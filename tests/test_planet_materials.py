@@ -93,6 +93,33 @@ class PlanetMaterialsTests(unittest.TestCase):
             self.assertFalse(dashboard._handle_html_workspace_command({
                 'page': 'planet-materials', 'operation': 'save', 'profile_key': 'old'}))
 
+    def test_manual_ground_coordinates_persist_and_arm_compass(self):
+        dashboard = MainDashboard.__new__(MainDashboard)
+        dashboard.config = {}
+        dashboard.current_sys = 'Sol'
+        dashboard.current_body_name = 'Moon'
+        dashboard.on_planet = True
+        dashboard._save_config_file = lambda: None
+        dashboard.update_ground_target_ui = lambda: None
+        dashboard.is_running = False
+
+        self.assertTrue(dashboard._handle_html_workspace_command({
+            'page': 'ground', 'operation': 'set',
+            'lat': '12.5', 'lon': '44.25',
+        }))
+        self.assertTrue(dashboard.target_latlon_active)
+        self.assertEqual((dashboard.target_lat, dashboard.target_lon), (12.5, 44.25))
+        self.assertEqual(dashboard.config['ground_target_active'], True)
+        self.assertEqual(dashboard.config['ground_target_lat'], 12.5)
+        self.assertEqual(dashboard.config['ground_target_lon'], 44.25)
+        self.assertEqual(dashboard.ground_target_system, 'Sol')
+        self.assertEqual(dashboard.ground_target_body, 'Moon')
+
+        self.assertFalse(dashboard._handle_html_workspace_command({
+            'page': 'ground', 'operation': 'set', 'lat': '', 'lon': '44.25',
+        }))
+        self.assertEqual((dashboard.target_lat, dashboard.target_lon), (12.5, 44.25))
+
     def test_saved_site_arms_body_bound_planet_compass(self):
         with tempfile.TemporaryDirectory() as folder:
             store = PlanetMaterialsStore(Path(folder) / 'sites.db')

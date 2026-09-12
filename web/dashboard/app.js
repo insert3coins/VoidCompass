@@ -46,6 +46,7 @@ let studioSearch = "";
 let workspaceFingerprints = {};
 let workspaceSyncTimer = 0;
 let workspaceSyncTicket = 0;
+let groundTargetRefreshTimer = 0;
 let missionSelectedId = "";
 let hotkeyCaptureAction = "";
 let orrerySelectedBodyId = "";
@@ -3070,6 +3071,23 @@ async function syncSnapshot() {
   setConnection(true);
 }
 
+// Ground targets are profile data as well as overlay state. The command is
+// accepted by the loopback server before its coalesced snapshot publication
+// runs, so give that publication one compositor turn and then pull the
+// authoritative state. This keeps the coordinate fields, Studio readout,
+// workspace and cockpit compass in step after a manual edit.
+function queueGroundTargetRefresh() {
+  if (groundTargetRefreshTimer) window.clearTimeout(groundTargetRefreshTimer);
+  groundTargetRefreshTimer = window.setTimeout(async () => {
+    groundTargetRefreshTimer = 0;
+    try {
+      await syncSnapshot();
+    } catch (error) {
+      reportClientError(error, "ground-target-refresh");
+    }
+  }, 90);
+}
+
 async function eventLoop() {
   while (true) {
     try {
@@ -3443,6 +3461,7 @@ document.addEventListener("click", async (event) => {
   }
   const workspaceButton = event.target.closest("[data-ws-page]");
   if (workspaceButton) {
+    event.preventDefault();
     if (workspaceButton.disabled) return;
     const page = workspaceButton.dataset.wsPage;
     const operation = workspaceButton.dataset.wsOp;
@@ -3506,8 +3525,17 @@ document.addEventListener("click", async (event) => {
       Object.assign(payload, {kind: "manual", target: target.trim(), system: model.flight?.system || "", count: 1});
     } else if (page === "ground" && operation === "set") {
       const prefix = workspaceButton.dataset.groundSource === "studio" ? "studio-ground" : "ground";
-      payload.lat = byId(`${prefix}-lat`)?.value;
-      payload.lon = byId(`${prefix}-lon`)?.value;
+      payload.lat = byId(`${prefix}-lat`)?.value?.trim() || "";
+      payload.lon = byId(`${prefix}-lon`)?.value?.trim() || "";
+      const latitude = Number(payload.lat);
+      const longitude = Number(payload.lon);
+      if (!payload.lat || !payload.lon
+          || !Number.isFinite(latitude) || !Number.isFinite(longitude)
+          || latitude < -90 || latitude > 90
+          || longitude < -180 || longitude > 180) {
+        showToast("Enter a latitude from −90 to 90 and longitude from −180 to 180");
+        return;
+      }
     } else if (page === "ground" && operation === "add_pin") {
       payload.label = byId("field-marker-label")?.value.trim() || "Field marker";
     } else if (page === "mining" && operation === "save_plan") {
@@ -3613,7 +3641,14 @@ document.addEventListener("click", async (event) => {
       if (!accepted) updateSettingsLive(model.workspace?.data || {});
       showToast(accepted ? "Cache rebuild started — progress is shown in Diagnostics" : "A cache rebuild is already running");
     } else {
-      showToast(accepted ? "Command applied" : "That action is not available from current journal state");
+      const groundTargetCommand = page === "ground" && ["set", "set_current", "return_ship", "clear", "toggle_popup"].includes(operation);
+      showToast(accepted
+        ? groundTargetCommand ? "Compass target saved and overlay refreshed" : "Command applied"
+        : "That action is not available from current journal state");
+      if (accepted && groundTargetCommand) {
+        workspaceFingerprints.ground = "";
+        queueGroundTargetRefresh();
+      }
     }
     return;
   }
