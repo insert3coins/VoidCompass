@@ -1,0 +1,22 @@
+[Theme]
+DisplayName=Void Compass Mouse
+
+[Control Panel\Cursors]
+Scheme Source=2
+Arrow=%SystemRoot%\Cursors\VoidCompass\normal-select.cur
+Help=%SystemRoot%\Cursors\VoidCompass\help-select.cur
+AppStarting=%SystemRoot%\Cursors\VoidCompass\working-background.cur
+Wait=%SystemRoot%\Cursors\VoidCompass\busy.cur
+Crosshair=%SystemRoot%\Cursors\VoidCompass\precision-select.cur
+IBeam=%SystemRoot%\Cursors\VoidCompass\text-select.cur
+NWPen=%SystemRoot%\Cursors\VoidCompass\handwriting.cur
+No=%SystemRoot%\Cursors\VoidCompass\unavailable.cur
+SizeNS=%SystemRoot%\Cursors\VoidCompass\vertical-resize.cur
+SizeWE=%SystemRoot%\Cursors\VoidCompass\horizontal-resize.cur
+SizeNWSE=%SystemRoot%\Cursors\VoidCompass\diagonal-resize-1.cur
+SizeNESW=%SystemRoot%\Cursors\VoidCompass\diagonal-resize-2.cur
+SizeAll=%SystemRoot%\Cursors\VoidCompass\move.cur
+UpArrow=%SystemRoot%\Cursors\VoidCompass\alternate-select.cur
+Hand=%SystemRoot%\Cursors\VoidCompass\link-select.cur
+Pin=%SystemRoot%\Cursors\VoidCompass\pin.cur
+Person=%SystemRoot%\Cursors\VoidCompass\person-select.cur
