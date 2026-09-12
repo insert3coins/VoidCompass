@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.3.1**
+**Current version: 5.4.3.2**
 
 Void Compass is a local exploration companion for *Elite Dangerous*. It reads the game’s journal, status and companion files, then turns them into a useful command deck, survey record and set of in-game overlays. It is built for commanders who want to keep track of a long trip without handing their flight history to a cloud service.
 
@@ -13,7 +13,7 @@ The main window is an HTML command deck backed by a Python application. It follo
 - **Dashboard and Explore & Survey** show current system progress, FSS and DSS work, biological and geological signals, valuable worlds, revisit targets and a short list of sensible next actions.
 - **Expedition tools** handle routes, waypoints, named objectives, neutron planning, return planning and expedition replay. Route advice is based on recorded game data and clearly marks anything that is unknown.
 - **Galactic Atlas** is an offline Three.js map with Elite XYZ coordinates, travel history, routes, regions, survey layers, annotations and the current ship position. It also includes a live System Orrery and body-target information.
-- **Planet Materials** records a planet’s known raw materials and lets you save surface mining sites with latitude, longitude, materials and notes. The current planet and coordinates can be filled from the live journal state, while mining observations remain editable by the commander. Saved sites belong to the active commander profile and can be sent to the Planet Waypoint Navigation overlay.
+- **Planet Materials** records a planet’s known raw materials and lets you save surface mining sites with latitude, longitude, materials and notes. The current planet and coordinates can be filled from the live journal state, while mining observations remain editable by the commander. Its optional field overlay keeps the active body's scan composition, DSS mining-location count, saved sites, live surface fix and Rhino state visible; saved sites can also be sent to the Planet Waypoint Navigation overlay.
 - **Engineering Companion** provides ship loadouts, planned ship builds, module slots, blueprint and experimental-effect searches, material requirements, engineer information, Tech Broker recipes, Odyssey goals and build import previews. Plans can follow the ship currently in Elite or be kept as separate profile-local builds.
 - **Mining and Ground tools** cover ring evidence, prospector details, refinery and cargo records, surface survey trails, exobiology work and journal-backed planetary mining signals.
 - **Carrier Command** follows personal and Squadron Carriers separately. It keeps their location, fuel, cargo, routes and jump history, and shows preparation, lockdown, transit and journal-confirmed arrival states.
@@ -26,7 +26,7 @@ The app is deliberately quiet. Feedback appears in the dashboard, Flight Log, no
 
 Every overlay can be enabled, positioned and themed independently. They are rendered through the same local HTML/WebView2 system as the command deck, while the Python runtime owns journal processing, profiles, scheduling, hotkeys and persistence.
 
-Available overlays include Navigation, Cargo, Carrier, Prospector, Gravity Warning, Station Link, Survey Operations, Cockpit Notifications, Journal Heartbeat and Planet Waypoint Navigation. The Navigation HUD includes route progress, survey state, fuel and scoop information, local targets, surface approach details, carrier countdowns and journal-confirmed arrivals. Overlay Layout Studio provides a visual way to arrange them and save commander-specific layouts.
+Available overlays include Navigation, Cargo, Carrier, Prospector, Planet Materials, Gravity Warning, Station Link, Survey Operations, Cockpit Notifications, Journal Heartbeat and Planet Waypoint Navigation. The Navigation HUD includes route progress, survey state, fuel and scoop information, local targets, surface approach details, carrier countdowns and journal-confirmed arrivals. Overlay Layout Studio provides a visual way to arrange them and save commander-specific layouts.
 
 ## Profiles and data
 

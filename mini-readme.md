@@ -1,5 +1,13 @@
 # VoidCompass // UPDATE LOG
 
+## v5.4.3.2 // Planet Materials Field Overlay
+**Release Date:** 2026-Sep-13
+
+* Added an optional, profile-aware Planet Materials overlay for live surface work. It follows the active body and shows journal-backed scan composition, DSS planetary mining-location count, gravity, volcanism, saved material sites, nearest-site distance, current coordinates and heading.
+* Added explicit Rhino field-state presentation and Compass-target highlighting without replacing the full Planet Materials tab, which remains the place to create, edit, filter and route saved sites.
+* Integrated Planet Materials with Overlay Layout Studio, themes, opacity, text scaling, global hide/show and commander-specific position/hotkey settings.
+* Fixed the shared WebView host registration for the new overlay so enabling Planet Materials cannot interrupt later overlay windows or trigger renderer recovery cycling.
+
 ## v5.4.3.1 // Galactic Atlas Rebuild
 **Release Date:** 2026-Sep-12
 

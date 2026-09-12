@@ -906,6 +906,11 @@ class DashboardScanMixin:
                 "status", "STATUS",
                 getattr(self, "hud_flight_state", None) or "FLIGHT",
             )
+        refresh_planet_materials = getattr(
+            self, "_refresh_planet_materials_overlay", None,
+        )
+        if callable(refresh_planet_materials) and not self.batch_mode:
+            refresh_planet_materials()
         self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
 
     def _check_status_toasts(self, data, flags, flags2):

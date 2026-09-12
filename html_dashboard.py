@@ -2136,6 +2136,25 @@ class HtmlDashboardMixin:
             },
         }
 
+    def _refresh_planet_materials_overlay(self):
+        """Publish the current body, surface fix, and saved sites to the HUD."""
+        overlay = getattr(self, "planet_materials_hud", None)
+        if overlay is None:
+            return False
+        try:
+            overlay.update(
+                self._html_planet_materials_workspace(),
+                latitude=getattr(self, "current_latitude", None),
+                longitude=getattr(self, "current_longitude", None),
+                heading=getattr(self, "current_heading", None),
+                radius_m=getattr(self, "current_planet_radius", None),
+                vehicle_name=getattr(self, "current_vehicle_name", ""),
+            )
+            return True
+        except Exception as exc:
+            logging.warning("Planet Materials overlay refresh failed: %s", exc)
+            return False
+
     def _html_workspace(self, page):
         builders = {
             "planet-materials": self._html_planet_materials_workspace,
@@ -2860,6 +2879,7 @@ class HtmlDashboardMixin:
                     return False
             else:
                 return False
+            self._refresh_planet_materials_overlay()
             self._schedule_html_dashboard_publish(immediate=True)
             return True
 

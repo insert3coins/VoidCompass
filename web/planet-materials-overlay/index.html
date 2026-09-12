@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Planet Materials</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <main id="panel" class="panel">
+    <header>
+      <div class="title"><i></i><strong>PLANET MATERIALS</strong></div>
+      <b id="mode">SURFACE INTEL</b>
+    </header>
+    <section class="body-lock">
+      <div><small id="system">SYSTEM UNKNOWN</small><strong id="body">NO BODY LOCK</strong><span id="body-class">Awaiting planetary data</span></div>
+      <div class="signal"><strong id="mining-count">0</strong><small>MINING LOCATIONS</small></div>
+    </section>
+    <section class="facts" id="facts"></section>
+    <section class="composition">
+      <div class="section-head"><span>SCAN COMPOSITION</span><b id="material-count">0 MATERIALS</b></div>
+      <div id="materials" class="materials"></div>
+    </section>
+    <section class="sites">
+      <div class="section-head"><span>SAVED SURFACE SITES</span><b id="site-count">0 SITES</b></div>
+      <div id="site-list" class="site-list"></div>
+    </section>
+    <footer><span id="position">NO SURFACE FIX</span><b id="target">NO COMPASS TARGET</b></footer>
+    <div class="scanlines"></div><div class="vignette"></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

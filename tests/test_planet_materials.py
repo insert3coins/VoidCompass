@@ -8,11 +8,57 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from planet_materials import PlanetMaterialsStore
+from planet_materials_hud import build_planet_materials_model
 from dashboard import MainDashboard
 from hud import TacticalHUD
 
 
 class PlanetMaterialsTests(unittest.TestCase):
+    def test_overlay_combines_body_scan_saved_sites_and_rhino_state(self):
+        workspace = {
+            'system': 'Synuefe AA-A h1', 'body': 'Synuefe AA-A h1 3 a',
+            'on_planet': True,
+            'bodies': [{
+                'body': 'Synuefe AA-A h1 3 a', 'short_name': '3 a',
+                'class': 'Rocky body', 'volcanism': 'Silicate vapour geysers',
+                'gravity': .12, 'landable': True, 'mining_locations': 6,
+                'materials': [
+                    {'name': 'Polonium', 'percent': .7, 'rare': True},
+                    {'name': 'Iron', 'percent': 18.2, 'rare': False},
+                ],
+            }],
+            'sites': [{
+                'id': 8, 'system': 'Synuefe AA-A h1', 'body': '3 a',
+                'name': 'North field', 'latitude': 10.1, 'longitude': 20.1,
+                'density': 'High', 'materials': 'Ruby, Sapphire',
+            }, {
+                'id': 9, 'system': 'Synuefe AA-A h1', 'body': '4 b',
+                'name': 'Wrong body', 'latitude': 0, 'longitude': 0,
+                'materials': 'Iron',
+            }],
+            'navigation_target': {
+                'active': True, 'system': 'Synuefe AA-A h1', 'body': '3 a',
+                'label': 'North field', 'site_id': 8,
+            },
+        }
+        model = build_planet_materials_model(
+            workspace, latitude=10, longitude=20, heading=42,
+            radius_m=1_000_000, vehicle_name='Rhino',
+        )
+        self.assertTrue(model['active'])
+        self.assertTrue(model['rhino_active'])
+        self.assertEqual(model['short_body'], '3 a')
+        self.assertEqual(model['details']['mining_locations'], 6)
+        self.assertEqual([row['name'] for row in model['materials']], ['Polonium', 'Iron'])
+        self.assertEqual(len(model['sites']), 1)
+        self.assertEqual(model['sites'][0]['materials'], ['Ruby', 'Sapphire'])
+        self.assertGreater(model['sites'][0]['distance_m'], 0)
+        self.assertTrue(model['target']['active'])
+
+    def test_overlay_without_body_context_is_inactive(self):
+        model = build_planet_materials_model({'system': 'Sol', 'bodies': [], 'sites': []})
+        self.assertFalse(model['active'])
+
     def test_legacy_database_migrates_and_retains_scan_snapshot(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'sites.db'
