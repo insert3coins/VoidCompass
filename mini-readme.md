@@ -1,5 +1,14 @@
 # VoidCompass // UPDATE LOG
 
+## v5.4.3.1 // Galactic Atlas Rebuild
+**Release Date:** 2026-Sep-12
+
+* Rebuilt the Galactic Atlas around an Elite-inspired orange cartographic interface, collapsible navigation/filter/position panels, zoom controls and a responsive inspection panel.
+* Replaced the flat galaxy image with a volumetric stellar background and an adaptive navigation grid. Preserved all 42 galactic regions, Elite XYZ coordinates, commander history, routes, intelligence layers and map annotations.
+* Added a selection reticle and separated single-click inspection from double-click camera focus. Galaxy background and grid can be toggled independently for clear local navigation.
+
+* Refined the Windows mouse theme with clearer outlines, animated busy/background-work rings, recognisable link and unavailable pointers, and corrected selection hotspots.
+
 ## v5.4.3 // Engineering Companion
 **Release Date:** 2026-Sep-10
 

@@ -130,7 +130,7 @@ class ExpeditionMapView:
             depth_scale = max(1.0, min(20.0, float(state.get('depth_scale', 4.0))))
         except (TypeError, ValueError):
             depth_scale = 4.0
-        return {'renderer': 'webgl', 'orientation': MAP_ORIENTATION, 'mode': mode, 'scope': scope, 'layers': layers, 'camera': {'position': list(position) if position else None, 'target': list(target) if target else None}, 'depth_scale': depth_scale, 'top_down': bool(state.get('top_down', False)) if orientation_matches else False}
+        return {'renderer': 'webgl', 'orientation': MAP_ORIENTATION, 'mode': mode, 'scope': scope, 'layers': layers, 'camera': {'position': list(position) if position else None, 'target': list(target) if target else None}, 'depth_scale': depth_scale, 'grid': state.get('grid') is not False, 'atmosphere': state.get('atmosphere') is not False, 'top_down': bool(state.get('top_down', False)) if orientation_matches else False}
 
     def apply_view_state(self, state):
         self._view_state = self._normalise_view_state(state)
