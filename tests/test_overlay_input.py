@@ -1,5 +1,6 @@
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from html_overlay_host import (
     WS_EX_LAYERED,
@@ -7,6 +8,7 @@ from html_overlay_host import (
     WS_EX_TRANSPARENT,
     _WindowController,
     _overlay_window_style as overlay_ex_style,
+    _patch_pywebview_overlay_focus,
 )
 
 
@@ -44,6 +46,33 @@ class OverlayInputStyleTests(unittest.TestCase):
         self.assertTrue(result["visible"])
         restore.assert_called_once_with(4242)
         self.assertEqual(controller.restore_foreground, 0)
+
+    def test_non_activating_webview_is_not_focused_when_shown(self):
+        class FakeBrowserForm:
+            def on_shown(self, *_):
+                self.original_handler_called = True
+
+        winforms = SimpleNamespace(
+            BrowserView=SimpleNamespace(BrowserForm=FakeBrowserForm),
+        )
+        self.assertTrue(_patch_pywebview_overlay_focus(winforms))
+
+        shown = Mock()
+        overlay = SimpleNamespace(
+            pywebview_window=SimpleNamespace(focus=False),
+            shown=SimpleNamespace(set=shown),
+        )
+        FakeBrowserForm.on_shown(overlay)
+
+        shown.assert_called_once_with()
+        self.assertFalse(hasattr(overlay, "original_handler_called"))
+
+        focused = SimpleNamespace(
+            pywebview_window=SimpleNamespace(focus=True),
+            shown=SimpleNamespace(set=Mock()),
+        )
+        FakeBrowserForm.on_shown(focused)
+        self.assertTrue(focused.original_handler_called)
 
 
 if __name__ == "__main__":

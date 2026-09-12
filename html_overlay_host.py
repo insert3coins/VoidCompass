@@ -29,6 +29,40 @@ HIDDEN_WINDOW_Y = -32000
 _LOOPBACK_OPENER = build_opener(ProxyHandler({}))
 
 
+def _patch_pywebview_overlay_focus(winforms_module=None):
+    """Stop pywebview from focusing non-activating WebViews when shown.
+
+    pywebview's WinForms backend unconditionally calls ``WebView.Focus`` from
+    its Form.Shown handler. That callback runs after our HWND has been mapped,
+    so it can take focus from Elite even though the window was created with
+    ``focus=False`` and ``WS_EX_NOACTIVATE``. Patch the handler before any
+    BrowserForm is constructed while preserving its normal focused-window
+    behaviour.
+    """
+    try:
+        if winforms_module is None:
+            from webview.platforms import winforms as winforms_module
+
+        browser_form = winforms_module.BrowserView.BrowserForm
+        original = browser_form.on_shown
+        if getattr(original, "_voidcompass_no_activate", False):
+            return True
+
+        def on_shown(form, *args):
+            if getattr(form.pywebview_window, "focus", True):
+                return original(form, *args)
+            # BrowserForm.on_shown normally signals this before focusing the
+            # child WebView. Keep the lifecycle signal and omit only Focus().
+            form.shown.set()
+            return None
+
+        on_shown._voidcompass_no_activate = True
+        browser_form.on_shown = on_shown
+        return True
+    except Exception:
+        return False
+
+
 def _native_handle(window):
     native = getattr(window, "native", None)
     handle = getattr(native, "Handle", None)
@@ -513,6 +547,8 @@ def run(url):
     try:
         import webview
     except Exception:
+        return 3
+    if not _patch_pywebview_overlay_focus():
         return 3
     host = _OverlayHost(url, webview)
     try:
