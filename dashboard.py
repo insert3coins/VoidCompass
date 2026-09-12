@@ -36,6 +36,7 @@ from journal_watcher import JournalWatcher
 from mining_data import MINING_MATERIALS
 from carrier_tracker import CarrierTracker
 from prospector_hud import ProspectorHUD
+from planet_materials_hud import PlanetMaterialsHUD
 from gravity_warning_hud import GravityWarningHUD
 from station_info_hud import StationInfoHUD
 from survey_status_hud import SurveyStatusHUD
@@ -50,6 +51,7 @@ from html_station_overlay import attach_html_station_overlay
 from html_cargo_overlay import attach_html_cargo_overlay
 from html_carrier_overlay import attach_html_carrier_overlay
 from html_prospector_overlay import attach_html_prospector_overlay
+from html_planet_materials_overlay import attach_html_planet_materials_overlay
 from html_heartbeat_overlay import attach_html_heartbeat_overlay
 from html_contact_overlay import attach_html_contact_overlay
 from runtime_trace import RuntimeTrace
@@ -358,6 +360,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         ("cargo_hud", "cargo_hud_x", "cargo_hud_y"),
         ("carrier_hud", "carrier_hud_x", "carrier_hud_y"),
         ("prospector_hud", "prospector_hud_x", "prospector_hud_y"),
+        ("planet_materials_hud", "planet_materials_hud_x", "planet_materials_hud_y"),
         ("gravity_warning_hud", "gravity_warning_hud_x", "gravity_warning_hud_y"),
         ("station_info_hud", "station_info_hud_x", "station_info_hud_y"),
         ("survey_status_hud", "survey_status_hud_x", "survey_status_hud_y"),
@@ -370,6 +373,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         "cargo_hud": ("cargo", "Void Compass Cargo", "cargo_overlay_enabled"),
         "carrier_hud": ("carrier", "Void Compass Carrier", "carrier_overlay_enabled"),
         "prospector_hud": ("prospector", "Void Compass Prospector", "prospector_overlay_enabled"),
+        "planet_materials_hud": ("planet-materials", "Void Compass Planet Materials", "planet_materials_overlay_enabled"),
         "gravity_warning_hud": ("gravity", "Void Compass Gravity Warning", "gravity_warning_overlay_enabled"),
         "station_info_hud": ("station", "Void Compass Station Link", "station_info_overlay_enabled"),
         "survey_status_hud": ("survey", "Void Compass Survey Operations", "survey_status_overlay_enabled"),
@@ -870,6 +874,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             "cargo_hud",
             "carrier_hud",
             "prospector_hud",
+            "planet_materials_hud",
             "gravity_warning_hud",
             "station_info_hud",
             "survey_status_hud",
@@ -958,7 +963,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             pass
 
         for attr in (
-            "hud", "cargo_hud", "carrier_hud", "prospector_hud",
+            "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud",
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud",
             "contact_scope_hud",
@@ -2334,6 +2339,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         else:
             self.prospector_hud = None
 
+        if self.config.get("planet_materials_overlay_enabled", False):
+            self.planet_materials_hud = PlanetMaterialsHUD(self.root, self.config)
+            self._refresh_planet_materials_overlay()
+        else:
+            self.planet_materials_hud = None
+
         if self.config.get("gravity_warning_overlay_enabled", True):
             self.gravity_warning_hud = GravityWarningHUD(self.root, self.config)
         else:
@@ -3370,6 +3381,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
     def _tick_runtime_trace(self):
         if not self.is_running:
             return
+        html_runtime = getattr(
+            self.root, "_voidcompass_html_overlay_runtime", None,
+        )
         extra = {
             "route_waypoints": len(getattr(self.waypoint_manager, "waypoints", []) or []),
             "scan_items": len(getattr(self, "scan_items", []) or []),
@@ -3378,6 +3392,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             "ui_dispatch": getattr(self, "ui_dispatcher", None).stats()
             if getattr(self, "ui_dispatcher", None) else {},
             "persistence": persistence_queue().stats(),
+            "html_overlays": (
+                html_runtime.health_snapshot() if html_runtime is not None else {}
+            ),
         }
         if self.runtime_trace:
             self.runtime_trace.flush(extra=extra)
@@ -4346,6 +4363,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 pass
             self.prospector_hud = None
 
+        if self.config.get("planet_materials_overlay_enabled", False):
+            if self.planet_materials_hud is None:
+                self.planet_materials_hud = PlanetMaterialsHUD(self.root, self.config)
+            self._refresh_planet_materials_overlay()
+        elif self.planet_materials_hud:
+            self.planet_materials_hud.destroy()
+            self.planet_materials_hud = None
+
         if self.config.get("gravity_warning_overlay_enabled", True):
             if self.gravity_warning_hud is None:
                 self.gravity_warning_hud = GravityWarningHUD(self.root, self.config)
@@ -4443,6 +4468,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 )
             elif attr == "prospector_hud":
                 attach_html_prospector_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "planet_materials_hud":
+                attach_html_planet_materials_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "survey_status_hud":
@@ -8891,6 +8920,16 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 mat = raw.get("Type_Localised") or raw.get("Type") or ""
                 self._ui_post(lambda m=mat: self.prospector_hud.add_refined(m))
 
+        if (
+            self.planet_materials_hud and not self.batch_mode
+            and ev in {
+                "ApproachBody", "LeaveBody", "Location", "FSDJump", "CarrierJump",
+                "Scan", "FSSBodySignals", "SAASignalsFound", "Touchdown", "Liftoff",
+                "LaunchSRV", "DockSRV", "Embark", "Disembark", "LoadGame",
+            }
+        ):
+            self._refresh_planet_materials_overlay()
+
         self._update_exploration_intelligence(
             ev, raw if isinstance(raw, dict) else d,
             startup_replay=startup_replay,
@@ -9702,6 +9741,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 self,
                 present=bool(startup_presentation or station_transition),
             )
+        self._refresh_planet_materials_overlay()
 
         if startup_final or self.is_first_load:
             self._startup_restore_active = False
