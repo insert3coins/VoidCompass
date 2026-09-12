@@ -77,6 +77,9 @@ from theme_state import apply_ui_scale
 PROJECT_URL = "https://github.com/insert3coins/VoidCompass"
 RELEASES_URL = f"{PROJECT_URL}/releases"
 ISSUES_URL = f"{PROJECT_URL}/issues/new/choose"
+DOCUMENTATION_URL = f"{PROJECT_URL}#readme"
+LICENSE_URL = f"{PROJECT_URL}/blob/master/LICENSE"
+THIRD_PARTY_NOTICES_URL = f"{PROJECT_URL}/blob/master/THIRD_PARTY_NOTICES.md"
 
 
 _CORE_RANKS = {
@@ -4291,6 +4294,9 @@ class HtmlDashboardMixin:
             "github": PROJECT_URL,
             "releases": RELEASES_URL,
             "issues": ISSUES_URL,
+            "documentation": DOCUMENTATION_URL,
+            "license": LICENSE_URL,
+            "notices": THIRD_PARTY_NOTICES_URL,
         }
         if target in urls:
             webbrowser.open_new_tab(urls[target])

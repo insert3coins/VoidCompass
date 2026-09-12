@@ -198,7 +198,7 @@
       <footer class="rail-footer">
         <div class="connection"><i id="connection-light"></i><span>LOCAL LINK</span><b id="connection-state">CONNECTING</b></div>
         <button data-command="open_screenshots">OPEN SCREENSHOTS</button>
-        <small id="rail-version">v5.4.3.2 // WEBVIEW2</small>
+        <small id="rail-version">v5.4.3.3 // WEBVIEW2</small>
       </footer>
     </aside>
 
@@ -613,14 +613,87 @@
           </section>
         </section>
 
-        <section class="page" data-page-name="about">
-          <header class="about-hero"><div class="about-glyph"><span></span></div><div><p>ELITE DANGEROUS EXPLORATION COMPANION</p><h2>Void Compass</h2><span id="about-version">Version 5.4.3.2 // HTML Command Deck</span></div></header>
-          <section class="about-grid">
-            <article class="card"><header><span>LOCAL FIRST</span></header><p>Void Compass reads Elite's journal and companion files and stores commander profiles locally. The dashboard server is private to this computer and binds only to loopback.</p></article>
-            <article class="card"><header><span>GPL-3.0</span></header><p>Void Compass is free software. You may use, study, modify and redistribute it under GNU GPL version 3.</p></article>
-            <article class="card wide"><header><span>FRONTIER DISCLAIMER</span></header><p>Void Compass is an independent community project and is not affiliated with or endorsed by Frontier Developments. Elite Dangerous and related marks belong to their respective owners.</p></article>
-            <article class="card wide"><header><span>SUPPORT & DIAGNOSTICS</span></header><div class="action-grid about-actions"><button data-command="open" data-target="github">GITHUB</button><button data-command="open" data-target="releases">RELEASES</button><button data-command="open" data-target="issues">REPORT AN ISSUE</button><button data-command="open_logs">OPEN LOGS</button></div></article>
+        <section class="page about-page" data-page-name="about">
+          <canvas id="about-matrix-canvas" class="about-matrix-canvas" aria-hidden="true"></canvas>
+          <div class="about-scan-sweep" aria-hidden="true"></div>
+          <header class="about-hero about-neon-hero">
+            <div class="about-reactor" aria-hidden="true"><i></i><i></i><i></i><b></b><span>VC</span></div>
+            <div class="about-identity">
+              <p>INDEPENDENT ELITE DANGEROUS EXPLORATION COMPANION</p>
+              <h2>Void Compass</h2>
+              <span id="about-version">Version 5.4.3.3 // HTML Command Deck</span>
+              <div class="about-signal"><i></i><b>LOCAL JOURNAL UPLINK</b><span>NO CLOUD ACCOUNT REQUIRED</span></div>
+            </div>
+            <div class="about-telemetry" aria-label="Application identity">
+              <div><small>CREATOR</small><strong>insert3coins</strong></div>
+              <div><small>PLATFORM</small><strong>WINDOWS x64</strong></div>
+              <div><small>RUNTIME</small><strong>PYTHON + WEBVIEW2</strong></div>
+              <div><small>LICENCE</small><strong>GPL-3.0-ONLY</strong></div>
+            </div>
+          </header>
+
+          <section class="about-manifesto">
+            <small>MISSION PROFILE // EXPLORATION WITHOUT SURRENDERING YOUR FLIGHT HISTORY</small>
+            <p>Void Compass turns Elite's Journal, Status and companion files into a live command deck, survey record and cockpit overlay suite. It is built for long-range commanders who want useful field intelligence, durable expedition history and direct control of their own data.</p>
           </section>
+
+          <section class="about-grid">
+            <article class="card about-creator-card">
+              <header><span>CREATOR &amp; COPYRIGHT</span><b>AUTHENTICATED</b></header>
+              <div class="about-signature"><small>DESIGNED &amp; DEVELOPED BY</small><strong>insert3coins</strong><span id="about-copyright">Copyright © 2026 insert3coins</span></div>
+              <p>Built as an independent community tool for fellow commanders. Source contributions remain credited through the project history.</p>
+            </article>
+
+            <article class="card about-principles-card">
+              <header><span>OPERATING PRINCIPLES</span><b>LOCAL FIRST</b></header>
+              <ul class="about-checklist">
+                <li><i></i><span><b>Journal authoritative</b><small>Game data is distinguished from estimates and commander notes.</small></span></li>
+                <li><i></i><span><b>Commander isolated</b><small>Profiles, routes, layouts and field records remain separate.</small></span></li>
+                <li><i></i><span><b>Offline capable</b><small>Core exploration tools do not require a hosted account.</small></span></li>
+              </ul>
+            </article>
+
+            <article class="card about-privacy-card">
+              <header><span>PRIVACY &amp; DATA</span><b>LOOPBACK SECURED</b></header>
+              <p>Commander data is stored locally. The HTML command deck and overlays are served only through this computer's private loopback interface. EDSM, EDDN, Spansh and Discord integrations are optional and act only when their related features are enabled or requested.</p>
+              <div class="about-data-path"><i></i><span>ELITE FILES</span><b>→</b><span>LOCAL RUNTIME</span><b>→</b><span>YOUR PROFILE</span></div>
+            </article>
+
+            <article class="card about-requirements-card">
+              <header><span>SYSTEM REQUIREMENTS</span><b>FLIGHT COMPUTER</b></header>
+              <dl class="about-specs">
+                <div><dt>Operating system</dt><dd>Windows x64</dd></div>
+                <div><dt>Display runtime</dt><dd>Microsoft Edge WebView2</dd></div>
+                <div><dt>Game interface</dt><dd>Elite Dangerous Journal &amp; Status files</dd></div>
+                <div><dt>Source runtime</dt><dd>Python 3 with project requirements</dd></div>
+              </dl>
+            </article>
+
+            <article class="card about-license-card">
+              <header><span>FREE SOFTWARE</span><b>GPL-3.0-ONLY</b></header>
+              <p>You may run, study, modify and redistribute Void Compass under the GNU General Public License version 3. Distributed modifications must preserve the licence and corresponding source obligations.</p>
+              <button data-command="open" data-target="license">READ THE LICENCE</button>
+            </article>
+
+            <article class="card about-credits-card">
+              <header><span>ACKNOWLEDGEMENTS</span><b>COMMUNITY POWERED</b></header>
+              <p>Void Compass incorporates or adapts appropriately licensed work from three.js, ED Engineering Companion and Elite Dangerous community reference projects. Full attribution and bundled licence notices are maintained in <code>THIRD_PARTY_NOTICES.md</code>.</p>
+              <button data-command="open" data-target="notices">VIEW THIRD-PARTY NOTICES</button>
+            </article>
+
+            <article class="card wide about-disclaimer-card">
+              <header><span>FRONTIER DISCLAIMER</span><b>UNOFFICIAL</b></header>
+              <p>Void Compass is an independent, non-commercial community project and is not affiliated with or endorsed by Frontier Developments plc. Elite Dangerous and all related names, marks and game assets belong to their respective owners.</p>
+            </article>
+
+            <article class="card wide about-support-card">
+              <header><span>SOURCE // SUPPORT // DIAGNOSTICS</span><b>OPEN CHANNELS</b></header>
+              <div class="action-grid about-actions"><button data-command="open" data-target="github">SOURCE CODE</button><button data-command="open" data-target="releases">RELEASES</button><button data-command="open" data-target="documentation">DOCUMENTATION</button><button data-command="open" data-target="issues">REPORT AN ISSUE</button><button data-command="open_logs">OPEN LOCAL LOGS</button></div>
+              <footer><span>Bug reports and focused contributions are welcome.</span><b>github.com/insert3coins/VoidCompass</b></footer>
+            </article>
+          </section>
+
+          <footer class="about-footer"><span>VOID COMPASS // MADE BY insert3coins</span><b id="about-footer-version">v5.4.3.3</b><span>Copyright © 2026 insert3coins</span></footer>
         </section>
       </main>
 

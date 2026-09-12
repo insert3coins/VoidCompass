@@ -3,6 +3,8 @@ const token = query.get("token") || "";
 let revision = -1;
 let model = {};
 let currentPage = "overview";
+let aboutMatrixFrame = 0;
+let aboutMatrixState = null;
 let profileKey = "default";
 let feedFilter = "ALL";
 let toastTimer = 0;
@@ -3021,9 +3023,12 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  text("rail-version", `v${model.app?.version || "5.4.3.2"} // WEBVIEW2`);
-  text("boot-version", `v${model.app?.version || "5.4.3.2"} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${model.app?.version || "5.4.3.2"} // HTML Command Deck`);
+  const appVersion = model.app?.version || "5.4.3.3";
+  text("rail-version", `v${appVersion} // WEBVIEW2`);
+  text("boot-version", `v${appVersion} // SECURE LOOPBACK // WEBVIEW2`);
+  text("about-version", `Version ${appVersion} // HTML Command Deck`);
+  text("about-footer-version", `v${appVersion}`);
+  text("about-copyright", `Copyright © ${new Date().getFullYear()} insert3coins`);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -3044,6 +3049,7 @@ function renderState(state) {
   model = state || {};
   applyTheme(model.theme || {});
   document.body.classList.toggle("reduced-motion", Boolean(model.ui?.reduced_motion));
+  if (currentPage === "about") startAboutMatrix();
   const nextBootActive = Boolean(model.boot?.active || model.onboarding?.active);
   const leavingBoot = bootActive && !nextBootActive;
   bootActive = nextBootActive;
@@ -3056,6 +3062,106 @@ function renderState(state) {
     return;
   }
   renderDashboard(model);
+}
+
+function aboutMatrixNodes(width, height) {
+  const count = Math.max(22, Math.min(46, Math.round(width / 34)));
+  return Array.from({length: count}, (_, index) => ({
+    x: ((index * 47) % 101) / 101 * width,
+    y: ((index * 71 + 13) % 103) / 103 * Math.max(180, height * .68),
+    vx: ((index % 5) - 2) * .035,
+    vy: (((index * 3) % 5) - 2) * .022,
+    phase: index * .73,
+  }));
+}
+
+function stopAboutMatrix() {
+  if (aboutMatrixFrame) window.cancelAnimationFrame(aboutMatrixFrame);
+  aboutMatrixFrame = 0;
+}
+
+function startAboutMatrix() {
+  if (aboutMatrixFrame || currentPage !== "about" || document.hidden) return;
+  const canvas = byId("about-matrix-canvas");
+  const page = canvas?.closest(".about-page");
+  const context = canvas?.getContext("2d");
+  if (!canvas || !page || !context) return;
+
+  const draw = (now) => {
+    aboutMatrixFrame = 0;
+    if (currentPage !== "about" || document.hidden) return;
+    const width = Math.max(1, Math.round(page.clientWidth));
+    const height = Math.max(1, Math.round(page.scrollHeight));
+    const pixelRatio = Math.min(1.5, window.devicePixelRatio || 1);
+    if (!aboutMatrixState || aboutMatrixState.width !== width || aboutMatrixState.height !== height) {
+      canvas.width = Math.round(width * pixelRatio);
+      canvas.height = Math.round(height * pixelRatio);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      aboutMatrixState = {width, height, nodes: aboutMatrixNodes(width, height)};
+    }
+
+    const styles = getComputedStyle(document.documentElement);
+    const accent = styles.getPropertyValue("--accent").trim() || "#25e8ff";
+    const orange = styles.getPropertyValue("--orange").trim() || "#ff8a2a";
+    const reduced = document.body.classList.contains("reduced-motion");
+    const {nodes} = aboutMatrixState;
+    const time = now * .001;
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, width, height);
+
+    // Synthwave horizon and perspective grid, adapted to the active theme.
+    const horizon = Math.min(height - 150, Math.max(230, height * .66));
+    context.save();
+    context.globalAlpha = .14;
+    context.strokeStyle = orange;
+    context.lineWidth = 1;
+    for (let row = 0; row < 13; row += 1) {
+      const progress = row / 12;
+      const y = horizon + Math.pow(progress, 2.1) * (height - horizon);
+      context.beginPath(); context.moveTo(0, y); context.lineTo(width, y); context.stroke();
+    }
+    for (let column = -10; column <= 10; column += 1) {
+      const foot = width / 2 + column * width / 9;
+      context.beginPath(); context.moveTo(width / 2, horizon); context.lineTo(foot, height); context.stroke();
+    }
+    context.globalAlpha = .28;
+    context.strokeStyle = accent;
+    context.beginPath(); context.moveTo(0, horizon); context.lineTo(width, horizon); context.stroke();
+    context.restore();
+
+    if (!reduced) {
+      nodes.forEach((node) => {
+        node.x = (node.x + node.vx + width) % width;
+        node.y = (node.y + node.vy + horizon) % horizon;
+      });
+    }
+    context.save();
+    for (let left = 0; left < nodes.length; left += 1) {
+      const first = nodes[left];
+      for (let right = left + 1; right < nodes.length; right += 1) {
+        const second = nodes[right];
+        const distance = Math.hypot(first.x - second.x, first.y - second.y);
+        if (distance > 145) continue;
+        context.globalAlpha = (1 - distance / 145) * .17;
+        context.strokeStyle = accent;
+        context.beginPath(); context.moveTo(first.x, first.y); context.lineTo(second.x, second.y); context.stroke();
+      }
+      const pulse = reduced ? .7 : .55 + Math.sin(time * 1.8 + first.phase) * .25;
+      context.globalAlpha = pulse;
+      context.fillStyle = left % 7 === 0 ? orange : accent;
+      context.fillRect(first.x - 1.5, first.y - 1.5, 3, 3);
+      if (left % 6 === 0) {
+        const packet = reduced ? .4 : (time * .12 + left * .17) % 1;
+        context.globalAlpha = .65;
+        context.fillRect(first.x + packet * 32 - 16, first.y, 4, 1);
+      }
+    }
+    context.restore();
+
+    if (!reduced) aboutMatrixFrame = window.requestAnimationFrame(draw);
+  };
+  aboutMatrixFrame = window.requestAnimationFrame(draw);
 }
 
 function setConnection(online) {
@@ -3115,6 +3221,8 @@ function showPage(name) {
   if (pageLayoutEditing && pageLayoutEditing !== name) cancelPageLayout();
   if (name === "settings" && currentPage !== "settings") workspaceFingerprints.settings = "";
   currentPage = name;
+  if (name === "about") window.requestAnimationFrame(startAboutMatrix);
+  else stopAboutMatrix();
   localStorage.setItem(`voidcompass.dashboard.page.${profileKey}`, name);
   document.querySelectorAll(".page").forEach((node) => node.classList.toggle("active", node === page));
   document.querySelectorAll(".nav-item[data-page]").forEach((node) => node.classList.toggle("active", node.dataset.page === name));
@@ -4133,6 +4241,11 @@ window.addEventListener("error", (event) => {
 
 window.addEventListener("unhandledrejection", (event) => {
   reportClientError(event.reason, "unhandled-rejection");
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopAboutMatrix();
+  else if (currentPage === "about") startAboutMatrix();
 });
 
 window.setInterval(() => text("footer-clock", new Date().toLocaleTimeString([], {hour12: false})), 500);
