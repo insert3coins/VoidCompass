@@ -186,6 +186,13 @@ class GalacticMapServer:
         self._send_bytes(handler, encoded, "application/json; charset=utf-8", status)
 
     def _static_path(self, request_path):
+        if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png"}:
+            candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()
+            try:
+                candidate.relative_to(self.static_root.parent)
+            except ValueError:
+                return None
+            return candidate
         aliases = {
             "/": "index.html",
             "/index.html": "index.html",
