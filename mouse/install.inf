@@ -16,10 +16,12 @@ DelReg=CursorScheme
 CursorFiles=10,"Cursors\VoidCompass"
 
 [CursorFiles]
-normal-select.cur
-help-select.cur
 working-background.cur
 busy.cur
+normal-select.cur
+help-select.cur
+working-background.ani
+busy.ani
 precision-select.cur
 text-select.cur
 handwriting.cur
@@ -39,8 +41,8 @@ pin.cur
 HKCU,"Control Panel\Cursors","Scheme Source",0x00010001,2
 HKCU,"Control Panel\Cursors","Arrow",0x00020000,"%10%\Cursors\VoidCompass\normal-select.cur"
 HKCU,"Control Panel\Cursors","Help",0x00020000,"%10%\Cursors\VoidCompass\help-select.cur"
-HKCU,"Control Panel\Cursors","AppStarting",0x00020000,"%10%\Cursors\VoidCompass\working-background.cur"
-HKCU,"Control Panel\Cursors","Wait",0x00020000,"%10%\Cursors\VoidCompass\busy.cur"
+HKCU,"Control Panel\Cursors","AppStarting",0x00020000,"%10%\Cursors\VoidCompass\working-background.ani"
+HKCU,"Control Panel\Cursors","Wait",0x00020000,"%10%\Cursors\VoidCompass\busy.ani"
 HKCU,"Control Panel\Cursors","Crosshair",0x00020000,"%10%\Cursors\VoidCompass\precision-select.cur"
 HKCU,"Control Panel\Cursors","IBeam",0x00020000,"%10%\Cursors\VoidCompass\text-select.cur"
 HKCU,"Control Panel\Cursors","NWPen",0x00020000,"%10%\Cursors\VoidCompass\handwriting.cur"

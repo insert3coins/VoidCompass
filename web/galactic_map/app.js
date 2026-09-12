@@ -56,7 +56,7 @@ let eventSource = null;
 let connected = false;
 let viewState = {
   mode: 'Galactic Atlas', scope: 'All History', layers: {...DEFAULT_LAYER_STATE},
-  orientation: MAP_ORIENTATION, depth_scale: 4, top_down: false,
+  orientation: MAP_ORIENTATION, depth_scale: 4, top_down: false, grid: true, atmosphere: true,
   camera: {position: null, target: null},
 };
 let cameraTween = null;
@@ -74,7 +74,6 @@ let waypointBeacon;
 let lastFocusRequest = null;
 let saveTimer = null;
 let rebuildTimer = null;
-let staticBuildGeneration = 0;
 let captureFramesRemaining = captureMode ? 180 : 0;
 let lastRouteOverlayFrame = -Infinity;
 
@@ -164,7 +163,7 @@ function applyTheme(theme) {
   for (const [keyName, variable] of Object.entries(mapping)) {
     if (theme[keyName]) document.documentElement.style.setProperty(variable, theme[keyName]);
   }
-  if (renderer) renderer.setClearColor(theme.bg || '#070b10', 1);
+  if (renderer) renderer.setClearColor('#020307', 1);
   return true;
 }
 
@@ -204,7 +203,7 @@ function clearGroup(group) {
 function initialiseThree() {
   const viewport = measureViewport();
   scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2('#070b10', 0.0000075);
+  scene.fog = new THREE.FogExp2('#020307', 0.000001);
   camera = new THREE.PerspectiveCamera(46, viewport.width / viewport.height, 2, 600000);
   camera.position.copy(GALACTIC_CENTRE).add(
     DEFAULT_TILT_DIRECTION.clone().multiplyScalar(132000),
@@ -240,7 +239,7 @@ function initialiseThree() {
     scheduleSaveView();
   });
 
-  for (const name of ['galaxy', 'regions', 'route', 'return', 'planned', 'markers', 'current', 'animation']) {
+  for (const name of ['galaxy', 'grid', 'selection', 'regions', 'route', 'return', 'planned', 'markers', 'current', 'animation']) {
     groups[name] = new THREE.Group();
     groups[name].name = name;
     scene.add(groups[name]);
@@ -293,107 +292,81 @@ function regionColour(id) {
 
 function buildStaticGalaxy() {
   if (!regions || !scene) return;
-  const generation = ++staticBuildGeneration;
   clearGroup(groups.galaxy);
   clearGroup(groups.regions);
   dom['region-labels'].replaceChildren();
   const theme = snapshot?.theme || {};
-  scene.fog.color.set(theme.bg || '#070b10');
+  scene.fog.color.set('#020307');
 
-  const textureLoader = new THREE.TextureLoader();
-  textureLoader.load('/assets/atlas.png', (texture) => {
-    if (generation !== staticBuildGeneration) {
-      texture.dispose();
-      return;
-    }
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.repeat.x = -1;
-    texture.offset.x = 1;
-    texture.userData.ownedByAtlas = true;
-    const geometry = new THREE.PlaneGeometry(GALAXY_RADIUS * 2, GALAXY_RADIUS * 2);
-    const material = new THREE.MeshBasicMaterial({
-      map: texture, transparent: true, opacity: .96, depthWrite: false,
-      side: THREE.DoubleSide, blending: THREE.NormalBlending, toneMapped: false,
-      fog: false,
-    });
-    const plane = new THREE.Mesh(geometry, material);
-    plane.rotation.x = -Math.PI / 2;
-    plane.position.set(GALACTIC_CENTRE.x, -180, GALACTIC_CENTRE.z);
-    plane.renderOrder = -5;
-    groups.galaxy.add(plane);
-    // Capture mode renders on demand, so explicitly paint once the image has
-    // decoded instead of waiting for a second animation frame.
-    if (captureMode) renderer.render(scene, camera);
-  });
-
+  // An illustrative stellar volume, independent of selectable journal systems.
+  // Soft particles replace the old rectangular atlas photograph entirely.
   const random = seededRandom(0x5A17C0DE);
   const starPositions = [];
   const starColours = [];
-  const accent = new THREE.Color(theme.accent || '#00d1ff');
-  const warm = new THREE.Color(theme.orange || '#ff8a3d');
-  const pale = new THREE.Color(theme.text || '#dcebf3');
-  for (let index = 0; index < 15000; index += 1) {
-    const radial = Math.pow(random(), .68);
+  const starSizes = [];
+  const warm = new THREE.Color('#ffe4b9');
+  const cool = new THREE.Color('#a9bddd');
+  const pale = new THREE.Color('#fff8ee');
+  for (let index = 0; index < 76000; index += 1) {
+    const bulge = index < 19000;
+    const radial = bulge ? Math.pow(random(), .65) * .23 : Math.pow(random(), .7);
+    const radius = radial * GALAXY_RADIUS;
     const arm = index % 4;
-    const spread = (random() - .5) * (.28 + radial * .35);
-    const angle = arm * Math.PI / 2 + .62 + radial * 5.12 + spread;
-    const radius = radial * GALAXY_RADIUS * (.92 + random() * .12);
-    starPositions.push(
-      -Math.cos(angle) * radius,
-      (random() - .5) * (120 + radial * 2300),
-      GALACTIC_CENTRE.z + Math.sin(angle) * radius * .92,
-    );
-    const colour = (radial < .23 ? warm : accent).clone().lerp(pale, random() * .38);
+    const scatter = (random() + random() + random() - 1.5);
+    const angle = bulge ? random() * Math.PI * 2
+      : arm * Math.PI / 2 + .65 + radial * 5.1 + scatter * (.32 + radial * .24);
+    const thickness = bulge ? 4200 * (1 - radial * 3) : 450 + (1 - radial) * 650;
+    starPositions.push(-Math.cos(angle) * radius,
+      (random() + random() - 1) * thickness,
+      GALACTIC_CENTRE.z + Math.sin(angle) * radius * .93);
+    const colour = (bulge ? warm : cool).clone().lerp(pale, random() * .85);
+    colour.multiplyScalar(bulge ? .45 + random() * .3 : .3 + random() * .65);
     starColours.push(colour.r, colour.g, colour.b);
+    starSizes.push(index % 7 === 0 ? 13 + random() * 24 : 1 + random() * 2.2);
   }
   const starGeometry = new THREE.BufferGeometry();
   starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
   starGeometry.setAttribute('color', new THREE.Float32BufferAttribute(starColours, 3));
-  const stars = new THREE.Points(starGeometry, new THREE.PointsMaterial({
-    size: 1.35, sizeAttenuation: false, vertexColors: true,
-    transparent: true, opacity: .62, depthWrite: false, fog: false,
-    blending: THREE.AdditiveBlending,
+  starGeometry.setAttribute('particleSize', new THREE.Float32BufferAttribute(starSizes, 1));
+  const stars = new THREE.Points(starGeometry, new THREE.ShaderMaterial({
+    uniforms: {pixelRatio: {value: renderer.getPixelRatio()}, fieldDistance: {value: 132000}},
+    vertexShader: `
+      attribute vec3 color;
+      attribute float particleSize;
+      varying vec3 vColor;
+      varying float vCloud;
+      uniform float pixelRatio;
+      void main() {
+        vColor = color;
+        vCloud = step(10.0, particleSize);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = clamp(particleSize * pixelRatio * 105000.0 / max(12000.0, -mv.z), 1.0, 100.0);
+      }`,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vCloud;
+      uniform float fieldDistance;
+      void main() {
+        float r = length(gl_PointCoord - .5) * 2.0;
+        if (r > 1.0) discard;
+        float glow = exp(-r * r * mix(5.0, 4.0, vCloud)) * (1.0 - smoothstep(.65, 1.0, r));
+        float fade = smoothstep(900.0, 18000.0, fieldDistance);
+        gl_FragColor = vec4(vColor, glow * mix(.8, .06, vCloud) * fade);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
+  stars.name = 'stellar-volume';
   groups.galaxy.add(stars);
 
-  for (const radius of [10000, 20000, 30000, 40000, 50000]) {
-    const points = [];
-    for (let index = 0; index <= 128; index += 1) {
-      const angle = index / 128 * Math.PI * 2;
-      points.push(new THREE.Vector3(
-        Math.cos(angle) * radius, -30,
-        GALACTIC_CENTRE.z + Math.sin(angle) * radius,
-      ));
-    }
-    const line = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(points),
-      new THREE.LineBasicMaterial({
-        color: theme.border || '#243746', transparent: true, opacity: .24,
-        depthWrite: false,
-      }),
-    );
-    groups.galaxy.add(line);
-  }
-  const radialPositions = [];
-  for (let index = 0; index < 12; index += 1) {
-    const angle = index / 12 * Math.PI * 2;
-    radialPositions.push(
-      0, -30, GALACTIC_CENTRE.z,
-      Math.cos(angle) * GALAXY_RADIUS, -30,
-      GALACTIC_CENTRE.z + Math.sin(angle) * GALAXY_RADIUS,
-    );
-  }
-  const radialGeometry = new THREE.BufferGeometry();
-  radialGeometry.setAttribute('position', new THREE.Float32BufferAttribute(radialPositions, 3));
-  groups.galaxy.add(new THREE.LineSegments(
-    radialGeometry,
-    new THREE.LineBasicMaterial({
-      color: theme.border_soft || '#192a36', transparent: true, opacity: .18,
-      depthWrite: false,
-    }),
-  ));
+  clearGroup(groups.grid);
+  const grid = new THREE.GridHelper(100000, 20, '#936746', '#33414b');
+  grid.name = 'navigation-grid';
+  grid.material.transparent = true;
+  grid.material.opacity = .22;
+  grid.material.depthWrite = false;
+  grid.material.fog = false;
+  groups.grid.add(grid);
 
   const fillPositions = [];
   const fillColours = [];
@@ -409,7 +382,7 @@ function buildStaticGalaxy() {
   fillGeometry.setAttribute('position', new THREE.Float32BufferAttribute(fillPositions, 3));
   fillGeometry.setAttribute('color', new THREE.Float32BufferAttribute(fillColours, 3));
   const fillMesh = new THREE.Mesh(fillGeometry, new THREE.MeshBasicMaterial({
-    vertexColors: true, transparent: true, opacity: .035,
+    vertexColors: true, transparent: true, opacity: .018,
     side: THREE.DoubleSide, depthWrite: false, fog: false,
   }));
   fillMesh.renderOrder = -1;
@@ -424,7 +397,7 @@ function buildStaticGalaxy() {
   groups.regions.add(new THREE.LineSegments(
     segmentGeometry,
     new THREE.LineBasicMaterial({
-      color: theme.orange || '#ff8a3d', transparent: true, opacity: .20,
+      color: theme.orange || '#ff8a3d', transparent: true, opacity: .32,
       depthWrite: false, fog: false,
     }),
   ));
@@ -786,6 +759,21 @@ function rebuildDynamicScene() {
 
 function buildClusterLabels() {
   dom['cluster-labels'].replaceChildren();
+  if (camera.position.distanceTo(controls.target) < 22000) {
+    const named = new Set();
+    const records = [...screenPickRecords].sort((a, b) => a.position.distanceToSquared(controls.target) - b.position.distanceToSquared(controls.target));
+    for (const entry of records) {
+      const name = entry.record.system;
+      if (!name || named.has(name) || named.size >= 70) continue;
+      named.add(name);
+      const label = document.createElement('span');
+      label.className = 'system-label';
+      label.textContent = name;
+      label.dataset.layer = entry.layer || '';
+      label._mapPosition = entry.position;
+      dom['cluster-labels'].appendChild(label);
+    }
+  }
   for (const row of clusterLabelRecords.slice(0, 140)) {
     const element = document.createElement('span');
     element.className = 'cluster-label';
@@ -836,6 +824,8 @@ function updateLabels() {
   const {width, height} = viewportMetrics();
   const currentRegionId = snapshot?.current?.region?.id;
   const occupied = [];
+  const panelEdge = document.documentElement.classList.contains('controls-collapsed') ? 78 : document.getElementById('map-controls').getBoundingClientRect().right + 12;
+  const topEdge = document.documentElement.classList.contains('embedded-atlas') ? 25 : 85;
   const labels = [...dom['region-labels'].children].sort((a, b) => {
     const ac = Number(a.dataset.id) === Number(currentRegionId);
     const bc = Number(b.dataset.id) === Number(currentRegionId);
@@ -849,7 +839,7 @@ function updateLabels() {
     const bounds = [x - 65, y - 9, x + 65, y + 9];
     const current = Number(label.dataset.id) === Number(currentRegionId);
     const overlap = occupied.some((other) => bounds[0] < other[2] && bounds[2] > other[0] && bounds[1] < other[3] && bounds[3] > other[1]);
-    const show = visible && x > 310 && x < width - 25 && y > 92 && y < height - 65 && (!overlap || current);
+    const show = visible && x > panelEdge && x < width - 25 && y > topEdge && y < height - 65 && (!overlap || current);
     label.hidden = !show;
     label.classList.toggle('current', current);
     if (show) {
@@ -865,7 +855,7 @@ function updateLabels() {
     const layer = label.dataset.layer;
     const show = (!layer || viewState.layers[layer] !== false)
       && projected.z > -1 && projected.z < 1
-      && x > 305 && x < width - 18 && y > 88 && y < height - 58;
+      && x > panelEdge && x < width - 18 && y > topEdge && y < height - 58;
     label.hidden = !show;
     if (show) {
       label.style.left = `${x}px`;
@@ -1003,6 +993,7 @@ function animate(now) {
       beacon?.scale.setScalar(1 + (Math.sin(phase * 1.45) + 1) * .18);
     }
   }
+  updateNavigationScene();
   updateLabels();
   renderer.render(scene, camera);
 }
@@ -1129,8 +1120,13 @@ function restoreView(state) {
     layers: {...DEFAULT_LAYER_STATE, ...(state?.layers || {})},
     depth_scale: Math.max(1, Math.min(20, Number(state?.depth_scale || 4))),
     top_down: Boolean(state?.top_down),
+    grid: state?.grid !== false, atmosphere: state?.atmosphere !== false,
     camera: state?.camera || {position: null, target: null},
   };
+  groups.grid.visible = viewState.grid;
+  groups.galaxy.visible = viewState.atmosphere;
+  document.getElementById('grid-toggle').checked = viewState.grid;
+  document.getElementById('atmosphere-toggle').checked = viewState.atmosphere;
   dom['view-mode'].value = viewState.mode;
   dom['scope-mode'].value = viewState.scope;
   dom['depth-scale'].value = viewState.depth_scale;
@@ -1219,6 +1215,7 @@ function applySnapshot(data, first = false) {
     'reduced-motion', Boolean(data.reduced_motion),
   );
   if (profileChanged || first) {
+    closeInspector();
     activeProfile = data.profile?.id;
     restoreView(data.view_state || {});
   }
@@ -1279,7 +1276,18 @@ function pickAt(clientX, clientY, maxDistance = 14) {
       nearest = item.record;
     }
   }
-  return nearest;
+  if (nearest) return nearest;
+  if (viewState.layers.Regions !== false) {
+    for (const label of dom['region-labels'].children) {
+      if (label.hidden) continue;
+      const bounds = label.getBoundingClientRect();
+      if (clientX < bounds.left || clientX > bounds.right || clientY < bounds.top || clientY > bounds.bottom) continue;
+      const row = regions.labels.find((region) => region.id === Number(label.dataset.id));
+      if (row) return {kind: 'Region', subject: row.name, position: row.position,
+        detail: `Universal Cartographics region ${row.id} of 42`};
+    }
+  }
+  return null;
 }
 
 function planePositionAt(clientX, clientY) {
@@ -1326,7 +1334,10 @@ function onCanvasClick(event) {
   updatePointerTravel(event);
   if (pointerDown?.maximumTravel > 5) return;
   const record = pickAt(event.clientX, event.clientY);
-  if (record) focusRecord(record);
+  if (record) {
+    if (event.detail >= 2) focusRecord(record);
+    else inspect(record);
+  }
 }
 
 function onPointerMove(event) {
@@ -1385,13 +1396,23 @@ function onContextMenu(event) {
 function hideContextMenu() { dom['context-menu'].hidden = true; }
 
 function inspect(record) {
+  clearGroup(groups.selection);
+  const position = positionOf(record);
+  if (position) {
+    const marker = new THREE.Mesh(new THREE.RingGeometry(.85, 1, 48),
+      new THREE.MeshBasicMaterial({color: '#ff9b40', transparent: true, opacity: .9,
+        side: THREE.DoubleSide, depthTest: false, depthWrite: false}));
+    marker.position.copy(scenePosition(position));
+    marker.onBeforeRender = () => marker.quaternion.copy(camera.quaternion);
+    marker.renderOrder = 10;
+    groups.selection.add(marker);
+  }
   if (!record) return;
   selectedRecord = record;
   dom['inspect-kind'].textContent = String(record.kind || 'MAP INTELLIGENCE').toUpperCase();
   dom['inspect-title'].textContent = record.subject || record.system || record.kind || 'Map record';
   dom['inspect-system'].textContent = record.system || '';
   dom['inspect-detail'].textContent = record.detail || 'Retained commander map evidence.';
-  const position = positionOf(record);
   dom['inspect-coordinates'].replaceChildren();
   if (position) {
     for (const [label, value] of [['X', position[0]], ['Y', position[1]], ['Z', position[2]]]) {
@@ -1424,6 +1445,7 @@ function inspect(record) {
 }
 
 function closeInspector() {
+  clearGroup(groups.selection);
   dom.inspector.classList.remove('open');
   selectedRecord = null;
 }
@@ -1498,7 +1520,61 @@ function runSearch() {
   dom['search-results'].hidden = false;
 }
 
+function setMapPanel(name) {
+  const buttons = [...document.querySelectorAll('[data-map-panel]')];
+  const active = buttons.find((button) => button.classList.contains('active'));
+  const collapse = !name || (active?.dataset.mapPanel === name
+    && !document.documentElement.classList.contains('controls-collapsed'));
+  document.documentElement.classList.toggle('controls-collapsed', collapse);
+  document.getElementById('map-controls').inert = collapse;
+  for (const button of buttons) {
+    const selected = !collapse && button.dataset.mapPanel === name;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-expanded', String(selected));
+  }
+  if (!collapse) {
+    for (const panel of document.querySelectorAll('[data-panel]')) panel.hidden = panel.dataset.panel !== name;
+    document.getElementById('panel-title').textContent = {navigation: 'NAVIGATION', layers: 'MAP FILTERS', reference: 'GALACTIC POSITION'}[name];
+  }
+  hideTooltip();
+}
+
+function updateNavigationScene() {
+  const distance = camera.position.distanceTo(controls.target);
+  const volume = groups.galaxy.getObjectByName('stellar-volume');
+  if (volume) {
+    volume.material.uniforms.fieldDistance.value = distance;
+    volume.material.uniforms.pixelRatio.value = renderer.getPixelRatio();
+  }
+  const grid = groups.grid.getObjectByName('navigation-grid');
+  if (grid) {
+    const spacing = niceScaleDistance(distance / 8);
+    grid.scale.setScalar(spacing / 5000);
+    grid.position.set(Math.round(controls.target.x / spacing) * spacing, -220,
+      Math.round(controls.target.z / spacing) * spacing);
+  }
+  if (currentBeacon) currentBeacon.scale.setScalar(Math.max(.008, distance / 85000));
+  const selection = groups.selection.children[0];
+  if (selection) {
+    selection.scale.setScalar(distance * .012);
+    const position = positionOf(selectedRecord);
+    if (position) selection.position.copy(scenePosition(position));
+  }
+}
+
 function bindInterface() {
+  for (const button of document.querySelectorAll('[data-map-panel]')) {
+    button.addEventListener('click', () => setMapPanel(button.dataset.mapPanel));
+  }
+  document.getElementById('collapse-controls').addEventListener('click', () => setMapPanel(null));
+  document.getElementById('grid-toggle').addEventListener('change', (event) => { viewState.grid = groups.grid.visible = event.target.checked; scheduleSaveView(); });
+  document.getElementById('atmosphere-toggle').addEventListener('change', (event) => { viewState.atmosphere = groups.galaxy.visible = event.target.checked; scheduleSaveView(); });
+  for (const [id, factor] of [['zoom-in', .65], ['zoom-out', 1.5]]) {
+    document.getElementById(id).addEventListener('click', () => tweenCamera(controls.target,
+      Math.min(controls.maxDistance, Math.max(controls.minDistance, camera.position.distanceTo(controls.target) * factor))));
+  }
+  if (window.innerWidth < 700) setMapPanel(null);
+
   dom['search-button'].addEventListener('click', runSearch);
   dom.search.addEventListener('input', runSearch);
   dom.search.addEventListener('keydown', (event) => {

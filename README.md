@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.3**
+**Current version: 5.4.3.1**
 
 Void Compass is a local exploration companion for *Elite Dangerous*. It reads the game’s journal, status and companion files, then turns them into a useful command deck, survey record and set of in-game overlays. It is built for commanders who want to keep track of a long trip without handing their flight history to a cloud service.
 

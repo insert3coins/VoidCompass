@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
   <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
   <title>Void Compass // Galactic Atlas</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/assets/cursor.css">
@@ -36,24 +37,31 @@
       </div>
     </header>
 
-    <aside class="control-deck glass angular">
+    <nav class="map-tools" aria-label="Map tools">
+      <button data-map-panel="navigation" aria-controls="map-controls" aria-expanded="true" class="active" title="Navigation"><span>⌖</span><small>NAV</small></button>
+      <button data-map-panel="layers" aria-controls="map-controls" aria-expanded="false" title="Map filters"><span>◈</span><small>FILTERS</small></button>
+      <button data-map-panel="reference" aria-controls="map-controls" aria-expanded="false" title="Position and controls"><span>⊕</span><small>POSITION</small></button>
+    </nav>
+    <aside id="map-controls" class="control-deck glass angular">
+      <header class="panel-heading"><div><span class="eyebrow">UNIVERSAL CARTOGRAPHICS</span><h2 id="panel-title">NAVIGATION</h2></div><button id="collapse-controls" class="text-button" aria-label="Collapse map controls">‹</button></header>
+      <div data-panel="navigation">
       <section class="control-section search-section">
         <label for="search">SYSTEM / REGION / ANNOTATION</label>
         <div class="search-row">
-          <input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="Search retained map data">
+          <input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="Search systems & regions">
           <button id="search-button" class="icon-button" title="Search">⌖</button>
         </div>
         <div id="search-results" class="search-results" hidden></div>
       </section>
 
       <section class="control-section split-controls">
-        <label>VIEW</label>
+        <label for="view-mode">VIEW</label>
         <select id="view-mode">
           <option>Galactic Atlas</option>
           <option>Route Focus</option>
           <option>Current Vicinity</option>
         </select>
-        <label>SCOPE</label>
+        <label for="scope-mode">SCOPE</label>
         <select id="scope-mode">
           <option>All History</option>
           <option>Current Session</option>
@@ -69,16 +77,25 @@
         <button id="mark-button">ADD MARK</button>
         <button id="reset-button">RESET</button>
       </section>
-
+      <p class="panel-note">Search your recorded systems, map marks and all 42 galactic regions.</p>
+      </div>
+      <div data-panel="layers" hidden>
       <section class="control-section depth-control">
         <div class="section-heading"><span>VERTICAL STRUCTURE</span><output id="depth-value">4×</output></div>
-        <input id="depth-scale" type="range" min="1" max="20" step="1" value="4">
+        <input id="depth-scale" aria-label="Vertical structure scale" type="range" min="1" max="20" step="1" value="4">
       </section>
-
       <section class="control-section layers-section">
         <div class="section-heading"><span>INTELLIGENCE LAYERS</span><button id="layers-toggle" class="text-button">ALL</button></div>
         <div id="layer-grid" class="layer-grid"></div>
       </section>
+      <section class="control-section display-options">
+        <label><input id="grid-toggle" type="checkbox" checked> GALACTIC GRID</label>
+        <label><input id="atmosphere-toggle" type="checkbox" checked> GALAXY BACKGROUND</label>
+      </section>
+      <p class="panel-note">The galaxy background is illustrative. Plotted systems and routes use your recorded Elite coordinates.</p>
+      </div>
+      <div data-panel="reference" hidden>
+
 
       <section class="control-section atlas-reference">
         <div class="section-heading"><span>LIVE GALACTIC FIX</span><span>XYZ // LY</span></div>
@@ -93,7 +110,11 @@
           <span>WHEEL <strong>RANGE</strong></span>
         </div>
       </section>
+      <p class="panel-note">Select a system or region to inspect it. Double-click to focus. Right-click to place a map annotation.</p>
+      </div>
     </aside>
+
+    <div class="map-view-toolbar" aria-label="Map zoom"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button></div>
 
     <aside id="inspector" class="inspector glass angular" aria-live="polite">
       <button id="close-inspector" class="close-button" aria-label="Close inspector">×</button>
