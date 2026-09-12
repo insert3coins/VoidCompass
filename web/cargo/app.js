@@ -8,6 +8,7 @@
   const root = document.getElementById("cargo");
   const byId = (id) => document.getElementById(id);
   const MAX_ROWS = 14;
+  const MAX_RELATED_ROWS = 8;
   const CAPACITY_CELLS = 16;
   let revision = -1;
   let polling = false;
@@ -258,6 +259,51 @@
     placeChildren(host, desired);
   }
 
+  function renderRelatedHolds(model) {
+    const host = byId("related-holds");
+    const holds = Array.isArray(model.related_holds) ? model.related_holds : [];
+    host.hidden = !holds.length;
+    if (!holds.length) {
+      host.replaceChildren();
+      return;
+    }
+    host.replaceChildren(...holds.map((hold) => {
+      const owner = String(hold.owner || "SHIP").toUpperCase();
+      const rows = orderedRows(Array.isArray(hold.rows) ? hold.rows : []);
+      const total = Math.max(0, number(hold.total));
+      const capacity = Math.max(0, number(hold.capacity));
+      const card = node("article", "related-hold");
+      const heading = node("header", "related-hold-head");
+      const title = node("div");
+      title.appendChild(node("strong", "", `${owner} CARGO`));
+      title.appendChild(node("small", "", String(hold.status || "RETAINED")));
+      heading.appendChild(title);
+      heading.appendChild(node(
+        "b", "", capacity ? `${total.toLocaleString()} / ${capacity.toLocaleString()} T` : tonnes(total),
+      ));
+      card.appendChild(heading);
+
+      const list = node("div", "related-manifest");
+      if (!rows.length) {
+        list.appendChild(node("span", "related-empty", "MOTHERSHIP HOLD CLEAR"));
+      } else {
+        rows.slice(0, MAX_RELATED_ROWS).forEach((row) => {
+          const item = node("span", "related-row");
+          item.appendChild(node("i", "", row.name || "Unknown commodity"));
+          item.appendChild(node("b", "", tonnes(row.count)));
+          list.appendChild(item);
+        });
+        if (rows.length > MAX_RELATED_ROWS) {
+          list.appendChild(node(
+            "span", "related-overflow", `+ ${rows.length - MAX_RELATED_ROWS} MORE STACKS`,
+          ));
+        }
+      }
+      card.appendChild(list);
+      return card;
+    }));
+  }
+
   function acknowledgeCargoChange(delta, hasRows, owner) {
     const holdLabel = `${owner || "CARGO"} HOLD`;
     if (!delta) {
@@ -330,6 +376,7 @@
     set("manifest-summary", manifestSummary);
     renderCapacity(model);
     renderFlags(model, delta);
+    renderRelatedHolds(model);
     renderManifest(model);
     previousModel = JSON.parse(JSON.stringify(model));
   }

@@ -337,7 +337,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         "neutron_boost_armed", "neutron_boost_value",
         "fsd_injection_armed", "fsd_injection_percent",
         "cargo_capacity", "current_cargo_tons", "current_cargo_vessel",
-        "current_cargo_inventory", "dest_coords", "dest_name", "route_list",
+        "current_cargo_inventory", "_cargo_inventory_by_hold",
+        "dest_coords", "dest_name", "route_list",
         "nav_route_entries", "current_latitude", "current_longitude",
         "current_heading", "current_planet_radius", "on_planet",
     )
@@ -615,6 +616,15 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         state = {}
         for field in self._COCKPIT_STATE_FIELDS:
             value = getattr(self, field, None)
+            if field == "_cargo_inventory_by_hold":
+                # Only the Rhino needs an independently retained vehicle hold.
+                # Other SRVs continue to follow the game's live Cargo.json.
+                cargo_holds = value if isinstance(value, dict) else {}
+                value = {
+                    key: list(rows or [])[:256]
+                    for key, rows in cargo_holds.items()
+                    if key in {"Ship", "SRV:RHINO"} and isinstance(rows, list)
+                }
             limit = self._COCKPIT_STATE_LIMITS.get(field)
             if limit is not None and isinstance(value, (list, tuple, deque)):
                 value = list(value)[:limit]
@@ -690,6 +700,22 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self._last_surface_vehicle_name = restored_vehicle
         if restored_vehicle in surface_vehicles and self.current_vehicle_id is not None:
             self._vehicle_name_by_id[self.current_vehicle_id] = restored_vehicle
+        cargo_cache = getattr(self, "_cargo_inventory_by_hold", None)
+        if not isinstance(cargo_cache, dict):
+            cargo_cache = {}
+        self._cargo_inventory_by_hold = {
+            key: list(rows or [])[:256]
+            for key, rows in cargo_cache.items()
+            if key in {"Ship", "SRV:RHINO"} and isinstance(rows, list)
+        }
+        active_hold_key = self._cargo_hold_key(
+            getattr(self, "current_cargo_vessel", "Ship")
+        )
+        if active_hold_key in {"Ship", "SRV:RHINO"}:
+            self._cargo_inventory_by_hold.setdefault(
+                active_hold_key,
+                list(getattr(self, "current_cargo_inventory", None) or [])[:256],
+            )
         if "scan_total_confirmed" not in state:
             # Older snapshots could only express an inferred N/N body floor.
             # A partial system with a confirmed total is N/M, while explicit
@@ -2277,7 +2303,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 pass
             try:
                 inventory, capacity, vessel, owner = self._cargo_hold_snapshot()
-                self.cargo_hud.update(inventory, capacity, vessel, owner)
+                self.cargo_hud.update(
+                    inventory, capacity, vessel, owner,
+                    self._rhino_related_cargo_holds(vessel, owner),
+                )
                 self.cargo_hud.win.deiconify()
                 pass
                 pass
@@ -4276,7 +4305,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
                 self.watcher.force_check_cargo()
             inventory, capacity, vessel, owner = self._cargo_hold_snapshot()
-            self.cargo_hud.update(inventory, capacity, vessel, owner)
+            self.cargo_hud.update(
+                inventory, capacity, vessel, owner,
+                self._rhino_related_cargo_holds(vessel, owner),
+            )
             try:
                 self.cargo_hud.win.deiconify()
                 pass
@@ -9790,15 +9822,36 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self._cargo_vehicle_owner(vessel),
         )
 
+    def _rhino_related_cargo_holds(self, vessel=None, owner=None):
+        """Expose the retained mothership manifest only while the Rhino is active."""
+        vessel = self._normalise_cargo_vessel(
+            vessel if vessel is not None else getattr(self, "current_cargo_vessel", "Ship")
+        )
+        owner = str(owner or self._cargo_vehicle_owner(vessel)).strip().upper()
+        if vessel != "SRV" or owner != "RHINO":
+            return []
+        cache = getattr(self, "_cargo_inventory_by_hold", None)
+        if not isinstance(cache, dict) or "Ship" not in cache:
+            return []
+        return [{
+            "inventory": list(cache.get("Ship") or []),
+            "capacity": getattr(self, "cargo_capacity", 0),
+            "vessel": "Ship",
+            "vehicle_name": "SHIP",
+            "status": "REMOTE / RETAINED",
+        }]
+
     def _refresh_cargo_consumers(self):
         """Publish one vessel-aware Cargo.json snapshot to the live overlay."""
         self._reconcile_active_cargo_vessel()
         cargo_hud = getattr(self, "cargo_hud", None)
         if cargo_hud:
             inventory, capacity, vessel, owner = self._cargo_hold_snapshot()
+            related_holds = self._rhino_related_cargo_holds(vessel, owner)
             self._ui_post(
                 lambda hud=cargo_hud, inv=inventory, cap=capacity,
-                       ves=vessel, own=owner: hud.update(inv, cap, ves, own),
+                       ves=vessel, own=owner, related=related_holds:
+                       hud.update(inv, cap, ves, own, related),
                 key="cargo-hud",
             )
 
