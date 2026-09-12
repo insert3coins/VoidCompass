@@ -989,7 +989,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 self.root.cancel(transition_job)
             except Exception:
                 pass
+        event_expiry_job = getattr(self, "_hud_event_expiry_job", None)
+        if event_expiry_job is not None:
+            try:
+                self.root.cancel(event_expiry_job)
+            except Exception:
+                pass
         self._navigation_transition_job = None
+        self._hud_event_expiry_job = None
         self._hud_refresh_job = None
         self._hud_refresh_requested = False
         self._last_hud_refresh_ts = 0.0
@@ -1222,6 +1229,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         self._data_risk_level = 0
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self._hud_event_pulse = None
+        self._hud_event_expiry_job = None
         self._hud_event_batch_priority = None
         self.last_journal_event_ts = 0.0
         self.last_logged_journal_file = None
@@ -2131,6 +2139,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         self.last_journal_event_ts = 0.0
         self._hud_event_sequence = 0
         self._hud_event_pulse = None
+        self._hud_event_expiry_job = None
         self._hud_event_batch_priority = None
         self.last_logged_journal_file = None
         self.last_status_event_ts = 0.0
@@ -5609,6 +5618,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             "observed": now,
             **detail,
         }
+        self._schedule_navigation_hud_event_expiry(
+            self._hud_event_sequence, duration_s,
+        )
         if event in {"FSDJump", "CarrierJump", "NavRouteClear"}:
             self._navigation_selected_star = None
         if getattr(self, "batch_mode", False):
@@ -5649,6 +5661,48 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         if age < 0 or age > duration + 0.5:
             return None
         return dict(pulse)
+
+    def _schedule_navigation_hud_event_expiry(self, sequence, duration):
+        """Repaint after a transient ends even when cockpit telemetry is idle."""
+        job = getattr(self, "_hud_event_expiry_job", None)
+        if job is not None:
+            try:
+                self.root.cancel(job)
+            except Exception:
+                pass
+        try:
+            delay_ms = max(1, int((float(duration) + 0.55) * 1000.0))
+            self._hud_event_expiry_job = self.root.call_later(
+                delay_ms,
+                lambda seq=int(sequence): self._expire_navigation_hud_event(seq),
+            )
+        except Exception:
+            self._hud_event_expiry_job = None
+
+    def _expire_navigation_hud_event(self, sequence):
+        self._hud_event_expiry_job = None
+        pulse = getattr(self, "_hud_event_pulse", None)
+        if not isinstance(pulse, dict) or pulse.get("seq") != sequence:
+            return False
+        try:
+            remaining = (
+                float(pulse.get("duration", 0.0)) + 0.5
+                - (time.monotonic() - float(pulse.get("observed", 0.0)))
+            )
+        except (TypeError, ValueError):
+            remaining = 0.0
+        if remaining > 0:
+            try:
+                self._hud_event_expiry_job = self.root.call_later(
+                    max(1, int(remaining * 1000.0) + 1),
+                    lambda seq=int(sequence): self._expire_navigation_hud_event(seq),
+                )
+            except Exception:
+                self._hud_event_expiry_job = None
+            return False
+        self._hud_event_pulse = None
+        self.update_hud()
+        return True
 
     def _cancel_navigation_transition_job(self):
         job = getattr(self, "_navigation_transition_job", None)
@@ -5950,6 +6004,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             "count": 1, "observed": time.monotonic(),
             "state_label": str(state_label or "").upper(),
         }
+        self._schedule_navigation_hud_event_expiry(
+            self._hud_event_sequence, duration,
+        )
         if not getattr(self, "batch_mode", False):
             self.update_hud()
         return True
