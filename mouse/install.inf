@@ -6,7 +6,7 @@ Provider=%ProviderName%
 
 [DefaultInstall]
 CopyFiles=CursorFiles
-AddReg=CursorScheme
+AddReg=CursorScheme,NamedCursorScheme
 
 [DefaultUninstall]
 DelFiles=CursorFiles
@@ -56,6 +56,10 @@ HKCU,"Control Panel\Cursors","UpArrow",0x00020000,"%10%\Cursors\VoidCompass\alte
 HKCU,"Control Panel\Cursors","Hand",0x00020000,"%10%\Cursors\VoidCompass\link-select.cur"
 HKCU,"Control Panel\Cursors","Pin",0x00020000,"%10%\Cursors\VoidCompass\pin.cur"
 HKCU,"Control Panel\Cursors","Person",0x00020000,"%10%\Cursors\VoidCompass\person-select.cur"
+
+[NamedCursorScheme]
+HKCU,"Control Panel\Cursors\Schemes","Void Compass",0x00020000,"%10%\Cursors\VoidCompass\normal-select.cur,%10%\Cursors\VoidCompass\help-select.cur,%10%\Cursors\VoidCompass\working-background.ani,%10%\Cursors\VoidCompass\busy.ani,%10%\Cursors\VoidCompass\precision-select.cur,%10%\Cursors\VoidCompass\text-select.cur,%10%\Cursors\VoidCompass\handwriting.cur,%10%\Cursors\VoidCompass\unavailable.cur,%10%\Cursors\VoidCompass\vertical-resize.cur,%10%\Cursors\VoidCompass\horizontal-resize.cur,%10%\Cursors\VoidCompass\diagonal-resize-1.cur,%10%\Cursors\VoidCompass\diagonal-resize-2.cur,%10%\Cursors\VoidCompass\move.cur,%10%\Cursors\VoidCompass\alternate-select.cur,%10%\Cursors\VoidCompass\link-select.cur,%10%\Cursors\VoidCompass\pin.cur,%10%\Cursors\VoidCompass\person-select.cur"
+HKCU,"Control Panel\Cursors","",0x00000000,"Void Compass"
 
 [Strings]
 ProviderName="Void Compass"

@@ -15,11 +15,18 @@ roles use standard Windows `.cur` files, with hotspots set for their shapes.
 and at native size on both light and dark backgrounds. Busy and working are
 shown as still frames; the installed `.ani` versions rotate.
 
-To install it, right-click `install.inf`, choose **Install**, then open
-`VoidCompass.theme` from this folder. Windows may ask for administrator access
-when it copies the files into its cursor directory. If the theme does not
-refresh immediately, open **Settings → Bluetooth & devices → Mouse → Additional
-mouse settings → Pointers**, choose the Void Compass scheme, and apply it.
+To install it, right-click `install.inf` and choose **Install** (under **Show
+more options** if needed). Windows may ask for administrator access when it
+copies the files into its cursor directory. Then:
+
+1. Press **Win + R**, enter `main.cpl`, and press **Enter**.
+2. Open the **Pointers** tab.
+3. Choose **Void Compass** from **Scheme**, then click **Apply** and **OK**.
+
+If the Mouse Properties window was already open, close and reopen it after
+installing. Older installers assigned the cursor files without adding a named
+scheme: rerun the updated installer, or use **Save As… → Void Compass** on the
+Pointers tab while the installed Void Compass cursors are shown, then apply.
 
 `generate_theme.py` is the small Pillow-based generator used to rebuild the
 cursor files from the in-app artwork and role-specific drawing code. Run
