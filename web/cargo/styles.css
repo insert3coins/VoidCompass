@@ -285,6 +285,65 @@ header > b {
 .cargo-flags .mission { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 40%, var(--soft)); }
 .cargo-flags .stolen { color: var(--red); border-color: color-mix(in srgb, var(--red) 44%, var(--soft)); }
 
+.related-holds {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 4px;
+}
+.related-holds[hidden] { display: none; }
+.related-hold {
+  padding: 5px 7px 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--soft));
+  border-left: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--raised) 36%, transparent);
+}
+.related-hold-head {
+  min-height: 25px;
+  border-bottom-color: color-mix(in srgb, var(--accent) 16%, var(--soft));
+}
+.related-hold-head > div { min-width: 0; }
+.related-hold-head strong,
+.related-hold-head small { display: block; }
+.related-hold-head strong { color: var(--accent); font-size: var(--type-body); }
+.related-hold-head small { color: var(--dim); font-size: var(--type-small); font-weight: 700; }
+.related-hold-head > b {
+  padding: 0;
+  color: var(--orange);
+  border: 0;
+  background: transparent;
+  font-size: var(--type-body);
+}
+.related-manifest {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px 10px;
+  padding-top: 5px;
+}
+.related-row {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--type-small);
+}
+.related-row i {
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.related-row b { flex: 0 0 auto; color: var(--text); }
+.related-empty,
+.related-overflow {
+  grid-column: 1 / -1;
+  color: var(--dim);
+  font-size: var(--type-small);
+  font-weight: 700;
+  text-align: center;
+}
+
 .manifest-head {
   position: relative;
   z-index: 2;

@@ -43,8 +43,8 @@ def cargo_capacity_for(vessel='Ship', vehicle_name='', ship_capacity=0):
         return max(0, _integer(ship_capacity))
     return max(0, _integer(VEHICLE_CARGO_CAPACITIES.get(owner, 0)))
 
-def build_cargo_model(inventory, capacity=0, vessel='Ship', vehicle_name=''):
-    """Normalise Cargo.json inventory and expose mission/stolen distinctions."""
+def _build_single_cargo_model(inventory, capacity=0, vessel='Ship', vehicle_name=''):
+    """Normalise one Cargo.json hold and expose mission/stolen distinctions."""
     stacks = {}
     for item in inventory or []:
         if not isinstance(item, dict):
@@ -68,6 +68,22 @@ def build_cargo_model(inventory, capacity=0, vessel='Ship', vehicle_name=''):
         utilisation = max(0.0, min(1.0, total / capacity_value))
     return {'rows': rows, 'total': total, 'capacity': capacity_value, 'free': max(0, capacity_value - total) if capacity_value else None, 'utilisation': utilisation, 'mission': sum((row['mission'] for row in rows)), 'stolen': sum((row['stolen'] for row in rows)), 'vessel': vessel, 'owner': owner, 'hold_key': f'{vessel.casefold()}:{owner.casefold()}', 'capacity_known': bool(capacity_value)}
 
+def build_cargo_model(inventory, capacity=0, vessel='Ship', vehicle_name='', related_holds=None):
+    """Build the active hold plus any explicitly related retained holds."""
+    model = _build_single_cargo_model(inventory, capacity, vessel, vehicle_name)
+    related_models = []
+    for hold in related_holds or []:
+        if not isinstance(hold, dict):
+            continue
+        related = _build_single_cargo_model(
+            hold.get('inventory'), hold.get('capacity', 0),
+            hold.get('vessel', 'Ship'), hold.get('vehicle_name', ''),
+        )
+        related['status'] = str(hold.get('status') or 'RETAINED').strip().upper()
+        related_models.append(related)
+    model['related_holds'] = related_models
+    return model
+
 class CargoHUD:
 
     def __init__(self, root, config):
@@ -78,6 +94,7 @@ class CargoHUD:
         self._last_capacity = 0
         self._last_vessel = 'Ship'
         self._last_vehicle_name = ''
+        self._last_related_holds = []
         self._last_render_key = None
         self._html_render_model = build_cargo_model([], 0, 'Ship', '')
         self._height = MIN_HEIGHT
@@ -127,13 +144,16 @@ class CargoHUD:
         except Exception:
             pass
 
-    def update(self, inventory, capacity=0, vessel='Ship', vehicle_name=''):
+    def update(self, inventory, capacity=0, vessel='Ship', vehicle_name='', related_holds=None):
         inventory = list(inventory or [])
         self._last_inventory = list(inventory)
         self._last_capacity = capacity
         self._last_vessel = vessel
         self._last_vehicle_name = vehicle_name
-        model = build_cargo_model(inventory, capacity, vessel, vehicle_name)
+        self._last_related_holds = list(related_holds or [])
+        model = build_cargo_model(
+            inventory, capacity, vessel, vehicle_name, self._last_related_holds,
+        )
         self._html_render_model = model
         render_key = repr(model)
         if render_key == self._last_render_key:
@@ -142,10 +162,17 @@ class CargoHUD:
         shown = model['rows'][:MAX_ROWS]
         overflow = model['rows'][MAX_ROWS:]
         row_count = max(1, len(shown)) + (1 if overflow else 0)
-        self._height = max(MIN_HEIGHT, 116 + row_count * 21 + 28)
+        related_rows = sum(
+            min(8, len(hold.get('rows') or [])) + 1
+            for hold in model.get('related_holds') or []
+        )
+        self._height = max(MIN_HEIGHT, 116 + (row_count + related_rows) * 21 + 28)
         x, y = self._desired_pos
 
     def apply_theme(self, palette=None):
         self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
         self._last_render_key = None
-        self.update(self._last_inventory, self._last_capacity, self._last_vessel, self._last_vehicle_name)
+        self.update(
+            self._last_inventory, self._last_capacity, self._last_vessel,
+            self._last_vehicle_name, self._last_related_holds,
+        )
