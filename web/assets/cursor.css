@@ -1,0 +1,31 @@
+/* Void Compass application pointer. The asset is served from the private
+   loopback web root so every HTML surface shares one cursor and one hotspot. */
+:root {
+  --void-compass-cursor: url("/assets/void-compass-cursor.png") 5 4;
+}
+
+html,
+body {
+  cursor: var(--void-compass-cursor), auto;
+}
+
+button,
+select,
+[role="button"],
+summary,
+a,
+label[for] {
+  cursor: var(--void-compass-cursor), pointer !important;
+}
+
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="url"],
+input[type="email"],
+input[type="time"],
+input[type="date"],
+textarea,
+[contenteditable="true"] {
+  cursor: text !important;
+}

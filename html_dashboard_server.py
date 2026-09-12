@@ -189,6 +189,15 @@ class HtmlDashboardServer:
         )
 
     def _static_path(self, request_path):
+        # Shared browser assets live beside the dashboard folder so every
+        # overlay can use the same branded cursor without duplicating it.
+        if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png"}:
+            candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()
+            try:
+                candidate.relative_to(self.static_root.parent)
+            except ValueError:
+                return None
+            return candidate
         relative = "index.html" if request_path in {"", "/"} else request_path.lstrip("/")
         if not relative or relative.startswith("."):
             return None
