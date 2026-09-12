@@ -1,0 +1,59 @@
+[Version]
+signature="$CHICAGO$"
+Class=Mouse
+ClassGuid={6BDD1FC6-810F-11D0-BEC7-08002BE2092F}
+Provider=%ProviderName%
+
+[DefaultInstall]
+CopyFiles=CursorFiles
+AddReg=CursorScheme
+
+[DefaultUninstall]
+DelFiles=CursorFiles
+DelReg=CursorScheme
+
+[DestinationDirs]
+CursorFiles=10,"Cursors\VoidCompass"
+
+[CursorFiles]
+normal-select.cur
+help-select.cur
+working-background.cur
+busy.cur
+precision-select.cur
+text-select.cur
+handwriting.cur
+unavailable.cur
+vertical-resize.cur
+horizontal-resize.cur
+diagonal-resize-1.cur
+diagonal-resize-2.cur
+move.cur
+alternate-select.cur
+link-select.cur
+location-select.cur
+person-select.cur
+pin.cur
+
+[CursorScheme]
+HKCU,"Control Panel\Cursors","Scheme Source",0x00010001,2
+HKCU,"Control Panel\Cursors","Arrow",0x00020000,"%10%\Cursors\VoidCompass\normal-select.cur"
+HKCU,"Control Panel\Cursors","Help",0x00020000,"%10%\Cursors\VoidCompass\help-select.cur"
+HKCU,"Control Panel\Cursors","AppStarting",0x00020000,"%10%\Cursors\VoidCompass\working-background.cur"
+HKCU,"Control Panel\Cursors","Wait",0x00020000,"%10%\Cursors\VoidCompass\busy.cur"
+HKCU,"Control Panel\Cursors","Crosshair",0x00020000,"%10%\Cursors\VoidCompass\precision-select.cur"
+HKCU,"Control Panel\Cursors","IBeam",0x00020000,"%10%\Cursors\VoidCompass\text-select.cur"
+HKCU,"Control Panel\Cursors","NWPen",0x00020000,"%10%\Cursors\VoidCompass\handwriting.cur"
+HKCU,"Control Panel\Cursors","No",0x00020000,"%10%\Cursors\VoidCompass\unavailable.cur"
+HKCU,"Control Panel\Cursors","SizeNS",0x00020000,"%10%\Cursors\VoidCompass\vertical-resize.cur"
+HKCU,"Control Panel\Cursors","SizeWE",0x00020000,"%10%\Cursors\VoidCompass\horizontal-resize.cur"
+HKCU,"Control Panel\Cursors","SizeNWSE",0x00020000,"%10%\Cursors\VoidCompass\diagonal-resize-1.cur"
+HKCU,"Control Panel\Cursors","SizeNESW",0x00020000,"%10%\Cursors\VoidCompass\diagonal-resize-2.cur"
+HKCU,"Control Panel\Cursors","SizeAll",0x00020000,"%10%\Cursors\VoidCompass\move.cur"
+HKCU,"Control Panel\Cursors","UpArrow",0x00020000,"%10%\Cursors\VoidCompass\alternate-select.cur"
+HKCU,"Control Panel\Cursors","Hand",0x00020000,"%10%\Cursors\VoidCompass\link-select.cur"
+HKCU,"Control Panel\Cursors","Pin",0x00020000,"%10%\Cursors\VoidCompass\pin.cur"
+HKCU,"Control Panel\Cursors","Person",0x00020000,"%10%\Cursors\VoidCompass\person-select.cur"
+
+[Strings]
+ProviderName="Void Compass"
