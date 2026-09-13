@@ -27,7 +27,7 @@ def apply_theme_live(runtime, theme_name, palette):
                     setattr(module, attr, palette[key])
     app = getattr(runtime, '_voidcompass_app', None)
     if app:
-        for attr in ('hud','cargo_hud','carrier_hud','prospector_hud','planet_materials_hud','station_info_hud',
+        for attr in ('hud','cargo_hud','carrier_hud','prospector_hud','planet_materials_hud','rhino_minimap_hud','station_info_hud',
                      'survey_status_hud','toast_hud','heartbeat_hud','contact_scope_hud','gravity_warning_hud'):
             overlay = getattr(app, attr, None)
             if overlay is not None:

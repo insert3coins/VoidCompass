@@ -74,6 +74,7 @@ class PlanetMaterialsTests(unittest.TestCase):
             saved = PlanetMaterialsStore(path).rows()[0]
             self.assertEqual(saved['body_details'], row['body_details'])
             self.assertEqual(saved['density'], 'High')
+            self.assertEqual(saved['depleted'], 0)
             with self.assertRaises(ValueError):
                 store.save({**row, 'body':'Mars'})
 
@@ -102,10 +103,11 @@ class PlanetMaterialsTests(unittest.TestCase):
             data = dict(system='Sol', body='Moon', name='Site 1', latitude=0,
                         longitude=-180, materials='Diamond, Osmium', notes='Dense')
             site_id = store.save(data)
-            data.update(id=site_id, latitude=90, longitude=180, materials='Ruby')
+            data.update(id=site_id, latitude=90, longitude=180, materials='Ruby', depleted=True)
             store.save(data)
             reopened = PlanetMaterialsStore(path)
             self.assertEqual(reopened.rows()[0]['materials'], 'Ruby')
+            self.assertEqual(reopened.rows()[0]['depleted'], 1)
             other = PlanetMaterialsStore(Path(folder) / 'two' / 'planet_materials.db')
             self.assertEqual(other.rows(), [])
             self.assertFalse(other.delete(site_id))

@@ -2175,6 +2175,87 @@ class HtmlDashboardMixin:
             logging.warning("Planet Materials overlay refresh failed: %s", exc)
             return False
 
+    def _rhino_minimap_sites(self):
+        now = time.monotonic()
+        cache = getattr(self, "_rhino_minimap_sites_cache", None)
+        cache_at = float(getattr(self, "_rhino_minimap_sites_cached_at", 0.0) or 0.0)
+        if cache is None or now - cache_at >= 2.0:
+            cache = self._planet_materials_store().rows()
+            self._rhino_minimap_sites_cache = cache
+            self._rhino_minimap_sites_cached_at = now
+        return cache
+
+    def _refresh_rhino_minimap_overlay(self):
+        """Publish the active profile's persistent Rhino coverage map."""
+        overlay = getattr(self, "rhino_minimap_hud", None)
+        tracker = getattr(self, "rhino_minimap", None)
+        if overlay is None or tracker is None:
+            return False
+        try:
+            overlay.update(tracker.snapshot(
+                self._rhino_minimap_sites(),
+                center_hotkey=self.config.get("overlay_hotkey_rhino_minimap_center", ""),
+                border_hotkey=self.config.get("overlay_hotkey_rhino_minimap_border", ""),
+            ))
+            return True
+        except Exception as exc:
+            logging.warning("Rhino minimap overlay refresh failed: %s", exc)
+            return False
+
+    def _observe_rhino_minimap_status(self, status):
+        tracker = getattr(self, "rhino_minimap", None)
+        if tracker is None:
+            return False
+        status = status if isinstance(status, dict) else {}
+        was_active = bool(tracker.in_rhino)
+        changed = tracker.update(
+            body=getattr(self, "current_body_name", ""),
+            system=getattr(self, "current_sys", ""),
+            latitude=getattr(self, "current_latitude", None),
+            longitude=getattr(self, "current_longitude", None),
+            radius_m=getattr(self, "current_planet_radius", None),
+            heading=getattr(self, "current_heading", None),
+            in_srv=bool(getattr(self, "current_in_srv", False)),
+            vehicle=getattr(self, "current_vehicle_name", ""),
+            destination=status.get("Destination"),
+        )
+        if was_active and not tracker.in_rhino:
+            tracker.export_picture(self._rhino_minimap_sites())
+        self._refresh_rhino_minimap_overlay()
+        return changed
+
+    def _open_rhino_minimap_folder(self):
+        tracker = getattr(self, "rhino_minimap", None)
+        if tracker is None:
+            return False
+        try:
+            tracker.map_folder.mkdir(parents=True, exist_ok=True)
+            return bool(open_path(tracker.map_folder))
+        except OSError:
+            return False
+
+    def _set_rhino_minimap_center(self):
+        tracker = getattr(self, "rhino_minimap", None)
+        changed = bool(tracker and tracker.center_here())
+        self._refresh_rhino_minimap_overlay()
+        self._schedule_html_dashboard_publish(immediate=True)
+        self.add_event_feed_entry(
+            "RHINO", "Coverage center set" if changed else "Deploy the Rhino before setting a coverage center",
+            severity="INFO" if changed else "WARN",
+        )
+        return changed
+
+    def _set_rhino_minimap_border(self):
+        tracker = getattr(self, "rhino_minimap", None)
+        changed = bool(tracker and tracker.border_here())
+        self._refresh_rhino_minimap_overlay()
+        self._schedule_html_dashboard_publish(immediate=True)
+        detail = "Coverage border set"
+        if not changed:
+            detail = "Set the coverage center first, while deployed in the Rhino"
+        self.add_event_feed_entry("RHINO", detail, severity="INFO" if changed else "WARN")
+        return changed
+
     def _html_workspace(self, page):
         builders = {
             "planet-materials": self._html_planet_materials_workspace,
@@ -2310,6 +2391,11 @@ class HtmlDashboardMixin:
             ground_solution = {}
             ground_configured = False
             ground_ready = False
+        rhino_tracker = getattr(self, "rhino_minimap", None)
+        rhino_map = getattr(rhino_tracker, "active", None)
+        rhino_maps_count, rhino_maps_size = (
+            rhino_tracker.usage() if rhino_tracker is not None else (0, 0)
+        )
         return {
             "desktop": self._html_overlay_desktop(),
             "overlays": self._html_overlay_records(
@@ -2327,6 +2413,17 @@ class HtmlDashboardMixin:
                     getattr(self, "current_latitude", None) is not None
                     and getattr(self, "current_longitude", None) is not None
                 ),
+            },
+            "rhino_minimap": {
+                "active": bool(getattr(rhino_tracker, "in_rhino", False)),
+                "map_name": _text(getattr(rhino_map, "name", ""), 80),
+                "centered": bool(getattr(rhino_map, "centered", False)),
+                "border_m": _number(getattr(rhino_map, "border_m", None)),
+                "painted_km2": round(_number(getattr(rhino_map, "painted_km2", 0.0)) or 0.0, 2),
+                "center_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_center"), 80),
+                "border_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_border"), 80),
+                "saved_maps": rhino_maps_count,
+                "saved_bytes": rhino_maps_size,
             },
             "options": {
                 "overlay_mouse_passthrough": bool(self.config.get("overlay_mouse_passthrough", True)),
@@ -2526,6 +2623,12 @@ class HtmlDashboardMixin:
     def _handle_html_overlay_studio_command(self, payload):
         operation = _text(payload.get("operation"), 40).casefold()
         overlay_id = _text(payload.get("overlay_id"), 50)
+        if operation == "rhino_center":
+            return self._set_rhino_minimap_center()
+        if operation == "rhino_border":
+            return self._set_rhino_minimap_border()
+        if operation == "rhino_open_maps":
+            return self._open_rhino_minimap_folder()
         if operation == "move":
             sequence = max(0, _integer(payload.get("sequence"), 0))
             seen = getattr(self, "_html_overlay_move_sequences", None)
@@ -2900,7 +3003,9 @@ class HtmlDashboardMixin:
                     return False
             else:
                 return False
+            self._rhino_minimap_sites_cache = None
             self._refresh_planet_materials_overlay()
+            self._refresh_rhino_minimap_overlay()
             self._schedule_html_dashboard_publish(immediate=True)
             return True
 

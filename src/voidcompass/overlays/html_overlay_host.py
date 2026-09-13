@@ -533,6 +533,8 @@ class _OverlayHost:
             path = "/planet-materials-overlay/index.html"
         elif template == "powerplay-overlay":
             path = "/powerplay-overlay/index.html"
+        elif template == "rhino-minimap-overlay":
+            path = "/rhino-minimap/index.html"
         else:
             raise ValueError(f"Unsupported semantic overlay template: {template}")
         return self._url(path, overlay_id)

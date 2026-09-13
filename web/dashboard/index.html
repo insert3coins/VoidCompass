@@ -199,7 +199,7 @@
       <footer class="rail-footer">
         <div class="connection"><i id="connection-light"></i><span>LOCAL LINK</span><b id="connection-state">CONNECTING</b></div>
         <button data-command="open_screenshots">OPEN SCREENSHOTS</button>
-        <small id="rail-version">v5.4.6 // WEBVIEW2</small>
+        <small id="rail-version">v5.4.6.1 // WEBVIEW2</small>
       </footer>
     </aside>
 
@@ -592,6 +592,19 @@
                 <div class="studio-ground-readout"><span id="studio-ground-target-detail">NO COORDINATES SET</span><b id="studio-ground-visibility">HIDDEN UNTIL APPROACH</b></div>
               </article>
 
+              <article class="card studio-option-card studio-rhino-map-card">
+                <header><span>RHINO COVERAGE MINIMAP</span><b id="studio-rhino-state">AWAITING RHINO</b></header>
+                <p class="studio-option-note">Coverage is painted from Status.json positions using the estimated 2 km Rhino scanner radius. Set a center, then drive to the location edge and set its border.</p>
+                <div class="workspace-actions wrap">
+                  <button id="studio-rhino-center" type="button">SET CENTER HERE</button>
+                  <button id="studio-rhino-border" type="button">SET BORDER HERE</button>
+                  <button id="studio-rhino-overlay-toggle" type="button">OVERLAY ON</button>
+                  <button id="studio-rhino-open-maps" type="button">OPEN SAVED MAPS</button>
+                </div>
+                <div class="studio-ground-readout"><span id="studio-rhino-detail">NO ACTIVE COVERAGE MAP</span><b id="studio-rhino-hotkeys">CTRL+ALT+Z · CTRL+ALT+B</b></div>
+                <p id="studio-rhino-storage" class="studio-option-note">0 SAVED MAPS</p>
+              </article>
+
               <article class="card studio-option-card">
                 <header><span>ACTIONABLE ALERTS</span></header>
                 <label class="studio-switch"><span><b>Clear-to-sample notifications</b><small>Show exobiology sample-spacing guidance.</small></span><input type="checkbox" data-overlay-option="sample_clear_notifications_enabled"><i></i></label>
@@ -628,7 +641,7 @@
             <div class="about-identity">
               <p>INDEPENDENT ELITE DANGEROUS EXPLORATION COMPANION</p>
               <h2>Void Compass</h2>
-              <span id="about-version">Version 5.4.6 // HTML Command Deck</span>
+              <span id="about-version">Version 5.4.6.1 // HTML Command Deck</span>
               <div class="about-signal"><i></i><b>LOCAL JOURNAL UPLINK</b><span>NO CLOUD ACCOUNT REQUIRED</span></div>
             </div>
             <div class="about-telemetry" aria-label="Application identity">
@@ -700,7 +713,7 @@
             </article>
           </section>
 
-          <footer class="about-footer"><span>VOID COMPASS // MADE BY insert3coins</span><b id="about-footer-version">v5.4.6</b><span>Copyright © 2026 insert3coins</span></footer>
+          <footer class="about-footer"><span>VOID COMPASS // MADE BY insert3coins</span><b id="about-footer-version">v5.4.6.1</b><span>Copyright © 2026 insert3coins</span></footer>
         </section>
       </main>
 

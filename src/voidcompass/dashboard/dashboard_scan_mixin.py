@@ -911,6 +911,9 @@ class DashboardScanMixin:
         )
         if callable(refresh_planet_materials) and not self.batch_mode:
             refresh_planet_materials()
+        observe_rhino_minimap = getattr(self, "_observe_rhino_minimap_status", None)
+        if callable(observe_rhino_minimap) and not self.batch_mode:
+            observe_rhino_minimap(data)
         self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
 
     def _check_status_toasts(self, data, flags, flags2):
