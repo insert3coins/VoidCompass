@@ -7275,6 +7275,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 )
             except Exception as exc:
                 logging.warning("Carrier cargo total update failed: %s", exc)
+        if ev == "CargoTransfer" and not at_own_carrier and not startup_replay:
+            try:
+                self._apply_rhino_cargo_transfer(raw)
+            except Exception as exc:
+                logging.warning("Rhino cargo transfer update failed: %s", exc)
         if specialist_changed and not self.batch_mode:
             self._schedule_specialist_flush()
             self._refresh_html_workspace()
@@ -9865,6 +9870,123 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             int(item.get("Count", item.get("count", 0)) or 0)
             for item in (inventory or []) if isinstance(item, dict)
         )
+
+    @staticmethod
+    def _cargo_commodity_key(value):
+        """Normalise journal commodity symbols for hold-to-hold matching."""
+        value = str(value or "").strip().casefold()
+        if value.startswith("$"):
+            value = value[1:]
+        if value.endswith(";"):
+            value = value[:-1]
+        if value.endswith("_name"):
+            value = value[:-5]
+        return value.replace("_", "").replace(" ", "")
+
+    @classmethod
+    def _adjust_cargo_inventory(cls, inventory, commodity, delta, localised=None):
+        """Apply one confirmed transfer without merging mission/stolen stacks."""
+        rows = [dict(item) for item in (inventory or []) if isinstance(item, dict)]
+        commodity_key = cls._cargo_commodity_key(commodity)
+        try:
+            delta = int(delta or 0)
+        except (TypeError, ValueError):
+            return rows
+        if not commodity_key or not delta:
+            return rows
+
+        if delta < 0:
+            remaining = abs(delta)
+            for row in rows:
+                if cls._cargo_commodity_key(row.get("Name")) != commodity_key:
+                    continue
+                try:
+                    available = max(0, int(row.get("Count") or 0))
+                except (TypeError, ValueError):
+                    available = 0
+                removed = min(available, remaining)
+                row["Count"] = available - removed
+                remaining -= removed
+                if not remaining:
+                    break
+            return [row for row in rows if int(row.get("Count") or 0) > 0]
+
+        target = next((
+            row for row in rows
+            if cls._cargo_commodity_key(row.get("Name")) == commodity_key
+            and row.get("MissionID") in (None, "", 0, "0")
+            and int(row.get("Stolen") or 0) == 0
+        ), None)
+        if target is None:
+            target = {"Name": str(commodity or commodity_key), "Count": 0, "Stolen": 0}
+            if localised:
+                target["Name_Localised"] = str(localised)
+            rows.append(target)
+        target["Count"] = max(0, int(target.get("Count") or 0)) + delta
+        return rows
+
+    def _apply_rhino_cargo_transfer(self, raw):
+        """Reconcile both holds when cargo moves between Rhino and mothership."""
+        if not isinstance(raw, dict):
+            return False
+        if self._runtime_cargo_vessel() != "SRV":
+            return False
+        if self._cargo_vehicle_owner("SRV") != "RHINO":
+            return False
+
+        # Make the active hold agree with verified cockpit state before editing
+        # the cache; otherwise a delayed Ship Cargo.json could overwrite Rhino.
+        self._reconcile_active_cargo_vessel()
+        cache = getattr(self, "_cargo_inventory_by_hold", None)
+        if not isinstance(cache, dict):
+            cache = {}
+            self._cargo_inventory_by_hold = cache
+        rhino_key = "SRV:RHINO"
+        cache.setdefault("Ship", [])
+        cache.setdefault(rhino_key, [])
+        changed = False
+
+        for transfer in raw.get("Transfers") or []:
+            if not isinstance(transfer, dict):
+                continue
+            try:
+                count = max(0, int(transfer.get("Count") or 0))
+            except (TypeError, ValueError):
+                continue
+            commodity = transfer.get("Type") or transfer.get("Name")
+            direction = str(transfer.get("Direction") or "").strip().casefold()
+            if not count or not self._cargo_commodity_key(commodity):
+                continue
+            if direction == "toship":
+                source_key, destination_key = rhino_key, "Ship"
+            elif direction == "tosrv":
+                source_key, destination_key = "Ship", rhino_key
+            else:
+                # In particular, never interpret a fleet-carrier transfer as
+                # a Rhino hand-off even if unrelated state arrives late.
+                continue
+            cache[source_key] = self._adjust_cargo_inventory(
+                cache.get(source_key), commodity, -count,
+            )
+            cache[destination_key] = self._adjust_cargo_inventory(
+                cache.get(destination_key), commodity, count,
+                transfer.get("Type_Localised") or transfer.get("Name_Localised"),
+            )
+            changed = True
+
+        if not changed:
+            return False
+        active_key = self._cargo_hold_key(
+            getattr(self, "current_cargo_vessel", "SRV")
+        )
+        self.current_cargo_inventory = list(cache.get(active_key) or [])
+        self.current_cargo_tons = self._cargo_inventory_total(
+            self.current_cargo_inventory
+        )
+        self.last_cargo_event_ts = time.time()
+        self._refresh_cargo_consumers()
+        self._refresh_html_workspace()
+        return True
 
     def _runtime_cargo_vessel(self):
         """Resolve the hold that belongs to the commander's current cockpit."""
