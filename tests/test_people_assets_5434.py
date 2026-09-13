@@ -3,6 +3,7 @@ import unittest
 
 from engineering_companion import _portrait, reference_catalogues
 from html_dashboard_server import HtmlDashboardServer
+from release_packager import PUBLIC_RUNTIME_IMAGE_DOCUMENTS
 from version import APP_VERSION
 
 
@@ -26,6 +27,9 @@ POWERPLAY_PORTRAITS = {
 class AuthenticPeopleAssetTests(unittest.TestCase):
     def test_release_version_is_5434(self):
         self.assertEqual(APP_VERSION, "5.4.3.4")
+
+    def test_people_provenance_is_allowed_in_release_image_tree(self):
+        self.assertIn("Images/people/README.md", PUBLIC_RUNTIME_IMAGE_DOCUMENTS)
 
     def test_every_catalogued_engineer_has_a_local_portrait(self):
         for name in reference_catalogues()["unlocks"]:

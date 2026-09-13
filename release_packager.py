@@ -38,8 +38,9 @@ OPTIONAL_LICENSE_PATTERNS = ("LICENSE", "LICENSE.*", "COPYING", "COPYING.*")
 README_IMAGE_PATTERN = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 PUBLIC_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 PUBLIC_RUNTIME_IMAGE_DOCUMENTS = {
-    # Attribution and provenance for the bundled ship-art catalogue. Keep the
-    # runtime image tree strict: this is the only intentional non-image file.
+    # Attribution and provenance for bundled art catalogues. Keep the runtime
+    # image tree strict: these are the only intentional non-image files.
+    "Images/people/README.md",
     "Images/ships/README.md",
 }
 REQUIRED_RUNTIME_IMAGES = {
