@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.3.4**
+**Current version: 5.4.4**
 
 Void Compass is a local exploration companion for *Elite Dangerous*. It reads the game’s journal, status and companion files, then turns them into a useful command deck, survey record and set of in-game overlays. It is built for commanders who want to keep track of a long trip without handing their flight history to a cloud service.
 
@@ -17,7 +17,7 @@ The main window is an HTML command deck backed by a Python application. It follo
 - **Engineering Companion** provides ship loadouts, planned ship builds, module slots, blueprint and experimental-effect searches, material requirements, engineer information, Tech Broker recipes, Odyssey goals and build import previews. Plans can follow the ship currently in Elite or be kept as separate profile-local builds.
 - **Mining and Ground tools** cover ring evidence, prospector details, refinery and cargo records, surface survey trails, exobiology work and journal-backed planetary mining signals.
 - **Carrier Command** follows personal and Squadron Carriers separately. It keeps their location, fuel, cargo, routes and jump history, and shows preparation, lockdown, transit and journal-confirmed arrival states.
-- **Powerplay, Colonisation Recon and Explorer Achievements** are available under Field Tools for commanders who want those records alongside their exploration data.
+- **Powerplay Operations, Colonisation Recon and Explorer Achievements** are available under Field Tools. Powerplay includes all 12 leader dossiers, journal-backed merits and cargo history, weekly cycle records, commander assignments and an optional cockpit overlay.
 - **Galnet Relay** provides an optional local ticker and article reader using Frontier’s news feed.
 
 The app is deliberately quiet. Feedback appears in the dashboard, Flight Log, notifications and overlays instead of through speech, personas or an AI service.
@@ -26,7 +26,7 @@ The app is deliberately quiet. Feedback appears in the dashboard, Flight Log, no
 
 Every overlay can be enabled, positioned and themed independently. They are rendered through the same local HTML/WebView2 system as the command deck, while the Python runtime owns journal processing, profiles, scheduling, hotkeys and persistence.
 
-Available overlays include Navigation, Cargo, Carrier, Prospector, Planet Materials, Gravity Warning, Station Link, Survey Operations, Cockpit Notifications, Journal Heartbeat and Planet Waypoint Navigation. The Navigation HUD includes route progress, survey state, fuel and scoop information, local targets, surface approach details, carrier countdowns and journal-confirmed arrivals. Overlay Layout Studio provides a visual way to arrange them and save commander-specific layouts.
+Available overlays include Navigation, Cargo, Carrier, Prospector, Planet Materials, Powerplay Operations, Gravity Warning, Station Link, Survey Operations, Cockpit Notifications, Journal Heartbeat and Planet Waypoint Navigation. The Navigation HUD includes route progress, survey state, fuel and scoop information, local targets, surface approach details, carrier countdowns and journal-confirmed arrivals. Overlay Layout Studio provides a visual way to arrange them and save commander-specific layouts.
 
 ## Profiles and data
 

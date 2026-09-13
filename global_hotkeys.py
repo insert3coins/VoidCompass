@@ -26,6 +26,7 @@ OVERLAY_HOTKEY_SPECS = (
     ("carrier", "overlay_hotkey_carrier", "Fleet Carrier", "carrier_hud"),
     ("prospector", "overlay_hotkey_prospector", "Prospector Results", "prospector_hud"),
     ("planet_materials", "overlay_hotkey_planet_materials", "Planet Materials", "planet_materials_hud"),
+    ("powerplay", "overlay_hotkey_powerplay", "Powerplay Operations", "powerplay_hud"),
     ("gravity", "overlay_hotkey_gravity", "Gravity Warning", "gravity_warning_hud"),
     ("notifications", "overlay_hotkey_notifications", "Cockpit Notifications", "toast_hud"),
     ("heartbeat", "overlay_hotkey_heartbeat", "Journal Heartbeat", "heartbeat_hud"),

@@ -21,6 +21,8 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
+from PIL import Image, UnidentifiedImageError
+
 from version import APP_VERSION
 
 
@@ -151,8 +153,9 @@ def _copy_readme_images(project: Path, package_dir: Path) -> set[str]:
     return copied
 
 
-def _copy_runtime_images(project: Path, package_dir: Path) -> set[str]:
-    """Copy the public runtime image tree without weakening the privacy guard."""
+def validate_runtime_images(project: str | Path) -> set[str]:
+    """Validate the runtime image allowlist before an expensive executable build."""
+    project = Path(project).resolve()
     source_root = project / "Images"
     if not source_root.is_dir():
         raise FileNotFoundError(f"Required runtime image folder is missing: {source_root}")
@@ -173,15 +176,29 @@ def _copy_runtime_images(project: Path, package_dir: Path) -> set[str]:
             and relative_name not in PUBLIC_RUNTIME_IMAGE_DOCUMENTS
         ):
             raise RuntimeError(f"Release image tree contains a non-image file: {source}")
-        destination = package_dir / safe_relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(resolved, destination)
+        if source.suffix.casefold() in PUBLIC_IMAGE_EXTENSIONS:
+            try:
+                with Image.open(resolved) as image:
+                    image.verify()
+            except (OSError, UnidentifiedImageError) as exc:
+                raise RuntimeError(f"Release image is unreadable: {source}") from exc
         copied.add(safe_relative.as_posix())
     missing = REQUIRED_RUNTIME_IMAGES - copied
     if missing:
         raise FileNotFoundError(
             "Required runtime image assets are missing: " + ", ".join(sorted(missing))
         )
+    return copied
+
+
+def _copy_runtime_images(project: Path, package_dir: Path) -> set[str]:
+    """Copy the validated public runtime image tree."""
+    copied = validate_runtime_images(project)
+    for relative_name in sorted(copied, key=str.casefold):
+        source = project / Path(relative_name)
+        destination = package_dir / Path(relative_name)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
     return copied
 
 

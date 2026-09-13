@@ -22,6 +22,7 @@ import webbrowser
 import companion_features
 import engineering_companion
 import engineering_data
+import powerplay_operations
 from engineering_build_import import BuildImportError, preview_build
 from explorer_decision_deck import (
     DOCTRINES,
@@ -1732,10 +1733,19 @@ class HtmlDashboardMixin:
 
     def _html_powerplay_workspace(self):
         companion = getattr(self, "companion_state", None) or {}
-        powerplay = dict(companion.get("powerplay") or {})
-        powerplay["location"] = dict(powerplay.get("location") or {})
-        powerplay["cargo_history"] = list(powerplay.get("cargo_history") or [])[:100]
-        return {"powerplay": powerplay}
+        return powerplay_operations.build_workspace(
+            companion.get("powerplay") or {},
+            session_started=getattr(self, "session_start_ts", None),
+        )
+
+    def _refresh_powerplay_overlay(self):
+        overlay = getattr(self, "powerplay_hud", None)
+        if overlay is None:
+            return
+        try:
+            overlay.update(self._html_powerplay_workspace())
+        except Exception as exc:
+            logging.warning("Powerplay overlay refresh failed: %s", exc)
 
     def _html_carrier_workspace(self):
         tracker = getattr(self, "carrier_tracker", None)
@@ -3657,6 +3667,34 @@ class HtmlDashboardMixin:
         elif page == "powerplay":
             if operation == "copy_system":
                 return self._html_copy_text(_text(payload.get("system"), 140))
+            companion = getattr(self, "companion_state", None)
+            if not isinstance(companion, dict):
+                return False
+            state = companion.get("powerplay") or {}
+            if operation == "add_objective":
+                state, changed = powerplay_operations.add_objective(state, payload)
+            elif operation in {"select_objective", "toggle_objective", "delete_objective"}:
+                if operation == "delete_objective" and not payload.get("confirmed"):
+                    return False
+                state, changed = powerplay_operations.change_objective(
+                    state, payload.get("objective_id"), operation,
+                )
+            elif operation == "select_dossier":
+                state, changed = powerplay_operations.select_dossier(
+                    state, payload.get("dossier"),
+                )
+            else:
+                return False
+            if not changed:
+                return False
+            companion["powerplay"] = state
+            self._save_companion_state()
+            try:
+                self._refresh_powerplay_overlay()
+            except Exception:
+                pass
+            self._schedule_html_dashboard_publish(immediate=True)
+            return True
 
         elif page == "carrier":
             tracker = getattr(self, "carrier_tracker", None)

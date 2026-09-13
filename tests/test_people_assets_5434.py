@@ -3,7 +3,8 @@ import unittest
 
 from engineering_companion import _portrait, reference_catalogues
 from html_dashboard_server import HtmlDashboardServer
-from release_packager import PUBLIC_RUNTIME_IMAGE_DOCUMENTS
+from powerplay_operations import POWER_DOSSIERS
+from release_packager import PUBLIC_RUNTIME_IMAGE_DOCUMENTS, validate_runtime_images
 from version import APP_VERSION
 
 
@@ -25,11 +26,13 @@ POWERPLAY_PORTRAITS = {
 
 
 class AuthenticPeopleAssetTests(unittest.TestCase):
-    def test_release_version_is_5434(self):
-        self.assertEqual(APP_VERSION, "5.4.3.4")
+    def test_release_version_is_544(self):
+        self.assertEqual(APP_VERSION, "5.4.4")
 
     def test_people_provenance_is_allowed_in_release_image_tree(self):
         self.assertIn("Images/people/README.md", PUBLIC_RUNTIME_IMAGE_DOCUMENTS)
+        validated = validate_runtime_images(ROOT)
+        self.assertIn("Images/people/README.md", validated)
 
     def test_every_catalogued_engineer_has_a_local_portrait(self):
         for name in reference_catalogues()["unlocks"]:
@@ -39,13 +42,13 @@ class AuthenticPeopleAssetTests(unittest.TestCase):
             self.assertTrue((ROOT / "Images" / relative).is_file(), (name, url))
 
     def test_current_powerplay_roster_has_local_portraits(self):
-        app = (ROOT / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
+        catalogue = {row["slug"]: row["portrait"] for row in POWER_DOSSIERS}
         for slug, filename in POWERPLAY_PORTRAITS.items():
             self.assertTrue(
                 (ROOT / "Images" / "people" / "powerplay" / filename).is_file(),
                 slug,
             )
-            self.assertIn(f'{slug}:"{filename}"', app)
+            self.assertEqual(catalogue.get(slug), filename)
 
     def test_dashboard_serves_only_descendants_of_the_image_root(self):
         server = HtmlDashboardServer(

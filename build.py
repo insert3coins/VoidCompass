@@ -34,7 +34,7 @@ if __name__ == '__main__':
     import PyInstaller.__main__
     import PyInstaller
     from mining_data import MiningDataStore
-    from release_packager import create_release
+    from release_packager import create_release, validate_runtime_images
 
     is_windows = True
     target_name = "Windows-x64"
@@ -53,6 +53,9 @@ if __name__ == '__main__':
             "Run: python -m pip install -r requirements.txt"
         )
     print(f"Building with PyInstaller {PyInstaller.__version__}")
+
+    runtime_images = validate_runtime_images(project_dir)
+    print(f"Release preflight passed: {len(runtime_images)} runtime image files validated")
 
     # Clean up previous build artifacts
     if os.path.exists('build'):

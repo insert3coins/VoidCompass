@@ -457,6 +457,8 @@ class _OverlayHost:
             path = "/contact_scope/index.html"
         elif template == "planet-materials-overlay":
             path = "/planet-materials-overlay/index.html"
+        elif template == "powerplay-overlay":
+            path = "/powerplay-overlay/index.html"
         else:
             raise ValueError(f"Unsupported semantic overlay template: {template}")
         return self._url(path, overlay_id)
