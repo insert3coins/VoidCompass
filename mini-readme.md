@@ -7,6 +7,7 @@
 * Added journal-driven merit history, per-cycle gains, cargo collection and delivery ledgers, system contribution summaries and automatic Thursday cycle archives.
 * Added profile-local Powerplay assignments with matching cargo progress, active-objective selection and a dedicated theme-aware cockpit overlay.
 * Moved Powerplay state reduction and dashboard rendering out of the main monoliths, and added a release-image preflight before the PyInstaller build begins.
+* Fixed Navigation HUD route priority so recalculating an active route in Elite immediately replaces any older saved expedition-waypoint presentation; saved waypoints remain available when no in-game route is plotted.
 
 ## Earlier releases
 
