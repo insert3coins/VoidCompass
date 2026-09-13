@@ -24,6 +24,10 @@ SWP_NOSIZE = 0x0001
 SWP_NOMOVE = 0x0002
 SWP_NOACTIVATE = 0x0010
 SWP_FRAMECHANGED = 0x0020
+DWMWA_WINDOW_CORNER_PREFERENCE = 33
+DWMWA_BORDER_COLOR = 34
+DWMWCP_DONOTROUND = 1
+DWMWA_COLOR_NONE = 0xFFFFFFFE
 HIDDEN_WINDOW_X = -32000
 HIDDEN_WINDOW_Y = -32000
 _LOOPBACK_OPENER = build_opener(ProxyHandler({}))
@@ -147,6 +151,47 @@ def _overlay_window_style(style, click_through=True):
     return style
 
 
+def _apply_windows_overlay_chrome(window):
+    """Keep Windows 11 from decorating a frameless overlay HWND.
+
+    DWM can independently add rounded corners and a one-pixel system border
+    after pywebview creates or remaps a window.  Those pixels sit outside the
+    transparent WebView surface, which makes clipped HUD panels look as if
+    they have white or malformed corners.  Both attributes are best-effort so
+    the same host continues to work on Windows versions that predate them.
+    """
+    hwnd = _native_handle(window)
+    if not hwnd:
+        return False
+    try:
+        dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
+        setter = dwmapi.DwmSetWindowAttribute
+        setter.argtypes = (
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+        )
+        setter.restype = ctypes.c_long
+        corner = ctypes.c_int(DWMWCP_DONOTROUND)
+        border = ctypes.c_uint32(DWMWA_COLOR_NONE)
+        corner_result = setter(
+            ctypes.c_void_p(hwnd),
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            ctypes.byref(corner),
+            ctypes.sizeof(corner),
+        )
+        border_result = setter(
+            ctypes.c_void_p(hwnd),
+            DWMWA_BORDER_COLOR,
+            ctypes.byref(border),
+            ctypes.sizeof(border),
+        )
+        return corner_result == 0 or border_result == 0
+    except Exception:
+        return False
+
+
 def _apply_windows_style(window, click_through=True):
     hwnd = _native_handle(window)
     if not hwnd:
@@ -187,6 +232,7 @@ def _apply_windows_style(window, click_through=True):
         )
         if style_changed and was_appwindow and was_visible:
             user32.ShowWindow(ctypes.c_void_p(hwnd), SW_SHOWNOACTIVATE)
+        _apply_windows_overlay_chrome(window)
         return True
     except Exception:
         return False
@@ -205,10 +251,13 @@ def _apply_webview_transparency(window):
     native = getattr(window, "native", None)
     if native is None:
         return False
+    # ``native.webview`` is pywebview's public native-control hook.  Keep the
+    # older BrowserForm.browser.webview route as a fallback for releases that
+    # did not expose it directly.
+    control = getattr(native, "webview", None)
     browser = getattr(native, "browser", None)
-    control = getattr(browser, "webview", None) if browser is not None else None
-    if control is None:
-        control = getattr(native, "webview", None)
+    if control is None and browser is not None:
+        control = getattr(browser, "webview", None)
     if control is None:
         return False
     try:
@@ -220,8 +269,33 @@ def _apply_webview_transparency(window):
                 return None
             if bool(getattr(control, "IsDisposed", False)):
                 return None
-            control.DefaultBackgroundColor = Color.FromArgb(0, 0, 0, 0)
-            control.Invalidate()
+            transparent = Color.FromArgb(0, 0, 0, 0)
+            restored = False
+            try:
+                control.DefaultBackgroundColor = transparent
+                restored = True
+            except Exception:
+                pass
+            # Newer WebView2 runtimes also expose the colour on the initialized
+            # controller.  Reasserting both sides survives hide/show and
+            # navigation races that otherwise leave an opaque white fallback.
+            try:
+                controller = getattr(control, "CoreWebView2Controller", None)
+                if controller is not None:
+                    controller.DefaultBackgroundColor = transparent
+                    restored = True
+            except Exception:
+                pass
+            try:
+                control.Invalidate()
+            except Exception:
+                pass
+            try:
+                native.Invalidate(True)
+            except Exception:
+                pass
+            if not restored:
+                raise RuntimeError("WebView2 transparency property unavailable")
             return None
 
         if bool(getattr(native, "InvokeRequired", False)):

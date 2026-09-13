@@ -35,6 +35,7 @@ tests/*
 !tests/test_people_assets_5434.py
 !tests/test_powerplay_operations_544.py
 !tests/test_project_structure_545.py
+!tests/test_build_planner_546.py
 .pytest_cache/
 .coverage
 .coverage.*
@@ -58,6 +59,8 @@ data/*
 !data/codexRef.json
 !data/engineering_companion/
 !data/engineering_companion/**
+!data/build_planner/
+!data/build_planner/**
 version_info.txt
 
 # Virtual environment

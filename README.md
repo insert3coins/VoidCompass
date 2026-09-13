@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.5**
+**Current version: 5.4.6**
 
 Void Compass is a local exploration companion for *Elite Dangerous*. It reads the game’s journal, status and companion files, then turns them into a useful command deck, survey record and set of in-game overlays. It is built for commanders who want to keep track of a long trip without handing their flight history to a cloud service.
 
@@ -15,6 +15,7 @@ The main window is an HTML command deck backed by a Python application. It follo
 - **Galactic Atlas** is an offline Three.js map with Elite XYZ coordinates, travel history, routes, regions, survey layers, annotations and the current ship position. It also includes a live System Orrery and body-target information.
 - **Planet Materials** records a planet’s known raw materials and lets you save surface mining sites with latitude, longitude, materials and notes. The current planet and coordinates can be filled from the live journal state, while mining observations remain editable by the commander. Its optional field overlay keeps the active body's scan composition, DSS mining-location count, saved sites, live surface fix and Rhino state visible; saved sites can also be sent to the Planet Waypoint Navigation overlay.
 - **Engineering Companion** provides ship loadouts, planned ship builds, module slots, blueprint and experimental-effect searches, material requirements, engineer information, Tech Broker recipes, Odyssey goals and build import previews. Plans can follow the ship currently in Elite or be kept as separate profile-local builds.
+- **Build Planner** is a complete offline shipyard and outfitting workspace with all current hulls and modules, Engineering modifications, power priorities, fuel/cargo/pip load states, flight, range, defence, offence, heat, handling, cost and rebuy analysis. Builds are profile-local, can be compared side-by-side, cloned from the live Journal ship, imported from EDSY/SLEF, exported to SLEF and sent to the Engineering material wishlist.
 - **Mining and Ground tools** cover ring evidence, prospector details, refinery and cargo records, surface survey trails, exobiology work and journal-backed planetary mining signals.
 - **Carrier Command** follows personal and Squadron Carriers separately. It keeps their location, fuel, cargo, routes and jump history, and shows preparation, lockdown, transit and journal-confirmed arrival states.
 - **Powerplay Operations, Colonisation Recon and Explorer Achievements** are available under Field Tools. Powerplay includes all 12 leader dossiers, journal-backed merits and cargo history, weekly cycle records, commander assignments and an optional cockpit overlay.
@@ -89,7 +90,7 @@ Run the build script from Windows:
 python tools/build.py
 ```
 
-`tools/build.py` installs the requirements, checks the PyInstaller and WebView2 dependencies, bundles the HTML, map, engineering and image assets, excludes Tk modules, and creates the executable and release archive under `dist` and `release`.
+`tools/build.py` installs the requirements, checks the PyInstaller and WebView2 dependencies, bundles the HTML, map, Engineering, Build Planner and image assets, excludes Tk modules, and creates the executable and release archive under `dist` and `release`.
 
 ## Contributing
 

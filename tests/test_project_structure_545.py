@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ProjectStructure545Tests(unittest.TestCase):
     def test_release_version_and_project_root(self):
-        self.assertEqual(APP_VERSION, "5.4.5")
+        self.assertEqual(APP_VERSION, "5.4.6")
         self.assertEqual(project_root(), ROOT)
 
     def test_feature_packages_and_launcher_exist(self):

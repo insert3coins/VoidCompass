@@ -186,19 +186,20 @@
         <button class="nav-item" data-page="ground"><i>⌖</i><span>Ground & Exobio</span><b>13</b></button>
         <button class="nav-item" data-page="mining"><i>◆</i><span>Mining Command</span><b>14</b></button>
         <button class="nav-item" data-page="engineering"><i>⚙</i><span>Engineering</span><b>15</b></button>
-        <button class="nav-item" data-page="powerplay"><i>⚑</i><span>Powerplay</span><b>16</b></button>
-        <button class="nav-item" data-page="carrier"><i>◈</i><span>Carrier Command</span><b>17</b></button>
-        <button class="nav-item" data-page="recon"><i>✧</i><span>System Recon</span><b>18</b></button>
-        <button class="nav-item" data-page="overlay-studio"><i>⌗</i><span>Overlay Studio</span><b>19</b></button>
+        <button class="nav-item" data-page="build-planner"><i>▤</i><span>Build Planner</span><b>16</b></button>
+        <button class="nav-item" data-page="powerplay"><i>⚑</i><span>Powerplay</span><b>17</b></button>
+        <button class="nav-item" data-page="carrier"><i>◈</i><span>Carrier Command</span><b>18</b></button>
+        <button class="nav-item" data-page="recon"><i>✧</i><span>System Recon</span><b>19</b></button>
+        <button class="nav-item" data-page="overlay-studio"><i>⌗</i><span>Overlay Studio</span><b>20</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="settings"><i>≡</i><span>Settings</span><b>20</b></button>
-        <button class="nav-item" data-page="about"><i>ⓘ</i><span>About</span><b>21</b></button>
+        <button class="nav-item" data-page="settings"><i>≡</i><span>Settings</span><b>21</b></button>
+        <button class="nav-item" data-page="about"><i>ⓘ</i><span>About</span><b>22</b></button>
       </nav>
 
       <footer class="rail-footer">
         <div class="connection"><i id="connection-light"></i><span>LOCAL LINK</span><b id="connection-state">CONNECTING</b></div>
         <button data-command="open_screenshots">OPEN SCREENSHOTS</button>
-        <small id="rail-version">v5.4.5 // WEBVIEW2</small>
+        <small id="rail-version">v5.4.6 // WEBVIEW2</small>
       </footer>
     </aside>
 
@@ -404,6 +405,7 @@
             <article class="tool-card"><i>⌖</i><div><small>SURFACE OPERATIONS</small><h3>Ground & Exobiology</h3><p>Coordinate targets, bearing, distance guidance and biological field work.</p></div><button data-command="open" data-target="ground">OPEN GROUND TOOL</button></article>
             <article class="tool-card"><i>◆</i><div><small>RESOURCE OPERATIONS</small><h3>Mining</h3><p>Prospector analysis, refinery yield, cargo economics and session history.</p></div><button data-command="open" data-target="mining">OPEN MINING</button></article>
             <article class="tool-card"><i>⚙</i><div><small>SHIP READINESS</small><h3>Engineering & Synthesis</h3><p>FSD injections, synthesis inventory and pinned exploration upgrades.</p></div><button data-command="open" data-target="engineering">OPEN ENGINEERING</button></article>
+            <article class="tool-card"><i>▤</i><div><small>SHIPYARD & OUTFITTING</small><h3>Build Planner</h3><p>Design complete loadouts, apply Engineering, compare performance and import EDSY or SLEF builds.</p></div><button data-command="open" data-target="build-planner">OPEN BUILD PLANNER</button></article>
             <article class="tool-card"><i>⚑</i><div><small>GALACTIC POWERS</small><h3>Powerplay Operations</h3><p>Leader dossiers, merit and cycle history, system state, cargo ledgers and commander assignments.</p></div><button data-command="open" data-target="powerplay">OPEN POWERPLAY</button></article>
             <article class="tool-card"><i>◈</i><div><small>LONG-RANGE SUPPORT</small><h3>Carrier Command</h3><p>Personal and Squadron Carrier inventory, expedition routes, Tritium planning and jump operations.</p></div><button data-command="open" data-target="carrier">OPEN CARRIERS</button></article>
             <article class="tool-card"><i>✦</i><div><small>FIELD RECON</small><h3>Colonisation Recon</h3><p>Assess surveyed systems as possible expansion candidates.</p></div><button data-command="open" data-target="recon">OPEN RECON</button></article>
@@ -444,6 +446,11 @@
         <section class="page specialist-page" data-page-name="engineering">
           <header class="page-title"><div><p>ENGINEERING COMPANION</p><h2>Ship engineering</h2><span>Physical slots, complete blueprints, wishlists, Engineer access, materials and Tech Brokers</span></div></header>
           <div id="engineering-workspace" class="workspace-shell loading-panel">Calculating engineering readiness…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="build-planner">
+          <header class="page-title"><div><p>SHIPYARD & OUTFITTING</p><h2>Build Planner</h2><span>Complete offline ship builds, engineering, performance analysis, comparison and EDSY/SLEF interchange</span></div><div class="title-actions"><button class="primary" data-bp-focus="new">＋ NEW BUILD</button><button data-page="engineering">ENGINEERING MATERIALS</button></div></header>
+          <div id="build-planner-workspace" class="workspace-shell loading-panel">Loading the shipyard catalogue…</div>
         </section>
 
         <section class="page specialist-page" data-page-name="powerplay">
@@ -621,7 +628,7 @@
             <div class="about-identity">
               <p>INDEPENDENT ELITE DANGEROUS EXPLORATION COMPANION</p>
               <h2>Void Compass</h2>
-              <span id="about-version">Version 5.4.5 // HTML Command Deck</span>
+              <span id="about-version">Version 5.4.6 // HTML Command Deck</span>
               <div class="about-signal"><i></i><b>LOCAL JOURNAL UPLINK</b><span>NO CLOUD ACCOUNT REQUIRED</span></div>
             </div>
             <div class="about-telemetry" aria-label="Application identity">
@@ -677,7 +684,7 @@
 
             <article class="card about-credits-card">
               <header><span>ACKNOWLEDGEMENTS</span><b>COMMUNITY POWERED</b></header>
-              <p>Void Compass incorporates or adapts appropriately licensed work from three.js, ED Engineering Companion and Elite Dangerous community reference projects. Full attribution and bundled licence notices are maintained in <code>THIRD_PARTY_NOTICES.md</code>.</p>
+              <p>Void Compass incorporates or adapts appropriately licensed work from three.js, EDSY, ED Engineering Companion and Elite Dangerous community reference projects. Full attribution and bundled licence notices are maintained in <code>THIRD_PARTY_NOTICES.md</code>.</p>
               <button data-command="open" data-target="notices">VIEW THIRD-PARTY NOTICES</button>
             </article>
 
@@ -693,7 +700,7 @@
             </article>
           </section>
 
-          <footer class="about-footer"><span>VOID COMPASS // MADE BY insert3coins</span><b id="about-footer-version">v5.4.5</b><span>Copyright © 2026 insert3coins</span></footer>
+          <footer class="about-footer"><span>VOID COMPASS // MADE BY insert3coins</span><b id="about-footer-version">v5.4.6</b><span>Copyright © 2026 insert3coins</span></footer>
         </section>
       </main>
 

@@ -21,6 +21,7 @@ def load_engineer_materials(path: str) -> dict:
         "raw": {}, "manufactured": {}, "encoded": {}, "engineers": {},
         "pinned_blueprints": [], "odyssey_goals": [], "ship_locker": {},
         "engineering_builds": [], "engineering_follow_current": True,
+        "build_planner_builds": [], "build_planner_selected": "live", "build_planner_compare": "",
         "last_updated": None,
     }
     if not path or not os.path.exists(path):
@@ -36,6 +37,9 @@ def load_engineer_materials(path: str) -> dict:
         data.setdefault("ship_locker", {})
         data.setdefault("engineering_builds", [])
         data.setdefault("engineering_follow_current", True)
+        data.setdefault("build_planner_builds", [])
+        data.setdefault("build_planner_selected", "live")
+        data.setdefault("build_planner_compare", "")
         return data
     except Exception as exc:
         backup = None
