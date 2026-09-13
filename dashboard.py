@@ -4904,9 +4904,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         route_idx = -1
         route_remaining = None
         waypoint_manager = getattr(self, "waypoint_manager", None)
+        # The active Elite route describes the ship's real next jump. Keep a
+        # saved expedition waypoint as the fallback only when no game route is
+        # plotted; otherwise an old profile plan masks in-game recalculations.
         manual_next = (
             waypoint_manager.get_next_waypoint(current)
-            if waypoint_manager is not None else None
+            if waypoint_manager is not None and not route else None
         )
 
         if manual_next:
@@ -4982,10 +4985,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 ),
             }]
 
-        if waypoint_manager and waypoint_manager.waypoints:
-            route_mode = "WAYPOINT ROUTE"
-        elif route:
+        if route:
             route_mode = "GAME ROUTE"
+        elif waypoint_manager and waypoint_manager.waypoints:
+            route_mode = "WAYPOINT ROUTE"
         elif selected_name:
             route_mode = "FSD TARGET"
         elif self.dest_name:

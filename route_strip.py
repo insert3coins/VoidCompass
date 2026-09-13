@@ -27,14 +27,15 @@ def build_route_hops(current_coords, route_list, nav_route_entries, current_sys=
     Each hop is {"name": str, "dist": float|None, "scoopable": bool|None,
     "star_class": str}, where
     "dist" is the LY distance from the previous point (current position for
-    the first hop). A pending commander-authored profile route takes
-    precedence; otherwise the game's NavRoute.json supplies the upcoming legs.
+    the first hop). The game's active NavRoute.json is authoritative because it
+    describes what the ship will actually fly. A pending commander-authored
+    profile route is used only when Elite has no route plotted.
     """
     route = list(route_list or [])
     entries = list(nav_route_entries or [])
     waypoints = list(getattr(waypoint_manager, "waypoints", None) or [])
     pending = [wp for wp in waypoints if not wp.get("visited")]
-    if pending:
+    if pending and not route:
         hops = []
         prev_coords = current_coords
         for wp in pending[:max_hops]:
@@ -96,12 +97,10 @@ def build_route_track(current_coords, route_list, nav_route_entries, current_sys
     entries = list(nav_route_entries or [])
     current_key = str(current_sys or "").strip().casefold()
 
-    # A commander-authored profile route is deliberate and takes visual
-    # precedence over a leftover Elite NavRoute snapshot. This keeps a newly
-    # added manual waypoint on the HUD immediately while the game route remains
-    # available again as soon as the profile plan is cleared.
+    # Elite's live route is authoritative while one is plotted. Profile
+    # waypoints remain the fallback plan after the in-game route is cleared.
     waypoints = list(getattr(waypoint_manager, "waypoints", None) or [])
-    if waypoints:
+    if waypoints and not route:
         exact_current = next(
             (index for index, waypoint in enumerate(waypoints)
              if str(waypoint.get("name") or "").strip().casefold() == current_key),
