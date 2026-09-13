@@ -31,6 +31,7 @@ tests/
 tests/*
 !tests/test_engineering_companion_543.py
 !tests/test_people_assets_5434.py
+!tests/test_powerplay_operations_544.py
 .pytest_cache/
 .coverage
 .coverage.*

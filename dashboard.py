@@ -37,6 +37,7 @@ from mining_data import MINING_MATERIALS
 from carrier_tracker import CarrierTracker
 from prospector_hud import ProspectorHUD
 from planet_materials_hud import PlanetMaterialsHUD
+from powerplay_hud import PowerplayHUD
 from gravity_warning_hud import GravityWarningHUD
 from station_info_hud import StationInfoHUD
 from survey_status_hud import SurveyStatusHUD
@@ -52,6 +53,7 @@ from html_cargo_overlay import attach_html_cargo_overlay
 from html_carrier_overlay import attach_html_carrier_overlay
 from html_prospector_overlay import attach_html_prospector_overlay
 from html_planet_materials_overlay import attach_html_planet_materials_overlay
+from html_powerplay_overlay import attach_html_powerplay_overlay
 from html_heartbeat_overlay import attach_html_heartbeat_overlay
 from html_contact_overlay import attach_html_contact_overlay
 from runtime_trace import RuntimeTrace
@@ -66,6 +68,7 @@ from field_state import (
 from engineering_data import ready_blueprints
 import companion_features
 import operational_state
+import powerplay_operations
 from credit_events import authoritative_balance, credit_delta
 from stellar_types import star_type_label
 from expedition_map_view import ExpeditionMapView
@@ -361,6 +364,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         ("carrier_hud", "carrier_hud_x", "carrier_hud_y"),
         ("prospector_hud", "prospector_hud_x", "prospector_hud_y"),
         ("planet_materials_hud", "planet_materials_hud_x", "planet_materials_hud_y"),
+        ("powerplay_hud", "powerplay_hud_x", "powerplay_hud_y"),
         ("gravity_warning_hud", "gravity_warning_hud_x", "gravity_warning_hud_y"),
         ("station_info_hud", "station_info_hud_x", "station_info_hud_y"),
         ("survey_status_hud", "survey_status_hud_x", "survey_status_hud_y"),
@@ -374,6 +378,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         "carrier_hud": ("carrier", "Void Compass Carrier", "carrier_overlay_enabled"),
         "prospector_hud": ("prospector", "Void Compass Prospector", "prospector_overlay_enabled"),
         "planet_materials_hud": ("planet-materials", "Void Compass Planet Materials", "planet_materials_overlay_enabled"),
+        "powerplay_hud": ("powerplay", "Void Compass Powerplay Operations", "powerplay_overlay_enabled"),
         "gravity_warning_hud": ("gravity", "Void Compass Gravity Warning", "gravity_warning_overlay_enabled"),
         "station_info_hud": ("station", "Void Compass Station Link", "station_info_overlay_enabled"),
         "survey_status_hud": ("survey", "Void Compass Survey Operations", "survey_status_overlay_enabled"),
@@ -875,6 +880,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             "carrier_hud",
             "prospector_hud",
             "planet_materials_hud",
+            "powerplay_hud",
             "gravity_warning_hud",
             "station_info_hud",
             "survey_status_hud",
@@ -963,7 +969,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             pass
 
         for attr in (
-            "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud",
+            "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "powerplay_hud",
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud",
             "contact_scope_hud",
@@ -2344,6 +2350,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self._refresh_planet_materials_overlay()
         else:
             self.planet_materials_hud = None
+
+        if self.config.get("powerplay_overlay_enabled", False):
+            self.powerplay_hud = PowerplayHUD(self.root, self.config)
+            self._refresh_powerplay_overlay()
+        else:
+            self.powerplay_hud = None
 
         if self.config.get("gravity_warning_overlay_enabled", True):
             self.gravity_warning_hud = GravityWarningHUD(self.root, self.config)
@@ -4371,6 +4383,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self.planet_materials_hud.destroy()
             self.planet_materials_hud = None
 
+        if self.config.get("powerplay_overlay_enabled", False):
+            if self.powerplay_hud is None:
+                self.powerplay_hud = PowerplayHUD(self.root, self.config)
+            self._refresh_powerplay_overlay()
+        elif self.powerplay_hud:
+            self.powerplay_hud.destroy()
+            self.powerplay_hud = None
+
         if self.config.get("gravity_warning_overlay_enabled", True):
             if self.gravity_warning_hud is None:
                 self.gravity_warning_hud = GravityWarningHUD(self.root, self.config)
@@ -4472,6 +4492,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 )
             elif attr == "planet_materials_hud":
                 attach_html_planet_materials_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "powerplay_hud":
+                attach_html_powerplay_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "survey_status_hud":
@@ -8998,52 +9022,13 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 state.setdefault("fleet_loadouts", {})[str(ship_id)] = dict(raw)
             changed = True
 
-        elif ev in {
-            "Powerplay", "PowerplayJoin", "PowerplayLeave", "PowerplayDefect",
-            "PowerplayRank", "PowerplayMerits", "PowerplaySalary",
-            "PowerplayDeliver", "PowerplayCollect", "Location", "FSDJump",
-            "CarrierJump",
-        }:
-            power = state.get("powerplay")
-            if not isinstance(power, dict):
-                power = {}
-                state["powerplay"] = power
-            if ev == "PowerplayLeave":
-                power.update({"pledged": False, "power": "", "rank": None,
-                              "merits": None, "time_pledged": None})
-            elif ev in {"PowerplayJoin", "Powerplay"} and raw.get("Power"):
-                power.update({"pledged": True, "power": raw.get("Power")})
-            elif ev in {"PowerplayRank", "PowerplayMerits"} and raw.get("Power"):
-                power.update({"pledged": True, "power": raw.get("Power")})
-            elif ev == "PowerplayDefect" and (raw.get("ToPower") or raw.get("Power")):
-                power.update({"pledged": True, "power": raw.get("ToPower") or raw.get("Power"),
-                              "rank": None, "merits": None, "time_pledged": None})
-            if ev in {"Powerplay", "PowerplayRank"} and raw.get("Rank") is not None:
-                power["rank"] = int(raw.get("Rank") or 0)
-            if ev == "Powerplay" and raw.get("Merits") is not None:
-                power["merits"] = int(raw.get("Merits") or 0)
-            if ev == "PowerplayMerits" and raw.get("TotalMerits") is not None:
-                power["merits"] = int(raw.get("TotalMerits") or 0)
-            if ev == "Powerplay" and raw.get("TimePledged") is not None:
-                power["time_pledged"] = int(raw.get("TimePledged") or 0)
-            if ev == "PowerplaySalary" and raw.get("Amount") is not None:
-                power["salary"] = int(raw.get("Amount") or 0)
-            if ev in {"Location", "FSDJump", "CarrierJump"}:
-                power["location"] = {
-                    "system": raw.get("StarSystem"), "controlling_power": raw.get("ControllingPower"),
-                    "powers": list(raw.get("Powers") or []), "state": raw.get("PowerplayState"),
-                    "control_progress": raw.get("PowerplayStateControlProgress"),
-                    "reinforcement": raw.get("PowerplayStateReinforcement"),
-                    "undermining": raw.get("PowerplayStateUndermining"),
-                }
-            if ev in {"PowerplayDeliver", "PowerplayCollect"}:
-                history = list(power.get("cargo_history") or [])
-                history.append({"direction": "DELIVER" if ev == "PowerplayDeliver" else "COLLECT",
-                                "type": raw.get("Type_Localised") or raw.get("Type"),
-                                "count": int(raw.get("Count") or 0), "timestamp": raw.get("timestamp")})
-                power["cargo_history"] = history[-10:]
-            power["last_updated"] = raw.get("timestamp")
-            changed = True
+        elif ev in powerplay_operations.POWERPLAY_EVENTS:
+            previous = state.get("powerplay")
+            power = powerplay_operations.reduce_event(
+                previous, ev, raw, current_system=getattr(self, "current_sys", ""),
+            )
+            state["powerplay"] = power
+            changed = power != previous
 
         elif ev in companion_features.SHIP_COMPANION_EVENTS:
             changed = companion_features.update_ship_companion_state(
@@ -9176,6 +9161,11 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                         engineering["engineering_selected_ship"] = str(active_ship_id)
                         self._save_engineer_materials(engineering)
             self._save_companion_state()
+            if ev in powerplay_operations.POWERPLAY_EVENTS:
+                try:
+                    self._refresh_powerplay_overlay()
+                except Exception:
+                    pass
             if ev in {"Loadout", "ShipyardBuy", "ShipyardNew", "ShipyardSwap", "SetUserShipName"}:
                 self._schedule_html_dashboard_publish(immediate=True)
             self._refresh_companion_surfaces()

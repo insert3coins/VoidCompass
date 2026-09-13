@@ -1,3 +1,5 @@
+import {renderPowerplayWorkspace as renderPowerplayOperationsWorkspace} from "./powerplay.js";
+
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
 let revision = -1;
@@ -2739,28 +2741,9 @@ function renderEngineeringWorkspace(data) {
 }
 
 function renderPowerplayWorkspace(data) {
-  const root = byId("powerplay-workspace");
-  const power = data.powerplay || {};
-  const aliases = {"a lavigny duval":"arissa_lavigny_duval","li yong rui":"li_yong_rui"};
-  const portraits = {
-    aisling_duval:"aisling_duval.jpg", archon_delaine:"archon_delaine.png",
-    arissa_lavigny_duval:"arissa_lavigny_duval.png", denton_patreus:"denton_patreus.jpg",
-    edmund_mahon:"edmund_mahon.png", felicia_winters:"felicia_winters.png",
-    jerome_archer:"jerome_archer.webp", li_yong_rui:"li_yong_rui.png",
-    nakato_kaine:"nakato_kaine.webp", pranav_antal:"pranav_antal.png",
-    yuri_grom:"yuri_grom.webp", zemina_torval:"zemina_torval.png",
-  };
-  const powerKey = String(power.power || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  const powerSlug = aliases[powerKey] || powerKey.replace(/ /g, "_");
-  const portrait = portraits[powerSlug] || "";
-  const location = power.location || {};
-  const cargo = workspaceTable(
-    [{label:"Action",key:"direction"},{label:"Commodity",key:"type"},{label:"Count",key:"count"},{label:"When",key:"timestamp"}],
-    power.cargo_history || [],
-    "Powerplay cargo activity will appear from live Journal events.",
-  );
-  root.classList.remove("loading-panel");
-  root.innerHTML = `<section class="powerplay-workspace"><article class="powerplay-identity">${portrait ? `<img src="images/people/powerplay/${escapeHtml(portrait)}" onerror="this.hidden=true">` : ""}<div><small>POWERPLAY 2.0 · JOURNAL OBSERVED</small><h2>${escapeHtml(power.power || "NO ACTIVE PLEDGE")}</h2><p>${power.pledged ? "PLEDGED COMMANDER" : "No PowerplayJoin or Powerplay status is retained for this profile."}</p></div></article>${workspaceMetrics([{label:"Rank",value:power.rank==null?"UNKNOWN":numeric(power.rank),detail:"JOURNAL REPORTED"},{label:"Merits",value:power.merits==null?"UNKNOWN":numeric(power.merits),detail:"CURRENT TOTAL"},{label:"Salary",value:power.salary==null?"UNKNOWN":credits(power.salary),detail:"LAST PAYMENT"},{label:"Time pledged",value:power.time_pledged==null?"UNKNOWN":`${numeric(power.time_pledged/86400,1)} D`,detail:"AT LAST SNAPSHOT"}])}<section class="workspace-grid two">${workspaceCard("CURRENT POWERPLAY SYSTEM",`<div class="fact-list spacious"><div><span>SYSTEM</span><b>${escapeHtml(location.system || "UNKNOWN")}</b></div><div><span>CONTROLLING POWER</span><b>${escapeHtml(location.controlling_power || "UNKNOWN")}</b></div><div><span>STATE</span><b>${escapeHtml(location.state || "UNKNOWN")}</b></div><div><span>CONTROL PROGRESS</span><b>${location.control_progress==null?"UNKNOWN":`${numeric(location.control_progress*100,1)}%`}</b></div><div><span>REINFORCEMENT</span><b>${location.reinforcement==null?"UNKNOWN":numeric(location.reinforcement)}</b></div><div><span>UNDERMINING</span><b>${location.undermining==null?"UNKNOWN":numeric(location.undermining)}</b></div></div>${location.system ? `<div class="workspace-actions"><button data-ws-page="powerplay" data-ws-op="copy_system" data-system="${escapeHtml(location.system)}">COPY SYSTEM</button></div>` : ""}`)}${workspaceCard("POWERPLAY CARGO ACTIVITY",cargo,`${(power.cargo_history || []).length} EVENTS`)}</section></section>`;
+  renderPowerplayOperationsWorkspace(data, {
+    byId, escapeHtml, workspaceMetrics, workspaceCard, workspaceTable, numeric, credits,
+  });
 }
 
 function renderCarrierWorkspace(data) {
@@ -3032,7 +3015,7 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  const appVersion = model.app?.version || "5.4.3.4";
+  const appVersion = model.app?.version || "5.4.4";
   text("rail-version", `v${appVersion} // WEBVIEW2`);
   text("boot-version", `v${appVersion} // SECURE LOOPBACK // WEBVIEW2`);
   text("about-version", `Version ${appVersion} // HTML Command Deck`);
@@ -3583,7 +3566,7 @@ document.addEventListener("click", async (event) => {
     const page = workspaceButton.dataset.wsPage;
     const operation = workspaceButton.dataset.wsOp;
     const payload = {page, operation};
-    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["planId", "plan_id"], ["bookmarkId", "bookmark_id"], ["sessionIndex", "session_index"], ["carrierId", "carrier_id"], ["shipId", "ship_id"], ["slot", "slot"], ["system", "system"], ["name", "name"]]) {
+    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["planId", "plan_id"], ["bookmarkId", "bookmark_id"], ["sessionIndex", "session_index"], ["carrierId", "carrier_id"], ["shipId", "ship_id"], ["slot", "slot"], ["system", "system"], ["name", "name"], ["dossier", "dossier"]]) {
       if (workspaceButton.dataset[datasetKey] !== undefined) payload[payloadKey] = workspaceButton.dataset[datasetKey];
     }
     if (page === "carrier" && payload.carrier_id === undefined) {
@@ -3595,7 +3578,7 @@ document.addEventListener("click", async (event) => {
     if (workspaceButton.dataset.resultIndex !== undefined) payload.result_index = number(workspaceButton.dataset.resultIndex, -1);
     if (workspaceButton.dataset.visited !== undefined) payload.visited = workspaceButton.dataset.visited === "true";
     if (workspaceButton.dataset.enabled !== undefined) payload.enabled = workspaceButton.dataset.enabled === "true";
-    if (["delete", "remove_objective", "delete_stop", "clear_route", "delete_candidate", "reset", "delete_waypoint", "clear_waypoints", "delete_theme", "delete_bookmark", "delete_build", "clear_slot"].includes(operation)) {
+    if (["delete", "remove_objective", "delete_objective", "delete_stop", "clear_route", "delete_candidate", "reset", "delete_waypoint", "clear_waypoints", "delete_theme", "delete_bookmark", "delete_build", "clear_slot"].includes(operation)) {
       if (!window.confirm("Confirm this profile-local change?")) return;
       payload.confirmed = true;
     }
@@ -3707,6 +3690,16 @@ document.addEventListener("click", async (event) => {
     } else if (page === "engineering" && operation === "odyssey_pin") {
       payload.name = byId("odyssey-blueprint")?.value || "";
       payload.quantity = byId("odyssey-quantity")?.value;
+    } else if (page === "powerplay" && operation === "add_objective") {
+      Object.assign(payload, {
+        title: byId("powerplay-objective-title")?.value.trim() || "",
+        kind: byId("powerplay-objective-kind")?.value || "general",
+        system: byId("powerplay-objective-system")?.value.trim() || "",
+        commodity: byId("powerplay-objective-commodity")?.value.trim() || "",
+        target: byId("powerplay-objective-target")?.value,
+        notes: byId("powerplay-objective-notes")?.value.trim() || "",
+      });
+      if (!payload.title || number(payload.target) < 1) return;
     } else if (page === "carrier" && ["plot_route", "save_route", "update_route_details"].includes(operation)) {
       payload.name = byId("carrier-route-name")?.value.trim() || "Carrier expedition";
       payload.reserve = byId("carrier-route-reserve")?.value;

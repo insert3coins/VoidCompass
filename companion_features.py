@@ -15,6 +15,7 @@ import os
 
 from version import APP_VERSION
 from persistence_queue import persistence_queue
+from powerplay_operations import fresh_powerplay_state
 
 
 DEFAULT_STATE = {
@@ -23,8 +24,7 @@ DEFAULT_STATE = {
     # to these physical slots and stay available while another hull is active.
     "fleet_loadouts": {},
     "stored_ships": None,
-    "powerplay": {"pledged": False, "power": "", "rank": None, "merits": None,
-                  "time_pledged": None, "salary": None, "location": {}, "cargo_history": []},
+    "powerplay": fresh_powerplay_state(),
     "missions": {},
     "statistics": None,
     "statistics_updated": None,

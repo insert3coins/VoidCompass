@@ -1,54 +1,21 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.3.4 // Authentic Elite Portraits
+## v5.4.4 // Powerplay Operations
 **Release Date:** 2026-Sep-13
 
-* Replaced generated Engineer and Powerplay people artwork with official Elite Dangerous imagery.
-* Moved the shared portrait library to `Images/people` and taught the private dashboard server to expose it safely to the offline command deck.
-* Added complete current Powerplay 2.0 leader coverage and all 34 Engineer portraits used by the Engineering workspace.
-
-## v5.4.3.3.1 // Rhino Cargo Transfer Reconciliation
-**Release Date:** 2026-Sep-13
-
-* Fixed Rhino cargo transfers so moving commodities to or from the mothership immediately reconciles both manifests, without waiting for the Rhino to dock or affecting fleet-carrier cargo transfers.
-
-## v5.4.3.3 // Neon About Uplink
-**Release Date:** 2026-Sep-13
-
-* Rebuilt About as a neon command-deck identity screen inspired by the local Matrix Mode visual language, with a theme-aware node network, data packets, perspective grid, scan effects and animated Void Compass reactor.
-* Added clear creator and copyright attribution for insert3coins, application identity, version, platform and runtime details, system requirements, privacy boundaries, operating principles and the Frontier disclaimer.
-* Added direct About-page access to the source, releases, documentation, issue reporting, local logs, GNU GPL v3 licence and third-party acknowledgements.
-
-## v5.4.3.2 // Planet Materials Field Overlay
-**Release Date:** 2026-Sep-13
-
-* Added an optional, profile-aware Planet Materials overlay for live surface work. It follows the active body and shows journal-backed scan composition, DSS planetary mining-location count, gravity, volcanism, saved material sites, nearest-site distance, current coordinates and heading.
-* Added explicit Rhino field-state presentation and Compass-target highlighting without replacing the full Planet Materials tab, which remains the place to create, edit, filter and route saved sites.
-* Integrated Planet Materials with Overlay Layout Studio, themes, opacity, text scaling, global hide/show and commander-specific position/hotkey settings.
-* Fixed the shared WebView host registration for the new overlay so enabling Planet Materials cannot interrupt later overlay windows or trigger renderer recovery cycling.
-
-## v5.4.3.1 // Galactic Atlas Rebuild
-**Release Date:** 2026-Sep-12
-
-* Rebuilt the Galactic Atlas around an Elite-inspired orange cartographic interface, collapsible navigation/filter/position panels, zoom controls and a responsive inspection panel.
-* Replaced the flat galaxy image with a volumetric stellar background and an adaptive navigation grid. Preserved all 42 galactic regions, Elite XYZ coordinates, commander history, routes, intelligence layers and map annotations.
-* Added a selection reticle and separated single-click inspection from double-click camera focus. Galaxy background and grid can be toggled independently for clear local navigation.
-* Refined the Windows mouse theme with clearer outlines, animated busy/background-work rings, recognisable link and unavailable pointers, and corrected selection hotspots.
-* Added Rhino-only dual-hold cargo tracking: while the Rhino is deployed, Cargo Manifest keeps the active 72-tonne Rhino hold alongside the mothership's retained cargo, including commander-profile recovery and clean restoration on docking.
-* Fixed brief Navigation HUD cues such as `TARGET CLEARED` remaining on screen after a ship swap when no further cockpit telemetry arrived.
-
-## v5.4.3 // Engineering Companion
-**Release Date:** 2026-Sep-10
-
-* Rebuilt Engineering as a complete HTML companion suite with Operations, Ship Engineering, Wishlist, Engineers, Materials, Odyssey, State Finds and Tech Brokers. Ship Engineering uses counted module-group tabs, a compact slot grid and a side-by-side modification browser so large hull loadouts stay readable.
-* Added Powerplay as its own profile-aware Field Tools workspace, showing the commander's Journal-reported pledge, rank, merits, salary, current system state, cargo activity and bundled power portrait.
-* Added the complete bundled ship blueprint and experimental-effect catalogues, authoritative 137-material reference, Engineer unlock chains, Technology Broker recipes, module identities and ship definitions. Engineer portraits and 48 interactive ship schematics are bundled for offline use.
-* Engineering now follows ship changes immediately, retains the last complete Journal `Loadout` per ShipID and supports profile-local planned builds for every ship in the bundled catalogue. Planned hulls expose their real core, optional, hardpoint and utility slots so module choices and Engineering goals can be edited before owning or boarding the ship.
-* Added profile-aware, ship-bound wishlists with per-grade material calculations, live Raw/Manufactured/Encoded inventory, missing/ready/surplus/tradeable filters, protected build reserves, material sourcing guidance and Journal-backed Engineer access progress.
-* Added preview-first EDEC, EDSY/SLEF and Coriolis build import with strict hull and physical-slot validation, plus anonymous current-loadout export to the clipboard. Existing legacy engineering and Odyssey goals remain readable by the runtime.
+* Rebuilt Powerplay as a full operations workspace with offline dossiers for all 12 powers, authentic leader portraits, headquarters and ethos reference cards.
+* Added journal-driven merit history, per-cycle gains, cargo collection and delivery ledgers, system contribution summaries and automatic Thursday cycle archives.
+* Added profile-local Powerplay assignments with matching cargo progress, active-objective selection and a dedicated theme-aware cockpit overlay.
+* Moved Powerplay state reduction and dashboard rendering out of the main monoliths, and added a release-image preflight before the PyInstaller build begins.
 
 ## Earlier releases
 
+* **v5.4.3.4** — Replaced generated Engineer and Powerplay artwork with authentic Elite Dangerous portraits, added the shared `Images/people` library and completed all 34 Engineer and 12 current Powerplay leader portraits.
+* **v5.4.3.3.1** — Fixed Rhino-to-mothership cargo transfer reconciliation without affecting fleet-carrier transfers.
+* **v5.4.3.3** — Rebuilt About as a neon command-deck identity screen with creator, licence, privacy, runtime and project links.
+* **v5.4.3.2** — Added the profile-aware Planet Materials cockpit overlay with live surface telemetry, Rhino state, saved sites and Overlay Studio integration.
+* **v5.4.3.1** — Rebuilt Galactic Atlas with Elite-inspired cartography, a volumetric background, selection and focus controls, and refined Windows cursors; added Rhino dual-hold tracking and fixed stale Navigation cues.
+* **v5.4.3** — Rebuilt Engineering as a complete HTML companion with fleet and planned builds, blueprints, materials, Engineer access, Tech Brokers, Odyssey goals and build interchange; introduced the profile-aware Powerplay workspace.
 * **v5.4.2.7** — Redesigned Planet Materials saved locations, added Send to Compass, synchronized edited/deleted compass targets, hardened legacy site loading and completed Settings hotkey coverage for all 11 overlays.
 * **v5.4.2.6.1** — Corrected Carrier Transit/arrival journal ordering, moved Planet Materials into its own menu tab, added live planet/coordinate/scan capture and a commander-profile mining-site database.
 * **v5.4.2.6** — Replaced the Tk backend with the Python runtime and HTML/WebView2 overlays, repaired HUD startup visibility, added profile-aware planet mining sites and material choices, and introduced carrier preparation/lockdown countdowns for the carrier aboard.
