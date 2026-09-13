@@ -113,6 +113,7 @@ class HtmlDashboardRuntime:
         self.window_geometry = geometry
         self.server = HtmlDashboardServer(
             _resource_path(Path("web") / "dashboard"),
+            image_root=_resource_path("Images"),
             command_callback=self._receive_command,
             host_state=host_state,
         )

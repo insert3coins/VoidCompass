@@ -29,8 +29,10 @@ class _DashboardHTTPServer(ThreadingHTTPServer):
 class HtmlDashboardServer:
     """Serve bundled dashboard assets and one revisioned application state."""
 
-    def __init__(self, static_root, *, command_callback=None, host_state=None):
+    def __init__(self, static_root, *, image_root=None, command_callback=None,
+                 host_state=None):
         self.static_root = Path(static_root).resolve()
+        self.image_root = Path(image_root).resolve() if image_root else None
         self.command_callback = command_callback
         self.token = secrets.token_urlsafe(32)
         self._condition = threading.Condition()
@@ -189,6 +191,18 @@ class HtmlDashboardServer:
         )
 
     def _static_path(self, request_path):
+        # Large shared artwork lives outside the web bundle under Images so
+        # desktop views and packaged builds use one authoritative copy.
+        if request_path.startswith("/images/") and self.image_root is not None:
+            relative = request_path.removeprefix("/images/")
+            if not relative or relative.startswith("."):
+                return None
+            candidate = (self.image_root / relative).resolve()
+            try:
+                candidate.relative_to(self.image_root)
+            except ValueError:
+                return None
+            return candidate
         # Shared browser assets live beside the dashboard folder so every
         # overlay can use the same branded cursor without duplicating it.
         if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png"}:

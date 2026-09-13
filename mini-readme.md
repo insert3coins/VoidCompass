@@ -1,5 +1,12 @@
 # VoidCompass // UPDATE LOG
 
+## v5.4.3.4 // Authentic Elite Portraits
+**Release Date:** 2026-Sep-13
+
+* Replaced generated Engineer and Powerplay people artwork with official Elite Dangerous imagery.
+* Moved the shared portrait library to `Images/people` and taught the private dashboard server to expose it safely to the offline command deck.
+* Added complete current Powerplay 2.0 leader coverage and all 34 Engineer portraits used by the Engineering workspace.
+
 ## v5.4.3.3.1 // Rhino Cargo Transfer Reconciliation
 **Release Date:** 2026-Sep-13
 
