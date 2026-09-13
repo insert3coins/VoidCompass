@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voidcompass"
+version = "5.4.5"
+description = "Local Elite Dangerous exploration companion and cockpit overlays"
+requires-python = ">=3.10"
+dependencies = [
+    "Pillow",
+    "pywebview>=6.2.1,<7.0; sys_platform == 'win32'",
+    "requests>=2.32.3,<3.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

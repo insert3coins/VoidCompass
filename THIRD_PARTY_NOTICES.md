@@ -2,14 +2,14 @@
 
 ## Elite Dangerous Character Portraits
 
-`Images/people/powerplay` includes official, non-fanmade Elite Dangerous
+`assets/images/people/powerplay` includes official, non-fanmade Elite Dangerous
 Powerplay character artwork. Nine portraits were sourced from
 [Venefilyn/EDAssets](https://github.com/Venefilyn/EDAssets), pinned at commit
 `5a9b2f82796fc65abace9439aea000155f1e6eb3`. The current Powerplay 2.0
 portraits missing from that collection (Jerome Archer, Nakato Kaine and Yuri
 Grom) were sourced from the Elite Dangerous Wiki's Frontier artwork archive.
 
-`Images/people/engineers` includes the in-game Engineer portraits maintained
+`assets/images/people/engineers` includes the in-game Engineer portraits maintained
 by [EDDiscovery](https://github.com/EDDiscovery/EDDiscovery), pinned at commit
 `758d69d4ecee70974c24f5e69c142994b565cfd9`.
 
@@ -96,7 +96,7 @@ SOFTWARE.
 
 ## Elite Cartoon Ship Vectors
 
-`Images/ships` includes the 2025 **Elite Cartoon Ship Vectors** collection by
+`assets/images/ships` includes the 2025 **Elite Cartoon Ship Vectors** collection by
 [CMDR Qohen Leth](https://www.reddit.com/user/CMDR_Qohen_Leth/), made from
 blueprints by CMDR Arithon and the creator's own tracing. The upstream bundle
 contains 45 human spacecraft through the Type-11 Prospector and a Cyclops
@@ -111,7 +111,7 @@ Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International:
 This artwork is separately licensed, is not covered by Void Compass' GPL-3.0
 software licence, and retains its non-commercial and share-alike restrictions.
 The post-2025 and auxiliary-vehicle illustrations identified in
-`Images/ships/README.md` are Void Compass additions and are not represented as
+`assets/images/ships/README.md` are Void Compass additions and are not represented as
 part of CMDR Qohen Leth's original bundle.
 
 ## pywebview

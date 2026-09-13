@@ -3015,7 +3015,7 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
-  const appVersion = model.app?.version || "5.4.4";
+  const appVersion = model.app?.version || "5.4.5";
   text("rail-version", `v${appVersion} // WEBVIEW2`);
   text("boot-version", `v${appVersion} // SECURE LOOPBACK // WEBVIEW2`);
   text("about-version", `Version ${appVersion} // HTML Command Deck`);

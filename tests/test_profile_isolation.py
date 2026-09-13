@@ -6,11 +6,11 @@ import threading
 import unittest
 from collections import deque
 
-from captains_log import CaptainsLog
-from carrier_tracker import CarrierTracker
-from dashboard import MainDashboard
-from edsm_handler import EDSMHandler
-from journal_watcher import JournalWatcher
+from voidcompass.exploration.captains_log import CaptainsLog
+from voidcompass.services.carrier_tracker import CarrierTracker
+from voidcompass.dashboard.dashboard import MainDashboard
+from voidcompass.services.edsm_handler import EDSMHandler
+from voidcompass.core.journal_watcher import JournalWatcher
 
 
 def _write_journal(path, rows):

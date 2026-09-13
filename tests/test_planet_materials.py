@@ -7,10 +7,10 @@ from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from planet_materials import PlanetMaterialsStore
-from planet_materials_hud import build_planet_materials_model
-from dashboard import MainDashboard
-from hud import TacticalHUD
+from voidcompass.mining.planet_materials import PlanetMaterialsStore
+from voidcompass.overlays.planet_materials_hud import build_planet_materials_model
+from voidcompass.dashboard.dashboard import MainDashboard
+from voidcompass.overlays.hud import TacticalHUD
 
 
 class PlanetMaterialsTests(unittest.TestCase):
@@ -135,7 +135,10 @@ class PlanetMaterialsTests(unittest.TestCase):
     def test_stale_profile_command_is_rejected(self):
         dashboard = MainDashboard.__new__(MainDashboard)
         dashboard.config = {}
-        with patch('html_dashboard.get_active_profile', return_value='new'):
+        with patch(
+            'voidcompass.dashboard.html_dashboard.get_active_profile',
+            return_value='new',
+        ):
             self.assertFalse(dashboard._handle_html_workspace_command({
                 'page': 'planet-materials', 'operation': 'save', 'profile_key': 'old'}))
 
@@ -177,7 +180,10 @@ class PlanetMaterialsTests(unittest.TestCase):
             dashboard._save_config_file = lambda: None
             dashboard.update_ground_target_ui = lambda: None
             dashboard.is_running = False
-            with patch('html_dashboard.get_active_profile', return_value='test'):
+            with patch(
+                'voidcompass.dashboard.html_dashboard.get_active_profile',
+                return_value='test',
+            ):
                 self.assertTrue(dashboard._handle_html_workspace_command({
                     'page':'planet-materials', 'operation':'navigate_site',
                     'profile_key':'test', 'id':site_id}))
@@ -195,7 +201,10 @@ class PlanetMaterialsTests(unittest.TestCase):
             dashboard.current_body_name = 'Mars'
             self.assertFalse(dashboard._ground_target_matches_current_body())
             self.assertEqual(dashboard._ground_target_solution()['state'], 'WAIT_BODY')
-            with patch('html_dashboard.get_active_profile', return_value='test'):
+            with patch(
+                'voidcompass.dashboard.html_dashboard.get_active_profile',
+                return_value='test',
+            ):
                 self.assertTrue(dashboard._handle_html_workspace_command({
                     'page':'planet-materials', 'operation':'save', 'profile_key':'test',
                     'id':site_id, 'system':'Sol', 'body':'Sol Moon', 'name':'Ruby valley',

@@ -21,6 +21,7 @@ waypoints.json
 
 # Python Internals
 __pycache__/
+*.egg-info/
 *.log
 
 # Local-only test scaffolding (not shipped/tracked). Release regression tests
@@ -29,9 +30,11 @@ test/
 tests/
 !tests/
 tests/*
+!tests/__init__.py
 !tests/test_engineering_companion_543.py
 !tests/test_people_assets_5434.py
 !tests/test_powerplay_operations_544.py
+!tests/test_project_structure_545.py
 .pytest_cache/
 .coverage
 .coverage.*
@@ -52,6 +55,7 @@ data/
 !data/
 data/*
 !data/achievements.json
+!data/codexRef.json
 !data/engineering_companion/
 !data/engineering_companion/**
 version_info.txt

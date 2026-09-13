@@ -1,17 +1,17 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.4 // Powerplay Operations
+## v5.4.5 // Project Architecture
 **Release Date:** 2026-Sep-13
 
-* Rebuilt Powerplay as a full operations workspace with offline dossiers for all 12 powers, authentic leader portraits, headquarters and ethos reference cards.
-* Added journal-driven merit history, per-cycle gains, cargo collection and delivery ledgers, system contribution summaries and automatic Thursday cycle archives.
-* Added profile-local Powerplay assignments with matching cargo progress, active-objective selection and a dedicated theme-aware cockpit overlay.
-* Moved Powerplay state reduction and dashboard rendering out of the main monoliths, and added a release-image preflight before the PyInstaller build begins.
-* Fixed Navigation HUD route priority so recalculating an active route in Elite immediately replaces any older saved expedition-waypoint presentation; saved waypoints remain available when no in-game route is plotted.
+* Reorganised the Python application into the `src/voidcompass` package with dedicated core, dashboard, overlay, engineering, exploration, mining, Powerplay and service boundaries.
+* Moved runtime artwork, icons, cursor themes and documentation screenshots into a structured `assets` tree, while static reference databases remain under `data`.
+* Moved build, release and asset-maintenance utilities into `tools`, added installable project metadata and retained a small root launcher for source and packaged startup compatibility.
+* Updated imports, WebView child-process launch paths, bundled-resource discovery, PyInstaller inputs and release packaging for the new layout.
 
 ## Earlier releases
 
-* **v5.4.3.4** — Replaced generated Engineer and Powerplay artwork with authentic Elite Dangerous portraits, added the shared `Images/people` library and completed all 34 Engineer and 12 current Powerplay leader portraits.
+* **v5.4.4** — Rebuilt Powerplay as a complete operations workspace with dossiers, authentic portraits, journal-driven merit and cargo history, weekly archives, profile assignments and a cockpit overlay; fixed Navigation HUD priority after in-game route recalculation.
+* **v5.4.3.4** — Replaced generated Engineer and Powerplay artwork with authentic Elite Dangerous portraits, added the shared people-image library and completed all 34 Engineer and 12 current Powerplay leader portraits.
 * **v5.4.3.3.1** — Fixed Rhino-to-mothership cargo transfer reconciliation without affecting fleet-carrier transfers.
 * **v5.4.3.3** — Rebuilt About as a neon command-deck identity screen with creator, licence, privacy, runtime and project links.
 * **v5.4.3.2** — Added the profile-aware Planet Materials cockpit overlay with live surface telemetry, Rhino state, saved sites and Overlay Studio integration.

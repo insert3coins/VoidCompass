@@ -1,7 +1,7 @@
 import unittest
 
-from dashboard import MainDashboard
-from global_hotkeys import OVERLAY_HOTKEY_SPECS
+from voidcompass.dashboard.dashboard import MainDashboard
+from voidcompass.core.global_hotkeys import OVERLAY_HOTKEY_SPECS
 
 
 class _Window:
@@ -162,9 +162,9 @@ class OverlayStartupRestoreTests(unittest.TestCase):
 
 class RuntimeOverlayVisibilityTests(unittest.TestCase):
     def test_cached_survey_and_contacts_restore_after_startup_curtain(self):
-        from application_runtime import ApplicationRuntime
-        from survey_status_hud import SurveyStatusHUD
-        from contact_scope_hud import ContactScopeHUD
+        from voidcompass.core.application_runtime import ApplicationRuntime
+        from voidcompass.overlays.survey_status_hud import SurveyStatusHUD
+        from voidcompass.overlays.contact_scope_hud import ContactScopeHUD
         from types import SimpleNamespace
         loop = ApplicationRuntime()
         loop._voidcompass_startup_presentation_held = False
@@ -202,8 +202,8 @@ class RuntimeOverlayVisibilityTests(unittest.TestCase):
             loop.close()
 
     def test_navigation_handoff_updates_browser_visibility_without_journal_event(self):
-        from application_runtime import ApplicationRuntime
-        from hud import TacticalHUD
+        from voidcompass.core.application_runtime import ApplicationRuntime
+        from voidcompass.overlays.hud import TacticalHUD
         from unittest.mock import Mock
         loop = ApplicationRuntime()
         nav = TacticalHUD(loop, {})

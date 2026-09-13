@@ -1,6 +1,6 @@
 import unittest
-from dashboard import MainDashboard
-import route_strip
+from voidcompass.dashboard.dashboard import MainDashboard
+from voidcompass.exploration import route_strip
 
 
 class _WaypointPlan:

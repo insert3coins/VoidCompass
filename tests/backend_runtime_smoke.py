@@ -5,7 +5,10 @@ class BlockTk(importlib.abc.MetaPathFinder):
         if fullname.startswith(('tkinter', '_tkinter')):
             raise RuntimeError('Tk imported by backend: ' + fullname)
 sys.meta_path.insert(0, BlockTk())
-sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1]))
+sys.path.insert(
+    0,
+    str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'),
+)
 import tempfile
 import logging
 from contextlib import nullcontext
@@ -17,10 +20,10 @@ logging.getLogger().addHandler(Errors())
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-import config
-import dashboard
-from application_runtime import ApplicationRuntime
-from html_overlay_runtime import HtmlOverlayRuntime
+from voidcompass.core import config
+from voidcompass.dashboard import dashboard
+from voidcompass.core.application_runtime import ApplicationRuntime
+from voidcompass.overlays.html_overlay_runtime import HtmlOverlayRuntime
 
 with tempfile.TemporaryDirectory() as folder:
     folder = Path(folder)

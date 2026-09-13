@@ -1,7 +1,7 @@
 import unittest
-from application_runtime import ApplicationRuntime
-from hud import TacticalHUD
-from galactic_regions import region_names
+from voidcompass.core.application_runtime import ApplicationRuntime
+from voidcompass.overlays.hud import TacticalHUD
+from voidcompass.exploration.galactic_regions import region_names
 
 class HudRegionLabelTests(unittest.TestCase):
     def test_region_model_preserves_long_names_in_both_html_layouts(self):

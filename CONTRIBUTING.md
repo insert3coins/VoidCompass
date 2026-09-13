@@ -22,10 +22,11 @@ py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+python -m pip install -e .
 python VoidCompass.py
 ```
 
-The former experimental Linux build has been retired while Void Compass moves to one HTML/WebView2 presentation architecture. Run `python build.py` on Windows to create the executable, public ZIP and SHA-256 checksum.
+The former experimental Linux build has been retired while Void Compass moves to one HTML/WebView2 presentation architecture. Run `python tools/build.py` on Windows to create the executable, public ZIP and SHA-256 checksum.
 
 Create a branch from `master` and keep each change focused. Do not commit generated builds, local databases, commander profiles, configuration, logs, journal files, voice caches, or credentials.
 
@@ -44,10 +45,10 @@ Small, redacted journal excerpts are preferred over full journals. Describe the 
 Run the automated test suite before submitting a pull request:
 
 ```powershell
-python -m unittest discover -s tests -p "test_*.py"
+python -m unittest discover -s tests -t . -p "test_*.py"
 ```
 
-Also launch the application for changes that affect startup, profiles, themes, overlays, journals, audio, or settings. Building the packaged application with `python build.py` is useful for release-sensitive changes but is not required for every contribution.
+Also launch the application for changes that affect startup, profiles, themes, overlays, journals, audio, or settings. Building the packaged application with `python tools/build.py` is useful for release-sensitive changes but is not required for every contribution.
 
 ## Pull requests
 
