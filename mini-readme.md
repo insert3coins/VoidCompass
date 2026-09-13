@@ -6,6 +6,7 @@
 * Rebuilt About as a neon command-deck identity screen inspired by the local Matrix Mode visual language, with a theme-aware node network, data packets, perspective grid, scan effects and animated Void Compass reactor.
 * Added clear creator and copyright attribution for insert3coins, application identity, version, platform and runtime details, system requirements, privacy boundaries, operating principles and the Frontier disclaimer.
 * Added direct About-page access to the source, releases, documentation, issue reporting, local logs, GNU GPL v3 licence and third-party acknowledgements.
+* Fixed Rhino cargo transfers so moving commodities to or from the mothership immediately reconciles both manifests, without waiting for the Rhino to dock or affecting fleet-carrier cargo transfers.
 
 ## v5.4.3.2 // Planet Materials Field Overlay
 **Release Date:** 2026-Sep-13

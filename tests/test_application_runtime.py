@@ -2,6 +2,7 @@ import threading
 import unittest
 from pathlib import Path
 from application_runtime import ApplicationRuntime, OverlayWindowState
+from dashboard import MainDashboard
 from ui_dispatcher import ApplicationDispatcher
 from version import APP_VERSION
 
@@ -52,3 +53,66 @@ class AboutPageTests(unittest.TestCase):
         self.assertIn('data-target="documentation"', index)
         self.assertIn('data-target="notices"', index)
         self.assertIn("function startAboutMatrix()", script)
+
+
+class RhinoCargoTransferTests(unittest.TestCase):
+    @staticmethod
+    def dashboard(ship_rows):
+        dashboard = MainDashboard.__new__(MainDashboard)
+        dashboard.current_cargo_vessel = "Ship"
+        dashboard.current_cargo_inventory = list(ship_rows)
+        dashboard.current_cargo_tons = dashboard._cargo_inventory_total(ship_rows)
+        dashboard.cargo_capacity = 322
+        dashboard.current_in_srv = True
+        dashboard.current_in_fighter = False
+        dashboard.current_vehicle_name = "RHINO"
+        dashboard._last_surface_vehicle_name = "RHINO"
+        dashboard._cargo_inventory_by_hold = {}
+        dashboard.cargo_hud = None
+        dashboard._refresh_html_workspace = lambda: None
+        dashboard._refresh_cargo_consumers()
+        return dashboard
+
+    def test_transfer_to_mothership_updates_both_holds_before_docking(self):
+        dashboard = self.dashboard([{"Name": "gold", "Count": 12}])
+        dashboard.current_cargo_inventory = [
+            {"Name": "platinum", "Count": 61, "Stolen": 0},
+        ]
+        dashboard.current_cargo_tons = 61
+        dashboard._cargo_inventory_by_hold["SRV:RHINO"] = list(
+            dashboard.current_cargo_inventory
+        )
+
+        changed = dashboard._apply_rhino_cargo_transfer({
+            "Transfers": [{
+                "Type": "platinum", "Count": 61, "Direction": "toship",
+            }],
+        })
+
+        self.assertTrue(changed)
+        self.assertEqual(dashboard.current_cargo_inventory, [])
+        self.assertEqual(dashboard.current_cargo_tons, 0)
+        self.assertEqual(
+            dashboard._cargo_inventory_total(
+                dashboard._cargo_inventory_by_hold["Ship"]
+            ),
+            73,
+        )
+
+    def test_transfer_to_rhino_debits_ship_but_carrier_transfer_is_ignored(self):
+        dashboard = self.dashboard([{"Name": "platinum", "Count": 20}])
+        self.assertTrue(dashboard._apply_rhino_cargo_transfer({
+            "Transfers": [{
+                "Type": "platinum", "Count": 7, "Direction": "tosrv",
+            }],
+        }))
+        self.assertEqual(dashboard.current_cargo_tons, 7)
+        self.assertEqual(
+            dashboard._cargo_inventory_by_hold["Ship"],
+            [{"Name": "platinum", "Count": 13}],
+        )
+        self.assertFalse(dashboard._apply_rhino_cargo_transfer({
+            "Transfers": [{
+                "Type": "platinum", "Count": 5, "Direction": "tocarrier",
+            }],
+        }))
