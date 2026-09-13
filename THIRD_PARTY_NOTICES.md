@@ -1,5 +1,22 @@
 # Third-Party Notices
 
+## Elite Dangerous Character Portraits
+
+`Images/people/powerplay` includes official, non-fanmade Elite Dangerous
+Powerplay character artwork. Nine portraits were sourced from
+[Venefilyn/EDAssets](https://github.com/Venefilyn/EDAssets), pinned at commit
+`5a9b2f82796fc65abace9439aea000155f1e6eb3`. The current Powerplay 2.0
+portraits missing from that collection (Jerome Archer, Nakato Kaine and Yuri
+Grom) were sourced from the Elite Dangerous Wiki's Frontier artwork archive.
+
+`Images/people/engineers` includes the in-game Engineer portraits maintained
+by [EDDiscovery](https://github.com/EDDiscovery/EDDiscovery), pinned at commit
+`758d69d4ecee70974c24f5e69c142994b565cfd9`.
+
+The EDAssets repository is MIT-licensed and EDDiscovery is Apache-2.0-licensed.
+The character designs and original game artwork remain the property of
+Frontier Developments plc and are used here by an unofficial fan project.
+
 ## ED Engineering Companion
 
 VoidCompass v5.4.3 adapts the offline Engineering, Wishlist, Engineers,
@@ -7,7 +24,7 @@ Materials and Technology Broker workflows from
 [ED Engineering Companion](https://github.com/CMDRForcer/ED-Engineering-Companion).
 It includes the upstream blueprint, experimental-effect, material, Engineer
 unlock, module identity, ship and Technology Broker JSON catalogues; its strict
-build-import parser; Engineer portraits; and ship schematic assets.
+build-import parser; and ship schematic assets.
 
 ED Engineering Companion is licensed under the GNU General Public License
 version 3. VoidCompass uses the adapted code and data under its own matching

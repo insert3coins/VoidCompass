@@ -464,7 +464,8 @@ def _experimental_catalogue() -> list[dict]:
 def _portrait(name: str) -> str:
     aliases = {"todtheblastermcquinn": "tod_mcquinn"}
     stem = aliases.get(key(name), re.sub(r"[^a-z0-9]+", "_", name.casefold()).strip("_"))
-    return f"assets/engineering/engineers/{stem}.jpg"
+    extension = "png" if stem == "elvira_martuuk" else "jpg"
+    return f"images/people/engineers/{stem}.{extension}"
 
 
 @lru_cache(maxsize=1)
