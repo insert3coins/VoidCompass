@@ -1,15 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.5 // Project Architecture
+## v5.4.6 // Build Planner
 **Release Date:** 2026-Sep-13
 
-* Reorganised the Python application into the `src/voidcompass` package with dedicated core, dashboard, overlay, engineering, exploration, mining, Powerplay and service boundaries.
-* Moved runtime artwork, icons, cursor themes and documentation screenshots into a structured `assets` tree, while static reference databases remain under `data`.
-* Moved build, release and asset-maintenance utilities into `tools`, added installable project metadata and retained a small root launcher for source and packaged startup compatibility.
-* Updated imports, WebView child-process launch paths, bundled-resource discovery, PyInstaller inputs and release packaging for the new layout.
+* Added the complete offline Build Planner under Field Systems with all 48 current ship hulls, 958 modules, stock loadouts and the existing VoidCompass ship artwork.
+* Added compatible-slot outfitting, power priorities, module enable states, full Engineering blueprints and experimental effects, fuel/cargo/pip load states and profile-local saved builds.
+* Added range, flight, handling, power, thermal, weapons, shield, armour, resistance, mass, cost and rebuy analysis, plus saved-build comparisons.
+* Added current EDSY long-URL and backup import, EDCD SLEF and Journal Loadout import, SLEF export, live-ship cloning and Engineering wishlist hand-off.
+* Made new-build creation prominent and brought Build Planner actions, outfitting rows and analysis tabs into the shared cockpit control design.
+* Repaired cockpit-overlay transparency after the project restructure and removed Windows 11's native border and rounded-corner decoration from overlay surfaces.
 
 ## Earlier releases
 
+* **v5.4.5** — Reorganised the application into the `src/voidcompass` package and structured `assets`, `data`, `web`, `tests` and `tools` directories; updated imports, resource discovery, build inputs and launch compatibility.
 * **v5.4.4** — Rebuilt Powerplay as a complete operations workspace with dossiers, authentic portraits, journal-driven merit and cargo history, weekly archives, profile assignments and a cockpit overlay; fixed Navigation HUD priority after in-game route recalculation.
 * **v5.4.3.4** — Replaced generated Engineer and Powerplay artwork with authentic Elite Dangerous portraits, added the shared people-image library and completed all 34 Engineer and 12 current Powerplay leader portraits.
 * **v5.4.3.3.1** — Fixed Rhino-to-mothership cargo transfer reconciliation without affecting fleet-carrier transfers.

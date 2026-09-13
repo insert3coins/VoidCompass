@@ -1,12 +1,21 @@
 import unittest
+import ctypes
+import sys
+from types import ModuleType
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from voidcompass.overlays.html_overlay_host import (
+    DWMWA_BORDER_COLOR,
+    DWMWA_WINDOW_CORNER_PREFERENCE,
+    DWMWA_COLOR_NONE,
+    DWMWCP_DONOTROUND,
     WS_EX_LAYERED,
     WS_EX_NOACTIVATE,
     WS_EX_TRANSPARENT,
     _WindowController,
+    _apply_webview_transparency,
+    _apply_windows_overlay_chrome,
     _overlay_window_style as overlay_ex_style,
     _patch_pywebview_overlay_focus,
     _OverlayHost,
@@ -42,6 +51,81 @@ class OverlayInputStyleTests(unittest.TestCase):
         updated = overlay_ex_style(original, False)
 
         self.assertEqual(updated, retained | WS_EX_NOACTIVATE)
+
+    def test_windows_chrome_disables_system_border_and_rounded_corners(self):
+        calls = []
+
+        class FakeSetter:
+            argtypes = None
+            restype = None
+
+            def __call__(self, hwnd, attribute, value, size):
+                value_type = (
+                    ctypes.c_int
+                    if attribute == DWMWA_WINDOW_CORNER_PREFERENCE
+                    else ctypes.c_uint32
+                )
+                calls.append((
+                    attribute,
+                    ctypes.cast(value, ctypes.POINTER(value_type)).contents.value,
+                    size,
+                ))
+                return 0
+
+        window = SimpleNamespace(
+            native=SimpleNamespace(
+                Handle=SimpleNamespace(ToInt64=lambda: 4242),
+            ),
+        )
+        fake_dwm = SimpleNamespace(DwmSetWindowAttribute=FakeSetter())
+        with patch(
+            "voidcompass.overlays.html_overlay_host.ctypes.WinDLL",
+            return_value=fake_dwm,
+        ):
+            self.assertTrue(_apply_windows_overlay_chrome(window))
+
+        self.assertEqual(calls, [
+            (DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND, 4),
+            (DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE, 4),
+        ])
+
+    def test_transparency_repairs_webview_control_and_controller(self):
+        transparent = object()
+
+        class FakeColor:
+            @staticmethod
+            def FromArgb(*_):
+                return transparent
+
+        system = ModuleType("System")
+        system.Func = object
+        system.Type = object
+        drawing = ModuleType("System.Drawing")
+        drawing.Color = FakeColor
+        controller = SimpleNamespace(DefaultBackgroundColor=None)
+        control = SimpleNamespace(
+            IsDisposed=False,
+            DefaultBackgroundColor=None,
+            CoreWebView2Controller=controller,
+            Invalidate=Mock(),
+        )
+        native = SimpleNamespace(
+            IsDisposed=False,
+            InvokeRequired=False,
+            webview=control,
+            browser=SimpleNamespace(webview=object()),
+            Invalidate=Mock(),
+        )
+        with patch.dict(sys.modules, {
+            "System": system,
+            "System.Drawing": drawing,
+        }):
+            self.assertTrue(_apply_webview_transparency(SimpleNamespace(native=native)))
+
+        self.assertIs(control.DefaultBackgroundColor, transparent)
+        self.assertIs(controller.DefaultBackgroundColor, transparent)
+        control.Invalidate.assert_called_once_with()
+        native.Invalidate.assert_called_once_with(True)
 
     def test_first_visible_frame_restores_previous_foreground_window(self):
         controller = _WindowController("ground", object(), restore_foreground=4242)
