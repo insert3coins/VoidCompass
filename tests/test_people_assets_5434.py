@@ -27,7 +27,7 @@ POWERPLAY_PORTRAITS = {
 
 class AuthenticPeopleAssetTests(unittest.TestCase):
     def test_release_version_is_545(self):
-        self.assertEqual(APP_VERSION, "5.4.6")
+        self.assertEqual(APP_VERSION, "5.4.6.1")
 
     def test_people_provenance_is_allowed_in_release_image_tree(self):
         self.assertIn("assets/images/people/README.md", PUBLIC_RUNTIME_IMAGE_DOCUMENTS)

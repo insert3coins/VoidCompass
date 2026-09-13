@@ -37,6 +37,7 @@ from voidcompass.mining.mining_data import MINING_MATERIALS
 from voidcompass.services.carrier_tracker import CarrierTracker
 from voidcompass.overlays.prospector_hud import ProspectorHUD
 from voidcompass.overlays.planet_materials_hud import PlanetMaterialsHUD
+from voidcompass.overlays.rhino_minimap_hud import RhinoMinimapHUD
 from voidcompass.overlays.powerplay_hud import PowerplayHUD
 from voidcompass.overlays.gravity_warning_hud import GravityWarningHUD
 from voidcompass.overlays.station_info_hud import StationInfoHUD
@@ -53,6 +54,7 @@ from voidcompass.overlays.html_cargo_overlay import attach_html_cargo_overlay
 from voidcompass.overlays.html_carrier_overlay import attach_html_carrier_overlay
 from voidcompass.overlays.html_prospector_overlay import attach_html_prospector_overlay
 from voidcompass.overlays.html_planet_materials_overlay import attach_html_planet_materials_overlay
+from voidcompass.overlays.html_rhino_minimap_overlay import attach_html_rhino_minimap_overlay
 from voidcompass.overlays.html_powerplay_overlay import attach_html_powerplay_overlay
 from voidcompass.overlays.html_heartbeat_overlay import attach_html_heartbeat_overlay
 from voidcompass.overlays.html_contact_overlay import attach_html_contact_overlay
@@ -99,6 +101,7 @@ from voidcompass.core.platform_support import default_screenshot_path, open_path
 from voidcompass.core.theme_state import apply_ui_scale
 from voidcompass.core.profile_backups import automatic_backup
 from voidcompass.core.paths import resource_path
+from voidcompass.mining.rhino_minimap import RhinoMinimapTracker
 
 
 # One burst of journal events describes a single moment, so the shared
@@ -365,6 +368,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         ("carrier_hud", "carrier_hud_x", "carrier_hud_y"),
         ("prospector_hud", "prospector_hud_x", "prospector_hud_y"),
         ("planet_materials_hud", "planet_materials_hud_x", "planet_materials_hud_y"),
+        ("rhino_minimap_hud", "rhino_minimap_hud_x", "rhino_minimap_hud_y"),
         ("powerplay_hud", "powerplay_hud_x", "powerplay_hud_y"),
         ("gravity_warning_hud", "gravity_warning_hud_x", "gravity_warning_hud_y"),
         ("station_info_hud", "station_info_hud_x", "station_info_hud_y"),
@@ -379,6 +383,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         "carrier_hud": ("carrier", "Void Compass Carrier", "carrier_overlay_enabled"),
         "prospector_hud": ("prospector", "Void Compass Prospector", "prospector_overlay_enabled"),
         "planet_materials_hud": ("planet-materials", "Void Compass Planet Materials", "planet_materials_overlay_enabled"),
+        "rhino_minimap_hud": ("rhino-minimap", "Void Compass Rhino Coverage", "rhino_minimap_overlay_enabled"),
         "powerplay_hud": ("powerplay", "Void Compass Powerplay Operations", "powerplay_overlay_enabled"),
         "gravity_warning_hud": ("gravity", "Void Compass Gravity Warning", "gravity_warning_overlay_enabled"),
         "station_info_hud": ("station", "Void Compass Station Link", "station_info_overlay_enabled"),
@@ -885,6 +890,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             "carrier_hud",
             "prospector_hud",
             "planet_materials_hud",
+            "rhino_minimap_hud",
             "powerplay_hud",
             "gravity_warning_hud",
             "station_info_hud",
@@ -974,7 +980,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             pass
 
         for attr in (
-            "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "powerplay_hud",
+            "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "rhino_minimap_hud", "powerplay_hud",
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud",
             "contact_scope_hud",
@@ -1744,6 +1750,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         # Close and persist the outgoing commander's session while every live
         # fact and UI position still belongs to that profile.
         self._save_exploration_checkpoint("profile-change", immediate=True)
+        if getattr(self, "rhino_minimap", None):
+            self.rhino_minimap.flush(force=True)
         self._capture_dashboard_window_geometry()
         outgoing_engineer_path = self.config.get("engineer_materials_file")
         self._close_profile_surfaces()
@@ -1784,6 +1792,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 "deep_survey.json",
                 "expeditions.json",
                 "waypoints.json",
+                "rhino_minimap.json.gz",
             ):
                 src = get_profile_file(old_key, filename)
                 dst = get_profile_file(new_key, filename)
@@ -1796,6 +1805,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         self.config["active_commander_name"] = commander_name
         self.config["active_commander_fid"] = fid or profile.get("fid", "")
         apply_profile_config(self.config, new_key)
+        if getattr(self, "rhino_minimap", None):
+            self.rhino_minimap.switch(get_profile_file(new_key, "rhino_minimap.json.gz"))
+        self._rhino_minimap_sites_cache = None
         self._refresh_profile_paths()
         self._reset_profile_runtime_state(commander_name, self.config.get("active_commander_fid"))
         self._apply_active_profile_theme()
@@ -1933,6 +1945,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         )
         self.deep_survey = DeepSurveyTracker(
             get_profile_file(get_active_profile(self.config), "deep_survey.json")
+        )
+        self.rhino_minimap = RhinoMinimapTracker(
+            get_profile_file(get_active_profile(self.config), "rhino_minimap.json.gz")
         )
         self.expedition_manager = ExpeditionManager(
             get_profile_file(get_active_profile(self.config), "expeditions.json")
@@ -2355,6 +2370,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self._refresh_planet_materials_overlay()
         else:
             self.planet_materials_hud = None
+
+        if self.config.get("rhino_minimap_overlay_enabled", True):
+            self.rhino_minimap_hud = RhinoMinimapHUD(self.root, self.config)
+            self._refresh_rhino_minimap_overlay()
+        else:
+            self.rhino_minimap_hud = None
 
         if self.config.get("powerplay_overlay_enabled", False):
             self.powerplay_hud = PowerplayHUD(self.root, self.config)
@@ -3132,6 +3153,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         if action == "field_bookmark":
             self._field_bookmark()
             return
+        if action == "rhino_minimap_center":
+            self._set_rhino_minimap_center()
+            return
+        if action == "rhino_minimap_border":
+            self._set_rhino_minimap_border()
+            return
         if action == "toggle_all":
             if self._overlay_hotkey_global_hidden:
                 self._overlay_hotkey_global_hidden = False
@@ -3604,6 +3631,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         # without turning live journal traffic into continuous disk writes.
         self._save_profile_cockpit_state()
         self._save_exploration_checkpoint("app-close", immediate=True)
+        if getattr(self, "rhino_minimap", None):
+            self.rhino_minimap.flush(force=True)
 
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
@@ -4388,6 +4417,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self.planet_materials_hud.destroy()
             self.planet_materials_hud = None
 
+        if self.config.get("rhino_minimap_overlay_enabled", True):
+            if self.rhino_minimap_hud is None:
+                self.rhino_minimap_hud = RhinoMinimapHUD(self.root, self.config)
+            self._refresh_rhino_minimap_overlay()
+        elif self.rhino_minimap_hud:
+            self.rhino_minimap_hud.destroy()
+            self.rhino_minimap_hud = None
+
         if self.config.get("powerplay_overlay_enabled", False):
             if self.powerplay_hud is None:
                 self.powerplay_hud = PowerplayHUD(self.root, self.config)
@@ -4497,6 +4534,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 )
             elif attr == "planet_materials_hud":
                 attach_html_planet_materials_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "rhino_minimap_hud":
+                attach_html_rhino_minimap_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "powerplay_hud":

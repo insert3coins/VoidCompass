@@ -106,7 +106,7 @@ class BuildPlanner546Tests(unittest.TestCase):
         source = build_planner.stock_build(1, "Round trip")
         exported = build_planner.export_slef(source)
         document = json.loads(exported)
-        self.assertEqual(document[0]["header"]["appVersion"], "5.4.6")
+        self.assertEqual(document[0]["header"]["appVersion"], "5.4.6.1")
         imported = build_planner.parse_import(exported)["builds"][0]
         self.assertEqual(imported["ship_id"], source["ship_id"])
         self.assertGreaterEqual(sum(bool(row.get("module")) for row in imported["slots"].values()), 10)

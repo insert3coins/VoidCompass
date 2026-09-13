@@ -1393,6 +1393,9 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .planet-materials-wide > p { padding: 10px 0; line-height: 1.6; }
 
 .planet-site-form button:disabled { opacity: .45; cursor: default; }
+.planet-depleted-toggle { position:relative; display:grid!important; grid-template-columns:minmax(0,1fr) 36px; align-items:center; gap:12px!important; min-height:52px; padding:7px 10px; border:1px solid var(--border-soft); background:var(--inset); cursor:pointer; }
+.planet-depleted-toggle span b,.planet-depleted-toggle span small { display:block; }.planet-depleted-toggle span b { color:var(--text); font:700 10px "Segoe UI",sans-serif; }.planet-depleted-toggle span small { margin-top:3px; color:var(--muted); font:9px Consolas,monospace; }
+.planet-depleted-toggle input { position:absolute; opacity:0; pointer-events:none; }.planet-depleted-toggle > i { position:relative; width:34px; height:18px; border:1px solid var(--border); background:var(--panel-alt); }.planet-depleted-toggle > i::after { content:""; position:absolute; left:2px; top:2px; width:12px; height:12px; background:var(--dim); transition:.17s; }.planet-depleted-toggle input:checked + span + i { border-color:var(--red); }.planet-depleted-toggle input:checked + span + i::after { left:18px; background:var(--red); box-shadow:0 0 8px var(--red); }
 
 .planet-live { margin-bottom: 14px; }
 [data-planet-live-status] { padding: 16px; color: var(--accent); font: 13px Consolas, monospace; }
@@ -1418,6 +1421,7 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .planet-site-grid { display: grid; gap: 8px; padding: 12px; }
 .planet-site-card { border: 1px solid var(--border-soft); background: var(--inset); }
 .planet-site-card[open] { border-color: var(--border); box-shadow: inset 3px 0 color-mix(in srgb,var(--accent) 70%,transparent); }
+.planet-site-card.depleted { border-color:color-mix(in srgb,var(--red) 35%,var(--border-soft)); }.planet-site-card.depleted[open] { box-shadow:inset 3px 0 color-mix(in srgb,var(--red) 76%,transparent); }.planet-site-card.depleted summary em { color:var(--red); font-weight:700; }
 .planet-site-card summary { display: grid; grid-template-columns: minmax(175px,1fr) minmax(160px,1fr) auto auto; gap: 12px; align-items: center; padding: 13px 14px; cursor: pointer; list-style-position: inside; }
 .planet-site-card summary span { min-width: 0; }
 .planet-site-card summary span b, .planet-site-card summary span small { display: block; overflow-wrap: anywhere; }

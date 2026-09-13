@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Rhino Coverage</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <main id="panel" class="panel">
+    <header><span><i></i><b>RHINO COVERAGE</b></span><strong id="north">N ↑</strong></header>
+    <div class="location"><span id="location">AWAITING RHINO DEPLOYMENT</span><b id="map-name">MAP —</b></div>
+    <section class="map-frame"><canvas id="map" width="336" height="336"></canvas><div id="warning" class="warning" hidden></div></section>
+    <section class="readout"><span id="anchor">DROP POINT —</span><b id="area">0.00 KM² PAINTED</b></section>
+    <section class="controls"><span id="center-key">SET CENTER · UNBOUND</span><span id="border-key">SET BORDER · UNBOUND</span></section>
+    <footer><span>2 KM ESTIMATED SCANNER COVERAGE</span><b id="border">BORDER OPEN</b></footer>
+    <div class="scanlines"></div><div class="vignette"></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

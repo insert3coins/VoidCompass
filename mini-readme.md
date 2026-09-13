@@ -1,17 +1,17 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.6 // Build Planner
-**Release Date:** 2026-Sep-13
+## v5.4.6.1 // Rhino Coverage Minimap
+**Release Date:** 2026-Sep-14
 
-* Added the complete offline Build Planner under Field Systems with all 48 current ship hulls, 958 modules, stock loadouts and the existing VoidCompass ship artwork.
-* Added compatible-slot outfitting, power priorities, module enable states, full Engineering blueprints and experimental effects, fuel/cargo/pip load states and profile-local saved builds.
-* Added range, flight, handling, power, thermal, weapons, shield, armour, resistance, mass, cost and rebuy analysis, plus saved-build comparisons.
-* Added current EDSY long-URL and backup import, EDCD SLEF and Journal Loadout import, SLEF export, live-ship cloning and Engineering wishlist hand-off.
-* Made new-build creation prominent and brought Build Planner actions, outfitting rows and analysis tabs into the shared cockpit control design.
-* Repaired cockpit-overlay transparency after the project restructure and removed Windows 11's native border and rounded-corner decoration from overlay surfaces.
+* Added a feature-complete Rhino Coverage Minimap , rendered through Void Compass's transparent HTML overlay system.
+* Paints persistent estimated 2 km scanner coverage from live Status.json positions, resumes nearby maps on the same body and follows the Rhino north-up with heading and scale references.
+* Added commander-set coverage centers and borders, drop-point bearing and distance, outside-range warnings, coverage-driving rings and measured painted area.
+* Shows saved Planet Materials locations as coded green bookmarks, with depleted locations rendered red and editable from the Planet Materials workspace.
+* Added profile-local map persistence, automatic Rhino-only visibility, configurable placement and enable state in Overlay Studio, global center and border hotkeys, and shareable full-map PNGs written when the Rhino session ends.
 
 ## Earlier releases
 
+* **v5.4.6** — Added the complete offline Build Planner with current ships and modules, Engineering, EDSY/SLEF/Journal interchange, profile builds and full performance analysis; refined planner controls and repaired overlay transparency after the project restructure.
 * **v5.4.5** — Reorganised the application into the `src/voidcompass` package and structured `assets`, `data`, `web`, `tests` and `tools` directories; updated imports, resource discovery, build inputs and launch compatibility.
 * **v5.4.4** — Rebuilt Powerplay as a complete operations workspace with dossiers, authentic portraits, journal-driven merit and cargo history, weekly archives, profile assignments and a cockpit overlay; fixed Navigation HUD priority after in-game route recalculation.
 * **v5.4.3.4** — Replaced generated Engineer and Powerplay artwork with authentic Elite Dangerous portraits, added the shared people-image library and completed all 34 Engineer and 12 current Powerplay leader portraits.

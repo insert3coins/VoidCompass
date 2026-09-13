@@ -36,6 +36,19 @@ class OverlayInputStyleTests(unittest.TestCase):
             "?token=test-token&overlay=planet-materials",
         )
 
+    def test_rhino_minimap_template_resolves_to_bundled_page(self):
+        host = _OverlayHost.__new__(_OverlayHost)
+        host.origin = "http://127.0.0.1:1234"
+        host.token = "test-token"
+
+        url = host.page_url("rhino-minimap", "rhino-minimap-overlay")
+
+        self.assertEqual(
+            url,
+            "http://127.0.0.1:1234/rhino-minimap/index.html"
+            "?token=test-token&overlay=rhino-minimap",
+        )
+
     def test_passthrough_adds_required_windows_styles(self):
         original = 0x00000080  # WS_EX_TOOLWINDOW, retained by the helper.
         updated = overlay_ex_style(original, True)

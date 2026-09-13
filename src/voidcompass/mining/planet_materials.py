@@ -21,6 +21,8 @@ class PlanetMaterialsStore:
                 db.execute("ALTER TABLE sites ADD COLUMN body_details TEXT NOT NULL DEFAULT '{}'")
             if "density" not in columns:
                 db.execute("ALTER TABLE sites ADD COLUMN density TEXT NOT NULL DEFAULT ''")
+            if "depleted" not in columns:
+                db.execute("ALTER TABLE sites ADD COLUMN depleted INTEGER NOT NULL DEFAULT 0")
 
     def rows(self):
         with closing(sqlite3.connect(self.path)) as db:
@@ -48,6 +50,9 @@ class PlanetMaterialsStore:
         values["density"] = str(data.get("density") or "")
         if values["density"] not in {"", "Low", "Medium", "High"}:
             raise ValueError("Choose low, medium or high density.")
+        values["depleted"] = int(str(data.get("depleted") or "").casefold() in {
+            "1", "true", "yes", "on",
+        })
         for key, limit in (("system", 140), ("body", 160), ("name", 120), ("materials", 2000), ("notes", 4000)):
             values[key] = str(data.get(key) or "").strip()
             if len(values[key]) > limit or (key != "notes" and not values[key]):
@@ -70,12 +75,13 @@ class PlanetMaterialsStore:
                 cursor = db.execute("""UPDATE sites SET system=:system, body=:body,
                     name=:name, latitude=:latitude, longitude=:longitude,
                     materials=:materials, notes=:notes, body_details=:body_details,
-                    density=:density, updated_at=CURRENT_TIMESTAMP WHERE id=:id""", values)
+                    density=:density, depleted=:depleted,
+                    updated_at=CURRENT_TIMESTAMP WHERE id=:id""", values)
                 if not cursor.rowcount:
                     raise ValueError("This site no longer exists in the active profile.")
                 return values["id"]
-            return db.execute("""INSERT INTO sites (system,body,name,latitude,longitude,materials,notes,body_details,density)
-                VALUES (:system,:body,:name,:latitude,:longitude,:materials,:notes,:body_details,:density)""", values).lastrowid
+            return db.execute("""INSERT INTO sites (system,body,name,latitude,longitude,materials,notes,body_details,density,depleted)
+                VALUES (:system,:body,:name,:latitude,:longitude,:materials,:notes,:body_details,:density,:depleted)""", values).lastrowid
 
     def delete(self, site_id):
         with closing(sqlite3.connect(self.path)) as db, db:
