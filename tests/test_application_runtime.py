@@ -1,10 +1,10 @@
 import threading
 import unittest
 from pathlib import Path
-from application_runtime import ApplicationRuntime, OverlayWindowState
-from dashboard import MainDashboard
-from ui_dispatcher import ApplicationDispatcher
-from version import APP_VERSION
+from voidcompass.core.application_runtime import ApplicationRuntime, OverlayWindowState
+from voidcompass.dashboard.dashboard import MainDashboard
+from voidcompass.core.ui_dispatcher import ApplicationDispatcher
+from voidcompass.core.version import APP_VERSION
 
 class ApplicationRuntimeTests(unittest.TestCase):
     def test_cross_thread_work_is_serial_and_cancelled_work_never_runs(self):
@@ -46,7 +46,7 @@ class AboutPageTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         index = (root / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")
         script = (root / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
-        self.assertEqual(APP_VERSION, "5.4.4")
+        self.assertEqual(APP_VERSION, "5.4.5")
         self.assertIn('id="about-matrix-canvas"', index)
         self.assertIn("Copyright © 2026 insert3coins", index)
         self.assertIn('data-target="license"', index)

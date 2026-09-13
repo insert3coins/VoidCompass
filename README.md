@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.4**
+**Current version: 5.4.5**
 
 Void Compass is a local exploration companion for *Elite Dangerous*. It reads the game’s journal, status and companion files, then turns them into a useful command deck, survey record and set of in-game overlays. It is built for commanders who want to keep track of a long trip without handing their flight history to a cloud service.
 
@@ -57,27 +57,46 @@ py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+python -m pip install -e .
 python VoidCompass.py
 ```
 
 The application uses a local WebView2 window for its HTML interface. The source run and the packaged build use the same Python-owned state and journal pipeline.
+
+## Project structure
+
+The source tree is organised by responsibility:
+
+```text
+src/voidcompass/
+├── core/          runtime, configuration, profiles and persistence
+├── dashboard/     command-deck state and HTML dashboard integration
+├── overlays/      cockpit overlay models, servers and host bridges
+├── engineering/   engineering catalogues and build workflows
+├── exploration/   survey, route, cartography and expedition systems
+├── mining/        mining, prospector and planetary-material systems
+├── powerplay/     Powerplay operations and reference data
+└── services/      EDSM, EDDN, Galnet, Spansh and carrier services
+```
+
+Bundled artwork lives under `assets`, static reference catalogues under `data`, browser interfaces under `web`, automated checks under `tests`, and build/release utilities under `tools`. `VoidCompass.py` remains the small repository-root launcher.
 
 ## Building a release
 
 Run the build script from Windows:
 
 ```powershell
-python build.py
+python tools/build.py
 ```
 
-`build.py` installs the requirements, checks the PyInstaller and WebView2 dependencies, bundles the HTML, map, engineering and image assets, excludes Tk modules, and creates the executable and release archive under `dist` and `release`.
+`tools/build.py` installs the requirements, checks the PyInstaller and WebView2 dependencies, bundles the HTML, map, engineering and image assets, excludes Tk modules, and creates the executable and release archive under `dist` and `release`.
 
 ## Contributing
 
 Bug reports, journal evidence, documentation fixes and focused code changes are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Run the test suite before submitting changes:
 
 ```powershell
-python -m unittest discover -s tests -p "test_*.py"
+python -m unittest discover -s tests -t . -p "test_*.py"
 ```
 
 Please remove commander names, Frontier IDs, API keys, Discord webhooks and other personal information from logs or journal excerpts. Do not commit local databases, profiles, configuration files, generated builds or credentials.

@@ -1,9 +1,9 @@
 import unittest
 
-import powerplay_operations as powerplay
-from html_dashboard import HtmlDashboardMixin
-from overlay_layout_model import OVERLAY_ENABLE_KEYS
-from powerplay_hud import build_powerplay_overlay_model
+from voidcompass.powerplay import powerplay_operations as powerplay
+from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
+from voidcompass.overlays.overlay_layout_model import OVERLAY_ENABLE_KEYS
+from voidcompass.overlays.powerplay_hud import build_powerplay_overlay_model
 
 
 class _PowerplayDashboard(HtmlDashboardMixin):
@@ -138,7 +138,9 @@ class PowerplayOperations544Tests(unittest.TestCase):
         from pathlib import Path
         root = Path(__file__).resolve().parents[1]
         app = (root / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
-        host = (root / "html_overlay_host.py").read_text(encoding="utf-8")
+        host = (
+            root / "src" / "voidcompass" / "overlays" / "html_overlay_host.py"
+        ).read_text(encoding="utf-8")
         self.assertIn('from "./powerplay.js"', app)
         self.assertIn('template == "powerplay-overlay"', host)
         self.assertTrue((root / "web" / "powerplay-overlay" / "index.html").is_file())

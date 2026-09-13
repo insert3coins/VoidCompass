@@ -6,13 +6,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import engineering_companion as companion
-from companion_features import fresh_state, update_ship_companion_state
-from dashboard_db_mixin import DashboardDBMixin
-from html_dashboard import HtmlDashboardMixin
-import hud
-from hud import TacticalHUD
-from journal_watcher import JournalWatcher
+from voidcompass.engineering import engineering_companion as companion
+from voidcompass.core.companion_features import fresh_state, update_ship_companion_state
+from voidcompass.dashboard.dashboard_db_mixin import DashboardDBMixin
+from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
+from voidcompass.overlays import hud
+from voidcompass.overlays.hud import TacticalHUD
+from voidcompass.core.journal_watcher import JournalWatcher
 
 
 class EngineeringCompanion543Tests(unittest.TestCase):
@@ -238,7 +238,7 @@ class EngineeringCompanion543Tests(unittest.TestCase):
                 self.started = True
 
         host = Host()
-        with patch("dashboard_db_mixin.threading.Thread", Thread):
+        with patch("voidcompass.dashboard.dashboard_db_mixin.threading.Thread", Thread):
             self.assertTrue(host.scan_all_logs_threaded())
             self.assertFalse(host.scan_all_logs_threaded())
         self.assertEqual(len(threads), 1)
