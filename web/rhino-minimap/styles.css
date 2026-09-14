@@ -15,6 +15,6 @@ canvas { display:block; width:100%; height:100%; }
 .readout span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .readout b { color:var(--accent); white-space:nowrap; }
 .controls { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:5px 0; }
 .controls span { min-width:0; padding:4px 5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--dim); background:color-mix(in srgb,var(--raised) 26%,transparent); border-left:2px solid color-mix(in srgb,var(--orange) 42%,var(--soft)); font-size:calc(8px * var(--scale)); }
-.controls span:last-child { grid-column:1/-1; color:var(--muted); }
+.controls span:nth-last-child(-n+2) { color:var(--muted); }
 footer { min-height:18px; color:var(--dim); font-size:calc(8px * var(--scale)); font-weight:700; } footer b { color:var(--green); }
 .scanlines,.vignette { position:absolute; inset:0; pointer-events:none; }.scanlines { z-index:30; opacity:.1; background:repeating-linear-gradient(to bottom,transparent 0 2px,rgba(30,60,74,.1) 3px); }.vignette { z-index:29; box-shadow:inset 0 0 18px rgba(0,0,0,.72); }.no-crt .scanlines,.no-crt .vignette { display:none; }.reduced-motion * { animation:none!important; transition:none!important; }

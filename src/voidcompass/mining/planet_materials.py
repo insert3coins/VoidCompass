@@ -23,6 +23,8 @@ class PlanetMaterialsStore:
                 db.execute("ALTER TABLE sites ADD COLUMN density TEXT NOT NULL DEFAULT ''")
             if "depleted" not in columns:
                 db.execute("ALTER TABLE sites ADD COLUMN depleted INTEGER NOT NULL DEFAULT 0")
+            if "site_type" not in columns:
+                db.execute("ALTER TABLE sites ADD COLUMN site_type TEXT NOT NULL DEFAULT 'site'")
 
     def rows(self):
         with closing(sqlite3.connect(self.path)) as db:
@@ -53,9 +55,13 @@ class PlanetMaterialsStore:
         values["depleted"] = int(str(data.get("depleted") or "").casefold() in {
             "1", "true", "yes", "on",
         })
+        values["site_type"] = str(data.get("site_type") or "site").strip().casefold()
+        if values["site_type"] not in {"site", "drill"}:
+            raise ValueError("Invalid surface marker type.")
         for key, limit in (("system", 140), ("body", 160), ("name", 120), ("materials", 2000), ("notes", 4000)):
             values[key] = str(data.get(key) or "").strip()
-            if len(values[key]) > limit or (key != "notes" and not values[key]):
+            optional = key == "notes" or (key == "materials" and values["site_type"] == "drill")
+            if len(values[key]) > limit or (not optional and not values[key]):
                 raise ValueError(f"Provide {key} (maximum {limit} characters).")
         if details and (
                 details.get("system") != values["system"] or
@@ -75,13 +81,13 @@ class PlanetMaterialsStore:
                 cursor = db.execute("""UPDATE sites SET system=:system, body=:body,
                     name=:name, latitude=:latitude, longitude=:longitude,
                     materials=:materials, notes=:notes, body_details=:body_details,
-                    density=:density, depleted=:depleted,
+                    density=:density, depleted=:depleted, site_type=:site_type,
                     updated_at=CURRENT_TIMESTAMP WHERE id=:id""", values)
                 if not cursor.rowcount:
                     raise ValueError("This site no longer exists in the active profile.")
                 return values["id"]
-            return db.execute("""INSERT INTO sites (system,body,name,latitude,longitude,materials,notes,body_details,density,depleted)
-                VALUES (:system,:body,:name,:latitude,:longitude,:materials,:notes,:body_details,:density,:depleted)""", values).lastrowid
+            return db.execute("""INSERT INTO sites (system,body,name,latitude,longitude,materials,notes,body_details,density,depleted,site_type)
+                VALUES (:system,:body,:name,:latitude,:longitude,:materials,:notes,:body_details,:density,:depleted,:site_type)""", values).lastrowid
 
     def delete(self, site_id):
         with closing(sqlite3.connect(self.path)) as db, db:

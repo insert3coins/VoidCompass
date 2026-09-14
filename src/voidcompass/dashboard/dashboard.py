@@ -3159,6 +3159,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         if action == "rhino_minimap_border":
             self._set_rhino_minimap_border()
             return
+        if action == "rhino_minimap_drill":
+            self._mark_rhino_drill()
+            return
         if action == "rhino_minimap_reset":
             self._reset_rhino_minimap()
             return

@@ -75,6 +75,7 @@ class PlanetMaterialsTests(unittest.TestCase):
             self.assertEqual(saved['body_details'], row['body_details'])
             self.assertEqual(saved['density'], 'High')
             self.assertEqual(saved['depleted'], 0)
+            self.assertEqual(saved['site_type'], 'site')
             with self.assertRaises(ValueError):
                 store.save({**row, 'body':'Mars'})
 
@@ -114,6 +115,20 @@ class PlanetMaterialsTests(unittest.TestCase):
             self.assertEqual(len(reopened.rows()), 1)
             self.assertTrue(reopened.delete(site_id))
             self.assertEqual(reopened.rows(), [])
+
+    def test_drill_marker_can_be_saved_before_its_material_is_known(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = PlanetMaterialsStore(Path(folder) / 'sites.db')
+            drill_id = store.save(dict(
+                system='Sol', body='Moon', name='Drill 1', site_type='drill',
+                materials='', notes='Just deployed', latitude=1.25, longitude=-4.5,
+            ))
+            drill = store.rows()[0]
+            self.assertEqual(drill['id'], drill_id)
+            self.assertEqual(drill['site_type'], 'drill')
+            self.assertEqual(drill['materials'], '')
+            with self.assertRaises(ValueError):
+                store.save({**drill, 'site_type': 'unknown'})
 
     def test_coordinate_validation_does_not_write_invalid_data(self):
         with tempfile.TemporaryDirectory() as folder:

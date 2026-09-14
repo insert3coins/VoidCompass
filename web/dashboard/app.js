@@ -1382,14 +1382,15 @@ function updateStudioOptionControls(options, groundTarget = {}, rhinoMinimap = {
   const rhinoEnabled = Boolean(rhinoOverlay?.enabled);
   text("studio-rhino-state", rhinoMinimap.active ? "RHINO MAP LIVE" : "AWAITING RHINO");
   text("studio-rhino-detail", rhinoMinimap.map_name
-    ? `${String(rhinoMinimap.map_name).toUpperCase()} · ${number(rhinoMinimap.painted_km2, 0).toFixed(2)} KM² · ${rhinoMinimap.centered ? "CENTER SET" : "DROP POINT CENTER"}${rhinoMinimap.border_m == null ? " · BORDER OPEN" : ` · BORDER ${(number(rhinoMinimap.border_m) / 1000).toFixed(1)} KM`}`
+    ? `${String(rhinoMinimap.map_name).toUpperCase()} · ${number(rhinoMinimap.painted_km2, 0).toFixed(2)} KM² · ${number(rhinoMinimap.drill_count, 0)} DRILLS · ${rhinoMinimap.centered ? "CENTER SET" : "DROP POINT CENTER"}${rhinoMinimap.border_m == null ? " · BORDER OPEN" : ` · BORDER ${(number(rhinoMinimap.border_m) / 1000).toFixed(1)} KM`}`
     : "NO ACTIVE COVERAGE MAP");
-  text("studio-rhino-hotkeys", `CENTER ${rhinoMinimap.center_hotkey || "UNBOUND"} · BORDER ${rhinoMinimap.border_hotkey || "UNBOUND"} · RESET ${rhinoMinimap.reset_hotkey || "UNBOUND"}`);
+  text("studio-rhino-hotkeys", `CENTER ${rhinoMinimap.center_hotkey || "UNBOUND"} · BORDER ${rhinoMinimap.border_hotkey || "UNBOUND"} · DRILL ${rhinoMinimap.drill_hotkey || "UNBOUND"} · RESET ${rhinoMinimap.reset_hotkey || "UNBOUND"}`);
   const savedBytes = number(rhinoMinimap.saved_bytes, 0), savedAmount = savedBytes >= 1048576 ? `${(savedBytes / 1048576).toFixed(1)} MB` : `${Math.round(savedBytes / 1024)} KB`;
   text("studio-rhino-storage", `${number(rhinoMinimap.saved_maps, 0)} SAVED MAPS · ${savedAmount}`);
-  const rhinoCenter = byId("studio-rhino-center"), rhinoBorder = byId("studio-rhino-border"), rhinoReset = byId("studio-rhino-reset"), rhinoToggle = byId("studio-rhino-overlay-toggle");
+  const rhinoCenter = byId("studio-rhino-center"), rhinoBorder = byId("studio-rhino-border"), rhinoDrill = byId("studio-rhino-drill"), rhinoReset = byId("studio-rhino-reset"), rhinoToggle = byId("studio-rhino-overlay-toggle");
   if (rhinoCenter) rhinoCenter.disabled = !Boolean(rhinoMinimap.active);
   if (rhinoBorder) rhinoBorder.disabled = !Boolean(rhinoMinimap.active && rhinoMinimap.centered);
+  if (rhinoDrill) rhinoDrill.disabled = !Boolean(rhinoMinimap.active);
   if (rhinoReset) rhinoReset.disabled = !Boolean(rhinoMinimap.active);
   if (rhinoToggle) rhinoToggle.textContent = `OVERLAY ${rhinoEnabled ? "ON" : "OFF"}`;
 }
@@ -2144,12 +2145,12 @@ function renderPlanetMaterialsWorkspace(data) {
     ["DSS MINING LOCATIONS", body.mining_locations ?? null]
   ].map(([label,value]) => `<div><small>${label}</small><b>${escapeHtml(value ?? "UNREPORTED")}</b></div>`).join("")}</div>`;
   const evidence = body => `${bodyFacts(body)}<div class="planet-composition">${rawMaterials(body)}</div>`;
-  const fields = (site = {}) => `<input type="hidden" name="id" value="${escapeHtml(site.id || "")}"><input type="hidden" name="body_details" value="${escapeHtml(JSON.stringify(site.body_details || {}))}">${[
+  const fields = (site = {}) => `<input type="hidden" name="id" value="${escapeHtml(site.id || "")}"><input type="hidden" name="site_type" value="${escapeHtml(site.site_type || "site")}"><input type="hidden" name="body_details" value="${escapeHtml(JSON.stringify(site.body_details || {}))}">${[
     ["system", "SYSTEM", site.system || data.current_position?.system || data.system || ""],
     ["body", "PLANET", site.body || data.current_position?.body || ""], ["name", "SITE NAME", site.name || ""],
     ["latitude", "LATITUDE (Y) · −90 TO 90", site.latitude ?? ""], ["longitude", "LONGITUDE (X) · −180 TO 180", site.longitude ?? ""],
     ["materials", "MINING MATERIALS · MANUAL OBSERVATIONS", site.materials || ""], ["notes", "NOTES / CONDITIONS", site.notes || ""]
-  ].map(([key,label,value]) => `<label>${label}<input name="${key}" value="${escapeHtml(value)}" ${["latitude","longitude"].includes(key) ? `type="number" step="any" min="-${key === "latitude" ? 90 : 180}" max="${key === "latitude" ? 90 : 180}"` : `maxlength="${key === "notes" ? 4000 : key === "materials" ? 2000 : key === "body" ? 160 : key === "system" ? 140 : 120}"`} ${key === "notes" ? "" : "required"}></label>`).join("")}
+  ].map(([key,label,value]) => `<label>${label}<input name="${key}" value="${escapeHtml(value)}" ${["latitude","longitude"].includes(key) ? `type="number" step="any" min="-${key === "latitude" ? 90 : 180}" max="${key === "latitude" ? 90 : 180}"` : `maxlength="${key === "notes" ? 4000 : key === "materials" ? 2000 : key === "body" ? 160 : key === "system" ? 140 : 120}"`} ${key === "notes" || (key === "materials" && site.site_type === "drill") ? "" : "required"}></label>`).join("")}
     <label>ADD MINING MATERIAL<select data-material-choice><option value="">Choose a material…</option>${(data.mining_catalogue || []).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}${(data.new_mining_materials || []).includes(name) ? " · NEW" : ""}</option>`).join("")}</select></label>
     <label>OBSERVED DEPOSIT DENSITY<select name="density">${["","Low","Medium","High"].map(value=>`<option value="${value}" ${site.density === value ? "selected" : ""}>${value || "Unrecorded"}</option>`).join("")}</select></label>
     <label class="planet-depleted-toggle"><input type="checkbox" name="depleted" value="1" ${site.depleted ? "checked" : ""}><span><b>LOCATION DEPLETED</b><small>Render this bookmark red on the Rhino minimap.</small></span><i></i></label>
@@ -2163,7 +2164,7 @@ function renderPlanetMaterialsWorkspace(data) {
     planetKey(site) === planetKey(navigationTarget)
       && Math.abs(number(site.latitude) - number(navigationTarget.latitude)) < 0.000001
       && Math.abs(number(site.longitude) - number(navigationTarget.longitude)) < 0.000001));
-  const siteCards = rows => `<div class="planet-site-grid">${rows.map(site => `<details class="planet-site-card${site.depleted ? " depleted" : ""}" data-site-id="${site.id}"><summary><span><b>${escapeHtml(site.name)}</b><small>X ${numeric(site.longitude,5)} · Y ${numeric(site.latitude,5)}</small></span><strong>${materialsFor(site).map(material=>`<i>${escapeHtml(material)}</i>`).join("")}</strong><em>${site.depleted ? "DEPLETED" : escapeHtml(site.density || "Density unrecorded")}</em><button type="button" class="planet-compass-action${siteIsActive(site) ? " active" : ""}" data-site-navigate="${site.id}">${siteIsActive(site) ? "COMPASS TARGET ACTIVE" : "SEND TO COMPASS"}</button></summary><div class="planet-site-meta">${escapeHtml(site.notes || "No field notes")}</div><form class="planet-site-form">${fields(site)}</form></details>`).join("") || '<p class="workspace-empty">No mining locations saved for this planet yet.</p>'}</div>`;
+  const siteCards = rows => `<div class="planet-site-grid">${rows.map(site => `<details class="planet-site-card${site.depleted ? " depleted" : ""}${site.site_type === "drill" ? " drill" : ""}" data-site-id="${site.id}"><summary><span><b>${escapeHtml(site.name)}</b><small>X ${numeric(site.longitude,5)} · Y ${numeric(site.latitude,5)}</small></span><strong>${site.site_type === "drill" ? "<i>DRILL MARKER</i>" : ""}${materialsFor(site).map(material=>`<i>${escapeHtml(material)}</i>`).join("")}</strong><em>${site.depleted ? "DEPLETED" : escapeHtml(site.density || "Density unrecorded")}</em><button type="button" class="planet-compass-action${siteIsActive(site) ? " active" : ""}" data-site-navigate="${site.id}">${siteIsActive(site) ? "COMPASS TARGET ACTIVE" : "SEND TO COMPASS"}</button></summary><div class="planet-site-meta">${escapeHtml(site.notes || "No field notes")}</div><form class="planet-site-form">${fields(site)}</form></details>`).join("") || '<p class="workspace-empty">No mining locations saved for this planet yet.</p>'}</div>`;
   const materialNames = new Map();
   (data.sites || []).flatMap(materialsFor).forEach(name => materialNames.set(folded(name), materialNames.get(folded(name)) || name));
   const minerals = [...materialNames.values()].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
@@ -3637,6 +3638,10 @@ document.addEventListener("click", async (event) => {
   }
   if (event.target.closest("#studio-rhino-border")) {
     showToast(await command("overlay_studio", {operation: "rhino_border"}) ? "Rhino coverage border set" : "Set the center first");
+    return;
+  }
+  if (event.target.closest("#studio-rhino-drill")) {
+    showToast(await command("overlay_studio", {operation: "rhino_drill"}) ? "Drill marked at current position" : "Deploy the Rhino first");
     return;
   }
   if (event.target.closest("#studio-rhino-reset")) {

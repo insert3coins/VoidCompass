@@ -2196,6 +2196,7 @@ class HtmlDashboardMixin:
                 self._rhino_minimap_sites(),
                 center_hotkey=self.config.get("overlay_hotkey_rhino_minimap_center", ""),
                 border_hotkey=self.config.get("overlay_hotkey_rhino_minimap_border", ""),
+                drill_hotkey=self.config.get("overlay_hotkey_rhino_minimap_drill", ""),
                 reset_hotkey=self.config.get("overlay_hotkey_rhino_minimap_reset", ""),
             ))
             return True
@@ -2256,6 +2257,64 @@ class HtmlDashboardMixin:
             detail = "Set the coverage center first, while deployed in the Rhino"
         self.add_event_feed_entry("RHINO", detail, severity="INFO" if changed else "WARN")
         return changed
+
+    def _mark_rhino_drill(self):
+        """Persist the Rhino's current position as a numbered drill marker.
+
+        Elite does not publish a drill-deployed journal event, so this explicit
+        field action mirrors EDRhinoSpotter's Bookmark workflow.
+        """
+        tracker = getattr(self, "rhino_minimap", None)
+        if not tracker or not tracker.in_rhino or tracker.active is None or tracker.here is None:
+            if tracker:
+                tracker.show_notice("Drill marker unavailable outside the Rhino")
+            self._refresh_rhino_minimap_overlay()
+            self._schedule_html_dashboard_publish(immediate=True)
+            self.add_event_feed_entry(
+                "RHINO", "Deploy the Rhino before marking a drill",
+                severity="WARN",
+            )
+            return False
+
+        store = self._planet_materials_store()
+        system = tracker.system or str(getattr(self, "current_sys", "") or "").strip()
+        body = tracker.active.body
+        if not system:
+            tracker.show_notice("Drill marker unavailable without a system fix")
+            self._refresh_rhino_minimap_overlay()
+            self._schedule_html_dashboard_publish(immediate=True)
+            self.add_event_feed_entry("RHINO", "No system fix available for a drill marker", severity="WARN")
+            return False
+        numbers = []
+        for row in store.rows():
+            if str(row.get("site_type") or "").casefold() != "drill":
+                continue
+            if str(row.get("system") or "").casefold() != system.casefold():
+                continue
+            if str(row.get("body") or "").casefold() != body.casefold():
+                continue
+            match = re.fullmatch(r"Drill\s+(\d+)", str(row.get("name") or ""), re.IGNORECASE)
+            if match:
+                numbers.append(int(match.group(1)))
+        label = f"Drill {max(numbers, default=0) + 1}"
+        latitude, longitude = tracker.here
+        store.save({
+            "system": system,
+            "body": body,
+            "name": label,
+            "latitude": latitude,
+            "longitude": longitude,
+            "materials": "",
+            "notes": "Marked from the Rhino Coverage Minimap. Add the drill's material and field notes here.",
+            "site_type": "drill",
+        })
+        self._rhino_minimap_sites_cache = None
+        tracker.show_notice(f"{label} marked")
+        self._refresh_planet_materials_overlay()
+        self._refresh_rhino_minimap_overlay()
+        self._schedule_html_dashboard_publish(immediate=True)
+        self.add_event_feed_entry("RHINO", f"{label} marked at current position", severity="INFO")
+        return True
 
     def _reset_rhino_minimap(self):
         tracker = getattr(self, "rhino_minimap", None)
@@ -2437,7 +2496,14 @@ class HtmlDashboardMixin:
                 "painted_km2": round(_number(getattr(rhino_map, "painted_km2", 0.0)) or 0.0, 2),
                 "center_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_center"), 80),
                 "border_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_border"), 80),
+                "drill_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_drill"), 80),
                 "reset_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_reset"), 80),
+                "drill_count": sum(
+                    str(row.get("site_type") or "").casefold() == "drill"
+                    and str(row.get("system") or "").casefold() == str(getattr(rhino_tracker, "system", "")).casefold()
+                    and str(row.get("body") or "").casefold() == str(getattr(rhino_map, "body", "")).casefold()
+                    for row in self._rhino_minimap_sites()
+                ) if rhino_tracker is not None else 0,
                 "saved_maps": rhino_maps_count,
                 "saved_bytes": rhino_maps_size,
             },
@@ -2643,6 +2709,8 @@ class HtmlDashboardMixin:
             return self._set_rhino_minimap_center()
         if operation == "rhino_border":
             return self._set_rhino_minimap_border()
+        if operation == "rhino_drill":
+            return self._mark_rhino_drill()
         if operation == "rhino_reset":
             return bool(payload.get("confirmed") and self._reset_rhino_minimap())
         if operation == "rhino_open_maps":
