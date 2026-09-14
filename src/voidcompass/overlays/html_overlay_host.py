@@ -41,7 +41,10 @@ def _patch_pywebview_overlay_focus(winforms_module=None):
     later host control pass is therefore too late: Explorer can register that
     first frame as an application window and flash Void Compass' grouped
     taskbar icon when an overlay appears. Patch the constructor so non-focused
-    forms are taskbar-free before pywebview performs its internal first show.
+    forms receive native tool-window styles before pywebview performs its
+    internal first show. Do not set WinForms' ``ShowInTaskbar`` property here:
+    changing it after WebView2 is attached recreates the HWND and strands the
+    browser controller on the discarded handle.
 
     pywebview also unconditionally calls ``WebView.Focus`` from Form.Shown.
     Keep its lifecycle signal but omit that focus call for overlay windows.
@@ -58,13 +61,9 @@ def _patch_pywebview_overlay_focus(winforms_module=None):
                 window = getattr(form, "pywebview_window", None)
                 if getattr(window, "focus", True):
                     return
-                # ShowInTaskbar controls WinForms' managed style calculation;
-                # the native style helper then hardens the already-created
-                # HWND against WebView2/Windows restoring APPWINDOW.
-                try:
-                    form.ShowInTaskbar = False
-                except Exception:
-                    pass
+                # Change the existing HWND in place. SetWindowLongPtr preserves
+                # WebView2's parent handle while TOOLWINDOW keeps Explorer from
+                # registering the transient form on the taskbar.
                 _apply_windows_style(window, click_through=True)
 
             __init__._voidcompass_no_taskbar = True
