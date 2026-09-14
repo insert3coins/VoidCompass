@@ -24,19 +24,15 @@ __pycache__/
 *.egg-info/
 *.log
 
-# Local-only test scaffolding (not shipped/tracked). Release regression tests
-# are explicitly opted in as they are added.
+# Local-only scratch tests and generated visual-test artefacts. The real
+# regression suite under tests/ is source and must remain tracked.
 test/
-tests/
-!tests/
-tests/*
-!tests/__init__.py
-!tests/test_engineering_companion_543.py
-!tests/test_people_assets_5434.py
-!tests/test_powerplay_operations_544.py
-!tests/test_project_structure_545.py
-!tests/test_build_planner_546.py
-!tests/test_rhino_minimap_5461.py
+tests/*.png
+tests/*.html
+tests/*.txt
+tests/check-*.cjs
+tests/navigation_indicator_smoke.js
+tests/nav-preview-tools/
 .pytest_cache/
 .coverage
 .coverage.*

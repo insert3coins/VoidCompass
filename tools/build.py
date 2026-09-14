@@ -13,6 +13,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from voidcompass.core.version import APP_VERSION
+from tools.version_sync import validate_version_sync
 
 # This script automates the build process for SurveyAnalysis
 
@@ -27,6 +28,14 @@ if __name__ == '__main__':
     # may not yet be installed in this Python environment.
     project_dir = PROJECT_ROOT
     os.chdir(project_dir)
+    version_errors = validate_version_sync(project_dir)
+    if version_errors:
+        raise SystemExit(
+            "Release version metadata is out of sync with "
+            f"src/voidcompass/core/version.py ({APP_VERSION}):\n- "
+            + "\n- ".join(version_errors)
+            + "\nRun: python tools/version_sync.py --write"
+        )
     print(f"Installing build requirements with {sys.executable}...", flush=True)
     try:
         subprocess.run(

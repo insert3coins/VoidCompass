@@ -13,41 +13,10 @@ import os
 import re
 import threading
 
-
-OVERLAY_HOTKEY_SPECS = (
-    ("layout_studio", "overlay_hotkey_layout_studio", "Toggle Overlay Layout Studio", None),
-    ("toggle_all", "overlay_hotkey_toggle_all", "Show / hide all overlays", None),
-    ("navigation", "overlay_hotkey_navigation", "Navigation HUD", "hud"),
-    ("navigation_layout", "overlay_hotkey_navigation_layout", "Navigation HUD layout", None),
-    ("survey", "overlay_hotkey_survey", "Survey Operations", "survey_status_hud"),
-    ("contact_scope", "overlay_hotkey_contact_scope", "Deep Space Contacts", "contact_scope_hud"),
-    ("station_info", "overlay_hotkey_station_info", "Station Info", "station_info_hud"),
-    ("cargo", "overlay_hotkey_cargo", "Cargo Manifest", "cargo_hud"),
-    ("carrier", "overlay_hotkey_carrier", "Fleet Carrier", "carrier_hud"),
-    ("prospector", "overlay_hotkey_prospector", "Prospector Results", "prospector_hud"),
-    ("planet_materials", "overlay_hotkey_planet_materials", "Planet Materials", "planet_materials_hud"),
-    ("rhino_minimap", "overlay_hotkey_rhino_minimap", "Rhino Coverage Minimap", "rhino_minimap_hud"),
-    ("rhino_minimap_center", "overlay_hotkey_rhino_minimap_center", "Rhino Minimap: Set Center", None),
-    ("rhino_minimap_border", "overlay_hotkey_rhino_minimap_border", "Rhino Minimap: Set Border", None),
-    ("rhino_minimap_drill", "overlay_hotkey_rhino_minimap_drill", "Rhino Minimap: Mark Drill Here", None),
-    ("rhino_minimap_reset", "overlay_hotkey_rhino_minimap_reset", "Rhino Minimap: Reset Current Map", None),
-    ("powerplay", "overlay_hotkey_powerplay", "Powerplay Operations", "powerplay_hud"),
-    ("gravity", "overlay_hotkey_gravity", "Gravity Warning", "gravity_warning_hud"),
-    ("notifications", "overlay_hotkey_notifications", "Cockpit Notifications", "toast_hud"),
-    ("heartbeat", "overlay_hotkey_heartbeat", "Journal Heartbeat", "heartbeat_hud"),
-    ("planet_waypoint", "overlay_hotkey_planet_waypoint", "Planet Waypoint Navigation", "ground_popup"),
-    ("field_bookmark", "overlay_hotkey_field_bookmark", "Save field bookmark", None),
+from voidcompass.core.overlay_registry import (
+    DEFAULT_OVERLAY_HOTKEYS,
+    OVERLAY_HOTKEY_SPECS,
 )
-
-DEFAULT_OVERLAY_HOTKEYS = {
-    "overlay_hotkey_layout_studio": "Ctrl+Alt+Shift+F10",
-    "overlay_hotkey_toggle_all": "Ctrl+Alt+Shift+F11",
-    "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
-    "overlay_hotkey_rhino_minimap_center": "Ctrl+Alt+Z",
-    "overlay_hotkey_rhino_minimap_border": "Ctrl+Alt+B",
-    "overlay_hotkey_rhino_minimap_drill": "Ctrl+Alt+D",
-    "overlay_hotkey_rhino_minimap_reset": "Ctrl+Alt+Shift+R",
-}
 
 _MODIFIERS = {
     "CTRL": (0x0002, "Ctrl"),

@@ -3,23 +3,13 @@
   const params = new URLSearchParams(location.search);
   const token = params.get("token") || "";
   const overlay = params.get("overlay") || "prospector";
-  const suffix = `token=${encodeURIComponent(token)}&overlay=${encodeURIComponent(overlay)}`;
   const root = document.getElementById("prospector");
   const byId = (id) => document.getElementById(id);
-  let revision = -1, polling = false, ready = false;
 
   function node(tag, className = "", text = "") { const element = document.createElement(tag); if (className) element.className = className; if (text !== "") element.textContent = String(text); return element; }
   function set(id, value, fallback = "—") { const element = byId(id); if (element) element.textContent = value === null || value === undefined || value === "" ? fallback : String(value); }
   function number(value, fallback = 0) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
   function tone(value) { const allowed = new Set(["green","yellow","red","orange","accent","dim","muted","text"]); const result = String(value || "text").toLowerCase(); return allowed.has(result) ? result : "text"; }
-
-  function applyTheme(theme = {}, effects = {}) {
-    const mapping = {bg:"bg",panel:"panel",panel_alt:"alt",panel_raised:"raised",border:"border",border_soft:"soft",accent:"accent",orange:"orange",text:"text",muted:"muted",dim:"dim",green:"green",yellow:"yellow",red:"red"};
-    for (const [key, css] of Object.entries(mapping)) { const value = String(theme[key] || ""); if (/^#[0-9a-f]{6}$/i.test(value)) document.documentElement.style.setProperty(`--${css}`, value); }
-    const scale = Number(effects.text_scale); document.documentElement.style.setProperty("--scale", String(Number.isFinite(scale) ? Math.max(.75, Math.min(2, scale)) : 1));
-    const opacity = Number(effects.opacity); document.body.style.opacity = String(Number.isFinite(opacity) ? Math.max(.4, Math.min(1, opacity)) : 1);
-    root.classList.toggle("no-crt", !effects.crt); root.classList.toggle("reduced-motion", Boolean(effects.reduced_motion));
-  }
 
   function materialRow(item, maximum, coreName) {
     const isCore = Boolean(coreName && String(item.name || "").toLowerCase() === String(coreName).toLowerCase());
@@ -31,7 +21,7 @@
   }
 
   function render(snapshot = {}) {
-    applyTheme(snapshot.theme || {}, snapshot.effects || {});
+    VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, snapshot.effects || {});
     const model = snapshot.prospector || {};
     const materials = Array.isArray(model.materials) ? model.materials.slice(0, 10) : [];
     const refined = Array.isArray(model.refined) ? model.refined : [];
@@ -57,7 +47,5 @@
   }
 
   function contentHeight() { return Math.max(180, Math.ceil(root.getBoundingClientRect().height + 2)); }
-  async function refresh(nextRevision) { const response = await fetch(`/api/snapshot?${suffix}`, {cache:"no-store"}); if (!response.ok) return; render(await response.json()); await new Promise((resolve) => requestAnimationFrame(resolve)); revision = nextRevision; try { await fetch(`/api/rendered?${suffix}`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({revision:nextRevision,content_height:contentHeight()})}); if (!ready) { ready = true; await fetch(`/api/ready?${suffix}`, {method:"POST",body:"{}"}); } } catch (_) {} }
-  async function poll() { if (polling) return; polling = true; try { const response = await fetch(`/api/health?${suffix}`, {cache:"no-store"}); if (response.ok) { const next = Number((await response.json()).revision); if (Number.isFinite(next) && next !== revision) await refresh(next); } } catch (_) {} finally { polling = false; } }
-  poll(); window.setInterval(poll, 260);
+  VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 260});
 })();

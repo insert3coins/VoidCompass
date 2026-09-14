@@ -3,6 +3,7 @@ import unittest
 
 from voidcompass.core.paths import project_root, resource_path
 from voidcompass.core.version import APP_VERSION
+from tools.version_sync import validate_version_sync
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -10,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ProjectStructure545Tests(unittest.TestCase):
     def test_release_version_and_project_root(self):
-        self.assertEqual(APP_VERSION, "5.4.6.1")
+        self.assertFalse(validate_version_sync(ROOT), APP_VERSION)
         self.assertEqual(project_root(), ROOT)
 
     def test_feature_packages_and_launcher_exist(self):

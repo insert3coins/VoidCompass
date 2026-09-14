@@ -1,78 +1,22 @@
-"""Renderer-neutral catalogue and defaults for managed cockpit overlays."""
+"""Compatibility exports for the canonical cockpit-overlay registry."""
 
-DEFAULT_POSITIONS = {
-    "hud": (100, 100), "cargo_hud": (800, 400),
-    "carrier_hud": (30, 180),
-    "prospector_hud": (30, 600),
-    "planet_materials_hud": (820, 80),
-    "rhino_minimap_hud": (30, 80),
-    "powerplay_hud": (820, 490),
-    "gravity_warning_hud": (1200, 530), "station_info_hud": (30, 380),
-    "survey_status_hud": (30, 520), "toast_hud": (1200, 80),
-    "heartbeat_hud": (24, 24), "ground_popup": (1320, 160),
-    "contact_scope_hud": (1180, 250),
-}
+from voidcompass.core.overlay_registry import (
+    DEFAULT_POSITIONS,
+    DEFAULT_SIZES,
+    HTML_OVERLAY_SPECS,
+    OVERLAY_CARD_LABELS,
+    OVERLAY_ENABLE_DEFAULTS,
+    OVERLAY_ENABLE_KEYS,
+    OVERLAY_HOTKEY_SPECS,
+    OVERLAY_LABELS,
+    OVERLAY_POSITION_SPECS,
+    OVERLAY_SPECS,
+    OVERLAY_SPEC_BY_ATTR,
+)
 
-DEFAULT_SIZES = {
-    "hud": (430, 230), "cargo_hud": (410, 260),
-    "carrier_hud": (430, 270),
-    "prospector_hud": (400, 250),
-    "planet_materials_hud": (440, 390),
-    "rhino_minimap_hud": (360, 470),
-    "powerplay_hud": (430, 310),
-    "gravity_warning_hud": (320, 106), "station_info_hud": (520, 442),
-    "survey_status_hud": (520, 340), "toast_hud": (400, 94),
-    "heartbeat_hud": (54, 54), "ground_popup": (370, 154),
-    "contact_scope_hud": (480, 270),
-}
-
-OVERLAY_LABELS = {
-    "hud": "Navigation HUD",
-    "cargo_hud": "Cargo Manifest",
-    "carrier_hud": "Fleet / Squadron Carrier HUD",
-    "prospector_hud": "Prospector Analysis",
-    "planet_materials_hud": "Planet Materials",
-    "rhino_minimap_hud": "Rhino Coverage Minimap",
-    "powerplay_hud": "Powerplay Operations",
-    "gravity_warning_hud": "Gravity Warning",
-    "station_info_hud": "Station Information",
-    "survey_status_hud": "Survey Operations",
-    "toast_hud": "Cockpit Notifications",
-    "heartbeat_hud": "Journal Heartbeat",
-    "ground_popup": "Planet Waypoint Navigation",
-    "contact_scope_hud": "Deep Space Contact Scope",
-}
-
-OVERLAY_CARD_LABELS = {
-    "hud": "NAVIGATION",
-    "cargo_hud": "CARGO",
-    "carrier_hud": "CARRIER",
-    "prospector_hud": "PROSPECTOR",
-    "planet_materials_hud": "PLANET MATS",
-    "rhino_minimap_hud": "RHINO MAP",
-    "powerplay_hud": "POWERPLAY",
-    "gravity_warning_hud": "GRAVITY",
-    "station_info_hud": "STATION",
-    "survey_status_hud": "SURVEY",
-    "toast_hud": "NOTIFY",
-    "heartbeat_hud": "HEARTBEAT",
-    "ground_popup": "SURFACE NAV",
-    "contact_scope_hud": "CONTACTS",
-}
-
-OVERLAY_ENABLE_KEYS = {
-    "hud": "overlay_enabled",
-    "cargo_hud": "cargo_overlay_enabled",
-    "carrier_hud": "carrier_overlay_enabled",
-    "prospector_hud": "prospector_overlay_enabled",
-    "planet_materials_hud": "planet_materials_overlay_enabled",
-    "rhino_minimap_hud": "rhino_minimap_overlay_enabled",
-    "powerplay_hud": "powerplay_overlay_enabled",
-    "gravity_warning_hud": "gravity_warning_overlay_enabled",
-    "station_info_hud": "station_info_overlay_enabled",
-    "survey_status_hud": "survey_status_overlay_enabled",
-    "toast_hud": "toast_overlay_enabled",
-    "heartbeat_hud": "heartbeat_overlay_enabled",
-    "ground_popup": "ground_popup_enabled",
-    "contact_scope_hud": "contact_scope_overlay_enabled",
-}
+__all__ = [
+    "DEFAULT_POSITIONS", "DEFAULT_SIZES", "HTML_OVERLAY_SPECS",
+    "OVERLAY_CARD_LABELS", "OVERLAY_ENABLE_DEFAULTS", "OVERLAY_ENABLE_KEYS",
+    "OVERLAY_HOTKEY_SPECS", "OVERLAY_LABELS", "OVERLAY_POSITION_SPECS",
+    "OVERLAY_SPECS", "OVERLAY_SPEC_BY_ATTR",
+]

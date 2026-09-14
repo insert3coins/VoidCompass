@@ -194,10 +194,11 @@ class EngineeringCompanion543Tests(unittest.TestCase):
         self.assertEqual(model["selected_ship_id"], "plan:two")
         self.assertEqual(model["ship"]["label"], "Two")
 
-    def test_ship_selector_allows_its_committed_snapshot_to_render(self):
+    def test_build_planner_selector_allows_its_committed_snapshot_to_render(self):
         root = Path(__file__).resolve().parents[1]
         app = (root / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
-        self.assertIn('id="engineering-ship-select" data-refresh-on-change', app)
+        self.assertIn('id="bp-build-select" data-refresh-on-change', app)
+        self.assertNotIn('id="engineering-ship-select"', app)
         self.assertIn('!focused?.matches("[data-refresh-on-change]")', app)
 
     def test_journal_cache_progress_reports_every_file_in_small_histories(self):
@@ -331,15 +332,16 @@ class EngineeringCompanion543Tests(unittest.TestCase):
         engineering_page = engineering_page[:engineering_page.index('data-page-name="powerplay"')]
         self.assertNotIn('>FIELD TOOLS</button>', engineering_page)
 
-    def test_ship_engineering_uses_compact_module_groups_and_split_blueprint_browser(self):
+    def test_engineering_is_logistics_and_hands_loadouts_to_build_planner(self):
         root = Path(__file__).resolve().parents[1]
         app = (root / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
         engineering = app[app.index("function renderEngineeringWorkspace"):]
         engineering = engineering[:engineering.index("function renderPowerplayWorkspace")]
-        self.assertIn('class="engineering-module-tabs"', engineering)
-        self.assertIn('data-engineering-category=', engineering)
-        self.assertIn('class="engineering-slot-grid"', engineering)
-        self.assertIn('class="engineering-blueprint-browser"', engineering)
+        self.assertIn('BUILD PLANNER HANDOFF', engineering)
+        self.assertIn('data-page="build-planner"', engineering)
+        self.assertIn('class="engineering-wishlist-grid"', engineering)
+        self.assertNotIn('class="engineering-module-tabs"', engineering)
+        self.assertNotIn('data-engineering-category=', engineering)
 
 
 if __name__ == "__main__":

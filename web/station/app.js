@@ -3,12 +3,8 @@
   const params = new URLSearchParams(location.search);
   const token = params.get("token") || "";
   const overlay = params.get("overlay") || "station";
-  const suffix = `token=${encodeURIComponent(token)}&overlay=${encodeURIComponent(overlay)}`;
   const byId = (id) => document.getElementById(id);
   const root = byId("station");
-  let revision = -1;
-  let polling = false;
-  let ready = false;
 
   function node(tag, className = "", text = "") {
     const element = document.createElement(tag);
@@ -20,25 +16,6 @@
   function set(id, value, fallback = "—") {
     const element = byId(id);
     if (element) element.textContent = value === null || value === undefined || value === "" ? fallback : String(value);
-  }
-
-  function applyTheme(theme = {}, effects = {}) {
-    const mapping = {
-      bg: "bg", panel: "panel", panel_alt: "alt", panel_raised: "raised",
-      border: "border", border_soft: "soft", accent: "accent",
-      orange: "orange", text: "text", muted: "muted", dim: "dim",
-      green: "green", yellow: "yellow", red: "red",
-    };
-    for (const [key, css] of Object.entries(mapping)) {
-      const value = String(theme[key] || "");
-      if (/^#[0-9a-f]{6}$/i.test(value)) document.documentElement.style.setProperty(`--${css}`, value);
-    }
-    const scale = Number(effects.text_scale);
-    document.documentElement.style.setProperty("--scale", String(Number.isFinite(scale) ? Math.max(.75, Math.min(2, scale)) : 1));
-    const opacity = Number(effects.opacity);
-    document.body.style.opacity = String(Number.isFinite(opacity) ? Math.max(.4, Math.min(1, opacity)) : 1);
-    root.classList.toggle("no-crt", !effects.crt);
-    root.classList.toggle("reduced-motion", Boolean(effects.reduced_motion));
   }
 
   function availabilityChip(service) {
@@ -107,7 +84,7 @@
   }
 
   function render(snapshot = {}) {
-    applyTheme(snapshot.theme || {}, snapshot.effects || {});
+    VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, snapshot.effects || {});
     const model = snapshot.station || {};
     const core = Array.isArray(model.core_services) ? model.core_services : [];
     const explorer = Array.isArray(model.exploration_services) ? model.exploration_services : [];
@@ -133,39 +110,5 @@
     return Math.max(330, Math.ceil(root.getBoundingClientRect().height + 2));
   }
 
-  async function refresh(nextRevision) {
-    const response = await fetch(`/api/snapshot?${suffix}`, {cache: "no-store"});
-    if (!response.ok) return;
-    render(await response.json());
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    revision = nextRevision;
-    try {
-      await fetch(`/api/rendered?${suffix}`, {
-        method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({revision: nextRevision, content_height: contentHeight()}),
-      });
-      if (!ready) {
-        ready = true;
-        await fetch(`/api/ready?${suffix}`, {method: "POST", body: "{}"});
-      }
-    } catch (_) {}
-  }
-
-  async function poll() {
-    if (polling) return;
-    polling = true;
-    try {
-      const response = await fetch(`/api/health?${suffix}`, {cache: "no-store"});
-      if (response.ok) {
-        const next = Number((await response.json()).revision);
-        if (Number.isFinite(next) && next !== revision) await refresh(next);
-      }
-    } catch (_) {
-    } finally {
-      polling = false;
-    }
-  }
-
-  poll();
-  window.setInterval(poll, 260);
+  VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 260});
 })();

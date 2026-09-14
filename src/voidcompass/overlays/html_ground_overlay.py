@@ -6,7 +6,11 @@ import logging
 import os
 
 from voidcompass.core import themes
-from voidcompass.overlays.html_overlay_runtime import HtmlOverlaySurface, overlay_opacity_ratio
+from voidcompass.overlays.html_overlay_runtime import (
+    HtmlOverlayBridgeLifecycle,
+    HtmlOverlaySurface,
+    overlay_opacity_ratio,
+)
 
 
 def _integer(value, default=0):
@@ -16,7 +20,7 @@ def _integer(value, default=0):
         return int(default)
 
 
-class HtmlGroundOverlayBridge:
+class HtmlGroundOverlayBridge(HtmlOverlayBridgeLifecycle):
     """Turn the legacy ground popup proxy into a semantic HTML surface."""
 
     def __init__(self, app, window, overlay_id, title, enabled_key, x_key, y_key):
@@ -129,17 +133,6 @@ class HtmlGroundOverlayBridge:
             "window": self._window_payload(solution),
         }
 
-    def sync_window(self, x=None, y=None):
-        if self.surface is None:
-            return False
-        window = self._window_payload()
-        if x is not None:
-            window["x"] = int(round(float(x)))
-        if y is not None:
-            window["y"] = int(round(float(y)))
-        self.surface.update_window(window)
-        return True
-
     def set_enabled(self, enabled):
         enabled = bool(enabled and os.name == "nt")
         if not enabled:
@@ -201,21 +194,6 @@ class HtmlGroundOverlayBridge:
     def _on_destroy(self, event):
         if event.widget is self.win:
             self.dispose()
-
-    def dispose(self):
-        if self._disposed:
-            return
-        self._disposed = True
-        if self._sync_job is not None:
-            try:
-                self.win.cancel(self._sync_job)
-            except Exception:
-                pass
-            self._sync_job = None
-        surface, self.surface = self.surface, None
-        if surface is not None:
-            surface.dispose()
-
 
 def attach_html_ground_overlay(app, window, overlay_id, title, enabled_key, x_key, y_key):
     if window is None or getattr(window, "_html_ground_bridge", None) is not None:

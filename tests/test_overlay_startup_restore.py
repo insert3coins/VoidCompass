@@ -1,7 +1,12 @@
 import unittest
+from pathlib import Path
 
 from voidcompass.dashboard.dashboard import MainDashboard
 from voidcompass.core.global_hotkeys import OVERLAY_HOTKEY_SPECS
+from voidcompass.core.overlay_registry import (
+    OVERLAY_ENABLE_DEFAULTS,
+    OVERLAY_SPECS,
+)
 
 
 class _Window:
@@ -74,6 +79,41 @@ class _Harness:
 
 
 class OverlayStartupRestoreTests(unittest.TestCase):
+    def test_registry_is_the_single_overlay_metadata_source(self):
+        self.assertEqual(len(OVERLAY_SPECS), len({row.attr for row in OVERLAY_SPECS}))
+        self.assertEqual(
+            OVERLAY_ENABLE_DEFAULTS["rhino_minimap_overlay_enabled"], True,
+        )
+        self.assertEqual(
+            {row.attr for row in OVERLAY_SPECS},
+            {attr for attr, _x_key, _y_key in MainDashboard._OVERLAY_POSITION_SPECS},
+        )
+
+    def test_semantic_overlays_load_the_shared_browser_client(self):
+        root = Path(__file__).resolve().parents[1]
+        client = root / "web" / "assets" / "overlay-client.js"
+        self.assertTrue(client.is_file())
+        for spec in OVERLAY_SPECS:
+            if not spec.html_managed:
+                continue
+            folder = {
+                "ground_popup": "ground",
+                "planet_materials_hud": "planet-materials-overlay",
+                "powerplay_hud": "powerplay-overlay",
+                "rhino_minimap_hud": "rhino-minimap",
+                "contact_scope_hud": "contact_scope",
+                "survey_status_hud": "survey",
+                "station_info_hud": "station",
+                "gravity_warning_hud": "gravity",
+                "carrier_hud": "carrier",
+                "prospector_hud": "prospector",
+                "heartbeat_hud": "heartbeat",
+                "cargo_hud": "cargo",
+                "toast_hud": "toast",
+            }[spec.attr]
+            html = (root / "web" / folder / "index.html").read_text(encoding="utf-8")
+            self.assertIn('/assets/overlay-client.js', html, spec.attr)
+
     def test_every_managed_overlay_has_a_settings_hotkey(self):
         managed = {attr for attr, _x_key, _y_key in MainDashboard._OVERLAY_POSITION_SPECS}
         hotkey_managed = {attr for _action, _key, _label, attr in OVERLAY_HOTKEY_SPECS if attr}

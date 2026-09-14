@@ -2,6 +2,7 @@ import os
 import json
 import re
 from voidcompass.core.platform_support import application_dir, default_screenshot_path, detect_elite_journal_path
+from voidcompass.core.overlay_registry import OVERLAY_ENABLE_DEFAULTS
 
 
 def _get_config_file():
@@ -525,37 +526,25 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
     }
     bool_defaults = {
+        **OVERLAY_ENABLE_DEFAULTS,
         "edsm_upload_enabled": False,
         "edsm_backfill_on_cache_rebuild": True,
         "eddn_market_upload_enabled": True,
         "automatic_profile_backups_enabled": True,
         "galnet_enabled": True,
         "galnet_auto_rotate_enabled": True,
-        "overlay_enabled": True,
         "overlay_mouse_passthrough": os.name == "nt",
         "overlay_hotkeys_enabled": os.name == "nt",
         # Existing profile files without the old boolean retain Expanded;
         # genuinely new commander profiles begin with the everyday Standard
         # layout. Stored True/False choices remain authoritative either way.
         "hud_compact_mode": not profile_config_exists,
-        "cargo_overlay_enabled": False,
-        "carrier_overlay_enabled": False,
-        "prospector_overlay_enabled": True,
-        "planet_materials_overlay_enabled": False,
-        "powerplay_overlay_enabled": False,
-        "gravity_warning_overlay_enabled": True,
-        "station_info_overlay_enabled": True,
         "station_info_auto_hide_enabled": False,
-        "survey_status_overlay_enabled": True,
         "survey_status_show_all_bodies": False,
-        "contact_scope_overlay_enabled": True,
-        "toast_overlay_enabled": True,
         "sample_clear_notifications_enabled": True,
         "rebuy_warnings_enabled": True,
         "data_risk_warnings_enabled": True,
-        "heartbeat_overlay_enabled": True,
         "screenshots_enabled": False,
-        "ground_popup_enabled": True,
         "ground_popup_position_migrated": False,
         "ground_target_active": False,
         "auto_copy_waypoint": False,
@@ -673,9 +662,9 @@ def load_config():
     config_existed = os.path.exists(CONFIG_FILE)
     detected_journal = detect_elite_journal_path()
     defaults = {
+        **OVERLAY_ENABLE_DEFAULTS,
         'journal_path': '',
         'nav_collapsed_groups': [],
-        'overlay_enabled': True,
         'overlay_mouse_passthrough': os.name == 'nt',
         'overlay_hotkeys_enabled': os.name == 'nt',
         'overlay_hotkey_layout_studio': 'Ctrl+Alt+Shift+F10',
@@ -703,12 +692,6 @@ def load_config():
         # New installs start with Standard. An older root config that somehow
         # lacks the setting keeps the historical Expanded default.
         'hud_compact_mode': not config_existed,
-        'cargo_overlay_enabled': False,
-        'carrier_overlay_enabled': False,
-        'prospector_overlay_enabled': True,
-        'planet_materials_overlay_enabled': False,
-        'rhino_minimap_overlay_enabled': True,
-        'powerplay_overlay_enabled': False,
         'prospector_hud_timeout_s': 45,
         'prospector_hud_x': 30,
         'prospector_hud_y': 600,
@@ -738,7 +721,6 @@ def load_config():
         'survey_status_hud_x': 30,
         'survey_status_hud_y': 520,
         'survey_status_show_all_bodies': False,
-        'contact_scope_overlay_enabled': True,
         'contact_scope_hud_x': 1180,
         'contact_scope_hud_y': 250,
         'contact_scope_timeout_s': 45,
@@ -759,7 +741,6 @@ def load_config():
         'ground_popup_geometry': '340x140+1320+160',
         'ground_popup_x': 1320,
         'ground_popup_y': 160,
-        'ground_popup_enabled': True,
         'ground_popup_position_migrated': False,
         'ground_target_active': False,
         'ground_target_lat': None,

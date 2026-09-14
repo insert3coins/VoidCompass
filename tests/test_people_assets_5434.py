@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 from voidcompass.engineering.engineering_companion import _portrait, reference_catalogues
@@ -27,7 +28,7 @@ POWERPLAY_PORTRAITS = {
 
 class AuthenticPeopleAssetTests(unittest.TestCase):
     def test_release_version_is_545(self):
-        self.assertEqual(APP_VERSION, "5.4.6.1")
+        self.assertRegex(APP_VERSION, re.compile(r"^\d+(?:\.\d+)+$"))
 
     def test_people_provenance_is_allowed_in_release_image_tree(self):
         self.assertIn("assets/images/people/README.md", PUBLIC_RUNTIME_IMAGE_DOCUMENTS)
