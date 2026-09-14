@@ -388,6 +388,46 @@ class RhinoMinimapTracker:
         self._notice(f"Coverage border set at {self.active.border_m / 1000.0:.1f} km")
         return True
 
+    def reset_active(self):
+        """Replace the current map with a clean map anchored at the Rhino.
+
+        The map keeps its name and Elite location number so a reset does not
+        create a misleading extra saved-map entry. Coverage, custom center,
+        border and any previous exported PNG are discarded. The Rhino's
+        present scanner footprint becomes the first coverage stamp.
+        """
+        if not self.in_rhino or self.active is None or self.here is None:
+            self._notice("Map reset unavailable outside the Rhino")
+            return False
+        previous = self.active
+        replacement = CoverageMap(
+            previous.body, *self.here, previous.radius_m, name=previous.name,
+        )
+        replacement.location = previous.location
+        replacement.launch(*self.here)
+        replacement.add(*self.here)
+        replaced = False
+        for covers in self.maps.values():
+            for index, cover in enumerate(covers):
+                if cover is previous:
+                    covers[index] = replacement
+                    replaced = True
+                    break
+            if replaced:
+                break
+        if not replaced:
+            self.maps.setdefault(previous.body, []).append(replacement)
+        self.active = replacement
+        self.in_reach = True
+        self._dirty = True
+        self.flush(force=True)
+        try:
+            self._picture_path(previous).unlink(missing_ok=True)
+        except OSError:
+            pass
+        self._notice("Coverage map reset")
+        return True
+
     def _notice(self, text):
         self.notice = str(text)
         self.notice_until = time.monotonic() + 5.0
@@ -423,7 +463,8 @@ class RhinoMinimapTracker:
                 item.saved = time.time()
         return True
 
-    def snapshot(self, sites=(), *, center_hotkey="", border_hotkey=""):
+    def snapshot(self, sites=(), *, center_hotkey="", border_hotkey="",
+                 reset_hotkey=""):
         cover = self.active
         if not self.in_rhino or cover is None or self.here is None:
             return {"active": False, "vehicle": "RHINO"}
@@ -484,7 +525,11 @@ class RhinoMinimapTracker:
             "grid_m": GRID_M,
             "version": cover.version,
             "notice": notice,
-            "hotkeys": {"center": center_hotkey, "border": border_hotkey},
+            "hotkeys": {
+                "center": center_hotkey,
+                "border": border_hotkey,
+                "reset": reset_hotkey,
+            },
             "coverage_is_estimate": True,
         }
 
@@ -509,6 +554,15 @@ class RhinoMinimapTracker:
     def _safe_path_name(value):
         value = re.sub(r"[^A-Za-z0-9._ -]+", "_", str(value or "map")).strip(" .")
         return value[:100] or "map"
+
+    def _picture_path(self, cover=None):
+        cover = cover or self.active
+        if cover is None:
+            return self.map_folder / "map.png"
+        return (
+            self.map_folder / self._safe_path_name(cover.body)
+            / f"{self._safe_path_name(cover.name)}.png"
+        )
 
     def export_picture(self, sites=()):
         """Write the active map and bookmark legend as a shareable PNG."""
@@ -584,9 +638,8 @@ class RhinoMinimapTracker:
                 sheet_draw.text((10, y), detail, fill=colour)
                 y += 18
 
-            folder = self.map_folder / self._safe_path_name(cover.body)
-            folder.mkdir(parents=True, exist_ok=True)
-            target = folder / f"{self._safe_path_name(cover.name)}.png"
+            target = self._picture_path(cover)
+            target.parent.mkdir(parents=True, exist_ok=True)
             temporary = target.with_suffix(".png.tmp")
             sheet.save(temporary, format="PNG", optimize=True)
             os.replace(temporary, target)

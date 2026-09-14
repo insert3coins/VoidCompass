@@ -2196,6 +2196,7 @@ class HtmlDashboardMixin:
                 self._rhino_minimap_sites(),
                 center_hotkey=self.config.get("overlay_hotkey_rhino_minimap_center", ""),
                 border_hotkey=self.config.get("overlay_hotkey_rhino_minimap_border", ""),
+                reset_hotkey=self.config.get("overlay_hotkey_rhino_minimap_reset", ""),
             ))
             return True
         except Exception as exc:
@@ -2254,6 +2255,20 @@ class HtmlDashboardMixin:
         if not changed:
             detail = "Set the coverage center first, while deployed in the Rhino"
         self.add_event_feed_entry("RHINO", detail, severity="INFO" if changed else "WARN")
+        return changed
+
+    def _reset_rhino_minimap(self):
+        tracker = getattr(self, "rhino_minimap", None)
+        changed = bool(tracker and tracker.reset_active())
+        self._refresh_rhino_minimap_overlay()
+        self._schedule_html_dashboard_publish(immediate=True)
+        detail = (
+            "Current coverage map reset"
+            if changed else "Deploy the Rhino before resetting its active map"
+        )
+        self.add_event_feed_entry(
+            "RHINO", detail, severity="WARN" if changed else "INFO",
+        )
         return changed
 
     def _html_workspace(self, page):
@@ -2422,6 +2437,7 @@ class HtmlDashboardMixin:
                 "painted_km2": round(_number(getattr(rhino_map, "painted_km2", 0.0)) or 0.0, 2),
                 "center_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_center"), 80),
                 "border_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_border"), 80),
+                "reset_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_reset"), 80),
                 "saved_maps": rhino_maps_count,
                 "saved_bytes": rhino_maps_size,
             },
@@ -2627,6 +2643,8 @@ class HtmlDashboardMixin:
             return self._set_rhino_minimap_center()
         if operation == "rhino_border":
             return self._set_rhino_minimap_border()
+        if operation == "rhino_reset":
+            return bool(payload.get("confirmed") and self._reset_rhino_minimap())
         if operation == "rhino_open_maps":
             return self._open_rhino_minimap_folder()
         if operation == "move":

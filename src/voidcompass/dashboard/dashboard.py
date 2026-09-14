@@ -3159,6 +3159,9 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         if action == "rhino_minimap_border":
             self._set_rhino_minimap_border()
             return
+        if action == "rhino_minimap_reset":
+            self._reset_rhino_minimap()
+            return
         if action == "toggle_all":
             if self._overlay_hotkey_global_hidden:
                 self._overlay_hotkey_global_hidden = False

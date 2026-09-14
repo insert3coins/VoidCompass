@@ -29,6 +29,7 @@ OVERLAY_HOTKEY_SPECS = (
     ("rhino_minimap", "overlay_hotkey_rhino_minimap", "Rhino Coverage Minimap", "rhino_minimap_hud"),
     ("rhino_minimap_center", "overlay_hotkey_rhino_minimap_center", "Rhino Minimap: Set Center", None),
     ("rhino_minimap_border", "overlay_hotkey_rhino_minimap_border", "Rhino Minimap: Set Border", None),
+    ("rhino_minimap_reset", "overlay_hotkey_rhino_minimap_reset", "Rhino Minimap: Reset Current Map", None),
     ("powerplay", "overlay_hotkey_powerplay", "Powerplay Operations", "powerplay_hud"),
     ("gravity", "overlay_hotkey_gravity", "Gravity Warning", "gravity_warning_hud"),
     ("notifications", "overlay_hotkey_notifications", "Cockpit Notifications", "toast_hud"),
@@ -43,6 +44,7 @@ DEFAULT_OVERLAY_HOTKEYS = {
     "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
     "overlay_hotkey_rhino_minimap_center": "Ctrl+Alt+Z",
     "overlay_hotkey_rhino_minimap_border": "Ctrl+Alt+B",
+    "overlay_hotkey_rhino_minimap_reset": "Ctrl+Alt+Shift+R",
 }
 
 _MODIFIERS = {
