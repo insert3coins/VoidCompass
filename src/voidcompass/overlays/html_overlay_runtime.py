@@ -29,6 +29,35 @@ def overlay_opacity_ratio(config):
     return max(0.4, min(1.0, percent / 100.0))
 
 
+class HtmlOverlayBridgeLifecycle:
+    """Shared window synchronisation and disposal for overlay bridges."""
+
+    def sync_window(self, x=None, y=None):
+        if self.surface is None:
+            return False
+        window = self._window_payload()
+        if x is not None:
+            window["x"] = int(round(float(x)))
+        if y is not None:
+            window["y"] = int(round(float(y)))
+        self.surface.update_window(window)
+        return True
+
+    def dispose(self):
+        if self._disposed:
+            return
+        self._disposed = True
+        if self._sync_job is not None:
+            try:
+                self.win.cancel(self._sync_job)
+            except Exception:
+                pass
+            self._sync_job = None
+        surface, self.surface = self.surface, None
+        if surface is not None:
+            surface.dispose()
+
+
 
 
 class HtmlOverlayRuntime:

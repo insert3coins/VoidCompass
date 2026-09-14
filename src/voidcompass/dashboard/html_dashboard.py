@@ -3804,14 +3804,27 @@ class HtmlDashboardMixin:
                     target = selected_build()
                     if target is None:
                         raise build_planner.BuildPlannerError("Clone the live loadout before creating an Engineering plan.")
-                    planned, pins = build_planner.engineering_plan(target)
-                    engineering_builds = [row for row in (materials.get("engineering_builds") or []) if isinstance(row, dict)]
-                    engineering_builds.append(planned)
-                    materials["engineering_builds"] = engineering_builds[-100:]
-                    materials["pinned_blueprints"] = list(materials.get("pinned_blueprints") or []) + pins
-                    materials["engineering_selected_ship"] = planned["id"]
-                    materials["engineering_follow_current"] = False
-                    tool["notice"] = f"Sent {len(pins)} engineered module goal(s) to Engineering."
+                    _legacy_plan, pins = build_planner.engineering_plan(target)
+                    source_build_id = str(target.get("id") or "")
+                    legacy_builds = [row for row in (materials.get("engineering_builds") or []) if isinstance(row, dict)]
+                    legacy_plan_ids = {
+                        str(row.get("id") or "") for row in legacy_builds
+                        if str(row.get("source_build_id") or "") == source_build_id
+                    }
+                    # A resend refreshes this build's goals instead of creating
+                    # a second Engineering build and duplicate reservations.
+                    materials["engineering_builds"] = [
+                        row for row in legacy_builds
+                        if str(row.get("source_build_id") or "") != source_build_id
+                    ]
+                    existing_pins = [
+                        row for row in (materials.get("pinned_blueprints") or [])
+                        if isinstance(row, dict)
+                        and str(row.get("source_build_id") or "") != source_build_id
+                        and str(row.get("ship_id") or "") not in legacy_plan_ids
+                    ]
+                    materials["pinned_blueprints"] = existing_pins + pins
+                    tool["notice"] = f"Refreshed {len(pins)} engineered module goal(s) from Build Planner."
                     changed = self._save_engineer_materials(materials)
                 else:
                     return False

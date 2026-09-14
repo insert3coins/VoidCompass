@@ -3,22 +3,13 @@
   const params = new URLSearchParams(location.search);
   const token = params.get("token") || "";
   const overlay = params.get("overlay") || "rhino-minimap";
-  const suffix = `token=${encodeURIComponent(token)}&overlay=${encodeURIComponent(overlay)}`;
   const root = document.getElementById("panel");
   const canvas = document.getElementById("map");
   const ctx = canvas.getContext("2d");
   const byId = (id) => document.getElementById(id);
-  let revision = -1, polling = false, ready = false, palette = {};
+  let palette = {};
   const set = (id, value, fallback = "—") => { const node = byId(id); if (node) node.textContent = value === null || value === undefined || value === "" ? fallback : String(value); };
   const number = (value, fallback = null) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; };
-  function applyTheme(theme = {}, effects = {}) {
-    const mapping = {bg:"bg",panel:"panel",panel_alt:"alt",panel_raised:"raised",border:"border",border_soft:"soft",accent:"accent",orange:"orange",text:"text",muted:"muted",dim:"dim",green:"green",yellow:"yellow",red:"red"};
-    for (const [key, css] of Object.entries(mapping)) { const value = String(theme[key] || ""); if (/^#[0-9a-f]{6}$/i.test(value)) document.documentElement.style.setProperty(`--${css}`, value); }
-    palette = Object.fromEntries(Object.entries(mapping).map(([key, css]) => [css, theme[key] || getComputedStyle(document.documentElement).getPropertyValue(`--${css}`).trim()]));
-    const scale = number(effects.text_scale, 1); document.documentElement.style.setProperty("--scale", String(Math.max(.75, Math.min(2, scale))));
-    document.body.style.opacity = String(Math.max(.4, Math.min(1, number(effects.opacity, 1))));
-    root.classList.toggle("no-crt", !effects.crt); root.classList.toggle("reduced-motion", Boolean(effects.reduced_motion));
-  }
   function compass(degrees) {
     if (degrees === null || degrees === undefined) return "";
     const names = ["N","NE","E","SE","S","SW","W","NW"];
@@ -60,7 +51,7 @@
     const bar=grid*scale,bx=10,by=side-12;ctx.strokeStyle=palette.text||"#dcebf3";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+bar,by);ctx.stroke();ctx.fillStyle=palette.text||"#dcebf3";ctx.font=`${Math.max(9,side*.03)}px Consolas`;ctx.fillText("1.0 km",bx+bar+5,by+3);
   }
   function render(snapshot = {}) {
-    applyTheme(snapshot.theme || {}, snapshot.effects || {});
+    palette = VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, snapshot.effects || {});
     const model = snapshot.rhino_minimap || {};
     if (!model.active) return;
     set("location", model.header || model.body, "RHINO COVERAGE"); set("map-name", String(model.map_name || "MAP").toUpperCase());
@@ -73,7 +64,6 @@
     draw(model);
   }
   function contentHeight(){return Math.max(430,Math.ceil(root.getBoundingClientRect().height+2));}
-  async function refresh(nextRevision){const response=await fetch(`/api/snapshot?${suffix}`,{cache:"no-store"});if(!response.ok)return;render(await response.json());await new Promise(resolve=>requestAnimationFrame(resolve));revision=nextRevision;try{await fetch(`/api/rendered?${suffix}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({revision:nextRevision,content_height:contentHeight()})});if(!ready){ready=true;await fetch(`/api/ready?${suffix}`,{method:"POST",body:"{}"});}}catch(_){}}
-  async function poll(){if(polling)return;polling=true;try{const response=await fetch(`/api/health?${suffix}`,{cache:"no-store"});if(response.ok){const next=Number((await response.json()).revision);if(Number.isFinite(next)&&next!==revision)await refresh(next);}}catch(_){}finally{polling=false;}}
-  window.addEventListener("resize",()=>{if(revision>=0)poll();});poll();window.setInterval(poll,180);
+  const client = VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 180});
+  window.addEventListener("resize", client.rerender);
 })();

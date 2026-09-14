@@ -46,7 +46,8 @@ class AboutPageTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         index = (root / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")
         script = (root / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
-        self.assertEqual(APP_VERSION, "5.4.6.1")
+        self.assertNotIn(APP_VERSION, index)
+        self.assertIn('model.app?.version || "DEV"', script)
         self.assertIn('id="about-matrix-canvas"', index)
         self.assertIn("Copyright © 2026 insert3coins", index)
         self.assertIn('data-target="license"', index)

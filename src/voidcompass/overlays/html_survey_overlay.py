@@ -6,7 +6,11 @@ import json
 import logging
 import os
 
-from voidcompass.overlays.html_overlay_runtime import HtmlOverlaySurface, overlay_opacity_ratio
+from voidcompass.overlays.html_overlay_runtime import (
+    HtmlOverlayBridgeLifecycle,
+    HtmlOverlaySurface,
+    overlay_opacity_ratio,
+)
 
 
 def _safe_int(value, default=0):
@@ -21,7 +25,7 @@ def _json_safe(value):
     return json.loads(json.dumps(value or {}, ensure_ascii=False, default=str))
 
 
-class HtmlSurveyOverlayBridge:
+class HtmlSurveyOverlayBridge(HtmlOverlayBridgeLifecycle):
     """Publish SurveyStatusHUD's semantic model to its dedicated web page."""
 
     def __init__(self, overlay, overlay_id, title, enabled_key, x_key, y_key):
@@ -139,17 +143,6 @@ class HtmlSurveyOverlayBridge:
             bool(self.config.get("reduced_motion_enabled", False)),
         )
 
-    def sync_window(self, x=None, y=None):
-        if self.surface is None:
-            return False
-        window = self._window_payload()
-        if x is not None:
-            window["x"] = int(round(float(x)))
-        if y is not None:
-            window["y"] = int(round(float(y)))
-        self.surface.update_window(window)
-        return True
-
     def set_enabled(self, enabled):
         enabled = bool(enabled and os.name == "nt")
         if not enabled:
@@ -224,21 +217,6 @@ class HtmlSurveyOverlayBridge:
     def _on_destroy(self, event):
         if event.widget is self.win:
             self.dispose()
-
-    def dispose(self):
-        if self._disposed:
-            return
-        self._disposed = True
-        if self._sync_job is not None:
-            try:
-                self.win.cancel(self._sync_job)
-            except Exception:
-                pass
-            self._sync_job = None
-        surface, self.surface = self.surface, None
-        if surface is not None:
-            surface.dispose()
-
 
 def attach_html_survey_overlay(overlay, overlay_id, title, enabled_key, x_key, y_key):
     """Attach the dedicated Survey Operations browser renderer once."""

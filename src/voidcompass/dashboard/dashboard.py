@@ -101,6 +101,11 @@ from voidcompass.core.platform_support import default_screenshot_path, open_path
 from voidcompass.core.theme_state import apply_ui_scale
 from voidcompass.core.profile_backups import automatic_backup
 from voidcompass.core.paths import resource_path
+from voidcompass.core.overlay_registry import (
+    HTML_OVERLAY_SPECS,
+    OVERLAY_POSITION_SPECS,
+    OVERLAY_SPEC_BY_ATTR,
+)
 from voidcompass.mining.rhino_minimap import RhinoMinimapTracker
 
 
@@ -347,8 +352,8 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         "fsd_injection_armed", "fsd_injection_percent",
         "cargo_capacity", "current_cargo_tons", "current_cargo_vessel",
         "current_cargo_inventory", "_cargo_inventory_by_hold",
-        "dest_coords", "dest_name", "route_list",
-        "nav_route_entries", "current_latitude", "current_longitude",
+        "dest_coords", "dest_name", "nav_route_entries",
+        "current_latitude", "current_longitude",
         "current_heading", "current_planet_radius", "on_planet",
     )
     _COCKPIT_STATE_LIMITS = {
@@ -357,42 +362,12 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         "current_station_economies": 16,
         "current_station_services": 128,
         "current_cargo_inventory": 256,
-        "route_list": 256,
         "nav_route_entries": 256,
         "bio_sample_points": 8,
         "deep_space_contacts": 128,
     }
-    _OVERLAY_POSITION_SPECS = (
-        ("hud", "hud_x", "hud_y"),
-        ("cargo_hud", "cargo_hud_x", "cargo_hud_y"),
-        ("carrier_hud", "carrier_hud_x", "carrier_hud_y"),
-        ("prospector_hud", "prospector_hud_x", "prospector_hud_y"),
-        ("planet_materials_hud", "planet_materials_hud_x", "planet_materials_hud_y"),
-        ("rhino_minimap_hud", "rhino_minimap_hud_x", "rhino_minimap_hud_y"),
-        ("powerplay_hud", "powerplay_hud_x", "powerplay_hud_y"),
-        ("gravity_warning_hud", "gravity_warning_hud_x", "gravity_warning_hud_y"),
-        ("station_info_hud", "station_info_hud_x", "station_info_hud_y"),
-        ("survey_status_hud", "survey_status_hud_x", "survey_status_hud_y"),
-        ("toast_hud", "toast_hud_x", "toast_hud_y"),
-        ("heartbeat_hud", "heartbeat_hud_x", "heartbeat_hud_y"),
-        ("contact_scope_hud", "contact_scope_hud_x", "contact_scope_hud_y"),
-        ("ground_popup", "ground_popup_x", "ground_popup_y"),
-    )
-    _HTML_OVERLAY_SPECS = {
-        "cargo_hud": ("cargo", "Void Compass Cargo", "cargo_overlay_enabled"),
-        "carrier_hud": ("carrier", "Void Compass Carrier", "carrier_overlay_enabled"),
-        "prospector_hud": ("prospector", "Void Compass Prospector", "prospector_overlay_enabled"),
-        "planet_materials_hud": ("planet-materials", "Void Compass Planet Materials", "planet_materials_overlay_enabled"),
-        "rhino_minimap_hud": ("rhino-minimap", "Void Compass Rhino Coverage", "rhino_minimap_overlay_enabled"),
-        "powerplay_hud": ("powerplay", "Void Compass Powerplay Operations", "powerplay_overlay_enabled"),
-        "gravity_warning_hud": ("gravity", "Void Compass Gravity Warning", "gravity_warning_overlay_enabled"),
-        "station_info_hud": ("station", "Void Compass Station Link", "station_info_overlay_enabled"),
-        "survey_status_hud": ("survey", "Void Compass Survey Operations", "survey_status_overlay_enabled"),
-        "toast_hud": ("toast", "Void Compass Cockpit Notifications", "toast_overlay_enabled"),
-        "heartbeat_hud": ("heartbeat", "Void Compass Journal Heartbeat", "heartbeat_overlay_enabled"),
-        "contact_scope_hud": ("contact-scope", "Void Compass Deep Space Contacts", "contact_scope_overlay_enabled"),
-        "ground_popup": ("ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled"),
-    }
+    _OVERLAY_POSITION_SPECS = OVERLAY_POSITION_SPECS
+    _HTML_OVERLAY_SPECS = HTML_OVERLAY_SPECS
 
     @staticmethod
     def _to_float(value, default=None):
@@ -603,6 +578,35 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
     def _profile_path(self, filename):
         return get_profile_file(get_active_profile(self.config), filename)
 
+    def _overlay_enabled(self, attr):
+        spec = OVERLAY_SPEC_BY_ATTR[attr]
+        return bool(self.config.get(spec.enabled_key, spec.default_enabled))
+
+    @property
+    def route_list(self):
+        """Compatibility view derived from the canonical NavRoute entries."""
+        names = []
+        for entry in getattr(self, "nav_route_entries", None) or []:
+            if isinstance(entry, dict):
+                name = entry.get("StarSystem")
+            else:
+                name = entry
+            if name:
+                names.append(str(name))
+        return names
+
+    @route_list.setter
+    def route_list(self, rows):
+        """Accept legacy callers while retaining a single route data model."""
+        entries = []
+        for row in rows or []:
+            if isinstance(row, dict):
+                if row.get("StarSystem"):
+                    entries.append(dict(row))
+            elif row:
+                entries.append({"StarSystem": str(row)})
+        self.nav_route_entries = entries
+
     @classmethod
     def _cockpit_state_json_value(cls, value):
         """Return a bounded JSON-safe copy of simple runtime state."""
@@ -706,6 +710,10 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         for field in self._COCKPIT_STATE_FIELDS:
             if field in state:
                 setattr(self, field, state[field])
+        if not getattr(self, "nav_route_entries", None) and state.get("route_list"):
+            # Schema-1 snapshots stored the names separately. Convert those
+            # records once; future saves retain only detailed NavRoute rows.
+            self.route_list = state["route_list"]
         surface_vehicles = {"NOMAD", "SCARAB", "SCORPION", "RHINO", "SRV"}
         restored_vehicle = str(getattr(self, "current_vehicle_name", "") or "").upper()
         remembered_vehicle = str(getattr(self, "_last_surface_vehicle_name", "") or "").upper()
@@ -1210,7 +1218,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
 
         self.dest_coords = None
         self.dest_name = None
-        self.route_list = []
         self.nav_route_entries = []
         self.target_waypoint = None
         self.waypoint_cache = {}
@@ -1238,7 +1245,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         self.current_planet_radius = None
         self.on_planet = False
         self._ground_last_on_planet = False
-        self.ground_popup_enabled = bool(self.config.get("ground_popup_enabled", True))
+        self.ground_popup_enabled = self._overlay_enabled("ground_popup")
         self._ground_ui_needs_update = True
         self._ground_last_status_key = None
         self.surface_trail = []
@@ -2191,7 +2198,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         self.dest_coords = None
         self.current_coords = [0,0,0]
         self.dest_name = None
-        self.route_list = []
         self.nav_route_entries = []
         self.session_start_ts = time.time()
         self.session_jump_count = 0
@@ -2226,7 +2232,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         self.ground_target_window = None
         self._ground_popup_visible = False
         self._ground_popup_compass_ids = None
-        self.ground_popup_enabled = bool(self.config.get("ground_popup_enabled", True))
+        self.ground_popup_enabled = self._overlay_enabled("ground_popup")
         self._ground_ui_needs_update = False
         self._ground_last_status_key = None
         self.surface_trail = []
@@ -2322,7 +2328,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             on_unlock=self._on_achievement_unlocked,
         )
 
-        if self.config.get("overlay_enabled", True):
+        if self._overlay_enabled("hud"):
             self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
             try:
                 hx = int(float(self.config.get("hud_x", 100)))
@@ -2333,7 +2339,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         else:
             self.hud = None
 
-        if self.config.get("cargo_overlay_enabled", False):
+        if self._overlay_enabled("cargo_hud"):
             self.cargo_hud = CargoHUD(self.root, self.config)
             try:
                 cx = int(float(self.config.get("cargo_hud_x", self.cargo_hud.win.winfo_x())))
@@ -2355,60 +2361,60 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         else:
             self.cargo_hud = None
 
-        if self.config.get("carrier_overlay_enabled", False):
+        if self._overlay_enabled("carrier_hud"):
             self.carrier_hud = CarrierHUD(self.root, self.config, self.carrier_tracker)
         else:
             self.carrier_hud = None
 
-        if self.config.get("prospector_overlay_enabled", True):
+        if self._overlay_enabled("prospector_hud"):
             self.prospector_hud = ProspectorHUD(self.root, self.config)
         else:
             self.prospector_hud = None
 
-        if self.config.get("planet_materials_overlay_enabled", False):
+        if self._overlay_enabled("planet_materials_hud"):
             self.planet_materials_hud = PlanetMaterialsHUD(self.root, self.config)
             self._refresh_planet_materials_overlay()
         else:
             self.planet_materials_hud = None
 
-        if self.config.get("rhino_minimap_overlay_enabled", True):
+        if self._overlay_enabled("rhino_minimap_hud"):
             self.rhino_minimap_hud = RhinoMinimapHUD(self.root, self.config)
             self._refresh_rhino_minimap_overlay()
         else:
             self.rhino_minimap_hud = None
 
-        if self.config.get("powerplay_overlay_enabled", False):
+        if self._overlay_enabled("powerplay_hud"):
             self.powerplay_hud = PowerplayHUD(self.root, self.config)
             self._refresh_powerplay_overlay()
         else:
             self.powerplay_hud = None
 
-        if self.config.get("gravity_warning_overlay_enabled", True):
+        if self._overlay_enabled("gravity_warning_hud"):
             self.gravity_warning_hud = GravityWarningHUD(self.root, self.config)
         else:
             self.gravity_warning_hud = None
 
-        if self.config.get("station_info_overlay_enabled", True):
+        if self._overlay_enabled("station_info_hud"):
             self.station_info_hud = StationInfoHUD(self.root, self.config)
         else:
             self.station_info_hud = None
 
-        if self.config.get("survey_status_overlay_enabled", True):
+        if self._overlay_enabled("survey_status_hud"):
             self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
         else:
             self.survey_status_hud = None
 
-        if self.config.get("toast_overlay_enabled", True):
+        if self._overlay_enabled("toast_hud"):
             self.toast_hud = ToastHUD(self.root, self.config)
         else:
             self.toast_hud = None
 
-        if self.config.get("heartbeat_overlay_enabled", True):
+        if self._overlay_enabled("heartbeat_hud"):
             self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
         else:
             self.heartbeat_hud = None
 
-        if self.config.get("contact_scope_overlay_enabled", True):
+        if self._overlay_enabled("contact_scope_hud"):
             self.contact_scope_hud = ContactScopeHUD(self.root, self.config)
             self._refresh_contact_scope()
             if self.current_docked:
@@ -2624,19 +2630,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         explicit visibility intent.  Event-driven overlays remain governed by
         their own pending/show policies and are deliberately excluded here.
         """
-        enabled_keys = {
-            "hud": "overlay_enabled",
-            "cargo_hud": "cargo_overlay_enabled",
-            "carrier_hud": "carrier_overlay_enabled",
-            "heartbeat_hud": "heartbeat_overlay_enabled",
-        }
+        persistent = ("hud", "cargo_hud", "carrier_hud", "heartbeat_hud")
         hidden = set(getattr(self, "_overlay_hotkey_hidden", set()))
         if bool(getattr(self, "_overlay_hotkey_global_hidden", False)):
             return set()
         return {
-            attr for attr, key in enabled_keys.items()
+            attr for attr in persistent
             if attr not in hidden
-            and bool(self.config.get(key, False))
+            and self._overlay_enabled(attr)
             and getattr(self, attr, None) is not None
         }
 
@@ -4369,7 +4370,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         else:
             self.log("Screenshot Converter: DISABLED")
 
-        if self.config.get("overlay_enabled", True):
+        if self._overlay_enabled("hud"):
             if self.hud is None:
                 self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
             self.update_hud()
@@ -4377,7 +4378,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self.hud.win.destroy()
             self.hud = None
 
-        if self.config.get("cargo_overlay_enabled", False):
+        if self._overlay_enabled("cargo_hud"):
             if self.cargo_hud is None:
                 self.cargo_hud = CargoHUD(self.root, self.config)
                 self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
@@ -4397,7 +4398,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self.cargo_hud.win.destroy()
             self.cargo_hud = None
 
-        if self.config.get("carrier_overlay_enabled", False):
+        if self._overlay_enabled("carrier_hud"):
             if self.carrier_hud is None:
                 self.carrier_hud = CarrierHUD(self.root, self.config, self.carrier_tracker)
             self.carrier_hud.show()
@@ -4405,7 +4406,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self.carrier_hud.destroy()
             self.carrier_hud = None
 
-        if self.config.get("prospector_overlay_enabled", True):
+        if self._overlay_enabled("prospector_hud"):
             if self.prospector_hud is None:
                 self.prospector_hud = ProspectorHUD(self.root, self.config)
         elif self.prospector_hud:
@@ -4415,7 +4416,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 pass
             self.prospector_hud = None
 
-        if self.config.get("planet_materials_overlay_enabled", False):
+        if self._overlay_enabled("planet_materials_hud"):
             if self.planet_materials_hud is None:
                 self.planet_materials_hud = PlanetMaterialsHUD(self.root, self.config)
             self._refresh_planet_materials_overlay()
@@ -4423,7 +4424,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self.planet_materials_hud.destroy()
             self.planet_materials_hud = None
 
-        if self.config.get("rhino_minimap_overlay_enabled", True):
+        if self._overlay_enabled("rhino_minimap_hud"):
             if self.rhino_minimap_hud is None:
                 self.rhino_minimap_hud = RhinoMinimapHUD(self.root, self.config)
             self._refresh_rhino_minimap_overlay()
@@ -4431,7 +4432,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self.rhino_minimap_hud.destroy()
             self.rhino_minimap_hud = None
 
-        if self.config.get("powerplay_overlay_enabled", False):
+        if self._overlay_enabled("powerplay_hud"):
             if self.powerplay_hud is None:
                 self.powerplay_hud = PowerplayHUD(self.root, self.config)
             self._refresh_powerplay_overlay()
@@ -4439,7 +4440,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             self.powerplay_hud.destroy()
             self.powerplay_hud = None
 
-        if self.config.get("gravity_warning_overlay_enabled", True):
+        if self._overlay_enabled("gravity_warning_hud"):
             if self.gravity_warning_hud is None:
                 self.gravity_warning_hud = GravityWarningHUD(self.root, self.config)
         elif self.gravity_warning_hud:
@@ -4449,7 +4450,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 pass
             self.gravity_warning_hud = None
 
-        if self.config.get("station_info_overlay_enabled", True):
+        if self._overlay_enabled("station_info_hud"):
             if self.station_info_hud is None:
                 self.station_info_hud = StationInfoHUD(self.root, self.config)
                 if self.current_docked and self.current_station_name:
@@ -4461,7 +4462,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 pass
             self.station_info_hud = None
 
-        if self.config.get("survey_status_overlay_enabled", True):
+        if self._overlay_enabled("survey_status_hud"):
             if self.survey_status_hud is None:
                 self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
                 if self.current_docked:
@@ -4473,7 +4474,7 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 pass
             self.survey_status_hud = None
 
-        if self.config.get("toast_overlay_enabled", True):
+        if self._overlay_enabled("toast_hud"):
             if self.toast_hud is None:
                 self.toast_hud = ToastHUD(self.root, self.config)
         elif self.toast_hud:
@@ -4483,14 +4484,14 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 pass
             self.toast_hud = None
 
-        if self.config.get("heartbeat_overlay_enabled", True):
+        if self._overlay_enabled("heartbeat_hud"):
             if self.heartbeat_hud is None:
                 self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
         elif self.heartbeat_hud:
             self.heartbeat_hud.destroy()
             self.heartbeat_hud = None
 
-        if self.config.get("contact_scope_overlay_enabled", True):
+        if self._overlay_enabled("contact_scope_hud"):
             contact_scope_created = self.contact_scope_hud is None
             if self.contact_scope_hud is None:
                 self.contact_scope_hud = ContactScopeHUD(self.root, self.config)
@@ -10193,7 +10194,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
     def update_nav_route(self, data):
         self.last_nav_event_ts = time.time()
         self.nav_route_entries = list(data.get('Route', []) or [])
-        self.route_list = [r['StarSystem'] for r in self.nav_route_entries if r.get('StarSystem')]
         if self.route_list:
             dest = self.nav_route_entries[-1]
             self.dest_coords = dest.get('StarPos')

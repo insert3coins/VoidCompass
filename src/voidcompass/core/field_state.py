@@ -20,6 +20,7 @@ def load_engineer_materials(path: str) -> dict:
     empty = {
         "raw": {}, "manufactured": {}, "encoded": {}, "engineers": {},
         "pinned_blueprints": [], "odyssey_goals": [], "ship_locker": {},
+        # Retained for read-only compatibility with pre-Build-Planner profiles.
         "engineering_builds": [], "engineering_follow_current": True,
         "build_planner_builds": [], "build_planner_selected": "live", "build_planner_compare": "",
         "last_updated": None,

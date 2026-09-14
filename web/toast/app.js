@@ -4,11 +4,7 @@
   const params = new URLSearchParams(location.search);
   const token = params.get("token") || "";
   const overlay = params.get("overlay") || "toast";
-  const suffix = `token=${encodeURIComponent(token)}&overlay=${encodeURIComponent(overlay)}`;
   const root = document.getElementById("notifications");
-  let lastRevision = -1;
-  let pollActive = false;
-  let readySent = false;
 
   const number = (value, fallback = 0) => {
     const parsed = Number(value);
@@ -20,26 +16,6 @@
     if (className) element.className = className;
     if (text !== "") element.textContent = String(text);
     return element;
-  }
-
-  function applyTheme(theme = {}, effects = {}) {
-    const mapping = {
-      bg: "bg", panel: "panel", panel_raised: "raised", border: "border",
-      border_soft: "soft", accent: "accent", orange: "orange", text: "text",
-      muted: "muted", dim: "dim", green: "green", yellow: "yellow", red: "red",
-    };
-    for (const [key, css] of Object.entries(mapping)) {
-      const value = String(theme[key] || "");
-      if (/^#[0-9a-f]{6}$/i.test(value)) {
-        document.documentElement.style.setProperty(`--${css}`, value);
-      }
-    }
-    document.documentElement.style.setProperty(
-      "--scale", String(Math.max(.75, Math.min(2, number(effects.text_scale, 1)))),
-    );
-    document.body.style.opacity = String(Math.max(.4, Math.min(1, number(effects.opacity, 1))));
-    root.classList.toggle("no-crt", !effects.crt);
-    root.classList.toggle("reduced-motion", Boolean(effects.reduced_motion));
   }
 
   function severityIcon(severity) {
@@ -98,7 +74,7 @@
   }
 
   function render(snapshot = {}) {
-    applyTheme(snapshot.theme || {}, snapshot.effects || {});
+    VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, snapshot.effects || {});
     const fragment = document.createDocumentFragment();
     for (const item of snapshot.notifications || []) {
       fragment.appendChild(item.kind === "achievement" ? achievementCard(item) : noticeCard(item));
@@ -106,39 +82,5 @@
     root.replaceChildren(fragment);
   }
 
-  async function refresh(revision) {
-    const response = await fetch(`/api/snapshot?${suffix}`, {cache: "no-store"});
-    if (!response.ok) return;
-    render(await response.json());
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    lastRevision = revision;
-    try {
-      await fetch(`/api/rendered?${suffix}`, {
-        method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({revision}),
-      });
-      if (!readySent) {
-        readySent = true;
-        await fetch(`/api/ready?${suffix}`, {method: "POST", body: "{}"});
-      }
-    } catch (_) {}
-  }
-
-  async function poll() {
-    if (pollActive) return;
-    pollActive = true;
-    try {
-      const response = await fetch(`/api/health?${suffix}`, {cache: "no-store"});
-      if (response.ok) {
-        const revision = Number((await response.json()).revision);
-        if (Number.isFinite(revision) && revision !== lastRevision) await refresh(revision);
-      }
-    } catch (_) {
-    } finally {
-      pollActive = false;
-    }
-  }
-
-  poll();
-  window.setInterval(poll, 220);
+  VoidCompassOverlay.startPolling({token, overlay, render, interval: 220});
 })();

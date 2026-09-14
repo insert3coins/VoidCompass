@@ -9,6 +9,10 @@
 * Shows saved Planet Materials locations as coded green bookmarks, with depleted locations rendered red and editable from the Planet Materials workspace.
 * Added manual, numbered drill markers at the Rhino's live position, shown as orange diamonds on the minimap and editable from Planet Materials. Elite exposes no drill-deployed journal event, so the marker has an explicit button and configurable global hotkey; resetting a coverage map clears its drill markers too.
 * Added profile-local map persistence, automatic Rhino-only visibility, configurable placement and enable state in Overlay Studio, global center, border, drill and reset hotkeys, and shareable full-map PNGs written when the Rhino session ends.
+* Consolidated overlay metadata, lifecycle handling, browser polling and theme application so all cockpit overlays use the same defaults and renderer handshake; corrected Rhino's new-profile enable default.
+* Made Build Planner the sole loadout authoring/import surface and Engineering the material, wishlist, source and Engineer-access workspace; planner handoffs now refresh instead of duplicating hidden builds and material reservations.
+* Made detailed Elite `NavRoute` entries canonical, with migration for existing snapshots, and derived route names from them to prevent stale state after an in-game recalculation.
+* Restored the full Python regression suite to source control, added version-metadata validation to the build preflight and expanded cleanup coverage to 232 tests.
 
 ## Earlier releases
 

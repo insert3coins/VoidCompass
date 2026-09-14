@@ -1089,7 +1089,10 @@ def engineering_plan(build: dict) -> tuple[dict, list[dict]]:
     core_slots = ("Armour", "PowerPlant", "MainEngines", "FrameShiftDrive", "LifeSupport", "PowerDistributor", "Radar", "FuelTank")
     assignments = {}
     pins = []
-    plan_id = f"plan:{time.time_ns()}"
+    # Engineering wishlists point directly at the canonical planner build.
+    # ``planned`` remains as a compatibility adapter for callers that still
+    # render legacy Engineering build records, but it is no longer persisted.
+    plan_id = str(build["id"])
     from voidcompass.engineering import engineering_companion
 
     engineering_groups = engineering_companion.blueprint_groups()
@@ -1129,16 +1132,17 @@ def engineering_plan(build: dict) -> tuple[dict, list[dict]]:
             continue
         effect = (catalogue().get("experimentalEffects") or {}).get(slot.get("experimental"), {})
         pins.append({
-            "id": f"{plan_id}:{journal_slot}", "name": blueprint_name,
+            "id": f"planner:{plan_id}:{journal_slot}", "name": blueprint_name,
             "type": module_type, "grade": _integer(slot.get("grade")),
             "target_grade": _integer(slot.get("grade")), "current_grade": 0,
             "quantity": 1, "slot": journal_slot, "ship_id": plan_id,
+            "source_build_id": plan_id,
             "experimental": str(effect.get("name") or slot.get("experimental") or ""),
         })
     planned = {
         "id": plan_id, "ship_symbol": str(ship.get("fdname") or ""),
         "name": f"{build['name']} engineering", "slots": assignments,
-        "created": time.time(), "source_build_id": build["id"],
+        "created": time.time(), "source_build_id": plan_id,
     }
     return planned, pins
 

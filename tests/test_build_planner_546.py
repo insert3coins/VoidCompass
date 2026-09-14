@@ -8,6 +8,7 @@ import unittest
 from voidcompass.engineering import build_planner
 from voidcompass.engineering import engineering_companion
 from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
+from voidcompass.core.version import APP_VERSION
 
 
 class _PlannerDashboard(HtmlDashboardMixin):
@@ -106,7 +107,7 @@ class BuildPlanner546Tests(unittest.TestCase):
         source = build_planner.stock_build(1, "Round trip")
         exported = build_planner.export_slef(source)
         document = json.loads(exported)
-        self.assertEqual(document[0]["header"]["appVersion"], "5.4.6.1")
+        self.assertEqual(document[0]["header"]["appVersion"], APP_VERSION)
         imported = build_planner.parse_import(exported)["builds"][0]
         self.assertEqual(imported["ship_id"], source["ship_id"])
         self.assertGreaterEqual(sum(bool(row.get("module")) for row in imported["slots"].values()), 10)
@@ -154,7 +155,33 @@ class BuildPlanner546Tests(unittest.TestCase):
             "engineering_builds": [planned], "pinned_blueprints": pins,
         }, {})
         self.assertEqual(pins[0]["name"], "Increased FSD Range")
+        self.assertEqual(pins[0]["source_build_id"], build["id"])
         self.assertGreater(len(workspace["pins"][0]["materials"]), 0)
+
+    def test_engineering_handoff_refreshes_without_duplicate_build_or_goals(self):
+        build = build_planner.stock_build(1, "FSD plan")
+        fsd = next(
+            row for row in build_planner._compact_modules(1)
+            if row["type"] == "cfsd" and row["class"] == 2 and row["rating"] == "A"
+        )
+        build = build_planner.set_module(build, "component:3", fsd["id"])
+        build = build_planner.configure_slot(build, "component:3", {
+            "blueprint": "cfsd_ir", "grade": 5, "priority": 1, "enabled": True,
+        })
+        dashboard = _PlannerDashboard()
+        dashboard.engineer_materials = {
+            "build_planner_builds": [build],
+            "build_planner_selected": build["id"],
+        }
+
+        command = {"page": "build-planner", "operation": "send_engineering"}
+        self.assertTrue(dashboard._handle_html_workspace_command(command))
+        self.assertTrue(dashboard._handle_html_workspace_command(command))
+
+        state = dashboard.engineer_materials
+        self.assertEqual(state.get("engineering_builds"), [])
+        self.assertEqual(len(state["pinned_blueprints"]), 1)
+        self.assertEqual(state["pinned_blueprints"][0]["source_build_id"], build["id"])
 
 
 if __name__ == "__main__":
