@@ -178,7 +178,9 @@ class OverlayInputStyleTests(unittest.TestCase):
             self.assertTrue(_patch_pywebview_overlay_focus(winforms))
             form = FakeBrowserForm(SimpleNamespace(focus=False))
 
-        self.assertFalse(form.ShowInTaskbar)
+        # Changing this managed property after WebView2 is attached recreates
+        # the HWND, so the pre-show patch must use native styles exclusively.
+        self.assertTrue(form.ShowInTaskbar)
         apply_style.assert_called_once_with(
             form.pywebview_window, click_through=True,
         )
