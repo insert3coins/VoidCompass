@@ -1384,12 +1384,13 @@ function updateStudioOptionControls(options, groundTarget = {}, rhinoMinimap = {
   text("studio-rhino-detail", rhinoMinimap.map_name
     ? `${String(rhinoMinimap.map_name).toUpperCase()} · ${number(rhinoMinimap.painted_km2, 0).toFixed(2)} KM² · ${rhinoMinimap.centered ? "CENTER SET" : "DROP POINT CENTER"}${rhinoMinimap.border_m == null ? " · BORDER OPEN" : ` · BORDER ${(number(rhinoMinimap.border_m) / 1000).toFixed(1)} KM`}`
     : "NO ACTIVE COVERAGE MAP");
-  text("studio-rhino-hotkeys", `${rhinoMinimap.center_hotkey || "CENTER UNBOUND"} · ${rhinoMinimap.border_hotkey || "BORDER UNBOUND"}`);
+  text("studio-rhino-hotkeys", `CENTER ${rhinoMinimap.center_hotkey || "UNBOUND"} · BORDER ${rhinoMinimap.border_hotkey || "UNBOUND"} · RESET ${rhinoMinimap.reset_hotkey || "UNBOUND"}`);
   const savedBytes = number(rhinoMinimap.saved_bytes, 0), savedAmount = savedBytes >= 1048576 ? `${(savedBytes / 1048576).toFixed(1)} MB` : `${Math.round(savedBytes / 1024)} KB`;
   text("studio-rhino-storage", `${number(rhinoMinimap.saved_maps, 0)} SAVED MAPS · ${savedAmount}`);
-  const rhinoCenter = byId("studio-rhino-center"), rhinoBorder = byId("studio-rhino-border"), rhinoToggle = byId("studio-rhino-overlay-toggle");
+  const rhinoCenter = byId("studio-rhino-center"), rhinoBorder = byId("studio-rhino-border"), rhinoReset = byId("studio-rhino-reset"), rhinoToggle = byId("studio-rhino-overlay-toggle");
   if (rhinoCenter) rhinoCenter.disabled = !Boolean(rhinoMinimap.active);
   if (rhinoBorder) rhinoBorder.disabled = !Boolean(rhinoMinimap.active && rhinoMinimap.centered);
+  if (rhinoReset) rhinoReset.disabled = !Boolean(rhinoMinimap.active);
   if (rhinoToggle) rhinoToggle.textContent = `OVERLAY ${rhinoEnabled ? "ON" : "OFF"}`;
 }
 
@@ -3636,6 +3637,11 @@ document.addEventListener("click", async (event) => {
   }
   if (event.target.closest("#studio-rhino-border")) {
     showToast(await command("overlay_studio", {operation: "rhino_border"}) ? "Rhino coverage border set" : "Set the center first");
+    return;
+  }
+  if (event.target.closest("#studio-rhino-reset")) {
+    if (!window.confirm("Reset the current Rhino coverage map? All painted coverage, its center and border will be cleared.")) return;
+    showToast(await command("overlay_studio", {operation: "rhino_reset", confirmed: true}) ? "Rhino coverage map reset" : "Deploy the Rhino first");
     return;
   }
   if (event.target.closest("#studio-rhino-open-maps")) {

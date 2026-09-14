@@ -34,34 +34,54 @@ _LOOPBACK_OPENER = build_opener(ProxyHandler({}))
 
 
 def _patch_pywebview_overlay_focus(winforms_module=None):
-    """Stop pywebview from focusing non-activating WebViews when shown.
+    """Prepare pywebview overlays before their first native ``Show`` call.
 
-    pywebview's WinForms backend unconditionally calls ``WebView.Focus`` from
-    its Form.Shown handler. That callback runs after our HWND has been mapped,
-    so it can take focus from Elite even though the window was created with
-    ``focus=False`` and ``WS_EX_NOACTIVATE``. Patch the handler before any
-    BrowserForm is constructed while preserving its normal focused-window
-    behaviour.
+    WinForms creates even ``hidden=True`` pywebview windows by showing and
+    immediately hiding the form. Applying ``WS_EX_TOOLWINDOW`` only from the
+    later host control pass is therefore too late: Explorer can register that
+    first frame as an application window and flash Void Compass' grouped
+    taskbar icon when an overlay appears. Patch the constructor so non-focused
+    forms are taskbar-free before pywebview performs its internal first show.
+
+    pywebview also unconditionally calls ``WebView.Focus`` from Form.Shown.
+    Keep its lifecycle signal but omit that focus call for overlay windows.
     """
     try:
         if winforms_module is None:
             from webview.platforms import winforms as winforms_module
 
         browser_form = winforms_module.BrowserView.BrowserForm
-        original = browser_form.on_shown
-        if getattr(original, "_voidcompass_no_activate", False):
-            return True
+        original_init = browser_form.__init__
+        if not getattr(original_init, "_voidcompass_no_taskbar", False):
+            def __init__(form, *args, **kwargs):
+                original_init(form, *args, **kwargs)
+                window = getattr(form, "pywebview_window", None)
+                if getattr(window, "focus", True):
+                    return
+                # ShowInTaskbar controls WinForms' managed style calculation;
+                # the native style helper then hardens the already-created
+                # HWND against WebView2/Windows restoring APPWINDOW.
+                try:
+                    form.ShowInTaskbar = False
+                except Exception:
+                    pass
+                _apply_windows_style(window, click_through=True)
 
-        def on_shown(form, *args):
-            if getattr(form.pywebview_window, "focus", True):
-                return original(form, *args)
-            # BrowserForm.on_shown normally signals this before focusing the
-            # child WebView. Keep the lifecycle signal and omit only Focus().
-            form.shown.set()
-            return None
+            __init__._voidcompass_no_taskbar = True
+            browser_form.__init__ = __init__
 
-        on_shown._voidcompass_no_activate = True
-        browser_form.on_shown = on_shown
+        original_shown = browser_form.on_shown
+        if not getattr(original_shown, "_voidcompass_no_activate", False):
+            def on_shown(form, *args):
+                if getattr(form.pywebview_window, "focus", True):
+                    return original_shown(form, *args)
+                # BrowserForm.on_shown normally signals this before focusing
+                # the child WebView. Keep the signal and omit only Focus().
+                form.shown.set()
+                return None
+
+            on_shown._voidcompass_no_activate = True
+            browser_form.on_shown = on_shown
         return True
     except Exception:
         return False

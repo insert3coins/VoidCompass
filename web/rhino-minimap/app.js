@@ -67,7 +67,7 @@
     const targetName = model.centered ? "CENTER" : "DROP POINT"; const bearing = number(model.bearing);
     set("anchor", `${targetName} ${distance(model.distance_m)}${bearing === null ? "" : ` ${compass(bearing)} · ${Math.round(bearing)}°`}`);
     set("area", `${number(model.painted_km2,0).toFixed(2)} KM² PAINTED`);
-    set("center-key", `SET CENTER · ${model.hotkeys?.center || "UNBOUND"}`); set("border-key", `SET BORDER · ${model.hotkeys?.border || "UNBOUND"}`);
+    set("center-key", `SET CENTER · ${model.hotkeys?.center || "UNBOUND"}`); set("border-key", `SET BORDER · ${model.hotkeys?.border || "UNBOUND"}`); set("reset-key", `RESET MAP · ${model.hotkeys?.reset || "UNBOUND"}`);
     set("border", model.border_m === null || model.border_m === undefined ? "BORDER OPEN" : `BORDER ${distance(model.border_m).toUpperCase()}`);
     const warning = byId("warning"), message = model.notice || (!model.in_reach ? "OUTSIDE SAVED MAP RANGE" : ""); warning.textContent = message; warning.hidden = !message;
     draw(model);

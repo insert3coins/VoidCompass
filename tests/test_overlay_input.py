@@ -12,6 +12,7 @@ from voidcompass.overlays.html_overlay_host import (
     DWMWCP_DONOTROUND,
     WS_EX_LAYERED,
     WS_EX_NOACTIVATE,
+    WS_EX_TOOLWINDOW,
     WS_EX_TRANSPARENT,
     _WindowController,
     _apply_webview_transparency,
@@ -50,10 +51,10 @@ class OverlayInputStyleTests(unittest.TestCase):
         )
 
     def test_passthrough_adds_required_windows_styles(self):
-        original = 0x00000080  # WS_EX_TOOLWINDOW, retained by the helper.
+        original = 0
         updated = overlay_ex_style(original, True)
 
-        self.assertEqual(updated & original, original)
+        self.assertTrue(updated & WS_EX_TOOLWINDOW)
         self.assertTrue(updated & WS_EX_LAYERED)
         self.assertTrue(updated & WS_EX_TRANSPARENT)
         self.assertTrue(updated & WS_EX_NOACTIVATE)
@@ -160,13 +161,27 @@ class OverlayInputStyleTests(unittest.TestCase):
 
     def test_non_activating_webview_is_not_focused_when_shown(self):
         class FakeBrowserForm:
+            def __init__(self, window):
+                self.pywebview_window = window
+                self.ShowInTaskbar = True
+
             def on_shown(self, *_):
                 self.original_handler_called = True
 
         winforms = SimpleNamespace(
             BrowserView=SimpleNamespace(BrowserForm=FakeBrowserForm),
         )
-        self.assertTrue(_patch_pywebview_overlay_focus(winforms))
+        with patch(
+            "voidcompass.overlays.html_overlay_host._apply_windows_style",
+            return_value=True,
+        ) as apply_style:
+            self.assertTrue(_patch_pywebview_overlay_focus(winforms))
+            form = FakeBrowserForm(SimpleNamespace(focus=False))
+
+        self.assertFalse(form.ShowInTaskbar)
+        apply_style.assert_called_once_with(
+            form.pywebview_window, click_through=True,
+        )
 
         shown = Mock()
         overlay = SimpleNamespace(
