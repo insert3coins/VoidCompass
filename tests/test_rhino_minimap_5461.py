@@ -8,6 +8,8 @@ from voidcompass.mining.rhino_minimap import (
     drive_radii,
     location_index,
 )
+from voidcompass.mining.planet_materials import PlanetMaterialsStore
+from voidcompass.dashboard.dashboard import MainDashboard
 from voidcompass.core.global_hotkeys import (
     DEFAULT_OVERLAY_HOTKEYS,
     OVERLAY_HOTKEY_SPECS,
@@ -58,12 +60,20 @@ class RhinoMinimapCoverageTests(unittest.TestCase):
                 "system": "Sol", "body": "Sol Moon", "name": "Ruby ridge",
                 "latitude": 0, "longitude": 0.01, "materials": "Ruby",
                 "depleted": 1,
+            }, {
+                "system": "Sol", "body": "Sol Moon", "name": "Drill 7",
+                "latitude": 0, "longitude": 0.02, "materials": "",
+                "site_type": "drill",
             }], center_hotkey="Ctrl+Alt+Z", border_hotkey="Ctrl+Alt+B",
-                reset_hotkey="Ctrl+Alt+Shift+R")
+                drill_hotkey="Ctrl+Alt+D", reset_hotkey="Ctrl+Alt+Shift+R")
             self.assertEqual(snapshot["header"], "loc 4  Moon")
             self.assertTrue(snapshot["centered"])
             self.assertTrue(snapshot["bookmarks"][0]["depleted"])
             self.assertEqual(snapshot["bookmarks"][0]["code"], "RU")
+            self.assertEqual(snapshot["bookmarks"][1]["code"], "D7")
+            self.assertEqual(snapshot["bookmarks"][1]["kind"], "drill")
+            self.assertEqual(snapshot["drill_count"], 1)
+            self.assertEqual(snapshot["hotkeys"]["drill"], "Ctrl+Alt+D")
             self.assertEqual(snapshot["hotkeys"]["reset"], "Ctrl+Alt+Shift+R")
             self.assertTrue(path.exists())
             picture = tracker.export_picture([{
@@ -128,13 +138,49 @@ class RhinoMinimapCoverageTests(unittest.TestCase):
             "overlay_hotkey_rhino_minimap_border",
         )
         self.assertEqual(
+            actions["rhino_minimap_drill"],
+            "overlay_hotkey_rhino_minimap_drill",
+        )
+        self.assertEqual(
             actions["rhino_minimap_reset"],
             "overlay_hotkey_rhino_minimap_reset",
+        )
+        self.assertEqual(
+            DEFAULT_OVERLAY_HOTKEYS["overlay_hotkey_rhino_minimap_drill"],
+            "Ctrl+Alt+D",
         )
         self.assertEqual(
             DEFAULT_OVERLAY_HOTKEYS["overlay_hotkey_rhino_minimap_reset"],
             "Ctrl+Alt+Shift+R",
         )
+
+    def test_mark_drill_persists_numbered_current_position(self):
+        with tempfile.TemporaryDirectory() as folder:
+            tracker = RhinoMinimapTracker(Path(folder) / "rhino_minimap.json.gz")
+            self.assertTrue(tracker.update(
+                body="Sol Moon", system="Sol", latitude=1.25, longitude=-4.5,
+                radius_m=1_000_000, heading=90, in_srv=True, vehicle="Rhino",
+            ))
+            store = PlanetMaterialsStore(Path(folder) / "planet_materials.db")
+            dashboard = MainDashboard.__new__(MainDashboard)
+            dashboard.config = {}
+            dashboard.rhino_minimap = tracker
+            dashboard._planet_materials_store = lambda: store
+            dashboard._refresh_planet_materials_overlay = lambda: True
+            dashboard._refresh_rhino_minimap_overlay = lambda: True
+            dashboard._schedule_html_dashboard_publish = lambda **_kwargs: None
+            dashboard.add_event_feed_entry = lambda *_args, **_kwargs: None
+
+            self.assertTrue(dashboard._mark_rhino_drill())
+            tracker.here = (1.5, -4.0)
+            self.assertTrue(dashboard._mark_rhino_drill())
+            rows = store.rows()
+            self.assertEqual([row["name"] for row in rows], ["Drill 1", "Drill 2"])
+            self.assertTrue(all(row["site_type"] == "drill" for row in rows))
+            self.assertEqual((rows[1]["latitude"], rows[1]["longitude"]), (1.5, -4.0))
+            snapshot = tracker.snapshot(rows)
+            self.assertEqual(snapshot["drill_count"], 2)
+            self.assertIn("Drill 2 marked", snapshot["notice"])
 
     def test_overlay_is_first_class_managed_surface(self):
         self.assertEqual(

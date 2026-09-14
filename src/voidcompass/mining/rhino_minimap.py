@@ -432,6 +432,10 @@ class RhinoMinimapTracker:
         self.notice = str(text)
         self.notice_until = time.monotonic() + 5.0
 
+    def show_notice(self, text):
+        """Show a short confirmation over the active coverage map."""
+        self._notice(text)
+
     def flush_if_due(self):
         if self._dirty and time.monotonic() - self._last_save >= 2.0:
             return self.flush()
@@ -464,7 +468,7 @@ class RhinoMinimapTracker:
         return True
 
     def snapshot(self, sites=(), *, center_hotkey="", border_hotkey="",
-                 reset_hotkey=""):
+                 drill_hotkey="", reset_hotkey=""):
         cover = self.active
         if not self.in_rhino or cover is None or self.here is None:
             return {"active": False, "vehicle": "RHINO"}
@@ -484,12 +488,18 @@ class RhinoMinimapTracker:
             if lat is None or lon is None:
                 continue
             mx, my = cover.xy(lat, lon)
+            kind = "drill" if str(site.get("site_type") or "").casefold() == "drill" else "site"
             materials = re.split(r"[,;|\n]+", str(site.get("materials") or ""))
             material = next((item.strip() for item in materials if item.strip()), "")
+            label = str(site.get("name") or material or "Surface site")
+            drill_number = re.search(r"\b(\d+)\b", label) if kind == "drill" else None
             marks.append({
                 "x": round(mx, 1), "y": round(my, 1),
-                "code": _material_code(material),
-                "label": str(site.get("name") or material or "Surface site"),
+                "code": f"D{drill_number.group(1)}" if drill_number else (
+                    "D" if kind == "drill" else _material_code(material)
+                ),
+                "kind": kind,
+                "label": label,
                 "depleted": bool(site.get("depleted")),
             })
         notice = self.notice if time.monotonic() < self.notice_until else ""
@@ -516,6 +526,7 @@ class RhinoMinimapTracker:
             "painted_km2": round(cover.painted_km2, 2),
             "stamps": [{"x": round(px, 1), "y": round(py, 1)} for px, py in stamp_xy],
             "bookmarks": marks,
+            "drill_count": sum(mark["kind"] == "drill" for mark in marks),
             "drive_rings": drive_radii(cover.border_m) if cover.border_m is not None else [],
             "range_rings": list(RANGE_RINGS_M),
             "scan_radius_m": SCAN_RADIUS_M,
@@ -528,6 +539,7 @@ class RhinoMinimapTracker:
             "hotkeys": {
                 "center": center_hotkey,
                 "border": border_hotkey,
+                "drill": drill_hotkey,
                 "reset": reset_hotkey,
             },
             "coverage_is_estimate": True,
@@ -606,13 +618,22 @@ class RhinoMinimapTracker:
                 material = next((part.strip() for part in re.split(
                     r"[,;|\n]+", str(site.get("materials") or "")
                 ) if part.strip()), "")
-                marks.append((x, y, _material_code(material), material,
-                              str(site.get("name") or "Surface site"), bool(site.get("depleted"))))
-            for x, y, code, _material, _name, depleted in marks:
+                kind = "drill" if str(site.get("site_type") or "").casefold() == "drill" else "site"
+                name = str(site.get("name") or "Surface site")
+                drill_number = re.search(r"\b(\d+)\b", name) if kind == "drill" else None
+                code = f"D{drill_number.group(1)}" if drill_number else (
+                    "D" if kind == "drill" else _material_code(material)
+                )
+                marks.append((x, y, code, material, name, bool(site.get("depleted")), kind))
+            for x, y, code, _material, _name, depleted, kind in marks:
                 px = (x + REACH_M) / metres_per_pixel
                 py = (REACH_M - y) / metres_per_pixel
-                colour = "#ff6b70" if depleted else "#54e39a"
-                draw.ellipse((px-6, py-6, px+6, py+6), fill=colour, outline="#070b10", width=2)
+                colour = "#ff6b70" if depleted else ("#ff8a3d" if kind == "drill" else "#54e39a")
+                if kind == "drill":
+                    draw.polygon(((px, py-8), (px+8, py), (px, py+8), (px-8, py)),
+                                 fill=colour, outline="#070b10")
+                else:
+                    draw.ellipse((px-6, py-6, px+6, py+6), fill=colour, outline="#070b10", width=2)
                 draw.text((px+9, py-6), code, fill=colour, stroke_width=2, stroke_fill="#070b10")
 
             facts = [str(cover.name or "map")]
@@ -630,9 +651,9 @@ class RhinoMinimapTracker:
             sheet_draw.text((10, 11), title, fill="#dcebf3")
             sheet.paste(image, (0, 38))
             y = 38 + MASK_PX + 8
-            for _x, _y, code, material, name, depleted in marks:
-                colour = "#ff6b70" if depleted else "#54e39a"
-                detail = f"{code or '-'}  {material or 'Unknown material'}  ·  {name}"
+            for _x, _y, code, material, name, depleted, kind in marks:
+                colour = "#ff6b70" if depleted else ("#ff8a3d" if kind == "drill" else "#54e39a")
+                detail = f"{code or '-'}  {material or 'Unidentified'}  ·  {name}"
                 if depleted:
                     detail += "  ·  depleted"
                 sheet_draw.text((10, y), detail, fill=colour)
