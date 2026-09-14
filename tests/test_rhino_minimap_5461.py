@@ -63,7 +63,11 @@ class RhinoMinimapCoverageTests(unittest.TestCase):
             }, {
                 "system": "Sol", "body": "Sol Moon", "name": "Drill 7",
                 "latitude": 0, "longitude": 0.02, "materials": "",
-                "site_type": "drill",
+                "site_type": "drill", "map_name": "map 1",
+            }, {
+                "system": "Sol", "body": "Sol Moon", "name": "Other map drill",
+                "latitude": 0, "longitude": 0.025, "materials": "",
+                "site_type": "drill", "map_name": "map 2",
             }], center_hotkey="Ctrl+Alt+Z", border_hotkey="Ctrl+Alt+B",
                 drill_hotkey="Ctrl+Alt+D", reset_hotkey="Ctrl+Alt+Shift+R")
             self.assertEqual(snapshot["header"], "loc 4  Moon")
@@ -72,6 +76,7 @@ class RhinoMinimapCoverageTests(unittest.TestCase):
             self.assertEqual(snapshot["bookmarks"][0]["code"], "RU")
             self.assertEqual(snapshot["bookmarks"][1]["code"], "D7")
             self.assertEqual(snapshot["bookmarks"][1]["kind"], "drill")
+            self.assertEqual(len(snapshot["bookmarks"]), 2)
             self.assertEqual(snapshot["drill_count"], 1)
             self.assertEqual(snapshot["hotkeys"]["drill"], "Ctrl+Alt+D")
             self.assertEqual(snapshot["hotkeys"]["reset"], "Ctrl+Alt+Shift+R")
@@ -177,10 +182,21 @@ class RhinoMinimapCoverageTests(unittest.TestCase):
             rows = store.rows()
             self.assertEqual([row["name"] for row in rows], ["Drill 1", "Drill 2"])
             self.assertTrue(all(row["site_type"] == "drill" for row in rows))
+            self.assertTrue(all(row["map_name"] == "map 1" for row in rows))
             self.assertEqual((rows[1]["latitude"], rows[1]["longitude"]), (1.5, -4.0))
             snapshot = tracker.snapshot(rows)
             self.assertEqual(snapshot["drill_count"], 2)
             self.assertIn("Drill 2 marked", snapshot["notice"])
+
+            store.save(dict(
+                system="Sol", body="Sol Moon", name="Other map drill",
+                site_type="drill", map_name="map 2", materials="",
+                latitude=2, longitude=-3,
+            ))
+            self.assertTrue(dashboard._reset_rhino_minimap())
+            remaining = store.rows()
+            self.assertEqual([row["name"] for row in remaining], ["Other map drill"])
+            self.assertEqual(tracker.snapshot(remaining)["drill_count"], 0)
 
     def test_overlay_is_first_class_managed_surface(self):
         self.assertEqual(

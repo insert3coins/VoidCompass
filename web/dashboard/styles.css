@@ -75,7 +75,7 @@ body.ready .app { opacity: 1; visibility: visible; }
 .rail-footer > button:hover { color: var(--accent); border-color: var(--accent); }
 .rail-footer small { display: block; margin-top: 11px; color: var(--dim); font: 8px Consolas, monospace; }
 
-.deck { min-width: 0; min-height: 0; display: grid; grid-template-rows: var(--topbar) 1fr 29px; }
+.deck { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-rows: var(--topbar) minmax(0,1fr); overflow: hidden; padding-bottom: 29px; }
 .flight-log-shell { display: none; min-width: 0; min-height: 0; background: radial-gradient(circle at 74% 12%, color-mix(in srgb,var(--accent) 8%,transparent), transparent 31%), var(--bg); }
 body.flight-log-mode .app { grid-template-columns: minmax(0,1fr); }
 body.flight-log-mode .rail, body.flight-log-mode .deck { display: none; }
@@ -157,7 +157,7 @@ body.flight-log-mode .flight-log-shell { display: grid; grid-template-rows: 80px
 .pages.atlas-active { overflow: hidden; }
 body.atlas-focus .app { grid-template-columns: 1fr; }
 body.atlas-focus .rail, body.atlas-focus .topbar, body.atlas-focus .statusbar { display: none; }
-body.atlas-focus .deck { grid-template-rows: 1fr; }
+body.atlas-focus .deck { grid-template-rows: 1fr; padding-bottom: 0; }
 body.atlas-focus .atlas-page {
   position: fixed; z-index: 100; inset: 0;
   width: 100vw; height: 100vh; min-height: 0; margin: 0; padding: 0;
@@ -736,15 +736,20 @@ body[data-activity="exploration"] .survey-card, body[data-activity="ground"] .co
   .studio-module-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 
-.statusbar { display: flex; align-items: center; gap: 22px; padding: 0 17px; background: var(--header); border-top: 1px solid var(--border); color: var(--dim); font: 9px Consolas, monospace; letter-spacing: .07em; }
-.statusbar span { white-space: nowrap; }
+.statusbar { position: fixed; z-index: 45; left: var(--rail); right: 0; bottom: 0; height: 29px; min-width: 0; display: flex; align-items: center; gap: clamp(7px,1.35vw,22px); overflow: hidden; contain: layout paint; padding: 0 clamp(9px,1.2vw,17px); background: var(--header); border-top: 1px solid var(--border); box-shadow: 0 -5px 14px rgba(0,0,0,.24); color: var(--dim); font: 9px Consolas, monospace; letter-spacing: .07em; }
+.statusbar span { flex: 0 0 auto; white-space: nowrap; }
 .statusbar b { color: var(--muted); }
 .statusbar #ui-heartbeat.beat i { animation: dashboard-heartbeat .52s ease-out; }
-.status-spacer { flex: 1; }
-.status-galnet { min-width: 180px; max-width: min(38vw,560px); height: 25px; display: grid; grid-template-columns: auto auto minmax(70px,1fr) auto; align-items: center; gap: 7px; overflow: hidden; border: 0; border-left: 1px solid var(--border-soft); border-right: 1px solid var(--border-soft); background: color-mix(in srgb,var(--accent) 3%,transparent); color: var(--dim); padding: 0 10px; cursor: pointer; font: 9px Consolas,monospace; letter-spacing: .04em; }
+.status-spacer { min-width: 0; flex: 1 1 12px !important; }
+.status-galnet { min-width: 140px; max-width: min(38vw,560px); height: 25px; flex: 1 1 320px; display: grid; grid-template-columns: auto auto minmax(45px,1fr) auto; align-items: center; gap: 7px; overflow: hidden; border: 0; border-left: 1px solid var(--border-soft); border-right: 1px solid var(--border-soft); background: color-mix(in srgb,var(--accent) 3%,transparent); color: var(--dim); padding: 0 9px; cursor: pointer; font: 9px Consolas,monospace; letter-spacing: .04em; }
 .status-galnet:hover,.status-galnet:focus-visible { background: var(--selection); outline: none; }
 .status-galnet b { color: var(--orange); }.status-galnet span { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }.status-galnet em { color: var(--dim); font-style: normal; font-size: 8px; }
 .status-galnet.live #galnet-light { background: var(--green); box-shadow: 0 0 9px var(--green); }.status-galnet.cached #galnet-light { background: var(--yellow); box-shadow: 0 0 9px var(--yellow); }.status-galnet.error #galnet-light { background: var(--red); box-shadow: 0 0 9px var(--red); }
+@media (max-width: 1180px) {
+  #footer-region { display: none; }
+  .statusbar { gap: 8px; padding-inline: 10px; }
+  .status-galnet { max-width: none; }
+}
 @keyframes dashboard-heartbeat { 0%{transform:scale(.65);filter:brightness(1)}45%{transform:scale(1.9);filter:brightness(1.6)}100%{transform:scale(1);filter:brightness(1)} }
 
 .boot { position: fixed; inset: 0; z-index: 50; --boot-stage-color: var(--orange); background: radial-gradient(ellipse at 20% 52%, color-mix(in srgb,var(--accent) 8%,transparent), transparent 34%), radial-gradient(ellipse at 78% 42%, color-mix(in srgb,var(--orange) 7%,transparent), transparent 31%), linear-gradient(150deg,#030609,var(--bg) 54%,#050a0f); overflow: hidden; transition: opacity .55s ease, visibility .55s; isolation: isolate; contain: strict; }

@@ -489,6 +489,9 @@ class RhinoMinimapTracker:
                 continue
             mx, my = cover.xy(lat, lon)
             kind = "drill" if str(site.get("site_type") or "").casefold() == "drill" else "site"
+            if (kind == "drill" and site.get("map_name")
+                    and str(site.get("map_name")).casefold() != str(cover.name or "").casefold()):
+                continue
             materials = re.split(r"[,;|\n]+", str(site.get("materials") or ""))
             material = next((item.strip() for item in materials if item.strip()), "")
             label = str(site.get("name") or material or "Surface site")
@@ -619,6 +622,9 @@ class RhinoMinimapTracker:
                     r"[,;|\n]+", str(site.get("materials") or "")
                 ) if part.strip()), "")
                 kind = "drill" if str(site.get("site_type") or "").casefold() == "drill" else "site"
+                if (kind == "drill" and site.get("map_name")
+                        and str(site.get("map_name")).casefold() != str(cover.name or "").casefold()):
+                    continue
                 name = str(site.get("name") or "Surface site")
                 drill_number = re.search(r"\b(\d+)\b", name) if kind == "drill" else None
                 code = f"D{drill_number.group(1)}" if drill_number else (
