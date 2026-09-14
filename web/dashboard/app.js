@@ -2145,7 +2145,7 @@ function renderPlanetMaterialsWorkspace(data) {
     ["DSS MINING LOCATIONS", body.mining_locations ?? null]
   ].map(([label,value]) => `<div><small>${label}</small><b>${escapeHtml(value ?? "UNREPORTED")}</b></div>`).join("")}</div>`;
   const evidence = body => `${bodyFacts(body)}<div class="planet-composition">${rawMaterials(body)}</div>`;
-  const fields = (site = {}) => `<input type="hidden" name="id" value="${escapeHtml(site.id || "")}"><input type="hidden" name="site_type" value="${escapeHtml(site.site_type || "site")}"><input type="hidden" name="body_details" value="${escapeHtml(JSON.stringify(site.body_details || {}))}">${[
+  const fields = (site = {}) => `<input type="hidden" name="id" value="${escapeHtml(site.id || "")}"><input type="hidden" name="site_type" value="${escapeHtml(site.site_type || "site")}"><input type="hidden" name="map_name" value="${escapeHtml(site.map_name || "")}"><input type="hidden" name="body_details" value="${escapeHtml(JSON.stringify(site.body_details || {}))}">${[
     ["system", "SYSTEM", site.system || data.current_position?.system || data.system || ""],
     ["body", "PLANET", site.body || data.current_position?.body || ""], ["name", "SITE NAME", site.name || ""],
     ["latitude", "LATITUDE (Y) · −90 TO 90", site.latitude ?? ""], ["longitude", "LONGITUDE (X) · −180 TO 180", site.longitude ?? ""],
@@ -3645,7 +3645,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (event.target.closest("#studio-rhino-reset")) {
-    if (!window.confirm("Reset the current Rhino coverage map? All painted coverage, its center and border will be cleared.")) return;
+    if (!window.confirm("Reset the current Rhino coverage map? All painted coverage, its center, border and drill markers will be cleared.")) return;
     showToast(await command("overlay_studio", {operation: "rhino_reset", confirmed: true}) ? "Rhino coverage map reset" : "Deploy the Rhino first");
     return;
   }

@@ -2279,6 +2279,7 @@ class HtmlDashboardMixin:
         store = self._planet_materials_store()
         system = tracker.system or str(getattr(self, "current_sys", "") or "").strip()
         body = tracker.active.body
+        map_name = str(tracker.active.name or "")
         if not system:
             tracker.show_notice("Drill marker unavailable without a system fix")
             self._refresh_rhino_minimap_overlay()
@@ -2292,6 +2293,8 @@ class HtmlDashboardMixin:
             if str(row.get("system") or "").casefold() != system.casefold():
                 continue
             if str(row.get("body") or "").casefold() != body.casefold():
+                continue
+            if str(row.get("map_name") or "").casefold() not in {"", map_name.casefold()}:
                 continue
             match = re.fullmatch(r"Drill\s+(\d+)", str(row.get("name") or ""), re.IGNORECASE)
             if match:
@@ -2307,6 +2310,7 @@ class HtmlDashboardMixin:
             "materials": "",
             "notes": "Marked from the Rhino Coverage Minimap. Add the drill's material and field notes here.",
             "site_type": "drill",
+            "map_name": map_name,
         })
         self._rhino_minimap_sites_cache = None
         tracker.show_notice(f"{label} marked")
@@ -2318,11 +2322,22 @@ class HtmlDashboardMixin:
 
     def _reset_rhino_minimap(self):
         tracker = getattr(self, "rhino_minimap", None)
+        active = getattr(tracker, "active", None)
+        system = str(getattr(tracker, "system", "") or getattr(self, "current_sys", "") or "").strip()
+        body = str(getattr(active, "body", "") or "")
+        map_name = str(getattr(active, "name", "") or "")
         changed = bool(tracker and tracker.reset_active())
+        cleared_drills = 0
+        if changed and system and body:
+            cleared_drills = self._planet_materials_store().delete_drills_for_map(
+                system, body, map_name,
+            )
+            self._rhino_minimap_sites_cache = None
+            self._refresh_planet_materials_overlay()
         self._refresh_rhino_minimap_overlay()
         self._schedule_html_dashboard_publish(immediate=True)
         detail = (
-            "Current coverage map reset"
+            f"Current coverage map reset; {cleared_drills} drill marker{'s' if cleared_drills != 1 else ''} cleared"
             if changed else "Deploy the Rhino before resetting its active map"
         )
         self.add_event_feed_entry(
@@ -2502,6 +2517,9 @@ class HtmlDashboardMixin:
                     str(row.get("site_type") or "").casefold() == "drill"
                     and str(row.get("system") or "").casefold() == str(getattr(rhino_tracker, "system", "")).casefold()
                     and str(row.get("body") or "").casefold() == str(getattr(rhino_map, "body", "")).casefold()
+                    and str(row.get("map_name") or "").casefold() in {
+                        "", str(getattr(rhino_map, "name", "") or "").casefold(),
+                    }
                     for row in self._rhino_minimap_sites()
                 ) if rhino_tracker is not None else 0,
                 "saved_maps": rhino_maps_count,

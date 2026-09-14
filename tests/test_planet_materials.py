@@ -76,6 +76,7 @@ class PlanetMaterialsTests(unittest.TestCase):
             self.assertEqual(saved['density'], 'High')
             self.assertEqual(saved['depleted'], 0)
             self.assertEqual(saved['site_type'], 'site')
+            self.assertEqual(saved['map_name'], '')
             with self.assertRaises(ValueError):
                 store.save({**row, 'body':'Mars'})
 
@@ -121,14 +122,27 @@ class PlanetMaterialsTests(unittest.TestCase):
             store = PlanetMaterialsStore(Path(folder) / 'sites.db')
             drill_id = store.save(dict(
                 system='Sol', body='Moon', name='Drill 1', site_type='drill',
-                materials='', notes='Just deployed', latitude=1.25, longitude=-4.5,
+                map_name='map 1', materials='', notes='Just deployed',
+                latitude=1.25, longitude=-4.5,
             ))
             drill = store.rows()[0]
             self.assertEqual(drill['id'], drill_id)
             self.assertEqual(drill['site_type'], 'drill')
             self.assertEqual(drill['materials'], '')
+            self.assertEqual(drill['map_name'], 'map 1')
             with self.assertRaises(ValueError):
                 store.save({**drill, 'site_type': 'unknown'})
+
+    def test_deleting_map_drills_keeps_other_maps_and_regular_sites(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = PlanetMaterialsStore(Path(folder) / 'sites.db')
+            common = dict(system='Sol', body='Moon', materials='', latitude=0, longitude=0)
+            store.save({**common, 'name':'Drill 1', 'site_type':'drill', 'map_name':'map 1'})
+            store.save({**common, 'name':'Legacy drill', 'site_type':'drill'})
+            store.save({**common, 'name':'Drill 2', 'site_type':'drill', 'map_name':'map 2'})
+            store.save({**common, 'name':'Mining site', 'site_type':'site', 'materials':'Ruby'})
+            self.assertEqual(store.delete_drills_for_map('sol', 'moon', 'MAP 1'), 2)
+            self.assertEqual([row['name'] for row in store.rows()], ['Drill 2', 'Mining site'])
 
     def test_coordinate_validation_does_not_write_invalid_data(self):
         with tempfile.TemporaryDirectory() as folder:

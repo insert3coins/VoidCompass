@@ -7,7 +7,7 @@
 * Paints persistent estimated 2 km scanner coverage from live Status.json positions, resumes nearby maps on the same body and follows the Rhino north-up with heading and scale references.
 * Added commander-set coverage centers and borders, drop-point bearing and distance, outside-range warnings, coverage-driving rings and measured painted area.
 * Shows saved Planet Materials locations as coded green bookmarks, with depleted locations rendered red and editable from the Planet Materials workspace.
-* Added manual, numbered drill markers at the Rhino's live position, shown as orange diamonds on the minimap and editable from Planet Materials. Elite exposes no drill-deployed journal event, so the marker has an explicit button and configurable global hotkey.
+* Added manual, numbered drill markers at the Rhino's live position, shown as orange diamonds on the minimap and editable from Planet Materials. Elite exposes no drill-deployed journal event, so the marker has an explicit button and configurable global hotkey; resetting a coverage map clears its drill markers too.
 * Added profile-local map persistence, automatic Rhino-only visibility, configurable placement and enable state in Overlay Studio, global center, border, drill and reset hotkeys, and shareable full-map PNGs written when the Rhino session ends.
 
 ## Earlier releases
