@@ -43,13 +43,6 @@ from voidcompass.core.global_hotkeys import (
     OVERLAY_HOTKEY_SPECS,
     validate_hotkey_bindings,
 )
-from voidcompass.overlays.overlay_layout_model import (
-    DEFAULT_POSITIONS,
-    DEFAULT_SIZES,
-    OVERLAY_CARD_LABELS,
-    OVERLAY_ENABLE_KEYS,
-    OVERLAY_LABELS,
-)
 from voidcompass.core.platform_support import open_path
 from voidcompass.core.profile_backups import schedule_restore, snapshot_profile, validate_backup
 from voidcompass.mining.mining_data import (
@@ -64,18 +57,22 @@ from voidcompass.services.spansh import (
     fleet_carrier_job_id,
     fleet_carrier_route,
     import_fleet_carrier_route,
-    neutron_route,
 )
 from voidcompass.exploration.stellar_cartography import (
-    build_orrery,
     build_planetary_resources,
     build_region_passport,
     build_replay,
     build_science_lab,
-    build_survey_queue,
     replay_export_html,
 )
 from voidcompass.core.theme_state import apply_ui_scale
+from voidcompass.dashboard.html_workspace_support import (
+    integer as _integer,
+    number as _number,
+    text as _text,
+)
+from voidcompass.dashboard.html_explore_workspace import HtmlExploreWorkspaceMixin
+from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
 
 
 PROJECT_URL = "https://github.com/insert3coins/VoidCompass"
@@ -101,25 +98,6 @@ _HTML_WORKSPACE_PAGES = {
     "planet-materials", "explore", "profile", "analytics", "chronicle", "mission", "ground", "mining",
     "engineering", "build-planner", "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
 }
-
-
-def _integer(value, default=0):
-    try:
-        return int(float(value or 0))
-    except (TypeError, ValueError, OverflowError):
-        return default
-
-
-def _number(value, default=None):
-    try:
-        parsed = float(value)
-        return parsed if math.isfinite(parsed) else default
-    except (TypeError, ValueError, OverflowError):
-        return default
-
-
-def _text(value, limit=180):
-    return str(value or "").replace("\r", " ").replace("\n", " ").strip()[:limit]
 
 
 def _local_departure_timestamp(value):
@@ -169,7 +147,7 @@ def _local_departure_timestamp(value):
     return int(time.mktime(parsed.timetuple()))
 
 
-class HtmlDashboardMixin:
+class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
     """Publish exploration state and accept private dashboard commands."""
 
     def start_html_dashboard_bridge(self):
@@ -836,133 +814,6 @@ class HtmlDashboardMixin:
             "body": body_id,
             "is_current_body": is_current_body,
             "source": "ELITE STATUS",
-        }
-
-    def _html_explore_workspace(self):
-        manager = getattr(self, "waypoint_manager", None)
-        waypoints = list(getattr(manager, "waypoints", None) or [])
-        current = _text(getattr(self, "current_sys", None), 140)
-        current_coords = getattr(self, "current_coords", None)
-
-        rendered_waypoints = []
-        previous_coords = current_coords
-        for index, row in enumerate(waypoints[:500]):
-            if not isinstance(row, dict):
-                continue
-            coords = row.get("coords")
-            leg_distance = None
-            if manager is not None and previous_coords and coords:
-                try:
-                    leg_distance = manager.get_distance(previous_coords, coords)
-                except (KeyError, TypeError, ValueError):
-                    leg_distance = None
-            rendered_waypoints.append({
-                "index": index,
-                "name": _text(row.get("name"), 140),
-                "visited": bool(row.get("visited")),
-                "note": _text(row.get("note") or row.get("notes"), 500),
-                "coords_known": bool(coords),
-                "distance": _number(leg_distance),
-            })
-            if coords:
-                previous_coords = coords
-
-        nav_entries = []
-        raw_route = [
-            row for row in (getattr(self, "nav_route_entries", None) or [])
-            if isinstance(row, dict)
-        ]
-        current_index = next((
-            index for index, row in enumerate(raw_route)
-            if str(row.get("StarSystem") or "").casefold() == current.casefold()
-        ), -1)
-        previous = current_coords
-        for index, row in enumerate(raw_route[:500]):
-            coords = row.get("StarPos")
-            distance = None
-            if manager is not None and previous and coords:
-                try:
-                    distance = manager.get_distance(previous, coords)
-                except (KeyError, TypeError, ValueError):
-                    distance = None
-            nav_entries.append({
-                "index": index,
-                "system": _text(row.get("StarSystem"), 140),
-                "star_class": _text(row.get("StarClass"), 30),
-                "distance": _number(distance),
-                "current": index == current_index,
-                "passed": current_index >= 0 and index < current_index,
-            })
-            if coords:
-                previous = coords
-
-        tool = self._html_profile_transient(
-            "_html_explore_tool_state",
-            {"status": "ready", "detail": "Ready to plot a manual neutron route.", "route": None},
-        )
-        saved_form = self.config.get("system_plotter_form") or {}
-        survey_states = self.config.get("stellar_survey_queue_state") or {}
-        survey_state = survey_states.get(current.casefold()) or {}
-        scan_items = [
-            row for row in (getattr(self, "scan_items", None) or [])
-            if isinstance(row, dict)
-        ]
-        body_target = self._html_local_body_target()
-        local_ids = {
-            str(row.get("body_id")) for row in scan_items
-            if row.get("body_id") is not None
-        }
-        cached_edsm = (
-            getattr(self, "_edsm_orrery_bodies", {})
-            .get(current.casefold(), [])
-        )
-        external_items = [
-            row for row in cached_edsm
-            if isinstance(row, dict)
-            and row.get("body_id") is not None
-            and str(row.get("body_id")) not in local_ids
-        ]
-        orrery_items = [*scan_items, *external_items]
-        orrery = build_orrery(
-            orrery_items, body_target,
-            getattr(self, "system_barycentres", None) or [],
-        )
-        orrery["loading"] = bool(
-            not orrery_items
-            and current.casefold() in getattr(self, "_edsm_orrery_pending", set())
-        )
-        if external_items:
-            orrery["mode"] = (
-                "EDSM KNOWN-SYSTEM ARCHITECTURE"
-                if not scan_items else "JOURNAL + EDSM ARCHITECTURE"
-            )
-            orrery["external_bodies"] = len(external_items)
-        return {
-            "current": current,
-            "destination": _text(getattr(self, "dest_name", None), 140),
-            "nav_route": nav_entries,
-            "waypoints": rendered_waypoints,
-            "next_waypoint": _text(
-                manager.get_next_waypoint(current) if manager is not None else "", 140,
-            ),
-            "auto_copy": bool(self.config.get("auto_copy_waypoint", False)),
-            "cartography": {
-                "system": current,
-                "target": body_target,
-                "orrery": orrery,
-                "queue": build_survey_queue(scan_items, survey_state, body_target),
-                "resources": build_planetary_resources(scan_items),
-            },
-            "plotter": {
-                "from": _text(saved_form.get("from") or current, 140),
-                "to": _text(saved_form.get("to"), 140),
-                "range": _number(saved_form.get("range"), 30),
-                "efficiency": _integer(saved_form.get("efficiency"), 60),
-                "multiplier": _integer(saved_form.get("supercharge_multiplier"), 4),
-                "status": _text(tool.get("status"), 30),
-                "detail": _text(tool.get("detail"), 300),
-                "result": tool.get("route"),
-            },
         }
 
     @staticmethod
@@ -2424,10 +2275,10 @@ class HtmlDashboardMixin:
         )
         return changed
 
-    def _html_workspace(self, page):
+    def _html_workspace(self, page, intelligence=None):
         builders = {
             "planet-materials": self._html_planet_materials_workspace,
-            "explore": self._html_explore_workspace,
+            "explore": lambda: self._html_explore_workspace(intelligence),
             "profile": self._html_profile_workspace,
             "analytics": self._html_analytics_workspace,
             "chronicle": self._html_chronicle_workspace,
@@ -2452,178 +2303,6 @@ class HtmlDashboardMixin:
             logging.exception("HTML workspace snapshot failed for %s", page)
             return {"page": page, "ready": False, "error": _text(exc, 240)}
 
-    def _html_overlay_desktop(self):
-        """Return the complete Windows virtual desktop in screen coordinates."""
-        try:
-            import ctypes
-
-            user32 = ctypes.windll.user32
-            left = int(user32.GetSystemMetrics(76))
-            top = int(user32.GetSystemMetrics(77))
-            width = int(user32.GetSystemMetrics(78))
-            height = int(user32.GetSystemMetrics(79))
-            primary_width = int(user32.GetSystemMetrics(0))
-            primary_height = int(user32.GetSystemMetrics(1))
-            if width > 0 and height > 0:
-                return {
-                    "left": left,
-                    "top": top,
-                    "width": width,
-                    "height": height,
-                    "primary": {
-                        "left": 0, "top": 0,
-                        "width": max(1, primary_width),
-                        "height": max(1, primary_height),
-                    },
-                }
-        except (AttributeError, OSError):
-            pass
-        try:
-            width = max(1, int(self.root.winfo_screenwidth()))
-            height = max(1, int(self.root.winfo_screenheight()))
-        except Exception:
-            width, height = 1920, 1080
-        return {
-            "left": 0, "top": 0, "width": width, "height": height,
-            "primary": {"left": 0, "top": 0, "width": width, "height": height},
-        }
-
-    @staticmethod
-    def _html_overlay_window_shown(window):
-        try:
-            return bool(window.winfo_viewable()) and str(window.state()) not in {
-                "withdrawn", "iconic",
-            }
-        except Exception:
-            return False
-
-    def _html_overlay_records(self, *, live=True):
-        records = []
-        for attr, x_key, y_key in self._OVERLAY_POSITION_SPECS:
-            default_x, default_y = DEFAULT_POSITIONS.get(attr, (30, 30))
-            default_width, default_height = DEFAULT_SIZES.get(attr, (320, 160))
-            x = _integer(self.config.get(x_key), default_x)
-            y = _integer(self.config.get(y_key), default_y)
-            width, height = default_width, default_height
-            overlay = getattr(self, attr, None)
-            window = getattr(overlay, "win", overlay)
-            shown = self._html_overlay_window_shown(window) if live else False
-            html_size = getattr(overlay, "_html_window_size", None)
-            if html_ready := bool(getattr(overlay, "_html_ready", False)):
-                if isinstance(html_size, (tuple, list)) and len(html_size) == 2:
-                    width = max(24, _integer(html_size[0], default_width))
-                    height = max(20, _integer(html_size[1], default_height))
-            elif live and window is not None:
-                try:
-                    if window.winfo_exists():
-                        if attr == "toast_hud" and not getattr(overlay, "_toasts", None):
-                            # Keep a useful draggable footprint in Studio even
-                            # while the transient notification queue is empty.
-                            width, height = default_width, default_height
-                        else:
-                            width = max(24, int(window.winfo_width()), int(window.winfo_reqwidth()))
-                            height = max(20, int(window.winfo_height()), int(window.winfo_reqheight()))
-                except Exception:
-                    pass
-            enabled = bool(self.config.get(OVERLAY_ENABLE_KEYS.get(attr, ""), False))
-            # This flag is ordinary Python state, so it is safe to expose even
-            # while avoiding the higher-frequency Tk geometry calls off-page.
-            html_ready = bool(getattr(overlay, "_html_ready", False))
-            records.append({
-                "id": attr,
-                "label": OVERLAY_LABELS.get(attr, attr.replace("_", " ").title()),
-                "short_label": OVERLAY_CARD_LABELS.get(attr, attr.upper()),
-                "x": x, "y": y, "width": width, "height": height,
-                "enabled": enabled,
-                "shown": shown,
-                "html_ready": html_ready,
-                "state": (
-                    "OFF" if not enabled else
-                    "HTML" if html_ready else
-                    "SHOWN" if shown else "READY"
-                ),
-            })
-        return records
-
-    def _html_overlay_studio(self):
-        presets = self.config.get("overlay_layout_presets") or {}
-        preset_names = sorted(
-            (_text(name, 50) for name in presets if str(name).strip()),
-            key=str.casefold,
-        )
-        try:
-            ground_solution = self._ground_target_solution() or {}
-            ground_configured = bool(self._ground_target_configured())
-            ground_ready = bool(self._ground_target_should_show(ground_solution))
-        except Exception:
-            ground_solution = {}
-            ground_configured = False
-            ground_ready = False
-        rhino_tracker = getattr(self, "rhino_minimap", None)
-        rhino_map = getattr(rhino_tracker, "active", None)
-        rhino_maps_count, rhino_maps_size = (
-            rhino_tracker.usage() if rhino_tracker is not None else (0, 0)
-        )
-        return {
-            "desktop": self._html_overlay_desktop(),
-            "overlays": self._html_overlay_records(
-                live=getattr(self, "_html_dashboard_active_page", "") == "overlay-studio",
-            ),
-            "presets": preset_names,
-            "ground_target": {
-                "active": ground_configured,
-                "lat": _number(getattr(self, "target_lat", None)) if ground_configured else None,
-                "lon": _number(getattr(self, "target_lon", None)) if ground_configured else None,
-                "on_planet": bool(getattr(self, "on_planet", False)),
-                "navigation_ready": ground_ready,
-                "state": _text(ground_solution.get("state") or "OFF", 30),
-                "current_available": bool(
-                    getattr(self, "current_latitude", None) is not None
-                    and getattr(self, "current_longitude", None) is not None
-                ),
-            },
-            "rhino_minimap": {
-                "active": bool(getattr(rhino_tracker, "in_rhino", False)),
-                "map_name": _text(getattr(rhino_map, "name", ""), 80),
-                "centered": bool(getattr(rhino_map, "centered", False)),
-                "border_m": _number(getattr(rhino_map, "border_m", None)),
-                "painted_km2": round(_number(getattr(rhino_map, "painted_km2", 0.0)) or 0.0, 2),
-                "center_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_center"), 80),
-                "border_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_border"), 80),
-                "drill_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_drill"), 80),
-                "reset_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_reset"), 80),
-                "drill_count": sum(
-                    str(row.get("site_type") or "").casefold() == "drill"
-                    and str(row.get("system") or "").casefold() == str(getattr(rhino_tracker, "system", "")).casefold()
-                    and str(row.get("body") or "").casefold() == str(getattr(rhino_map, "body", "")).casefold()
-                    and str(row.get("map_name") or "").casefold() in {
-                        "", str(getattr(rhino_map, "name", "") or "").casefold(),
-                    }
-                    for row in self._rhino_minimap_sites()
-                ) if rhino_tracker is not None else 0,
-                "saved_maps": rhino_maps_count,
-                "saved_bytes": rhino_maps_size,
-            },
-            "options": {
-                "overlay_mouse_passthrough": bool(self.config.get("overlay_mouse_passthrough", True)),
-                "hud_compact_mode": bool(self.config.get("hud_compact_mode", True)),
-                "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
-                "overlay_opacity_percent": _integer(self.config.get("overlay_opacity_percent"), 100),
-                "sample_clear_notifications_enabled": bool(self.config.get("sample_clear_notifications_enabled", True)),
-                "rebuy_warnings_enabled": bool(self.config.get("rebuy_warnings_enabled", True)),
-                "data_risk_warnings_enabled": bool(self.config.get("data_risk_warnings_enabled", True)),
-                "prospector_hud_timeout_s": _integer(self.config.get("prospector_hud_timeout_s"), 45),
-                "gravity_warning_hud_timeout_s": _integer(self.config.get("gravity_warning_hud_timeout_s"), 20),
-                "station_info_auto_hide_enabled": bool(self.config.get("station_info_auto_hide_enabled", False)),
-                "survey_status_show_all_bodies": bool(self.config.get("survey_status_show_all_bodies", False)),
-                "station_info_timeout_s": _integer(self.config.get("station_info_timeout_s"), 30),
-                "contact_scope_timeout_s": _integer(self.config.get("contact_scope_timeout_s"), 45),
-                "gravity_warning_threshold_g": _number(self.config.get("gravity_warning_threshold_g"), 3.0),
-                "hud_crt_enabled": bool(self.config.get("hud_crt_enabled", True)),
-                "hud_crt_motion_enabled": bool(self.config.get("hud_crt_motion_enabled", True)),
-                "hud_crt_intensity": _text(self.config.get("hud_crt_intensity") or "Subtle", 20).title(),
-            },
-        }
 
     def _request_html_dashboard_page(self, page):
         page = _text(page, 40).casefold()
@@ -2639,243 +2318,6 @@ class HtmlDashboardMixin:
         self._schedule_html_dashboard_publish(immediate=True)
         return True
 
-    def _html_overlay_row(self, overlay_id):
-        overlay_id = _text(overlay_id, 50)
-        spec = next(
-            (item for item in self._OVERLAY_POSITION_SPECS if item[0] == overlay_id),
-            None,
-        )
-        if spec is None:
-            return None
-        return spec
-
-    def _html_overlay_position(self, overlay_id, x, y, *, persist=False, preview=False):
-        spec = self._html_overlay_row(overlay_id)
-        if spec is None:
-            return False
-        attr, _x_key, _y_key = spec
-        records = {row["id"]: row for row in self._html_overlay_records()}
-        record = records.get(attr) or {}
-        desktop = self._html_overlay_desktop()
-        width = max(20, _integer(record.get("width"), DEFAULT_SIZES.get(attr, (320, 160))[0]))
-        height = max(20, _integer(record.get("height"), DEFAULT_SIZES.get(attr, (320, 160))[1]))
-        left, top = desktop["left"], desktop["top"]
-        right, bottom = left + desktop["width"], top + desktop["height"]
-        x = max(left, min(_integer(x, left), right - width))
-        y = max(top, min(_integer(y, top), bottom - height))
-        # Geometry and the lightweight HTML-host window channel stay live
-        # during the drag, but the expensive full Dashboard model and config
-        # write are deferred until pointer-up.
-        self._set_overlay_position(attr, x, y, authority_s=3.0)
-        if persist:
-            self._persist_config()
-        if not preview or persist:
-            self._schedule_html_dashboard_publish(immediate=True)
-        return True
-
-    def _html_overlay_snap(self, overlay_id):
-        records = {row["id"]: row for row in self._html_overlay_records()}
-        selected = records.get(overlay_id)
-        if selected is None:
-            return False
-        desktop = self._html_overlay_desktop()
-        left, top = desktop["left"], desktop["top"]
-        right, bottom = left + desktop["width"], top + desktop["height"]
-        width, height = selected["width"], selected["height"]
-        x, y = selected["x"], selected["y"]
-        candidates_x = [left, max(left, right - width)]
-        candidates_y = [top, max(top, bottom - height)]
-        for attr, row in records.items():
-            if attr == overlay_id:
-                continue
-            ox, oy, ow, oh = row["x"], row["y"], row["width"], row["height"]
-            candidates_x.extend((ox, ox + ow, ox - width, ox + ow - width))
-            candidates_y.extend((oy, oy + oh, oy - height, oy + oh - height))
-        nearest_x = min(candidates_x, key=lambda value: abs(value - x))
-        nearest_y = min(candidates_y, key=lambda value: abs(value - y))
-        if abs(nearest_x - x) <= 20:
-            x = nearest_x
-        if abs(nearest_y - y) <= 20:
-            y = nearest_y
-        return self._html_overlay_position(overlay_id, x, y, persist=True)
-
-    def _html_overlay_toggle(self, overlay_id):
-        spec = self._html_overlay_row(overlay_id)
-        key = OVERLAY_ENABLE_KEYS.get(overlay_id)
-        if spec is None or not key:
-            return False
-        previous = bool(self.config.get(key, False))
-        self.config[key] = not previous
-        try:
-            if overlay_id == "ground_popup":
-                self.ground_popup_enabled = not previous
-                self.update_ground_target_ui()
-            self._apply_runtime_feature_toggles()
-        except Exception:
-            self.config[key] = previous
-            if overlay_id == "ground_popup":
-                self.ground_popup_enabled = previous
-            return False
-        self._persist_config()
-        try:
-            self.add_event_feed_entry(
-                "SYSTEM",
-                f"{OVERLAY_LABELS.get(overlay_id, overlay_id)} "
-                f"{'enabled' if not previous else 'disabled'} in Overlay Studio",
-                severity="INFO",
-            )
-        except Exception:
-            pass
-        self._schedule_html_dashboard_publish(immediate=True)
-        return True
-
-    def _html_overlay_option_toggle(self, key, requested_value=None):
-        allowed = {
-            "overlay_mouse_passthrough", "hud_compact_mode",
-            "sample_clear_notifications_enabled", "rebuy_warnings_enabled",
-            "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
-            "survey_status_show_all_bodies",
-            "hud_crt_enabled", "hud_crt_motion_enabled",
-        }
-        key = _text(key, 80)
-        if key not in allowed:
-            return False
-        self.config[key] = (
-            requested_value if isinstance(requested_value, bool)
-            else not bool(self.config.get(key, False))
-        )
-        self._persist_config()
-        if key == "overlay_mouse_passthrough":
-            self._apply_overlay_mouse_passthrough()
-        elif key in {"hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled"}:
-            self.update_hud()
-        elif key == "station_info_auto_hide_enabled":
-            station = getattr(self, "station_info_hud", None)
-            if station is not None:
-                apply_setting = getattr(station, "apply_auto_hide_setting", None)
-                if callable(apply_setting):
-                    apply_setting(self, self.config[key])
-                elif getattr(self, "current_docked", False) and getattr(self, "current_station_name", None):
-                    station.on_docked(self)
-                else:
-                    station.hide()
-        elif key == "survey_status_show_all_bodies":
-            survey = getattr(self, "survey_status_hud", None)
-            if survey is not None:
-                survey._last_render_key = None
-                if survey._last_update is not None:
-                    survey.update(*survey._last_update)
-        self._schedule_html_dashboard_publish(immediate=True)
-        return True
-
-    def _html_overlay_settings_save(self, payload):
-        numeric = {
-            "overlay_text_scale_percent": (75.0, 200.0, 100.0, True),
-            "overlay_opacity_percent": (40.0, 100.0, 100.0, True),
-            "prospector_hud_timeout_s": (5.0, 3600.0, 45.0, True),
-            "gravity_warning_hud_timeout_s": (5.0, 3600.0, 20.0, True),
-            "station_info_timeout_s": (5.0, 3600.0, 30.0, True),
-            "contact_scope_timeout_s": (0.0, 3600.0, 45.0, True),
-            "gravity_warning_threshold_g": (0.5, 20.0, 3.0, False),
-        }
-        for key, (low, high, default, integer) in numeric.items():
-            value = _number(payload.get(key), default)
-            value = max(low, min(high, value if value is not None else default))
-            self.config[key] = int(round(value)) if integer else round(value, 2)
-        intensity = _text(payload.get("hud_crt_intensity") or "Subtle", 20).title()
-        self.config["hud_crt_intensity"] = (
-            intensity if intensity in {"Subtle", "Standard", "Strong"} else "Subtle"
-        )
-        self._persist_config()
-        self.update_hud()
-        station = getattr(self, "station_info_hud", None)
-        if station is not None and getattr(self, "current_docked", False):
-            station.on_docked(self)
-        contact_scope = getattr(self, "contact_scope_hud", None)
-        if contact_scope is not None:
-            apply_timer = getattr(contact_scope, "apply_auto_hide_setting", None)
-            if callable(apply_timer):
-                apply_timer()
-        self._schedule_html_dashboard_publish(immediate=True)
-        return True
-
-    def _handle_html_overlay_studio_command(self, payload):
-        operation = _text(payload.get("operation"), 40).casefold()
-        overlay_id = _text(payload.get("overlay_id"), 50)
-        if operation == "rhino_center":
-            return self._set_rhino_minimap_center()
-        if operation == "rhino_border":
-            return self._set_rhino_minimap_border()
-        if operation == "rhino_drill":
-            return self._mark_rhino_drill()
-        if operation == "rhino_reset":
-            return bool(payload.get("confirmed") and self._reset_rhino_minimap())
-        if operation == "rhino_open_maps":
-            return self._open_rhino_minimap_folder()
-        if operation == "move":
-            sequence = max(0, _integer(payload.get("sequence"), 0))
-            seen = getattr(self, "_html_overlay_move_sequences", None)
-            if not isinstance(seen, dict):
-                seen = self._html_overlay_move_sequences = {}
-            if sequence and sequence < _integer(seen.get(overlay_id), 0):
-                return True
-            if sequence:
-                seen[overlay_id] = sequence
-            return self._html_overlay_position(
-                overlay_id, payload.get("x"), payload.get("y"),
-                persist=bool(payload.get("commit")),
-                preview=not bool(payload.get("commit")),
-            )
-        if operation == "toggle":
-            return self._html_overlay_toggle(overlay_id)
-        if operation == "snap":
-            return self._html_overlay_snap(overlay_id)
-        if operation == "reset":
-            x, y = DEFAULT_POSITIONS.get(overlay_id, (30, 30))
-            return self._html_overlay_position(overlay_id, x, y, persist=True)
-        if operation == "toggle_option":
-            return self._html_overlay_option_toggle(
-                payload.get("key"), payload.get("value"),
-            )
-        if operation == "save_settings":
-            return self._html_overlay_settings_save(payload)
-        if operation == "save_preset":
-            name = _text(payload.get("name"), 50)
-            if not name:
-                return False
-            presets = self.config.setdefault("overlay_layout_presets", {})
-            presets[name] = {
-                row["id"]: {"x": row["x"], "y": row["y"]}
-                for row in self._html_overlay_records()
-            }
-            self._persist_config()
-            self._schedule_html_dashboard_publish(immediate=True)
-            return True
-        if operation == "apply_preset":
-            name = _text(payload.get("name"), 50)
-            preset = (self.config.get("overlay_layout_presets") or {}).get(name)
-            if not isinstance(preset, dict):
-                return False
-            applied = False
-            for attr, position in preset.items():
-                if not isinstance(position, dict) or self._html_overlay_row(attr) is None:
-                    continue
-                applied = self._html_overlay_position(
-                    attr, position.get("x"), position.get("y"), persist=False,
-                ) or applied
-            if applied:
-                self._persist_config()
-            return applied
-        if operation == "delete_preset":
-            name = _text(payload.get("name"), 50)
-            presets = self.config.get("overlay_layout_presets") or {}
-            if name not in presets:
-                return False
-            presets.pop(name, None)
-            self._persist_config()
-            self._schedule_html_dashboard_publish(immediate=True)
-            return True
-        return False
 
     def _html_dashboard_galnet(self):
         service = getattr(self, "galnet_feed", None)
@@ -3099,7 +2541,7 @@ class HtmlDashboardMixin:
             "workspace": (
                 {"page": active_page, "ready": False, "deferred": True}
                 if boot_active or active_page not in _HTML_WORKSPACE_PAGES
-                else self._html_workspace(active_page)
+                else self._html_workspace(active_page, intelligence=intelligence)
             ),
             # The Studio is an on-demand workspace, not boot-critical state.
             # Deferring its desktop/overlay catalogue keeps startup snapshots
@@ -3204,171 +2646,7 @@ class HtmlDashboardMixin:
             return True
 
         if page == "explore":
-            if operation in {"survey_pin", "survey_skip", "survey_complete", "survey_reset"}:
-                system = _text(payload.get("system") or getattr(self, "current_sys", ""), 140)
-                if not system:
-                    return False
-                states = dict(self.config.get("stellar_survey_queue_state") or {})
-                system_key = system.casefold()
-                state = dict(states.get(system_key) or {})
-                if operation == "survey_reset":
-                    states.pop(system_key, None)
-                else:
-                    body_key = _text(payload.get("body_key"), 220)
-                    if not body_key:
-                        return False
-                    buckets = {
-                        name: {str(value) for value in state.get(name) or ()}
-                        for name in ("pinned", "skipped", "completed")
-                    }
-                    target = {
-                        "survey_pin": "pinned",
-                        "survey_skip": "skipped",
-                        "survey_complete": "completed",
-                    }[operation]
-                    enabled = body_key not in buckets[target]
-                    for values in buckets.values():
-                        values.discard(body_key)
-                    if enabled:
-                        buckets[target].add(body_key)
-                    states[system_key] = {
-                        name: sorted(values) for name, values in buckets.items()
-                    }
-                self.config["stellar_survey_queue_state"] = dict(list(states.items())[-50:])
-                self._persist_config()
-                self._schedule_html_dashboard_publish(immediate=True)
-                return True
-            manager = getattr(self, "waypoint_manager", None)
-            if manager is None:
-                return False
-            index = _integer(payload.get("index"), -1)
-            if operation == "copy_next":
-                return self._html_copy_text(manager.get_next_waypoint(getattr(self, "current_sys", "")))
-            if operation == "copy_waypoint":
-                if not 0 <= index < len(manager.waypoints):
-                    return False
-                return self._html_copy_text(manager.waypoints[index].get("name"))
-            if operation == "add_waypoint":
-                name = _text(payload.get("name"), 140)
-                if not name:
-                    return False
-                coords = getattr(self, "current_coords", None) if name.casefold() == str(getattr(self, "current_sys", "")).casefold() else None
-                manager.add_waypoint(name, coords, _text(payload.get("note"), 1000) or None)
-                changed = True
-            elif operation == "edit_waypoint":
-                if not 0 <= index < len(manager.waypoints):
-                    return False
-                current_row = manager.waypoints[index]
-                name = _text(payload.get("name") or current_row.get("name"), 140)
-                if not name:
-                    return False
-                changed = manager.edit_waypoint(
-                    index, name, current_row.get("coords"),
-                    _text(payload.get("note"), 1000) or None,
-                )
-            elif operation == "mark_waypoint":
-                if not 0 <= index < len(manager.waypoints):
-                    return False
-                manager.waypoints[index]["visited"] = bool(payload.get("visited"))
-                changed = manager.save()
-            elif operation == "move_waypoint":
-                offset = max(-1, min(1, _integer(payload.get("offset"))))
-                changed = manager.move_up(index) if offset < 0 else manager.move_down(index)
-            elif operation == "delete_waypoint":
-                if not bool(payload.get("confirmed")) or not 0 <= index < len(manager.waypoints):
-                    return False
-                before = len(manager.waypoints)
-                manager.remove_waypoint(index)
-                changed = len(manager.waypoints) < before
-            elif operation == "clear_waypoints":
-                if not bool(payload.get("confirmed")):
-                    return False
-                manager.clear()
-                changed = True
-            elif operation == "set_auto_copy":
-                self.config["auto_copy_waypoint"] = bool(payload.get("enabled"))
-                self._persist_config()
-                changed = True
-            elif operation == "neutron_copy":
-                tool = self._html_profile_transient("_html_explore_tool_state", {})
-                names = [
-                    _text(row.get("system"), 140) for row in ((tool.get("route") or {}).get("waypoints") or [])
-                    if isinstance(row, dict) and _text(row.get("system"), 140)
-                ]
-                return self._html_copy_text("\n".join(names))
-            elif operation == "neutron_clear":
-                tool = self._html_profile_transient("_html_explore_tool_state", {})
-                tool.update({"status": "ready", "detail": "Route result cleared.", "route": None})
-                changed = True
-            elif operation == "neutron_import":
-                tool = self._html_profile_transient("_html_explore_tool_state", {})
-                rows = (tool.get("route") or {}).get("waypoints") or []
-                existing = {str(row.get("name") or "").casefold() for row in manager.waypoints}
-                added = 0
-                for row in rows:
-                    name = _text(row.get("system") if isinstance(row, dict) else "", 140)
-                    if not name or name.casefold() in existing:
-                        continue
-                    manager.waypoints.append({"name": name, "coords": None, "note": "Spansh neutron route"})
-                    existing.add(name.casefold())
-                    added += 1
-                changed = bool(added and manager.save())
-                if added:
-                    tool["detail"] = f"Imported {added:,} new systems into the profile waypoint route."
-            elif operation == "neutron_plot":
-                from_system = _text(payload.get("from") or getattr(self, "current_sys", ""), 140)
-                to_system = _text(payload.get("to"), 140)
-                jump_range = _number(payload.get("range"))
-                efficiency = max(1, min(100, _integer(payload.get("efficiency"), 60)))
-                multiplier = 6 if _integer(payload.get("multiplier"), 4) == 6 else 4
-                if not from_system or not to_system or jump_range is None or jump_range <= 0:
-                    return False
-                profile = get_active_profile(self.config)
-                generation = time.time_ns()
-                tool = self._html_profile_transient(
-                    "_html_explore_tool_state", {"status": "ready", "detail": "", "route": None},
-                )
-                tool.update({
-                    "generation": generation, "status": "working",
-                    "detail": f"Spansh is plotting {from_system} to {to_system}…", "route": None,
-                })
-                self.config["system_plotter_form"] = {
-                    "from": from_system, "to": to_system, "range": jump_range,
-                    "efficiency": efficiency, "supercharge_multiplier": multiplier,
-                }
-                self._persist_config()
-                self.add_event_feed_entry("ROUTE", f"Neutron plot started: {from_system} to {to_system}", severity="INFO")
-                self._schedule_html_dashboard_publish(immediate=True)
-
-                def worker():
-                    try:
-                        result = neutron_route(
-                            from_system, to_system, jump_range, efficiency,
-                            supercharge_multiplier=multiplier,
-                        )
-                        error = None
-                    except Exception as exc:
-                        result, error = None, exc
-
-                    def finish():
-                        active = self._html_profile_transient("_html_explore_tool_state", {})
-                        if active.get("profile") != profile or active.get("generation") != generation:
-                            return
-                        if error is not None:
-                            detail = str(error) if isinstance(error, SpanshError) else f"Unexpected route error: {error}"
-                            active.update({"status": "failed", "detail": detail, "route": None})
-                            self.add_event_feed_entry("ROUTE", f"Neutron plot failed: {detail}", severity="WARN")
-                        else:
-                            count = len(result.get("waypoints") or [])
-                            active.update({"status": "ready", "detail": f"Route ready · {count:,} waypoints.", "route": result})
-                            self.add_event_feed_entry("ROUTE", f"Neutron plot ready: {count:,} waypoints", severity="INFO")
-                        self._schedule_html_dashboard_publish(immediate=True)
-
-                    self._ui_post(finish, key="html-neutron-route")
-
-                threading.Thread(target=worker, name="HtmlSpanshNeutron", daemon=True).start()
-                return True
-
+            return self._handle_html_explore_command(payload)
         elif page == "profile":
             companion = getattr(self, "companion_state", None) or {}
             if operation == "open_folder":

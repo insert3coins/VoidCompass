@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.6.2**
+**Current version: 5.4.7**
 
 Void Compass is a local exploration companion for *Elite Dangerous*. It reads the game’s journal, status and companion files, then turns them into a useful command deck, survey record and set of in-game overlays. It is built for commanders who want to keep track of a long trip without handing their flight history to a cloud service.
 
@@ -10,7 +10,7 @@ Void Compass is a local exploration companion for *Elite Dangerous*. It reads th
 
 The main window is an HTML command deck backed by a Python application. It follows the active commander’s journals and keeps the important parts of an expedition in one place:
 
-- **Dashboard and Explore & Survey** show current system progress, FSS and DSS work, biological and geological signals, valuable worlds, revisit targets and a short list of sensible next actions.
+- **Dashboard and Explore & Survey** show current system progress, FSS and DSS work, biological and geological signals, valuable worlds, revisit targets and a short list of sensible next actions. Exploration Scout adds a journal-backed system audit, personal regional Codex gaps and on-demand Spansh searches for known biological, Guardian, Thargoid and high-value prospects, with source and freshness context on every result.
 - **Expedition tools** handle routes, waypoints, named objectives, neutron planning, return planning and expedition replay. Route advice is based on recorded game data and clearly marks anything that is unknown.
 - **Galactic Atlas** is an offline Three.js map with Elite XYZ coordinates, travel history, routes, regions, survey layers, annotations and the current ship position. It also includes a live System Orrery and body-target information.
 - **Planet Materials** records a planet’s known raw materials and lets you save surface mining sites with latitude, longitude, materials and notes. The current planet and coordinates can be filled from the live journal state, while mining observations remain editable by the commander. Its optional field overlay keeps the active body's scan composition, DSS mining-location count, saved sites, live surface fix and Rhino state visible; saved sites can also be sent to the Planet Waypoint Navigation overlay.
@@ -36,7 +36,7 @@ Void Compass keeps exploration history, expeditions, engineering plans, mining r
 
 Data is stored locally beside the application’s configuration and in profile folders. There is no Void Compass account or hosted database. Automatic profile safety snapshots can run before upgrades and cache rebuilds, and Settings can create a redacted support bundle containing diagnostic information without raw journal payloads, credentials or commander identifiers.
 
-Void Compass does not download or maintain a local copy of the EDDN market feed. EDDN publishing, EDSM uploads and traffic lookups are optional. Spansh is used only for requested route, ring, trader or carrier searches. Discord webhooks are optional and can announce carrier activity using the active theme.
+Void Compass does not download or maintain a local copy of the EDDN market feed. EDDN publishing, EDSM uploads and traffic lookups are optional. Spansh is used only for commander-requested route, exploration prospect, ring, trader or carrier searches. Discord webhooks are optional and can announce carrier activity using the active theme.
 
 ## Installation
 
@@ -63,7 +63,7 @@ python -m pip install -e .
 python VoidCompass.py
 ```
 
-The application uses a local WebView2 window for its HTML interface. The source run and the packaged build use the same Python-owned state and journal pipeline.
+The application uses a local WebView2 window for its HTML interface. The source run and the packaged build use the same Python-owned state and journal pipeline. One central coordinator owns the Elite journal watcher and distributes its normalised events plus Cargo, NavRoute, Status, Market and ShipLocker snapshots to the dashboard features and overlays.
 
 ## Project structure
 
