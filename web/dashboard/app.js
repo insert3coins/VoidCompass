@@ -2129,29 +2129,35 @@ function renderPlanetMaterialsWorkspace(data) {
   };
   (data.bodies || []).forEach(addBody);
   (data.sites || []).forEach(site => addBody({...site.body_details, system:site.system, body:site.body}));
+  (data.coverage_maps || []).forEach(addBody);
   const bodies = [...mergedBodies.values()].sort((a,b) => planetLabel(a).localeCompare(planetLabel(b), undefined, {numeric:true, sensitivity:"base"}));
   const liveKey = data.current_position ? planetKey(data.current_position) : "";
   let selected = bodies.find(body => planetKey(body) === root.dataset.selectedPlanet)
     || bodies.find(body => planetKey(body) === liveKey)
     || bodies[0] || {};
   const rawMaterials = body => (body.materials || []).map(mat => `<div class="planet-composition-row"><span>${escapeHtml(mat.name)}</span><i style="--share:${Math.min(100, Math.max(0, number(mat.percent)))}%"></i><b>${numeric(mat.percent, 2)}%</b></div>`).join("") || '<p class="workspace-empty">Raw-material composition not yet scanned.</p>';
+  const expectedMaterials = body => (body.best_materials || []).map((row,index) => `<article class="planet-value-card"><small>#${index+1} EXPECTED VALUE</small><b>${escapeHtml(row.material)}</b><span>${numeric(row.pct,1)}% OF SURVEYED LOCATIONS</span><em>${credits(row.median)} MEDIAN · ${credits(row.best)} BEST</em></article>`).join("") || '<p class="workspace-empty">This planet has no matching ground row in the bundled Rhino mining sheet.</p>';
   const bodyFacts = body => `<div class="planet-facts">${[
     ["PLANET CLASS", body.class], ["VOLCANISM", body.volcanism === "" ? "No volcanism" : body.volcanism],
+    ["RHINO GROUND", body.ground_label], ["GROUND SAMPLE", body.ground_sample ? `${numeric(body.ground_sample)} LOCATIONS` : "UNMEASURED"],
     ["ATMOSPHERE", body.atmosphere === "" ? "No atmosphere" : body.atmosphere],
     ["SURFACE TEMPERATURE", body.temperature == null ? null : `${numeric(body.temperature, 1)} K`],
     ["GRAVITY", body.gravity == null ? null : `${numeric(body.gravity, 2)} g`],
     ["STARS IN SYSTEM", (body.stars || []).join(" · ")],
     ["DSS MINING LOCATIONS", body.mining_locations ?? null]
   ].map(([label,value]) => `<div><small>${label}</small><b>${escapeHtml(value ?? "UNREPORTED")}</b></div>`).join("")}</div>`;
-  const evidence = body => `${bodyFacts(body)}<div class="planet-composition">${rawMaterials(body)}</div>`;
-  const fields = (site = {}) => `<input type="hidden" name="id" value="${escapeHtml(site.id || "")}"><input type="hidden" name="site_type" value="${escapeHtml(site.site_type || "site")}"><input type="hidden" name="map_name" value="${escapeHtml(site.map_name || "")}"><input type="hidden" name="body_details" value="${escapeHtml(JSON.stringify(site.body_details || {}))}">${[
+  const evidence = body => `${bodyFacts(body)}<div class="planet-value-grid">${expectedMaterials(body)}</div><div class="planet-composition">${rawMaterials(body)}</div>`;
+  const fields = (site = {}) => `<input type="hidden" name="id" value="${escapeHtml(site.id || "")}"><input type="hidden" name="site_type" value="${escapeHtml(site.site_type || "site")}"><input type="hidden" name="map_name" value="${escapeHtml(site.map_name || "")}"><input type="hidden" name="planet_radius" value="${escapeHtml(site.planet_radius || data.current_position?.planet_radius || "")}"><input type="hidden" name="body_details" value="${escapeHtml(JSON.stringify(site.body_details || {}))}">${[
     ["system", "SYSTEM", site.system || data.current_position?.system || data.system || ""],
     ["body", "PLANET", site.body || data.current_position?.body || ""], ["name", "SITE NAME", site.name || ""],
     ["latitude", "LATITUDE (Y) · −90 TO 90", site.latitude ?? ""], ["longitude", "LONGITUDE (X) · −180 TO 180", site.longitude ?? ""],
     ["materials", "MINING MATERIALS · MANUAL OBSERVATIONS", site.materials || ""], ["notes", "NOTES / CONDITIONS", site.notes || ""]
   ].map(([key,label,value]) => `<label>${label}<input name="${key}" value="${escapeHtml(value)}" ${["latitude","longitude"].includes(key) ? `type="number" step="any" min="-${key === "latitude" ? 90 : 180}" max="${key === "latitude" ? 90 : 180}"` : `maxlength="${key === "notes" ? 4000 : key === "materials" ? 2000 : key === "body" ? 160 : key === "system" ? 140 : 120}"`} ${key === "notes" || (key === "materials" && site.site_type === "drill") ? "" : "required"}></label>`).join("")}
     <label>ADD MINING MATERIAL<select data-material-choice><option value="">Choose a material…</option>${(data.mining_catalogue || []).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}${(data.new_mining_materials || []).includes(name) ? " · NEW" : ""}</option>`).join("")}</select></label>
+    <label>MINING LOCATION NUMBER<input name="location_index" type="number" min="1" max="9999" step="1" value="${escapeHtml(site.location_index ?? data.current_position?.location_index ?? "")}" placeholder="Optional"></label>
+    <label>DEPOSIT AMOUNT<select name="amount">${["","High","Medium","Low","Depleted"].map(value=>`<option value="${value}" ${site.amount === value ? "selected" : ""}>${value || "Unrecorded"}</option>`).join("")}</select></label>
     <label>OBSERVED DEPOSIT DENSITY<select name="density">${["","Low","Medium","High"].map(value=>`<option value="${value}" ${site.density === value ? "selected" : ""}>${value || "Unrecorded"}</option>`).join("")}</select></label>
+    <label>DEPOSIT RIG POSITIONS<input name="rigs" type="number" min="0" max="64" step="1" value="${numeric(site.rigs,0)}"><small>Count the rig circles drawn by this deposit—not placed drill markers.</small></label>
     <label class="planet-depleted-toggle"><input type="checkbox" name="depleted" value="1" ${site.depleted ? "checked" : ""}><span><b>LOCATION DEPLETED</b><small>Render this bookmark red on the Rhino minimap.</small></span><i></i></label>
     <button type="button" data-current-coordinates ${data.current_position ? "" : "disabled"}>USE CURRENT PLANET & LOCATION</button>
     <button type="submit" class="primary">${site.id ? "SAVE CHANGES" : "ADD SITE"}</button>${site.id ? `<button type="button" data-site-delete="${site.id}">DELETE SITE</button>` : ""}
@@ -2163,7 +2169,7 @@ function renderPlanetMaterialsWorkspace(data) {
     planetKey(site) === planetKey(navigationTarget)
       && Math.abs(number(site.latitude) - number(navigationTarget.latitude)) < 0.000001
       && Math.abs(number(site.longitude) - number(navigationTarget.longitude)) < 0.000001));
-  const siteCards = rows => `<div class="planet-site-grid">${rows.map(site => `<details class="planet-site-card${site.depleted ? " depleted" : ""}${site.site_type === "drill" ? " drill" : ""}" data-site-id="${site.id}"><summary><span><b>${escapeHtml(site.name)}</b><small>X ${numeric(site.longitude,5)} · Y ${numeric(site.latitude,5)}</small></span><strong>${site.site_type === "drill" ? "<i>DRILL MARKER</i>" : ""}${materialsFor(site).map(material=>`<i>${escapeHtml(material)}</i>`).join("")}</strong><em>${site.depleted ? "DEPLETED" : escapeHtml(site.density || "Density unrecorded")}</em><button type="button" class="planet-compass-action${siteIsActive(site) ? " active" : ""}" data-site-navigate="${site.id}">${siteIsActive(site) ? "COMPASS TARGET ACTIVE" : "SEND TO COMPASS"}</button></summary><div class="planet-site-meta">${escapeHtml(site.notes || "No field notes")}</div><form class="planet-site-form">${fields(site)}</form></details>`).join("") || '<p class="workspace-empty">No mining locations saved for this planet yet.</p>'}</div>`;
+  const siteCards = rows => `<div class="planet-site-grid">${rows.map(site => `<details class="planet-site-card${site.depleted ? " depleted" : ""}${site.site_type === "drill" ? " drill" : ""}" data-site-id="${site.id}"><summary><span><b>${escapeHtml(site.name)}</b><small>${site.location_index ? `LOC ${numeric(site.location_index)} · ` : ""}X ${numeric(site.longitude,5)} · Y ${numeric(site.latitude,5)}</small></span><strong>${site.site_type === "drill" ? "<i>DRILL MARKER</i>" : ""}${materialsFor(site).map(material=>`<i>${escapeHtml(material)}</i>`).join("")}</strong><em>${site.tons_left ? escapeHtml(site.tons_left) : site.depleted ? "DEPLETED" : `${escapeHtml(site.amount || "Amount unrecorded")} · ${escapeHtml(site.density || "Density unrecorded")}`}</em><button type="button" class="planet-compass-action${siteIsActive(site) ? " active" : ""}" data-site-navigate="${site.id}">${siteIsActive(site) ? "COMPASS TARGET ACTIVE" : "SEND TO COMPASS"}</button></summary><div class="planet-site-meta">${escapeHtml(site.notes || "No field notes")} ${site.rigs ? `· ${numeric(site.rigs)} RIG POSITION${number(site.rigs)===1?"":"S"}` : ""}</div><form class="planet-site-form">${fields(site)}</form></details>`).join("") || '<p class="workspace-empty">No mining locations match this planet and material filter.</p>'}</div>`;
   const materialNames = new Map();
   (data.sites || []).flatMap(materialsFor).forEach(name => materialNames.set(folded(name), materialNames.get(folded(name)) || name));
   const minerals = [...materialNames.values()].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
@@ -2172,11 +2178,14 @@ function renderPlanetMaterialsWorkspace(data) {
     const count = (data.sites || []).filter(site => (site.body_details?.class || "Unreported") === cls && materialsFor(site).some(value => folded(value) === folded(material))).length;
     return `<td class="${count ? "planet-heat-present" : ""}">${count || "—"}</td>`;
   }).join("")}</tr>`).join("");
-  root.innerHTML = `<section class="planet-materials-shell"><article class="card planet-command-bar"><div><small>LIVE PLANET LINK</small><b data-planet-live-status></b></div><label>SCANNED OR SAVED PLANET<select data-select-planet>${bodies.map(body=>`<option value="${escapeHtml(planetKey(body))}" ${body === selected ? "selected" : ""}>${escapeHtml(planetLabel(body))}</option>`).join("") || '<option value="">No planets scanned or saved</option>'}</select></label><strong data-selected-count>0 SAVED LOCATIONS</strong></article>
-    <div class="workspace-actions planet-atlas-tabs">${[["body","PLANET SITES"],["heat","HEAT MAP"],["material","BY MATERIAL"]].map(([key,label])=>`<button type="button" data-atlas-view="${key}">${label}</button>`).join("")}</div>
+  const coverageFor = body => (data.coverage_maps || []).find(row => planetKey(row) === planetKey(body));
+  const coverageMaps = body => { const record=coverageFor(body); if(!record)return '<p class="workspace-empty">No Rhino coverage maps saved for this planet.</p>'; return `<div class="planet-map-summary"><b>${numeric(record.mapped_count)} / ${numeric(record.location_total)} LOCATIONS MAPPED</b><span>${numeric((record.maps||[]).length)} SAVED COVERAGE MAPS</span></div><div class="planet-map-grid">${(record.maps||[]).map(map=>`<article><header><b>${escapeHtml(map.name)}</b><span>${(map.locations||[]).length?`LOC ${(map.locations||[]).map(value=>numeric(value)).join(", ")}`:"LOCATION UNKNOWN"}</span></header><p>${numeric(map.painted_km2,2)} KM² PAINTED · ${numeric(map.bookmarks)} BOOKMARKS</p><small>${map.centered?"CENTRE SET":"DROP-POINT CENTRED"}${map.border_m?` · ${numeric(number(map.border_m)/1000,1)} KM BORDER`:" · OPEN BORDER"}</small><button type="button" data-map-export="${escapeHtml(map.name)}" data-map-body="${escapeHtml(record.body)}" data-map-system="${escapeHtml(record.system||"")}">${map.exported?"REFRESH & OPEN MAP":"EXPORT & OPEN MAP"}</button></article>`).join("")}</div>${(record.unknown_maps||[]).length?`<p>Location unknown: ${escapeHtml(record.unknown_maps.join(", "))}</p>`:""}`; };
+  root.innerHTML = `<section class="planet-materials-shell"><article class="card planet-command-bar"><div><small>LIVE PLANET LINK</small><b data-planet-live-status></b></div><label>SCANNED OR SAVED PLANET<select data-select-planet>${bodies.map(body=>`<option value="${escapeHtml(planetKey(body))}" ${body === selected ? "selected" : ""}>${escapeHtml(planetLabel(body))}</option>`).join("") || '<option value="">No planets scanned or saved</option>'}</select></label><label>BOOKMARK MATERIAL<select data-select-body-material><option value="">All recorded materials</option></select></label><strong data-selected-count>0 SAVED LOCATIONS</strong></article>
+    <div class="workspace-actions planet-atlas-tabs">${[["body","PLANET SITES"],["maps","COVERAGE MAPS"],["heat","HEAT MAP"],["material","BY MATERIAL"]].map(([key,label])=>`<button type="button" data-atlas-view="${key}">${label}</button>`).join("")}</div>
     <section data-atlas-panel="body"><article class="card planet-condition-card"><header>SELECTED PLANET</header><div data-selected-facts></div></article>
-      <div class="planet-atlas-columns"><article class="card planet-location-library"><header><span>SURFACE MINING LOCATIONS</span><b data-selected-count>0 SAVED</b></header><div data-selected-mining></div></article><article class="card"><header>KNOWN RAW MATERIAL COMPOSITION</header><div data-selected-raw></div></article></div>
+      <div class="planet-atlas-columns"><article class="card planet-location-library"><header><span>SURFACE MINING LOCATIONS</span><b data-selected-count>0 SAVED</b></header><div data-selected-mining></div></article><article class="card"><header>EXPECTED RHINO VALUE · FIELD ESTIMATE</header><div data-selected-value></div><header>KNOWN RAW MATERIAL COMPOSITION</header><div data-selected-raw></div></article></div>
       <article class="card planet-materials-wide planet-new-site"><header>RECORD A NEW LOCATION</header><p>Use current to capture the live planet, X/Y coordinates and scanned raw materials. Mining materials and deposit density are your field observations.</p><form class="planet-site-form" data-new-site-form>${fields()}</form></article></section>
+    <section data-atlas-panel="maps" hidden><article class="card"><header>NUMBERED MINING-LOCATION COVERAGE</header><div data-selected-maps></div></article></section>
     <section data-atlas-panel="heat" hidden><article class="card"><header>SURFACE MINING HEAT MAP · RECORDED SITES</header><p>Counts of your saved sites by material and planet class. Blank cells mean no recorded observation.</p><div class="planet-table-scroll"><table class="planet-atlas-table"><thead><tr><th>MATERIAL</th>${classes.map(cls=>`<th>${escapeHtml(cls)}</th>`).join("")}</tr></thead><tbody>${heatRows || '<tr><td>Save mining sites to build the comparison.</td></tr>'}</tbody></table></div></article></section>
     <section data-atlas-panel="material" hidden><article class="card"><header>FIND PLANETS BY MINING MATERIAL</header><label class="planet-body-picker">MATERIAL<select data-select-material>${minerals.map(m=>`<option>${escapeHtml(m)}</option>`).join("") || '<option>No recorded materials</option>'}</select></label><div data-material-sites></div></article></section>
     </section>`;
@@ -2184,10 +2193,20 @@ function renderPlanetMaterialsWorkspace(data) {
   function showBody() {
     root.dataset.selectedPlanet = planetKey(selected);
     const selectedSites = (data.sites || []).filter(site=>planetKey(site) === planetKey(selected));
+    const picker = root.querySelector('[data-select-body-material]');
+    const choices = [...new Set(selectedSites.flatMap(materialsFor))].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
+    const previous = root.dataset.bodyMaterial || "";
+    picker.innerHTML = `<option value="">All recorded materials</option>${choices.map(value=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")}`;
+    picker.value = choices.some(value=>folded(value)===folded(previous)) ? previous : "";
+    root.dataset.bodyMaterial = picker.value;
+    const visibleSites = picker.value ? selectedSites.filter(site=>materialsFor(site).some(value=>folded(value)===folded(picker.value))) : selectedSites;
     root.querySelector('[data-selected-facts]').innerHTML = bodyFacts(selected);
+    root.querySelector('[data-selected-value]').innerHTML = `<div class="planet-value-grid">${expectedMaterials(selected)}</div><p class="planet-evidence-note">Ranked by observed location rate × median market price. This is reconnaissance guidance, not a guarantee of deposit contents.</p>`;
     root.querySelector('[data-selected-raw]').innerHTML = rawMaterials(selected);
-    root.querySelector('[data-selected-mining]').innerHTML = siteCards(selectedSites);
-    root.querySelectorAll('[data-selected-count]').forEach(label=>{label.textContent=`${selectedSites.length} SAVED LOCATION${selectedSites.length === 1 ? "" : "S"}`;});
+    root.querySelector('[data-selected-mining]').innerHTML = siteCards(visibleSites);
+    root.querySelector('[data-selected-maps]').innerHTML = coverageMaps(selected);
+    const coverage = coverageFor(selected);
+    root.querySelectorAll('[data-selected-count]').forEach(label=>{label.textContent=`${selectedSites.length} SAVED · ${numeric(coverage?.mapped_count)} / ${numeric(coverage?.location_total || selected.mining_locations)} MAPPED`;});
   }
   showBody();
   for (const [siteId, draft] of preservedDrafts) {
@@ -2224,6 +2243,13 @@ function renderPlanetMaterialsWorkspace(data) {
   root.onclick = async event => {
     const viewButton=event.target.closest('button[data-atlas-view]');
     if(viewButton)return showView(viewButton.dataset.atlasView);
+    const mapButton=event.target.closest('[data-map-export]');
+    if(mapButton){
+      const accepted=await command('workspace',{page:'planet-materials',operation:'export_map',profile_key:root.dataset.profileKey,map_name:mapButton.dataset.mapExport,body:mapButton.dataset.mapBody,system:mapButton.dataset.mapSystem});
+      showToast(accepted?'Coverage map exported and opened.':'Coverage map could not be exported.');
+      if(accepted){delete workspaceFingerprints['planet-materials'];window.setTimeout(()=>{if(typeof syncSnapshot==='function')syncSnapshot();},120);}
+      return;
+    }
     const navigateButton=event.target.closest('[data-site-navigate]');
     if(navigateButton){
       event.preventDefault();event.stopPropagation();
@@ -2243,6 +2269,8 @@ function renderPlanetMaterialsWorkspace(data) {
     if (!position) return showToast('Current planetary coordinates are unavailable.');
     const form=button.closest('form');
     for (const key of ['system','body','latitude','longitude']) form.elements[key].value=position[key];
+    form.elements.planet_radius.value=position.planet_radius || '';
+    form.elements.location_index.value=position.location_index || '';
     if (!form.elements.name.value) form.elements.name.value=`Site ${numeric(position.latitude,4)}, ${numeric(position.longitude,4)}`;
     form.elements.body_details.value=JSON.stringify(position.body_details || {});
     form.querySelector('[data-captured-evidence]').innerHTML=`<small>CAPTURED PLANET SCAN · ${escapeHtml(position.body)}</small>${evidence(position.body_details || {})}`;
@@ -2264,6 +2292,8 @@ function renderPlanetMaterialsWorkspace(data) {
     form.dataset.dirty='true';
     if (['system','body'].includes(event.target.name)) {
       form.elements.body_details.value='{}';
+      form.elements.planet_radius.value='';
+      form.elements.location_index.value='';
       form.querySelector('[data-captured-evidence]').textContent='Planet changed. Use current again to capture matching scan evidence.';
     }
   };
@@ -2274,6 +2304,18 @@ function renderPlanetMaterialsWorkspace(data) {
       return;
     }
     if(event.target.matches('[data-select-material]'))return showMaterial();
+    if(event.target.matches('[data-select-body-material]')){root.dataset.bodyMaterial=event.target.value;return showBody();}
+    if(event.target.name==='amount'){
+      const form=event.target.closest('form');
+      form.elements.depleted.checked=event.target.value==='Depleted';
+      form.dataset.dirty='true';return;
+    }
+    if(event.target.name==='depleted'){
+      const form=event.target.closest('form');
+      if(event.target.checked)form.elements.amount.value='Depleted';
+      else if(form.elements.amount.value==='Depleted')form.elements.amount.value='';
+      form.dataset.dirty='true';return;
+    }
     if(event.target.matches('[data-material-choice]')){
       const select=event.target;
       if (!select.value) return;
@@ -2306,7 +2348,7 @@ function updatePlanetMaterialsLive(root, data) {
   root.querySelectorAll('[data-current-coordinates]').forEach(button=>{button.disabled=!position;});
   const status=root.querySelector('[data-planet-live-status]');
   if(status)status.textContent=position
-    ? `${position.system} / ${position.body} · X ${numeric(position.longitude,5)} · Y ${numeric(position.latitude,5)} · LIVE SURFACE POSITION`
+    ? `${position.system} / ${position.body} · X ${numeric(position.longitude,5)} · Y ${numeric(position.latitude,5)}${position.location_index?` · LOC ${numeric(position.location_index)} FROM ${position.location_source}${position.location_distance_m==null?"":` (${numeric(position.location_distance_m)} M)`}`:""} · LIVE SURFACE POSITION`
     : 'No current planetary coordinates. Approach or land on a planet to use current location.';
 }
 

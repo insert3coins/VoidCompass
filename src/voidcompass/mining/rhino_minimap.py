@@ -2,7 +2,7 @@
 
 The coverage behaviour is adapted from Fumlop/EDRhinoSpotter's GPL-3.0
 ``rs_core.coverage`` and ``rs_core.coverstore`` modules (commit
-694bd8b2a531af94e83f423eaab88472708426e5).  Void Compass keeps the same
+30177fcd60ed3604b45a01b1d388d3dc4354ea1b).  Void Compass keeps the same
 field semantics but publishes geometry to its HTML overlay rather than using
 Pillow/Tk.  See THIRD_PARTY_NOTICES.md.
 
@@ -28,9 +28,9 @@ REACH_M = 10000.0
 MASK_M_PER_PX = 50.0
 STAMP_M = 250.0
 GRID_M = 1000.0
-DRIVE_OVERLAP_M = 250.0
-DRIVE_STEP_M = 2 * SCAN_RADIUS_M - DRIVE_OVERLAP_M
-RANGE_RINGS_M = (3000.0, 5000.0)
+FIRST_RING_M = 3750.0
+RING_STEP_M = 1750.0
+RINGS_WITHOUT_BORDER = 2
 MASK_PX = int(2 * REACH_M / MASK_M_PER_PX)
 SCHEMA_VERSION = 1
 
@@ -59,15 +59,15 @@ def location_index(destination):
     return int(match.group(1)) if match else None
 
 
-def drive_radii(border_m):
-    """Coverage-driving rings for a known circular location, outside-in."""
+def drive_radii(border_m=None):
+    """Coverage-driving rings counted outward from the location centre."""
+    radii = [FIRST_RING_M + index * RING_STEP_M for index in range(RINGS_WITHOUT_BORDER)]
     border = max(0.0, float(border_m or 0.0))
-    radii = []
-    radius = border - SCAN_RADIUS_M
-    while radius - SCAN_RADIUS_M > 0:
-        radii.append(radius)
-        radius -= DRIVE_STEP_M
-    radii.append(max(radius, 0.0))
+    if not border:
+        return radii
+    radii = radii[:1]
+    while radii[-1] + SCAN_RADIUS_M < border:
+        radii.append(radii[-1] + RING_STEP_M)
     return radii
 
 
@@ -388,6 +388,25 @@ class RhinoMinimapTracker:
         self._notice(f"Coverage border set at {self.active.border_m / 1000.0:.1f} km")
         return True
 
+    def associate_location(self, location, notice=""):
+        """Attach an inferred Elite mining-location number to the active map."""
+        if self.active is None:
+            return False
+        try:
+            location = int(location)
+        except (TypeError, ValueError):
+            return False
+        if location <= 0:
+            return False
+        changed = self.active.location != location
+        self.active.location = location
+        if changed:
+            self._dirty = True
+            self.flush(force=True)
+        if notice:
+            self.show_notice(notice)
+        return changed
+
     def reset_active(self):
         """Replace the current map with a clean map anchored at the Rhino.
 
@@ -478,11 +497,7 @@ class RhinoMinimapTracker:
         direction = bearing_deg(x, y, anchor_x, anchor_y) if distance > 0.5 else None
         marks = []
         for site in sites or ():
-            if not isinstance(site, dict):
-                continue
-            if str(site.get("system") or "").casefold() != self.system.casefold():
-                continue
-            if str(site.get("body") or "").casefold() != cover.body.casefold():
+            if not self._site_matches(site, cover.body, self.system):
                 continue
             lat, lon = _number(site.get("latitude")), _number(site.get("longitude"))
             if lat is None or lon is None:
@@ -530,8 +545,8 @@ class RhinoMinimapTracker:
             "stamps": [{"x": round(px, 1), "y": round(py, 1)} for px, py in stamp_xy],
             "bookmarks": marks,
             "drill_count": sum(mark["kind"] == "drill" for mark in marks),
-            "drive_rings": drive_radii(cover.border_m) if cover.border_m is not None else [],
-            "range_rings": list(RANGE_RINGS_M),
+            "drive_rings": drive_radii(cover.border_m),
+            "range_rings": drive_radii(),
             "scan_radius_m": SCAN_RADIUS_M,
             "view_m": VIEW_M,
             "reach_m": REACH_M,
@@ -551,6 +566,97 @@ class RhinoMinimapTracker:
     @property
     def map_folder(self):
         return Path(self.path).parent / "rhino_maps"
+
+    def find_map(self, body, name):
+        for stored_body, covers in self.maps.items():
+            if stored_body.casefold() != str(body or "").casefold():
+                continue
+            return next((cover for cover in covers if str(cover.name).casefold() == str(name or "").casefold()), None)
+        return None
+
+    @staticmethod
+    def _site_matches(site, body, system=""):
+        if not isinstance(site, dict):
+            return False
+        site_system = str(site.get("system") or system or "").strip()
+        if _short_body(site.get("body"), site_system).casefold() != _short_body(
+                body, site_system).casefold():
+            return False
+        return not system or str(site.get("system") or "").casefold() == str(system).casefold()
+
+    def _map_for_site(self, covers, site):
+        named = str(site.get("map_name") or "").strip()
+        if named:
+            match = next((cover for cover in covers if str(cover.name).casefold() == named.casefold()), None)
+            if match is not None:
+                return match
+        lat, lon = _number(site.get("latitude")), _number(site.get("longitude"))
+        if lat is None or lon is None:
+            return None
+        found = []
+        for cover in covers:
+            if cover.reaches(lat, lon):
+                found.append((math.hypot(*cover.xy(lat, lon)), cover))
+        return min(found, key=lambda value: value[0])[1] if found else None
+
+    def map_catalogue(self, sites=(), body_totals=None, current_system=""):
+        """Serializable map/location inventory for the Planet Materials browser."""
+        body_totals = {str(key).casefold(): int(value or 0) for key, value in (body_totals or {}).items()}
+        result = []
+        for body, covers in sorted(self.maps.items(), key=lambda value: value[0].casefold()):
+            body_sites = [site for site in sites or () if self._site_matches(site, body)]
+            system = str(next((site.get("system") for site in body_sites if site.get("system")), "") or "")
+            if not system and str(body).casefold().startswith((str(current_system).strip() + " ").casefold()):
+                system = str(current_system).strip()
+            assigned = {id(cover): [] for cover in covers}
+            for site in body_sites:
+                cover = self._map_for_site(covers, site)
+                if cover is not None:
+                    assigned[id(cover)].append(site)
+            mapped = {}
+            maps = []
+            for cover in covers:
+                marks = assigned[id(cover)]
+                locations = set()
+                if isinstance(cover.location, int) and not isinstance(cover.location, bool):
+                    locations.add(cover.location)
+                locations.update(
+                    int(site["location_index"]) for site in marks
+                    if site.get("location_index") is not None
+                )
+                for location in locations:
+                    mapped.setdefault(location, set()).add(str(cover.name))
+                picture = self._picture_path(cover)
+                maps.append({
+                    "name": str(cover.name or "map"),
+                    "location": cover.location,
+                    "locations": sorted(locations),
+                    "painted_km2": round(cover.painted_km2, 2),
+                    "bookmarks": len(marks),
+                    "centered": bool(cover.centered),
+                    "border_m": cover.border_m,
+                    "exported": picture.is_file(),
+                    "picture": str(picture) if picture.is_file() else "",
+                })
+            mapped_rows = [
+                {"location": location, "maps": sorted(names)}
+                for location, names in sorted(mapped.items())
+            ]
+            tied = {name for row in mapped_rows for name in row["maps"]}
+            total = next((
+                value for key, value in body_totals.items()
+                if _short_body(key, system).casefold() == _short_body(body, system).casefold()
+            ), 0)
+            result.append({
+                "system": system,
+                "body": body,
+                "maps": maps,
+                "mapped": mapped_rows,
+                "mapped_count": len(mapped_rows),
+                "location_total": total,
+                "unknown_maps": [row["name"] for row in maps if row["name"] not in tied],
+            })
+        return result
 
     def usage(self):
         folder = self.map_folder
@@ -579,9 +685,9 @@ class RhinoMinimapTracker:
             / f"{self._safe_path_name(cover.name)}.png"
         )
 
-    def export_picture(self, sites=()):
-        """Write the active map and bookmark legend as a shareable PNG."""
-        cover = self.active
+    def export_picture(self, sites=(), *, cover=None, system=None):
+        """Write a selected map and bookmark legend as a shareable PNG."""
+        cover = cover or self.active
         if cover is None:
             return None
         try:
@@ -608,11 +714,7 @@ class RhinoMinimapTracker:
 
             marks = []
             for site in sites or ():
-                if not isinstance(site, dict):
-                    continue
-                if str(site.get("system") or "").casefold() != self.system.casefold():
-                    continue
-                if str(site.get("body") or "").casefold() != cover.body.casefold():
+                if not self._site_matches(site, cover.body, system or ""):
                     continue
                 lat, lon = _number(site.get("latitude")), _number(site.get("longitude"))
                 if lat is None or lon is None or not cover.reaches(lat, lon):
@@ -673,3 +775,7 @@ class RhinoMinimapTracker:
             return target
         except (OSError, ValueError, ImportError):
             return None
+
+    def export_picture_for(self, body, name, sites=(), *, system=None):
+        cover = self.find_map(body, name)
+        return self.export_picture(sites, cover=cover, system=system) if cover is not None else None

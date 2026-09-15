@@ -96,6 +96,10 @@ def build_planet_materials_model(
             "id": row.get("id"),
             "name": str(row.get("name") or "Surface site").strip(),
             "density": str(row.get("density") or "").strip(),
+            "amount": str(row.get("amount") or "").strip(),
+            "rigs": max(0, int(_number(row.get("rigs")) or 0)),
+            "tons_left": str(row.get("tons_left") or "").strip(),
+            "location_index": row.get("location_index"),
             "materials": _material_names(row.get("materials")),
             "latitude": site_lat,
             "longitude": site_lon,
@@ -137,7 +141,17 @@ def build_planet_materials_model(
             "temperature": _number(details.get("temperature")),
             "landable": bool(details.get("landable")),
             "mining_locations": max(0, int(_number(details.get("mining_locations")) or 0)),
+            "ground": str(details.get("ground_label") or "Ground unclassified"),
+            "ground_sample": max(0, int(_number(details.get("ground_sample")) or 0)),
         },
+        "best_materials": [
+            {
+                "name": str(row.get("material") or "Unknown"),
+                "percent": round(max(0.0, _number(row.get("pct")) or 0.0), 1),
+                "median": max(0, int(_number(row.get("median")) or 0)),
+            }
+            for row in (details.get("best_materials") or ())[:3] if isinstance(row, dict)
+        ],
         "materials": materials[:8],
         "sites": sites[:8],
         "site_count": len(sites),

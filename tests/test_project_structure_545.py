@@ -27,6 +27,7 @@ class ProjectStructure545Tests(unittest.TestCase):
         self.assertEqual(resource_path("web"), ROOT / "web")
         self.assertTrue(resource_path("assets", "images", "ships").is_dir())
         self.assertTrue(resource_path("data", "codexRef.json").is_file())
+        self.assertTrue(resource_path("data", "rhino_mining_sheet.json").is_file())
 
     def test_production_modules_no_longer_fill_repository_root(self):
         allowed = {"VoidCompass.py"}

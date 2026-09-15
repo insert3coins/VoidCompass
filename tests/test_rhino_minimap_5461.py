@@ -21,7 +21,8 @@ class RhinoMinimapCoverageTests(unittest.TestCase):
     def test_location_parser_and_drive_rings_match_elite_semantics(self):
         self.assertEqual(location_index({"Name": "$SAA_Unknown_Signal:#index=22;"}), 22)
         self.assertIsNone(location_index({"Name": "Sol A 1"}))
-        self.assertEqual(drive_radii(10_000), [8000, 4250, 500])
+        self.assertEqual(drive_radii(), [3750, 5500])
+        self.assertEqual(drive_radii(10_000), [3750, 5500, 7250, 9000])
 
     def test_coverage_stamps_recenter_and_border_clip(self):
         cover = CoverageMap("Test 1 a", 0, 0, 1_000_000)
@@ -88,6 +89,14 @@ class RhinoMinimapCoverageTests(unittest.TestCase):
             }])
             self.assertTrue(picture.is_file())
             self.assertEqual(tracker.usage()[0], 1)
+            catalogue = tracker.map_catalogue([{
+                "system": "Sol", "body": "Sol Moon", "name": "Ruby ridge",
+                "latitude": 0, "longitude": 0.01, "materials": "Ruby",
+                "location_index": 4,
+            }], {"Sol Moon": 20}, "Sol")
+            self.assertEqual(catalogue[0]["mapped_count"], 1)
+            self.assertEqual(catalogue[0]["location_total"], 20)
+            self.assertEqual(catalogue[0]["maps"][0]["bookmarks"], 1)
 
             restored = RhinoMinimapTracker(path)
             self.assertTrue(restored.update(
