@@ -33,6 +33,8 @@ from voidcompass.exploration.explorer_decision_deck import (
 )
 from voidcompass.core import themes
 from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_material_catalogue, SURFACE_MINING_NEW
+from voidcompass.mining.rhino_intelligence import ground_intelligence
+from voidcompass.mining.rhino_minimap import location_index
 from voidcompass.core.config import get_active_profile, get_profile_dir
 from voidcompass.exploration.deep_survey import recon_report
 from voidcompass.core.diagnostic_logs import application_base_dir
@@ -2108,7 +2110,7 @@ class HtmlDashboardMixin:
         return PlanetMaterialsStore(os.path.join(
             get_profile_dir(get_active_profile(self.config)), "planet_materials.db"))
 
-    def _html_planet_materials_workspace(self):
+    def _html_planet_materials_workspace(self, include_coverage_maps=True):
         lat = _number(getattr(self, "current_latitude", None))
         lon = _number(getattr(self, "current_longitude", None))
         body = str(getattr(self, "current_body_name", "") or "")
@@ -2121,19 +2123,70 @@ class HtmlDashboardMixin:
                 continue
             name = str(item.get("full_name") or item.get("name") or "")
             resource = next(iter(build_planetary_resources([item])["bodies"]), {})
-            bodies.append({"body": name, "short_name": item.get("name"),
+            body_row = {"body": name, "short_name": item.get("name"),
                 "system": getattr(self, "current_sys", ""), "body_id": item.get("body_id"),
                 "class": item.get("planet_class") or item.get("class") or "Unknown",
                 "volcanism": item.get("volcanism"), "atmosphere": item.get("atmosphere_type"),
                 "temperature": _number(item.get("surface_temp")), "gravity": _number(item.get("gravity_g")),
                 "landable": bool(item.get("landable")), "stars": stars,
-                "materials": resource.get("materials", []), "mining_locations": resource.get("mining_locations", 0)})
+                "radius_m": _number(item.get("radius")),
+                "materials": resource.get("materials", []), "mining_locations": resource.get("mining_locations", 0)}
+            body_row.update(ground_intelligence(body_row))
+            bodies.append(body_row)
         details = next((row for row in bodies if body in (row["body"], row["short_name"])), {})
         position = None
+        store = self._planet_materials_store()
+        sites = store.rows()
         if (getattr(self, "on_planet", False) and body and lat is not None and lon is not None
                 and math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180):
             position = {"latitude": lat, "longitude": lon, "body": body,
-                        "system": getattr(self, "current_sys", ""), "body_details": details}
+                        "system": getattr(self, "current_sys", ""), "body_details": details,
+                        "planet_radius": _number(getattr(self, "current_planet_radius", None))}
+            nearest_location = getattr(store, "nearest_location", None)
+            nearby = nearest_location(
+                position["system"], body, lat, lon, position["planet_radius"],
+                rows=sites,
+            ) if callable(nearest_location) else None
+            if nearby is not None:
+                distance, site = nearby
+                position.update({
+                    "location_index": site.get("location_index"),
+                    "location_source": site.get("name"),
+                    "location_distance_m": round(distance, 1),
+                })
+            else:
+                selected_location = location_index(
+                    getattr(self, "current_destination_details", None),
+                )
+                fallback = getattr(self, "_rhino_touchdown_location", None) or {}
+                fallback_matches = (
+                    str(fallback.get("system") or "").casefold() == position["system"].casefold()
+                    and PlanetMaterialsStore._body_key(position["system"], fallback.get("body"))
+                    == PlanetMaterialsStore._body_key(position["system"], body)
+                )
+                if selected_location is not None:
+                    position.update({"location_index": selected_location, "location_source": "Elite target"})
+                elif fallback_matches and fallback.get("location_index") is not None:
+                    position.update({
+                        "location_index": fallback["location_index"],
+                        "location_source": "Touchdown",
+                    })
+        for site in sites:
+            saved_details = site.get("body_details")
+            if isinstance(saved_details, dict) and saved_details:
+                site["body_details"] = {**saved_details, **ground_intelligence(saved_details)}
+        tracker = getattr(self, "rhino_minimap", None)
+        body_totals = {
+            str(row.get("body") or ""): _integer(row.get("mining_locations")) for row in bodies
+        }
+        for site in sites:
+            saved_details = site.get("body_details") or {}
+            saved_body = str(site.get("body") or saved_details.get("body") or "")
+            if saved_body and saved_body.casefold() not in {key.casefold() for key in body_totals}:
+                body_totals[saved_body] = _integer(saved_details.get("mining_locations"))
+        coverage_maps = tracker.map_catalogue(
+            sites, body_totals, getattr(self, "current_sys", ""),
+        ) if tracker is not None and include_coverage_maps else []
         return {
             "on_planet": bool(getattr(self, "on_planet", False)),
             "bodies": bodies,
@@ -2144,7 +2197,8 @@ class HtmlDashboardMixin:
             "profile_key": get_active_profile(self.config),
             "system": getattr(self, "current_sys", ""),
             "resources": resources,
-            "sites": self._planet_materials_store().rows(),
+            "sites": sites,
+            "coverage_maps": coverage_maps,
             "navigation_target": {
                 "active": bool(getattr(self, "target_latlon_active", False)),
                 "system": getattr(self, "ground_target_system", ""),
@@ -2163,7 +2217,7 @@ class HtmlDashboardMixin:
             return False
         try:
             overlay.update(
-                self._html_planet_materials_workspace(),
+                self._html_planet_materials_workspace(include_coverage_maps=False),
                 latitude=getattr(self, "current_latitude", None),
                 longitude=getattr(self, "current_longitude", None),
                 heading=getattr(self, "current_heading", None),
@@ -2221,8 +2275,31 @@ class HtmlDashboardMixin:
             vehicle=getattr(self, "current_vehicle_name", ""),
             destination=status.get("Destination"),
         )
+        if tracker.in_rhino and tracker.active is not None and (
+                not was_active or tracker.active.location is None):
+            nearest = self._planet_materials_store().nearest_location(
+                tracker.system, tracker.active.body,
+                tracker.here[0], tracker.here[1], tracker.active.radius_m,
+                rows=self._rhino_minimap_sites(),
+            )
+            if nearest is not None:
+                distance, site = nearest
+                location = site.get("location_index")
+                if location is not None and tracker.active.location != location:
+                    changed = tracker.associate_location(
+                        location,
+                        f"Location {location} from {site.get('name') or 'bookmark'} · {distance:.0f} m",
+                    ) or changed
+            elif tracker.active.location is None:
+                fallback = getattr(self, "_rhino_touchdown_location", None) or {}
+                if str(fallback.get("system") or "").casefold() == tracker.system.casefold() and \
+                        PlanetMaterialsStore._body_key(tracker.system, fallback.get("body")) == \
+                        PlanetMaterialsStore._body_key(tracker.system, tracker.active.body):
+                    changed = tracker.associate_location(
+                        fallback.get("location_index"), "Location restored from Touchdown",
+                    ) or changed
         if was_active and not tracker.in_rhino:
-            tracker.export_picture(self._rhino_minimap_sites())
+            tracker.export_picture(self._rhino_minimap_sites(), system=tracker.system)
         self._refresh_rhino_minimap_overlay()
         return changed
 
@@ -2311,6 +2388,8 @@ class HtmlDashboardMixin:
             "notes": "Marked from the Rhino Coverage Minimap. Add the drill's material and field notes here.",
             "site_type": "drill",
             "map_name": map_name,
+            "planet_radius": tracker.active.radius_m,
+            "location_index": tracker.active.location,
         })
         self._rhino_minimap_sites_cache = None
         tracker.show_notice(f"{label} marked")
@@ -3105,6 +3184,17 @@ class HtmlDashboardMixin:
                     )
                 except (TypeError, ValueError):
                     return False
+            elif operation == "export_map":
+                tracker = getattr(self, "rhino_minimap", None)
+                if tracker is None:
+                    return False
+                target = tracker.export_picture_for(
+                    _text(payload.get("body"), 180), _text(payload.get("map_name"), 120),
+                    store.rows(), system=_text(payload.get("system"), 140) or None,
+                )
+                if target is None:
+                    return False
+                open_path(target)
             else:
                 return False
             self._rhino_minimap_sites_cache = None

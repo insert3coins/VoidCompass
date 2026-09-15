@@ -5,6 +5,7 @@ import threading
 import math
 import sqlite3
 import logging
+import re
 import sys
 import time
 import traceback
@@ -8970,6 +8971,16 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
                 self.current_body_id = body_id
             if body_name:
                 self.current_body_name = body_name
+            nearest_location = None
+            if isinstance(raw, dict):
+                match = re.search(r"#index=(\d+)", str(raw.get("NearestDestination") or ""))
+                nearest_location = int(match.group(1)) if match else None
+            if nearest_location is not None:
+                self._rhino_touchdown_location = {
+                    "system": getattr(self, "current_sys", ""),
+                    "body": body_name or getattr(self, "current_body_name", ""),
+                    "location_index": nearest_location,
+                }
             self.current_landed = True
             self._surface_departure_active = False
             self._surface_glide_guard_until = 0.0

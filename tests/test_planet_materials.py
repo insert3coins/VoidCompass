@@ -8,6 +8,10 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from voidcompass.mining.planet_materials import PlanetMaterialsStore
+from voidcompass.mining.rhino_intelligence import (
+    classify_ground, ground_intelligence, tons_left,
+)
+from voidcompass.mining.rhino_minimap import RhinoMinimapTracker
 from voidcompass.overlays.planet_materials_hud import build_planet_materials_model
 from voidcompass.dashboard.dashboard import MainDashboard
 from voidcompass.overlays.hud import TacticalHUD
@@ -77,6 +81,10 @@ class PlanetMaterialsTests(unittest.TestCase):
             self.assertEqual(saved['depleted'], 0)
             self.assertEqual(saved['site_type'], 'site')
             self.assertEqual(saved['map_name'], '')
+            self.assertEqual(saved['amount'], '')
+            self.assertEqual(saved['rigs'], 0)
+            self.assertIsNone(saved['planet_radius'])
+            self.assertIsNone(saved['location_index'])
             with self.assertRaises(ValueError):
                 store.save({**row, 'body':'Mars'})
 
@@ -153,6 +161,66 @@ class PlanetMaterialsTests(unittest.TestCase):
                 with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                     store.save({**data, key: value})
             self.assertEqual(store.rows(), [])
+
+    def test_deposit_estimate_and_repeat_observation_update_in_place(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = PlanetMaterialsStore(Path(folder) / 'sites.db')
+            original = store.save(dict(
+                system='Sol', body='Sol Moon', name='Ruby patch', materials='Ruby',
+                latitude=0, longitude=0, planet_radius=1_000_000,
+                amount='High', density='Low', rigs=4, location_index=7,
+            ))
+            repeated = store.save(dict(
+                system='Sol', body='Moon', name='Duplicate reading', materials='Ruby',
+                latitude=0, longitude=.002, planet_radius=1_000_000,
+                amount='Low', density='High', rigs=8, location_index=7,
+            ))
+            self.assertEqual(repeated, original)
+            row = store.rows()[0]
+            self.assertEqual((row['latitude'], row['longitude'], row['rigs']), (0, 0, 4))
+            self.assertEqual((row['amount'], row['density']), ('Low', 'High'))
+            self.assertEqual(row['tons_left'], 'Estimated up to 410 t left')
+            nearby = store.nearest_location('Sol', 'Moon', 0, .01, 1_000_000)
+            self.assertEqual(nearby[1]['location_index'], 7)
+            self.assertLess(nearby[0], 1000)
+
+    def test_ground_classifier_and_value_sheet_cover_current_body_types(self):
+        self.assertEqual(classify_ground({
+            'class':'Rocky body', 'volcanism':'Major Metallic Magma', 'landable':True,
+        }), 'rock 80%+ [metallic magma]')
+        self.assertEqual(classify_ground({
+            'class':'Rocky body', 'volcanism':'Silicate Magma', 'landable':True,
+        }), 'rock 80%+ [silicate magma]')
+        intel = ground_intelligence({'class':'High metal content body', 'landable':True})
+        self.assertEqual(intel['ground'], 'high-metal-content')
+        self.assertEqual(len(intel['best_materials']), 3)
+        self.assertGreater(intel['ground_sample'], 0)
+        self.assertEqual(tons_left(4, 'High'), (620, 1200))
+
+    def test_rhino_launch_associates_nearest_numbered_bookmark(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = PlanetMaterialsStore(Path(folder) / 'sites.db')
+            store.save(dict(
+                system='Sol', body='Moon', name='Location seven', materials='Ruby',
+                latitude=0, longitude=.002, planet_radius=1_000_000,
+                location_index=7,
+            ))
+            dashboard = MainDashboard.__new__(MainDashboard)
+            dashboard.config = {}
+            dashboard.rhino_minimap = RhinoMinimapTracker(Path(folder) / 'maps.json.gz')
+            dashboard.rhino_minimap_hud = None
+            dashboard.current_sys = 'Sol'
+            dashboard.current_body_name = 'Sol Moon'
+            dashboard.current_latitude = 0
+            dashboard.current_longitude = 0
+            dashboard.current_planet_radius = 1_000_000
+            dashboard.current_heading = 0
+            dashboard.current_in_srv = True
+            dashboard.current_vehicle_name = 'Rhino'
+            dashboard._planet_materials_store = lambda: store
+            self.assertTrue(dashboard._observe_rhino_minimap_status({}))
+            self.assertEqual(dashboard.rhino_minimap.active.location, 7)
+            self.assertIn('Location 7 from Location seven', dashboard.rhino_minimap.notice)
 
     def test_invalid_legacy_scan_snapshot_does_not_hide_saved_sites(self):
         with tempfile.TemporaryDirectory() as folder:

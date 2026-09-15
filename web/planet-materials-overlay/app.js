@@ -26,7 +26,8 @@
     const materials = Array.isArray(site.materials) ? site.materials.slice(0, 4).join(" · ") : "";
     copy.appendChild(node("span", "", materials || "No field materials logged")); row.appendChild(copy);
     const meta = node("div", "site-meta");
-    if (site.density) meta.appendChild(node("b", "", String(site.density).toUpperCase()));
+    if (site.tons_left) meta.appendChild(node("b", "", String(site.tons_left).toUpperCase()));
+    else if (site.amount || site.density) meta.appendChild(node("b", "", [site.amount,site.density].filter(Boolean).join(" · ").toUpperCase()));
     meta.appendChild(node("small", "", distance(site.distance_m))); row.appendChild(meta);
     return row;
   }
@@ -34,6 +35,7 @@
     VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, snapshot.effects || {});
     const model = snapshot.planet_materials || {}, details = model.details || {};
     const materials = Array.isArray(model.materials) ? model.materials : [];
+    const bestMaterials = Array.isArray(model.best_materials) ? model.best_materials : [];
     const sites = Array.isArray(model.sites) ? model.sites.slice(0, 4) : [];
     const position = model.position || null, target = model.target || {};
     root.classList.toggle("rhino", Boolean(model.rhino_active));
@@ -45,7 +47,8 @@
     const facts = byId("facts"); facts.replaceChildren();
     const factRows = [
       ["GRAVITY", number(details.gravity) === null ? "—" : `${number(details.gravity).toFixed(2)} G`],
-      ["VOLCANISM", details.volcanism || "None detected"],
+      ["GROUND", details.ground || "Unclassified"],
+      ["SAMPLE", details.ground_sample ? `${details.ground_sample} LOCATIONS` : "UNMEASURED"],
       ["SURFACE", details.landable ? "LANDABLE" : "NOT LANDABLE"],
     ];
     factRows.forEach(([label, value]) => { const item = node("div"); item.appendChild(node("small", "", label)); item.appendChild(node("strong", "", value)); facts.appendChild(item); });
@@ -54,6 +57,14 @@
     const maximum = Math.max(1, ...materials.map((item) => number(item.percent) || 0));
     if (materials.length) materials.forEach((item) => materialHost.appendChild(materialRow(item, maximum)));
     else materialHost.appendChild(node("div", "empty", "NO SCAN.MATERIALS DATA FOR THIS BODY"));
+    const valueHost = byId("best-materials"); valueHost.replaceChildren();
+    const bestMaximum = Math.max(1, ...bestMaterials.map((item) => number(item.percent) || 0));
+    if (bestMaterials.length) bestMaterials.forEach((item) => {
+      const row = materialRow(item, bestMaximum);
+      row.querySelector("span").textContent = `${(number(item.percent)||0).toFixed(1)}% · ${Math.round(number(item.median)||0).toLocaleString()} CR`;
+      valueHost.appendChild(row);
+    });
+    else valueHost.appendChild(node("div", "empty", "NO MATCHING RHINO GROUND DATA"));
     set("site-count", `${Math.max(0, Math.round(number(model.site_count) || 0))} SITE${Number(model.site_count) === 1 ? "" : "S"}`);
     const siteHost = byId("site-list"); siteHost.replaceChildren();
     if (sites.length) sites.forEach((site) => siteHost.appendChild(siteRow(site, target.site_id)));
