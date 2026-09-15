@@ -1,4 +1,5 @@
 import {renderPowerplayWorkspace as renderPowerplayOperationsWorkspace} from "./powerplay.js";
+import {renderExploreWorkspace} from "./explore.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
@@ -2352,35 +2353,12 @@ function updatePlanetMaterialsLive(root, data) {
     : 'No current planetary coordinates. Approach or land on a planet to use current location.';
 }
 
-function renderExploreWorkspace(data) {
-  const root = byId("explore-workspace");
-  const navRows = (data.nav_route || []).map((row) => `<div class="route-system${row.current ? " current" : row.passed ? " passed" : ""}"><i>${row.passed ? "✓" : row.current ? "◆" : "·"}</i><span><b>${escapeHtml(row.system)}</b><small>${escapeHtml(row.star_class || "STAR CLASS UNKNOWN")} · ${row.distance === null ? "LEG UNKNOWN" : `${numeric(row.distance, 1)} LY`}</small></span></div>`);
-  const waypointRows = (data.waypoints || []).map((row) => `<div class="waypoint-row${row.visited ? " visited" : ""}">
-    <button data-ws-page="explore" data-ws-op="mark_waypoint" data-index="${row.index}" data-visited="${!row.visited}">${row.visited ? "✓" : "○"}</button>
-    <span><b>${String(row.index + 1).padStart(2, "0")} · ${escapeHtml(row.name)}</b><small>${escapeHtml(row.note || (row.coords_known ? "COORDINATES RESOLVED" : "COORDINATES AWAITING VISIT"))}${row.distance === null ? "" : ` · ${numeric(row.distance, 1)} LY`}</small></span>
-    <div><button data-ws-page="explore" data-ws-op="copy_waypoint" data-index="${row.index}">COPY</button><button data-ws-page="explore" data-ws-op="edit_waypoint" data-index="${row.index}" data-name="${escapeHtml(row.name)}" data-note="${escapeHtml(row.note || "")}">EDIT</button><button data-ws-page="explore" data-ws-op="move_waypoint" data-index="${row.index}" data-offset="-1">↑</button><button data-ws-page="explore" data-ws-op="move_waypoint" data-index="${row.index}" data-offset="1">↓</button><button class="danger-action" data-ws-page="explore" data-ws-op="delete_waypoint" data-index="${row.index}">×</button></div>
-  </div>`);
-  const plotted = data.plotter?.result || {};
-  const plottedRows = workspaceTable([
-    {label: "#", render: (row) => numeric(row.index)},
-    {label: "System", render: (row) => `<b>${escapeHtml(row.system)}</b>`},
-    {label: "Leg", render: (row) => row.distance_jumped === null || row.distance_jumped === undefined ? "—" : `${numeric(row.distance_jumped, 1)} LY`},
-    {label: "Remaining", render: (row) => row.distance_left === null || row.distance_left === undefined ? "—" : `${numeric(row.distance_left, 1)} LY`},
-    {label: "Boost", render: (row) => row.neutron ? "NEUTRON" : "STANDARD"},
-  ], (plotted.waypoints || []).map((row, index) => ({index: index + 1, ...row})), "Plot a route to inspect its manual waypoints here.");
-  root.classList.remove("loading-panel");
-  root.innerHTML = `${workspaceMetrics([
-    {label: "Current system", value: data.current || "—", detail: data.destination ? `NAV TARGET · ${data.destination}` : "NO LOCAL NAV TARGET"},
-    {label: "Elite route", value: `${numeric((data.nav_route || []).length)} STOPS`, detail: (data.nav_route || []).length ? "LIVE NAVROUTE.JSON" : "NO ROUTE PLOTTED IN GAME"},
-    {label: "Saved waypoints", value: numeric((data.waypoints || []).length), detail: data.next_waypoint ? `NEXT · ${data.next_waypoint}` : "ROUTE COMPLETE / EMPTY"},
-    {label: "Survey queue", value: `${numeric(data.cartography?.queue?.pending)} ACTIVE`, detail: data.cartography?.queue?.next ? `NEXT · ${data.cartography.queue.next.body}` : "SYSTEM WORK COMPLETE"},
-  ])}${stellarCartographyMarkup(data.cartography || {})}<section class="workspace-grid route-workspace-grid">
-    ${workspaceCard("ELITE NAV ROUTE", workspaceRows(navRows, "Plot a route in Elite to populate the live NavRoute."), `${(data.nav_route || []).length} STOPS`)}
-    ${workspaceCard("PROFILE WAYPOINT ROUTE", `${workspaceRows(waypointRows, "No saved waypoints. Add a destination below or import a plotted route.")}<div class="route-add-form"><input id="waypoint-name" placeholder="SYSTEM NAME"><input id="waypoint-note" placeholder="OPTIONAL NOTE"><button data-ws-page="explore" data-ws-op="add_waypoint">ADD</button></div><div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="copy_next">COPY NEXT</button><button data-ws-page="explore" data-ws-op="set_auto_copy" data-enabled="${!data.auto_copy}">AUTO COPY ${data.auto_copy ? "ON" : "OFF"}</button><button class="danger-action" data-ws-page="explore" data-ws-op="clear_waypoints">CLEAR ROUTE</button></div>`, `${(data.waypoints || []).filter((row) => row.visited).length}/${(data.waypoints || []).length} COMPLETE`)}
-    ${workspaceCard("SPANSH NEUTRON PLOTTER", `<div class="neutron-form"><label>FROM<input id="neutron-from" value="${escapeHtml(data.plotter?.from || data.current || "")}"></label><label>DESTINATION<input id="neutron-to" value="${escapeHtml(data.plotter?.to || "")}"></label><label>SHIP RANGE<input id="neutron-range" type="number" min="1" step="0.1" value="${number(data.plotter?.range, 30)}"></label><label>EFFICIENCY<input id="neutron-efficiency" type="number" min="1" max="100" value="${number(data.plotter?.efficiency, 60)}"></label><label>BOOST<select id="neutron-multiplier"><option value="4" ${number(data.plotter?.multiplier, 4) === 4 ? "selected" : ""}>NEUTRON 4×</option><option value="6" ${number(data.plotter?.multiplier, 4) === 6 ? "selected" : ""}>OVERCHARGE 6×</option></select></label><button class="primary" data-ws-page="explore" data-ws-op="neutron_plot" ${data.plotter?.status === "working" ? "disabled" : ""}>${data.plotter?.status === "working" ? "PLOTTING…" : "PLOT ROUTE"}</button></div><p class="workspace-status ${escapeHtml(data.plotter?.status || "ready")}">${escapeHtml(data.plotter?.detail || "Ready.")}</p>${plottedRows}<div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="neutron_copy" ${plotted.waypoints?.length ? "" : "disabled"}>COPY LIST</button><button data-ws-page="explore" data-ws-op="neutron_import" ${plotted.waypoints?.length ? "" : "disabled"}>IMPORT TO WAYPOINTS</button><button data-ws-page="explore" data-ws-op="neutron_clear" ${plotted.waypoints?.length ? "" : "disabled"}>CLEAR RESULT</button></div>`, plotted.total_jumps ? `${numeric(plotted.total_jumps)} JUMPS` : "MANUAL ROUTE", "neutron-plotter-card")}
-  </section>`;
-  mountSystemOrrery(data.cartography?.orrery || {});
-}
+
+const EXPLORE_WORKSPACE_UI = Object.freeze({
+  byId, credits, escapeHtml, mountSystemOrrery, number, numeric,
+  stellarCartographyMarkup, workspaceCard, workspaceMetrics, workspaceRows,
+  workspaceTable,
+});
 
 function renderProfileWorkspace(data) {
   const root = byId("profile-workspace");
@@ -3054,7 +3032,7 @@ function renderWorkspace(state) {
   workspaceFingerprints[page] = fingerprint;
   const renderers = {
     "planet-materials": renderPlanetMaterialsWorkspace,
-    explore: renderExploreWorkspace,
+    explore: (data) => renderExploreWorkspace(data, EXPLORE_WORKSPACE_UI),
     profile: renderProfileWorkspace, analytics: renderAnalyticsWorkspace,
     chronicle: renderChronicleWorkspace, mission: renderMissionWorkspace,
     ground: renderGroundWorkspace, mining: renderMiningWorkspace,
@@ -3790,6 +3768,19 @@ document.addEventListener("click", async (event) => {
         multiplier: byId("neutron-multiplier")?.value,
       });
       if (!payload.from || !payload.to || number(payload.range) <= 0) return;
+    } else if (page === "explore" && operation === "scout_search") {
+      Object.assign(payload, {
+        reference: byId("scout-reference")?.value.trim() || "",
+        mode: byId("scout-mode")?.value || "biology",
+        radius: byId("scout-radius")?.value,
+        min_signals: byId("scout-signals")?.value,
+        min_value: byId("scout-min-value")?.value,
+        jump_range: byId("scout-range")?.value,
+        max_results: byId("scout-limit")?.value,
+      });
+      if (!payload.reference || number(payload.radius) <= 0 || number(payload.max_results) <= 0 || number(payload.jump_range) <= 0) {
+        showToast("Enter a reference system and positive search values"); return;
+      }
     } else if (page === "mission" && operation === "add_objective") {
       const target = window.prompt("Objective:", "Survey target") || "";
       if (!target.trim()) return;

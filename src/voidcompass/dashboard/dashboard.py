@@ -34,6 +34,7 @@ from voidcompass.core.screenshot_handler import ScreenshotHandler
 from voidcompass.exploration.waypoint_manager import WaypointManager
 from voidcompass.exploration import route_strip
 from voidcompass.core.journal_watcher import JournalWatcher
+from voidcompass.core.journal_coordinator import JournalCoordinator
 from voidcompass.mining.mining_data import MINING_MATERIALS
 from voidcompass.services.carrier_tracker import CarrierTracker
 from voidcompass.overlays.prospector_hud import ProspectorHUD
@@ -63,6 +64,7 @@ from voidcompass.core.runtime_trace import RuntimeTrace
 from voidcompass.dashboard.dashboard_db_mixin import DashboardDBMixin
 from voidcompass.dashboard.dashboard_core_mixin import DashboardCoreMixin
 from voidcompass.dashboard.dashboard_scan_mixin import DashboardScanMixin
+from voidcompass.dashboard.dashboard_exploration_mixin import DashboardExplorationMixin
 from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
 from voidcompass.core.field_state import (
     get_material_category, load_colonisation_data, load_engineer_materials,
@@ -81,7 +83,6 @@ from voidcompass.exploration.achievement_engine import AchievementEngine
 from voidcompass.mining.specialist_engine import SpecialistEngine
 from voidcompass.exploration.captains_log import CaptainsLog
 from voidcompass.exploration.deep_survey import DeepSurveyTracker
-from voidcompass.exploration.exploration_intelligence import build_intelligence, checkpoint_payload
 from voidcompass.exploration.galactic_regions import find_region
 from voidcompass.exploration.explorer_fieldcraft import (
     HIGH_VALUE_WORLDS, WHITE_DWARF_CLASSES, revisit_candidate,
@@ -110,10 +111,6 @@ from voidcompass.core.overlay_registry import (
 from voidcompass.mining.rhino_minimap import RhinoMinimapTracker
 
 
-# One burst of journal events describes a single moment, so the shared
-# exploration fact packet is reused for that long instead of being rebuilt
-# for every event in the batch.
-EXPLORATION_INTELLIGENCE_TTL_S = 0.5
 # How long the Navigation HUD marks a freshly entered Codex region.
 HUD_REGION_CROSSED_S = 45.0
 # Sagittarius A* in Elite's Sol-centred X/Y/Z journal coordinate frame.  The
@@ -233,7 +230,13 @@ def _location_surface_focus(event, raw, data):
     return body_id, body_name
 
 
-class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, DashboardDBMixin):
+class MainDashboard(
+    HtmlDashboardMixin,
+    DashboardScanMixin,
+    DashboardExplorationMixin,
+    DashboardCoreMixin,
+    DashboardDBMixin,
+):
     _SURVEY_REFRESH_EVENTS = frozenset({
         "Location", "FSDJump", "CarrierJump", "StartJump",
         "Docked", "Undocked", "ApproachBody", "LeaveBody",
@@ -2464,27 +2467,38 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
         self._hydrate_cached_system_scan_state()
         self._show_cached_cockpit_state()
 
-        self.watcher = JournalWatcher(
+        self.journal = JournalCoordinator(
             self.config.get("journal_path"),
             trace_callback=self._trace_record_ms,
             config=self.config,
+            dispatch=self._ui_post,
         )
-        self.watcher.register_callback(
-            event_cb=lambda event: self._ui_post(self.process_event, event),
-            batch_cb=lambda events: self._ui_post(self.process_batch, list(events)),
-            cargo_cb=lambda data, vessel="Ship": self._ui_post(
-                self.update_cargo, data, vessel, key="watcher:cargo"
-            ),
-            nav_cb=lambda data: self._ui_post(self.update_nav_route, data, key="watcher:nav"),
-            status_cb=lambda data: self._ui_post(self.update_status, data, key="watcher:status"),
-            market_cb=lambda data: self._ui_post(self.update_market, data, key="watcher:market"),
-            ship_locker_cb=lambda data: self._ui_post(
-                self.update_ship_locker, data, key="watcher:ship-locker",
-            ),
+        # Compatibility name for code and third-party integrations that still
+        # refer to app.watcher.  It is the coordinator, never a second reader.
+        self.watcher = self.journal
+        self.journal.subscribe_journal(
+            self.process_event,
+            batch_callback=self.process_batch,
+        )
+        self.journal.subscribe_snapshot(
+            "cargo", self.update_cargo, dispatch_key="journal:cargo",
+        )
+        self.journal.subscribe_snapshot(
+            "nav_route", self.update_nav_route, dispatch_key="journal:nav-route",
+        )
+        self.journal.subscribe_snapshot(
+            "status", self.update_status, dispatch_key="journal:status",
+        )
+        self.journal.subscribe_snapshot(
+            "market", self.update_market, dispatch_key="journal:market",
+        )
+        self.journal.subscribe_snapshot(
+            "ship_locker", self.update_ship_locker,
+            dispatch_key="journal:ship-locker",
         )
         self.watcher.prime_market_file()
-        # Let Tk paint the cached cockpit and overlay windows before the
-        # journal worker begins its potentially large startup replay.
+        # Let the HTML cockpit publish its cached state before journal startup
+        # replay begins reducing the recent live tail.
         self.root.call_later(75, self.watcher.start)
         self._start_eddn_market_upload()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
@@ -6530,120 +6544,6 @@ class MainDashboard(HtmlDashboardMixin, DashboardScanMixin, DashboardCoreMixin, 
             return False
         return self._set_commander_balance(int(self.cmdr_balance or 0) + delta, timestamp=timestamp, log=log)
 
-    def _invalidate_exploration_intelligence(self):
-        self._exploration_intelligence_ts = 0.0
-
-    def _exploration_intelligence_snapshot(self, compact=False):
-        # Rebuilding deep-copies the Codex, checkpoint and milestone state under
-        # the tracker lock, and a burst of Scan events asked for it repeatedly
-        # from the same drain. Reuse holds only for the length of one burst, so
-        # the packet still reflects the batch being processed.
-        now = time.monotonic()
-        intelligence = getattr(self, "_latest_exploration_intelligence", None)
-        fresh = (
-            intelligence is not None
-            and (now - getattr(self, "_exploration_intelligence_ts", 0.0))
-            < EXPLORATION_INTELLIGENCE_TTL_S
-        )
-        if not fresh:
-            try:
-                intelligence = build_intelligence(self)
-            except Exception as exc:
-                logging.debug("Exploration intelligence snapshot skipped: %s", exc)
-                return {}
-            self._exploration_intelligence_ts = now
-        self._latest_exploration_intelligence = intelligence
-        if compact:
-            intelligence = dict(intelligence)
-            completion = dict(intelligence.get("completion") or {})
-            completion.pop("body_rows", None)
-            intelligence["completion"] = completion
-            intelligence["actions"] = [
-                dict(row) for row in list(intelligence.get("actions") or [])[:5]
-            ]
-            intelligence["milestones"] = [
-                dict(row) for row in list(intelligence.get("milestones") or [])[-4:]
-            ]
-        return intelligence
-
-    def _save_exploration_checkpoint(self, reason="app-close", immediate=False):
-        tracker = getattr(self, "deep_survey", None)
-        if not tracker:
-            return {}
-        # A checkpoint is the record a commander resumes from, so it always
-        # rebuilds rather than accepting a packet cached during a burst. The
-        # fresh packet is then reused by whatever reads it next.
-        self._invalidate_exploration_intelligence()
-        try:
-            return tracker.update_checkpoint(
-                checkpoint_payload(
-                    self, reason,
-                    intelligence=self._exploration_intelligence_snapshot(),
-                ),
-                immediate=immediate,
-            )
-        except Exception as exc:
-            logging.debug("Exploration checkpoint skipped [%s]: %s", reason, exc)
-            return {}
-
-    def _update_exploration_intelligence(self, ev, raw, startup_replay=False):
-        tracker = getattr(self, "deep_survey", None)
-        if not tracker:
-            return
-        relevant = {
-            "LoadGame", "Location", "FSDJump", "CarrierJump", "Docked", "Shutdown",
-            "FSSDiscoveryScan", "FSSAllBodiesFound", "Scan", "SAAScanComplete",
-            "SAASignalsFound", "ScanOrganic", "CodexEntry", "Screenshot",
-            "HullDamage", "RepairAll", "Loadout", "Synthesis", "JetConeBoost",
-        }
-        if ev not in relevant:
-            return
-        self._invalidate_exploration_intelligence()
-        timestamp = raw.get("timestamp") if isinstance(raw, dict) else None
-        try:
-            milestones = tracker.evaluate_milestones(
-                current_bodies=getattr(self, "scan_items", None) or (),
-                timestamp=timestamp,
-            )
-        except Exception as exc:
-            logging.debug("Exploration milestone evaluation skipped [%s]: %s", ev, exc)
-            milestones = []
-        intelligence = self._exploration_intelligence_snapshot()
-        regions = intelligence.get("regions") or {}
-        current_region = regions.get("current") or {}
-        try:
-            self.achievement_engine.process_event({
-                "type": "VoidCompassRegionPassport",
-                "event": "VoidCompassRegionPassport",
-                "VisitedRegions": int(regions.get("visited") or 0),
-                "RegionID": current_region.get("id"),
-                "RegionName": current_region.get("name"),
-            }, notify=not startup_replay, historical=startup_replay)
-        except Exception:
-            pass
-        if ev in {"Docked", "Shutdown"}:
-            self._save_exploration_checkpoint(ev.casefold(), immediate=ev == "Shutdown")
-        if ev == "LoadGame" and not startup_replay:
-            checkpoint = intelligence.get("checkpoint") or {}
-            checkpoint_key = str(checkpoint.get("saved_at") or "")
-            if checkpoint_key and checkpoint_key != getattr(self, "_exploration_resume_feed_key", None):
-                self._exploration_resume_feed_key = checkpoint_key
-                completion = checkpoint.get("completion") or {}
-                next_waypoint = checkpoint.get("next_waypoint") or "no plotted waypoint"
-                self.add_event_feed_entry(
-                    "EXPEDITION",
-                    f"Resume checkpoint: {checkpoint.get('system') or 'unknown system'} · "
-                    f"{completion.get('summary') or 'survey state retained'} · next {next_waypoint}",
-                    severity="INFO",
-                )
-        if not milestones or startup_replay:
-            return
-        for milestone in milestones:
-            title = str(milestone.get("title") or "Exploration milestone")
-            detail = str(milestone.get("detail") or "")
-            self.add_event_feed_entry("MILESTONE", f"{title} · {detail}", severity="INFO")
-            if ev != "Shutdown" and getattr(self, "captains_log", None):
-                self.captains_log.add_manual_highlight("MILESTONE", title, detail)
 
     def _operational_snapshot(self):
         """Return compact verified facts for the adaptive command deck."""

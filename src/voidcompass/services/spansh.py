@@ -6,6 +6,11 @@ import re
 import requests
 
 from voidcompass.core.version import APP_VERSION
+from voidcompass.exploration.exploration_scout import (
+    SIGNAL_MODES,
+    normalise_body_prospects,
+    scout_mode,
+)
 
 BASE = "https://spansh.co.uk/api"
 HEADERS = {
@@ -308,6 +313,62 @@ def riches_route(
             "total_value": sum((b["map_value"] or b["scan_value"] or 0) for b in bodies),
         })
     return systems
+
+
+def exploration_body_search(
+    reference_system,
+    mode="biology",
+    max_distance=500,
+    min_signals=1,
+    max_results=30,
+):
+    """Search Spansh's known body catalogue for exploration signals.
+
+    The response remains explicitly catalogue-backed: this is not a claim
+    that systems absent from EDDN/community records contain no such signals.
+    """
+    reference = str(reference_system or "").strip()
+    if not reference:
+        raise SpanshError("No reference system known yet.")
+    mode = scout_mode(mode)
+    signal = SIGNAL_MODES.get(mode)
+    if signal is None:
+        raise SpanshError("High-value searches use the riches route service.")
+    try:
+        radius = max(1, min(10_000, int(float(max_distance))))
+        minimum = max(1, min(100, int(float(min_signals))))
+        limit = max(1, min(100, int(float(max_results))))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise SpanshError("Exploration Scout search values are invalid.") from exc
+    body = {
+        "filters": {
+            "signals": [{"name": signal, "value": [minimum, 100]}],
+            "distance": {"min": 0, "max": radius},
+        },
+        "sort": [{"distance": {"direction": "asc"}}],
+        "size": limit,
+        "page": 0,
+        "reference_system": reference,
+    }
+    try:
+        response = requests.post(
+            f"{BASE}/bodies/search", json=body, headers=HEADERS,
+            timeout=SUBMIT_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        raise SpanshError(f"Could not reach Spansh: {exc}") from exc
+    if response.status_code >= 400:
+        raise SpanshError(_error_text(response))
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise SpanshError("Spansh returned invalid body-search data.") from exc
+    if not isinstance(payload, dict):
+        raise SpanshError("Spansh returned invalid body-search data.")
+    result = normalise_body_prospects(payload, mode)
+    result["reference"] = result.get("reference") or reference
+    result["results"] = (result.get("results") or [])[:limit]
+    return result
 
 
 def neutron_route(from_system, to_system, jump_range, efficiency=60, supercharge_multiplier=4):

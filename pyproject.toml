@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voidcompass"
-version = "5.4.6.2"
+version = "5.4.7"
 description = "Local Elite Dangerous exploration companion and cockpit overlays"
 requires-python = ">=3.10"
 dependencies = [

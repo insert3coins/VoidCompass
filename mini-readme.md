@@ -1,18 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.6.2 // Rhino Field Intelligence
+## v5.4.7 // Exploration Scout
 **Release Date:** 2026-Sep-15
 
-* Updated Rhino coverage guidance to the current field pattern: the first driving ring is 3.75 km from the centre and subsequent rings step outward by 1.75 km until scanner reach meets a known border.
-* Added deposit Amount and rig-position observations, with clearly labelled estimated remaining-tonnage ranges based on the bundled field evidence model; Density remains recorded but is not used in the estimate.
-* Repeat observations of the same material within 100 metres update the deposit's Amount and Density instead of creating duplicate bookmarks, while individually placed drill markers remain separate.
-* Added mining-location numbers, planet-radius retention and automatic location association from the nearest same-body bookmark within 10 km, with Elite target and Touchdown fallbacks.
-* Added a Coverage Maps browser with mapped-location progress, per-map coverage and bookmark counts, location-unknown handling, and on-demand PNG export/open controls.
-* Added bundled ground intelligence for rocky magma, metallic magma, silicate and other planetary ground classes, including the three best expected materials ranked by observed occurrence and median value.
-* Added live-body bookmark material filtering and surfaced Amount, Density, rig estimates, ground classification and value guidance in both Planet Materials and its cockpit overlay.
+* Added Exploration Scout to Explore & Survey, combining a live journal-backed current-system audit with personal regional Codex coverage gaps.
+* Added on-demand searches for known nearby biological signals, Guardian sites, Thargoid sites and high-value mapping prospects using Spansh community catalogue and route data.
+* Added ranked prospect briefings with distance, arrival distance, signal or value evidence, catalogue freshness and clear source/coverage limitations.
+* Added actions to copy a prospect, open it in Spansh, add it to the profile waypoint route or create an objective on the active expedition.
+* Kept all searches commander-initiated and made the distinction between local Elite journal evidence and community-reported catalogue evidence explicit.
+* Centralised live journal and companion-file ingestion behind one coordinator, preserving event order while distributing the same authoritative data to dashboard features and overlays.
 
 ## Earlier releases
 
+* **v5.4.6.2** — Updated Rhino driving-ring guidance, deposit observations and rig estimates; added location association, Coverage Maps, ground intelligence and richer Planet Materials integration.
 * **v5.4.6.1** — Added the persistent Rhino Coverage Minimap with centres, borders, driving guidance, coloured bookmarks, manual drill markers, profile-local maps, configurable hotkeys and shareable PNG exports; consolidated overlay/runtime plumbing, clarified Build Planner and Engineering ownership, canonicalised NavRoute state and restored the complete tracked regression suite.
 * **v5.4.6** — Added the complete offline Build Planner with current ships and modules, Engineering, EDSY/SLEF/Journal interchange, profile builds and full performance analysis; refined planner controls and repaired overlay transparency after the project restructure.
 * **v5.4.5** — Reorganised the application into the `src/voidcompass` package and structured `assets`, `data`, `web`, `tests` and `tools` directories; updated imports, resource discovery, build inputs and launch compatibility.
