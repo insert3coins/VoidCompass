@@ -96,9 +96,6 @@ const PAGE_SUITES = [
   {parent: "build-planner", label: "SHIP WORKSHOP", pages: [
     ["build-planner", "BUILD PLANNER"], ["engineering", "ENGINEERING"],
   ]},
-  {parent: "settings", label: "APPLICATION CONTROL", pages: [
-    ["settings", "SETTINGS"], ["overlay-studio", "OVERLAY STUDIO"],
-  ]},
 ];
 const PAGE_SUITE_BY_PAGE = new Map();
 for (const suite of PAGE_SUITES) {

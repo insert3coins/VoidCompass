@@ -11,24 +11,24 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class CommandDeckConsolidation548Tests(unittest.TestCase):
     def test_release_version_comparison_handles_elite_style_patch_versions(self):
-        self.assertEqual(APP_VERSION, "5.4.8")
-        self.assertTrue(release_is_newer("v5.4.8", "5.4.7"))
+        self.assertEqual(APP_VERSION, "5.4.8.1")
+        self.assertTrue(release_is_newer("v5.4.8.1", "5.4.8"))
         self.assertTrue(release_is_newer("5.4.7.1", "5.4.7"))
         self.assertTrue(release_is_newer("5.4.10", "5.4.9.9"))
-        self.assertFalse(release_is_newer("v5.4.8", "5.4.8"))
+        self.assertFalse(release_is_newer("v5.4.8.1", "5.4.8.1"))
         self.assertFalse(release_is_newer("5.4.7.9", "5.4.8"))
-        self.assertFalse(release_is_newer("not-a-release", "5.4.8"))
+        self.assertFalse(release_is_newer("not-a-release", "5.4.8.1"))
 
-    def test_left_rail_contains_twelve_workflow_destinations(self):
+    def test_left_rail_contains_thirteen_workflow_destinations(self):
         document = (ROOT / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")
         rail = document.split('<nav class="nav"', 1)[1].split("</nav>", 1)[0]
         labels = re.findall(r'<button class="nav-item[^>]*>.*?<span>(.*?)</span>', rail)
 
-        self.assertEqual(len(labels), 12)
+        self.assertEqual(len(labels), 13)
         self.assertEqual(labels, [
             "Dashboard", "Explore & Survey", "Planetary Operations", "Galactic Atlas",
             "Commander Record", "Exploration Archive", "Mining Command", "Ship Workshop",
-            "Carrier Command", "Powerplay", "Settings", "About",
+            "Carrier Command", "Powerplay", "Overlay Studio", "Settings", "About",
         ])
         self.assertNotIn("Field Tools", labels)
 
@@ -46,9 +46,10 @@ class CommandDeckConsolidation548Tests(unittest.TestCase):
         self.assertIn('node.dataset.page === navPage', script)
         for suite in (
             "EXPLORATION COMMAND", "PLANETARY OPERATIONS", "COMMANDER RECORD",
-            "EXPLORATION ARCHIVE", "SHIP WORKSHOP", "APPLICATION CONTROL",
+            "EXPLORATION ARCHIVE", "SHIP WORKSHOP",
         ):
             self.assertIn(suite, script)
+        self.assertNotIn('{parent: "settings"', script)
 
     def test_release_notice_is_in_app_and_opens_the_matching_github_release(self):
         document = (ROOT / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")

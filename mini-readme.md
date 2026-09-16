@@ -1,17 +1,15 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.8 // Unified Command Deck
+## v5.4.8.1 // Overlay Presentation Stability
 **Release Date:** 2026-Sep-16
 
-* Consolidated the left rail from 22 destinations to 12 workflow-focused entries without removing specialist tools or breaking their existing routes.
-* Added shared tab navigation for Exploration Command, Planetary Operations, Commander Record, Exploration Archive, Ship Workshop and Application Control.
-* Grouped Mission Control, Scout & Recon and the Value Ledger with Explore & Survey; grouped Ground & Exobiology with Planet Materials; and joined Build Planner with Engineering.
-* Moved Flight Records and Achievements under Commander Record, Captain's Log under Exploration Archive, and Overlay Studio under Settings.
-* Added an in-app GitHub release notification showing the available version and release notes, with a direct link to the matching release page and a manual update check in About.
-* Preserved legacy page identifiers as compatibility routes so saved pages, internal shortcuts and feature commands continue to work.
+* Restored Overlay Studio as a standalone Application destination immediately before Settings and removed its Settings suite tab and duplicate Settings card.
+* Staged WebView creation, required a rendered-page acknowledgement before showing overlays and made readiness handshakes retry safely during startup.
+* Changed overlay recovery to reload only the failed browser page so healthy cockpit overlays remain live and visible.
 
 ## Earlier releases
 
+* **v5.4.8** — Consolidated the command deck into workflow-focused destinations and shared suites, retained compatibility routes, and added an in-app GitHub release notification with matching release notes and links.
 * **v5.4.7** — Added Exploration Scout with journal-backed system audits, Codex coverage gaps and commander-requested Spansh prospect searches; split the largest dashboard domains and centralised live journal and companion-file distribution.
 * **v5.4.6.2** — Updated Rhino driving-ring guidance, deposit observations and rig estimates; added location association, Coverage Maps, ground intelligence and richer Planet Materials integration.
 * **v5.4.6.1** — Added the persistent Rhino Coverage Minimap with centres, borders, driving guidance, coloured bookmarks, manual drill markers, profile-local maps, configurable hotkeys and shareable PNG exports; consolidated overlay/runtime plumbing, clarified Build Planner and Engineering ownership, canonicalised NavRoute state and restored the complete tracked regression suite.
