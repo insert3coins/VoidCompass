@@ -141,6 +141,12 @@ body.flight-log-mode .flight-log-shell { display: grid; grid-template-rows: 80px
 .title-actions .primary { color: #021015; border-color: var(--accent); background: var(--accent); }
 .title-actions .primary:hover { color: #000; filter: brightness(1.12); }
 
+.suite-tabs { display: flex; align-items: center; gap: 6px; min-height: 43px; margin: -7px 0 18px; padding: 5px 7px; overflow-x: auto; border: 1px solid var(--border-soft); border-left: 2px solid var(--accent); background: color-mix(in srgb,var(--panel) 94%,transparent); scrollbar-width: thin; }
+.suite-tabs > span { flex: 0 0 auto; padding: 0 10px 0 5px; color: var(--dim); font: 700 8px Consolas,monospace; letter-spacing: .12em; }
+.suite-tabs button { flex: 0 0 auto; min-height: 29px; padding: 0 12px; border: 1px solid transparent; background: transparent; color: var(--muted); font: 700 9px Consolas,monospace; letter-spacing: .055em; cursor: pointer; }
+.suite-tabs button:hover { color: var(--text); border-color: var(--border); background: var(--panel-alt); }
+.suite-tabs button.active { color: #021015; border-color: var(--accent); background: var(--accent); box-shadow: 0 0 15px color-mix(in srgb,var(--accent) 18%,transparent); }
+
 .atlas-page { max-width: none; height: 100%; min-height: 0; padding: 12px 14px 14px; grid-template-rows: auto minmax(0,1fr); }
 .atlas-page.active { display: grid; }
 .atlas-dockbar { min-height: 60px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 0 5px 10px; }
@@ -1077,6 +1083,33 @@ button:disabled { opacity: .38; cursor: default !important; }
 
 .toast { position: fixed; right: 22px; bottom: 42px; z-index: 80; max-width: 420px; padding: 11px 15px; border: 1px solid var(--accent); border-left-width: 3px; background: var(--panel-raised); color: var(--text); font: 10px Consolas, monospace; transform: translateY(20px); opacity: 0; pointer-events: none; transition: .2s; }
 .toast.show { opacity: 1; transform: none; }
+
+.release-update { position: fixed; z-index: 130; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(1,5,8,.78); backdrop-filter: blur(8px); }
+.release-update-shell { width: min(690px,calc(100vw - 32px)); max-height: min(720px,calc(100vh - 32px)); position: relative; overflow: hidden; border: 1px solid var(--accent); border-top-color: var(--orange); background: linear-gradient(145deg,color-mix(in srgb,var(--panel-raised) 96%,transparent),color-mix(in srgb,var(--panel) 98%,transparent)); box-shadow: 0 25px 90px rgba(0,0,0,.65),0 0 32px color-mix(in srgb,var(--accent) 13%,transparent); }
+.release-update-scan { position: absolute; z-index: 0; inset: 0; pointer-events: none; opacity: .25; background: repeating-linear-gradient(0deg,transparent 0 3px,color-mix(in srgb,var(--accent) 9%,transparent) 4px); }
+.release-update-shell > header,.release-update-shell > main,.release-update-shell > footer { position: relative; z-index: 1; }
+.release-update-shell > header { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 0 17px; border-bottom: 1px solid var(--border); background: color-mix(in srgb,var(--header) 91%,transparent); }
+.release-update-shell > header span { color: var(--dim); font: 700 8px Consolas,monospace; letter-spacing: .13em; }
+.release-update-shell > header b { color: var(--orange); font: 700 9px Consolas,monospace; letter-spacing: .09em; }
+.release-update-shell > main { display: grid; grid-template-columns: 94px minmax(0,1fr); gap: 22px; align-items: start; padding: 28px; }
+.release-update-glyph { width: 82px; aspect-ratio: 1; display: grid; place-items: center; position: relative; border: 1px solid var(--accent); transform: rotate(45deg); box-shadow: inset 0 0 24px color-mix(in srgb,var(--accent) 13%,transparent); }
+.release-update-glyph::before,.release-update-glyph::after { content: ""; position: absolute; inset: 12px; border: 1px solid var(--orange); }
+.release-update-glyph::after { inset: 26px; border-color: var(--accent); background: var(--accent); box-shadow: 0 0 18px var(--accent); }
+.release-update-shell main small { color: var(--dim); font: 700 8px Consolas,monospace; letter-spacing: .1em; }
+.release-update-shell h2 { margin: 4px 0 8px; color: var(--accent); font: 700 clamp(22px,3vw,32px) "Bahnschrift SemiCondensed","Arial Narrow",sans-serif; letter-spacing: .025em; }
+.release-update-shell p { margin: 0 0 14px; color: var(--text); font: 11px/1.5 "Segoe UI",sans-serif; }
+.release-update-shell pre { max-height: 245px; margin: 0; overflow: auto; color: var(--muted); white-space: pre-wrap; font: 10px/1.55 Consolas,monospace; scrollbar-width: thin; }
+.release-update-shell > footer { min-height: 62px; display: flex; justify-content: flex-end; align-items: center; gap: 9px; padding: 11px 17px; border-top: 1px solid var(--border); background: color-mix(in srgb,var(--header) 75%,transparent); }
+.release-update-shell > footer button { min-height: 36px; padding: 0 15px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); font: 700 9px Consolas,monospace; letter-spacing: .055em; cursor: pointer; }
+.release-update-shell > footer button:hover { color: var(--accent); border-color: var(--accent); }
+.release-update-shell > footer .primary { color: #021015; border-color: var(--accent); background: var(--accent); }
+
+@media (max-width: 760px) {
+  .suite-tabs > span { display: none; }
+  .release-update-shell > main { grid-template-columns: 1fr; padding: 22px; }
+  .release-update-glyph { display: none; }
+  .release-update-shell > footer { align-items: stretch; flex-direction: column-reverse; }
+}
 
 /* Shared HTML cockpit controls. Palette variables are rebound whenever the
    active commander profile/theme changes, so static and generated buttons

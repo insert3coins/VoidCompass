@@ -1,17 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.7 // Exploration Scout
-**Release Date:** 2026-Sep-15
+## v5.4.8 // Unified Command Deck
+**Release Date:** 2026-Sep-16
 
-* Added Exploration Scout to Explore & Survey, combining a live journal-backed current-system audit with personal regional Codex coverage gaps.
-* Added on-demand searches for known nearby biological signals, Guardian sites, Thargoid sites and high-value mapping prospects using Spansh community catalogue and route data.
-* Added ranked prospect briefings with distance, arrival distance, signal or value evidence, catalogue freshness and clear source/coverage limitations.
-* Added actions to copy a prospect, open it in Spansh, add it to the profile waypoint route or create an objective on the active expedition.
-* Kept all searches commander-initiated and made the distinction between local Elite journal evidence and community-reported catalogue evidence explicit.
-* Centralised live journal and companion-file ingestion behind one coordinator, preserving event order while distributing the same authoritative data to dashboard features and overlays.
+* Consolidated the left rail from 22 destinations to 12 workflow-focused entries without removing specialist tools or breaking their existing routes.
+* Added shared tab navigation for Exploration Command, Planetary Operations, Commander Record, Exploration Archive, Ship Workshop and Application Control.
+* Grouped Mission Control, Scout & Recon and the Value Ledger with Explore & Survey; grouped Ground & Exobiology with Planet Materials; and joined Build Planner with Engineering.
+* Moved Flight Records and Achievements under Commander Record, Captain's Log under Exploration Archive, and Overlay Studio under Settings.
+* Added an in-app GitHub release notification showing the available version and release notes, with a direct link to the matching release page and a manual update check in About.
+* Preserved legacy page identifiers as compatibility routes so saved pages, internal shortcuts and feature commands continue to work.
 
 ## Earlier releases
 
+* **v5.4.7** — Added Exploration Scout with journal-backed system audits, Codex coverage gaps and commander-requested Spansh prospect searches; split the largest dashboard domains and centralised live journal and companion-file distribution.
 * **v5.4.6.2** — Updated Rhino driving-ring guidance, deposit observations and rig estimates; added location association, Coverage Maps, ground intelligence and richer Planet Materials integration.
 * **v5.4.6.1** — Added the persistent Rhino Coverage Minimap with centres, borders, driving guidance, coloured bookmarks, manual drill markers, profile-local maps, configurable hotkeys and shareable PNG exports; consolidated overlay/runtime plumbing, clarified Build Planner and Engineering ownership, canonicalised NavRoute state and restored the complete tracked regression suite.
 * **v5.4.6** — Added the complete offline Build Planner with current ships and modules, Engineering, EDSY/SLEF/Journal interchange, profile builds and full performance analysis; refined planner controls and repaired overlay transparency after the project restructure.

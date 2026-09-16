@@ -32,6 +32,7 @@ from voidcompass.exploration.explorer_decision_deck import (
     route_horizon,
 )
 from voidcompass.core import themes
+from voidcompass.core.version import APP_VERSION
 from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_material_catalogue, SURFACE_MINING_NEW
 from voidcompass.mining.rhino_intelligence import ground_intelligence
 from voidcompass.mining.rhino_minimap import location_index
@@ -2405,6 +2406,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             or "UNKNOWN"
         )
         sources = self._html_dashboard_sources()
+        release_update = dict(getattr(self, "release_update", None) or {})
         map_view = getattr(
             self, "atlas", None,
         )
@@ -2482,6 +2484,17 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                 page_layouts[_text(page, 40).casefold()] = clean_containers
         return {
             "app": {"renderer": "html-command-deck", "platform": "windows"},
+            "update": {
+                "checked": bool(release_update.get("checked")),
+                "available": bool(release_update.get("available")),
+                "current_version": _text(
+                    release_update.get("current_version") or APP_VERSION, 40,
+                ),
+                "latest_version": _text(release_update.get("latest_version"), 40),
+                "title": _text(release_update.get("title"), 240),
+                "notes": _text(release_update.get("notes"), 4000),
+                "published_at": _text(release_update.get("published_at"), 60),
+            },
             "profile": {
                 "key": _text(self.config.get("active_commander_profile"), 120),
                 "commander": _text(profile_name, 120),
@@ -3963,6 +3976,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                 return False
             self._schedule_html_dashboard_publish(immediate=True)
             return True
+        if action == "check_updates":
+            self.check_updates(manual=True)
+            return True
         if action == "set_exploration_doctrine":
             doctrine = _text(payload.get("doctrine") or "balanced", 30).casefold()
             if doctrine not in DOCTRINES:
@@ -4084,6 +4100,14 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             return True
         if target == "overlay_studio":
             return self._request_html_dashboard_page("overlay-studio")
+        if target == "release_update":
+            url = str(
+                (getattr(self, "release_update", None) or {}).get("url") or RELEASES_URL
+            ).strip()
+            if not url.startswith(f"{PROJECT_URL}/releases"):
+                url = RELEASES_URL
+            webbrowser.open_new_tab(url)
+            return True
         if target in _HTML_WORKSPACE_PAGES or target in {"explore", "operations"}:
             return self._request_html_dashboard_page(target)
         urls = {

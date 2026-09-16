@@ -78,6 +78,34 @@ let pageLayoutDrag = null;
 let pageLayoutDrop = null;
 const pageLayoutDefaults = {};
 
+const PAGE_SUITES = [
+  {parent: "explore", label: "EXPLORATION COMMAND", pages: [
+    ["explore", "SYSTEM SURVEY"], ["mission", "EXPEDITIONS"],
+    ["recon", "SCOUT & RECON"], ["ledger", "VALUE LEDGER"],
+  ]},
+  {parent: "planet-materials", label: "PLANETARY OPERATIONS", pages: [
+    ["planet-materials", "MATERIALS & SITES"], ["ground", "GROUND & EXOBIO"],
+  ]},
+  {parent: "profile", label: "COMMANDER RECORD", pages: [
+    ["profile", "COMMANDER"], ["records", "FLIGHT RECORD"],
+    ["achievements", "ACHIEVEMENTS"],
+  ]},
+  {parent: "analytics", label: "EXPLORATION ARCHIVE", pages: [
+    ["analytics", "ANALYTICS"], ["chronicle", "CAPTAIN'S LOG"],
+  ]},
+  {parent: "build-planner", label: "SHIP WORKSHOP", pages: [
+    ["build-planner", "BUILD PLANNER"], ["engineering", "ENGINEERING"],
+  ]},
+  {parent: "settings", label: "APPLICATION CONTROL", pages: [
+    ["settings", "SETTINGS"], ["overlay-studio", "OVERLAY STUDIO"],
+  ]},
+];
+const PAGE_SUITE_BY_PAGE = new Map();
+for (const suite of PAGE_SUITES) {
+  for (const [page] of suite.pages) PAGE_SUITE_BY_PAGE.set(page, suite);
+}
+const LEGACY_PAGE_REDIRECTS = {operations: "overview"};
+
 const HOTKEY_MODIFIER_KEYS = new Set([
   "Alt", "AltGraph", "Control", "Meta", "OS", "Shift",
 ]);
@@ -92,7 +120,7 @@ const HOTKEY_CODE_NAMES = {
 const STRUCTURAL_BUTTON_SELECTOR = [
   ".nav-item", "[data-feed-filter]", ".studio-overlay-card",
   ".studio-index-row", ".mission-row", ".workspace-tabs button",
-  "[data-analytics-view]", "[data-studio-view]",
+  ".suite-tabs button", "[data-analytics-view]", "[data-studio-view]",
   ".galnet-headline-row", "#status-galnet", ".bp-group-tabs button",
   ".bp-slot", ".bp-module", ".bp-analysis > nav button",
 ].join(",");
@@ -2747,6 +2775,50 @@ function renderEngineeringWorkspace(data) {
   root.innerHTML = `<nav class="engineering-suite-nav">${tabs.map((tab)=>`<button class="${engineeringView===tab.id?"active":""}" data-engineering-view="${tab.id}">${tab.label}<small>${tab.id==="wishlist"?pins.length:tab.id==="engineers"?(data.engineers||[]).length:tab.id==="materials"?(data.materials||[]).length:""}</small></button>`).join("")}</nav><div class="engineering-suite-body">${activePanel}</div><footer class="engineering-suite-source">${escapeHtml(data.source || "")} · LIVE JOURNAL STOCK · PROFILE-AWARE PLANS</footer>`;
 }
 
+function installPageSuites() {
+  for (const suite of PAGE_SUITES) {
+    for (const [pageName, pageLabel] of suite.pages) {
+      const page = document.querySelector(`[data-page-name="${CSS.escape(pageName)}"]`);
+      const header = page?.querySelector(":scope > .page-title, :scope > .studio-title");
+      if (!page || !header || page.querySelector(":scope > .suite-tabs")) continue;
+      const tabs = document.createElement("nav");
+      tabs.className = "suite-tabs";
+      tabs.setAttribute("aria-label", suite.label);
+      tabs.innerHTML = `<span>${escapeHtml(suite.label)}</span>${suite.pages.map(([target, label]) => `<button type="button" data-page="${escapeHtml(target)}">${escapeHtml(label)}</button>`).join("")}`;
+      header.insertAdjacentElement("afterend", tabs);
+    }
+  }
+}
+
+function navigationPage(pageName) {
+  return PAGE_SUITE_BY_PAGE.get(pageName)?.parent || pageName;
+}
+
+function renderUpdateNotice(update = {}) {
+  const dialog = byId("release-update");
+  if (!dialog) return;
+  const latest = String(update.latest_version || "").trim();
+  const dismissalKey = latest ? `voidcompass.update.dismissed.${latest}` : "";
+  const dismissed = dismissalKey && sessionStorage.getItem(dismissalKey) === "1";
+  if (!update.available || !latest || dismissed) {
+    dialog.hidden = true;
+    return;
+  }
+  dialog.dataset.version = latest;
+  text("release-update-current", `INSTALLED v${update.current_version || model.app?.version || "—"}`);
+  text("release-update-title", `VOID COMPASS v${latest} IS AVAILABLE`);
+  text("release-update-summary", update.title || "A newer Void Compass release is ready on GitHub.");
+  text("release-update-notes", update.notes || "Open the GitHub release page for downloads and the complete change log.");
+  dialog.hidden = false;
+}
+
+function dismissUpdateNotice() {
+  const dialog = byId("release-update");
+  const version = String(dialog?.dataset.version || "");
+  if (version) sessionStorage.setItem(`voidcompass.update.dismissed.${version}`, "1");
+  if (dialog) dialog.hidden = true;
+}
+
 function renderBuildPlannerWorkspace(data) {
   const root = byId("build-planner-workspace");
   if (!root) return;
@@ -3106,6 +3178,7 @@ function renderDashboard(state) {
   renderIntelligence(model);
   renderExpedition(model);
   renderSources(model);
+  renderUpdateNotice(model.update || {});
   renderWorkspace(model);
   preparePageLayout(currentPage);
   // The Studio has a richer DOM than the briefing pages. Hydrate it only
@@ -3311,6 +3384,7 @@ async function eventLoop() {
 }
 
 function showPage(name) {
+  name = LEGACY_PAGE_REDIRECTS[name] || name;
   const page = document.querySelector(`[data-page-name="${CSS.escape(name)}"]`);
   if (!page) return;
   if (pageLayoutEditing && pageLayoutEditing !== name) cancelPageLayout();
@@ -3320,7 +3394,9 @@ function showPage(name) {
   else stopAboutMatrix();
   localStorage.setItem(`voidcompass.dashboard.page.${profileKey}`, name);
   document.querySelectorAll(".page").forEach((node) => node.classList.toggle("active", node === page));
-  document.querySelectorAll(".nav-item[data-page]").forEach((node) => node.classList.toggle("active", node.dataset.page === name));
+  const navPage = navigationPage(name);
+  document.querySelectorAll(".nav-item[data-page]").forEach((node) => node.classList.toggle("active", node.dataset.page === navPage));
+  document.querySelectorAll(".suite-tabs [data-page]").forEach((node) => node.classList.toggle("active", node.dataset.page === name));
   document.querySelector(".pages").classList.toggle("atlas-active", name === "map");
   if (name !== "map") {
     document.body.classList.remove("atlas-focus");
@@ -4423,6 +4499,11 @@ document.addEventListener("visibilitychange", () => {
 });
 
 window.setInterval(() => text("footer-clock", new Date().toLocaleTimeString([], {hour12: false})), 500);
+byId("release-update-later").addEventListener("click", dismissUpdateNotice);
+byId("release-update-open").addEventListener("click", async () => {
+  if (await command("open", {target: "release_update"})) dismissUpdateNotice();
+});
+installPageSuites();
 decorateCockpitButtons();
 cockpitButtonObserver.observe(document.body, {childList: true, subtree: true});
 showPage("overview");
