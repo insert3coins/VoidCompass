@@ -2,12 +2,33 @@
 import time
 import logging
 import math
+import re
 import threading
 from collections import deque
 from voidcompass.core.application_runtime import OverlayWindowState
 from voidcompass.core.config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE
+from voidcompass.core.version import APP_VERSION
 from voidcompass.core import themes
 from voidcompass.overlays.html_ground_overlay import attach_html_ground_overlay
+
+
+def _release_version_tuple(value):
+    """Return a comparison-safe numeric tuple for GitHub release tags."""
+    match = re.search(r"\d+(?:\.\d+)+", str(value or ""))
+    if not match:
+        return ()
+    return tuple(int(part) for part in match.group(0).split("."))
+
+
+def release_is_newer(candidate, current=APP_VERSION):
+    """Return whether a GitHub release tag is newer than this application."""
+    candidate_parts = _release_version_tuple(candidate)
+    current_parts = _release_version_tuple(current)
+    if not candidate_parts or not current_parts:
+        return False
+    width = max(len(candidate_parts), len(current_parts))
+    return candidate_parts + (0,) * (width - len(candidate_parts)) > \
+        current_parts + (0,) * (width - len(current_parts))
 
 class DashboardCoreMixin:
     JOURNAL_HISTORY_LIMIT = 100
@@ -248,14 +269,51 @@ class DashboardCoreMixin:
         def check():
             import requests
             try:
-                result = requests.get('https://api.github.com/repos/insert3coins/VoidCompass/releases/latest', timeout=15)
+                result = requests.get(
+                    'https://api.github.com/repos/insert3coins/VoidCompass/releases/latest',
+                    headers={
+                        "Accept": "application/vnd.github+json",
+                        "User-Agent": f"VoidCompass/{APP_VERSION}",
+                    },
+                    timeout=15,
+                )
                 result.raise_for_status()
                 data = result.json()
-                self._ui_post(self.add_event_feed_entry, 'UPDATE', f"Latest release: {data.get('tag_name','Unknown')}", url=data.get('html_url'))
+                tag = str(data.get("tag_name") or "").strip()
+                url = str(data.get("html_url") or "").strip()
+                if not url.startswith("https://github.com/insert3coins/VoidCompass/releases/"):
+                    url = "https://github.com/insert3coins/VoidCompass/releases"
+                update = {
+                    "checked": True,
+                    "available": release_is_newer(tag),
+                    "current_version": APP_VERSION,
+                    "latest_version": re.sub(r"^[vV]", "", tag),
+                    "title": str(data.get("name") or f"Void Compass {tag}").strip()[:240],
+                    "notes": str(data.get("body") or "").strip()[:4000],
+                    "published_at": str(data.get("published_at") or "").strip()[:60],
+                    "url": url,
+                }
+                self._ui_post(self._apply_release_update, update, manual)
             except Exception as exc:
                 if manual:
                     self._ui_post(self.add_event_feed_entry, 'UPDATE', f'Update check failed: {exc}', severity='WARN')
         threading.Thread(target=check, name='release-check', daemon=True).start()
+
+    def _apply_release_update(self, update, manual=False):
+        """Publish release-check results to the HTML command deck."""
+        self.release_update = dict(update or {})
+        if self.release_update.get("available"):
+            latest = self.release_update.get("latest_version") or "new release"
+            self.add_event_feed_entry(
+                "UPDATE", f"Void Compass v{latest} is available",
+                severity="INFO", url=self.release_update.get("url"),
+            )
+        elif manual:
+            self.add_event_feed_entry(
+                "UPDATE", f"Void Compass v{APP_VERSION} is up to date",
+                severity="INFO",
+            )
+        self._schedule_html_dashboard_publish(immediate=True)
 
     def _current_route_progress(self):
         """Return compact, truthful progress for the live route or saved waypoints."""

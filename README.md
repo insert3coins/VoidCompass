@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.7**
+**Current version: 5.4.8**
 
 Void Compass is a local exploration companion for *Elite Dangerous*. It reads the game’s journal, status and companion files, then turns them into a useful command deck, survey record and set of in-game overlays. It is built for commanders who want to keep track of a long trip without handing their flight history to a cloud service.
 
@@ -23,6 +23,8 @@ The main window is an HTML command deck backed by a Python application. It follo
 - **Galnet Relay** provides an optional local ticker and article reader using Frontier’s news feed.
 
 The app is deliberately quiet. Feedback appears in the dashboard, Flight Log, notifications and overlays instead of through speech, personas or an AI service.
+
+Related tools are grouped into workflow suites rather than repeated as separate menu destinations: exploration planning and recon, planetary field operations, commander records, exploration archives, ship outfitting and application presentation each share a compact tabbed workspace. When GitHub reports a newer release, the command deck presents an in-app release notice with a direct link to its release page.
 
 ## Cockpit overlays
 

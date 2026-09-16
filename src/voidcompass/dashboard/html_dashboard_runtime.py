@@ -290,6 +290,7 @@ class HtmlDashboardRuntime:
             "set_flight_log_mode",
             "set_exploration_doctrine", "save_dashboard_layout",
             "refresh_galnet", "clear_galnet_cache",
+            "check_updates",
             "save_page_layout", "reset_page_layout",
             "add_codex_objective", "open_codex_atlas",
             "onboarding_submit", "onboarding_cancel",

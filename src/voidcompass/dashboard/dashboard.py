@@ -2562,7 +2562,7 @@ class MainDashboard(
                 self._startup_history_timeout,
             )
 
-        threading.Thread(target=self.check_updates, daemon=True).start()
+        self.check_updates()
         self._restart_galnet_feed_schedule(delay_ms=900)
 
 

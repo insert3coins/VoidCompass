@@ -171,29 +171,19 @@
         <p>EXPLORATION</p>
         <button class="nav-item active" data-page="overview"><i>⌖</i><span>Dashboard</span><b>01</b></button>
         <button class="nav-item" data-page="explore"><i>✦</i><span>Explore & Survey</span><b>02</b></button>
-        <button class="nav-item" data-page="planet-materials"><i>◇</i><span>Planet Materials</span><b>03</b></button>
-        <button class="nav-item" data-page="mission"><i>⌁</i><span>Mission Control</span><b>04</b></button>
-        <button class="nav-item" data-page="map"><i>◉</i><span>Galactic Atlas</span><b>05</b></button>
+        <button class="nav-item" data-page="planet-materials"><i>◇</i><span>Planetary Operations</span><b>03</b></button>
+        <button class="nav-item" data-page="map"><i>◉</i><span>Galactic Atlas</span><b>04</b></button>
         <p>RECORDS</p>
-        <button class="nav-item" data-page="records"><i>∿</i><span>Flight Records</span><b>06</b></button>
-        <button class="nav-item" data-page="analytics"><i>▥</i><span>Analytics</span><b>07</b></button>
-        <button class="nav-item" data-page="chronicle"><i>☷</i><span>Captain's Log</span><b>08</b></button>
-        <button class="nav-item" data-page="profile"><i>◎</i><span>Commander Profile</span><b>09</b></button>
-        <button class="nav-item" data-page="ledger"><i>◇</i><span>Value Ledger</span><b>10</b></button>
-        <button class="nav-item" data-page="achievements"><i>★</i><span>Achievements</span><b>11</b></button>
+        <button class="nav-item" data-page="profile"><i>◎</i><span>Commander Record</span><b>05</b></button>
+        <button class="nav-item" data-page="analytics"><i>▥</i><span>Exploration Archive</span><b>06</b></button>
         <p>FIELD SYSTEMS</p>
-        <button class="nav-item" data-page="operations"><i>▦</i><span>Field Tools</span><b>12</b></button>
-        <button class="nav-item" data-page="ground"><i>⌖</i><span>Ground & Exobio</span><b>13</b></button>
-        <button class="nav-item" data-page="mining"><i>◆</i><span>Mining Command</span><b>14</b></button>
-        <button class="nav-item" data-page="engineering"><i>⚙</i><span>Engineering</span><b>15</b></button>
-        <button class="nav-item" data-page="build-planner"><i>▤</i><span>Build Planner</span><b>16</b></button>
-        <button class="nav-item" data-page="powerplay"><i>⚑</i><span>Powerplay</span><b>17</b></button>
-        <button class="nav-item" data-page="carrier"><i>◈</i><span>Carrier Command</span><b>18</b></button>
-        <button class="nav-item" data-page="recon"><i>✧</i><span>System Recon</span><b>19</b></button>
-        <button class="nav-item" data-page="overlay-studio"><i>⌗</i><span>Overlay Studio</span><b>20</b></button>
+        <button class="nav-item" data-page="mining"><i>◆</i><span>Mining Command</span><b>07</b></button>
+        <button class="nav-item" data-page="build-planner"><i>▤</i><span>Ship Workshop</span><b>08</b></button>
+        <button class="nav-item" data-page="carrier"><i>◈</i><span>Carrier Command</span><b>09</b></button>
+        <button class="nav-item" data-page="powerplay"><i>⚑</i><span>Powerplay</span><b>10</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="settings"><i>≡</i><span>Settings</span><b>21</b></button>
-        <button class="nav-item" data-page="about"><i>ⓘ</i><span>About</span><b>22</b></button>
+        <button class="nav-item" data-page="settings"><i>≡</i><span>Settings</span><b>11</b></button>
+        <button class="nav-item" data-page="about"><i>ⓘ</i><span>About</span><b>12</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -434,12 +424,12 @@
         </section>
 
         <section class="page specialist-page" data-page-name="ground">
-          <header class="page-title"><div><p>PLANETARY FIELD SCIENCE</p><h2>Ground & exobiology</h2><span>Surface mapping, sampling distance, field markers and return guidance</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button></div></header>
+          <header class="page-title"><div><p>PLANETARY FIELD SCIENCE</p><h2>Ground & exobiology</h2><span>Surface mapping, sampling distance, field markers and return guidance</span></div><div class="title-actions"><button data-page="planet-materials">PLANETARY OPERATIONS</button></div></header>
           <div id="ground-workspace" class="workspace-shell loading-panel">Waiting for surface telemetry…</div>
         </section>
 
         <section class="page specialist-page" data-page-name="mining">
-          <header class="page-title"><div><p>RESOURCE OPERATIONS</p><h2>Mining command</h2><span>Prospector quality, refinery yield and retained run history</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button></div></header>
+          <header class="page-title"><div><p>RESOURCE OPERATIONS</p><h2>Mining command</h2><span>Prospector quality, refinery yield and retained run history</span></div><div class="title-actions"><button data-page="overview">COMMAND DECK</button></div></header>
           <div id="mining-workspace" class="workspace-shell loading-panel">Loading mining telemetry…</div>
         </section>
 
@@ -454,22 +444,22 @@
         </section>
 
         <section class="page specialist-page" data-page-name="powerplay">
-          <header class="page-title"><div><p>GALACTIC POWERS</p><h2>Powerplay Operations</h2><span>Offline dossiers, profile-aware assignments, cycle history and live Journal evidence</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button></div></header>
+          <header class="page-title"><div><p>GALACTIC POWERS</p><h2>Powerplay Operations</h2><span>Offline dossiers, profile-aware assignments, cycle history and live Journal evidence</span></div><div class="title-actions"><button data-page="overview">COMMAND DECK</button></div></header>
           <div id="powerplay-workspace" class="workspace-shell loading-panel">Synchronising Powerplay operations…</div>
         </section>
 
         <section class="page specialist-page" data-page-name="carrier">
-          <header class="page-title"><div><p>LONG-RANGE SUPPORT</p><h2>Carrier command</h2><span>Independent personal and Squadron Carrier fuel, cargo, jumps and expedition routes</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button><button class="primary" data-ws-page="carrier" data-ws-op="copy_next">COPY NEXT STOP</button></div></header>
+          <header class="page-title"><div><p>LONG-RANGE SUPPORT</p><h2>Carrier command</h2><span>Independent personal and Squadron Carrier fuel, cargo, jumps and expedition routes</span></div><div class="title-actions"><button data-page="overview">COMMAND DECK</button><button class="primary" data-ws-page="carrier" data-ws-op="copy_next">COPY NEXT STOP</button></div></header>
           <div id="carrier-workspace" class="workspace-shell loading-panel">Synchronising Carrier operations…</div>
         </section>
 
         <section class="page specialist-page" data-page-name="recon">
-          <header class="page-title"><div><p>COLONISATION RECON</p><h2>System assessment</h2><span>Survey completeness, value, traffic and retained candidates</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button><button class="primary" data-ws-page="recon" data-ws-op="save">SAVE CURRENT</button></div></header>
+          <header class="page-title"><div><p>COLONISATION RECON</p><h2>System assessment</h2><span>Survey completeness, value, traffic and retained candidates</span></div><div class="title-actions"><button data-page="explore">EXPLORE & SURVEY</button><button class="primary" data-ws-page="recon" data-ws-op="save">SAVE CURRENT</button></div></header>
           <div id="recon-workspace" class="workspace-shell loading-panel">Assessing the current system…</div>
         </section>
 
         <section class="page specialist-page" data-page-name="achievements">
-          <header class="page-title"><div><p>COMMANDER MILESTONES</p><h2>Explorer achievements</h2><span>Journal-driven progression across exploration, biology and mining</span></div><div class="title-actions"><button data-page="operations">FIELD TOOLS</button></div></header>
+          <header class="page-title"><div><p>COMMANDER MILESTONES</p><h2>Explorer achievements</h2><span>Journal-driven progression across exploration, biology and mining</span></div><div class="title-actions"><button data-page="profile">COMMANDER RECORD</button></div></header>
           <div id="achievements-workspace" class="workspace-shell loading-panel">Loading milestone catalogue…</div>
         </section>
 
@@ -710,7 +700,7 @@
 
             <article class="card wide about-support-card">
               <header><span>SOURCE // SUPPORT // DIAGNOSTICS</span><b>OPEN CHANNELS</b></header>
-              <div class="action-grid about-actions"><button data-command="open" data-target="github">SOURCE CODE</button><button data-command="open" data-target="releases">RELEASES</button><button data-command="open" data-target="documentation">DOCUMENTATION</button><button data-command="open" data-target="issues">REPORT AN ISSUE</button><button data-command="open_logs">OPEN LOCAL LOGS</button></div>
+              <div class="action-grid about-actions"><button data-command="open" data-target="github">SOURCE CODE</button><button data-command="open" data-target="releases">RELEASES</button><button data-command="check_updates">CHECK FOR UPDATES</button><button data-command="open" data-target="documentation">DOCUMENTATION</button><button data-command="open" data-target="issues">REPORT AN ISSUE</button><button data-command="open_logs">OPEN LOCAL LOGS</button></div>
               <footer><span>Bug reports and focused contributions are welcome.</span><b>github.com/insert3coins/VoidCompass</b></footer>
             </article>
           </section>
@@ -731,6 +721,26 @@
       </footer>
     </section>
   </div>
+
+  <section id="release-update" class="release-update" hidden aria-modal="true" role="dialog" aria-labelledby="release-update-title">
+    <article class="release-update-shell">
+      <div class="release-update-scan" aria-hidden="true"></div>
+      <header><span>VOID COMPASS // RELEASE CHANNEL</span><b>UPDATE AVAILABLE</b></header>
+      <main>
+        <div class="release-update-glyph" aria-hidden="true"><i></i></div>
+        <div>
+          <small id="release-update-current">INSTALLED v—</small>
+          <h2 id="release-update-title">VOID COMPASS v— IS AVAILABLE</h2>
+          <p id="release-update-summary">A newer release is ready on GitHub.</p>
+          <pre id="release-update-notes"></pre>
+        </div>
+      </main>
+      <footer>
+        <button id="release-update-later" type="button">REMIND ME NEXT LAUNCH</button>
+        <button id="release-update-open" class="primary" type="button">OPEN RELEASE ON GITHUB</button>
+      </footer>
+    </article>
+  </section>
 
   <section id="galnet-reader" class="galnet-reader" hidden aria-modal="true" role="dialog" aria-labelledby="galnet-reader-title">
     <div id="galnet-reader-shell" class="galnet-reader-shell" data-relay-state="waiting">
