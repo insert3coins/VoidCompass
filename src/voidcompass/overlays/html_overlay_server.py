@@ -35,6 +35,7 @@ class _OverlayState:
         self.last_rendered_at = 0.0
         self.ready = threading.Event()
         self.host_status = {}
+        self.reload_revision = 0
 
 
 class HtmlOverlayServer:
@@ -170,6 +171,23 @@ class HtmlOverlayServer:
             state = self._overlays.get(str(overlay_id))
             return dict(state.host_status if state else {})
 
+    def request_reload(self, overlay_id):
+        """Ask the host to reload one failed browser page in place."""
+        with self._condition:
+            state = self._overlays.get(str(overlay_id))
+            if state is None or state.shutdown:
+                return 0
+            state.last_client_seen = 0.0
+            state.rendered_revision = -1
+            state.content_height = 0
+            state.last_rendered_at = 0.0
+            state.ready.clear()
+            state.host_status = {}
+            state.reload_revision += 1
+            self._window_revision += 1
+            self._condition.notify_all()
+            return state.reload_revision
+
     def window_manifest(self):
         with self._condition:
             result = {}
@@ -179,6 +197,14 @@ class HtmlOverlayServer:
                     "title": state.title,
                     "window": dict(state.window),
                     "shutdown": state.shutdown,
+                    # Native WebView creation and page rendering are separate
+                    # milestones.  The host must not reveal a surface until
+                    # the browser client has painted an authoritative model.
+                    "content_ready": bool(
+                        state.ready.is_set()
+                        and state.rendered_revision >= 0
+                    ),
+                    "reload_revision": state.reload_revision,
                 }
             return result
 
@@ -460,11 +486,30 @@ class HtmlOverlayServer:
                 self._send_json(handler, {"error": "invalid revision"}, 400)
                 return
             with self._condition:
+                was_content_ready = bool(
+                    state.ready.is_set() and state.rendered_revision >= 0
+                )
                 state.rendered_revision = max(state.rendered_revision, revision)
                 state.content_height = content_height
                 state.last_rendered_at = time.monotonic()
                 state.last_client_seen = state.last_rendered_at
+                is_content_ready = bool(
+                    state.ready.is_set() and state.rendered_revision >= 0
+                )
+                if is_content_ready != was_content_ready:
+                    self._window_revision += 1
+                    self._condition.notify_all()
             self._send_json(handler, {"accepted": True, "revision": revision}, 202)
             return
-        state.ready.set()
+        with self._condition:
+            was_content_ready = bool(
+                state.ready.is_set() and state.rendered_revision >= 0
+            )
+            state.ready.set()
+            is_content_ready = bool(
+                state.ready.is_set() and state.rendered_revision >= 0
+            )
+            if is_content_ready != was_content_ready:
+                self._window_revision += 1
+                self._condition.notify_all()
         self._send_json(handler, {"ready": True}, 202)

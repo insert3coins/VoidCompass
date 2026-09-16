@@ -1,6 +1,7 @@
 import unittest
 import ctypes
 import sys
+from pathlib import Path
 from types import ModuleType
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -21,9 +22,75 @@ from voidcompass.overlays.html_overlay_host import (
     _patch_pywebview_overlay_focus,
     _OverlayHost,
 )
+from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 
 
 class OverlayInputStyleTests(unittest.TestCase):
+    def test_failed_page_reload_does_not_reset_healthy_overlays(self):
+        static_root = Path(__file__).resolve().parents[1] / "web"
+        server = HtmlOverlayServer(static_root)
+        try:
+            failed = server.register("prospector", "prospector", "Prospector")
+            healthy = server.register("station", "station", "Station")
+            for state in (failed, healthy):
+                state.ready.set()
+                state.rendered_revision = 3
+
+            self.assertEqual(server.request_reload("prospector"), 1)
+
+            manifest = server.window_manifest()
+            self.assertFalse(manifest["prospector"]["content_ready"])
+            self.assertEqual(manifest["prospector"]["reload_revision"], 1)
+            self.assertTrue(manifest["station"]["content_ready"])
+            self.assertEqual(manifest["station"]["reload_revision"], 0)
+        finally:
+            server.stop()
+
+    def test_host_reloads_only_the_requested_browser_window(self):
+        window = SimpleNamespace(load_url=Mock())
+        controller = SimpleNamespace(
+            reload_revision=0,
+            hide=Mock(),
+            window=window,
+            apply=Mock(return_value={
+                "ok": True, "visible": False, "curtained": False,
+                "_restore_all_transparency": False,
+            }),
+            last_visible=False,
+        )
+        host = _OverlayHost.__new__(_OverlayHost)
+        host.origin = "http://127.0.0.1:1234"
+        host.token = "test-token"
+        host.controllers = {"prospector": controller}
+        host.closing = False
+        host.last_contact = 0.0
+        host.presentation_held = False
+
+        def one_manifest():
+            host.closing = True
+            return {"prospector": {
+                "template": "prospector",
+                "reload_revision": 1,
+                "content_ready": False,
+                "window": {"visible": True},
+            }}
+
+        host.manifest = one_manifest
+        with patch("voidcompass.overlays.html_overlay_host._request_json"):
+            host.control_loop()
+
+        controller.hide.assert_called_once_with()
+        window.load_url.assert_called_once_with(
+            "http://127.0.0.1:1234/prospector/index.html"
+            "?token=test-token&overlay=prospector",
+        )
+        self.assertEqual(controller.reload_revision, 1)
+        controller.apply.assert_called_once_with(
+            {"visible": True},
+            presentation_held=False,
+            content_ready=False,
+        )
+
     def test_planet_materials_template_resolves_to_bundled_page(self):
         host = _OverlayHost.__new__(_OverlayHost)
         host.origin = "http://127.0.0.1:1234"
@@ -158,6 +225,22 @@ class OverlayInputStyleTests(unittest.TestCase):
         self.assertTrue(result["visible"])
         restore.assert_called_once_with(4242)
         self.assertEqual(controller.restore_foreground, 0)
+
+    def test_surface_stays_hidden_until_browser_content_is_ready(self):
+        controller = _WindowController("station", object())
+        with patch("voidcompass.overlays.html_overlay_host._native_handle", return_value=99), \
+             patch("voidcompass.overlays.html_overlay_host._apply_windows_geometry", return_value=True), \
+             patch("voidcompass.overlays.html_overlay_host._apply_windows_style", return_value=True), \
+             patch("voidcompass.overlays.html_overlay_host._apply_webview_transparency"), \
+             patch("voidcompass.overlays.html_overlay_host._windows_visibility", return_value=True), \
+             patch("voidcompass.overlays.html_overlay_host._set_windows_visibility", return_value=True) as set_visible:
+            result = controller.apply({
+                "x": 100, "y": 100, "width": 520, "height": 442,
+                "visible": True, "click_through": True,
+            }, content_ready=False)
+
+        self.assertFalse(result["visible"])
+        set_visible.assert_called_once_with(controller.window, False)
 
     def test_non_activating_webview_is_not_focused_when_shown(self):
         class FakeBrowserForm:

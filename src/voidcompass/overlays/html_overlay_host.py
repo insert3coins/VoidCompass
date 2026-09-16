@@ -30,6 +30,7 @@ DWMWCP_DONOTROUND = 1
 DWMWA_COLOR_NONE = 0xFFFFFFFE
 HIDDEN_WINDOW_X = -32000
 HIDDEN_WINDOW_Y = -32000
+WINDOW_CREATE_INTERVAL_S = 0.25
 _LOOPBACK_OPENER = build_opener(ProxyHandler({}))
 
 
@@ -403,9 +404,9 @@ class _WindowController:
         self.last_click_through = None
         self.last_visible = None
         self.last_topmost_refresh = 0.0
-        self.ready_sent = False
+        self.reload_revision = 0
 
-    def apply(self, payload, presentation_held=False):
+    def apply(self, payload, presentation_held=False, content_ready=True):
         payload = payload if isinstance(payload, dict) else {}
         try:
             width = max(24, int(payload.get("width") or 360))
@@ -438,6 +439,7 @@ class _WindowController:
                 payload.get("visible", False)
                 and not payload.get("shutdown")
                 and not presentation_held
+                and content_ready
             )
             # WebView2 occasionally maps an asynchronously-created window
             # after our first SW_HIDE. Compare with the actual HWND instead of
@@ -497,6 +499,7 @@ class _OverlayHost:
         self.controllers = {}
         self.closing = False
         self.last_contact = time.monotonic()
+        self.last_window_created_at = 0.0
         self.window_revision = -1
         self.presentation_held = True
 
@@ -509,7 +512,7 @@ class _OverlayHost:
     def manifest(self):
         response = _request_json(
             self._url("/api/windows")
-            + f"&since={int(self.window_revision)}&wait=0.75",
+            + f"&since={int(self.window_revision)}&wait=0.25",
             timeout=1.25,
         )
         if not isinstance(response, dict):
@@ -577,9 +580,15 @@ class _OverlayHost:
             on_top=True, transparent=True, background_color="#000000",
             text_select=False, zoomable=False,
         )
-        self.controllers[str(overlay_id)] = _WindowController(
+        controller = _WindowController(
             overlay_id, window, restore_foreground=restore_foreground,
         )
+        try:
+            controller.reload_revision = int(spec.get("reload_revision") or 0)
+        except (TypeError, ValueError):
+            controller.reload_revision = 0
+        self.controllers[str(overlay_id)] = controller
+        self.last_window_created_at = time.monotonic()
         return window
 
     def control_loop(self):
@@ -589,16 +598,38 @@ class _OverlayHost:
                 manifest = self.manifest()
                 self.last_contact = time.monotonic()
                 restore_shared_transparency = False
+                # pywebview/WebView2 is unreliable when several dynamically
+                # created forms all begin navigation in the same message-loop
+                # pass.  Admit one new surface at a time with a real monotonic
+                # interval so live manifest traffic cannot collapse the queue
+                # back into an immediate burst.
+                created_window = False
                 for overlay_id, spec in manifest.items():
                     if overlay_id not in self.controllers:
+                        if (created_window or time.monotonic()
+                                - self.last_window_created_at
+                                < WINDOW_CREATE_INTERVAL_S):
+                            continue
                         self.create_window(overlay_id, spec, hidden=True)
+                        created_window = True
                     controller = self.controllers[overlay_id]
                     if spec.get("shutdown"):
                         controller.hide()
                         continue
+                    try:
+                        reload_revision = int(spec.get("reload_revision") or 0)
+                    except (TypeError, ValueError):
+                        reload_revision = 0
+                    if reload_revision > controller.reload_revision:
+                        controller.hide()
+                        controller.window.load_url(self.page_url(
+                            overlay_id, spec.get("template"),
+                        ))
+                        controller.reload_revision = reload_revision
                     result = controller.apply(
                         spec.get("window"),
                         presentation_held=self.presentation_held,
+                        content_ready=bool(spec.get("content_ready", False)),
                     )
                     restore_shared_transparency = bool(
                         result.pop("_restore_all_transparency", False)
@@ -607,12 +638,6 @@ class _OverlayHost:
                         last_status[overlay_id] = result
                         try:
                             _request_json(self._url("/api/host-status", overlay_id), result)
-                        except Exception:
-                            pass
-                    if result.get("ok") and not controller.ready_sent:
-                        try:
-                            _request_json(self._url("/api/ready", overlay_id), {})
-                            controller.ready_sent = True
                         except Exception:
                             pass
                 for overlay_id, controller in self.controllers.items():
