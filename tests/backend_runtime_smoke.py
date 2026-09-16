@@ -128,11 +128,33 @@ with tempfile.TemporaryDirectory() as folder:
                 surfaces=runtime._voidcompass_html_overlay_runtime.surfaces
                 assert expected <= set(surfaces), expected - set(surfaces)
                 missing=[name for name,surface in surfaces.items() if not surface.ready]
+                if missing:
+                    print('WEBVIEW NOT READY', {
+                        name: {
+                            'host': surface.host_status,
+                            'server_ready': surface.server.is_ready(name),
+                            'rendered': surface.server.rendered_revision(name),
+                            'clients': surface.server.clients(name),
+                            'last_seen': surface.server.last_client_seen(name),
+                        } for name, surface in surfaces.items() if name in missing
+                    }, flush=True)
                 assert not missing, missing
+                manifest = runtime._voidcompass_html_overlay_runtime.server.window_manifest()
                 for overlay_id in expected:
                     status = surfaces[overlay_id].host_status
-                    assert status.get('visible') and not status.get('curtained'), (overlay_id, status)
-                print('WEBVIEW HUDS registered, ready and visible:', ', '.join(sorted(expected)),flush=True)
+                    requested_visible = bool(
+                        manifest.get(overlay_id, {}).get('window', {}).get('visible')
+                    )
+                    if (bool(status.get('visible')) != requested_visible
+                            or status.get('curtained')):
+                        print('WEBVIEW NOT VISIBLE', overlay_id, {
+                            'host': status,
+                            'manifest': manifest.get(overlay_id),
+                            'ready': surfaces[overlay_id].ready,
+                        }, flush=True)
+                    assert bool(status.get('visible')) == requested_visible, (overlay_id, status)
+                    assert not status.get('curtained'), (overlay_id, status)
+                print('WEBVIEW HUDS registered, ready and correctly presented:', ', '.join(sorted(expected)),flush=True)
                 switch_profile()
 
             runtime.call_later(10000 if '--renderers' in sys.argv else 200,

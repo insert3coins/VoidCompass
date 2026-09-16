@@ -42,9 +42,20 @@
     const overlay = String(options.overlay || "");
     const suffix = `token=${encodeURIComponent(token)}&overlay=${encodeURIComponent(overlay)}`;
     let revision = -1;
+    let renderedRevision = -1;
     let polling = false;
     let ready = false;
     let snapshot = null;
+
+    async function announceReady() {
+      if (ready || renderedRevision < 0) return;
+      try {
+        const response = await fetch(`/api/ready?${suffix}`, {
+          method: "POST", body: "{}",
+        });
+        ready = response.ok;
+      } catch (_) { /* A later health poll retries the handshake. */ }
+    }
 
     async function refresh(nextRevision) {
       const response = await fetch(`/api/snapshot?${suffix}`, {cache: "no-store"});
@@ -52,20 +63,20 @@
       snapshot = await response.json();
       options.render(snapshot);
       await new Promise((resolve) => requestAnimationFrame(resolve));
-      revision = nextRevision;
       const rendered = {revision: nextRevision};
       const height = typeof options.contentHeight === "function"
         ? Number(options.contentHeight())
         : Number(options.contentHeight);
       if (Number.isFinite(height) && height > 0) rendered.content_height = Math.ceil(height);
       try {
-        await fetch(`/api/rendered?${suffix}`, {
+        const response = await fetch(`/api/rendered?${suffix}`, {
           method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify(rendered),
         });
-        if (!ready) {
-          ready = true;
-          await fetch(`/api/ready?${suffix}`, {method: "POST", body: "{}"});
+        if (response.ok) {
+          revision = nextRevision;
+          renderedRevision = nextRevision;
+          await announceReady();
         }
       } catch (_) { /* A later poll retries the renderer handshake. */ }
     }
@@ -79,6 +90,8 @@
           const nextRevision = Number((await response.json()).revision);
           if (Number.isFinite(nextRevision) && nextRevision !== revision) {
             await refresh(nextRevision);
+          } else {
+            await announceReady();
           }
         }
       } catch (_) { /* Overlay server startup/recovery is transient. */ }

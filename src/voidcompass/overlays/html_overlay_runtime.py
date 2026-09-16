@@ -180,6 +180,27 @@ class HtmlOverlayRuntime:
         ).start()
         return True
 
+    def request_surface_reload(self, surface, reason="renderer page unavailable"):
+        """Reload one failed page without disturbing healthy overlay windows."""
+        if self._disposed or surface is None or surface._disposed:
+            return False
+        now = time.monotonic()
+        if now - surface._last_reload_at < 5.0:
+            return False
+        surface._last_reload_at = now
+        surface._reload_attempts += 1
+        surface._renderer_seen = False
+        surface._renderer_lost_at = None
+        surface._started_at = now
+        revision = self.server.request_reload(surface.overlay_id)
+        if revision:
+            logging.warning(
+                "Reloading HTML overlay page %s after %s (attempt %s)",
+                surface.overlay_id, reason, surface._reload_attempts,
+            )
+            return True
+        return False
+
     def _recover_process(self):
         process = None
         try:
@@ -302,6 +323,8 @@ class HtmlOverlaySurface:
         self._started_at = time.monotonic()
         self._renderer_seen = False
         self._renderer_lost_at = None
+        self._last_reload_at = 0.0
+        self._reload_attempts = 0
         runtime = getattr(root, "_voidcompass_html_overlay_runtime", None)
         if runtime is None or getattr(runtime, "_disposed", False):
             runtime = HtmlOverlayRuntime(root)
@@ -335,6 +358,7 @@ class HtmlOverlaySurface:
         if server.is_ready(self.overlay_id) and browser_rendered and recently_seen:
             self._renderer_seen = True
             self._renderer_lost_at = None
+            self._reload_attempts = 0
             return True
         if self._renderer_seen:
             if self._renderer_lost_at is None:
@@ -360,13 +384,19 @@ class HtmlOverlaySurface:
             failed = time.monotonic() - self._renderer_lost_at >= 2.5
             reason = f"{self.overlay_id} browser heartbeat expired"
         elif self.runtime.is_alive():
-            failed = elapsed > 12.0
+            # The shared host deliberately stages browser creation so WebView2
+            # does not navigate every overlay at once.  Allow the tail of that
+            # queue to finish before replacing the healthy host process.
+            failed = elapsed > 20.0
             reason = f"{self.overlay_id} did not finish rendering"
         else:
             failed = elapsed > 0.35
             reason = "shared browser host exited"
         if failed:
-            self.runtime.request_recovery(reason)
+            if self.runtime.is_alive():
+                self.runtime.request_surface_reload(self, reason)
+            else:
+                self.runtime.request_recovery(reason)
         # Recovery owns the renderer transition. Native proxies stay hidden
         # so a late browser frame can never overlap a native proxy window.
         return False

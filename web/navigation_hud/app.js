@@ -26,6 +26,7 @@ let stateChangeTimer = null;
 let vehicleImageTransition = null;
 let lastServerContact = Date.now();
 let lastRevision = -1;
+let pageReady = false;
 let healthPollActive = false;
 let lastRouteSignature = '';
 let lastSurveyProgress = null;
@@ -455,11 +456,24 @@ async function fetchSnapshot() {
 
 async function acknowledgeRendered(revision) {
   try {
-    await fetch(api('/api/rendered'), {
+    const response = await fetch(api('/api/rendered'), {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({revision}),
     });
+    return response.ok;
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function acknowledgeReady() {
+  if (pageReady || lastRevision < 0) return;
+  try {
+    const response = await fetch(api('/api/ready'), {
+      method: 'POST', body: '{}',
+    });
+    pageReady = response.ok;
   } catch (_error) {}
 }
 
@@ -472,11 +486,16 @@ async function checkHostHealth() {
     const health = await response.json();
     lastServerContact = Date.now();
     const revision = Number(health.revision);
+    pageReady = pageReady || Boolean(health.ready);
     if (Number.isFinite(revision) && revision !== lastRevision) {
       render(await fetchSnapshot());
-      lastRevision = revision;
-      await acknowledgeRendered(revision);
-      dom['link-state'].textContent = 'HTML NAV // LIVE';
+      if (await acknowledgeRendered(revision)) {
+        lastRevision = revision;
+        await acknowledgeReady();
+        dom['link-state'].textContent = 'HTML NAV // LIVE';
+      }
+    } else if (!pageReady) {
+      await acknowledgeReady();
     }
   } catch (_error) {
     if (Date.now() - lastServerContact > 15000) {

@@ -114,6 +114,21 @@ class OverlayStartupRestoreTests(unittest.TestCase):
             html = (root / "web" / folder / "index.html").read_text(encoding="utf-8")
             self.assertIn('/assets/overlay-client.js', html, spec.attr)
 
+    def test_browser_readiness_handshake_retries_after_startup_races(self):
+        root = Path(__file__).resolve().parents[1]
+        client = (root / "web" / "assets" / "overlay-client.js").read_text(
+            encoding="utf-8",
+        )
+        self.assertIn("let renderedRevision = -1", client)
+        self.assertIn("ready = response.ok", client)
+        self.assertIn("await announceReady()", client)
+        navigation = (
+            root / "web" / "navigation_hud" / "app.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("let pageReady = false", navigation)
+        self.assertIn("pageReady = response.ok", navigation)
+        self.assertIn("await acknowledgeReady()", navigation)
+
     def test_every_managed_overlay_has_a_settings_hotkey(self):
         managed = {attr for attr, _x_key, _y_key in MainDashboard._OVERLAY_POSITION_SPECS}
         hotkey_managed = {attr for _action, _key, _label, attr in OVERLAY_HOTKEY_SPECS if attr}
