@@ -18,6 +18,19 @@ from voidcompass.overlays.hud import TacticalHUD
 
 
 class PlanetMaterialsTests(unittest.TestCase):
+    def test_planetary_operations_has_quick_compass_coordinate_entry(self):
+        root = Path(__file__).resolve().parents[1]
+        dashboard = (root / 'web' / 'dashboard' / 'app.js').read_text(encoding='utf-8')
+        document = (root / 'web' / 'dashboard' / 'index.html').read_text(encoding='utf-8')
+        stylesheet = (root / 'web' / 'dashboard' / 'styles.css').read_text(encoding='utf-8')
+        self.assertIn('id="planet-compass-lat"', dashboard)
+        self.assertIn('id="planet-compass-lon"', dashboard)
+        self.assertIn('data-ground-source="planet"', dashboard)
+        self.assertIn('planet: "planet-compass"', dashboard)
+        self.assertIn('#planet-compass-lat, #planet-compass-lon', dashboard)
+        self.assertIn('Compass waypoints', document)
+        self.assertIn('.planet-compass-quick', stylesheet)
+
     def test_overlay_combines_body_scan_saved_sites_and_rhino_state(self):
         workspace = {
             'system': 'Synuefe AA-A h1', 'body': 'Synuefe AA-A h1 3 a',

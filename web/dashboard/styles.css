@@ -1440,6 +1440,11 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .planet-live { margin-bottom: 14px; }
 [data-planet-live-status] { padding: 16px; color: var(--accent); font: 13px Consolas, monospace; }
 .planet-materials-shell { display: grid; gap: 14px; }
+.planet-compass-quick { position: relative; display: grid; grid-template-columns: minmax(245px,.9fr) minmax(310px,1fr) minmax(300px,auto); gap: 14px 18px; align-items: end; overflow: hidden; padding: 18px; border-left: 3px solid var(--orange); background: radial-gradient(circle at 0 0,color-mix(in srgb,var(--orange) 12%,transparent),transparent 44%),linear-gradient(135deg,var(--panel),color-mix(in srgb,var(--accent) 3%,var(--panel))); }
+.planet-compass-quick::after { content:""; position:absolute; top:0; right:0; width:72px; height:2px; background:var(--orange); box-shadow:0 0 12px color-mix(in srgb,var(--orange) 70%,transparent); }
+.planet-compass-heading small,.planet-compass-heading h3,.planet-compass-heading span { display:block; }.planet-compass-heading small { color:var(--orange); font:700 8px Consolas,monospace; letter-spacing:.14em; }.planet-compass-heading h3 { margin:4px 0 3px; color:var(--text); font:500 20px "Bahnschrift SemiCondensed",sans-serif; text-transform:uppercase; }.planet-compass-heading span { max-width:410px; color:var(--muted); font:9px/1.45 Consolas,monospace; }
+.planet-compass-coordinates { gap:9px; padding:0; }.planet-compass-coordinates input { height:39px; color:var(--accent); font-size:12px; }.planet-compass-controls { align-self:center; padding:0; }.planet-compass-controls button { min-height:39px; }.planet-compass-controls button.primary { border-color:var(--accent); background:var(--accent); color:#021015; }
+.planet-compass-state { grid-column:1/-1; display:grid; grid-template-columns:8px minmax(0,1fr) auto; align-items:center; gap:9px; min-height:31px; padding:7px 10px; border:1px solid var(--border-soft); background:var(--inset); color:var(--muted); font:700 9px Consolas,monospace; }.planet-compass-state i { width:6px; height:6px; border:1px solid var(--dim); transform:rotate(45deg); }.planet-compass-state span { overflow-wrap:anywhere; }.planet-compass-state b { color:var(--dim); white-space:nowrap; }.planet-compass-quick.active { border-left-color:var(--accent); }.planet-compass-quick.active::after { background:var(--accent); }.planet-compass-quick.active .planet-compass-heading small,.planet-compass-quick.active .planet-compass-state b { color:var(--green); }.planet-compass-quick.active .planet-compass-state i { border-color:var(--green); background:var(--green); box-shadow:0 0 8px var(--green); }
 .planet-command-bar { display: grid; grid-template-columns: minmax(280px,1.25fr) minmax(230px,1fr) minmax(190px,.7fr) auto; gap: 18px; align-items: end; padding: 18px; border-left: 3px solid var(--accent); background: radial-gradient(circle at 0 50%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 42%),var(--panel); }
 .planet-command-bar > div, .planet-command-bar > label { min-width: 0; display: grid; gap: 7px; }
 .planet-command-bar small, .planet-command-bar label { color: var(--muted); font: 10px Consolas,monospace; }
@@ -1504,12 +1509,17 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .planet-heat-present { color: var(--accent); background: var(--selection); font-weight: bold; }
 [data-atlas-panel] p { padding: 0 14px; color: var(--muted); font-size: 12px; }
 @media (max-width: 1100px) {
+  .planet-compass-quick { grid-template-columns:minmax(230px,.8fr) minmax(310px,1.2fr); }
+  .planet-compass-controls { grid-column:1/-1; }
   .planet-command-bar { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
   .planet-command-bar > strong { grid-column: 1 / -1; justify-self: start; }
   .planet-condition-card .planet-facts { grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); }
   .planet-atlas-columns { grid-template-columns: minmax(0,1fr); }
 }
 @media (max-width: 760px) {
+  .planet-compass-quick { grid-template-columns:minmax(0,1fr); }
+  .planet-compass-controls,.planet-compass-state { grid-column:auto; }
+  .planet-compass-state { grid-template-columns:8px minmax(0,1fr); }.planet-compass-state b { grid-column:2; }
   .planet-command-bar { grid-template-columns: minmax(0,1fr); }
   .planet-command-bar > strong { grid-column: auto; }
   .planet-site-card summary { grid-template-columns: minmax(0,1fr); }

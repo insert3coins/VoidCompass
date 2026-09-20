@@ -1,14 +1,16 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.8.1 // Overlay Presentation Stability
-**Release Date:** 2026-Sep-16
+## v5.4.8.2 // Heartbeat Beacon
+**Release Date:** 2026-Sep-19
 
-* Restored Overlay Studio as a standalone Application destination immediately before Settings and removed its Settings suite tab and duplicate Settings card.
-* Staged WebView creation, required a rendered-page acknowledgement before showing overlays and made readiness handshakes retry safely during startup.
-* Changed overlay recovery to reload only the failed browser page so healthy cockpit overlays remain live and visible.
+* Rebuilt Journal Heartbeat as a floating energy core with segmented orbital rotors, satellite lights, a turning iris and continuous breathing and ripple animations.
+* Journal activity adds a double core pulse and expanding energy waves without restarting idle motion; bursts of telemetry are combined so each pulse can finish smoothly.
+* Preserved theme-aware activity colours, reduced-motion behaviour and the stalled-feed warning without adding labels or telemetry readouts.
+* Added a prominent quick compass target to Planetary Operations for pasting surface latitude and longitude, using the current position, clearing the target and opening the full Ground & Exobiology workspace.
 
 ## Earlier releases
 
+* **v5.4.8.1** — Restored Overlay Studio as a standalone Application destination and stabilised overlay startup with staged WebView loading, rendered-page acknowledgements and isolated page recovery.
 * **v5.4.8** — Consolidated the command deck into workflow-focused destinations and shared suites, retained compatibility routes, and added an in-app GitHub release notification with matching release notes and links.
 * **v5.4.7** — Added Exploration Scout with journal-backed system audits, Codex coverage gaps and commander-requested Spansh prospect searches; split the largest dashboard domains and centralised live journal and companion-file distribution.
 * **v5.4.6.2** — Updated Rhino driving-ring guidance, deposit observations and rig estimates; added location association, Coverage Maps, ground intelligence and richer Planet Materials integration.
