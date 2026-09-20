@@ -2190,6 +2190,16 @@ function renderPlanetMaterialsWorkspace(data) {
     <div class="planet-captured" data-captured-evidence>${site.body_details?.body ? `<small>CAPTURED PLANET SCAN · ${escapeHtml(site.body_details.body)}</small>${evidence(site.body_details)}` : '<small>Use current to capture planet conditions and known raw materials with this site.</small>'}</div>`;
   const materialsFor = site => clean(site.materials).split(",").map(clean).filter(Boolean);
   const navigationTarget = data.navigation_target || {};
+  const navigationTargetReady = Boolean(
+    navigationTarget.active
+    && navigationTarget.latitude !== null && navigationTarget.latitude !== undefined && navigationTarget.latitude !== ""
+    && navigationTarget.longitude !== null && navigationTarget.longitude !== undefined && navigationTarget.longitude !== ""
+    && Number.isFinite(Number(navigationTarget.latitude))
+    && Number.isFinite(Number(navigationTarget.longitude))
+  );
+  const navigationTargetDetail = navigationTargetReady
+    ? `${navigationTarget.label || "MANUAL WAYPOINT"} · LAT ${numeric(navigationTarget.latitude, 6)} · LON ${numeric(navigationTarget.longitude, 6)}`
+    : "NO COMPASS TARGET SET";
   const siteIsActive = site => Boolean(navigationTarget.active && (
     navigationTarget.site_id != null ? String(navigationTarget.site_id) === String(site.id) :
     planetKey(site) === planetKey(navigationTarget)
@@ -2206,7 +2216,12 @@ function renderPlanetMaterialsWorkspace(data) {
   }).join("")}</tr>`).join("");
   const coverageFor = body => (data.coverage_maps || []).find(row => planetKey(row) === planetKey(body));
   const coverageMaps = body => { const record=coverageFor(body); if(!record)return '<p class="workspace-empty">No Rhino coverage maps saved for this planet.</p>'; return `<div class="planet-map-summary"><b>${numeric(record.mapped_count)} / ${numeric(record.location_total)} LOCATIONS MAPPED</b><span>${numeric((record.maps||[]).length)} SAVED COVERAGE MAPS</span></div><div class="planet-map-grid">${(record.maps||[]).map(map=>`<article><header><b>${escapeHtml(map.name)}</b><span>${(map.locations||[]).length?`LOC ${(map.locations||[]).map(value=>numeric(value)).join(", ")}`:"LOCATION UNKNOWN"}</span></header><p>${numeric(map.painted_km2,2)} KM² PAINTED · ${numeric(map.bookmarks)} BOOKMARKS</p><small>${map.centered?"CENTRE SET":"DROP-POINT CENTRED"}${map.border_m?` · ${numeric(number(map.border_m)/1000,1)} KM BORDER`:" · OPEN BORDER"}</small><button type="button" data-map-export="${escapeHtml(map.name)}" data-map-body="${escapeHtml(record.body)}" data-map-system="${escapeHtml(record.system||"")}">${map.exported?"REFRESH & OPEN MAP":"EXPORT & OPEN MAP"}</button></article>`).join("")}</div>${(record.unknown_maps||[]).length?`<p>Location unknown: ${escapeHtml(record.unknown_maps.join(", "))}</p>`:""}`; };
-  root.innerHTML = `<section class="planet-materials-shell"><article class="card planet-command-bar"><div><small>LIVE PLANET LINK</small><b data-planet-live-status></b></div><label>SCANNED OR SAVED PLANET<select data-select-planet>${bodies.map(body=>`<option value="${escapeHtml(planetKey(body))}" ${body === selected ? "selected" : ""}>${escapeHtml(planetLabel(body))}</option>`).join("") || '<option value="">No planets scanned or saved</option>'}</select></label><label>BOOKMARK MATERIAL<select data-select-body-material><option value="">All recorded materials</option></select></label><strong data-selected-count>0 SAVED LOCATIONS</strong></article>
+  root.innerHTML = `<section class="planet-materials-shell"><article class="card planet-compass-quick${navigationTargetReady ? " active" : ""}">
+      <div class="planet-compass-heading"><small>PLANET WAYPOINT OVERLAY</small><h3>Quick compass target</h3><span>Paste Elite surface coordinates here and send them straight to the cockpit compass.</span></div>
+      <div class="coordinate-form planet-compass-coordinates"><label>LATITUDE<input id="planet-compass-lat" type="number" min="-90" max="90" step="0.000001" value="${navigationTargetReady ? navigationTarget.latitude : ""}" placeholder="32.328000"></label><label>LONGITUDE<input id="planet-compass-lon" type="number" min="-180" max="180" step="0.000001" value="${navigationTargetReady ? navigationTarget.longitude : ""}" placeholder="108.838000"></label></div>
+      <div class="workspace-actions wrap planet-compass-controls"><button class="primary" data-ws-page="ground" data-ws-op="set" data-ground-source="planet">SEND TO COMPASS</button><button data-ws-page="ground" data-ws-op="set_current" ${data.current_position ? "" : "disabled"}>USE CURRENT</button><button data-ws-page="ground" data-ws-op="clear" ${navigationTargetReady ? "" : "disabled"}>CLEAR</button><button data-page="ground">GROUND &amp; EXOBIO</button></div>
+      <div class="planet-compass-state"><i></i><span>${escapeHtml(navigationTargetDetail)}</span><b>${navigationTargetReady ? "TARGET ARMED" : "STANDBY"}</b></div>
+    </article><article class="card planet-command-bar"><div><small>LIVE PLANET LINK</small><b data-planet-live-status></b></div><label>SCANNED OR SAVED PLANET<select data-select-planet>${bodies.map(body=>`<option value="${escapeHtml(planetKey(body))}" ${body === selected ? "selected" : ""}>${escapeHtml(planetLabel(body))}</option>`).join("") || '<option value="">No planets scanned or saved</option>'}</select></label><label>BOOKMARK MATERIAL<select data-select-body-material><option value="">All recorded materials</option></select></label><strong data-selected-count>0 SAVED LOCATIONS</strong></article>
     <div class="workspace-actions planet-atlas-tabs">${[["body","PLANET SITES"],["maps","COVERAGE MAPS"],["heat","HEAT MAP"],["material","BY MATERIAL"]].map(([key,label])=>`<button type="button" data-atlas-view="${key}">${label}</button>`).join("")}</div>
     <section data-atlas-panel="body"><article class="card planet-condition-card"><header>SELECTED PLANET</header><div data-selected-facts></div></article>
       <div class="planet-atlas-columns"><article class="card planet-location-library"><header><span>SURFACE MINING LOCATIONS</span><b data-selected-count>0 SAVED</b></header><div data-selected-mining></div></article><article class="card"><header>EXPECTED RHINO VALUE · FIELD ESTIMATE</header><div data-selected-value></div><header>KNOWN RAW MATERIAL COMPOSITION</header><div data-selected-raw></div></article></div>
@@ -3097,6 +3112,7 @@ function renderWorkspace(state) {
   if (page === "planet-materials" && root?.dataset.profileKey === workspace.data?.profile_key && root.querySelector("form[data-dirty]")
       && root.planetSitesFingerprint === JSON.stringify(workspace.data?.sites || [])) return;
   const profileChanged = page === "planet-materials" && root?.dataset.profileKey !== workspace.data?.profile_key;
+  if (!profileChanged && root?.contains(focused) && focused?.matches("#planet-compass-lat, #planet-compass-lon")) return;
   if (page !== "planet-materials" && !profileChanged && root?.contains(focused) && focused?.matches("input, textarea, select, [contenteditable='true']") && !focused?.matches("[data-refresh-on-change]")) return;
   workspaceFingerprints[page] = fingerprint;
   const renderers = {
@@ -3859,7 +3875,10 @@ document.addEventListener("click", async (event) => {
       if (!target.trim()) return;
       Object.assign(payload, {kind: "manual", target: target.trim(), system: model.flight?.system || "", count: 1});
     } else if (page === "ground" && operation === "set") {
-      const prefix = workspaceButton.dataset.groundSource === "studio" ? "studio-ground" : "ground";
+      const prefix = {
+        studio: "studio-ground",
+        planet: "planet-compass",
+      }[workspaceButton.dataset.groundSource] || "ground";
       payload.lat = byId(`${prefix}-lat`)?.value?.trim() || "";
       payload.lon = byId(`${prefix}-lon`)?.value?.trim() || "";
       const latitude = Number(payload.lat);

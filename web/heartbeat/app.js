@@ -1,32 +1,78 @@
 (() => {
   "use strict";
   const params = new URLSearchParams(location.search);
-  const token = params.get("token") || "";
-  const overlay = params.get("overlay") || "heartbeat";
   const root = document.getElementById("heartbeat");
-  let pulseId = -1;
+  const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const core = root.querySelector(".nucleus-pulse");
+  const waves = [...root.querySelectorAll(".event-wave")];
+  const rays = root.querySelector(".event-rays");
+  let pulseId = null;
+  let activeAnimations = [];
+  let beatTimer = 0;
+
+  function stopBeat() {
+    window.clearTimeout(beatTimer);
+    beatTimer = 0;
+    activeAnimations.forEach(animation => animation.cancel());
+    activeAnimations = [];
+    delete root.dataset.activity;
+  }
+
+  function reducedMotion() {
+    return motionPreference.matches || root.classList.contains("reduced-motion");
+  }
+
+  function playBeat(model) {
+    // Let the double beat finish during bursts; ambient rotors never restart.
+    root.dataset.activity = model.state_changed ? "change" : model.kind || "journal";
+    if (beatTimer) return;
+    if (reducedMotion()) {
+      beatTimer = window.setTimeout(stopBeat, 650);
+      return;
+    }
+    activeAnimations.push(core.animate([
+      {transform: "scale(1)", offset: 0},
+      {transform: "scale(.85)", offset: .1},
+      {transform: "scale(1.3)", offset: .24},
+      {transform: "scale(.96)", offset: .4},
+      {transform: "scale(1.16)", offset: .57},
+      {transform: "scale(1)", offset: 1},
+    ], {duration: 900, easing: "ease-in-out"}));
+    waves.forEach((wave, index) => activeAnimations.push(wave.animate([
+      {transform: "scale(.8)", opacity: 0},
+      {transform: "scale(1.1)", opacity: .75, offset: .2},
+      {transform: "scale(2.5)", opacity: 0},
+    ], {duration: 700, delay: index * 220, easing: "ease-out"})));
+    activeAnimations.push(rays.animate([
+      {transform: "scale(.65) rotate(-25deg)", opacity: 0},
+      {transform: "scale(1) rotate(0deg)", opacity: .8, offset: .25},
+      {transform: "scale(1.4) rotate(25deg)", opacity: 0},
+    ], {duration: 900, easing: "ease-out"}));
+    beatTimer = window.setTimeout(stopBeat, 940);
+  }
 
   function render(snapshot = {}) {
-    VoidCompassOverlay.applyTheme(
-      root, snapshot.theme || {}, snapshot.effects || {},
-      {scaleMin: .85, scaleMax: 1.25},
-    );
+    VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, snapshot.effects || {});
     const model = snapshot.heartbeat || {};
     const stalled = Boolean(model.stalled);
     root.classList.toggle("stalled", stalled);
-    root.classList.toggle("journal", model.kind === "journal");
-    root.classList.toggle("status", model.kind === "status");
-    root.classList.toggle("state-change", Boolean(model.state_changed));
-    root.setAttribute("aria-label", stalled ? "Telemetry heartbeat stalled" : "Telemetry heartbeat active");
-    root.title = stalled ? "Telemetry heartbeat stalled" : "Telemetry heartbeat active";
-    const nextPulse = Number(model.pulse_id);
-    if (!stalled && Number.isFinite(nextPulse) && nextPulse !== pulseId) {
-      pulseId = nextPulse;
-      root.classList.remove("beat");
-      void root.offsetWidth;
-      root.classList.add("beat");
-    }
+    const label = stalled ? "Telemetry heartbeat stalled" : "Telemetry heartbeat active";
+    root.setAttribute("aria-label", label);
+    root.title = label;
+    if (stalled || (reducedMotion() && activeAnimations.length)) stopBeat();
+    const nextPulse = model.pulse_id;
+    if (typeof nextPulse !== "number" || !Number.isFinite(nextPulse)) return;
+    const changed = pulseId !== null && nextPulse !== pulseId;
+    pulseId = nextPulse;
+    if (!stalled && changed) playBeat(model);
   }
 
-  VoidCompassOverlay.startPolling({token, overlay, render, contentHeight: 54, interval: 160});
+  motionPreference.addEventListener("change", () => {
+    if (reducedMotion()) stopBeat();
+  });
+  window.addEventListener("pagehide", stopBeat);
+  VoidCompassOverlay.startPolling({
+    token: params.get("token") || "", overlay: params.get("overlay") || "heartbeat",
+    render, contentHeight: 54, interval: 160,
+  });
 })();
