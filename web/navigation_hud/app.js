@@ -9,6 +9,7 @@ const dom = Object.fromEntries([
   'region-label', 'system-clock', 'current-system',
   'route-title', 'route-target', 'route-target-label', 'route-next', 'route-distance', 'route-progress',
   'route-pips', 'route-origin', 'route-destination', 'survey-block', 'survey-title',
+  'route-star', 'route-feedback', 'route-fuel',
   'survey-title-text', 'survey-state', 'survey-mode', 'survey-remaining',
   'survey-count', 'survey-percent', 'survey-progress-marker',
   'survey-rail', 'survey-progress-fill', 'survey-acquisition', 'survey-signals',
@@ -29,6 +30,18 @@ let lastRevision = -1;
 let pageReady = false;
 let healthPollActive = false;
 let lastRouteSignature = '';
+let routeMemory = null;
+let routeFeedbackTimer = null;
+
+function routeFeedback(message) {
+  clearTimeout(routeFeedbackTimer);
+  dom['route-feedback'].textContent = message;
+  briefHighlight(dom['route-feedback'], 'system-arrival');
+  routeFeedbackTimer = setTimeout(() => {
+    dom['route-feedback'].textContent = '';
+    routeFeedbackTimer = null;
+  }, 4500);
+}
 let lastSurveyProgress = null;
 let lastSurveySignature = '';
 
@@ -180,12 +193,34 @@ function setMetric(id, metric) {
   element.parentElement.style.setProperty('--metric-color', metric?.color || 'var(--accent)');
 }
 
-function renderRoute(route = {}) {
+function renderRoute(route = {}, systemName = '') {
   const hops = Array.isArray(route.hops) ? route.hops : [];
+  const names = JSON.stringify(hops.map(hop => hop.name));
+  const present = Boolean(route.active || route.complete || hops.length);
+  const arrived = Boolean(routeMemory && systemName && routeMemory.systemName
+    && systemName !== routeMemory.systemName);
+  if (routeMemory) {
+    if (arrived) routeFeedback(`ARRIVED · ${systemName}`);
+    else if (routeMemory.present && !present) routeFeedback('ROUTE CLEARED');
+    else if (present && (!routeMemory.present || names !== routeMemory.names || route.source !== routeMemory.source)) routeFeedback('ROUTE UPDATED');
+  }
+  routeMemory = {names, present, source: route.source, systemName};
+  const star = route.next_star || {};
+  const classKnown = Boolean(star.star_class && route.active && !route.complete);
+  dom['route-star'].textContent = classKnown
+    ? `${star.star_class} · ${star.scoopable === true ? 'SCOOPABLE' : star.scoopable === false ? 'NON-SCOOP' : 'SCOOP UNKNOWN'}`
+    : route.active && !route.complete ? 'STAR UNKNOWN' : '';
+  dom['route-star'].style.color = star.scoopable === false ? 'var(--yellow)' : 'var(--accent)';
+  const endurance = route.fuel_endurance_jumps;
+  const estimated = typeof endurance === 'number' && Number.isFinite(endurance) && endurance >= 0;
+  dom['route-fuel'].textContent = route.active && !route.complete
+    ? estimated ? `EST. FUEL ${endurance} JUMPS${endurance <= 1 ? ' · REFUEL' : ''}` : 'FUEL RANGE UNKNOWN' : '';
+  dom['route-fuel'].classList.toggle('fuel-caution', estimated && endurance <= 2);
+  dom['route-fuel'].title = 'Estimate based on recent fuel use, not a verified range or next-jump fuel calculation.';
   const previousSignature = lastRouteSignature;
   const previousProgress = Number(dom['route-progress'].dataset.progress || 0);
   const signature = JSON.stringify([
-    route.target, route.progress_text, route.leg_distance, route.remaining_distance, route.complete,
+    route.target, route.source, route.progress_text, route.leg_distance, route.remaining_distance, route.complete,
     route.header || '', route.next_distance || '', route.distance || '',
     Boolean(route.active), route.origin_current === false ? 'start' : 'current',
     Number(route.progress_percent || 0),
@@ -196,13 +231,17 @@ function renderRoute(route = {}) {
   const target = route.target || hops.find(hop => hop.next)?.name || '';
   dom['route-target-label'].textContent = route.complete ? 'ARRIVED' : 'NEXT SYSTEM';
   dom['route-target'].textContent = target || (route.active ? 'DESTINATION PENDING' : 'NO DESTINATION PLOTTED');
-  dom['route-title'].textContent = route.complete ? 'ROUTE COMPLETE' : route.progress_text || route.header || 'NO ACTIVE ROUTE';
+  const done = hops.filter(hop => hop.completed || hop.current).length;
+  if (previousSignature && arrived) briefHighlight(dom['route-target'], 'target-promoted');
+  const nextIndex = hops.findIndex(hop => hop.next);
+  const progressLabel = hops.length ? `${route.source === 'waypoints' ? 'STOP' : 'JUMP'} ${route.complete ? hops.length : nextIndex >= 0 ? nextIndex + 1 : Math.min(done + 1, hops.length)} / ${hops.length}` : '';
+  dom['route-title'].textContent = route.complete ? 'ROUTE COMPLETE' : progressLabel || route.progress_text || route.header || 'NO ACTIVE ROUTE';
   const distance = value => value && !['--', 'None'].includes(String(value)) ? String(value) : '—';
   dom['route-next'].textContent = route.active && !route.complete ? `NEXT ${distance(route.leg_distance ?? route.next_distance)}` : '';
   dom['route-distance'].textContent = route.active && !route.complete ? `LEFT ${distance(route.remaining_distance ?? route.distance)}` : '';
   dom['route-origin'].textContent = route.origin_current === false ? 'START' : 'CURRENT';
   dom['route-destination'].textContent = route.active || route.hops?.length ? 'DEST' : 'NEXT';
-  dom['route-progress'].style.width = `${Math.max(0, Math.min(100, Number(route.progress_percent || 0)))}%`;
+  dom['route-progress'].style.width = `${hops.length ? done / hops.length * 100 : 0}%`;
   dom['route-progress'].dataset.progress = String(route.progress_percent || 0);
   if (previousSignature && Number(route.progress_percent || 0) > previousProgress) {
     briefHighlight(dom['route-progress'], 'route-arrival');
@@ -427,7 +466,8 @@ function render(data) {
   lastSystemName = system.name || '';
   dom['current-system'].textContent = system.name || '---';
   dom['region-label'].textContent = system.region || 'REGION UNKNOWN';
-  renderRoute(data.route);
+  hud.classList.toggle('surface-focus', Boolean(data.context?.surface));
+  renderRoute(data.route, system.name || '');
   renderSurvey(data.survey, theme, system.name || '', reducedMotion);
   const metrics = data.metrics || {};
   for (const prefix of ['metric', 'expanded']) {
@@ -520,6 +560,7 @@ async function start() {
 }
 
 window.addEventListener('beforeunload', () => {
+  clearTimeout(routeFeedbackTimer);
   if (arrivalTimer) clearInterval(arrivalTimer);
 });
 start();

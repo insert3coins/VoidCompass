@@ -1,6 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.8.3 // Living Optics
+## v5.4.8.4 // Navigation Clarity
+**Release Date:** 2026-Sep-22
+
+* Strengthened the next-system readout with star class, scoopability and explicit jump/stop progress beside the complete route rail.
+* Added route-update, route-clear and arrival feedback with smooth next-target promotion; routine distance updates do not retrigger notifications.
+* Added labelled fuel-endurance estimates from recent fuel use, low-endurance caution and an explicit unknown state. These are not exact next-jump fuel or range calculations.
+* Surface operations emphasise the context rail without rearranging the HUD. Both layouts reserve a small status row and retain reduced-motion support.
+* Redesigned startup around a luminous optical core, real-progress orbital ring and horizontal stage sequence, with compact layouts and reduced-motion support. Startup/handoff timing is unchanged.
+* Added a local starfield inspired by the Twitch overlay: layered drifting stars, a galactic band, subtle twinkle and theme-tinted nebula haze. Animation stops after handoff; reduced motion keeps a static sky.
+
+## Earlier releases
+
+### v5.4.8.3 // Living Optics
 **Release Date:** 2026-Sep-22
 
 * Replaced the heartbeat eye with HAL-inspired camera optics: a luminous core, counter-rotating lens rings, drifting focus and moving glass reflections, with continuous idle animation and smooth journal-event pulses.
@@ -8,8 +20,6 @@
 * Replaced the angular heartbeat frame with counter-rotating orbital arcs, an orbiting beacon and breathing index marks. Quiet-feed periods retain a bright theme-coloured lens, with a separate red warning dot instead of dimming the entire eye.
 * Refreshed the Navigation HUD route rail with distinct current/next markers and an animated next leg. Every waypoint retains its own evenly spaced marker, including long routes; routine distance updates no longer rebuild the markers.
 * Disabled the Rhino Coverage overlay, including for existing profiles, and removed its Settings hotkey bindings. Saved maps and the underlying coverage tools are retained. since we are waiting for journal events, there's a better tool out in the wild that does the overlay 100% better than I could ever do ( https://github.com/Fumlop/EDRhinoSpotter is the better tool for this )
-
-## Earlier releases
 
 * **v5.4.8.2** — Redesigned the heartbeat, added quick planetary compass coordinates and stabilised overlay startup/recovery with offscreen loading, browser error suppression and reliable readiness handshakes.
 * **v5.4.8.1** — Restored Overlay Studio as a standalone Application destination and stabilised overlay startup with staged WebView loading, rendered-page acknowledgements and isolated page recovery.
