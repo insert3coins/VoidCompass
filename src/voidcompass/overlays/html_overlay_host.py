@@ -414,14 +414,19 @@ class _WindowController:
             x = int(payload.get("x") or 0)
             y = int(payload.get("y") or 0)
             requested_geometry = (x, y, width, height)
+            visible = bool(
+                payload.get("visible", False)
+                and not payload.get("shutdown")
+                and not presentation_held
+                and content_ready
+            )
             # WebView2/WinForms can map a dynamically created window despite
-            # pywebview's hidden=True request. While startup owns the screen,
-            # quarantine every native surface outside the virtual desktop as
-            # well as issuing SW_HIDE. Release moves it to the saved position
-            # before the first visible frame.
+            # pywebview's hidden=True request. Keep every non-presentable
+            # surface outside the desktop even after the boot curtain drops.
+            # Only rendered content moves to its saved position before reveal.
             geometry = (
                 (HIDDEN_WINDOW_X, HIDDEN_WINDOW_Y, width, height)
-                if presentation_held else requested_geometry
+                if not visible else requested_geometry
             )
             handle = _native_handle(self.window)
             if not handle:
@@ -435,12 +440,6 @@ class _WindowController:
                 _apply_windows_style(self.window, click_through)
                 _apply_webview_transparency(self.window)
                 self.last_click_through = click_through
-            visible = bool(
-                payload.get("visible", False)
-                and not payload.get("shutdown")
-                and not presentation_held
-                and content_ready
-            )
             # WebView2 occasionally maps an asynchronously-created window
             # after our first SW_HIDE. Compare with the actual HWND instead of
             # trusting only last_visible, otherwise inactive transient HUDs
@@ -487,6 +486,13 @@ class _WindowController:
 
     def hide(self):
         _set_windows_visibility(self.window, False)
+        # Navigation can remap a WinForms window. Move it away before reloading,
+        # not on the next manifest pass after navigation has already started.
+        if self.last_geometry:
+            _, _, width, height = self.last_geometry
+            hidden_geometry = (HIDDEN_WINDOW_X, HIDDEN_WINDOW_Y, width, height)
+            if _apply_windows_geometry(self.window, *hidden_geometry):
+                self.last_geometry = hidden_geometry
         self.last_visible = False
 
 
@@ -622,9 +628,10 @@ class _OverlayHost:
                         reload_revision = 0
                     if reload_revision > controller.reload_revision:
                         controller.hide()
+                        print(f"Overlay page retry: {overlay_id} ({reload_revision})", flush=True)
                         controller.window.load_url(self.page_url(
                             overlay_id, spec.get("template"),
-                        ))
+                        ) + f"&reload={reload_revision}")
                         controller.reload_revision = reload_revision
                     result = controller.apply(
                         spec.get("window"),
@@ -674,6 +681,8 @@ def run(url):
         return 3
     if not _patch_pywebview_overlay_focus():
         return 3
+    from voidcompass.core.webview_bootstrap import configure_embedded_navigation
+    configure_embedded_navigation()
     host = _OverlayHost(url, webview)
     try:
         manifest = host.manifest()

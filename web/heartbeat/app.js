@@ -3,7 +3,7 @@
   const params = new URLSearchParams(location.search);
   const root = document.getElementById("heartbeat");
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const core = root.querySelector(".nucleus-pulse");
+  const core = root.querySelector(".signal-pulse");
   const waves = [...root.querySelectorAll(".event-wave")];
   const rays = root.querySelector(".event-rays");
   let pulseId = null;
@@ -23,7 +23,7 @@
   }
 
   function playBeat(model) {
-    // Let the double beat finish during bursts; ambient rotors never restart.
+    // Let the double beat finish during bursts; idle signal flow never restarts.
     root.dataset.activity = model.state_changed ? "change" : model.kind || "journal";
     if (beatTimer) return;
     if (reducedMotion()) {
@@ -44,9 +44,9 @@
       {transform: "scale(2.5)", opacity: 0},
     ], {duration: 700, delay: index * 220, easing: "ease-out"})));
     activeAnimations.push(rays.animate([
-      {transform: "scale(.65) rotate(-25deg)", opacity: 0},
-      {transform: "scale(1) rotate(0deg)", opacity: .8, offset: .25},
-      {transform: "scale(1.4) rotate(25deg)", opacity: 0},
+      {transform: "scaleX(.25)", opacity: 0},
+      {transform: "scaleX(1)", opacity: .8, offset: .25},
+      {transform: "scaleX(1.2)", opacity: 0},
     ], {duration: 900, easing: "ease-out"}));
     beatTimer = window.setTimeout(stopBeat, 940);
   }

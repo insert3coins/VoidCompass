@@ -1,0 +1,65 @@
+import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+from voidcompass.core.webview_bootstrap import configure_embedded_navigation
+
+
+class WebviewNavigationTests(unittest.TestCase):
+    def test_error_document_disabled_before_navigation_and_patch_is_idempotent(self):
+        settings = SimpleNamespace(IsBuiltInErrorPageEnabled=True)
+        observed = []
+
+        class Browser:
+            def on_navigation_start(self, sender, args):
+                observed.append(settings.IsBuiltInErrorPageEnabled)
+                return "started"
+
+            def on_navigation_completed(self, sender, args):
+                return "completed"
+
+        module = SimpleNamespace(EdgeChrome=Browser)
+        self.assertTrue(configure_embedded_navigation(module))
+        patched_start = Browser.on_navigation_start
+        self.assertTrue(configure_embedded_navigation(module))
+        self.assertIs(Browser.on_navigation_start, patched_start)
+        browser = Browser()
+        browser.webview = SimpleNamespace(CoreWebView2=SimpleNamespace(Settings=settings))
+        browser.url = "http://127.0.0.1:1234/heartbeat/index.html?token=secret"
+        self.assertEqual(browser.on_navigation_start(None, None), "started")
+        self.assertEqual(observed, [False])
+        with patch("builtins.print") as output:
+            result = browser.on_navigation_completed(None, SimpleNamespace(
+                IsSuccess=False, WebErrorStatus="ConnectionAborted",
+            ))
+        self.assertEqual(result, "completed")
+        message = output.call_args.args[0]
+        self.assertIn("/heartbeat/index.html", message)
+        self.assertIn("ConnectionAborted", message)
+        self.assertNotIn("secret", message)
+
+    def test_optional_setting_failure_keeps_navigation_working(self):
+        original = Mock(return_value="started")
+        browser_type = type("Browser", (), {
+            "on_navigation_start": original,
+            "on_navigation_completed": Mock(),
+        })
+        self.assertTrue(configure_embedded_navigation(SimpleNamespace(EdgeChrome=browser_type)))
+        with patch("builtins.print"):
+            self.assertEqual(browser_type().on_navigation_start(None, None), "started")
+        original.assert_called_once()
+
+    def test_overlay_navigation_does_not_force_show_or_activate(self):
+        original = Mock()
+        browser_type = type("Browser", (), {
+            "on_navigation_start": original,
+            "on_navigation_completed": Mock(),
+        })
+        self.assertTrue(configure_embedded_navigation(SimpleNamespace(EdgeChrome=browser_type)))
+        browser = browser_type()
+        settings = SimpleNamespace(IsBuiltInErrorPageEnabled=True)
+        browser.webview = SimpleNamespace(CoreWebView2=SimpleNamespace(Settings=settings))
+        browser.pywebview_window = SimpleNamespace(transparent=True, focus=False)
+        browser.on_navigation_start(None, None)
+        original.assert_not_called()
+        self.assertFalse(settings.IsBuiltInErrorPageEnabled)

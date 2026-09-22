@@ -501,6 +501,17 @@ class HtmlOverlayServer:
                     self._condition.notify_all()
             self._send_json(handler, {"accepted": True, "revision": revision}, 202)
             return
+        # /api/ready carries a small body too. Leaving it unread corrupts the
+        # next request on this HTTP/1.1 connection (e.g. "{}GET /api/health").
+        try:
+            length = int(handler.headers.get("Content-Length", "0"))
+            if not 0 <= length <= 1024:
+                raise ValueError("invalid ready payload length")
+            handler.rfile.read(length)
+        except (TypeError, ValueError, OSError):
+            handler.close_connection = True
+            self._send_json(handler, {"error": "invalid ready payload"}, 400)
+            return
         with self._condition:
             was_content_ready = bool(
                 state.ready.is_set() and state.rendered_revision >= 0
