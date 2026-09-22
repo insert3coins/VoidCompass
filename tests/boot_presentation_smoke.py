@@ -80,6 +80,20 @@ def run():
         ended_draws = page.evaluate("window.bootDraws")
         page.wait_for_timeout(150)
         assert page.evaluate("window.bootDraws") == ended_draws, "Starfield still drawing after handoff"
+        page.emulate_media(reduced_motion="reduce")
+        page.clock.install()
+        page.evaluate("bootTest({boot:{active:true,progress:0}})")
+        page.wait_for_function("document.getElementById('boot-fact').textContent.length > 0")
+        ids = {page.locator('#boot-fact').get_attribute('data-fact-id')}
+        for _ in range(9):
+            page.clock.run_for(9000)
+            ids.add(page.locator('#boot-fact').get_attribute('data-fact-id'))
+        assert len(ids) == 10, "Fact deck repeated before all ten entries appeared"
+        assert page.locator('#boot-fact-previous').is_visible(), "Missing previous chat bubble"
+        page.evaluate("bootTest({boot:{active:false,progress:1}})")
+        final_fact = page.locator('#boot-fact').text_content()
+        page.clock.run_for(20000)
+        assert page.locator('#boot-fact').text_content() == final_fact, "Facts continued after startup"
         assert not errors, errors
         browser.close()
     print("PASS: boot stages, progress ring, 5 viewport sizes, starfield rendering, reduced-motion freeze, commissioning and stopped animation after handoff")

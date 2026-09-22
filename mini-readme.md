@@ -9,6 +9,7 @@
 * Surface operations emphasise the context rail without rearranging the HUD. Both layouts reserve a small status row and retain reduced-motion support.
 * Redesigned startup around a luminous optical core, real-progress orbital ring and horizontal stage sequence, with compact layouts and reduced-motion support. Startup/handoff timing is unchanged.
 * Added a local starfield inspired by the Twitch overlay: layered drifting stars, a galactic band, subtle twinkle and theme-tinted nebula haze. Animation stops after handoff; reduced motion keeps a static sky.
+* The boot lens now acts as a silent exploration companion with animated chat bubbles and ten shuffled offline Elite facts. The editable fact deck avoids repeats until all entries have appeared and never delays startup.
 
 ## Earlier releases
 
