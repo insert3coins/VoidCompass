@@ -584,7 +584,7 @@ class MainDashboard(
 
     def _overlay_enabled(self, attr):
         spec = OVERLAY_SPEC_BY_ATTR[attr]
-        return bool(self.config.get(spec.enabled_key, spec.default_enabled))
+        return spec.available and bool(self.config.get(spec.enabled_key, spec.default_enabled))
 
     @property
     def route_list(self):

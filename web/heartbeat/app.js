@@ -4,9 +4,9 @@
   const root = document.getElementById("heartbeat");
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
   const core = root.querySelector(".signal-pulse");
-  const lids = root.querySelector(".eye-lids");
-  const gaze = root.querySelector(".eye-gaze");
-  const gazePoints = [[-3, -1], [3, 0], [0, -2], [-2, 1], [2, 1], [0, 0]];
+  const optics = root.querySelector(".lens-optics");
+  const gaze = root.querySelector(".lens-focus");
+  const gazePoints = [[-1, -.5], [1, 0], [0, -1], [-.5, 1], [.5, .5], [0, 0]];
   const waves = [...root.querySelectorAll(".event-wave")];
   const rays = root.querySelector(".event-rays");
   let pulseId = null;
@@ -40,11 +40,11 @@
     gaze.style.setProperty("--gaze-x", `${x}px`);
     gaze.style.setProperty("--gaze-y", `${y}px`);
     if (model.kind === "journal" || model.state_changed) {
-      activeAnimations.push(lids.animate([
-        {transform: "scaleY(1)"},
-        {transform: "scaleY(.06)", offset: .42},
-        {transform: "scaleY(1)"},
-      ], {duration: 240, easing: "ease-in-out"}));
+      activeAnimations.push(optics.animate([
+        {filter: "brightness(1)", transform: "scale(1)"},
+        {filter: "brightness(1.65)", transform: "scale(.92)", offset: .35},
+        {filter: "brightness(1)", transform: "scale(1)"},
+      ], {duration: 900, easing: "cubic-bezier(.22,.61,.36,1)"}));
     }
     activeAnimations.push(core.animate([
       {transform: "scale(1)", offset: 0},

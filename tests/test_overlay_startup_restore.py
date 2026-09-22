@@ -82,7 +82,7 @@ class OverlayStartupRestoreTests(unittest.TestCase):
     def test_registry_is_the_single_overlay_metadata_source(self):
         self.assertEqual(len(OVERLAY_SPECS), len({row.attr for row in OVERLAY_SPECS}))
         self.assertEqual(
-            OVERLAY_ENABLE_DEFAULTS["rhino_minimap_overlay_enabled"], True,
+            OVERLAY_ENABLE_DEFAULTS["rhino_minimap_overlay_enabled"], False,
         )
         self.assertEqual(
             {row.attr for row in OVERLAY_SPECS},
@@ -130,9 +130,15 @@ class OverlayStartupRestoreTests(unittest.TestCase):
         self.assertIn("await acknowledgeReady()", navigation)
 
     def test_every_managed_overlay_has_a_settings_hotkey(self):
-        managed = {attr for attr, _x_key, _y_key in MainDashboard._OVERLAY_POSITION_SPECS}
+        managed = {spec.attr for spec in OVERLAY_SPECS if spec.available}
         hotkey_managed = {attr for _action, _key, _label, attr in OVERLAY_HOTKEY_SPECS if attr}
         self.assertEqual(hotkey_managed, managed)
+
+    def test_saved_profile_cannot_enable_disabled_rhino_overlay(self):
+        dashboard = MainDashboard.__new__(MainDashboard)
+        dashboard.config = {"rhino_minimap_overlay_enabled": True}
+        self.assertFalse(dashboard._overlay_enabled("rhino_minimap_hud"))
+        self.assertNotIn("rhino_minimap_hud", dashboard._HTML_OVERLAY_SPECS)
 
     def _harness(self, survey_pending=False, has_content=True):
         survey_window = _Window()

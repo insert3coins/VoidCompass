@@ -316,19 +316,20 @@ body {
 .route-line > i { display: block; height: 2px; width: 0; background: color-mix(in srgb, var(--accent) 55%, transparent); transition: width .65s cubic-bezier(.2,.8,.2,1); }
 .route-pips { position: absolute; inset: 0; }
 .route-pips.unified { overflow: visible; }
-.route-segment { position: absolute; top: 6px; height: 10px; min-width: 1px; border: 1px solid color-mix(in srgb, var(--orange) 66%, #1a2530); border-left-width: 0; background: color-mix(in srgb, var(--orange) 10%, rgba(0,0,0,.72)); box-shadow: inset 0 1px color-mix(in srgb, var(--orange) 12%, transparent); transition: background .38s ease, border-color .38s ease, filter .38s ease; }
-.route-segment:first-child { border-left-width: 1px; }
-.route-segment > b { position: absolute; z-index: 2; right: -1px; top: -3px; width: 2px; height: 14px; background: color-mix(in srgb, var(--orange) 72%, var(--border)); box-shadow: 0 0 3px rgba(0,0,0,.9); }
-.route-segment.completed { border-color: color-mix(in srgb, var(--accent) 55%, #1a2530); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 20%, transparent), color-mix(in srgb, var(--accent) 42%, transparent)); }
-.route-segment.completed > b { background: color-mix(in srgb, var(--accent) 62%, var(--border)); }
-.route-segment.current { z-index: 4; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 60%, var(--inset)); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 52%, transparent), inset 0 0 4px color-mix(in srgb, var(--accent) 34%, transparent); }
-.route-segment.current > b { width: 3px; background: var(--accent); box-shadow: 0 0 7px var(--accent); }
-.route-segment.next { z-index: 3; border-color: var(--orange); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 15%, transparent), color-mix(in srgb, var(--orange) 30%, transparent)); }
-.route-segment.next > b { width: 3px; background: var(--orange); box-shadow: 0 0 7px var(--orange); }
-.route-segment.unscoopable.next { border-color: var(--yellow); background: color-mix(in srgb, var(--yellow) 18%, var(--inset)); }
-.route-segment.unscoopable.next > b { background: var(--yellow); box-shadow: 0 0 7px var(--yellow); }
-.route-pips.dense .route-segment { border-right-color: color-mix(in srgb, var(--orange) 45%, #1a2530); }
-.route-pips.ultra-dense .route-segment > b { width: 1px; opacity: .72; }
+.route-segment { --stop-tone: var(--orange); position: absolute; top: 9px; height: 3px; min-width: 0; background: color-mix(in srgb,var(--stop-tone) 24%,var(--inset)); transition: background .6s ease; }
+.route-segment > b { position: absolute; right: 0; top: -2px; width: min(6px,70%); height: 7px; border-radius: 2px; background: var(--stop-tone); opacity: .65; box-shadow: 0 0 3px var(--inset); transition: opacity .6s ease,background .6s ease; }
+.route-segment.completed { --stop-tone: var(--accent); background: color-mix(in srgb,var(--accent) 50%,var(--inset)); }
+.route-segment.completed > b { opacity: .45; }
+.route-segment.current { --stop-tone: var(--accent); z-index: 4; }
+.route-segment.current > b { top: -4px; height: 11px; opacity: 1; box-shadow: 0 0 6px var(--stop-tone); }
+.route-segment.next { z-index: 3; background: color-mix(in srgb,var(--stop-tone) 35%,var(--inset)); }
+.route-segment.next > b { top: -3px; height: 9px; opacity: 1; animation: waypoint-beacon 3s ease-in-out infinite; }
+.route-segment.next::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg,transparent,var(--stop-tone),transparent); transform-origin: left; animation: waypoint-transit 2.8s ease-in-out infinite; }
+.route-segment.unscoopable { --stop-tone: var(--yellow); }
+.route-pips.ultra-dense .route-segment > b { border-radius: 0; }
+@keyframes waypoint-beacon { 0%,100% { opacity: .55; box-shadow: 0 0 2px var(--stop-tone); } 50% { opacity: 1; box-shadow: 0 0 7px var(--stop-tone); } }
+@keyframes waypoint-transit { 0% { transform: scaleX(.05); opacity: 0; } 65% { transform: scaleX(1); opacity: .9; } 100% { transform: scaleX(1); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .route-track *, .route-track *::after { animation: none !important; transition: none !important; } }
 .route-captions { display: flex; justify-content: space-between; color: var(--dim); font-size: calc(11px * var(--text-scale)); font-weight: 700; }
 #route-origin { color: var(--accent); } #route-destination { color: var(--orange); }
 

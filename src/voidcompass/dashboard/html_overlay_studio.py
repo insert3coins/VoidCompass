@@ -1,5 +1,7 @@
 """Overlay Layout Studio model and command controller."""
 
+from voidcompass.core.overlay_registry import OVERLAY_SPEC_BY_ATTR
+
 from voidcompass.dashboard.html_workspace_support import (
     integer as _integer,
     number as _number,
@@ -63,6 +65,8 @@ class HtmlOverlayStudioMixin:
     def _html_overlay_records(self, *, live=True):
         records = []
         for attr, x_key, y_key in self._OVERLAY_POSITION_SPECS:
+            if not OVERLAY_SPEC_BY_ATTR[attr].available:
+                continue
             default_x, default_y = DEFAULT_POSITIONS.get(attr, (30, 30))
             default_width, default_height = DEFAULT_SIZES.get(attr, (320, 160))
             x = _integer(self.config.get(x_key), default_x)

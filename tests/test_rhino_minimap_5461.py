@@ -141,32 +141,10 @@ class RhinoMinimapCoverageTests(unittest.TestCase):
             tracker.update(in_srv=False)
             self.assertFalse(tracker.reset_active())
 
-    def test_rhino_map_hotkeys_are_exposed_to_the_settings_editor(self):
+    def test_disabled_rhino_map_hotkeys_are_not_exposed_to_settings(self):
         actions = {action: key for action, key, _label, _attr in OVERLAY_HOTKEY_SPECS}
-        self.assertEqual(
-            actions["rhino_minimap_center"],
-            "overlay_hotkey_rhino_minimap_center",
-        )
-        self.assertEqual(
-            actions["rhino_minimap_border"],
-            "overlay_hotkey_rhino_minimap_border",
-        )
-        self.assertEqual(
-            actions["rhino_minimap_drill"],
-            "overlay_hotkey_rhino_minimap_drill",
-        )
-        self.assertEqual(
-            actions["rhino_minimap_reset"],
-            "overlay_hotkey_rhino_minimap_reset",
-        )
-        self.assertEqual(
-            DEFAULT_OVERLAY_HOTKEYS["overlay_hotkey_rhino_minimap_drill"],
-            "Ctrl+Alt+D",
-        )
-        self.assertEqual(
-            DEFAULT_OVERLAY_HOTKEYS["overlay_hotkey_rhino_minimap_reset"],
-            "Ctrl+Alt+Shift+R",
-        )
+        self.assertFalse(any(action.startswith("rhino_minimap") for action in actions))
+        self.assertFalse(any("rhino_minimap" in key for key in DEFAULT_OVERLAY_HOTKEYS))
 
     def test_mark_drill_persists_numbered_current_position(self):
         with tempfile.TemporaryDirectory() as folder:

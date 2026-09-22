@@ -208,24 +208,26 @@ function renderRoute(route = {}) {
     briefHighlight(dom['route-progress'], 'route-arrival');
   }
   const host = dom['route-pips'];
-  host.replaceChildren();
   host.className = `route-pips unified${hops.length > 48 ? ' ultra-dense' : hops.length > 18 ? ' dense' : ''}`;
-  let previousPosition = 0;
-  for (const hop of hops) {
-    const endPosition = Math.max(previousPosition, Math.min(100, Number(hop.position || 0)));
-    const segment = document.createElement('i');
+  host.setAttribute('aria-label', `${hops.length} waypoints; ${hops.filter(hop => hop.completed).length} completed`);
+  // Equal slots preserve every stop, including coincident/distant route positions.
+  // Reuse nodes so distance updates do not restart the next-leg animation.
+  while (host.children.length > hops.length) host.lastElementChild.remove();
+  for (const [index, hop] of hops.entries()) {
+    const segment = host.children[index] || document.createElement('i');
     segment.className = [
       'route-segment', hop.completed && 'completed', hop.current && 'current',
       hop.next && 'next', hop.scoopable === false && 'unscoopable',
     ].filter(Boolean).join(' ');
-    segment.style.left = `${previousPosition}%`;
-    segment.style.width = `${Math.max(.18, endPosition - previousPosition)}%`;
-    segment.title = hop.name || '';
-    const waypoint = document.createElement('b');
-    waypoint.setAttribute('aria-hidden', 'true');
-    segment.appendChild(waypoint);
-    host.appendChild(segment);
-    previousPosition = endPosition;
+    segment.style.left = `${index / hops.length * 100}%`;
+    segment.style.width = `${100 / hops.length}%`;
+    segment.title = `${index + 1}. ${hop.name || 'Unknown'}${hop.current ? ' · current' : hop.next ? ' · next' : hop.completed ? ' · completed' : ''}${hop.scoopable === false ? ' · unscoopable' : ''}`;
+    if (!segment.firstElementChild) {
+      const waypoint = document.createElement('b');
+      waypoint.setAttribute('aria-hidden', 'true');
+      segment.appendChild(waypoint);
+      host.appendChild(segment);
+    }
   }
 }
 
