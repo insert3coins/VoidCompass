@@ -80,7 +80,7 @@ function sync() {
     companion.classList.remove('speaking');
   } else if (!timer) {
     if (!current.textContent) nextFact();
-    timer = setInterval(nextFact, 3000);
+    timer = setInterval(nextFact, 4000);
   }
 }
 const observer = new MutationObserver(sync);
