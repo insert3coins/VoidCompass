@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="boot.css">
   <script defer src="boot-starfield.js"></script>
+  <script type="module" src="boot-companion.js"></script>
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
@@ -27,11 +28,13 @@
     </footer>
 
     <section id="boot-loader" class="boot-loader" data-boot-stage="profile">
+      <section class="boot-companion" aria-label="Exploration companion">
       <div class="boot-instrument" aria-hidden="true">
         <div class="boot-optic-halo"></div>
         <div class="boot-optic-ticks"></div>
         <div class="boot-optic-orbit orbit-a"></div>
         <div class="boot-optic-orbit orbit-b"></div>
+        <div class="boot-companion-orbit"><i></i></div>
         <svg class="boot-optic-progress" viewBox="0 0 200 200">
           <circle class="optic-track" cx="100" cy="100" r="85" pathLength="100"/>
           <circle class="optic-fill" cx="100" cy="100" r="85" pathLength="100"/>
@@ -43,6 +46,14 @@
         </div>
         <div class="boot-optic-caption">EXPLORATION CORE <span>LOCAL SIGNAL / HUMAN HORIZON</span></div>
       </div>
+        <div class="boot-chat" aria-live="off">
+          <p id="boot-fact-previous" class="boot-chat-previous" hidden></p>
+          <article class="boot-chat-bubble">
+            <header><span>COMPASS / FIELD NOTES</span><i class="boot-voice" aria-hidden="true"><b></b><b></b><b></b></i></header>
+            <p id="boot-fact"></p>
+          </article>
+        </div>
+      </section>
 
       <section class="boot-copy">
         <div class="boot-identity"><p class="eyebrow">YOUR NEXT HORIZON AWAITS</p><b>EXPLORER / LOCAL FIRST</b></div>
