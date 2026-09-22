@@ -1,18 +1,17 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.8.2 // Heartbeat Beacon
-**Release Date:** 2026-Sep-19
+## v5.4.8.3 // Living Optics
+**Release Date:** 2026-Sep-22
 
-* Rebuilt Journal Heartbeat in the cockpit HUD's angular style, with a mechanical eye, charging side rails, travelling signal packets, scanning light and breathing corner brackets. The eye looks around and blinks while idle, glances toward new activity and blinks on journal events or state changes.
-* Journal activity adds a double pulse, expanding brackets and a signal flash without restarting idle motion; bursts of telemetry are combined so each pulse can finish smoothly.
-* Kept overlays offscreen until their content is ready, including during individual page recovery, and suppressed browser error documents while recording navigation failures in host diagnostics.
-* Fixed reused-connection errors in the readiness handshake, forced fresh navigation on page retries and stopped WebView2's navigation hook from showing or activating unfinished overlays.
-* Removed a hidden-page readiness deadlock caused by suspended animation frames, so failed pages can recover before being revealed.
-* Preserved theme-aware activity colours, reduced-motion behaviour and the stalled-feed warning without adding labels or telemetry readouts.
-* Added a prominent quick compass target to Planetary Operations for pasting surface latitude and longitude, using the current position, clearing the target and opening the full Ground & Exobiology workspace.
+* Replaced the heartbeat eye with HAL-inspired camera optics: a luminous core, counter-rotating lens rings, drifting focus and moving glass reflections, with continuous idle animation and smooth journal-event pulses.
+* Lens colours follow the active profile theme and blend between activity states; stalled-feed and reduced-motion behaviour are preserved.
+* Replaced the angular heartbeat frame with counter-rotating orbital arcs, an orbiting beacon and breathing index marks. Quiet-feed periods retain a bright theme-coloured lens, with a separate red warning dot instead of dimming the entire eye.
+* Refreshed the Navigation HUD route rail with distinct current/next markers and an animated next leg. Every waypoint retains its own evenly spaced marker, including long routes; routine distance updates no longer rebuild the markers.
+* Disabled the Rhino Coverage overlay, including for existing profiles, and removed its Settings hotkey bindings. Saved maps and the underlying coverage tools are retained. since we are waiting for journal events, there's a better tool out in the wild that does the overlay 100% better than I could ever do ( https://github.com/Fumlop/EDRhinoSpotter is the better tool for this )
 
 ## Earlier releases
 
+* **v5.4.8.2** — Redesigned the heartbeat, added quick planetary compass coordinates and stabilised overlay startup/recovery with offscreen loading, browser error suppression and reliable readiness handshakes.
 * **v5.4.8.1** — Restored Overlay Studio as a standalone Application destination and stabilised overlay startup with staged WebView loading, rendered-page acknowledgements and isolated page recovery.
 * **v5.4.8** — Consolidated the command deck into workflow-focused destinations and shared suites, retained compatibility routes, and added an in-app GitHub release notification with matching release notes and links.
 * **v5.4.7** — Added Exploration Scout with journal-backed system audits, Codex coverage gaps and commander-requested Spansh prospect searches; split the largest dashboard domains and centralised live journal and companion-file distribution.

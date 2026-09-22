@@ -22,6 +22,7 @@ class OverlaySpec:
     hotkey_key: str
     hotkey_label: str
     html_managed: bool = True
+    available: bool = True
 
 
 OVERLAY_SPECS = (
@@ -30,7 +31,7 @@ OVERLAY_SPECS = (
     OverlaySpec("carrier_hud", "carrier", "Void Compass Carrier", "carrier_overlay_enabled", "carrier_hud_x", "carrier_hud_y", (30, 180), (430, 270), "Fleet / Squadron Carrier HUD", "CARRIER", False, "carrier", "overlay_hotkey_carrier", "Fleet Carrier"),
     OverlaySpec("prospector_hud", "prospector", "Void Compass Prospector", "prospector_overlay_enabled", "prospector_hud_x", "prospector_hud_y", (30, 600), (400, 250), "Prospector Analysis", "PROSPECTOR", True, "prospector", "overlay_hotkey_prospector", "Prospector Results"),
     OverlaySpec("planet_materials_hud", "planet-materials", "Void Compass Planet Materials", "planet_materials_overlay_enabled", "planet_materials_hud_x", "planet_materials_hud_y", (820, 80), (440, 390), "Planet Materials", "PLANET MATS", False, "planet_materials", "overlay_hotkey_planet_materials", "Planet Materials"),
-    OverlaySpec("rhino_minimap_hud", "rhino-minimap", "Void Compass Rhino Coverage", "rhino_minimap_overlay_enabled", "rhino_minimap_hud_x", "rhino_minimap_hud_y", (30, 80), (360, 470), "Rhino Coverage Minimap", "RHINO MAP", True, "rhino_minimap", "overlay_hotkey_rhino_minimap", "Rhino Coverage Minimap"),
+    OverlaySpec("rhino_minimap_hud", "rhino-minimap", "Void Compass Rhino Coverage", "rhino_minimap_overlay_enabled", "rhino_minimap_hud_x", "rhino_minimap_hud_y", (30, 80), (360, 470), "Rhino Coverage Minimap", "RHINO MAP", False, "rhino_minimap", "overlay_hotkey_rhino_minimap", "Rhino Coverage Minimap", available=False),
     OverlaySpec("powerplay_hud", "powerplay", "Void Compass Powerplay Operations", "powerplay_overlay_enabled", "powerplay_hud_x", "powerplay_hud_y", (820, 490), (430, 310), "Powerplay Operations", "POWERPLAY", False, "powerplay", "overlay_hotkey_powerplay", "Powerplay Operations"),
     OverlaySpec("gravity_warning_hud", "gravity", "Void Compass Gravity Warning", "gravity_warning_overlay_enabled", "gravity_warning_hud_x", "gravity_warning_hud_y", (1200, 530), (320, 106), "Gravity Warning", "GRAVITY", True, "gravity", "overlay_hotkey_gravity", "Gravity Warning"),
     OverlaySpec("station_info_hud", "station", "Void Compass Station Link", "station_info_overlay_enabled", "station_info_hud_x", "station_info_hud_y", (30, 380), (520, 442), "Station Information", "STATION", True, "station_info", "overlay_hotkey_station_info", "Station Info"),
@@ -51,7 +52,7 @@ OVERLAY_ENABLE_DEFAULTS = {spec.enabled_key: spec.default_enabled for spec in OV
 OVERLAY_POSITION_SPECS = tuple((spec.attr, spec.x_key, spec.y_key) for spec in OVERLAY_SPECS)
 HTML_OVERLAY_SPECS = {
     spec.attr: (spec.overlay_id, spec.title, spec.enabled_key)
-    for spec in OVERLAY_SPECS if spec.html_managed
+    for spec in OVERLAY_SPECS if spec.html_managed and spec.available
 }
 
 
@@ -74,11 +75,6 @@ OVERLAY_HOTKEY_SPECS = (
     _overlay_hotkey("carrier"),
     _overlay_hotkey("prospector"),
     _overlay_hotkey("planet_materials"),
-    _overlay_hotkey("rhino_minimap"),
-    ("rhino_minimap_center", "overlay_hotkey_rhino_minimap_center", "Rhino Minimap: Set Center", None),
-    ("rhino_minimap_border", "overlay_hotkey_rhino_minimap_border", "Rhino Minimap: Set Border", None),
-    ("rhino_minimap_drill", "overlay_hotkey_rhino_minimap_drill", "Rhino Minimap: Mark Drill Here", None),
-    ("rhino_minimap_reset", "overlay_hotkey_rhino_minimap_reset", "Rhino Minimap: Reset Current Map", None),
     _overlay_hotkey("powerplay"),
     _overlay_hotkey("gravity"),
     _overlay_hotkey("notifications"),
@@ -91,8 +87,4 @@ DEFAULT_OVERLAY_HOTKEYS = {
     "overlay_hotkey_layout_studio": "Ctrl+Alt+Shift+F10",
     "overlay_hotkey_toggle_all": "Ctrl+Alt+Shift+F11",
     "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
-    "overlay_hotkey_rhino_minimap_center": "Ctrl+Alt+Z",
-    "overlay_hotkey_rhino_minimap_border": "Ctrl+Alt+B",
-    "overlay_hotkey_rhino_minimap_drill": "Ctrl+Alt+D",
-    "overlay_hotkey_rhino_minimap_reset": "Ctrl+Alt+Shift+R",
 }

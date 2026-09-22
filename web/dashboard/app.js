@@ -1403,13 +1403,11 @@ function updateStudioOptionControls(options, groundTarget = {}, rhinoMinimap = {
   if (clear) clear.disabled = !Boolean(groundTarget.active);
   const toggle = byId("studio-ground-overlay-toggle");
   if (toggle) toggle.textContent = `OVERLAY ${overlayEnabled ? "ON" : "OFF"}`;
-  const rhinoOverlay = studioOverlay("rhino_minimap_hud");
-  const rhinoEnabled = Boolean(rhinoOverlay?.enabled);
   text("studio-rhino-state", rhinoMinimap.active ? "RHINO MAP LIVE" : "AWAITING RHINO");
   text("studio-rhino-detail", rhinoMinimap.map_name
     ? `${String(rhinoMinimap.map_name).toUpperCase()} · ${number(rhinoMinimap.painted_km2, 0).toFixed(2)} KM² · ${number(rhinoMinimap.drill_count, 0)} DRILLS · ${rhinoMinimap.centered ? "CENTER SET" : "DROP POINT CENTER"}${rhinoMinimap.border_m == null ? " · BORDER OPEN" : ` · BORDER ${(number(rhinoMinimap.border_m) / 1000).toFixed(1)} KM`}`
     : "NO ACTIVE COVERAGE MAP");
-  text("studio-rhino-hotkeys", `CENTER ${rhinoMinimap.center_hotkey || "UNBOUND"} · BORDER ${rhinoMinimap.border_hotkey || "UNBOUND"} · DRILL ${rhinoMinimap.drill_hotkey || "UNBOUND"} · RESET ${rhinoMinimap.reset_hotkey || "UNBOUND"}`);
+  text("studio-rhino-hotkeys", "COVERAGE OVERLAY AND HOTKEYS DISABLED");
   const savedBytes = number(rhinoMinimap.saved_bytes, 0), savedAmount = savedBytes >= 1048576 ? `${(savedBytes / 1048576).toFixed(1)} MB` : `${Math.round(savedBytes / 1024)} KB`;
   text("studio-rhino-storage", `${number(rhinoMinimap.saved_maps, 0)} SAVED MAPS · ${savedAmount}`);
   const rhinoCenter = byId("studio-rhino-center"), rhinoBorder = byId("studio-rhino-border"), rhinoDrill = byId("studio-rhino-drill"), rhinoReset = byId("studio-rhino-reset"), rhinoToggle = byId("studio-rhino-overlay-toggle");
@@ -1417,7 +1415,10 @@ function updateStudioOptionControls(options, groundTarget = {}, rhinoMinimap = {
   if (rhinoBorder) rhinoBorder.disabled = !Boolean(rhinoMinimap.active && rhinoMinimap.centered);
   if (rhinoDrill) rhinoDrill.disabled = !Boolean(rhinoMinimap.active);
   if (rhinoReset) rhinoReset.disabled = !Boolean(rhinoMinimap.active);
-  if (rhinoToggle) rhinoToggle.textContent = `OVERLAY ${rhinoEnabled ? "ON" : "OFF"}`;
+  if (rhinoToggle) {
+    rhinoToggle.textContent = "OVERLAY DISABLED";
+    rhinoToggle.disabled = true;
+  }
 }
 
 function renderOverlayStudio(state) {
