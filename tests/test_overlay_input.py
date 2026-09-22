@@ -1,5 +1,6 @@
 import unittest
 import ctypes
+from http.client import HTTPConnection
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -15,6 +16,8 @@ from voidcompass.overlays.html_overlay_host import (
     WS_EX_NOACTIVATE,
     WS_EX_TOOLWINDOW,
     WS_EX_TRANSPARENT,
+    HIDDEN_WINDOW_X,
+    HIDDEN_WINDOW_Y,
     _WindowController,
     _apply_webview_transparency,
     _apply_windows_overlay_chrome,
@@ -26,6 +29,24 @@ from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 
 
 class OverlayInputStyleTests(unittest.TestCase):
+    def test_ready_handshake_does_not_corrupt_next_keepalive_request(self):
+        server = HtmlOverlayServer(Path(__file__).resolve().parents[1] / "web")
+        server.register("heartbeat", "heartbeat", "Heartbeat")
+        connection = HTTPConnection("127.0.0.1", server.port, timeout=2)
+        suffix = f"?token={server.token}&overlay=heartbeat"
+        try:
+            connection.request("POST", "/api/ready" + suffix, body="{}")
+            response = connection.getresponse()
+            self.assertEqual(response.status, 202)
+            response.read()
+            connection.request("GET", "/api/health" + suffix)
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            response.read()
+        finally:
+            connection.close()
+            server.stop()
+
     def test_failed_page_reload_does_not_reset_healthy_overlays(self):
         static_root = Path(__file__).resolve().parents[1] / "web"
         server = HtmlOverlayServer(static_root)
@@ -82,7 +103,7 @@ class OverlayInputStyleTests(unittest.TestCase):
         controller.hide.assert_called_once_with()
         window.load_url.assert_called_once_with(
             "http://127.0.0.1:1234/prospector/index.html"
-            "?token=test-token&overlay=prospector",
+            "?token=test-token&overlay=prospector&reload=1",
         )
         self.assertEqual(controller.reload_revision, 1)
         controller.apply.assert_called_once_with(
@@ -229,7 +250,7 @@ class OverlayInputStyleTests(unittest.TestCase):
     def test_surface_stays_hidden_until_browser_content_is_ready(self):
         controller = _WindowController("station", object())
         with patch("voidcompass.overlays.html_overlay_host._native_handle", return_value=99), \
-             patch("voidcompass.overlays.html_overlay_host._apply_windows_geometry", return_value=True), \
+             patch("voidcompass.overlays.html_overlay_host._apply_windows_geometry", return_value=True) as geometry, \
              patch("voidcompass.overlays.html_overlay_host._apply_windows_style", return_value=True), \
              patch("voidcompass.overlays.html_overlay_host._apply_webview_transparency"), \
              patch("voidcompass.overlays.html_overlay_host._windows_visibility", return_value=True), \
@@ -239,8 +260,25 @@ class OverlayInputStyleTests(unittest.TestCase):
                 "visible": True, "click_through": True,
             }, content_ready=False)
 
-        self.assertFalse(result["visible"])
-        set_visible.assert_called_once_with(controller.window, False)
+            geometry.assert_called_with(controller.window, HIDDEN_WINDOW_X, HIDDEN_WINDOW_Y, 520, 442)
+            self.assertFalse(result["visible"])
+            set_visible.assert_called_once_with(controller.window, False)
+            ready = controller.apply({
+                "x": 100, "y": 100, "width": 520, "height": 442,
+                "visible": True, "click_through": True,
+            }, content_ready=True)
+            geometry.assert_called_with(controller.window, 100, 100, 520, 442)
+            self.assertTrue(ready["visible"])
+
+    def test_reload_quarantines_window_before_navigation_can_remap_it(self):
+        controller = _WindowController("station", object())
+        controller.last_geometry = (100, 200, 520, 442)
+        with patch("voidcompass.overlays.html_overlay_host._set_windows_visibility", return_value=True), \
+             patch("voidcompass.overlays.html_overlay_host._apply_windows_geometry", return_value=True) as geometry:
+            controller.hide()
+        geometry.assert_called_once_with(controller.window, HIDDEN_WINDOW_X, HIDDEN_WINDOW_Y, 520, 442)
+        self.assertEqual(controller.last_geometry, (HIDDEN_WINDOW_X, HIDDEN_WINDOW_Y, 520, 442))
+        self.assertFalse(controller.last_visible)
 
     def test_non_activating_webview_is_not_focused_when_shown(self):
         class FakeBrowserForm:

@@ -14,6 +14,7 @@ import time
 
 from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 from voidcompass.core.paths import resource_path, source_launcher_path
+from voidcompass.core.diagnostic_logs import prepare_log, resolve_log_path
 
 
 def _resource_path(relative_path):
@@ -72,6 +73,7 @@ class HtmlOverlayRuntime:
             )),
         )
         self.process = None
+        self._host_log = None
         self._closing_process = None
         self.surfaces = {}
         self._disposed = False
@@ -122,7 +124,16 @@ class HtmlOverlayRuntime:
                 raise RuntimeError("HTML overlay runtime is closed")
             if self.process is not None and self.process.poll() is None:
                 return
-            self.process = subprocess.Popen(self._command, **self._popen_kwargs)
+            if self._host_log is None:
+                try:
+                    path = prepare_log(resolve_log_path("html_overlay_host.log"))
+                    self._host_log = open(path, "ab", buffering=0)
+                except OSError:
+                    pass
+            kwargs = dict(self._popen_kwargs)
+            if self._host_log is not None:
+                kwargs.update(stdout=self._host_log, stderr=subprocess.STDOUT)
+            self.process = subprocess.Popen(self._command, **kwargs)
 
     def register(self, surface):
         self.surfaces[surface.overlay_id] = surface
@@ -297,6 +308,9 @@ class HtmlOverlayRuntime:
         finally:
             self._closing_process = None
             self.server.stop()
+            if self._host_log is not None:
+                self._host_log.close()
+                self._host_log = None
 
     def _force_process_exit(self):
         """Last-resort guard against an orphaned frozen WebView host."""

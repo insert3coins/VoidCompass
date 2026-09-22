@@ -9,45 +9,27 @@
 </head>
 <body>
   <main id="heartbeat" class="heartbeat" aria-label="Telemetry heartbeat" title="Telemetry heartbeat">
-    <svg class="reactor" viewBox="0 0 54 54" aria-hidden="true">
-      <defs>
-        <radialGradient id="corona">
-          <stop offset="0" stop-color="currentColor" stop-opacity=".3"/>
-          <stop offset=".5" stop-color="currentColor" stop-opacity=".1"/>
-          <stop offset="1" stop-color="currentColor" stop-opacity="0"/>
-        </radialGradient>
-      </defs>
-      <circle class="corona" cx="27" cy="27" r="25" fill="url(#corona)"/>
-      <g class="registration">
-        <path d="M27 3v2 M49 27h2 M27 49v2 M3 27h2"/>
-        <circle cx="27" cy="27" r="22" stroke-dasharray="1 10.52"/>
-      </g>
-      <g class="outer-rotor">
-        <circle class="rotor-track" cx="27" cy="27" r="19.5"/>
-        <circle class="rotor-segments" cx="27" cy="27" r="19.5" pathLength="120" stroke-dasharray="24 16"/>
-        <g class="satellites">
-          <circle cx="27" cy="7.5" r="1.7"/>
-          <circle cx="43.89" cy="36.75" r="1.2"/>
-          <circle cx="10.11" cy="36.75" r="1.2"/>
-        </g>
-      </g>
-      <g class="inner-rotor">
-        <path class="vanes" d="M15 22a13 13 0 0 1 16-7 M39 32a13 13 0 0 1-16 7"/>
-        <path class="vanes-fine" d="M14 27h3 M37 27h3 M27 14v3 M27 37v3"/>
-      </g>
-      <circle class="ambient-wave" cx="27" cy="27" r="9"/>
-      <g class="nucleus-pulse">
-        <g class="nucleus-breathe">
-          <path class="nucleus-shell" d="M27 18l7.8 4.5v9L27 36l-7.8-4.5v-9z"/>
-          <g class="iris"><path d="M27 20v3 M33.06 30.5l-2.6-1.5 M20.94 30.5l2.6-1.5"/></g>
-          <path class="nucleus" d="M27 23l3.46 2v4L27 31l-3.46-2v-4z"/>
-          <circle class="nucleus-light" cx="27" cy="27" r="1.3"/>
-        </g>
-      </g>
-      <circle class="event-wave wave-first" cx="27" cy="27" r="10"/>
-      <circle class="event-wave wave-second" cx="27" cy="27" r="10"/>
-      <g class="event-rays"><path d="M27 11v4 M40.86 35l-3.46-2 M13.14 35l3.46-2"/></g>
-    </svg>
+    <div class="instrument" aria-hidden="true">
+      <div class="faceplate"></div>
+      <div class="corner corner-nw"></div><div class="corner corner-ne"></div>
+      <div class="corner corner-sw"></div><div class="corner corner-se"></div>
+      <div class="top-channel"><i></i></div>
+      <div class="bottom-channel"><i></i></div>
+      <div class="rail rail-left"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="rail rail-right"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="sweep-window"><i></i></div>
+      <div class="signal-pulse">
+        <div class="signal-core">
+          <div class="signal-chevron chevron-one"></div>
+          <div class="signal-chevron chevron-two"></div>
+          <div class="signal-chevron chevron-three"></div>
+          <div class="signal-seed"></div>
+        </div>
+      </div>
+      <div class="event-wave wave-first"></div><div class="event-wave wave-second"></div>
+      <div class="event-rays"></div>
+      <div class="scanlines"></div>
+    </div>
   </main>
   <script src="/assets/overlay-client.js"></script>
   <script src="app.js"></script>

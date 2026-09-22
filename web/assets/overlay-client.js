@@ -62,7 +62,18 @@
       if (!response.ok) return;
       snapshot = await response.json();
       options.render(snapshot);
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+      // Hidden WebViews may suspend animation frames. A page must still be
+      // able to acknowledge its rendered DOM before the host will reveal it.
+      await new Promise((resolve) => {
+        let frame = 0;
+        const finish = () => {
+          global.clearTimeout(timer);
+          global.cancelAnimationFrame(frame);
+          resolve();
+        };
+        const timer = global.setTimeout(finish, 100);
+        frame = global.requestAnimationFrame(finish);
+      });
       const rendered = {revision: nextRevision};
       const height = typeof options.contentHeight === "function"
         ? Number(options.contentHeight())

@@ -225,6 +225,9 @@ def main(argv=None):
 
     import webview
 
+    from voidcompass.core.webview_bootstrap import configure_embedded_navigation
+    configure_embedded_navigation()
+
     width = max(980, int(state.get("width") or 1440))
     height = max(680, int(state.get("height") or 900))
     x = state.get("x")

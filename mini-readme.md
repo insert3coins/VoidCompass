@@ -3,8 +3,11 @@
 ## v5.4.8.2 // Heartbeat Beacon
 **Release Date:** 2026-Sep-19
 
-* Rebuilt Journal Heartbeat as a floating energy core with segmented orbital rotors, satellite lights, a turning iris and continuous breathing and ripple animations.
-* Journal activity adds a double core pulse and expanding energy waves without restarting idle motion; bursts of telemetry are combined so each pulse can finish smoothly.
+* Rebuilt Journal Heartbeat in the cockpit HUD's angular style, with flowing chevrons, charging side rails, travelling signal packets, scanning light and breathing corner brackets.
+* Journal activity adds a double pulse, expanding brackets and a signal flash without restarting idle motion; bursts of telemetry are combined so each pulse can finish smoothly.
+* Kept overlays offscreen until their content is ready, including during individual page recovery, and suppressed browser error documents while recording navigation failures in host diagnostics.
+* Fixed reused-connection errors in the readiness handshake, forced fresh navigation on page retries and stopped WebView2's navigation hook from showing or activating unfinished overlays.
+* Removed a hidden-page readiness deadlock caused by suspended animation frames, so failed pages can recover before being revealed.
 * Preserved theme-aware activity colours, reduced-motion behaviour and the stalled-feed warning without adding labels or telemetry readouts.
 * Added a prominent quick compass target to Planetary Operations for pasting surface latitude and longitude, using the current position, clearing the target and opening the full Ground & Exobiology workspace.
 
