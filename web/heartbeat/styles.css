@@ -45,14 +45,21 @@ body { pointer-events: none; user-select: none; }
 .sweep-window { inset: 10px 12px; overflow: hidden; }
 .sweep-window i { display: block; height: 9px; background: linear-gradient(transparent,color-mix(in srgb,currentColor 14%,transparent),transparent); animation: scan-pass 3.2s linear infinite; }
 
-/* Upward chevron flow gives the idle instrument a steady transmission rhythm. */
+/* A mechanical eye sits inside the existing signal rails and cockpit frame. */
 .signal-pulse { inset: 12px; }
 .signal-core { position: absolute; inset: 0; animation: signal-breathe 3.2s ease-in-out infinite; }
-.signal-chevron { position: absolute; left: 6px; width: 18px; height: 9px; clip-path: polygon(50% 0,100% 65%,100% 100%,50% 35%,0 100%,0 65%); background: currentColor; animation: chevron-flow 2.4s ease-in-out infinite; }
-.chevron-one { top: 2px; animation-delay: -.8s; }
-.chevron-two { top: 9px; animation-delay: -.4s; }
-.chevron-three { top: 16px; }
-.signal-seed { position: absolute; left: 14px; bottom: 0; width: 2px; height: 2px; background: currentColor; box-shadow: 0 0 4px currentColor; animation: seed-beat 2.4s ease-in-out infinite; }
+.eye-reticle { position: absolute; left: 12px; width: 6px; height: 2px; border-left: 1px solid currentColor; border-right: 1px solid currentColor; opacity: .5; }
+.reticle-top { top: 2px; border-top: 1px solid currentColor; }
+.reticle-bottom { bottom: 2px; border-bottom: 1px solid currentColor; }
+.eye-lids { position: absolute; left: 1px; top: 7px; width: 28px; height: 16px; }
+.eye-aperture { position: absolute; inset: 0; overflow: hidden; clip-path: polygon(0 50%,20% 15%,40% 0,60% 0,80% 15%,100% 50%,80% 85%,60% 100%,40% 100%,20% 85%); background: currentColor; animation: eye-blink 7.4s linear infinite; }
+.eye-socket { position: absolute; inset: 1px; clip-path: inherit; background: var(--inset); }
+.eye-gaze { position: absolute; left: 9px; top: 3px; width: 10px; height: 10px; transform: translate(var(--gaze-x, 0px),var(--gaze-y, 0px)); transition: transform .22s cubic-bezier(.2,.8,.25,1); }
+.eye-drift { width: 100%; height: 100%; animation: eye-look-around 13s ease-in-out infinite; }
+.eye-iris { position: relative; width: 10px; height: 10px; border: 1px solid currentColor; border-radius: 50%; background: color-mix(in srgb,currentColor 45%,var(--inset)); box-shadow: 0 0 3px currentColor; }
+.eye-iris i { position: absolute; left: 2px; top: 1px; width: 4px; height: 6px; border-radius: 45%; background: var(--bg); }
+.eye-iris b { position: absolute; right: 1px; top: 1px; width: 2px; height: 2px; border-radius: 50%; background: #e9fcff; opacity: .9; }
+.eye-glass { position: absolute; inset: 1px; clip-path: inherit; background: linear-gradient(150deg,color-mix(in srgb,currentColor 16%,transparent),transparent 55%); }
 .event-wave { left: 17px; top: 17px; width: 20px; height: 20px; opacity: 0; border: 1px solid currentColor; clip-path: polygon(0 0,35% 0,35% 35%,65% 35%,65% 0,100% 0,100% 100%,65% 100%,65% 65%,35% 65%,35% 100%,0 100%); }
 .event-rays { left: 9px; top: 26px; width: 36px; height: 1px; opacity: 0; background: currentColor; box-shadow: 0 0 4px currentColor; }
 .scanlines { inset: 6px; opacity: .2; background: repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.5) 2px 3px); pointer-events: none; }
@@ -61,16 +68,26 @@ body { pointer-events: none; user-select: none; }
 .heartbeat.stalled { color: var(--red); }
 .heartbeat.stalled .instrument * { animation: none; }
 .heartbeat.stalled .rail, .heartbeat.stalled .signal-core { opacity: .4; }
+.heartbeat.stalled .eye-lids { transform: scaleY(.16); }
+.heartbeat.stalled .eye-gaze, .heartbeat.stalled .eye-drift { transform: none; }
 .heartbeat.stalled .corner { animation: fault-breathe 3s ease-in-out infinite; }
 .heartbeat.reduced-motion .instrument * { animation: none !important; }
+.heartbeat.reduced-motion .eye-gaze { transition: none; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .heartbeat .instrument * { animation: none !important; }
+  .heartbeat .eye-gaze { transition: none; transform: none; }
 }
 @keyframes channel-flow { from { transform: translateX(-7px); } to { transform: translateX(20px); } }
 @keyframes rail-charge { 0%,100% { opacity: .2; transform: scaleX(.6); } 45% { opacity: .9; transform: scaleX(1); } }
 @keyframes bracket-breathe { 0%,100% { opacity: .4; } 50% { opacity: .85; } }
 @keyframes scan-pass { from { transform: translateY(-9px); } to { transform: translateY(36px); } }
 @keyframes signal-breathe { 0%,100% { transform: translateY(1px); } 50% { transform: translateY(-1px); } }
-@keyframes chevron-flow { 0%,100% { opacity: .25; transform: translateY(1px); } 40% { opacity: 1; transform: translateY(-1px); } 65% { opacity: .55; } }
-@keyframes seed-beat { 0%,100% { opacity: .3; } 30%,50% { opacity: 1; } }
+@keyframes eye-blink { 0%,42%,46%,91%,95%,100% { transform: scaleY(1); } 44%,93% { transform: scaleY(.06); } }
+@keyframes eye-look-around {
+  0%,16%,100% { transform: translate(0,0); }
+  20%,35% { transform: translate(2px,-1px); }
+  39%,53% { transform: translate(-2px,1px); }
+  58%,73% { transform: translate(1px,1px); }
+  78%,90% { transform: translate(-1px,-1px); }
+}
 @keyframes fault-breathe { 0%,100% { opacity: .25; } 50% { opacity: .85; } }

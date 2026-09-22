@@ -4,6 +4,9 @@
   const root = document.getElementById("heartbeat");
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
   const core = root.querySelector(".signal-pulse");
+  const lids = root.querySelector(".eye-lids");
+  const gaze = root.querySelector(".eye-gaze");
+  const gazePoints = [[-3, -1], [3, 0], [0, -2], [-2, 1], [2, 1], [0, 0]];
   const waves = [...root.querySelectorAll(".event-wave")];
   const rays = root.querySelector(".event-rays");
   let pulseId = null;
@@ -16,6 +19,8 @@
     activeAnimations.forEach(animation => animation.cancel());
     activeAnimations = [];
     delete root.dataset.activity;
+    gaze.style.removeProperty("--gaze-x");
+    gaze.style.removeProperty("--gaze-y");
   }
 
   function reducedMotion() {
@@ -30,12 +35,23 @@
       beatTimer = window.setTimeout(stopBeat, 650);
       return;
     }
+    // Decorative glances respond to new activity; these are not bearings.
+    const [x, y] = gazePoints[Math.abs(Math.trunc(model.pulse_id)) % gazePoints.length];
+    gaze.style.setProperty("--gaze-x", `${x}px`);
+    gaze.style.setProperty("--gaze-y", `${y}px`);
+    if (model.kind === "journal" || model.state_changed) {
+      activeAnimations.push(lids.animate([
+        {transform: "scaleY(1)"},
+        {transform: "scaleY(.06)", offset: .42},
+        {transform: "scaleY(1)"},
+      ], {duration: 240, easing: "ease-in-out"}));
+    }
     activeAnimations.push(core.animate([
       {transform: "scale(1)", offset: 0},
-      {transform: "scale(.85)", offset: .1},
-      {transform: "scale(1.3)", offset: .24},
-      {transform: "scale(.96)", offset: .4},
-      {transform: "scale(1.16)", offset: .57},
+      {transform: "scale(.97)", offset: .1},
+      {transform: "scale(1.1)", offset: .24},
+      {transform: "scale(1)", offset: .4},
+      {transform: "scale(1.05)", offset: .57},
       {transform: "scale(1)", offset: 1},
     ], {duration: 900, easing: "ease-in-out"}));
     waves.forEach((wave, index) => activeAnimations.push(wave.animate([
