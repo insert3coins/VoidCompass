@@ -10,7 +10,7 @@
 * Redesigned startup around a luminous optical core, real-progress orbital ring and horizontal stage sequence, with compact layouts and reduced-motion support. Startup/handoff timing is unchanged.
 * Added a local starfield inspired by the Twitch overlay: layered drifting stars, a galactic band, subtle twinkle and theme-tinted nebula haze. Animation stops after handoff; reduced motion keeps a static sky.
 * The boot lens now acts as a silent exploration companion with animated chat bubbles and ten shuffled offline Elite facts. The editable fact deck avoids repeats until all entries have appeared and never delays startup.
-* Random decorative lens activity adds focus shifts, theme-coloured pulses and expanding rings between facts, without generating journal events or changing progress. It pauses when hidden or reduced motion is enabled and stops at handoff.
+* Random decorative lens activity adds focus shifts, theme-coloured pulses and expanding rings between facts, without generating journal events or changing progress. It pauses when hidden or reduced motion is enabled and stops at handoff. Now with random elite facst!
 
 ## Earlier releases
 
