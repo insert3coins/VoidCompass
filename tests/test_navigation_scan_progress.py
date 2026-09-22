@@ -5,6 +5,15 @@ from voidcompass.overlays.hud import TacticalHUD
 
 
 class NavigationScanProgressTests(unittest.TestCase):
+    def test_footer_keeps_vector_without_duplicate_scoopability(self):
+        label, _color = TacticalHUD._context_presentation({
+            "next_star": {"name": "Sol", "star_class": "G", "scoopable": True},
+            "galactic_vector": {"direction": "COREWARD", "plane": "ABOVE PLANE"},
+        }, "", "")
+        self.assertIn("COREWARD", label)
+        self.assertNotIn("SCOOP", label)
+        self.assertNotIn("NEXT", label)
+
     @staticmethod
     def _dashboard(scanned=3, total=42):
         dashboard = MainDashboard.__new__(MainDashboard)

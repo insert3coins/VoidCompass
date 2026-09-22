@@ -14,8 +14,8 @@ class TacticalHUD:
     def __init__(self, root, config, on_widget_click=None):
         self.config = config
         self.on_widget_click = on_widget_click
-        self.full_width, self.full_height = 620, 322
-        self.compact_width, self.compact_height = 500, 306
+        self.full_width, self.full_height = 620, 342
+        self.compact_width, self.compact_height = 500, 326
         self.width, self.base_height = self._target_dimensions()
         self._desired_pos = (self._safe_int(config.get('hud_x'), 100), self._safe_int(config.get('hud_y'), 100))
         self.win = OverlayWindowState(root, self.width, self.base_height, *self._desired_pos)
@@ -768,7 +768,7 @@ class TacticalHUD:
         star_label = str(next_star.get("star_label") or star_class or "STAR").upper()
         if next_star.get("fuel_risk") in {"warn", "alert"}:
             return (
-                f"RANGE WARNING · NEXT {star_label}",
+                f"EST. FUEL LOW · NEXT {star_label}",
                 COLOR_ORANGE if next_star.get("fuel_risk") == "alert" else COLOR_YELLOW,
             )
         if context.get("docked") and context.get("station"):
@@ -828,19 +828,16 @@ class TacticalHUD:
             except (TypeError, ValueError):
                 return "SURFACE OPERATIONS", COLOR_ACCENT
         if next_star.get("name") and star_class:
-            scoop = next_star.get("scoopable")
-            scoop_text = "SCOOPABLE" if scoop is True else "UNSCOOPABLE" if scoop is False else "CLASS UNKNOWN"
             dry = int(next_star.get("consecutive_unscoopable") or 0)
-            dry_text = f" · DRY {dry}" if dry >= 2 else ""
+            dry_text = f"DRY STRETCH · {dry} STARS" if dry >= 2 else ""
             vector = context.get("galactic_vector") or {}
             vector_parts = [
                 str(vector.get("direction") or "").strip(),
                 str(vector.get("plane") or "").strip(),
             ]
             vector_text = " · ".join(part for part in vector_parts if part)
-            prefix = f"{vector_text} · " if vector_text else ""
-            return f"{prefix}NEXT {star_label} · {scoop_text}{dry_text}", (
-                COLOR_YELLOW if scoop is False else COLOR_ACCENT
+            return " · ".join(part for part in (vector_text, dry_text) if part), (
+                COLOR_YELLOW if dry >= 2 else COLOR_ACCENT
             )
         vector = context.get("galactic_vector") or {}
         vector_label = str(vector.get("label") or "").strip()
@@ -1144,6 +1141,9 @@ class TacticalHUD:
             if progress_index >= 0:
                 progress_percent = float(html_hops[progress_index]["position"])
         model["route"] = {
+            "source": str((nav_context.get("route_track") or {}).get("source") or "none"),
+            "next_star": dict(route.get("next_star") or {}),
+            "fuel_endurance_jumps": (nav_context.get("route_safety") or {}).get("fuel_endurance_jumps"),
             "header": route_header,
             "target": str(route.get("target") or ""),
             "progress_text": str(route.get("progress_text") or route.get("jump_text") or ""),
@@ -1206,6 +1206,9 @@ class TacticalHUD:
             attention_text if attention_text and context_text != attention_text else ""
         )
         model["context"] = {
+            "surface": bool(nav_context.get("landed") or nav_context.get("in_srv")
+                            or nav_context.get("on_foot")
+                            or (nav_context.get("surface_approach") or {}).get("active")),
             "attention": attention_state if attention_text else "",
             "primary": context_text,
             "primary_color": context_color,

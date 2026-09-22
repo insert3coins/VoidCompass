@@ -303,7 +303,7 @@ body {
 #system-clock { color: var(--dim); min-width: 40px; text-align: right; }
 .current-system { color: var(--text); font: 700 calc(16px * var(--text-scale)) "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .5px; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px #000; }
 
-.route-block { top: 102px; height: 74px; }
+.route-block { top: 102px; height: 94px; }
 .route-target { display: flex; align-items: baseline; gap: 9px; min-width: 0; height: 23px; }
 .route-target > span { flex: 0 0 auto; color: var(--muted); font-size: calc(11px * var(--text-scale)); font-weight: 700; }
 .route-target > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--orange); font-size: calc(13px * var(--text-scale)); }
@@ -333,7 +333,20 @@ body {
 .route-captions { display: flex; justify-content: space-between; color: var(--dim); font-size: calc(11px * var(--text-scale)); font-weight: 700; }
 #route-origin { color: var(--accent); } #route-destination { color: var(--orange); }
 
-.survey-block { top: 181px; height: 68px; }
+.route-target > strong { font-size: calc(16px * var(--text-scale)); transition: color .6s ease; }
+.route-status { display: flex; justify-content: space-between; align-items: center; gap: 10px; height: 20px; color: var(--muted); font-size: calc(10px * var(--text-scale)); }
+.route-status > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#route-feedback { color: var(--accent); flex: 1; }
+#route-fuel { flex-shrink: 0; }
+#route-fuel.fuel-caution { color: var(--yellow); }
+#route-star { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
+.surface-focus .context-rail { background: color-mix(in srgb,var(--accent) 12%,transparent); border-left: 2px solid var(--accent); padding-left: 6px; }
+.surface-focus .route-target > strong { color: var(--text); }
+.context-rail { transition: background .6s ease,border-color .6s ease; }
+.target-promoted { animation: target-promote .8s ease-out; }
+@keyframes target-promote { from { opacity: .55; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .target-promoted, .system-arrival { animation: none !important; } }
+.survey-block { top: 201px; height: 68px; }
 .survey-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 7px; height: 33px; font-size: calc(12px * var(--text-scale)); }
 .survey-status { grid-row: 2; grid-column: 1 / -1; }
 .survey-readout { grid-column: 2; grid-row: 1; }
@@ -382,7 +395,7 @@ body {
 .survey-block[data-survey-state="complete"] .survey-header strong > i { background: var(--accent); }
 .survey-block[data-survey-state="complete"] .survey-progress-fill { filter:brightness(1.15); }
 
-.standard-metrics { top: 255px; height: 19px; display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 0; }
+.standard-metrics { top: 275px; height: 19px; display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 0; }
 .standard-metrics > div, .expanded-metrics > div { display: flex; align-items: center; justify-content: space-between; padding: 0 9px; border-left: 3px solid color-mix(in srgb, var(--metric-color, var(--accent)) 40%, transparent); }
 .standard-metrics span, .expanded-metrics span { color: var(--muted); font-size: calc(11px * var(--text-scale)); font-weight: 700; }
 .standard-metrics strong, .expanded-metrics strong { color: var(--metric-color, var(--accent)); font-size: calc(13px * var(--text-scale)); }
@@ -395,8 +408,8 @@ body {
 /* Expanded layout keeps the same language but exposes the four metric bank. */
 .hud.expanded .system-block { top: 51px; height: 45px; }
 .hud.expanded .expanded-metrics { position: absolute; display: grid; left: 20px; right: 20px; top: 103px; height: 28px; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid rgba(92,123,140,.22); }
-.hud.expanded .route-block { top: 138px; height: 74px; left: 20px; right: 20px; }
-.hud.expanded .survey-block { top: 217px; height: 68px; left: 20px; right: 20px; }
+.hud.expanded .route-block { top: 138px; height: 94px; left: 20px; right: 20px; }
+.hud.expanded .survey-block { top: 237px; height: 68px; left: 20px; right: 20px; }
 .hud.expanded .standard-metrics { display: none; }
 .hud.expanded .context-rail { left: 20px; right: 20px; bottom: 8px; font-size: calc(12px * var(--text-scale)); }
 .hud.expanded .route-header { grid-template-columns: minmax(0,1fr) auto auto; }

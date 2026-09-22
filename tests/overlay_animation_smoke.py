@@ -74,9 +74,51 @@ def run():
           document.getElementById('hud').classList.add('reduced-motion');
           if (document.querySelector('.route-segment.next > b').getAnimations().length) throw Error('Reduced route motion');
         }""")
+        page.evaluate("""() => {
+          const expect = (ok, message) => { if (!ok) throw Error(message); };
+          routeMemory = null;
+          lastRouteSignature = '';
+          clearTimeout(routeFeedbackTimer);
+          dom['route-feedback'].textContent = '';
+          const route = {active: true, source: 'game', target: 'Beta',
+            next_star: {star_class: 'K', scoopable: true}, fuel_endurance_jumps: 1,
+            hops: [{name: 'Beta', next: true}, {name: 'Gamma'}]};
+          renderRoute(route, 'Alpha');
+          expect(!dom['route-feedback'].textContent, 'Startup announced a replot');
+          expect(dom['route-star'].textContent === 'K · SCOOPABLE', 'Missing next-star facts');
+          expect(dom['route-fuel'].classList.contains('fuel-caution'), 'Missing fuel caution');
+          expect(dom['route-title'].textContent === 'JUMP 1 / 2', 'Incorrect jump count');
+          renderRoute({...route, leg_distance: '20 LY'}, 'Alpha');
+          expect(!dom['route-feedback'].textContent, 'Distance update announced a replot');
+          renderRoute({...route, target: 'Delta', hops: [{name: 'Delta', next: true}]}, 'Alpha');
+          expect(dom['route-feedback'].textContent === 'ROUTE UPDATED', 'Missing replot notice');
+          renderRoute({}, 'Alpha');
+          expect(dom['route-feedback'].textContent === 'ROUTE CLEARED', 'Missing clear notice');
+          renderRoute(route, 'Alpha');
+          renderRoute({...route, target: 'Gamma', fuel_endurance_jumps: null,
+            next_star: {}, hops: [{name: 'Beta', completed: true, current: true}, {name: 'Gamma', next: true}]}, 'Beta');
+          expect(dom['route-feedback'].textContent === 'ARRIVED · Beta', 'Missing arrival');
+          expect(dom['route-title'].textContent === 'JUMP 2 / 2', 'Arrival progress wrong');
+          expect(dom['route-progress'].style.width === '50%', 'Rail progress not aligned');
+          expect(dom['route-fuel'].textContent === 'FUEL RANGE UNKNOWN', 'Unknown fuel presented as verified');
+          expect(dom['route-star'].textContent === 'STAR UNKNOWN', 'Unknown star presented as verified');
+        }""")
+        for layout, width, height in [("standard", 500, 326), ("expanded", 620, 342)]:
+            page.set_viewport_size({"width": width, "height": height})
+            page.evaluate("""layout => {
+              render({schema: 1, layout, effects: {reduced_motion: true},
+                context: {surface: true, primary: 'SURFACE · TEST'}, system: {name: 'Beta'}});
+              if (!dom.hud.classList.contains('surface-focus')) throw Error('Missing surface emphasis');
+              const route = document.querySelector('.route-block').getBoundingClientRect();
+              const survey = dom['survey-block'].getBoundingClientRect();
+              const footer = document.querySelector('.context-rail').getBoundingClientRect();
+              if (route.bottom > survey.top || survey.bottom > footer.top) throw Error('HUD sections overlap');
+              const status = document.querySelector('.route-status').getBoundingClientRect();
+              if (status.bottom > route.bottom) throw Error('Status row exceeds route block');
+            }""", layout)
         assert not errors, errors
         browser.close()
-    print("PASS: lens idle/activity/stalled/reduced motion; 0–1000 waypoints, bounds, node reuse and route animation")
+    print("PASS: lens animation; 0-1000 waypoints; route updates/arrival/clear; fuel/star unknowns; both HUD layouts and surface emphasis")
 
 
 if __name__ == "__main__":

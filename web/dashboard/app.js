@@ -562,6 +562,7 @@ function renderBoot(state) {
     key: "handoff", label: "LIVE HANDOFF",
   };
   const loader = byId("boot-loader");
+  loader.style.setProperty("--boot-progress", String(progressPercent));
   loader.dataset.bootStage = activeStage.key;
   text("boot-stage-code", activeIndex >= 0
     ? String(activeIndex + 1).padStart(2, "0") : "05");
@@ -583,7 +584,7 @@ function renderBoot(state) {
     const active = index === activeIndex;
     text(id, ready ? "READY" : active ? "ACTIVE" : "WAIT");
     byId(id).classList.toggle("ready", ready);
-    const stage = document.querySelector(`[data-boot-stage="${id.replace("boot-", "")}"]`);
+    const stage = document.querySelector(`.boot-sequence > [data-boot-stage="${id.replace("boot-", "")}"]`);
     if (stage) {
       stage.classList.toggle("ready", ready);
       stage.classList.toggle("active", active);
