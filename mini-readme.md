@@ -3,7 +3,7 @@
 ## v5.4.8.2 // Heartbeat Beacon
 **Release Date:** 2026-Sep-19
 
-* Rebuilt Journal Heartbeat in the cockpit HUD's angular style, with flowing chevrons, charging side rails, travelling signal packets, scanning light and breathing corner brackets.
+* Rebuilt Journal Heartbeat in the cockpit HUD's angular style, with a mechanical eye, charging side rails, travelling signal packets, scanning light and breathing corner brackets. The eye looks around and blinks while idle, glances toward new activity and blinks on journal events or state changes.
 * Journal activity adds a double pulse, expanding brackets and a signal flash without restarting idle motion; bursts of telemetry are combined so each pulse can finish smoothly.
 * Kept overlays offscreen until their content is ready, including during individual page recovery, and suppressed browser error documents while recording navigation failures in host diagnostics.
 * Fixed reused-connection errors in the readiness handshake, forced fresh navigation on page retries and stopped WebView2's navigation hook from showing or activating unfinished overlays.
