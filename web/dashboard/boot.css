@@ -14,6 +14,7 @@
 .boot-companion .boot-instrument { width: min(100%,300px); }
 .boot-companion-orbit { inset: 5%; border-radius: 50%; animation: optic-orbit 11s linear infinite; }
 .boot-companion-orbit i { position: absolute; left: 50%; top: 0; width: 4px; height: 4px; border-radius: 50%; background: white; box-shadow: 0 0 9px currentColor; }
+.boot-activity-wave { inset: 25%; border: 1px solid currentColor; border-radius: 50%; opacity: 0; pointer-events: none; }
 .boot-chat { width: 100%; max-width: 340px; min-height: 132px; }
 .boot-chat-bubble { position: relative; border: 1px solid color-mix(in srgb,var(--boot-stage-color) 45%,var(--border)); border-radius: 3px 14px 14px 14px; background: color-mix(in srgb,var(--panel) 94%,transparent); padding: 13px 16px; }
 .boot-chat-bubble::before { content: ''; position: absolute; top: -7px; left: 25px; width: 12px; height: 12px; background: var(--panel); border-top: 1px solid var(--boot-stage-color); border-left: 1px solid var(--boot-stage-color); transform: rotate(45deg); }

@@ -13,6 +13,12 @@ def run():
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page()
         page.add_init_script("""window.bootDraws = 0;
+          window.bootActivityCount = 0;
+          const animate = Element.prototype.animate;
+          Element.prototype.animate = function(...args) {
+            if (this.classList.contains('boot-optic-lens')) window.bootActivityCount++;
+            return animate.apply(this, args);
+          };
           const clear = CanvasRenderingContext2D.prototype.clearRect;
           CanvasRenderingContext2D.prototype.clearRect = function(...args) {
             if (this.canvas.id === 'boot-starfield') window.bootDraws++;
@@ -41,6 +47,7 @@ def run():
         page.route("http://boot.test/**", serve)
         page.goto("http://boot.test/dashboard/index.html")
         page.wait_for_function("window.bootDraws > 2")
+        page.wait_for_function("window.bootActivityCount > 0")
         page.evaluate("""() => {
           const sky = document.getElementById('boot-starfield');
           const pixels = sky.getContext('2d').getImageData(0,0,sky.width,sky.height).data;
@@ -64,6 +71,7 @@ def run():
         page.emulate_media(reduced_motion="reduce")
         page.wait_for_timeout(100)
         still_draws = page.evaluate("window.bootDraws")
+        still_activity = page.evaluate("window.bootActivityCount")
         page.wait_for_timeout(150)
         assert page.evaluate("window.bootDraws") == still_draws, "Reduced-motion sky still drawing"
         page.evaluate("""() => {
@@ -88,11 +96,15 @@ def run():
         for _ in range(9):
             page.clock.run_for(9000)
             ids.add(page.locator('#boot-fact').get_attribute('data-fact-id'))
+        assert page.evaluate("window.bootActivityCount") == still_activity, "Reduced motion triggered decorative activity"
         assert len(ids) == 10, "Fact deck repeated before all ten entries appeared"
         assert page.locator('#boot-fact-previous').is_visible(), "Missing previous chat bubble"
         page.evaluate("bootTest({boot:{active:false,progress:1}})")
         final_fact = page.locator('#boot-fact').text_content()
+        page.emulate_media(reduced_motion="no-preference")
+        final_activity = page.evaluate("window.bootActivityCount")
         page.clock.run_for(20000)
+        assert page.evaluate("window.bootActivityCount") == final_activity, "Decorative activity continued after handoff"
         assert page.locator('#boot-fact').text_content() == final_fact, "Facts continued after startup"
         assert not errors, errors
         browser.close()
