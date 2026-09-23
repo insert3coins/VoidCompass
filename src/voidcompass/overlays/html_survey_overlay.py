@@ -55,7 +55,7 @@ class HtmlSurveyOverlayBridge(HtmlOverlayBridgeLifecycle):
         return self._ready
 
     def _has_actionable_model(self):
-        """Only map the browser surface when Survey has real work to show."""
+        """Map the browser only when Survey has a scanned body or target."""
         model = getattr(self.overlay, "_html_render_model", None)
         if not isinstance(model, dict) or model.get("mode") not in {"system", "body"}:
             return False
@@ -64,7 +64,9 @@ class HtmlSurveyOverlayBridge(HtmlOverlayBridgeLifecycle):
         if model.get("mode") == "body":
             body = model.get("body") or {}
             return bool(
-                model.get("rows")
+                body.get("name")
+                or body.get("body_id") is not None
+                or model.get("rows")
                 or model.get("notable")
                 or body.get("bio_count")
                 or body.get("geo_count")

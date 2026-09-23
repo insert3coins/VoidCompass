@@ -80,6 +80,13 @@ class SurveyOverlayVisibilityTests(unittest.TestCase):
         })
         self.assertTrue(bridge._window_payload()["visible"])
 
+    def test_focused_routine_scan_publishes_visible(self):
+        bridge = _bridge("normal", {
+            "mode": "body", "body": {"body_id": 5, "name": "Testia A 5"},
+            "rows": [],
+        })
+        self.assertTrue(bridge._window_payload()["visible"])
+
     def test_withdrawn_window_with_actionable_model_stays_hidden(self):
         bridge = _bridge("withdrawn", {
             "mode": "system",

@@ -13,9 +13,9 @@ from voidcompass.core import themes
 _CHROMA = '#ff00ff'
 _SEVERITIES = frozenset(('info', 'warn', 'fail', 'success'))
 WIDTH = 400
-_TOAST_H = 66
-_ACHIEVEMENT_H = 94
-_GAP = 7
+_NOTICE_BASE_H = 40
+_ACHIEVEMENT_BASE_H = 56
+_GAP = 8
 _MAX_STACK = 4
 _TEXT_X = 17
 _ICON_X = WIDTH - 31
@@ -53,9 +53,14 @@ class ToastHUD:
         except Exception:
             return default
 
-    @staticmethod
-    def toast_height(toast):
-        return _ACHIEVEMENT_H if str((toast or {}).get('kind')) == 'achievement' else _TOAST_H
+    def toast_height(self, toast):
+        """Keep the native host height aligned with scaled HTML toast rows."""
+        scale = max(75, min(200, self._safe_int(
+            self.config.get('overlay_text_scale_percent'), 100,
+        ))) / 100.0
+        base = (_ACHIEVEMENT_BASE_H if str((toast or {}).get('kind')) == 'achievement'
+                else _NOTICE_BASE_H)
+        return round(base * (1 + scale))
 
     def _show(self):
         if not self._toasts:

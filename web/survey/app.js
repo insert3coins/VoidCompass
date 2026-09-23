@@ -14,9 +14,16 @@
   let atlas = null;
   let atlasCycleTimer = 0;
   let atlasTurnTimer = 0;
+  let bioPinCycleTimer = 0;
+  let routine = null;
+  let routineCycleTimer = 0;
   const ATLAS_CYCLE_MS = 8000;
   const ATLAS_CONTENT_BUDGET = 520;
   const ATLAS_PAGE_CARD_LIMIT = 8;
+  const BIO_PIN_LIMIT = 8;
+  const BIO_PIN_CYCLE_MS = 10000;
+  const ROUTINE_CYCLE_MS = 10000;
+  const ROUTINE_LIMIT = 8;
 
   function node(tag, className = "", text = "") {
     const element = document.createElement(tag);
@@ -92,7 +99,9 @@
   }
 
   function rowKey(row = {}) {
-    return identityKey(row.name || row.display_name);
+    return row.body_id == null
+      ? identityKey(row.name || row.display_name)
+      : `body:${row.body_id}`;
   }
 
   function detailKey(detail = {}) {
@@ -122,6 +131,8 @@
       needsDss: Boolean(row.needs_dss),
       probes: Math.max(0, Math.round(safeNumber(row.dss_probes_used))),
       notable: Boolean(row.notable),
+      recent: Boolean(row.recent_scan),
+      scanStamp: String(row.scan_timestamp || ""),
       value: Math.max(safeNumber(row.max_value), safeNumber(row.min_value)),
       details: detailStateMap(details),
     };
@@ -183,7 +194,8 @@
         value: current.value > 0, notable: current.notable, details: new Map()};
     }
     return {
-      fresh: false,
+      fresh: (current.recent && !previous.recent)
+        || Boolean(current.scanStamp && current.scanStamp !== previous.scanStamp),
       bio: current.bio > previous.bio,
       geo: current.geo > previous.geo,
       mining: current.mining > previous.mining,
@@ -383,20 +395,49 @@
     const mining = Math.max(0, Math.round(safeNumber(row.mining_count)));
     const complete = Boolean(row.bio_complete || (bio && done >= bio));
     const value = valueRange(row.min_value, row.max_value);
+    const compactRoutine = row.priority === false && row.expanded !== true && !focused;
     const eventClasses = [
       event.fresh ? "event-new-target" : "",
       event.completed ? "event-target-complete" : "",
       event.mapped ? "event-mapped" : "",
       event.value || event.notable ? "event-value" : "",
     ].filter(Boolean).join(" ");
-    const card = node("article", `target${focused ? " focus-target" : ""}${complete ? " complete" : ""}${!bio && (geo || mining) ? " surface-only" : ""}${row.priority === false ? " routine" : ""}${eventClasses ? ` ${eventClasses}` : ""}`);
+    const card = node("article", `target${focused ? " focus-target" : ""}${complete ? " complete" : ""}${!bio && (geo || mining) ? " surface-only" : ""}${row.priority === false ? " routine" : ""}${compactRoutine ? " compact" : ""}${eventClasses ? ` ${eventClasses}` : ""}`);
     const planet = node("div", "planet-cell");
     planet.appendChild(planetOrb(row, focused));
     card.appendChild(planet);
+    const landableKnown = Object.prototype.hasOwnProperty.call(row, "landable_known")
+      ? row.landable_known === true
+      : Object.prototype.hasOwnProperty.call(row, "landable") && row.landable !== null;
+    if (compactRoutine) {
+      const summary = node("div", "routine-summary");
+      const primary = node("div", "routine-primary");
+      primary.appendChild(node("strong", "target-name", designation(row, system)));
+      if (row.recent_scan) primary.appendChild(node("b", "target-kicker routine-latest", "LATEST SCAN"));
+      summary.appendChild(primary);
+      const facts = node("div", "routine-facts");
+      facts.appendChild(node("span", "routine-class", classLabel(row)));
+      const atmosphere = String(row.atmosphere_label || "").trim();
+      if (atmosphere) {
+        const detail = node("span", "routine-atmosphere", atmosphere);
+        detail.title = atmosphere;
+        facts.appendChild(detail);
+      }
+      if (safeNumber(row.ring_count) > 0) facts.appendChild(node("b", "routine-chip", `RINGS ${Math.round(safeNumber(row.ring_count))}`));
+      if (landableKnown) facts.appendChild(node("b", "routine-chip", row.landable ? "LAND" : "NO LAND"));
+      if (row.first_footfall) facts.appendChild(node("b", "routine-chip", "1ST FOOTFALL"));
+      const probes = Math.max(0, Math.round(safeNumber(row.dss_probes_used)));
+      const target = Math.max(0, Math.round(safeNumber(row.dss_efficiency_target)));
+      if (probes && target) facts.appendChild(node("b", "routine-chip", `DSS ${probes}/${target}`));
+      else facts.appendChild(node("b", "routine-chip", row.needs_dss ? "DSS OPEN" : "MAPPED"));
+      summary.appendChild(facts);
+      card.appendChild(summary);
+      return card;
+    }
     const head = node("div", "target-head");
     const identity = node("div", "target-identity");
     const eyebrow = node("div", "target-eyebrow");
-    eyebrow.appendChild(node("span", "target-kicker", focused ? "SURFACE FOCUS" : (complete ? "SURVEY COMPLETE" : "SURVEY TARGET")));
+    eyebrow.appendChild(node("span", "target-kicker", focused ? "SURFACE FOCUS" : row.recent_scan ? "LATEST SCAN" : (complete ? "SURVEY COMPLETE" : "SURVEY TARGET")));
     if (row.terraformable) eyebrow.appendChild(node("b", "environment-tag terraformable", "TERRAFORMABLE"));
     if (row.notable) eyebrow.appendChild(node("b", "environment-tag notable-tag", "◆ NOTABLE"));
     identity.appendChild(eyebrow);
@@ -416,9 +457,6 @@
     if (bio) badges.appendChild(node("b", `badge bio${event.bio ? " event-signal" : ""}`, `BIO ${done}/${bio}`));
     if (geo) badges.appendChild(node("b", `badge geo${event.geo ? " event-signal" : ""}`, `GEO ${geo}`));
     if (mining) badges.appendChild(node("b", `badge mining${event.mining ? " event-signal" : ""}`, `MINING ${mining}`));
-    const landableKnown = Object.prototype.hasOwnProperty.call(row, "landable_known")
-      ? row.landable_known === true
-      : Object.prototype.hasOwnProperty.call(row, "landable") && row.landable !== null;
     if (landableKnown) {
       const landable = Boolean(row.landable);
       const badge = node(
@@ -463,29 +501,64 @@
 
   function sampleCard(sampling, event = {}) {
     const progress = Math.max(1, Math.min(3, Math.round(safeNumber(sampling.progress) || 1)));
+    const distanceKnown = sampling.min_distance_m != null
+      && Number.isFinite(Number(sampling.min_distance_m));
+    const spacing = Math.max(0, Math.round(safeNumber(sampling.colony_m)));
+    const distance = distanceKnown ? Math.max(0, Math.round(safeNumber(sampling.min_distance_m))) : 0;
+    const ready = progress < 3 && (sampling.clear === true
+      || (distanceKnown && spacing > 0 && distance >= spacing));
+    const analysisPending = progress === 3;
     const eventClasses = [
       event.fresh ? "event-sample-start" : "",
       event.progress ? "event-sample-step" : "",
       event.complete ? "event-sample-complete" : "",
     ].filter(Boolean).join(" ");
-    const card = node("article", `sample-card${eventClasses ? ` ${eventClasses}` : ""}`);
+    const card = node("article", `sample-card${ready ? " ready" : ""}${analysisPending ? " analysis-pending" : ""}${eventClasses ? ` ${eventClasses}` : ""}`);
+    const heading = node("div", "sample-heading");
+    heading.appendChild(node("span", "sample-kicker", "EXOBIO · GENETIC SEQUENCE"));
+    heading.appendChild(node("b", "sample-count", `${String(progress).padStart(2, "0")} / 03`));
+    card.appendChild(heading);
+    const species = node("strong", "sample-species", sampling.species || "Biological sample");
+    species.title = sampling.species || "Biological sample";
+    card.appendChild(species);
     const nodes = node("div", "sample-nodes");
+    nodes.style.setProperty("--track-fill", `${(progress - 1) * 33.333}%`);
     for (let index = 1; index <= 3; index += 1) {
       const acknowledged = index === progress && (event.fresh || event.progress || event.complete);
-      nodes.appendChild(node("i", `sample-node${index <= progress ? " done" : ""}${acknowledged ? " acknowledged" : ""}`, index));
+      const step = node("div", `sample-step${index <= progress ? " captured" : ""}${index === progress ? " current" : ""}${index === progress + 1 ? " next" : ""}`);
+      step.appendChild(node("i", `sample-node${index <= progress ? " done" : ""}${acknowledged ? " acknowledged" : ""}`, String(index).padStart(2, "0")));
+      step.appendChild(node("span", "sample-step-label", index <= progress ? "CAPTURED" : index === progress + 1 ? (ready ? "READY" : "NEXT") : "PENDING"));
+      nodes.appendChild(step);
     }
     card.appendChild(nodes);
-    const copy = node("div", "sample-copy");
-    copy.appendChild(node("strong", "sample-species", sampling.species || "Biological sample"));
-    const status = node("div", "sample-status");
-    status.appendChild(node("span", "", `SAMPLE ${progress}/3`));
-    let range = "SEEK NEXT COLONY";
-    if (sampling.clear) range = "CLEAR FOR NEXT";
-    else if (sampling.min_distance_m != null && sampling.colony_m) {
-      range = `${Math.round(safeNumber(sampling.min_distance_m)).toLocaleString()}/${Math.round(safeNumber(sampling.colony_m)).toLocaleString()} M`;
+    const clearance = node("div", "sample-clearance");
+    let action = "DISTANCE UNAVAILABLE";
+    let context = spacing ? `${spacing.toLocaleString()} M REQUIRED` : "COLONY SPACING UNKNOWN";
+    if (analysisPending) {
+      action = "SAMPLES SECURED";
+      context = "AWAITING ANALYSIS";
+    } else if (ready) {
+      action = `READY FOR SAMPLE ${String(progress + 1).padStart(2, "0")}`;
+      context = distanceKnown && spacing
+        ? `${distance.toLocaleString()} / ${spacing.toLocaleString()} M SPACING`
+        : "COLONY SPACING CLEAR";
+    } else if (distanceKnown && spacing) {
+      action = `${Math.max(0, spacing - distance).toLocaleString()} M TO SAMPLE ${String(progress + 1).padStart(2, "0")}`;
+      context = `${distance.toLocaleString()} / ${spacing.toLocaleString()} M SPACING`;
+    } else if (distanceKnown) {
+      context = `${distance.toLocaleString()} M FROM NEAREST SAMPLE`;
     }
-    status.appendChild(node("span", sampling.clear ? "clear" : "", range));
-    copy.appendChild(status); card.appendChild(copy);
+    clearance.appendChild(node("strong", "sample-action", action));
+    clearance.appendChild(node("span", "sample-distance", context));
+    card.appendChild(clearance);
+    if (!analysisPending && distanceKnown && spacing) {
+      const meter = node("div", "sample-range-meter");
+      meter.setAttribute("aria-hidden", "true");
+      const fill = node("i");
+      fill.style.width = `${Math.min(100, (distance / spacing) * 100)}%`;
+      meter.appendChild(fill);
+      card.appendChild(meter);
+    }
     return card;
   }
 
@@ -510,17 +583,121 @@
   function stopAtlasCycle() {
     if (atlasCycleTimer) window.clearInterval(atlasCycleTimer);
     if (atlasTurnTimer) window.clearTimeout(atlasTurnTimer);
+    if (bioPinCycleTimer) window.clearInterval(bioPinCycleTimer);
     atlasCycleTimer = 0;
     atlasTurnTimer = 0;
+    bioPinCycleTimer = 0;
     atlas = null;
     dom.root.classList.remove("paged", "page-turn");
+  }
+
+  function stopRoutineCycle() {
+    if (routineCycleTimer) window.clearInterval(routineCycleTimer);
+    routineCycleTimer = 0;
+    routine = null;
+  }
+
+  function renderRoutineStrip(board, rows, index, system, limit) {
+    const start = index * limit;
+    const visible = rows.slice(start, start + limit);
+    const heading = node("div", "routine-strip-heading");
+    const compressed = dom.root.classList.contains("scale-huge")
+      && dom.root.classList.contains("survey-congested");
+    heading.appendChild(node("strong", "", compressed ? "OTHER" : "OTHER SCANNED PLANETS"));
+    heading.appendChild(node("span", "", rows.length > limit
+      ? compressed ? `${start + 1}–${start + visible.length}/${rows.length}`
+        : `${start + 1}–${start + visible.length} / ${rows.length} · AUTO ${ROUTINE_CYCLE_MS / 1000}S`
+      : `${rows.length} ${rows.length === 1 ? "WORLD" : "WORLDS"}`));
+    const grid = node("div", "routine-strip-grid");
+    for (const row of visible) {
+      const pin = node("div", `routine-pin${row.recent_scan ? " recent" : ""}`);
+      pin.dataset.bodyKey = rowKey(row);
+      const className = classLabel(row);
+      const mapping = row.needs_dss ? "DSS OPEN" : "MAPPED";
+      pin.setAttribute("aria-label", `${row.name || designation(row, system)} · ${className} · ${mapping}`);
+      pin.appendChild(planetOrb(row));
+      const copy = node("div", "routine-pin-copy");
+      copy.appendChild(node("strong", "routine-pin-name", designation(row, system)));
+      copy.appendChild(node("span", "routine-pin-class", className));
+      pin.appendChild(copy);
+      pin.appendChild(node("b", "routine-pin-status", row.recent_scan ? "NEW" : row.needs_dss ? "DSS" : "MAP"));
+      grid.appendChild(pin);
+    }
+    board.replaceChildren(heading, grid);
+  }
+
+  function nextRoutinePage() {
+    if (!routine || routine.pages < 2) return;
+    routine.page = (routine.page + 1) % routine.pages;
+    renderRoutineStrip(routine.board, routine.rows, routine.page, routine.system, routine.limit);
+  }
+
+  function routineStrip(rows, system, samplingActive = false) {
+    if (!rows.length) {
+      stopRoutineCycle();
+      return null;
+    }
+    const previous = routine;
+    const limit = dom.root.classList.contains("scale-huge") ? (samplingActive ? 2 : 4)
+      : dom.root.classList.contains("scale-large") ? (samplingActive ? 4 : 6) : ROUTINE_LIMIT;
+    const identity = `${system}|${rows.map(rowKey).join("|")}`;
+    const pages = Math.ceil(rows.length / limit);
+    const page = previous?.identity === identity
+      ? Math.min(previous.page, pages - 1) : 0;
+    const board = node("section", "routine-strip");
+    board.setAttribute("aria-label", "Other scanned planets");
+    routine = {board, rows, system, limit, identity, pages, page};
+    renderRoutineStrip(board, rows, page, system, limit);
+    if (pages > 1 && !routineCycleTimer) {
+      routineCycleTimer = window.setInterval(nextRoutinePage, ROUTINE_CYCLE_MS);
+    } else if (pages <= 1 && routineCycleTimer) {
+      window.clearInterval(routineCycleTimer);
+      routineCycleTimer = 0;
+    }
+    return board;
+  }
+
+  function renderBioPins(board, rows, index, system, limit) {
+    const start = index * limit;
+    const visible = rows.slice(start, start + limit);
+    const heading = node("div", "bio-pinboard-heading");
+    const compressed = dom.root.classList.contains("scale-huge")
+      && dom.root.classList.contains("survey-congested");
+    heading.appendChild(node("strong", "", compressed ? "BIO PINS" : "PINNED BIOLOGY"));
+    heading.appendChild(node("span", "", rows.length > limit
+      ? compressed ? `${start + 1}–${start + visible.length}/${rows.length}`
+        : `${start + 1}–${start + visible.length} / ${rows.length} · AUTO ${BIO_PIN_CYCLE_MS / 1000}S`
+      : `${rows.length} SCANNED ${rows.length === 1 ? "WORLD" : "WORLDS"}`));
+    const grid = node("div", "bio-pinboard-grid");
+    for (const row of visible) {
+      const total = Math.max(0, Math.round(safeNumber(row.bio_count)));
+      const complete = Math.max(0, Math.round(safeNumber(row.complete)));
+      const pin = node("div", `bio-pin${row.bio_complete ? " complete" : ""}${row.recent_scan ? " recent" : ""}`);
+      pin.dataset.bodyKey = rowKey(row);
+      pin.setAttribute("aria-label", `${row.name || designation(row, system)} · biology ${complete} of ${total}`);
+      pin.appendChild(planetOrb(row));
+      pin.appendChild(node("strong", "bio-pin-name", designation(row, system)));
+      pin.appendChild(node("b", "bio-pin-count", `${complete}/${total}`));
+      grid.appendChild(pin);
+    }
+    board.replaceChildren(heading, grid);
+  }
+
+  function nextBioPinPage() {
+    if (!atlas?.pinboard || atlas.pinPages < 2) return;
+    atlas.pinPage = (atlas.pinPage + 1) % atlas.pinPages;
+    renderBioPins(atlas.pinboard, atlas.pinRows, atlas.pinPage,
+      atlas.system, atlas.pinLimit);
   }
 
   function atlasBanner(page, pages, first, last, total) {
     const banner = node("div", "atlas-page-banner");
     banner.style.setProperty("--page-fill", `${(page / pages) * 100}%`);
+    const compressed = dom.root.classList.contains("scale-huge")
+      && dom.root.classList.contains("survey-congested");
     banner.appendChild(node("strong", "", `ATLAS PAGE ${page} / ${pages}`));
-    banner.appendChild(node("span", "", ` · ${first}–${last} OF ${total} · AUTO ${ATLAS_CYCLE_MS / 1000}S`));
+    banner.appendChild(node("span", "", compressed ? ` · ${first}–${last} OF ${total}`
+      : ` · ${first}–${last} OF ${total} · AUTO ${ATLAS_CYCLE_MS / 1000}S`));
     return banner;
   }
 
@@ -532,6 +709,8 @@
     const current = atlas.pages[atlas.index];
     dom.content.replaceChildren();
     if (atlas.sample) dom.content.appendChild(atlas.sample);
+    if (atlas.routineStrip) dom.content.appendChild(atlas.routineStrip);
+    if (atlas.pinboard) dom.content.appendChild(atlas.pinboard);
     dom.content.appendChild(atlasBanner(
       atlas.index + 1, atlas.pages.length,
       current[0].index + 1, current[current.length - 1].index + 1, atlas.total,
@@ -549,7 +728,11 @@
     showAtlasPage(true);
   }
 
-  function paginateSystemCards(cards, sample, model, motion) {
+  function paginateSystemCards(cards, sample, routineBoard, pinRows, model, motion) {
+    if (!cards.length) {
+      stopAtlasCycle();
+      return;
+    }
     const fullHeight = contentChildrenHeight([...dom.content.children]);
     const pageBudget = dom.root.classList.contains("scale-huge") ? 450
       : dom.root.classList.contains("scale-large") ? 490
@@ -561,12 +744,27 @@
     const previous = atlas;
     const gap = Number.parseFloat(getComputedStyle(dom.content).rowGap) || 0;
     const sampleHeight = sample ? sample.getBoundingClientRect().height : 0;
+    const routineHeight = routineBoard ? routineBoard.getBoundingClientRect().height : 0;
+    const sharedSpace = Boolean(sample && routineBoard);
+    const pinLimit = dom.root.classList.contains("scale-huge") ? (sharedSpace ? 2 : 4)
+      : dom.root.classList.contains("scale-large") ? (sharedSpace ? 4 : 6) : BIO_PIN_LIMIT;
+    const pinIdentity = `${model.system}|${pinRows.map(rowKey).join("|")}`;
+    const pinPages = Math.ceil(pinRows.length / pinLimit);
+    const pinPage = pinRows.length && previous?.pinIdentity === pinIdentity
+      ? Math.min(previous.pinPage, pinPages - 1) : 0;
+    const pinboard = pinRows.length ? node("section", "bio-pinboard") : null;
+    if (pinboard) {
+      pinboard.setAttribute("aria-label", "Pinned scanned planets with biological signals");
+      renderBioPins(pinboard, pinRows, pinPage, model.system, pinLimit);
+      dom.content.insertBefore(pinboard, cards[0]?.element || null);
+    }
+    const pinHeight = pinboard ? pinboard.getBoundingClientRect().height : 0;
     const probe = atlasBanner(1, 1, 1, cards.length, cards.length);
     dom.content.appendChild(probe);
     const bannerHeight = probe.getBoundingClientRect().height;
     probe.remove();
-    const pageHeight = (entries, cardHeight) => sampleHeight + bannerHeight + cardHeight
-      + gap * (entries.length + (sample ? 1 : 0));
+    const pageHeight = (entries, cardHeight) => sampleHeight + routineHeight + pinHeight + bannerHeight + cardHeight
+      + gap * (entries.length + (sample ? 1 : 0) + (routineBoard ? 1 : 0) + (pinboard ? 1 : 0));
     const pages = [];
     let current = [];
     let currentHeight = 0;
@@ -593,17 +791,32 @@
       const changedPage = pages.findIndex((page) => page.some((entry) => changed.has(entry.key)));
       if (changedPage >= 0) index = changedPage;
     }
-    atlas = {pages, index, total: cards.length, sample, identity, maxContentHeight: height};
+    atlas = {pages, index, total: cards.length, sample, routineStrip: routineBoard, pinboard, pinRows,
+      pinIdentity, pinPage, pinPages, pinLimit, system: model.system, identity,
+      maxContentHeight: height};
     dom.root.classList.add("paged");
     showAtlasPage();
     if (!atlasCycleTimer) atlasCycleTimer = window.setInterval(nextAtlasPage, ATLAS_CYCLE_MS);
+    if (pinPages > 1 && !bioPinCycleTimer) {
+      bioPinCycleTimer = window.setInterval(nextBioPinPage, BIO_PIN_CYCLE_MS);
+    } else if (pinPages <= 1 && bioPinCycleTimer) {
+      window.clearInterval(bioPinCycleTimer);
+      bioPinCycleTimer = 0;
+    }
   }
 
   window.VoidCompassSurveyAtlas = Object.freeze({
     nextPage: nextAtlasPage,
+    nextPinPage: nextBioPinPage,
+    nextRoutinePage,
     getState: () => atlas
-      ? {page: atlas.index + 1, pages: atlas.pages.length, total: atlas.total}
-      : {page: 0, pages: 0, total: 0},
+      ? {page: atlas.index + 1, pages: atlas.pages.length, total: atlas.total,
+        pinned: atlas.pinRows.length, pinPage: atlas.pinPage + 1,
+        pinPages: atlas.pinPages, routine: routine?.rows.length || 0,
+        routinePage: routine ? routine.page + 1 : 0, routinePages: routine?.pages || 0}
+      : {page: 0, pages: 0, total: 0, pinned: 0, pinPage: 0, pinPages: 0,
+        routine: routine?.rows.length || 0, routinePage: routine ? routine.page + 1 : 0,
+        routinePages: routine?.pages || 0},
   });
 
   function overview(model, motion = {}) {
@@ -656,7 +869,7 @@
     const metrics = node("div", "overview-metrics");
     const items = bodyMode
       ? [["BIO", bio], ["GEO", geo], ["MINING", mining], ["DSS", body.dss_complete ? "MAPPED" : "OPEN"]]
-      : [["FSS", model.total_known && safeNumber(model.total) ? `${safeNumber(model.scanned)}/${safeNumber(model.total)}` : "INTAKE"], ["GEO", geo], ["MINING", mining], ["SCOPE", model.scope === "all" ? "ALL" : "PRIORITY"]];
+      : [["FSS", model.total_known && safeNumber(model.total) ? `${safeNumber(model.scanned)}/${safeNumber(model.total)}` : "INTAKE"], ["GEO", geo], ["MINING", mining], ["SCOPE", model.scope === "all" ? "EXPANDED" : "COMPACT"]];
     for (const [label, value] of items) {
       const item = node("span", "overview-metric");
       item.appendChild(node("small", "", label));
@@ -694,6 +907,8 @@
     dom.content.replaceChildren(); dom.footer.replaceChildren();
     if (!model.mode) {
       stopAtlasCycle();
+      stopRoutineCycle();
+      dom.root.classList.remove("survey-congested");
       dom.root.classList.add("empty");
       dom.overview.replaceChildren();
       applyMotionClass({enabled: false});
@@ -710,6 +925,8 @@
     };
     if (bodyMode) {
       stopAtlasCycle();
+      stopRoutineCycle();
+      dom.root.classList.remove("survey-congested");
       const body = model.body || {};
       const samplingName = String((model.sampling || {}).species || "").toLowerCase();
       const bodyDetails = rows.filter((detail) => {
@@ -730,12 +947,18 @@
         landable_known: Object.prototype.hasOwnProperty.call(body, "landable")
           && body.landable !== null,
       };
-      if (rows.length || safeNumber(body.geo_count) || safeNumber(body.mining_count) || model.notable) {
-        dom.content.appendChild(targetCard(projected, motion.body || {}, model.system, true));
-      }
+      dom.content.appendChild(targetCard(projected, motion.body || {}, model.system, true));
     } else {
-      const active = rows.filter((row) => !row.bio_complete);
-      const complete = rows.filter((row) => row.bio_complete);
+      const routineRows = rows.filter((row) => row.priority === false
+        && String(row.planet_class || "").trim());
+      dom.root.classList.toggle("survey-congested", Boolean(sample && routineRows.length
+        && rows.some((row) => safeNumber(row.bio_count) > 0)));
+      const board = routineStrip(routineRows, model.system, Boolean(sample));
+      if (board) dom.content.appendChild(board);
+      const detailedRows = rows.filter((row) => row.priority !== false || row.expanded === true
+        || !String(row.planet_class || "").trim());
+      const active = detailedRows.filter((row) => !row.bio_complete || row.recent_scan);
+      const complete = detailedRows.filter((row) => row.bio_complete && !row.recent_scan);
       for (const row of active) addCard(targetCard(row, motion.rows.get(rowKey(row)) || {}, model.system), rowKey(row), row);
       if (complete.length) {
         const label = node("div", "group-label");
@@ -750,7 +973,11 @@
       if (bodyMode) dom.content.appendChild(element);
       else addCard(element, rowKey(row), row);
     }
-    if (!bodyMode) paginateSystemCards(cards, sample, model, motion);
+    if (!bodyMode) {
+      const bioPins = rows.filter((row) => safeNumber(row.bio_count) > 0
+        && String(row.planet_class || "").trim());
+      paginateSystemCards(cards, sample, routine?.board || null, bioPins, model, motion);
+    }
 
     if (bodyMode) {
       dom.footer.appendChild(node("span", "", "SURFACE FIELD NOTES"));
@@ -763,13 +990,12 @@
       const complete = rows.filter((row) => row.bio_complete).length;
       const low = rows.reduce((sum, row) => sum + safeNumber(row.min_value), 0);
       const high = rows.reduce((sum, row) => sum + safeNumber(row.max_value), 0);
-      const scope = model.scope === "all" ? "ALL BODIES" : "PRIORITY TARGETS";
+      const scope = model.scope === "all" ? "EXPANDED ATLAS" : "COMPACT ATLAS";
       const priority = rows.filter((row) => row.priority !== false).length;
+      const routine = rows.length - priority;
       const mapped = rows.filter((row) => !row.needs_dss).length;
       const notableOnly = (model.notable_rows || []).length;
-      const summary = model.scope === "all"
-        ? `${scope} ${rows.length + notableOnly} · PRIORITY ${priority} · MAPPED ${mapped}`
-        : `${scope} ${rows.length + notableOnly} · OPEN ${rows.length - complete} · DONE ${complete}${notableOnly ? ` · NOTABLE ${notableOnly}` : ""}`;
+      const summary = `${scope} ${rows.length + notableOnly} · PRIORITY ${priority} · ROUTINE ${routine} · DONE ${complete} · MAPPED ${mapped}${notableOnly ? ` · NOTABLE ${notableOnly}` : ""}`;
       dom.footer.appendChild(node("span", "", summary));
       const session = model.dss_stats?.session || {};
       const mappedSession = Math.max(0, Math.round(safeNumber(session.mapped)));

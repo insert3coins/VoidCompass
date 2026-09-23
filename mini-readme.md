@@ -1,6 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.9 // Flight-Deck Navigation
+## v5.4.9.1 // Field Signals
+**Release Date:** 2026-Sep-24
+
+* Survey Operations now refreshes for each planet Scan even after FSS has already found the full system. Other scanned planets stay in a compact, independently cycling strip above the atlas, while biology, geology, landable and mining worlds retain detailed cards; the existing option can expand routine cards.
+* Scan-confirmed biological planets stay in a pinned mini-atlas above Survey Operations' rotating pages. Crowded systems cycle the pinboard independently in bounded batches while the detailed cards remain available below.
+* Reworked the three-step exobiology sampler with captured/next/ready states, live distance remaining, travelled-versus-required spacing and an honest analysis-pending state after the third sample.
+* Removed the duplicate clear-to-sample notification and its obsolete toggle. The live spacing guidance stays in Survey Operations.
+* Rebuilt Achievements as a commander record with a completion dial, next-milestone spotlight, latest unlock and a searchable, filterable, paged archive. Tracking, unlock notices and manual controls remain available.
+* Rebuilt cockpit notifications as severity-coded signal cards and achievement unlocks as distinct milestone cards, preserving category, points and expiry with readable scaling and reduced-motion support. Their accents now follow the active commander profile; warning and reward colours retain their meaning.
+
+## Earlier releases
+
+### v5.4.9 // Flight-Deck Navigation
 **Release Date:** 2026-Sep-23
 
 * Rebuilt the Navigation HUD as a flight-deck instrument with a clearer current-system readout, prominent next-system vector, compact jump/distance telemetry and glass-panel survey and metric banks.
@@ -11,8 +23,6 @@
 * Kept the existing fuel-estimate cautions and journal-backed survey data.
 * Rebuilt Survey Operations as a title-free field atlas with journal-classed, code-drawn planets, scan-backed atmosphere and ring details, clearer FSS/biology progress, focused surface cards, and a refreshed sampling track. Signal-only bodies retain neutral unknown planets until scanned.
 * Added rotating planet surfaces beneath fixed lighting and a bounded atlas for crowded systems. Smaller planet discs and a persistent miniature roster keep every included body visible at once, while full planet cards and biological details cycle below. Removed the 60-body current-system scan-cache limit; the existing All surveyed bodies option includes non-priority scans. Reduced motion keeps the data accessible without visual effects.
-
-## Earlier releases
 
 ### v5.4.8.4 // Navigation Clarity
 **Release Date:** 2026-Sep-23
