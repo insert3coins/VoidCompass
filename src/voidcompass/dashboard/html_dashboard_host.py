@@ -13,6 +13,8 @@ from urllib.request import build_opener, ProxyHandler, Request
 
 
 _OPENER = build_opener(ProxyHandler({}))
+_BOOT_RECOVERY_DELAY_S = 7.0  # Browser owns the 5 s hold and 720 ms fade.
+_BOOT_RECOVERY_RETRY_S = 1.0
 
 
 def _request_json(url, payload=None, timeout=2.0):
@@ -43,6 +45,7 @@ class DashboardHost:
         self.monitor_failures = 0
         self.boot_released = False
         self.boot_release_started_at = 0.0
+        self._last_boot_recovery_at = 0.0
 
     def url(self, path):
         return f"{self.origin}{path}?token={quote(self.token)}"
@@ -101,6 +104,33 @@ class DashboardHost:
         if not self.closing_from_backend:
             self.post("window_closed")
 
+    def _service_boot_release(self, boot_active, onboarding_active, now):
+        """Nudge a stalled client after its own handoff window; never paint it."""
+        if boot_active or onboarding_active:
+            self.boot_released = False
+            self.boot_release_started_at = 0.0
+            self._last_boot_recovery_at = 0.0
+            return
+        if self.boot_released:
+            return
+        if not self.boot_release_started_at:
+            self.boot_release_started_at = now
+            return
+        if now - self.boot_release_started_at < _BOOT_RECOVERY_DELAY_S:
+            return
+        if now - self._last_boot_recovery_at < _BOOT_RECOVERY_RETRY_S:
+            return
+        self._last_boot_recovery_at = now
+        status = self.window.evaluate_js(
+            "(()=>{const boot=document.getElementById('boot');"
+            "if(document.body.classList.contains('ready')&&(!boot||boot.hidden))return 'ready';"
+            "window.dispatchEvent(new Event('voidcompass:boot-recover'));"
+            "return 'pending';})()"
+        )
+        if status == "ready":
+            self.boot_released = True
+            print("HTML dashboard boot release guard settled", flush=True)
+
     def monitor(self):
         while self.window is not None:
             try:
@@ -112,34 +142,9 @@ class DashboardHost:
                 self.monitor_failures = 0
                 boot_active = bool(state.get("boot_active", True))
                 onboarding_active = bool(state.get("onboarding_active", False))
-                if boot_active or onboarding_active:
-                    # A later commissioning run owns the curtain again.
-                    self.boot_released = False
-                    self.boot_release_started_at = 0.0
-                elif not self.boot_released:
-                    # Belt-and-braces handoff: a snapshot GET that began just
-                    # before runtime.stop() can arrive after the first native
-                    # release and make the curtain visible again. Reassert the
-                    # live presentation for a short settling window instead of
-                    # treating release as a one-shot edge.
-                    now = time.monotonic()
-                    if not self.boot_release_started_at:
-                        self.boot_release_started_at = now
-                        print("HTML dashboard boot release guard engaged", flush=True)
-                    elapsed = now - self.boot_release_started_at
-                    force_hide = elapsed >= 0.85
-                    self.window.evaluate_js(
-                        "document.body.classList.add('ready');"
-                        "document.getElementById('app')?.setAttribute('aria-hidden','false');"
-                        + (
-                            "(()=>{const b=document.getElementById('boot');if(b)b.hidden=true;})()"
-                            if force_hide else
-                            "setTimeout(()=>{const b=document.getElementById('boot');if(b)b.hidden=true;},720)"
-                        )
-                    )
-                    if elapsed >= 4.0:
-                        self.boot_released = True
-                        print("HTML dashboard boot release guard settled", flush=True)
+                self._service_boot_release(
+                    boot_active, onboarding_active, time.monotonic(),
+                )
                 host_revision = int(state.get("host_revision") or 0)
                 if host_revision != self.host_revision:
                     self.host_revision = host_revision

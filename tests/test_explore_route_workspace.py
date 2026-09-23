@@ -53,6 +53,25 @@ class ExploreRouteWorkspaceTests(unittest.TestCase):
         self.assertEqual(truncated, 0)
         self.assertEqual(track["source"], "game")
         self.assertEqual([hop["name"] for hop in track["hops"]], ["NEW NEXT", "NEW DESTINATION"])
+        self.assertEqual([hop["star_class"] for hop in track["hops"]], ["G", "M"])
+
+    def test_nav_route_missing_star_class_is_unknown_not_unscoopable(self):
+        route = ["CURRENT", "UNKNOWN NEXT", "NEUTRON AFTER"]
+        entries = [
+            {"StarSystem": "CURRENT", "StarClass": "K"},
+            {"StarSystem": "UNKNOWN NEXT"},
+            {"StarSystem": "NEUTRON AFTER", "StarClass": "N"},
+        ]
+        hops, _truncated = route_strip.build_route_hops(
+            None, route, entries, "CURRENT",
+        )
+        track = route_strip.build_route_track(
+            None, route, entries, "CURRENT",
+        )
+
+        self.assertEqual([hop["star_class"] for hop in hops], ["", "N"])
+        self.assertEqual([hop["scoopable"] for hop in hops], [None, False])
+        self.assertEqual([hop["scoopable"] for hop in track["hops"]], [None, False])
 
     def test_profile_waypoints_remain_fallback_without_elite_route(self):
         plan = _WaypointPlan()
@@ -74,6 +93,7 @@ class ExploreRouteWorkspaceTests(unittest.TestCase):
         app.previous_sys = "PREVIOUS"
         app.previous_coords = [-10, 0, 0]
         app.current_coords = [0, 0, 0]
+        app.star_class = "M"  # A later secondary-star scan must not mask the route's K arrival star.
         app.route_list = ["CURRENT", "NEW NEXT", "NEW DESTINATION"]
         app.nav_route_entries = [
             {"StarSystem": "CURRENT", "StarPos": [0, 0, 0], "StarClass": "K"},
@@ -105,3 +125,4 @@ class ExploreRouteWorkspaceTests(unittest.TestCase):
         self.assertEqual(context["next"], "NEW NEXT")
         self.assertEqual(context["route_remaining"], 2)
         self.assertEqual(context["route_track"]["source"], "game")
+        self.assertEqual(context["current_star_class"], "K")

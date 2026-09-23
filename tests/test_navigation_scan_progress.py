@@ -2,9 +2,48 @@ import unittest
 
 from voidcompass.dashboard.dashboard import MainDashboard
 from voidcompass.overlays.hud import TacticalHUD
+from voidcompass.core.application_runtime import ApplicationRuntime
 
 
 class NavigationScanProgressTests(unittest.TestCase):
+    def test_html_model_forwards_current_and_each_route_star_class(self):
+        root = ApplicationRuntime()
+        try:
+            hud = TacticalHUD(root, {})
+            try:
+                hud.update(
+                    "CURRENT", "NEUTRON AFTER", 0, 0, 0, None, {},
+                    nav_context={
+                        "current": "CURRENT",
+                        "current_star_class": "K",
+                        "next": "UNKNOWN NEXT",
+                        "route_mode": "GAME ROUTE",
+                        "route_remaining": 2,
+                        "next_star": {"name": "UNKNOWN NEXT", "star_class": "", "scoopable": None},
+                        "route_track": {
+                            "source": "game", "origin_current": True,
+                            "hops": [
+                                {"name": "UNKNOWN NEXT", "star_class": "", "scoopable": None, "next": True},
+                                {"name": "NEUTRON AFTER", "star_class": "N", "scoopable": False},
+                            ],
+                        },
+                    },
+                )
+                model = hud._html_last_model
+                self.assertEqual(model["system"]["star_class"], "K")
+                self.assertEqual(
+                    [hop["star_class"] for hop in model["route"]["hops"]],
+                    ["", "N"],
+                )
+                self.assertEqual(
+                    [hop["scoopable"] for hop in model["route"]["hops"]],
+                    [None, False],
+                )
+            finally:
+                hud.win.destroy()
+        finally:
+            root.close()
+
     def test_footer_keeps_vector_without_duplicate_scoopability(self):
         label, _color = TacticalHUD._context_presentation({
             "next_star": {"name": "Sol", "star_class": "G", "scoopable": True},

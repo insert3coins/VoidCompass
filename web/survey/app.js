@@ -5,13 +5,18 @@
   const overlay = params.get("overlay") || "survey";
   const dom = {
     root: document.getElementById("survey"),
-    system: document.getElementById("system-name"),
     overview: document.getElementById("overview"),
     content: document.getElementById("content"),
     footer: document.getElementById("footer"),
   };
   let previousMotionState = null;
   let motionClassTimer = 0;
+  let atlas = null;
+  let atlasCycleTimer = 0;
+  let atlasTurnTimer = 0;
+  const ATLAS_CYCLE_MS = 8000;
+  const ATLAS_CONTENT_BUDGET = 520;
+  const ATLAS_PAGE_CARD_LIMIT = 4;
 
   function node(tag, className = "", text = "") {
     const element = document.createElement(tag);
@@ -37,6 +42,49 @@
     low = safeNumber(low); high = safeNumber(high);
     if (!high) return "";
     return low === high ? credits(low) : `${credits(low)}–${credits(high)}`;
+  }
+
+  // These are class illustrations, not inferred images of individual bodies.
+  // A signal-only body has no Scan/PlanetClass yet and remains unclassified.
+  function planetKind(planetClass) {
+    const label = String(planetClass || "").trim().toLowerCase();
+    if (/earth[- ]?like/.test(label)) return "earthlike";
+    if (/ammonia world/.test(label)) return "ammonia";
+    if (/water world/.test(label)) return "water";
+    if (/water giant|gas giant.*water/.test(label)) return "gas-water";
+    if (/gas giant.*ammonia/.test(label)) return "gas-ammonia";
+    if (/gas giant|helium rich giant/.test(label)) return "gas";
+    if (/rocky ice/.test(label)) return "rocky-ice";
+    if (/icy body/.test(label)) return "icy";
+    if (/high metal content|metal rich/.test(label)) return "metal";
+    if (/rocky body/.test(label)) return "rocky";
+    return "unknown";
+  }
+
+  function designation(row, system = "") {
+    if (row.designation) return String(row.designation);
+    const name = String(row.name || "Unknown body");
+    const prefix = `${system} `;
+    return system && name.toLowerCase().startsWith(prefix.toLowerCase())
+      ? name.slice(prefix.length) : name;
+  }
+
+  function classLabel(row) {
+    return String(row.class_label || row.planet_class || "CLASS UNCONFIRMED")
+      .replace(/ body$/i, "");
+  }
+
+  function planetOrb(row, large = false) {
+    const kind = planetKind(row.planet_class);
+    const ringCount = Math.max(0, Math.round(safeNumber(row.ring_count)));
+    const orb = node("span", `planet-orb planet-${kind}${ringCount ? " has-rings" : ""}${large ? " large" : ""}`);
+    orb.dataset.planetKind = kind;
+    orb.setAttribute("aria-hidden", "true");
+    orb.title = `${classLabel(row)} illustration${ringCount ? ` · ${ringCount} ring${ringCount === 1 ? "" : "s"}` : ""}`;
+    orb.appendChild(node("i", "planet-ring"));
+    orb.appendChild(node("i", "planet-sphere"));
+    orb.appendChild(node("i", "planet-glint"));
+    return orb;
   }
 
   function identityKey(value) {
@@ -243,7 +291,22 @@
     if (motion.focusLeft) dom.root.classList.add("event-focus-out");
     if (motion.scanCompleted) dom.root.classList.add("event-scan-complete");
     window.clearTimeout(motionClassTimer);
-    motionClassTimer = window.setTimeout(() => dom.root.classList.remove(...names), 1100);
+    motionClassTimer = window.setTimeout(() => {
+      dom.root.classList.remove(...names);
+      // Atlas cards are detached and reattached as pages turn. Retire
+      // one-shot journal acknowledgements so paging never replays old events.
+      const cards = atlas
+        ? atlas.pages.flatMap((page) => page.map((entry) => entry.element))
+        : [...dom.content.children];
+      if (atlas?.sample) cards.push(atlas.sample);
+      for (const card of cards) {
+        for (const element of [card, ...card.querySelectorAll("[class*='event-']")]) {
+          for (const className of [...element.classList]) {
+            if (className.startsWith("event-")) element.classList.remove(className);
+          }
+        }
+      }
+    }, 1100);
   }
 
   function detailStates(row) {
@@ -313,7 +376,7 @@
     });
   }
 
-  function targetCard(row, event = {}) {
+  function targetCard(row, event = {}, system = "", focused = false) {
     const bio = Math.max(0, Math.round(safeNumber(row.bio_count)));
     const done = Math.max(0, Math.round(safeNumber(row.complete)));
     const geo = Math.max(0, Math.round(safeNumber(row.geo_count)));
@@ -326,9 +389,29 @@
       event.mapped ? "event-mapped" : "",
       event.value || event.notable ? "event-value" : "",
     ].filter(Boolean).join(" ");
-    const card = node("article", `target${complete ? " complete" : ""}${!bio && (geo || mining) ? " surface-only" : ""}${row.priority === false ? " routine" : ""}${eventClasses ? ` ${eventClasses}` : ""}`);
+    const card = node("article", `target${focused ? " focus-target" : ""}${complete ? " complete" : ""}${!bio && (geo || mining) ? " surface-only" : ""}${row.priority === false ? " routine" : ""}${eventClasses ? ` ${eventClasses}` : ""}`);
+    const planet = node("div", "planet-cell");
+    planet.appendChild(planetOrb(row, focused));
+    card.appendChild(planet);
     const head = node("div", "target-head");
-    head.appendChild(node("span", "target-name", row.display_name || row.name || "Unknown body"));
+    const identity = node("div", "target-identity");
+    const eyebrow = node("div", "target-eyebrow");
+    eyebrow.appendChild(node("span", "target-kicker", focused ? "SURFACE FOCUS" : (complete ? "SURVEY COMPLETE" : "SURVEY TARGET")));
+    if (row.terraformable) eyebrow.appendChild(node("b", "environment-tag terraformable", "TERRAFORMABLE"));
+    if (row.notable) eyebrow.appendChild(node("b", "environment-tag notable-tag", "◆ NOTABLE"));
+    identity.appendChild(eyebrow);
+    identity.appendChild(node("strong", "target-name", designation(row, system)));
+    const environment = node("div", "target-environment");
+    environment.appendChild(node("span", "target-class", classLabel(row)));
+    const atmosphere = String(row.atmosphere_label || "").trim();
+    if (atmosphere) {
+      const atmos = node("span", "target-atmosphere", atmosphere);
+      atmos.title = atmosphere;
+      environment.appendChild(atmos);
+    }
+    if (safeNumber(row.ring_count) > 0) environment.appendChild(node("span", "target-rings", `RINGS ${Math.round(safeNumber(row.ring_count))}`));
+    identity.appendChild(environment);
+    head.appendChild(identity);
     const badges = node("span", "badges");
     if (bio) badges.appendChild(node("b", `badge bio${event.bio ? " event-signal" : ""}`, `BIO ${done}/${bio}`));
     if (geo) badges.appendChild(node("b", `badge geo${event.geo ? " event-signal" : ""}`, `GEO ${geo}`));
@@ -354,8 +437,7 @@
       badge.title = efficient ? "DSS efficiency target met" : "DSS mapping complete";
       badges.appendChild(badge);
     } else if (row.needs_dss) badges.appendChild(node("b", "badge dss", "DSS"));
-    if (row.priority === false) badges.appendChild(node("b", "badge routine", "BODY"));
-    if (complete && value) badges.appendChild(node("b", `badge${event.value ? " event-value-badge" : ""}`, `BASE ${value}`));
+    if (row.first_footfall) badges.appendChild(node("b", "badge footfall", "1ST FOOTFALL"));
     head.appendChild(badges); card.appendChild(head);
 
     const biological = orderedBiologicalDetails(row.bio_details || row.rows || []);
@@ -369,9 +451,13 @@
         appendNodes(detail, row, event);
       }
     }
-    if (row.notable) detail.appendChild(node("span", "notable", "◆ NOTABLE"));
-    if (value && !complete) detail.appendChild(node("span", "value", `EST ${value}`));
     if (detail.childNodes.length) card.appendChild(detail);
+    if (value || row.notable || row.priority === false) {
+      const foot = node("div", "target-foot");
+      foot.appendChild(node("span", "target-foot-status", row.priority === false ? "CATALOGUED BODY" : complete ? "BIOLOGY COMPLETE" : bio ? "BIOLOGY IN PROGRESS" : "SURFACE SIGNALS"));
+      if (value) foot.appendChild(node("span", `value${event.value ? " event-value-badge" : ""}`, `BIO BASE ${value}`));
+      card.appendChild(foot);
+    }
     return card;
   }
 
@@ -403,21 +489,159 @@
     return card;
   }
 
-  function notableCard(row, event = {}) {
+  function notableCard(row, event = {}, system = "") {
     const card = node("article", `notable-card${event.fresh ? " event-new-notable" : ""}${event.value ? " event-value" : ""}`);
-    card.appendChild(node("strong", "", `${row.icons || "◆"} ${row.display_name || row.name || "Notable body"}`));
-    const line = node("span");
-    line.appendChild(node("i", "", "SURVEY VALUE"));
-    line.appendChild(node("b", "", row.value_line || ""));
-    card.appendChild(line);
+    card.appendChild(planetOrb(row));
+    const copy = node("div", "notable-copy");
+    copy.appendChild(node("small", "", "◆ HIGH-VALUE BODY"));
+    copy.appendChild(node("strong", "", designation(row, system)));
+    copy.appendChild(node("span", "", classLabel(row)));
+    card.appendChild(copy);
+    card.appendChild(node("b", "notable-value", row.value_line || ""));
     return card;
   }
+
+  function contentChildrenHeight(children) {
+    const gap = Number.parseFloat(getComputedStyle(dom.content).rowGap) || 0;
+    return children.reduce((total, child) => total + child.getBoundingClientRect().height, 0)
+      + Math.max(0, children.length - 1) * gap;
+  }
+
+  function stopAtlasCycle() {
+    if (atlasCycleTimer) window.clearInterval(atlasCycleTimer);
+    if (atlasTurnTimer) window.clearTimeout(atlasTurnTimer);
+    atlasCycleTimer = 0;
+    atlasTurnTimer = 0;
+    atlas = null;
+    dom.root.classList.remove("paged", "page-turn");
+  }
+
+  function atlasBanner(page, pages, first, last, total) {
+    const banner = node("div", "atlas-page-banner");
+    banner.style.setProperty("--page-fill", `${(page / pages) * 100}%`);
+    banner.appendChild(node("strong", "", `ATLAS PAGE ${page} / ${pages}`));
+    banner.appendChild(node("span", "", ` · ${first}–${last} OF ${total} · AUTO ${ATLAS_CYCLE_MS / 1000}S`));
+    return banner;
+  }
+
+  function atlasRoster(cards, system, scope) {
+    const roster = node("div", "atlas-roster");
+    const heading = node("div", "atlas-roster-heading");
+    heading.appendChild(node("strong", "", scope === "all"
+      ? `ALL ${cards.length} SCANNED BODIES` : `${cards.length} SURVEY TARGETS`));
+    heading.appendChild(node("span", "", "ACTIVE PAGE HIGHLIGHTED"));
+    roster.appendChild(heading);
+    const grid = node("div", "atlas-roster-grid");
+    for (const entry of cards) {
+      const cell = node("span", "atlas-roster-body");
+      const name = designation(entry.row, system);
+      cell.dataset.bodyName = name;
+      cell.dataset.index = String(entry.index);
+      cell.title = `${name} · ${classLabel(entry.row)}`;
+      cell.setAttribute("aria-label", cell.title);
+      cell.appendChild(planetOrb(entry.row));
+      grid.appendChild(cell);
+    }
+    roster.appendChild(grid);
+    return roster;
+  }
+
+  function showAtlasPage(animate = false) {
+    if (!atlas || !atlas.pages.length) return;
+    if (atlasTurnTimer) window.clearTimeout(atlasTurnTimer);
+    atlasTurnTimer = 0;
+    dom.root.classList.remove("page-turn");
+    const current = atlas.pages[atlas.index];
+    dom.content.replaceChildren();
+    dom.content.appendChild(atlas.roster);
+    const active = new Set(current.map((entry) => entry.index));
+    for (const cell of atlas.roster.querySelectorAll(".atlas-roster-body")) {
+      cell.classList.toggle("active", active.has(Number(cell.dataset.index)));
+    }
+    if (atlas.sample) dom.content.appendChild(atlas.sample);
+    dom.content.appendChild(atlasBanner(
+      atlas.index + 1, atlas.pages.length,
+      current[0].index + 1, current[current.length - 1].index + 1, atlas.total,
+    ));
+    for (const entry of current) dom.content.appendChild(entry.element);
+    if (animate) {
+      dom.root.classList.add("page-turn");
+      atlasTurnTimer = window.setTimeout(() => dom.root.classList.remove("page-turn"), 400);
+    }
+  }
+
+  function nextAtlasPage() {
+    if (!atlas || atlas.pages.length < 2) return;
+    atlas.index = (atlas.index + 1) % atlas.pages.length;
+    showAtlasPage(true);
+  }
+
+  function paginateSystemCards(cards, sample, model, motion) {
+    const fullHeight = contentChildrenHeight([...dom.content.children]);
+    if (cards.length <= 6 && fullHeight <= 560) {
+      stopAtlasCycle();
+      return;
+    }
+    const previous = atlas;
+    const gap = Number.parseFloat(getComputedStyle(dom.content).rowGap) || 0;
+    const pageBudget = dom.root.classList.contains("scale-huge") ? 450
+      : dom.root.classList.contains("scale-large") ? 490
+        : ATLAS_CONTENT_BUDGET;
+    const sampleHeight = sample ? sample.getBoundingClientRect().height : 0;
+    const roster = atlasRoster(cards, model.system, model.scope);
+    dom.content.appendChild(roster);
+    const rosterHeight = roster.getBoundingClientRect().height;
+    const probe = atlasBanner(1, 1, 1, cards.length, cards.length);
+    dom.content.appendChild(probe);
+    const bannerHeight = probe.getBoundingClientRect().height;
+    probe.remove();
+    const pageHeight = (entries, cardHeight) => rosterHeight + sampleHeight + bannerHeight + cardHeight
+      + gap * (entries.length + (sample ? 1 : 0) + 1);
+    const pages = [];
+    let current = [];
+    let currentHeight = 0;
+    for (const entry of cards) {
+      entry.height = entry.element.getBoundingClientRect().height;
+      if (current.length && (current.length >= ATLAS_PAGE_CARD_LIMIT
+          || pageHeight([...current, entry], currentHeight + entry.height) > pageBudget)) {
+        pages.push(current);
+        current = [];
+        currentHeight = 0;
+      }
+      current.push(entry);
+      currentHeight += entry.height;
+    }
+    if (current.length) pages.push(current);
+    const height = Math.max(...pages.map((page) => pageHeight(
+      page, page.reduce((sum, entry) => sum + entry.height, 0),
+    )));
+    const identity = `${model.system}|${cards.map((entry) => entry.key).join("|")}`;
+    let index = previous?.identity === identity
+      ? Math.min(previous.index, pages.length - 1) : 0;
+    const changed = new Set([...motion.rows.keys(), ...motion.notable.keys()]);
+    if (changed.size) {
+      const changedPage = pages.findIndex((page) => page.some((entry) => changed.has(entry.key)));
+      if (changedPage >= 0) index = changedPage;
+    }
+    atlas = {pages, index, total: cards.length, roster, sample, identity, maxContentHeight: height};
+    dom.root.classList.add("paged");
+    showAtlasPage();
+    if (!atlasCycleTimer) atlasCycleTimer = window.setInterval(nextAtlasPage, ATLAS_CYCLE_MS);
+  }
+
+  window.VoidCompassSurveyAtlas = Object.freeze({
+    nextPage: nextAtlasPage,
+    getState: () => atlas
+      ? {page: atlas.index + 1, pages: atlas.pages.length, total: atlas.total}
+      : {page: 0, pages: 0, total: 0},
+  });
 
   function overview(model, motion = {}) {
     dom.overview.replaceChildren();
     const bodyMode = model.mode === "body";
     const body = model.body || {};
     const rows = Array.isArray(model.rows) ? model.rows : [];
+    const visibleBodies = rows.length + (Array.isArray(model.notable_rows) ? model.notable_rows.length : 0);
     const bio = bodyMode
       ? safeNumber(body.bio_count)
       : rows.reduce((sum, row) => sum + safeNumber(row.bio_count), 0);
@@ -430,18 +654,24 @@
     const mining = bodyMode
       ? safeNumber(body.mining_count)
       : rows.reduce((sum, row) => sum + safeNumber(row.mining_count), 0);
-    const line = node("div", "overview-line");
-    line.appendChild(node(
-      "strong", "overview-primary",
-      bodyMode ? (model.body_display || body.name || "SURFACE TARGET") : `BIO SIGNALS ${bio} · ANALYSED ${done} · GEO ${geo} · MINING ${mining}`,
-    ));
-    const scan = bodyMode
-      ? `BIO ${done}/${bio}${geo ? ` · GEO ${geo}` : ""}${mining ? ` · MINING ${mining}` : ""}`
-      : model.total_known && safeNumber(model.total)
-        ? `FSS ${safeNumber(model.scanned)}/${safeNumber(model.total)}`
-        : "FSS INTAKE";
-    line.appendChild(node("span", "overview-meta", scan));
-    dom.overview.appendChild(line);
+    const heading = node("div", "overview-heading");
+    const title = node("div", "overview-title");
+    const context = node("div", "overview-context");
+    const mode = node("span", "", bodyMode ? "BODY" : "SYSTEM");
+    mode.id = "mode-label";
+    const system = node("strong", "", String(model.system || "UNKNOWN SYSTEM"));
+    system.id = "system-name";
+    context.appendChild(mode);
+    context.appendChild(node("i", "context-separator", "·"));
+    context.appendChild(system);
+    title.appendChild(context);
+    title.appendChild(node("strong", "overview-primary", bodyMode ? designation(body, model.system) : `${visibleBodies} ${visibleBodies === 1 ? "BODY" : "BODIES"} IN VIEW`));
+    heading.appendChild(title);
+    const counter = node("div", "overview-counter");
+    counter.appendChild(node("small", "", "BIO ANALYSED"));
+    counter.appendChild(node("strong", "overview-meta", `${done}/${bio}`));
+    heading.appendChild(counter);
+    dom.overview.appendChild(heading);
     const rail = node("div", "overview-rail");
     const fill = node("i");
     const fillPercent = bio ? Math.min(100, (done / bio) * 100) : 0;
@@ -453,10 +683,24 @@
     rail.appendChild(node("b", "rail-sweep"));
     rail.appendChild(node("em", "rail-beacon"));
     dom.overview.appendChild(rail);
+    const metrics = node("div", "overview-metrics");
+    const items = bodyMode
+      ? [["BIO", bio], ["GEO", geo], ["MINING", mining], ["DSS", body.dss_complete ? "MAPPED" : "OPEN"]]
+      : [["FSS", model.total_known && safeNumber(model.total) ? `${safeNumber(model.scanned)}/${safeNumber(model.total)}` : "INTAKE"], ["GEO", geo], ["MINING", mining], ["SCOPE", model.scope === "all" ? "ALL" : "PRIORITY"]];
+    for (const [label, value] of items) {
+      const item = node("span", "overview-metric");
+      item.appendChild(node("small", "", label));
+      item.appendChild(node("b", "", value));
+      metrics.appendChild(item);
+    }
+    dom.overview.appendChild(metrics);
   }
 
   function render(snapshot = {}) {
     VoidCompassOverlay.applyTheme(dom.root, snapshot.theme || {}, snapshot.effects || {});
+    const textScale = safeNumber(snapshot.effects?.text_scale) || 1;
+    dom.root.classList.toggle("scale-large", textScale > 1.35);
+    dom.root.classList.toggle("scale-huge", textScale > 1.75);
     const model = snapshot.survey || {};
     const motion = motionContext(model);
     const bodyMode = model.mode === "body";
@@ -469,6 +713,7 @@
       : rows.some((row) => safeNumber(row.bio_count) > safeNumber(row.complete));
     dom.root.classList.toggle("body", bodyMode);
     dom.root.classList.toggle("system", !bodyMode);
+    dom.root.classList.toggle("dense", !bodyMode && rows.length > 5);
     dom.root.classList.toggle("scan-active", Boolean(
       !bodyMode && model.total_known && total > 0 && scanned < total
     ));
@@ -477,9 +722,9 @@
     dom.root.classList.toggle("survey-locked", Boolean(
       !bodyMode && model.total_known && total > 0 && scanned >= total
     ));
-    dom.system.textContent = String(model.system || "SYSTEM").toUpperCase();
     dom.content.replaceChildren(); dom.footer.replaceChildren();
     if (!model.mode) {
+      stopAtlasCycle();
       dom.root.classList.add("empty");
       dom.overview.replaceChildren();
       applyMotionClass({enabled: false});
@@ -487,8 +732,15 @@
     }
     dom.root.classList.remove("empty");
     overview(model, motion);
-    if (model.sampling) dom.content.appendChild(sampleCard(model.sampling, motion.sampling || {}));
+    const sample = model.sampling ? sampleCard(model.sampling, motion.sampling || {}) : null;
+    if (sample) dom.content.appendChild(sample);
+    const cards = [];
+    const addCard = (element, key, row) => {
+      cards.push({index: cards.length, element, key, row});
+      dom.content.appendChild(element);
+    };
     if (bodyMode) {
+      stopAtlasCycle();
       const body = model.body || {};
       const samplingName = String((model.sampling || {}).species || "").toLowerCase();
       const bodyDetails = rows.filter((detail) => {
@@ -510,31 +762,34 @@
           && body.landable !== null,
       };
       if (rows.length || safeNumber(body.geo_count) || safeNumber(body.mining_count) || model.notable) {
-        dom.content.appendChild(targetCard(projected, motion.body || {}));
+        dom.content.appendChild(targetCard(projected, motion.body || {}, model.system, true));
       }
     } else {
       const active = rows.filter((row) => !row.bio_complete);
       const complete = rows.filter((row) => row.bio_complete);
-      for (const row of active) dom.content.appendChild(targetCard(row, motion.rows.get(rowKey(row)) || {}));
+      for (const row of active) addCard(targetCard(row, motion.rows.get(rowKey(row)) || {}, model.system), rowKey(row), row);
       if (complete.length) {
         const label = node("div", "group-label");
         label.appendChild(node("span", "", "COMPLETED BIOLOGY"));
         label.appendChild(node("span", "", `${complete.length} SURFACE${complete.length === 1 ? "" : "S"}`));
         dom.content.appendChild(label);
-        for (const row of complete) dom.content.appendChild(targetCard(row, motion.rows.get(rowKey(row)) || {}));
+        for (const row of complete) addCard(targetCard(row, motion.rows.get(rowKey(row)) || {}, model.system), rowKey(row), row);
       }
     }
     for (const row of (model.notable_rows || [])) {
-      dom.content.appendChild(notableCard(row, motion.notable.get(rowKey(row)) || {}));
+      const element = notableCard(row, motion.notable.get(rowKey(row)) || {}, model.system);
+      if (bodyMode) dom.content.appendChild(element);
+      else addCard(element, rowKey(row), row);
     }
+    if (!bodyMode) paginateSystemCards(cards, sample, model, motion);
 
     if (bodyMode) {
-      dom.footer.appendChild(node("span", "", "BIOLOGICAL SURFACE WORKBOARD"));
+      dom.footer.appendChild(node("span", "", "SURFACE FIELD NOTES"));
       const lifetime = model.dss_stats?.lifetime || {};
       const mapped = Math.max(0, Math.round(safeNumber(lifetime.mapped)));
       const efficient = Math.max(0, Math.round(safeNumber(lifetime.efficient)));
       const receipt = mapped ? ` · DSS ${efficient}/${mapped}` : "";
-      dom.footer.appendChild(node("span", "credits", `BIO BASE ${valueRange(model.min_value, model.max_value) || "-"}${receipt}`));
+      dom.footer.appendChild(node("span", "credits", `BIO BASE ${valueRange(model.min_value, model.max_value) || "—"}${receipt}`));
     } else {
       const complete = rows.filter((row) => row.bio_complete).length;
       const low = rows.reduce((sum, row) => sum + safeNumber(row.min_value), 0);
@@ -542,9 +797,10 @@
       const scope = model.scope === "all" ? "ALL BODIES" : "PRIORITY TARGETS";
       const priority = rows.filter((row) => row.priority !== false).length;
       const mapped = rows.filter((row) => !row.needs_dss).length;
+      const notableOnly = (model.notable_rows || []).length;
       const summary = model.scope === "all"
-        ? `${scope} ${rows.length} · PRIORITY ${priority} · MAPPED ${mapped}`
-        : `${scope} ${rows.length} · OPEN ${rows.length - complete} · COMPLETE ${complete}`;
+        ? `${scope} ${rows.length + notableOnly} · PRIORITY ${priority} · MAPPED ${mapped}`
+        : `${scope} ${rows.length + notableOnly} · OPEN ${rows.length - complete} · DONE ${complete}${notableOnly ? ` · NOTABLE ${notableOnly}` : ""}`;
       dom.footer.appendChild(node("span", "", summary));
       const session = model.dss_stats?.session || {};
       const mappedSession = Math.max(0, Math.round(safeNumber(session.mapped)));
@@ -557,19 +813,14 @@
   }
 
   function renderedContentHeight() {
-    const children = [...dom.content.children];
-    const gap = Number.parseFloat(getComputedStyle(dom.content).rowGap) || 0;
-    const contentHeight = children.reduce(
-      (total, child) => total + child.getBoundingClientRect().height,
-      0,
-    ) + Math.max(0, children.length - 1) * gap;
-    // Content begins at 67px. Reserve only the footer's 24px lower band and
-    // its one-pixel boundary. The shared compositor already clips safely, so
-    // an additional margin merely leaves a visible gap below the final body.
-    // Measure children directly rather than content.scrollHeight: the content
-    // viewport itself expands with the window and would otherwise create a
-    // positive resize feedback loop.
-    return Math.max(90, Math.ceil(67 + contentHeight + 25));
+    const contentHeight = atlas?.maxContentHeight
+      ?? contentChildrenHeight([...dom.content.children]);
+    // Measure children, not the viewport: the viewport itself grows with the
+    // host window and would otherwise create a positive resize feedback loop.
+    const style = getComputedStyle(dom.content);
+    const top = Number.parseFloat(style.top) || 0;
+    const bottom = Number.parseFloat(style.bottom) || 0;
+    return Math.max(150, Math.ceil(top + contentHeight + bottom + 1));
   }
 
   VoidCompassOverlay.startPolling({

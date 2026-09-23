@@ -267,14 +267,16 @@
       const motion = String(state?.motion || "flight");
       const label = String(state?.label || "FLIGHT").toUpperCase();
       if (motion === "scanner") return label.startsWith("DSS") ? "dss" : "fss";
+      if (motion === "supercruise" && label === "TAXI") return "taxi";
       if (motion === "map") return ({
         "GALAXY MAP": "galaxy_map", "SYSTEM MAP": "system_map",
         "POWER MAP": "power_map", ORRERY: "orrery", CODEX: "codex",
       })[label] || "map";
       if (motion === "surface_vehicle") {
         if (label === "NOMAD" || state?.vehicleKey === "nomad") return "nomad";
-        if (state?.vehicleKey === "scorpion") return "scorpion";
+        if (label === "SCORPION" || state?.vehicleKey === "scorpion") return "scorpion";
         if (label === "RHINO" || state?.vehicleKey === "rhino") return "rhino";
+        if (label === "SCARAB") return "scarab";
         return "srv";
       }
       if (motion === "fsd_charge") return label === "HYPER CHARGE" ? "hyper_charge" : "fsd_charge";
@@ -291,6 +293,16 @@
         if (label === "INTERDICTION") return "interdiction";
         return "combat";
       }
+      if (motion === "target_lock") {
+        if (label === "SYSTEM TARGET") return "target_system";
+        if (label === "BODY TARGET") return "target_body";
+        if (label === "SIGNAL TARGET") return "target_signal";
+        if (label === "TARGET CLEARED") return "target_clear";
+      }
+      if (motion === "docking_denied") {
+        if (label === "DOCK CANCELLED") return "docking_cancelled";
+        if (label === "DOCK TIMEOUT") return "docking_timeout";
+      }
       if (motion.startsWith("vehicle_")) {
         const vehicle = label.includes("NOMAD") || state?.vehicleKey === "nomad" ? "nomad"
           : label.includes("FIGHTER") || state?.vehicleKey === "fighter" ? "fighter"
@@ -304,25 +316,28 @@
       if (motion === "flight" && label === "EXPLORATION") return "exploration";
       if (motion === "docked" && label === "STATION") return "station";
       if (motion === "station" && label === "CARRIER VICINITY") return "carrier_vicinity";
+      if (motion === "station" && label === "STATION VICINITY") return "station_vicinity";
       return motion;
     }
 
     family(state) {
       const key = this.key(state);
-      if (["supercruise", "fsd_charge", "hyper_charge", "hyperspace", "jumping", "arrival",
+      if (["supercruise", "taxi", "fsd_charge", "hyper_charge", "hyperspace", "jumping", "arrival",
         "interdiction_evaded", "fsd_cooldown", "supercruise_overcharge",
         "supercruise_assist", "local_arrival", "fsd_injection"].includes(key)) return "fsd";
-      if (PLANETARY.has(key) || ["surface_station", "landed", "srv", "scorpion", "rhino", "nomad", "on_foot",
+      if (PLANETARY.has(key) || ["surface_station", "landed", "srv", "scarab", "scorpion", "rhino", "nomad", "on_foot",
         "srv_handbrake", "srv_turret", "srv_drive_assist"].includes(key)) return "surface";
       if (["fss", "dss", "map", "galaxy_map", "system_map", "power_map",
-        "orrery", "codex", "exploration", "phenomena", "target_lock"].includes(key)) return "scope";
+        "orrery", "codex", "exploration", "phenomena", "target_lock",
+        "target_system", "target_body", "target_signal", "target_clear"].includes(key)) return "scope";
       if (["mass_lock", "signal_lock", "signal_drop", "signal_threat", "combat",
         "interdiction", "interdicted", "asteroid_field", "srv_threat",
         "capital_contact", "unknown_contact", "heavy_combat", "heat_critical",
-        "suit_hazard", "jet_cone_damage", "docking_denied"].includes(key)) return "hazard";
+        "suit_hazard", "jet_cone_damage", "docking_denied",
+        "docking_cancelled", "docking_timeout"].includes(key)) return "hazard";
       if (key.startsWith("vehicle_") || ["fighter", "multicrew"].includes(key)) return "vehicle";
       if (key.startsWith("carrier_")) return "carrier";
-      if (["docked", "station", "docking_assist", "docking_clearance",
+      if (["docked", "station", "station_vicinity", "docking_assist", "docking_clearance",
         "maintenance", "system_reboot"].includes(key)) return "station";
       if (key === "settlement_area") return "surface";
       if (["left_panel", "right_panel", "comms_panel", "role_panel",
@@ -343,11 +358,13 @@
       const key = this.key(state);
       return ({
         flight: 1.9, fighter: .82, multicrew: 1.5, exploration: 2.25,
-        supercruise: .94, supercruise_overcharge: .48,
+        supercruise: .94, taxi: 1.56, supercruise_overcharge: .48,
         supercruise_assist: 1.28, flight_assist_off: .84, silent_running: 2.2,
         fsd_charge: .86, hyper_charge: .64, hyperspace: .58, jumping: .72,
         arrival: 1.15, interdiction_evaded: 1.05, fsd_cooldown: 1.55,
-        local_arrival: 1.42, fsd_injection: 1.9, target_lock: 2.2, carrier_vicinity: 2.3,
+        local_arrival: 1.42, fsd_injection: 1.9, target_lock: 2.2,
+        target_system: 1.9, target_body: 1.7, target_signal: 1.42, target_clear: 1.8,
+        carrier_vicinity: 2.3, station_vicinity: 2.1,
         carrier_transit: 1.08, carrier_arrival: 1.34, carrier_deck: 2.4,
         fss: 1.52, dss: 1.82, map: 2.1, galaxy_map: 2.35,
         system_map: 1.86, power_map: 1.7, orrery: 2.5, codex: 1.9,
@@ -358,7 +375,8 @@
         role_panel: 1.78, station_services: 2.05,
         orbital_approach: 1.68, glide: .82, surface_approach: 1.38,
         surface_hold: 2.25, surface_departure: 1.28, orbital_departure: 1.55,
-        landed: 2.4, on_foot: 1.32, srv: 1.18, scorpion: .9, rhino: 1.04, nomad: 1.05,
+        landed: 2.4, on_foot: 1.32, srv: 1.18, scarab: 1.18,
+        scorpion: .9, rhino: 1.04, nomad: 1.05,
         srv_handbrake: 1.8, srv_turret: 1.2, srv_drive_assist: 1.35,
         asteroid_field: 5.2, mass_lock: 1.12, signal_lock: 1.55,
         signal_drop: .92, signal_threat: .76, combat: .64,
@@ -366,6 +384,7 @@
         surface_station: 1.72,
         heat_critical: .58, suit_hazard: .72, jet_cone_damage: .46,
         docking_clearance: 1.42, docking_denied: .68,
+        docking_cancelled: 1.1, docking_timeout: .8,
         maintenance: 1.7, system_reboot: .92,
       })[key] || 1.45;
     }
@@ -749,6 +768,25 @@
 
     drawDrive(state, p, key) {
       const c = state.color, tier = this.boostTier(state);
+      if (key === "taxi") {
+        // A passenger shuttle in a paired navigation corridor. Taxi is not
+        // drawn as the player's own supercruise drive instrument.
+        for (const side of [-1, 1]) {
+          this.path([[6, 18 + side * 12], [35, 18 + side * 9],
+            [59, 18 + side * 6], [112, 18 + side * 6]], c, .48, 1.1);
+          for (let i = 0; i < 3; i++) {
+            const t = fract(p * .16 + i / 3), x = 10 + t * 99;
+            this.line(x - 5, 18 + side * (11 - 5 * t), x,
+              18 + side * (11 - 5 * t), c, Math.sin(t * Math.PI) * .67, 1.5);
+          }
+        }
+        this.path([[48, 18], [56, 13], [76, 13], [83, 18],
+          [76, 23], [56, 23]], c, .78, 1.3, true, .1);
+        this.path([[59, 13], [61, 10], [73, 10], [76, 13]], c, .53);
+        this.line(55, 18, 79, 18, c, .34);
+        this.brackets(66, 18, 26, 12, c, .44);
+        return;
+      }
       if (key === "fsd_injection") {
         // Synthesis feeds the drive core. This is an armed-buff signature,
         // never a simulated recipe progress meter or an automatic jump.
@@ -767,31 +805,42 @@
       }
       if (["supercruise", "supercruise_overcharge", "supercruise_assist"].includes(key)) {
         const sco = key === "supercruise_overcharge", assist = key === "supercruise_assist";
-        // Supercruise: a bowed space-time wake, not a rotating radar or bars.
+        // A compression corridor, with a fixed ship at the vanishing point.
+        // SCO fractures the outer rails; assist acquires a clean guide lane.
         const cx = 67, cy = 18;
-        this.spaceLanes(p, c, {cx, cy, count: sco ? 22 : 13, speed: sco ? .45 : .28, strength: .7});
-        for (let i = 0; i < (sco ? 5 : 3); i++) {
-          const t = fract(p * (sco ? .4 : .24) + i / (sco ? 5 : 3));
-          const fade = Math.sin(t * Math.PI), points = [];
-          for (let j = 0; j <= 16; j++) {
-            const u = j / 16 * 2 - 1;
-            points.push([cx - 7 - t * 54 + (1 - u * u) * (sco ? 14 : 9), cy + u * (4 + t * 19)]);
+        this.spaceLanes(p, c, {cx, cy, count: sco ? 20 : 11,
+          speed: sco ? .42 : .25, strength: sco ? .59 : .4});
+        for (const side of [-1, 1]) {
+          this.path([[6, cy + side * 15], [29, cy + side * 10],
+            [50, cy + side * 4], [cx - 5, cy + side * 2]], c, .44, 1.15);
+          for (let i = 0; i < 4; i++) {
+            const t = fract(p * (sco ? .37 : .23) + i / 4);
+            const x = cx - 6 - 59 * t, y = cy + side * (2 + 13 * t * t);
+            const fade = Math.sin(t * Math.PI);
+            this.line(x - 2 - t * 5, y + side * 1.2, x + 2 + t * 5,
+              y - side * 1.2, c, fade * (sco ? .86 : .6), sco ? 1.55 : 1.1);
           }
-          this.path(points, c, fade * .55, sco ? 1.35 : 1);
         }
-        this.path([[62, 18], [69, 15], [75, 18], [69, 21], [62, 18]], c, .85, 1.2, false, .2);
+        this.path([[59, 18], [68, 13], [77, 18], [68, 23]], c, .82, 1.3, true, .16);
+        this.line(76, 18, 112, 18, c, .24, 1);
         if (assist) {
-          this.brackets(70, 18, 13, 9, c, .72);
-          this.line(84, 18, 109, 18, c, .3);
-          this.dot(110, 18, 1.7, c, .7);
+          this.path([[13, 18], [42, 18], [53, 13], [68, 13]], c, .52);
+          this.path([[13, 18], [42, 18], [53, 23], [68, 23]], c, .52);
+          this.brackets(68, 18, 15, 10, c, .72);
+          this.glowDot(108, 18, 1.3, c, .8);
         }
         if (sco) for (const side of [-1, 1]) {
           const points = [];
           for (let j = 0; j <= 20; j++) {
             const x = j * 5;
-            points.push([x, 18 + side * (10 + Math.sin(j * .72 - p * 2) * 2)]);
+            points.push([x, 18 + side * (11 + Math.sin(j * .82 - p * 2.2) * 2.4)]);
           }
-          this.path(points, c, .35, 1.2);
+          this.path(points, c, .43, 1.35);
+          for (let i = 0; i < 3; i++) {
+            const x = 18 + i * 43 + Math.sin(p * .55 + i) * 3;
+            this.path([[x - 3, 18 + side * 9], [x + 1, 18 + side * 15],
+              [x + 5, 18 + side * 10]], c, .33 + .37 * wave(p * .42 - i / 3), 1.25);
+          }
         }
         // Confirmed boosts add symmetric jet-cone threads, not fake speed data.
         for (let i = 0; i < tier; i++) for (const side of [-1, 1]) {
@@ -807,29 +856,40 @@
       }
       if (key === "fsd_charge" || key === "hyper_charge") {
         const hyper = key === "hyper_charge", settle = .65 + .35 * smooth(state.age / 2.4);
-        // Coils feed inward; inter-system charge opens a faceted destination
-        // aperture, whereas local FSD charge winds an elongated solenoid.
-        for (let i = 0; i < 7; i++) {
-          const x = 16 + i * 14, strength = .2 + .5 * wave(p * .65 - Math.abs(i - 3) * .2);
-          this.arc(x, 18, hyper ? 3 : 4.5, 5 + Math.abs(i - 3) * 2, -.8, .8, c, strength);
-          this.arc(x, 18, hyper ? 3 : 4.5, 5 + Math.abs(i - 3) * 2, Math.PI - .8, Math.PI + .8, c, strength);
-        }
-        for (const side of [-1, 1]) for (let strand = 0; strand < 2; strand++) {
-          const points = [];
-          for (let j = 0; j <= 24; j++) {
-            const t = j / 24, amp = Math.sin(t * Math.PI) * (hyper ? 8 : 5);
-            points.push([60 + side * (4 + t * 50), 18 + Math.sin(t * 11 - p * 2 + strand * Math.PI) * amp]);
+        // Opposed field vanes feed a core. The rhythm is decorative and never
+        // purports to predict when the journal will confirm a jump.
+        for (const side of [-1, 1]) {
+          this.path([[60 + side * 9, 7], [60 + side * 18, 3],
+            [60 + side * 48, 3], [60 + side * 55, 10]], c, .41, 1.2);
+          this.path([[60 + side * 9, 29], [60 + side * 18, 33],
+            [60 + side * 48, 33], [60 + side * 55, 26]], c, .41, 1.2);
+          for (let i = 0; i < 4; i++) {
+            const x = 60 + side * (20 + i * 10), phase = wave(p * .66 - i * .15);
+            const reach = hyper ? 7 : 5;
+            this.path([[x + side * 3, 18 - reach], [x, 18],
+              [x + side * 3, 18 + reach]], c, .22 + .61 * phase, 1.35);
+            this.line(x, 18 - reach - 3, x, 18 - reach,
+              c, .18 + .48 * phase, 1.25);
+            this.line(x, 18 + reach, x, 18 + reach + 3,
+              c, .18 + .48 * phase, 1.25);
           }
-          this.path(points, c, .3 + strand * .25, 1.1);
+          const flow = fract(p * (hyper ? .38 : .27) + (side < 0 ? 0 : .5));
+          const x = 60 + side * (53 - flow * 41);
+          this.line(x, 18 - 2, x + side * 4, 18,
+            c, Math.sin(flow * Math.PI) * .72, 1.7);
+          this.line(x + side * 4, 18, x, 18 + 2,
+            c, Math.sin(flow * Math.PI) * .72, 1.7);
         }
         if (hyper) {
-          this.angularRing(60, 18, 12, 12, 6, c, .6, 1.15, Math.PI / 6);
-          this.angularRing(60, 18, 6 + wave(p * .4) * 2, 7, 6, c, .85, 1.2, Math.PI / 6);
+          this.angularRing(60, 18, 15, 15, 6, c, .48, 1.15, Math.PI / 6);
+          this.angularRing(60, 18, 9 + wave(p * .44) * 1.6, 9, 6, c, .88, 1.35,
+            Math.PI / 6 + p * .075);
         } else {
-          this.arc(60, 18, 11, 7, 0, TAU, c, .7);
-          this.line(43, 18, 77, 18, c, .38 + .3 * settle, 1.8);
+          this.path([[46, 18], [53, 11], [67, 11], [74, 18],
+            [67, 25], [53, 25]], c, .72, 1.25, true, .06);
+          this.arc(60, 18, 11, 7, p * .3, p * .3 + 2.3, c, .38 + .37 * settle, 1.8);
         }
-        this.glowDot(60, 18, 1.6 + wave(p * .6) * .7, c, .8);
+        this.glowDot(60, 18, 1.7 + wave(p * .55) * .8, c, .88);
         return;
       }
       if (key === "hyperspace" || key === "jumping") {
@@ -849,11 +909,38 @@
         if (opening) {
           const t = smooth(state.age / 1.8);
           this.line(5, 18, 115, 18, c, (1 - t) * .6, 1 + t * 2);
+          // The threshold splits once; the journal, not this animation,
+          // decides when the ship has actually arrived.
+          for (const side of [-1, 1]) {
+            this.path([[cx + side * (5 + t * 6), 6], [cx + side * (14 + t * 18), 18],
+              [cx + side * (5 + t * 6), 30]], c, .75, 1.5);
+            this.line(cx + side * (33 + t * 11), 4,
+              cx + side * (21 + t * 9), 18, c, .45, 1.2);
+          }
+        } else {
+          this.angularRing(cx, cy, 10, 10, 10, c, .8, 1.2, p * .08);
+          this.arc(cx, cy, 5, 5, 0, TAU, c, .33);
+          this.glowDot(cx, cy, 1.8, c, .84);
         }
         return;
       }
       if (["arrival", "interdiction_evaded", "local_arrival"].includes(key)) {
         const t = smooth(state.age / 2.2), local = key === "local_arrival";
+        if (key === "interdiction_evaded") {
+          // Two divergent capture rails peel away from a stable ship.
+          this.ship(61, 18, c, .9, 1.25);
+          for (const side of [-1, 1]) {
+            this.path([[9, 18 + side * 3], [35, 18 + side * 5],
+              [66, 18 + side * 9], [109, 18 + side * 16]], c, .58, 1.3);
+            for (let i = 0; i < 3; i++) {
+              const v = fract(p * .16 + i / 3), x = 10 + v * 99;
+              this.chevron(x, 18 + side * (3 + v * 13), 1, c,
+                Math.sin(v * Math.PI) * .67, 2.6);
+            }
+          }
+          this.brackets(61, 18, 14 + (1 - t) * 13, 9, c, .76);
+          return;
+        }
         this.spaceLanes(p, c, {count: 12, speed: .2, strength: (1 - t) * .8});
         if (local) {
           this.arc(65, 19, 24, 9, 0, TAU, c, .35);
@@ -894,67 +981,121 @@
     drawSurveyInstrument(state, p, key) {
       const c = state.color;
       if (key === "fss") {
-        // FSS tuning spectrum with discrete signal peaks and a focus lens.
-        const peaks = [.16, .33, .61, .82], points = [];
-        for (let i = 0; i <= 70; i++) {
-          const u = i / 70;
+        // A spectral trace on the left feeds a luminous focus aperture. Peak
+        // positions are illustrative, never a claim about detected bodies.
+        const peaks = [.14, .32, .58, .79], points = [];
+        for (let i = 0; i <= 44; i++) {
+          const u = i / 44;
           const amp = peaks.reduce((sum, at, n) => sum + Math.exp(-(((u - at) / .027) ** 2))
-            * (7 + n * 1.6 + wave(p * .3 + n) * 2), 0);
-          points.push([5 + u * 110, 26 - amp]);
+            * (5 + n * 1.2 + wave(p * .26 + n) * 1.6), 0);
+          points.push([5 + u * 61, 25 - amp]);
         }
-        this.path(points, c, .78, 1.2);
-        this.line(5, 29, 115, 29, c, .25);
-        for (let i = 0; i < 18; i++) this.line(5 + i * 6.4, 30, 5 + i * 6.4, i % 3 ? 32 : 34, c, .32);
-        const x = 16 + wave(p * .12) * 88;
-        this.brackets(x, 15, 7, 11, c, .8);
-        this.line(x, 4, x, 27, c, .24);
+        this.path(points, c, .88, 1.35);
+        this.line(5, 28, 67, 28, c, .32);
+        for (let i = 0; i < 12; i++) this.line(6 + i * 5.4, 29,
+          6 + i * 5.4, i % 3 ? 31 : 34, c, .36);
+        this.path([[66, 18], [74, 18], [79, 12]], c, .45);
+        this.angularRing(93, 18, 15, 14, 8, c, .46, 1.1, Math.PI / 8);
+        this.arc(93, 18, 8, 8, 0, TAU, c, .32);
+        const focus = p * TAU * .2;
+        this.arc(93, 18, 15, 14, focus, focus + .96, c, .85, 1.6);
+        this.path([[90, 18], [93, 15], [96, 18], [93, 21]], c, .76, 1.2, true);
+        const x = 8 + wave(p * .14) * 57;
+        this.line(x, 5, x, 27, c, .37, 1.2);
       } else if (key === "dss") {
-        this.globe(68, 18, 14, c, p, .75);
+        this.globe(69, 18, 15, c, p, .72);
+        this.arc(69, 18, 20, 8, Math.PI * .96, Math.PI * 2.04, c, .49);
         for (let i = 0; i < 3; i++) {
-          const t = fract(p * .18 + i / 3), fade = Math.sin(t * Math.PI);
+          const t = fract(p * .16 + i / 3), fade = Math.sin(t * Math.PI);
           const path = [];
-          for (let j = 0; j <= 18; j++) {
-            const u = j / 18;
-            path.push([14 + u * 48, 27 - u * 14 - Math.sin(u * Math.PI) * (9 + i * 3)]);
+          for (let j = 0; j <= 14; j++) {
+            const u = j / 14;
+            path.push([8 + u * 51, 29 - u * 15 - Math.sin(u * Math.PI) * (7 + i * 2)]);
           }
-          this.path(path, c, .15);
-          this.glowDot(14 + t * 48, 27 - t * 14 - Math.sin(t * Math.PI) * (9 + i * 3), 1.3, c, fade * .8);
-          this.arc(69 + i * 3, 17 + i * 2, 2 + t * 6, 1 + t * 3, 0, TAU, c, fade * .32);
+          this.path(path, c, .19);
+          this.glowDot(8 + t * 51, 29 - t * 15 - Math.sin(t * Math.PI) * (7 + i * 2),
+            1.3, c, fade * .86);
+          this.arc(69 + i * 3, 17 + i * 2, 2 + t * 7, 1 + t * 3,
+            0, TAU, c, fade * .34);
         }
-        this.ship(14, 27, c, .8, .8);
-      } else if (key === "galaxy_map" || key === "power_map") {
-        const power = key === "power_map";
+        this.path([[10, 28], [17, 24], [24, 27], [17, 30]], c, .86, 1.1, true, .13);
+        if (state.label.startsWith("DSS EFFICIENT")) {
+          // The journal confirms efficiency; this is a badge, not a guessed
+          // probe counter or an automatic map-completion animation.
+          this.angularRing(102, 18, 11, 10, 6, c, .77, 1.25, Math.PI / 6);
+          this.path([[97, 18], [101, 22], [108, 13]], c, .91, 1.8);
+        } else if (state.label.startsWith("DSS COMPLETE")) {
+          this.angularRing(102, 18, 11, 10, 8, c, .8, 1.3, Math.PI / 8);
+          this.glowDot(102, 18, 2, c, .85);
+          for (const side of [-1, 1]) this.line(102 + side * 6, 18,
+            102 + side * 10, 18, c, .68, 1.2);
+        }
+      } else if (key === "power_map") {
+        // Powerplay territory is a linked influence lattice, deliberately
+        // unlike the Galaxy Map's stellar spiral.
+        const cells = [[15,9],[39,8],[63,10],[88,7],[105,15],
+          [14,27],[39,26],[64,27],[89,27],[105,22]];
+        for (let i = 0; i < 5; i++) {
+          this.line(cells[i][0], cells[i][1], cells[i+5][0], cells[i+5][1], c, .2);
+          if (i < 4) {
+            this.line(cells[i][0], cells[i][1], cells[i+1][0], cells[i+1][1], c, .3);
+            this.line(cells[i+5][0], cells[i+5][1], cells[i+6][0], cells[i+6][1], c, .3);
+          }
+        }
+        for (let i = 0; i < cells.length; i++) {
+          const [x, y] = cells[i], active = [1,2,6,7,8].includes(i);
+          this.angularRing(x, y, active ? 8 : 5, active ? 6 : 4, 6,
+            c, active ? .65 : .35, 1.1, Math.PI / 6);
+          if (active) this.dot(x, y, 1.3, c, .62 + .25 * wave(p * .22 - i * .1));
+        }
+        this.path([[39,8],[63,10],[89,27],[64,27],[39,26]], c, .61, 1.4, true, .08);
+      } else if (key === "galaxy_map") {
         for (let arm = 0; arm < 4; arm++) {
           const points = [];
           for (let i = 0; i <= 22; i++) {
             const r = 2 + i * 2.25, a = arm * Math.PI / 2 + i * .16 + .35;
             points.push([60 + Math.cos(a) * r, 18 + Math.sin(a) * r * .28]);
           }
-          this.path(points, c, power ? .2 : .42);
+          this.path(points, c, .42);
           for (let i = 4; i < points.length; i += 4) {
             const [x, y] = points[i];
-            this.dot(x, y, power ? 1.6 : 1, c, .3 + .5 * wave(p * .15 - i * .04 - arm * .2));
-            if (power) this.angularRing(x, y, 6, 3, 6, c, .3);
+            this.dot(x, y, 1, c, .3 + .5 * wave(p * .15 - i * .04 - arm * .2));
           }
         }
         this.glowDot(60, 18, 2.1, c, .85);
         this.line(8, 32, 112, 32, c, .16);
-      } else if (["map", "system_map", "orrery"].includes(key)) {
-        const flat = key !== "orrery";
-        this.glowDot(flat ? 14 : 55, 18, 2.8, c, .85);
+      } else if (key === "map") {
+        // Unspecified map: a navigable grid, not an invented star system.
+        this.path([[17,5],[102,5],[111,13],[103,31],[18,31],[9,20]], c, .5, 1.1, true, .04);
         for (let i = 0; i < 4; i++) {
-          if (flat) {
-            const x = 38 + i * 23;
-            this.line(i ? x - 23 : 18, 18, x - 4, 18, c, .22);
-            this.globe(x, 18, 3 + i % 2, c, p * .4, .65);
-            this.arc(x, 18, 7, 10, -Math.PI / 2, -Math.PI / 2 + TAU * .7, c, .2);
-            this.dot(x + Math.cos(p * .32 + i) * 7, 18 + Math.sin(p * .32 + i) * 10, .9, c, .6);
-          } else {
-            const rx = 15 + i * 12, ry = 4 + i * 3, a = p * .28 / (i + 1) + i * 1.4;
-            this.arc(55, 18, rx, ry, 0, TAU, c, .3);
-            this.dot(55 + Math.cos(a) * rx, 18 + Math.sin(a) * ry, 1.8, c, .8);
-          }
+          const x = 27 + i * 21;
+          this.line(x, 7, x - 5, 29, c, .22);
         }
+        for (const y of [12,20,27]) this.line(13, y, 107, y, c, .2);
+        const x = 59 + Math.sin(p * .21) * 18, y = 18 + Math.cos(p * .17) * 6;
+        this.path([[x,y-5],[x+5,y],[x,y+5],[x-5,y]], c, .83, 1.3, true, .1);
+        this.brackets(x, y, 13, 10, c, .42);
+      } else if (key === "system_map") {
+        // Nested local orbits and bodies; the star remains the fixed anchor.
+        this.glowDot(27, 18, 4, c, .9);
+        for (let i = 0; i < 4; i++) {
+          const x = 49 + i * 18, radius = 7 + i % 2 * 2;
+          this.line(i ? x - 18 : 32, 18, x - radius, 18, c, .25);
+          this.globe(x, 18, 3 + i % 2, c, p * .4, .68);
+          this.arc(x, 18, radius, radius * .73, p * .16 + i,
+            p * .16 + i + Math.PI * 1.2, c, .35);
+          this.dot(x + Math.cos(p * .3 + i) * radius,
+            18 + Math.sin(p * .3 + i) * radius * .73, .9, c, .67);
+        }
+      } else if (key === "orrery") {
+        this.glowDot(55, 18, 3.3, c, .88);
+        for (let i = 0; i < 4; i++) {
+          const rx = 15 + i * 12, ry = 4 + i * 3, a = p * .28 / (i + 1) + i * 1.4;
+          this.arc(55, 18, rx, ry, 0, TAU, c, .32);
+          this.dot(55 + Math.cos(a) * rx, 18 + Math.sin(a) * ry, 1.8, c, .8);
+        }
+        this.path([[9,5],[55,18],[111,5]], c, .18);
+        this.path([[9,31],[55,18],[111,31]], c, .18);
       } else if (key === "codex") {
         this.path([[18, 6], [50, 9], [60, 13], [70, 9], [102, 6], [102, 29],
           [71, 28], [60, 32], [49, 28], [18, 29]], c, .6, 1, true, .06);
@@ -994,14 +1135,25 @@
       const c = state.color, d = state.dynamics;
       const depart = key.includes("departure"), orbital = key.startsWith("orbital");
       if (orbital) {
-        // Tangential orbital path; departure opens away from the planet limb.
+        // An orbital limb anchors a descending acquisition path or an outward
+        // departure corridor. Altitude only changes scale when it is known.
         const altitude = d.altitude < 0 ? .5 : clamp(Math.log10(1 + d.altitude) / 7);
         const r = 39 - altitude * 8, cy = 49;
         this.globe(61, cy, r, c, p * .5, .65);
         this.arc(61, cy, r + 11, r + 11, Math.PI * 1.15, Math.PI * 1.85, c, .32);
+        this.arc(61, cy, r + 17, r + 17, Math.PI * 1.26, Math.PI * 1.74,
+          c, .2 + .2 * wave(p * .23), 1.3);
         const points = depart ? [[34, 24], [52, 16], [73, 8], [103, 4]]
           : [[15, 5], [38, 9], [60, 16], [81, 27]];
         this.path(points, c, .65, 1.2);
+        if (depart) {
+          for (let i = 0; i < 3; i++) this.chevron(83 + i * 10, 8 - i * 2,
+            1, c, .42 + .2 * wave(p * .3 - i * .2), 2.5);
+          this.path([[12, 30], [32, 30], [42, 25]], c, .42, 1.3);
+        } else {
+          this.brackets(79, 27, 12, 7, c, .61);
+          this.path([[13, 6], [13, 20], [25, 20]], c, .48, 1.3);
+        }
         const t = fract(p * .15), fade = Math.sin(t * Math.PI), i = Math.min(2, Math.floor(t * 3));
         const f = t * 3 - i;
         this.glowDot(points[i][0] + (points[i + 1][0] - points[i][0]) * f,
@@ -1022,11 +1174,16 @@
       this.path([[4, horizon + 1], [23, horizon - 1], [38, horizon + 2],
         [62, horizon], [79, horizon - 2], [101, horizon + 1], [116, horizon]], c, .55);
       if (landed) {
+        // Pad shoes are latched; only edge lights breathe while landed.
+        this.path([[30, 33], [39, 28], [85, 28], [94, 33]], c, .45, 1.4);
         this.path([[37, 26], [48, 20], [76, 20], [87, 26], [76, 32], [48, 32]], c, .7, 1.2, true, .07);
         this.ship(62, 25, c, .85, 1.35);
         for (const x of [45, 79]) this.line(x, 27, x, 31, c, .8, 1.5);
         this.traceEdges([[37, 26], [48, 20], [76, 20], [87, 26], [76, 32], [48, 32]], p * .5, c);
       } else if (hold) {
+        for (const side of [-1, 1]) this.path([[61 + side * 30, 7],
+          [61 + side * 24, 10], [61 + side * 24, 24], [61 + side * 30, 27]],
+        c, .31 + .19 * wave(p * .27), 1.2);
         this.brackets(61, 17, 19, 8, c, .65);
         this.line(49, 17, 57, 17, c, .8); this.line(65, 17, 73, 17, c, .8);
         this.dot(61, 17, 1.4, c, .75);
@@ -1035,6 +1192,8 @@
         for (const offset of [0, Math.PI]) this.arc(61, 28, 16, 3,
           stabilizer + offset, stabilizer + offset + .9, c, .8, 1.6);
       } else if (glide) {
+        for (const side of [-1, 1]) this.path([[61 + side * 48, 4],
+          [61 + side * 32, 11], [61 + side * 19, 26]], c, .47, 1.3);
         for (let i = 0; i < 4; i++) {
           const t = fract(p * .18 + i / 4), fade = Math.sin(t * Math.PI);
           const w = 9 + t * t * 48, h = 2 + t * t * 15;
@@ -1045,6 +1204,12 @@
       } else {
         // Descent ladder and outward ascent vector have different silhouettes.
         const direction = depart ? -1 : 1;
+        for (const side of [-1, 1]) this.path(depart
+          ? [[61 + side * 11, 27], [61 + side * 30, 13], [61 + side * 46, 7]]
+          : [[61 + side * 46, 6], [61 + side * 30, 15], [61 + side * 11, 27]],
+        c, .51, 1.3);
+        this.arc(61, depart ? 29 : 12, depart ? 16 : 22, 5,
+          depart ? Math.PI : 0, depart ? TAU : Math.PI, c, .42, 1.2);
         this.path([[48, 16], [57, 16], [61, 19], [65, 16], [74, 16]], c, .8, 1.2);
         for (let i = 0; i < 3; i++) {
           const t = fract(state.terrainCycles * .18 + i / 3), yy = 18 + direction * (2 + t * 12);
@@ -1064,7 +1229,12 @@
       const type = key === "srv" ? "scarab" : ["rhino", "scorpion", "nomad"].includes(key) ? key
         : state.vehicleKey || "scarab";
       if (key === "on_foot") {
-        // Suit's projected boot tracks / visor range fan, not another ship.
+        // A visor aperture and paired footfall rails, not another ship.
+        this.path([[28, 9], [42, 4], [78, 4], [92, 9], [85, 28],
+          [35, 28]], c, .53, 1.25, true, .04);
+        this.path([[38, 13], [48, 10], [72, 10], [82, 13],
+          [77, 22], [43, 22]], c, .45, 1.1, true, .07);
+        this.line(48, 16, 72, 16, c, .43);
         this.arc(60, 31, 38, 22, Math.PI, TAU, c, .3);
         for (let i = 0; i < 4; i++) {
           const t = fract(p * .18 + i / 4), fade = Math.sin(t * Math.PI);
@@ -1076,6 +1246,8 @@
         return;
       }
       if (key === "srv_turret") {
+        this.path([[11, 31], [25, 31], [38, 27]], c, .41);
+        this.path([[109, 31], [95, 31], [82, 27]], c, .41);
         this.arc(60, 27, 29, 18, Math.PI, TAU, c, .4);
         const a = -Math.PI / 2 + Math.sin(p * .4) * .45;
         this.path([[49, 30], [53, 24], [67, 24], [71, 30]], c, .7);
@@ -1122,6 +1294,31 @@
         }
       }
       this.line(20, 33, 101, 33, c, .25);
+      if (key === "srv") {
+        // Unidentified SRV class keeps a neutral tracking frame.
+        this.brackets(60, 19, 39, 13, c, .44);
+        for (const x of [14, 106]) this.arc(x, 18, 5, 11,
+          -Math.PI / 2, Math.PI / 2, c, .38, 1.1);
+      } else if (key === "scarab") {
+        // Scarab's articulated wheel telemetry is separate from generic SRV.
+        for (const side of [-1, 1]) {
+          this.path([[60 + side * 39, 4], [60 + side * 45, 8],
+            [60 + side * 45, 27]], c, .5, 1.15);
+          this.arc(60 + side * 45, 18, 5, 8, -1.2, 1.2, c, .54, 1.2);
+        }
+      } else if (type === "scorpion") {
+        for (const side of [-1, 1]) this.path([[60 + side * 41, 6],
+          [60 + side * 49, 11], [60 + side * 49, 23],
+          [60 + side * 41, 29]], c, .57, 1.4);
+      } else if (type === "rhino") {
+        for (const side of [-1, 1]) for (let i = 0; i < 3; i++) {
+          const x = 60 + side * (40 + i * 6);
+          this.line(x, 11, x, 26, c, .42 + i * .09, 1.5);
+        }
+      } else if (type === "nomad") {
+        this.arc(60, 26, 46, 8, 0, Math.PI, c, .49, 1.3);
+        for (const x of [22, 98]) this.glowDot(x, 27, 1.5, c, .6);
+      }
       if (brake) {
         this.brackets(60, 20, 43, 12, c, .72);
         this.path([[10, 14], [6, 18], [10, 22]], c, .6);
@@ -1143,23 +1340,60 @@
 
     drawDockInstrument(state, p, key) {
       const c = state.color;
-      const denied = key === "docking_denied", docking = key === "docking_assist" || key === "docking_clearance";
-      if (["station", "docking_assist", "docking_clearance", "docking_denied"].includes(key)) {
-        // Coriolis-style octagonal station frame and illuminated letterbox.
-        this.angularRing(72, 18, 25, 16, 8, c, .65, 1.1, Math.PI / 8);
-        this.angularRing(72, 18, 19, 12, 8, c, .26, 1, Math.PI / 8);
-        this.rect(60, 14, 24, 8, c, .8);
+      const denied = ["docking_denied", "docking_cancelled", "docking_timeout"].includes(key);
+      const docking = key === "docking_assist" || key === "docking_clearance";
+      if (["station", "station_vicinity", "docking_assist", "docking_clearance",
+        "docking_denied", "docking_cancelled", "docking_timeout"].includes(key)) {
+        // Station approach is a gate; clearance locks its letterbox, denial
+        // visibly seals it. No invented pad location is implied by the scene.
+        this.angularRing(72, 18, 27, 16, 8, c, .69, 1.2, Math.PI / 8);
+        this.angularRing(72, 18, 18, 11, 8, c, .28, 1, Math.PI / 8);
+        this.path([[59, 14], [85, 14], [85, 22], [59, 22]], c,
+          denied ? .44 : .81, 1.25, true, .05);
         for (let i = 0; i < 5; i++) this.line(62 + i * 5, 15, 62 + i * 5, 17, c,
           .2 + .65 * Math.pow(wave(p * .5 - i / 5), 3), 1.4);
-        if (denied) {
-          const caution = .28 + .6 * wave(p * .26);
-          this.line(64, 12, 80, 24, c, caution, 1.8); this.line(64, 24, 80, 12, c, caution, 1.8);
+        if (key === "docking_cancelled") {
+          for (const side of [-1, 1]) {
+            this.path([[72 + side * 8, 7], [72 + side * 19, 3],
+              [72 + side * 31, 3]], c, .68, 1.5);
+            this.path([[72 + side * 8, 29], [72 + side * 19, 33],
+              [72 + side * 31, 33]], c, .68, 1.5);
+          }
+          this.line(15, 18, 44, 18, c, .52, 1.4);
+          this.chevron(18, 18, -1, c, .8, 3);
+        } else if (key === "docking_timeout") {
+          this.arc(72, 18, 32, 17, -2.6, -.3, c, .7, 1.6);
+          this.arc(72, 18, 32, 17, .4, 2.3, c, .7, 1.6);
+          this.line(72, 18, 72, 8, c, .8, 1.5);
+          this.line(72, 18, 81, 20, c, .8, 1.5);
+          for (const x of [15, 24, 33]) this.line(x, 8, x + 4, 8,
+            c, .55 + .25 * wave(p * .32), 1.4);
+        } else if (denied) {
+          const caution = .41 + .51 * wave(p * .38);
+          this.line(58, 9, 86, 27, c, caution, 2);
+          this.line(58, 27, 86, 9, c, caution, 2);
+          this.path([[17, 6], [37, 6], [43, 12]], c, caution, 1.6);
+          this.path([[17, 30], [37, 30], [43, 24]], c, caution, 1.6);
         } else if (docking) {
           for (let i = 0; i < 3; i++) {
             const t = fract(p * .2 + i / 3), x = 7 + t * 47;
             this.chevron(x, 18, 1, c, Math.sin(t * Math.PI) * .8, 3);
           }
-          if (key === "docking_clearance") this.brackets(72, 18, 15, 7, c, .6);
+          if (key === "docking_clearance") {
+            const confirmed = state.label.includes("CLEARED");
+            this.brackets(72, 18, 18, 9, c, confirmed ? .86 : .46);
+            for (const side of [-1, 1]) this.line(72 + side * 32, 9,
+              72 + side * 32, 27, c, confirmed ? .65 : .28, 1.4);
+          } else {
+            this.path([[13, 18], [34, 18], [43, 12]], c, .5);
+            this.path([[13, 18], [34, 18], [43, 24]], c, .5);
+          }
+        } else if (key === "station_vicinity") {
+          this.path([[12, 18], [34, 18], [46, 12]], c, .5, 1.3);
+          this.path([[12, 18], [34, 18], [46, 24]], c, .5, 1.3);
+          this.brackets(72, 18, 35, 16, c, .52);
+          const t = fract(p * .18);
+          this.chevron(14 + t * 32, 18, 1, c, Math.sin(t * Math.PI) * .76, 3);
         } else {
           // The old 88-second arc was mostly clipped and looked frozen.
           // A lit facet circuit stays inside the visible station silhouette.
@@ -1179,7 +1413,17 @@
           this.line(x + 2, 28, x + 11, 28, c,
             .12 + .65 * Math.pow(wave(p * .5 - i / 5), 3), 1.6);
         }
-        if (key === "surface_station") this.arc(62, 29, 25, 5, 0, Math.PI, c, .6);
+        if (key === "surface_station") {
+          this.arc(62, 29, 25, 5, 0, Math.PI, c, .6);
+          this.path([[42, 33], [42, 24], [49, 21], [75, 21],
+            [82, 24], [82, 33]], c, .67, 1.25);
+          for (const x of [46, 78]) this.line(x, 23, x, 30, c, .55, 1.1);
+        } else {
+          for (const x of [11, 110]) {
+            this.path([[x - 3, 27], [x - 3, 17], [x, 12],
+              [x + 3, 17], [x + 3, 27]], c, .54, 1.2);
+          }
+        }
       } else {
         // Docked: pad clamps stay latched; no endless docking manoeuvre.
         this.path([[25, 24], [44, 8], [83, 8], [102, 24], [83, 32], [44, 32]], c, .65, 1.1, true, .06);
@@ -1199,9 +1443,12 @@
           const t = fract(p * .23 + i / 4);
           this.angularRing(62, 19, 19 + t * 46, 3 + t * 18, 8, c, Math.sin(t * Math.PI) * .4, 1.2);
         }
+        for (const side of [-1, 1]) this.path([[62 + side * 15, 5],
+          [62 + side * 39, 3], [62 + side * 54, 9]], c, .58, 1.5);
       } else if (arrival) {
         this.spaceLanes(p, c, {count: 10, speed: .2, strength: 1 - smooth(state.age / 2)});
         this.brackets(60, 18, 50, 14, c, .4);
+        this.arc(62, 19, 53, 17, Math.PI * .15, Math.PI * .85, c, .48, 1.4);
       } else {
         this.path([[16, 29], [32, 10], [97, 10], [108, 29]], c, .24);
         this.line(6, 32, 115, 32, c, .22);
@@ -1210,9 +1457,22 @@
         const close = smooth(Math.min(state.age / 3, 1));
         this.line(18, 4 + close * 10, 108, 4 + close * 10, c, .65);
         this.brackets(62, 19, 48 - close * 5, 16, c, .7);
+        for (const side of [-1, 1]) this.path([[62 + side * 50, 3],
+          [62 + side * 34, 9], [62 + side * 34, 28],
+          [62 + side * 50, 33]], c, .64, 1.6);
       } else if (key === "carrier_preparing") {
         for (let i = 0; i < 4; i++) this.line(30 + i * 20, 8, 40 + i * 20, 8, c,
           .2 + .65 * wave(p * .35 - i / 4), 1.6);
+        for (const side of [-1, 1]) this.chevron(62 + side * 47,
+          18, -side, c, .65, 4);
+      } else if (key === "carrier_deck" || key === "carrier_vicinity") {
+        const deck = key === "carrier_deck";
+        this.path([[11, 31], [34, deck ? 27 : 24],
+          [87, deck ? 27 : 24], [111, 31]], c, .58, 1.35);
+        for (const x of [22, 99]) this.line(x, 24, x, 32, c, .6, 1.3);
+        if (deck) this.brackets(63, 22, 27, 10, c, .47);
+        else this.arc(63, 20, 44, 13, Math.PI * 1.1,
+          Math.PI * 1.9, c, .44, 1.3);
       }
       this.path([[14, 21], [26, 17], [42, 17], [45, 13], [91, 13], [105, 18],
         [105, 24], [32, 24]], c, .75, 1.2, true, .08);
@@ -1229,6 +1489,43 @@
       const c = state.color, board = key.includes("board");
       const t = smooth(state.age / 2), progress = board ? 1 - t : t;
       const foot = key.endsWith("crew"), flyer = key.endsWith("fighter") || key.endsWith("ship");
+      if (key.includes("switch")) {
+        // A handoff link, not a ramp animation reused from deployment.
+        for (const side of [-1, 1]) {
+          const x = 60 + side * 36;
+          this.angularRing(x, 18, 15, 13, 6, c, .63, 1.25, Math.PI / 6);
+          this.brackets(x, 18, 11, 9, c, .54);
+          if (foot) {
+            this.dot(x, 14, 2, c, .8);
+            this.path([[x - 5, 24], [x - 4, 19], [x, 17],
+              [x + 4, 19], [x + 5, 24]], c, .7);
+          } else if (flyer) this.ship(x, 18, c, .86, 1.2, -side);
+          else {
+            const rhino = key.endsWith("_rhino"), nomad = key.endsWith("_nomad");
+            const scorpion = key.endsWith("_scorpion");
+            const half = rhino ? 11 : scorpion ? 7 : 8;
+            this.path([[x - half, 20], [x - half + 3, 14],
+              [x + half - 3, 14], [x + half, 20]], c, .72, 1.2);
+            if (nomad) {
+              this.arc(x, 23, 10, 2, 0, TAU, c, .7, 1.25);
+              this.line(x - 8, 27, x + 8, 27, c, .48);
+            } else {
+              for (const wheel of [-1, 1]) this.arc(x + wheel * (half - 3),
+                22, rhino ? 3 : 2.4, rhino ? 3 : 2.4,
+                0, TAU, c, .65);
+              if (rhino) for (const offset of [-3, 3]) this.line(x + offset,
+                12, x + offset, 20, c, .57, 1.2);
+              if (scorpion) this.path([[x - 2, 14], [x, 10],
+                [x + 2, 14]], c, .78, 1.35);
+            }
+          }
+        }
+        this.path([[40, 18], [51, 18], [56, 13], [64, 23],
+          [69, 18], [80, 18]], c, .68, 1.5);
+        for (const side of [-1, 1]) this.chevron(60 + side * 14,
+          18, side, c, .38 + .3 * wave(p * .3), 2.5);
+        return;
+      }
       // An airlock / ramp transfer runs once, then waits for journal confirmation.
       this.path([[14, 30], [14, 6], [43, 6], [49, 12], [49, 30]], c, .58);
       const door = board ? (1 - t) * 13 : t * 13;
@@ -1240,12 +1537,25 @@
         this.dot(x, y - 5, 2, c, .8);
         this.path([[x, y - 2], [x, y + 3], [x - 3, y + 7]], c, .75);
         this.line(x, y + 3, x + 3, y + 7, c, .75);
-      } else if (flyer) this.ship(x, y, c, .9, 1.5, board ? -1 : 1);
-      else {
+      } else if (flyer) {
+        this.ship(x, y, c, .9, key.endsWith("fighter") ? 1.25 : 1.5,
+          board ? -1 : 1);
+        if (key.endsWith("fighter")) {
+          for (const side of [-1, 1]) this.path([[x + side * 5, y + 2],
+            [x + side * 10, y + 5], [x + side * 15, y + 2]],
+          c, .67, 1.2);
+        } else this.arc(x, y, 13, 7, 0, TAU, c, .31, 1.1);
+      } else {
         const size = key.endsWith("rhino") ? 11 : 8;
         this.path([[x - size, y], [x - size + 3, y - 5], [x + size - 3, y - 5], [x + size, y]], c, .8);
         for (const side of [-1, 1]) this.arc(x + side * (size - 3), y + 2, 2.7, 2.7, 0, TAU, c, .7);
         if (key.endsWith("nomad")) this.arc(x, y + 6, size, 1.5, 0, TAU, c, .5);
+        if (key.endsWith("scorpion")) this.path([[x - 2, y - 5],
+          [x, y - 9], [x + 3, y - 5]], c, .75, 1.25);
+        if (key.endsWith("rhino")) for (const offset of [-3, 3]) {
+          this.line(x + offset, y - 7, x + offset, y,
+            c, .62, 1.2);
+        }
       }
       this.brackets(board ? 29 : 96, 20, 13, 11, c, .2 + .45 * t);
       // The transfer itself is one-shot; the airlock's confirmation circuit
@@ -1256,13 +1566,41 @@
 
     drawContactInstrument(state, p, key) {
       const c = state.color;
-      if (key === "target_lock") {
+      if (["target_lock", "target_system", "target_body", "target_signal", "target_clear"].includes(key)) {
+        if (key === "target_clear") {
+          for (const side of [-1, 1]) this.path([[60 + side * 14, 6],
+            [60 + side * 38, 6], [60 + side * 46, 13]], c, .63, 1.4);
+          for (const side of [-1, 1]) this.path([[60 + side * 14, 30],
+            [60 + side * 38, 30], [60 + side * 46, 23]], c, .63, 1.4);
+          this.arc(60, 18, 10, 10, -.8, .8, c, .48, 1.3);
+          this.arc(60, 18, 10, 10, Math.PI - .8,
+            Math.PI + .8, c, .48, 1.3);
+          this.line(44, 27, 76, 9, c, .62, 1.5);
+          return;
+        }
         const locked = smooth(state.age / 1.2);
         this.arc(61, 18, 10, 10, 0, TAU, c, .4);
         this.brackets(61, 18, 16 + (1 - locked) * 23, 13, c, .78);
         this.line(61, 3, 61, 7, c, .5); this.line(61, 29, 61, 33, c, .5);
         this.line(30, 18, 47, 18, c, .4); this.line(75, 18, 92, 18, c, .4);
-        this.dot(61, 18, 1.3, c, .8);
+        if (key === "target_system") {
+          this.angularRing(61, 18, 8, 8, 8, c, .65, 1.1, Math.PI / 8);
+          this.glowDot(61, 18, 1.7, c, .84);
+          for (const x of [22, 100]) this.path([[x - 4, 18],
+            [x, 14], [x + 4, 18], [x, 22]], c, .49, 1.1, true);
+        } else if (key === "target_body") {
+          this.globe(61, 18, 7, c, p * .28, .76);
+          this.arc(61, 18, 16, 7, Math.PI * .12,
+            Math.PI * .88, c, .48, 1.2);
+        } else if (key === "target_signal") {
+          this.dot(61, 18, 1.5, c, .8);
+          for (const side of [-1, 1]) for (let i = 0; i < 2; i++) {
+            this.arc(61, 18, 14 + i * 9, 8 + i * 5,
+              side < 0 ? Math.PI - .75 : -.75,
+              side < 0 ? Math.PI + .75 : .75,
+              c, .38 + .24 * wave(p * .3 - i * .25), 1.2);
+          }
+        } else this.dot(61, 18, 1.3, c, .8);
         const track = p * TAU * .45;
         for (const offset of [0, Math.PI]) this.arc(61, 18, 10, 10,
           track + offset, track + offset + .65, c, .75, 1.5);
@@ -1301,12 +1639,42 @@
       } else if (key === "capital_contact") {
         this.drawCarrierInstrument(state, p, "carrier_deck");
         this.brackets(60, 18, 54, 15, c, .65);
+      } else if (["combat", "heavy_combat", "srv_threat"].includes(key)) {
+        const heavy = key === "heavy_combat", ground = key === "srv_threat";
+        const lock = .37 + .48 * wave(p * (heavy ? .82 : .57));
+        // Threat geometry is an alarm frame, not a fabricated target count.
+        this.angularRing(60, 18, heavy ? 28 : 24, 14, 8, c,
+          heavy ? .69 : .51, heavy ? 1.5 : 1.2, Math.PI / 8);
+        this.angularRing(60, 18, 14, 9, 8, c, .25 + lock * .35, 1.15,
+          Math.PI / 8);
+        this.path([[60, 8], [69, 18], [60, 28], [51, 18]], c,
+          .8, 1.5, true, .07);
+        for (const side of [-1, 1]) {
+          this.path([[60 + side * 35, 4], [60 + side * 47, 4],
+            [60 + side * 47, 12]], c, lock, 1.6);
+          this.path([[60 + side * 35, 32], [60 + side * 47, 32],
+            [60 + side * 47, 24]], c, lock, 1.6);
+          this.path([[60 + side * 18, 18], [60 + side * 42, 18]], c,
+            .23 + lock * .36, 1.3);
+        }
+        if (ground) {
+          this.path([[10, 33], [30, 29], [48, 31], [60, 29],
+            [77, 31], [94, 29], [111, 33]], c, .61, 1.2);
+          for (const x of [24, 96]) this.line(x, 28, x, 34, c, .7, 1.2);
+        } else if (heavy) {
+          this.line(60, 1, 60, 6, c, lock, 1.8);
+          this.line(60, 30, 60, 35, c, lock, 1.8);
+          for (const side of [-1, 1]) this.chevron(60 + side * 52, 18,
+            -side, c, lock, 4);
+        } else {
+          this.arc(60, 18, 34, 12, p * .34, p * .34 + 1.1,
+            c, lock, 1.4);
+        }
       } else {
-        const combat = ["combat", "heavy_combat", "srv_threat"].includes(key);
-        const threat = combat || key === "signal_threat", drop = key === "signal_drop";
+        const threat = key === "signal_threat", drop = key === "signal_drop";
         this.arc(60, 22, 45, 10, 0, TAU, c, .3);
         this.arc(60, 22, 22, 5, 0, TAU, c, .2);
-        const x = 62 + Math.sin(p * .18) * (combat ? 18 : 2), y = 14 + Math.cos(p * .2) * 2;
+        const x = 62 + Math.sin(p * .18) * 2, y = 14 + Math.cos(p * .2) * 2;
         this.line(x, 23, x, y, c, .4);
         if (key === "unknown_contact") {
           this.angularRing(x, y, 5, 5, 6, c, .6);
@@ -1315,9 +1683,17 @@
           this.path([[x, y - 4], [x + 4, y + 3], [x - 4, y + 3]], c, .8, 1.1, true, .13);
           this.brackets(x, y, 10 + (drop ? 4 * wave(p * .2) : 0), 8, c, .6);
         }
-        if (threat) for (let i = 0; i < (key === "heavy_combat" ? 4 : 2); i++) {
+        if (threat) for (let i = 0; i < 2; i++) {
           const t = fract(p * .2 + i / 4), fade = Math.sin(t * Math.PI);
           this.line(11 + t * 24, 30 - t * 9, 16 + t * 24, 28 - t * 9, c, fade * .65, 1.3);
+        }
+        if (threat) {
+          const level = clamp(Number(state.label.match(/\d+$/)?.[0] || 0), 0, 8);
+          for (let i = 0; i < level; i++) {
+            const x = 34 + i * 7;
+            this.path([[x - 2, 31], [x, 25], [x + 2, 31]],
+              c, .42 + .35 * wave(p * .47 - i * .11), 1.2);
+          }
         }
       }
     }
@@ -1325,12 +1701,16 @@
     drawCockpitInstrument(state, p, key) {
       const c = state.color;
       if (["left_panel", "right_panel", "role_panel", "station_services", "comms_panel"].includes(key)) {
+        this.path([[6, 5], [114, 5], [114, 31], [6, 31]],
+          c, .2, 1, true, .015);
         if (key === "comms_panel") {
           this.path([[15, 10], [30, 10], [30, 22], [21, 22], [16, 27], [16, 22], [12, 22], [12, 10]], c, .6);
           for (let i = 0; i < 21; i++) {
             const amp = 2 + 10 * wave(p * .25 - i * .12) * Math.sin(i / 20 * Math.PI);
             this.line(39 + i * 3.5, 18 - amp, 39 + i * 3.5, 18 + amp, c, .4 + .25 * wave(p * .2 - i * .1));
           }
+          for (let i = 0; i < 3; i++) this.dot(104 + i * 4,
+            9, 1.1, c, .31 + .39 * wave(p * .38 - i * .18));
         } else if (key === "role_panel") {
           for (let i = 0; i < 3; i++) {
             const x = 30 + i * 30;
@@ -1343,6 +1723,7 @@
             this.line(60 + side * (13 + t * 9), 31, 60 + side * (17 + t * 9), 31,
               c, Math.sin(t * Math.PI) * .75, 1.5);
           }
+          this.path([[30, 12], [60, 6], [90, 12]], c, .39);
         } else if (key === "station_services") {
           for (let i = 0; i < 4; i++) {
             const x = 25 + i * 24;
@@ -1350,6 +1731,8 @@
             this.line(x - 3, 18, x + 3, 18, c, .6);
             if (i % 2) this.line(x, 15, x, 21, c, .6);
           }
+          this.path([[11, 30], [11, 8], [18, 8]], c, .58, 1.3);
+          this.path([[109, 30], [109, 8], [102, 8]], c, .58, 1.3);
         } else {
           const left = key === "left_panel";
           this.path(left ? [[18, 7], [100, 3], [100, 32], [18, 27]]
@@ -1362,17 +1745,24 @@
               this.arc(x, y, 5.5, 5.5, 0, TAU, c,
                 .7 * Math.pow(wave(p * .45 - i / 4), 4), 1.3);
             }
+            this.path([[8, 7], [15, 7], [15, 30], [8, 30]], c,
+              .52, 1.3, true, .06);
           } else {
             for (let i = 0; i < 4; i++) {
               this.rect(31, 9 + i * 5, 5, 2, c, .4, true);
               this.line(41, 10 + i * 5, 82 - i * 4, 10 + i * 5, c, .28 + .3 * wave(p * .2 - i * .2));
             }
+            this.path([[105, 7], [112, 7], [112, 30], [105, 30]], c,
+              .52, 1.3, true, .06);
           }
         }
         return;
       }
       if (key === "maintenance" || key === "system_reboot") {
         const reboot = key === "system_reboot";
+        for (const side of [-1, 1]) this.path([[60 + side * 55, 5],
+          [60 + side * 42, 5], [60 + side * 37, 11]], c,
+        reboot ? .61 : .37, 1.25);
         for (let i = 0; i < 6; i++) {
           const x = 15 + i * 18, activity = .25 + .45 * wave(p * .2 - i / 6);
           this.rect(x - 5, 12, 10, 12, c, activity);
@@ -1386,10 +1776,24 @@
         if (reboot) {
           const t = fract(p * .18), x = 5 + t * 110;
           this.line(x, 6, x, 30, c, Math.sin(t * Math.PI) * .6);
+          this.path([[52, 4], [66, 4], [61, 13], [70, 13],
+            [54, 31], [59, 20], [50, 20]], c, .78, 1.45);
+        } else {
+          this.angularRing(60, 18, 13, 12, 6, c, .49, 1.2, Math.PI / 6);
+          this.line(60, 12, 60, 24, c, .7, 1.5);
+          this.line(54, 18, 66, 18, c, .7, 1.5);
         }
         return;
       }
       if (["heat_critical", "suit_hazard", "jet_cone_damage"].includes(key)) {
+        const alarm = .43 + .43 * wave(p * .5);
+        for (const side of [-1, 1]) for (let i = 0; i < 3; i++) {
+          const x = 60 + side * (45 + i * 6);
+          this.path([[x, 3], [x + side * 3, 6], [x, 9]], c,
+            alarm * (1 - i * .17), 1.4);
+          this.path([[x, 33], [x + side * 3, 30], [x, 27]], c,
+            alarm * (1 - i * .17), 1.4);
+        }
         if (key === "jet_cone_damage") {
           for (let i = 0; i < 4; i++) {
             const points = [];
@@ -1397,11 +1801,44 @@
               18 + (i - 1.5) * 5 + Math.sin(j * .45 - p + i) * 4]);
             this.path(points, c, .25 + i * .13);
           }
-          this.brackets(60, 18, 13, 11, c, .8);
+          this.angularRing(60, 18, 14, 12, 6, c, .8, 1.55, Math.PI / 6);
+          this.path([[53, 18], [58, 13], [65, 20], [68, 16]], c, .84, 1.6);
         } else if (key === "suit_hazard") {
-          this.path([[48, 29], [43, 22], [43, 12], [49, 5], [69, 5], [76, 12], [76, 22], [71, 29]], c, .72);
-          this.path([[47, 14], [71, 14], [70, 21], [48, 21]], c, .5, 1, true, .08);
-          for (const x of [33, 85]) this.path([[x, 10], [x, 22], [x + 2, 26]], c, .4 + .3 * wave(p * .3), 1.5);
+          const label = state.label;
+          this.path([[45, 30], [40, 23], [40, 12], [47, 4], [73, 4],
+            [80, 12], [80, 23], [75, 30]], c, .78, 1.25);
+          this.path([[44, 14], [76, 14], [73, 23], [47, 23]], c,
+            .55, 1, true, .06);
+          if (label.includes("OXYGEN")) {
+            for (let i = 0; i < 3; i++) {
+              const t = fract(p * .2 + i / 3), fade = Math.sin(t * Math.PI);
+              this.arc(60, 19, 3 + t * 20, 2 + t * 8, Math.PI * .1,
+                Math.PI * .9, c, fade * .63, 1.25);
+            }
+          } else if (label.includes("HEALTH")) {
+            this.path([[14, 19], [43, 19], [49, 19], [53, 12], [58, 26],
+              [63, 15], [68, 19], [77, 19], [106, 19]], c, alarm, 1.5);
+          } else if (label.includes("COLD")) {
+            for (const x of [27, 93]) {
+              this.line(x - 5, 18, x + 5, 18, c, alarm, 1.3);
+              this.line(x, 12, x, 24, c, alarm, 1.3);
+              this.line(x - 4, 14, x + 4, 22, c, alarm * .7);
+              this.line(x + 4, 14, x - 4, 22, c, alarm * .7);
+            }
+          } else {
+            for (const x of [26, 94]) this.path([[x - 4, 26], [x - 5, 17],
+              [x + Math.sin(p * .6 + x) * 2, 9], [x + 5, 17], [x + 4, 26]],
+            c, alarm, 1.4);
+          }
+          if (label.startsWith("EXTREME")) {
+            // Status distinguishes an extreme environment from a suit caution.
+            for (const side of [-1, 1]) {
+              const x = 60 + side * 48;
+              this.path([[x, 5], [x + side * 5, 10],
+                [x, 15], [x + side * 5, 20], [x, 29]],
+              c, alarm, 1.6);
+            }
+          }
         } else {
           this.path([[47, 30], [47, 9], [51, 4], [69, 4], [73, 9], [73, 30]], c, .65);
           for (let i = 0; i < 6; i++) this.line(51, 28 - i * 3.5, 69, 28 - i * 3.5, c, .3 + .5 * wave(p * .25 - i * .1), 1.8);
@@ -1415,32 +1852,49 @@
       }
       const faOff = key === "flight_assist_off", silent = key === "silent_running";
       const fighter = key === "fighter", crew = key === "multicrew";
-      // Flight: holographic attitude gimbal. FA-off shows a detached inertia
-      // vector; silent running shutters the thermal shell around the ship.
-      this.arc(60, 20, 30, 10, 0, TAU, c, .42);
-      this.arc(60, 20, 12, 15, 0, TAU, c, .28);
-      this.path(fighter ? [[41, 24], [54, 20], [60, 11], [66, 20], [79, 24], [60, 22]]
-        : [[47, 23], [60, 12], [73, 23], [60, 20]], c, .8, 1.15, true, .1);
+      // A faceted attitude lens is the quiet home state. The ship stays fixed;
+      // its peripheral vector or shutters distinguish control modes at a glance.
+      this.angularRing(60, 18, 31, 14, 8, c, .42, 1.1, Math.PI / 8);
+      this.path([[6, 18], [25, 18], [34, 13]], c, .34);
+      this.path([[114, 18], [95, 18], [86, 13]], c, .34);
+      this.line(34, 27, 49, 27, c, .31);
+      this.line(71, 27, 86, 27, c, .31);
+      this.path(fighter
+        ? [[41, 22], [52, 19], [60, 8], [68, 19], [79, 22], [60, 19]]
+        : [[43, 20], [52, 19], [60, 10], [68, 19], [77, 20], [60, 23]],
+      c, .88, 1.3, true, .13);
+      this.dot(60, 19, 1.2, c, .82);
       if (faOff) {
-        const x = 60 + Math.sin(p * .35) * 43, y = 20 + Math.cos(p * .35) * 11;
-        this.line(60, 20, x, y, c, .4); this.brackets(x, y, 4, 3, c, .75);
+        const x = 60 + Math.sin(p * .38) * 41, y = 18 + Math.cos(p * .31) * 10;
+        this.path([[60, 18], [60 + (x - 60) * .43, y], [x, y]], c, .44, 1.1);
+        this.angularRing(x, y, 4, 4, 4, c, .85, 1.3, Math.PI / 4);
+        this.line(60 - (x - 60) * .2, 31, 60 + (x - 60) * .2, 31, c, .4);
       } else if (silent) {
-        const seal = .25 + .55 * wave(p * .55);
-        for (const side of [-1, 1]) this.path([[60 + side * 25, 5], [60 + side * 19, 10],
-          [60 + side * 19, 28], [60 + side * 25, 32]], c, seal, 1.6);
-        this.line(44, 32, 76, 32, c, .25 + .35 * wave(p * .55));
+        const seal = .42 + .46 * wave(p * .42);
+        for (const side of [-1, 1]) {
+          this.path([[60 + side * 38, 4], [60 + side * 25, 10],
+            [60 + side * 25, 26], [60 + side * 38, 32]], c, seal, 1.8);
+          this.path([[60 + side * 23, 11], [60 + side * 16, 15],
+            [60 + side * 16, 22], [60 + side * 23, 26]], c, seal * .62, 1.2);
+        }
+        this.line(43, 32, 77, 32, c, seal * .75, 1.3);
       } else if (crew) {
         for (const side of [-1, 1]) {
-          this.angularRing(60 + side * 45, 18, 6, 6, 6, c, .6);
-          this.line(60 + side * 31, 20, 60 + side * 39, 18, c, .35);
-          this.angularRing(60 + side * 45, 18, 8, 8, 6, c,
-            .2 + .55 * wave(p * .5 + (side < 0 ? 0 : .5)), 1.3);
+          this.angularRing(60 + side * 44, 18, 7, 8, 6, c, .7, 1.2);
+          this.path([[60 + side * 30, 16], [60 + side * 35, 18],
+            [60 + side * 37, 18]], c, .49);
+          this.angularRing(60 + side * 44, 18, 10, 11, 6, c,
+            .19 + .55 * wave(p * .42 + (side < 0 ? 0 : .5)), 1.3);
         }
       } else {
-        const a = p * TAU * (fighter ? .18 : .25);
-        this.arc(60, 20, 30, 10, a - .65, a, c, .65, 1.3);
-        this.dot(60 + Math.cos(a) * 30, 20 + Math.sin(a) * 10, 1.4, c, .8);
-        if (fighter) this.brackets(60, 19, 45, 13, c, .55);
+        const a = p * TAU * (fighter ? .2 : .14);
+        this.arc(60, 18, 37, 11, a - .75, a, c, .75, 1.5);
+        this.dot(60 + Math.cos(a) * 37, 18 + Math.sin(a) * 11, 1.4, c, .84);
+        if (fighter) {
+          this.brackets(60, 18, 49, 14, c, .54);
+          for (const side of [-1, 1]) this.chevron(60 + side * 45, 18, -side,
+            c, .4 + .35 * wave(p * .6), 3);
+        }
       }
     }
 
@@ -1527,7 +1981,7 @@
       if (alpha <= .002) return;
       const key = this.key(state);
       this.instrument(g, alpha, () => {
-        if (["supercruise", "supercruise_overcharge", "supercruise_assist", "fsd_charge",
+        if (["supercruise", "taxi", "supercruise_overcharge", "supercruise_assist", "fsd_charge",
           "hyper_charge", "hyperspace", "jumping", "arrival", "interdiction_evaded",
           "local_arrival", "fsd_cooldown", "fsd_injection"].includes(key)) {
           this.drawDrive(state, p, key);
@@ -1536,11 +1990,12 @@
           this.drawSurveyInstrument(state, p, key);
         } else if (PLANETARY.has(key) || key === "landed") {
           this.drawSurfaceFlight(state, p, key);
-        } else if (["srv", "scorpion", "rhino", "nomad", "srv_handbrake",
+        } else if (["srv", "scarab", "scorpion", "rhino", "nomad", "srv_handbrake",
           "srv_turret", "srv_drive_assist", "on_foot"].includes(key)) {
           this.drawVehicleInstrument(state, p, key);
-        } else if (["docked", "station", "surface_station", "settlement_area",
-          "docking_clearance", "docking_denied", "docking_assist"].includes(key)) {
+        } else if (["docked", "station", "station_vicinity", "surface_station", "settlement_area",
+          "docking_clearance", "docking_denied", "docking_cancelled", "docking_timeout",
+          "docking_assist"].includes(key)) {
           this.drawDockInstrument(state, p, key);
         } else if (key.startsWith("carrier_")) {
           this.drawCarrierInstrument(state, p, key);
@@ -1548,7 +2003,8 @@
           this.drawHandoffInstrument(state, p, key);
         } else if (["asteroid_field", "mass_lock", "signal_lock", "signal_drop",
           "signal_threat", "combat", "heavy_combat", "srv_threat", "unknown_contact",
-          "capital_contact", "interdiction", "interdicted", "target_lock"].includes(key)) {
+          "capital_contact", "interdiction", "interdicted", "target_lock", "target_system",
+          "target_body", "target_signal", "target_clear"].includes(key)) {
           this.drawContactInstrument(state, p, key);
         } else {
           this.drawCockpitInstrument(state, p, key);

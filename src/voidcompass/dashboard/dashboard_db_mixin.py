@@ -720,7 +720,7 @@ class DashboardDBMixin:
             try:
                 cur = self.conn.cursor()
                 cur.execute(
-                    "SELECT data_json FROM scan_hud_items WHERE system_name=? ORDER BY ts DESC LIMIT 60",
+                    "SELECT data_json FROM scan_hud_items WHERE system_name=? ORDER BY ts DESC",
                     (system_name,),
                 )
                 rows = cur.fetchall()

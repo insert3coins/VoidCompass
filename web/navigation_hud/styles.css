@@ -32,11 +32,11 @@ body {
   height: 100%;
   color: var(--text);
   background:
-    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--state) 10%, transparent), transparent 46%),
-    linear-gradient(100deg,
-      color-mix(in srgb, var(--inset) 97%, transparent),
-      color-mix(in srgb, var(--panel) 95%, transparent) 50%,
-      color-mix(in srgb, var(--bg) 97%, transparent));
+    radial-gradient(ellipse at 50% -20%, color-mix(in srgb, var(--state) 17%, transparent), transparent 60%),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(0deg, color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(115deg, var(--inset), var(--panel) 56%, var(--bg));
+  background-size: auto, 24px 24px, 24px 24px, auto;
   isolation: isolate;
   font-size: calc(10px * var(--text-scale));
 }
@@ -69,12 +69,23 @@ body {
   position: absolute; left: 16px; right: 16px; top: 7px; height: 45px;
   display: grid; grid-template-columns: 1fr minmax(142px, 38%) 1fr; align-items: center;
   overflow: hidden; border-bottom: 1px solid rgba(92, 123, 140, .2);
-  background: linear-gradient(90deg,
+  background: var(--state-motif, none), linear-gradient(90deg,
     transparent,
     color-mix(in srgb, var(--state) 3%, transparent) 22%,
     color-mix(in srgb, var(--state) 6%, transparent) 50%,
     color-mix(in srgb, var(--state) 3%, transparent) 78%,
     transparent);
+}
+.state-instrument::before {
+  content: ""; position: absolute; z-index: 1; right: 0; top: 0; width: 72px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--state));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--state) 60%, transparent);
+}
+.state-instrument::after {
+  content: ""; position: absolute; z-index: 1; right: 0; bottom: 4px; width: 24px; height: 4px;
+  border-right: 2px solid var(--state);
+  border-bottom: 1px solid color-mix(in srgb, var(--state) 50%, transparent);
+  opacity: .66;
 }
 #state-canvas { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; }
 .state-vehicle {
@@ -85,6 +96,16 @@ body {
   opacity: 1;
 }
 .state-vehicle[hidden] { display: none; }
+.state-vehicle::before {
+  content: ""; position: absolute; z-index: 0; inset: 5px 8px;
+  background: var(--vehicle-motif, none);
+  opacity: .86; pointer-events: none;
+}
+.state-vehicle::after {
+  content: ""; position: absolute; z-index: 1; left: 11px; right: 13px; bottom: 5px; height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--state) 58%, transparent), transparent);
+  opacity: .45; pointer-events: none;
+}
 .state-vehicle img {
   position: relative; z-index: 2; display: block; width: 132px; height: 43px;
   object-fit: contain; transform-origin: 48% 54%;
@@ -113,7 +134,8 @@ body {
 }
 .state-core {
   position: relative; z-index: 2; grid-column: 2; align-self: center; justify-self: stretch; height: 33px;
-  display: flex; align-items: center; justify-content: center; gap: 9px; min-width: 0;
+  display: flex; align-items: center; justify-content: center; min-width: 0;
+  container-type: inline-size;
   background: linear-gradient(90deg,
     transparent,
     color-mix(in srgb, var(--inset) 96%, transparent) 12%,
@@ -131,18 +153,202 @@ body {
 .state-core strong {
   position: relative; z-index: 4; color: var(--state);
   font: 700 calc(12.5px * var(--text-scale)) "Cascadia Mono", "Consolas", monospace;
-  letter-spacing: 1.15px; line-height: 1; text-align: center;
+  font-size: min(calc(12.5px * var(--text-scale)), 7.2cqw);
+  letter-spacing: .6px; line-height: 1; text-align: center; padding: 0 10px;
   text-shadow: 0 0 7px color-mix(in srgb, var(--state) 48%, transparent), 1px 1px #000;
   white-space: nowrap;
 }
-.core-bracket { width: 10px; height: 8px; opacity: .8; }
-.core-bracket.left { border-top: 1px solid var(--state); transform: skewX(-18deg); }
-.core-bracket.right { border-bottom: 1px solid var(--state); transform: skewX(-18deg); }
+.core-bracket { position: absolute; top: calc(50% - 4px); width: 8px; height: 8px; opacity: .8; }
+.core-bracket.left { left: 1px; border-top: 1px solid var(--state); transform: skewX(-18deg); }
+.core-bracket.right { right: 1px; border-bottom: 1px solid var(--state); transform: skewX(-18deg); }
+.hud:is([data-state="INTERDICTION EVADED"], [data-state="CARRIER PREPARING"],
+  [data-state="CARRIER LOCKDOWN"], [data-state="STATION VICINITY"],
+  [data-state="SUIT OXYGEN LOW"], [data-state="SUIT HEALTH LOW"],
+  [data-state="SURFACE DEPARTURE"], [data-state="ORBITAL DEPARTURE"],
+  [data-state="SURFACE APPROACH"], [data-state="ORBITAL APPROACH"],
+  [data-state="FLIGHT ASSIST OFF"], [data-state^="FSD INJECTION"],
+  [data-state^="SIGNAL THREAT"], [data-state^="DSS EFFICIENT"],
+  [data-state^="BOARDING "]) .state-core strong {
+  font-size: min(calc(12.5px * var(--text-scale)), 6.1cqw);
+  letter-spacing: .2px;
+}
 .core-pulse {
   position: absolute; z-index: 1; width: 62%; height: 7px; border-radius: 50%;
   background: color-mix(in srgb, var(--state) 20%, transparent); filter: blur(5px);
   opacity: .38; animation: core-breathe calc(2.15s * var(--motion-scale)) ease-in-out infinite;
 }
+
+/* Each state has a restrained, persistent instrument signature. The canvas
+   supplies the active response; these fields remain recognisable at rest. */
+.hud:is([data-motion="supercruise"], [data-motion="supercruise_assist"], [data-motion="supercruise_overcharge"]) {
+  --state-motif: repeating-linear-gradient(112deg,
+    transparent 0 29px, color-mix(in srgb, var(--state) 7%, transparent) 30px 31px, transparent 32px 60px);
+  --vehicle-motif: linear-gradient(90deg, transparent 0 8%, color-mix(in srgb, var(--state) 10%, transparent) 45%, transparent 95%);
+}
+.hud:is([data-motion="fsd_charge"], [data-motion="system_reboot"]) {
+  --state-motif: repeating-linear-gradient(90deg,
+    transparent 0 16px, color-mix(in srgb, var(--state) 8%, transparent) 17px 18px, transparent 19px 35px);
+  --vehicle-motif: linear-gradient(125deg, transparent 0 34%, color-mix(in srgb, var(--state) 16%, transparent) 48%, transparent 50%),
+    linear-gradient(235deg, transparent 0 34%, color-mix(in srgb, var(--state) 16%, transparent) 48%, transparent 50%);
+}
+.hud:is([data-motion="carrier_preparing"], [data-motion="carrier_lockdown"], [data-motion="carrier_deck"]) {
+  --state-motif: repeating-linear-gradient(90deg,
+    transparent 0 20px, color-mix(in srgb, var(--state) 8%, transparent) 21px 23px, transparent 24px 42px);
+  --vehicle-motif: linear-gradient(90deg, color-mix(in srgb, var(--state) 12%, transparent) 0 8%,
+    transparent 8% 92%, color-mix(in srgb, var(--state) 12%, transparent) 92%);
+}
+.hud:is([data-motion="jump"], [data-motion="carrier_transit"]) {
+  --state-motif: repeating-linear-gradient(90deg,
+    transparent 0 35px, color-mix(in srgb, var(--state) 12%, transparent) 36px,
+    transparent 37px 49px, color-mix(in srgb, var(--state) 5%, transparent) 50px, transparent 51px 71px);
+  --vehicle-motif: linear-gradient(90deg, transparent 0 8%, color-mix(in srgb, var(--state) 19%, transparent) 31%, transparent 95%);
+}
+.hud:is([data-motion="arrival"], [data-motion="carrier_arrival"], [data-motion="local_arrival"], [data-motion="fsd_cooldown"]) {
+  --state-motif: radial-gradient(ellipse 23% 130% at 50% 50%,
+    color-mix(in srgb, var(--state) 10%, transparent) 0 36%, transparent 39% 52%,
+    color-mix(in srgb, var(--state) 7%, transparent) 54%, transparent 57%);
+  --vehicle-motif: radial-gradient(ellipse at 52% 50%, transparent 34%, color-mix(in srgb, var(--state) 16%, transparent) 58%, transparent 76%);
+}
+.hud:is([data-motion="scanner"], [data-motion="map"], [data-motion="target_lock"], [data-motion="phenomena"]) {
+  --state-motif: repeating-radial-gradient(circle at 22% 50%,
+    transparent 0 13px, color-mix(in srgb, var(--state) 6%, transparent) 14px 15px, transparent 16px 29px);
+  --vehicle-motif: repeating-radial-gradient(circle at 50% 50%,
+    transparent 0 10px, color-mix(in srgb, var(--state) 15%, transparent) 11px, transparent 12px 21px);
+}
+.hud:is([data-motion="orbital_approach"], [data-motion="surface_approach"], [data-motion="glide"],
+  [data-motion="surface_hold"], [data-motion="surface_departure"], [data-motion="orbital_departure"],
+  [data-motion="landed"], [data-motion="surface_vehicle"], [data-motion="on_foot"],
+  [data-motion="srv_handbrake"], [data-motion="srv_turret"], [data-motion="srv_drive_assist"],
+  [data-motion="settlement_area"], [data-motion="surface_station"]) {
+  --state-motif: linear-gradient(0deg,
+    transparent 0 29%, color-mix(in srgb, var(--state) 11%, transparent) 30%,
+    transparent 32% 67%, color-mix(in srgb, var(--state) 5%, transparent) 68%, transparent 70%);
+  --vehicle-motif: linear-gradient(0deg,
+    color-mix(in srgb, var(--state) 13%, transparent), transparent 38% 100%);
+}
+.hud:is([data-motion="docking_assist"], [data-motion="docking_clearance"], [data-motion="docked"],
+  [data-motion="station"], [data-motion="station_services"], [data-motion="maintenance"]) {
+  --state-motif: linear-gradient(90deg, transparent 0 20%, color-mix(in srgb, var(--state) 8%, transparent) 20% 20.4%,
+    transparent 20.4% 79.6%, color-mix(in srgb, var(--state) 8%, transparent) 79.6% 80%, transparent 80%);
+  --vehicle-motif: linear-gradient(90deg,
+    color-mix(in srgb, var(--state) 12%, transparent) 0 2px, transparent 2px calc(100% - 2px),
+    color-mix(in srgb, var(--state) 12%, transparent) calc(100% - 2px));
+}
+.hud:is([data-motion="left_panel"], [data-motion="right_panel"], [data-motion="comms_panel"], [data-motion="role_panel"]) {
+  --state-motif: repeating-linear-gradient(0deg,
+    transparent 0 7px, color-mix(in srgb, var(--state) 5%, transparent) 8px, transparent 9px 15px);
+  --vehicle-motif: linear-gradient(90deg, color-mix(in srgb, var(--state) 13%, transparent) 0 14%,
+    transparent 14% 86%, color-mix(in srgb, var(--state) 13%, transparent) 86%);
+}
+.hud:is([data-motion="fighter"], [data-motion="vehicle_deploy"], [data-motion="vehicle_board"],
+  [data-motion="vehicle_switch"]) {
+  --state-motif: linear-gradient(90deg, transparent 0 26%, color-mix(in srgb, var(--state) 7%, transparent) 26% 27%,
+    transparent 27% 73%, color-mix(in srgb, var(--state) 7%, transparent) 73% 74%, transparent 74%);
+  --vehicle-motif: repeating-linear-gradient(90deg,
+    color-mix(in srgb, var(--state) 10%, transparent) 0 2px, transparent 3px 18px);
+}
+.hud:is([data-motion="combat"], [data-motion="heavy_combat"], [data-motion="srv_threat"],
+  [data-motion="capital_contact"], [data-motion="unknown_contact"], [data-motion="asteroid_field"],
+  [data-motion="fsd_lock"], [data-motion="flight_assist_off"], [data-motion="heat_critical"],
+  [data-motion="suit_hazard"], [data-motion="jet_cone_damage"], [data-motion="docking_denied"]) {
+  --state-motif: repeating-linear-gradient(135deg,
+    transparent 0 12px, color-mix(in srgb, var(--state) 9%, transparent) 13px 15px, transparent 16px 30px);
+  --vehicle-motif: linear-gradient(135deg,
+    color-mix(in srgb, var(--state) 12%, transparent) 0 13%, transparent 13% 87%,
+    color-mix(in srgb, var(--state) 12%, transparent) 87%);
+}
+.hud[data-motion="silent_running"] {
+  --state-motif: repeating-linear-gradient(90deg,
+    transparent 0 23px, color-mix(in srgb, var(--state) 3%, transparent) 24px, transparent 25px 47px);
+  --vehicle-motif: none;
+}
+
+.hud:is([data-motion="supercruise"], [data-motion="supercruise_assist"], [data-motion="supercruise_overcharge"],
+  [data-motion="fsd_charge"], [data-motion="jump"], [data-motion="carrier_transit"]) .state-vehicle::after {
+  animation: state-vector-flow calc(1.35s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud:is([data-motion="fsd_charge"], [data-motion="supercruise_overcharge"], [data-motion="system_reboot"]) .state-instrument::before {
+  animation: state-rail-charge calc(.88s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud:is([data-motion="carrier_preparing"], [data-motion="carrier_lockdown"]) .state-instrument::before {
+  animation: state-rail-charge calc(1.45s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud:is([data-motion="scanner"], [data-motion="map"], [data-motion="target_lock"], [data-motion="phenomena"]) .vehicle-frame {
+  border-style: dashed; border-right-style: solid;
+}
+.hud:is([data-motion="docked"], [data-motion="landed"], [data-motion="station"], [data-motion="docking_clearance"]) .state-core::before,
+.hud:is([data-motion="docked"], [data-motion="landed"], [data-motion="station"], [data-motion="docking_clearance"]) .state-core::after {
+  transform: none; border-width: 1px 2px;
+}
+.hud:is([data-motion="combat"], [data-motion="heavy_combat"], [data-motion="srv_threat"],
+  [data-motion="heat_critical"], [data-motion="suit_hazard"], [data-motion="jet_cone_damage"],
+  [data-motion="docking_denied"]) .state-core::before,
+.hud:is([data-motion="combat"], [data-motion="heavy_combat"], [data-motion="srv_threat"],
+  [data-motion="heat_critical"], [data-motion="suit_hazard"], [data-motion="jet_cone_damage"],
+  [data-motion="docking_denied"]) .state-core::after {
+  animation: state-warning-clamp calc(.9s * var(--motion-scale)) steps(2, end) infinite;
+}
+/* The canvas paints each response instrument. These small, outer-right rail
+   signatures keep its state family legible without covering the drawing. */
+.hud:is([data-motion="scanner"], [data-motion="map"], [data-motion="target_lock"],
+  [data-motion="phenomena"]) .state-instrument::before {
+  width: 60px;
+  background: repeating-linear-gradient(90deg, transparent 0 5px, var(--state) 5px 7px,
+    transparent 7px 12px);
+  animation: state-scope-rail calc(2.1s * var(--motion-scale)) linear infinite;
+}
+.hud:is([data-motion="scanner"], [data-motion="map"], [data-motion="target_lock"],
+  [data-motion="phenomena"]) .state-instrument::after {
+  width: 28px; border-right-style: dashed; border-bottom-style: dashed;
+}
+.hud:is([data-motion="orbital_approach"], [data-motion="surface_approach"], [data-motion="glide"],
+  [data-motion="surface_hold"], [data-motion="surface_departure"], [data-motion="orbital_departure"],
+  [data-motion="landed"], [data-motion="surface_vehicle"], [data-motion="on_foot"],
+  [data-motion="srv_handbrake"], [data-motion="srv_turret"], [data-motion="srv_drive_assist"],
+  [data-motion="settlement_area"], [data-motion="surface_station"]) .state-instrument::after {
+  width: 42px; height: 3px; border-right: 0; border-bottom-width: 2px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--state) 28%, transparent));
+}
+.hud:is([data-motion="docking_assist"], [data-motion="docking_clearance"], [data-motion="docked"],
+  [data-motion="station"], [data-motion="station_services"], [data-motion="maintenance"]) .state-instrument::after {
+  width: 34px; height: 6px; border: 1px solid color-mix(in srgb, var(--state) 60%, transparent);
+  border-left: 0; box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--state) 18%, transparent);
+}
+.hud:is([data-motion="carrier_preparing"], [data-motion="carrier_lockdown"],
+  [data-motion="carrier_transit"], [data-motion="carrier_arrival"], [data-motion="carrier_deck"]) .state-instrument::after {
+  width: 46px; height: 6px; border-right-width: 3px; border-bottom-width: 2px;
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--state) 22%, transparent);
+}
+.hud:is([data-motion="left_panel"], [data-motion="right_panel"],
+  [data-motion="comms_panel"], [data-motion="role_panel"]) .state-instrument::after {
+  width: 30px; height: 5px; border-right-width: 1px;
+  background: repeating-linear-gradient(90deg,
+    color-mix(in srgb, var(--state) 25%, transparent) 0 2px, transparent 2px 6px);
+}
+.hud:is([data-motion="combat"], [data-motion="heavy_combat"], [data-motion="srv_threat"],
+  [data-motion="capital_contact"], [data-motion="unknown_contact"], [data-motion="asteroid_field"],
+  [data-motion="fsd_lock"], [data-motion="flight_assist_off"], [data-motion="heat_critical"],
+  [data-motion="suit_hazard"], [data-motion="jet_cone_damage"], [data-motion="docking_denied"]) .state-instrument::after {
+  width: 34px; height: 6px; border-right-width: 3px;
+  animation: state-warning-clamp calc(.95s * var(--motion-scale)) steps(2, end) infinite;
+}
+.hud[data-motion="silent_running"] .state-instrument::after {
+  width: 14px; opacity: .25; border-right-style: dotted; border-bottom-style: dotted;
+}
+@keyframes state-scope-rail { to { background-position-x: 12px; } }
+.hud[data-motion="silent_running"] .state-instrument { filter: saturate(.55) brightness(.72); }
+.hud[data-motion="silent_running"] .vehicle-frame { border-style: dotted; }
+.hud[data-motion="carrier_lockdown"] .vehicle-frame,
+.hud[data-motion="carrier_deck"] .vehicle-frame { border-right-width: 2px; }
+.hud:is([data-motion="vehicle_deploy"], [data-motion="vehicle_board"], [data-motion="vehicle_switch"]) .state-vehicle::after {
+  animation: state-vector-flow calc(1.2s * var(--motion-scale)) ease-in-out infinite;
+}
+@keyframes state-vector-flow {
+  0%, 100% { transform: scaleX(.42); opacity: .18; }
+  50% { transform: scaleX(1); opacity: .7; }
+}
+@keyframes state-rail-charge { 50% { opacity: .35; width: 112px; filter: brightness(1.5); } }
+@keyframes state-warning-clamp { 50% { opacity: .36; filter: brightness(1.6); } }
 
 .hud[data-motion="supercruise"] .state-vehicle img {
   animation: vehicle-cruise calc(1.55s * var(--motion-scale)) ease-in-out infinite;
@@ -171,6 +377,7 @@ body {
 .hud[data-motion="phenomena"] .state-vehicle img {
   animation: vehicle-phenomena calc(2.6s * var(--motion-scale)) ease-in-out infinite;
 }
+.hud[data-motion="combat"] .state-vehicle img,
 .hud[data-motion="srv_threat"] .state-vehicle img,
 .hud[data-motion="capital_contact"] .state-vehicle img,
 .hud[data-motion="unknown_contact"] .state-vehicle img,
@@ -182,6 +389,14 @@ body {
 }
 .hud[data-motion="settlement_area"] .state-vehicle img {
   animation: vehicle-hold calc(1.95s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="surface_station"] .state-vehicle img,
+.hud[data-motion="carrier_deck"] .state-vehicle img {
+  animation: vehicle-hold calc(2.05s * var(--motion-scale)) ease-in-out infinite;
+}
+.hud[data-motion="carrier_preparing"] .state-vehicle img,
+.hud[data-motion="carrier_lockdown"] .state-vehicle img {
+  animation: vehicle-charge calc(1.3s * var(--motion-scale)) ease-in-out infinite;
 }
 .hud[data-motion="left_panel"] .state-vehicle img {
   animation: vehicle-panel-left calc(1.62s * var(--motion-scale)) ease-in-out infinite;
@@ -215,6 +430,10 @@ body {
 .hud[data-motion="flight_assist_off"] .state-vehicle img {
   animation: vehicle-threat calc(1.35s * var(--motion-scale)) ease-in-out infinite;
 }
+.hud[data-motion="fsd_lock"] .state-vehicle img,
+.hud[data-motion="asteroid_field"] .state-vehicle img {
+  animation: vehicle-hold calc(1.55s * var(--motion-scale)) ease-in-out infinite;
+}
 .hud[data-motion="silent_running"] .state-vehicle img {
   animation: vehicle-hold calc(2.2s * var(--motion-scale)) ease-in-out infinite;
   opacity: .68;
@@ -235,7 +454,8 @@ body {
   animation: vehicle-threat calc(.72s * var(--motion-scale)) ease-in-out infinite;
 }
 .hud[data-motion="scanner"] .vehicle-scan,
-.hud[data-motion="map"] .vehicle-scan {
+.hud[data-motion="map"] .vehicle-scan,
+.hud[data-motion="target_lock"] .vehicle-scan {
   opacity: .7; animation: vehicle-scan calc(1.8s * var(--motion-scale)) ease-in-out infinite;
 }
 .hud[data-state="GALAXY MAP"] .state-vehicle img {
@@ -295,58 +515,188 @@ body {
 .hud[data-motion="landed"] .state-vehicle img { animation: none; opacity: .9; }
 .hud[data-motion^="vehicle_"] .state-vehicle img { animation: none; }
 
-.system-block { top: 54px; height: 44px; padding-left: 11px; }
-.locator-rail { position: absolute; left: 0; top: 5px; bottom: 6px; width: 4px; background: color-mix(in srgb, var(--accent) 35%, transparent); }
-.locator-rail i { position: absolute; inset: 8px 0; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.system-block {
+  top: 54px; height: 44px; padding-left: 15px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 62%);
+}
+.locator-rail {
+  position: absolute; left: 0; top: 5px; bottom: 6px; width: 7px;
+  border-left: 1px solid var(--accent);
+  border-right: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.locator-rail i {
+  position: absolute; left: 2px; right: 2px; top: 7px; bottom: 7px;
+  background: var(--accent); box-shadow: 0 0 7px var(--accent);
+  animation: locator-breathe calc(3.8s * var(--motion-scale)) ease-in-out infinite;
+}
 .system-meta { height: 15px; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; color: var(--muted); font-size: calc(11px * var(--text-scale)); font-weight: 700; letter-spacing: .4px; }
 #region-label { text-align: right; color: var(--accent); opacity: .74; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #system-clock { color: var(--dim); min-width: 40px; text-align: right; }
-.current-system { color: var(--text); font: 700 calc(16px * var(--text-scale)) "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .5px; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 1px 1px #000; }
+.system-readout { display: flex; align-items: center; gap: 8px; min-width: 0; height: 24px; }
+.current-system { flex: 1; min-width: 0; color: var(--text); font: 700 calc(18px * var(--text-scale)) "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .7px; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 17%, transparent); }
+.current-star-label { flex: 0 1 auto; max-width: 115px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 6px; border-left: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); color: var(--muted); font-size: calc(9px * var(--text-scale)); font-weight: 700; letter-spacing: .35px; }
 
-.route-block { top: 102px; height: 94px; }
-.route-target { display: flex; align-items: baseline; gap: 9px; min-width: 0; height: 23px; }
-.route-target > span { flex: 0 0 auto; color: var(--muted); font-size: calc(11px * var(--text-scale)); font-weight: 700; }
-.route-target > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--orange); font-size: calc(13px * var(--text-scale)); }
-.route-header { height: 17px; display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 14px; align-items: center; font-size: calc(12px * var(--text-scale)); font-weight: 700; color: var(--text); }
-#route-title { color: var(--muted); }
+/* Code-rendered arrival-star illustrations. These are spectral-class cues,
+   never claims to show a photograph or every stellar body in the system. */
+.star-o { --stellar-tone: #a9cfff; }
+.star-b { --stellar-tone: #c5d9ff; }
+.star-a { --stellar-tone: #e6ecff; }
+.star-f { --stellar-tone: #fff3d1; }
+.star-g { --stellar-tone: #ffe38c; }
+.star-k { --stellar-tone: #ffb65c; }
+.star-m { --stellar-tone: #ff795a; }
+.star-l { --stellar-tone: #d86a3c; }
+.star-t { --stellar-tone: #c05040; }
+.star-y { --stellar-tone: #9b4545; }
+.star-dwarf { --stellar-tone: #e8f2ff; }
+.star-neutron { --stellar-tone: #9fdcff; }
+.star-wolf { --stellar-tone: #c8d9ff; }
+.star-tauri { --stellar-tone: #ffd59d; }
+.star-carbon { --stellar-tone: #ef8b70; }
+.star-exotic { --stellar-tone: #c98dff; }
+.star-blackhole { --stellar-tone: #c98dff; }
+.star-unknown { --stellar-tone: var(--dim); }
+.star-orb {
+  position: relative; display: inline-block; flex: 0 0 22px; width: 22px; height: 22px;
+  border-radius: 50%; isolation: isolate;
+}
+.system-readout .star-orb { flex-basis: 19px; width: 19px; height: 19px; }
+.star-orb::before {
+  content: ""; position: absolute; inset: -3px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--stellar-tone) 43%, transparent) 0 22%, transparent 73%);
+  animation: stellar-corona calc(4.8s * var(--motion-scale)) ease-in-out infinite;
+}
+.star-orb > i {
+  position: absolute; inset: 3px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 27%, #fff 0 7%,
+    color-mix(in srgb, #fff 34%, var(--stellar-tone)) 28%,
+    var(--stellar-tone) 59%, color-mix(in srgb, var(--stellar-tone) 45%, #241017) 100%);
+  box-shadow: 0 0 5px var(--stellar-tone), 0 0 10px color-mix(in srgb, var(--stellar-tone) 45%, transparent);
+  animation: stellar-breathe calc(5.2s * var(--motion-scale)) ease-in-out infinite;
+}
+.star-orb > i::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; opacity: .45;
+  background: radial-gradient(circle at 69% 68%, rgba(67, 22, 18, .38) 0 9%, transparent 15%),
+    radial-gradient(circle at 28% 58%, rgba(62, 31, 20, .27) 0 7%, transparent 13%);
+  animation: stellar-granulation calc(13s * var(--motion-scale)) linear infinite;
+}
+.star-dwarf > i { inset: 5px; box-shadow: 0 0 7px var(--stellar-tone), 0 0 14px color-mix(in srgb, var(--stellar-tone) 60%, transparent); }
+.star-neutron > i { inset: 7px; box-shadow: 0 0 8px var(--stellar-tone), 0 0 15px var(--stellar-tone); }
+.star-neutron::after {
+  content: ""; position: absolute; left: -3px; right: -3px; top: calc(50% - 1px); height: 2px;
+  transform: rotate(-28deg);
+  background: linear-gradient(90deg, transparent, var(--stellar-tone), transparent);
+  opacity: .72; box-shadow: 0 0 5px var(--stellar-tone);
+  animation: neutron-beam calc(2.6s * var(--motion-scale)) ease-in-out infinite;
+}
+.star-blackhole::before {
+  inset: 1px;
+  background: conic-gradient(from 20deg, transparent, var(--stellar-tone), #ffe0a3, transparent 55%, var(--stellar-tone), transparent);
+  filter: blur(2px); animation: blackhole-disc calc(12s * var(--motion-scale)) linear infinite;
+}
+.star-blackhole > i { inset: 5px; background: #020409; border: 1px solid color-mix(in srgb, var(--stellar-tone) 56%, transparent); box-shadow: 0 0 5px var(--stellar-tone); animation: none; }
+.star-blackhole > i::after { display: none; }
+.star-unknown::before { inset: 2px; border: 1px dashed var(--dim); background: none; opacity: .7; animation: none; }
+.star-unknown > i { inset: 7px; border: 1px solid var(--dim); border-radius: 0; background: none; box-shadow: none; transform: rotate(45deg); animation: none; }
+.star-unknown > i::after { display: none; }
+@keyframes stellar-corona { 50% { transform: scale(1.15); opacity: .62; } }
+@keyframes stellar-breathe { 50% { filter: brightness(1.16); } }
+@keyframes stellar-granulation { to { transform: rotate(360deg); } }
+@keyframes neutron-beam { 50% { opacity: .34; filter: brightness(1.6); } }
+@keyframes blackhole-disc { to { transform: rotate(360deg); } }
+
+.route-block { top: 102px; height: 94px; --route-tone: var(--orange); }
+.route-block[data-route-state="complete"] { --route-tone: var(--green); }
+.route-block[data-route-state="empty"] { --route-tone: var(--dim); }
+.route-target {
+  position: relative; display: grid; grid-template-columns: 96px 22px minmax(0,1fr) 13px;
+  align-items: center; gap: 9px; min-width: 0; height: 27px; padding: 0 7px 0 9px;
+  border-left: 2px solid var(--route-tone);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--route-tone) 16%, var(--inset)),
+    color-mix(in srgb, var(--route-tone) 5%, var(--panel)) 62%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--route-tone) 25%, transparent);
+}
+.route-target::after {
+  content: ""; width: 8px; height: 8px; border-top: 2px solid var(--route-tone);
+  border-right: 2px solid var(--route-tone); transform: rotate(45deg);
+  opacity: .86; filter: drop-shadow(0 0 4px var(--route-tone));
+  animation: vector-pulse calc(3s * var(--motion-scale)) ease-in-out infinite;
+}
+.route-block[data-route-state="complete"] .route-target::after { transform: rotate(45deg); }
+.route-target > span:first-child { color: var(--muted); font-size: calc(10px * var(--text-scale)); font-weight: 700; letter-spacing: .7px; }
+.route-target > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--route-tone); font: 700 calc(18px * var(--text-scale))/1 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .4px; text-shadow: 0 0 10px color-mix(in srgb, var(--route-tone) 30%, transparent); transition: color .6s ease; }
+.route-header { height: 18px; display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 9px; align-items: center; font-size: calc(10px * var(--text-scale)); font-weight: 700; color: var(--text); }
+#route-title { color: var(--route-tone); letter-spacing: .45px; }
 .route-header strong, .route-header span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-#route-next { text-align: center; } #route-distance { text-align: right; }
-.route-track { position: relative; height: 20px; }
-.route-line { position: absolute; left: 0; right: 0; top: 10px; height: 2px; background: #1a2530; box-shadow: 0 0 4px rgba(0,0,0,.8); }
-.route-line > i { display: block; height: 2px; width: 0; background: color-mix(in srgb, var(--accent) 55%, transparent); transition: width .65s cubic-bezier(.2,.8,.2,1); }
+#route-next, #route-distance { padding-left: 8px; border-left: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); text-align: right; }
+#route-next { color: var(--text); } #route-distance { color: var(--muted); }
+.route-track { position: relative; height: 20px; overflow: hidden; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 15%, transparent) 0 1px, transparent 1px 24px); }
+.route-track::after {
+  content: ""; position: absolute; z-index: 5; top: 1px; bottom: 1px; left: -14%; width: 14%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 15%, transparent), transparent);
+  animation: flight-tape-sweep calc(7s * var(--motion-scale)) linear infinite;
+}
+.route-line { position: absolute; left: 0; right: 0; top: 9px; height: 2px; background: color-mix(in srgb, var(--border) 65%, var(--inset)); box-shadow: 0 0 4px rgba(0,0,0,.8); }
+.route-line > i { display: block; height: 2px; width: 0; background: color-mix(in srgb, var(--accent) 70%, transparent); box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 45%, transparent); transition: width .65s cubic-bezier(.2,.8,.2,1); }
 .route-pips { position: absolute; inset: 0; }
 .route-pips.unified { overflow: visible; }
-.route-segment { --stop-tone: var(--orange); position: absolute; top: 9px; height: 3px; min-width: 0; background: color-mix(in srgb,var(--stop-tone) 24%,var(--inset)); transition: background .6s ease; }
-.route-segment > b { position: absolute; right: 0; top: -2px; width: min(6px,70%); height: 7px; border-radius: 2px; background: var(--stop-tone); opacity: .65; box-shadow: 0 0 3px var(--inset); transition: opacity .6s ease,background .6s ease; }
-.route-segment.completed { --stop-tone: var(--accent); background: color-mix(in srgb,var(--accent) 50%,var(--inset)); }
-.route-segment.completed > b { opacity: .45; }
+.route-segment { --stop-tone: var(--orange); position: absolute; top: 8px; height: 4px; min-width: 0; background: color-mix(in srgb,var(--stop-tone) 23%,var(--inset)); transition: background .6s ease; }
+.route-segment.known-star { --stop-tone: var(--stellar-tone); }
+.route-segment.star-unknown { --stop-tone: var(--dim); }
+.route-segment > b { position: absolute; right: 0; top: -2px; width: min(5px,70%); height: 8px; background: var(--stop-tone); opacity: .65; box-shadow: 0 0 3px var(--inset); transition: opacity .6s ease,background .6s ease; }
+.route-segment.completed { --stop-tone: var(--accent); background: color-mix(in srgb,var(--accent) 65%,var(--inset)); }
+.route-segment.completed > b { opacity: .56; }
 .route-segment.current { --stop-tone: var(--accent); z-index: 4; }
-.route-segment.current > b { top: -4px; height: 11px; opacity: 1; box-shadow: 0 0 6px var(--stop-tone); }
+.route-segment.current > b { top: -4px; height: 12px; opacity: 1; box-shadow: 0 0 7px var(--stop-tone); }
 .route-segment.next { z-index: 3; background: color-mix(in srgb,var(--stop-tone) 35%,var(--inset)); }
-.route-segment.next > b { top: -3px; height: 9px; opacity: 1; animation: waypoint-beacon 3s ease-in-out infinite; }
-.route-segment.next::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg,transparent,var(--stop-tone),transparent); transform-origin: left; animation: waypoint-transit 2.8s ease-in-out infinite; }
+.route-segment.next > b { top: -5px; width: max(3px, min(7px,70%)); height: 13px; opacity: 1; clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); animation: waypoint-beacon calc(2.6s * var(--motion-scale)) ease-in-out infinite; }
+.route-segment.next::after { content: ''; position: absolute; inset: -2px 0; background: linear-gradient(90deg,transparent,var(--stop-tone),transparent); transform-origin: left; animation: waypoint-transit calc(2.8s * var(--motion-scale)) ease-in-out infinite; }
 .route-segment.unscoopable { --stop-tone: var(--yellow); }
-.route-pips.ultra-dense .route-segment > b { border-radius: 0; }
+.route-segment.known-star > b { background: var(--stellar-tone); }
+.route-segment.unscoopable > b { box-shadow: 0 0 0 1px var(--yellow), 0 0 4px var(--yellow); }
+.route-pips.ultra-dense .route-segment:not(.next):not(.current) > b { opacity: .48; }
 @keyframes waypoint-beacon { 0%,100% { opacity: .55; box-shadow: 0 0 2px var(--stop-tone); } 50% { opacity: 1; box-shadow: 0 0 7px var(--stop-tone); } }
 @keyframes waypoint-transit { 0% { transform: scaleX(.05); opacity: 0; } 65% { transform: scaleX(1); opacity: .9; } 100% { transform: scaleX(1); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .route-track *, .route-track *::after { animation: none !important; transition: none !important; } }
-.route-captions { display: flex; justify-content: space-between; color: var(--dim); font-size: calc(11px * var(--text-scale)); font-weight: 700; }
+@keyframes flight-tape-sweep { to { left: 100%; } }
+@keyframes locator-breathe { 50% { opacity: .52; box-shadow: 0 0 3px var(--accent); } }
+@keyframes vector-pulse { 50% { opacity: .35; filter: drop-shadow(0 0 1px var(--route-tone)); } }
+.route-captions { display: flex; justify-content: space-between; align-items: center; height: 13px; color: var(--dim); font-size: calc(10px * var(--text-scale)); font-weight: 700; letter-spacing: .3px; }
 #route-origin { color: var(--accent); } #route-destination { color: var(--orange); }
 
-.route-target > strong { font-size: calc(16px * var(--text-scale)); transition: color .6s ease; }
-.route-status { display: flex; justify-content: space-between; align-items: center; gap: 10px; height: 20px; color: var(--muted); font-size: calc(10px * var(--text-scale)); }
+.route-status { display: flex; justify-content: space-between; align-items: center; gap: 10px; height: 16px; color: var(--muted); font-size: calc(10px * var(--text-scale)); border-top: 1px solid color-mix(in srgb, var(--accent) 12%, transparent); }
 .route-status > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#route-feedback { color: var(--accent); flex: 1; }
+#route-feedback { color: var(--accent); flex: 1; letter-spacing: .2px; }
 #route-fuel { flex-shrink: 0; }
 #route-fuel.fuel-caution { color: var(--yellow); }
 #route-star { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
+.route-block.route-notice .route-target { animation: vector-confirm .85s ease-out; }
+.route-block.route-notice .route-track::after { animation: flight-tape-confirm .9s ease-out; }
+.route-block.route-notice[data-notice="arrived"] { --route-tone: var(--green); }
+.route-block.route-notice[data-notice="cleared"] { --route-tone: var(--dim); }
+.hud[data-motion="fsd_charge"] .route-track::after,
+.hud[data-motion="supercruise_overcharge"] .route-track::after { animation-duration: calc(1.5s * var(--motion-scale)); }
+.hud[data-motion="jump"] .route-track::after,
+.hud[data-motion="carrier_transit"] .route-track::after { animation-duration: calc(.8s * var(--motion-scale)); }
+.hud[data-motion="arrival"] .route-target,
+.hud[data-motion="carrier_arrival"] .route-target { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--green) 46%, transparent); }
+@keyframes vector-confirm { 30% { box-shadow: inset 0 0 15px color-mix(in srgb, var(--route-tone) 32%, transparent), 0 0 12px color-mix(in srgb, var(--route-tone) 24%, transparent); } }
+@keyframes flight-tape-confirm { from { left: -14%; opacity: 0; } 55% { opacity: 1; } to { left: 100%; opacity: 0; } }
 .surface-focus .context-rail { background: color-mix(in srgb,var(--accent) 12%,transparent); border-left: 2px solid var(--accent); padding-left: 6px; }
 .surface-focus .route-target > strong { color: var(--text); }
 .context-rail { transition: background .6s ease,border-color .6s ease; }
 .target-promoted { animation: target-promote .8s ease-out; }
 @keyframes target-promote { from { opacity: .55; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .target-promoted, .system-arrival { animation: none !important; } }
-.survey-block { top: 201px; height: 68px; }
+.survey-block {
+  top: 201px; height: 68px; padding: 0 7px;
+  border-left: 2px solid color-mix(in srgb, var(--survey-tone, var(--accent)) 65%, transparent);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--survey-tone, var(--accent)) 7%, var(--inset)),
+    color-mix(in srgb, var(--inset) 70%, transparent) 58%, transparent);
+}
 .survey-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 7px; height: 33px; font-size: calc(12px * var(--text-scale)); }
 .survey-status { grid-row: 2; grid-column: 1 / -1; }
 .survey-readout { grid-column: 2; grid-row: 1; }
@@ -396,11 +746,13 @@ body {
 .survey-block[data-survey-state="complete"] .survey-progress-fill { filter:brightness(1.15); }
 
 .standard-metrics { top: 275px; height: 19px; display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 0; }
-.standard-metrics > div, .expanded-metrics > div { display: flex; align-items: center; justify-content: space-between; padding: 0 9px; border-left: 3px solid color-mix(in srgb, var(--metric-color, var(--accent)) 40%, transparent); }
+.standard-metrics > div, .expanded-metrics > div { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; padding: 0 7px; border-left: 2px solid color-mix(in srgb, var(--metric-color, var(--accent)) 64%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--metric-color, var(--accent)) 8%, var(--inset)), color-mix(in srgb, var(--inset) 60%, transparent)); }
+.standard-metrics > div:not(:first-child), .expanded-metrics > div:not(:first-child) { margin-left: 5px; }
+.standard-metrics > div > *, .expanded-metrics > div > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .standard-metrics span, .expanded-metrics span { color: var(--muted); font-size: calc(11px * var(--text-scale)); font-weight: 700; }
 .standard-metrics strong, .expanded-metrics strong { color: var(--metric-color, var(--accent)); font-size: calc(13px * var(--text-scale)); }
 .expanded-metrics { display: none; }
-.context-rail { position: absolute; left: 16px; right: 16px; bottom: 8px; height: 17px; display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; color: var(--accent); font-size: calc(11.5px * var(--text-scale)); font-weight: 700; white-space: nowrap; overflow: hidden; }
+.context-rail { position: absolute; left: 16px; right: 16px; bottom: 8px; height: 17px; display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 0 6px; border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, var(--inset)), transparent 75%); color: var(--accent); font-size: calc(11.5px * var(--text-scale)); font-weight: 700; white-space: nowrap; overflow: hidden; }
 .context-rail span { overflow: hidden; text-overflow: ellipsis; }
 #secondary-label { color: var(--yellow); } #traffic-label { color: var(--muted); }
 .link-state { position: absolute; right: 9px; bottom: 4px; color: var(--dim); font-size: 6px; opacity: 0; }
@@ -444,6 +796,12 @@ body {
 .hud[data-motion="local_arrival"] .core-pulse,
 .hud[data-motion="phenomena"] .core-pulse { background: color-mix(in srgb, var(--green) 35%, transparent); }
 .hud.reduced-motion *, .hud.reduced-motion *::before, .hud.reduced-motion *::after { animation: none !important; transition-duration: 0s !important; }
+@media (prefers-reduced-motion: reduce) {
+  .hud, .hud *, .hud *::before, .hud *::after {
+    animation: none !important;
+    transition-duration: 0s !important;
+  }
+}
 
 @keyframes next-segment { 50% { filter: brightness(1.42); box-shadow: 0 0 9px color-mix(in srgb, var(--orange) 66%, transparent), inset 0 0 6px color-mix(in srgb, var(--orange) 30%, transparent); } }
 @keyframes survey-energy-flow { 0% { transform:translateX(-130%); opacity:0; } 18% { opacity:.72; } 82% { opacity:.72; } 100% { transform:translateX(130%); opacity:0; } }

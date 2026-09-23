@@ -1647,7 +1647,6 @@ class DashboardScanMixin:
                     item[key] = existing[key]
             self.scan_items.remove(existing)
         self.scan_items.insert(0, item)
-        self.scan_items = self.scan_items[:60]
         if body_id is not None:
             self.scan_items_by_id[body_id] = item
         self.save_scan_item_to_db(self.current_sys, item)
