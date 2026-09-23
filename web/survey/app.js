@@ -16,7 +16,7 @@
   let atlasTurnTimer = 0;
   const ATLAS_CYCLE_MS = 8000;
   const ATLAS_CONTENT_BUDGET = 520;
-  const ATLAS_PAGE_CARD_LIMIT = 4;
+  const ATLAS_PAGE_CARD_LIMIT = 8;
 
   function node(tag, className = "", text = "") {
     const element = document.createElement(tag);
@@ -524,28 +524,6 @@
     return banner;
   }
 
-  function atlasRoster(cards, system, scope) {
-    const roster = node("div", "atlas-roster");
-    const heading = node("div", "atlas-roster-heading");
-    heading.appendChild(node("strong", "", scope === "all"
-      ? `ALL ${cards.length} SCANNED BODIES` : `${cards.length} SURVEY TARGETS`));
-    heading.appendChild(node("span", "", "ACTIVE PAGE HIGHLIGHTED"));
-    roster.appendChild(heading);
-    const grid = node("div", "atlas-roster-grid");
-    for (const entry of cards) {
-      const cell = node("span", "atlas-roster-body");
-      const name = designation(entry.row, system);
-      cell.dataset.bodyName = name;
-      cell.dataset.index = String(entry.index);
-      cell.title = `${name} · ${classLabel(entry.row)}`;
-      cell.setAttribute("aria-label", cell.title);
-      cell.appendChild(planetOrb(entry.row));
-      grid.appendChild(cell);
-    }
-    roster.appendChild(grid);
-    return roster;
-  }
-
   function showAtlasPage(animate = false) {
     if (!atlas || !atlas.pages.length) return;
     if (atlasTurnTimer) window.clearTimeout(atlasTurnTimer);
@@ -553,11 +531,6 @@
     dom.root.classList.remove("page-turn");
     const current = atlas.pages[atlas.index];
     dom.content.replaceChildren();
-    dom.content.appendChild(atlas.roster);
-    const active = new Set(current.map((entry) => entry.index));
-    for (const cell of atlas.roster.querySelectorAll(".atlas-roster-body")) {
-      cell.classList.toggle("active", active.has(Number(cell.dataset.index)));
-    }
     if (atlas.sample) dom.content.appendChild(atlas.sample);
     dom.content.appendChild(atlasBanner(
       atlas.index + 1, atlas.pages.length,
@@ -578,25 +551,22 @@
 
   function paginateSystemCards(cards, sample, model, motion) {
     const fullHeight = contentChildrenHeight([...dom.content.children]);
-    if (cards.length <= 6 && fullHeight <= 560) {
+    const pageBudget = dom.root.classList.contains("scale-huge") ? 450
+      : dom.root.classList.contains("scale-large") ? 490
+        : ATLAS_CONTENT_BUDGET;
+    if (cards.length <= ATLAS_PAGE_CARD_LIMIT && fullHeight <= pageBudget) {
       stopAtlasCycle();
       return;
     }
     const previous = atlas;
     const gap = Number.parseFloat(getComputedStyle(dom.content).rowGap) || 0;
-    const pageBudget = dom.root.classList.contains("scale-huge") ? 450
-      : dom.root.classList.contains("scale-large") ? 490
-        : ATLAS_CONTENT_BUDGET;
     const sampleHeight = sample ? sample.getBoundingClientRect().height : 0;
-    const roster = atlasRoster(cards, model.system, model.scope);
-    dom.content.appendChild(roster);
-    const rosterHeight = roster.getBoundingClientRect().height;
     const probe = atlasBanner(1, 1, 1, cards.length, cards.length);
     dom.content.appendChild(probe);
     const bannerHeight = probe.getBoundingClientRect().height;
     probe.remove();
-    const pageHeight = (entries, cardHeight) => rosterHeight + sampleHeight + bannerHeight + cardHeight
-      + gap * (entries.length + (sample ? 1 : 0) + 1);
+    const pageHeight = (entries, cardHeight) => sampleHeight + bannerHeight + cardHeight
+      + gap * (entries.length + (sample ? 1 : 0));
     const pages = [];
     let current = [];
     let currentHeight = 0;
@@ -623,7 +593,7 @@
       const changedPage = pages.findIndex((page) => page.some((entry) => changed.has(entry.key)));
       if (changedPage >= 0) index = changedPage;
     }
-    atlas = {pages, index, total: cards.length, roster, sample, identity, maxContentHeight: height};
+    atlas = {pages, index, total: cards.length, sample, identity, maxContentHeight: height};
     dom.root.classList.add("paged");
     showAtlasPage();
     if (!atlasCycleTimer) atlasCycleTimer = window.setInterval(nextAtlasPage, ATLAS_CYCLE_MS);
@@ -713,7 +683,6 @@
       : rows.some((row) => safeNumber(row.bio_count) > safeNumber(row.complete));
     dom.root.classList.toggle("body", bodyMode);
     dom.root.classList.toggle("system", !bodyMode);
-    dom.root.classList.toggle("dense", !bodyMode && rows.length > 5);
     dom.root.classList.toggle("scan-active", Boolean(
       !bodyMode && model.total_known && total > 0 && scanned < total
     ));

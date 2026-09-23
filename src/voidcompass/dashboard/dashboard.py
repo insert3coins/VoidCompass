@@ -1990,6 +1990,7 @@ class MainDashboard(
         self._startup_presentation_ready = False
         self._startup_journal_events_loaded = 0
         self._startup_overlay_restore = set()
+        self._startup_overlay_handoff_pending = None
         self._startup_presentation_held = bool(
             getattr(self.root, "_voidcompass_startup_presentation_held", False)
         )
@@ -2789,7 +2790,9 @@ class MainDashboard(
 
     def _maybe_complete_startup_presentation(self):
         splash = getattr(self.root, "_voidcompass_startup_splash", None)
-        if splash is None or getattr(self, "_startup_boot_handoff_job", None) is not None:
+        if (splash is None
+            or getattr(self, "_startup_boot_handoff_job", None) is not None
+            or self._startup_overlay_handoff_pending is not None):
             return
         boot = self._startup_boot()
         if boot is not None and not getattr(boot, "_ready_emitted", False):
@@ -2827,18 +2830,32 @@ class MainDashboard(
                 except RuntimeError:
                     pass
                 setattr(self, job_attr, None)
-        # One last curtain pass catches overlays whose final journal
-        # reconciliation deliberately called show(). Restore their saved
-        # coordinates while invisible, then permit mapping exactly once.
+        # Journal startup is complete, but WebView still displays its timed
+        # boot curtain. Keep every overlay held until the browser has actually
+        # revealed the dashboard and acknowledged that final painted frame.
         self._hold_startup_presentation()
         restore = set(self._startup_overlay_restore)
         restore.update(self._persistent_startup_overlay_names())
         self._startup_overlay_restore.clear()
-        self._release_startup_overlay_curtain()
-        splash = getattr(self.root, "_voidcompass_startup_splash", None)
+        self._startup_overlay_handoff_pending = restore
         boot = self._startup_boot()
         if boot is not None:
             boot.stop()
+
+    def _complete_startup_overlay_handoff(self):
+        restore = self._startup_overlay_handoff_pending
+        if restore is None:
+            return
+        self._trace_bump("startup_browser_handoff_complete")
+        # An event-driven overlay may have become pending during the browser's
+        # five-second handoff. Reconcile it under the curtain before release.
+        self._hold_startup_presentation()
+        restore = set(restore)
+        restore.update(self._startup_overlay_restore)
+        restore.update(self._persistent_startup_overlay_names())
+        self._startup_overlay_restore.clear()
+        self._startup_overlay_handoff_pending = None
+        self._release_startup_overlay_curtain()
         self.root._voidcompass_startup_splash = None
         self._restore_overlay_hotkey_windows(restore, force_show=False)
         self._enforce_overlay_hotkey_visibility()

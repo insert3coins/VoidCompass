@@ -26,6 +26,8 @@ let bootActive = true;
 let bootHideTimer = 0;
 let bootReleaseStarted = false;
 let bootRecoveryPending = false;
+let bootPresentedRequested = false;
+let bootHandoffRequested = false;
 // Keep the finished deck visible long enough to see the lens and a field note.
 const BOOT_READY_HOLD_MS = 5000;
 let bootReadyAt = 0;
@@ -222,6 +224,39 @@ async function command(action, payload = {}) {
     showToast(`Command unavailable: ${error.message}`);
     return false;
   }
+}
+
+function postBootMilestone(action) {
+  fetch(apiUrl("/api/command"), {
+    method: "POST",
+    cache: "no-store",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({action}),
+  }).then((response) => {
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  }).catch(() => window.setTimeout(() => postBootMilestone(action), 1000));
+}
+
+function afterBootPaint(callback) {
+  requestAnimationFrame(() => requestAnimationFrame(() => window.setTimeout(callback, 0)));
+}
+
+function acknowledgeBootPresented() {
+  if (bootPresentedRequested) return;
+  bootPresentedRequested = true;
+  afterBootPaint(() => {
+    if (!byId("boot").hidden) postBootMilestone("boot_presented");
+  });
+}
+
+function acknowledgeBootHandoff() {
+  if (bootHandoffRequested) return;
+  bootHandoffRequested = true;
+  afterBootPaint(() => {
+    if (byId("boot").hidden && document.body.classList.contains("ready")) {
+      postBootMilestone("boot_handoff_complete");
+    }
+  });
 }
 
 function reportClientError(error, source = "runtime") {
@@ -626,9 +661,13 @@ function renderBoot(state) {
     if (!bootRoot.hidden && !bootHideTimer) {
       bootHideTimer = window.setTimeout(() => {
         bootHideTimer = 0;
-        if (!model.boot?.active && !model.onboarding?.active) bootRoot.hidden = true;
+        if (!model.boot?.active && !model.onboarding?.active) {
+          bootRoot.hidden = true;
+          acknowledgeBootHandoff();
+        }
       }, 720);
     }
+    if (bootRoot.hidden) acknowledgeBootHandoff();
   } else {
     window.clearTimeout(bootHoldTimer);
     bootHoldTimer = 0;
@@ -639,6 +678,7 @@ function renderBoot(state) {
     bootHideTimer = 0;
     document.body.classList.remove("ready");
     byId("app").setAttribute("aria-hidden", "true");
+    acknowledgeBootPresented();
   }
 }
 
