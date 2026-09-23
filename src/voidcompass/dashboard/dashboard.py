@@ -1079,7 +1079,6 @@ class MainDashboard(
         self.bio_sample_points = []
         self._startup_bio_sampling_replay = None
         self._startup_bio_sampling_replay_seen = False
-        self._sample_clear_announced = False
         self._stale_bio_warned = set()
 
         self.cmdr_name = commander_name or "CMDR"
@@ -2051,7 +2050,6 @@ class MainDashboard(
         self.bio_sample_points = []
         self._startup_bio_sampling_replay = None
         self._startup_bio_sampling_replay_seen = False
-        self._sample_clear_announced = False
         self._rebuy_warning_level = 0
         self._data_risk_level = 0
         self._stale_bio_warned = set()
@@ -9089,7 +9087,6 @@ class MainDashboard(
         elif ev == "LeaveBody":
             self.bio_sampling = None
             self.bio_sample_points = []
-            self._sample_clear_announced = False
             self._update_sampling_clearance()
 
         elif ev == "Died" and not startup_replay:
@@ -9194,7 +9191,7 @@ class MainDashboard(
         """Recover the active genetic-sampler step from journal catch-up.
 
         Startup replay must rebuild presentation state without replaying sale
-        value, unsold-data counters, notifications or sample-clearance toasts.
+        value, unsold-data counters or notifications.
         Elite records the complete Log → Sample → Sample → Analyse sequence,
         so the most recent unfinished sequence is authoritative after a crash.
         """
@@ -9356,7 +9353,6 @@ class MainDashboard(
 
         self.bio_sampling = candidate
         self.bio_sample_points = preserved_points
-        self._sample_clear_announced = False
         self._startup_bio_sampling_replay = None
         self._startup_bio_sampling_replay_seen = False
         return bool(candidate)
@@ -9395,7 +9391,6 @@ class MainDashboard(
                 "progress": progress,
                 "colony_m": bio_values.GENUS_COLONY_M.get(genus),
             }
-            self._sample_clear_announced = False
             self._update_sampling_clearance()
             return False
         if scan_type == "analyse" or data.get("is_complete"):
@@ -9411,7 +9406,6 @@ class MainDashboard(
             self.companion_state["unsold_bio_samples"] = int(self.companion_state.get("unsold_bio_samples") or 0) + 1
             self.bio_sampling = None
             self.bio_sample_points = []
-            self._sample_clear_announced = False
             self._update_sampling_clearance()
             return True
         return False
@@ -9433,12 +9427,6 @@ class MainDashboard(
 
     def _update_sampling_clearance(self):
         sample = self._sampling_snapshot()
-        if (sample and sample.get("clear") and not self._sample_clear_announced
-                and self.config.get("sample_clear_notifications_enabled", True)):
-            self._sample_clear_announced = True
-            self._toast_on_main(
-                "CLEAR TO SAMPLE", f"{sample['species']} · {sample.get('min_distance_m', 0):,} m", "success", 10,
-            )
         if self.survey_status_hud:
             self._ui_post(lambda s=sample: self.survey_status_hud.update(
                 self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals, sampling=s,

@@ -138,9 +138,9 @@ body {
   container-type: inline-size;
   background: linear-gradient(90deg,
     transparent,
-    color-mix(in srgb, var(--inset) 96%, transparent) 12%,
-    color-mix(in srgb, var(--panel) 98%, transparent) 50%,
-    color-mix(in srgb, var(--inset) 96%, transparent) 88%,
+    color-mix(in srgb, var(--state) 3%, transparent) 12%,
+    color-mix(in srgb, var(--state) 8%, transparent) 50%,
+    color-mix(in srgb, var(--state) 3%, transparent) 88%,
     transparent);
 }
 .state-core::before, .state-core::after {

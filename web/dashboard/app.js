@@ -65,6 +65,7 @@ let workspaceSyncTimer = 0;
 let workspaceSyncTicket = 0;
 let groundTargetRefreshTimer = 0;
 let missionSelectedId = "";
+const achievementUi = {category: "all", status: "all", search: "", sort: "progress", visible: 24};
 let hotkeyCaptureAction = "";
 let orrerySelectedBodyId = "";
 let orreryLiveTargetBodyId = "";
@@ -3063,14 +3064,107 @@ function renderReconWorkspace(data) {
   ])}<section class="workspace-grid two">${workspaceCard("CURRENT ASSESSMENT", `<div class="recon-score"><strong>${numeric(report.score)}</strong><span>/100<br>${escapeHtml(String(report.grade || "unknown").toUpperCase())}</span></div>${workspaceRows(gaps, "This system has no identified survey gaps.")}<div class="workspace-actions"><button data-ws-page="recon" data-ws-op="copy_report">COPY DOSSIER</button><button data-ws-page="recon" data-ws-op="save">SAVE CANDIDATE</button></div>`)}${workspaceCard("SAVED CANDIDATES", candidates)}${workspaceCard("REVISIT QUEUE", workspaceTable([{label: "System", key: "system"}, {label: "Reason", render: (row) => escapeHtml(row.reason || row.detail || row.grade || "Missed opportunity")}, {label: "", render: (row) => `<button data-ws-page="recon" data-ws-op="dismiss_revisit" data-system="${escapeHtml(row.system)}">DISMISS</button>`}], data.revisits || [], "No unresolved revisit opportunities."))}${workspaceCard("EXPLORATION MILESTONES", workspaceTable([{label: "When", key: "timestamp"}, {label: "Milestone", render: (row) => escapeHtml(row.title || row.kind || row.detail || "Milestone")}, {label: "System", key: "system"}], data.milestones || [], "Milestones will appear as the exploration record grows."))}</section>`;
 }
 
+function achievementPercent(row) {
+  return row.unlocked ? 100 : number(row.target) > 0
+    ? clamp(number(row.current) * 100 / number(row.target)) : 0;
+}
+
+function achievementState(row) {
+  if (row.unlocked) return "earned";
+  return number(row.current) > 0 && number(row.target) > 0 ? "active" : "locked";
+}
+
+function achievementDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, {
+    timeZone: "UTC", day: "numeric", month: "short", year: "numeric",
+  }).toUpperCase();
+}
+
+function achievementTile(row) {
+  const state = achievementState(row);
+  const percent = achievementPercent(row);
+  const hasTarget = number(row.target) > 0;
+  const current = Math.max(0, number(row.current));
+  const target = Math.max(0, number(row.target));
+  const progressText = row.unlocked ? "COMPLETE" : hasTarget
+    ? `${numeric(Math.min(current, target))} / ${numeric(target)}` : "DISCOVERY MILESTONE";
+  const earnedDate = achievementDate(row.unlocked_at);
+  const symbol = String(row.category || "M").trim().slice(0, 2).toUpperCase();
+  return `<article class="achievement-tile ${state}">
+    <div class="achievement-tile-head"><span class="achievement-category-mark" aria-hidden="true">${escapeHtml(symbol)}</span><span class="achievement-tile-category">${escapeHtml(row.category || "Milestone")}</span><b>${numeric(row.points)} <small>PTS</small></b></div>
+    <div class="achievement-tile-body"><span class="achievement-state"><i aria-hidden="true"></i>${state === "earned" ? "EARNED" : state === "active" ? "IN PROGRESS" : "UNDISCOVERED"}</span><h3>${escapeHtml(row.title || "Untitled milestone")}</h3><p>${escapeHtml(row.description || "Journal-driven commander milestone.")}</p></div>
+    <div class="achievement-progress"><div><span>${progressText}</span><b>${hasTarget || row.unlocked ? `${numeric(percent)}%` : ""}</b></div><i role="progressbar" aria-label="${escapeHtml(row.title || "Milestone")} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(percent)}"><em style="width:${percent}%"></em></i></div>
+    <footer><span>${state === "earned" ? `UNLOCKED${earnedDate ? ` · ${earnedDate}` : ""}` : state === "active" ? "JOURNAL PROGRESS" : "AWAITING JOURNAL EVENT"}</span><div>${row.unlocked ? "" : `<button type="button" data-ws-page="achievements" data-ws-op="manual_unlock" data-achievement-id="${escapeHtml(row.id)}">MARK EARNED</button>`}<button type="button" class="danger-action" data-ws-page="achievements" data-ws-op="reset" data-achievement-id="${escapeHtml(row.id)}" ${row.unlocked || current > 0 ? "" : "disabled"}>RESET</button></div></footer>
+  </article>`;
+}
+
+function renderAchievementCatalogue(data) {
+  const rows = Array.isArray(data.achievements) ? data.achievements : [];
+  const categories = new Map();
+  rows.forEach((row) => {
+    const category = String(row.category || "Milestone");
+    categories.set(category, (categories.get(category) || 0) + 1);
+  });
+  if (achievementUi.category !== "all" && !categories.has(achievementUi.category)) achievementUi.category = "all";
+  const categoryOptions = [...categories].sort(([a], [b]) => a.localeCompare(b));
+  byId("achievement-categories").innerHTML = [["all", rows.length], ...categoryOptions].map(([name, count]) => `<button type="button" data-achievement-category="${escapeHtml(name)}" aria-pressed="${achievementUi.category === name}">${name === "all" ? "ALL FIELDS" : escapeHtml(name)} <b>${numeric(count)}</b></button>`).join("");
+  const search = achievementUi.search.trim().toLocaleLowerCase();
+  const scoped = rows.filter((row) => (achievementUi.category === "all" || String(row.category || "Milestone") === achievementUi.category)
+    && (!search || [row.title, row.description, row.category].some((value) => String(value || "").toLocaleLowerCase().includes(search))));
+  const counts = {all: scoped.length, earned: 0, active: 0, locked: 0};
+  scoped.forEach((row) => { counts[achievementState(row)] += 1; });
+  byId("achievement-states").innerHTML = [["all", "ALL"], ["active", "IN PROGRESS"], ["earned", "EARNED"], ["locked", "UNDISCOVERED"]].map(([state, label]) => `<button type="button" data-achievement-state="${state}" aria-pressed="${achievementUi.status === state}">${label} <b>${numeric(counts[state])}</b></button>`).join("");
+  const filtered = scoped.filter((row) => achievementUi.status === "all" || achievementState(row) === achievementUi.status);
+  const originalOrder = new Map(rows.map((row, index) => [row.id, index]));
+  filtered.sort((a, b) => {
+    if (achievementUi.sort === "points") return number(b.points) - number(a.points) || (originalOrder.get(a.id) || 0) - (originalOrder.get(b.id) || 0);
+    if (achievementUi.sort === "recent") return String(b.unlocked_at || "").localeCompare(String(a.unlocked_at || "")) || (originalOrder.get(a.id) || 0) - (originalOrder.get(b.id) || 0);
+    if (achievementUi.sort === "progress") {
+      const rank = {active: 0, earned: 1, locked: 2};
+      const difference = rank[achievementState(a)] - rank[achievementState(b)];
+      if (difference) return difference;
+      if (achievementState(a) === "active") return achievementPercent(b) - achievementPercent(a) || number(b.current) - number(a.current);
+      if (a.unlocked && b.unlocked) return String(b.unlocked_at || "").localeCompare(String(a.unlocked_at || ""));
+    }
+    return (originalOrder.get(a.id) || 0) - (originalOrder.get(b.id) || 0);
+  });
+  const visible = filtered.slice(0, achievementUi.visible);
+  byId("achievement-results").textContent = `${numeric(filtered.length ? visible.length : 0)} OF ${numeric(filtered.length)} MILESTONES`;
+  byId("achievement-grid").innerHTML = visible.map(achievementTile).join("") || `<div class="achievement-empty"><span aria-hidden="true">◇</span><b>${rows.length ? "NO MILESTONES MATCH" : "CATALOGUE UNAVAILABLE"}</b><p>${rows.length ? "Try another field, status or search term." : "The milestone catalogue could not be loaded for this profile."}</p></div>`;
+  const more = byId("achievement-more");
+  more.hidden = visible.length >= filtered.length;
+  more.textContent = `SHOW MORE · ${numeric(filtered.length - visible.length)} REMAINING`;
+}
+
 function renderAchievementsWorkspace(data) {
   const root = byId("achievements-workspace");
-  const rows = (data.achievements || []).map((row) => {
-    const progress = row.unlocked ? 100 : row.target ? clamp(number(row.current) * 100 / number(row.target)) : 0;
-    return `<article class="achievement-tile${row.unlocked ? " unlocked" : ""}" data-achievement-category="${escapeHtml(row.category)}"><header><span>${escapeHtml(row.category || "MILESTONE")}</span><b>${numeric(row.points)} PTS</b></header><h3>${escapeHtml(row.title)}</h3><p>${escapeHtml(row.description || "Journal-driven commander milestone.")}</p><div class="achievement-progress"><i style="width:${progress}%"></i><span>${row.unlocked ? "UNLOCKED" : row.target ? `${numeric(row.current)} / ${numeric(row.target)}` : "LOCKED"}</span></div><footer><button data-ws-page="achievements" data-ws-op="manual_unlock" data-achievement-id="${escapeHtml(row.id)}" ${row.unlocked ? "disabled" : ""}>UNLOCK</button><button class="danger-action" data-ws-page="achievements" data-ws-op="reset" data-achievement-id="${escapeHtml(row.id)}" ${row.unlocked || number(row.current) ? "" : "disabled"}>RESET</button></footer></article>`;
-  });
+  const rows = Array.isArray(data.achievements) ? data.achievements : [];
+  const total = Math.max(0, number(data.total));
+  const unlocked = Math.max(0, Math.min(total, number(data.unlocked)));
+  const percent = total ? clamp(unlocked * 100 / total) : 0;
+  const active = rows.filter((row) => achievementState(row) === "active")
+    .sort((a, b) => achievementPercent(b) - achievementPercent(a) || number(a.target) - number(b.target))[0];
+  const latest = rows.filter((row) => row.unlocked)
+    .sort((a, b) => String(b.unlocked_at || "").localeCompare(String(a.unlocked_at || "")))[0];
+  const activePercent = active ? achievementPercent(active) : 0;
   root.classList.remove("loading-panel");
-  root.innerHTML = `${workspaceMetrics([{label: "Unlocked", value: `${numeric(data.unlocked)} / ${numeric(data.total)}`, detail: `${data.total ? numeric(number(data.unlocked) * 100 / number(data.total), 1) : "0.0"}% COMPLETE`}, {label: "Achievement points", value: numeric(data.points), detail: "PROFILE TOTAL"}, {label: "Categories", value: numeric((data.categories || []).length), detail: "EXPLORATION-FOCUSED"}, {label: "Tracking", value: data.enabled ? "ACTIVE" : "PAUSED", detail: data.notifications_enabled ? "UNLOCK SIGNALS ON" : "UNLOCK SIGNALS OFF"}])}<div class="workspace-actions achievement-controls"><button data-ws-page="achievements" data-ws-op="set_enabled" data-enabled="${!data.enabled}">${data.enabled ? "PAUSE TRACKING" : "ENABLE TRACKING"}</button><button data-ws-page="achievements" data-ws-op="set_notifications" data-enabled="${!data.notifications_enabled}">${data.notifications_enabled ? "MUTE UNLOCK SIGNALS" : "ENABLE UNLOCK SIGNALS"}</button><input id="achievement-filter" placeholder="FILTER MILESTONES"></div><section id="achievement-grid" class="achievement-grid">${rows.join("") || `<p class="workspace-empty">Achievement catalogue unavailable.</p>`}</section>`;
+  root.innerHTML = `<div class="achievement-dashboard">
+    <section class="achievement-overview" aria-label="Commander achievement record">
+      <div class="achievement-overview-head"><span>VOID COMPASS <i>／</i> COMMANDER RECORD</span><b class="${data.enabled ? "" : "paused"}">${data.enabled ? "TRACKING ACTIVE" : "TRACKING PAUSED"}</b></div>
+      <div class="achievement-overview-main"><div class="achievement-dial" style="--achievement-complete:${percent}%" role="img" aria-label="${numeric(percent, 1)} percent of milestones earned"><div><strong>${numeric(percent, 1)}<small>%</small></strong><span>COMPLETE</span></div></div><div class="achievement-overview-copy"><span class="achievement-kicker">FIELD HONOURS</span><h3>Your journey, recorded.</h3><p>Every discovery, expedition and hard won first adds to this commander record.</p><div class="achievement-overview-count"><strong>${numeric(unlocked)}</strong><span>OF ${numeric(total)}<br>MILESTONES EARNED</span></div></div></div>
+      <div class="achievement-overview-stats"><div><span>ACHIEVEMENT POINTS</span><strong>${numeric(data.points)}</strong></div><div><span>IN PROGRESS</span><strong>${numeric(rows.filter((row) => achievementState(row) === "active").length)}</strong></div><div><span>FIELDS OF DISCOVERY</span><strong>${numeric((data.categories || []).length)}</strong></div></div>
+    </section>
+    <div class="achievement-side"><section class="achievement-spotlight"><span class="achievement-kicker">NEXT ON THE HORIZON</span><div class="achievement-spotlight-emblem" aria-hidden="true">✦</div><h3>${escapeHtml(active?.title || "The next milestone awaits")}</h3><p>${escapeHtml(active?.description || "Keep exploring. Your journal will chart the way to the next unlock.")}</p><div class="achievement-spotlight-progress"><span>${active ? `${numeric(Math.max(0, number(active.current)))} / ${numeric(Math.max(0, number(active.target)))}` : "NO ACTIVE MILESTONE"}</span><b>${active ? `${numeric(activePercent)}%` : ""}</b></div><i class="achievement-spotlight-bar"><em style="width:${activePercent}%"></em></i></section>
+      <section class="achievement-latest"><span class="achievement-kicker">LATEST UNLOCK</span><strong>${escapeHtml(latest?.title || "Your story starts here")}</strong><small>${latest ? `${escapeHtml(latest.category || "MILESTONE")} · ${numeric(latest.points)} PTS${achievementDate(latest.unlocked_at) ? ` · ${achievementDate(latest.unlocked_at)}` : ""}` : "Earn a milestone to begin your record."}</small></section></div>
+    <section class="achievement-preferences" aria-label="Achievement settings"><div><span>RECORD SIGNALS</span><small>Profile settings for progress tracking and unlock notices.</small></div><div class="achievement-preference"><span><i class="${data.enabled ? "on" : ""}"></i>TRACKING ${data.enabled ? "ON" : "OFF"}</span><button type="button" data-ws-page="achievements" data-ws-op="set_enabled" data-enabled="${!data.enabled}">${data.enabled ? "PAUSE" : "RESUME"}</button></div><div class="achievement-preference"><span><i class="${data.notifications_enabled ? "on" : ""}"></i>UNLOCK NOTICES ${data.notifications_enabled ? "ON" : "OFF"}</span><button type="button" data-ws-page="achievements" data-ws-op="set_notifications" data-enabled="${!data.notifications_enabled}">${data.notifications_enabled ? "MUTE" : "ENABLE"}</button></div></section>
+    <section class="achievement-archive" aria-label="Achievement catalogue"><div class="achievement-archive-head"><div><span class="achievement-kicker">THE ARCHIVE</span><h3>Milestone catalogue</h3><p>Follow the milestones still ahead, or revisit what you have earned.</p></div><span id="achievement-results" role="status" aria-live="polite"></span></div>
+      <div class="achievement-catalogue-controls"><label for="achievement-filter">FIND A MILESTONE<input id="achievement-filter" type="search" autocomplete="off" placeholder="Search title, field or description" value="${escapeHtml(achievementUi.search)}"></label><label for="achievement-sort">ORDER BY<select id="achievement-sort"><option value="progress" ${achievementUi.sort === "progress" ? "selected" : ""}>Closest progress</option><option value="catalogue" ${achievementUi.sort === "catalogue" ? "selected" : ""}>Catalogue order</option><option value="recent" ${achievementUi.sort === "recent" ? "selected" : ""}>Recently earned</option><option value="points" ${achievementUi.sort === "points" ? "selected" : ""}>Highest points</option></select></label></div>
+      <div id="achievement-categories" class="achievement-categories" role="group" aria-label="Filter by field"></div><div id="achievement-states" class="achievement-states" role="group" aria-label="Filter by status"></div><div id="achievement-grid" class="achievement-grid"></div><button id="achievement-more" type="button" class="achievement-more"></button>
+    </section>
+  </div>`;
+  renderAchievementCatalogue(data);
 }
 
 function renderLedgerWorkspace(data) {
@@ -3798,6 +3892,24 @@ document.addEventListener("click", async (event) => {
     showPage(pageButton.dataset.page);
     return;
   }
+  const achievementCategory = event.target.closest("[data-achievement-category]");
+  const achievementStatus = event.target.closest("[data-achievement-state]");
+  if (achievementCategory || achievementStatus) {
+    if (achievementCategory) achievementUi.category = achievementCategory.dataset.achievementCategory;
+    if (achievementStatus) achievementUi.status = achievementStatus.dataset.achievementState;
+    achievementUi.visible = 24;
+    renderAchievementCatalogue(model.workspace?.data || {});
+    const attribute = achievementCategory ? "achievementCategory" : "achievementState";
+    const selected = achievementCategory ? achievementUi.category : achievementUi.status;
+    [...document.querySelectorAll("#achievement-categories button, #achievement-states button")]
+      .find((button) => button.dataset[attribute] === selected)?.focus({preventScroll: true});
+    return;
+  }
+  if (event.target.closest("#achievement-more")) {
+    achievementUi.visible += 24;
+    renderAchievementCatalogue(model.workspace?.data || {});
+    return;
+  }
   if (event.target.closest("#explore-complete")) {
     byId("explore-workspace")?.scrollIntoView({behavior: "smooth", block: "start"});
     return;
@@ -4137,10 +4249,9 @@ document.addEventListener("input", (event) => {
   if (event.target.id === "replay-slider") {
     updateReplayCursor(event.target.value);
   } else if (event.target.id === "achievement-filter") {
-    const query = event.target.value.trim().toLocaleLowerCase();
-    document.querySelectorAll("#achievement-grid .achievement-tile").forEach((tile) => {
-      tile.hidden = Boolean(query && !tile.textContent.toLocaleLowerCase().includes(query));
-    });
+    achievementUi.search = event.target.value;
+    achievementUi.visible = 24;
+    renderAchievementCatalogue(model.workspace?.data || {});
   } else if (event.target.id === "ledger-filter") {
     const query = event.target.value.trim().toLocaleLowerCase();
     const rows = model.workspace?.page === "ledger" ? model.workspace.data?.rows || [] : [];
@@ -4175,7 +4286,11 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
-  if (event.target.dataset.deckVisible && deckLayoutDraft) {
+  if (event.target.id === "achievement-sort") {
+    achievementUi.sort = event.target.value;
+    achievementUi.visible = 24;
+    renderAchievementCatalogue(model.workspace?.data || {});
+  } else if (event.target.dataset.deckVisible && deckLayoutDraft) {
     const id = event.target.dataset.deckVisible;
     const hidden = new Set(deckLayoutDraft.hidden);
     if (event.target.checked) hidden.delete(id); else hidden.add(id);

@@ -71,6 +71,20 @@ body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none
 .target.complete { --tone: var(--green); }
 .target.surface-only { --tone: var(--accent); }
 .target.routine { --tone: var(--muted); }
+.target.routine.compact:not(.focus-target) { min-height: 36px; grid-template-columns: 28px minmax(0, 1fr); gap: 0 4px; padding: 2px 5px 2px 2px; }
+.target.routine.compact:not(.focus-target) .planet-cell { min-height: 26px; }
+.target.routine.compact:not(.focus-target) .planet-orb { flex-basis: 24px; width: 24px; height: 24px; }
+.target.routine.compact:not(.focus-target) .planet-sphere { inset: 2px; }
+.target.routine.compact:not(.focus-target) .planet-ring { left: -1px; right: -1px; top: 6px; height: 12px; border-width: 1px; }
+.routine-summary { display: grid; align-content: center; gap: 2px; min-width: 0; }
+.routine-primary, .routine-facts { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.routine-primary .target-name { min-width: 0; font-size: calc(12px * var(--scale)); }
+.routine-latest { flex: 0 0 auto; color: var(--orange); font-size: calc(8px * var(--scale)); }
+.routine-facts { flex-wrap: wrap; gap: 2px 5px; color: var(--muted); font-size: calc(8px * var(--scale)); }
+.routine-facts > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.routine-class { color: var(--accent); font-weight: 700; }
+.routine-atmosphere { flex: 1 1 65px; }
+.routine-chip { flex: 0 0 auto; color: var(--dim); font-size: inherit; }
 .target.focus-target { min-height: 56px; grid-template-columns: 46px minmax(0, 1fr); padding: 4px; border-color: color-mix(in srgb, var(--tone) 42%, var(--soft)); }
 .planet-cell { display: grid; place-items: center; min-height: 34px; overflow: visible; }
 .target-head { display: grid; align-content: center; gap: 3px; min-width: 0; }
@@ -113,6 +127,37 @@ body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none
 .target-foot-status { color: var(--dim); }.target-foot .value { color: var(--orange); }
 .target.complete .target-foot .value { color: var(--green); }
 .group-label { display: flex; justify-content: space-between; gap: 5px; padding: 4px 2px 1px; border-top: 1px solid var(--soft); color: var(--dim); font-size: var(--type-compact); font-weight: 700; letter-spacing: .7px; }
+.routine-strip { flex: 0 0 auto; display: grid; gap: 4px; min-width: 0; padding: 5px 7px 6px; border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--soft)); border-left: 2px solid var(--accent); background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 8%, var(--panel)), var(--panel)); }
+.routine-strip-heading { display: flex; align-items: center; justify-content: space-between; gap: 5px; min-width: 0; font-size: var(--type-compact); font-weight: 700; letter-spacing: .55px; }
+.routine-strip-heading strong { color: var(--accent); white-space: nowrap; }
+.routine-strip-heading span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); text-align: right; }
+.routine-strip-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 5px; }
+.routine-pin { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 3px; align-items: center; min-width: 0; min-height: 29px; padding: 2px 4px 2px 1px; border: 1px solid var(--soft); background: color-mix(in srgb, var(--raised) 55%, transparent); }
+.routine-pin.recent { border-color: color-mix(in srgb, var(--orange) 55%, var(--soft)); }
+.routine-pin-copy { display: grid; gap: 1px; min-width: 0; }
+.routine-pin-name, .routine-pin-class { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-compact); }
+.routine-pin-name { color: var(--text); }
+.routine-pin-class { color: var(--muted); font-size: calc(8px * var(--scale)); }
+.routine-pin-status { color: var(--dim); font-size: calc(8px * var(--scale)); white-space: nowrap; }
+.routine-pin.recent .routine-pin-status { color: var(--orange); }
+.routine-pin .planet-orb { flex-basis: 18px; width: 18px; height: 18px; }
+.routine-pin .planet-sphere, .routine-pin .planet-glint { inset: 2px; }
+.routine-pin .planet-ring { left: -1px; right: -1px; top: 4px; height: 10px; border-width: 1px; }
+.bio-pinboard { flex: 0 0 auto; display: grid; gap: 5px; min-width: 0; padding: 5px 7px 6px; border: 1px solid color-mix(in srgb, var(--orange) 34%, var(--soft)); border-left: 2px solid var(--orange); background: linear-gradient(100deg, color-mix(in srgb, var(--orange) 9%, var(--panel)), var(--panel)); }
+.bio-pinboard-heading { display: flex; align-items: center; justify-content: space-between; gap: 5px; min-width: 0; font-size: var(--type-compact); font-weight: 700; letter-spacing: .55px; }
+.bio-pinboard-heading strong { color: var(--orange); white-space: nowrap; }
+.bio-pinboard-heading span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); text-align: right; }
+.bio-pinboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 5px; }
+.bio-pin { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 3px; align-items: center; min-width: 0; min-height: 22px; padding: 1px 4px 1px 1px; border: 1px solid var(--soft); background: color-mix(in srgb, var(--raised) 55%, transparent); }
+.bio-pin.recent { border-color: color-mix(in srgb, var(--orange) 52%, var(--soft)); }
+.bio-pin.complete { border-color: color-mix(in srgb, var(--green) 38%, var(--soft)); }
+.bio-pin .planet-orb { flex-basis: 18px; width: 18px; height: 18px; }
+.bio-pin .planet-sphere { inset: 2px; }
+.bio-pin .planet-glint { inset: 2px; }
+.bio-pin .planet-ring { left: -1px; right: -1px; top: 4px; height: 10px; border-width: 1px; }
+.bio-pin-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: var(--type-compact); }
+.bio-pin-count { color: var(--orange); font-size: var(--type-compact); white-space: nowrap; }
+.bio-pin.complete .bio-pin-count { color: var(--green); }
 
 /* Journal PlanetClass selects a palette and texture; these are deliberately
    illustrative spheres rather than claims about a body's actual appearance. */
@@ -161,17 +206,43 @@ body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none
 .planet-orb.large .planet-sphere { inset: 4px; }
 .planet-orb.large .planet-ring { left: -3px; right: -3px; top: 10px; height: 20px; border-width: 2px; }
 
-.sample-card { position: relative; flex: 0 0 auto; min-height: 56px; display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 10px; align-items: center; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--orange) 42%, var(--soft)); border-left: 3px solid var(--orange); background: linear-gradient(90deg, color-mix(in srgb, var(--orange) 15%, var(--panel)), var(--panel)); }
-.sample-nodes { position: relative; display: flex; align-items: center; justify-content: space-between; }
-.sample-nodes::before { content: ""; position: absolute; left: 8px; right: 8px; height: 2px; background: var(--soft); }
-.sample-nodes::after { content: ""; position: absolute; left: 8px; top: 50%; width: 10px; height: 2px; background: var(--orange); opacity: 0; transform: translateY(-50%); }
-.sampling-active .sample-nodes::after { opacity: .85; animation: survey-sample-flow 2.3s ease-in-out infinite; }
-.sample-node { position: relative; z-index: 1; display: grid; place-items: center; width: 21px; height: 21px; border: 1px solid var(--dim); border-radius: 50%; background: var(--panel); color: var(--dim); font-size: var(--type-compact); font-weight: 700; }
-.sample-node.done { border: 2px solid var(--orange); color: var(--orange); box-shadow: 0 0 7px color-mix(in srgb, var(--orange) 50%, transparent); }
-.sample-copy { display: grid; gap: 5px; min-width: 0; }
-.sample-species { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: var(--type-primary); }
-.sample-status { display: flex; justify-content: space-between; gap: 5px; color: var(--muted); font-size: var(--type-compact); font-weight: 700; }
-.sample-status .clear { color: var(--green); }
+.sample-card {
+  --sample-tone: var(--orange);
+  position: relative; flex: 0 0 auto; display: grid; gap: 5px; min-width: 0;
+  padding: 7px 9px 8px; overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--sample-tone) 48%, var(--soft));
+  border-left: 3px solid var(--sample-tone);
+  background:
+    radial-gradient(ellipse at 100% 0, color-mix(in srgb, var(--sample-tone) 15%, transparent), transparent 64%),
+    linear-gradient(110deg, color-mix(in srgb, var(--raised) 82%, var(--panel)), var(--panel));
+}
+.sample-card.ready { --sample-tone: var(--green); }
+.sample-card.analysis-pending { --sample-tone: var(--accent); }
+.sample-heading, .sample-clearance { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.sample-kicker { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sample-tone); font-size: var(--type-compact); font-weight: 700; letter-spacing: .8px; }
+.sample-count { flex: 0 0 auto; color: var(--sample-tone); font-size: var(--type-support); letter-spacing: .7px; }
+.sample-species { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: var(--type-primary); line-height: 1.2; }
+.sample-nodes { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 2px 0 1px; }
+.sample-nodes::before, .sample-nodes::after { content: ""; position: absolute; top: 12px; left: 16.667%; height: 2px; pointer-events: none; }
+.sample-nodes::before { width: 66.666%; background: var(--soft); }
+.sample-nodes::after { width: var(--track-fill, 0%); background: var(--sample-tone); box-shadow: 0 0 7px var(--sample-tone); transition: width .35s ease; }
+.sample-step { position: relative; z-index: 1; display: grid; justify-items: center; gap: 3px; min-width: 0; color: var(--dim); }
+.sample-node { display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid var(--dim); border-radius: 50%; background: var(--panel); color: var(--dim); font-size: var(--type-compact); font-style: normal; font-weight: 700; }
+.sample-node.done { border: 2px solid var(--orange); background: color-mix(in srgb, var(--orange) 19%, var(--panel)); color: var(--text); box-shadow: 0 0 7px color-mix(in srgb, var(--orange) 40%, transparent); }
+.sample-step.current .sample-node { box-shadow: 0 0 0 3px color-mix(in srgb, var(--orange) 14%, transparent), 0 0 10px color-mix(in srgb, var(--orange) 48%, transparent); }
+.sample-step.next .sample-node { border-color: var(--orange); color: var(--orange); }
+.sample-card.ready .sample-step.next .sample-node { border-color: var(--green); color: var(--green); box-shadow: 0 0 10px color-mix(in srgb, var(--green) 48%, transparent); animation: survey-sample-ready 2.4s ease-in-out infinite; }
+.sample-card.analysis-pending .sample-node.done { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--panel)); box-shadow: 0 0 7px color-mix(in srgb, var(--accent) 35%, transparent); }
+.sample-card.analysis-pending .sample-step.current .sample-node { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent); }
+.sample-step-label { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-size: calc(8px * var(--scale)); font-weight: 700; letter-spacing: .45px; }
+.sample-step.captured .sample-step-label { color: var(--muted); }
+.sample-step.next .sample-step-label { color: var(--orange); }
+.sample-card.ready .sample-step.next .sample-step-label { color: var(--green); }
+.sample-clearance { min-height: 20px; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--sample-tone) 26%, var(--soft)); }
+.sample-action { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sample-tone); font-size: var(--type-support); }
+.sample-distance { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--type-compact); font-weight: 700; text-align: right; }
+.sample-range-meter { height: 3px; overflow: hidden; background: var(--soft); }
+.sample-range-meter > i { display: block; height: 100%; background: var(--sample-tone); box-shadow: 0 0 8px var(--sample-tone); transition: width .35s ease; }
 .notable-card { position: relative; flex: 0 0 auto; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 7px; align-items: center; min-height: 42px; padding: 3px 7px; border: 1px solid color-mix(in srgb, var(--yellow) 28%, var(--soft)); border-left: 2px solid var(--yellow); background: color-mix(in srgb, var(--yellow) 7%, var(--panel)); }
 .notable-card .planet-orb { width: 30px; height: 30px; }
 .notable-card .planet-sphere { inset: 4px; }.notable-card .planet-ring { left: -2px; right: -2px; top: 8px; height: 16px; border-width: 2px; }
@@ -207,6 +278,17 @@ footer .credits { color: var(--orange); text-align: right; }
 .survey.scale-huge footer { height: 36px; }
 .survey.scale-huge .atlas-page-banner { display: grid; gap: 1px; justify-content: stretch; min-height: 43px; }
 .survey.scale-huge .atlas-page-banner span { text-align: left; }
+.survey.scale-huge .sample-clearance { display: grid; justify-content: stretch; gap: 2px; }
+.survey.scale-huge .sample-distance { text-align: left; }
+.survey.scale-huge.survey-congested .routine-strip,
+.survey.scale-huge.survey-congested .bio-pinboard { display: flex; align-items: center; gap: 5px; min-height: 0; padding: 3px 5px; }
+.survey.scale-huge.survey-congested .routine-strip-heading,
+.survey.scale-huge.survey-congested .bio-pinboard-heading { flex: 0 0 91px; display: grid; align-content: center; justify-content: stretch; gap: 1px; min-width: 0; letter-spacing: 0; }
+.survey.scale-huge.survey-congested .routine-strip-heading span,
+.survey.scale-huge.survey-congested .bio-pinboard-heading span { text-align: left; }
+.survey.scale-huge.survey-congested .routine-strip-grid,
+.survey.scale-huge.survey-congested .bio-pinboard-grid { flex: 1 1 auto; min-width: 0; }
+.survey.scale-huge.survey-congested .atlas-page-banner { display: flex; min-height: 26px; padding: 2px 6px; }
 
 .event-new-target { animation: survey-acquire .55s ease-out both; }
 .event-new-target::after, .event-mapped::after, .event-target-complete::after { animation: survey-card-sweep .8s ease-out both; }
@@ -216,7 +298,8 @@ footer .credits { color: var(--orange); text-align: right; }
 .biological-row.event-sample-progress, .biological-row.event-bio-complete { animation: survey-complete .75s ease-out both; }
 .event-value .value, .event-value .biological-value, .notable-card.event-value .notable-value { animation: survey-chip 1s ease-out both; }
 .sample-card.event-sample-start, .notable-card.event-new-notable { animation: survey-acquire .6s ease-out both; }
-.sample-card.event-sample-step, .sample-card.event-sample-complete { animation: survey-complete .8s ease-out both; }
+.sample-card.event-sample-step { animation: survey-complete .8s ease-out both; }
+.sample-card.event-sample-complete { animation: survey-sample-analysis .8s ease-out both; }
 .sample-node.acknowledged { animation: survey-chip .8s ease-out both; }
 .overview-rail i.event-progress { animation: survey-progress .7s ease-out both; }
 .survey.event-active #mode-label { animation: survey-chip .75s ease-out both; }
@@ -230,7 +313,8 @@ footer .credits { color: var(--orange); text-align: right; }
 @keyframes atlas-card-enter { from { opacity: .25; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 @keyframes survey-rail-sweep { to { transform: translateX(430px); } }
 @keyframes survey-beacon { 50% { opacity: .45; box-shadow: 0 0 7px var(--accent); transform: translate(-50%,-50%) scale(1.4); } }
-@keyframes survey-sample-flow { 50% { left: calc(100% - 18px); opacity: 1; } }
+@keyframes survey-sample-ready { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--green) 10%, transparent), 0 0 13px color-mix(in srgb, var(--green) 70%, transparent); } }
+@keyframes survey-sample-analysis { 40% { box-shadow: inset 3px 0 0 var(--accent), 0 0 12px color-mix(in srgb, var(--accent) 28%, transparent); } }
 @keyframes survey-acquire { from { opacity: 0; transform: translateX(-9px); } to { opacity: 1; transform: none; } }
 @keyframes survey-card-sweep { 0% { opacity: 0; transform: translateX(-110%); } 35% { opacity: .7; } 100% { opacity: 0; transform: translateX(110%); } }
 @keyframes survey-complete { 40% { box-shadow: inset 3px 0 0 var(--green), 0 0 12px color-mix(in srgb, var(--green) 25%, transparent); } }

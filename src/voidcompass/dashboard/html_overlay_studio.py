@@ -176,7 +176,6 @@ class HtmlOverlayStudioMixin:
                 "hud_compact_mode": bool(self.config.get("hud_compact_mode", True)),
                 "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
                 "overlay_opacity_percent": _integer(self.config.get("overlay_opacity_percent"), 100),
-                "sample_clear_notifications_enabled": bool(self.config.get("sample_clear_notifications_enabled", True)),
                 "rebuy_warnings_enabled": bool(self.config.get("rebuy_warnings_enabled", True)),
                 "data_risk_warnings_enabled": bool(self.config.get("data_risk_warnings_enabled", True)),
                 "prospector_hud_timeout_s": _integer(self.config.get("prospector_hud_timeout_s"), 45),
@@ -285,7 +284,7 @@ class HtmlOverlayStudioMixin:
     def _html_overlay_option_toggle(self, key, requested_value=None):
         allowed = {
             "overlay_mouse_passthrough", "hud_compact_mode",
-            "sample_clear_notifications_enabled", "rebuy_warnings_enabled",
+            "rebuy_warnings_enabled",
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies",
             "hud_crt_enabled", "hud_crt_motion_enabled",

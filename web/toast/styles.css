@@ -5,66 +5,147 @@
   --orange: #ff8a3d; --text: #dcebf3; --muted: #91a8b7;
   --dim: #607584; --green: #54e39a; --yellow: #f5c76d;
   --red: #ff6b70; --scale: 1;
+  --notice-height: calc(40px + 40px * var(--scale));
+  --achievement-height: calc(56px + 56px * var(--scale));
 }
+
 * { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
-body { pointer-events: none; user-select: none; font-family: "Cascadia Mono", "Consolas", monospace; }
-#notifications { width: 100%; height: 100%; display: flex; flex-direction: column; gap: 7px; }
+body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none; user-select: none; }
+#notifications { display: flex; flex-direction: column; gap: 8px; width: 100%; height: 100%; }
+
 .notification {
   --tone: var(--accent);
-  position: relative; flex: 0 0 auto; width: 100%; overflow: hidden;
-  color: var(--text); border: 1px solid color-mix(in srgb, var(--tone) 48%, var(--border));
+  position: relative; isolation: isolate; flex: 0 0 auto; width: 100%; min-width: 0;
+  overflow: hidden; color: var(--text);
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+  border: 1px solid color-mix(in srgb, var(--tone) 48%, var(--border));
   background:
-    radial-gradient(ellipse at 12% 0%, color-mix(in srgb, var(--tone) 12%, transparent), transparent 50%),
-    linear-gradient(104deg, color-mix(in srgb, var(--bg) 98%, transparent), color-mix(in srgb, var(--panel) 97%, transparent));
-  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
-  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, .72));
+    radial-gradient(ellipse at 0 45%, color-mix(in srgb, var(--tone) 15%, transparent), transparent 44%),
+    linear-gradient(108deg, color-mix(in srgb, var(--bg) 97%, transparent), color-mix(in srgb, var(--panel) 97%, transparent));
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, .34);
+  animation: signal-arrive .42s cubic-bezier(.18, .8, .25, 1) both;
 }
-.notification::before, .notification::after { content: ""; position: absolute; pointer-events: none; }
-.notification::before { left: 8px; right: 8px; top: 3px; height: 1px; background: linear-gradient(90deg, var(--tone), transparent 78%); opacity: .76; }
-.notification::after { inset: 0; box-shadow: inset 0 0 17px rgba(0, 0, 0, .72); }
-.notice { height: 66px; display: grid; grid-template-columns: 6px 42px minmax(0, 1fr) 45px; align-items: center; animation: notice-enter .36s cubic-bezier(.16,.86,.28,1) both; }
-.notice.info { --tone: var(--accent); }.notice.warn { --tone: var(--orange); }
-.notice.fail { --tone: var(--red); }.notice.success { --tone: var(--green); }
-.signal-rail { align-self: stretch; position: relative; overflow: hidden; background: color-mix(in srgb, var(--tone) 22%, transparent); }
-.signal-rail i { position: absolute; inset: 0; background: linear-gradient(180deg, transparent, var(--tone), transparent); animation: signal-run 1.6s ease-in-out infinite; }
-.notice-icon { width: 29px; height: 29px; margin-left: 8px; display: grid; place-items: center; color: var(--tone); border: 1px solid color-mix(in srgb, var(--tone) 54%, transparent); font: 700 calc(17px * var(--scale)) "Segoe UI Symbol", sans-serif; transform: rotate(45deg); box-shadow: inset 0 0 9px color-mix(in srgb, var(--tone) 9%, transparent), 0 0 6px color-mix(in srgb, var(--tone) 23%, transparent); }
-.notice-icon span { transform: rotate(-45deg); }
-.notice-copy { min-width: 0; display: grid; align-content: center; gap: 2px; padding-left: 7px; }
-.notice-channel { color: var(--dim); font-size: calc(8px * var(--scale)); font-weight: 700; letter-spacing: 1px; }
-.notice-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tone); font: 700 calc(12px * var(--scale)) "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .55px; text-transform: uppercase; }
-.notice-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: calc(9.5px * var(--scale)); }
-.notice-code { justify-self: center; color: color-mix(in srgb, var(--tone) 78%, var(--muted)); font-size: calc(8px * var(--scale)); letter-spacing: .6px; writing-mode: vertical-rl; transform: rotate(180deg); opacity: .8; }
-.life-rail { position: absolute; left: 5px; right: 0; bottom: 0; height: 2px; background: color-mix(in srgb, var(--tone) 13%, transparent); overflow: hidden; }
-.life-rail::after { content: ""; display: block; width: 100%; height: 100%; background: var(--tone); box-shadow: 0 0 5px var(--tone); transform-origin: left; animation: life-drain var(--life, 6s) linear forwards; }
+.notification::before {
+  content: ""; position: absolute; z-index: 1; top: 4px; left: 10px; right: 8px; height: 1px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 25%, transparent) 45%, transparent 88%);
+  opacity: .78; pointer-events: none;
+}
+.notification-edge {
+  position: absolute; z-index: 2; top: 9px; bottom: 3px; left: 0; width: 4px;
+  background: linear-gradient(180deg, var(--tone), color-mix(in srgb, var(--tone) 48%, var(--panel)));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--tone) 40%, transparent);
+}
+.notification-texture {
+  position: absolute; z-index: 4; inset: 0; pointer-events: none; opacity: .32;
+  background: repeating-linear-gradient(to bottom, transparent 0 3px, rgba(0, 0, 0, .16) 4px);
+}
+.no-crt .notification-texture { display: none; }
+.life-track {
+  position: absolute; z-index: 5; left: 4px; right: 0; bottom: 0; height: 2px;
+  background: color-mix(in srgb, var(--tone) 16%, var(--soft));
+}
+.life-track::after {
+  content: ""; display: block; width: 100%; height: 100%; transform-origin: left;
+  background: var(--tone); box-shadow: 0 0 7px var(--tone);
+  animation: life-drain var(--life, 6s) linear forwards;
+}
+
+.notice {
+  height: var(--notice-height); display: grid; grid-template-columns: 54px minmax(0, 1fr) 9px;
+  align-items: center; gap: 7px; padding: 8px 10px 9px 10px;
+}
+.notice.info { --tone: var(--accent); }
+.notice.warn { --tone: var(--orange); }
+.notice.fail { --tone: var(--red); }
+.notice.success { --tone: var(--green); }
+.notice-mark {
+  position: relative; display: grid; place-items: center; justify-self: center;
+  width: calc(30px + 8px * var(--scale)); height: calc(30px + 8px * var(--scale));
+  max-width: 50px; max-height: 50px; border: 1px solid color-mix(in srgb, var(--tone) 70%, var(--border));
+  border-radius: 50%; color: var(--tone); background: color-mix(in srgb, var(--tone) 9%, var(--panel));
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--tone) 11%, transparent), 0 0 9px color-mix(in srgb, var(--tone) 14%, transparent);
+  font: 700 calc(16px * var(--scale)) "Segoe UI Symbol", "Segoe UI", sans-serif;
+}
+.notice-mark::before, .notice-mark::after { content: ""; position: absolute; pointer-events: none; }
+.notice-mark::before { inset: -5px; border: 1px solid color-mix(in srgb, var(--tone) 22%, transparent); border-radius: 50%; border-top-color: var(--tone); transform: rotate(-35deg); }
+.notice-mark::after { right: -6px; top: 50%; width: 5px; height: 1px; background: var(--tone); }
+.notice-copy { display: grid; align-content: center; gap: 3px; min-width: 0; overflow: hidden; }
+.notice-header { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; }
+.notice-severity { flex: 0 0 auto; color: var(--tone); font-size: calc(8px * var(--scale)); font-weight: 700; letter-spacing: .95px; }
+.notice-rule { flex: 1 1 12px; min-width: 5px; height: 1px; background: color-mix(in srgb, var(--tone) 34%, var(--soft)); }
+.notice-source { flex: 0 0 auto; color: var(--accent); font-size: calc(7px * var(--scale)); font-weight: 700; letter-spacing: .35px; }
+.notice-title, .notice-message, .achievement-title, .achievement-message, .achievement-category {
+  display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.notice-title { font: 700 calc(16px * var(--scale))/1.08 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .25px; text-transform: uppercase; }
+.notice-message { color: var(--muted); font-size: calc(10.5px * var(--scale)); line-height: 1.2; }
+.notice-signal {
+  width: 5px; height: 27px; justify-self: center; opacity: .55;
+  background: repeating-linear-gradient(to bottom, var(--tone) 0 3px, transparent 3px 8px);
+}
+.notice.fail .notice-signal { animation: alert-pulse 1.2s ease-in-out infinite; }
 
 .achievement {
-  --tone: var(--yellow); height: 94px; display: grid;
-  grid-template-columns: 63px minmax(0, 1fr) 59px;
-  grid-template-rows: 1fr 19px; align-items: center;
+  --tone: var(--accent);
+  height: var(--achievement-height); display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 76px;
+  align-items: center; gap: 8px; padding: 10px 9px 11px 9px;
   background:
-    radial-gradient(circle at 9% 48%, color-mix(in srgb, var(--yellow) 18%, transparent), transparent 25%),
-    linear-gradient(104deg, color-mix(in srgb, var(--bg) 98%, transparent), color-mix(in srgb, var(--panel) 95%, transparent));
-  animation: achievement-enter .54s cubic-bezier(.14,.82,.25,1) both;
+    radial-gradient(circle at 9% 50%, color-mix(in srgb, var(--tone) 21%, transparent), transparent 36%),
+    linear-gradient(108deg, color-mix(in srgb, var(--bg) 98%, transparent), color-mix(in srgb, var(--panel) 96%, transparent));
 }
-.achievement-sigil { position: relative; grid-row: 1 / 3; justify-self: center; width: 38px; height: 38px; display: grid; place-items: center; color: var(--yellow); border: 1px solid var(--yellow); border-radius: 50%; font: 700 calc(20px * var(--scale)) "Segoe UI Symbol", sans-serif; box-shadow: 0 0 12px color-mix(in srgb, var(--yellow) 30%, transparent), inset 0 0 9px color-mix(in srgb, var(--yellow) 12%, transparent); animation: sigil-lock .72s cubic-bezier(.2,.8,.2,1) both; }
-.achievement-sigil i { position: absolute; inset: -7px; border: 1px dashed color-mix(in srgb, var(--yellow) 54%, transparent); border-radius: 50%; animation: sigil-orbit 9s linear infinite; }
-.achievement-copy { min-width: 0; align-self: end; display: grid; gap: 2px; padding: 9px 6px 4px 0; }
-.achievement-kicker { color: var(--yellow); font-size: calc(8px * var(--scale)); font-weight: 700; letter-spacing: 1.2px; }
-.achievement-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font: 700 calc(15px * var(--scale)) "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .55px; text-transform: uppercase; text-shadow: 0 0 7px color-mix(in srgb, var(--yellow) 18%, transparent); }
-.achievement-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: calc(9px * var(--scale)); }
-.achievement-score { align-self: center; justify-self: stretch; display: grid; place-items: center; gap: 1px; height: 47px; margin-right: 8px; border-left: 1px solid color-mix(in srgb, var(--yellow) 34%, var(--soft)); color: var(--yellow); }
-.achievement-score b { font: 700 calc(14px * var(--scale)) "Bahnschrift SemiCondensed", sans-serif; }.achievement-score small { color: var(--dim); font-size: calc(8px * var(--scale)); font-weight: 700; }
-.achievement-category { grid-column: 2 / 4; align-self: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-top: 2px; border-top: 1px solid color-mix(in srgb, var(--yellow) 16%, var(--soft)); color: var(--dim); font-size: calc(8px * var(--scale)); font-weight: 700; letter-spacing: .65px; }
-.achievement-sweep { position: absolute; z-index: 0; top: 0; bottom: 0; width: 70px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--yellow) 17%, transparent), transparent); transform: skewX(-16deg); animation: achievement-sweep 1.25s .12s ease-out both; }
-.scanlines { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: .12; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(40,70,82,.14) 3px); }
-.no-crt .scanlines { display: none; }
-.reduced-motion .notification, .reduced-motion .notification * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
+.achievement::after {
+  content: ""; position: absolute; z-index: 3; top: 0; bottom: 0; left: -70px; width: 60px;
+  transform: skewX(-15deg); pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--tone) 13%, transparent), transparent);
+  animation: milestone-sweep 1s .12s ease-out both;
+}
+.achievement-mark {
+  position: relative; display: grid; place-items: center; justify-self: center;
+  width: calc(32px + 10px * var(--scale)); height: calc(32px + 10px * var(--scale));
+  max-width: 54px; max-height: 54px; border: 1px solid var(--tone); border-radius: 50%;
+  color: var(--tone); background: radial-gradient(circle, color-mix(in srgb, var(--tone) 19%, var(--panel)), var(--panel) 72%);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--tone) 24%, transparent), inset 0 0 12px color-mix(in srgb, var(--tone) 12%, transparent);
+  font: 700 calc(21px * var(--scale)) "Segoe UI Symbol", "Segoe UI", sans-serif;
+}
+.achievement-mark::before {
+  content: ""; position: absolute; inset: -6px; border: 1px dashed color-mix(in srgb, var(--tone) 55%, transparent);
+  border-radius: 50%; animation: milestone-orbit 10s linear infinite;
+}
+.achievement-copy { display: grid; align-content: center; gap: 3px; min-width: 0; overflow: hidden; }
+.achievement-kicker { color: var(--tone); font-size: calc(8px * var(--scale)); font-weight: 700; letter-spacing: .7px; white-space: nowrap; }
+.achievement-title { color: var(--text); font: 700 calc(17px * var(--scale))/1.08 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; text-transform: uppercase; }
+.achievement-message { color: var(--muted); font-size: calc(10px * var(--scale)); line-height: 1.2; }
+.achievement-category { padding-top: 3px; border-top: 1px solid color-mix(in srgb, var(--tone) 24%, var(--soft)); color: var(--dim); font-size: calc(7.5px * var(--scale)); font-weight: 700; letter-spacing: .65px; }
+.achievement-score {
+  display: grid; align-content: center; justify-items: center; gap: 2px;
+  align-self: stretch; min-width: 0; border-left: 1px solid color-mix(in srgb, var(--tone) 36%, var(--soft));
+  color: var(--yellow); text-align: center;
+}
+.achievement-score b { font: 700 clamp(14px, calc(12px * var(--scale)), 22px) "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; white-space: nowrap; }
+.achievement-score small { color: var(--dim); font-size: calc(7px * var(--scale)); font-weight: 700; letter-spacing: .45px; }
 
-@keyframes notice-enter { from { opacity: 0; transform: translateX(34px) scale(.985); filter: blur(1px); } to { opacity: 1; transform: none; filter: drop-shadow(0 3px 7px rgba(0,0,0,.72)); } }
-@keyframes signal-run { 0%,100% { transform: translateY(-82%); opacity: .2; } 50% { transform: translateY(82%); opacity: 1; } }
-@keyframes life-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-@keyframes achievement-enter { 0% { opacity: 0; transform: translateX(46px) scale(.97); } 62% { opacity: 1; transform: translateX(-3px) scale(1.006); } 100% { opacity: 1; transform: none; } }
-@keyframes achievement-sweep { from { left: -90px; opacity: 0; } 18% { opacity: 1; } to { left: calc(100% + 30px); opacity: 0; } }
-@keyframes sigil-lock { 0% { opacity: 0; transform: scale(.45) rotate(-50deg); } 70% { opacity: 1; transform: scale(1.08) rotate(4deg); } 100% { transform: none; } }
-@keyframes sigil-orbit { to { transform: rotate(360deg); } }
+.large-type .notice-source { display: none; }
+.large-type .notice-message, .large-type .achievement-message {
+  display: -webkit-box; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+.reduced-motion .notification, .reduced-motion .notification::after,
+.reduced-motion .notification *, .reduced-motion .notification *::before,
+.reduced-motion .notification *::after { animation: none !important; transition: none !important; }
+.reduced-motion .life-track { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .notification, .notification::after, .notification *, .notification *::before,
+  .notification *::after { animation: none !important; transition: none !important; }
+  .life-track { display: none; }
+}
+
+@keyframes signal-arrive {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes life-drain { to { transform: scaleX(0); } }
+@keyframes alert-pulse { 50% { opacity: 1; } }
+@keyframes milestone-sweep { to { left: calc(100% + 20px); } }
+@keyframes milestone-orbit { to { transform: rotate(360deg); } }

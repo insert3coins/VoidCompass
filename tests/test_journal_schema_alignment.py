@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from voidcompass.services.carrier_tracker import CarrierTracker
 from voidcompass.exploration.captains_log import CaptainsLog
@@ -234,7 +234,6 @@ class JournalSchemaAlignmentTests(unittest.TestCase):
         app.current_latitude = app.current_longitude = None
         app.bio_sampling = None
         app.bio_sample_points = []
-        app._sample_clear_announced = False
         app._update_sampling_clearance = lambda: None
         self.assertTrue(app._process_sampling_event(
             {"ScanType": "Analyse", "Body": 1},
@@ -242,6 +241,32 @@ class JournalSchemaAlignmentTests(unittest.TestCase):
         ))
         self.assertEqual(app.companion_state["unsold_bio_cr"], 1_000_000)
         self.assertEqual(app.companion_state["unsold_bio_bonus_potential_cr"], 4_000_000)
+
+    def test_sample_clearance_updates_survey_without_duplicate_toast(self):
+        app = MainDashboard.__new__(MainDashboard)
+        sample = {
+            "species": "Bacterium Aurasus", "progress": 2,
+            "min_distance_m": 530, "colony_m": 500, "clear": True,
+        }
+        app._sampling_snapshot = lambda: sample
+        app.survey_status_hud = Mock()
+        app._toast_on_main = Mock()
+        app._ui_post = lambda callback, key=None: callback()
+        app.current_sys = "Testia"
+        app.scanned = app.total = 2
+        app.scan_items = []
+        app.body_signals = {}
+        app.current_body_id = 1
+        app.current_body_name = "Testia A 1"
+        app.scan_total_confirmed = True
+        app.belt_clusters = []
+        app._dss_efficiency_snapshot = lambda: {}
+        app.exploration_window = None
+
+        app._update_sampling_clearance()
+
+        self.assertFalse(app._toast_on_main.called)
+        self.assertEqual(app.survey_status_hud.update.call_args.kwargs["sampling"], sample)
 
     def test_captains_log_derives_carrier_distance_and_bio_body(self):
         log = CaptainsLog("")

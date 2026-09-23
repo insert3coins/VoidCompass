@@ -261,6 +261,15 @@ def _joined_lines(values, max_chars=62):
 def build_survey_model(system_name, scan_items, focused_body_id=None, focused_body_name=None, sampling=None, scanned=0, total=0, min_notable_value=50000, palette=None, total_known=True, body_signals=None, belt_clusters=None, show_all_bodies=False, dss_stats=None):
     """Build a renderer-neutral survey model for the overlay and tests."""
     bodies = _survey_bodies(scan_items, body_signals)
+    # Scan rows are newest-first. Highlight the newest planet even when FSS
+    # has already filled the system count and every scanned body is visible.
+    latest_scan = next((row for row in scan_items or []
+                        if not row.get('is_star') and row.get('planet_class')), None)
+
+    def is_latest_scan(body):
+        return bool(latest_scan and _body_matches(
+            body, latest_scan.get('body_id'), latest_scan.get('name'),
+        ))
     notable_rows = build_notable_body_rows(scan_items, min_notable_value, palette)
     scanned_by_id = {str(row.get('body_id')): row for row in scan_items or [] if row.get('body_id') is not None}
     scanned_by_name = {str(row.get('name') or '').casefold(): row for row in scan_items or []}
@@ -277,11 +286,9 @@ def build_survey_model(system_name, scan_items, focused_body_id=None, focused_bo
         if focused is None:
             return None
         focused.update(_body_visual_meta(focused, system_name))
+        focused['recent_scan'] = is_latest_scan(focused)
         focused_notable = notable_by_id.get(str(focused.get('body_id'))) if focused.get('body_id') is not None else None
         focused_notable = focused_notable or notable_by_name.get(str(focused.get('name') or '').casefold())
-        has_surface_work = bool(_safe_int(focused.get('bio_count')) or _safe_int(focused.get('geo_count')) or _safe_int(focused.get('mining_count')) or focused_notable or sampling)
-        if not has_surface_work:
-            return None
         lo, hi = _body_value_range(focused)
         return {'mode': 'body', 'system': system_name or '', 'body': focused, 'body_display': _body_display_name(focused.get('name'), system_name, focused.get('planet_class'), focused.get('terraformable')), 'rows': _body_detail_rows(focused), 'sampling': sampling, 'min_value': lo, 'max_value': hi, 'notable': focused_notable, 'notable_rows': [], 'scanned': _safe_int(scanned), 'total': _safe_int(total), 'total_known': bool(total_known), 'dss_stats': dss_stats or {}}
     rows = []
@@ -294,19 +301,18 @@ def build_survey_model(system_name, scan_items, focused_body_id=None, focused_bo
         needs_dss = not bool(body.get('dss_complete'))
         notable = notable_by_id.get(str(body.get('body_id'))) if body.get('body_id') is not None else None
         notable = notable or notable_by_name.get(str(body.get('name') or '').casefold())
-        priority = bool(bio_count or geo_count or mining_count or notable)
-        if not show_all_bodies and (not priority):
-            continue
+        priority = bool(bio_count or geo_count or mining_count or body.get('landable') or notable)
+        recent_scan = is_latest_scan(body)
         if notable:
             represented_notable.add((str(notable.get('body_id')), str(notable.get('name') or '').casefold()))
         lo, hi = _body_value_range(body)
-        rows.append({'name': body.get('name') or 'Unknown body', 'display_name': _body_display_name(body.get('name'), system_name, body.get('planet_class'), body.get('terraformable')), **_body_visual_meta(body, system_name), 'planet_class': body.get('planet_class') or '', 'terraformable': bool(body.get('terraformable')), 'bio_count': bio_count, 'geo_count': geo_count, 'mining_count': mining_count, 'complete': complete, 'bio_complete': bool(bio_count and complete >= bio_count), 'needs_dss': needs_dss, 'dss_probes_used': body.get('dss_probes_used'), 'dss_efficiency_target': body.get('dss_efficiency_target'), 'dss_efficiency_met': body.get('dss_efficiency_met'), 'min_value': lo, 'max_value': hi, 'first_footfall': bool(body.get('first_footfall')), 'landable': bool(body.get('landable')), 'landable_known': 'landable' in body and body.get('landable') is not None, 'gravity_g': body.get('gravity_g'), 'notable': notable, 'priority': priority, 'bio_details': [detail for detail in _body_detail_rows(body) if detail.get('kind') not in PREDICTED_KINDS]})
-    rows.sort(key=lambda row: (bool(row['bio_complete']), not bool(row['bio_count'] or row['geo_count'] or row['mining_count']), not bool(row['bio_count']), row['name']))
+        rows.append({'body_id': body.get('body_id'), 'name': body.get('name') or 'Unknown body', 'display_name': _body_display_name(body.get('name'), system_name, body.get('planet_class'), body.get('terraformable')), **_body_visual_meta(body, system_name), 'planet_class': body.get('planet_class') or '', 'terraformable': bool(body.get('terraformable')), 'bio_count': bio_count, 'geo_count': geo_count, 'mining_count': mining_count, 'complete': complete, 'bio_complete': bool(bio_count and complete >= bio_count), 'needs_dss': needs_dss, 'dss_probes_used': body.get('dss_probes_used'), 'dss_efficiency_target': body.get('dss_efficiency_target'), 'dss_efficiency_met': body.get('dss_efficiency_met'), 'min_value': lo, 'max_value': hi, 'first_footfall': bool(body.get('first_footfall')), 'landable': bool(body.get('landable')), 'landable_known': 'landable' in body and body.get('landable') is not None, 'gravity_g': body.get('gravity_g'), 'notable': notable, 'priority': priority, 'expanded': bool(show_all_bodies and not priority), 'recent_scan': recent_scan, 'scan_timestamp': body.get('scan_timestamp'), 'bio_details': [detail for detail in _body_detail_rows(body) if detail.get('kind') not in PREDICTED_KINDS]})
+    rows.sort(key=lambda row: (not row['recent_scan'], bool(row['bio_complete']), not bool(row['bio_count'] or row['geo_count'] or row['mining_count'] or row['landable']), not bool(row['bio_count']), row['name']))
     remaining_notable = [row for row in notable_rows if (str(row.get('body_id')), str(row.get('name') or '').casefold()) not in represented_notable]
     scan_in_progress = bool(total_known and _safe_int(total) > 0 and (_safe_int(scanned) < _safe_int(total)))
     if not rows and (not remaining_notable) and (not sampling):
         return None
-    return {'mode': 'system', 'system': system_name or '', 'rows': rows, 'scope': 'all' if show_all_bodies else 'priority', 'notable_rows': remaining_notable, 'sampling': sampling, 'scanned': _safe_int(scanned), 'total': _safe_int(total), 'total_known': bool(total_known), 'notable_count': len(notable_rows), 'scan_in_progress': scan_in_progress, 'dss_stats': dss_stats or {}}
+    return {'mode': 'system', 'system': system_name or '', 'rows': rows, 'scope': 'all' if show_all_bodies else 'compact', 'notable_rows': remaining_notable, 'sampling': sampling, 'scanned': _safe_int(scanned), 'total': _safe_int(total), 'total_known': bool(total_known), 'notable_count': len(notable_rows), 'scan_in_progress': scan_in_progress, 'dss_stats': dss_stats or {}}
 
 def _survey_render_key(model):
     """Key only pixels the Survey Operations renderer can actually change."""
@@ -330,11 +336,13 @@ def _survey_render_key(model):
     common = (model.get('mode'), model.get('system'), sampling_key, model.get('scope'), repr(model.get('dss_stats') or {}), _safe_int(model.get('scanned')), _safe_int(model.get('total')), bool(model.get('total_known')), tuple((notable_key(row) for row in model.get('notable_rows') or ())))
     if model.get('mode') == 'body':
         body = model.get('body') or {}
-        return common + (model.get('body_display') or body.get('name'), body.get('designation'), body.get('class_label'), body.get('atmosphere_label'), body.get('ring_count'), _safe_int(body.get('bio_count')), _safe_int(body.get('organic_complete_count')), _safe_int(body.get('geo_count')), _safe_int(body.get('mining_count')), bool(body.get('dss_complete')), body.get('dss_probes_used'), body.get('dss_efficiency_target'), body.get('dss_efficiency_met'), bool(body.get('first_footfall')), body.get('landable') if 'landable' in body else None, body.get('gravity_g'), notable_key(model.get('notable')) if model.get('notable') else None, tuple((detail_key(row) for row in model.get('rows') or ())), model.get('min_value'), model.get('max_value'))
+        return common + (model.get('body_display') or body.get('name'), body.get('designation'), body.get('class_label'), body.get('atmosphere_label'), body.get('ring_count'), _safe_int(body.get('bio_count')), _safe_int(body.get('organic_complete_count')), _safe_int(body.get('geo_count')), _safe_int(body.get('mining_count')), bool(body.get('dss_complete')), body.get('dss_probes_used'), body.get('dss_efficiency_target'), body.get('dss_efficiency_met'), bool(body.get('first_footfall')), body.get('landable') if 'landable' in body else None, body.get('gravity_g'), notable_key(model.get('notable')) if model.get('notable') else None, tuple((detail_key(row) for row in model.get('rows') or ())), model.get('min_value'), model.get('max_value'), bool(body.get('recent_scan')), body.get('scan_timestamp'))
     row_keys = []
     for row in model.get('rows') or ():
-        row_keys.append((row.get('display_name') or row.get('name'), row.get('designation'), row.get('class_label'), row.get('atmosphere_label'), row.get('ring_count'), bool(row.get('priority')), _safe_int(row.get('bio_count')), _safe_int(row.get('geo_count')), _safe_int(row.get('mining_count')), _safe_int(row.get('complete')), bool(row.get('bio_complete')), bool(row.get('needs_dss')), bool(row.get('landable_known')), bool(row.get('first_footfall')), row.get('dss_probes_used'), row.get('dss_efficiency_target'), row.get('dss_efficiency_met'), bool(row.get('landable')) if row.get('landable_known') else None, row.get('min_value'), row.get('max_value'), notable_key(row.get('notable')) if row.get('notable') else None, tuple((detail_key(detail) for detail in row.get('bio_details') or ()))))
-    return common + (tuple(row_keys), _safe_int(model.get('notable_count')), bool(model.get('scan_in_progress')))
+        row_keys.append((row.get('body_id'), row.get('display_name') or row.get('name'), row.get('designation'), row.get('class_label'), row.get('atmosphere_label'), row.get('ring_count'), bool(row.get('priority')), _safe_int(row.get('bio_count')), _safe_int(row.get('geo_count')), _safe_int(row.get('mining_count')), _safe_int(row.get('complete')), bool(row.get('bio_complete')), bool(row.get('needs_dss')), bool(row.get('landable_known')), bool(row.get('first_footfall')), row.get('dss_probes_used'), row.get('dss_efficiency_target'), row.get('dss_efficiency_met'), bool(row.get('landable')) if row.get('landable_known') else None, row.get('min_value'), row.get('max_value'), notable_key(row.get('notable')) if row.get('notable') else None, tuple((detail_key(detail) for detail in row.get('bio_details') or ()))))
+    recent_keys = tuple((bool(row.get('recent_scan')), row.get('scan_timestamp'))
+                        for row in model.get('rows') or ())
+    return common + (tuple(row_keys), _safe_int(model.get('notable_count')), bool(model.get('scan_in_progress')), recent_keys)
 
 def _signal_node_states(signal_count, details=None, complete_count=0):
     """Return one truthful visual state for each biological signal slot.
