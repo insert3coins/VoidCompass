@@ -24,6 +24,11 @@ let atlasRequested = false;
 let lastClientError = "";
 let bootActive = true;
 let bootHideTimer = 0;
+// Keep the finished deck visible long enough to see the lens and a field note.
+const BOOT_READY_HOLD_MS = 5000;
+let bootReadyAt = 0;
+let bootHoldComplete = false;
+let bootHoldTimer = 0;
 let lastBootStage = "";
 let bootStageTransitionTimer = 0;
 let dashboardRenderQueued = false;
@@ -535,6 +540,10 @@ function renderBoot(state) {
   byId("boot-loader").hidden = commissioning;
   byId("commissioning").hidden = !commissioning;
   if (commissioning) {
+    window.clearTimeout(bootHoldTimer);
+    bootHoldTimer = 0;
+    bootReadyAt = 0;
+    bootHoldComplete = false;
     bootRoot.hidden = false;
     window.clearTimeout(bootHideTimer);
     bootHideTimer = 0;
@@ -593,6 +602,24 @@ function renderBoot(state) {
     }
   }
   if (!boot.active) {
+    if (!bootReadyAt && !bootHoldComplete) bootReadyAt = performance.now();
+    const remaining = bootHoldComplete ? 0 : BOOT_READY_HOLD_MS - (performance.now() - bootReadyAt);
+    if (remaining > 0) {
+      bootRoot.hidden = false;
+      document.body.classList.remove("ready");
+      byId("app").setAttribute("aria-hidden", "true");
+      text("boot-status", "FLIGHT DECK READY");
+      text("boot-detail", "Stand by for live handoff");
+      if (!bootHoldTimer) {
+        bootHoldTimer = window.setTimeout(() => {
+          bootHoldTimer = 0;
+          renderBoot(model);
+        }, Math.ceil(remaining));
+      }
+      return;
+    }
+    bootReadyAt = 0;
+    bootHoldComplete = true;
     document.body.classList.add("ready");
     byId("app").setAttribute("aria-hidden", "false");
     if (!bootHideTimer) {
@@ -602,6 +629,10 @@ function renderBoot(state) {
       }, 720);
     }
   } else {
+    window.clearTimeout(bootHoldTimer);
+    bootHoldTimer = 0;
+    bootReadyAt = 0;
+    bootHoldComplete = false;
     bootRoot.hidden = false;
     window.clearTimeout(bootHideTimer);
     bootHideTimer = 0;

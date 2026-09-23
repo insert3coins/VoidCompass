@@ -1,16 +1,17 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.4.8.4 // Navigation Clarity
-**Release Date:** 2026-Sep-22
+**Release Date:** 2026-Sep-23
 
 * Strengthened the next-system readout with star class, scoopability and explicit jump/stop progress beside the complete route rail.
 * Added route-update, route-clear and arrival feedback with smooth next-target promotion; routine distance updates do not retrigger notifications.
 * Added labelled fuel-endurance estimates from recent fuel use, low-endurance caution and an explicit unknown state. These are not exact next-jump fuel or range calculations.
 * Surface operations emphasise the context rail without rearranging the HUD. Both layouts reserve a small status row and retain reduced-motion support.
-* Redesigned startup around a luminous optical core, real-progress orbital ring and horizontal stage sequence, with compact layouts and reduced-motion support. Startup/handoff timing is unchanged.
+* Redesigned startup around a luminous optical core, real-progress orbital ring and horizontal stage sequence, with compact layouts and reduced-motion support. Once the app is ready, the screen remains for five seconds so the lens and facts can be seen.
 * Added a local starfield inspired by the Twitch overlay: layered drifting stars, a galactic band, subtle twinkle and theme-tinted nebula haze. Animation stops after handoff; reduced motion keeps a static sky.
-* The boot lens now acts as a silent exploration companion with animated chat bubbles and ten shuffled offline Elite facts. The editable fact deck avoids repeats until all entries have appeared and never delays startup.
+* The boot lens now acts as a silent exploration companion with animated chat bubbles and a shuffled offline Elite fact deck. The editable deck avoids repeats until all entries have appeared.
 * Random decorative lens activity adds focus shifts, theme-coloured pulses and expanding rings between facts, without generating journal events or changing progress. It pauses when hidden or reduced motion is enabled and stops at handoff. Now with random elite facst!
+* A failed overlay WebView navigation now gets a prompt, bounded page retry. The existing watchdog remains as fallback if the page still cannot render.
 
 ## Earlier releases
 

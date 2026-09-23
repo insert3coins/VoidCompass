@@ -405,6 +405,8 @@ class _WindowController:
         self.last_visible = None
         self.last_topmost_refresh = 0.0
         self.reload_revision = 0
+        self.navigation_retries = 0
+        self.last_navigation_retry_at = 0.0
 
     def apply(self, payload, presentation_held=False, content_ready=True):
         payload = payload if isinstance(payload, dict) else {}
@@ -622,6 +624,21 @@ class _OverlayHost:
                     if spec.get("shutdown"):
                         controller.hide()
                         continue
+                    if (not spec.get("content_ready") and
+                            bool(getattr(controller.window, "_voidcompass_navigation_failed", False))):
+                        now = time.monotonic()
+                        if (controller.navigation_retries < 2 and
+                                now - controller.last_navigation_retry_at >= 1.5):
+                            controller.window._voidcompass_navigation_failed = False
+                            controller.hide()
+                            controller.navigation_retries += 1
+                            controller.last_navigation_retry_at = now
+                            print(f"Overlay navigation retry: {overlay_id} ({controller.navigation_retries})", flush=True)
+                            controller.window.load_url(self.page_url(
+                                overlay_id, spec.get("template"),
+                            ) + f"&host_retry={controller.navigation_retries}")
+                    elif spec.get("content_ready"):
+                        controller.navigation_retries = 0
                     try:
                         reload_revision = int(spec.get("reload_revision") or 0)
                     except (TypeError, ValueError):

@@ -1,11 +1,14 @@
 """Headless startup presentation checks, without screenshots or a running backend."""
 from pathlib import Path
+import re
 from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
 
 WEB = Path(__file__).resolve().parents[1] / "web"
 SOURCE = (WEB / "dashboard/app.js").read_text(encoding="utf-8")
 RENDER = SOURCE[SOURCE.index("function renderBoot(state)"):SOURCE.index("function renderCommissioning(onboarding)")]
+COMPANION = (WEB / "dashboard/boot-companion.js").read_text(encoding="utf-8")
+FACT_INTERVAL_MS = int(re.search(r"setInterval\(nextFact,\s*(\d+)\)", COMPANION).group(1))
 
 
 def run():
@@ -33,6 +36,8 @@ def run():
             if path == WEB / "dashboard/app.js":
                 route.fulfill(content_type="application/javascript", body="""
                   let model = {}, bootHideTimer = 0, bootStageTransitionTimer = 0, lastBootStage = '';
+                  const BOOT_READY_HOLD_MS = 5000;
+                  let bootReadyAt = 0, bootHoldComplete = false, bootHoldTimer = 0;
                   const byId = id => document.getElementById(id);
                   const number = value => Number(value) || 0;
                   const text = (id, value, fallback = '') => byId(id).textContent = value || fallback;
@@ -82,8 +87,9 @@ def run():
         page.emulate_media(reduced_motion="no-preference")
         page.evaluate("""() => {
           bootTest({boot: {active:false, progress:1}});
-          if (!document.body.classList.contains('ready')) throw Error('Missing handoff');
+          if (document.body.classList.contains('ready')) throw Error('Boot screen vanished immediately');
         }""")
+        page.wait_for_function("document.body.classList.contains('ready')", timeout=6500)
         page.wait_for_function("document.getElementById('boot').hidden")
         ended_draws = page.evaluate("window.bootDraws")
         page.wait_for_timeout(150)
@@ -91,19 +97,29 @@ def run():
         page.emulate_media(reduced_motion="reduce")
         page.clock.install()
         page.evaluate("bootTest({boot:{active:true,progress:0}})")
+        second_activity = page.evaluate("window.bootActivityCount")
         page.wait_for_function("document.getElementById('boot-fact').textContent.length > 0")
+        fact_count = page.evaluate("import('/dashboard/boot-facts.js').then(module => module.BOOT_FACTS.length)")
         ids = {page.locator('#boot-fact').get_attribute('data-fact-id')}
-        for _ in range(9):
-            page.clock.run_for(9000)
+        # The screen was already active earlier in this test, so resume from
+        # an arbitrary point in the current shuffle and cover a full new deck.
+        for _ in range(fact_count * 2):
+            page.clock.run_for(FACT_INTERVAL_MS)
             ids.add(page.locator('#boot-fact').get_attribute('data-fact-id'))
-        assert page.evaluate("window.bootActivityCount") == still_activity, "Reduced motion triggered decorative activity"
-        assert len(ids) == 10, "Fact deck repeated before all ten entries appeared"
+        assert page.evaluate("window.bootActivityCount") == second_activity, "Reduced motion triggered decorative activity"
+        assert len(ids) == fact_count, "Fact deck did not cover every entry"
         assert page.locator('#boot-fact-previous').is_visible(), "Missing previous chat bubble"
         page.evaluate("bootTest({boot:{active:false,progress:1}})")
+        assert not page.evaluate("document.body.classList.contains('ready')"), "Handoff skipped minimum display"
+        page.clock.run_for(4999)
+        assert not page.evaluate("document.body.classList.contains('ready')"), "Handoff happened before 5 seconds"
+        page.clock.run_for(2)
+        assert page.evaluate("document.body.classList.contains('ready')"), "Handoff did not finish"
         final_fact = page.locator('#boot-fact').text_content()
         page.emulate_media(reduced_motion="no-preference")
         final_activity = page.evaluate("window.bootActivityCount")
         page.clock.run_for(20000)
+        assert page.evaluate("document.body.classList.contains('ready')"), "Repeated render restarted minimum hold"
         assert page.evaluate("window.bootActivityCount") == final_activity, "Decorative activity continued after handoff"
         assert page.locator('#boot-fact').text_content() == final_fact, "Facts continued after startup"
         assert not errors, errors
