@@ -117,51 +117,7 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                     self.assertTrue(all(geometry["spheres"]), geometry)
                     return host_height
 
-                def check_roster(expected_names):
-                    roster = page.evaluate("""() => {
-                      const root = document.querySelector('#survey').getBoundingClientRect();
-                      const content = document.querySelector('#content').getBoundingClientRect();
-                      const roster = document.querySelector('.atlas-roster');
-                      if (!roster) return null;
-                      const bounds = roster.getBoundingClientRect();
-                      const inside = (inner, outer) => inner.top >= outer.top - 1
-                        && inner.bottom <= outer.bottom + 1
-                        && inner.left >= outer.left - 1
-                        && inner.right <= outer.right + 1;
-                      return {
-                        first: document.querySelector('#content').firstElementChild === roster,
-                        inside: inside(bounds, content) && inside(bounds, root),
-                        cells: [...roster.querySelectorAll('.atlas-roster-body')].map(cell => {
-                          const orb = cell.querySelector('.planet-orb');
-                          const rect = orb?.getBoundingClientRect();
-                          const cellRect = cell.getBoundingClientRect();
-                          const style = getComputedStyle(cell);
-                          const orbStyle = orb && getComputedStyle(orb);
-                          return {
-                            name: cell.dataset.bodyName,
-                            orbs: cell.querySelectorAll('.planet-orb').length,
-                            visible: Boolean(rect) && rect.width >= 8 && rect.height >= 8
-                              && style.display !== 'none' && style.visibility !== 'hidden'
-                              && Number(style.opacity) > 0
-                              && orbStyle.display !== 'none'
-                              && orbStyle.visibility !== 'hidden'
-                              && Number(orbStyle.opacity) > 0
-                              && inside(rect, cellRect) && inside(rect, bounds)
-                              && inside(rect, content) && inside(rect, root),
-                          };
-                        }),
-                      };
-                    }""")
-                    self.assertIsNotNone(roster)
-                    self.assertTrue(roster["first"], roster)
-                    self.assertTrue(roster["inside"], roster)
-                    self.assertEqual([cell["name"] for cell in roster["cells"]],
-                                     expected_names, roster)
-                    self.assertTrue(all(cell["orbs"] == 1 and cell["visible"]
-                                        for cell in roster["cells"]), roster)
-
-                def collect_pages(expected_total, max_height=None, geometry_each_page=True,
-                                  roster_names=None):
+                def collect_pages(expected_total, max_height=None, geometry_each_page=True):
                     """Walk the real page controller, keeping the host at its measured size."""
                     state = page.evaluate("window.VoidCompassSurveyAtlas.getState()")
                     self.assertEqual(state["total"], expected_total, state)
@@ -175,8 +131,7 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                             height = check_geometry()
                             if max_height is not None:
                                 self.assertLessEqual(height, max_height, current)
-                        if roster_names is not None:
-                            check_roster(roster_names)
+                        self.assertEqual(page.locator(".atlas-roster").count(), 0)
                         view = page.evaluate("""() => ({
                           banner: document.querySelector('.atlas-page-banner')?.textContent || '',
                           cards: [...document.querySelectorAll('.target')].map(card => ({
@@ -184,6 +139,7 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                             designation: card.querySelector('.target-name')?.textContent,
                             kind: card.querySelector('.planet-orb')?.dataset.planetKind || null,
                             orbCount: card.querySelectorAll('.planet-orb').length,
+                            orbWidth: card.querySelector('.planet-orb')?.getBoundingClientRect().width || 0,
                             ringed: Boolean(card.querySelector('.planet-orb.has-rings')),
                             details: [...card.querySelectorAll('.biological-name')]
                               .map(detail => detail.textContent),
@@ -263,6 +219,7 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                         self.assertEqual(len(matches), 1, matches)
                         self.assertEqual(matches[0]["kind"], expected_kind)
                         self.assertEqual(matches[0]["orbCount"], 1)
+                        self.assertLessEqual(matches[0]["orbWidth"], 32)
                         self.assertEqual(matches[0]["ringed"], index == 4)
                 for scale in (1.5, 2):
                     with self.subTest(mode="system", text_scale=scale):
@@ -299,7 +256,7 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 self.assertGreater(state["pages"], 1, state)
                 crowded_names = [f"B {index}" for index in range(1, 25)]
                 crowded_cards = collect_pages(
-                    len(crowded_rows), max_height=700, roster_names=crowded_names,
+                    len(crowded_rows), max_height=700,
                 )
                 self.assertEqual([card["designation"] for card in crowded_cards],
                                  crowded_names)
@@ -352,7 +309,6 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 stress_names = [f"C {index}" for index in range(1, 102)]
                 stress_cards = collect_pages(
                     101, max_height=700, geometry_each_page=False,
-                    roster_names=stress_names,
                 )
                 self.assertEqual([card["designation"] for card in stress_cards],
                                  stress_names)

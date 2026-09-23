@@ -60,8 +60,6 @@ class StartupPresentation:
 class HtmlDashboardRuntime:
     """Own the private server, native WebView2 window and command queue."""
 
-    _ready_emitted = True
-
     def __init__(self, root, config, app_version):
         self.root = root
         self.config = config
@@ -73,6 +71,8 @@ class HtmlDashboardRuntime:
         self._commands = queue.SimpleQueue()
         self._command_job = None
         self._command_pump_last_tick = time.monotonic()
+        # The host process starting does not mean its boot page has painted.
+        self._ready_emitted = False
         self._host_watchdog_job = None
         self._host_exit_seen_at = 0.0
         self._host_log = None
@@ -283,6 +283,9 @@ class HtmlDashboardRuntime:
             except Exception:
                 pass
             return True
+        if action in {"boot_presented", "boot_handoff_complete"}:
+            self._commands.put(dict(payload))
+            return True
         if action not in {
             "open", "copy_next", "set_theme", "rebuild_cache",
             "open_screenshots", "open_logs", "quit",
@@ -391,7 +394,16 @@ class HtmlDashboardRuntime:
                     break
                 action = str(payload.get("action") or "").strip().casefold()
                 try:
-                    if action in {"onboarding_submit", "onboarding_cancel"}:
+                    if action == "boot_presented":
+                        self._ready_emitted = True
+                        self._write_host_log("Browser boot frame presented")
+                        if app is not None:
+                            app._maybe_complete_startup_presentation()
+                    elif action == "boot_handoff_complete":
+                        if app is not None and not self._boot.get("active"):
+                            self._write_host_log("Browser dashboard handoff complete")
+                            app._complete_startup_overlay_handoff()
+                    elif action in {"onboarding_submit", "onboarding_cancel"}:
                         self._handle_commissioning_command(payload)
                     elif app is not None:
                         app.handle_html_dashboard_command(payload)

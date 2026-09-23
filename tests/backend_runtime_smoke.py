@@ -79,6 +79,9 @@ with tempfile.TemporaryDirectory() as folder:
                 result=app._html_workspace(page)
                 assert result.get('ready'), (page,result.get('error'))
             app._finish_startup_presentation()
+            assert runtime._voidcompass_startup_presentation_held
+            assert runtime._voidcompass_html_overlay_runtime.server._presentation_held
+            app._complete_startup_overlay_handoff()
             assert app.hud._html_window_payload()['visible']
             assert app.hud._html_last_model['window']['visible']
             assert not runtime._voidcompass_startup_presentation_held

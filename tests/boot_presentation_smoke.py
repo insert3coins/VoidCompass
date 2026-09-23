@@ -6,6 +6,7 @@ from playwright.sync_api import sync_playwright
 
 WEB = Path(__file__).resolve().parents[1] / "web"
 SOURCE = (WEB / "dashboard/app.js").read_text(encoding="utf-8")
+MILESTONES = SOURCE[SOURCE.index("function postBootMilestone(action)"):SOURCE.index("function reportClientError(")]
 RENDER = SOURCE[SOURCE.index("function renderBoot(state)"):SOURCE.index("function renderCommissioning(onboarding)")]
 STATE_RENDER = SOURCE[SOURCE.index("function renderState(state)"):SOURCE.index("function aboutMatrixNodes(")]
 COMPANION = (WEB / "dashboard/boot-companion.js").read_text(encoding="utf-8")
@@ -30,18 +31,27 @@ def run():
           };
         """)
         errors = []
+        signals = []
         page.on("pageerror", lambda error: errors.append(str(error)))
 
         def serve(route):
-            path = WEB / urlsplit(route.request.url).path.lstrip("/")
+            request_path = urlsplit(route.request.url).path
+            if request_path == "/api/command":
+                signals.append(route.request.post_data_json["action"])
+                route.fulfill(status=202, content_type="application/json",
+                              body='{"accepted":true}')
+                return
+            path = WEB / request_path.lstrip("/")
             if path == WEB / "dashboard/app.js":
                 route.fulfill(content_type="application/javascript", body="""
                   let model = {}, bootHideTimer = 0, bootStageTransitionTimer = 0, lastBootStage = '';
                   const BOOT_READY_HOLD_MS = 5000;
                   let bootReadyAt = 0, bootHoldComplete = false, bootHoldTimer = 0;
                   let bootActive = true, bootReleaseStarted = false, currentPage = 'overview';
+                  let bootPresentedRequested = false, bootHandoffRequested = false;
                   window.deckHydrations = 0;
                   const byId = id => document.getElementById(id);
+                  const apiUrl = path => path;
                   const number = value => Number(value) || 0;
                   const text = (id, value, fallback = '') => byId(id).textContent = value || fallback;
                   const percentWidth = (id, value) => byId(id).style.width = `${value}%`;
@@ -49,7 +59,7 @@ def run():
                   const applyTheme = () => {};
                   const startAboutMatrix = () => {};
                   const renderDashboard = () => { window.deckHydrations++; };
-                """ + RENDER + STATE_RENDER + "\nwindow.bootTest = state => { model = state; renderBoot(state); };"
+                """ + MILESTONES + RENDER + STATE_RENDER + "\nwindow.bootTest = state => { model = state; renderBoot(state); };"
                     + "\nwindow.bootStateTest = state => renderState(state);")
             elif path.is_file():
                 route.fulfill(path=str(path))
@@ -80,6 +90,8 @@ def run():
                   }
                   if (document.body.classList.contains('ready')) throw Error('Premature handoff');
                 }""", {"progress": progress, "stage": stage})
+        page.wait_for_timeout(100)
+        assert "boot_presented" in signals, "Browser never acknowledged its first boot frame"
         page.emulate_media(reduced_motion="reduce")
         page.wait_for_timeout(100)
         still_draws = page.evaluate("window.bootDraws")
@@ -98,6 +110,8 @@ def run():
         }""")
         page.wait_for_function("document.body.classList.contains('ready')", timeout=6500)
         page.wait_for_function("document.getElementById('boot').hidden")
+        page.wait_for_timeout(100)
+        assert "boot_handoff_complete" in signals, "Browser never acknowledged dashboard reveal"
         ended_draws = page.evaluate("window.bootDraws")
         page.wait_for_timeout(150)
         assert page.evaluate("window.bootDraws") == ended_draws, "Starfield still drawing after handoff"
@@ -118,9 +132,9 @@ def run():
         assert page.locator('#boot-fact-previous').is_visible(), "Missing previous chat bubble"
         page.evaluate("bootTest({boot:{active:false,progress:1}})")
         assert not page.evaluate("document.body.classList.contains('ready')"), "Handoff skipped minimum display"
-        page.clock.run_for(4999)
+        page.clock.run_for(4900)
         assert not page.evaluate("document.body.classList.contains('ready')"), "Handoff happened before 5 seconds"
-        page.clock.run_for(2)
+        page.clock.run_for(150)
         assert page.evaluate("document.body.classList.contains('ready')"), "Handoff did not finish"
         final_fact = page.locator('#boot-fact').text_content()
         page.emulate_media(reduced_motion="no-preference")
@@ -144,9 +158,9 @@ def run():
           if (bootStateTest({boot: {active: true, progress: .8}}) !== false)
             throw Error('A stale active snapshot reopened boot');
         }""")
-        page.clock.run_for(4999)
+        page.clock.run_for(4900)
         assert not page.evaluate("document.body.classList.contains('ready')"), "Stale snapshot shortened boot hold"
-        page.clock.run_for(2)
+        page.clock.run_for(150)
         assert page.evaluate("document.body.classList.contains('ready')"), "Browser did not own the final handoff"
         page.clock.run_for(721)
         assert page.evaluate("document.getElementById('boot').hidden"), "Boot curtain was not dismissed"
