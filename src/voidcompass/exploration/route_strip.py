@@ -7,6 +7,7 @@ for legible dots. Modeled on SrvSurvey's PlotJumpInfo pip plotter.
 """
 
 import math
+from voidcompass.exploration.route_stars import is_scoopable
 
 SCOOPABLE_CLASSES = "KGBFOAM"
 
@@ -72,7 +73,7 @@ def build_route_hops(current_coords, route_list, nav_route_entries, current_sys=
         hops.append({
             "name": name,
             "dist": _distance(prev_coords, coords),
-            "scoopable": star_class.upper() in SCOOPABLE_CLASSES,
+            "scoopable": is_scoopable(star_class),
             "star_class": star_class,
         })
         if coords:
@@ -170,7 +171,7 @@ def build_route_track(current_coords, route_list, nav_route_entries, current_sys
             hops.append({
                 "name": route[route_index],
                 "dist": _distance(previous_coords, coords),
-                "scoopable": star_class.upper() in SCOOPABLE_CLASSES,
+                "scoopable": is_scoopable(star_class),
                 "star_class": star_class,
                 "completed": route_idx >= 0 and route_index <= route_idx,
                 "current": route_idx >= 0 and route_index == route_idx,

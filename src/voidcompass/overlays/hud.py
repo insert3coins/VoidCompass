@@ -102,7 +102,7 @@ class TacticalHUD:
             "state": {
                 "label": "FLIGHT", "color": str(theme.dim), "motion": "flight",
             },
-            "system": {"name": "---", "region": "REGION UNKNOWN", "arrival_epoch": 0},
+            "system": {"name": "---", "region": "REGION UNKNOWN", "arrival_epoch": 0, "star_class": ""},
             "route": {"header": "NO ACTIVE ROUTE", "hops": []},
             "survey": {
                 "label": "COUNT UNKNOWN", "state": "unknown",
@@ -1105,6 +1105,7 @@ class TacticalHUD:
             "name": current_display,
             "region": region_text,
             "arrival_epoch": float(nav_context.get("system_arrival_epoch") or 0.0),
+            "star_class": str(nav_context.get("current_star_class") or "").strip()[:40],
         }
 
         route = self._route_presentation(
@@ -1126,6 +1127,7 @@ class TacticalHUD:
                 "current": bool(hop.get("current")),
                 "next": bool(hop.get("next")),
                 "scoopable": hop.get("scoopable"),
+                "star_class": str(hop.get("star_class") or "").strip()[:40],
             })
         progress_percent = 100.0 if route.get("complete") else 0.0
         if html_hops and not route.get("complete"):

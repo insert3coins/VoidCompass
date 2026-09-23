@@ -495,7 +495,6 @@ class MainDashboard(
         }
         self._normalize_scan_item(item)
         self.scan_items.insert(0, item)
-        self.scan_items = self.scan_items[:60]
         self.scan_items_by_id[body_id] = item
         return item
 
@@ -4969,6 +4968,14 @@ class MainDashboard(
         next_coords = None
         route = list(getattr(self, "route_list", None) or [])
         entries = getattr(self, "nav_route_entries", None) or []
+        # Prefer Frontier's arrival star for the current route system over a
+        # later Scan event that may describe a different star in this system.
+        current_star_class = next((
+            str(entry.get("StarClass") or "").strip()
+            for entry in entries if isinstance(entry, dict)
+            and str(entry.get("StarSystem") or "").strip().casefold() == current.casefold()
+            and entry.get("StarClass")
+        ), "") or str(getattr(self, "star_class", "") or "").strip()
         route_idx = -1
         route_remaining = None
         waypoint_manager = getattr(self, "waypoint_manager", None)
@@ -5196,6 +5203,7 @@ class MainDashboard(
             "route_mode": route_mode,
             "previous": previous,
             "current": current,
+            "current_star_class": current_star_class,
             "next": next_name or "---",
             "prev_distance": self._format_hud_distance(previous_coords, self.current_coords),
             "next_distance": self._format_hud_distance(self.current_coords, next_coords),

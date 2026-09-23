@@ -6,8 +6,8 @@ const $ = (id) => document.getElementById(id);
 
 const dom = Object.fromEntries([
   'hud', 'state-canvas', 'state-label', 'vehicle-display', 'vehicle-image',
-  'region-label', 'system-clock', 'current-system',
-  'route-title', 'route-target', 'route-target-label', 'route-next', 'route-distance', 'route-progress',
+  'region-label', 'system-clock', 'current-system', 'current-star-orb', 'current-star-label',
+  'route-block', 'route-title', 'route-target', 'route-target-label', 'route-star-orb', 'route-next', 'route-distance', 'route-progress',
   'route-pips', 'route-origin', 'route-destination', 'survey-block', 'survey-title',
   'route-star', 'route-feedback', 'route-fuel',
   'survey-title-text', 'survey-state', 'survey-mode', 'survey-remaining',
@@ -32,11 +32,23 @@ let healthPollActive = false;
 let lastRouteSignature = '';
 let routeMemory = null;
 let routeFeedbackTimer = null;
+let routeNoticeTimer = null;
+const osMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 function routeFeedback(message) {
   clearTimeout(routeFeedbackTimer);
+  clearTimeout(routeNoticeTimer);
   dom['route-feedback'].textContent = message;
   briefHighlight(dom['route-feedback'], 'system-arrival');
+  const routeBlock = dom['route-block'];
+  routeBlock.classList.remove('route-notice');
+  routeBlock.dataset.notice = message.startsWith('ARRIVED') ? 'arrived'
+    : message === 'ROUTE CLEARED' ? 'cleared' : 'updated';
+  if (!dom.hud.classList.contains('reduced-motion')) {
+    void routeBlock.offsetWidth;
+    routeBlock.classList.add('route-notice');
+    routeNoticeTimer = setTimeout(() => routeBlock.classList.remove('route-notice'), 900);
+  }
   routeFeedbackTimer = setTimeout(() => {
     dom['route-feedback'].textContent = '';
     routeFeedbackTimer = null;
@@ -73,6 +85,32 @@ function themedStateColour(value, theme) {
     '#ffd166': theme.yellow,
     '#7d8891': theme.dim,
   })[original.toLowerCase()] || original;
+}
+
+// Frontier supplies a class for the arrival star, not an image or a complete
+// inventory of every star in the system. Keep unknown classes visually neutral.
+function starFamily(value) {
+  const code = String(value || '').trim().toUpperCase();
+  if (!code) return 'unknown';
+  if (['H', 'BH', 'SUPERMASSIVEBLACKHOLE'].includes(code)) return 'blackhole';
+  if (['N', 'NS'].includes(code)) return 'neutron';
+  if (code.startsWith('D')) return 'dwarf';
+  if (code === 'TTS') return 'tauri';
+  if (code === 'AEBE') return 'a';
+  if (code.startsWith('W')) return 'wolf';
+  if (code.startsWith('C')) return 'carbon';
+  if (code.startsWith('S')) return 'm';
+  if (code === 'X') return 'exotic';
+  const primary = code[0].toLowerCase();
+  return 'obafgkmlty'.includes(primary) ? primary : 'unknown';
+}
+
+function renderStarOrb(element, starClass) {
+  const family = starFamily(starClass);
+  const className = `star-orb star-${family}`;
+  const title = starClass ? `Arrival star class ${starClass}` : 'Arrival star class unknown';
+  if (element.className !== className) element.className = className;
+  if (element.title !== title) element.title = title;
 }
 
 function vehiclePresentation(state = {}) {
@@ -197,6 +235,7 @@ function renderRoute(route = {}, systemName = '') {
   const hops = Array.isArray(route.hops) ? route.hops : [];
   const names = JSON.stringify(hops.map(hop => hop.name));
   const present = Boolean(route.active || route.complete || hops.length);
+  dom['route-block'].dataset.routeState = route.complete ? 'complete' : present ? 'active' : 'empty';
   const arrived = Boolean(routeMemory && systemName && routeMemory.systemName
     && systemName !== routeMemory.systemName);
   if (routeMemory) {
@@ -206,11 +245,16 @@ function renderRoute(route = {}, systemName = '') {
   }
   routeMemory = {names, present, source: route.source, systemName};
   const star = route.next_star || {};
-  const classKnown = Boolean(star.star_class && route.active && !route.complete);
+  const nextHop = hops.find(hop => hop.next);
+  const starClass = route.complete ? (hops.at(-1)?.star_class || '')
+    : route.active ? (star.star_class || nextHop?.star_class || '') : '';
+  const scoopable = star.star_class ? star.scoopable : nextHop?.scoopable;
+  renderStarOrb(dom['route-star-orb'], starClass);
+  const classKnown = Boolean(starClass && route.active && !route.complete);
   dom['route-star'].textContent = classKnown
-    ? `${star.star_class} · ${star.scoopable === true ? 'SCOOPABLE' : star.scoopable === false ? 'NON-SCOOP' : 'SCOOP UNKNOWN'}`
+    ? `${starClass} · ${scoopable === true ? 'SCOOPABLE' : scoopable === false ? 'NON-SCOOP' : 'SCOOP UNKNOWN'}`
     : route.active && !route.complete ? 'STAR UNKNOWN' : '';
-  dom['route-star'].style.color = star.scoopable === false ? 'var(--yellow)' : 'var(--accent)';
+  dom['route-star'].style.color = scoopable === false && classKnown ? 'var(--yellow)' : 'var(--accent)';
   const endurance = route.fuel_endurance_jumps;
   const estimated = typeof endurance === 'number' && Number.isFinite(endurance) && endurance >= 0;
   dom['route-fuel'].textContent = route.active && !route.complete
@@ -224,7 +268,7 @@ function renderRoute(route = {}, systemName = '') {
     route.header || '', route.next_distance || '', route.distance || '',
     Boolean(route.active), route.origin_current === false ? 'start' : 'current',
     Number(route.progress_percent || 0),
-    hops.map((hop) => [hop.position, hop.completed, hop.current, hop.next, hop.scoopable, hop.name]),
+    hops.map((hop) => [hop.position, hop.completed, hop.current, hop.next, hop.scoopable, hop.star_class, hop.name]),
   ]);
   if (signature === lastRouteSignature) return;
   lastRouteSignature = signature;
@@ -254,13 +298,15 @@ function renderRoute(route = {}, systemName = '') {
   while (host.children.length > hops.length) host.lastElementChild.remove();
   for (const [index, hop] of hops.entries()) {
     const segment = host.children[index] || document.createElement('i');
+    const family = starFamily(hop.star_class);
     segment.className = [
-      'route-segment', hop.completed && 'completed', hop.current && 'current',
+      'route-segment', `star-${family}`, family !== 'unknown' && 'known-star',
+      hop.completed && 'completed', hop.current && 'current',
       hop.next && 'next', hop.scoopable === false && 'unscoopable',
     ].filter(Boolean).join(' ');
     segment.style.left = `${index / hops.length * 100}%`;
     segment.style.width = `${100 / hops.length}%`;
-    segment.title = `${index + 1}. ${hop.name || 'Unknown'}${hop.current ? ' · current' : hop.next ? ' · next' : hop.completed ? ' · completed' : ''}${hop.scoopable === false ? ' · unscoopable' : ''}`;
+    segment.title = `${index + 1}. ${hop.name || 'Unknown'}${hop.current ? ' · current' : hop.next ? ' · next' : hop.completed ? ' · completed' : ''} · ${hop.star_class ? `star class ${hop.star_class}` : 'star class unknown'}${hop.scoopable === false ? ' · unscoopable' : ''}`;
     if (!segment.firstElementChild) {
       const waypoint = document.createElement('b');
       waypoint.setAttribute('aria-hidden', 'true');
@@ -425,8 +471,17 @@ function render(data) {
   hud.classList.toggle('standard', data.layout !== 'expanded');
   hud.classList.toggle('expanded', data.layout === 'expanded');
   hud.classList.toggle('no-crt', !data.effects?.crt);
-  const reducedMotion = Boolean(data.effects?.reduced_motion);
+  const reducedMotion = Boolean(data.effects?.reduced_motion || osMotionPreference.matches);
+  const enteringReducedMotion = reducedMotion && !hud.classList.contains('reduced-motion');
   hud.classList.toggle('reduced-motion', reducedMotion);
+  if (enteringReducedMotion) {
+    for (const className of ['route-arrival', 'system-arrival', 'target-promoted', 'context-attention']) {
+      hud.querySelectorAll(`.${className}`).forEach((node) => node.classList.remove(className));
+    }
+    dom['route-block'].classList.remove('route-notice');
+    hud.classList.remove('state-changing');
+    clearTimeout(routeNoticeTimer);
+  }
   hud.dataset.motion = data.state?.motion || 'flight';
   hud.dataset.state = data.state?.label || 'FLIGHT';
   const vehicle = renderVehicle(data.state, reducedMotion);
@@ -438,7 +493,7 @@ function render(data) {
   const indicatorSignature = `${data.state?.motion || 'flight'}|${data.state?.label || 'FLIGHT'}|${vehicle?.key || 'none'}`;
   dom['state-label'].textContent = data.state?.label || 'FLIGHT';
   if (lastIndicatorSignature && indicatorSignature !== lastIndicatorSignature
-      && !data.effects?.reduced_motion) {
+      && !reducedMotion) {
     hud.classList.remove('state-changing');
     void dom['state-label'].offsetWidth;
     hud.classList.add('state-changing');
@@ -456,7 +511,7 @@ function render(data) {
     color: stateColour,
     energy,
     dynamics: data.state?.dynamics || {},
-    reduced: Boolean(data.effects?.reduced_motion),
+    reduced: reducedMotion,
     visible: data.window?.visible !== false,
     eventSequence: data.state?.event_sequence,
     eventKind: data.state?.event_kind,
@@ -465,6 +520,10 @@ function render(data) {
   if (lastSystemName && system.name && lastSystemName !== system.name) briefHighlight(dom['current-system'], 'system-arrival');
   lastSystemName = system.name || '';
   dom['current-system'].textContent = system.name || '---';
+  const currentStarClass = String(system.star_class || '').trim();
+  renderStarOrb(dom['current-star-orb'], currentStarClass);
+  dom['current-star-label'].textContent = currentStarClass ? `STAR ${currentStarClass.toUpperCase()}` : 'STAR CLASS ?';
+  dom['current-star-label'].title = currentStarClass ? `Known local star class ${currentStarClass}` : 'Local star class unknown';
   dom['region-label'].textContent = system.region || 'REGION UNKNOWN';
   hud.classList.toggle('surface-focus', Boolean(data.context?.surface));
   renderRoute(data.route, system.name || '');
@@ -487,6 +546,9 @@ function render(data) {
   if (attentionText && attentionText !== lastAttentionText) briefHighlight(dom['context-label'], 'context-attention');
   lastAttentionText = attentionText;
   updateClock();
+  // A running CSS transition can outlive a just-enabled reduced-motion rule.
+  // Stop those in-flight effects as well as preventing new ones.
+  if (reducedMotion) hud.getAnimations({subtree: true}).forEach((animation) => animation.cancel());
 }
 
 async function fetchSnapshot() {
@@ -561,6 +623,10 @@ async function start() {
 
 window.addEventListener('beforeunload', () => {
   clearTimeout(routeFeedbackTimer);
+  clearTimeout(routeNoticeTimer);
   if (arrivalTimer) clearInterval(arrivalTimer);
+});
+osMotionPreference.addEventListener('change', () => {
+  if (snapshot) render(snapshot);
 });
 start();

@@ -24,6 +24,8 @@ let atlasRequested = false;
 let lastClientError = "";
 let bootActive = true;
 let bootHideTimer = 0;
+let bootReleaseStarted = false;
+let bootRecoveryPending = false;
 // Keep the finished deck visible long enough to see the lens and a field note.
 const BOOT_READY_HOLD_MS = 5000;
 let bootReadyAt = 0;
@@ -31,7 +33,6 @@ let bootHoldComplete = false;
 let bootHoldTimer = 0;
 let lastBootStage = "";
 let bootStageTransitionTimer = 0;
-let dashboardRenderQueued = false;
 let themeFingerprint = "";
 let pageRequestId = 0;
 let studioSelectedId = "";
@@ -622,7 +623,7 @@ function renderBoot(state) {
     bootHoldComplete = true;
     document.body.classList.add("ready");
     byId("app").setAttribute("aria-hidden", "false");
-    if (!bootHideTimer) {
+    if (!bootRoot.hidden && !bootHideTimer) {
       bootHideTimer = window.setTimeout(() => {
         bootHideTimer = 0;
         if (!model.boot?.active && !model.onboarding?.active) bootRoot.hidden = true;
@@ -3247,35 +3248,35 @@ function renderDashboard(state) {
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
 
-function queueDashboardRender() {
-  if (dashboardRenderQueued) return;
-  dashboardRenderQueued = true;
-  // Give WebView2 two compositor turns to paint the dismissed boot curtain
-  // before hydrating the complete dashboard. This keeps journal catch-up and
-  // overlay creation from being visually mistaken for a frozen handoff.
-  window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-    dashboardRenderQueued = false;
-    if (!model.boot?.active && !model.onboarding?.active) renderDashboard(model);
-  }));
-}
-
 function renderState(state) {
-  model = state || {};
+  const incoming = state || {};
+  // A response fetched before Python stopped booting may arrive after a newer
+  // inactive snapshot. Reject it and let syncSnapshot fetch the current one.
+  if (bootReleaseStarted && incoming.boot?.active && !incoming.onboarding?.active) return false;
+  if (incoming.onboarding?.active) {
+    bootReleaseStarted = false;
+  } else if (!incoming.boot?.active) {
+    bootReleaseStarted = true;
+  }
+  model = incoming;
   applyTheme(model.theme || {});
   document.body.classList.toggle("reduced-motion", Boolean(model.ui?.reduced_motion));
   if (currentPage === "about") startAboutMatrix();
   const nextBootActive = Boolean(model.boot?.active || model.onboarding?.active);
   const leavingBoot = bootActive && !nextBootActive;
   bootActive = nextBootActive;
-  // Boot ownership is deliberately independent. While it is visible, do not
-  // build hidden dashboard lists or start optional renderers underneath it.
+  // Keep startup work out of the active boot phase; the final five-second
+  // handoff hold below is the safe window to hydrate the deck behind it.
   renderBoot(model);
-  if (nextBootActive) return;
+  if (nextBootActive) return true;
   if (leavingBoot) {
-    queueDashboardRender();
-    return;
+    // The boot curtain remains visible for five seconds. Hydrate the deck
+    // behind it now so the first revealed frame is already complete.
+    renderDashboard(model);
+    return true;
   }
   renderDashboard(model);
+  return true;
 }
 
 function aboutMatrixNodes(width, height) {
@@ -3385,11 +3386,30 @@ function setConnection(online) {
 }
 
 async function syncSnapshot() {
-  const state = await getJson("/api/snapshot");
-  renderState(state);
-  lastClientError = "";
-  setConnection(true);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const state = await getJson("/api/snapshot");
+    if (renderState(state) !== false) {
+      lastClientError = "";
+      setConnection(true);
+      return;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 120));
+  }
+  throw new Error("Stale boot snapshot persisted after handoff");
 }
+
+window.addEventListener("voidcompass:boot-recover", async () => {
+  if (bootRecoveryPending || model.onboarding?.active
+      || (document.body.classList.contains("ready") && byId("boot").hidden)) return;
+  bootRecoveryPending = true;
+  try {
+    await syncSnapshot();
+  } catch (error) {
+    reportClientError(error, "boot-recover");
+  } finally {
+    bootRecoveryPending = false;
+  }
+});
 
 // Ground targets are profile data as well as overlay state. The command is
 // accepted by the loopback server before its coalesced snapshot publication

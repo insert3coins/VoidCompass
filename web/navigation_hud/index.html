@@ -35,7 +35,11 @@
         <span id="region-label">REGION UNKNOWN</span>
         <span id="system-clock">00:00</span>
       </div>
-      <div id="current-system" class="current-system">---</div>
+      <div class="system-readout">
+        <span id="current-star-orb" class="star-orb star-unknown" aria-hidden="true"><i></i></span>
+        <div id="current-system" class="current-system">---</div>
+        <span id="current-star-label" class="current-star-label">STAR CLASS ?</span>
+      </div>
     </section>
 
     <section class="expanded-metrics section" aria-label="Navigation metrics">
@@ -45,8 +49,12 @@
       <div><span>TRAFFIC</span><strong id="expanded-traffic">0 / 0 / 0</strong></div>
     </section>
 
-    <section class="route-block section">
-      <div class="route-target"><span id="route-target-label">NEXT SYSTEM</span><strong id="route-target">NO DESTINATION PLOTTED</strong></div>
+    <section id="route-block" class="route-block section" data-route-state="empty" aria-label="Navigation route">
+      <div class="route-target">
+        <span id="route-target-label">NEXT SYSTEM</span>
+        <span id="route-star-orb" class="star-orb star-unknown" aria-hidden="true"><i></i></span>
+        <strong id="route-target">NO DESTINATION PLOTTED</strong>
+      </div>
       <div class="route-header">
         <strong id="route-title">NO ACTIVE ROUTE</strong>
         <span id="route-next"></span>

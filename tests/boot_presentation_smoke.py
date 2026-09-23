@@ -7,6 +7,7 @@ from playwright.sync_api import sync_playwright
 WEB = Path(__file__).resolve().parents[1] / "web"
 SOURCE = (WEB / "dashboard/app.js").read_text(encoding="utf-8")
 RENDER = SOURCE[SOURCE.index("function renderBoot(state)"):SOURCE.index("function renderCommissioning(onboarding)")]
+STATE_RENDER = SOURCE[SOURCE.index("function renderState(state)"):SOURCE.index("function aboutMatrixNodes(")]
 COMPANION = (WEB / "dashboard/boot-companion.js").read_text(encoding="utf-8")
 FACT_INTERVAL_MS = int(re.search(r"setInterval\(nextFact,\s*(\d+)\)", COMPANION).group(1))
 
@@ -38,12 +39,18 @@ def run():
                   let model = {}, bootHideTimer = 0, bootStageTransitionTimer = 0, lastBootStage = '';
                   const BOOT_READY_HOLD_MS = 5000;
                   let bootReadyAt = 0, bootHoldComplete = false, bootHoldTimer = 0;
+                  let bootActive = true, bootReleaseStarted = false, currentPage = 'overview';
+                  window.deckHydrations = 0;
                   const byId = id => document.getElementById(id);
                   const number = value => Number(value) || 0;
                   const text = (id, value, fallback = '') => byId(id).textContent = value || fallback;
                   const percentWidth = (id, value) => byId(id).style.width = `${value}%`;
                   const renderCommissioning = () => {};
-                """ + RENDER + "\nwindow.bootTest = state => { model = state; renderBoot(state); };")
+                  const applyTheme = () => {};
+                  const startAboutMatrix = () => {};
+                  const renderDashboard = () => { window.deckHydrations++; };
+                """ + RENDER + STATE_RENDER + "\nwindow.bootTest = state => { model = state; renderBoot(state); };"
+                    + "\nwindow.bootStateTest = state => renderState(state);")
             elif path.is_file():
                 route.fulfill(path=str(path))
             else:
@@ -122,9 +129,35 @@ def run():
         assert page.evaluate("document.body.classList.contains('ready')"), "Repeated render restarted minimum hold"
         assert page.evaluate("window.bootActivityCount") == final_activity, "Decorative activity continued after handoff"
         assert page.locator('#boot-fact').text_content() == final_fact, "Facts continued after startup"
+        page.evaluate("""() => {
+          bootActive = true;
+          bootReleaseStarted = false;
+          bootHoldComplete = false;
+          bootReadyAt = 0;
+          document.body.classList.remove('ready');
+          document.getElementById('boot').hidden = false;
+          window.deckHydrations = 0;
+          bootStateTest({boot: {active: true, progress: .8}});
+          bootStateTest({boot: {active: false, progress: 1}});
+          if (window.deckHydrations !== 1) throw Error('Dashboard was not hydrated behind the boot curtain');
+          if (document.body.classList.contains('ready')) throw Error('Deck revealed before hold finished');
+          if (bootStateTest({boot: {active: true, progress: .8}}) !== false)
+            throw Error('A stale active snapshot reopened boot');
+        }""")
+        page.clock.run_for(4999)
+        assert not page.evaluate("document.body.classList.contains('ready')"), "Stale snapshot shortened boot hold"
+        page.clock.run_for(2)
+        assert page.evaluate("document.body.classList.contains('ready')"), "Browser did not own the final handoff"
+        page.clock.run_for(721)
+        assert page.evaluate("document.getElementById('boot').hidden"), "Boot curtain was not dismissed"
+        page.evaluate("""() => {
+          bootStateTest({boot: {active: true, progress: .8}});
+          if (!document.body.classList.contains('ready') || !document.getElementById('boot').hidden)
+            throw Error('A late snapshot flashed the boot curtain after handoff');
+        }""")
         assert not errors, errors
         browser.close()
-    print("PASS: boot stages, progress ring, 5 viewport sizes, starfield rendering, reduced-motion freeze, commissioning and stopped animation after handoff")
+    print("PASS: boot stages, progress ring, 5 viewport sizes, starfield, reduced motion, commissioning, single hydrated handoff and stale-snapshot rejection")
 
 
 if __name__ == "__main__":

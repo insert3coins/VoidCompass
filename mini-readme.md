@@ -1,6 +1,20 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.8.4 // Navigation Clarity
+## v5.4.9 // Flight-Deck Navigation
+**Release Date:** 2026-Sep-23
+
+* Rebuilt the Navigation HUD as a flight-deck instrument with a clearer current-system readout, prominent next-system vector, compact jump/distance telemetry and glass-panel survey and metric banks.
+* Redesigned the full-route flight tape with a soft scanner sweep, distinct current and next markers, unscoopable-star colouring, and event-driven route-update and arrival confirmations. Every waypoint remains represented, including long routes.
+* Added class-coloured stellar illustrations for the known current and next arrival stars, plus spectral-class markers for each live route hop. White dwarfs, neutron stars and black holes have distinct treatments; unknown classes keep a neutral marker instead of a guessed star.
+* Linked route motion to charging and jumps while keeping routine telemetry refreshes calm. Both the app's reduced-motion setting and the OS preference stop HUD motion.
+* Refreshed the state instrument and completed the right-hand state scenes: travel, scan and map modes, planetary phases, vehicles, targeting, docking outcomes, carrier phases and hazards now have distinct geometry rather than shared fallback drawings. Live ship imagery, journal-event responses and reduced-motion support remain intact.
+* Kept the existing fuel-estimate cautions and journal-backed survey data.
+* Rebuilt Survey Operations as a title-free field atlas with journal-classed, code-drawn planets, scan-backed atmosphere and ring details, clearer FSS/biology progress, focused surface cards, and a refreshed sampling track. Signal-only bodies retain neutral unknown planets until scanned.
+* Added rotating planet surfaces beneath fixed lighting and a bounded atlas for crowded systems. Smaller planet discs and a persistent miniature roster keep every included body visible at once, while full planet cards and biological details cycle below. Removed the 60-body current-system scan-cache limit; the existing All surveyed bodies option includes non-priority scans. Reduced motion keeps the data accessible without visual effects.
+
+## Earlier releases
+
+### v5.4.8.4 // Navigation Clarity
 **Release Date:** 2026-Sep-23
 
 * Strengthened the next-system readout with star class, scoopability and explicit jump/stop progress beside the complete route rail.
@@ -12,8 +26,6 @@
 * The boot lens now acts as a silent exploration companion with animated chat bubbles and a shuffled offline Elite fact deck. The editable deck avoids repeats until all entries have appeared.
 * Random decorative lens activity adds focus shifts, theme-coloured pulses and expanding rings between facts, without generating journal events or changing progress. It pauses when hidden or reduced motion is enabled and stops at handoff. Now with random elite facst!
 * A failed overlay WebView navigation now gets a prompt, bounded page retry. The existing watchdog remains as fallback if the page still cannot render.
-
-## Earlier releases
 
 ### v5.4.8.3 // Living Optics
 **Release Date:** 2026-Sep-22
