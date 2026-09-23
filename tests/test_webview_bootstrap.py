@@ -28,6 +28,7 @@ class WebviewNavigationTests(unittest.TestCase):
         browser.url = "http://127.0.0.1:1234/heartbeat/index.html?token=secret"
         self.assertEqual(browser.on_navigation_start(None, None), "started")
         self.assertEqual(observed, [False])
+        browser.pywebview_window = SimpleNamespace(transparent=True, focus=False)
         with patch("builtins.print") as output:
             result = browser.on_navigation_completed(None, SimpleNamespace(
                 IsSuccess=False, WebErrorStatus="ConnectionAborted",
@@ -37,6 +38,9 @@ class WebviewNavigationTests(unittest.TestCase):
         self.assertIn("/heartbeat/index.html", message)
         self.assertIn("ConnectionAborted", message)
         self.assertNotIn("secret", message)
+        self.assertTrue(browser.pywebview_window._voidcompass_navigation_failed)
+        browser.on_navigation_completed(None, SimpleNamespace(IsSuccess=True))
+        self.assertFalse(browser.pywebview_window._voidcompass_navigation_failed)
 
     def test_optional_setting_failure_keeps_navigation_working(self):
         original = Mock(return_value="started")

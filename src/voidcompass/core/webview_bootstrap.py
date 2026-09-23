@@ -33,7 +33,13 @@ def configure_embedded_navigation(edge_module=None):
             return original_start(browser, sender, args)
 
         def on_navigation_completed(browser, sender, args):
-            if not getattr(args, "IsSuccess", True):
+            success = bool(getattr(args, "IsSuccess", True))
+            window = getattr(browser, "pywebview_window", None)
+            if window is not None and getattr(window, "transparent", False):
+                # Let the overlay host recover an actual navigation failure
+                # promptly instead of waiting for its 20-second watchdog.
+                window._voidcompass_navigation_failed = not success
+            if not success:
                 # Never put the loopback authentication token in diagnostics.
                 path = urlparse(str(getattr(browser, "url", "") or "")).path
                 status = str(getattr(args, "WebErrorStatus", "unknown"))

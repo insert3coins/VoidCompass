@@ -112,6 +112,38 @@ class OverlayInputStyleTests(unittest.TestCase):
             content_ready=False,
         )
 
+    def test_failed_initial_navigation_retries_before_watchdog(self):
+        window = SimpleNamespace(load_url=Mock(), _voidcompass_navigation_failed=True)
+        controller = SimpleNamespace(
+            window=window, navigation_retries=0, last_navigation_retry_at=0.0,
+            reload_revision=0, hide=Mock(),
+            apply=Mock(return_value={"ok": True, "visible": False,
+                                     "_restore_all_transparency": False}),
+            last_visible=False,
+        )
+        host = _OverlayHost.__new__(_OverlayHost)
+        host.origin, host.token = "http://127.0.0.1:1234", "test-token"
+        host.controllers = {"navigation": controller}
+        host.closing, host.last_contact, host.presentation_held = False, 0.0, True
+
+        def one_manifest():
+            host.closing = True
+            return {"navigation": {"template": "navigation", "reload_revision": 0,
+                                   "content_ready": False, "window": {"visible": True}}}
+
+        host.manifest = one_manifest
+        with patch("voidcompass.overlays.html_overlay_host._request_json"), \
+             patch("voidcompass.overlays.html_overlay_host.time.monotonic", return_value=10.0):
+            host.control_loop()
+
+        controller.hide.assert_called_once_with()
+        window.load_url.assert_called_once_with(
+            "http://127.0.0.1:1234/navigation_hud/index.html"
+            "?token=test-token&overlay=navigation&host_retry=1",
+        )
+        self.assertFalse(window._voidcompass_navigation_failed)
+        self.assertEqual(controller.navigation_retries, 1)
+
     def test_planet_materials_template_resolves_to_bundled_page(self):
         host = _OverlayHost.__new__(_OverlayHost)
         host.origin = "http://127.0.0.1:1234"
