@@ -876,7 +876,7 @@ function renderSurveyBodies(survey, system) {
     const orb = document.createElement("span");
     orb.className = `bridge-planet-orb bridge-planet-${kind}${ringCount ? " has-rings" : ""}`;
     orb.setAttribute("aria-hidden", "true");
-    for (const part of ("ring", "sphere", "glint")) {
+    for (const part of ["ring", "sphere", "glint"]) {
       const layer = document.createElement("i");
       layer.className = `bridge-planet-${part}`;
       orb.appendChild(layer);
