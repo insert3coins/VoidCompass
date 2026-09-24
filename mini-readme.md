@@ -1,10 +1,13 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.9.2 // Surface Instruments
+## v5.4.9.2 // Surface Instruments & Expedition Bridge
 **Release Date:** 2026-Sep-24
 
 * Rebuilt Planet Materials as a smaller field dossier with compact scan composition, clearly labelled Rhino material estimates, temperature and volcanism facts, and bounded saved-site pages. The active compass site stays pinned, and every saved site remains reachable as live distances change.
 * Rebuilt Planet Waypoint Navigation around a relative-heading dial, prominent surface distance, turn correction and target/current coordinate fixes. Near-target guidance uses measured distance, without inventing an arrival event or ETA; the panel adapts to larger text and honours profile themes and reduced motion.
+* Rebuilt the Dashboard overview as the Expedition Bridge, with a live journal-link indicator, mission directive, departure-check signals, orbital system-survey display and flight-corridor radar. Existing live data, actions and profile-saved panel arrangements remain in place.
+* Carried the theme-aware Bridge design through all 20 other non-map dashboard pages, with distinct exploration, commander-record, field-system, Build Planner, Settings and Overlay Studio treatments. Compact-window layouts and reduced-motion preferences remain supported; Galactic Atlas keeps its existing map presentation.
+* The Dashboard's Current System panel now lists every known planet and moon record as scans or surface signals arrive, with animated class illustrations, ring cues, latest-scan focus and a bounded list for large systems. Unclassified signals stay visually unknown, while archive-only records remain labelled as such.
 
 ## Earlier releases
 

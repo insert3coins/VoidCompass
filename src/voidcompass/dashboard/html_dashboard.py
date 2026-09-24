@@ -426,6 +426,14 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
 
     @staticmethod
     def _html_dashboard_body_detail(item):
+        if item.get("_signal_only"):
+            details = ["SIGNAL DETECTED"]
+            for key, label in (("bio_count", "BIO"), ("geo_count", "GEO"),
+                               ("mining_count", "MINING")):
+                count = _integer(item.get(key))
+                if count:
+                    details.append(f"{label} {count}")
+            return " · ".join(details)
         details = []
         if item.get("_orrery_source") == "edsm":
             details.append("KNOWN-SYSTEM ARCHIVE")
@@ -446,6 +454,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
 
     @staticmethod
     def _html_dashboard_body_badge(item):
+        if item.get("_signal_only"):
+            return "SIGNAL"
         if item.get("_orrery_source") == "edsm":
             return "KNOWN"
         bio = _integer(item.get("bio_count"))
@@ -479,9 +489,35 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             row for row in (getattr(self, "scan_items", None) or [])
             if isinstance(row, dict)
         ]
+        # Prefer the journal's UTC Scan timestamp. add_scan_item also inserts
+        # the newest row first, which covers older cache rows without one. A
+        # signal-only contact is not a Scan and never receives this marker.
+        planet_scans = [
+            row for row in journal_rows
+            if not row.get("is_star") and row.get("body_id") is not None
+            and (
+                row.get("scan_timestamp")
+                or str(row.get("planet_class") or row.get("class") or "").strip().casefold()
+                not in {"", "unknown"}
+            )
+        ]
+        dated_scans = [row for row in planet_scans if row.get("scan_timestamp")]
+        latest_planet_scan = (
+            max(dated_scans, key=lambda row: str(row["scan_timestamp"]))
+            if dated_scans else next(iter(planet_scans), None)
+        )
+        latest_planet_id = (
+            str(latest_planet_scan.get("body_id"))
+            if latest_planet_scan is not None else None
+        )
         local_ids = {
             str(row.get("body_id")) for row in journal_rows
             if row.get("body_id") is not None
+        }
+        signal_rows = {
+            str(body_id): signals
+            for body_id, signals in (getattr(self, "body_signals", None) or {}).items()
+            if body_id is not None and isinstance(signals, dict)
         }
         current_key = str(getattr(self, "current_sys", "") or "").casefold()
         archived_rows = [
@@ -496,12 +532,43 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
         # The local journal remains authoritative. Public known-system bodies
         # only fill historical detail that this profile did not retain (for
         # example a visit made before Void Compass began caching Scan events).
-        rows = [*journal_rows, *archived_rows]
+        rows = []
+        for source in (*journal_rows, *archived_rows):
+            row = dict(source)
+            signals = signal_rows.get(str(row.get("body_id")))
+            if signals and not row.get("is_star"):
+                # Surface-signal updates can precede a detailed Scan. Keep
+                # the journal/archive class while using the latest counts.
+                row["bio_count"] = _integer(signals.get("bio"), _integer(row.get("bio_count")))
+                row["geo_count"] = _integer(signals.get("geo"), _integer(row.get("geo_count")))
+                row["dss_complete"] = bool(row.get("dss_complete") or signals.get("dss_complete"))
+            rows.append(row)
+        represented_ids = {
+            str(row.get("body_id")) for row in rows if row.get("body_id") is not None
+        }
+        for body_id, signals in signal_rows.items():
+            if body_id in represented_ids:
+                continue
+            bio_count = max(0, _integer(signals.get("bio")))
+            geo_count = max(0, _integer(signals.get("geo")))
+            mining_count = max(0, _integer(signals.get("mining")))
+            if not (bio_count or geo_count or mining_count):
+                continue
+            rows.append({
+                "body_id": body_id,
+                "name": signals.get("body_name") or f"Body {body_id}",
+                "bio_count": bio_count,
+                "geo_count": geo_count,
+                "mining_count": mining_count,
+                "dss_complete": bool(signals.get("dss_complete")),
+                "_signal_only": True,
+            })
         rows.sort(key=lambda row: (_integer(row.get("body_id"), 9999), _text(row.get("name"))))
         for row in rows:
             if row.get("is_star"):
                 continue
             body_class = str(row.get("planet_class") or row.get("class") or "")
+            rings = row.get("rings")
             priority = bool(
                 _integer(row.get("bio_count"))
                 or _integer(row.get("geo_count"))
@@ -512,6 +579,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                 "name": _text(row.get("name") or f"Body {row.get('body_id', '?')}", 140),
                 "body_id": _integer(row.get("body_id"), 0),
                 "type": _text(body_class, 100),
+                "planet_class": _text(body_class, 100),
                 "detail": self._html_dashboard_body_detail(row),
                 "badge": self._html_dashboard_body_badge(row),
                 "priority": priority,
@@ -524,6 +592,13 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                     if "landable" in row and row.get("landable") is not None
                     else None
                 ),
+                "ring_count": len(rings) if isinstance(rings, (list, tuple)) else None,
+                "latest_scan": bool(
+                    latest_planet_id is not None
+                    and str(row.get("body_id")) == latest_planet_id
+                    and not row.get("_orrery_source")
+                ),
+                "signal_only": bool(row.get("_signal_only")),
                 "archived": row.get("_orrery_source") == "edsm",
             }
             bodies.append(body_payload)
@@ -586,7 +661,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             ),
             "notables": notables[:8],
             "notable_total": len(notables),
-            "bodies": bodies[:28],
+            "bodies": bodies,
             "journal_bodies": len(journal_rows),
             "archive_bodies": len(archived_rows),
             "archive_loading": bool(

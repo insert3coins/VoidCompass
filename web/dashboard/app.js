@@ -78,7 +78,10 @@ let deckLayoutFingerprint = "";
 let atlasLayerRequest = "";
 let decisionTagsFingerprint = "";
 let preflightFingerprint = "";
+let preflightSignalFingerprint = "";
 let preflightExpanded = false;
+let surveyBodiesFingerprint = "";
+let surveyBodyObserver = null;
 let routeHorizonFingerprint = "";
 let sessionHighlightsFingerprint = "";
 let codexCandidatesFingerprint = "";
@@ -705,6 +708,7 @@ function renderHeader(state) {
   const route = state.route || {};
   const session = state.session || {};
   const traffic = state.traffic || {};
+  const source = String(state.sources?.overall || "CACHED").toUpperCase();
   text("header-system", flight.system, "---");
   text("header-context", flight.context, "WAITING FOR LIVE JOURNAL");
   text("header-survey", `${number(survey.scanned)} / ${survey.total_known ? number(survey.total) : "?"}`);
@@ -713,6 +717,8 @@ function renderHeader(state) {
   text("header-traffic", `${number(traffic.day)} / ${number(traffic.week)} / ${number(traffic.total)}`);
   text("header-commander", state.profile?.commander, "UNKNOWN");
   text("header-ship", `${flight.ship || "SHIP"} // ${flight.state || "FLIGHT"}`.toUpperCase());
+  text("overview-link-state", `JOURNAL ${source}`);
+  byId("overview-link-state").dataset.source = source.toLowerCase();
 }
 
 function renderAdaptive(state) {
@@ -728,6 +734,7 @@ function renderDecision(state) {
   text("decision-confidence", decision.confidence || "JOURNAL-BACKED");
   text("decision-title", decision.title || "HOLD FOR EXPLORATION TELEMETRY");
   text("decision-detail", decision.detail || "No unresolved journal-backed objective is currently known.");
+  text("decision-context", state.flight?.system, "UNKNOWN SYSTEM");
   const tags = Array.isArray(decision.tags) ? decision.tags : [];
   const tagsFingerprint = tags.join("\u0000");
   if (tagsFingerprint !== decisionTagsFingerprint) {
@@ -748,6 +755,18 @@ function renderPreflight(state) {
   const checks = Array.isArray(preflight.checks) ? preflight.checks : [];
   const attention = checks.filter((row) => ["warn", "fail"].includes(String(row.status || "").toLowerCase()));
   const visible = preflightExpanded ? checks : attention;
+  const signal = byId("preflight-signal");
+  signal.setAttribute("aria-label", `${checks.length} departure checks; ${attention.length} need attention`);
+  const signalFingerprint = JSON.stringify(checks.map((row) => [row.id, row.label, row.status, row.value]));
+  if (signalFingerprint !== preflightSignalFingerprint) {
+    preflightSignalFingerprint = signalFingerprint;
+    signal.replaceChildren(...checks.map((row) => {
+      const light = document.createElement("i");
+      light.className = String(row.status || "warn").toLowerCase();
+      light.title = `${row.label || "Check"}: ${row.value || "—"}`;
+      return light;
+    }));
+  }
   const badge = byId("preflight-status");
   text("preflight-status", preflight.status || "CHECK");
   if (badge) badge.dataset.state = String(preflight.status || "check").toLowerCase();
@@ -803,10 +822,115 @@ function renderFlightLog(state) {
   byId("flightlog-event-list").innerHTML = events.map((row) => `<div class="flightlog-event ${escapeHtml(String(row.severity || "info").toLowerCase())}"><time>${escapeHtml(row.time || "--:--:--")}</time><b>${escapeHtml(row.tag || "INFO")}</b><span>${escapeHtml(row.message || "")}</span></div>`).join("") || `<p class="workspace-empty">The curated exploration record is waiting for live journal activity.</p>`;
 }
 
+function surveyPlanetKind(planetClass) {
+  const label = String(planetClass || "").trim().toLowerCase();
+  if (/earth[- ]?like/.test(label)) return "earthlike";
+  if (/ammonia world/.test(label)) return "ammonia";
+  if (/water world/.test(label)) return "water";
+  if (/water giant|gas giant.*water/.test(label)) return "gas-water";
+  if (/gas giant.*ammonia/.test(label)) return "gas-ammonia";
+  if (/gas giant|helium rich giant/.test(label)) return "gas";
+  if (/rocky ice/.test(label)) return "rocky-ice";
+  if (/icy body/.test(label)) return "icy";
+  if (/high metal content|metal rich/.test(label)) return "metal";
+  if (/rocky body/.test(label)) return "rocky";
+  return "unknown";
+}
+
+function renderSurveyBodies(survey, system) {
+  const bodies = Array.isArray(survey.bodies) ? survey.bodies : [];
+  const fingerprint = JSON.stringify([system, bodies]);
+  if (fingerprint === surveyBodiesFingerprint) return;
+  surveyBodiesFingerprint = fingerprint;
+  const list = byId("survey-body-list");
+  surveyBodyObserver?.disconnect();
+  const previousSystem = list.dataset.system || "";
+  const previousLatest = list.dataset.latest || "";
+  const scrollTop = list.scrollTop;
+  const latest = bodies.find((row) => row.latest_scan);
+  const latestKey = latest ? String(latest.body_id ?? latest.name ?? "") : "";
+  const ordered = latest ? [latest, ...bodies.filter((row) => row !== latest)] : bodies;
+  text("survey-body-total", `${bodies.length} ${bodies.length === 1 ? "BODY RECORD" : "BODY RECORDS"}`);
+  list.dataset.system = system;
+  list.dataset.latest = latestKey;
+  list.classList.toggle("empty", bodies.length === 0);
+  if (!bodies.length) {
+    surveyBodyObserver = null;
+    list.textContent = survey.archive_loading ? "Recovering known-system body records…"
+      : number(survey.scanned) ? "Scan progress retained; detailed body records are unavailable for this profile."
+      : "Planets and moons appear here as their journal records arrive.";
+    return;
+  }
+  list.replaceChildren(...ordered.map((body) => {
+    const row = document.createElement("div");
+    row.className = ["survey-body-row", body.latest_scan ? "latest" : "", body.priority ? "priority" : "", body.archived ? "archived" : ""].filter(Boolean).join(" ");
+    row.setAttribute("role", "listitem");
+    row.dataset.bodyId = String(body.body_id ?? "");
+    const fullName = String(body.name || "UNKNOWN BODY");
+    const name = system && fullName.toLowerCase().startsWith(`${system} `.toLowerCase())
+      ? fullName.slice(system.length + 1) : fullName;
+    const planetClass = String(body.planet_class || body.type || "");
+    const ringCount = Math.max(0, number(body.ring_count));
+    const kind = surveyPlanetKind(planetClass);
+    row.title = [fullName, planetClass || "Class unconfirmed", body.detail || ""].filter(Boolean).join(" · ");
+    const orb = document.createElement("span");
+    orb.className = `bridge-planet-orb bridge-planet-${kind}${ringCount ? " has-rings" : ""}`;
+    orb.setAttribute("aria-hidden", "true");
+    for (const part of ("ring", "sphere", "glint")) {
+      const layer = document.createElement("i");
+      layer.className = `bridge-planet-${part}`;
+      orb.appendChild(layer);
+    }
+    const copy = document.createElement("span");
+    copy.className = "survey-body-copy";
+    const title = document.createElement("b");
+    title.textContent = name;
+    const detail = document.createElement("small");
+    detail.textContent = `${body.archived ? "KNOWN ARCHIVE · " : ""}${planetClass || "CLASS UNCONFIRMED"}`;
+    copy.append(title, detail);
+    const flags = document.createElement("span");
+    flags.className = "survey-body-flags";
+    const status = [];
+    if (body.latest_scan) status.push(["latest", "LATEST"]);
+    if (number(body.bio_count)) status.push(["bio", `BIO ${number(body.bio_count)}`]);
+    if (number(body.geo_count)) status.push(["geo", `GEO ${number(body.geo_count)}`]);
+    if (body.terraformable) status.push(["terraformable", "TF"]);
+    if (!status.length && body.mapped) status.push(["mapped", "MAPPED"]);
+    if (!status.length && body.landable) status.push(["landable", "LANDABLE"]);
+    if (!status.length && body.archived) status.push(["archive", "ARCHIVE"]);
+    if (!status.length) status.push(["scan", planetClass ? "SCAN" : "SIGNAL"]);
+    for (const [className, label] of status) {
+      const badge = document.createElement("em");
+      badge.className = className;
+      badge.textContent = label;
+      flags.appendChild(badge);
+    }
+    row.append(orb, copy, flags);
+    return row;
+  }));
+  if ("IntersectionObserver" in window) {
+    surveyBodyObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) entry.target.classList.toggle("in-view", entry.isIntersecting);
+    }, {root: list, rootMargin: "10px"});
+    for (const row of list.children) surveyBodyObserver.observe(row);
+  } else {
+    for (const row of list.children) row.classList.add("in-view");
+  }
+  list.scrollTop = previousSystem !== system || previousLatest !== latestKey ? 0 : scrollTop;
+}
+
 function renderSurvey(state) {
   const survey = state.survey || {};
   const intel = state.intelligence || {};
   const completion = number(survey.percent);
+  const surveyCard = document.querySelector(".overview-modules > .survey-card");
+  surveyCard.dataset.surveyState = survey.complete ? "complete" : survey.total_known ? "active" : "awaiting";
+  surveyCard.dataset.starClass = String(survey.star_class || "").trim().charAt(0).toUpperCase();
+  const orbital = byId("survey-orbital");
+  orbital.style.setProperty("--survey-angle", `${Math.max(0, Math.min(100, completion)) * 3.6}deg`);
+  orbital.setAttribute("aria-valuetext", survey.total_known ? `${Math.round(completion)}% of bodies scanned` : "System body total unknown");
+  if (survey.total_known) orbital.setAttribute("aria-valuenow", String(Math.round(completion)));
+  else orbital.removeAttribute("aria-valuenow");
   text("survey-system", state.flight?.system, "NO SYSTEM DATA");
   text("survey-star", survey.star_class ? `STAR CLASS ${survey.star_class}` : "STAR CLASS —");
   text("survey-count", `${number(survey.scanned)} / ${survey.total_known ? number(survey.total) : "?"}`);
@@ -815,6 +939,7 @@ function renderSurvey(state) {
   text("survey-region", intel.region, "UNKNOWN");
   text("survey-percent", survey.total_known ? `${Math.round(completion)}%` : "UNKNOWN");
   percentWidth("survey-progress", completion);
+  renderSurveyBodies(survey, String(state.flight?.system || ""));
   const badge = byId("survey-badge");
   const badgeText = survey.complete ? "COMPLETE" : survey.undiscovered ? "NEW SYSTEM" : survey.total_known ? "IN PROGRESS" : "AWAITING";
   badge.textContent = badgeText;
@@ -905,6 +1030,7 @@ function renderSurvey(state) {
 
 function renderRoute(state) {
   const route = state.route || {};
+  document.querySelector(".overview-modules > .route-card").classList.toggle("has-route", Boolean(route.next));
   text("route-badge", route.mode === "none" ? "NO ROUTE" : route.mode === "game" ? "GAME ROUTE" : "WAYPOINT PLAN");
   text("route-source", route.source, "NAVIGATION");
   text("route-next", route.next, "NO ACTIVE ROUTE");
@@ -3343,7 +3469,9 @@ function renderDashboard(state) {
     deckLayoutFingerprint = "";
     decisionTagsFingerprint = "";
     preflightFingerprint = "";
+    preflightSignalFingerprint = "";
     preflightExpanded = false;
+    surveyBodiesFingerprint = "";
     routeHorizonFingerprint = "";
     sessionHighlightsFingerprint = "";
     codexCandidatesFingerprint = "";

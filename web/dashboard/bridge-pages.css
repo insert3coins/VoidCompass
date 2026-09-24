@@ -1,0 +1,318 @@
+/* Expedition Bridge visual language for the rest of the command deck.
+   Atlas and Overview are intentionally outside this scope. Keep specialist
+   grids and page-specific instruments in their own stylesheets. */
+.page:not([data-page-name="map"]):not([data-page-name="overview"]) {
+  --bridge-page-line: color-mix(in srgb, var(--accent) 25%, var(--border-soft));
+  --bridge-page-glow: color-mix(in srgb, var(--accent) 9%, transparent);
+  --bridge-page-surface: color-mix(in srgb, var(--panel) 92%, var(--bg));
+  background:
+    radial-gradient(ellipse at 66% -7%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 36%),
+    linear-gradient(90deg, transparent 0 99%, color-mix(in srgb, var(--accent) 2.5%, transparent) 100%) 0 0 / 44px 44px,
+    linear-gradient(transparent 0 99%, color-mix(in srgb, var(--accent) 2.5%, transparent) 100%) 0 0 / 44px 44px;
+}
+
+/* The About reactor owns its own full-page matrix treatment. */
+.page.about-page:not([data-page-name="map"]):not([data-page-name="overview"]) {
+  background: radial-gradient(circle at 50% 5%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 36%);
+}
+
+/* Mastheads echo the Dashboard's live-operations line without reproducing it. */
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title {
+  position: relative;
+  min-width: 0;
+  min-height: 80px;
+  margin: 0 0 15px;
+  padding: 3px 0 14px;
+  align-items: center;
+  gap: 12px 22px;
+  border-bottom: 1px solid var(--bridge-page-line);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 3%, transparent), transparent 60%);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: clamp(80px, 13vw, 180px);
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  box-shadow: 0 0 9px var(--bridge-page-glow);
+  pointer-events: none;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title > div:first-child {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title p {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 4px;
+  color: var(--orange);
+  font: 700 10px/1.25 Consolas, monospace;
+  letter-spacing: .13em;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title p::before {
+  content: "";
+  display: inline-block;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--orange);
+  transform: rotate(45deg);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--orange) 40%, transparent);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title h2 {
+  margin: 0;
+  color: var(--text);
+  font: 700 clamp(25px, 2.35vw, 34px)/1.02 "Bahnschrift SemiCondensed", "Arial Narrow", sans-serif;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+  text-shadow: 0 0 21px var(--bridge-page-glow);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title span {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font: 10px/1.3 Consolas, monospace;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title .title-actions {
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title .title-actions button {
+  min-height: 32px;
+  padding-inline: 10px;
+  font-size: 9px;
+  letter-spacing: .045em;
+  white-space: nowrap;
+}
+
+/* Shared instrument housings. Specific cards retain their own layout and
+   state colours; this layer only supplies a common material and edge light. */
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .card {
+  background:
+    linear-gradient(158deg, color-mix(in srgb, var(--panel-raised) 23%, transparent), transparent 57%),
+    var(--bridge-page-surface);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--text) 4%, transparent), 0 8px 25px rgba(0, 0, 0, .11);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .card::after {
+  width: 12px;
+  height: 12px;
+  border-color: color-mix(in srgb, var(--accent) 39%, var(--border));
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .card > header {
+  border-bottom-color: var(--bridge-page-line);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 6%, var(--header)), var(--header) 84%);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .card > header > span {
+  color: var(--orange);
+  font-size: 10px;
+  letter-spacing: .11em;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .card > header > b {
+  border: 1px solid color-mix(in srgb, var(--accent) 15%, var(--border-soft));
+  background: color-mix(in srgb, var(--accent) 6%, var(--inset));
+  color: var(--muted);
+  font-size: 9px;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .workspace-card {
+  min-width: 0;
+  box-shadow: inset 0 1px color-mix(in srgb, var(--text) 4%, transparent), 0 8px 25px rgba(0, 0, 0, .11);
+}
+
+/* Flight summaries read as an instrument shelf rather than isolated tiles. */
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.workspace-metrics, .record-metrics) {
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--bridge-page-line);
+  background: var(--bridge-page-line);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, .09);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.workspace-metrics, .record-metrics) > article {
+  min-width: 0;
+  border: 0;
+  border-top: 2px solid color-mix(in srgb, var(--accent) 52%, var(--border));
+  background: linear-gradient(150deg, color-mix(in srgb, var(--panel-raised) 24%, var(--panel)), var(--panel));
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.workspace-metrics, .record-metrics) > article:nth-child(2) { border-top-color: color-mix(in srgb, var(--orange) 55%, var(--border)); }
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.workspace-metrics, .record-metrics) > article:nth-child(3) { border-top-color: color-mix(in srgb, var(--green) 55%, var(--border)); }
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.workspace-metrics, .record-metrics) > article:nth-child(4) { border-top-color: color-mix(in srgb, var(--yellow) 55%, var(--border)); }
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.workspace-metrics, .record-metrics) strong {
+  color: var(--text);
+  text-shadow: 0 0 15px color-mix(in srgb, var(--accent) 11%, transparent);
+}
+
+/* Workspaces stay transparent to the chart layer; the loading state is an
+   intentional bridge panel, not a blank rectangle during hydration. */
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .workspace-shell:not(.loading-panel) {
+  background: transparent;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .workspace-shell.loading-panel {
+  min-height: clamp(260px, 45vh, 430px);
+  align-content: center;
+  gap: 12px;
+  border-color: var(--bridge-page-line);
+  background:
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 34%),
+    repeating-linear-gradient(90deg, transparent 0 37px, color-mix(in srgb, var(--accent) 3%, transparent) 38px 39px),
+    var(--panel);
+  color: var(--muted);
+  text-align: center;
+  font: 10px/1.5 Consolas, monospace;
+  letter-spacing: .09em;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .workspace-shell.loading-panel::before {
+  content: "";
+  display: block;
+  width: 43px;
+  height: 43px;
+  margin: 0 auto;
+  border: 1px solid color-mix(in srgb, var(--accent) 31%, var(--border));
+  border-top-color: var(--accent);
+  border-bottom-color: var(--orange);
+  border-radius: 50%;
+  box-shadow: inset 0 0 14px var(--bridge-page-glow), 0 0 12px var(--bridge-page-glow);
+  animation: bridge-page-orbit 3s linear infinite;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .workspace-empty {
+  color: var(--muted);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 4%, var(--inset)), transparent 88%);
+  box-shadow: inset 2px 0 color-mix(in srgb, var(--accent) 28%, var(--border));
+  font-size: 10px;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .workspace-status.working {
+  color: var(--accent);
+  animation: bridge-page-breathe 2.6s ease-in-out infinite;
+}
+
+/* Common workbench affordances. Structural tabs stay rectangular and retain
+   their existing active-state and keyboard semantics. */
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.suite-tabs, .workspace-tabs, .studio-view-tabs) {
+  border-color: var(--bridge-page-line);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, var(--header)), var(--header));
+  box-shadow: inset 0 1px color-mix(in srgb, var(--text) 3%, transparent);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.suite-tabs, .workspace-tabs, .studio-view-tabs) button {
+  letter-spacing: .05em;
+  transition: color .16s, border-color .16s, background .16s, box-shadow .16s;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.suite-tabs, .workspace-tabs, .studio-view-tabs) button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .suite-tabs button.active {
+  box-shadow: inset 0 -2px color-mix(in srgb, var(--accent) 67%, white), 0 0 13px var(--bridge-page-glow);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .workspace-tabs button.active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 11%, var(--panel));
+  box-shadow: inset 0 -2px var(--accent);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .workspace-hero {
+  border-color: var(--bridge-page-line);
+  border-left-color: var(--accent);
+  background:
+    radial-gradient(circle at 12% 50%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 38%),
+    linear-gradient(115deg, color-mix(in srgb, var(--panel-raised) 30%, var(--panel)), var(--panel));
+  box-shadow: inset 0 1px color-mix(in srgb, var(--text) 5%, transparent), 0 10px 28px rgba(0, 0, 0, .1);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .workspace-actions {
+  border-top-color: var(--bridge-page-line);
+  background: color-mix(in srgb, var(--header) 38%, transparent);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .workspace-table th {
+  border-bottom-color: var(--bridge-page-line);
+  background: color-mix(in srgb, var(--accent) 5%, var(--header));
+  color: var(--muted);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .workspace-table tr:hover td {
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(input, select, textarea):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 68%, transparent);
+  outline-offset: 1px;
+}
+
+/* Secondary navigation and saved panel arrangement retain familiar controls
+   but share the bridge's edge-light and spacing. */
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .tool-card {
+  background:
+    linear-gradient(142deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 58%),
+    var(--bridge-page-surface);
+  border-color: var(--bridge-page-line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .1);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .tool-card > i {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  box-shadow: inset 0 0 11px var(--bridge-page-glow);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .page-layout-toolbar {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  border-left-color: var(--accent);
+  background: linear-gradient(105deg, color-mix(in srgb, var(--accent) 10%, var(--panel)), var(--panel) 72%);
+  box-shadow: 0 10px 27px rgba(0, 0, 0, .17);
+}
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .page-layout-toolbar strong { color: var(--text); }
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) .page-layout-toolbar button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes bridge-page-orbit { to { transform: rotate(360deg); } }
+@keyframes bridge-page-breathe { 50% { opacity: .58; } }
+
+@media (max-width: 1180px) {
+  :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title {
+    min-height: 0;
+    flex-wrap: wrap;
+    gap: 10px 15px;
+  }
+  :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title .title-actions {
+    flex: 1 1 310px;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 980px) {
+  :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title {
+    margin-bottom: 12px;
+    padding-bottom: 11px;
+  }
+  :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title h2 { font-size: 26px; }
+  :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title .title-actions button {
+    min-height: 30px;
+    font-size: 8px;
+  }
+  :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.workspace-metrics, .record-metrics) > article {
+    min-height: 72px;
+    padding: 11px 12px;
+  }
+}
+
+@media (max-width: 680px) {
+  :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.workspace-metrics, .record-metrics) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) > .page-title .title-actions button {
+    flex: 1 1 150px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) *,
+  :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) *::before,
+  :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) *::after {
+    animation: none !important;
+    transition-duration: .001ms !important;
+  }
+}
+body.reduced-motion :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) *,
+body.reduced-motion :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) *::before,
+body.reduced-motion :where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) *::after {
+  animation: none !important;
+  transition-duration: .001ms !important;
+}
