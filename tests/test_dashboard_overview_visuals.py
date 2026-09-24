@@ -28,8 +28,9 @@ def overview_state():
                            "dss_complete": 1, "bio_total": 3, "bio_complete": 1},
             "notables": [f"Priority world {index}" for index in range(1, 8)],
             "bodies": [{"body_id": 2, "name": "SYNUEFE AA-A H1 2",
+                        "planet_class": "Water world", "ring_count": 1,
                         "detail": "BIOLOGICAL SIGNALS", "badge": "BIO",
-                        "priority": True, "bio_count": 3}],
+                        "priority": True, "bio_count": 3, "latest_scan": True}],
         },
         "route": {"mode": "game", "source": "GAME ROUTE", "next": "COL 285 SECTOR",
                   "final": "BEAGLE POINT", "summary": "12 JUMPS REMAINING",
@@ -143,10 +144,42 @@ class DashboardOverviewVisualTests(unittest.TestCase):
     def test_populated_survey_work_and_ranked_notable_overflow(self):
         self.render(overview_state())
         self.assertEqual(self.page.locator("#header-system").inner_text(), "SYNUEFE AA-A H1")
+        self.assertIn("EXPEDITION BRIDGE", self.page.locator(".overview-masthead h2").inner_text().upper())
+        self.assertEqual(self.page.locator("#overview-link-state").inner_text(), "JOURNAL LIVE")
+        self.assertEqual(self.page.locator("#overview-link-state").get_attribute("data-source"), "live")
+        for selector in ("#customise-deck", ".overview-actions [data-command='set_flight_log_mode']",
+                         ".overview-actions [data-target='explore']",
+                         ".overview-actions [data-page='map']"):
+            self.assertTrue(self.page.locator(selector).is_visible(), selector)
+        self.assertTrue(self.page.locator(".decision-lens").is_visible())
+        self.assertEqual(self.page.locator("#decision-context").inner_text(), "SYNUEFE AA-A H1")
+        self.assertEqual(self.page.locator("#decision-tags span").count(), 2)
+        self.assertTrue(self.page.locator("#decision-primary").is_enabled())
+        for selector, key in ((".decision-card", "smart-next-action"),
+                              (".preflight-card", "exploration-preflight"),
+                              (".survey-card", "current-system-survey")):
+            self.assertEqual(self.page.locator(f".overview-modules > {selector}").get_attribute(
+                "data-layout-panel"), key)
         self.assertIn("8 OPEN TASKS", self.page.locator("#metric-work").inner_text())
         work_detail = self.page.locator("#metric-work-detail").inner_text()
         for part in ("FSS 4", "DSS 2", "BIO 2"):
             self.assertIn(part, work_detail)
+
+        survey = self.page.locator(".overview-modules > .survey-card")
+        self.assertEqual(survey.get_attribute("data-survey-state"), "active")
+        self.assertEqual(survey.get_attribute("data-star-class"), "K")
+        self.assertAlmostEqual(float(self.page.locator("#survey-orbital").evaluate(
+            "node => parseFloat(node.style.getPropertyValue('--survey-angle'))")), 240.12, places=2)
+        self.assertEqual(self.page.locator("#survey-percent").inner_text(), "67%")
+        self.assertEqual(self.page.locator("#survey-body-total").inner_text(), "1 BODY RECORD")
+        self.assertEqual(self.page.locator("#survey-body-list .survey-body-row").count(), 1)
+        self.assertIn("2", self.page.locator("#survey-body-list .survey-body-copy b").inner_text())
+        self.assertIn("Water world", self.page.locator("#survey-body-list .survey-body-copy small").inner_text())
+        self.assertIn("bridge-planet-water", self.page.locator("#survey-body-list .bridge-planet-orb").get_attribute("class"))
+        self.assertIn("has-rings", self.page.locator("#survey-body-list .bridge-planet-orb").get_attribute("class"))
+        self.assertTrue(self.page.locator(".route-radar").is_visible())
+        self.assertIn("has-route", self.page.locator(".overview-modules > .route-card").get_attribute("class"))
+        self.assertEqual(self.page.locator("#route-badge").inner_text(), "GAME ROUTE")
 
         notables = self.page.locator("#survey-notables")
         for index in range(1, 5):
@@ -173,9 +206,18 @@ class DashboardOverviewVisualTests(unittest.TestCase):
         self.assertEqual(toggle.get_attribute("aria-expanded"), "false")
         checks = self.page.locator("#preflight-checks .preflight-check")
         self.assertEqual(checks.count(), 0)
+        signal = self.page.locator("#preflight-signal")
+        self.assertEqual(signal.get_attribute("aria-label"), "1 departure checks; 0 need attention")
+        self.assertEqual(signal.locator("i.ready").count(), 1)
 
         state["preflight"] = overview_state()["preflight"]
         self.render(state)
+        self.assertEqual(self.page.locator("#preflight-status").inner_text(), "CHECK")
+        self.assertTrue(self.page.locator("#preflight-status").evaluate(
+            "node => node.scrollWidth <= node.clientWidth + 1"))
+        self.assertEqual(signal.get_attribute("aria-label"), "4 departure checks; 2 need attention")
+        for status in ("ready", "warn", "fail", "optional"):
+            self.assertEqual(signal.locator(f"i.{status}").count(), 1)
         self.assertEqual(checks.count(), 2)
         self.assertIn("DEPARTURE ROUTE", self.page.locator("#preflight-checks").inner_text())
         self.assertIn("FUEL RESERVE", self.page.locator("#preflight-checks").inner_text())
@@ -200,13 +242,135 @@ class DashboardOverviewVisualTests(unittest.TestCase):
         self.render(state)
         self.assertIn("AWAITING SURVEY", self.page.locator("#metric-work").inner_text())
         self.assertIn("Awaiting scan telemetry", self.page.locator("#survey-notables").inner_text())
+        self.assertEqual(self.page.locator("#survey-body-total").inner_text(), "0 BODY RECORDS")
+        self.assertIn("Planets and moons appear", self.page.locator("#survey-body-list").inner_text())
         self.assertTrue(self.page.locator("#survey-overflow").is_hidden())
+        self.assertEqual(self.page.locator(".overview-modules > .survey-card").get_attribute("data-survey-state"), "awaiting")
+        self.assertEqual(self.page.locator("#decision-context").inner_text(), "UNKNOWN SYSTEM")
 
         state["flight"]["system"] = "SOL"
         state["survey"].update({"total_known": True, "scanned": 1, "total": 1,
                                 "percent": 100, "complete": True})
         self.render(state)
         self.assertIn("CLEAR", self.page.locator("#metric-work").inner_text())
+        self.assertEqual(self.page.locator(".overview-modules > .survey-card").get_attribute("data-survey-state"), "complete")
+        self.assertEqual(self.page.locator("#survey-orbital").evaluate(
+            "node => node.style.getPropertyValue('--survey-angle')"), "360deg")
+        self.assertEqual(self.page.locator("#decision-context").inner_text(), "SOL")
+
+        state["route"].update({"mode": "none", "next": "", "summary": "", "horizon": {"jumps": []}})
+        self.render(state)
+        self.assertNotIn("has-route", self.page.locator(".overview-modules > .route-card").get_attribute("class"))
+        self.assertEqual(self.page.locator("#route-badge").inner_text(), "NO ROUTE")
+        self.assertFalse(self.errors, self.errors)
+
+    def test_current_system_body_deck_tracks_new_scans_and_large_systems(self):
+        state = overview_state()
+        state["survey"]["bodies"] = [
+            {"body_id": index, "name": f"SYNUEFE AA-A H1 {index}",
+             "planet_class": "Rocky body" if index % 3 else "Icy body",
+             "ring_count": 2 if index == 35 else 0,
+             "latest_scan": index == 35, "priority": index % 4 == 0,
+             "bio_count": 2 if index == 35 else 0}
+            for index in range(1, 36)
+        ]
+        state["survey"].update({"scanned": 35, "total": 60, "percent": 58.3})
+        self.render(state)
+        rows = self.page.locator("#survey-body-list .survey-body-row")
+        self.assertEqual(rows.count(), 35)
+        self.assertEqual(rows.first.get_attribute("data-body-id"), "35")
+        self.assertIn("has-rings", rows.first.locator(".bridge-planet-orb").get_attribute("class"))
+        self.assertIn("LATEST", rows.first.inner_text())
+        self.assertIn("35 BODY RECORDS", self.page.locator("#survey-body-total").inner_text())
+        for width, height in ((1600, 900), (980, 680)):
+            with self.subTest(viewport=(width, height)):
+                self.page.set_viewport_size({"width": width, "height": height})
+                geometry = self.page.locator("#survey-body-list").evaluate("""node => ({
+                  viewport: node.clientHeight, content: node.scrollHeight,
+                  fits: node.scrollWidth <= node.clientWidth + 1,
+                })""")
+                self.assertLessEqual(geometry["viewport"], 170, geometry)
+                self.assertGreater(geometry["content"], geometry["viewport"], geometry)
+                self.assertTrue(geometry["fits"], geometry)
+
+        body_list = self.page.locator("#survey-body-list")
+        body_list.scroll_into_view_if_needed()
+        self.page.wait_for_function("document.querySelectorAll('#survey-body-list .survey-body-row.in-view').length > 0")
+        self.assertLess(self.page.locator("#survey-body-list .survey-body-row.in-view").count(), 35)
+        body_list.evaluate("node => { node.scrollTop = node.scrollHeight; }")
+        self.page.wait_for_function("document.querySelector('#survey-body-list .survey-body-row:last-child').classList.contains('in-view')")
+        self.assertNotIn("in-view", rows.first.get_attribute("class"))
+
+        state["survey"]["bodies"].append({"body_id": 36, "name": "SYNUEFE AA-A H1 36",
+                                           "bio_count": 1, "latest_scan": True})
+        state["survey"]["bodies"][-2]["latest_scan"] = False
+        self.render(state)
+        self.assertEqual(rows.count(), 36)
+        self.assertEqual(rows.first.get_attribute("data-body-id"), "36")
+        self.assertIn("bridge-planet-unknown", rows.first.locator(".bridge-planet-orb").get_attribute("class"))
+        self.assertIn("CLASS UNCONFIRMED", rows.first.inner_text())
+
+        state["flight"]["system"] = "SOL"
+        state["survey"].update({"bodies": [], "scanned": 0, "total": 0,
+                                "total_known": False, "notables": [], "notable_total": 0})
+        self.render(state)
+        self.assertEqual(rows.count(), 0)
+        self.assertIn("Planets and moons appear", self.page.locator("#survey-body-list").inner_text())
+        self.assertNotIn("SYNUEFE", self.page.locator("#survey-body-list").inner_text())
+        self.assertFalse(self.errors, self.errors)
+
+    def test_saved_overview_layout_keeps_legacy_core_panel_keys(self):
+        state = overview_state()
+        saved_order = ["current-system-survey", "route", "smart-next-action",
+                       "exploration-preflight"]
+        state["page_layouts"] = {"overview": {"overview-modules": saved_order}}
+        self.render(state)
+        actual = self.page.locator("#overview-modules > [data-layout-panel]").evaluate_all(
+            "nodes => nodes.map(node => node.dataset.layoutPanel)")
+        self.assertEqual(actual[:len(saved_order)], saved_order)
+        self.assertFalse(self.errors, self.errors)
+
+    def test_arrange_panels_still_uses_the_redesigned_cards(self):
+        self.render(overview_state())
+        self.page.locator('[data-page-layout-open="overview"]').click()
+        self.assertIn("layout-editing", self.page.locator('[data-page-name="overview"]').get_attribute("class"))
+        self.assertEqual(self.page.locator("#overview-modules > .layout-panel").count(), 9)
+        self.assertEqual(self.page.locator(".decision-lens").evaluate(
+            "node => getComputedStyle(node).visibility"), "hidden")
+        self.page.locator('[data-page-layout-cancel]').click()
+        self.assertNotIn("layout-editing", self.page.locator('[data-page-name="overview"]').get_attribute("class"))
+        self.assertEqual(self.page.locator(".decision-lens").evaluate(
+            "node => getComputedStyle(node).visibility"), "visible")
+        self.assertFalse(self.errors, self.errors)
+
+    def test_bridge_instruments_follow_profile_theme(self):
+        state = overview_state()
+        self.render(state)
+        def palette_readout():
+            return self.page.evaluate("""() => {
+              const root = getComputedStyle(document.documentElement);
+              const css = selector => getComputedStyle(document.querySelector(selector));
+              return {
+                accent: root.getPropertyValue('--accent').trim(),
+                orange: root.getPropertyValue('--orange').trim(),
+                green: root.getPropertyValue('--green').trim(),
+                lens: css('.decision-lens').borderTopColor,
+                orbital: css('#survey-orbital').backgroundImage,
+                radar: css('.route-radar').borderTopColor,
+                link: css('#overview-link-state').color,
+              };
+            }""")
+        baseline = palette_readout()
+        state["theme"] = {"name": "Bridge Test", "palette": {
+            "accent": "#bf73ff", "orange": "#ffcb55", "green": "#46dd87",
+        }}
+        self.render(state)
+        themed = palette_readout()
+        self.assertEqual(themed["accent"].lower(), "#bf73ff")
+        self.assertEqual(themed["orange"].lower(), "#ffcb55")
+        self.assertEqual(themed["green"].lower(), "#46dd87")
+        for instrument in ("lens", "orbital", "radar", "link"):
+            self.assertNotEqual(themed[instrument], baseline[instrument], (instrument, baseline, themed))
         self.assertFalse(self.errors, self.errors)
 
     def test_responsive_cards_statusbar_and_icon_rail_accessibility(self):
@@ -219,14 +383,30 @@ class DashboardOverviewVisualTests(unittest.TestCase):
                 geometry = self.page.evaluate("""() => {
                   const box = selector => document.querySelector(selector).getBoundingClientRect();
                   const page = box('.page[data-page-name="overview"]');
+                  const masthead = box('.overview-masthead');
+                  const decision = box('.overview-modules > .decision-card');
+                  const preflight = box('.overview-modules > .preflight-card');
                   const survey = box('.overview-modules > .survey-card');
                   const route = box('.overview-modules > .route-card');
                   const status = box('.statusbar');
                   const cards = [...document.querySelectorAll('.overview-modules > :not([hidden])')]
                     .map(node => node.getBoundingClientRect());
+                  const inside = (child, parent) => child.left >= parent.left - 1
+                    && child.right <= parent.right + 1
+                    && child.top >= parent.top - 1 && child.bottom <= parent.bottom + 1;
+                  const controls = [...document.querySelectorAll('.overview-actions button')]
+                    .map(node => node.getBoundingClientRect());
                   return {
                     viewport: window.innerWidth,
                     scrollWidth: document.documentElement.scrollWidth,
+                    mastheadAboveCards: masthead.bottom <= decision.top + 1,
+                    primaryHierarchy: decision.top <= survey.top + 1 && preflight.top <= survey.top + 1,
+                    actionsFit: controls.every(rect => inside(rect, masthead)),
+                    instrumentsFit: inside(box('.decision-lens'), decision)
+                      && inside(box('#decision-primary'), decision)
+                      && inside(box('#preflight-signal'), preflight)
+                      && inside(box('#survey-orbital'), survey)
+                      && inside(box('.route-radar'), route),
                     cardsFit: cards.every(rect => rect.left >= page.left - 1 && rect.right <= page.right + 1),
                     pair: Math.abs(survey.top - route.top) <= 2 && survey.right <= route.left + 2,
                     statusVisible: status.height >= 25 && Math.abs(status.bottom - innerHeight) <= 1
@@ -234,6 +414,10 @@ class DashboardOverviewVisualTests(unittest.TestCase):
                   };
                 }""")
                 self.assertLessEqual(geometry["scrollWidth"], geometry["viewport"] + 1, geometry)
+                self.assertTrue(geometry["mastheadAboveCards"], geometry)
+                self.assertTrue(geometry["primaryHierarchy"], geometry)
+                self.assertTrue(geometry["actionsFit"], geometry)
+                self.assertTrue(geometry["instrumentsFit"], geometry)
                 self.assertTrue(geometry["cardsFit"], geometry)
                 self.assertTrue(geometry["pair"], geometry)
                 self.assertTrue(geometry["statusVisible"], geometry)

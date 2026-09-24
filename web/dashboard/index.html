@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Void Compass</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="overview.css">
+  <link rel="stylesheet" href="bridge-pages.css">
+  <link rel="stylesheet" href="bridge-exploration.css">
+  <link rel="stylesheet" href="bridge-systems.css">
   <link rel="stylesheet" href="boot.css">
   <script defer src="boot-starfield.js"></script>
   <script type="module" src="boot-companion.js"></script>
@@ -196,10 +200,10 @@
       </header>
 
       <main class="pages">
-        <section class="page active" data-page-name="overview">
-          <header class="page-title">
-            <div><p>LIVE COMMAND DECK</p><h2>Exploration briefing</h2><span id="overview-subtitle">Journal-backed field intelligence</span></div>
-            <div class="title-actions">
+        <section class="page active overview-page" data-page-name="overview">
+          <header class="page-title overview-masthead">
+            <div class="overview-heading"><p><i class="overview-live-indicator" aria-hidden="true"></i> EXPLORATION // LIVE OPERATIONS <b id="overview-link-state">JOURNAL STANDBY</b></p><h2>Expedition bridge</h2><span id="overview-subtitle">Journal-backed field intelligence</span></div>
+            <div class="title-actions overview-actions">
               <button class="ghost" id="customise-deck">DECK OPTIONS</button>
               <button class="ghost" data-command="set_flight_log_mode" data-enabled="true">FOCUSED LOG</button>
               <button class="ghost" data-command="open" data-target="explore">FULL SURVEY</button>
@@ -217,44 +221,52 @@
           </section>
 
           <section id="overview-modules" class="overview-modules">
-            <article class="card decision-card accent-card core-module">
-              <header><span>SMART NEXT ACTION</span><b id="decision-doctrine">BALANCED</b></header>
+            <article class="card decision-card accent-card core-module" data-layout-panel="smart-next-action">
+              <header><span>01 / MISSION DIRECTIVE</span><b id="decision-doctrine">BALANCED</b></header>
               <div class="decision-body">
-                <i class="decision-glyph" aria-hidden="true"></i>
-                <div><small id="decision-confidence">JOURNAL-BACKED</small><h3 id="decision-title">HOLD FOR EXPLORATION TELEMETRY</h3><p id="decision-detail">No unresolved journal-backed objective is currently known.</p><div id="decision-tags" class="decision-tags"></div></div>
+                <div class="decision-lens" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
+                <div class="decision-copy"><small id="decision-confidence">JOURNAL-BACKED</small><h3 id="decision-title">HOLD FOR EXPLORATION TELEMETRY</h3><p id="decision-detail">No unresolved journal-backed objective is currently known.</p><div id="decision-tags" class="decision-tags"></div></div>
                 <button id="decision-primary" class="primary">OPEN SYSTEM SURVEY</button>
               </div>
+              <footer class="decision-footer"><span>CURRENT THEATRE <b id="decision-context">UNKNOWN SYSTEM</b></span><span>LOCAL JOURNAL / DECISION SUPPORT</span></footer>
             </article>
 
-            <article class="card preflight-card core-module">
-              <header><span>EXPLORATION PREFLIGHT</span><b id="preflight-status">CHECK</b></header>
+            <article class="card preflight-card core-module" data-layout-panel="exploration-preflight">
+              <header><span>02 / DEPARTURE SYSTEMS</span><b id="preflight-status">CHECK</b></header>
               <div class="preflight-body">
                 <div class="preflight-summary-row">
                   <p id="preflight-summary">Checking departure systems.</p>
+                  <div id="preflight-signal" class="preflight-signal" role="img" aria-label="Departure checks loading"></div>
                   <button type="button" id="preflight-toggle" aria-expanded="false" aria-controls="preflight-checks">SHOW ALL CHECKS</button>
                 </div>
                 <div id="preflight-checks" class="preflight-checks"></div>
               </div>
             </article>
 
-            <article class="card survey-card accent-card core-module">
-              <header><span>CURRENT SYSTEM SURVEY</span><b id="survey-badge">AWAITING</b></header>
-              <div class="survey-title"><h3 id="survey-system">NO SYSTEM DATA</h3><span id="survey-star">STAR CLASS —</span></div>
-              <div class="survey-progress"><i id="survey-progress"></i><em id="survey-percent">0%</em></div>
+            <article class="card survey-card accent-card core-module" data-layout-panel="current-system-survey">
+              <header><span>03 / CURRENT SYSTEM</span><b id="survey-badge">AWAITING</b></header>
+              <div class="survey-command">
+                <div id="survey-orbital" class="survey-orbital" role="progressbar" aria-label="Current system survey" aria-valuemin="0" aria-valuemax="100" aria-valuetext="System body total unknown"><i class="survey-world" aria-hidden="true"></i><em id="survey-percent">0%</em></div>
+                <div class="survey-heading"><small>STELLAR CARTOGRAPHY / LIVE SURVEY</small><div class="survey-title"><h3 id="survey-system">NO SYSTEM DATA</h3><span id="survey-star">STAR CLASS —</span></div><div class="survey-progress"><i id="survey-progress"></i></div></div>
+              </div>
               <div class="survey-stats">
                 <div><small>DISCOVERED</small><strong id="survey-count">0 / ?</strong></div>
                 <div><small>BIOLOGICAL</small><strong id="survey-bio">0 SIGNALS</strong></div>
                 <div><small>VALUABLE</small><strong id="survey-valuable">0 BODIES</strong></div>
                 <div><small>REGION</small><strong id="survey-region">UNKNOWN</strong></div>
               </div>
+              <section class="survey-body-deck" aria-label="Discovered worlds in the current system">
+                <div class="survey-body-heading"><span>DISCOVERED WORLDS</span><b id="survey-body-total">0 BODY RECORDS</b></div>
+                <div id="survey-body-list" class="survey-body-list empty" role="list" tabindex="0">Planets and moons appear here as their journal records arrive.</div>
+              </section>
               <div id="survey-notables" class="notable-list empty">Awaiting scan telemetry.</div>
               <div class="survey-footer"><span id="survey-overflow" class="notable-overflow" hidden></span><button type="button" id="survey-open-workboard" data-page="explore">OPEN SYSTEM WORKBOARD</button></div>
             </article>
 
             <article class="card route-card" data-deck-module="route">
-              <header><span>ROUTE HORIZON</span><b id="route-badge">NO ROUTE</b></header>
+              <header><span>04 / FLIGHT CORRIDOR</span><b id="route-badge">NO ROUTE</b></header>
               <div class="route-target">
-                <span class="target-reticle" aria-hidden="true"></span>
+                <span class="route-radar" aria-hidden="true"><i></i><i></i></span>
                 <div><small id="route-source">NAVIGATION</small><h3 id="route-next">NO ACTIVE ROUTE</h3><p id="route-final">Plot a route in Elite or Mission Control.</p></div>
               </div>
               <div class="route-track"><i id="route-progress"></i><span id="route-progress-label">INACTIVE</span></div>

@@ -1,0 +1,314 @@
+/* Expedition Bridge: exploration and commander-record instruments.
+   All rules are page-scoped so live specialist workspaces keep their own
+   controls, data hierarchy and profile palette. Load after styles.css. */
+
+/* Stellar cartography: one primary astronomical instrument, then decisions. */
+.page[data-page-name="explore"] .intel-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, .85fr);
+  gap: 14px;
+}
+.page[data-page-name="explore"] .system-workboard-card {
+  min-height: 560px;
+  border-color: color-mix(in srgb, var(--accent) 37%, var(--border));
+  background:
+    radial-gradient(circle at 18% 21%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 31%),
+    radial-gradient(circle at 90% 75%, color-mix(in srgb, var(--orange) 6%, transparent), transparent 43%),
+    var(--panel);
+  box-shadow: inset 0 0 45px color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.page[data-page-name="explore"] .workboard-system {
+  min-height: 106px;
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 10%, var(--inset)), var(--inset) 80%);
+}
+.page[data-page-name="explore"] .workboard-identity strong {
+  font-size: clamp(17px, 1.8vw, 25px);
+  letter-spacing: .04em;
+}
+.page[data-page-name="explore"] .workboard-orbits {
+  height: 77px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 49px, color-mix(in srgb, var(--accent) 10%, transparent) 49px 50px),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 4%, var(--inset)), var(--inset));
+  box-shadow: inset 0 0 21px color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.page[data-page-name="explore"] .workboard { max-height: 360px; }
+.page[data-page-name="explore"] .body-row {
+  margin-block: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--border-soft) 70%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--panel-raised) 84%, transparent), transparent 85%);
+}
+.page[data-page-name="explore"] .body-row.priority {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--orange) 8%, var(--panel-alt)), var(--panel) 90%);
+}
+.page[data-page-name="explore"] .intel-grid > .card:not(.system-workboard-card) {
+  border-left: 2px solid color-mix(in srgb, var(--accent) 56%, var(--border));
+}
+.page[data-page-name="explore"] .intel-grid .big-stat strong {
+  font-size: clamp(26px, 3vw, 40px);
+  letter-spacing: -.035em;
+}
+.page[data-page-name="explore"] .orrery-card {
+  border-color: color-mix(in srgb, var(--accent) 43%, var(--border));
+  box-shadow: 0 14px 35px color-mix(in srgb, var(--bg) 45%, transparent);
+}
+.page[data-page-name="explore"] .orrery-stage,
+.page[data-page-name="explore"] .orrery-empty {
+  height: clamp(350px, 42vw, 560px);
+}
+.page[data-page-name="explore"] .orrery-detail {
+  border-top-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 7%, var(--panel-alt)), var(--panel-alt));
+}
+.page[data-page-name="explore"] .survey-next {
+  background: linear-gradient(95deg, color-mix(in srgb, var(--orange) 12%, var(--inset)), var(--inset));
+}
+.page[data-page-name="explore"] .survey-queue-row:not(.complete):not(.skipped):hover {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.page[data-page-name="explore"] .route-system.current,
+.page[data-page-name="explore"] .waypoint-row:not(.visited):hover {
+  box-shadow: inset 3px 0 var(--orange);
+  background: color-mix(in srgb, var(--orange) 7%, transparent);
+}
+
+/* Planetary operations: keep the target lock, selected planet and sites distinct. */
+.page[data-page-name="planet-materials"] .planet-materials-shell { gap: 12px; }
+.page[data-page-name="planet-materials"] .planet-compass-quick {
+  border: 1px solid color-mix(in srgb, var(--orange) 43%, var(--border));
+  border-left: 3px solid var(--orange);
+  background:
+    radial-gradient(circle at 0 0, color-mix(in srgb, var(--orange) 13%, transparent), transparent 44%),
+    linear-gradient(135deg, var(--panel-alt), var(--panel));
+}
+.page[data-page-name="planet-materials"] .planet-compass-quick.active {
+  border-color: color-mix(in srgb, var(--green) 49%, var(--border));
+  border-left-color: var(--green);
+}
+.page[data-page-name="planet-materials"] .planet-compass-heading h3 { font-size: clamp(21px, 2.4vw, 30px); }
+.page[data-page-name="planet-materials"] .planet-compass-state {
+  border-left: 2px solid var(--orange);
+  background: color-mix(in srgb, var(--orange) 6%, var(--inset));
+}
+.page[data-page-name="planet-materials"] .planet-compass-quick.active .planet-compass-state {
+  border-left-color: var(--green);
+  background: color-mix(in srgb, var(--green) 6%, var(--inset));
+}
+.page[data-page-name="planet-materials"] .planet-command-bar {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 7%, var(--panel)), var(--panel));
+}
+.page[data-page-name="planet-materials"] .planet-atlas-tabs {
+  margin: 0;
+  padding: 5px;
+  border: 1px solid var(--border);
+  background: var(--header);
+}
+.page[data-page-name="planet-materials"] .planet-atlas-tabs button { min-width: 0; }
+.page[data-page-name="planet-materials"] .planet-condition-card {
+  border-color: color-mix(in srgb, var(--accent) 37%, var(--border));
+}
+.page[data-page-name="planet-materials"] .planet-facts > div {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--border-soft);
+  background: var(--inset);
+}
+.page[data-page-name="planet-materials"] .planet-site-card {
+  background: linear-gradient(110deg, var(--inset), color-mix(in srgb, var(--accent) 3%, var(--panel-alt)));
+}
+.page[data-page-name="planet-materials"] .planet-site-card[open] {
+  border-color: color-mix(in srgb, var(--accent) 57%, var(--border));
+}
+.page[data-page-name="planet-materials"] .planet-site-card summary:hover {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.page[data-page-name="planet-materials"] .planet-composition-row i { box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* Field systems and mission planning: clear launch choices and route sequence. */
+.page[data-page-name="operations"] .tool-grid { gap: 13px; }
+.page[data-page-name="operations"] .tool-card {
+  min-height: 194px;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 12px 15px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 5%, var(--panel)), var(--panel) 63%),
+    var(--panel);
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.page[data-page-name="operations"] .tool-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+  transform: translateY(-2px);
+}
+.page[data-page-name="operations"] .tool-card > i {
+  width: 44px;
+  height: 44px;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--inset));
+}
+.page[data-page-name="operations"] .tool-card h3 { font-size: 19px; }
+.page[data-page-name="operations"] .tool-card button { justify-self: stretch; }
+.page[data-page-name="mission"] .mission-list {
+  border-color: color-mix(in srgb, var(--orange) 37%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--orange) 5%, var(--panel)), var(--panel));
+}
+.page[data-page-name="mission"] .mission-row { min-height: 68px; }
+.page[data-page-name="mission"] .mission-row.active {
+  border-left: 3px solid var(--orange);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--orange) 13%, var(--inset)), var(--inset));
+}
+.page[data-page-name="mission"] .mission-row.active i { background: var(--orange); box-shadow: 0 0 8px var(--orange); }
+.page[data-page-name="mission"] .mission-detail .workspace-hero {
+  border-color: color-mix(in srgb, var(--orange) 40%, var(--border));
+  border-left: 3px solid var(--orange);
+  background: radial-gradient(circle at 8% 45%, color-mix(in srgb, var(--orange) 11%, transparent), transparent 46%), var(--panel);
+}
+.page[data-page-name="mission"] .mission-detail .workspace-hero h3 { color: var(--text); }
+.page[data-page-name="mission"] .objective-row:not(.complete) { box-shadow: inset 2px 0 color-mix(in srgb, var(--orange) 52%, transparent); padding-left: 8px; }
+
+/* Surface navigation: map is primary, command entry and readout are adjacent. */
+.page[data-page-name="ground"] .workspace-metrics article:nth-child(3),
+.page[data-page-name="ground"] .workspace-metrics article:nth-child(4) {
+  border-top-color: var(--green);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--green) 7%, var(--panel)), var(--panel-alt));
+}
+.page[data-page-name="ground"] .ground-grid > .workspace-card:last-child {
+  border-color: color-mix(in srgb, var(--green) 37%, var(--border));
+}
+.page[data-page-name="ground"] .trail-chart,
+.page[data-page-name="ground"] .trail-empty {
+  height: clamp(300px, 40vw, 410px);
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--green) 8%, transparent), transparent 55%),
+    repeating-linear-gradient(90deg, transparent 0 47px, color-mix(in srgb, var(--accent) 5%, transparent) 47px 48px),
+    var(--inset);
+}
+.page[data-page-name="ground"] .field-map-summary { border-top-color: color-mix(in srgb, var(--green) 30%, var(--border)); }
+.page[data-page-name="ground"] .trail-readout {
+  flex-wrap: wrap;
+  background: color-mix(in srgb, var(--green) 4%, var(--panel-alt));
+}
+.page[data-page-name="ground"] .trail-readout b { color: var(--green); }
+.page[data-page-name="ground"] .field-pin-row:hover { background: color-mix(in srgb, var(--green) 5%, transparent); }
+
+/* Record pages: archive counters, trends and a readable flight chronology. */
+:is(.page[data-page-name="records"], .page[data-page-name="profile"], .page[data-page-name="analytics"], .page[data-page-name="chronicle"], .page[data-page-name="ledger"]) .workspace-metrics article,
+.page[data-page-name="records"] .record-metrics article {
+  border-top: 2px solid color-mix(in srgb, var(--accent) 75%, var(--border));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 8%, var(--panel-alt)), var(--panel));
+}
+.page[data-page-name="records"] .record-metrics strong,
+:is(.page[data-page-name="profile"], .page[data-page-name="analytics"], .page[data-page-name="chronicle"], .page[data-page-name="ledger"]) .workspace-metrics strong {
+  color: var(--accent);
+  font-size: clamp(21px, 2.3vw, 30px);
+}
+.page[data-page-name="records"] .records-grid { grid-template-columns: minmax(0, 1.35fr) minmax(0, .8fr); }
+.page[data-page-name="records"] .record-feed { height: min(62vh, 480px); min-height: 310px; }
+.page[data-page-name="records"] .records-grid > .card:first-child { border-top-color: var(--orange); }
+.page[data-page-name="profile"] .profile-workspace-grid > .workspace-card { border-top: 2px solid color-mix(in srgb, var(--accent) 48%, var(--border)); }
+.page[data-page-name="profile"] .profile-ship-grid > div {
+  border-left: 2px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: linear-gradient(115deg, color-mix(in srgb, var(--accent) 5%, var(--panel-alt)), var(--panel-alt));
+}
+.page[data-page-name="profile"] .profile-ship-grid b { color: var(--accent); }
+.page[data-page-name="analytics"] .analytics-tabs {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, var(--header)), var(--header));
+}
+.page[data-page-name="analytics"] .analytics-bars {
+  height: 190px;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 37px, color-mix(in srgb, var(--accent) 10%, transparent) 37px 38px),
+    linear-gradient(180deg, var(--inset), color-mix(in srgb, var(--accent) 3%, var(--panel-alt)));
+}
+.page[data-page-name="analytics"] .science-index-card { border-top-color: var(--green); }
+.page[data-page-name="analytics"] .region-passport-card.visited {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 8%, var(--panel-alt)), var(--panel));
+}
+.page[data-page-name="chronicle"] .replay-card { border-color: color-mix(in srgb, var(--orange) 36%, var(--border)); }
+.page[data-page-name="chronicle"] .replay-chart {
+  height: min(48vh, 450px);
+  min-height: 310px;
+}
+.page[data-page-name="chronicle"] .chronicle-event,
+.page[data-page-name="chronicle"] .photo-chronicle-row {
+  border-left: 1px solid color-mix(in srgb, var(--orange) 45%, var(--border));
+  padding-left: 12px;
+}
+.page[data-page-name="chronicle"] .chronicle-event > b { color: var(--accent); }
+.page[data-page-name="chronicle"] .chronicle-list > .workspace-card { border-left: 2px solid color-mix(in srgb, var(--orange) 55%, var(--border)); }
+
+/* Recon, milestones and value archive each retain a distinct command purpose. */
+.page[data-page-name="recon"] .workspace-hero {
+  border-left: 3px solid var(--green);
+  background: radial-gradient(circle at 7% 50%, color-mix(in srgb, var(--green) 11%, transparent), transparent 40%), var(--panel);
+}
+.page[data-page-name="recon"] .recon-score {
+  min-height: 125px;
+  background: radial-gradient(circle at 14% 50%, color-mix(in srgb, var(--green) 13%, transparent), transparent 47%), var(--inset);
+}
+.page[data-page-name="recon"] .recon-score strong { color: var(--green); font-size: clamp(49px, 6vw, 70px); }
+.page[data-page-name="recon"] .recon-gap { border-left: 2px solid var(--orange); padding-left: 9px; }
+.page[data-page-name="achievements"] .achievement-overview {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: inset 0 0 40px color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.page[data-page-name="achievements"] .achievement-spotlight { border-top-color: var(--orange); }
+.page[data-page-name="achievements"] .achievement-archive { border-top: 2px solid color-mix(in srgb, var(--accent) 65%, var(--border)); }
+.page[data-page-name="achievements"] .achievement-tile.active {
+  box-shadow: inset 0 0 18px color-mix(in srgb, var(--orange) 7%, transparent);
+}
+.page[data-page-name="achievements"] .achievement-tile.earned {
+  box-shadow: inset 0 0 18px color-mix(in srgb, var(--green) 7%, transparent);
+}
+.page[data-page-name="ledger"] .ledger-card {
+  border-top: 2px solid var(--yellow);
+  background: linear-gradient(165deg, color-mix(in srgb, var(--yellow) 4%, var(--panel)), var(--panel) 38%);
+}
+.page[data-page-name="ledger"] .ledger-card .workspace-table th { color: var(--yellow); }
+.page[data-page-name="ledger"] .ledger-card .workspace-table tbody tr:hover td { background: color-mix(in srgb, var(--yellow) 7%, var(--panel-alt)); }
+
+/* At a compact desktop window, stack dense instruments instead of clipping. */
+@media (max-width: 1220px) {
+  .page[data-page-name="explore"] .route-workspace-grid,
+  .page[data-page-name="ground"] .ground-grid { grid-template-columns: minmax(0, 1fr); }
+  .page[data-page-name="explore"] .neutron-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page[data-page-name="explore"] .neutron-form > button { grid-column: 1 / -1; }
+  .page[data-page-name="planet-materials"] .planet-site-card summary {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .page[data-page-name="planet-materials"] .planet-site-card summary > em,
+  .page[data-page-name="planet-materials"] .planet-site-card summary > button { justify-self: start; }
+  .page[data-page-name="analytics"] .region-passport-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1050px) {
+  .page[data-page-name="explore"] .intel-grid,
+  .page[data-page-name="records"] .records-grid,
+  .page[data-page-name="mission"] .mission-layout { grid-template-columns: minmax(0, 1fr); }
+  .page[data-page-name="explore"] .tall-card { grid-row: auto; min-height: 0; }
+  .page[data-page-name="explore"] .workboard { max-height: 280px; }
+  .page[data-page-name="operations"] .tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page[data-page-name="mission"] .mission-list > div { max-height: 210px; }
+  .page[data-page-name="records"] .record-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page[data-page-name="profile"] .profile-workspace-grid { column-count: 1; }
+  .page[data-page-name="planet-materials"] .planet-atlas-tabs { flex-wrap: wrap; }
+  .page[data-page-name="planet-materials"] .planet-atlas-tabs button { flex: 1 1 150px; }
+}
+
+@media (max-width: 680px) {
+  .page[data-page-name="operations"] .tool-grid,
+  .page[data-page-name="records"] .record-metrics,
+  .page[data-page-name="analytics"] .region-passport-grid { grid-template-columns: minmax(0, 1fr); }
+  .page[data-page-name="explore"] .workboard-system { grid-template-columns: 50px minmax(0, 1fr); }
+  .page[data-page-name="explore"] .workboard-completion { grid-column: 1 / -1; text-align: left; }
+  .page[data-page-name="planet-materials"] .planet-site-card summary,
+  .page[data-page-name="explore"] .neutron-form { grid-template-columns: minmax(0, 1fr); }
+  .page[data-page-name="explore"] .neutron-form > button { grid-column: auto; }
+}
+
+body.reduced-motion .page[data-page-name="operations"] .tool-card { transition: none; }
+body.reduced-motion .page[data-page-name="operations"] .tool-card:hover { transform: none; }
