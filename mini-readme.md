@@ -1,51 +1,17 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.9.1 // Field Signals
+## v5.4.9.2 // Surface Instruments
 **Release Date:** 2026-Sep-24
 
-* Survey Operations now refreshes for each planet Scan even after FSS has already found the full system. Other scanned planets stay in a compact, independently cycling strip above the atlas, while biology, geology, landable and mining worlds retain detailed cards; the existing option can expand routine cards.
-* Scan-confirmed biological planets stay in a pinned mini-atlas above Survey Operations' rotating pages. Crowded systems cycle the pinboard independently in bounded batches while the detailed cards remain available below.
-* Reworked the three-step exobiology sampler with captured/next/ready states, live distance remaining, travelled-versus-required spacing and an honest analysis-pending state after the third sample.
-* Removed the duplicate clear-to-sample notification and its obsolete toggle. The live spacing guidance stays in Survey Operations.
-* Rebuilt Achievements as a commander record with a completion dial, next-milestone spotlight, latest unlock and a searchable, filterable, paged archive. Tracking, unlock notices and manual controls remain available.
-* Rebuilt cockpit notifications as severity-coded signal cards and achievement unlocks as distinct milestone cards, preserving category, points and expiry with readable scaling and reduced-motion support. Their accents now follow the active commander profile; warning and reward colours retain their meaning.
+* Rebuilt Planet Materials as a smaller field dossier with compact scan composition, clearly labelled Rhino material estimates, temperature and volcanism facts, and bounded saved-site pages. The active compass site stays pinned, and every saved site remains reachable as live distances change.
+* Rebuilt Planet Waypoint Navigation around a relative-heading dial, prominent surface distance, turn correction and target/current coordinate fixes. Near-target guidance uses measured distance, without inventing an arrival event or ETA; the panel adapts to larger text and honours profile themes and reduced motion.
 
 ## Earlier releases
 
-### v5.4.9 // Flight-Deck Navigation
-**Release Date:** 2026-Sep-23
-
-* Rebuilt the Navigation HUD as a flight-deck instrument with a clearer current-system readout, prominent next-system vector, compact jump/distance telemetry and glass-panel survey and metric banks.
-* Redesigned the full-route flight tape with a soft scanner sweep, distinct current and next markers, unscoopable-star colouring, and event-driven route-update and arrival confirmations. Every waypoint remains represented, including long routes.
-* Added class-coloured stellar illustrations for the known current and next arrival stars, plus spectral-class markers for each live route hop. White dwarfs, neutron stars and black holes have distinct treatments; unknown classes keep a neutral marker instead of a guessed star.
-* Linked route motion to charging and jumps while keeping routine telemetry refreshes calm. Both the app's reduced-motion setting and the OS preference stop HUD motion.
-* Refreshed the state instrument and completed the right-hand state scenes: travel, scan and map modes, planetary phases, vehicles, targeting, docking outcomes, carrier phases and hazards now have distinct geometry rather than shared fallback drawings. Live ship imagery, journal-event responses and reduced-motion support remain intact.
-* Kept the existing fuel-estimate cautions and journal-backed survey data.
-* Rebuilt Survey Operations as a title-free field atlas with journal-classed, code-drawn planets, scan-backed atmosphere and ring details, clearer FSS/biology progress, focused surface cards, and a refreshed sampling track. Signal-only bodies retain neutral unknown planets until scanned.
-* Added rotating planet surfaces beneath fixed lighting and a bounded atlas for crowded systems. Smaller planet discs and a persistent miniature roster keep every included body visible at once, while full planet cards and biological details cycle below. Removed the 60-body current-system scan-cache limit; the existing All surveyed bodies option includes non-priority scans. Reduced motion keeps the data accessible without visual effects.
-
-### v5.4.8.4 // Navigation Clarity
-**Release Date:** 2026-Sep-23
-
-* Strengthened the next-system readout with star class, scoopability and explicit jump/stop progress beside the complete route rail.
-* Added route-update, route-clear and arrival feedback with smooth next-target promotion; routine distance updates do not retrigger notifications.
-* Added labelled fuel-endurance estimates from recent fuel use, low-endurance caution and an explicit unknown state. These are not exact next-jump fuel or range calculations.
-* Surface operations emphasise the context rail without rearranging the HUD. Both layouts reserve a small status row and retain reduced-motion support.
-* Redesigned startup around a luminous optical core, real-progress orbital ring and horizontal stage sequence, with compact layouts and reduced-motion support. Once the app is ready, the screen remains for five seconds so the lens and facts can be seen.
-* Added a local starfield inspired by the Twitch overlay: layered drifting stars, a galactic band, subtle twinkle and theme-tinted nebula haze. Animation stops after handoff; reduced motion keeps a static sky.
-* The boot lens now acts as a silent exploration companion with animated chat bubbles and a shuffled offline Elite fact deck. The editable deck avoids repeats until all entries have appeared.
-* Random decorative lens activity adds focus shifts, theme-coloured pulses and expanding rings between facts, without generating journal events or changing progress. It pauses when hidden or reduced motion is enabled and stops at handoff. Now with random elite facst!
-* A failed overlay WebView navigation now gets a prompt, bounded page retry. The existing watchdog remains as fallback if the page still cannot render.
-
-### v5.4.8.3 // Living Optics
-**Release Date:** 2026-Sep-22
-
-* Replaced the heartbeat eye with HAL-inspired camera optics: a luminous core, counter-rotating lens rings, drifting focus and moving glass reflections, with continuous idle animation and smooth journal-event pulses.
-* Lens colours follow the active profile theme and blend between activity states; stalled-feed and reduced-motion behaviour are preserved.
-* Replaced the angular heartbeat frame with counter-rotating orbital arcs, an orbiting beacon and breathing index marks. Quiet-feed periods retain a bright theme-coloured lens, with a separate red warning dot instead of dimming the entire eye.
-* Refreshed the Navigation HUD route rail with distinct current/next markers and an animated next leg. Every waypoint retains its own evenly spaced marker, including long routes; routine distance updates no longer rebuild the markers.
-* Disabled the Rhino Coverage overlay, including for existing profiles, and removed its Settings hotkey bindings. Saved maps and the underlying coverage tools are retained. since we are waiting for journal events, there's a better tool out in the wild that does the overlay 100% better than I could ever do ( https://github.com/Fumlop/EDRhinoSpotter is the better tool for this )
-
+* **v5.4.9.1** — Refreshed Survey Operations for every planet scan with compact routine and pinned biology strips, improved exobiology sampling, and rebuilt Achievements and themed cockpit notifications.
+* **v5.4.9** — Rebuilt the Navigation HUD with a flight-deck layout, complete animated route, stellar-class visuals and distinct state scenes; redesigned Survey Operations as a bounded, animated planet atlas.
+* **v5.4.8.4** — Improved Navigation route and fuel guidance, redesigned startup with an optical core, starfield and rotating Elite facts, and added prompt retry for failed overlay pages.
+* **v5.4.8.3** — Rebuilt the theme-aware HAL-inspired heartbeat optics, refreshed the Navigation route rail, and disabled the Rhino Coverage overlay while retaining saved maps and underlying tools.
 * **v5.4.8.2** — Redesigned the heartbeat, added quick planetary compass coordinates and stabilised overlay startup/recovery with offscreen loading, browser error suppression and reliable readiness handshakes.
 * **v5.4.8.1** — Restored Overlay Studio as a standalone Application destination and stabilised overlay startup with staged WebView loading, rendered-page acknowledgements and isolated page recovery.
 * **v5.4.8** — Consolidated the command deck into workflow-focused destinations and shared suites, retained compatibility routes, and added an in-app GitHub release notification with matching release notes and links.

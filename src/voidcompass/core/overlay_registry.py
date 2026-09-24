@@ -39,7 +39,7 @@ OVERLAY_SPECS = (
     OverlaySpec("toast_hud", "toast", "Void Compass Cockpit Notifications", "toast_overlay_enabled", "toast_hud_x", "toast_hud_y", (1200, 80), (400, 94), "Cockpit Notifications", "NOTIFY", True, "notifications", "overlay_hotkey_notifications", "Cockpit Notifications"),
     OverlaySpec("heartbeat_hud", "heartbeat", "Void Compass Journal Heartbeat", "heartbeat_overlay_enabled", "heartbeat_hud_x", "heartbeat_hud_y", (24, 24), (54, 54), "Journal Heartbeat", "HEARTBEAT", True, "heartbeat", "overlay_hotkey_heartbeat", "Journal Heartbeat"),
     OverlaySpec("contact_scope_hud", "contact-scope", "Void Compass Deep Space Contacts", "contact_scope_overlay_enabled", "contact_scope_hud_x", "contact_scope_hud_y", (1180, 250), (480, 270), "Deep Space Contact Scope", "CONTACTS", True, "contact_scope", "overlay_hotkey_contact_scope", "Deep Space Contacts"),
-    OverlaySpec("ground_popup", "ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled", "ground_popup_x", "ground_popup_y", (1320, 160), (370, 154), "Planet Waypoint Navigation", "SURFACE NAV", True, "planet_waypoint", "overlay_hotkey_planet_waypoint", "Planet Waypoint Navigation"),
+    OverlaySpec("ground_popup", "ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled", "ground_popup_x", "ground_popup_y", (1320, 160), (420, 208), "Planet Waypoint Navigation", "SURFACE NAV", True, "planet_waypoint", "overlay_hotkey_planet_waypoint", "Planet Waypoint Navigation"),
 )
 
 OVERLAY_SPEC_BY_ATTR = {spec.attr: spec for spec in OVERLAY_SPECS}

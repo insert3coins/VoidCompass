@@ -201,7 +201,7 @@ class DashboardCoreMixin:
 
     def _ensure_ground_popup(self):
         if self.ground_popup is None or self.ground_popup.closed:
-            self.ground_popup = OverlayWindowState(self.root, 370, 154,
+            self.ground_popup = OverlayWindowState(self.root, 420, 208,
                 int(self.config.get('ground_popup_x',1320)), int(self.config.get('ground_popup_y',160)))
             attach_html_ground_overlay(self, self.ground_popup, 'ground', 'Planet Waypoint Navigation',
                                        'ground_popup_enabled', 'ground_popup_x', 'ground_popup_y')

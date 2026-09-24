@@ -38,6 +38,7 @@ from voidcompass.mining.rhino_intelligence import ground_intelligence
 from voidcompass.mining.rhino_minimap import location_index
 from voidcompass.core.config import get_active_profile, get_profile_dir
 from voidcompass.exploration.deep_survey import recon_report
+from voidcompass.exploration.exploration_intelligence import body_completion
 from voidcompass.core.diagnostic_logs import application_base_dir
 from voidcompass.core.global_hotkeys import (
     DEFAULT_OVERLAY_HOTKEYS,
@@ -472,7 +473,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
         complete = bool(total_known and scanned >= total)
         completion = (intelligence or {}).get("completion") or {}
         bodies = []
-        notables = []
+        notable_targets = []
         high_classes = {"Earthlike body", "Water world", "Ammonia world"}
         journal_rows = [
             row for row in (getattr(self, "scan_items", None) or [])
@@ -527,9 +528,32 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             }
             bodies.append(body_payload)
             if priority:
-                notables.append(
-                    f"{body_payload['name']} · {body_payload['badge']}"
+                archived = body_payload["archived"]
+                completion_state = body_completion(row) if not archived else {}
+                bio_remaining = max(
+                    0,
+                    _integer(completion_state.get("bio_total"))
+                    - _integer(completion_state.get("bio_complete")),
                 )
+                dss_pending = bool(
+                    completion_state.get("dss_recommended")
+                    and not completion_state.get("mapped")
+                )
+                if bio_remaining:
+                    rank = 0
+                    bio_done = _integer(completion_state.get("bio_complete"))
+                    bio_total = _integer(completion_state.get("bio_total"))
+                    task = f"BIO {bio_done}/{bio_total}"
+                    if dss_pending:
+                        task += " · DSS PENDING"
+                elif dss_pending:
+                    rank = 1
+                    task = "DSS PENDING"
+                else:
+                    rank = 3 if archived else 2
+                    task = "KNOWN ARCHIVE" if archived else body_payload["badge"]
+                notable_targets.append((rank, body_payload["body_id"], f"{body_payload['name']} · {task}"))
+        notables = [row[2] for row in sorted(notable_targets)]
         if not notables:
             notables = [_text(row, 180) for row in (getattr(self, "valuable_bodies", None) or [])]
         star_class = _text(getattr(self, "star_class", ""), 50)
@@ -561,6 +585,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                 known_valuable,
             ),
             "notables": notables[:8],
+            "notable_total": len(notables),
             "bodies": bodies[:28],
             "journal_bodies": len(journal_rows),
             "archive_bodies": len(archived_rows),

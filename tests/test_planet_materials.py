@@ -76,6 +76,22 @@ class PlanetMaterialsTests(unittest.TestCase):
         model = build_planet_materials_model({'system': 'Sol', 'bodies': [], 'sites': []})
         self.assertFalse(model['active'])
 
+    def test_overlay_retains_all_saved_sites_and_distant_compass_target(self):
+        sites = [
+            {'id': index, 'system': 'Sol', 'body': 'Moon', 'name': f'Site {index}',
+             'latitude': index / 10, 'longitude': 0}
+            for index in range(1, 13)
+        ]
+        model = build_planet_materials_model({
+            'system': 'Sol', 'body': 'Moon', 'sites': sites,
+            'navigation_target': {'active': True, 'system': 'Sol', 'body': 'Moon',
+                                  'site_id': 12, 'label': 'Site 12'},
+        }, latitude=0, longitude=0, radius_m=1_000_000)
+        self.assertEqual(model['site_count'], 12)
+        self.assertEqual(len(model['sites']), 12)
+        self.assertEqual(model['sites'][-1]['id'], 12)
+        self.assertTrue(model['target']['active'])
+
     def test_legacy_database_migrates_and_retains_scan_snapshot(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'sites.db'

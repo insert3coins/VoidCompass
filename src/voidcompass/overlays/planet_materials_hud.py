@@ -153,7 +153,9 @@ def build_planet_materials_model(
             for row in (details.get("best_materials") or ())[:3] if isinstance(row, dict)
         ],
         "materials": materials[:8],
-        "sites": sites[:8],
+        # Site paging happens in the renderer; retain every saved site so a
+        # compass target outside the nearest eight cannot disappear.
+        "sites": sites,
         "site_count": len(sites),
         "target": {
             "active": target_here,
