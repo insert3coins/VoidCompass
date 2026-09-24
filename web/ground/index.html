@@ -8,15 +8,35 @@
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
-  <main id="ground" class="ground">
-    <header><span>PLANET WAYPOINT NAV</span><strong id="body-name">SURFACE FIX</strong></header>
-    <section>
-      <div class="compass" aria-hidden="true"><i class="ring"></i><i class="north">N</i><i class="east">E</i><i class="south">S</i><i class="west">W</i><b id="needle"></b><em></em></div>
-      <div class="nav-copy"><small id="direction">HEADING N/A</small><strong id="distance">—</strong><span id="bearing">BEARING —</span><span id="target">TARGET —</span></div>
-      <div class="turn"><small>RELATIVE</small><strong id="turn-value">—</strong><i><b id="turn-fill"></b></i></div>
+  <main id="ground" class="ground" aria-label="Planet waypoint navigation">
+    <header class="masthead">
+      <div class="masthead-title"><span class="signal-dot" aria-hidden="true"></span><span>SURFACE / WAYPOINT</span></div>
+      <strong id="body-name">SURFACE FIX</strong>
+    </header>
+    <section class="navigation-core" aria-label="Live waypoint guidance">
+      <div class="relative-dial" aria-label="Heading-relative target direction">
+        <span class="dial-axis forward">FWD</span><span class="dial-axis port">L</span>
+        <span class="dial-axis starboard">R</span><span class="dial-axis aft">AFT</span>
+        <span class="dial-ring"></span><span id="needle" class="dial-needle"></span><span class="dial-center"></span>
+      </div>
+      <div class="range-readout">
+        <span class="eyebrow">SURFACE DISTANCE</span>
+        <strong id="distance">—</strong>
+        <span id="state-label" class="state-label">FIX PENDING</span>
+        <span id="direction" class="direction">HEADING N/A</span>
+      </div>
     </section>
-    <footer style="justify-content:flex-end"><b id="coordinates">POSITION PENDING</b></footer>
-    <div class="scanlines"></div>
+    <section class="course-band" aria-label="Turn guidance">
+      <div class="course-readout"><span>COURSE CORRECTION</span><strong id="turn-value">—</strong></div>
+      <div class="turn-track" aria-hidden="true"><span class="track-centre"></span><span id="turn-marker" class="turn-marker"></span></div>
+      <div class="course-legend"><span>LEFT</span><span>AHEAD</span><span>RIGHT</span></div>
+    </section>
+    <footer class="position-band">
+      <div><span>TARGET FIX</span><strong id="target">—</strong></div>
+      <div><span>CURRENT FIX</span><strong id="coordinates">POSITION PENDING</strong></div>
+      <div class="heading-readout"><span>HDG / BRG</span><strong id="bearing">— / —</strong></div>
+    </footer>
+    <div class="scanlines" aria-hidden="true"></div>
   </main>
   <script src="/assets/overlay-client.js"></script>
   <script src="app.js"></script>

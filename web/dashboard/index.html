@@ -151,22 +151,22 @@
 
       <nav class="nav" aria-label="Command deck">
         <p>EXPLORATION</p>
-        <button class="nav-item active" data-page="overview"><i>⌖</i><span>Dashboard</span><b>01</b></button>
-        <button class="nav-item" data-page="explore"><i>✦</i><span>Explore & Survey</span><b>02</b></button>
-        <button class="nav-item" data-page="planet-materials"><i>◇</i><span>Planetary Operations</span><b>03</b></button>
-        <button class="nav-item" data-page="map"><i>◉</i><span>Galactic Atlas</span><b>04</b></button>
+        <button class="nav-item active" data-page="overview" aria-label="Dashboard" aria-current="page" title="Dashboard"><i>⌖</i><span>Dashboard</span><b>01</b></button>
+        <button class="nav-item" data-page="explore" aria-label="Explore &amp; Survey" title="Explore &amp; Survey"><i>✦</i><span>Explore & Survey</span><b>02</b></button>
+        <button class="nav-item" data-page="planet-materials" aria-label="Planetary Operations" title="Planetary Operations"><i>◇</i><span>Planetary Operations</span><b>03</b></button>
+        <button class="nav-item" data-page="map" aria-label="Galactic Atlas" title="Galactic Atlas"><i>◉</i><span>Galactic Atlas</span><b>04</b></button>
         <p>RECORDS</p>
-        <button class="nav-item" data-page="profile"><i>◎</i><span>Commander Record</span><b>05</b></button>
-        <button class="nav-item" data-page="analytics"><i>▥</i><span>Exploration Archive</span><b>06</b></button>
+        <button class="nav-item" data-page="profile" aria-label="Commander Record" title="Commander Record"><i>◎</i><span>Commander Record</span><b>05</b></button>
+        <button class="nav-item" data-page="analytics" aria-label="Exploration Archive" title="Exploration Archive"><i>▥</i><span>Exploration Archive</span><b>06</b></button>
         <p>FIELD SYSTEMS</p>
-        <button class="nav-item" data-page="mining"><i>◆</i><span>Mining Command</span><b>07</b></button>
-        <button class="nav-item" data-page="build-planner"><i>▤</i><span>Ship Workshop</span><b>08</b></button>
-        <button class="nav-item" data-page="carrier"><i>◈</i><span>Carrier Command</span><b>09</b></button>
-        <button class="nav-item" data-page="powerplay"><i>⚑</i><span>Powerplay</span><b>10</b></button>
+        <button class="nav-item" data-page="mining" aria-label="Mining Command" title="Mining Command"><i>◆</i><span>Mining Command</span><b>07</b></button>
+        <button class="nav-item" data-page="build-planner" aria-label="Ship Workshop" title="Ship Workshop"><i>▤</i><span>Ship Workshop</span><b>08</b></button>
+        <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>09</b></button>
+        <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>10</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="overlay-studio"><i>▦</i><span>Overlay Studio</span><b>11</b></button>
-        <button class="nav-item" data-page="settings"><i>≡</i><span>Settings</span><b>12</b></button>
-        <button class="nav-item" data-page="about"><i>ⓘ</i><span>About</span><b>13</b></button>
+        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>11</b></button>
+        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>12</b></button>
+        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>13</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -229,8 +229,11 @@
             <article class="card preflight-card core-module">
               <header><span>EXPLORATION PREFLIGHT</span><b id="preflight-status">CHECK</b></header>
               <div class="preflight-body">
+                <div class="preflight-summary-row">
+                  <p id="preflight-summary">Checking departure systems.</p>
+                  <button type="button" id="preflight-toggle" aria-expanded="false" aria-controls="preflight-checks">SHOW ALL CHECKS</button>
+                </div>
                 <div id="preflight-checks" class="preflight-checks"></div>
-                <p id="preflight-summary">Checking departure systems.</p>
               </div>
             </article>
 
@@ -245,6 +248,7 @@
                 <div><small>REGION</small><strong id="survey-region">UNKNOWN</strong></div>
               </div>
               <div id="survey-notables" class="notable-list empty">Awaiting scan telemetry.</div>
+              <div class="survey-footer"><span id="survey-overflow" class="notable-overflow" hidden></span><button type="button" id="survey-open-workboard" data-page="explore">OPEN SYSTEM WORKBOARD</button></div>
             </article>
 
             <article class="card route-card" data-deck-module="route">
@@ -262,7 +266,7 @@
             <section class="telemetry-strip core-module">
             <article><i class="fuel-icon"></i><div><small>FUEL INTEGRITY</small><strong id="metric-fuel">—</strong><span id="metric-fuel-detail">AWAITING LOADOUT</span></div></article>
             <article><i class="data-icon"></i><div><small>DATA ABOARD</small><strong id="metric-data">0 CR</strong><span id="metric-data-detail">NO UNSOLD RECORDS</span></div></article>
-            <article><i class="jump-icon"></i><div><small>SESSION TRAVEL</small><strong id="metric-distance">0.0 LY</strong><span id="metric-jumps">0 JUMPS</span></div></article>
+            <article><i class="work-icon"></i><div><small>SURVEY WORK</small><strong id="metric-work">AWAITING SURVEY</strong><span id="metric-work-detail">FSS / DSS / BIO UNKNOWN</span></div></article>
             <article><i class="signal-icon"></i><div><small>SOURCE HEALTH</small><strong id="metric-health">CACHED</strong><span id="metric-health-detail">WAITING FOR GAME</span></div></article>
             </section>
 

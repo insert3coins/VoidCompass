@@ -37,6 +37,7 @@ class HtmlGroundOverlayBridge(HtmlOverlayBridgeLifecycle):
         self._disposed = False
         self._sync_job = None
         self._last_fingerprint = None
+        self._browser_content_height = 0
         try:
             self.win.on_destroy(self._on_destroy)
         except Exception:
@@ -66,6 +67,7 @@ class HtmlGroundOverlayBridge(HtmlOverlayBridgeLifecycle):
         return False
 
     def _window_payload(self, solution=None):
+        width, height = self._dimensions()
         held = bool(getattr(
             self.win.master, "_voidcompass_startup_presentation_held", False,
         ))
@@ -76,14 +78,18 @@ class HtmlGroundOverlayBridge(HtmlOverlayBridgeLifecycle):
         return {
             "x": _integer(self.config.get(self.x_key), 1320),
             "y": _integer(self.config.get(self.y_key), 160),
-            "width": 370,
-            "height": 154,
+            "width": width,
+            "height": height,
             "visible": bool(
                 shown and self._active(solution) and not held
                 and self.config.get(self.enabled_key, True)
             ),
             "click_through": bool(self.config.get("overlay_mouse_passthrough", True)),
         }
+
+    def _dimensions(self):
+        measured = _integer(self._browser_content_height, 0)
+        return 420, max(208, min(400, measured)) if measured else 208
 
     def _theme(self):
         _, palette = themes.resolve_theme(
@@ -143,6 +149,7 @@ class HtmlGroundOverlayBridge(HtmlOverlayBridgeLifecycle):
                 surface.dispose()
             pass
             self._last_fingerprint = None
+            self._browser_content_height = 0
             return False
         if self.surface is not None:
             return True
@@ -181,6 +188,12 @@ class HtmlGroundOverlayBridge(HtmlOverlayBridgeLifecycle):
                 self._ready = self.surface.ready
                 self.win._html_ready = self._ready
                 pass
+                measured_height = self.surface.server.rendered_content_height(
+                    self.overlay_id,
+                )
+                if measured_height != self._browser_content_height:
+                    self._browser_content_height = measured_height
+                    self.win._html_window_size = self._dimensions()
                 if self._ready:
                     if not was_ready:
                         logging.info("HTML Planet Waypoint Navigation renderer is live")
@@ -203,7 +216,7 @@ def attach_html_ground_overlay(app, window, overlay_id, title, enabled_key, x_ke
     )
     window._html_ground_bridge = bridge
     window._html_ready = False
-    window._html_window_size = (370, 154)
+    window._html_window_size = bridge._dimensions()
 
     def set_html_renderer(enabled):
         result = bridge.set_enabled(enabled)

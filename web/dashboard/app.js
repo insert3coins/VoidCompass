@@ -78,6 +78,7 @@ let deckLayoutFingerprint = "";
 let atlasLayerRequest = "";
 let decisionTagsFingerprint = "";
 let preflightFingerprint = "";
+let preflightExpanded = false;
 let routeHorizonFingerprint = "";
 let sessionHighlightsFingerprint = "";
 let codexCandidatesFingerprint = "";
@@ -745,24 +746,33 @@ function renderDecision(state) {
 function renderPreflight(state) {
   const preflight = state.preflight || {};
   const checks = Array.isArray(preflight.checks) ? preflight.checks : [];
+  const attention = checks.filter((row) => ["warn", "fail"].includes(String(row.status || "").toLowerCase()));
+  const visible = preflightExpanded ? checks : attention;
   const badge = byId("preflight-status");
   text("preflight-status", preflight.status || "CHECK");
   if (badge) badge.dataset.state = String(preflight.status || "check").toLowerCase();
   text("preflight-summary", preflight.summary || "Checking departure systems.");
-  const fingerprint = JSON.stringify(checks.map((row) => [row.id, row.status, row.label, row.value, row.detail]));
+  const toggle = byId("preflight-toggle");
+  toggle.disabled = checks.length === 0;
+  toggle.setAttribute("aria-expanded", String(preflightExpanded));
+  toggle.textContent = preflightExpanded ? "HIDE CHECKS" : `SHOW ALL ${checks.length} CHECKS`;
+  const list = byId("preflight-checks");
+  list.hidden = visible.length === 0;
+  const fingerprint = JSON.stringify([preflightExpanded, visible.map((row) => [row.id, row.status, row.label, row.value, row.detail])]);
   if (fingerprint === preflightFingerprint) return;
   preflightFingerprint = fingerprint;
-  byId("preflight-checks")?.replaceChildren(...checks.map((row) => {
+  list.replaceChildren(...visible.map((row) => {
     const node = document.createElement("div");
     node.className = `preflight-check ${String(row.status || "warn").toLowerCase()}`;
-    node.title = row.detail || "";
     const light = document.createElement("i");
     const copy = document.createElement("span");
     const label = document.createElement("small");
     const value = document.createElement("b");
+    const detail = document.createElement("em");
     label.textContent = row.label || "CHECK";
     value.textContent = row.value || "—";
-    copy.append(label, value);
+    detail.textContent = row.detail || "";
+    copy.append(label, value, detail);
     node.append(light, copy);
     return node;
   }));
@@ -817,12 +827,17 @@ function renderSurvey(state) {
 
   const rows = Array.isArray(survey.notables) ? survey.notables : [];
   const notable = byId("survey-notables");
+  const shown = rows.slice(0, 4);
+  const overflow = Math.max(0, number(survey.notable_total, rows.length) - shown.length);
+  const overflowNode = byId("survey-overflow");
+  overflowNode.hidden = overflow === 0;
+  overflowNode.textContent = overflow ? `+${overflow} MORE PRIORITY ${overflow === 1 ? "BODY" : "BODIES"}` : "";
   if (!rows.length) {
     notable.className = "notable-list empty";
     notable.textContent = survey.total_known ? "No priority bodies or surface signals recorded yet." : "Awaiting scan telemetry.";
   } else {
     notable.className = "notable-list";
-    notable.replaceChildren(...rows.slice(0, 4).map((item) => {
+    notable.replaceChildren(...shown.map((item) => {
       const span = document.createElement("span");
       span.textContent = String(item);
       return span;
@@ -939,14 +954,21 @@ function formatCredits(value) {
 function renderMetrics(state) {
   const flight = state.flight || {};
   const session = state.session || {};
+  const survey = state.survey || {};
   const data = state.data || {};
   const sources = state.sources || {};
   text("metric-fuel", flight.fuel_percent === null || flight.fuel_percent === undefined ? "—" : `${Math.round(number(flight.fuel_percent))}%`);
   text("metric-fuel-detail", flight.fuel_detail, "AWAITING LOADOUT");
   text("metric-data", formatCredits(data.unsold_total));
   text("metric-data-detail", data.unsold_bio ? `${formatCredits(data.unsold_bio)} BIOLOGICAL` : "EXPLORATION LEDGER");
-  text("metric-distance", `${number(session.distance_ly).toLocaleString(undefined, {maximumFractionDigits: 1})} LY`);
-  text("metric-jumps", `${number(session.jumps)} JUMPS`);
+  const completion = survey.completion || {};
+  const fss = Math.max(0, number(completion.unknown_bodies));
+  const dss = Math.max(0, number(completion.dss_targets) - number(completion.dss_complete));
+  const bio = Math.max(0, number(completion.bio_total) - number(completion.bio_complete));
+  const outstanding = fss + dss + bio;
+  const surveyKnown = Boolean(survey.total_known || number(survey.scanned));
+  text("metric-work", !surveyKnown ? "AWAITING SURVEY" : outstanding ? `${outstanding} OPEN ${outstanding === 1 ? "TASK" : "TASKS"}` : survey.complete ? "CLEAR" : "FSS UNCONFIRMED");
+  text("metric-work-detail", !surveyKnown ? "FSS / DSS / BIO UNKNOWN" : `FSS ${survey.total_known ? fss : "?"} · DSS ${dss} · BIO ${bio}`);
   text("metric-health", sources.overall, "CACHED");
   text("metric-health-detail", sources.detail, "WAITING FOR GAME");
   text("record-jumps", number(session.jumps));
@@ -1023,6 +1045,7 @@ function renderDeckLayout(state) {
     node.style.order = pageLayoutOwnsOrder ? "" : String(2 + (index < 0 ? order.length : index) * 2);
     node.hidden = hidden.has(node.dataset.deckModule);
   });
+  byId("overview-modules").classList.toggle("route-hidden", hidden.has("route"));
   const corePanels = [
     document.querySelector(".overview-modules > .decision-card"),
     document.querySelector(".overview-modules > .preflight-card"),
@@ -3320,6 +3343,7 @@ function renderDashboard(state) {
     deckLayoutFingerprint = "";
     decisionTagsFingerprint = "";
     preflightFingerprint = "";
+    preflightExpanded = false;
     routeHorizonFingerprint = "";
     sessionHighlightsFingerprint = "";
     codexCandidatesFingerprint = "";
@@ -3595,7 +3619,12 @@ function showPage(name) {
   localStorage.setItem(`voidcompass.dashboard.page.${profileKey}`, name);
   document.querySelectorAll(".page").forEach((node) => node.classList.toggle("active", node === page));
   const navPage = navigationPage(name);
-  document.querySelectorAll(".nav-item[data-page]").forEach((node) => node.classList.toggle("active", node.dataset.page === navPage));
+  document.querySelectorAll(".nav-item[data-page]").forEach((node) => {
+    const active = node.dataset.page === navPage;
+    node.classList.toggle("active", active);
+    if (active) node.setAttribute("aria-current", "page");
+    else node.removeAttribute("aria-current");
+  });
   document.querySelectorAll(".suite-tabs [data-page]").forEach((node) => node.classList.toggle("active", node.dataset.page === name));
   document.querySelector(".pages").classList.toggle("atlas-active", name === "map");
   if (name !== "map") {
@@ -4317,6 +4346,11 @@ byId("customise-deck").addEventListener("click", () => {
   renderDeckModuleControls(layout.available_modules || []);
   byId("deck-customiser").hidden = false;
   byId("deck-customiser").scrollIntoView({block: "nearest", behavior: "smooth"});
+});
+
+byId("preflight-toggle").addEventListener("click", () => {
+  preflightExpanded = !preflightExpanded;
+  renderPreflight(model);
 });
 
 byId("close-deck-customiser").addEventListener("click", () => {
