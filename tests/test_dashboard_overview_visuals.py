@@ -175,8 +175,16 @@ class DashboardOverviewVisualTests(unittest.TestCase):
         self.assertEqual(self.page.locator("#survey-body-list .survey-body-row").count(), 1)
         self.assertIn("2", self.page.locator("#survey-body-list .survey-body-copy b").inner_text())
         self.assertIn("Water world", self.page.locator("#survey-body-list .survey-body-copy small").inner_text())
-        self.assertIn("bridge-planet-water", self.page.locator("#survey-body-list .bridge-planet-orb").get_attribute("class"))
-        self.assertIn("has-rings", self.page.locator("#survey-body-list .bridge-planet-orb").get_attribute("class"))
+        planet_orb = self.page.locator("#survey-body-list .bridge-planet-orb")
+        self.assertIn("bridge-planet-water", planet_orb.get_attribute("class"))
+        self.assertIn("has-rings", planet_orb.get_attribute("class"))
+        for layer in ("ring", "sphere", "glint"):
+            self.assertEqual(planet_orb.locator(f":scope > .bridge-planet-{layer}").count(), 1)
+        sphere = planet_orb.locator(":scope > .bridge-planet-sphere")
+        self.assertTrue(sphere.evaluate("""node => {
+          const style = getComputedStyle(node), box = node.getBoundingClientRect();
+          return box.width > 15 && box.height > 15 && style.backgroundImage !== 'none';
+        }"""))
         self.assertTrue(self.page.locator(".route-radar").is_visible())
         self.assertIn("has-route", self.page.locator(".overview-modules > .route-card").get_attribute("class"))
         self.assertEqual(self.page.locator("#route-badge").inner_text(), "GAME ROUTE")
