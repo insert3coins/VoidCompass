@@ -85,6 +85,12 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
                       workspaceFingerprints[name] = '';
                       renderWorkspace(model);
                     },
+                    studio(data) {
+                      this.activate('overlay-studio');
+                      currentPage = 'overlay-studio';
+                      model.overlay_studio = data;
+                      renderOverlayStudio(model);
+                    },
                     theme(value) { applyTheme(value); }
                   };
                 """
@@ -127,6 +133,27 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
                     }""", name)
                     self.assertTrue(all(geometry.values()), (name, width, geometry))
         self.assertFalse(self.missing, self.missing)
+        self.assertFalse(self.errors, self.errors)
+
+    def test_global_overlay_fade_is_visible_and_sends_live_setting(self):
+        snapshot = overview_state()
+        snapshot["overlay_studio"] = {
+            "desktop": {}, "overlays": [], "presets": [],
+            "options": {"overlay_opacity_percent": 75},
+        }
+        self.page.evaluate("data => window.__bridgeHarness.render(data)", snapshot)
+        self.page.evaluate("data => window.__bridgeHarness.studio(data)", snapshot["overlay_studio"])
+        fade = self.page.locator("#studio-global-fade")
+        self.assertTrue(fade.is_visible())
+        self.assertEqual(fade.input_value(), "75")
+        with self.page.expect_request(lambda request: "/api/command" in request.url
+                                      and '"set_opacity"' in (request.post_data or "")) as submitted:
+            fade.evaluate("input => { input.value = '65'; input.dispatchEvent(new Event('input', {bubbles: true})); }")
+        payload = submitted.value.post_data_json
+        self.assertEqual(payload["operation"], "set_opacity")
+        self.assertEqual(payload["value"], 65)
+        self.assertEqual(self.page.locator("#studio-overlay-opacity").input_value(), "65")
+        self.assertEqual(self.page.locator("#studio-global-fade-value").text_content(), "65%")
         self.assertFalse(self.errors, self.errors)
 
     def test_live_workspaces_render_without_clipping_or_script_errors(self):

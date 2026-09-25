@@ -541,6 +541,14 @@
               <article><small>HTML LINK</small><strong id="studio-html-count">0</strong><span>WEBVIEW READY</span></article>
             </section>
 
+            <article class="card studio-global-fade-card">
+              <header><span>GLOBAL OVERLAY FADE</span><b>LIVE · ALL SURFACES</b></header>
+              <div class="studio-global-fade-body">
+                <div><strong>Whole-overlay opacity</strong><p>Fade every cockpit overlay together, including its text, icons, planets and borders. Saved for this commander.</p></div>
+                <label for="studio-global-fade"><span>MORE TRANSPARENT</span><input id="studio-global-fade" type="range" min="40" max="100" step="5" aria-label="Global whole-overlay opacity"><span>OPAQUE</span><b id="studio-global-fade-value">100%</b></label>
+              </div>
+            </article>
+
             <div class="studio-console-grid">
               <aside class="studio-roster-column">
                 <article class="card studio-index-card">
@@ -607,7 +615,7 @@
                 <label class="studio-switch"><span><b>Compact Navigation HUD</b><small>Use the compact-first navigation surface.</small></span><input type="checkbox" data-overlay-option="hud_compact_mode"><i></i></label>
                 <label class="studio-switch"><span><b>Expand routine bodies</b><small>Other scanned planets stay in a compact strip; on also gives them full atlas cards.</small></span><input type="checkbox" data-overlay-option="survey_status_show_all_bodies"><i></i></label>
                 <label class="studio-field"><span>Overlay text scale</span><div><input id="studio-text-scale" type="number" min="75" max="200" step="5"><b>%</b></div></label>
-                <label class="studio-field studio-opacity-field"><span>Overlay opacity</span><div><input id="studio-overlay-opacity" type="range" min="40" max="100" step="5"><b id="studio-overlay-opacity-value">100%</b></div></label>
+                <label class="studio-field studio-opacity-field"><span>Global whole-overlay opacity</span><div><input id="studio-overlay-opacity" type="range" min="40" max="100" step="5"><b id="studio-overlay-opacity-value">100%</b></div></label>
               </article>
 
               <article class="card studio-option-card studio-ground-target-card">
