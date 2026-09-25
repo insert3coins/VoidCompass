@@ -147,17 +147,35 @@ body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none
 .bio-pinboard-heading { display: flex; align-items: center; justify-content: space-between; gap: 5px; min-width: 0; font-size: calc(10px * var(--scale)); font-weight: 700; letter-spacing: .55px; }
 .bio-pinboard-heading strong { color: var(--orange); white-space: nowrap; }
 .bio-pinboard-heading span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); text-align: right; }
-.bio-pinboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 5px; }
-.bio-pin { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 3px; align-items: center; min-width: 0; min-height: 28px; padding: 1px 4px 1px 1px; border: 1px solid var(--soft); background: color-mix(in srgb, var(--raised) 55%, transparent); }
-.bio-pin.recent { border-color: color-mix(in srgb, var(--orange) 52%, var(--soft)); }
-.bio-pin.complete { border-color: color-mix(in srgb, var(--green) 38%, var(--soft)); }
-.bio-pin .planet-orb { flex-basis: 18px; width: 18px; height: 18px; }
-.bio-pin .planet-sphere { inset: 2px; }
-.bio-pin .planet-glint { inset: 2px; }
-.bio-pin .planet-ring { left: -1px; right: -1px; top: 4px; height: 10px; border-width: 1px; }
-.bio-pin-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: calc(11px * var(--scale)); }
-.bio-pin-count { color: var(--orange); font-size: calc(11px * var(--scale)); white-space: nowrap; }
-.bio-pin.complete .bio-pin-count { color: var(--green); }
+.bio-pinboard-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.bio-pin {
+  --tone: var(--orange);
+  position: relative; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 6px;
+  min-width: 0; padding: 5px 6px 5px 3px; overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--tone) 30%, var(--soft)); border-left: 2px solid var(--tone);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--tone) 10%, transparent), transparent 48%), color-mix(in srgb, var(--panel) 87%, transparent);
+}
+.bio-pin::after { content: ""; position: absolute; inset: 0; z-index: 5; opacity: 0; pointer-events: none; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--tone) 30%, transparent), transparent); transform: translateX(-110%); }
+.bio-pin.complete { --tone: var(--green); }
+.bio-pin.recent { border-color: color-mix(in srgb, var(--tone) 55%, var(--soft)); }
+.bio-pin .planet-orb { flex-basis: 30px; width: 30px; height: 30px; margin: 4px 0 0 1px; }
+.bio-pin-copy { display: grid; gap: 3px; min-width: 0; }
+.bio-pin-eyebrow { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.bio-pin-kicker { color: var(--tone); font-size: var(--type-compact); font-weight: 700; letter-spacing: .7px; white-space: nowrap; }
+.bio-pin-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: calc(13px * var(--scale)); line-height: 1; letter-spacing: .3px; }
+.bio-pin-environment { display: flex; gap: 5px; min-width: 0; color: var(--muted); font-size: calc(10px * var(--scale)); white-space: nowrap; }
+.bio-pin-environment > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bio-pin-class { color: var(--accent); font-weight: 700; }
+.bio-pin-atmosphere, .bio-pin-rings { padding-left: 5px; border-left: 1px solid var(--soft); }
+.bio-pin-rings { flex: 0 0 auto; color: var(--yellow); }
+.bio-pin-badges { gap: 3px; }
+.bio-pin-count { font-size: calc(11px * var(--scale)); }
+.bio-pin-detail { display: grid; gap: 2px; min-width: 0; margin-top: 1px; padding-top: 3px; border-top: 1px solid color-mix(in srgb, var(--tone) 20%, var(--soft)); color: var(--muted); font-size: var(--type-compact); }
+.bio-pin-detail.unknown { color: var(--dim); font-weight: 700; letter-spacing: .35px; }
+.bio-pin-detail .biological-row { min-height: 17px; }
+.bio-pin-foot { display: flex; justify-content: space-between; gap: 6px; min-width: 0; padding-top: 2px; border-top: 1px solid var(--soft); color: var(--dim); font-size: var(--type-compact); font-weight: 700; letter-spacing: .3px; }
+.bio-pin-value { color: var(--orange); text-align: right; }
+.bio-pin.complete .bio-pin-value { color: var(--green); }
 
 /* Journal PlanetClass selects a palette and texture; these are deliberately
    illustrative spheres rather than claims about a body's actual appearance. */
@@ -280,16 +298,35 @@ footer .credits { color: var(--orange); text-align: right; }
 .survey.scale-huge .atlas-page-banner span { text-align: left; }
 .survey.scale-huge .sample-clearance { display: grid; justify-content: stretch; gap: 2px; }
 .survey.scale-huge .sample-distance { text-align: left; }
-.survey.scale-huge.survey-congested .content { gap: 5px; }
-.survey.scale-huge.survey-congested .routine-strip,
-.survey.scale-huge.survey-congested .bio-pinboard { display: flex; align-items: center; gap: 5px; min-height: 0; padding: 1px 5px; }
-.survey.scale-huge.survey-congested .routine-strip-heading,
-.survey.scale-huge.survey-congested .bio-pinboard-heading { flex: 0 0 91px; display: grid; align-content: center; justify-content: stretch; gap: 1px; min-width: 0; letter-spacing: 0; }
-.survey.scale-huge.survey-congested .routine-strip-heading span,
-.survey.scale-huge.survey-congested .bio-pinboard-heading span { text-align: left; }
-.survey.scale-huge.survey-congested .routine-strip-grid,
-.survey.scale-huge.survey-congested .bio-pinboard-grid { flex: 1 1 auto; min-width: 0; }
-.survey.scale-huge.survey-congested .atlas-page-banner { display: flex; min-height: 26px; padding: 2px 6px; }
+.survey.scale-huge.sampling-active .content { gap: 4px; }
+.survey.scale-huge.survey-congested .routine-strip { display: flex; align-items: center; gap: 5px; min-height: 0; padding: 1px 5px; }
+.survey.scale-huge.survey-congested .routine-strip-heading { flex: 0 0 91px; display: grid; align-content: center; justify-content: stretch; gap: 1px; min-width: 0; letter-spacing: 0; }
+.survey.scale-huge.survey-congested .routine-strip-heading span { text-align: left; }
+.survey.scale-huge.survey-congested .routine-strip-grid { flex: 1 1 auto; min-width: 0; }
+.survey.scale-huge.sampling-active .bio-pinboard { display: flex; align-items: center; gap: 5px; padding: 1px 5px; }
+.survey.scale-huge.sampling-active .bio-pinboard-heading { flex: 0 0 91px; display: grid; align-content: center; gap: 1px; min-width: 0; letter-spacing: 0; }
+.survey.scale-huge.sampling-active .bio-pinboard-heading span { text-align: left; }
+.survey.scale-huge.sampling-active .bio-pinboard-grid { flex: 1 1 auto; min-width: 0; }
+.survey.scale-huge.sampling-active .bio-pin { grid-template-columns: 24px minmax(0, 1fr); gap: 3px; padding: 2px 3px 2px 1px; }
+.survey.scale-huge.sampling-active .bio-pin .planet-orb { width: 23px; height: 23px; margin-top: 2px; }
+.survey.scale-huge.sampling-active .bio-pin .planet-sphere,
+.survey.scale-huge.sampling-active .bio-pin .planet-glint { inset: 2px; }
+.survey.scale-huge.sampling-active .bio-pin .planet-ring { left: -1px; right: -1px; top: 5px; height: 11px; border-width: 1px; }
+.survey.scale-huge.sampling-active .bio-pin-copy { grid-template-columns: minmax(0, 1fr) auto; gap: 1px 4px; }
+.survey.scale-huge.sampling-active .bio-pin-name { grid-column: 1; }
+.survey.scale-huge.sampling-active .bio-pin-environment { grid-column: 2; max-width: 130px; }
+.survey.scale-huge.sampling-active .bio-pin-badges,
+.survey.scale-huge.sampling-active .bio-pin-detail { grid-column: 1 / -1; }
+.survey.scale-huge.sampling-active .bio-pin-eyebrow,
+.survey.scale-huge.sampling-active .bio-pin-foot { display: none; }
+.survey.scale-huge.sampling-active .bio-pin-name { font-size: calc(11px * var(--scale)); }
+.survey.scale-huge.sampling-active .bio-pin-environment { font-size: calc(9px * var(--scale)); }
+.survey.scale-huge.sampling-active .bio-pin-detail { padding-top: 1px; }
+.survey.scale-huge.sampling-active .target:not(.focus-target) .target-eyebrow,
+.survey.scale-huge.sampling-active .target:not(.focus-target) .target-environment,
+.survey.scale-huge.sampling-active .target:not(.focus-target) .target-foot { display: none; }
+.survey.scale-huge.sampling-active .target:not(.focus-target) .target-detail { margin-top: 1px; padding-top: 1px; }
+.survey.scale-huge.sampling-active .atlas-page-banner { display: flex; min-height: 26px; padding: 2px 6px; }
 
 .event-new-target { animation: survey-acquire .55s ease-out both; }
 .event-new-target::after, .event-mapped::after, .event-target-complete::after { animation: survey-card-sweep .8s ease-out both; }

@@ -354,6 +354,21 @@ class HtmlOverlayStudioMixin:
     def _handle_html_overlay_studio_command(self, payload):
         operation = _text(payload.get("operation"), 40).casefold()
         overlay_id = _text(payload.get("overlay_id"), 50)
+        if operation == "set_opacity":
+            sequence = max(0, _integer(payload.get("sequence"), 0))
+            if sequence and sequence < getattr(self, "_html_overlay_opacity_sequence", 0):
+                return True
+            if sequence:
+                self._html_overlay_opacity_sequence = sequence
+            current = _integer(self.config.get("overlay_opacity_percent"), 100)
+            requested = _number(payload.get("value"), current)
+            opacity = int(round(max(40, min(100, requested))))
+            if opacity != current:
+                self.config["overlay_opacity_percent"] = opacity
+                self._persist_config()
+                self.update_hud()
+                self._schedule_html_dashboard_publish(immediate=True)
+            return True
         if operation == "rhino_center":
             return self._set_rhino_minimap_center()
         if operation == "rhino_border":

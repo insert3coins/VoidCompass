@@ -2,6 +2,7 @@ import types
 import unittest
 
 from voidcompass.overlays.html_survey_overlay import HtmlSurveyOverlayBridge
+from voidcompass.overlays.survey_status_hud import build_survey_model
 
 
 class _Master:
@@ -79,6 +80,19 @@ class SurveyOverlayVisibilityTests(unittest.TestCase):
             "rows": [{"name": "Body A", "bio_count": 1}],
         })
         self.assertTrue(bridge._window_payload()["visible"])
+
+    def test_completed_biology_still_publishes_visible(self):
+        model = build_survey_model("Testia", [{
+            "body_id": 1, "name": "Testia A 1", "planet_class": "Rocky body",
+            "bio_count": 1, "organic_complete_count": 1,
+            "organic_scans": {"bacterium": {
+                "species": "Bacterium Vesicula", "sample_idx": 3,
+                "is_complete": True,
+            }},
+        }])
+        self.assertEqual(len(model["rows"]), 1)
+        self.assertTrue(model["rows"][0]["bio_complete"])
+        self.assertTrue(_bridge("normal", model)._window_payload()["visible"])
 
     def test_focused_routine_scan_publishes_visible(self):
         bridge = _bridge("normal", {

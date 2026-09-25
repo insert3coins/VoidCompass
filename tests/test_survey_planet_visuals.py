@@ -98,6 +98,25 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                             && bounds.right <= content.right + 1;
                         }),
                         targetCount: document.querySelectorAll('.target').length,
+                        noBioDuplicates: (() => {
+                          const targets = new Set([...document.querySelectorAll('.target-name')]
+                            .map(item => item.textContent));
+                          return [...document.querySelectorAll('.bio-pin-name')]
+                            .every(item => !targets.has(item.textContent));
+                        })(),
+                        pinContentsFit: [...document.querySelectorAll('.bio-pin')]
+                          .every(pin => {
+                            const bounds = pin.getBoundingClientRect();
+                            return [...pin.querySelectorAll(
+                              '.bio-pin-name, .bio-pin-class, .bio-pin-badges, .bio-pin-detail')]
+                              .every(item => {
+                                const part = item.getBoundingClientRect();
+                                return part.left >= bounds.left - 1
+                                  && part.right <= bounds.right + 1
+                                  && part.top >= bounds.top - 1
+                                  && part.bottom <= bounds.bottom + 1;
+                              });
+                          }),
                         spheres: spheres.map(sphere => {
                           const bounds = sphere.getBoundingClientRect();
                           const card = sphere.closest('.target').getBoundingClientRect();
@@ -114,6 +133,8 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                     self.assertTrue(geometry["bandContentsFit"], geometry)
                     self.assertTrue(geometry["titleStripAbsent"], geometry)
                     self.assertTrue(geometry["contentsFit"], geometry)
+                    self.assertTrue(geometry["noBioDuplicates"], geometry)
+                    self.assertTrue(geometry["pinContentsFit"], geometry)
                     self.assertEqual(len(geometry["spheres"]),
                                      geometry["targetCount"], geometry)
                     self.assertTrue(all(geometry["spheres"]), geometry)
@@ -187,6 +208,46 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                     self.assertEqual(len(collected), expected_total, collected)
                     return collected
 
+                def collect_bio_pin_pages(expected_total, max_height=None):
+                    """Walk scanned biology independently of the detailed atlas."""
+                    state = page.evaluate("window.VoidCompassSurveyAtlas.getState()")
+                    self.assertEqual(state["pinned"], expected_total, state)
+                    self.assertGreaterEqual(state["pinPages"], 1, state)
+                    self.assertEqual(state["pinPage"], 1, state)
+                    collected = []
+                    for number in range(1, state["pinPages"] + 1):
+                        current = page.evaluate("window.VoidCompassSurveyAtlas.getState()")
+                        self.assertEqual(current["pinPage"], number, current)
+                        height = check_geometry()
+                        if max_height is not None:
+                            stack = page.evaluate("""() => ({
+                              overview: document.querySelector('#overview').getBoundingClientRect().height,
+                              content: document.querySelector('#content').getBoundingClientRect().height,
+                              children: [...document.querySelector('#content').children]
+                                .map(el => ({name: el.className, height: el.getBoundingClientRect().height})),
+                            })""")
+                            self.assertLessEqual(height, max_height, (current, stack))
+                        pins = page.evaluate("""() => [...document.querySelectorAll('.bio-pin')]
+                          .map(pin => ({
+                            name: pin.querySelector('.bio-pin-name')?.textContent,
+                            text: pin.textContent,
+                            detail: pin.querySelector('.bio-pin-detail')?.textContent,
+                            planetClass: pin.querySelector('.bio-pin-class')?.textContent,
+                            badges: [...pin.querySelectorAll('.bio-pin-badges .badge')]
+                              .map(badge => badge.textContent),
+                            kind: pin.querySelector('.planet-orb')?.dataset.planetKind,
+                            orbCount: pin.querySelectorAll('.planet-orb').length,
+                            orbWidth: pin.querySelector('.planet-orb')?.getBoundingClientRect().width || 0,
+                            ringed: Boolean(pin.querySelector('.planet-orb.has-rings')),
+                          }))""")
+                        self.assertGreater(len(pins), 0)
+                        collected.extend(pins)
+                        page.evaluate("window.VoidCompassSurveyAtlas.nextPinPage()")
+                    self.assertEqual(page.evaluate(
+                        "window.VoidCompassSurveyAtlas.getState().pinPage"), 1)
+                    self.assertEqual(len(collected), expected_total, collected)
+                    return collected
+
                 classes = [
                     ("Earth-like world", "earthlike"),
                     ("Water world", "water"),
@@ -206,7 +267,14 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                         "ring_count": 2 if index == 4 else 0,
                         "bio_count": 1,
                         "complete": 0,
-                        "bio_details": [{"name": f"Genus {index}", "kind": "detected"}],
+                        "geo_count": 3 if index == 6 else 0,
+                        "mining_count": 2 if index == 6 else 0,
+                        **({"landable": True, "first_footfall": True}
+                           if index == 6 else {}),
+                        "bio_details": [{"name": f"Genus {index}",
+                                         "display_name": "Genus 2 Species" if index == 2 else None,
+                                         "kind": "sample" if index == 2 else
+                                         "complete" if index == 3 else "detected"}],
                         "needs_dss": True,
                         "priority": True,
                     })
@@ -237,23 +305,106 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 self.assertTrue(rendered["reduced"])
                 self.assertFalse(rendered["animated"])
                 self.assertGreater(rendered["height"], 90)
-                cards = collect_pages(len(classes), max_height=700)
+                # A body with a known PlanetClass and biology is represented
+                # once, in the persistent bio pins. The unclassified
+                # signal-only body remains in the detailed atlas.
+                self.assertEqual(page.locator(".target-name").all_text_contents(), ["A 8"])
+                self.assertEqual(page.locator(".bio-pinboard").count(), 1)
+                cards = collect_bio_pin_pages(len(classes) - 1, max_height=700)
                 for index, (_, expected_kind) in enumerate(classes, 1):
                     with self.subTest(index=index, kind=expected_kind):
+                        if expected_kind == "unknown":
+                            self.assertEqual(page.locator(".target .planet-orb").first.get_attribute(
+                                "data-planet-kind"), expected_kind)
+                            continue
                         matches = [card for card in cards
-                                   if card["designation"] == f"A {index}"]
+                                   if card["name"] == f"A {index}"]
                         self.assertEqual(len(matches), 1, matches)
                         self.assertEqual(matches[0]["kind"], expected_kind)
+                        self.assertEqual(matches[0]["planetClass"],
+                                         classes[index - 1][0].removesuffix(" body"))
                         self.assertEqual(matches[0]["orbCount"], 1)
                         self.assertLessEqual(matches[0]["orbWidth"], 32)
                         self.assertEqual(matches[0]["ringed"], index == 4)
+                        expected_bio = "Genus 2 Species" if index == 2 else f"Genus {index}"
+                        self.assertIn(expected_bio, matches[0]["detail"])
+                        self.assertIn("BIO 0/1", matches[0]["badges"])
+                        self.assertIn("DSS", matches[0]["badges"])
+                rocky_pin = next(card for card in cards if card["name"] == "A 6")
+                for badge in ("GEO 3", "MINING 2", "LAND", "1ST FOOTFALL"):
+                    self.assertIn(badge, rocky_pin["badges"])
                 for scale in (1.5, 2):
                     with self.subTest(mode="system", text_scale=scale):
                         system["effects"]["text_scale"] = scale
                         page.evaluate("snapshot => window.__surveyRender(snapshot)", system)
-                        scaled = collect_pages(len(classes), max_height=700)
-                        self.assertEqual({card["designation"] for card in scaled},
-                                         {f"A {index}" for index in range(1, len(classes) + 1)})
+                        scaled = collect_bio_pin_pages(len(classes) - 1, max_height=700)
+                        self.assertEqual({card["name"] for card in scaled},
+                                         {f"A {index}" for index in range(1, len(classes))})
+                        self.assertEqual(page.locator(".target-name").all_text_contents(), ["A 8"])
+
+                completed_only = {
+                    "survey": {
+                        "mode": "system", "system": "Atlas", "scanned": 1,
+                        "total": 1, "total_known": True,
+                        "rows": [{
+                            "name": "Atlas D 1", "planet_class": "Rocky body",
+                            "bio_count": 2, "complete": 2, "bio_complete": True,
+                            "priority": False, "geo_count": 1,
+                            "bio_details": [
+                                {"name": "Bacterium D", "kind": "complete"},
+                                {"name": "Fungoid D", "kind": "complete"},
+                            ],
+                        }],
+                    },
+                    "effects": {"reduced_motion": True},
+                }
+                page.evaluate("snapshot => window.__surveyRender(snapshot)", completed_only)
+                self.assertEqual(page.locator(".target").count(), 0)
+                self.assertEqual(page.locator(".bio-pin.complete").count(), 1)
+                self.assertEqual(page.evaluate(
+                    "window.VoidCompassSurveyAtlas.getState().pinned"), 1)
+                completed = page.locator(".bio-pin").first
+                self.assertEqual(completed.locator(".bio-pin-name").text_content(), "D 1")
+                self.assertEqual(completed.locator(".bio-pin-class").text_content(), "Rocky")
+                self.assertIn("Bacterium D", completed.locator(".bio-pin-detail").text_content())
+                self.assertIn("Fungoid D", completed.locator(".bio-pin-detail").text_content())
+                self.assertIn("BIO 2/2", completed.locator(".bio-pin-badges").text_content())
+                self.assertIn("GEO 1", completed.locator(".bio-pin-badges").text_content())
+                self.assertLessEqual(check_geometry(), 700)
+
+                moving_rows = [{
+                    "name": f"Atlas E {index}", "planet_class": "Rocky body",
+                    "bio_count": 1, "complete": 0,
+                    "bio_details": [{"name": f"Bacterium {index}",
+                                     "kind": "detected"}],
+                } for index in range(1, 10)]
+                moving = {
+                    "survey": {
+                        "mode": "system", "system": "Atlas", "scanned": 9,
+                        "total": 9, "total_known": True, "rows": moving_rows,
+                    },
+                    "effects": {"reduced_motion": True},
+                }
+                page.evaluate("snapshot => window.__surveyRender(snapshot)", moving)
+                self.assertGreater(page.evaluate(
+                    "window.VoidCompassSurveyAtlas.getState().pinPages"), 1)
+                page.evaluate("window.VoidCompassSurveyAtlas.nextPinPage()")
+                self.assertEqual(page.evaluate(
+                    "window.VoidCompassSurveyAtlas.getState().pinPage"), 2)
+                # Completing a world may move it to the end of the backend's
+                # active-then-complete sort. Follow that world across pages.
+                finished = moving_rows.pop(5)
+                finished.update({"complete": 1, "bio_complete": True,
+                                 "bio_details": [{"name": "Bacterium 6",
+                                                  "kind": "complete"}]})
+                moving_rows.append(finished)
+                page.evaluate("snapshot => window.__surveyRender(snapshot)", moving)
+                state = page.evaluate("window.VoidCompassSurveyAtlas.getState()")
+                self.assertEqual(state["pinPage"], state["pinPages"], state)
+                self.assertIn("E 6", page.locator(".bio-pin-name").all_text_contents())
+                self.assertEqual(page.locator(".bio-pin.complete").count(), 1)
+                self.assertEqual(page.locator(".target").count(), 0)
+                self.assertLessEqual(check_geometry(), 700)
 
                 crowded_rows = []
                 for index in range(1, 25):
@@ -279,12 +430,15 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 }
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", crowded)
                 state = page.evaluate("window.VoidCompassSurveyAtlas.getState()")
-                self.assertGreater(state["pages"], 1, state)
                 # Three signal-only rows lack a scanned PlanetClass and stay
                 # in the atlas until a matching Scan confirms the planet.
+                self.assertEqual(state["total"], 3, state)
                 self.assertEqual(state["pinned"], 21)
-                self.assertEqual(state["pinPages"], 3)
-                self.assertEqual(page.locator(".bio-pin").count(), 8)
+                first_pin_count = page.locator(".bio-pin").count()
+                self.assertGreater(first_pin_count, 0)
+                self.assertLess(first_pin_count, 21)
+                self.assertEqual(state["pinPages"],
+                                 (21 + first_pin_count - 1) // first_pin_count)
                 first_pins = page.locator(".bio-pin-name").all_text_contents()
                 page.evaluate("window.VoidCompassSurveyAtlas.nextPage()")
                 self.assertEqual(page.locator(".bio-pin-name").all_text_contents(), first_pins)
@@ -296,6 +450,17 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 self.assertEqual(page.locator(".target").count(),
                                  len(page.locator(".target-name").all_text_contents()))
                 check_geometry()
+                # Start independent atlases from their first pages again.
+                page.evaluate("snapshot => window.__surveyRender(snapshot)", system)
+                page.evaluate("snapshot => window.__surveyRender(snapshot)", crowded)
+                pin_cards = collect_bio_pin_pages(21, max_height=700)
+                self.assertEqual([pin["name"] for pin in pin_cards],
+                                 [f"B {index}" for index in range(1, 25)
+                                  if index % len(classes) != 0])
+                for pin in pin_cards:
+                    index = int(pin["name"].split()[-1])
+                    self.assertIn(f"Fungoid {index}", pin["detail"])
+                    self.assertNotIn(f"Tussock {index}", pin["text"])
                 mixed = {
                     "survey": {
                         **crowded["survey"],
@@ -315,7 +480,7 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 pin_type = page.evaluate("""() => Object.fromEntries([
                   '.routine-strip-heading', '.routine-pin-name', '.routine-pin-class',
                   '.routine-pin-status', '.bio-pinboard-heading', '.bio-pin-name',
-                  '.bio-pin-count',
+                  '.bio-pin-class', '.bio-pin-badges .badge',
                 ].map(selector => [selector, parseFloat(getComputedStyle(
                   document.querySelector(selector)).fontSize)]))""")
                 self.assertGreaterEqual(pin_type[".routine-strip-heading"], 10)
@@ -324,9 +489,10 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 self.assertGreaterEqual(pin_type[".routine-pin-status"], 10)
                 self.assertGreaterEqual(pin_type[".bio-pinboard-heading"], 10)
                 self.assertGreaterEqual(pin_type[".bio-pin-name"], 11)
-                self.assertGreaterEqual(pin_type[".bio-pin-count"], 11)
+                self.assertGreaterEqual(pin_type[".bio-pin-class"], 10)
+                self.assertGreaterEqual(pin_type[".bio-pin-badges .badge"], 9)
                 self.assertEqual(page.evaluate(
-                    "window.VoidCompassSurveyAtlas.getState().total"), 24)
+                    "window.VoidCompassSurveyAtlas.getState().total"), 3)
                 self.assertTrue(page.evaluate("""() => {
                   const strip = document.querySelector('.routine-strip');
                   const target = document.querySelector('.target');
@@ -344,7 +510,7 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                     "min_distance_m": 240, "colony_m": 500,
                 }
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", mixed)
-                self.assertEqual(page.locator(".bio-pin").count(), 2)
+                self.assertEqual(page.locator(".bio-pin").count(), 1)
                 self.assertEqual(page.locator(".routine-pin").count(), 2)
                 self.assertEqual(page.locator(".sample-card").count(), 1)
                 mixed_height = check_geometry()
@@ -352,6 +518,15 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                   cards: document.querySelectorAll('.target').length,
                   children: [...document.querySelector('#content').children]
                     .map(el => ({name: el.className, height: el.getBoundingClientRect().height})),
+                  pieces: Object.fromEntries([
+                    '.bio-pinboard-heading', '.bio-pinboard-grid', '.bio-pin',
+                    '.bio-pin-eyebrow', '.bio-pin-name', '.bio-pin-environment',
+                    '.bio-pin-badges', '.bio-pin-detail', '.bio-pin-detail .biological-row',
+                    '.bio-pin .planet-orb', '.target-head', '.target-detail',
+                    '.target .planet-orb', '.target .badges',
+                  ].map(selector => [selector, [...document.querySelectorAll(selector)]
+                    .map(el => ({width: el.getBoundingClientRect().width,
+                                 height: el.getBoundingClientRect().height}))])),
                 })""")
                 self.assertLessEqual(mixed_height, 700, mixed_stack)
                 routine_names = page.locator(".routine-pin-name").all_text_contents()
@@ -365,13 +540,13 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 # Restore the first atlas/pin pages for the page-walking check.
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", system)
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", crowded)
-                crowded_names = [f"B {index}" for index in range(1, 25)]
+                crowded_names = ["B 8", "B 16", "B 24"]
                 crowded_cards = collect_pages(
-                    len(crowded_rows), max_height=700,
+                    len(crowded_names), max_height=700,
                 )
                 self.assertEqual([card["designation"] for card in crowded_cards],
                                  crowded_names)
-                for index, card in enumerate(crowded_cards, 1):
+                for index, card in zip((8, 16, 24), crowded_cards):
                     self.assertEqual(card["orbCount"], 1)
                     self.assertEqual(card["details"],
                                      [f"Fungoid {index}", f"Tussock {index}"])
@@ -381,9 +556,12 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                     "min_distance_m": 240, "colony_m": 500,
                 }
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", crowded)
-                self.assertEqual(page.locator(".bio-pin").count(), 2)
+                self.assertEqual(page.locator(".bio-pin").count(), 1)
                 self.assertEqual(page.locator(".sample-card").count(), 1)
-                self.assertLessEqual(check_geometry(), 700)
+                crowded_height = check_geometry()
+                crowded_stack = page.evaluate("""() => [...document.querySelector('#content').children]
+                  .map(el => ({name: el.className, height: el.getBoundingClientRect().height}))""")
+                self.assertLessEqual(crowded_height, 700, crowded_stack)
                 crowded["effects"]["text_scale"] = 1
                 crowded["survey"].pop("sampling")
                 # Reduced motion must turn off visual animation, not hide later pages.
@@ -427,17 +605,22 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 }
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", stress)
                 stress_state = page.evaluate("window.VoidCompassSurveyAtlas.getState()")
-                self.assertGreater(stress_state["pages"], 10, stress_state)
+                # Pin paging must survive a system with no main atlas cards.
+                self.assertEqual(stress_state["total"], 0, stress_state)
+                self.assertEqual(stress_state["pages"], 0, stress_state)
+                self.assertGreater(stress_state["pinPages"], 10, stress_state)
+                self.assertEqual(page.locator(".target").count(), 0)
+                stress_first_pin_count = page.locator(".bio-pin").count()
                 stress_names = [f"C {index}" for index in range(1, 102)]
-                stress_cards = collect_pages(
-                    101, max_height=700, geometry_each_page=False,
-                )
-                self.assertEqual([card["designation"] for card in stress_cards],
+                stress_pins = collect_bio_pin_pages(101, max_height=700)
+                self.assertEqual([pin["name"] for pin in stress_pins],
                                  stress_names)
-                self.assertTrue(all(card["orbCount"] == 1 for card in stress_cards))
+                self.assertTrue(all(pin["orbCount"] == 1 for pin in stress_pins))
+                self.assertTrue(all("TYPES NOT IDENTIFIED" in pin["detail"]
+                                    for pin in stress_pins))
                 self.assertEqual(page.evaluate(
                     "window.VoidCompassSurveyAtlas.getState().pinned"), 101)
-                self.assertEqual(page.locator(".bio-pin").count(), 8)
+                self.assertEqual(page.locator(".bio-pin").count(), stress_first_pin_count)
 
                 for row in stress_rows:
                     row["bio_count"] = 0
@@ -476,12 +659,20 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", stress)
                 self.assertEqual(page.locator(".bio-pin-name").all_text_contents(),
                                  ["C 1"])
+                self.assertNotIn("C 1", page.locator(".target-name").all_text_contents())
                 stress_rows[0].update({"complete": 1, "bio_complete": True})
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", stress)
                 self.assertEqual(page.locator(".bio-pin.complete").count(), 1)
                 stress_rows[0]["planet_class"] = None
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", stress)
                 self.assertEqual(page.locator(".bio-pinboard").count(), 0)
+                # C 1 is complete and can sit on a later detailed-atlas page.
+                signal_names = []
+                signal_pages = page.evaluate("window.VoidCompassSurveyAtlas.getState().pages")
+                for _ in range(signal_pages):
+                    signal_names.extend(page.locator(".target-name").all_text_contents())
+                    page.evaluate("window.VoidCompassSurveyAtlas.nextPage()")
+                self.assertIn("C 1", signal_names)
 
                 body = {
                     "survey": {
@@ -577,6 +768,15 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 body["survey"]["sampling"] = None
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", body)
                 self.assertEqual(page.locator(".sample-card").count(), 0)
+                body["survey"]["body"]["organic_complete_count"] = 2
+                body["survey"]["rows"] = [
+                    {"name": "Bacterium Sample", "kind": "complete", "progress": 3},
+                    {"name": "Fonticulua Detected", "kind": "complete", "progress": 3},
+                ]
+                page.evaluate("snapshot => window.__surveyRender(snapshot)", body)
+                self.assertEqual(page.locator(".focus-target.complete .biological-row.complete").count(), 2)
+                self.assertIn("Fonticulua Detected", page.locator(".focus-target").text_content())
+                self.assertLessEqual(check_geometry(), 700)
 
                 routine = {
                     "survey": {

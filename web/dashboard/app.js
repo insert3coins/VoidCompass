@@ -60,6 +60,12 @@ let studioDragging = null;
 let studioFingerprint = "";
 let studioMoveSentAt = 0;
 let studioMoveSequence = 0;
+let studioOpacitySequence = 0;
+let studioOpacityTimer = 0;
+let studioOpacityLastSentAt = 0;
+let studioOpacityLastSentValue = null;
+let studioOpacityPending = null;
+let studioOpacityPendingAt = 0;
 let studioDragFrame = 0;
 let studioPendingPosition = null;
 let studioFilter = "all";
@@ -1751,13 +1757,50 @@ function setStudioView(name) {
   byId("studio-options-view").classList.toggle("active", studioView === "options");
 }
 
+function syncStudioOpacity(value) {
+  const percent = Math.max(40, Math.min(100, Math.round(number(value, 100))));
+  byId("studio-desktop-viewport")?.style.setProperty("--studio-global-opacity", String(percent / 100));
+  for (const id of ["studio-global-fade", "studio-overlay-opacity"]) {
+    const input = byId(id);
+    if (input) input.value = percent;
+  }
+  text("studio-global-fade-value", `${percent}%`);
+  text("studio-overlay-opacity-value", `${percent}%`);
+  return percent;
+}
+
+function sendStudioOpacity(value) {
+  if (studioOpacityTimer) clearTimeout(studioOpacityTimer);
+  studioOpacityTimer = 0;
+  const percent = Math.max(40, Math.min(100, Math.round(number(value, 100))));
+  if (percent === studioOpacityLastSentValue) return;
+  studioOpacityLastSentValue = percent;
+  studioOpacityLastSentAt = Date.now();
+  const sequence = ++studioOpacitySequence;
+  command("overlay_studio", {operation: "set_opacity", value: percent, sequence}).then((accepted) => {
+    if (accepted || sequence !== studioOpacitySequence) return;
+    studioOpacityLastSentValue = null;
+    studioOpacityPending = null;
+    syncStudioOpacity(studioData().options?.overlay_opacity_percent);
+  });
+}
+
+function queueStudioOpacity(value, flush = false) {
+  const percent = syncStudioOpacity(value);
+  studioOpacityPending = percent;
+  studioOpacityPendingAt = Date.now();
+  if (studioOpacityTimer) clearTimeout(studioOpacityTimer);
+  const delay = flush ? 0 : Math.max(0, 120 - (Date.now() - studioOpacityLastSentAt));
+  if (!delay) sendStudioOpacity(percent);
+  else studioOpacityTimer = setTimeout(() => sendStudioOpacity(percent), delay);
+}
+
 function updateStudioOptionControls(options, groundTarget = {}, rhinoMinimap = {}) {
   document.querySelectorAll("[data-overlay-option]").forEach((input) => {
     if (document.activeElement !== input) input.checked = Boolean(options[input.dataset.overlayOption]);
   });
   const fields = {
     "studio-text-scale": options.overlay_text_scale_percent,
-    "studio-overlay-opacity": options.overlay_opacity_percent,
     "studio-prospector-timeout": options.prospector_hud_timeout_s,
     "studio-gravity-timeout": options.gravity_warning_hud_timeout_s,
     "studio-contact-timeout": options.contact_scope_timeout_s,
@@ -1769,10 +1812,13 @@ function updateStudioOptionControls(options, groundTarget = {}, rhinoMinimap = {
     const field = byId(id);
     if (field && document.activeElement !== field) field.value = value ?? "";
   }
-  const opacityField = byId("studio-overlay-opacity");
-  const opacityValue = document.activeElement === opacityField
-    ? opacityField.value : options.overlay_opacity_percent;
-  text("studio-overlay-opacity-value", `${Math.max(40, Math.min(100, Math.round(number(opacityValue, 100))))}%`);
+  const savedOpacity = Math.max(40, Math.min(100, Math.round(number(options.overlay_opacity_percent, 100))));
+  if (studioOpacityPending === savedOpacity || Date.now() - studioOpacityPendingAt > 3000) {
+    studioOpacityPending = null;
+  }
+  const activeOpacity = ["studio-global-fade", "studio-overlay-opacity"]
+    .map(byId).find((input) => input === document.activeElement);
+  syncStudioOpacity(activeOpacity?.value ?? studioOpacityPending ?? savedOpacity);
   const stationTimeout = byId("studio-station-timeout");
   if (stationTimeout) stationTimeout.disabled = !Boolean(options.station_info_auto_hide_enabled);
   const targetFields = {
@@ -4803,9 +4849,10 @@ byId("studio-save-settings").addEventListener("click", async () => {
   if (accepted) showToast("Overlay settings saved for this commander");
 });
 
-byId("studio-overlay-opacity").addEventListener("input", (event) => {
-  text("studio-overlay-opacity-value", `${Math.max(40, Math.min(100, Math.round(number(event.target.value, 100))))}%`);
-});
+for (const id of ["studio-global-fade", "studio-overlay-opacity"]) {
+  byId(id).addEventListener("input", (event) => queueStudioOpacity(event.target.value));
+  byId(id).addEventListener("change", (event) => queueStudioOpacity(event.target.value, true));
+}
 
 byId("studio-save-preset").addEventListener("click", async () => {
   const name = window.prompt("Name this overlay layout preset:", "");
