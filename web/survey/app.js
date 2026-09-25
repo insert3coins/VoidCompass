@@ -745,9 +745,10 @@
     const gap = Number.parseFloat(getComputedStyle(dom.content).rowGap) || 0;
     const sampleHeight = sample ? sample.getBoundingClientRect().height : 0;
     const routineHeight = routineBoard ? routineBoard.getBoundingClientRect().height : 0;
-    const sharedSpace = Boolean(sample && routineBoard);
-    const pinLimit = dom.root.classList.contains("scale-huge") ? (sharedSpace ? 2 : 4)
-      : dom.root.classList.contains("scale-large") ? (sharedSpace ? 4 : 6) : BIO_PIN_LIMIT;
+    // Larger pin labels need a shorter page while sampling is on screen;
+    // the independent pin pager still exposes every scanned biology world.
+    const pinLimit = dom.root.classList.contains("scale-huge") ? (sample ? 2 : 4)
+      : dom.root.classList.contains("scale-large") ? (sample ? 4 : 6) : BIO_PIN_LIMIT;
     const pinIdentity = `${model.system}|${pinRows.map(rowKey).join("|")}`;
     const pinPages = Math.ceil(pinRows.length / pinLimit);
     const pinPage = pinRows.length && previous?.pinIdentity === pinIdentity

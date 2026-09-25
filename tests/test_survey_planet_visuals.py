@@ -312,6 +312,19 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", mixed)
                 self.assertEqual(page.locator(".routine-pin-name").all_text_contents(),
                                  ["B 25", "B 26"])
+                pin_type = page.evaluate("""() => Object.fromEntries([
+                  '.routine-strip-heading', '.routine-pin-name', '.routine-pin-class',
+                  '.routine-pin-status', '.bio-pinboard-heading', '.bio-pin-name',
+                  '.bio-pin-count',
+                ].map(selector => [selector, parseFloat(getComputedStyle(
+                  document.querySelector(selector)).fontSize)]))""")
+                self.assertGreaterEqual(pin_type[".routine-strip-heading"], 10)
+                self.assertGreaterEqual(pin_type[".routine-pin-name"], 11)
+                self.assertGreaterEqual(pin_type[".routine-pin-class"], 10)
+                self.assertGreaterEqual(pin_type[".routine-pin-status"], 10)
+                self.assertGreaterEqual(pin_type[".bio-pinboard-heading"], 10)
+                self.assertGreaterEqual(pin_type[".bio-pin-name"], 11)
+                self.assertGreaterEqual(pin_type[".bio-pin-count"], 11)
                 self.assertEqual(page.evaluate(
                     "window.VoidCompassSurveyAtlas.getState().total"), 24)
                 self.assertTrue(page.evaluate("""() => {
@@ -368,7 +381,7 @@ class SurveyPlanetVisualTests(unittest.TestCase):
                     "min_distance_m": 240, "colony_m": 500,
                 }
                 page.evaluate("snapshot => window.__surveyRender(snapshot)", crowded)
-                self.assertEqual(page.locator(".bio-pin").count(), 4)
+                self.assertEqual(page.locator(".bio-pin").count(), 2)
                 self.assertEqual(page.locator(".sample-card").count(), 1)
                 self.assertLessEqual(check_geometry(), 700)
                 crowded["effects"]["text_scale"] = 1
