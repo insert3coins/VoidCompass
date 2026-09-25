@@ -12,7 +12,7 @@ WEB = Path(__file__).resolve().parents[1] / "web"
 def overview_state():
     """A small journal-shaped state with deliberately distinct work counts."""
     return {
-        "app": {"version": "5.4.9.2"},
+        "app": {"version": "5.4.9.3"},
         "profile": {"key": "overview-visual-test", "commander": "TEST CMDR",
                     "profile_label": "TEST CMDR · live field briefing"},
         "theme": {},
@@ -122,7 +122,8 @@ class DashboardOverviewVisualTests(unittest.TestCase):
                       document.getElementById('boot').hidden = true;
                       document.getElementById('app').setAttribute('aria-hidden', 'false');
                       renderDashboard(data);
-                    }
+                    },
+                    queueMarkup(cartography) { return stellarCartographyMarkup(cartography); }
                   };
                 """
                 route.fulfill(content_type="application/javascript", body=source)
@@ -325,6 +326,118 @@ class DashboardOverviewVisualTests(unittest.TestCase):
         self.assertEqual(rows.count(), 0)
         self.assertIn("Planets and moons appear", self.page.locator("#survey-body-list").inner_text())
         self.assertNotIn("SYNUEFE", self.page.locator("#survey-body-list").inner_text())
+        self.assertFalse(self.errors, self.errors)
+
+    def test_workboard_keeps_every_body_and_preserves_live_scroll(self):
+        state = overview_state()
+        state["survey"]["bodies"] = [
+            {"body_id": index, "name": f"SYNUEFE AA-A H1 {index}",
+             "planet_class": "Rocky body", "detail": "SURVEY RECORD"}
+            for index in range(1, 36)
+        ]
+        self.render(state)
+        self.assertEqual(self.page.locator("#body-workboard .body-row:not(.empty)").count(), 35)
+        self.assertEqual(self.page.locator("#workboard-orbits .workboard-body-marker").count(), 18)
+        self.assertEqual(self.page.locator("#workboard-orbits .workboard-more").inner_text(), "+17 MORE")
+        self.assertIn("18 of 35", self.page.locator("#workboard-orbits").get_attribute("aria-label"))
+        self.page.locator('.nav-item[data-page="explore"]').click()
+        workboard = self.page.locator("#body-workboard")
+        initial = workboard.evaluate("""node => {
+          node.scrollTop = Math.floor(node.scrollHeight * .45);
+          node.children[20].dataset.domProof = 'retained';
+          return {top: node.scrollTop, bounded: node.clientHeight < node.scrollHeight};
+        }""")
+        self.assertTrue(initial["bounded"], initial)
+        self.assertGreater(initial["top"], 0)
+        self.render(state)
+        self.assertEqual(workboard.locator('[data-dom-proof="retained"]').count(), 1)
+        self.assertEqual(workboard.evaluate("node => node.scrollTop"), initial["top"])
+
+        state["survey"]["bodies"].append({"body_id": 36, "name": "SYNUEFE AA-A H1 36"})
+        self.render(state)
+        self.assertEqual(workboard.locator(".body-row:not(.empty)").count(), 36)
+        self.assertEqual(self.page.locator("#workboard-orbits .workboard-more").inner_text(), "+18 MORE")
+        self.assertEqual(workboard.evaluate("node => node.scrollTop"), initial["top"])
+        self.assertFalse(self.errors, self.errors)
+
+    def test_current_system_body_click_and_keyboard_focus_matching_workboard(self):
+        state = overview_state()
+        state["survey"]["bodies"] = [
+            {"body_id": index, "name": f"SYNUEFE AA-A H1 {index}",
+             "planet_class": "Rocky body"}
+            for index in range(1, 36)
+        ]
+        self.render(state)
+        source = self.page.locator('#survey-body-list .survey-body-row[data-body-id="32"]')
+        self.assertEqual(source.get_attribute("aria-label"),
+                         "Open SYNUEFE AA-A H1 32 in System Workboard")
+        source.click()
+        self.assertIn("active", self.page.locator('[data-page-name="explore"]').get_attribute("class"))
+        selected = self.page.locator("#body-workboard .body-row.selected")
+        self.assertEqual(selected.count(), 1)
+        self.assertEqual(selected.get_attribute("data-body-id"), "32")
+        self.assertEqual(selected.get_attribute("aria-current"), "true")
+        self.assertTrue(selected.evaluate("node => document.activeElement === node"))
+        self.assertGreater(self.page.locator("#body-workboard").evaluate("node => node.scrollTop"), 0)
+
+        self.page.locator('.nav-item[data-page="overview"]').click()
+        source = self.page.locator('#survey-body-list .survey-body-row[data-body-id="3"]')
+        source.focus()
+        source.press("Enter")
+        self.assertEqual(self.page.locator("#body-workboard .body-row.selected").get_attribute("data-body-id"), "3")
+        self.page.locator('.nav-item[data-page="overview"]').click()
+        source = self.page.locator('#survey-body-list .survey-body-row[data-body-id="4"]')
+        source.focus()
+        source.press("Space")
+        self.assertEqual(self.page.locator("#body-workboard .body-row.selected").get_attribute("data-body-id"), "4")
+
+        state["profile"]["key"] = "another-commander"
+        self.render(state)
+        self.assertEqual(self.page.locator("#body-workboard .body-row.selected").count(), 0)
+        self.page.locator('#survey-body-list .survey-body-row[data-body-id="3"]').click()
+        self.assertEqual(self.page.locator("#body-workboard .body-row.selected").count(), 1)
+        state["flight"]["system"] = "SOL"
+        state["survey"]["bodies"] = [{"body_id": 1, "name": "SOL 1"}]
+        self.render(state)
+        self.assertEqual(self.page.locator("#body-workboard .body-row.selected").count(), 0)
+        self.assertEqual(self.page.locator("#body-workboard .body-row").count(), 1)
+        self.assertFalse(self.errors, self.errors)
+
+    def test_survey_queue_distinguishes_journal_and_manual_completion(self):
+        rows = [
+            {"key": "journal", "body": "JOURNAL WORLD", "status": "complete",
+             "manual_complete": False},
+            {"key": "manual", "body": "MANUAL WORLD", "status": "complete",
+             "manual_complete": True},
+            {"key": "pending", "body": "PENDING WORLD", "status": "pending"},
+        ]
+        self.page.evaluate("""rows => {
+          document.getElementById('explore-workspace').innerHTML =
+            window.__overviewHarness.queueMarkup({system: 'SYNUEFE AA-A H1', queue: {rows}});
+        }""", rows)
+        actions = self.page.locator('.survey-queue-row [data-ws-op="survey_complete"]')
+        self.assertEqual(actions.count(), 3)
+        self.assertEqual(actions.nth(0).inner_text(), "JOURNAL ✓")
+        self.assertFalse(actions.nth(0).is_enabled())
+        self.assertEqual(actions.nth(1).inner_text(), "REOPEN")
+        self.assertTrue(actions.nth(1).is_enabled())
+        self.assertEqual(actions.nth(2).inner_text(), "DONE")
+        self.assertTrue(actions.nth(2).is_enabled())
+        self.assertFalse(self.errors, self.errors)
+
+    def test_return_later_action_id_is_forwarded(self):
+        self.render(overview_state())
+        self.page.locator('.nav-item[data-page="explore"]').click()
+        self.page.evaluate("""() => {
+          document.getElementById('explore-workspace').innerHTML =
+            '<button data-ws-page="explore" data-ws-op="return_later_waypoint" data-return-later-id="system:body">ADD WAYPOINT</button>';
+        }""")
+        with self.page.expect_request(lambda request: urlsplit(request.url).path == "/api/command"
+                                      and request.post_data_json.get("action") == "workspace") as captured:
+            self.page.locator('[data-ws-op="return_later_waypoint"]').click()
+        payload = captured.value.post_data_json
+        self.assertEqual(payload["operation"], "return_later_waypoint")
+        self.assertEqual(payload["id"], "system:body")
         self.assertFalse(self.errors, self.errors)
 
     def test_saved_overview_layout_keeps_legacy_core_panel_keys(self):

@@ -1,5 +1,6 @@
 import {renderPowerplayWorkspace as renderPowerplayOperationsWorkspace} from "./powerplay.js";
 import {renderExploreWorkspace} from "./explore.js";
+import {renderExplorationArchive} from "./archive.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
@@ -10,6 +11,9 @@ let aboutMatrixFrame = 0;
 let aboutMatrixState = null;
 let profileKey = "default";
 let feedFilter = "ALL";
+let flightLogFilter = "ALL";
+let flightLogSearch = "";
+let flightLogEventsFingerprint = "";
 let toastTimer = 0;
 let feedFingerprint = "";
 let galnetFingerprint = "";
@@ -82,6 +86,9 @@ let preflightSignalFingerprint = "";
 let preflightExpanded = false;
 let surveyBodiesFingerprint = "";
 let surveyBodyObserver = null;
+let workboardFingerprint = "";
+let workboardSystem = "";
+let workboardSelection = null;
 let routeHorizonFingerprint = "";
 let sessionHighlightsFingerprint = "";
 let codexCandidatesFingerprint = "";
@@ -104,7 +111,7 @@ const PAGE_SUITES = [
     ["achievements", "ACHIEVEMENTS"],
   ]},
   {parent: "analytics", label: "EXPLORATION ARCHIVE", pages: [
-    ["analytics", "ANALYTICS"], ["chronicle", "CAPTAIN'S LOG"],
+    ["analytics", "ARCHIVE"], ["chronicle", "CAPTAIN'S LOG"],
   ]},
   {parent: "build-planner", label: "SHIP WORKSHOP", pages: [
     ["build-planner", "BUILD PLANNER"], ["engineering", "ENGINEERING"],
@@ -133,6 +140,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".suite-tabs button", "[data-analytics-view]", "[data-studio-view]",
   ".galnet-headline-row", "#status-galnet", ".bp-group-tabs button",
   ".bp-slot", ".bp-module", ".bp-analysis > nav button",
+  ".survey-body-row",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -806,20 +814,122 @@ function renderFlightLog(state) {
   const survey = state.survey || {};
   const route = state.route || {};
   const data = state.data || {};
-  text("flightlog-identity", `${state.profile?.commander || "UNKNOWN COMMANDER"} · ${flight.ship || "SHIP"} · ${state.session?.elapsed || "00:00:00"}`);
+  const session = state.session || {};
+  const source = String(state.sources?.overall || "CACHED").toUpperCase();
+  const sourceNode = byId("flightlog-source");
+  sourceNode.dataset.source = ["LIVE", "RECENT", "CACHED"].includes(source) ? source.toLowerCase() : "cached";
+  text("flightlog-source", `LOCAL LINK ${sourceNode.dataset.source.toUpperCase()}`);
+  text("flightlog-evidence", source === "LIVE" ? "Journal or status linked · recent curated events"
+    : source === "RECENT" ? "Game link quiet · recent curated events"
+    : "Cached field state · waiting for game activity");
+  text("flightlog-commander", state.profile?.commander, "UNKNOWN COMMANDER");
+  text("flightlog-ship", flight.ship, "SHIP UNKNOWN");
+  text("flightlog-session-time", session.elapsed, "00:00:00");
   text("flightlog-system", flight.system, "NO SYSTEM DATA");
   text("flightlog-state", flight.context, "WAITING FOR LIVE JOURNAL");
-  text("flightlog-survey-badge", survey.complete ? "COMPLETE" : survey.total_known ? "IN PROGRESS" : "AWAITING");
+  text("flightlog-directive", state.decision?.title, "AWAITING JOURNAL-BACKED OBJECTIVE");
+  text("flightlog-directive-detail", state.decision?.detail, "The field directive will appear when exploration evidence is available.");
+  text("flightlog-directive-confidence", state.decision?.confidence, "FIELD INTELLIGENCE");
+  const knownTotal = Boolean(survey.total_known);
+  const progress = knownTotal ? Math.max(0, Math.min(100, number(survey.percent))) : 0;
+  const gauge = byId("flightlog-survey-gauge");
+  gauge.dataset.known = String(knownTotal);
+  gauge.setAttribute("role", knownTotal ? "progressbar" : "img");
+  gauge.setAttribute("role", knownTotal ? "progressbar" : "img");
+  gauge.style.setProperty("--flightlog-survey-angle", `${progress * 3.6}deg`);
+  gauge.setAttribute("aria-label", knownTotal
+    ? `System survey ${Math.round(progress)} percent complete`
+    : "System survey total not yet confirmed");
+  if (knownTotal) gauge.setAttribute("aria-valuenow", String(Math.round(progress)));
+  else gauge.removeAttribute("aria-valuenow");
+  text("flightlog-survey-percent", knownTotal ? `${Math.round(progress)}%` : "—");
+  text("flightlog-survey-badge", knownTotal && survey.complete ? "SYSTEM COMPLETE" : knownTotal ? "SURVEY ACTIVE" : "TOTAL UNKNOWN");
   text("flightlog-survey", `${numeric(survey.scanned)} / ${survey.total_known ? numeric(survey.total) : "?"}`);
   text("flightlog-survey-detail", `${numeric(survey.bio_signals)} BIO · ${numeric(survey.geo_signals)} GEO · ${numeric(survey.valuable_count)} VALUABLE`);
-  percentWidth("flightlog-progress", survey.percent);
+  const work = survey.completion || {};
+  const surveyWork = [
+    ["FSS UNKNOWN", knownTotal ? numeric(work.unknown_bodies) : "?"],
+    ["DSS LEFT", numeric(Math.max(0, number(work.dss_targets) - number(work.dss_complete)))],
+    ["BIO LEFT", numeric(Math.max(0, number(work.bio_total) - number(work.bio_complete)))],
+  ];
+  for (const [index, [label, value]] of surveyWork.entries()) {
+    text(`flightlog-work-label-${index}`, label);
+    text(`flightlog-work-value-${index}`, value);
+  }
   text("flightlog-route", route.next || "NO ACTIVE ROUTE");
   text("flightlog-route-detail", route.summary || route.text || "PLOT IN ELITE OR WAYPOINTS");
+  text("flightlog-route-source", route.next ? route.source : "NO PLOTTED LEG");
+  text("flightlog-route-final", route.final || "—");
+  text("flightlog-route-distance", route.distance_text || "—");
   text("flightlog-value", credits(data.unsold_total));
   text("flightlog-value-detail", `${credits(data.unsold_exploration)} CARTOGRAPHY · ${credits(data.unsold_bio)} BIOLOGY`);
-  const events = (state.events || []).slice(0, 40);
-  text("flightlog-event-count", `${events.length} EVENTS`);
-  byId("flightlog-event-list").innerHTML = events.map((row) => `<div class="flightlog-event ${escapeHtml(String(row.severity || "info").toLowerCase())}"><time>${escapeHtml(row.time || "--:--:--")}</time><b>${escapeHtml(row.tag || "INFO")}</b><span>${escapeHtml(row.message || "")}</span></div>`).join("") || `<p class="workspace-empty">The curated exploration record is waiting for live journal activity.</p>`;
+  text("flightlog-jumps", numeric(session.jumps));
+  text("flightlog-distance", `${number(session.distance_ly).toLocaleString(undefined, {maximumFractionDigits: 1})} LY`);
+  const priorities = Array.isArray(state.priorities) ? state.priorities.slice(0, 4) : [];
+  const priorityList = byId("flightlog-priorities");
+  const priorityKey = JSON.stringify(priorities.map((row) => [row.title, row.detail, row.severity]));
+  if (priorityList.dataset.renderKey !== priorityKey) {
+    priorityList.dataset.renderKey = priorityKey;
+    priorityList.replaceChildren(...(priorities.length ? priorities.map((row, index) => {
+      const item = document.createElement("li");
+      const ordinal = document.createElement("b");
+      const copy = document.createElement("div");
+      const title = document.createElement("strong");
+      const detail = document.createElement("span");
+      ordinal.textContent = String(index + 1).padStart(2, "0");
+      title.textContent = row.title || "Field objective";
+      detail.textContent = row.detail || "Current field objective.";
+      copy.append(title, detail);
+      item.append(ordinal, copy);
+      return item;
+    }) : [Object.assign(document.createElement("li"), {className: "flightlog-priorities-empty", textContent: "No additional field priorities are pending."})]));
+  }
+  renderFlightLogEvents(state);
+}
+
+function renderFlightLogEvents(state, resetScroll = false) {
+  const recent = (Array.isArray(state.events) ? state.events : []).slice(0, 40);
+  const query = flightLogSearch.trim().toLocaleLowerCase();
+  const filtered = recent.filter((row) =>
+    (flightLogFilter === "ALL" || eventGroup(row.tag, row.severity) === flightLogFilter)
+    && (!query || `${row.time || ""} ${row.tag || ""} ${row.message || ""}`.toLocaleLowerCase().includes(query)));
+  text("flightlog-event-count", `${filtered.length} SHOWN / ${recent.length} RECENT`);
+  text("flightlog-event-limit", (state.events || []).length > 40
+    ? `Showing the latest 40 of ${(state.events || []).length} curated events.`
+    : "Recent curated events only · not a permanent flight archive.");
+  for (const button of document.querySelectorAll("[data-flightlog-filter]")) {
+    const active = button.dataset.flightlogFilter === flightLogFilter;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
+  const fingerprint = JSON.stringify([flightLogFilter, query, filtered.map((row) => [row.ts, row.time, row.tag, row.severity, row.message])]);
+  if (fingerprint === flightLogEventsFingerprint) return;
+  flightLogEventsFingerprint = fingerprint;
+  const list = byId("flightlog-event-list");
+  const scrollTop = list.scrollTop;
+  const rows = filtered.map((row) => {
+    const item = document.createElement("article");
+    const severity = String(row.severity || "info").toLowerCase();
+    item.className = `flightlog-event ${["info", "warn", "fail", "error"].includes(severity) ? severity : "info"}`;
+    const timeNode = document.createElement("time");
+    timeNode.textContent = row.time || "--:--:--";
+    const tag = document.createElement("b");
+    tag.textContent = row.tag || "INFO";
+    const message = document.createElement("p");
+    message.textContent = row.message || "";
+    item.append(timeNode, tag, message);
+    return item;
+  });
+  if (!rows.length) {
+    const empty = document.createElement("p");
+    empty.className = "flightlog-empty";
+    empty.textContent = recent.length
+      ? "No recent events match this filter. Change the category or search."
+      : "Waiting for curated exploration events from the local journal.";
+    rows.push(empty);
+  }
+  list.replaceChildren(...rows);
+  list.scrollTop = resetScroll ? 0 : scrollTop;
 }
 
 function surveyPlanetKind(planetClass) {
@@ -835,6 +945,46 @@ function surveyPlanetKind(planetClass) {
   if (/high metal content|metal rich/.test(label)) return "metal";
   if (/rocky body/.test(label)) return "rocky";
   return "unknown";
+}
+
+function matchesWorkboardSelection(row) {
+  if (!workboardSelection || workboardSelection.system !== workboardSystem) return false;
+  const selectedId = workboardSelection.bodyId;
+  if (selectedId && selectedId !== "0" && row.dataset.bodyId === selectedId) return true;
+  return row.dataset.bodyName.toLowerCase() === workboardSelection.name.toLowerCase();
+}
+
+function markWorkboardSelection(focus = false) {
+  const list = byId("body-workboard");
+  let selected = null;
+  for (const row of list.querySelectorAll(".body-row[data-body-name]")) {
+    const active = matchesWorkboardSelection(row);
+    row.classList.toggle("selected", active);
+    if (active) {
+      row.setAttribute("aria-current", "true");
+      selected = row;
+    } else {
+      row.removeAttribute("aria-current");
+    }
+  }
+  if (!focus) return;
+  const target = selected || list;
+  target.focus({preventScroll: true});
+  if (selected) {
+    const rowBox = selected.getBoundingClientRect();
+    const listBox = list.getBoundingClientRect();
+    list.scrollTop += rowBox.top - listBox.top - (list.clientHeight - rowBox.height) / 2;
+  }
+}
+
+function openWorkboardBody(button) {
+  workboardSelection = {
+    system: button.closest("#survey-body-list")?.dataset.system || "",
+    bodyId: button.dataset.bodyId || "",
+    name: button.dataset.bodyName || "",
+  };
+  showPage("explore");
+  markWorkboardSelection(true);
 }
 
 function renderSurveyBodies(survey, system) {
@@ -862,11 +1012,13 @@ function renderSurveyBodies(survey, system) {
     return;
   }
   list.replaceChildren(...ordered.map((body) => {
-    const row = document.createElement("div");
+    const row = document.createElement("button");
+    row.type = "button";
     row.className = ["survey-body-row", body.latest_scan ? "latest" : "", body.priority ? "priority" : "", body.archived ? "archived" : ""].filter(Boolean).join(" ");
-    row.setAttribute("role", "listitem");
     row.dataset.bodyId = String(body.body_id ?? "");
     const fullName = String(body.name || "UNKNOWN BODY");
+    row.dataset.bodyName = fullName;
+    row.setAttribute("aria-label", `Open ${fullName} in System Workboard`);
     const name = system && fullName.toLowerCase().startsWith(`${system} `.toLowerCase())
       ? fullName.slice(system.length + 1) : fullName;
     const planetClass = String(body.planet_class || body.type || "");
@@ -912,9 +1064,9 @@ function renderSurveyBodies(survey, system) {
     surveyBodyObserver = new IntersectionObserver((entries) => {
       for (const entry of entries) entry.target.classList.toggle("in-view", entry.isIntersecting);
     }, {root: list, rootMargin: "10px"});
-    for (const row of list.children) surveyBodyObserver.observe(row);
+    for (const row of list.querySelectorAll(".survey-body-row")) surveyBodyObserver.observe(row);
   } else {
-    for (const row of list.children) row.classList.add("in-view");
+    for (const row of list.querySelectorAll(".survey-body-row")) row.classList.add("in-view");
   }
   list.scrollTop = previousSystem !== system || previousLatest !== latestKey ? 0 : scrollTop;
 }
@@ -972,7 +1124,16 @@ function renderSurvey(state) {
   const bodies = Array.isArray(survey.bodies) ? survey.bodies : [];
   const workboard = byId("body-workboard");
   const orbits = byId("workboard-orbits");
-  orbits.replaceChildren(...bodies.slice(0, 18).map((row, index) => {
+  const system = String(state.flight?.system || "");
+  if (workboardSelection?.system !== system) workboardSelection = null;
+  const fingerprint = JSON.stringify([system, bodies, survey.archive_loading, survey.total_known, survey.scanned]);
+  if (fingerprint === workboardFingerprint) return;
+  workboardFingerprint = fingerprint;
+  const previousSystem = workboardSystem;
+  const scrollTop = workboard.scrollTop;
+  const hadFocus = workboard.contains(document.activeElement);
+  workboardSystem = system;
+  const markers = bodies.slice(0, 18).map((row, index) => {
     const marker = document.createElement("i");
     marker.className = [
       "workboard-body-marker",
@@ -988,7 +1149,18 @@ function renderSurvey(state) {
     label.textContent = row.body_id > 0 ? String(row.body_id) : String(index + 1);
     marker.appendChild(label);
     return marker;
-  }));
+  });
+  const hiddenCount = Math.max(0, bodies.length - markers.length);
+  if (hiddenCount) {
+    const more = document.createElement("span");
+    more.className = "workboard-more";
+    more.textContent = `+${hiddenCount} MORE`;
+    markers.push(more);
+  }
+  orbits.replaceChildren(...markers);
+  orbits.setAttribute("aria-label", hiddenCount
+    ? `System body schematic: ${markers.length - 1} of ${bodies.length} bodies pictured; ${hiddenCount} more in workboard list`
+    : `System body schematic: ${bodies.length} bodies pictured`);
   orbits.classList.toggle("empty", bodies.length === 0);
   if (!bodies.length) {
     const empty = document.createElement("div");
@@ -1009,9 +1181,13 @@ function renderSurvey(state) {
     empty.append(copy);
     workboard.replaceChildren(empty);
   } else {
-    workboard.replaceChildren(...bodies.slice(0, 18).map((row, index) => {
+    workboard.replaceChildren(...bodies.map((row, index) => {
       const item = document.createElement("div");
       item.className = `body-row${row.priority ? " priority" : ""}${row.mapped ? " mapped" : ""}`;
+      item.setAttribute("role", "listitem");
+      item.tabIndex = -1;
+      item.dataset.bodyId = String(row.body_id ?? "");
+      item.dataset.bodyName = String(row.name || "");
       const indexNode = document.createElement("i");
       indexNode.textContent = row.body_id > 0 ? String(row.body_id).padStart(2, "0") : String(index + 1).padStart(2, "0");
       const copy = document.createElement("div");
@@ -1026,6 +1202,8 @@ function renderSurvey(state) {
       return item;
     }));
   }
+  workboard.scrollTop = previousSystem === system ? scrollTop : 0;
+  markWorkboardSelection(hadFocus);
 }
 
 function renderRoute(state) {
@@ -2320,7 +2498,7 @@ function stellarCartographyMarkup(cartography = {}) {
   }
   if (!orrerySelectedBodyId || !bodies.some((row) => !row.hidden && String(row.id) === String(orrerySelectedBodyId))) orrerySelectedBodyId = String(bodies.find((row) => !row.hidden)?.id || "");
   const selected = bodies.find((row) => String(row.id) === String(orrerySelectedBodyId));
-  const queueRows = (queue.rows || []).map((row) => `<div class="survey-queue-row ${escapeHtml(row.status)}${row.targeted ? " targeted" : ""}"><i>${row.targeted ? "⌖" : row.status === "complete" ? "✓" : row.status === "skipped" ? "–" : row.pinned ? "◆" : String(number(row.score)).padStart(2, "0")}</i><span><b>${escapeHtml(row.body)}${row.targeted ? " <strong>ELITE TARGET</strong>" : ""}</b><small>${escapeHtml(row.action)} · ${escapeHtml(row.reason)}</small><em>${row.distance_ls ? `${numeric(row.distance_ls, 0)} LS · ` : ""}${credits(row.value)}</em></span><div><button data-ws-page="explore" data-ws-op="survey_pin" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.pinned ? "UNPIN" : "PIN"}</button><button data-ws-page="explore" data-ws-op="survey_complete" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.status === "complete" && row.manual_complete ? "REOPEN" : "DONE"}</button><button data-ws-page="explore" data-ws-op="survey_skip" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.status === "skipped" ? "RESTORE" : "SKIP"}</button></div></div>`);
+  const queueRows = (queue.rows || []).map((row) => `<div class="survey-queue-row ${escapeHtml(row.status)}${row.targeted ? " targeted" : ""}"><i>${row.targeted ? "⌖" : row.status === "complete" ? "✓" : row.status === "skipped" ? "–" : row.pinned ? "◆" : String(number(row.score)).padStart(2, "0")}</i><span><b>${escapeHtml(row.body)}${row.targeted ? " <strong>ELITE TARGET</strong>" : ""}</b><small>${escapeHtml(row.action)} · ${escapeHtml(row.reason)}</small><em>${row.distance_ls ? `${numeric(row.distance_ls, 0)} LS · ` : ""}${credits(row.value)}</em></span><div><button data-ws-page="explore" data-ws-op="survey_pin" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.pinned ? "UNPIN" : "PIN"}</button><button data-ws-page="explore" data-ws-op="survey_complete" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}" ${row.status === "complete" && !row.manual_complete ? 'disabled title="Completed by Elite journal; only commander choices can be reopened"' : ""}>${row.status === "complete" ? row.manual_complete ? "REOPEN" : "JOURNAL ✓" : "DONE"}</button><button data-ws-page="explore" data-ws-op="survey_skip" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.status === "skipped" ? "RESTORE" : "SKIP"}</button></div></div>`);
   const resources = cartography.resources || {};
   const resourceRows = (resources.bodies || []).map((row) => {
     const composition = (row.materials || []).slice(0, 10).map((material) => `<em class="${material.rare ? "rare" : ""}">${escapeHtml(material.name)} <b>${numeric(material.percent, 1)}%</b></em>`).join("");
@@ -2674,59 +2852,8 @@ function renderProfileWorkspace(data) {
     </section>`;
 }
 
-function analyticsBars(rows, key, colour = "accent") {
-  const recent = [...rows].reverse().slice(-40);
-  const max = Math.max(1, ...recent.map((row) => number(row[key])));
-  return `<div class="analytics-bars">${recent.map((row) => `<i class="${colour}" style="height:${Math.max(3, number(row[key]) * 100 / max)}%" title="${escapeHtml(row.started || "Session")} · ${numeric(row[key], key === "distance" ? 1 : 0)}"></i>`).join("") || "<span>NO SESSION SERIES</span>"}</div>`;
-}
-
-function renderAnalyticsWorkspace(data) {
-  const root = byId("analytics-workspace");
-  const rows = data.sessions || [];
-  const totals = rows.reduce((sum, row) => ({jumps: sum.jumps + number(row.jumps), distance: sum.distance + number(row.distance), fss: sum.fss + number(row.fss), dss: sum.dss + number(row.dss), bio: sum.bio + number(row.bio)}), {jumps: 0, distance: 0, fss: 0, dss: 0, bio: 0});
-  const science = data.science || {};
-  const passport = data.passport || {};
-  const distribution = (items, colour = "accent") => {
-    const maximum = Math.max(1, ...(items || []).map((row) => number(row.count)));
-    return `<div class="science-distribution">${(items || []).map((row) => `<div><span>${escapeHtml(row.label)}</span><i><em class="${colour}" style="width:${number(row.count) * 100 / maximum}%"></em></i><b>${numeric(row.count)}</b></div>`).join("") || `<p class="workspace-empty">More retained scan evidence is required.</p>`}</div>`;
-  };
-  const species = workspaceTable([
-    {label: "Species", render: (row) => `<b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.genus)}</small>`},
-    {label: "Analyses", key: "analyses"}, {label: "Worlds", key: "worlds"}, {label: "Systems", key: "systems"},
-    {label: "Base value", render: (row) => credits(row.value)},
-  ], science.species || [], "Analysed organic species will form the ecology index.");
-  const regionCards = (passport.rows || []).map((row) => `<article class="region-passport-card${row.visited ? " visited" : ""}"><header><i>${String(row.id).padStart(2, "0")}</i><b>${row.visited ? "VISITED" : "UNSTAMPED"}</b></header><h4>${escapeHtml(row.name)}</h4><p>${row.visited ? `${numeric(row.systems)} systems · ${numeric(row.distance, 1)} LY` : "No commander visit retained"}</p><div><span>FSS <b>${numeric(row.fss)}</b></span><span>DSS <b>${numeric(row.dss)}</b></span><span>BIO <b>${numeric(row.biology)}</b></span><span>CODEX <b>${numeric(row.codex)}</b></span></div><footer>${escapeHtml(row.last_system || "REGION AWAITS EXPLORATION")}</footer></article>`).join("");
-  root.classList.remove("loading-panel");
-  root.innerHTML = `<nav class="workspace-tabs analytics-tabs"><button data-analytics-view="trends">FLIGHT TRENDS</button><button data-analytics-view="science">EXPLORER SCIENCE LAB</button><button data-analytics-view="passport">GALACTIC REGION PASSPORT</button></nav>
-  <section data-analytics-panel="trends">${workspaceMetrics([
-    {label: "Current duration", value: data.current?.elapsed || "00:00:00", detail: `${numeric(data.current?.systems)} SYSTEMS`},
-    {label: "Current travel", value: `${numeric(data.current?.distance, 1)} LY`, detail: `${numeric(data.current?.jumps)} JUMPS`},
-    {label: "Retained sessions", value: numeric(rows.length), detail: `${numeric(totals.distance, 1)} LY TOTAL`},
-    {label: "Survey operations", value: numeric(totals.fss + totals.dss + totals.bio), detail: `${numeric(totals.fss)} FSS · ${numeric(totals.dss)} DSS · ${numeric(totals.bio)} BIO`},
-  ])}<section class="workspace-grid two">
-    ${workspaceCard("DISTANCE BY FLIGHT", analyticsBars(rows, "distance"), "RECENT 40")}
-    ${workspaceCard("SURVEY ACTIVITY", analyticsBars(rows, "fss", "orange"), "FSS SERIES")}
-    ${workspaceCard("FLIGHT SESSION HISTORY", workspaceTable([
-      {label: "Started", render: (row) => escapeHtml(String(row.started || "—").replace("T", " ").slice(0, 16))},
-      {label: "Route", render: (row) => `${escapeHtml(row.start_system)}<small>→ ${escapeHtml(row.end_system)}</small>`},
-      {label: "Jumps", key: "jumps"}, {label: "Distance", render: (row) => `${numeric(row.distance, 1)} LY`},
-      {label: "FSS", key: "fss"}, {label: "DSS", key: "dss"}, {label: "Bio", key: "bio"},
-    ], rows, "No Captain's Log sessions have been retained yet."), `${rows.length} SESSIONS`, "flight-history-card")}
-  </section></section>
-  <section data-analytics-panel="science">${workspaceMetrics([
-    {label: "Indexed systems", value: numeric(science.systems), detail: `${numeric(science.bodies)} PLANETARY BODIES`},
-    {label: "Biological worlds", value: numeric(science.biological_bodies), detail: `${numeric(science.species_total)} SPECIES`},
-    {label: "Organic analyses", value: numeric(science.analyses), detail: "JOURNAL-CONFIRMED RECORDS"},
-    {label: "Notable worlds", value: numeric(science.valuable), detail: `${numeric(science.terraformable)} TERRAFORMABLE`},
-  ])}<section class="workspace-grid two science-grid">${workspaceCard("ORGANIC ECOLOGY INDEX", species, `${numeric(science.species_total)} SPECIES`, "science-index-card")}${workspaceCard("BIOLOGY BY ATMOSPHERE", distribution(science.atmospheres), `${numeric(science.biological_bodies)} WORLDS`)}${workspaceCard("BIOLOGY BY GRAVITY", distribution(science.gravity, "orange"))}${workspaceCard("WORLD CLASS MIX", distribution(science.body_classes))}${workspaceCard("STELLAR CLASS MIX", distribution(science.star_classes, "orange"))}</section></section>
-  <section data-analytics-panel="passport">${workspaceMetrics([
-    {label: "Regions stamped", value: `${numeric(passport.visited)} / ${numeric(passport.total)}`, detail: `${numeric(passport.percent, 1)}% OF GALACTIC REGIONS`},
-    {label: "Systems indexed", value: numeric(passport.systems), detail: "REGION-ASSIGNED VISITS"},
-    {label: "Regional travel", value: `${numeric(passport.distance, 1)} LY`, detail: "RETAINED JUMP DISTANCE"},
-    {label: "Biology", value: numeric(passport.biology), detail: "ANALYSES BY REGION"},
-  ])}<div class="passport-actions"><span>Each stamp is profile-local and derived from retained journal coordinates.</span><button data-page="map">OPEN GALACTIC ATLAS</button></div><section class="region-passport-grid">${regionCards}</section></section>`;
-  document.querySelectorAll("[data-analytics-view]").forEach((button) => button.classList.toggle("active", button.dataset.analyticsView === analyticsView));
-  document.querySelectorAll("[data-analytics-panel]").forEach((panel) => { panel.hidden = panel.dataset.analyticsPanel !== analyticsView; });
+function renderArchiveWorkspace(data) {
+  renderExplorationArchive(data, {byId, credits, escapeHtml, number, numeric, workspaceTable, analyticsView, profileKey});
 }
 
 function replayGeometry(replay = {}, sessionIndex = 0) {
@@ -3420,6 +3547,10 @@ function renderWorkspace(state) {
     }
     return;
   }
+  if (page === "analytics") {
+    const elapsed = byId("analytics-workspace")?.querySelector(".archive-current > strong");
+    if (elapsed) elapsed.textContent = String(workspace.data?.current?.elapsed || "00:00:00");
+  }
   if (workspaceFingerprints[page] === fingerprint) return;
   const root = byId(`${page}-workspace`);
   const focused = document.activeElement;
@@ -3428,14 +3559,15 @@ function renderWorkspace(state) {
   }
   if (page === "planet-materials" && root?.dataset.profileKey === workspace.data?.profile_key && root.querySelector("form[data-dirty]")
       && root.planetSitesFingerprint === JSON.stringify(workspace.data?.sites || [])) return;
-  const profileChanged = page === "planet-materials" && root?.dataset.profileKey !== workspace.data?.profile_key;
+  const profileChanged = (page === "planet-materials" && root?.dataset.profileKey !== workspace.data?.profile_key)
+    || (page === "analytics" && root?.dataset.profileKey !== profileKey);
   if (!profileChanged && root?.contains(focused) && focused?.matches("#planet-compass-lat, #planet-compass-lon")) return;
   if (page !== "planet-materials" && !profileChanged && root?.contains(focused) && focused?.matches("input, textarea, select, [contenteditable='true']") && !focused?.matches("[data-refresh-on-change]")) return;
   workspaceFingerprints[page] = fingerprint;
   const renderers = {
     "planet-materials": renderPlanetMaterialsWorkspace,
     explore: (data) => renderExploreWorkspace(data, EXPLORE_WORKSPACE_UI),
-    profile: renderProfileWorkspace, analytics: renderAnalyticsWorkspace,
+    profile: renderProfileWorkspace, analytics: renderArchiveWorkspace,
     chronicle: renderChronicleWorkspace, mission: renderMissionWorkspace,
     ground: renderGroundWorkspace, mining: renderMiningWorkspace,
     engineering: renderEngineeringWorkspace, "build-planner": renderBuildPlannerWorkspace, powerplay: renderPowerplayWorkspace,
@@ -3468,10 +3600,18 @@ function renderDashboard(state) {
     deckLayoutDraft = null;
     deckLayoutFingerprint = "";
     decisionTagsFingerprint = "";
+    flightLogFilter = "ALL";
+    flightLogSearch = "";
+    flightLogEventsFingerprint = "";
+    const flightLogSearchInput = byId("flightlog-search");
+    if (flightLogSearchInput) flightLogSearchInput.value = "";
     preflightFingerprint = "";
     preflightSignalFingerprint = "";
     preflightExpanded = false;
     surveyBodiesFingerprint = "";
+    workboardFingerprint = "";
+    workboardSystem = "";
+    workboardSelection = null;
     routeHorizonFingerprint = "";
     sessionHighlightsFingerprint = "";
     codexCandidatesFingerprint = "";
@@ -3884,6 +4024,13 @@ async function nudgeStudioOverlay(vector) {
 }
 
 document.addEventListener("click", async (event) => {
+  const flightLogFilterButton = event.target.closest("[data-flightlog-filter]");
+  if (flightLogFilterButton) {
+    flightLogFilter = flightLogFilterButton.dataset.flightlogFilter || "ALL";
+    flightLogEventsFingerprint = "";
+    renderFlightLogEvents(model, true);
+    return;
+  }
   const layoutOpen = event.target.closest("[data-page-layout-open]");
   if (layoutOpen) {
     beginPageLayout(layoutOpen.dataset.pageLayoutOpen);
@@ -3917,7 +4064,11 @@ document.addEventListener("click", async (event) => {
   const analyticsTab = event.target.closest("[data-analytics-view]");
   if (analyticsTab) {
     analyticsView = analyticsTab.dataset.analyticsView || "trends";
-    document.querySelectorAll("[data-analytics-view]").forEach((button) => button.classList.toggle("active", button === analyticsTab));
+    document.querySelectorAll("[data-analytics-view]").forEach((button) => {
+      const active = button === analyticsTab;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", String(active));
+    });
     document.querySelectorAll("[data-analytics-panel]").forEach((panel) => { panel.hidden = panel.dataset.analyticsPanel !== analyticsView; });
     return;
   }
@@ -4044,6 +4195,11 @@ document.addEventListener("click", async (event) => {
     showToast(await command("overlay_studio", {operation: "rhino_open_maps"}) ? "Opened saved Rhino maps" : "Saved map folder could not be opened");
     return;
   }
+  const surveyBodyButton = event.target.closest("#survey-body-list .survey-body-row");
+  if (surveyBodyButton) {
+    openWorkboardBody(surveyBodyButton);
+    return;
+  }
   const pageButton = event.target.closest("[data-page]");
   if (pageButton) {
     showPage(pageButton.dataset.page);
@@ -4166,7 +4322,7 @@ document.addEventListener("click", async (event) => {
     const page = workspaceButton.dataset.wsPage;
     const operation = workspaceButton.dataset.wsOp;
     const payload = {page, operation};
-    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["planId", "plan_id"], ["bookmarkId", "bookmark_id"], ["sessionIndex", "session_index"], ["carrierId", "carrier_id"], ["shipId", "ship_id"], ["slot", "slot"], ["system", "system"], ["name", "name"], ["dossier", "dossier"]]) {
+    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["planId", "plan_id"], ["bookmarkId", "bookmark_id"], ["sessionIndex", "session_index"], ["carrierId", "carrier_id"], ["shipId", "ship_id"], ["returnLaterId", "id"], ["slot", "slot"], ["system", "system"], ["name", "name"], ["dossier", "dossier"]]) {
       if (workspaceButton.dataset[datasetKey] !== undefined) payload[payloadKey] = workspaceButton.dataset[datasetKey];
     }
     if (page === "carrier" && payload.carrier_id === undefined) {
@@ -4403,7 +4559,11 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("input", (event) => {
-  if (event.target.id === "replay-slider") {
+  if (event.target.id === "flightlog-search") {
+    flightLogSearch = event.target.value;
+    flightLogEventsFingerprint = "";
+    renderFlightLogEvents(model, true);
+  } else if (event.target.id === "replay-slider") {
     updateReplayCursor(event.target.value);
   } else if (event.target.id === "achievement-filter") {
     achievementUi.search = event.target.value;

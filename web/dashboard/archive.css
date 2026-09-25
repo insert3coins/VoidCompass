@@ -1,0 +1,176 @@
+/* Exploration Archive — a retained-evidence dossier, not a lifetime dashboard. */
+.page[data-page-name="analytics"] > .page-title { align-items:center; min-height:40px; margin-bottom:11px; padding-bottom:9px; border-bottom:1px solid var(--border-soft); }
+.page[data-page-name="analytics"] > .page-title p { margin:0 0 2px; font-size:7px; }
+.page[data-page-name="analytics"] > .page-title h2 { color:var(--muted); font-size:13px; }
+.page[data-page-name="analytics"] > .page-title > div:first-child > span { display:none; }
+.page[data-page-name="analytics"] > .page-title .title-actions button { min-height:27px; padding:0 9px; font-size:8px; }
+.archive-shell { display:grid; gap:16px; min-width:0; }
+.archive-shell :is(button, [tabindex="0"]):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.archive-masthead { position:relative; display:flex; justify-content:space-between; gap:24px; min-width:0; min-height:212px; padding:30px clamp(22px,3vw,42px); overflow:hidden; border:1px solid var(--border); background:radial-gradient(circle at 80% 50%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 35%),linear-gradient(120deg,var(--panel),var(--header)); }
+.archive-masthead::before { content:""; position:absolute; top:-102px; right:12%; width:350px; aspect-ratio:1; border:1px solid color-mix(in srgb,var(--accent) 15%,transparent); border-radius:50%; box-shadow:0 0 0 42px color-mix(in srgb,var(--accent) 2%,transparent),0 0 0 108px color-mix(in srgb,var(--accent) 2%,transparent); pointer-events:none; }
+.archive-masthead::after { content:""; position:absolute; left:0; right:0; bottom:0; height:2px; background:linear-gradient(90deg,var(--accent),var(--orange) 44%,transparent 80%); opacity:.75; }
+.archive-masthead-copy,.archive-masthead-actions { position:relative; z-index:1; }
+.archive-masthead-copy { max-width:700px; min-width:0; }
+.archive-masthead-copy > small { display:flex; align-items:center; gap:9px; color:var(--orange); font:700 9px Consolas,monospace; letter-spacing:.18em; }
+.archive-masthead-copy > small i { width:20px; height:1px; background:var(--orange); }
+.archive-masthead h2 { margin:13px 0 8px; color:var(--text); font:700 clamp(35px,4vw,58px)/.97 "Bahnschrift SemiCondensed","Arial Narrow",sans-serif; letter-spacing:.025em; text-transform:uppercase; }
+.archive-masthead h2 span { color:var(--accent); }
+.archive-masthead p { max-width:620px; margin:0; color:var(--muted); font:12px/1.65 "Segoe UI",sans-serif; }
+.archive-masthead-actions { display:flex; align-self:flex-end; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+.archive-masthead-actions button,.archive-passport-note button { min-height:39px; padding:0 14px; border:1px solid color-mix(in srgb,var(--accent) 65%,var(--border)); background:color-mix(in srgb,var(--accent) 9%,var(--panel)); color:var(--text); cursor:pointer; font:700 9px Consolas,monospace; letter-spacing:.09em; white-space:nowrap; transition:background .18s ease,border-color .18s ease,transform .18s ease; }
+.archive-masthead-actions button:last-child { border-color:var(--border); background:var(--panel-alt); }
+.archive-masthead-actions button:hover,.archive-passport-note button:hover { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 16%,var(--panel)); transform:translateY(-2px); }
+.archive-masthead-actions button span,.archive-passport-note button span { margin-left:8px; color:var(--accent); font-size:14px; }
+.archive-index-strip { display:flex; align-items:center; flex-wrap:wrap; gap:8px 0; min-height:54px; padding:10px 17px; border:1px solid var(--border-soft); background:var(--panel); color:var(--muted); font:700 9px Consolas,monospace; letter-spacing:.04em; }
+.archive-index-strip > span { display:flex; align-items:baseline; gap:7px; margin-right:19px; padding-right:19px; border-right:1px solid var(--border); }
+.archive-index-strip > span b { color:var(--accent); font:700 16px "Bahnschrift SemiCondensed",sans-serif; }
+.archive-index-strip > small { margin-left:auto; color:var(--dim); font:8px Consolas,monospace; letter-spacing:.12em; }
+.archive-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.archive-tabs > button { display:grid; grid-template-columns:36px minmax(0,1fr); align-items:center; gap:12px; min-width:0; min-height:71px; padding:10px 15px; border:1px solid var(--border); border-bottom:2px solid var(--border); background:var(--panel); color:var(--muted); cursor:pointer; text-align:left; transition:border-color .18s ease,background .18s ease,color .18s ease; }
+.archive-tabs > button:hover { border-color:color-mix(in srgb,var(--accent) 55%,var(--border)); color:var(--text); }
+.archive-tabs > button.active { border-color:var(--border); border-bottom-color:var(--accent); background:linear-gradient(115deg,color-mix(in srgb,var(--accent) 10%,var(--panel)),var(--panel)); color:var(--text); box-shadow:inset 0 1px color-mix(in srgb,var(--accent) 30%,transparent); }
+.archive-tabs i { display:grid; place-items:center; width:33px; aspect-ratio:1; border:1px solid var(--border); border-radius:50%; color:var(--dim); font:normal 9px Consolas,monospace; }
+.archive-tabs > button.active i { border-color:var(--accent); color:var(--accent); }
+.archive-tabs span { overflow:hidden; font:700 16px "Bahnschrift SemiCondensed","Arial Narrow",sans-serif; letter-spacing:.035em; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap; }
+.archive-tabs small { display:block; margin-top:3px; overflow:hidden; color:var(--dim); font:8px Consolas,monospace; letter-spacing:.02em; text-overflow:ellipsis; text-transform:none; white-space:nowrap; }
+.archive-panel { display:grid; gap:16px; min-width:0; }
+.archive-section-head { display:flex; justify-content:space-between; align-items:end; gap:20px; min-width:0; padding:11px 1px 2px; }
+.archive-section-head small,.archive-ledger > header small,.archive-species > header small { color:var(--orange); font:700 8px Consolas,monospace; letter-spacing:.16em; }
+.archive-section-head h3 { margin:6px 0 4px; color:var(--text); font:700 clamp(25px,2.3vw,34px) "Bahnschrift SemiCondensed",sans-serif; text-transform:uppercase; }
+.archive-section-head p { max-width:800px; margin:0; color:var(--muted); font:11px/1.55 "Segoe UI",sans-serif; }
+.archive-section-head > span { flex:none; color:var(--accent); font:700 9px Consolas,monospace; letter-spacing:.08em; white-space:nowrap; }
+.archive-flight-layout { display:grid; grid-template-columns:minmax(240px,.52fr) minmax(0,1.48fr); gap:10px; min-width:0; }
+.archive-current,.archive-chart-card,.archive-metric,.archive-ledger,.archive-species,.archive-distribution,.archive-region,.archive-passport-progress { min-width:0; border:1px solid var(--border); background:var(--panel); }
+.archive-current { display:flex; flex-direction:column; justify-content:center; min-height:250px; padding:20px; background:radial-gradient(circle at 50% 18%,color-mix(in srgb,var(--accent) 11%,transparent),transparent 54%),var(--panel); }
+.archive-current-top { display:flex; justify-content:space-between; align-items:center; color:var(--accent); font:700 9px Consolas,monospace; letter-spacing:.14em; }
+.archive-current-top i { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 9px var(--green); }
+.archive-current > strong { margin:16px 0 1px; color:var(--text); font:700 clamp(28px,3.5vw,47px)/1 "Bahnschrift SemiCondensed",sans-serif; letter-spacing:.05em; }
+.archive-current > small { color:var(--dim); font:8px Consolas,monospace; letter-spacing:.12em; }
+.archive-current-readouts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin-top:24px; padding-top:17px; border-top:1px solid var(--border); }
+.archive-current-readouts span { color:var(--dim); font:7px/1.45 Consolas,monospace; }
+.archive-current-readouts b { display:block; margin-bottom:2px; color:var(--accent); font:700 15px "Bahnschrift SemiCondensed",sans-serif; }
+.archive-trend-pair { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; min-width:0; }
+.archive-chart-card { display:grid; grid-template-rows:auto minmax(0,1fr) auto; min-height:250px; padding:14px 16px 12px; }
+.archive-chart-card > header,.archive-chart-card > footer { display:flex; justify-content:space-between; gap:8px; }
+.archive-chart-card > header span { color:var(--text); font:700 13px "Bahnschrift SemiCondensed",sans-serif; letter-spacing:.06em; text-transform:uppercase; }
+.archive-chart-card > header b,.archive-chart-card > footer { color:var(--dim); font:8px Consolas,monospace; white-space:nowrap; }
+.archive-chart-card > footer { padding-top:9px; border-top:1px solid var(--border-soft); }
+.archive-chart { display:flex; align-items:end; gap:3px; min-height:140px; margin:12px 0 0; padding:8px 0 0; background:repeating-linear-gradient(0deg,transparent 0 35px,color-mix(in srgb,var(--border-soft) 70%,transparent) 35px 36px); }
+.archive-chart > i { position:relative; flex:1 1 0; min-width:2px; max-width:24px; height:var(--archive-bar); background:linear-gradient(0deg,color-mix(in srgb,var(--accent) 32%,transparent),var(--accent)); box-shadow:0 0 7px color-mix(in srgb,var(--accent) 18%,transparent); }
+.archive-chart-card:nth-child(2) .archive-chart > i { background:linear-gradient(0deg,color-mix(in srgb,var(--orange) 30%,transparent),var(--orange)); box-shadow:0 0 7px color-mix(in srgb,var(--orange) 16%,transparent); }
+.archive-chart > i em { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.archive-chart-empty { align-self:center; margin:auto; color:var(--dim); font:8px/1.6 Consolas,monospace; text-align:center; }
+.archive-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.archive-metric { min-height:91px; padding:15px 17px; box-shadow:inset 2px 0 color-mix(in srgb,var(--accent) 60%,transparent); }
+.archive-metric > span,.archive-metric > small { display:block; color:var(--dim); font:700 8px Consolas,monospace; letter-spacing:.09em; }
+.archive-metric > strong { display:block; margin:7px 0 4px; overflow:hidden; color:var(--text); font:700 clamp(17px,2vw,27px)/1 "Bahnschrift SemiCondensed",sans-serif; text-overflow:ellipsis; white-space:nowrap; }
+.archive-metric em { color:var(--accent); font:700 11px Consolas,monospace; font-style:normal; }
+.archive-metric > small { color:var(--muted); font-weight:400; }
+.archive-ledger,.archive-species { overflow:hidden; }
+.archive-ledger > header,.archive-species > header { display:flex; justify-content:space-between; align-items:end; gap:15px; padding:16px 18px 13px; border-bottom:1px solid var(--border); }
+.archive-ledger h4,.archive-species h4 { margin:3px 0 0; color:var(--text); font:700 21px "Bahnschrift SemiCondensed",sans-serif; text-transform:uppercase; }
+.archive-ledger > header > span,.archive-species > header > span { color:var(--dim); font:8px Consolas,monospace; text-align:right; }
+.archive-ledger-search { display:grid; gap:4px; width:min(290px,100%); color:var(--dim); font:700 8px Consolas,monospace; letter-spacing:.08em; }
+.archive-ledger-search input { width:100%; min-height:32px; padding:0 10px; border:1px solid var(--border); background:var(--input); color:var(--text); font:10px Consolas,monospace; }
+.archive-ledger-search input::placeholder { color:var(--dim); }
+.archive-ledger-count { min-height:24px; padding:7px 18px 5px; border-bottom:1px solid var(--border-soft); color:var(--dim); font:8px Consolas,monospace; letter-spacing:.08em; }
+.archive-flight-scroll,.archive-species-scroll { max-width:100%; max-height:550px; overflow:auto; scrollbar-width:thin; scrollbar-color:var(--border) var(--inset); }
+.archive-flight-table,.archive-species-table { width:100%; border-collapse:collapse; font:10px Consolas,monospace; }
+.archive-flight-table thead,.archive-species-table thead { position:sticky; top:0; z-index:1; background:var(--header); }
+.archive-flight-table :is(th,td),.archive-species-table :is(th,td) { padding:10px 12px; border-bottom:1px solid var(--border-soft); text-align:right; white-space:nowrap; }
+.archive-flight-table thead th,.archive-species-table thead th { color:var(--dim); font:700 8px Consolas,monospace; letter-spacing:.08em; text-transform:uppercase; }
+.archive-flight-table :is(th:first-child,td:first-child),.archive-species-table :is(th:first-child,td:first-child) { text-align:left; }
+.archive-flight-table tbody th,.archive-species-table tbody th { min-width:230px; font-weight:400; }
+.archive-flight-table tbody tr:hover,.archive-species-table tbody tr:hover { background:color-mix(in srgb,var(--accent) 7%,transparent); }
+.archive-flight-table time,.archive-flight-table small,.archive-species-table small { display:block; color:var(--dim); font:8px Consolas,monospace; }
+.archive-flight-table strong,.archive-species-table strong { display:block; margin-top:3px; overflow:hidden; color:var(--text); font:700 10px Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
+.archive-flight-table strong span { color:var(--accent); }
+.archive-flight-table td,.archive-species-table td { color:var(--muted); }
+.archive-flight-table td small { display:inline; }
+.archive-flight-table tbody tr:last-child :is(th,td),.archive-species-table tbody tr:last-child :is(th,td) { border-bottom:0; }
+.archive-science-layout { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(290px,.8fr); gap:10px; min-width:0; }
+.archive-science-side { display:grid; gap:10px; min-width:0; }
+.archive-species-scroll { max-height:540px; }
+.archive-species-table tbody th { max-width:300px; }
+.archive-species-table tbody th small { margin-top:2px; }
+.archive-distribution { padding:15px 17px; }
+.archive-distribution > header { display:flex; align-items:baseline; justify-content:space-between; gap:9px; padding-bottom:12px; border-bottom:1px solid var(--border-soft); }
+.archive-distribution h4 { margin:0; color:var(--text); font:700 15px "Bahnschrift SemiCondensed",sans-serif; text-transform:uppercase; }
+.archive-distribution > header small { color:var(--dim); font:7px Consolas,monospace; text-align:right; }
+.archive-distribution ol { display:grid; gap:8px; margin:12px 0 0; padding:0; list-style:none; }
+.archive-distribution li { display:grid; grid-template-columns:minmax(90px,1fr) minmax(40px,1.2fr) 36px; align-items:center; gap:9px; min-width:0; }
+.archive-distribution li > span { overflow:hidden; color:var(--muted); font:8px Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
+.archive-distribution li > i { height:5px; overflow:hidden; background:var(--inset); }
+.archive-distribution li em { display:block; height:100%; background:var(--accent); }
+.archive-distribution li b { color:var(--text); font:700 9px Consolas,monospace; text-align:right; }
+.archive-science-side .archive-distribution:nth-child(2) li em,.archive-world-mix .archive-distribution:nth-child(2) li em { background:var(--orange); }
+.archive-world-mix { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.archive-empty { margin:0; padding:20px; color:var(--dim); font:10px/1.6 Consolas,monospace; }
+.archive-passport-summary { display:grid; grid-template-columns:minmax(220px,1.25fr) repeat(3,minmax(0,.75fr)); gap:10px; }
+.archive-passport-progress { display:flex; flex-direction:column; justify-content:center; gap:12px; padding:16px 19px; background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 6%,var(--panel)),var(--panel)); }
+.archive-passport-progress > span { display:flex; align-items:baseline; justify-content:space-between; gap:8px; color:var(--muted); font:700 9px Consolas,monospace; }
+.archive-passport-progress b { color:var(--accent); font:700 25px "Bahnschrift SemiCondensed",sans-serif; }
+.archive-passport-progress > i { height:7px; overflow:hidden; border:1px solid var(--border); background:var(--inset); }
+.archive-passport-progress em { display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); }
+.archive-passport-progress small { color:var(--dim); font:8px Consolas,monospace; }
+.archive-passport-note { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:50px; padding:9px 13px 9px 16px; border:1px solid var(--border-soft); background:var(--panel); color:var(--muted); font:10px/1.45 Consolas,monospace; }
+.archive-regions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); align-content:start; gap:9px; max-height:650px; padding:2px; overflow:auto; scrollbar-width:thin; scrollbar-color:var(--border) var(--inset); }
+.archive-region { min-height:187px; padding:13px; opacity:.58; background:linear-gradient(145deg,var(--panel),var(--inset)); }
+.archive-region.visited { opacity:1; border-top-color:var(--accent); box-shadow:inset 0 2px color-mix(in srgb,var(--accent) 28%,transparent); }
+.archive-region > header { display:flex; align-items:center; justify-content:space-between; }
+.archive-region-number { display:grid; place-items:center; width:29px; aspect-ratio:1; border:1px solid var(--dim); border-radius:50%; color:var(--dim); font:8px Consolas,monospace; }
+.archive-region.visited .archive-region-number { border-color:var(--accent); color:var(--accent); }
+.archive-region > header b { color:var(--dim); font:700 7px Consolas,monospace; letter-spacing:.08em; }
+.archive-region.visited > header b { color:var(--green); }
+.archive-region h4 { margin:12px 0 4px; overflow:hidden; color:var(--text); font:700 16px "Bahnschrift SemiCondensed",sans-serif; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap; }
+.archive-region p { min-height:26px; margin:0; color:var(--muted); font:8px/1.5 Consolas,monospace; }
+.archive-region dl { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:3px; margin:10px 0; padding:9px 0; border-top:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft); }
+.archive-region dl > div { min-width:0; }
+.archive-region dt { color:var(--dim); font:7px Consolas,monospace; }
+.archive-region dd { margin:2px 0 0; overflow:hidden; color:var(--text); font:700 10px Consolas,monospace; text-overflow:ellipsis; }
+.archive-region footer { display:grid; gap:3px; margin-top:10px; }
+.archive-region footer small { color:var(--dim); font:7px Consolas,monospace; }
+.archive-region footer strong { overflow:hidden; color:var(--accent); font:700 8px Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
+.archive-region footer time { color:var(--dim); font:7px Consolas,monospace; }
+.archive-custody { display:flex; align-items:center; flex-wrap:wrap; gap:9px; padding:5px 1px 10px; color:var(--dim); font:700 8px Consolas,monospace; letter-spacing:.07em; }
+.archive-custody i { width:6px; height:6px; border:1px solid var(--accent); transform:rotate(45deg); }
+.archive-custody small { margin-left:auto; color:var(--dim); font:8px Consolas,monospace; letter-spacing:0; }
+.archive-status { display:flex; gap:10px; align-items:center; padding:12px 15px; border:1px solid var(--border); border-left:2px solid var(--orange); background:color-mix(in srgb,var(--orange) 6%,var(--panel)); color:var(--muted); font:9px/1.5 Consolas,monospace; }
+.archive-status strong { color:var(--orange); white-space:nowrap; }
+.archive-status.stale { border-left-color:var(--accent); background:color-mix(in srgb,var(--accent) 5%,var(--panel)); }
+.archive-status.stale strong { color:var(--accent); }
+.archive-deferred { display:grid; place-items:center; min-height:240px; padding:25px; border:1px solid var(--border); background:var(--panel); color:var(--muted); font:10px/1.6 Consolas,monospace; text-align:center; }
+
+@media (max-width:1350px) {
+  .archive-regions { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .archive-masthead { flex-direction:column; min-height:0; }
+  .archive-masthead-actions { align-self:flex-start; justify-content:flex-start; }
+}
+@media (max-width:1050px) {
+  .archive-flight-layout,.archive-science-layout { grid-template-columns:1fr; }
+  .archive-current { min-height:185px; }
+  .archive-passport-summary,.archive-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .archive-regions { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:720px) {
+  .archive-shell { gap:12px; }
+  .archive-masthead { padding:23px 20px; }
+  .archive-masthead h2 { font-size:35px; }
+  .archive-tabs { grid-template-columns:1fr; }
+  .archive-tabs > button { min-height:56px; }
+  .archive-trend-pair,.archive-world-mix { grid-template-columns:1fr; }
+  .archive-chart-card { min-height:190px; }
+  .archive-section-head { align-items:start; flex-direction:column; gap:7px; }
+  .archive-passport-note { align-items:start; flex-direction:column; }
+  .archive-index-strip > small { margin-left:0; }
+}
+@media (max-width:500px) {
+  .archive-metrics,.archive-passport-summary,.archive-regions { grid-template-columns:1fr; }
+  .archive-current-readouts { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .archive-ledger > header,.archive-species > header { align-items:start; flex-direction:column; }
+  .archive-region { min-height:0; }
+  .archive-custody small { width:100%; margin-left:15px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .archive-shell *, .archive-shell *::before, .archive-shell *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
+}
