@@ -7109,25 +7109,6 @@ class MainDashboard(
             titles = {"MissionAccepted": "MISSION ACCEPTED", "MissionCompleted": "MISSION COMPLETE", "MissionFailed": "MISSION FAILED", "MissionAbandoned": "MISSION ABANDONED"}
             sev = "success" if ev == "MissionCompleted" else ("fail" if ev in ("MissionFailed", "MissionAbandoned") else "info")
             self._push_live_toast(titles[ev], name, sev, 15)
-        elif ev == "ScanOrganic":
-            species = d.get("species") or d.get("genus") or "Organic"
-            scan_type = str(d.get("scan_type") or raw.get("ScanType") or "").lower()
-            complete = bool(d.get("is_complete")) or scan_type == "analyse"
-            body_id = self._normalize_body_id(d.get("body_id"))
-            species_key = f"{body_id}|{species}" if body_id is not None else species
-            existing = self.last_bio_scan.get(species_key, {})
-            max_samples = d.get("max_samples") or 3
-            # ScanOrganic reaches this toast only after the main reducer has
-            # stored the event. Display that exact index; adding one here made
-            # a first Log toast claim 2/3 while the database correctly held 1.
-            sample = existing.get("sample_idx") or (
-                max_samples if complete else 1
-            )
-            detail = "Analysis complete" if complete else f"Sample {sample}/{max_samples}"
-            self._push_live_toast(
-                "BIO COMPLETE" if complete else "BIO SAMPLE", f"{species}: {detail}",
-                "success" if complete else "info", 12,
-            )
         elif ev == "CodexEntry":
             name = d.get("name") or raw.get("Name_Localised") or raw.get("Name") or "New Codex entry"
             category = d.get("category") or raw.get("Category_Localised") or "Discovery"
@@ -7367,9 +7348,7 @@ class MainDashboard(
                 self.captains_log.add_manual_highlight(
                     "OBJECTIVE", f"Expedition objective complete: {summary}",
                 )
-        # Biological toast text depends on the authoritative sample index that
-        # is written in the main reducer below. Publish every other toast here,
-        # then emit ScanOrganic only after that state has settled.
+        # Survey Operations owns ScanOrganic progress; keep other journal toasts.
         if ev != "ScanOrganic":
             self._handle_live_journal_toast(
                 ev, raw, d, startup_replay=startup_replay,
@@ -7741,10 +7720,6 @@ class MainDashboard(
             # completed receipt while this body remains the active surface.
             if not startup_replay:
                 self._process_companion_event(
-                    ev, raw if isinstance(raw, dict) else {}, d,
-                    startup_replay=False,
-                )
-                self._handle_live_journal_toast(
                     ev, raw if isinstance(raw, dict) else {}, d,
                     startup_replay=False,
                 )
