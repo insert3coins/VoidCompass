@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class CommandDeckConsolidation548Tests(unittest.TestCase):
     def test_release_version_comparison_handles_elite_style_patch_versions(self):
-        self.assertEqual(APP_VERSION, "5.4.9.2")
+        self.assertEqual(APP_VERSION, "5.4.9.3")
         self.assertTrue(release_is_newer("v5.4.8.2", "5.4.8.1"))
         self.assertTrue(release_is_newer("5.4.7.1", "5.4.7"))
         self.assertTrue(release_is_newer("5.4.10", "5.4.9.9"))

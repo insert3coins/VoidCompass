@@ -284,6 +284,7 @@ PROFILE_VALUE_SETTINGS = (
     "exploration_window_geometry",
     "system_plotter_form",
     "exploration_scout_form",
+    "stellar_survey_queue_state",
     "ui_custom_themes",
     "ui_scale_percent",
     "overlay_text_scale_percent",
@@ -582,6 +583,7 @@ def apply_profile_config(config, profile_key=None):
                 "explore_map_view_state": {},
                 "explore_map_annotations": [],
                 "explore_map_annotation_geometry": "470x360",
+                "stellar_survey_queue_state": {},
                 "contact_scope_timeout_s": 45,
                 "dss_efficiency_stats": {
                     "mapped": 0, "efficient": 0, "probes": 0,
@@ -787,6 +789,7 @@ def load_config():
         'exploration_window_geometry': '1040x680',
         'system_plotter_form': {},
         'exploration_scout_form': {},
+        'stellar_survey_queue_state': {},
         'route_auto_note_from_edsm': True,
         'auto_copy_waypoint': False,
         'eddn_market_upload_enabled': True,

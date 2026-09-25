@@ -1801,6 +1801,7 @@ class MainDashboard(
                 "deep_survey.json",
                 "expeditions.json",
                 "waypoints.json",
+                "return_later.json",
                 "rhino_minimap.json.gz",
             ):
                 src = get_profile_file(old_key, filename)
@@ -7832,6 +7833,13 @@ class MainDashboard(
             # State reset for new system
             incoming_sys = d.get("star_system", "Unknown")
             previous_current_sys = self.current_sys
+            if is_jump and not startup_replay and incoming_sys != previous_current_sys:
+                # Preserve the outgoing system's unfinished journal-backed work
+                # before load_system_from_db replaces its scan and FSS state.
+                self._reconcile_return_later(
+                    visited_at=raw.get("timestamp") if isinstance(raw, dict) else None,
+                    departure=True,
+                )
             preserve_unconfirmed_total = _preserve_unconfirmed_scan_total(
                 startup_replay, data, incoming_sys, self.current_sys,
                 getattr(self, "scan_total_confirmed", False),

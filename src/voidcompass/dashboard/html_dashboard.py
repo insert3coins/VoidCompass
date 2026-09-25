@@ -1144,11 +1144,22 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
         profile = get_active_profile(self.config)
         now = time.monotonic()
         cache = getattr(self, "_html_science_lab_cache", None)
-        if not isinstance(cache, dict) or cache.get("profile") != profile or now - _number(cache.get("time"), 0) > 6.0:
-            scan_rows = []
+        if not isinstance(cache, dict) or cache.get("profile") != profile:
+            cache = None
+        age_seconds = max(0.0, now - _number(cache.get("time"), 0)) if cache else None
+        read_status = "ready"
+        if cache is None or age_seconds > 6.0:
             lock = getattr(self, "db_lock", None)
-            acquired = bool(lock and lock.acquire(blocking=False))
+            acquired = False
+            if lock is None:
+                read_status = "unavailable"
+            else:
+                try:
+                    acquired = bool(lock.acquire(blocking=False))
+                except Exception:
+                    read_status = "unavailable"
             if acquired:
+                scan_rows = []
                 try:
                     for system, payload in self.conn.execute(
                         "SELECT system_name, data_json FROM scan_hud_items"
@@ -1160,30 +1171,37 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                         if isinstance(item, dict):
                             scan_rows.append((system, item))
                 except Exception:
-                    scan_rows = []
+                    read_status = "unavailable"
                 finally:
                     lock.release()
-            elif isinstance(cache, dict):
-                scan_rows = None
-            deep = getattr(self, "deep_survey", None)
-            try:
-                region_state = deep.region_passport_state() if deep is not None else {}
-            except Exception:
-                region_state = {}
-            if scan_rows is not None:
+            elif read_status == "ready":
+                read_status = "loading"
+            if read_status == "ready":
+                deep = getattr(self, "deep_survey", None)
+                try:
+                    region_state = deep.region_passport_state() if deep is not None else {}
+                except Exception:
+                    region_state = {}
                 cache = {
                     "profile": profile, "time": now,
                     "science": build_science_lab(scan_rows),
                     "passport": build_region_passport(region_state),
                 }
                 self._html_science_lab_cache = cache
-        cache = cache if isinstance(cache, dict) else {
+                age_seconds = 0.0
+        if read_status != "ready" and cache is not None:
+            read_status = "stale"
+        cache = cache if cache is not None else {
             "science": build_science_lab([]), "passport": build_region_passport({}),
         }
         return {
             **base,
             "science": cache.get("science") or build_science_lab([]),
             "passport": cache.get("passport") or build_region_passport({}),
+            "science_status": {
+                "state": read_status,
+                "age_seconds": round(age_seconds, 1) if age_seconds is not None else None,
+            },
         }
 
     def _html_chronicle_workspace(self):

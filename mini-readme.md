@@ -1,16 +1,17 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.9.2 // Surface Instruments & Expedition Bridge
-**Release Date:** 2026-Sep-24
+## v5.4.9.3 // Survey Continuity & Field Records
+**Release Date:** 2026-Sep-25
 
-* Rebuilt Planet Materials as a smaller field dossier with compact scan composition, clearly labelled Rhino material estimates, temperature and volcanism facts, and bounded saved-site pages. The active compass site stays pinned, and every saved site remains reachable as live distances change.
-* Rebuilt Planet Waypoint Navigation around a relative-heading dial, prominent surface distance, turn correction and target/current coordinate fixes. Near-target guidance uses measured distance, without inventing an arrival event or ETA; the panel adapts to larger text and honours profile themes and reduced motion.
-* Rebuilt the Dashboard overview as the Expedition Bridge, with a live journal-link indicator, mission directive, departure-check signals, orbital system-survey display and flight-corridor radar. Existing live data, actions and profile-saved panel arrangements remain in place.
-* Carried the theme-aware Bridge design through all 20 other non-map dashboard pages, with distinct exploration, commander-record, field-system, Build Planner, Settings and Overlay Studio treatments. Compact-window layouts and reduced-motion preferences remain supported; Galactic Atlas keeps its existing map presentation.
-* The Dashboard's Current System panel now lists every known planet and moon record as scans or surface signals arrive, with animated class illustrations, ring cues, latest-scan focus and a bounded list for large systems. Unclassified signals stay visually unknown, while archive-only records remain labelled as such.
+* Kept every discovered body reachable in the Explore system workboard while bounding the display, with an honest overflow count on the compact orbit strip and direct Current System-to-workboard navigation.
+* Added a profile-local Return Later board for unfinished, journal-backed survey work from departed systems, with copy, route and dismiss actions. Revisited systems reconcile against fresh scan evidence rather than claiming unobserved completion.
+* Persisted survey queue choices per commander and clarified journal-completed entries so automatic completion cannot be mistaken for a manual task that can be reopened.
+* Rebuilt Exploration Archive as a flight-record workspace with session trends, a searchable ledger, ecological evidence and the 42-region passport. Archive counts describe retained records, and temporarily unavailable science data no longer masquerades as an empty history.
+* Reworked Focused Log into a live field brief with current survey and route context, a filterable rolling event feed and an obvious return to Dashboard.
 
 ## Earlier releases
 
+* **v5.4.9.2** — Rebuilt Planet Materials and Planet Waypoint Navigation, introduced the Expedition Bridge across non-map pages, and added animated known-world records to Current System.
 * **v5.4.9.1** — Refreshed Survey Operations for every planet scan with compact routine and pinned biology strips, improved exobiology sampling, and rebuilt Achievements and themed cockpit notifications.
 * **v5.4.9** — Rebuilt the Navigation HUD with a flight-deck layout, complete animated route, stellar-class visuals and distinct state scenes; redesigned Survey Operations as a bounded, animated planet atlas.
 * **v5.4.8.4** — Improved Navigation route and fuel guidance, redesigned startup with an optical core, starfield and rotating Elite facts, and added prompt retry for failed overlay pages.

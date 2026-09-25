@@ -8,7 +8,9 @@
   <link rel="stylesheet" href="overview.css">
   <link rel="stylesheet" href="bridge-pages.css">
   <link rel="stylesheet" href="bridge-exploration.css">
+  <link rel="stylesheet" href="archive.css">
   <link rel="stylesheet" href="bridge-systems.css">
+  <link rel="stylesheet" href="focused-log.css">
   <link rel="stylesheet" href="boot.css">
   <script defer src="boot-starfield.js"></script>
   <script type="module" src="boot-companion.js"></script>
@@ -139,11 +141,56 @@
 
   <div id="app" class="app" aria-hidden="true">
     <section id="flight-log-shell" class="flight-log-shell" aria-hidden="true">
-      <header><div><small>VOID COMPASS // FOCUSED SURFACE</small><h1>Flight Log</h1><span id="flightlog-identity">LIVE EXPLORATION RECORD</span></div><button data-command="set_flight_log_mode" data-enabled="false">RESTORE DASHBOARD</button></header>
-      <main>
-        <section class="flightlog-hero"><div><small>CURRENT SYSTEM</small><h2 id="flightlog-system">NO SYSTEM DATA</h2><span id="flightlog-state">WAITING FOR LIVE JOURNAL</span></div><b id="flightlog-survey-badge">AWAITING</b><i><em id="flightlog-progress"></em></i></section>
-        <section class="flightlog-metrics"><article><small>SYSTEM SURVEY</small><strong id="flightlog-survey">0 / ?</strong><span id="flightlog-survey-detail">AWAITING SCAN TOTAL</span></article><article><small>NEXT LEG</small><strong id="flightlog-route">NO ACTIVE ROUTE</strong><span id="flightlog-route-detail">PLOT IN ELITE OR WAYPOINTS</span></article><article><small>FIELD VALUE</small><strong id="flightlog-value">0 CR</strong><span id="flightlog-value-detail">NO UNSOLD DATA</span></article></section>
-        <section class="flightlog-events"><header><span>CURATED EXPLORATION LOG</span><b id="flightlog-event-count">0 EVENTS</b></header><div id="flightlog-event-list"></div></section>
+      <header class="flightlog-topbar">
+        <div class="flightlog-mark" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="flightlog-brand"><small>VOID COMPASS // EXPLORATION CONSOLE</small><h1>Focused Log</h1></div>
+        <div class="flightlog-connection"><b id="flightlog-source" data-source="cached">LOCAL LINK CACHED</b><span id="flightlog-evidence">Waiting for local journal activity</span></div>
+        <button type="button" class="flightlog-restore" data-command="set_flight_log_mode" data-enabled="false">← RESTORE DASHBOARD</button>
+      </header>
+      <main class="flightlog-main">
+        <section class="flightlog-stage" aria-labelledby="flightlog-system">
+          <div class="flightlog-stage-copy">
+            <p class="flightlog-kicker"><span>01 / ACTIVE THEATRE</span><b id="flightlog-survey-badge">TOTAL UNKNOWN</b></p>
+            <h2 id="flightlog-system">NO SYSTEM DATA</h2>
+            <p id="flightlog-state" class="flightlog-location">WAITING FOR LIVE JOURNAL</p>
+            <div class="flightlog-identity"><span>CMDR <b id="flightlog-commander">UNKNOWN COMMANDER</b></span><span>SHIP <b id="flightlog-ship">SHIP UNKNOWN</b></span><span>SESSION <b id="flightlog-session-time">00:00:00</b></span></div>
+          </div>
+          <div class="flightlog-directive">
+            <div class="flightlog-section-label"><span>FIELD DIRECTIVE</span><b id="flightlog-directive-confidence">FIELD INTELLIGENCE</b></div>
+            <h3 id="flightlog-directive">AWAITING JOURNAL-BACKED OBJECTIVE</h3>
+            <p id="flightlog-directive-detail">The field directive will appear when exploration evidence is available.</p>
+          </div>
+        </section>
+
+        <section class="flightlog-instruments" aria-label="Current exploration instruments">
+          <article class="flightlog-panel flightlog-survey-panel">
+            <div class="flightlog-section-label"><span>02 / SYSTEM SURVEY</span><b>JOURNAL EVIDENCE</b></div>
+            <div class="flightlog-survey-main"><div id="flightlog-survey-gauge" class="flightlog-survey-gauge" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="System survey total not yet confirmed" data-known="false"><i><strong id="flightlog-survey-percent">—</strong><small>FSS</small></i></div><div><strong id="flightlog-survey">0 / ?</strong><span>SCANNED / CONFIRMED</span><p id="flightlog-survey-detail">AWAITING SCAN TOTAL</p></div></div>
+            <div class="flightlog-work"><div><small id="flightlog-work-label-0">FSS UNKNOWN</small><b id="flightlog-work-value-0">?</b></div><div><small id="flightlog-work-label-1">DSS LEFT</small><b id="flightlog-work-value-1">0</b></div><div><small id="flightlog-work-label-2">BIO LEFT</small><b id="flightlog-work-value-2">0</b></div></div>
+          </article>
+          <article class="flightlog-panel flightlog-route-panel">
+            <div class="flightlog-section-label"><span>03 / NEXT LEG</span><b id="flightlog-route-source">NO PLOTTED LEG</b></div>
+            <strong id="flightlog-route">NO ACTIVE ROUTE</strong>
+            <p id="flightlog-route-detail">PLOT IN ELITE OR WAYPOINTS</p>
+            <div class="flightlog-pair"><span>FINAL DESTINATION <b id="flightlog-route-final">—</b></span><span>DISTANCE <b id="flightlog-route-distance">—</b></span></div>
+          </article>
+          <article class="flightlog-panel flightlog-value-panel">
+            <div class="flightlog-section-label"><span>04 / UNSOLD FIELD DATA</span><b>PROFILE ESTIMATE</b></div>
+            <strong id="flightlog-value">0 CR</strong>
+            <p id="flightlog-value-detail">0 CR CARTOGRAPHY · 0 CR BIOLOGY</p>
+            <div class="flightlog-session-grid"><span>SESSION JUMPS <b id="flightlog-jumps">0</b></span><span>DISTANCE FLOWN <b id="flightlog-distance">0 LY</b></span></div>
+          </article>
+        </section>
+
+        <section class="flightlog-lower">
+          <section class="flightlog-events" aria-labelledby="flightlog-events-heading">
+            <header class="flightlog-events-heading"><div><small>05 / ROLLING JOURNAL FEED</small><h3 id="flightlog-events-heading">Recent field events</h3></div><b id="flightlog-event-count">0 SHOWN / 0 RECENT</b></header>
+            <div class="flightlog-event-tools"><div class="flightlog-filters" role="group" aria-label="Filter recent field events"><button type="button" data-flightlog-filter="ALL" aria-pressed="true" class="active">ALL</button><button type="button" data-flightlog-filter="DISCOVERY" aria-pressed="false">DISCOVERY</button><button type="button" data-flightlog-filter="NAVIGATION" aria-pressed="false">NAVIGATION</button><button type="button" data-flightlog-filter="ALERTS" aria-pressed="false">ALERTS</button><button type="button" data-flightlog-filter="OPERATIONS" aria-pressed="false">OPERATIONS</button></div><label class="flightlog-search"><span>FIND</span><input id="flightlog-search" type="search" placeholder="Search recent events" autocomplete="off" aria-label="Search recent field events"></label></div>
+            <div id="flightlog-event-list" class="flightlog-event-list" role="feed" aria-label="Recent curated field events"></div>
+            <footer id="flightlog-event-limit">Recent curated events only · not a permanent flight archive.</footer>
+          </section>
+          <aside class="flightlog-priority-panel" aria-labelledby="flightlog-priority-heading"><div class="flightlog-section-label"><span>06 / FIELD PRIORITIES</span><b>UP TO 4</b></div><h3 id="flightlog-priority-heading">What still matters</h3><p>Current survey and route priorities, separate from the rolling event feed.</p><ol id="flightlog-priorities"><li class="flightlog-priorities-empty">No additional field priorities are pending.</li></ol></aside>
+        </section>
       </main>
     </section>
 
@@ -257,7 +304,7 @@
               </div>
               <section class="survey-body-deck" aria-label="Discovered worlds in the current system">
                 <div class="survey-body-heading"><span>DISCOVERED WORLDS</span><b id="survey-body-total">0 BODY RECORDS</b></div>
-                <div id="survey-body-list" class="survey-body-list empty" role="list" tabindex="0">Planets and moons appear here as their journal records arrive.</div>
+                <div id="survey-body-list" class="survey-body-list empty" role="group" aria-label="Discovered worlds" tabindex="0">Planets and moons appear here as their journal records arrive.</div>
               </section>
               <div id="survey-notables" class="notable-list empty">Awaiting scan telemetry.</div>
               <div class="survey-footer"><span id="survey-overflow" class="notable-overflow" hidden></span><button type="button" id="survey-open-workboard" data-page="explore">OPEN SYSTEM WORKBOARD</button></div>
@@ -340,7 +387,7 @@
               </section>
               <div id="workboard-orbits" class="workboard-orbits" aria-label="System body schematic"></div>
               <div class="workboard-key"><span><i class="priority"></i>PRIORITY</span><span><i class="mapped"></i>MAPPED</span><span><i></i>SCANNED</span></div>
-              <div id="body-workboard" class="workboard"></div>
+              <div id="body-workboard" class="workboard" role="list" aria-label="Surveyed system bodies" tabindex="-1"></div>
             </article>
             <article class="card"><header><span>DISCOVERY INTELLIGENCE</span></header><div class="big-stat"><strong id="intel-value">0 CR</strong><span>ESTIMATED DATA ABOARD</span></div><div id="intel-facts" class="fact-list"></div></article>
             <article class="card"><header><span>EXPEDITION PULSE</span><b id="expedition-badge">NO MISSION</b></header><h3 id="expedition-name">NO ACTIVE EXPEDITION</h3><p id="expedition-detail">Create or resume a named expedition in Mission Control.</p><div class="route-track"><i id="expedition-progress"></i><span id="expedition-progress-label">0 / 0</span></div><button class="wide-button" data-command="open" data-target="mission">OPEN MISSION CONTROL</button></article>
@@ -374,7 +421,7 @@
         <section class="page" data-page-name="records">
           <header class="page-title">
             <div><p>COMMANDER ARCHIVE</p><h2>Flight records</h2><span>Session totals, discoveries and the recent journal chronicle</span></div>
-            <div class="title-actions"><button class="ghost" data-command="open" data-target="profile">PROFILE</button><button class="primary" data-command="open" data-target="analytics">FULL ANALYTICS</button></div>
+            <div class="title-actions"><button class="ghost" data-command="open" data-target="profile">PROFILE</button><button class="primary" data-command="open" data-target="analytics">EXPLORATION ARCHIVE</button></div>
           </header>
           <section class="record-metrics">
             <article><small>SESSION JUMPS</small><strong id="record-jumps">0</strong><span>JOURNAL CONFIRMED</span></article>
@@ -384,7 +431,7 @@
           </section>
           <section class="records-grid">
             <article class="card"><header><span>RECENT CHRONICLE</span></header><div id="record-feed" class="event-feed record-feed"></div></article>
-            <article class="card"><header><span>DISCOVERY SUMMARY</span></header><div id="record-facts" class="fact-list spacious"></div><div class="action-grid"><button data-command="open" data-target="analytics">ANALYTICS</button><button data-command="open" data-target="profile">COMMANDER PROFILE</button><button data-command="open" data-target="captains_log">CAPTAIN'S LOG</button><button data-command="open_screenshots">SCREENSHOTS</button></div></article>
+            <article class="card"><header><span>DISCOVERY SUMMARY</span></header><div id="record-facts" class="fact-list spacious"></div><div class="action-grid"><button data-command="open" data-target="analytics">ARCHIVE</button><button data-command="open" data-target="profile">COMMANDER PROFILE</button><button data-command="open" data-target="captains_log">CAPTAIN'S LOG</button><button data-command="open_screenshots">SCREENSHOTS</button></div></article>
           </section>
         </section>
 
@@ -403,13 +450,13 @@
         </section>
 
         <section class="page specialist-page" data-page-name="profile">
-          <header class="page-title"><div><p>COMMANDER RECORD</p><h2>Profile & fleet</h2><span>Career progression, vessels, responsibilities and profile custody</span></div><div class="title-actions"><button data-page="records">FLIGHT RECORDS</button><button class="primary" data-page="analytics">ANALYTICS</button></div></header>
+          <header class="page-title"><div><p>COMMANDER RECORD</p><h2>Profile & fleet</h2><span>Career progression, vessels, responsibilities and profile custody</span></div><div class="title-actions"><button data-page="records">FLIGHT RECORDS</button><button class="primary" data-page="analytics">ARCHIVE</button></div></header>
           <div id="profile-workspace" class="workspace-shell loading-panel">Synchronising commander record…</div>
         </section>
 
         <section class="page specialist-page" data-page-name="analytics">
-          <header class="page-title"><div><p>EXPLORATION SCIENCE</p><h2>Analytics</h2><span>Flight trends, ecological evidence and the 42-region passport</span></div><div class="title-actions"><button data-page="records">RETURN TO RECORDS</button><button class="primary" data-page="chronicle">CAPTAIN'S LOG</button></div></header>
-          <div id="analytics-workspace" class="workspace-shell loading-panel">Building flight analytics…</div>
+          <header class="page-title"><div><p>COMMANDER RECORD / 06</p><h2>Exploration Archive</h2><span>Retained flight sessions, scan evidence and region stamps</span></div><div class="title-actions"><button data-page="records">RETURN TO RECORDS</button><button class="primary" data-page="chronicle">CAPTAIN'S LOG</button></div></header>
+          <div id="analytics-workspace" class="workspace-shell loading-panel">Opening exploration archive…</div>
         </section>
 
         <section class="page specialist-page" data-page-name="chronicle">

@@ -1,4 +1,26 @@
 /* Explore & Survey / Exploration Scout ---------------------------------- */
+.return-later-board { margin-bottom:13px; overflow:hidden; border:1px solid var(--border); border-top:2px solid var(--orange); background:linear-gradient(135deg,color-mix(in srgb,var(--orange) 5%,var(--panel)),var(--panel) 58%); }
+.return-later-board > header { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:17px 20px 14px; border-bottom:1px solid var(--border-soft); }
+.return-later-board > header small { color:var(--orange); font:700 8px Consolas,monospace; letter-spacing:.1em; }
+.return-later-board > header h3 { margin:4px 0; color:var(--text); font:700 23px "Bahnschrift SemiCondensed",sans-serif; letter-spacing:.04em; }
+.return-later-board > header p { max-width:720px; margin:0; color:var(--muted); font:9px/1.55 Consolas,monospace; }
+.return-later-board > header > b { flex:none; padding:7px 10px; border:1px solid color-mix(in srgb,var(--orange) 40%,var(--border)); color:var(--orange); font:700 9px Consolas,monospace; white-space:nowrap; }
+.return-later-entries { display:grid; gap:8px; max-height:450px; overflow:auto; padding:12px; scrollbar-color:var(--border) transparent; }
+.return-later-entries > .workspace-empty { margin:0; padding:17px; }
+.return-later-entry { display:flex; justify-content:space-between; gap:18px; padding:11px 13px; border:1px solid var(--border-soft); border-left:2px solid var(--accent); background:var(--inset); }
+.return-later-entry.current { border-left-color:var(--orange); background:color-mix(in srgb,var(--orange) 4%,var(--inset)); }
+.return-later-entry-main { min-width:0; }
+.return-later-entry-main > small { color:var(--dim); font:700 7px/1.4 Consolas,monospace; letter-spacing:.04em; }
+.return-later-entry-main h4 { margin:4px 0 2px; overflow-wrap:anywhere; color:var(--text); font:700 16px "Bahnschrift SemiCondensed",sans-serif; }
+.return-later-entry-main > strong { display:block; overflow-wrap:anywhere; color:var(--accent); font:700 9px Consolas,monospace; }
+.return-later-entry-main ul { display:flex; flex-wrap:wrap; gap:5px; margin:9px 0 0; padding:0; list-style:none; }
+.return-later-entry-main li { padding:4px 6px; border:1px solid var(--border-soft); color:var(--muted); font:8px/1.35 Consolas,monospace; }
+.return-later-actions { display:flex; flex:0 0 auto; align-items:center; flex-wrap:wrap; justify-content:flex-end; gap:5px; }
+.return-later-actions button { min-height:28px; padding:0 8px; border:1px solid var(--border); background:var(--panel-alt); color:var(--muted); cursor:pointer; font:700 8px Consolas,monospace; }
+.return-later-actions button:hover,.return-later-actions button:focus-visible { border-color:var(--accent); color:var(--accent); }
+.return-later-actions button.danger-action:hover,.return-later-actions button.danger-action:focus-visible { border-color:var(--red); color:var(--red); }
+@container (max-width: 680px) { .return-later-entry { flex-direction:column; gap:10px; }.return-later-actions { justify-content:flex-start; } }
+@media (max-width: 680px) { .return-later-board > header,.return-later-entry { flex-direction:column; gap:10px; }.return-later-actions { justify-content:flex-start; } }
 .exploration-scout { margin-bottom:13px; overflow:hidden; border:1px solid var(--border); border-top:2px solid var(--accent); background:linear-gradient(150deg,color-mix(in srgb,var(--accent) 5%,var(--panel)),var(--panel)); }
 .scout-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:18px 20px; border-bottom:1px solid var(--border-soft); background:radial-gradient(circle at 12% 50%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 42%); }
 .scout-heading small { color:var(--orange); font:700 8px Consolas,monospace; letter-spacing:.1em; }.scout-heading h3 { margin:4px 0; color:var(--accent); font:700 24px "Bahnschrift SemiCondensed",sans-serif; letter-spacing:.03em; }.scout-heading p { max-width:760px; margin:0; color:var(--muted); font:10px/1.5 Consolas,monospace; }.scout-heading > span { padding:6px 9px; border:1px solid var(--border); color:var(--text); font:700 9px Consolas,monospace; text-transform:uppercase; }

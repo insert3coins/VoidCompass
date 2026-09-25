@@ -7,6 +7,7 @@ export function renderExploreWorkspace(data, ui) {
     workspaceTable,
   } = ui;
   const root = byId("explore-workspace");
+  const returnLaterScroll = root.querySelector(".return-later-entries")?.scrollTop || 0;
   const navRows = (data.nav_route || []).map((row) => `<div class="route-system${row.current ? " current" : row.passed ? " passed" : ""}"><i>${row.passed ? "✓" : row.current ? "◆" : "·"}</i><span><b>${escapeHtml(row.system)}</b><small>${escapeHtml(row.star_class || "STAR CLASS UNKNOWN")} · ${row.distance === null ? "LEG UNKNOWN" : `${numeric(row.distance, 1)} LY`}</small></span></div>`);
   const waypointRows = (data.waypoints || []).map((row) => `<div class="waypoint-row${row.visited ? " visited" : ""}">
     <button data-ws-page="explore" data-ws-op="mark_waypoint" data-index="${row.index}" data-visited="${!row.visited}">${row.visited ? "✓" : "○"}</button>
@@ -59,16 +60,35 @@ export function renderExploreWorkspace(data, ui) {
     <div class="scout-content"><div class="scout-results">${prospectRows.join("") || `<p class="workspace-empty">No prospect result set. Search from the current system or enter another reference.</p>`}</div><aside><header>PERSONAL CODEX GAPS</header>${workspaceRows(codexRows, "Retained Codex history has no regional comparison yet.")}<p>${escapeHtml(codex.availability_note || "")}</p></aside></div>
     <div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="scout_clear" ${(scout.results || []).length ? "" : "disabled"}>CLEAR RESULTS</button></div>
   </section>`;
+  const returnLater = data.return_later || {};
+  const returnLaterEntries = Array.isArray(returnLater.entries) ? returnLater.entries : [];
+  const returnLaterRows = returnLaterEntries.map((row) => {
+    const system = escapeHtml(row.system || "UNKNOWN SYSTEM");
+    const body = row.body ? escapeHtml(row.body) : "SYSTEM SURVEY";
+    const reasons = (Array.isArray(row.reasons) ? row.reasons : []).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("");
+    const visited = row.last_visited ? `LAST VISIT ${escapeHtml(String(row.last_visited).replace("T", " ").slice(0, 16))}` : "VISIT TIME UNAVAILABLE";
+    const id = escapeHtml(row.id || "");
+    return `<article class="return-later-entry${row.current ? " current" : ""}">
+      <div class="return-later-entry-main"><small>${row.current ? "CURRENT SYSTEM · " : ""}${visited} · ${escapeHtml(String(row.source || "journal").toUpperCase())}</small><h4>${system}</h4><strong>${body}</strong><ul>${reasons || "<li>Unfinished survey work recorded in the Journal</li>"}</ul></div>
+      <div class="return-later-actions"><button type="button" data-ws-page="explore" data-ws-op="return_later_copy" data-return-later-id="${id}">COPY SYSTEM</button><button type="button" data-ws-page="explore" data-ws-op="return_later_waypoint" data-return-later-id="${id}">ADD TO ROUTE</button><button type="button" class="danger-action" data-ws-page="explore" data-ws-op="return_later_dismiss" data-return-later-id="${id}">DISMISS</button></div>
+    </article>`;
+  }).join("");
+  const returnLaterMarkup = `<section class="return-later-board" aria-label="Return Later exploration board">
+    <header><div><small>EXPEDITION CONTINUITY // PROFILE-LOCAL</small><h3>RETURN LATER</h3><p>Unfinished survey targets retained when you leave a system. New Journal evidence updates this board when you return.</p></div><b>${numeric(returnLaterEntries.length)} OPEN</b></header>
+    <div class="return-later-entries">${returnLaterRows || `<p class="workspace-empty">No unfinished return targets recorded yet. Continue surveying; journal-backed gaps will appear here after departure.</p>`}</div>
+  </section>`;
   root.classList.remove("loading-panel");
   root.innerHTML = `${workspaceMetrics([
     {label: "Current system", value: data.current || "—", detail: data.destination ? `NAV TARGET · ${data.destination}` : "NO LOCAL NAV TARGET"},
     {label: "Elite route", value: `${numeric((data.nav_route || []).length)} STOPS`, detail: (data.nav_route || []).length ? "LIVE NAVROUTE.JSON" : "NO ROUTE PLOTTED IN GAME"},
     {label: "Saved waypoints", value: numeric((data.waypoints || []).length), detail: data.next_waypoint ? `NEXT · ${data.next_waypoint}` : "ROUTE COMPLETE / EMPTY"},
     {label: "Survey queue", value: `${numeric(data.cartography?.queue?.pending)} ACTIVE`, detail: data.cartography?.queue?.next ? `NEXT · ${data.cartography.queue.next.body}` : "SYSTEM WORK COMPLETE"},
-  ])}${scoutMarkup}${stellarCartographyMarkup(data.cartography || {})}<section class="workspace-grid route-workspace-grid">
+  ])}${returnLaterMarkup}${scoutMarkup}${stellarCartographyMarkup(data.cartography || {})}<section class="workspace-grid route-workspace-grid">
     ${workspaceCard("ELITE NAV ROUTE", workspaceRows(navRows, "Plot a route in Elite to populate the live NavRoute."), `${(data.nav_route || []).length} STOPS`)}
     ${workspaceCard("PROFILE WAYPOINT ROUTE", `${workspaceRows(waypointRows, "No saved waypoints. Add a destination below or import a plotted route.")}<div class="route-add-form"><input id="waypoint-name" placeholder="SYSTEM NAME"><input id="waypoint-note" placeholder="OPTIONAL NOTE"><button data-ws-page="explore" data-ws-op="add_waypoint">ADD</button></div><div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="copy_next">COPY NEXT</button><button data-ws-page="explore" data-ws-op="set_auto_copy" data-enabled="${!data.auto_copy}">AUTO COPY ${data.auto_copy ? "ON" : "OFF"}</button><button class="danger-action" data-ws-page="explore" data-ws-op="clear_waypoints">CLEAR ROUTE</button></div>`, `${(data.waypoints || []).filter((row) => row.visited).length}/${(data.waypoints || []).length} COMPLETE`)}
     ${workspaceCard("SPANSH NEUTRON PLOTTER", `<div class="neutron-form"><label>FROM<input id="neutron-from" value="${escapeHtml(data.plotter?.from || data.current || "")}"></label><label>DESTINATION<input id="neutron-to" value="${escapeHtml(data.plotter?.to || "")}"></label><label>SHIP RANGE<input id="neutron-range" type="number" min="1" step="0.1" value="${number(data.plotter?.range, 30)}"></label><label>EFFICIENCY<input id="neutron-efficiency" type="number" min="1" max="100" value="${number(data.plotter?.efficiency, 60)}"></label><label>BOOST<select id="neutron-multiplier"><option value="4" ${number(data.plotter?.multiplier, 4) === 4 ? "selected" : ""}>NEUTRON 4×</option><option value="6" ${number(data.plotter?.multiplier, 4) === 6 ? "selected" : ""}>OVERCHARGE 6×</option></select></label><button class="primary" data-ws-page="explore" data-ws-op="neutron_plot" ${data.plotter?.status === "working" ? "disabled" : ""}>${data.plotter?.status === "working" ? "PLOTTING…" : "PLOT ROUTE"}</button></div><p class="workspace-status ${escapeHtml(data.plotter?.status || "ready")}">${escapeHtml(data.plotter?.detail || "Ready.")}</p>${plottedRows}<div class="workspace-actions wrap"><button data-ws-page="explore" data-ws-op="neutron_copy" ${plotted.waypoints?.length ? "" : "disabled"}>COPY LIST</button><button data-ws-page="explore" data-ws-op="neutron_import" ${plotted.waypoints?.length ? "" : "disabled"}>IMPORT TO WAYPOINTS</button><button data-ws-page="explore" data-ws-op="neutron_clear" ${plotted.waypoints?.length ? "" : "disabled"}>CLEAR RESULT</button></div>`, plotted.total_jumps ? `${numeric(plotted.total_jumps)} JUMPS` : "MANUAL ROUTE", "neutron-plotter-card")}
   </section>`;
+  const returnLaterList = root.querySelector(".return-later-entries");
+  if (returnLaterList) returnLaterList.scrollTop = returnLaterScroll;
   mountSystemOrrery(data.cartography?.orrery || {});
 }

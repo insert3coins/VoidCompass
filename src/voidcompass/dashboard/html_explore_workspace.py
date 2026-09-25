@@ -22,6 +22,13 @@ from voidcompass.exploration.exploration_scout import (
     system_audit,
 )
 from voidcompass.exploration.galactic_regions import find_region
+from voidcompass.exploration.return_later import (
+    dismiss_entry as dismiss_return_later_entry,
+    empty_state as empty_return_later_state,
+    read_state as read_return_later_state,
+    reconcile_state as reconcile_return_later_state,
+    write_state as write_return_later_state,
+)
 from voidcompass.exploration.stellar_cartography import (
     build_orrery,
     build_planetary_resources,
@@ -36,6 +43,54 @@ from voidcompass.services.spansh import (
 
 
 class HtmlExploreWorkspaceMixin:
+    # Journal reductions can arrive off the UI thread while a scheduled HTML
+    # snapshot is rendering.  Keep the profile cache and atomic file writes in
+    # one short critical section so neither view loses the other's update.
+    _return_later_lock = threading.RLock()
+
+    def _return_later_state(self):
+        """Keep the small board cached, invalidating it at profile boundaries."""
+        with self._return_later_lock:
+            profile = get_active_profile(self.config)
+            cached = getattr(self, "_return_later_cache", None)
+            if isinstance(cached, dict) and cached.get("profile") == profile:
+                return cached["state"]
+            path = self._profile_path("return_later.json") if hasattr(self, "_profile_path") else None
+            state = read_return_later_state(path) if path else empty_return_later_state()
+            self._return_later_cache = {"profile": profile, "path": path, "state": state}
+            return state
+
+    def _save_return_later_state(self, state):
+        with self._return_later_lock:
+            cache = getattr(self, "_return_later_cache", None)
+            if not isinstance(cache, dict) or cache.get("profile") != get_active_profile(self.config):
+                self._return_later_state()
+                cache = self._return_later_cache
+            path = cache.get("path")
+            if not path or not write_return_later_state(path, state):
+                return False
+            cache["state"] = state
+            return True
+
+    def _reconcile_return_later(self, *, visited_at=None, departure=False):
+        with self._return_later_lock:
+            state = self._return_later_state()
+            system = _text(getattr(self, "current_sys", None), 140)
+            survey_states = self.config.get("stellar_survey_queue_state") or {}
+            survey_state = survey_states.get(system.casefold()) or {}
+            updated = reconcile_return_later_state(
+                state, system, getattr(self, "scan_items", None) or (), survey_state,
+                scanned=getattr(self, "scanned", 0), total=getattr(self, "total", 0),
+                total_confirmed=bool(getattr(self, "scan_total_confirmed", False)),
+                fss_all_bodies=bool(getattr(self, "fss_all_bodies", False)),
+                visited_at=visited_at, coords=getattr(self, "current_coords", None),
+                departure=departure,
+                body_signals=getattr(self, "body_signals", None) or {},
+            )
+            if updated != state and self._save_return_later_state(updated):
+                return updated
+            return state
+
     def _html_explore_workspace(self, intelligence=None):
         manager = getattr(self, "waypoint_manager", None)
         waypoints = list(getattr(manager, "waypoints", None) or [])
@@ -164,6 +219,20 @@ class HtmlExploreWorkspaceMixin:
             )
         region = find_region(*current_coords) if current_coords else None
         codex = self._html_dashboard_codex_hunt(region[1] if region else "Unknown region")
+        return_later_state = self._reconcile_return_later()
+        return_later_entries = [
+            {
+                "id": _text(row.get("id"), 300),
+                "system": _text(row.get("system"), 140),
+                "body": _text(row.get("body"), 180),
+                "reasons": [_text(reason, 180) for reason in (row.get("reasons") or [])[:5]],
+                "last_visited": _text(row.get("last_visited"), 40),
+                "source": _text(row.get("source"), 30),
+                "current": str(row.get("system") or "").casefold() == current.casefold(),
+            }
+            for row in return_later_state.get("entries") or ()
+            if isinstance(row, dict)
+        ]
         return {
             "current": current,
             "destination": _text(getattr(self, "dest_name", None), 140),
@@ -173,6 +242,10 @@ class HtmlExploreWorkspaceMixin:
                 manager.get_next_waypoint(current) if manager is not None else "", 140,
             ),
             "auto_copy": bool(self.config.get("auto_copy_waypoint", False)),
+            "return_later": {
+                "entries": return_later_entries,
+                "count": len(return_later_entries),
+            },
             "cartography": {
                 "system": current,
                 "target": body_target,
@@ -215,6 +288,47 @@ class HtmlExploreWorkspaceMixin:
     def _handle_html_explore_command(self, payload):
         operation = _text(payload.get("operation"), 60).casefold()
         changed = False
+        if operation in {"return_later_copy", "return_later_waypoint", "return_later_dismiss"}:
+            entry_id = _text(payload.get("id"), 300)
+            with self._return_later_lock:
+                state = self._return_later_state()
+                entry = next((
+                    row for row in state.get("entries") or ()
+                    if isinstance(row, dict) and row.get("id") == entry_id
+                ), None)
+                if entry is None:
+                    return False
+                if operation == "return_later_dismiss":
+                    updated = dismiss_return_later_entry(state, entry_id)
+                    if updated == state or not self._save_return_later_state(updated):
+                        return False
+                    self._schedule_html_dashboard_publish(immediate=True)
+                    return True
+            system = _text(entry.get("system"), 140)
+            if operation == "return_later_copy":
+                return self._html_copy_text(system)
+            manager = getattr(self, "waypoint_manager", None)
+            if manager is None or not system:
+                return False
+            if any(str(row.get("name") or "").casefold() == system.casefold()
+                   for row in getattr(manager, "waypoints", ()) if isinstance(row, dict)):
+                return True
+            coords = entry.get("coords")
+            if not isinstance(coords, list) or len(coords) != 3:
+                coords = None
+            body = _text(entry.get("body"), 180)
+            reasons = "; ".join(_text(reason, 180) for reason in (entry.get("reasons") or [])[:5])
+            route_row = {
+                "name": system, "coords": coords,
+                "note": _text(f"Return Later · {body or 'system survey'} · {reasons}", 1000),
+            }
+            manager.waypoints.append(route_row)
+            if not manager.save():
+                manager.waypoints.pop()
+                return False
+            self.update_hud()
+            self._schedule_html_dashboard_publish(immediate=True)
+            return True
         if operation in {"survey_pin", "survey_skip", "survey_complete", "survey_reset"}:
             system = _text(payload.get("system") or getattr(self, "current_sys", ""), 140)
             if not system:
