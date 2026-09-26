@@ -83,6 +83,7 @@ class HtmlSurveyOverlayBridge(HtmlOverlayBridgeLifecycle):
 
     def _window_payload(self):
         width, height = self._dimensions()
+        self.overlay._html_window_size = (width, height)
         try:
             state = str(self.win.state())
             shown = state not in {"withdrawn", "iconic"}

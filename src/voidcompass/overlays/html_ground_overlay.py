@@ -80,6 +80,7 @@ class HtmlGroundOverlayBridge(HtmlOverlayBridgeLifecycle):
 
     def _window_payload(self, solution=None):
         width, height = self._dimensions()
+        self.win._html_window_size = (width, height)
         held = bool(getattr(
             self.win.master, "_voidcompass_startup_presentation_held", False,
         ))

@@ -170,8 +170,13 @@ class HtmlOverlayStudioMixin:
             html_size = getattr(overlay, "_html_window_size", None)
             if html_ready := bool(getattr(overlay, "_html_ready", False)):
                 if isinstance(html_size, (tuple, list)) and len(html_size) == 2:
-                    width = max(24, _integer(html_size[0], default_width))
-                    height = max(20, _integer(html_size[1], default_height))
+                    if attr == "toast_hud" and not getattr(overlay, "_toasts", None):
+                        # The host shrinks to 24 px when the queue is empty,
+                        # but keep a useful placement card in the Studio.
+                        width, height = default_width, default_height
+                    else:
+                        width = max(24, _integer(html_size[0], default_width))
+                        height = max(20, _integer(html_size[1], default_height))
             elif live and window is not None:
                 try:
                     if window.winfo_exists():

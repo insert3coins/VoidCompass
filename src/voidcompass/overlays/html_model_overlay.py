@@ -79,6 +79,7 @@ class HtmlModelOverlayBridge(HtmlOverlayBridgeLifecycle):
 
     def _window_payload(self):
         width, height = self._dimensions()
+        self.overlay._html_window_size = (width, height)
         try:
             shown = str(self.win.state()) not in {"withdrawn", "iconic"}
             fallback_x, fallback_y = self.win.winfo_x(), self.win.winfo_y()
