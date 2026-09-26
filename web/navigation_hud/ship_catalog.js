@@ -80,6 +80,7 @@
       key: normalise(item.key || item.name),
       src: artUrl(item.file),
       alt: String(alt || item.name),
+      name: item.name,
     } : null;
   }
 

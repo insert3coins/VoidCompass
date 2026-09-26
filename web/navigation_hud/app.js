@@ -5,7 +5,10 @@ const api = (path) => `${path}?token=${encodeURIComponent(token)}&overlay=${enco
 const $ = (id) => document.getElementById(id);
 
 const dom = Object.fromEntries([
-  'hud', 'state-canvas', 'state-label', 'vehicle-display', 'vehicle-image',
+  'hud', 'notice', 'state-tag', 'state-label', 'event-notice',
+  'instrument', 'instrument-fill', 'instrument-marker', 'instrument-readout',
+  'lamps', 'fuel-gauge', 'fuel-cells', 'metric-fuel',
+  'vehicle-display', 'vehicle-image', 'vehicle-type', 'vehicle-name',
   'region-label', 'system-clock', 'current-system', 'current-star-orb', 'current-star-label',
   'route-block', 'route-title', 'route-target', 'route-target-label', 'route-star-orb', 'route-next', 'route-distance', 'route-progress',
   'route-pips', 'route-origin', 'route-destination', 'survey-block', 'survey-title',
@@ -14,15 +17,12 @@ const dom = Object.fromEntries([
   'survey-count', 'survey-percent', 'survey-progress-marker',
   'survey-rail', 'survey-progress-fill', 'survey-acquisition', 'survey-signals',
   'survey-signal-bio', 'survey-signal-geo', 'survey-signal-mining', 'survey-signal-valuable',
-  'metric-fuel', 'metric-bio', 'metric-geo', 'expanded-fuel',
-  'expanded-bio', 'expanded-geo', 'expanded-traffic', 'context-label',
-  'secondary-label', 'traffic-label', 'link-state',
+  'context-label', 'secondary-label', 'traffic-label', 'link-state',
 ].map((id) => [id, $(id)]));
-const stateIndicator = new window.NavigationIndicator(dom['state-canvas']);
 
 let snapshot = null;
 let arrivalTimer = null;
-let lastIndicatorSignature = '';
+let lastStateSignature = '';
 let stateChangeTimer = null;
 let vehicleImageTransition = null;
 let lastServerContact = Date.now();
@@ -33,6 +33,9 @@ let lastRouteSignature = '';
 let routeMemory = null;
 let routeFeedbackTimer = null;
 let routeNoticeTimer = null;
+let lastLampSignature = '';
+let lastNoticeSequence = null;
+let eventNoticeTimer = null;
 const osMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 function routeFeedback(message) {
@@ -113,6 +116,287 @@ function renderStarOrb(element, starClass) {
   if (element.title !== title) element.title = title;
 }
 
+// ---------------------------------------------------------------------------
+// Status plate. Elite's cockpit reports state with a few notice styles and the
+// ship's own indicator lamps, so each state family gets one instrument band
+// rather than a bespoke scene, and the band only draws journal-backed values.
+// ---------------------------------------------------------------------------
+
+const DISPLAY_LABELS = {
+  FLIGHT: 'NORMAL SPACE',
+  ONFOOT: 'ON FOOT',
+  'MASS LOCK': 'MASS LOCKED',
+  'FSD CHARGE': 'FSD CHARGING',
+  'HYPER CHARGE': 'JUMP CHARGING',
+  'SC ASSIST': 'SUPERCRUISE ASSIST',
+  'ORBITAL APPROACH': 'ORBITAL CRUISE',
+  'DOCK REQUEST': 'DOCKING REQUESTED',
+  'DOCK CLEARED': 'DOCKING GRANTED',
+  'DOCK DENIED': 'DOCKING DENIED',
+  'DOCK CANCELLED': 'DOCKING CANCELLED',
+  'DOCK TIMEOUT': 'DOCKING TIMED OUT',
+  'DOCK ASSIST': 'DOCKING COMPUTER',
+  HANDBRAKE: 'HANDBRAKE ON',
+};
+
+function displayLabel(label) {
+  const text = String(label || 'FLIGHT').toUpperCase();
+  const pad = /^PAD (\d+) CLEARED$/.exec(text);
+  if (pad) return `DOCKING GRANTED · PAD ${pad[1]}`;
+  return DISPLAY_LABELS[text] || text;
+}
+
+const SURFACE_MOTIONS = new Set(['surface_vehicle', 'srv_handbrake', 'srv_turret', 'srv_drive_assist']);
+
+function stateTag(state = {}) {
+  const category = String(state.category || 'flight');
+  const motion = String(state.motion || 'flight');
+  const label = String(state.label || '').toUpperCase();
+  if (category === 'drive') return motion.startsWith('carrier_') ? 'CARRIER' : 'FSD';
+  if (category === 'vehicle') {
+    if (SURFACE_MOTIONS.has(motion)) return 'SRV';
+    if (motion === 'fighter') return 'FIGHTER';
+    if (motion === 'on_foot' || motion === 'carrier_deck') return 'SUIT';
+    if (label === 'TAXI') return 'PASSENGER';
+    if (label === 'MULTICREW') return 'CREW';
+    return 'VEHICLE';
+  }
+  if (category === 'scan') return motion === 'map' ? 'MAP' : motion === 'target_lock' ? 'TARGET' : 'SENSORS';
+  return ({
+    restrict: 'CAUTION', alert: 'WARNING', planet: 'PLANETARY',
+    dock: 'DOCKING', panel: 'COCKPIT',
+  })[category] || 'SHIP';
+}
+
+const FLOW_VARIANTS = {
+  fsd_charge: 'charge', jump: 'jump', supercruise: 'cruise', supercruise_assist: 'cruise',
+  supercruise_overcharge: 'overcharge', arrival: 'arrive', local_arrival: 'arrive',
+  fsd_cooldown: 'cool', carrier_preparing: 'carrier', carrier_lockdown: 'carrier',
+  carrier_transit: 'jump', carrier_arrival: 'arrive',
+};
+
+function finite(value) {
+  return value != null && value !== '' && Number.isFinite(Number(value));
+}
+
+function instrumentFor(state = {}) {
+  const category = String(state.category || 'flight');
+  const motion = String(state.motion || 'flight');
+  const dynamics = state.dynamics || {};
+  if (category === 'drive') return {kind: 'flow', variant: FLOW_VARIANTS[motion] || 'cruise'};
+  if (category === 'alert') return {kind: 'alert'};
+  if (category === 'restrict') return {kind: 'lock'};
+  if (category === 'planet' && finite(dynamics.altitude_m) && Number(dynamics.altitude_m) >= 0) {
+    return {kind: 'altimeter'};
+  }
+  if (motion === 'scanner' && String(state.label || '').toUpperCase() === 'FSS') return {kind: 'scan'};
+  return {kind: 'idle'};
+}
+
+// 10 m to 200 km on a log scale: the whole descent from orbital cruise to the
+// pad reads on one bar, and the last few hundred metres still move visibly.
+function altimeterPosition(altitude) {
+  const metres = Math.max(10, Number(altitude) || 0);
+  return Math.max(0, Math.min(1, Math.log10(metres / 10) / Math.log10(20000)));
+}
+
+function formatAltitude(altitude) {
+  const metres = Math.max(0, Number(altitude) || 0);
+  if (metres >= 100000) return `${Math.round(metres / 1000)} KM`;
+  if (metres >= 1000) return `${(metres / 1000).toFixed(1)} KM`;
+  return `${Math.round(metres)} M`;
+}
+
+function instrumentReadout(state, instrument) {
+  const dynamics = state.dynamics || {};
+  if (instrument.kind === 'flow') {
+    if (dynamics.neutron_boost) {
+      const boost = Number(dynamics.neutron_boost_value) || 0;
+      return boost > 0 ? `SUPERCHARGED ×${boost.toFixed(1)}` : 'FSD SUPERCHARGED';
+    }
+    if (dynamics.fsd_injection) {
+      const amount = Math.round(Number(dynamics.fsd_injection_percent) || 0);
+      return amount > 0 ? `INJECTION +${amount}%` : 'FSD INJECTION';
+    }
+    return '';
+  }
+  if (instrument.kind === 'altimeter') {
+    const parts = [`ALT ${formatAltitude(dynamics.altitude_m)}`];
+    const vertical = Number(dynamics.vertical_mps) || 0;
+    if (vertical > 1) parts.push(`▼ ${Math.round(vertical)} M/S`);
+    else if (vertical < -1) parts.push(`▲ ${Math.round(-vertical)} M/S`);
+    const gravity = Number(dynamics.gravity_g) || 0;
+    if (gravity > 0) parts.push(`${gravity.toFixed(2)} G`);
+    return parts.join('  ');
+  }
+  if (instrument.kind === 'scan') return `${Math.round(Math.max(0, Math.min(1, Number(dynamics.scan_percent) || 0)) * 100)}%`;
+  if (state.category === 'planet') {
+    const gravity = Number(dynamics.gravity_g) || 0;
+    return gravity > 0 ? `${gravity.toFixed(2)} G` : '';
+  }
+  return '';
+}
+
+function renderInstrument(state) {
+  const instrument = instrumentFor(state);
+  const host = dom.instrument;
+  const dynamics = state.dynamics || {};
+  host.dataset.instrument = instrument.kind;
+  if (instrument.variant) host.dataset.variant = instrument.variant;
+  else delete host.dataset.variant;
+  host.classList.toggle('supercharged', instrument.kind === 'flow'
+    && Boolean(dynamics.neutron_boost || dynamics.fsd_injection));
+  let fill = 0;
+  let marker = null;
+  if (instrument.kind === 'altimeter') {
+    marker = altimeterPosition(dynamics.altitude_m);
+    fill = marker;
+    const vertical = Number(dynamics.vertical_mps) || 0;
+    host.dataset.vertical = vertical > 1 ? 'down' : vertical < -1 ? 'up' : 'hold';
+  } else {
+    delete host.dataset.vertical;
+  }
+  if (instrument.kind === 'scan') {
+    fill = Math.max(0, Math.min(1, Number(dynamics.scan_percent) || 0));
+    marker = fill;
+  }
+  dom['instrument-fill'].style.transform = `scaleX(${fill})`;
+  dom['instrument-marker'].hidden = marker == null;
+  if (marker != null) dom['instrument-marker'].style.left = `${(marker * 100).toFixed(2)}%`;
+  dom['instrument-readout'].textContent = instrumentReadout(state, instrument);
+  return instrument;
+}
+
+// The ship's own indicator lamps, lit only while engaged. A lamp that merely
+// repeats the state notice (SILENT RUNNING shown as SILENT RUNNING) is omitted.
+function lampsFor(state = {}) {
+  const dynamics = state.dynamics || {};
+  const label = String(state.label || '').toUpperCase();
+  const motion = String(state.motion || '');
+  if (SURFACE_MOTIONS.has(motion)) {
+    return [
+      ['HANDBRAKE', dynamics.srv_handbrake, 'caution', 'HANDBRAKE'],
+      ['TURRET', dynamics.srv_turret, 'info', 'TURRET VIEW'],
+      ['DRIVE ASSIST', dynamics.srv_drive_assist, 'info', 'DRIVE ASSIST'],
+      ['NIGHT VISION', dynamics.night_vision, 'info', ''],
+    ].filter(([, on, , owner]) => on && owner !== label)
+      .map(([text, , tone]) => ({text, tone}));
+  }
+  if (state.category === 'vehicle' || !dynamics.in_main_ship) return [];
+  const lamps = [{
+    text: dynamics.analysis_mode ? 'ANALYSIS' : 'COMBAT',
+    tone: dynamics.analysis_mode ? 'info' : 'hud',
+    mode: true,
+  }];
+  for (const [text, on, tone, owner] of [
+    ['SHIELDS DOWN', dynamics.shields_known && !dynamics.shields_up, 'danger', ''],
+    ['HEAT', dynamics.overheating, 'danger', 'HEAT CRITICAL'],
+    ['LOW FUEL', dynamics.low_fuel, 'danger', ''],
+    ['HARDPOINTS', dynamics.hardpoints_deployed, 'hud', ''],
+    ['GEAR', dynamics.landing_gear, 'hud', ''],
+    ['CARGO SCOOP', dynamics.cargo_scoop, 'hud', ''],
+    ['FUEL SCOOPING', dynamics.fuel_scooping, 'good', ''],
+    ['SILENT RUNNING', dynamics.silent_running, 'caution', 'SILENT RUNNING'],
+    ['FA OFF', dynamics.flight_assist_off, 'caution', 'FLIGHT ASSIST OFF'],
+    ['SC ASSIST', dynamics.supercruise_assist, 'info', 'SC ASSIST'],
+    ['NIGHT VISION', dynamics.night_vision, 'info', ''],
+  ]) {
+    if (on && owner !== label) lamps.push({text, tone});
+  }
+  return lamps;
+}
+
+function renderLamps(state) {
+  const lamps = lampsFor(state);
+  const signature = JSON.stringify(lamps);
+  if (signature === lastLampSignature) return lamps;
+  lastLampSignature = signature;
+  const host = dom.lamps;
+  host.replaceChildren(...lamps.map((lamp) => {
+    const node = document.createElement('span');
+    node.className = `lamp tone-${lamp.tone}${lamp.mode ? ' mode' : ''}`;
+    node.textContent = lamp.text;
+    return node;
+  }));
+  return lamps;
+}
+
+const FUEL_CELLS = 10;
+
+function renderFuel(fuel = {}, dynamics = {}, theme = {}) {
+  const gauge = dom['fuel-gauge'];
+  const cells = dom['fuel-cells'];
+  if (cells.children.length !== FUEL_CELLS) {
+    cells.replaceChildren(...Array.from({length: FUEL_CELLS}, () => document.createElement('i')));
+  }
+  const percent = finite(fuel?.percent) ? Math.max(0, Math.min(100, Number(fuel.percent))) : null;
+  const lit = percent == null ? 0 : Math.ceil(percent / (100 / FUEL_CELLS));
+  [...cells.children].forEach((cell, index) => cell.classList.toggle('lit', index < lit));
+  dom['metric-fuel'].textContent = percent == null ? '--' : `${Math.round(percent)}%`;
+  gauge.style.setProperty('--fuel-tone', percent == null
+    ? 'var(--dim)' : themedStateColour(fuel?.color, theme));
+  gauge.classList.toggle('unknown', percent == null);
+  gauge.classList.toggle('scooping', Boolean(dynamics.fuel_scooping));
+}
+
+function renderEventNotice(notice, theme, reducedMotion) {
+  const node = dom['event-notice'];
+  if (!notice || notice.seq == null) return;
+  if (lastNoticeSequence === null) {
+    // A notice already live when the page loaded is still worth showing, but
+    // only once: later snapshots repeat the same sequence until it expires.
+    lastNoticeSequence = notice.seq;
+  } else if (notice.seq === lastNoticeSequence) {
+    return;
+  }
+  lastNoticeSequence = notice.seq;
+  const tone = ['accent', 'green', 'yellow', 'orange', 'red'].includes(notice.tone) ? notice.tone : 'accent';
+  node.textContent = notice.detail ? `${notice.text} · ${notice.detail}` : notice.text;
+  node.style.setProperty('--event-tone', `var(--${tone})`);
+  node.classList.remove('showing');
+  if (!reducedMotion) void node.offsetWidth;
+  node.classList.add('showing');
+  clearTimeout(eventNoticeTimer);
+  eventNoticeTimer = setTimeout(() => {
+    node.classList.remove('showing');
+    eventNoticeTimer = null;
+  }, Math.max(1000, Number(notice.duration || 2.4) * 1000));
+}
+
+function renderStatus(data, theme, reducedMotion) {
+  const state = data.state || {};
+  const hud = dom.hud;
+  const category = String(state.category || 'flight');
+  const label = String(state.label || 'FLIGHT').toUpperCase();
+  hud.dataset.motion = state.motion || 'flight';
+  hud.dataset.state = label;
+  hud.dataset.category = category;
+  const tone = category === 'alert' ? theme.red : themedStateColour(state.color, theme);
+  hud.style.setProperty('--state', tone);
+  dom['state-tag'].textContent = stateTag(state);
+  dom['state-label'].textContent = displayLabel(label);
+  const signature = `${category}|${label}`;
+  if (lastStateSignature && signature !== lastStateSignature && !reducedMotion) {
+    hud.classList.remove('state-changing');
+    void dom.notice.offsetWidth;
+    hud.classList.add('state-changing');
+    clearTimeout(stateChangeTimer);
+    stateChangeTimer = setTimeout(() => {
+      hud.classList.remove('state-changing');
+      stateChangeTimer = null;
+    }, 420);
+  }
+  lastStateSignature = signature;
+  renderInstrument(state);
+  renderLamps(state);
+  renderFuel(data.metrics?.fuel, state.dynamics || {}, theme);
+  renderEventNotice(state.notice, theme, reducedMotion);
+}
+
+// ---------------------------------------------------------------------------
+// Ship hologram. The catalogue portraits are kept; only their framing changed.
+// ---------------------------------------------------------------------------
+
 function vehiclePresentation(state = {}) {
   const motion = String(state.motion || 'flight');
   const label = String(state.label || 'FLIGHT').toUpperCase();
@@ -161,7 +445,8 @@ function clearVehicleTransition(host, image) {
 }
 
 function animateVehicleSwap(host, image, presentation) {
-  const hostRect = host.getBoundingClientRect();
+  const bay = image.parentElement;
+  const bayRect = bay.getBoundingClientRect();
   const imageRect = image.getBoundingClientRect();
   const computed = getComputedStyle(image);
   const ghost = image.cloneNode(false);
@@ -169,13 +454,13 @@ function animateVehicleSwap(host, image, presentation) {
   ghost.className = 'vehicle-outgoing';
   ghost.alt = '';
   ghost.setAttribute('aria-hidden', 'true');
-  ghost.style.left = `${imageRect.left - hostRect.left}px`;
-  ghost.style.top = `${imageRect.top - hostRect.top}px`;
+  ghost.style.left = `${imageRect.left - bayRect.left}px`;
+  ghost.style.top = `${imageRect.top - bayRect.top}px`;
   ghost.style.width = `${imageRect.width}px`;
   ghost.style.height = `${imageRect.height}px`;
   ghost.style.opacity = computed.opacity;
   ghost.style.filter = computed.filter;
-  host.appendChild(ghost);
+  bay.appendChild(ghost);
 
   host.classList.add('vehicle-swapping');
   host.dataset.vehicle = presentation.key;
@@ -199,19 +484,31 @@ function animateVehicleSwap(host, image, presentation) {
   };
 }
 
+function vehicleCaption(state = {}, presentation = null) {
+  const vehicle = state.vehicle || {};
+  const type = String(presentation?.name || vehicle.ship_type || '').toUpperCase();
+  const name = String(vehicle.ship_name || '').trim().toUpperCase();
+  const ownShip = presentation && !['fighter', 'onfoot', 'carrier', 'nomad', 'scarab', 'scorpion', 'rhino']
+    .includes(presentation.key);
+  return {type: type || (ownShip ? 'SHIP' : ''), name: ownShip && name !== type ? name : ''};
+}
+
 function renderVehicle(state = {}, reducedMotion = false) {
   const presentation = vehiclePresentation(state);
   const host = dom['vehicle-display'];
   const image = dom['vehicle-image'];
+  const caption = vehicleCaption(state, presentation);
+  dom['vehicle-type'].textContent = caption.type;
+  dom['vehicle-name'].textContent = caption.name;
   if (reducedMotion) clearVehicleTransition(host, image);
   if (!presentation) {
     clearVehicleTransition(host, image);
-    host.hidden = true;
+    host.classList.add('empty');
     image.removeAttribute('src');
     image.alt = '';
     return null;
   }
-  host.hidden = false;
+  host.classList.remove('empty');
   const previousSrc = image.getAttribute('src') || '';
   if (previousSrc && previousSrc !== presentation.src && !reducedMotion
       && typeof image.animate === 'function') {
@@ -225,11 +522,9 @@ function renderVehicle(state = {}, reducedMotion = false) {
   return presentation;
 }
 
-function setMetric(id, metric) {
-  const element = dom[id];
-  element.textContent = metric?.value ?? '--';
-  element.parentElement.style.setProperty('--metric-color', metric?.color || 'var(--accent)');
-}
+// ---------------------------------------------------------------------------
+// Route and survey
+// ---------------------------------------------------------------------------
 
 function renderRoute(route = {}, systemName = '') {
   const hops = Array.isArray(route.hops) ? route.hops : [];
@@ -254,7 +549,7 @@ function renderRoute(route = {}, systemName = '') {
   dom['route-star'].textContent = classKnown
     ? `${starClass} · ${scoopable === true ? 'SCOOPABLE' : scoopable === false ? 'NON-SCOOP' : 'SCOOP UNKNOWN'}`
     : route.active && !route.complete ? 'STAR UNKNOWN' : '';
-  dom['route-star'].style.color = scoopable === false && classKnown ? 'var(--yellow)' : 'var(--accent)';
+  dom['route-star'].classList.toggle('unscoopable', scoopable === false && classKnown);
   const endurance = route.fuel_endurance_jumps;
   const estimated = typeof endurance === 'number' && Number.isFinite(endurance) && endurance >= 0;
   dom['route-fuel'].textContent = route.active && !route.complete
@@ -273,17 +568,20 @@ function renderRoute(route = {}, systemName = '') {
   if (signature === lastRouteSignature) return;
   lastRouteSignature = signature;
   const target = route.target || hops.find(hop => hop.next)?.name || '';
-  dom['route-target-label'].textContent = route.complete ? 'ARRIVED' : 'NEXT SYSTEM';
+  dom['route-target-label'].textContent = route.complete ? 'ARRIVED' : route.source === 'waypoints' ? 'NEXT STOP' : 'NEXT JUMP';
   dom['route-target'].textContent = target || (route.active ? 'DESTINATION PENDING' : 'NO DESTINATION PLOTTED');
   const done = hops.filter(hop => hop.completed || hop.current).length;
   if (previousSignature && arrived) briefHighlight(dom['route-target'], 'target-promoted');
   const nextIndex = hops.findIndex(hop => hop.next);
   const progressLabel = hops.length ? `${route.source === 'waypoints' ? 'STOP' : 'JUMP'} ${route.complete ? hops.length : nextIndex >= 0 ? nextIndex + 1 : Math.min(done + 1, hops.length)} / ${hops.length}` : '';
-  dom['route-title'].textContent = route.complete ? 'ROUTE COMPLETE' : progressLabel || route.progress_text || route.header || 'NO ACTIVE ROUTE';
+  // With nothing plotted the target line already says so; a stale count
+  // from an earlier route must not linger beside it.
+  dom['route-title'].textContent = route.complete ? 'ROUTE COMPLETE'
+    : present ? progressLabel || route.progress_text || route.header || '' : '';
   const distance = value => value && !['--', 'None'].includes(String(value)) ? String(value) : '—';
-  dom['route-next'].textContent = route.active && !route.complete ? `NEXT ${distance(route.leg_distance ?? route.next_distance)}` : '';
-  dom['route-distance'].textContent = route.active && !route.complete ? `LEFT ${distance(route.remaining_distance ?? route.distance)}` : '';
-  dom['route-origin'].textContent = route.origin_current === false ? 'START' : 'CURRENT';
+  dom['route-next'].textContent = route.active && !route.complete ? distance(route.leg_distance ?? route.next_distance) : '';
+  dom['route-distance'].textContent = route.active && !route.complete ? `${distance(route.remaining_distance ?? route.distance)} LEFT` : '';
+  dom['route-origin'].textContent = route.origin_current === false ? 'START' : 'HERE';
   dom['route-destination'].textContent = route.active || route.hops?.length ? 'DEST' : 'NEXT';
   dom['route-progress'].style.width = `${hops.length ? done / hops.length * 100 : 0}%`;
   dom['route-progress'].dataset.progress = String(route.progress_percent || 0);
@@ -316,7 +614,7 @@ function renderRoute(route = {}, systemName = '') {
   }
 }
 
-function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = false) {
+function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = false, bioProgress = '') {
   const state = ['unknown', 'live', 'retained', 'complete'].includes(String(survey.state))
     ? String(survey.state) : (survey.complete ? 'complete' : survey.live ? 'live' : 'unknown');
   const scanned = Math.max(0, Number.parseInt(survey.scanned, 10) || 0);
@@ -330,9 +628,11 @@ function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = 
   const tone = survey.tone
     ? themedStateColour(survey.tone, theme)
     : (state === 'unknown' ? (theme.dim || 'var(--dim)') : (theme.accent || 'var(--accent)'));
+  // Show organic progress (logged/found) once any biology is known.
+  const bioText = signalCounts.bio > 0 && /^\d+\/\d+$/.test(String(bioProgress)) ? String(bioProgress) : String(signalCounts.bio);
   const signature = JSON.stringify([
     systemName, state, scanned, total, totalKnown, Math.round(percent * 100) / 100,
-    signalCounts.bio, signalCounts.geo, signalCounts.mining, signalCounts.valuable, tone, reducedMotion,
+    signalCounts.bio, signalCounts.geo, signalCounts.mining, signalCounts.valuable, tone, reducedMotion, bioText,
   ]);
   if (signature === lastSurveySignature) return;
 
@@ -353,11 +653,8 @@ function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = 
   dom['survey-mode'].textContent = modeLabels[state];
   dom['survey-remaining'].textContent = state !== 'complete' && remaining > 0
     ? `${remaining} REMAIN` : '';
-  dom['survey-state'].style.color = tone;
   dom['survey-count'].textContent = `${scanned} / ${totalKnown ? total : '?'} BODIES`;
-  dom['survey-count'].style.color = tone;
   dom['survey-percent'].textContent = totalKnown ? `${Math.round(percent)}%` : '--%';
-  dom['survey-percent'].style.color = tone;
 
   const host = dom['survey-rail'];
   const segmentCount = totalKnown && total > 0 && total <= 24 ? total : (total > 24 ? 24 : 12);
@@ -410,7 +707,7 @@ function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = 
   ]) {
     const count = signalCounts[kind];
     const alert = dom[`survey-signal-${kind}`];
-    alert.querySelector('em').textContent = String(count);
+    alert.querySelector('em').textContent = kind === 'bio' ? bioText : String(count);
     alert.title = `${title}: ${count}`;
     alert.setAttribute('aria-label', `${title}: ${count}`);
     alert.classList.toggle('present', count > 0);
@@ -447,7 +744,7 @@ function updateClock() {
 }
 
 // Event highlights settle automatically; ordinary telemetry refreshes do not
-// restart them. Keep the live state instrument as the sustained animation.
+// restart them. The drive band is the only sustained animation.
 const highlightTimers = new WeakMap();
 function briefHighlight(element, className) {
   if (dom.hud.classList.contains('reduced-motion')) return;
@@ -468,9 +765,12 @@ function render(data) {
     ? Math.max(.4, Math.min(1, overlayOpacity)) : 1);
   const theme = setTheme(data.theme);
   const hud = dom.hud;
-  hud.classList.toggle('standard', data.layout !== 'expanded');
-  hud.classList.toggle('expanded', data.layout === 'expanded');
+  const expanded = data.layout === 'expanded';
+  hud.classList.toggle('standard', !expanded);
+  hud.classList.toggle('expanded', expanded);
   hud.classList.toggle('no-crt', !data.effects?.crt);
+  // A hidden overlay keeps its state but stops spending frames on it.
+  hud.classList.toggle('dormant', data.window?.visible === false);
   const reducedMotion = Boolean(data.effects?.reduced_motion || osMotionPreference.matches);
   const enteringReducedMotion = reducedMotion && !hud.classList.contains('reduced-motion');
   hud.classList.toggle('reduced-motion', reducedMotion);
@@ -482,65 +782,29 @@ function render(data) {
     hud.classList.remove('state-changing');
     clearTimeout(routeNoticeTimer);
   }
-  hud.dataset.motion = data.state?.motion || 'flight';
-  hud.dataset.state = data.state?.label || 'FLIGHT';
-  const vehicle = renderVehicle(data.state, reducedMotion);
-  const stateColour = themedStateColour(data.state?.color, theme);
-  hud.style.setProperty('--state', stateColour);
   const energy = Math.max(.55, Math.min(1.6, Number(data.effects?.energy || 1)));
-  hud.style.setProperty('--motion-energy', String(energy));
   hud.style.setProperty('--motion-scale', String(1 / energy));
-  const indicatorSignature = `${data.state?.motion || 'flight'}|${data.state?.label || 'FLIGHT'}|${vehicle?.key || 'none'}`;
-  dom['state-label'].textContent = data.state?.label || 'FLIGHT';
-  if (lastIndicatorSignature && indicatorSignature !== lastIndicatorSignature
-      && !reducedMotion) {
-    hud.classList.remove('state-changing');
-    void dom['state-label'].offsetWidth;
-    hud.classList.add('state-changing');
-    if (stateChangeTimer) clearTimeout(stateChangeTimer);
-    stateChangeTimer = setTimeout(() => {
-      hud.classList.remove('state-changing');
-      stateChangeTimer = null;
-    }, 620);
-  }
-  lastIndicatorSignature = indicatorSignature;
-  stateIndicator.update({
-    motion: data.state?.motion || 'flight',
-    label: data.state?.label || 'FLIGHT',
-    vehicleKey: vehicle?.key || '',
-    color: stateColour,
-    energy,
-    dynamics: data.state?.dynamics || {},
-    reduced: reducedMotion,
-    visible: data.window?.visible !== false,
-    eventSequence: data.state?.event_sequence,
-    eventKind: data.state?.event_kind,
-  });
+  renderVehicle(data.state, reducedMotion);
+  renderStatus(data, theme, reducedMotion);
   const system = data.system || {};
   if (lastSystemName && system.name && lastSystemName !== system.name) briefHighlight(dom['current-system'], 'system-arrival');
   lastSystemName = system.name || '';
   dom['current-system'].textContent = system.name || '---';
   const currentStarClass = String(system.star_class || '').trim();
   renderStarOrb(dom['current-star-orb'], currentStarClass);
-  dom['current-star-label'].textContent = currentStarClass ? `STAR ${currentStarClass.toUpperCase()}` : 'STAR CLASS ?';
+  dom['current-star-label'].textContent = currentStarClass ? `STAR ${currentStarClass.toUpperCase()}` : 'STAR ?';
   dom['current-star-label'].title = currentStarClass ? `Known local star class ${currentStarClass}` : 'Local star class unknown';
   dom['region-label'].textContent = system.region || 'REGION UNKNOWN';
   hud.classList.toggle('surface-focus', Boolean(data.context?.surface));
   renderRoute(data.route, system.name || '');
-  renderSurvey(data.survey, theme, system.name || '', reducedMotion);
   const metrics = data.metrics || {};
-  for (const prefix of ['metric', 'expanded']) {
-    setMetric(`${prefix}-fuel`, metrics.fuel);
-    setMetric(`${prefix}-bio`, metrics.bio);
-    setMetric(`${prefix}-geo`, metrics.geo);
-  }
-  dom['expanded-traffic'].textContent = metrics.traffic?.value || '0 / 0 / 0';
-  dom['expanded-traffic'].parentElement.style.setProperty('--metric-color', metrics.traffic?.color || 'var(--dim)');
+  renderSurvey(data.survey, theme, system.name || '', reducedMotion, metrics.bio?.value);
   dom['context-label'].textContent = data.context?.primary || '';
-  dom['context-label'].style.color = data.context?.primary_color || 'var(--accent)';
-  dom['secondary-label'].textContent = data.layout === 'expanded' ? (data.context?.secondary || '') : '';
-  dom['secondary-label'].style.color = data.context?.secondary_color || 'var(--yellow)';
-  dom['traffic-label'].textContent = data.layout === 'expanded' ? '' : (data.context?.traffic || '');
+  dom['context-label'].style.color = themedStateColour(data.context?.primary_color, theme);
+  dom['secondary-label'].textContent = expanded ? (data.context?.secondary || '') : '';
+  dom['secondary-label'].style.color = themedStateColour(data.context?.secondary_color, theme);
+  dom['traffic-label'].textContent = expanded && metrics.traffic?.value
+    ? `TRAFFIC ${metrics.traffic.value}` : (data.context?.traffic || '');
   const attentionText = ['alert', 'warn', 'warning'].includes(data.context?.attention)
     ? [data.context?.primary, data.context?.secondary].filter(Boolean).join('|') : '';
   if (attentionText && attentionText !== lastAttentionText) briefHighlight(dom['context-label'], 'context-attention');
@@ -624,6 +888,7 @@ async function start() {
 window.addEventListener('beforeunload', () => {
   clearTimeout(routeFeedbackTimer);
   clearTimeout(routeNoticeTimer);
+  clearTimeout(eventNoticeTimer);
   if (arrivalTimer) clearInterval(arrivalTimer);
 });
 osMotionPreference.addEventListener('change', () => {

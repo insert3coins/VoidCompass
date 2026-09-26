@@ -1,16 +1,22 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.9.3 // Survey Continuity & Field Records
-**Release Date:** 2026-Sep-25
+## v5.4.9.4 // Survey Spotlight, Explore Views & Cockpit HUD
+**Release Date:** 2026-Sep-26
 
-* Kept every discovered body reachable in the Explore system workboard while bounding the display, with an honest overflow count on the compact orbit strip and direct Current System-to-workboard navigation.
-* Added a profile-local Return Later board for unfinished, journal-backed survey work from departed systems, with copy, route and dismiss actions. Revisited systems reconcile against fresh scan evidence rather than claiming unobserved completion.
-* Persisted survey queue choices per commander and clarified journal-completed entries so automatic completion cannot be mistaken for a manual task that can be reopened.
-* Rebuilt Exploration Archive as a flight-record workspace with session trends, a searchable ledger, ecological evidence and the 42-region passport. Archive counts describe retained records, and temporarily unavailable science data no longer masquerades as an empty history.
-* Reworked Focused Log into a live field brief with current survey and route context, a filterable rolling event feed and an obvious return to Dashboard.
+* Rebuilt Survey Operations around one spotlight world, a one-line-per-world biology manifest and a tiered catalogue of surface, notable, landable and other bodies, replacing three competing page timers with a single 10-second clock.
+* Survey Operations now jumps to the world a journal event affects and holds it for 30 seconds, locks to the world being sampled without repeating its species, and stays within a 640–700 px height budget by folding the quietest bodies first. A busy system shrank from 741 to 603 px, or from 1,001 to 678 px at double text size, and no body is hidden.
+* Survey Operations only rotates its spotlight when a system has more than eight worlds; a small system stays on its latest activity. Overlay Studio's new Survey Operations card chooses Auto (with an adjustable world count), Always or Off, and sets a Survey text size apart from the other overlays.
+* Rebuilt Explore & Survey as System survey, Route & waypoints and Prospects views that each fit the window and scroll their own lists, replacing a single page almost 5,000 px tall. The last view is remembered per commander, and the fixed view layouts replace this page's panel arranging.
+* Merged the System Workboard, Survey Queue and Planetary Resource Intelligence into one priority-ranked Survey Board with PIN, DONE and SKIP actions, filters and rare-material chips. Its selection is shared with the live orrery and the Dashboard's Current System list, and every discovered body stays listed.
+* Moved route planning (Elite NavRoute, saved waypoints with the add form first, and the Spansh neutron plotter) and prospecting (Return Later, Exploration Scout and personal Codex gaps) into their own views, with the expedition pulse beside the route.
+* Rebuilt the Navigation HUD as a cockpit status panel. The 85 animated state scenes are replaced by one notice per kind of state (FSD, planetary, sensors, docking, caution, warning) and a single instrument fed only by journal values: drive flow, a log-scale altimeter, the FSS scan bar or a flashing warning band. Engaged ship systems light as lamps beside a segmented fuel gauge, discoveries and damage appear as short notices, and ship portraits stay as a holographic display.
+* The Navigation HUD now grows with overlay text size instead of clipping larger type, and the Overlay Studio footprint follows its real size.
+* Rebuilt Planet Waypoint Navigation as a surface compass: a heading tape with the target marked on it (or an edge arrow when it is off the tape), an Elite-style target ring, the distance with the turn to make, and a log-scale approach bar ending in a 25 m arrival zone. Closing speed and ETA are measured from real position changes, with no estimate while you stand still. Altitude appears while flying, a mode chip shows ship, SRV or on foot, and the compass also scales with overlay text size.
+* Fixed startup stalling when the dashboard was minimised during boot, which kept overlays hidden until the window was restored. A dashboard page that fails to load or never starts now reloads instead of staying blank, a failed WebView2 start relaunches the dashboard host, and startup no longer waits forever on the browser.
 
 ## Earlier releases
 
+* **v5.4.9.3** — Added the profile-local Return Later board and per-commander survey queue choices, kept every discovered body reachable in the Explore workboard, rebuilt Exploration Archive as a flight-record workspace and reworked Focused Log into a live field brief.
 * **v5.4.9.2** — Rebuilt Planet Materials and Planet Waypoint Navigation, introduced the Expedition Bridge across non-map pages, and added animated known-world records to Current System.
 * **v5.4.9.1** — Refreshed Survey Operations for every planet scan with compact routine and pinned biology strips, improved exobiology sampling, and rebuilt Achievements and themed cockpit notifications.
 * **v5.4.9** — Rebuilt the Navigation HUD with a flight-deck layout, complete animated route, stellar-class visuals and distinct state scenes; redesigned Survey Operations as a bounded, animated planet atlas.

@@ -146,7 +146,7 @@ def run():
               const target = document.querySelector('.route-target').getBoundingClientRect();
               if (orb.left < target.left || orb.right > target.right || orb.bottom > target.bottom)
                 throw Error('Star visual escapes next-system panel');
-              const status = document.querySelector('.route-status').getBoundingClientRect();
+              const status = document.querySelector('.route-facts').getBoundingClientRect();
               if (status.bottom > route.bottom) throw Error('Status row exceeds route block');
             }""", layout)
         page.emulate_media(reduced_motion="reduce")

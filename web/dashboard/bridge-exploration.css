@@ -2,76 +2,6 @@
    All rules are page-scoped so live specialist workspaces keep their own
    controls, data hierarchy and profile palette. Load after styles.css. */
 
-/* Stellar cartography: one primary astronomical instrument, then decisions. */
-.page[data-page-name="explore"] .intel-grid {
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, .85fr);
-  gap: 14px;
-}
-.page[data-page-name="explore"] .system-workboard-card {
-  min-height: 560px;
-  border-color: color-mix(in srgb, var(--accent) 37%, var(--border));
-  background:
-    radial-gradient(circle at 18% 21%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 31%),
-    radial-gradient(circle at 90% 75%, color-mix(in srgb, var(--orange) 6%, transparent), transparent 43%),
-    var(--panel);
-  box-shadow: inset 0 0 45px color-mix(in srgb, var(--accent) 4%, transparent);
-}
-.page[data-page-name="explore"] .workboard-system {
-  min-height: 106px;
-  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
-  background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 10%, var(--inset)), var(--inset) 80%);
-}
-.page[data-page-name="explore"] .workboard-identity strong {
-  font-size: clamp(17px, 1.8vw, 25px);
-  letter-spacing: .04em;
-}
-.page[data-page-name="explore"] .workboard-orbits {
-  height: 77px;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 49px, color-mix(in srgb, var(--accent) 10%, transparent) 49px 50px),
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 4%, var(--inset)), var(--inset));
-  box-shadow: inset 0 0 21px color-mix(in srgb, var(--accent) 5%, transparent);
-}
-.page[data-page-name="explore"] .workboard { max-height: 360px; }
-.page[data-page-name="explore"] .body-row {
-  margin-block: 4px;
-  border-top: 1px solid color-mix(in srgb, var(--border-soft) 70%, transparent);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--panel-raised) 84%, transparent), transparent 85%);
-}
-.page[data-page-name="explore"] .body-row.priority {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--orange) 8%, var(--panel-alt)), var(--panel) 90%);
-}
-.page[data-page-name="explore"] .intel-grid > .card:not(.system-workboard-card) {
-  border-left: 2px solid color-mix(in srgb, var(--accent) 56%, var(--border));
-}
-.page[data-page-name="explore"] .intel-grid .big-stat strong {
-  font-size: clamp(26px, 3vw, 40px);
-  letter-spacing: -.035em;
-}
-.page[data-page-name="explore"] .orrery-card {
-  border-color: color-mix(in srgb, var(--accent) 43%, var(--border));
-  box-shadow: 0 14px 35px color-mix(in srgb, var(--bg) 45%, transparent);
-}
-.page[data-page-name="explore"] .orrery-stage,
-.page[data-page-name="explore"] .orrery-empty {
-  height: clamp(350px, 42vw, 560px);
-}
-.page[data-page-name="explore"] .orrery-detail {
-  border-top-color: color-mix(in srgb, var(--accent) 36%, var(--border));
-  background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 7%, var(--panel-alt)), var(--panel-alt));
-}
-.page[data-page-name="explore"] .survey-next {
-  background: linear-gradient(95deg, color-mix(in srgb, var(--orange) 12%, var(--inset)), var(--inset));
-}
-.page[data-page-name="explore"] .survey-queue-row:not(.complete):not(.skipped):hover {
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
-}
-.page[data-page-name="explore"] .route-system.current,
-.page[data-page-name="explore"] .waypoint-row:not(.visited):hover {
-  box-shadow: inset 3px 0 var(--orange);
-  background: color-mix(in srgb, var(--orange) 7%, transparent);
-}
-
 /* Planetary operations: keep the target lock, selected planet and sites distinct. */
 .page[data-page-name="planet-materials"] .planet-materials-shell { gap: 12px; }
 .page[data-page-name="planet-materials"] .planet-compass-quick {
@@ -273,10 +203,7 @@
 
 /* At a compact desktop window, stack dense instruments instead of clipping. */
 @media (max-width: 1220px) {
-  .page[data-page-name="explore"] .route-workspace-grid,
   .page[data-page-name="ground"] .ground-grid { grid-template-columns: minmax(0, 1fr); }
-  .page[data-page-name="explore"] .neutron-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .page[data-page-name="explore"] .neutron-form > button { grid-column: 1 / -1; }
   .page[data-page-name="planet-materials"] .planet-site-card summary {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
@@ -286,11 +213,8 @@
 }
 
 @media (max-width: 1050px) {
-  .page[data-page-name="explore"] .intel-grid,
   .page[data-page-name="records"] .records-grid,
   .page[data-page-name="mission"] .mission-layout { grid-template-columns: minmax(0, 1fr); }
-  .page[data-page-name="explore"] .tall-card { grid-row: auto; min-height: 0; }
-  .page[data-page-name="explore"] .workboard { max-height: 280px; }
   .page[data-page-name="operations"] .tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .page[data-page-name="mission"] .mission-list > div { max-height: 210px; }
   .page[data-page-name="records"] .record-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -303,11 +227,7 @@
   .page[data-page-name="operations"] .tool-grid,
   .page[data-page-name="records"] .record-metrics,
   .page[data-page-name="analytics"] .region-passport-grid { grid-template-columns: minmax(0, 1fr); }
-  .page[data-page-name="explore"] .workboard-system { grid-template-columns: 50px minmax(0, 1fr); }
-  .page[data-page-name="explore"] .workboard-completion { grid-column: 1 / -1; text-align: left; }
-  .page[data-page-name="planet-materials"] .planet-site-card summary,
-  .page[data-page-name="explore"] .neutron-form { grid-template-columns: minmax(0, 1fr); }
-  .page[data-page-name="explore"] .neutron-form > button { grid-column: auto; }
+  .page[data-page-name="planet-materials"] .planet-site-card summary { grid-template-columns: minmax(0, 1fr); }
 }
 
 body.reduced-motion .page[data-page-name="operations"] .tool-card { transition: none; }

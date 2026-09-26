@@ -51,12 +51,20 @@ class TacticalHUD:
         return bool(self.config.get("hud_compact_mode", True))
 
     def _target_dimensions(self):
-        if self._is_compact():
-            return self.compact_width, self.compact_height
-        return self.full_width, self.full_height
+        width, height = (
+            (self.compact_width, self.compact_height) if self._is_compact()
+            else (self.full_width, self.full_height)
+        )
+        # The page zooms its fixed cockpit layout by the overlay text size, so
+        # the window grows by the same factor instead of clipping larger type.
+        scale = self._text_scale_percent() / 100.0
+        return int(round(width * scale)), int(round(height * scale))
 
     def _html_window_payload(self):
         width, height = self._target_dimensions()
+        # Overlay Studio draws its drag footprint from this, not the proxy
+        # window, which keeps its first size across layout and text changes.
+        self._html_window_size = (int(width), int(height))
         try:
             state = str(self.win.state())
             shown = state not in {"withdrawn", "iconic"}
@@ -515,6 +523,118 @@ class TacticalHUD:
         if state_text == "SIGNAL DROP":
             return COLOR_YELLOW
         return "#7d8891"
+
+    # Elite's cockpit reports its state through a handful of notice styles, not
+    # a scene per state. Every motion profile belongs to one family, and the
+    # HUD gives each family one instrument: the drive flow, the altimeter, the
+    # scan bar or the warning band. Everything else is a quiet notice.
+    _MOTION_CATEGORIES = {
+        "supercruise": "drive", "supercruise_assist": "drive",
+        "supercruise_overcharge": "drive", "fsd_charge": "drive", "jump": "drive",
+        "arrival": "drive", "local_arrival": "drive", "fsd_cooldown": "drive",
+        "carrier_preparing": "drive", "carrier_lockdown": "drive",
+        "carrier_transit": "drive", "carrier_arrival": "drive",
+        "fsd_lock": "restrict", "asteroid_field": "restrict",
+        "capital_contact": "restrict", "unknown_contact": "restrict",
+        "combat": "alert", "heat_critical": "alert", "suit_hazard": "alert",
+        "jet_cone_damage": "alert", "system_reboot": "alert",
+        "srv_threat": "alert", "heavy_combat": "alert",
+        "orbital_approach": "planet", "glide": "planet",
+        "surface_approach": "planet", "surface_hold": "planet",
+        "surface_departure": "planet", "orbital_departure": "planet",
+        "surface_station": "planet", "landed": "planet",
+        "settlement_area": "planet",
+        "scanner": "scan", "map": "scan", "target_lock": "scan",
+        "phenomena": "scan",
+        "docking_clearance": "dock", "docking_denied": "dock",
+        "docking_assist": "dock", "docked": "dock", "station": "dock",
+        "maintenance": "dock",
+        "surface_vehicle": "vehicle", "srv_handbrake": "vehicle",
+        "srv_turret": "vehicle", "srv_drive_assist": "vehicle",
+        "fighter": "vehicle", "on_foot": "vehicle", "carrier_deck": "vehicle",
+        "vehicle_deploy": "vehicle", "vehicle_board": "vehicle",
+        "vehicle_switch": "vehicle",
+        "left_panel": "panel", "right_panel": "panel", "comms_panel": "panel",
+        "role_panel": "panel", "station_services": "panel",
+    }
+
+    @classmethod
+    def _navigation_category(cls, state_text, motion):
+        """Return the notice family (drive, planet, alert...) for one state."""
+        state = str(state_text or "").upper()
+        if state.startswith("FSD INJECTION"):
+            return "drive"  # An armed boost, not a restriction.
+        if state.startswith("SIGNAL THREAT"):
+            return "alert"
+        if state in {"TAXI", "MULTICREW"}:
+            return "vehicle"  # Someone else's ship: its lamps are not ours.
+        return cls._MOTION_CATEGORIES.get(str(motion or ""), "flight")
+
+    # Live journal events the state label cannot show become a short notice.
+    # Jumps, docking, vehicles and interdictions already change the state.
+    _EVENT_NOTICES = {
+        "honk": "SYSTEM SCAN", "fss_signal": "SIGNAL SOURCE",
+        "body_scan": "BODY SCANNED", "signals": "SIGNALS DETECTED",
+        "mapping_complete": "SURFACE MAPPED", "codex": "CODEX ENTRY",
+        "data_sale": "DATA SOLD", "arrival_valuable": "VALUABLE SYSTEM",
+        "valuable_discovery": "HIGH VALUE", "first_discovery": "FIRST DISCOVERY",
+        "footfall_candidate": "FIRST FOOTFALL",
+        "prospector_scan": "ASTEROID PROSPECTED", "prospector_rich": "RICH DEPOSIT",
+        "prospector_core": "MOTHERLODE", "mining_refined": "REFINED",
+    }
+    _WARNING_NOTICES = {
+        "HeatWarning": "HEAT WARNING", "HeatDamage": "HEAT DAMAGE",
+        "HullDamage": "HULL DAMAGE", "CockpitBreached": "CANOPY BREACHED",
+        "UnderAttack": "UNDER ATTACK", "SystemsShutdown": "SYSTEMS SHUTDOWN",
+        "SelfDestruct": "SELF DESTRUCT", "Died": "SHIP DESTROYED",
+        "FighterDestroyed": "FIGHTER DESTROYED", "SRVDestroyed": "SRV DESTROYED",
+    }
+
+    @classmethod
+    def _navigation_event_notice(cls, journal_event, system_name=""):
+        """Return one short cockpit notice for a live journal event, or None."""
+        event = journal_event if isinstance(journal_event, dict) else {}
+        kind = str(event.get("kind") or "")
+        if kind == "warning":
+            text = cls._WARNING_NOTICES.get(str(event.get("event") or ""), "WARNING")
+            tone = "red"
+        else:
+            text = cls._EVENT_NOTICES.get(kind)
+            tone = str(event.get("tone") or "accent")
+        if not text:
+            return None
+        try:
+            sequence = int(event.get("seq"))
+        except (TypeError, ValueError):
+            return None
+        detail = ""
+        if kind == "honk":
+            try:
+                count = int(event.get("body_count") or 0)
+            except (TypeError, ValueError):
+                count = 0
+            detail = f"{count} BODIES" if count > 0 else ""
+        elif kind in {"valuable_discovery", "first_discovery", "footfall_candidate"}:
+            detail = str(event.get("body_name") or "").strip().upper()
+            system = str(system_name or "").strip().upper()
+            if system and detail.startswith(system + " "):
+                detail = detail[len(system) + 1:]
+        elif kind in {"prospector_core", "mining_refined"}:
+            detail = str(
+                event.get("motherlode_material") or event.get("material_name") or ""
+            ).strip().upper()
+        try:
+            duration = float(event.get("duration") or 0.0)
+        except (TypeError, ValueError):
+            duration = 0.0
+        return {
+            "seq": sequence,
+            "text": text,
+            "detail": detail[:48],
+            "tone": tone if tone in {"accent", "green", "yellow", "orange", "red"} else "accent",
+            # Journal pulses are tuned for a flash; a notice must be readable.
+            "duration": round(max(2.4, min(4.0, duration + 1.0)), 2),
+        }
 
     @staticmethod
     def _navigation_motion_profile(state_text):
@@ -1053,18 +1173,19 @@ class TacticalHUD:
                 return default
             return number if math.isfinite(number) else default
 
+        motion = self._navigation_motion_profile(state_text)
         model["state"] = {
             "label": state_text,
             "color": state_color,
-            "motion": self._navigation_motion_profile(state_text),
+            "motion": motion,
+            "category": self._navigation_category(state_text, motion),
             "vehicle": {
                 "ship_symbol": str(nav_context.get("ship_symbol") or "").casefold(),
                 "ship_type": str(nav_context.get("ship_type") or ""),
                 "ship_name": str(nav_context.get("ship_name") or ""),
                 "surface": str(nav_context.get("vehicle_name") or "").upper(),
             },
-            "event_sequence": journal_event.get("seq"),
-            "event_kind": str(journal_event.get("kind") or ""),
+            "notice": self._navigation_event_notice(journal_event, current_display),
             "dynamics": {
                 "gravity_g": finite_number(nav_context.get("gravity_g"), 0.0),
                 "altitude_m": finite_number(approach.get("altitude_m")),
@@ -1079,6 +1200,13 @@ class TacticalHUD:
                 "night_vision": bool(ship_config.get("night_vision")),
                 "in_main_ship": bool(ship_config.get("in_main_ship")),
                 "low_fuel": bool(ship_config.get("low_fuel")),
+                "flight_assist_off": bool(ship_config.get("flight_assist_off")),
+                "silent_running": bool(ship_config.get("silent_running")),
+                "overheating": bool(ship_config.get("overheating")),
+                "supercruise_assist": bool(ship_config.get("supercruise_assist")),
+                "srv_handbrake": bool(ship_config.get("srv_handbrake")),
+                "srv_turret": bool(ship_config.get("srv_turret")),
+                "srv_drive_assist": bool(ship_config.get("srv_drive_assist")),
                 "fuel_scooping": bool(nav_context.get("fuel_scooping")),
                 "neutron_boost": bool((nav_context.get("neutron_boost") or {}).get("armed")),
                 "neutron_boost_value": finite_number(
@@ -1193,8 +1321,14 @@ class TacticalHUD:
         traffic_value = " / ".join(
             str(int(traffic.get(key, 0) or 0)) for key in ("day", "week", "total")
         )
+        fuel_percent = finite_number(nav_context.get("fuel_percent"))
         model["metrics"] = {
-            "fuel": metric_values.get("fuel"),
+            "fuel": {
+                **(metric_values.get("fuel") or {}),
+                # The segmented gauge needs the number, not the "71%" label.
+                "percent": None if fuel_percent is None
+                else max(0, min(100, int(round(fuel_percent)))),
+            },
             "bio": metric_values.get("bio"),
             "geo": metric_values.get("geo"),
             "traffic": {"value": traffic_value, "color": "#7d8891"},

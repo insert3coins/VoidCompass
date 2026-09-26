@@ -14,6 +14,7 @@ from voidcompass.overlays.overlay_layout_model import (
     OVERLAY_ENABLE_KEYS,
     OVERLAY_LABELS,
 )
+from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
 
 
 class HtmlOverlayStudioMixin:
@@ -182,6 +183,11 @@ class HtmlOverlayStudioMixin:
                 "gravity_warning_hud_timeout_s": _integer(self.config.get("gravity_warning_hud_timeout_s"), 20),
                 "station_info_auto_hide_enabled": bool(self.config.get("station_info_auto_hide_enabled", False)),
                 "survey_status_show_all_bodies": bool(self.config.get("survey_status_show_all_bodies", False)),
+                **{
+                    f"survey_{key}": value
+                    for key, value in survey_overlay_options(self.config).items()
+                },
+                "survey_text_scale_percent": _integer(self.config.get("survey_text_scale_percent"), 0),
                 "station_info_timeout_s": _integer(self.config.get("station_info_timeout_s"), 30),
                 "contact_scope_timeout_s": _integer(self.config.get("contact_scope_timeout_s"), 45),
                 "gravity_warning_threshold_g": _number(self.config.get("gravity_warning_threshold_g"), 3.0),
@@ -338,6 +344,20 @@ class HtmlOverlayStudioMixin:
         self.config["hud_crt_intensity"] = (
             intensity if intensity in {"Subtle", "Standard", "Strong"} else "Subtle"
         )
+        # Survey Operations presentation. A payload without these keys keeps
+        # the commander's current choice rather than resetting it.
+        if "survey_spotlight_rotation" in payload:
+            mode = _text(payload.get("survey_spotlight_rotation"), 20).casefold()
+            self.config["survey_spotlight_rotation"] = (
+                mode if mode in SPOTLIGHT_ROTATION_MODES else "auto"
+            )
+        if "survey_spotlight_threshold" in payload:
+            threshold = _number(payload.get("survey_spotlight_threshold"), 8)
+            self.config["survey_spotlight_threshold"] = int(round(max(2, min(40, threshold if threshold is not None else 8))))
+        if "survey_text_scale_percent" in payload:
+            # 0 follows the overlay-wide text scale; otherwise 75-200 %.
+            scale = _number(payload.get("survey_text_scale_percent"), 0) or 0
+            self.config["survey_text_scale_percent"] = 0 if scale <= 0 else int(round(max(75, min(200, scale))))
         self._persist_config()
         self.update_hud()
         station = getattr(self, "station_info_hud", None)

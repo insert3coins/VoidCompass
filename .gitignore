@@ -60,6 +60,7 @@ data/*
 !data/build_planner/
 !data/build_planner/**
 version_info.txt
+.claude/
 
 # Virtual environment
 .venv/

@@ -15,6 +15,12 @@ from urllib.request import build_opener, ProxyHandler, Request
 _OPENER = build_opener(ProxyHandler({}))
 _BOOT_RECOVERY_DELAY_S = 7.0  # Browser owns the 5 s hold and 720 ms fade.
 _BOOT_RECOVERY_RETRY_S = 1.0
+# Navigation errors show no error document (see webview_bootstrap), so a failed
+# or stillborn page would otherwise stay an empty window for the whole session.
+_PAGE_RETRY_DELAYS_S = (0.5, 1.5, 3.0, 6.0)
+_PAGE_START_TIMEOUT_S = 6.0  # A live client polls the API before load completes.
+# WebView2 cannot retry a failed start in-process; ask the parent for a new host.
+HOST_RELAUNCH_EXIT_CODE = 75
 
 
 def _request_json(url, payload=None, timeout=2.0):
@@ -46,6 +52,12 @@ class DashboardHost:
         self.boot_released = False
         self.boot_release_started_at = 0.0
         self._last_boot_recovery_at = 0.0
+        self.page_requests_mark = 0
+        self.page_started = False
+        self.page_retries = 0
+        self.page_reloaded_at = 0.0
+        self.page_gave_up = False
+        self.relaunch_requested = False
 
     def url(self, path):
         return f"{self.origin}{path}?token={quote(self.token)}"
@@ -101,7 +113,7 @@ class DashboardHost:
             timer.cancel()
         if {"x", "y", "width", "height"}.issubset(geometry):
             self.post("window_geometry", **geometry)
-        if not self.closing_from_backend:
+        if not self.closing_from_backend and not self.relaunch_requested:
             self.post("window_closed")
 
     def _service_boot_release(self, boot_active, onboarding_active, now):
@@ -131,6 +143,47 @@ class DashboardHost:
             self.boot_released = True
             print("HTML dashboard boot release guard settled", flush=True)
 
+    def _service_page_recovery(self, page_requests, now):
+        """Reload a page that failed or never started its client.
+
+        Returns True when WebView2 itself failed and only a new host can help.
+        """
+        window = self.window
+        if getattr(window, "_voidcompass_renderer_failed", False):
+            if not self.relaunch_requested:
+                self.relaunch_requested = True
+                print("Dashboard WebView2 failed to start; requesting a new host", flush=True)
+            return True
+        if page_requests > self.page_requests_mark:
+            self.page_requests_mark = page_requests
+            if not self.page_started and self.page_retries:
+                print(f"Dashboard page recovered after {self.page_retries} reload(s)", flush=True)
+            self.page_started = True
+            return False
+        if self.page_started or self.page_gave_up:
+            return False
+        completed_at = float(getattr(window, "_voidcompass_navigation_completed_at", 0.0) or 0.0)
+        if completed_at <= self.page_reloaded_at:
+            return False  # The current load is still in flight.
+        if getattr(window, "_voidcompass_navigation_failed", False):
+            reason = "failed to load"
+            wait = _PAGE_RETRY_DELAYS_S[min(self.page_retries, len(_PAGE_RETRY_DELAYS_S) - 1)]
+        else:
+            reason = "loaded without starting its client"
+            wait = _PAGE_START_TIMEOUT_S
+        if now - completed_at < wait:
+            return False
+        if self.page_retries >= len(_PAGE_RETRY_DELAYS_S):
+            self.page_gave_up = True
+            print(f"Dashboard page {reason}; giving up after {self.page_retries} reloads", flush=True)
+            return False
+        self.page_retries += 1
+        self.page_reloaded_at = now
+        window._voidcompass_navigation_failed = False
+        print(f"Dashboard page {reason}; reloading ({self.page_retries})", flush=True)
+        window.load_url(f"{self.dashboard_url}&host_retry={self.page_retries}")
+        return False
+
     def monitor(self):
         while self.window is not None:
             try:
@@ -140,11 +193,19 @@ class DashboardHost:
                     self.window.destroy()
                     return
                 self.monitor_failures = 0
+                if self._service_page_recovery(
+                    int(state.get("page_requests") or 0), time.monotonic(),
+                ):
+                    self.window.destroy()
+                    return
                 boot_active = bool(state.get("boot_active", True))
                 onboarding_active = bool(state.get("onboarding_active", False))
-                self._service_boot_release(
-                    boot_active, onboarding_active, time.monotonic(),
-                )
+                # Only a running client can answer the release nudge; a page
+                # that never started belongs to the recovery above.
+                if self.page_started:
+                    self._service_boot_release(
+                        boot_active, onboarding_active, time.monotonic(),
+                    )
                 host_revision = int(state.get("host_revision") or 0)
                 if host_revision != self.host_revision:
                     self.host_revision = host_revision
@@ -267,7 +328,7 @@ def main(argv=None):
         print("Dashboard WebView2 message loop failed", file=sys.stderr)
         traceback.print_exc()
         return 4
-    return 0
+    return HOST_RELAUNCH_EXIT_CODE if host.relaunch_requested else 0
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="overview.css">
   <link rel="stylesheet" href="bridge-pages.css">
   <link rel="stylesheet" href="bridge-exploration.css">
+  <link rel="stylesheet" href="explore.css">
   <link rel="stylesheet" href="archive.css">
   <link rel="stylesheet" href="bridge-systems.css">
   <link rel="stylesheet" href="focused-log.css">
@@ -307,7 +308,7 @@
                 <div id="survey-body-list" class="survey-body-list empty" role="group" aria-label="Discovered worlds" tabindex="0">Planets and moons appear here as their journal records arrive.</div>
               </section>
               <div id="survey-notables" class="notable-list empty">Awaiting scan telemetry.</div>
-              <div class="survey-footer"><span id="survey-overflow" class="notable-overflow" hidden></span><button type="button" id="survey-open-workboard" data-page="explore">OPEN SYSTEM WORKBOARD</button></div>
+              <div class="survey-footer"><span id="survey-overflow" class="notable-overflow" hidden></span><button type="button" id="survey-open-workboard" data-page="explore" data-explore-view="system">OPEN SURVEY BOARD</button></div>
             </article>
 
             <article class="card route-card" data-deck-module="route">
@@ -374,26 +375,11 @@
         </section>
         <section class="page" data-page-name="explore">
           <header class="page-title">
-            <div><p>STELLAR CARTOGRAPHY</p><h2>Explore & survey</h2><span>Live system orrery, survey priorities and expedition navigation</span></div>
-            <div class="title-actions"><button class="primary" id="explore-complete">ROUTE & WAYPOINTS</button></div>
+            <div><p>STELLAR CARTOGRAPHY</p><h2>Explore & survey</h2><span>Survey this system, plan the route and line up the next prospect</span></div>
+            <div class="title-actions"><button class="ghost" data-command="open" data-target="ground">GROUND NAV</button><button class="ghost" data-command="open" data-target="achievements">ACHIEVEMENTS</button><button data-page="map">GALACTIC ATLAS</button></div>
           </header>
-          <section class="intel-grid">
-            <article class="card tall-card system-workboard-card">
-              <header><span>SYSTEM WORKBOARD</span><b id="workboard-badge">LIVE</b></header>
-              <section class="workboard-system">
-                <div class="workboard-star" aria-hidden="true"><i></i><em></em></div>
-                <div class="workboard-identity"><small>FSS SYSTEM MODEL</small><strong id="workboard-system">NO SYSTEM DATA</strong><span id="workboard-class">STAR CLASS —</span></div>
-                <div class="workboard-completion"><b id="workboard-percent">0%</b><span id="workboard-count">0 / ? BODIES</span></div>
-              </section>
-              <div id="workboard-orbits" class="workboard-orbits" aria-label="System body schematic"></div>
-              <div class="workboard-key"><span><i class="priority"></i>PRIORITY</span><span><i class="mapped"></i>MAPPED</span><span><i></i>SCANNED</span></div>
-              <div id="body-workboard" class="workboard" role="list" aria-label="Surveyed system bodies" tabindex="-1"></div>
-            </article>
-            <article class="card"><header><span>DISCOVERY INTELLIGENCE</span></header><div class="big-stat"><strong id="intel-value">0 CR</strong><span>ESTIMATED DATA ABOARD</span></div><div id="intel-facts" class="fact-list"></div></article>
-            <article class="card"><header><span>EXPEDITION PULSE</span><b id="expedition-badge">NO MISSION</b></header><h3 id="expedition-name">NO ACTIVE EXPEDITION</h3><p id="expedition-detail">Create or resume a named expedition in Mission Control.</p><div class="route-track"><i id="expedition-progress"></i><span id="expedition-progress-label">0 / 0</span></div><button class="wide-button" data-command="open" data-target="mission">OPEN MISSION CONTROL</button></article>
-            <article class="card"><header><span>QUICK FIELD ACTIONS</span></header><div class="action-grid compact-actions"><button data-command="open" data-target="ground">GROUND NAV</button><button data-command="open" data-target="ledger">VALUE LEDGER</button><button data-command="open" data-target="achievements">ACHIEVEMENTS</button><button data-page="map">GALACTIC ATLAS</button></div></article>
-          </section>
-          <section id="explore-workspace" class="workspace-shell loading-panel">Linking route and waypoint records…</section>
+          <!-- Views, survey board and orrery are built by explore.js. -->
+          <section id="explore-workspace" class="explore-shell" aria-label="Explore and survey workspace"></section>
         </section>
 
         <section class="page atlas-page" data-page-name="map">
@@ -613,7 +599,6 @@
                 <header><span>DISPLAY & INTERACTION</span></header>
                 <label class="studio-switch"><span><b>Mouse passthrough</b><small>Let Elite receive input through cockpit overlays.</small></span><input type="checkbox" data-overlay-option="overlay_mouse_passthrough"><i></i></label>
                 <label class="studio-switch"><span><b>Compact Navigation HUD</b><small>Use the compact-first navigation surface.</small></span><input type="checkbox" data-overlay-option="hud_compact_mode"><i></i></label>
-                <label class="studio-switch"><span><b>Expand routine bodies</b><small>Other scanned planets stay in a compact strip; on also gives them full atlas cards.</small></span><input type="checkbox" data-overlay-option="survey_status_show_all_bodies"><i></i></label>
                 <label class="studio-field"><span>Overlay text scale</span><div><input id="studio-text-scale" type="number" min="75" max="200" step="5"><b>%</b></div></label>
                 <label class="studio-field studio-opacity-field"><span>Global whole-overlay opacity</span><div><input id="studio-overlay-opacity" type="range" min="40" max="100" step="5"><b id="studio-overlay-opacity-value">100%</b></div></label>
               </article>
@@ -654,6 +639,14 @@
                 <header><span>ACTIONABLE ALERTS</span></header>
                 <label class="studio-switch"><span><b>Rebuy coverage warnings</b><small>Warn when current funds do not cover rebuy.</small></span><input type="checkbox" data-overlay-option="rebuy_warnings_enabled"><i></i></label>
                 <label class="studio-switch"><span><b>Unsold data-risk warnings</b><small>Surface genuinely at-risk exploration data.</small></span><input type="checkbox" data-overlay-option="data_risk_warnings_enabled"><i></i></label>
+              </article>
+
+              <article class="card studio-option-card">
+                <header><span>SURVEY OPERATIONS</span></header>
+                <label class="studio-field"><span>Spotlight rotation (Off follows the latest activity)</span><select id="studio-survey-rotation"><option value="auto">Auto</option><option value="always">Always</option><option value="off">Off</option></select></label>
+                <label class="studio-field"><span>Auto rotates above</span><div><input id="studio-survey-threshold" type="number" min="2" max="40" step="1"><b>WORLDS</b></div></label>
+                <label class="studio-field"><span>Survey text size (0 = overlay scale)</span><div><input id="studio-survey-text-scale" type="number" min="0" max="200" step="5"><b>%</b></div></label>
+                <label class="studio-switch"><span><b>Expand routine bodies</b><small>Landable and other bodies list as full rows instead of compact chips.</small></span><input type="checkbox" data-overlay-option="survey_status_show_all_bodies"><i></i></label>
               </article>
 
               <article class="card studio-option-card">

@@ -80,6 +80,8 @@ class ReturnLaterVisualTests(unittest.TestCase):
 
     def render(self, entries):
         self.page.evaluate("entries => window.__returnLaterHarness.render({current: 'TEST SYSTEM', return_later: {entries}})", entries)
+        # Return Later lives in the Explore page's Prospects view.
+        self.page.locator("#explore-tab-prospects").click()
 
     def test_journal_evidence_and_actions_are_accessible(self):
         self.render([

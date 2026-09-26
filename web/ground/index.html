@@ -8,33 +8,61 @@
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
-  <main id="ground" class="ground" aria-label="Planet waypoint navigation">
+  <main id="ground" class="ground" data-state="pending" aria-label="Planet waypoint navigation">
+    <div class="corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
     <header class="masthead">
-      <div class="masthead-title"><span class="signal-dot" aria-hidden="true"></span><span>SURFACE / WAYPOINT</span></div>
-      <strong id="body-name">SURFACE FIX</strong>
+      <span class="title"><i aria-hidden="true"></i>SURFACE NAV</span>
+      <span id="mode" class="mode">SHIP</span>
+      <strong id="body-name"></strong>
     </header>
-    <section class="navigation-core" aria-label="Live waypoint guidance">
-      <div class="relative-dial" aria-label="Heading-relative target direction">
-        <span class="dial-axis forward">FWD</span><span class="dial-axis port">L</span>
-        <span class="dial-axis starboard">R</span><span class="dial-axis aft">AFT</span>
-        <span class="dial-ring"></span><span id="needle" class="dial-needle"></span><span class="dial-center"></span>
+
+    <div class="target-line">
+      <strong id="target-label">TARGET FIX</strong>
+      <span id="state-label" class="state-chip" role="status">FIX PENDING</span>
+    </div>
+
+    <section id="tape" class="tape" aria-label="Heading tape">
+      <div id="tape-strip" class="tape-strip" aria-hidden="true"></div>
+      <span class="tape-caret" aria-hidden="true"></span>
+      <b id="heading" class="tape-heading">---°</b>
+      <span id="tape-target" class="tape-target" aria-hidden="true"></span>
+      <span id="tape-edge" class="tape-edge" aria-hidden="true"></span>
+    </section>
+
+    <section class="guidance" aria-label="Live waypoint guidance">
+      <div class="scope" aria-hidden="true">
+        <i class="scope-ring"></i><i class="scope-cross"></i>
+        <span id="scope-bearing" class="scope-bearing"><b></b></span>
+        <i class="scope-core"></i>
       </div>
-      <div class="range-readout">
-        <span class="eyebrow">SURFACE DISTANCE</span>
+      <div class="range">
+        <span class="label">DISTANCE</span>
         <strong id="distance">—</strong>
-        <span id="state-label" class="state-label">FIX PENDING</span>
-        <span id="direction" class="direction">HEADING N/A</span>
+        <span id="closing" class="closing"></span>
+      </div>
+      <div class="turn">
+        <span class="label">COURSE</span>
+        <strong id="turn-value">—</strong>
       </div>
     </section>
-    <section class="course-band" aria-label="Turn guidance">
-      <div class="course-readout"><span>COURSE CORRECTION</span><strong id="turn-value">—</strong></div>
-      <div class="turn-track" aria-hidden="true"><span class="track-centre"></span><span id="turn-marker" class="turn-marker"></span></div>
-      <div class="course-legend"><span>LEFT</span><span>AHEAD</span><span>RIGHT</span></div>
+
+    <section class="approach" aria-label="Approach">
+      <div class="approach-bar" aria-hidden="true">
+        <i class="approach-near"></i><i class="approach-zone"></i>
+        <i id="approach-fill" class="approach-fill"></i>
+        <b id="approach-marker" class="approach-marker"></b>
+      </div>
+      <div class="approach-scale" aria-hidden="true">
+        <span style="left:0">10 KM</span><span style="left:33.33%">1 KM</span>
+        <span style="left:66.67%">100 M</span><span class="zone-label" style="left:86.73%">25 M</span>
+      </div>
     </section>
-    <footer class="position-band">
-      <div><span>TARGET FIX</span><strong id="target">—</strong></div>
-      <div><span>CURRENT FIX</span><strong id="coordinates">POSITION PENDING</strong></div>
-      <div class="heading-readout"><span>HDG / BRG</span><strong id="bearing">— / —</strong></div>
+
+    <footer class="fixes">
+      <span><small>TGT</small> <b id="target">—</b></span>
+      <span><small>HERE</small> <b id="coordinates">POSITION PENDING</b></span>
+      <span id="aux" class="aux"></span>
     </footer>
     <div class="scanlines" aria-hidden="true"></div>
   </main>
