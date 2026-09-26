@@ -8,12 +8,13 @@ from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-import mimetypes
 from pathlib import Path
 import secrets
 import threading
 import time
 from urllib.parse import parse_qs, urlparse
+
+from voidcompass.core.static_assets import asset_type, read_asset
 
 
 # Engineering build exports can carry a complete outfitting document.  Keep a
@@ -30,10 +31,11 @@ class HtmlDashboardServer:
     """Serve bundled dashboard assets and one revisioned application state."""
 
     def __init__(self, static_root, *, image_root=None, command_callback=None,
-                 host_state=None):
+                 host_state=None, on_asset_error=None):
         self.static_root = Path(static_root).resolve()
         self.image_root = Path(image_root).resolve() if image_root else None
         self.command_callback = command_callback
+        self.on_asset_error = on_asset_error
         self.token = secrets.token_urlsafe(32)
         self._condition = threading.Condition()
         self._snapshot_json = "{}"
@@ -263,20 +265,31 @@ class HtmlDashboardServer:
 
         candidate = self._static_path(path)
         if candidate is None or not candidate.is_file():
+            self._report_asset_error(path, "not found")
             self._send_json(handler, {"error": "not found"}, 404)
             return
         try:
-            payload = candidate.read_bytes()
-        except OSError:
+            payload = read_asset(candidate)
+        except OSError as exc:
+            self._report_asset_error(path, type(exc).__name__)
             self._send_json(handler, {"error": "asset unavailable"}, 404)
             return
-        content_type = mimetypes.guess_type(str(candidate))[0] or "application/octet-stream"
+        content_type = asset_type(candidate)
         self._send_bytes(
             handler,
             payload,
             content_type,
             cache="no-store" if candidate.name == "index.html" else "no-cache",
         )
+
+    def _report_asset_error(self, path, reason):
+        # A missing script leaves the page frozen, so say which one it was.
+        callback = self.on_asset_error
+        if callable(callback) and not str(path).startswith("/favicon"):
+            try:
+                callback(f"Dashboard asset unavailable: {path} ({reason})")
+            except Exception:
+                pass
 
     def _serve_events(self, handler, parsed):
         query = parse_qs(parsed.query)

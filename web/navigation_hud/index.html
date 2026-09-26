@@ -15,6 +15,7 @@
     <header class="status-plate" aria-label="Ship status">
       <figure id="vehicle-display" class="holo">
         <div class="holo-bay" aria-hidden="true">
+          <canvas id="bay-canvas" class="bay-canvas"></canvas>
           <img id="vehicle-image" alt="">
           <i class="holo-emitter"></i>
         </div>
@@ -32,15 +33,15 @@
         </div>
 
         <div id="instrument" class="instrument" data-instrument="idle" aria-hidden="true">
-          <div class="band">
-            <i class="band-flow"></i>
-            <i class="band-streaks"></i>
-            <i class="band-hazard"></i>
-            <i id="instrument-fill" class="band-fill"></i>
-            <b id="instrument-marker" class="band-marker"></b>
-            <span class="band-ticks"></span>
+          <div class="deck">
+            <canvas id="deck-canvas" class="deck-canvas"></canvas>
+            <div class="deck-rail">
+              <span class="rail-ticks"></span>
+              <i id="instrument-fill" class="rail-fill"></i>
+              <b id="instrument-marker" class="rail-marker"></b>
+            </div>
+            <span id="instrument-readout" class="readout"></span>
           </div>
-          <span id="instrument-readout" class="readout"></span>
         </div>
 
         <div class="systems-row">
@@ -122,6 +123,7 @@
     <div id="link-state" class="link-state">HTML NAV // CONNECTING</div>
   </main>
   <script src="ship_catalog.js"></script>
+  <script src="scene.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

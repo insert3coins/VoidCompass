@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-import mimetypes
 from pathlib import Path
 import secrets
 import threading
 import time
 from urllib.parse import parse_qs, unquote, urlparse
+
+from voidcompass.core.static_assets import asset_type, read_asset
 
 
 class _OverlayHTTPServer(ThreadingHTTPServer):
@@ -41,8 +42,9 @@ class _OverlayState:
 class HtmlOverlayServer:
     """Serve bundled assets and independent SSE streams from one port."""
 
-    def __init__(self, static_root, presentation_held=False):
+    def __init__(self, static_root, presentation_held=False, on_asset_error=None):
         self.static_root = Path(static_root).resolve()
+        self.on_asset_error = on_asset_error
         # Ship portraits live with the rest of Void Compass' bundled artwork,
         # outside the HTML document root.  Expose that one directory through a
         # narrow, traversal-safe route so the navigation HUD can select from a
@@ -153,6 +155,12 @@ class HtmlOverlayServer:
         with self._condition:
             state = self._overlays.get(str(overlay_id))
             return float(state.last_client_seen if state else 0.0)
+
+    def window_visible(self, overlay_id):
+        """Return whether the overlay's window is meant to be on screen."""
+        with self._condition:
+            state = self._overlays.get(str(overlay_id))
+            return bool(state and state.window.get("visible"))
 
     def rendered_revision(self, overlay_id):
         """Return the newest model the browser confirms it has painted."""
@@ -417,15 +425,25 @@ class HtmlOverlayServer:
         if candidate is None:
             candidate = self._static_path(parsed.path)
         if candidate is None or not candidate.is_file():
+            self._report_asset_error(parsed.path, "not found")
             self._send_json(handler, {"error": "not found"}, 404)
             return
         try:
-            payload = candidate.read_bytes()
-        except OSError:
+            payload = read_asset(candidate)
+        except OSError as exc:
+            self._report_asset_error(parsed.path, type(exc).__name__)
             self._send_json(handler, {"error": "asset unavailable"}, 404)
             return
-        content_type = mimetypes.guess_type(str(candidate))[0] or "application/octet-stream"
-        self._send_bytes(handler, payload, content_type)
+        self._send_bytes(handler, payload, asset_type(candidate))
+
+    def _report_asset_error(self, path, reason):
+        # A missing script leaves an overlay that never reports ready.
+        callback = self.on_asset_error
+        if callable(callback) and not str(path).startswith("/favicon"):
+            try:
+                callback(f"Overlay asset unavailable: {path} ({reason})")
+            except Exception:
+                pass
 
     def _serve_events(self, handler, state):
         handler.send_response(200)

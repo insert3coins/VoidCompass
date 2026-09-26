@@ -22,7 +22,12 @@ def _integer(value, default=0):
 class HtmlGravityOverlayBridge(HtmlOverlayBridgeLifecycle):
     """Publish GravityWarningHUD state without replaying Tk Canvas commands."""
 
-    def __init__(self, overlay, overlay_id, title, enabled_key, x_key, y_key):
+    # The warning is a fixed instrument that the page zooms by the overlay
+    # text size; the window grows by the same factor instead of clipping.
+    BASE_SIZE = (320, 106)
+
+    def __init__(self, overlay, overlay_id, title, enabled_key, x_key, y_key, app=None):
+        self.app = app
         self.overlay = overlay
         self.win = overlay.win
         self.config = overlay.config
@@ -47,6 +52,22 @@ class HtmlGravityOverlayBridge(HtmlOverlayBridgeLifecycle):
     def ready(self):
         return self._ready
 
+    def _text_scale(self):
+        return max(75, min(200, _integer(
+            self.config.get("overlay_text_scale_percent"), 100,
+        ))) / 100.0
+
+    def _dimensions(self):
+        scale = self._text_scale()
+        return tuple(int(round(value * scale)) for value in self.BASE_SIZE)
+
+    def _body_parts(self):
+        body = str(self.overlay._last_body or "").strip()
+        system = str(getattr(self.app, "current_sys", "") or "").strip()
+        if system and body.casefold().startswith(system.casefold() + " "):
+            return body[len(system) + 1:].strip(), system
+        return body, system
+
     def _window_payload(self):
         try:
             shown = str(self.win.state()) not in {"withdrawn", "iconic"}
@@ -59,11 +80,13 @@ class HtmlGravityOverlayBridge(HtmlOverlayBridgeLifecycle):
         ))
         x = _integer(self.config.get(self.x_key), fallback_x)
         y = _integer(self.config.get(self.y_key), fallback_y)
+        width, height = self._dimensions()
+        self.overlay._html_window_size = (width, height)
         return {
             "x": x,
             "y": y,
-            "width": 320,
-            "height": 106,
+            "width": width,
+            "height": height,
             "visible": bool(
                 shown and self.overlay._last_body is not None
                 and self.overlay._last_gravity is not None
@@ -76,24 +99,29 @@ class HtmlGravityOverlayBridge(HtmlOverlayBridgeLifecycle):
         gravity = self.overlay._last_gravity
         threshold = self.overlay._threshold()
         ratio = max(0.0, float(gravity or 0.0)) / max(0.1, float(threshold))
+        body_short, system = self._body_parts()
+        telemetry = getattr(self.overlay, "_telemetry", None) or {}
         return {
             "schema": 1,
             "kind": "gravity",
             "name": self.overlay_id,
             "gravity": {
                 "body": str(self.overlay._last_body or ""),
+                "body_short": body_short,
+                "system": system,
                 "g": None if gravity is None else round(float(gravity), 2),
                 "threshold": round(float(threshold), 1),
                 "severity": "critical" if ratio >= 1.75 else "high" if ratio >= 1.25 else "warning",
                 "ratio": min(2.0, ratio),
+                "phase": str(getattr(self.overlay, "_phase", "approach") or "approach"),
+                "altitude_m": telemetry.get("altitude_m"),
+                "descent_mps": telemetry.get("descent_mps"),
             },
             "theme": dict(getattr(self.overlay, "_palette", {}) or {}),
             "effects": {
                 "crt": bool(self.config.get("hud_crt_enabled", True)),
                 "reduced_motion": bool(self.config.get("reduced_motion_enabled", False)),
-                "text_scale": max(75, min(200, _integer(
-                    self.config.get("overlay_text_scale_percent"), 100,
-                ))) / 100.0,
+                "text_scale": self._text_scale(),
                 "opacity": overlay_opacity_ratio(self.config),
             },
             "window": self._window_payload(),
@@ -161,15 +189,15 @@ class HtmlGravityOverlayBridge(HtmlOverlayBridgeLifecycle):
         if event.widget is self.win:
             self.dispose()
 
-def attach_html_gravity_overlay(overlay, overlay_id, title, enabled_key, x_key, y_key):
+def attach_html_gravity_overlay(overlay, overlay_id, title, enabled_key, x_key, y_key, app=None):
     if overlay is None or getattr(overlay, "_html_gravity_bridge", None) is not None:
         return overlay
     bridge = HtmlGravityOverlayBridge(
-        overlay, overlay_id, title, enabled_key, x_key, y_key,
+        overlay, overlay_id, title, enabled_key, x_key, y_key, app=app,
     )
     overlay._html_gravity_bridge = bridge
     overlay._html_ready = False
-    overlay._html_window_size = (320, 106)
+    overlay._html_window_size = bridge._dimensions()
 
     def set_html_renderer(enabled):
         result = bridge.set_enabled(enabled)

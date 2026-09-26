@@ -914,6 +914,20 @@ class DashboardScanMixin:
         observe_rhino_minimap = getattr(self, "_observe_rhino_minimap_status", None)
         if callable(observe_rhino_minimap) and not self.batch_mode:
             observe_rhino_minimap(data)
+        gravity_warning = getattr(self, "gravity_warning_hud", None)
+        if gravity_warning is not None and not self.batch_mode:
+            flying = bool(
+                getattr(self, "on_planet", False)
+                and not getattr(self, "current_landed", False)
+                and not getattr(self, "current_in_srv", False)
+                and not getattr(self, "current_on_foot", False)
+                and not getattr(self, "current_docked", False)
+            )
+            gravity_warning.observe_descent(
+                getattr(self, "current_body_name", "") or "",
+                getattr(self, "current_altitude_m", None) if flying else None,
+                getattr(self, "_surface_descent_mps", 0.0) if flying else 0.0,
+            )
         self._perf_spike("_apply_status_update", t0, threshold_ms=20.0)
 
     def _check_status_toasts(self, data, flags, flags2):

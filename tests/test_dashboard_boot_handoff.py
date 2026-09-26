@@ -235,9 +235,9 @@ class DashboardBootHandoffTests(unittest.TestCase):
             self.assertEqual(len(page.loads), 1)
             # Loaded, but its client never reached the API.
             page.completed(31.0)
-            host._service_page_recovery(0, 36.9)
+            host._service_page_recovery(0, 33.9)
             self.assertEqual(len(page.loads), 1)
-            host._service_page_recovery(0, 37.1)
+            host._service_page_recovery(0, 34.1)
             self.assertEqual(page.loads[-1], "http://127.0.0.1:8765/?token=test&host_retry=2")
             page.completed(42.0)
             host._service_page_recovery(3, 42.2)

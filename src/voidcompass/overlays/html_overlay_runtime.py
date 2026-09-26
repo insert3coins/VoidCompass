@@ -61,6 +61,12 @@ class HtmlOverlayBridgeLifecycle:
 
 
 
+# Chromium's intensive throttling runs a hidden page's timers once a minute.
+HIDDEN_HEARTBEAT_S = 75.0
+# A page that was just shown may still be waking from that throttling.
+VISIBLE_SETTLE_S = 5.0
+
+
 class HtmlOverlayRuntime:
     """Own one HTTP transport and one WebView2 process per application."""
 
@@ -71,6 +77,7 @@ class HtmlOverlayRuntime:
             presentation_held=bool(getattr(
                 root, "_voidcompass_startup_presentation_held", False,
             )),
+            on_asset_error=self._log_asset_error,
         )
         self.process = None
         self._host_log = None
@@ -117,6 +124,17 @@ class HtmlOverlayRuntime:
         # needs a master window in its initial manifest.
         self._command = command
         self._popen_kwargs = kwargs
+
+    def _log_asset_error(self, message):
+        """Put a failed page asset beside the host's own lines in its log."""
+        handle = self._host_log
+        if handle is None:
+            logging.warning("%s", message)
+            return
+        try:
+            handle.write((str(message) + "\n").encode("utf-8", "replace"))
+        except Exception:
+            pass
 
     def _ensure_process(self):
         with self._process_lock:
@@ -333,6 +351,7 @@ class HtmlOverlaySurface:
         self.template = str(template)
         self.title = str(title or overlay_id)
         self._disposed = False
+        self._visible_since = None
         self._latest_model = {}
         self._started_at = time.monotonic()
         self._renderer_seen = False
@@ -365,7 +384,19 @@ class HtmlOverlaySurface:
             return False
         server = self.runtime.server
         last_seen = server.last_client_seen(self.overlay_id)
-        recently_seen = bool(last_seen and time.monotonic() - last_seen < 4.0)
+        # A hidden overlay is a background page to Chromium: its polling timer
+        # slows to once a second, and to once a minute after five minutes
+        # hidden. Holding it to the visible 4 s heartbeat reloaded every
+        # waiting overlay (gravity, station, survey...) every 12 s from then
+        # on. It speeds up again the moment the window is shown.
+        now = time.monotonic()
+        if not server.window_visible(self.overlay_id):
+            self._visible_since = None
+        elif self._visible_since is None:
+            self._visible_since = now
+        settled = self._visible_since is not None and now - self._visible_since > VISIBLE_SETTLE_S
+        heartbeat_s = 4.0 if settled else HIDDEN_HEARTBEAT_S
+        recently_seen = bool(last_seen and now - last_seen < heartbeat_s)
         browser_rendered = server.rendered_revision(self.overlay_id) >= 0
         # The page's revision checks are also its browser-side heartbeat.
         # Host control requests intentionally do not update this timestamp.

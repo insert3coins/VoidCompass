@@ -17,7 +17,7 @@ import time
 from voidcompass.dashboard.html_dashboard_host import HOST_RELAUNCH_EXIT_CODE
 from voidcompass.dashboard.html_dashboard_server import HtmlDashboardServer
 from voidcompass.core.diagnostic_logs import (
-    LOG_ARCHIVE_LIMIT, application_base_dir, prepare_log, resolve_log_path,
+    LOG_ARCHIVE_LIMIT, application_base_dir, log_clock, prepare_log, resolve_log_path,
 )
 from voidcompass.core import themes
 from voidcompass.core.paths import resource_path, source_launcher_path
@@ -122,6 +122,7 @@ class HtmlDashboardRuntime:
             image_root=_resource_path(Path("assets") / "images"),
             command_callback=self._receive_command,
             host_state=host_state,
+            on_asset_error=self._write_host_log,
         )
         self._open_host_log()
         self.splash = StartupPresentation(self)
@@ -152,7 +153,12 @@ class HtmlDashboardRuntime:
         if handle is None:
             return
         try:
-            payload = (str(message or "") + "\n").encode("utf-8", "replace")
+            text = str(message or "")
+            # Time-stamp entries (not the session banner) so a slow or dead
+            # page can be lined up against the runtime trace.
+            if text.strip() and not text.lstrip().startswith("==="):
+                text = f"{log_clock()} {text}"
+            payload = (text + "\n").encode("utf-8", "replace")
             with self._host_log_lock:
                 handle.write(payload)
         except Exception:

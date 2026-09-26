@@ -14,6 +14,11 @@ _CHROMA = '#ff00ff'
 class GravityWarningHUD:
     WIDTH = 300
     HEIGHT = 90
+    # ApproachBody fires at orbital cruise, and the first warning has usually
+    # timed out before the part that needs it: the hand-flown descent after
+    # glide. Below this altitude the warning returns once for that body.
+    FINAL_APPROACH_M = 2500.0
+    FINAL_DESCENT_MPS = 2.0
 
     def __init__(self, root, config):
         self.root = root
@@ -21,6 +26,9 @@ class GravityWarningHUD:
         self._hide_job = None
         self._last_body = None
         self._last_gravity = None
+        self._phase = "approach"
+        self._final_warned = False
+        self._telemetry = None
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
         self.win = OverlayWindowState(root)
         screen_w = root.winfo_screenwidth()
@@ -109,6 +117,9 @@ class GravityWarningHUD:
             return
         self._last_body = body_name
         self._last_gravity = gravity_g
+        self._phase = "approach"
+        self._final_warned = False
+        self._telemetry = None
         self._redraw(body_name, gravity_g)
         if self.show():
             self._schedule_hide()
@@ -117,7 +128,39 @@ class GravityWarningHUD:
         """Called on LeaveBody — drop tracked state and hide immediately."""
         self._last_body = None
         self._last_gravity = None
+        self._phase = "approach"
+        self._final_warned = False
+        self._telemetry = None
         self.hide()
+
+    def observe_descent(self, body_name, altitude_m, descent_mps):
+        """Follow a live descent over the warned body and re-warn once near it.
+
+        ``altitude_m`` is None whenever the commander is not flying the ship
+        over this body (landed, in an SRV, on foot or elsewhere).
+        """
+        same_body = bool(
+            self._last_body and body_name
+            and str(body_name).casefold() == str(self._last_body).casefold()
+        )
+        if not same_body or self._last_gravity is None or altitude_m is None:
+            self._telemetry = None
+            return False
+        try:
+            altitude = max(0.0, float(altitude_m))
+            descent = float(descent_mps or 0.0)
+        except (TypeError, ValueError):
+            self._telemetry = None
+            return False
+        self._telemetry = {"altitude_m": altitude, "descent_mps": descent}
+        if (self._final_warned or altitude > self.FINAL_APPROACH_M
+                or descent <= self.FINAL_DESCENT_MPS or self._startup_held()):
+            return False
+        self._final_warned = True
+        self._phase = "final"
+        if self.show():
+            self._schedule_hide()
+        return True
 
     def _redraw(self, body_name, g):
         self._last_body, self._last_gravity = (body_name, g)

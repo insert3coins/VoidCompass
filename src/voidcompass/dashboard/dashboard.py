@@ -4640,6 +4640,7 @@ class MainDashboard(
             elif attr == "gravity_warning_hud":
                 attach_html_gravity_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
+                    app=self,
                 )
             elif attr == "station_info_hud":
                 attach_html_station_overlay(

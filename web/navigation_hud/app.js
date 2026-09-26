@@ -37,6 +37,10 @@ let lastLampSignature = '';
 let lastNoticeSequence = null;
 let eventNoticeTimer = null;
 const osMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+// Each state's hologram: the deck scene and the ship's aura (scene.js).
+const scene = window.NavigationScene
+  ? new window.NavigationScene({deck: $('deck-canvas'), bay: $('bay-canvas')}) : null;
+window.navigationScene = scene;
 
 function routeFeedback(message) {
   clearTimeout(routeFeedbackTimer);
@@ -118,8 +122,9 @@ function renderStarOrb(element, starClass) {
 
 // ---------------------------------------------------------------------------
 // Status plate. Elite's cockpit reports state with a few notice styles and the
-// ship's own indicator lamps, so each state family gets one instrument band
-// rather than a bespoke scene, and the band only draws journal-backed values.
+// ship's own indicator lamps. Each state also projects its own scene into the
+// deck (scene.js); the measured instrument along the deck's foot and its
+// readout draw only journal-backed values.
 // ---------------------------------------------------------------------------
 
 const DISPLAY_LABELS = {
@@ -168,13 +173,6 @@ function stateTag(state = {}) {
   })[category] || 'SHIP';
 }
 
-const FLOW_VARIANTS = {
-  fsd_charge: 'charge', jump: 'jump', supercruise: 'cruise', supercruise_assist: 'cruise',
-  supercruise_overcharge: 'overcharge', arrival: 'arrive', local_arrival: 'arrive',
-  fsd_cooldown: 'cool', carrier_preparing: 'carrier', carrier_lockdown: 'carrier',
-  carrier_transit: 'jump', carrier_arrival: 'arrive',
-};
-
 function finite(value) {
   return value != null && value !== '' && Number.isFinite(Number(value));
 }
@@ -183,7 +181,7 @@ function instrumentFor(state = {}) {
   const category = String(state.category || 'flight');
   const motion = String(state.motion || 'flight');
   const dynamics = state.dynamics || {};
-  if (category === 'drive') return {kind: 'flow', variant: FLOW_VARIANTS[motion] || 'cruise'};
+  if (category === 'drive') return {kind: 'flow'};
   if (category === 'alert') return {kind: 'alert'};
   if (category === 'restrict') return {kind: 'lock'};
   if (category === 'planet' && finite(dynamics.altitude_m) && Number(dynamics.altitude_m) >= 0) {
@@ -242,8 +240,6 @@ function renderInstrument(state) {
   const host = dom.instrument;
   const dynamics = state.dynamics || {};
   host.dataset.instrument = instrument.kind;
-  if (instrument.variant) host.dataset.variant = instrument.variant;
-  else delete host.dataset.variant;
   host.classList.toggle('supercharged', instrument.kind === 'flow'
     && Boolean(dynamics.neutron_boost || dynamics.fsd_injection));
   let fill = 0;
@@ -391,6 +387,38 @@ function renderStatus(data, theme, reducedMotion) {
   renderLamps(state);
   renderFuel(data.metrics?.fuel, state.dynamics || {}, theme);
   renderEventNotice(state.notice, theme, reducedMotion);
+  return tone;
+}
+
+// The arrival star's own colour, when the journal has named its class.
+function currentStarTone(starClass) {
+  if (starFamily(starClass) === 'unknown') return '';
+  return getComputedStyle(dom['current-star-orb']).getPropertyValue('--stellar-tone').trim();
+}
+
+function renderScene(data, theme, tone, vehicle, reducedMotion, energy) {
+  if (!scene) return;
+  const state = data.state || {};
+  // A quiet state keeps its grey notice, but its hologram projects in the
+  // HUD's own orange, a little softer, rather than in grey.
+  const quiet = String(tone).toLowerCase() === String(theme.dim).toLowerCase();
+  scene.update({
+    quiet,
+    motion: state.motion,
+    label: state.label,
+    vehicleKey: vehicle?.key || '',
+    dynamics: state.dynamics || {},
+    energy,
+    reduced: reducedMotion,
+    // A hidden overlay keeps its state but spends no frames on it.
+    visible: data.window?.visible !== false,
+    eventSequence: state.event_sequence,
+    eventKind: state.event_kind,
+    eventTone: state.event_tone,
+    palette: {...theme, hud: theme.orange, state: quiet ? theme.orange : tone},
+    textScale: Number(data.theme?.text_scale) || 1,
+    starTone: currentStarTone(data.system?.star_class),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -744,7 +772,7 @@ function updateClock() {
 }
 
 // Event highlights settle automatically; ordinary telemetry refreshes do not
-// restart them. The drive band is the only sustained animation.
+// restart them. The state's scene is the only sustained animation.
 const highlightTimers = new WeakMap();
 function briefHighlight(element, className) {
   if (dom.hud.classList.contains('reduced-motion')) return;
@@ -784,14 +812,15 @@ function render(data) {
   }
   const energy = Math.max(.55, Math.min(1.6, Number(data.effects?.energy || 1)));
   hud.style.setProperty('--motion-scale', String(1 / energy));
-  renderVehicle(data.state, reducedMotion);
-  renderStatus(data, theme, reducedMotion);
+  const vehicle = renderVehicle(data.state, reducedMotion);
+  const tone = renderStatus(data, theme, reducedMotion);
   const system = data.system || {};
   if (lastSystemName && system.name && lastSystemName !== system.name) briefHighlight(dom['current-system'], 'system-arrival');
   lastSystemName = system.name || '';
   dom['current-system'].textContent = system.name || '---';
   const currentStarClass = String(system.star_class || '').trim();
   renderStarOrb(dom['current-star-orb'], currentStarClass);
+  renderScene(data, theme, tone, vehicle, reducedMotion, energy);
   dom['current-star-label'].textContent = currentStarClass ? `STAR ${currentStarClass.toUpperCase()}` : 'STAR ?';
   dom['current-star-label'].title = currentStarClass ? `Known local star class ${currentStarClass}` : 'Local star class unknown';
   dom['region-label'].textContent = system.region || 'REGION UNKNOWN';
