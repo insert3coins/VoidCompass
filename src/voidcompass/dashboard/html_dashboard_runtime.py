@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 
+from voidcompass.dashboard.html_dashboard_host import HOST_RELAUNCH_EXIT_CODE
 from voidcompass.dashboard.html_dashboard_server import HtmlDashboardServer
 from voidcompass.core.diagnostic_logs import (
     LOG_ARCHIVE_LIMIT, application_base_dir, prepare_log, resolve_log_path,
@@ -21,6 +22,10 @@ from voidcompass.core.diagnostic_logs import (
 from voidcompass.core import themes
 from voidcompass.core.paths import resource_path, source_launcher_path
 
+
+# A WebView2 start failure is usually transient (a runtime update in progress,
+# or the previous session's browser still releasing its profile folder).
+_HOST_RELAUNCH_LIMIT = 2
 
 _GEOMETRY_RE = re.compile(
     r"^(?P<width>\d+)x(?P<height>\d+)(?P<x>[+-]-?\d+)?(?P<y>[+-]-?\d+)?$"
@@ -75,6 +80,7 @@ class HtmlDashboardRuntime:
         self._ready_emitted = False
         self._host_watchdog_job = None
         self._host_exit_seen_at = 0.0
+        self._host_relaunches = 0
         self._host_log = None
         self._host_log_lock = threading.Lock()
         theme_name, palette = themes.resolve_theme(
@@ -336,6 +342,10 @@ class HtmlDashboardRuntime:
             return
         process = self.process
         if process is None or process.poll() is not None:
+            exit_code = process.poll() if process is not None else None
+            if exit_code == HOST_RELAUNCH_EXIT_CODE and self._relaunch_host():
+                self._schedule_host_watchdog()
+                return
             # A normal window close posts its command immediately before the
             # host exits. Give the application loop one turn to consume that command before
             # treating an unannounced exit as a renderer failure.
@@ -347,7 +357,6 @@ class HtmlDashboardRuntime:
             if now - self._host_exit_seen_at < 0.45:
                 self._schedule_host_watchdog()
                 return
-            exit_code = process.poll() if process is not None else None
             self._write_host_log(
                 f"HTML command-deck host exited unexpectedly (code {exit_code})"
             )
@@ -381,6 +390,23 @@ class HtmlDashboardRuntime:
                     pass
             self._schedule_command_pump()
         self._schedule_host_watchdog()
+
+    def _relaunch_host(self):
+        """Start a new host after its WebView2 failed to start, a few times."""
+        if self._disposed or self._host_relaunches >= _HOST_RELAUNCH_LIMIT:
+            return False
+        self._host_relaunches += 1
+        self._host_exit_seen_at = 0.0
+        self._write_host_log(
+            "Dashboard WebView2 failed to start; relaunching the host "
+            f"({self._host_relaunches}/{_HOST_RELAUNCH_LIMIT})"
+        )
+        try:
+            self._launch()
+        except Exception as exc:
+            self._write_host_log(f"Dashboard host relaunch failed: {type(exc).__name__}: {exc}")
+            return False
+        return True
 
     def _drain_commands(self):
         self._command_job = None

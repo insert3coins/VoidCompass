@@ -1,5 +1,7 @@
 import {renderPowerplayWorkspace as renderPowerplayOperationsWorkspace} from "./powerplay.js";
-import {renderExploreWorkspace} from "./explore.js";
+import {
+  openExploreBody, renderExploreSystem, renderExploreWorkspace, resetExploreProfile, setExploreView,
+} from "./explore.js";
 import {renderExplorationArchive} from "./archive.js";
 
 const query = new URLSearchParams(window.location.search);
@@ -78,7 +80,6 @@ let missionSelectedId = "";
 const achievementUi = {category: "all", status: "all", search: "", sort: "progress", visible: 24};
 let hotkeyCaptureAction = "";
 let orrerySelectedBodyId = "";
-let orreryLiveTargetBodyId = "";
 let orreryView = null;
 let analyticsView = "trends";
 let replaySelectedSessionIndex = 0;
@@ -92,9 +93,6 @@ let preflightSignalFingerprint = "";
 let preflightExpanded = false;
 let surveyBodiesFingerprint = "";
 let surveyBodyObserver = null;
-let workboardFingerprint = "";
-let workboardSystem = "";
-let workboardSelection = null;
 let routeHorizonFingerprint = "";
 let sessionHighlightsFingerprint = "";
 let codexCandidatesFingerprint = "";
@@ -146,7 +144,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".suite-tabs button", "[data-analytics-view]", "[data-studio-view]",
   ".galnet-headline-row", "#status-galnet", ".bp-group-tabs button",
   ".bp-slot", ".bp-module", ".bp-analysis > nav button",
-  ".survey-body-row",
+  ".survey-body-row", ".explore-views button", "[data-explore-filter]", ".body-select",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -256,8 +254,22 @@ function postBootMilestone(action) {
   }).catch(() => window.setTimeout(() => postBootMilestone(action), 1000));
 }
 
+// A minimized WebView2 stops requestAnimationFrame outright (timers still run,
+// throttled to about once a second). Waiting on frames alone held the whole
+// Python startup, overlays included, until the window was restored. A hidden
+// window has no frame to present, so the timer releases the milestone instead.
+const BOOT_PAINT_FALLBACK_MS = 800;
+
 function afterBootPaint(callback) {
-  requestAnimationFrame(() => requestAnimationFrame(() => window.setTimeout(callback, 0)));
+  let settled = false;
+  const settle = () => {
+    if (settled) return;
+    settled = true;
+    window.clearTimeout(fallback);
+    window.setTimeout(callback, 0);
+  };
+  const fallback = window.setTimeout(settle, BOOT_PAINT_FALLBACK_MS);
+  requestAnimationFrame(() => requestAnimationFrame(settle));
 }
 
 function acknowledgeBootPresented() {
@@ -295,10 +307,10 @@ function showToast(message) {
 }
 
 const PAGE_LAYOUT_CONTAINER_SELECTOR = [
-  "#overview-modules", ".intel-grid", ".record-metrics", ".records-grid",
+  "#overview-modules", ".record-metrics", ".records-grid",
   ".tool-grid", ".settings-grid", ".about-grid",
   ".workspace-shell .workspace-metrics", ".workspace-shell .workspace-grid",
-  ".workspace-shell .settings-workspace-grid", ".workspace-shell .stellar-grid",
+  ".workspace-shell .settings-workspace-grid",
   ".workspace-shell .mission-layout", ".workspace-shell .chronicle-list",
   ".workspace-shell .region-passport-grid", ".workspace-shell .achievement-grid",
   ".workspace-shell .mining-command-grid",
@@ -953,46 +965,6 @@ function surveyPlanetKind(planetClass) {
   return "unknown";
 }
 
-function matchesWorkboardSelection(row) {
-  if (!workboardSelection || workboardSelection.system !== workboardSystem) return false;
-  const selectedId = workboardSelection.bodyId;
-  if (selectedId && selectedId !== "0" && row.dataset.bodyId === selectedId) return true;
-  return row.dataset.bodyName.toLowerCase() === workboardSelection.name.toLowerCase();
-}
-
-function markWorkboardSelection(focus = false) {
-  const list = byId("body-workboard");
-  let selected = null;
-  for (const row of list.querySelectorAll(".body-row[data-body-name]")) {
-    const active = matchesWorkboardSelection(row);
-    row.classList.toggle("selected", active);
-    if (active) {
-      row.setAttribute("aria-current", "true");
-      selected = row;
-    } else {
-      row.removeAttribute("aria-current");
-    }
-  }
-  if (!focus) return;
-  const target = selected || list;
-  target.focus({preventScroll: true});
-  if (selected) {
-    const rowBox = selected.getBoundingClientRect();
-    const listBox = list.getBoundingClientRect();
-    list.scrollTop += rowBox.top - listBox.top - (list.clientHeight - rowBox.height) / 2;
-  }
-}
-
-function openWorkboardBody(button) {
-  workboardSelection = {
-    system: button.closest("#survey-body-list")?.dataset.system || "",
-    bodyId: button.dataset.bodyId || "",
-    name: button.dataset.bodyName || "",
-  };
-  showPage("explore");
-  markWorkboardSelection(true);
-}
-
 function renderSurveyBodies(survey, system) {
   const bodies = Array.isArray(survey.bodies) ? survey.bodies : [];
   const fingerprint = JSON.stringify([system, bodies]);
@@ -1024,7 +996,7 @@ function renderSurveyBodies(survey, system) {
     row.dataset.bodyId = String(body.body_id ?? "");
     const fullName = String(body.name || "UNKNOWN BODY");
     row.dataset.bodyName = fullName;
-    row.setAttribute("aria-label", `Open ${fullName} in System Workboard`);
+    row.setAttribute("aria-label", `Open ${fullName} in the Survey Board`);
     const name = system && fullName.toLowerCase().startsWith(`${system} `.toLowerCase())
       ? fullName.slice(system.length + 1) : fullName;
     const planetClass = String(body.planet_class || body.type || "");
@@ -1102,11 +1074,6 @@ function renderSurvey(state) {
   const badgeText = survey.complete ? "COMPLETE" : survey.undiscovered ? "NEW SYSTEM" : survey.total_known ? "IN PROGRESS" : "AWAITING";
   badge.textContent = badgeText;
   badge.style.color = survey.complete ? "var(--green)" : survey.undiscovered ? "var(--yellow)" : "var(--dim)";
-  text("workboard-badge", survey.complete ? "COMPLETE" : survey.archive_bodies ? "KNOWN" : "LIVE");
-  text("workboard-system", state.flight?.system, "NO SYSTEM DATA");
-  text("workboard-class", survey.star_class ? `PRIMARY · ${survey.star_class}` : "PRIMARY STAR · CLASS UNKNOWN");
-  text("workboard-percent", survey.total_known ? `${Math.round(completion)}%` : "—");
-  text("workboard-count", `${number(survey.scanned)} / ${survey.total_known ? number(survey.total) : "?"} BODIES`);
 
   const rows = Array.isArray(survey.notables) ? survey.notables : [];
   const notable = byId("survey-notables");
@@ -1127,89 +1094,8 @@ function renderSurvey(state) {
     }));
   }
 
-  const bodies = Array.isArray(survey.bodies) ? survey.bodies : [];
-  const workboard = byId("body-workboard");
-  const orbits = byId("workboard-orbits");
-  const system = String(state.flight?.system || "");
-  if (workboardSelection?.system !== system) workboardSelection = null;
-  const fingerprint = JSON.stringify([system, bodies, survey.archive_loading, survey.total_known, survey.scanned]);
-  if (fingerprint === workboardFingerprint) return;
-  workboardFingerprint = fingerprint;
-  const previousSystem = workboardSystem;
-  const scrollTop = workboard.scrollTop;
-  const hadFocus = workboard.contains(document.activeElement);
-  workboardSystem = system;
-  const markers = bodies.slice(0, 18).map((row, index) => {
-    const marker = document.createElement("i");
-    marker.className = [
-      "workboard-body-marker",
-      row.priority ? "priority" : "",
-      row.mapped ? "mapped" : "",
-      number(row.bio_count) ? "bio" : "",
-      number(row.geo_count) ? "geo" : "",
-      row.landable === true ? "landable" : "",
-    ].filter(Boolean).join(" ");
-    marker.style.setProperty("--body-index", String(index));
-    marker.title = `${row.name || "Unknown body"} · ${row.detail || "Survey record"}`;
-    const label = document.createElement("b");
-    label.textContent = row.body_id > 0 ? String(row.body_id) : String(index + 1);
-    marker.appendChild(label);
-    return marker;
-  });
-  const hiddenCount = Math.max(0, bodies.length - markers.length);
-  if (hiddenCount) {
-    const more = document.createElement("span");
-    more.className = "workboard-more";
-    more.textContent = `+${hiddenCount} MORE`;
-    markers.push(more);
-  }
-  orbits.replaceChildren(...markers);
-  orbits.setAttribute("aria-label", hiddenCount
-    ? `System body schematic: ${markers.length - 1} of ${bodies.length} bodies pictured; ${hiddenCount} more in workboard list`
-    : `System body schematic: ${bodies.length} bodies pictured`);
-  orbits.classList.toggle("empty", bodies.length === 0);
-  if (!bodies.length) {
-    const empty = document.createElement("div");
-    empty.className = "body-row empty";
-    const copy = document.createElement("div");
-    const title = document.createElement("strong");
-    const knownRecord = Boolean(survey.total_known && number(survey.scanned) >= number(survey.total));
-    title.textContent = survey.archive_loading
-      ? "RECOVERING KNOWN SYSTEM"
-      : knownRecord ? "KNOWN SYSTEM RECORD" : "AWAITING FSS / DSS DATA";
-    const detail = document.createElement("span");
-    detail.textContent = survey.archive_loading
-      ? "Requesting historical body architecture while retained scan progress remains authoritative."
-      : knownRecord
-        ? "Survey completion is retained; detailed body records were not captured by this profile."
-        : "Priority bodies will appear as the system survey develops.";
-    copy.append(title, detail);
-    empty.append(copy);
-    workboard.replaceChildren(empty);
-  } else {
-    workboard.replaceChildren(...bodies.map((row, index) => {
-      const item = document.createElement("div");
-      item.className = `body-row${row.priority ? " priority" : ""}${row.mapped ? " mapped" : ""}`;
-      item.setAttribute("role", "listitem");
-      item.tabIndex = -1;
-      item.dataset.bodyId = String(row.body_id ?? "");
-      item.dataset.bodyName = String(row.name || "");
-      const indexNode = document.createElement("i");
-      indexNode.textContent = row.body_id > 0 ? String(row.body_id).padStart(2, "0") : String(index + 1).padStart(2, "0");
-      const copy = document.createElement("div");
-      const name = document.createElement("strong");
-      name.textContent = row.name || "UNKNOWN BODY";
-      const detail = document.createElement("span");
-      detail.textContent = row.detail || row.type || "SURVEY RECORD";
-      copy.append(name, detail);
-      const badgeNode = document.createElement("b");
-      badgeNode.textContent = row.badge || "SCAN";
-      item.append(indexNode, copy, badgeNode);
-      return item;
-    }));
-  }
-  workboard.scrollTop = previousSystem === system ? scrollTop : 0;
-  markWorkboardSelection(hadFocus);
+  // The Explore survey board, band and schematic are fed by this snapshot.
+  renderExploreSystem(state, EXPLORE_WORKSPACE_UI);
 }
 
 function renderRoute(state) {
@@ -1585,6 +1471,7 @@ function configureGalnetRotation(feed, articles) {
 
 function setFactList(id, rows) {
   const parent = byId(id);
+  if (!parent) return;
   parent.replaceChildren(...rows.map(([label, value]) => {
     const row = document.createElement("div");
     const left = document.createElement("span");
@@ -1600,14 +1487,10 @@ function renderIntelligence(state) {
   const survey = state.survey || {};
   const intel = state.intelligence || {};
   const data = state.data || {};
+  // Explore's readouts: data at stake and region. Biology and geology
+  // progress sit in the Explore survey band.
   text("intel-value", formatCredits(data.unsold_total));
-  setFactList("intel-facts", [
-    ["Current region", intel.region || "UNKNOWN"],
-    ["First discoveries", String(number(intel.first_discoveries))],
-    ["First footfalls", String(number(intel.first_footfalls))],
-    ["Bio completion", `${number(survey.bio_complete)} / ${number(survey.bio_signals)}`],
-    ["Geological signals", String(number(survey.geo_signals))],
-  ]);
+  text("explore-region", intel.region, "UNKNOWN");
   setFactList("record-facts", [
     ["Current system", state.flight?.system || "UNKNOWN"],
     ["Survey completion", survey.total_known ? `${Math.round(number(survey.percent))}%` : "UNKNOWN"],
@@ -1807,6 +1690,9 @@ function updateStudioOptionControls(options, groundTarget = {}, rhinoMinimap = {
     "studio-station-timeout": options.station_info_timeout_s,
     "studio-gravity-threshold": options.gravity_warning_threshold_g,
     "studio-crt-intensity": options.hud_crt_intensity,
+    "studio-survey-rotation": options.survey_spotlight_rotation,
+    "studio-survey-threshold": options.survey_spotlight_threshold,
+    "studio-survey-text-scale": options.survey_text_scale_percent,
   };
   for (const [id, value] of Object.entries(fields)) {
     const field = byId(id);
@@ -2480,12 +2366,14 @@ class EliteSystemOrrery {
     return [...this.hits].reverse().find((hit) => Math.hypot(hit.x - x, hit.y - y) <= hit.radius);
   }
 
-  select(id) {
+  select(id, {announce = true} = {}) {
     this.selected = String(id); orrerySelectedBodyId = this.selected;
     const body = this.byId.get(this.selected);
     const detail = byId("orrery-detail");
     if (detail) detail.innerHTML = orreryDetail(body);
     this.render();
+    // Canvas picks tell the Explore survey board; board picks arrive silent.
+    if (announce) this.canvas.dispatchEvent(new CustomEvent("orrery-select", {bubbles: true, detail: {id: this.selected}}));
   }
 
   render() {
@@ -2530,35 +2418,19 @@ function orreryDetail(body) {
   return `<div class="orrery-body-title"><i class="${escapeHtml(body.kind)}"></i><div><small>BODY ${escapeHtml(body.body_id ?? "—")} · ${body.is_moon ? "MOON" : escapeHtml(String(body.kind || "BODY").toUpperCase())}</small><h3>${escapeHtml(body.name)}</h3><span>${escapeHtml(body.class)}</span></div><b>${credits(body.value)}</b></div><div class="orrery-facts"><span>ORBIT <b>${period}</b></span><span>DISTANCE <b>${body.distance_ls === null ? "—" : `${numeric(body.distance_ls, 1)} LS`}</b></span><span>GRAVITY <b>${body.gravity_g === null ? "—" : `${numeric(body.gravity_g, 2)} G`}</b></span><span>ATMOSPHERE <b>${escapeHtml(body.atmosphere || "AIRLESS")}</b></span><span>BIOLOGY <b>${numeric(body.bio_complete)} / ${numeric(body.bio)}</b></span><span>GEOLOGY <b>${numeric(body.geo)}</b></span><span>MINING SITES <b>${numeric(body.mining)}</b></span></div><div class="orrery-flags">${flags.map((flag) => `<em>${escapeHtml(flag)}</em>`).join("") || "<em>STANDARD SURVEY RECORD</em>"}</div>${materials ? `<div class="orrery-flags resource-composition">${materials}</div>` : ""}`;
 }
 
-function stellarCartographyMarkup(cartography = {}) {
-  const orrery = cartography.orrery || {};
-  const queue = cartography.queue || {};
-  const bodies = orrery.bodies || [];
-  const liveTarget = orrery.target || cartography.target || {};
-  const targetId = liveTarget.resolved && liveTarget.id !== null && liveTarget.id !== undefined ? String(liveTarget.id) : "";
-  if (targetId && targetId !== orreryLiveTargetBodyId) {
-    orreryLiveTargetBodyId = targetId;
-    orrerySelectedBodyId = targetId;
-  } else if (!targetId) {
-    orreryLiveTargetBodyId = "";
+// Explore's survey board and the orrery share one selection. A board pick is
+// applied silently; a canvas pick announces itself back to the board.
+function selectOrreryBody(id) {
+  orrerySelectedBodyId = String(id || "");
+  if (orreryView?.byId.has(orrerySelectedBodyId)) {
+    orreryView.select(orrerySelectedBodyId, {announce: false});
+    return true;
   }
-  if (!orrerySelectedBodyId || !bodies.some((row) => !row.hidden && String(row.id) === String(orrerySelectedBodyId))) orrerySelectedBodyId = String(bodies.find((row) => !row.hidden)?.id || "");
-  const selected = bodies.find((row) => String(row.id) === String(orrerySelectedBodyId));
-  const queueRows = (queue.rows || []).map((row) => `<div class="survey-queue-row ${escapeHtml(row.status)}${row.targeted ? " targeted" : ""}"><i>${row.targeted ? "⌖" : row.status === "complete" ? "✓" : row.status === "skipped" ? "–" : row.pinned ? "◆" : String(number(row.score)).padStart(2, "0")}</i><span><b>${escapeHtml(row.body)}${row.targeted ? " <strong>ELITE TARGET</strong>" : ""}</b><small>${escapeHtml(row.action)} · ${escapeHtml(row.reason)}</small><em>${row.distance_ls ? `${numeric(row.distance_ls, 0)} LS · ` : ""}${credits(row.value)}</em></span><div><button data-ws-page="explore" data-ws-op="survey_pin" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.pinned ? "UNPIN" : "PIN"}</button><button data-ws-page="explore" data-ws-op="survey_complete" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}" ${row.status === "complete" && !row.manual_complete ? 'disabled title="Completed by Elite journal; only commander choices can be reopened"' : ""}>${row.status === "complete" ? row.manual_complete ? "REOPEN" : "JOURNAL ✓" : "DONE"}</button><button data-ws-page="explore" data-ws-op="survey_skip" data-body-key="${escapeHtml(row.key)}" data-system="${escapeHtml(cartography.system || "")}">${row.status === "skipped" ? "RESTORE" : "SKIP"}</button></div></div>`);
-  const resources = cartography.resources || {};
-  const resourceRows = (resources.bodies || []).map((row) => {
-    const composition = (row.materials || []).slice(0, 10).map((material) => `<em class="${material.rare ? "rare" : ""}">${escapeHtml(material.name)} <b>${numeric(material.percent, 1)}%</b></em>`).join("");
-    return `<div class="planet-resource-row"><span><b>${escapeHtml(row.body)}</b><small>${escapeHtml(row.class || "PLANETARY BODY")} · ${row.landable ? "LANDABLE" : "ORBITAL SCAN"}</small></span><div>${composition || "<em>COMPOSITION UNREPORTED</em>"}</div><strong>${row.mining_locations ? `${numeric(row.mining_locations)} MINING SITES` : row.rare_count ? `${numeric(row.rare_count)} RARE` : "MATERIAL SCAN"}</strong></div>`;
-  });
-  return `<section class="stellar-cartography">
-    <header><div><small>STELLAR CARTOGRAPHY // LIVE SYSTEM MODEL</small><h3>${escapeHtml(cartography.system || "AWAITING SYSTEM")}</h3><span>${numeric(orrery.stars)} STARS · ${numeric(orrery.planets)} PLANETS · ${numeric(orrery.mapped)} MAPPED</span></div><div><b>${numeric(queue.pending)} ACTIVE</b><span>${numeric(queue.complete)} COMPLETE · ${numeric(queue.skipped)} SKIPPED</span></div></header>
-    ${liveTarget.resolved ? `<div class="cartography-target-lock"><i>⌖</i><span><small>ELITE NAVIGATION TARGET</small><b>${escapeHtml(liveTarget.name || "TARGETED BODY")}</b></span><em>BODY ${escapeHtml(liveTarget.body_id ?? "—")} · LOCKED IN ORRERY & SURVEY QUEUE</em></div>` : ""}
-    <div class="stellar-grid">
-      ${workspaceCard("LIVE SYSTEM ORRERY", `${orreryCanvas(orrery)}<div id="orrery-detail" class="orrery-detail">${orreryDetail(selected)}</div>`, `${numeric(number(orrery.stars) + number(orrery.planets))} BODIES · ${numeric(orrery.barycentres)} BARYCENTRES`, "orrery-card")}
-      ${workspaceCard("EXPLORATION SURVEY QUEUE", `${queue.next ? `<div class="survey-next"><small>NEXT RECOMMENDATION</small><b>${escapeHtml(queue.next.body)}</b><span>${escapeHtml(queue.next.action)} · ${escapeHtml(queue.next.reason)}</span></div>` : ""}${workspaceRows(queueRows, "FSS body records will create a prioritised survey queue.")}<div class="workspace-actions"><button data-ws-page="explore" data-ws-op="survey_reset" data-system="${escapeHtml(cartography.system || "")}">RESET COMMANDER CHOICES</button></div>`, `${numeric(queue.pending)} PENDING`, "survey-queue-card")}
-      ${workspaceCard("PLANETARY RESOURCE INTELLIGENCE", workspaceRows(resourceRows, "Detailed planet scans will reveal raw-material composition and Rhino mining locations."), `${numeric(resources.scanned)} SCANNED · ${numeric(resources.rare_bodies)} RARE · ${numeric(resources.mining_sites)} SITES`, "planet-resources-card")}
-    </div>
-  </section>`;
+  return false;
+}
+
+function setOrrerySelection(id) {
+  orrerySelectedBodyId = String(id || "");
 }
 
 function renderPlanetMaterialsWorkspace(data) {
@@ -2843,9 +2715,10 @@ function updatePlanetMaterialsLive(root, data) {
 
 
 const EXPLORE_WORKSPACE_UI = Object.freeze({
-  byId, credits, escapeHtml, mountSystemOrrery, number, numeric,
-  stellarCartographyMarkup, workspaceCard, workspaceMetrics, workspaceRows,
-  workspaceTable,
+  byId, credits, escapeHtml, formatCredits, mountSystemOrrery, number, numeric,
+  orreryCanvas, orreryDetail, percentWidth, selectOrreryBody, setOrrerySelection, showPage, text,
+  planetKind: surveyPlanetKind,
+  profileKey: () => profileKey,
 });
 
 function renderProfileWorkspace(data) {
@@ -3640,7 +3513,6 @@ function renderDashboard(state) {
     buildPlannerGroup = "component";
     buildPlannerSearch = "";
     orrerySelectedBodyId = "";
-    orreryLiveTargetBodyId = "";
     analyticsView = "trends";
     replaySelectedSessionIndex = 0;
     deckLayoutDraft = null;
@@ -3655,9 +3527,7 @@ function renderDashboard(state) {
     preflightSignalFingerprint = "";
     preflightExpanded = false;
     surveyBodiesFingerprint = "";
-    workboardFingerprint = "";
-    workboardSystem = "";
-    workboardSelection = null;
+    resetExploreProfile();
     routeHorizonFingerprint = "";
     sessionHighlightsFingerprint = "";
     codexCandidatesFingerprint = "";
@@ -4243,11 +4113,15 @@ document.addEventListener("click", async (event) => {
   }
   const surveyBodyButton = event.target.closest("#survey-body-list .survey-body-row");
   if (surveyBodyButton) {
-    openWorkboardBody(surveyBodyButton);
+    openExploreBody(surveyBodyButton, EXPLORE_WORKSPACE_UI);
     return;
   }
   const pageButton = event.target.closest("[data-page]");
   if (pageButton) {
+    // Links into Explore may name the view they belong to.
+    if (pageButton.dataset.page === "explore" && pageButton.dataset.exploreView) {
+      setExploreView(pageButton.dataset.exploreView, EXPLORE_WORKSPACE_UI);
+    }
     showPage(pageButton.dataset.page);
     return;
   }
@@ -4267,10 +4141,6 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("#achievement-more")) {
     achievementUi.visible += 24;
     renderAchievementCatalogue(model.workspace?.data || {});
-    return;
-  }
-  if (event.target.closest("#explore-complete")) {
-    byId("explore-workspace")?.scrollIntoView({behavior: "smooth", block: "start"});
     return;
   }
   const missionSelect = event.target.closest("[data-mission-select]");
@@ -4845,6 +4715,9 @@ byId("studio-save-settings").addEventListener("click", async () => {
     station_info_timeout_s: byId("studio-station-timeout").value,
     gravity_warning_threshold_g: byId("studio-gravity-threshold").value,
     hud_crt_intensity: byId("studio-crt-intensity").value,
+    survey_spotlight_rotation: byId("studio-survey-rotation").value,
+    survey_spotlight_threshold: byId("studio-survey-threshold").value,
+    survey_text_scale_percent: byId("studio-survey-text-scale").value,
   });
   if (accepted) showToast("Overlay settings saved for this commander");
 });

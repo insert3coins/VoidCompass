@@ -67,3 +67,44 @@ class WebviewNavigationTests(unittest.TestCase):
         browser.on_navigation_start(None, None)
         original.assert_not_called()
         self.assertFalse(settings.IsBuiltInErrorPageEnabled)
+
+    def test_every_window_records_how_its_navigation_ended(self):
+        browser_type = type("Browser", (), {
+            "on_navigation_start": Mock(),
+            "on_navigation_completed": Mock(return_value="completed"),
+        })
+        self.assertTrue(configure_embedded_navigation(SimpleNamespace(EdgeChrome=browser_type)))
+        browser = browser_type()
+        browser.url = "http://127.0.0.1:1234/?token=secret"
+        # The command deck is an ordinary window, not a transparent overlay.
+        browser.pywebview_window = SimpleNamespace(transparent=False)
+        with patch("builtins.print"), \
+                patch("voidcompass.core.webview_bootstrap.time.monotonic", return_value=42.0):
+            browser.on_navigation_completed(None, SimpleNamespace(
+                IsSuccess=False, WebErrorStatus="ConnectionReset",
+            ))
+        self.assertTrue(browser.pywebview_window._voidcompass_navigation_failed)
+        self.assertEqual(browser.pywebview_window._voidcompass_navigation_completed_at, 42.0)
+
+    def test_failed_webview2_start_marks_the_window_and_keeps_pywebview_handler(self):
+        original_ready = Mock(return_value="ready")
+        browser_type = type("Browser", (), {
+            "on_navigation_start": Mock(),
+            "on_navigation_completed": Mock(),
+            "on_webview_ready": original_ready,
+        })
+        self.assertTrue(configure_embedded_navigation(SimpleNamespace(EdgeChrome=browser_type)))
+        browser = browser_type()
+        browser.pywebview_window = SimpleNamespace()
+        with patch("builtins.print") as output:
+            self.assertEqual(browser.on_webview_ready(None, SimpleNamespace(
+                IsSuccess=False, InitializationException=RuntimeError("0x8007139F"),
+            )), "ready")
+        self.assertTrue(browser.pywebview_window._voidcompass_renderer_failed)
+        self.assertIn("RuntimeError", output.call_args.args[0])
+        original_ready.assert_called_once()
+
+        healthy = browser_type()
+        healthy.pywebview_window = SimpleNamespace()
+        healthy.on_webview_ready(None, SimpleNamespace(IsSuccess=True))
+        self.assertFalse(hasattr(healthy.pywebview_window, "_voidcompass_renderer_failed"))

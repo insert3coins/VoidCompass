@@ -1,3 +1,10 @@
+/*
+ * Navigation HUD, cockpit edition.
+ * Elite's own HUD reads as orange holographic chrome with blue for assists and
+ * information, red only for real danger, and a small set of notices and lamps
+ * rather than an animation per state. Colours are theme tokens throughout
+ * (--hud is the theme's orange); the star tones below are stellar data.
+ */
 :root {
   color-scheme: dark;
   --bg: #070b10;
@@ -12,533 +19,334 @@
   --text: #dce8ef;
   --muted: #85939d;
   --dim: #52616c;
-  --state: var(--dim);
+  --hud: var(--orange);
+  --hud-soft: color-mix(in srgb, var(--hud) 62%, transparent);
+  --hud-faint: color-mix(in srgb, var(--hud) 22%, transparent);
+  --hud-ghost: color-mix(in srgb, var(--hud) 8%, transparent);
+  --state: var(--hud);
   --text-scale: 1;
-  --motion-energy: 1;
   --motion-scale: 1;
+  --font-hud: "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif;
+  --font-wide: "Bahnschrift", "Segoe UI", sans-serif;
 }
 
 * { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
 body {
-  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-family: var(--font-hud);
   user-select: none;
   pointer-events: none;
 }
 
+/* ---------------------------------------------------------------- frame -- */
 .hud {
   position: relative;
   width: 100%;
   height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 88px 42px 76px 62px 18px;
+  row-gap: 5px;
+  padding: 10px 12px 9px;
   color: var(--text);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  /* Overlay text size scales the whole instrument. Python grows the window by
+     the same factor, so the fixed layout never clips larger type. */
+  zoom: var(--text-scale);
   background:
-    radial-gradient(ellipse at 50% -20%, color-mix(in srgb, var(--state) 17%, transparent), transparent 60%),
-    linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, transparent) 1px, transparent 1px),
-    linear-gradient(0deg, color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px),
-    linear-gradient(115deg, var(--inset), var(--panel) 56%, var(--bg));
-  background-size: auto, 24px 24px, 24px 24px, auto;
+    radial-gradient(ellipse at 18% -30%, color-mix(in srgb, var(--state) 16%, transparent), transparent 58%),
+    linear-gradient(0deg, var(--hud-ghost) 1px, transparent 1px) 0 0 / 100% 4px,
+    linear-gradient(160deg, color-mix(in srgb, var(--inset) 94%, var(--hud)), var(--panel) 48%, var(--bg));
   isolation: isolate;
-  font-size: calc(10px * var(--text-scale));
+}
+.hud.expanded {
+  grid-template-rows: 92px 44px 80px 64px 18px;
+  padding: 11px 16px 10px;
 }
 
+/* Clip only this decorative inset, never the WebView surface: clipping the
+   whole page left transparent corner pixels that some WebView2/OBS
+   compositors paint as opaque white blocks. */
 .hud::before {
   content: "";
   position: absolute;
   inset: 2px;
   z-index: -1;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  /* Clip only the decorative inset. Clipping the whole WebView surface left
-     four transparent corner pixels that some WebView2/OBS compositors paint
-     as opaque white blocks. */
-  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
-  box-shadow: inset 0 0 22px rgba(0, 0, 0, .86);
+  border: 1px solid var(--hud-faint);
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+  box-shadow: inset 0 0 26px rgba(0, 0, 0, .8);
 }
-
-.chrome { position: absolute; left: 8px; right: 8px; height: 3px; z-index: 8; opacity: .9; }
-.chrome::before, .chrome::after { content: ""; position: absolute; left: 0; right: 0; height: 1px; background: var(--accent); }
-.chrome::before { top: 0; box-shadow: 0 2px 0 color-mix(in srgb, var(--accent) 26%, transparent); }
-.chrome::after { top: 1px; opacity: .45; }
-.chrome-top { top: 3px; }
-.chrome-bottom { bottom: 3px; transform: rotate(180deg); }
-.scanlines { position: absolute; inset: 0; z-index: 30; pointer-events: none; opacity: .22; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(30, 60, 74, .13) 3px); }
-.vignette { position: absolute; inset: 0; z-index: 29; pointer-events: none; box-shadow: inset 0 0 20px rgba(0, 0, 0, .82); }
+/* Decorative layers sit outside the grid flow. */
+.hud-corners { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.hud-corners i { position: absolute; z-index: 8; width: 18px; height: 12px; border-color: var(--hud-soft); border-style: solid; border-width: 0; pointer-events: none; }
+.hud-corners i:nth-child(1) { left: 4px; top: 4px; border-left-width: 2px; border-top-width: 2px; }
+.hud-corners i:nth-child(2) { right: 4px; top: 4px; border-right-width: 2px; border-top-width: 2px; }
+.hud-corners i:nth-child(3) { right: 4px; bottom: 4px; border-right-width: 2px; border-bottom-width: 2px; }
+.hud-corners i:nth-child(4) { left: 4px; bottom: 4px; border-left-width: 2px; border-bottom-width: 2px; }
+.scanlines { position: absolute; inset: 0; z-index: 30; pointer-events: none; opacity: .2; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .32) 3px); }
+.vignette { position: absolute; inset: 0; z-index: 29; pointer-events: none; box-shadow: inset 0 0 22px rgba(0, 0, 0, .78); }
 .hud.no-crt .scanlines, .hud.no-crt .vignette { display: none; }
 
-.section { position: absolute; left: 16px; right: 16px; border-bottom: 1px solid rgba(92, 123, 140, .22); }
-.state-instrument {
-  position: absolute; left: 16px; right: 16px; top: 7px; height: 45px;
-  display: grid; grid-template-columns: 1fr minmax(142px, 38%) 1fr; align-items: center;
-  overflow: hidden; border-bottom: 1px solid rgba(92, 123, 140, .2);
-  background: var(--state-motif, none), linear-gradient(90deg,
-    transparent,
-    color-mix(in srgb, var(--state) 3%, transparent) 22%,
-    color-mix(in srgb, var(--state) 6%, transparent) 50%,
-    color-mix(in srgb, var(--state) 3%, transparent) 78%,
-    transparent);
+.section { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.section::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, var(--hud-soft), var(--hud-faint) 40%, transparent); }
+.section-label, .track-end { color: var(--hud-soft); font: 700 8.5px var(--font-wide); letter-spacing: .16em; white-space: nowrap; }
+
+/* ------------------------------------------------------------ status plate */
+.status-plate {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  column-gap: 10px;
 }
-.state-instrument::before {
-  content: ""; position: absolute; z-index: 1; right: 0; top: 0; width: 72px; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--state));
-  box-shadow: 0 0 6px color-mix(in srgb, var(--state) 60%, transparent);
+.hud.expanded .status-plate { grid-template-columns: 124px minmax(0, 1fr); }
+
+.holo { position: relative; margin: 0; min-width: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; row-gap: 2px; }
+.holo-bay {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 60% 26% at 50% 96%, color-mix(in srgb, var(--hud) 30%, transparent), transparent 70%),
+    linear-gradient(0deg, color-mix(in srgb, var(--hud) 10%, transparent), transparent 70%);
 }
-.state-instrument::after {
-  content: ""; position: absolute; z-index: 1; right: 0; bottom: 4px; width: 24px; height: 4px;
-  border-right: 2px solid var(--state);
-  border-bottom: 1px solid color-mix(in srgb, var(--state) 50%, transparent);
-  opacity: .66;
+.holo-bay::before, .holo-bay::after { content: ""; position: absolute; z-index: 3; width: 9px; height: 9px; border: 0 solid var(--hud-soft); pointer-events: none; }
+.holo-bay::before { left: 0; top: 0; border-left-width: 1px; border-top-width: 1px; }
+.holo-bay::after { right: 0; top: 0; border-right-width: 1px; border-top-width: 1px; }
+.holo-bay img, .holo-bay .vehicle-outgoing {
+  position: absolute;
+  inset: 3px 4px 7px;
+  width: calc(100% - 8px);
+  height: calc(100% - 10px);
+  object-fit: contain;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--hud) 34%, transparent)) saturate(.92) brightness(1.06);
 }
-#state-canvas { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; }
-.state-vehicle {
-  position: relative; z-index: 2; grid-column: 1; align-self: stretch; width: min(142px, 96%);
-  overflow: hidden; display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(ellipse 38% 65% at 48% 50%,
-    color-mix(in srgb, var(--inset) 84%, transparent), transparent);
-  opacity: 1;
+.holo-bay img:not([src]) { visibility: hidden; }
+/* Projection lines keep the portrait inside the HUD's holographic layer. */
+.holo-emitter {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(0, 0, 0, .2) 2px 3px);
 }
-.state-vehicle[hidden] { display: none; }
-.state-vehicle::before {
-  content: ""; position: absolute; z-index: 0; inset: 5px 8px;
-  background: var(--vehicle-motif, none);
-  opacity: .86; pointer-events: none;
+.holo-emitter::after {
+  content: ""; position: absolute; left: 22%; right: 22%; bottom: 2px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--hud), transparent);
+  box-shadow: 0 0 8px var(--hud);
+  opacity: .7;
 }
-.state-vehicle::after {
-  content: ""; position: absolute; z-index: 1; left: 11px; right: 13px; bottom: 5px; height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--state) 58%, transparent), transparent);
-  opacity: .45; pointer-events: none;
+.holo.empty .holo-bay { background: radial-gradient(ellipse 60% 26% at 50% 96%, var(--hud-faint), transparent 70%); }
+.holo figcaption { min-width: 0; display: grid; line-height: 1.15; }
+.holo figcaption b, .holo figcaption small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.holo figcaption b { color: var(--muted); font: 700 9px var(--font-hud); letter-spacing: .05em; }
+.holo figcaption small { color: var(--hud-soft); font: 700 8px var(--font-wide); letter-spacing: .1em; }
+.holo figcaption small:empty { display: none; }
+
+.status-main {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 27px 20px 18px;
+  row-gap: 6px;
+  align-content: center;
 }
-.state-vehicle img {
-  position: relative; z-index: 2; display: block; width: 132px; height: 43px;
-  object-fit: contain; transform-origin: 48% 54%;
-  filter: saturate(1.08) brightness(1.38) contrast(1.24)
-    drop-shadow(0 1px 1px rgba(0, 0, 0, .92))
-    drop-shadow(0 0 5px color-mix(in srgb, var(--state) 74%, transparent));
-  opacity: 1; animation: vehicle-idle calc(3.2s * var(--motion-scale)) ease-in-out infinite;
+
+.notice {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 0 8px 0 7px;
+  border-left: 3px solid var(--state);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--state) 18%, transparent), color-mix(in srgb, var(--state) 5%, transparent) 60%, transparent);
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
 }
-.state-vehicle[data-vehicle="onfoot"] img {
-  width: 112px; height: 88px; top: 16px;
-}
-.vehicle-frame {
-  position: absolute; z-index: 1; left: 3px; right: 5px; top: 5px; bottom: 5px;
-  border-left: 1px solid color-mix(in srgb, var(--state) 62%, transparent);
-  border-right: 1px solid color-mix(in srgb, var(--state) 24%, transparent);
-  clip-path: polygon(0 0, 84% 0, 100% 35%, 100% 100%, 16% 100%, 0 65%);
-}
-.vehicle-frame::before, .vehicle-frame::after {
-  content: ""; position: absolute; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, var(--state), color-mix(in srgb, var(--state) 18%, transparent));
-}
-.vehicle-frame::before { top: 0; } .vehicle-frame::after { bottom: 0; }
-.vehicle-scan {
-  position: absolute; z-index: 3; top: 6px; bottom: 6px; left: 7px; width: 1px;
-  background: var(--state); box-shadow: 0 0 5px var(--state); opacity: 0;
-}
-.state-core {
-  position: relative; z-index: 2; grid-column: 2; align-self: center; justify-self: stretch; height: 33px;
-  display: flex; align-items: center; justify-content: center; min-width: 0;
-  container-type: inline-size;
-  background: linear-gradient(90deg,
-    transparent,
-    color-mix(in srgb, var(--state) 3%, transparent) 12%,
-    color-mix(in srgb, var(--state) 8%, transparent) 50%,
-    color-mix(in srgb, var(--state) 3%, transparent) 88%,
-    transparent);
-}
-.state-core::before, .state-core::after {
-  content: ""; position: absolute; top: 5px; bottom: 5px; width: 8px;
-  border-color: color-mix(in srgb, var(--state) 72%, transparent); border-style: solid;
-  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--state) 34%, transparent));
-}
-.state-core::before { left: 0; border-width: 1px 0 1px 2px; transform: skewX(-13deg); }
-.state-core::after { right: 0; border-width: 1px 2px 1px 0; transform: skewX(13deg); }
-.state-core strong {
-  position: relative; z-index: 4; color: var(--state);
-  font: 700 calc(12.5px * var(--text-scale)) "Cascadia Mono", "Consolas", monospace;
-  font-size: min(calc(12.5px * var(--text-scale)), 7.2cqw);
-  letter-spacing: .6px; line-height: 1; text-align: center; padding: 0 10px;
-  text-shadow: 0 0 7px color-mix(in srgb, var(--state) 48%, transparent), 1px 1px #000;
+.notice::after { content: ""; position: absolute; left: 0; right: 9px; top: 0; height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--state) 70%, transparent), transparent); }
+.notice-tag {
+  padding: 2px 5px 1px;
+  border: 1px solid color-mix(in srgb, var(--state) 55%, transparent);
+  color: var(--state);
+  font: 700 8px var(--font-wide);
+  letter-spacing: .16em;
   white-space: nowrap;
 }
-.core-bracket { position: absolute; top: calc(50% - 4px); width: 8px; height: 8px; opacity: .8; }
-.core-bracket.left { left: 1px; border-top: 1px solid var(--state); transform: skewX(-18deg); }
-.core-bracket.right { right: 1px; border-bottom: 1px solid var(--state); transform: skewX(-18deg); }
-.hud:is([data-state="INTERDICTION EVADED"], [data-state="CARRIER PREPARING"],
-  [data-state="CARRIER LOCKDOWN"], [data-state="STATION VICINITY"],
-  [data-state="SUIT OXYGEN LOW"], [data-state="SUIT HEALTH LOW"],
-  [data-state="SURFACE DEPARTURE"], [data-state="ORBITAL DEPARTURE"],
-  [data-state="SURFACE APPROACH"], [data-state="ORBITAL APPROACH"],
-  [data-state="FLIGHT ASSIST OFF"], [data-state^="FSD INJECTION"],
-  [data-state^="SIGNAL THREAT"], [data-state^="DSS EFFICIENT"],
-  [data-state^="BOARDING "]) .state-core strong {
-  font-size: min(calc(12.5px * var(--text-scale)), 6.1cqw);
-  letter-spacing: .2px;
+#state-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--state);
+  font: 700 19px/1 var(--font-hud);
+  letter-spacing: .07em;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--state) 38%, transparent);
 }
-.core-pulse {
-  position: absolute; z-index: 1; width: 62%; height: 7px; border-radius: 50%;
-  background: color-mix(in srgb, var(--state) 20%, transparent); filter: blur(5px);
-  opacity: .38; animation: core-breathe calc(2.15s * var(--motion-scale)) ease-in-out infinite;
+.event-notice {
+  --event-tone: var(--accent);
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 8px;
+  border-left: 1px solid color-mix(in srgb, var(--event-tone) 60%, transparent);
+  color: var(--event-tone);
+  font: 700 9px var(--font-wide);
+  letter-spacing: .1em;
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity .35s ease, transform .35s ease;
+}
+.event-notice.showing { opacity: 1; transform: translateX(0); animation: event-arrive calc(.6s * var(--motion-scale)) steps(2, end) 2; }
+.hud.expanded .event-notice { max-width: 250px; }
+
+/* Warnings flash the way the cockpit's do; every other notice holds steady. */
+.hud[data-category="alert"] .notice { animation: warning-flash calc(1.2s * var(--motion-scale)) steps(1, end) infinite; }
+.hud.state-changing .notice { animation: notice-flicker .42s linear 1; }
+.hud.state-changing[data-category="alert"] .notice { animation: notice-flicker .42s linear 1, warning-flash calc(1.2s * var(--motion-scale)) steps(1, end) .42s infinite; }
+
+/* ---------------------------------------------------------- instrument -- */
+.instrument {
+  --flow: color-mix(in srgb, var(--state) 70%, transparent);
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 9px;
+}
+.band {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--hud-faint);
+  background: color-mix(in srgb, var(--inset) 86%, transparent);
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%);
+}
+.band > * { position: absolute; inset: 0; display: block; }
+.band-ticks { background: linear-gradient(90deg, var(--hud-faint) 1px, transparent 1px) 0 100% / 10% 3px repeat-x; opacity: .9; }
+.band-flow, .band-streaks, .band-hazard, .band-fill, .band-marker { opacity: 0; }
+.band-flow {
+  background:
+    linear-gradient(45deg, transparent 38%, var(--flow) 38% 58%, transparent 58%) 0 0 / 12px 50% repeat-x,
+    linear-gradient(135deg, transparent 38%, var(--flow) 38% 58%, transparent 58%) 0 100% / 12px 50% repeat-x;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+.band-streaks {
+  background:
+    linear-gradient(90deg, transparent 0 30%, color-mix(in srgb, var(--text) 70%, transparent) 30% 42%, transparent 42%) 0 25% / 64px 1px repeat-x,
+    linear-gradient(90deg, transparent 0 55%, color-mix(in srgb, var(--flow) 90%, transparent) 55% 75%, transparent 75%) 0 70% / 90px 1px repeat-x;
+}
+.band-hazard { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--state) 70%, transparent) 0 5px, transparent 5px 10px); }
+.band-fill {
+  right: auto; width: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--state) 22%, transparent), color-mix(in srgb, var(--state) 62%, transparent));
+  transition: transform .6s cubic-bezier(.2, .8, .2, 1);
+}
+.band-marker {
+  left: 0; right: auto; width: 2px;
+  transform: translateX(-50%);
+  background: var(--text);
+  box-shadow: 0 0 6px var(--state);
+  transition: left .6s cubic-bezier(.2, .8, .2, 1);
+}
+.band-marker[hidden] { display: none; }
+.readout {
+  min-width: 0;
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font: 700 10px var(--font-wide);
+  letter-spacing: .06em;
+}
+.readout:empty { display: none; }
+
+.instrument[data-instrument="idle"] .band { border-color: color-mix(in srgb, var(--hud) 12%, transparent); }
+.instrument[data-instrument="flow"] .band-flow { opacity: .75; animation: band-flow calc(1.6s * var(--motion-scale)) linear infinite; }
+.instrument[data-variant="charge"] .band-flow { opacity: .95; animation-duration: calc(.7s * var(--motion-scale)); }
+.instrument[data-variant="charge"] .band { animation: charge-build calc(.9s * var(--motion-scale)) ease-in-out infinite alternate; }
+.instrument[data-variant="jump"] .band-flow { opacity: 1; animation-duration: calc(.32s * var(--motion-scale)); }
+.instrument[data-variant="jump"] .band-streaks { opacity: .9; animation: band-streak calc(.45s * var(--motion-scale)) linear infinite; }
+.instrument[data-variant="overcharge"] .band-flow { opacity: 1; animation-duration: calc(.55s * var(--motion-scale)); }
+.instrument[data-variant="overcharge"] .band-streaks { opacity: .55; animation: band-streak calc(.9s * var(--motion-scale)) linear infinite; }
+.instrument[data-variant="arrive"] .band-flow { animation: band-flow calc(.5s * var(--motion-scale)) linear 3, band-settle calc(1.5s * var(--motion-scale)) ease-out forwards; }
+.instrument[data-variant="cool"] .band-flow { opacity: .3; animation-duration: calc(3.2s * var(--motion-scale)); }
+.instrument[data-variant="carrier"] .band-flow { opacity: .55; animation-duration: calc(3s * var(--motion-scale)); }
+.instrument.supercharged { --flow: color-mix(in srgb, var(--accent) 85%, white 15%); }
+.instrument.supercharged .band { border-color: color-mix(in srgb, var(--accent) 50%, transparent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 35%, transparent); }
+.instrument.supercharged .readout { color: var(--accent); }
+.instrument[data-instrument="alert"] .band-hazard { opacity: .8; animation: band-hazard calc(1.1s * var(--motion-scale)) linear infinite; }
+.instrument[data-instrument="lock"] .band-hazard { opacity: .38; }
+.instrument[data-instrument="altimeter"] .band-fill,
+.instrument[data-instrument="scan"] .band-fill { opacity: 1; }
+.instrument[data-instrument="altimeter"] .band-marker,
+.instrument[data-instrument="scan"] .band-marker { opacity: 1; }
+/* Decades of altitude: 100 m, 1 km, 10 km and 100 km on the log scale. */
+.instrument[data-instrument="altimeter"] .band-ticks {
+  background:
+    linear-gradient(90deg, transparent calc(23.25% - 1px), var(--hud-soft) calc(23.25% - 1px) 23.25%, transparent 23.25%),
+    linear-gradient(90deg, transparent calc(46.5% - 1px), var(--hud-soft) calc(46.5% - 1px) 46.5%, transparent 46.5%),
+    linear-gradient(90deg, transparent calc(69.75% - 1px), var(--hud-soft) calc(69.75% - 1px) 69.75%, transparent 69.75%),
+    linear-gradient(90deg, transparent calc(93% - 1px), var(--hud-soft) calc(93% - 1px) 93%, transparent 93%);
+}
+.instrument[data-vertical="down"] .band-marker { animation: altitude-cue calc(1s * var(--motion-scale)) ease-in-out infinite; }
+.instrument[data-instrument="scan"] { --state: var(--accent); }
+.instrument[data-instrument="scan"] .band-streaks {
+  opacity: .8;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 70%, white 30%), transparent) 0 0 / 40px 100% no-repeat;
+  animation: band-sweep calc(2.2s * var(--motion-scale)) ease-in-out infinite;
 }
 
-/* Each state has a restrained, persistent instrument signature. The canvas
-   supplies the active response; these fields remain recognisable at rest. */
-.hud:is([data-motion="supercruise"], [data-motion="supercruise_assist"], [data-motion="supercruise_overcharge"]) {
-  --state-motif: repeating-linear-gradient(112deg,
-    transparent 0 29px, color-mix(in srgb, var(--state) 7%, transparent) 30px 31px, transparent 32px 60px);
-  --vehicle-motif: linear-gradient(90deg, transparent 0 8%, color-mix(in srgb, var(--state) 10%, transparent) 45%, transparent 95%);
+/* ----------------------------------------------------- lamps and fuel -- */
+.systems-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
+.lamps { min-width: 0; display: flex; gap: 4px; overflow: hidden; white-space: nowrap; }
+.lamp {
+  --lamp: var(--hud);
+  flex: 0 0 auto;
+  padding: 2px 5px 1px;
+  border: 1px solid color-mix(in srgb, var(--lamp) 58%, transparent);
+  background: color-mix(in srgb, var(--lamp) 13%, transparent);
+  color: var(--lamp);
+  font: 700 8px/1.2 var(--font-wide);
+  letter-spacing: .1em;
+  text-shadow: 0 0 6px color-mix(in srgb, var(--lamp) 45%, transparent);
 }
-.hud:is([data-motion="fsd_charge"], [data-motion="system_reboot"]) {
-  --state-motif: repeating-linear-gradient(90deg,
-    transparent 0 16px, color-mix(in srgb, var(--state) 8%, transparent) 17px 18px, transparent 19px 35px);
-  --vehicle-motif: linear-gradient(125deg, transparent 0 34%, color-mix(in srgb, var(--state) 16%, transparent) 48%, transparent 50%),
-    linear-gradient(235deg, transparent 0 34%, color-mix(in srgb, var(--state) 16%, transparent) 48%, transparent 50%);
-}
-.hud:is([data-motion="carrier_preparing"], [data-motion="carrier_lockdown"], [data-motion="carrier_deck"]) {
-  --state-motif: repeating-linear-gradient(90deg,
-    transparent 0 20px, color-mix(in srgb, var(--state) 8%, transparent) 21px 23px, transparent 24px 42px);
-  --vehicle-motif: linear-gradient(90deg, color-mix(in srgb, var(--state) 12%, transparent) 0 8%,
-    transparent 8% 92%, color-mix(in srgb, var(--state) 12%, transparent) 92%);
-}
-.hud:is([data-motion="jump"], [data-motion="carrier_transit"]) {
-  --state-motif: repeating-linear-gradient(90deg,
-    transparent 0 35px, color-mix(in srgb, var(--state) 12%, transparent) 36px,
-    transparent 37px 49px, color-mix(in srgb, var(--state) 5%, transparent) 50px, transparent 51px 71px);
-  --vehicle-motif: linear-gradient(90deg, transparent 0 8%, color-mix(in srgb, var(--state) 19%, transparent) 31%, transparent 95%);
-}
-.hud:is([data-motion="arrival"], [data-motion="carrier_arrival"], [data-motion="local_arrival"], [data-motion="fsd_cooldown"]) {
-  --state-motif: radial-gradient(ellipse 23% 130% at 50% 50%,
-    color-mix(in srgb, var(--state) 10%, transparent) 0 36%, transparent 39% 52%,
-    color-mix(in srgb, var(--state) 7%, transparent) 54%, transparent 57%);
-  --vehicle-motif: radial-gradient(ellipse at 52% 50%, transparent 34%, color-mix(in srgb, var(--state) 16%, transparent) 58%, transparent 76%);
-}
-.hud:is([data-motion="scanner"], [data-motion="map"], [data-motion="target_lock"], [data-motion="phenomena"]) {
-  --state-motif: repeating-radial-gradient(circle at 22% 50%,
-    transparent 0 13px, color-mix(in srgb, var(--state) 6%, transparent) 14px 15px, transparent 16px 29px);
-  --vehicle-motif: repeating-radial-gradient(circle at 50% 50%,
-    transparent 0 10px, color-mix(in srgb, var(--state) 15%, transparent) 11px, transparent 12px 21px);
-}
-.hud:is([data-motion="orbital_approach"], [data-motion="surface_approach"], [data-motion="glide"],
-  [data-motion="surface_hold"], [data-motion="surface_departure"], [data-motion="orbital_departure"],
-  [data-motion="landed"], [data-motion="surface_vehicle"], [data-motion="on_foot"],
-  [data-motion="srv_handbrake"], [data-motion="srv_turret"], [data-motion="srv_drive_assist"],
-  [data-motion="settlement_area"], [data-motion="surface_station"]) {
-  --state-motif: linear-gradient(0deg,
-    transparent 0 29%, color-mix(in srgb, var(--state) 11%, transparent) 30%,
-    transparent 32% 67%, color-mix(in srgb, var(--state) 5%, transparent) 68%, transparent 70%);
-  --vehicle-motif: linear-gradient(0deg,
-    color-mix(in srgb, var(--state) 13%, transparent), transparent 38% 100%);
-}
-.hud:is([data-motion="docking_assist"], [data-motion="docking_clearance"], [data-motion="docked"],
-  [data-motion="station"], [data-motion="station_services"], [data-motion="maintenance"]) {
-  --state-motif: linear-gradient(90deg, transparent 0 20%, color-mix(in srgb, var(--state) 8%, transparent) 20% 20.4%,
-    transparent 20.4% 79.6%, color-mix(in srgb, var(--state) 8%, transparent) 79.6% 80%, transparent 80%);
-  --vehicle-motif: linear-gradient(90deg,
-    color-mix(in srgb, var(--state) 12%, transparent) 0 2px, transparent 2px calc(100% - 2px),
-    color-mix(in srgb, var(--state) 12%, transparent) calc(100% - 2px));
-}
-.hud:is([data-motion="left_panel"], [data-motion="right_panel"], [data-motion="comms_panel"], [data-motion="role_panel"]) {
-  --state-motif: repeating-linear-gradient(0deg,
-    transparent 0 7px, color-mix(in srgb, var(--state) 5%, transparent) 8px, transparent 9px 15px);
-  --vehicle-motif: linear-gradient(90deg, color-mix(in srgb, var(--state) 13%, transparent) 0 14%,
-    transparent 14% 86%, color-mix(in srgb, var(--state) 13%, transparent) 86%);
-}
-.hud:is([data-motion="fighter"], [data-motion="vehicle_deploy"], [data-motion="vehicle_board"],
-  [data-motion="vehicle_switch"]) {
-  --state-motif: linear-gradient(90deg, transparent 0 26%, color-mix(in srgb, var(--state) 7%, transparent) 26% 27%,
-    transparent 27% 73%, color-mix(in srgb, var(--state) 7%, transparent) 73% 74%, transparent 74%);
-  --vehicle-motif: repeating-linear-gradient(90deg,
-    color-mix(in srgb, var(--state) 10%, transparent) 0 2px, transparent 3px 18px);
-}
-.hud:is([data-motion="combat"], [data-motion="heavy_combat"], [data-motion="srv_threat"],
-  [data-motion="capital_contact"], [data-motion="unknown_contact"], [data-motion="asteroid_field"],
-  [data-motion="fsd_lock"], [data-motion="flight_assist_off"], [data-motion="heat_critical"],
-  [data-motion="suit_hazard"], [data-motion="jet_cone_damage"], [data-motion="docking_denied"]) {
-  --state-motif: repeating-linear-gradient(135deg,
-    transparent 0 12px, color-mix(in srgb, var(--state) 9%, transparent) 13px 15px, transparent 16px 30px);
-  --vehicle-motif: linear-gradient(135deg,
-    color-mix(in srgb, var(--state) 12%, transparent) 0 13%, transparent 13% 87%,
-    color-mix(in srgb, var(--state) 12%, transparent) 87%);
-}
-.hud[data-motion="silent_running"] {
-  --state-motif: repeating-linear-gradient(90deg,
-    transparent 0 23px, color-mix(in srgb, var(--state) 3%, transparent) 24px, transparent 25px 47px);
-  --vehicle-motif: none;
-}
+.lamp.mode { background: none; border-color: color-mix(in srgb, var(--lamp) 40%, transparent); border-style: dashed; }
+.lamp.tone-info { --lamp: var(--accent); }
+.lamp.tone-caution { --lamp: var(--yellow); }
+.lamp.tone-good { --lamp: var(--green); }
+.lamp.tone-danger { --lamp: var(--red); animation: warning-flash calc(1.2s * var(--motion-scale)) steps(1, end) infinite; }
 
-.hud:is([data-motion="supercruise"], [data-motion="supercruise_assist"], [data-motion="supercruise_overcharge"],
-  [data-motion="fsd_charge"], [data-motion="jump"], [data-motion="carrier_transit"]) .state-vehicle::after {
-  animation: state-vector-flow calc(1.35s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud:is([data-motion="fsd_charge"], [data-motion="supercruise_overcharge"], [data-motion="system_reboot"]) .state-instrument::before {
-  animation: state-rail-charge calc(.88s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud:is([data-motion="carrier_preparing"], [data-motion="carrier_lockdown"]) .state-instrument::before {
-  animation: state-rail-charge calc(1.45s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud:is([data-motion="scanner"], [data-motion="map"], [data-motion="target_lock"], [data-motion="phenomena"]) .vehicle-frame {
-  border-style: dashed; border-right-style: solid;
-}
-.hud:is([data-motion="docked"], [data-motion="landed"], [data-motion="station"], [data-motion="docking_clearance"]) .state-core::before,
-.hud:is([data-motion="docked"], [data-motion="landed"], [data-motion="station"], [data-motion="docking_clearance"]) .state-core::after {
-  transform: none; border-width: 1px 2px;
-}
-.hud:is([data-motion="combat"], [data-motion="heavy_combat"], [data-motion="srv_threat"],
-  [data-motion="heat_critical"], [data-motion="suit_hazard"], [data-motion="jet_cone_damage"],
-  [data-motion="docking_denied"]) .state-core::before,
-.hud:is([data-motion="combat"], [data-motion="heavy_combat"], [data-motion="srv_threat"],
-  [data-motion="heat_critical"], [data-motion="suit_hazard"], [data-motion="jet_cone_damage"],
-  [data-motion="docking_denied"]) .state-core::after {
-  animation: state-warning-clamp calc(.9s * var(--motion-scale)) steps(2, end) infinite;
-}
-/* The canvas paints each response instrument. These small, outer-right rail
-   signatures keep its state family legible without covering the drawing. */
-.hud:is([data-motion="scanner"], [data-motion="map"], [data-motion="target_lock"],
-  [data-motion="phenomena"]) .state-instrument::before {
-  width: 60px;
-  background: repeating-linear-gradient(90deg, transparent 0 5px, var(--state) 5px 7px,
-    transparent 7px 12px);
-  animation: state-scope-rail calc(2.1s * var(--motion-scale)) linear infinite;
-}
-.hud:is([data-motion="scanner"], [data-motion="map"], [data-motion="target_lock"],
-  [data-motion="phenomena"]) .state-instrument::after {
-  width: 28px; border-right-style: dashed; border-bottom-style: dashed;
-}
-.hud:is([data-motion="orbital_approach"], [data-motion="surface_approach"], [data-motion="glide"],
-  [data-motion="surface_hold"], [data-motion="surface_departure"], [data-motion="orbital_departure"],
-  [data-motion="landed"], [data-motion="surface_vehicle"], [data-motion="on_foot"],
-  [data-motion="srv_handbrake"], [data-motion="srv_turret"], [data-motion="srv_drive_assist"],
-  [data-motion="settlement_area"], [data-motion="surface_station"]) .state-instrument::after {
-  width: 42px; height: 3px; border-right: 0; border-bottom-width: 2px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--state) 28%, transparent));
-}
-.hud:is([data-motion="docking_assist"], [data-motion="docking_clearance"], [data-motion="docked"],
-  [data-motion="station"], [data-motion="station_services"], [data-motion="maintenance"]) .state-instrument::after {
-  width: 34px; height: 6px; border: 1px solid color-mix(in srgb, var(--state) 60%, transparent);
-  border-left: 0; box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--state) 18%, transparent);
-}
-.hud:is([data-motion="carrier_preparing"], [data-motion="carrier_lockdown"],
-  [data-motion="carrier_transit"], [data-motion="carrier_arrival"], [data-motion="carrier_deck"]) .state-instrument::after {
-  width: 46px; height: 6px; border-right-width: 3px; border-bottom-width: 2px;
-  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--state) 22%, transparent);
-}
-.hud:is([data-motion="left_panel"], [data-motion="right_panel"],
-  [data-motion="comms_panel"], [data-motion="role_panel"]) .state-instrument::after {
-  width: 30px; height: 5px; border-right-width: 1px;
-  background: repeating-linear-gradient(90deg,
-    color-mix(in srgb, var(--state) 25%, transparent) 0 2px, transparent 2px 6px);
-}
-.hud:is([data-motion="combat"], [data-motion="heavy_combat"], [data-motion="srv_threat"],
-  [data-motion="capital_contact"], [data-motion="unknown_contact"], [data-motion="asteroid_field"],
-  [data-motion="fsd_lock"], [data-motion="flight_assist_off"], [data-motion="heat_critical"],
-  [data-motion="suit_hazard"], [data-motion="jet_cone_damage"], [data-motion="docking_denied"]) .state-instrument::after {
-  width: 34px; height: 6px; border-right-width: 3px;
-  animation: state-warning-clamp calc(.95s * var(--motion-scale)) steps(2, end) infinite;
-}
-.hud[data-motion="silent_running"] .state-instrument::after {
-  width: 14px; opacity: .25; border-right-style: dotted; border-bottom-style: dotted;
-}
-@keyframes state-scope-rail { to { background-position-x: 12px; } }
-.hud[data-motion="silent_running"] .state-instrument { filter: saturate(.55) brightness(.72); }
-.hud[data-motion="silent_running"] .vehicle-frame { border-style: dotted; }
-.hud[data-motion="carrier_lockdown"] .vehicle-frame,
-.hud[data-motion="carrier_deck"] .vehicle-frame { border-right-width: 2px; }
-.hud:is([data-motion="vehicle_deploy"], [data-motion="vehicle_board"], [data-motion="vehicle_switch"]) .state-vehicle::after {
-  animation: state-vector-flow calc(1.2s * var(--motion-scale)) ease-in-out infinite;
-}
-@keyframes state-vector-flow {
-  0%, 100% { transform: scaleX(.42); opacity: .18; }
-  50% { transform: scaleX(1); opacity: .7; }
-}
-@keyframes state-rail-charge { 50% { opacity: .35; width: 112px; filter: brightness(1.5); } }
-@keyframes state-warning-clamp { 50% { opacity: .36; filter: brightness(1.6); } }
+.fuel-gauge { --fuel-tone: var(--green); display: flex; align-items: center; gap: 5px; color: var(--muted); }
+.fuel-gauge > span:first-child { color: var(--hud-soft); font: 700 8px var(--font-wide); letter-spacing: .16em; }
+.fuel-cells { display: flex; gap: 2px; }
+.fuel-cells i { width: 5px; height: 9px; transform: skewX(-14deg); background: color-mix(in srgb, var(--fuel-tone) 12%, var(--inset)); border: 1px solid color-mix(in srgb, var(--fuel-tone) 22%, transparent); }
+.fuel-cells i.lit { background: var(--fuel-tone); border-color: var(--fuel-tone); box-shadow: 0 0 4px color-mix(in srgb, var(--fuel-tone) 55%, transparent); }
+.fuel-gauge strong { min-width: 30px; text-align: right; color: var(--fuel-tone); font: 700 11px var(--font-wide); }
+.fuel-gauge.unknown strong { color: var(--dim); }
+.fuel-gauge.scooping .fuel-cells i.lit { animation: fuel-scoop calc(1.1s * var(--motion-scale)) ease-in-out infinite; }
+.fuel-gauge.scooping .fuel-cells i.lit:nth-child(2n) { animation-delay: calc(-.35s * var(--motion-scale)); }
 
-.hud[data-motion="supercruise"] .state-vehicle img {
-  animation: vehicle-cruise calc(1.55s * var(--motion-scale)) ease-in-out infinite;
+/* ------------------------------------------------------------- location -- */
+.location { display: grid; grid-template-rows: 24px 14px; align-content: center; row-gap: 1px; padding-top: 3px; }
+.location-line { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.current-system {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text);
+  font: 700 19px/1 var(--font-hud);
+  letter-spacing: .05em;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--hud) 16%, transparent);
 }
-.hud[data-motion="supercruise_assist"] .state-vehicle img {
-  animation: vehicle-cruise calc(1.9s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="supercruise_overcharge"] .state-vehicle img,
-.hud[data-motion="fsd_charge"] .state-vehicle img {
-  animation: vehicle-charge calc(.78s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="jump"] .state-vehicle img,
-.hud[data-motion="carrier_transit"] .state-vehicle img {
-  animation: vehicle-jump calc(.68s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="arrival"] .state-vehicle img,
-.hud[data-motion="carrier_arrival"] .state-vehicle img {
-  animation: vehicle-arrival calc(2.2s * var(--motion-scale)) ease-out 1 both;
-}
-.hud[data-motion="fsd_cooldown"] .state-vehicle img {
-  animation: vehicle-cooldown calc(1.55s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="local_arrival"] .state-vehicle img {
-  animation: vehicle-arrival calc(2.2s * var(--motion-scale)) ease-out 1 both;
-}
-.hud[data-motion="phenomena"] .state-vehicle img {
-  animation: vehicle-phenomena calc(2.6s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="combat"] .state-vehicle img,
-.hud[data-motion="srv_threat"] .state-vehicle img,
-.hud[data-motion="capital_contact"] .state-vehicle img,
-.hud[data-motion="unknown_contact"] .state-vehicle img,
-.hud[data-motion="heavy_combat"] .state-vehicle img {
-  animation: vehicle-threat calc(.78s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="docking_assist"] .state-vehicle img {
-  animation: vehicle-approach calc(1.34s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="settlement_area"] .state-vehicle img {
-  animation: vehicle-hold calc(1.95s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="surface_station"] .state-vehicle img,
-.hud[data-motion="carrier_deck"] .state-vehicle img {
-  animation: vehicle-hold calc(2.05s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="carrier_preparing"] .state-vehicle img,
-.hud[data-motion="carrier_lockdown"] .state-vehicle img {
-  animation: vehicle-charge calc(1.3s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="left_panel"] .state-vehicle img {
-  animation: vehicle-panel-left calc(1.62s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="right_panel"] .state-vehicle img {
-  animation: vehicle-panel-right calc(1.62s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="comms_panel"] .state-vehicle img {
-  animation: vehicle-comms calc(1.34s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="role_panel"] .state-vehicle img {
-  animation: vehicle-role-panel calc(1.78s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="station_services"] .state-vehicle img {
-  animation: vehicle-services calc(2.05s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="orbital_approach"] .state-vehicle img,
-.hud[data-motion="surface_approach"] .state-vehicle img {
-  animation: vehicle-approach calc(1.28s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="glide"] .state-vehicle img {
-  animation: vehicle-glide calc(.78s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="surface_departure"] .state-vehicle img,
-.hud[data-motion="orbital_departure"] .state-vehicle img {
-  animation: vehicle-departure calc(1.18s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="surface_hold"] .state-vehicle img {
-  animation: vehicle-hold calc(2.3s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="flight_assist_off"] .state-vehicle img {
-  animation: vehicle-threat calc(1.35s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="fsd_lock"] .state-vehicle img,
-.hud[data-motion="asteroid_field"] .state-vehicle img {
-  animation: vehicle-hold calc(1.55s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="silent_running"] .state-vehicle img {
-  animation: vehicle-hold calc(2.2s * var(--motion-scale)) ease-in-out infinite;
-  opacity: .68;
-}
-.hud[data-motion="docking_clearance"] .state-vehicle img {
-  animation: vehicle-approach calc(1.42s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="maintenance"] .state-vehicle img {
-  animation: vehicle-cooldown calc(1.7s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="system_reboot"] .state-vehicle img {
-  animation: vehicle-charge calc(.92s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="heat_critical"] .state-vehicle img,
-.hud[data-motion="suit_hazard"] .state-vehicle img,
-.hud[data-motion="jet_cone_damage"] .state-vehicle img,
-.hud[data-motion="docking_denied"] .state-vehicle img {
-  animation: vehicle-threat calc(.72s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="scanner"] .vehicle-scan,
-.hud[data-motion="map"] .vehicle-scan,
-.hud[data-motion="target_lock"] .vehicle-scan {
-  opacity: .7; animation: vehicle-scan calc(1.8s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-state="GALAXY MAP"] .state-vehicle img {
-  animation: vehicle-galaxy-map calc(2.35s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-state="GALAXY MAP"] .vehicle-scan {
-  animation: vehicle-map-vector calc(2.35s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-state="SYSTEM MAP"] .state-vehicle img {
-  animation: vehicle-system-map calc(1.86s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-state="SYSTEM MAP"] .vehicle-scan {
-  animation: vehicle-map-orbit calc(1.86s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="surface_vehicle"] .state-vehicle img,
-.hud[data-motion="on_foot"] .state-vehicle img,
-.hud[data-motion="srv_handbrake"] .state-vehicle img,
-.hud[data-motion="srv_turret"] .state-vehicle img,
-.hud[data-motion="srv_drive_assist"] .state-vehicle img {
-  animation: vehicle-surface calc(1.2s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="scarab"] img {
-  animation: vehicle-srv calc(1.18s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="scorpion"] img {
-  animation: vehicle-scorpion calc(.9s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="rhino"] img {
-  animation: vehicle-rhino calc(1.04s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="surface_vehicle"] .state-vehicle[data-vehicle="nomad"] img {
-  animation: vehicle-nomad calc(1.05s * var(--motion-scale)) ease-in-out infinite;
-}
-.hud[data-motion="fighter"] .state-vehicle[data-vehicle="fighter"] img {
-  animation: vehicle-fighter calc(.82s * var(--motion-scale)) ease-in-out infinite;
-}
-.state-vehicle[data-vehicle="nomad"] .vehicle-frame {
-  clip-path: polygon(0 24%, 13% 0, 86% 0, 100% 28%, 93% 100%, 8% 100%);
-  border-color: color-mix(in srgb, var(--state) 56%, transparent);
-}
-.state-vehicle[data-vehicle="scarab"] .vehicle-frame,
-.state-vehicle[data-vehicle="scorpion"] .vehicle-frame,
-.state-vehicle[data-vehicle="rhino"] .vehicle-frame {
-  clip-path: polygon(0 16%, 16% 0, 100% 0, 100% 74%, 84% 100%, 0 100%);
-}
-.state-vehicle[data-vehicle="fighter"] .vehicle-frame {
-  clip-path: polygon(0 0, 78% 0, 100% 50%, 78% 100%, 0 100%, 10% 50%);
-}
-.state-vehicle .vehicle-outgoing {
-  position: absolute; z-index: 4; margin: 0; animation: none !important;
-  pointer-events: none; object-fit: contain; transform-origin: 48% 54%;
-}
-.state-vehicle.vehicle-swapping .vehicle-frame {
-  animation: vehicle-frame-resolve .52s cubic-bezier(.2,.75,.2,1) 1;
-}
-.hud[data-motion="docked"] .state-vehicle img,
-.hud[data-motion="landed"] .state-vehicle img { animation: none; opacity: .9; }
-.hud[data-motion^="vehicle_"] .state-vehicle img { animation: none; }
+.star-chip { flex: 0 0 auto; padding: 1px 6px; border: 1px solid var(--hud-faint); color: var(--muted); font: 700 8.5px var(--font-wide); letter-spacing: .12em; }
+.location-meta { min-width: 0; display: flex; justify-content: space-between; gap: 12px; padding-left: 26px; color: var(--hud-soft); font: 700 8.5px var(--font-wide); letter-spacing: .12em; white-space: nowrap; }
+#region-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.clock small { color: var(--dim); font-size: inherit; }
+.clock b { color: var(--text); font-weight: 700; }
 
-.system-block {
-  top: 54px; height: 44px; padding-left: 15px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 62%);
-}
-.locator-rail {
-  position: absolute; left: 0; top: 5px; bottom: 6px; width: 7px;
-  border-left: 1px solid var(--accent);
-  border-right: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-.locator-rail i {
-  position: absolute; left: 2px; right: 2px; top: 7px; bottom: 7px;
-  background: var(--accent); box-shadow: 0 0 7px var(--accent);
-  animation: locator-breathe calc(3.8s * var(--motion-scale)) ease-in-out infinite;
-}
-.system-meta { height: 15px; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; color: var(--muted); font-size: calc(11px * var(--text-scale)); font-weight: 700; letter-spacing: .4px; }
-#region-label { text-align: right; color: var(--accent); opacity: .74; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-#system-clock { color: var(--dim); min-width: 40px; text-align: right; }
-.system-readout { display: flex; align-items: center; gap: 8px; min-width: 0; height: 24px; }
-.current-system { flex: 1; min-width: 0; color: var(--text); font: 700 calc(18px * var(--text-scale)) "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .7px; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 17%, transparent); }
-.current-star-label { flex: 0 1 auto; max-width: 115px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 6px; border-left: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); color: var(--muted); font-size: calc(9px * var(--text-scale)); font-weight: 700; letter-spacing: .35px; }
-
-/* Code-rendered arrival-star illustrations. These are spectral-class cues,
-   never claims to show a photograph or every stellar body in the system. */
+/* ---------------------------------------------------------- star orbs -- */
 .star-o { --stellar-tone: #a9cfff; }
 .star-b { --stellar-tone: #c5d9ff; }
 .star-a { --stellar-tone: #e6ecff; }
@@ -558,10 +366,9 @@ body {
 .star-blackhole { --stellar-tone: #c98dff; }
 .star-unknown { --stellar-tone: var(--dim); }
 .star-orb {
-  position: relative; display: inline-block; flex: 0 0 22px; width: 22px; height: 22px;
+  position: relative; display: inline-block; flex: 0 0 18px; width: 18px; height: 18px;
   border-radius: 50%; isolation: isolate;
 }
-.system-readout .star-orb { flex-basis: 19px; width: 19px; height: 19px; }
 .star-orb::before {
   content: ""; position: absolute; inset: -3px; border-radius: 50%;
   background: radial-gradient(circle, color-mix(in srgb, var(--stellar-tone) 43%, transparent) 0 22%, transparent 73%);
@@ -582,7 +389,7 @@ body {
   animation: stellar-granulation calc(13s * var(--motion-scale)) linear infinite;
 }
 .star-dwarf > i { inset: 5px; box-shadow: 0 0 7px var(--stellar-tone), 0 0 14px color-mix(in srgb, var(--stellar-tone) 60%, transparent); }
-.star-neutron > i { inset: 7px; box-shadow: 0 0 8px var(--stellar-tone), 0 0 15px var(--stellar-tone); }
+.star-neutron > i { inset: 6px; box-shadow: 0 0 8px var(--stellar-tone), 0 0 15px var(--stellar-tone); }
 .star-neutron::after {
   content: ""; position: absolute; left: -3px; right: -3px; top: calc(50% - 1px); height: 2px;
   transform: rotate(-28deg);
@@ -598,52 +405,35 @@ body {
 .star-blackhole > i { inset: 5px; background: #020409; border: 1px solid color-mix(in srgb, var(--stellar-tone) 56%, transparent); box-shadow: 0 0 5px var(--stellar-tone); animation: none; }
 .star-blackhole > i::after { display: none; }
 .star-unknown::before { inset: 2px; border: 1px dashed var(--dim); background: none; opacity: .7; animation: none; }
-.star-unknown > i { inset: 7px; border: 1px solid var(--dim); border-radius: 0; background: none; box-shadow: none; transform: rotate(45deg); animation: none; }
+.star-unknown > i { inset: 6px; border: 1px solid var(--dim); border-radius: 0; background: none; box-shadow: none; transform: rotate(45deg); animation: none; }
 .star-unknown > i::after { display: none; }
-@keyframes stellar-corona { 50% { transform: scale(1.15); opacity: .62; } }
-@keyframes stellar-breathe { 50% { filter: brightness(1.16); } }
-@keyframes stellar-granulation { to { transform: rotate(360deg); } }
-@keyframes neutron-beam { 50% { opacity: .34; filter: brightness(1.6); } }
-@keyframes blackhole-disc { to { transform: rotate(360deg); } }
 
-.route-block { top: 102px; height: 94px; --route-tone: var(--orange); }
-.route-block[data-route-state="complete"] { --route-tone: var(--green); }
+/* ---------------------------------------------------------------- route -- */
+.route-block { display: grid; grid-template-rows: 25px 20px 17px; align-content: center; padding-top: 4px; --route-tone: var(--hud); }
+.route-target { min-width: 0; display: flex; align-items: center; gap: 8px; }
+#route-target {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--route-tone);
+  font: 700 17px/1 var(--font-hud);
+  letter-spacing: .05em;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--route-tone) 30%, transparent);
+  transition: color .6s ease;
+}
+.route-leg { flex: 0 0 auto; color: var(--text); font: 700 12px var(--font-wide); letter-spacing: .04em; }
 .route-block[data-route-state="empty"] { --route-tone: var(--dim); }
-.route-target {
-  position: relative; display: grid; grid-template-columns: 96px 22px minmax(0,1fr) 13px;
-  align-items: center; gap: 9px; min-width: 0; height: 27px; padding: 0 7px 0 9px;
-  border-left: 2px solid var(--route-tone);
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--route-tone) 16%, var(--inset)),
-    color-mix(in srgb, var(--route-tone) 5%, var(--panel)) 62%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--route-tone) 25%, transparent);
-}
-.route-target::after {
-  content: ""; width: 8px; height: 8px; border-top: 2px solid var(--route-tone);
-  border-right: 2px solid var(--route-tone); transform: rotate(45deg);
-  opacity: .86; filter: drop-shadow(0 0 4px var(--route-tone));
-  animation: vector-pulse calc(3s * var(--motion-scale)) ease-in-out infinite;
-}
-.route-block[data-route-state="complete"] .route-target::after { transform: rotate(45deg); }
-.route-target > span:first-child { color: var(--muted); font-size: calc(10px * var(--text-scale)); font-weight: 700; letter-spacing: .7px; }
-.route-target > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--route-tone); font: 700 calc(18px * var(--text-scale))/1 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .4px; text-shadow: 0 0 10px color-mix(in srgb, var(--route-tone) 30%, transparent); transition: color .6s ease; }
-.route-header { height: 18px; display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 9px; align-items: center; font-size: calc(10px * var(--text-scale)); font-weight: 700; color: var(--text); }
-#route-title { color: var(--route-tone); letter-spacing: .45px; }
-.route-header strong, .route-header span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-#route-next, #route-distance { padding-left: 8px; border-left: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); text-align: right; }
-#route-next { color: var(--text); } #route-distance { color: var(--muted); }
-.route-track { position: relative; height: 20px; overflow: hidden; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 15%, transparent) 0 1px, transparent 1px 24px); }
-.route-track::after {
-  content: ""; position: absolute; z-index: 5; top: 1px; bottom: 1px; left: -14%; width: 14%;
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 15%, transparent), transparent);
-  animation: flight-tape-sweep calc(7s * var(--motion-scale)) linear infinite;
-}
+.route-block[data-route-state="empty"] #route-target { font-size: 13px; letter-spacing: .12em; text-shadow: none; }
+.route-block[data-route-state="complete"] { --route-tone: var(--green); }
+.surface-focus .route-block { --route-tone: color-mix(in srgb, var(--hud) 55%, var(--muted)); }
+
+.route-track-line { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 7px; }
+.track-end { font-size: 7.5px; color: var(--dim); }
+.route-track { position: relative; height: 20px; min-width: 0; }
 .route-line { position: absolute; left: 0; right: 0; top: 9px; height: 2px; background: color-mix(in srgb, var(--border) 65%, var(--inset)); box-shadow: 0 0 4px rgba(0,0,0,.8); }
 .route-line > i { display: block; height: 2px; width: 0; background: color-mix(in srgb, var(--accent) 70%, transparent); box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 45%, transparent); transition: width .65s cubic-bezier(.2,.8,.2,1); }
 .route-pips { position: absolute; inset: 0; }
 .route-pips.unified { overflow: visible; }
-.route-segment { --stop-tone: var(--orange); position: absolute; top: 8px; height: 4px; min-width: 0; background: color-mix(in srgb,var(--stop-tone) 23%,var(--inset)); transition: background .6s ease; }
+.route-segment { --stop-tone: var(--hud); position: absolute; top: 8px; height: 4px; min-width: 0; background: color-mix(in srgb,var(--stop-tone) 23%,var(--inset)); transition: background .6s ease; }
 .route-segment.known-star { --stop-tone: var(--stellar-tone); }
 .route-segment.star-unknown { --stop-tone: var(--dim); }
 .route-segment > b { position: absolute; right: 0; top: -2px; width: min(5px,70%); height: 8px; background: var(--stop-tone); opacity: .65; box-shadow: 0 0 3px var(--inset); transition: opacity .6s ease,background .6s ease; }
@@ -658,231 +448,134 @@ body {
 .route-segment.known-star > b { background: var(--stellar-tone); }
 .route-segment.unscoopable > b { box-shadow: 0 0 0 1px var(--yellow), 0 0 4px var(--yellow); }
 .route-pips.ultra-dense .route-segment:not(.next):not(.current) > b { opacity: .48; }
-@keyframes waypoint-beacon { 0%,100% { opacity: .55; box-shadow: 0 0 2px var(--stop-tone); } 50% { opacity: 1; box-shadow: 0 0 7px var(--stop-tone); } }
-@keyframes waypoint-transit { 0% { transform: scaleX(.05); opacity: 0; } 65% { transform: scaleX(1); opacity: .9; } 100% { transform: scaleX(1); opacity: 0; } }
-@keyframes flight-tape-sweep { to { left: 100%; } }
-@keyframes locator-breathe { 50% { opacity: .52; box-shadow: 0 0 3px var(--accent); } }
-@keyframes vector-pulse { 50% { opacity: .35; filter: drop-shadow(0 0 1px var(--route-tone)); } }
-.route-captions { display: flex; justify-content: space-between; align-items: center; height: 13px; color: var(--dim); font-size: calc(10px * var(--text-scale)); font-weight: 700; letter-spacing: .3px; }
-#route-origin { color: var(--accent); } #route-destination { color: var(--orange); }
 
-.route-status { display: flex; justify-content: space-between; align-items: center; gap: 10px; height: 16px; color: var(--muted); font-size: calc(10px * var(--text-scale)); border-top: 1px solid color-mix(in srgb, var(--accent) 12%, transparent); }
-.route-status > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#route-feedback { color: var(--accent); flex: 1; letter-spacing: .2px; }
-#route-fuel { flex-shrink: 0; }
-#route-fuel.fuel-caution { color: var(--yellow); }
-#route-star { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
-.route-block.route-notice .route-target { animation: vector-confirm .85s ease-out; }
-.route-block.route-notice .route-track::after { animation: flight-tape-confirm .9s ease-out; }
-.route-block.route-notice[data-notice="arrived"] { --route-tone: var(--green); }
-.route-block.route-notice[data-notice="cleared"] { --route-tone: var(--dim); }
-.hud[data-motion="fsd_charge"] .route-track::after,
-.hud[data-motion="supercruise_overcharge"] .route-track::after { animation-duration: calc(1.5s * var(--motion-scale)); }
-.hud[data-motion="jump"] .route-track::after,
-.hud[data-motion="carrier_transit"] .route-track::after { animation-duration: calc(.8s * var(--motion-scale)); }
-.hud[data-motion="arrival"] .route-target,
-.hud[data-motion="carrier_arrival"] .route-target { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--green) 46%, transparent); }
-@keyframes vector-confirm { 30% { box-shadow: inset 0 0 15px color-mix(in srgb, var(--route-tone) 32%, transparent), 0 0 12px color-mix(in srgb, var(--route-tone) 24%, transparent); } }
-@keyframes flight-tape-confirm { from { left: -14%; opacity: 0; } 55% { opacity: 1; } to { left: 100%; opacity: 0; } }
-.surface-focus .context-rail { background: color-mix(in srgb,var(--accent) 12%,transparent); border-left: 2px solid var(--accent); padding-left: 6px; }
-.surface-focus .route-target > strong { color: var(--text); }
-.context-rail { transition: background .6s ease,border-color .6s ease; }
-.target-promoted { animation: target-promote .8s ease-out; }
-@keyframes target-promote { from { opacity: .55; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .target-promoted, .system-arrival { animation: none !important; } }
-.survey-block {
-  top: 201px; height: 68px; padding: 0 7px;
-  border-left: 2px solid color-mix(in srgb, var(--survey-tone, var(--accent)) 65%, transparent);
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--survey-tone, var(--accent)) 7%, var(--inset)),
-    color-mix(in srgb, var(--inset) 70%, transparent) 58%, transparent);
+.route-facts {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font: 700 9px var(--font-wide);
+  letter-spacing: .08em;
+  white-space: nowrap;
 }
-.survey-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 7px; height: 33px; font-size: calc(12px * var(--text-scale)); }
-.survey-status { grid-row: 2; grid-column: 1 / -1; }
-.survey-readout { grid-column: 2; grid-row: 1; }
-.survey-header strong { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--muted); white-space: nowrap; }
-.survey-header strong > i { position: relative; flex: 0 0 12px; width: 12px; height: 8px; border-left: 2px solid var(--survey-tone, var(--accent)); border-right: 1px solid color-mix(in srgb,var(--survey-tone, var(--accent)) 46%,transparent); clip-path: polygon(0 0,75% 0,100% 50%,75% 100%,0 100%,20% 50%); background: color-mix(in srgb,var(--survey-tone, var(--accent)) 12%,transparent); box-shadow: 0 0 5px color-mix(in srgb,var(--survey-tone, var(--accent)) 32%,transparent); }
-.survey-header strong > i::after { content:""; position:absolute; left:4px; top:3px; width:3px; height:2px; background:var(--survey-tone, var(--accent)); box-shadow:0 0 4px var(--survey-tone, var(--accent)); }
-.survey-header strong > span { overflow: hidden; text-overflow: ellipsis; }
-.survey-header > span { color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.survey-status { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
-.survey-status b { flex: 0 0 auto; font-size: calc(11.5px * var(--text-scale)); letter-spacing: .2px; }
-.survey-status small { flex: 0 0 auto; padding-left: 7px; border-left: 1px solid color-mix(in srgb, currentColor 46%, transparent); font-size: calc(11px * var(--text-scale)); font-weight: 700; opacity: .82; }
-.survey-status small:empty { display: none; }
-.survey-readout { display: flex; align-items: baseline; justify-content: flex-end; gap: 7px; min-width: 0; text-align: right; }
-#survey-count { color: var(--accent); font-size: calc(12px * var(--text-scale)); letter-spacing: .15px; }
-#survey-percent { min-width: 30px; color: var(--accent); font-size: calc(11px * var(--text-scale)); font-weight: 700; opacity: .74; }
-.survey-instrument { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 11px 20px; gap: 3px; align-items: center; height: 34px; contain: layout paint; }
-.survey-track { position: relative; min-width: 0; height: 11px; }
-.survey-rail { position: relative; height: 11px; overflow: hidden; border-left: 1px solid color-mix(in srgb,var(--survey-tone, var(--accent)) 72%,transparent); border-right: 1px solid color-mix(in srgb,var(--survey-tone, var(--accent)) 38%,transparent); background: linear-gradient(90deg,color-mix(in srgb,var(--survey-tone, var(--accent)) 8%,var(--inset)),color-mix(in srgb,var(--inset) 88%,transparent) 48%,color-mix(in srgb,var(--survey-tone, var(--accent)) 5%,var(--inset))); clip-path: polygon(0 0,calc(100% - 6px) 0,100% 50%,calc(100% - 6px) 100%,0 100%,5px 50%); }
-.survey-rail::before,.survey-rail::after { content:""; position:absolute; z-index:4; pointer-events:none; }
-.survey-rail::before { left:4px; right:5px; top:2px; bottom:2px; border-top:1px solid color-mix(in srgb,var(--survey-tone, var(--accent)) 24%,transparent); border-bottom:1px solid color-mix(in srgb,var(--survey-tone, var(--accent)) 18%,transparent); }
-.survey-rail::after { right:5px; top:2px; width:12px; height:7px; background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--survey-tone, var(--accent)) 20%,transparent)); clip-path:polygon(0 0,100% 0,100% 100%,45% 100%); }
-.survey-grid { position:absolute; z-index:1; inset:2px 5px 2px 5px; opacity:.55; background:linear-gradient(90deg,transparent calc(100% - 1px),color-mix(in srgb,var(--survey-tone, var(--accent)) 24%,transparent) calc(100% - 1px)); background-size:var(--survey-tick,8.333%) 100%; }
-.survey-progress-fill { position:absolute; z-index:2; left:5px; right:5px; top:3px; height:5px; overflow:hidden; transform:scaleX(0); transform-origin:left center; will-change:transform; transition:transform .46s cubic-bezier(.2,.82,.2,1); background:linear-gradient(90deg,color-mix(in srgb,var(--survey-tone, var(--accent)) 50%,transparent),var(--survey-tone, var(--accent))); box-shadow:0 0 5px color-mix(in srgb,var(--survey-tone, var(--accent)) 48%,transparent); clip-path:polygon(0 0,calc(100% - 4px) 0,100% 50%,calc(100% - 4px) 100%,0 100%); }
-.survey-progress-fill::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent 0 24%,rgba(255,255,255,.48) 48%,transparent 72%); transform:translateX(-130%); }
-.survey-block[data-survey-state="live"] .survey-progress-fill::after { animation: none; }
-.survey-progress-marker { position:absolute; z-index:5; top:0; left:1%; width:2px; height:11px; transform:translateX(-50%); background:var(--survey-tone, var(--accent)); box-shadow:0 0 5px color-mix(in srgb,var(--survey-tone, var(--accent)) 62%,transparent); opacity:.72; transition:left .46s cubic-bezier(.2,.82,.2,1),opacity .2s ease; pointer-events:none; }
-.survey-progress-marker::before,.survey-progress-marker::after { content:""; position:absolute; left:-3px; width:8px; height:1px; background:var(--survey-tone, var(--accent)); }.survey-progress-marker::before { top:0; }.survey-progress-marker::after { bottom:0; }
-.survey-acquisition { position:absolute; z-index:6; top:50%; left:1%; width:24px; height:9px; opacity:0; transform:translate(-50%,-50%); border-left:1px solid var(--orange); border-right:1px solid var(--orange); background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--orange) 28%,transparent),transparent); box-shadow:0 0 6px color-mix(in srgb,var(--orange) 38%,transparent); pointer-events:none; transition:left .46s cubic-bezier(.2,.82,.2,1); }
-.survey-rail.resetting .survey-progress-fill,.survey-rail.resetting .survey-progress-marker,.survey-rail.resetting .survey-acquisition { transition:none; }
-.survey-progress-marker.unavailable { opacity: 0; }
-.survey-progress-marker.complete { opacity: 0; }
-.survey-signals { display:flex; align-items:center; gap:6px; min-width:0; height:20px; }
-.survey-signals:not(.has-signals) { visibility: hidden; }
-.survey-alert { display:none; grid-template-columns:4px auto auto; align-items:center; gap:4px; height:15px; padding:0 6px 0 4px; border:1px solid color-mix(in srgb,currentColor 68%,transparent); background:linear-gradient(180deg,color-mix(in srgb,currentColor 18%,var(--inset)),color-mix(in srgb,currentColor 9%,var(--inset))); clip-path:polygon(0 0,calc(100% - 4px) 0,100% 50%,calc(100% - 4px) 100%,0 100%,3px 50%); color:var(--accent); transform-origin:center; box-shadow:inset 0 0 5px color-mix(in srgb,currentColor 12%,transparent); }
-.survey-alert.present { display:grid; }
-.survey-alert i { width:4px; height:7px; background:currentColor; box-shadow:0 0 5px currentColor; }
-.survey-alert b,.survey-alert em { font:700 clamp(11px,calc(11px * var(--text-scale)),14px)/1 "Cascadia Mono","Consolas",monospace; font-style:normal; letter-spacing:.12px; white-space:nowrap; text-shadow:1px 1px 0 #000; }
-.survey-alert em { padding-left:4px; border-left:1px solid color-mix(in srgb,currentColor 48%,transparent); color:var(--text); font-size:clamp(12px,calc(12px * var(--text-scale)),15px); font-weight:800; }
-.survey-alert.bio { color:var(--green); }.survey-alert.geo { color:var(--yellow); }.survey-alert.mining { color:var(--accent); }.survey-alert.valuable { color:var(--orange); }
-.survey-block[data-survey-state="unknown"] { --survey-tone: var(--dim); }
-.survey-block[data-survey-state="unknown"] .survey-progress-fill { opacity:0; }
-.survey-block[data-survey-state="live"] .survey-header strong > i { background: color-mix(in srgb, var(--orange) 42%, transparent); }
-.survey-block[data-survey-state="retained"] .survey-progress-fill { opacity:.72; box-shadow:none; }
-.survey-block[data-survey-state="complete"] .survey-header strong { color: var(--accent); text-shadow: 0 0 5px color-mix(in srgb, var(--accent) 35%, transparent); }
-.survey-block[data-survey-state="complete"] .survey-header { grid-template-columns: minmax(0, 1fr) auto; }
-.survey-block[data-survey-state="complete"] .survey-header strong > i { background: var(--accent); }
-.survey-block[data-survey-state="complete"] .survey-progress-fill { filter:brightness(1.15); }
+.route-facts > * { flex: 0 0 auto; }
+#route-title { color: var(--text); letter-spacing: .1em; }
+#route-title:empty { display: none; }
+#route-star { color: var(--accent); }
+#route-star.unscoopable { color: var(--yellow); }
+#route-star:empty, #route-distance:empty, #route-fuel:empty { display: none; }
+#route-feedback { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--green); }
+#route-fuel { color: var(--muted); }
+#route-fuel.fuel-caution { color: var(--yellow); }
+.route-block[data-notice="cleared"] #route-feedback { color: var(--muted); }
+.route-block[data-notice="updated"] #route-feedback { color: var(--hud); }
+.route-block.route-notice::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--route-tone) 16%, transparent), transparent); animation: route-confirm .9s ease-out 1; }
+.route-line > i.route-arrival { animation: nav-readout-confirm 1.5s ease-out; }
 
-.standard-metrics { top: 275px; height: 19px; display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 0; }
-.standard-metrics > div, .expanded-metrics > div { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; padding: 0 7px; border-left: 2px solid color-mix(in srgb, var(--metric-color, var(--accent)) 64%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--metric-color, var(--accent)) 8%, var(--inset)), color-mix(in srgb, var(--inset) 60%, transparent)); }
-.standard-metrics > div:not(:first-child), .expanded-metrics > div:not(:first-child) { margin-left: 5px; }
-.standard-metrics > div > *, .expanded-metrics > div > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.standard-metrics span, .expanded-metrics span { color: var(--muted); font-size: calc(11px * var(--text-scale)); font-weight: 700; }
-.standard-metrics strong, .expanded-metrics strong { color: var(--metric-color, var(--accent)); font-size: calc(13px * var(--text-scale)); }
-.expanded-metrics { display: none; }
-.context-rail { position: absolute; left: 16px; right: 16px; bottom: 8px; height: 17px; display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 0 6px; border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, var(--inset)), transparent 75%); color: var(--accent); font-size: calc(11.5px * var(--text-scale)); font-weight: 700; white-space: nowrap; overflow: hidden; }
-.context-rail span { overflow: hidden; text-overflow: ellipsis; }
-#secondary-label { color: var(--yellow); } #traffic-label { color: var(--muted); }
+/* --------------------------------------------------------------- survey -- */
+.survey-block { display: grid; grid-template-rows: 22px 11px 21px; align-content: center; row-gap: 3px; padding-top: 3px; --survey-tone: var(--accent); }
+.survey-header { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
+#survey-title { color: var(--hud-soft); font: 700 8.5px var(--font-wide); letter-spacing: .16em; white-space: nowrap; }
+.survey-block[data-survey-state="complete"] #survey-title { color: var(--green); }
+.survey-status { min-width: 0; display: flex; align-items: baseline; gap: 7px; overflow: hidden; white-space: nowrap; color: var(--survey-tone); }
+.survey-status b { font: 700 10px var(--font-wide); letter-spacing: .1em; }
+.survey-status small { padding-left: 7px; border-left: 1px solid color-mix(in srgb, currentColor 46%, transparent); color: var(--muted); font: 700 9px var(--font-wide); letter-spacing: .08em; }
+.survey-status small:empty { display: none; }
+.survey-readout { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+#survey-count { color: var(--survey-tone); font: 700 12px var(--font-wide); letter-spacing: .04em; }
+#survey-percent { min-width: 30px; text-align: right; color: var(--text); font: 700 10px var(--font-wide); opacity: .82; }
+
+.survey-rail { position: relative; height: 11px; overflow: hidden; border: 1px solid var(--hud-faint); background: color-mix(in srgb, var(--inset) 86%, transparent); }
+.survey-grid { position: absolute; inset: 0; opacity: .7; background: linear-gradient(90deg, transparent calc(100% - 1px), color-mix(in srgb, var(--survey-tone) 30%, transparent) calc(100% - 1px)) 0 0 / var(--survey-tick, 8.33%) 100% repeat-x; }
+.survey-progress-fill {
+  position: absolute; left: 1px; right: 1px; top: 2px; bottom: 2px;
+  overflow: hidden;
+  transform: scaleX(0); transform-origin: left center;
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--survey-tone) 80%, transparent) 0 7px, color-mix(in srgb, var(--survey-tone) 45%, transparent) 7px 9px);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--survey-tone) 40%, transparent);
+  transition: transform .46s cubic-bezier(.2, .8, .2, 1);
+}
+.survey-progress-fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0 24%, rgba(255,255,255,.4) 48%, transparent 72%); transform: translateX(-130%); }
+.survey-block[data-survey-state="live"] .survey-progress-fill::after { animation: survey-energy-flow calc(2.4s * var(--motion-scale)) ease-in-out infinite; }
+.survey-progress-marker { position: absolute; z-index: 5; top: 0; left: 1%; width: 2px; height: 100%; transform: translateX(-50%); background: var(--text); box-shadow: 0 0 5px var(--survey-tone); transition: left .46s cubic-bezier(.2, .8, .2, 1); }
+.survey-acquisition { position: absolute; z-index: 6; top: 50%; left: 1%; width: 24px; height: 9px; opacity: 0; transform: translate(-50%, -50%); border-left: 1px solid var(--hud); border-right: 1px solid var(--hud); }
+.survey-rail.resetting .survey-progress-fill, .survey-rail.resetting .survey-progress-marker, .survey-rail.resetting .survey-acquisition { transition: none; }
+.survey-progress-marker.unavailable, .survey-progress-marker.complete { opacity: 0; }
+.survey-block[data-survey-state="unknown"] .survey-progress-fill { opacity: 0; }
+.survey-block[data-survey-state="retained"] .survey-progress-fill { opacity: .72; box-shadow: none; }
+
+.survey-signals { min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; }
+.survey-alert {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 17px; padding: 0 6px;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  color: var(--dim);
+  opacity: .55;
+}
+.survey-alert.present { opacity: 1; border-color: color-mix(in srgb, currentColor 62%, transparent); background: color-mix(in srgb, currentColor 10%, transparent); }
+.survey-alert.bio.present { color: var(--green); }
+.survey-alert.geo.present { color: var(--yellow); }
+.survey-alert.mining.present { color: var(--accent); }
+.survey-alert.valuable.present { color: var(--hud); }
+.survey-alert b { font: 700 8.5px var(--font-wide); letter-spacing: .12em; }
+.survey-alert em { padding-left: 5px; border-left: 1px solid color-mix(in srgb, currentColor 45%, transparent); color: var(--text); font: 700 11px var(--font-wide); font-style: normal; }
+.survey-alert:not(.present) em { color: inherit; }
+
+/* --------------------------------------------------------------- footer -- */
+.context-rail {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: 0 7px;
+  border-left: 2px solid var(--hud-soft);
+  background: linear-gradient(90deg, var(--hud-ghost), transparent 75%);
+  font: 700 9.5px var(--font-wide);
+  letter-spacing: .08em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+#context-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--accent); }
+#secondary-label { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+#secondary-label:empty { display: none; }
+#traffic-label { color: var(--dim); }
 .link-state { position: absolute; right: 9px; bottom: 4px; color: var(--dim); font-size: 6px; opacity: 0; }
 
-/* Expanded layout keeps the same language but exposes the four metric bank. */
-.hud.expanded .system-block { top: 51px; height: 45px; }
-.hud.expanded .expanded-metrics { position: absolute; display: grid; left: 20px; right: 20px; top: 103px; height: 28px; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid rgba(92,123,140,.22); }
-.hud.expanded .route-block { top: 138px; height: 94px; left: 20px; right: 20px; }
-.hud.expanded .survey-block { top: 237px; height: 68px; left: 20px; right: 20px; }
-.hud.expanded .standard-metrics { display: none; }
-.hud.expanded .context-rail { left: 20px; right: 20px; bottom: 8px; font-size: calc(12px * var(--text-scale)); }
-.hud.expanded .route-header { grid-template-columns: minmax(0,1fr) auto auto; }
+/* ------------------------------------------------------------- feedback -- */
+.system-arrival { animation: nav-readout-confirm 1.2s ease-out; }
+.target-promoted { animation: target-promote .55s cubic-bezier(.2, .8, .2, 1); }
+.context-attention { animation: context-attention 1.3s ease-out; }
 
-.system-arrival { animation: nav-readout-confirm 1.5s ease-out; }
-.route-line > i.route-arrival { animation: nav-readout-confirm 1.5s ease-out; }
-.context-attention { animation: nav-readout-confirm 1.5s ease-out; }
-@keyframes nav-readout-confirm {
-  0%, 100% { filter: none; }
-  25% { filter: brightness(1.6); text-shadow: 0 0 6px currentColor; }
-}
+@keyframes band-flow { to { background-position: 12px 0, 12px 100%; } }
+@keyframes band-streak { from { background-position: 0 25%, 0 70%; } to { background-position: 64px 25%, 90px 70%; } }
+@keyframes band-sweep { from { background-position: -40px 0; } to { background-position: calc(100% + 40px) 0; } }
+@keyframes band-hazard { to { background-position: 14px 0; } }
+@keyframes band-settle { from { opacity: 1; } to { opacity: .22; } }
+@keyframes charge-build { from { box-shadow: 0 0 0 transparent; filter: brightness(1); } to { box-shadow: 0 0 10px color-mix(in srgb, var(--state) 55%, transparent); filter: brightness(1.35); } }
+@keyframes altitude-cue { 50% { box-shadow: 0 0 10px var(--state), 0 3px 6px var(--state); } }
+@keyframes warning-flash { 0%, 55% { opacity: 1; } 56%, 100% { opacity: .38; } }
+@keyframes notice-flicker { 0% { opacity: .15; } 18% { opacity: .9; } 30% { opacity: .35; } 48% { opacity: 1; } 62% { opacity: .7; } 100% { opacity: 1; } }
+@keyframes event-arrive { 50% { opacity: .45; } }
+@keyframes fuel-scoop { 50% { filter: brightness(1.6); } }
+@keyframes route-confirm { from { transform: translateX(-60%); opacity: 1; } to { transform: translateX(60%); opacity: 0; } }
+@keyframes nav-readout-confirm { 0% { filter: brightness(2.2); text-shadow: 0 0 12px var(--hud); } 100% { filter: brightness(1); } }
+@keyframes target-promote { from { opacity: .55; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes context-attention { 0% { background-color: color-mix(in srgb, var(--hud) 30%, transparent); } 100% { background-color: transparent; } }
+@keyframes survey-energy-flow { 0% { transform: translateX(-130%); opacity: 0; } 18% { opacity: .72; } 82% { opacity: .72; } 100% { transform: translateX(130%); opacity: 0; } }
+@keyframes waypoint-beacon { 0%,100% { opacity: .55; box-shadow: 0 0 2px var(--stop-tone); } 50% { opacity: 1; box-shadow: 0 0 7px var(--stop-tone); } }
+@keyframes waypoint-transit { 0% { transform: scaleX(.05); opacity: 0; } 65% { transform: scaleX(1); opacity: .9; } 100% { transform: scaleX(1); opacity: 0; } }
+@keyframes stellar-corona { 50% { transform: scale(1.15); opacity: .62; } }
+@keyframes stellar-breathe { 50% { filter: brightness(1.16); } }
+@keyframes stellar-granulation { to { transform: rotate(360deg); } }
+@keyframes neutron-beam { 50% { opacity: .34; filter: brightness(1.6); } }
+@keyframes blackhole-disc { to { transform: rotate(360deg); } }
 
-/* Canvas owns the state language; CSS keeps only the live label crisp. */
-.hud[data-motion="fsd_charge"] .core-pulse,
-.hud[data-motion="supercruise_overcharge"] .core-pulse { animation-duration: calc(.74s * var(--motion-scale)); opacity: .58; }
-.hud[data-motion="combat"] .state-core strong,
-.hud[data-motion="srv_threat"] .state-core strong,
-.hud[data-motion="capital_contact"] .state-core strong,
-.hud[data-motion="unknown_contact"] .state-core strong,
-.hud[data-motion="heavy_combat"] .state-core strong {
-  animation: threat calc(1s * var(--motion-scale)) steps(2,end) infinite;
-}
-.hud[data-motion="heat_critical"] .state-core strong,
-.hud[data-motion="suit_hazard"] .state-core strong,
-.hud[data-motion="jet_cone_damage"] .state-core strong,
-.hud[data-motion="docking_denied"] .state-core strong {
-  animation: threat calc(.86s * var(--motion-scale)) steps(2,end) infinite;
-}
-.hud.state-changing .state-core strong { animation: state-label-resolve .58s cubic-bezier(.2,.75,.2,1) 1; }
-.hud[data-motion="arrival"] .core-pulse,
-.hud[data-motion="carrier_arrival"] .core-pulse,
-.hud[data-motion="local_arrival"] .core-pulse,
-.hud[data-motion="phenomena"] .core-pulse { background: color-mix(in srgb, var(--green) 35%, transparent); }
+/* A hidden overlay keeps its state but spends no frames on it. */
+.hud.dormant *, .hud.dormant *::before, .hud.dormant *::after { animation-play-state: paused !important; }
 .hud.reduced-motion *, .hud.reduced-motion *::before, .hud.reduced-motion *::after { animation: none !important; transition-duration: 0s !important; }
 @media (prefers-reduced-motion: reduce) {
-  .hud, .hud *, .hud *::before, .hud *::after {
-    animation: none !important;
-    transition-duration: 0s !important;
-  }
-}
-
-@keyframes next-segment { 50% { filter: brightness(1.42); box-shadow: 0 0 9px color-mix(in srgb, var(--orange) 66%, transparent), inset 0 0 6px color-mix(in srgb, var(--orange) 30%, transparent); } }
-@keyframes survey-energy-flow { 0% { transform:translateX(-130%); opacity:0; } 18% { opacity:.72; } 82% { opacity:.72; } 100% { transform:translateX(130%); opacity:0; } }
-@keyframes core-breathe { 50% { opacity: .72; transform: scaleX(1.28); } }
-@keyframes vehicle-idle { 50% { transform: translateY(-.7px); filter: saturate(.9) brightness(1.4) contrast(1.18) drop-shadow(0 0 5px color-mix(in srgb, var(--state) 72%, transparent)); } }
-@keyframes vehicle-cruise { 50% { transform: translateX(1.8px) scale(1.015); filter: saturate(.94) brightness(1.45) contrast(1.2) drop-shadow(-3px 0 6px color-mix(in srgb, var(--state) 68%, transparent)); } }
-@keyframes vehicle-charge { 50% { transform: scale(.975); filter: saturate(1) brightness(1.55) contrast(1.2) drop-shadow(-4px 0 7px color-mix(in srgb, var(--state) 78%, transparent)); } }
-@keyframes vehicle-jump { 50% { transform: translateX(2.2px) scaleX(1.025); filter: saturate(.95) brightness(1.5) contrast(1.2) blur(.2px) drop-shadow(-4px 0 7px color-mix(in srgb, var(--state) 72%, transparent)); } }
-@keyframes vehicle-arrival {
-  0% { transform: translateX(2px) scaleX(1.025); }
-  35% { transform: translateX(.4px) scaleX(1.004); filter: saturate(1.08) brightness(1.52) contrast(1.22) drop-shadow(0 0 7px color-mix(in srgb, var(--state) 78%, transparent)); }
-  100% { transform: translateX(0) scaleX(1); }
-}
-@keyframes vehicle-cooldown {
-  0%, 100% { transform: scale(.995); filter: saturate(.88) brightness(1.34) contrast(1.2) drop-shadow(0 0 3px color-mix(in srgb, var(--state) 44%, transparent)); }
-  50% { transform: scale(1.004); filter: saturate(1) brightness(1.48) contrast(1.22) drop-shadow(0 0 7px color-mix(in srgb, var(--state) 70%, transparent)); }
-}
-@keyframes vehicle-phenomena {
-  0%, 100% { transform: translateY(.4px) scale(.99); filter: saturate(.96) brightness(1.4) contrast(1.2) drop-shadow(-2px 0 5px color-mix(in srgb, var(--state) 56%, transparent)); }
-  50% { transform: translateY(-.4px) scale(1.008); filter: saturate(1.1) brightness(1.52) contrast(1.23) drop-shadow(2px 0 8px color-mix(in srgb, var(--state) 78%, transparent)); }
-}
-@keyframes vehicle-threat {
-  0%, 100% { transform: translateX(-.6px); filter: saturate(1.02) brightness(1.4) contrast(1.25) drop-shadow(-2px 0 5px color-mix(in srgb, var(--state) 58%, transparent)); }
-  50% { transform: translateX(.8px) scale(1.006); filter: saturate(1.12) brightness(1.56) contrast(1.28) drop-shadow(2px 0 8px color-mix(in srgb, var(--state) 82%, transparent)); }
-}
-@keyframes vehicle-panel-left {
-  0%, 100% { transform: translateX(-1.2px); filter: saturate(.96) brightness(1.4) contrast(1.2) drop-shadow(-3px 0 6px color-mix(in srgb, var(--state) 62%, transparent)); }
-  50% { transform: translateX(.4px); filter: saturate(1.04) brightness(1.5) contrast(1.23) drop-shadow(1px 0 7px color-mix(in srgb, var(--state) 76%, transparent)); }
-}
-@keyframes vehicle-panel-right {
-  0%, 100% { transform: translateX(1.2px); filter: saturate(.96) brightness(1.4) contrast(1.2) drop-shadow(3px 0 6px color-mix(in srgb, var(--state) 62%, transparent)); }
-  50% { transform: translateX(-.4px); filter: saturate(1.04) brightness(1.5) contrast(1.23) drop-shadow(-1px 0 7px color-mix(in srgb, var(--state) 76%, transparent)); }
-}
-@keyframes vehicle-comms {
-  0%, 100% { transform: scale(.995); filter: saturate(.94) brightness(1.38) contrast(1.2) drop-shadow(0 0 4px color-mix(in srgb, var(--state) 52%, transparent)); }
-  50% { transform: scale(1.006); filter: saturate(1.06) brightness(1.52) contrast(1.24) drop-shadow(0 0 8px color-mix(in srgb, var(--state) 78%, transparent)); }
-}
-@keyframes vehicle-role-panel {
-  0%, 100% { transform: translateY(1px); filter: saturate(.96) brightness(1.4) contrast(1.2) drop-shadow(0 3px 5px color-mix(in srgb, var(--state) 55%, transparent)); }
-  50% { transform: translateY(-.4px); filter: saturate(1.04) brightness(1.5) contrast(1.23) drop-shadow(0 -1px 7px color-mix(in srgb, var(--state) 74%, transparent)); }
-}
-@keyframes vehicle-services {
-  0%, 100% { transform: scale(.99); filter: saturate(.9) brightness(1.38) contrast(1.2) drop-shadow(0 0 4px color-mix(in srgb, var(--state) 48%, transparent)); }
-  50% { transform: scale(1.004); filter: saturate(1.02) brightness(1.5) contrast(1.22) drop-shadow(0 0 7px color-mix(in srgb, var(--state) 72%, transparent)); }
-}
-@keyframes vehicle-approach { 50% { transform: translateY(1px) scale(1.012); filter: saturate(1.04) brightness(1.46) contrast(1.22) drop-shadow(0 -2px 6px color-mix(in srgb, var(--state) 65%, transparent)); } }
-@keyframes vehicle-glide { 50% { transform: translateY(1.3px) rotate(.25deg) scaleX(1.015); filter: saturate(1.04) brightness(1.5) contrast(1.24) drop-shadow(0 -3px 7px color-mix(in srgb, var(--state) 72%, transparent)); } }
-@keyframes vehicle-departure { 50% { transform: translateY(-1px) scale(1.012); filter: saturate(1.04) brightness(1.48) contrast(1.22) drop-shadow(0 3px 6px color-mix(in srgb, var(--state) 68%, transparent)); } }
-@keyframes vehicle-hold { 50% { transform: translateY(-.2px); filter: saturate(1.02) brightness(1.44) contrast(1.2) drop-shadow(0 0 5px color-mix(in srgb, var(--state) 62%, transparent)); } }
-@keyframes vehicle-scan { 0%, 8% { transform: translateX(0); opacity: 0; } 22% { opacity: .72; } 82% { opacity: .72; } 100% { transform: translateX(96px); opacity: 0; } }
-@keyframes vehicle-galaxy-map {
-  0%, 100% { transform: scale(.985); filter: saturate(.86) brightness(1.38) contrast(1.2) drop-shadow(0 0 4px color-mix(in srgb, var(--state) 54%, transparent)); }
-  50% { transform: scale(1.008); filter: saturate(1) brightness(1.52) contrast(1.24) drop-shadow(0 0 8px color-mix(in srgb, var(--state) 78%, transparent)); }
-}
-@keyframes vehicle-system-map {
-  0%, 100% { transform: translateY(.4px) scale(.99); filter: saturate(.92) brightness(1.4) contrast(1.2) drop-shadow(0 0 4px color-mix(in srgb, var(--state) 58%, transparent)); }
-  50% { transform: translateY(-.4px) scale(1.005); filter: saturate(1.04) brightness(1.5) contrast(1.24) drop-shadow(0 0 7px color-mix(in srgb, var(--state) 76%, transparent)); }
-}
-@keyframes vehicle-map-vector {
-  0%, 7% { transform: translate(-3px, 2px) rotate(-7deg); opacity: 0; }
-  20% { opacity: .72; }
-  82% { opacity: .72; }
-  100% { transform: translate(98px, -4px) rotate(-7deg); opacity: 0; }
-}
-@keyframes vehicle-map-orbit {
-  0%, 100% { transform: translateX(8px) scaleX(.42); opacity: .28; }
-  50% { transform: translateX(54px) scaleX(1); opacity: .76; }
-}
-@keyframes vehicle-surface { 25% { transform: translateY(-.6px) rotate(-.25deg); } 75% { transform: translateY(.6px) rotate(.25deg); } }
-@keyframes vehicle-srv { 25% { transform: translateY(-.8px) rotate(-.22deg); } 52% { transform: translateY(.25px); } 78% { transform: translateY(-.45px) rotate(.18deg); } }
-@keyframes vehicle-rhino { 24% { transform: translateY(-.45px) rotate(-.12deg); } 52% { transform: translateY(.35px) scaleX(1.008); filter: saturate(1.08) brightness(1.38) contrast(1.22) drop-shadow(0 0 5px color-mix(in srgb, var(--state) 62%, transparent)); } 78% { transform: translateY(-.3px) rotate(.1deg); } }
-@keyframes vehicle-scorpion { 30% { transform: translateY(-.45px) translateX(.35px); } 58% { transform: translateY(.5px) translateX(-.25px); filter: saturate(1.08) brightness(1.5) contrast(1.3) drop-shadow(0 0 6px color-mix(in srgb, var(--state) 78%, transparent)); } }
-@keyframes vehicle-nomad { 25% { transform: translateY(-1.35px) rotate(-.18deg); } 55% { transform: translateY(.1px) rotate(.12deg); } 78% { transform: translateY(-.85px) rotate(.22deg); } }
-@keyframes vehicle-fighter { 25% { transform: translateX(1.2px) rotate(-.35deg) scale(1.01); } 58% { transform: translateX(-.35px) rotate(.28deg); filter: saturate(1.08) brightness(1.5) contrast(1.26) drop-shadow(-3px 0 7px color-mix(in srgb, var(--state) 76%, transparent)); } }
-@keyframes vehicle-frame-resolve {
-  0% { opacity: .3; transform: scaleX(.88); filter: brightness(1.8); }
-  48% { opacity: .9; transform: scaleX(1.025); }
-  100% { opacity: 1; transform: scaleX(1); filter: brightness(1); }
-}
-@keyframes threat { 50% { filter: brightness(1.7); transform: translateX(1px); } }
-@keyframes state-label-resolve {
-  0% { opacity: .78; }
-  100% { opacity: 1; }
+  .hud *, .hud *::before, .hud *::after { animation: none !important; transition-duration: 0s !important; }
 }

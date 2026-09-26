@@ -12,7 +12,7 @@ WEB = Path(__file__).resolve().parents[1] / "web"
 def overview_state():
     """A small journal-shaped state with deliberately distinct work counts."""
     return {
-        "app": {"version": "5.4.9.3"},
+        "app": {"version": "5.4.9.4"},
         "profile": {"key": "overview-visual-test", "commander": "TEST CMDR",
                     "profile_label": "TEST CMDR · live field briefing"},
         "theme": {},
@@ -123,7 +123,7 @@ class DashboardOverviewVisualTests(unittest.TestCase):
                       document.getElementById('app').setAttribute('aria-hidden', 'false');
                       renderDashboard(data);
                     },
-                    queueMarkup(cartography) { return stellarCartographyMarkup(cartography); }
+                    workspace(data) { renderExploreWorkspace(data, EXPLORE_WORKSPACE_UI); }
                   };
                 """
                 route.fulfill(content_type="application/javascript", body=source)
@@ -370,7 +370,7 @@ class DashboardOverviewVisualTests(unittest.TestCase):
         self.render(state)
         source = self.page.locator('#survey-body-list .survey-body-row[data-body-id="32"]')
         self.assertEqual(source.get_attribute("aria-label"),
-                         "Open SYNUEFE AA-A H1 32 in System Workboard")
+                         "Open SYNUEFE AA-A H1 32 in the Survey Board")
         source.click()
         self.assertIn("active", self.page.locator('[data-page-name="explore"]').get_attribute("class"))
         selected = self.page.locator("#body-workboard .body-row.selected")
@@ -403,26 +403,40 @@ class DashboardOverviewVisualTests(unittest.TestCase):
         self.assertEqual(self.page.locator("#body-workboard .body-row").count(), 1)
         self.assertFalse(self.errors, self.errors)
 
-    def test_survey_queue_distinguishes_journal_and_manual_completion(self):
-        rows = [
-            {"key": "journal", "body": "JOURNAL WORLD", "status": "complete",
-             "manual_complete": False},
-            {"key": "manual", "body": "MANUAL WORLD", "status": "complete",
-             "manual_complete": True},
-            {"key": "pending", "body": "PENDING WORLD", "status": "pending"},
+    def test_survey_board_distinguishes_journal_and_manual_completion(self):
+        state = overview_state()
+        names = {1: "JOURNAL WORLD", 2: "MANUAL WORLD", 3: "PENDING WORLD"}
+        state["survey"]["bodies"] = [
+            {"body_id": body_id, "name": f"SYNUEFE AA-A H1 {body_id}", "planet_class": "Rocky body"}
+            for body_id in names
         ]
-        self.page.evaluate("""rows => {
-          document.getElementById('explore-workspace').innerHTML =
-            window.__overviewHarness.queueMarkup({system: 'SYNUEFE AA-A H1', queue: {rows}});
-        }""", rows)
-        actions = self.page.locator('.survey-queue-row [data-ws-op="survey_complete"]')
-        self.assertEqual(actions.count(), 3)
-        self.assertEqual(actions.nth(0).inner_text(), "JOURNAL ✓")
-        self.assertFalse(actions.nth(0).is_enabled())
-        self.assertEqual(actions.nth(1).inner_text(), "REOPEN")
-        self.assertTrue(actions.nth(1).is_enabled())
-        self.assertEqual(actions.nth(2).inner_text(), "DONE")
-        self.assertTrue(actions.nth(2).is_enabled())
+        self.render(state)
+        rows = [
+            {"key": "body:1", "body": "SYNUEFE AA-A H1 1", "status": "complete",
+             "manual_complete": False, "action": "Observe", "reason": names[1]},
+            {"key": "body:2", "body": "SYNUEFE AA-A H1 2", "status": "complete",
+             "manual_complete": True, "action": "Observe", "reason": names[2]},
+            {"key": "body:3", "body": "SYNUEFE AA-A H1 3", "status": "pending", "score": 100,
+             "action": "DSS map", "reason": names[3]},
+        ]
+        self.page.evaluate("data => window.__overviewHarness.workspace(data)", {
+            "current": "SYNUEFE AA-A H1",
+            "cartography": {"system": "SYNUEFE AA-A H1", "queue": {"rows": rows, "next": rows[2]}},
+        })
+        board = self.page.locator("#body-workboard")
+        # Open work ranks first and carries the recommendation.
+        self.assertEqual(board.locator(".body-row").first.get_attribute("data-body-id"), "3")
+        self.assertEqual(board.locator(".body-row.next").get_attribute("data-body-id"), "3")
+        complete = lambda body_id: board.locator(
+            f'.body-row[data-body-id="{body_id}"] [data-ws-op="survey_complete"]')
+        self.assertEqual(complete(1).inner_text(), "JOURNAL ✓")
+        self.assertFalse(complete(1).is_enabled())
+        self.assertEqual(complete(2).inner_text(), "REOPEN")
+        self.assertTrue(complete(2).is_enabled())
+        self.assertEqual(complete(3).inner_text(), "DONE")
+        self.assertTrue(complete(3).is_enabled())
+        self.assertEqual(complete(3).get_attribute("data-body-key"), "body:3")
+        self.assertEqual(complete(3).get_attribute("data-system"), "SYNUEFE AA-A H1")
         self.assertFalse(self.errors, self.errors)
 
     def test_return_later_action_id_is_forwarded(self):

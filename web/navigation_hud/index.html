@@ -8,97 +8,109 @@
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
-  <main id="hud" class="hud standard" data-motion="flight" data-state="FLIGHT">
-    <div class="chrome chrome-top"></div>
-    <div class="chrome chrome-bottom"></div>
+  <main id="hud" class="hud standard" data-category="flight" data-state="FLIGHT">
+    <div class="hud-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <div class="scanlines"></div><div class="vignette"></div>
 
-    <header class="state-instrument" aria-label="Current navigation state">
-      <canvas id="state-canvas" aria-hidden="true"></canvas>
-      <div id="vehicle-display" class="state-vehicle" aria-hidden="true">
-        <span class="vehicle-frame"></span>
-        <img id="vehicle-image" alt="">
-        <i class="vehicle-scan"></i>
-      </div>
-      <div class="state-core">
-        <span class="core-bracket left"></span>
-        <strong id="state-label">FLIGHT</strong>
-        <span class="core-bracket right"></span>
-        <b class="core-pulse"></b>
+    <header class="status-plate" aria-label="Ship status">
+      <figure id="vehicle-display" class="holo">
+        <div class="holo-bay" aria-hidden="true">
+          <img id="vehicle-image" alt="">
+          <i class="holo-emitter"></i>
+        </div>
+        <figcaption>
+          <b id="vehicle-type"></b>
+          <small id="vehicle-name"></small>
+        </figcaption>
+      </figure>
+
+      <div class="status-main">
+        <div id="notice" class="notice" role="status">
+          <span id="state-tag" class="notice-tag">SHIP</span>
+          <strong id="state-label">FLIGHT</strong>
+          <span id="event-notice" class="event-notice" aria-live="polite"></span>
+        </div>
+
+        <div id="instrument" class="instrument" data-instrument="idle" aria-hidden="true">
+          <div class="band">
+            <i class="band-flow"></i>
+            <i class="band-streaks"></i>
+            <i class="band-hazard"></i>
+            <i id="instrument-fill" class="band-fill"></i>
+            <b id="instrument-marker" class="band-marker"></b>
+            <span class="band-ticks"></span>
+          </div>
+          <span id="instrument-readout" class="readout"></span>
+        </div>
+
+        <div class="systems-row">
+          <div id="lamps" class="lamps" aria-label="Ship systems"></div>
+          <div id="fuel-gauge" class="fuel-gauge" aria-label="Fuel">
+            <span>FUEL</span>
+            <span id="fuel-cells" class="fuel-cells"></span>
+            <strong id="metric-fuel">--</strong>
+          </div>
+        </div>
       </div>
     </header>
 
-    <section class="system-block section">
-      <div class="locator-rail"><i></i></div>
-      <div class="system-meta">
-        <span>CURRENT SYSTEM</span>
-        <span id="region-label">REGION UNKNOWN</span>
-        <span id="system-clock">00:00</span>
-      </div>
-      <div class="system-readout">
+    <section class="location section" aria-label="Current system">
+      <div class="location-line">
         <span id="current-star-orb" class="star-orb star-unknown" aria-hidden="true"><i></i></span>
         <div id="current-system" class="current-system">---</div>
-        <span id="current-star-label" class="current-star-label">STAR CLASS ?</span>
+        <span id="current-star-label" class="star-chip">STAR ?</span>
       </div>
-    </section>
-
-    <section class="expanded-metrics section" aria-label="Navigation metrics">
-      <div><span>FUEL</span><strong id="expanded-fuel">--</strong></div>
-      <div><span>BIO</span><strong id="expanded-bio">0/0</strong></div>
-      <div><span>GEO</span><strong id="expanded-geo">0</strong></div>
-      <div><span>TRAFFIC</span><strong id="expanded-traffic">0 / 0 / 0</strong></div>
+      <div class="location-meta">
+        <span id="region-label">REGION UNKNOWN</span>
+        <span class="clock"><small>IN SYSTEM</small> <b id="system-clock">--:--</b></span>
+      </div>
     </section>
 
     <section id="route-block" class="route-block section" data-route-state="empty" aria-label="Navigation route">
       <div class="route-target">
-        <span id="route-target-label">NEXT SYSTEM</span>
+        <span id="route-target-label" class="section-label">NEXT JUMP</span>
         <span id="route-star-orb" class="star-orb star-unknown" aria-hidden="true"><i></i></span>
         <strong id="route-target">NO DESTINATION PLOTTED</strong>
+        <span id="route-next" class="route-leg"></span>
       </div>
-      <div class="route-header">
+      <div class="route-track-line">
+        <span id="route-origin" class="track-end">CURRENT</span>
+        <div id="route-track" class="route-track">
+          <div class="route-line"><i id="route-progress"></i></div>
+          <div id="route-pips" class="route-pips"></div>
+        </div>
+        <span id="route-destination" class="track-end">NEXT</span>
+      </div>
+      <div class="route-facts">
         <strong id="route-title">NO ACTIVE ROUTE</strong>
-        <span id="route-next"></span>
+        <span id="route-star"></span>
+        <span id="route-feedback" role="status"></span>
         <span id="route-distance"></span>
+        <span id="route-fuel"></span>
       </div>
-      <div id="route-track" class="route-track">
-        <div class="route-line"><i id="route-progress"></i></div>
-        <div id="route-pips" class="route-pips"></div>
-      </div>
-      <div class="route-captions"><span id="route-origin">CURRENT</span><span id="route-star"></span><span id="route-destination">NEXT</span></div>
-      <div class="route-status"><span id="route-feedback" role="status"></span><span id="route-fuel"></span></div>
     </section>
 
-    <section id="survey-block" class="survey-block section" data-survey-state="unknown">
+    <section id="survey-block" class="survey-block section" data-survey-state="unknown" aria-label="System survey">
       <div class="survey-header">
-        <strong id="survey-title"><i aria-hidden="true"></i><span id="survey-title-text">SYSTEM SURVEY</span></strong>
+        <strong id="survey-title"><span id="survey-title-text">SYSTEM SURVEY</span></strong>
         <span id="survey-state" class="survey-status">
           <b id="survey-mode">COUNT UNKNOWN</b>
           <small id="survey-remaining"></small>
         </span>
         <span class="survey-readout"><b id="survey-count">0 / ? BODIES</b><small id="survey-percent">--%</small></span>
       </div>
-      <div class="survey-instrument">
-        <div class="survey-track">
-          <div id="survey-rail" class="survey-rail" aria-hidden="true">
-            <i class="survey-grid"></i>
-            <i id="survey-progress-fill" class="survey-progress-fill"></i>
-            <b id="survey-progress-marker" class="survey-progress-marker"></b>
-            <span id="survey-acquisition" class="survey-acquisition"></span>
-          </div>
-        </div>
-        <div id="survey-signals" class="survey-signals" aria-label="Survey discoveries">
-          <span id="survey-signal-bio" class="survey-alert bio" data-signal-kind="bio"><i></i><b>BIO</b><em>0</em></span>
-          <span id="survey-signal-geo" class="survey-alert geo" data-signal-kind="geo"><i></i><b>GEO</b><em>0</em></span>
-          <span id="survey-signal-mining" class="survey-alert mining" data-signal-kind="mining"><i></i><b>MINING</b><em>0</em></span>
-          <span id="survey-signal-valuable" class="survey-alert valuable" data-signal-kind="valuable"><i></i><b>VALUE</b><em>0</em></span>
-        </div>
+      <div id="survey-rail" class="survey-rail" aria-hidden="true">
+        <i class="survey-grid"></i>
+        <i id="survey-progress-fill" class="survey-progress-fill"></i>
+        <b id="survey-progress-marker" class="survey-progress-marker"></b>
+        <span id="survey-acquisition" class="survey-acquisition"></span>
       </div>
-    </section>
-
-    <section class="standard-metrics section" aria-label="Exploration metrics">
-      <div><span>FUEL</span><strong id="metric-fuel">--</strong></div>
-      <div><span>BIO</span><strong id="metric-bio">0/0</strong></div>
-      <div><span>GEO</span><strong id="metric-geo">0</strong></div>
+      <div id="survey-signals" class="survey-signals" aria-label="Survey discoveries">
+        <span id="survey-signal-bio" class="survey-alert bio" data-signal-kind="bio"><b>BIO</b><em>0</em></span>
+        <span id="survey-signal-geo" class="survey-alert geo" data-signal-kind="geo"><b>GEO</b><em>0</em></span>
+        <span id="survey-signal-mining" class="survey-alert mining" data-signal-kind="mining"><b>MINING</b><em>0</em></span>
+        <span id="survey-signal-valuable" class="survey-alert valuable" data-signal-kind="valuable"><b>VALUE</b><em>0</em></span>
+      </div>
     </section>
 
     <footer class="context-rail">
@@ -110,7 +122,6 @@
     <div id="link-state" class="link-state">HTML NAV // CONNECTING</div>
   </main>
   <script src="ship_catalog.js"></script>
-  <script src="indicator.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

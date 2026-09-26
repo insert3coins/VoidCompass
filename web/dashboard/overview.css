@@ -800,7 +800,9 @@ body.reduced-motion .overview-page *::after { animation: none !important; transi
 .overview-page .survey-card .survey-body-flags em.geo { color: var(--orange); }
 .overview-page .survey-card .survey-body-flags em.archived { color: var(--dim); }
 
-.overview-page .survey-card .bridge-planet-orb {
+/* Planet illustrations are shared with the Explore survey board; :is() keeps
+   the original specificity for the Dashboard rules. */
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-orb {
   --planet-light: #b5a28e;
   --planet-mid: #665a51;
   --planet-dark: #222b35;
@@ -812,7 +814,7 @@ body.reduced-motion .overview-page *::after { animation: none !important; transi
   height: 28px;
   isolation: isolate;
 }
-.overview-page .survey-card .bridge-planet-orb::before {
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-orb::before {
   content: "";
   position: absolute;
   inset: 2px;
@@ -821,7 +823,7 @@ body.reduced-motion .overview-page *::after { animation: none !important; transi
   box-shadow: 0 0 13px color-mix(in srgb, var(--planet-light) 24%, transparent);
   animation: bridge-planet-halo 5.6s ease-in-out infinite;
 }
-.overview-page .survey-card .bridge-planet-sphere {
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-sphere {
   position: absolute;
   z-index: 2;
   inset: 3px;
@@ -830,7 +832,7 @@ body.reduced-motion .overview-page *::after { animation: none !important; transi
   background: radial-gradient(circle at 30% 32%, var(--planet-light), var(--planet-mid) 58%, var(--planet-dark) 100%);
   box-shadow: inset -7px -3px 10px rgba(0,0,0,.56), inset 2px 1px 6px rgba(255,255,255,.12), 0 0 10px color-mix(in srgb, var(--planet-light) 23%, transparent);
 }
-.overview-page .survey-card .bridge-planet-sphere::before {
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-sphere::before {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
@@ -840,7 +842,7 @@ body.reduced-motion .overview-page *::after { animation: none !important; transi
   background-repeat: repeat-x;
   animation: bridge-planet-turn 22s linear infinite;
 }
-.overview-page .survey-card .bridge-planet-sphere::after {
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-sphere::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -849,7 +851,7 @@ body.reduced-motion .overview-page *::after { animation: none !important; transi
   background: radial-gradient(ellipse at 30% 24%, rgba(255,255,255,.38), transparent 29%),
     linear-gradient(100deg, transparent 30%, rgba(0,0,0,.04) 54%, rgba(0,0,0,.65) 100%);
 }
-.overview-page .survey-card .bridge-planet-glint {
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-glint {
   position: absolute;
   z-index: 4;
   inset: 3px;
@@ -858,7 +860,7 @@ body.reduced-motion .overview-page *::after { animation: none !important; transi
   opacity: .75;
   transform: rotate(-24deg);
 }
-.overview-page .survey-card .bridge-planet-ring {
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-ring {
   display: none;
   position: absolute;
   z-index: 3;
@@ -873,28 +875,28 @@ body.reduced-motion .overview-page *::after { animation: none !important; transi
   box-shadow: 0 0 6px color-mix(in srgb, var(--planet-light) 23%, transparent);
   transform: rotate(-24deg) scaleY(.55);
 }
-.overview-page .survey-card .bridge-planet-orb.has-rings .bridge-planet-ring {
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-orb.has-rings .bridge-planet-ring {
   display: block;
   animation: bridge-planet-ring-glint 9s ease-in-out infinite;
 }
-.overview-page .survey-card .bridge-planet-earthlike { --planet-light: #a8dbe6; --planet-mid: #1b7296; --planet-dark: #072538; --terrain: radial-gradient(ellipse at 36% 32%, #5a9c70 0 14%, transparent 17%), radial-gradient(ellipse at 64% 67%, #527a57 0 16%, transparent 20%), radial-gradient(ellipse at 31% 65%, rgba(241,248,248,.75) 0 4%, transparent 10%); }
-.overview-page .survey-card .bridge-planet-water { --planet-light: #8de8fa; --planet-mid: #146aa7; --planet-dark: #082c59; --terrain: radial-gradient(ellipse at 65% 33%, rgba(233,255,255,.72) 0 3%, transparent 14%), repeating-linear-gradient(164deg, transparent 0 10px, rgba(88,209,236,.28) 11px 15px, transparent 17px 23px); }
-.overview-page .survey-card .bridge-planet-ammonia { --planet-light: #c4e7b6; --planet-mid: #648a69; --planet-dark: #1f3b3d; --terrain: radial-gradient(ellipse at 64% 38%, rgba(220,233,160,.65) 0 16%, transparent 23%), radial-gradient(ellipse at 31% 72%, #789a75 0 14%, transparent 20%); }
-.overview-page .survey-card .bridge-planet-gas,
-.overview-page .survey-card .bridge-planet-gas-water,
-.overview-page .survey-card .bridge-planet-gas-ammonia { --planet-light: #ead7a2; --planet-mid: #ac795d; --planet-dark: #4c3442; --terrain: radial-gradient(ellipse at 35% 46%, rgba(243,211,171,.5) 0 13%, transparent 17%), repeating-linear-gradient(173deg, transparent 0 5px, rgba(255,233,187,.38) 6px 9px, rgba(74,42,44,.21) 11px 14px, transparent 16px 21px); }
-.overview-page .survey-card .bridge-planet-gas-water { --planet-light: #c0e4ec; --planet-mid: #5c98b1; --planet-dark: #27465c; }
-.overview-page .survey-card .bridge-planet-gas-ammonia { --planet-light: #d3dba8; --planet-mid: #869777; --planet-dark: #344842; }
-.overview-page .survey-card .bridge-planet-icy { --planet-light: #eef2fb; --planet-mid: #a0b8d1; --planet-dark: #4d6d86; --terrain: radial-gradient(circle at 32% 58%, rgba(67,111,148,.38) 0 7%, transparent 9%), radial-gradient(circle at 69% 35%, rgba(75,123,155,.4) 0 5%, transparent 7%), radial-gradient(circle at 65% 72%, rgba(243,255,255,.7) 0 9%, transparent 14%); }
-.overview-page .survey-card .bridge-planet-rocky-ice { --planet-light: #d6d8d0; --planet-mid: #8797a3; --planet-dark: #434e61; --terrain: radial-gradient(circle at 28% 50%, rgba(82,73,68,.5) 0 11%, transparent 15%), radial-gradient(circle at 66% 30%, rgba(232,244,252,.72) 0 10%, transparent 16%), radial-gradient(circle at 62% 75%, rgba(58,80,93,.48) 0 9%, transparent 14%); }
-.overview-page .survey-card .bridge-planet-rocky { --planet-light: #dbc7a6; --planet-mid: #967b69; --planet-dark: #483f44; --terrain: radial-gradient(circle at 30% 37%, rgba(80,62,58,.45) 0 9%, transparent 12%), radial-gradient(circle at 70% 64%, rgba(75,56,48,.42) 0 6%, transparent 9%), radial-gradient(circle at 38% 77%, rgba(236,201,154,.43) 0 12%, transparent 16%); }
-.overview-page .survey-card .bridge-planet-metal { --planet-light: #e8d4b5; --planet-mid: #a88973; --planet-dark: #50505b; --terrain: radial-gradient(circle at 30% 62%, rgba(91,77,79,.52) 0 9%, transparent 14%), radial-gradient(circle at 70% 37%, rgba(249,225,173,.35) 0 16%, transparent 21%), repeating-linear-gradient(145deg, transparent 0 14px, rgba(77,75,86,.25) 15px 18px); }
-.overview-page .survey-card .bridge-planet-unknown { --planet-light: var(--dim); }
-.overview-page .survey-card .bridge-planet-unknown::before { border-style: dashed; box-shadow: none; animation: bridge-planet-unknown-scan 22s linear infinite; }
-.overview-page .survey-card .bridge-planet-unknown .bridge-planet-sphere { inset: 5px; border: 1px dashed var(--dim); background: radial-gradient(circle at center, color-mix(in srgb, var(--dim) 8%, transparent), transparent 70%); box-shadow: none; }
-.overview-page .survey-card .bridge-planet-unknown .bridge-planet-sphere::before { display: none; }
-.overview-page .survey-card .bridge-planet-unknown .bridge-planet-sphere::after { inset: 4px; border: 1px solid color-mix(in srgb, var(--dim) 42%, transparent); }
-.overview-page .survey-card .bridge-planet-unknown .bridge-planet-glint { display: none; }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-earthlike { --planet-light: #a8dbe6; --planet-mid: #1b7296; --planet-dark: #072538; --terrain: radial-gradient(ellipse at 36% 32%, #5a9c70 0 14%, transparent 17%), radial-gradient(ellipse at 64% 67%, #527a57 0 16%, transparent 20%), radial-gradient(ellipse at 31% 65%, rgba(241,248,248,.75) 0 4%, transparent 10%); }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-water { --planet-light: #8de8fa; --planet-mid: #146aa7; --planet-dark: #082c59; --terrain: radial-gradient(ellipse at 65% 33%, rgba(233,255,255,.72) 0 3%, transparent 14%), repeating-linear-gradient(164deg, transparent 0 10px, rgba(88,209,236,.28) 11px 15px, transparent 17px 23px); }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-ammonia { --planet-light: #c4e7b6; --planet-mid: #648a69; --planet-dark: #1f3b3d; --terrain: radial-gradient(ellipse at 64% 38%, rgba(220,233,160,.65) 0 16%, transparent 23%), radial-gradient(ellipse at 31% 72%, #789a75 0 14%, transparent 20%); }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-gas,
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-gas-water,
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-gas-ammonia { --planet-light: #ead7a2; --planet-mid: #ac795d; --planet-dark: #4c3442; --terrain: radial-gradient(ellipse at 35% 46%, rgba(243,211,171,.5) 0 13%, transparent 17%), repeating-linear-gradient(173deg, transparent 0 5px, rgba(255,233,187,.38) 6px 9px, rgba(74,42,44,.21) 11px 14px, transparent 16px 21px); }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-gas-water { --planet-light: #c0e4ec; --planet-mid: #5c98b1; --planet-dark: #27465c; }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-gas-ammonia { --planet-light: #d3dba8; --planet-mid: #869777; --planet-dark: #344842; }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-icy { --planet-light: #eef2fb; --planet-mid: #a0b8d1; --planet-dark: #4d6d86; --terrain: radial-gradient(circle at 32% 58%, rgba(67,111,148,.38) 0 7%, transparent 9%), radial-gradient(circle at 69% 35%, rgba(75,123,155,.4) 0 5%, transparent 7%), radial-gradient(circle at 65% 72%, rgba(243,255,255,.7) 0 9%, transparent 14%); }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-rocky-ice { --planet-light: #d6d8d0; --planet-mid: #8797a3; --planet-dark: #434e61; --terrain: radial-gradient(circle at 28% 50%, rgba(82,73,68,.5) 0 11%, transparent 15%), radial-gradient(circle at 66% 30%, rgba(232,244,252,.72) 0 10%, transparent 16%), radial-gradient(circle at 62% 75%, rgba(58,80,93,.48) 0 9%, transparent 14%); }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-rocky { --planet-light: #dbc7a6; --planet-mid: #967b69; --planet-dark: #483f44; --terrain: radial-gradient(circle at 30% 37%, rgba(80,62,58,.45) 0 9%, transparent 12%), radial-gradient(circle at 70% 64%, rgba(75,56,48,.42) 0 6%, transparent 9%), radial-gradient(circle at 38% 77%, rgba(236,201,154,.43) 0 12%, transparent 16%); }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-metal { --planet-light: #e8d4b5; --planet-mid: #a88973; --planet-dark: #50505b; --terrain: radial-gradient(circle at 30% 62%, rgba(91,77,79,.52) 0 9%, transparent 14%), radial-gradient(circle at 70% 37%, rgba(249,225,173,.35) 0 16%, transparent 21%), repeating-linear-gradient(145deg, transparent 0 14px, rgba(77,75,86,.25) 15px 18px); }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-unknown { --planet-light: var(--dim); }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-unknown::before { border-style: dashed; box-shadow: none; animation: bridge-planet-unknown-scan 22s linear infinite; }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-unknown .bridge-planet-sphere { inset: 5px; border: 1px dashed var(--dim); background: radial-gradient(circle at center, color-mix(in srgb, var(--dim) 8%, transparent), transparent 70%); box-shadow: none; }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-unknown .bridge-planet-sphere::before { display: none; }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-unknown .bridge-planet-sphere::after { inset: 4px; border: 1px solid color-mix(in srgb, var(--dim) 42%, transparent); }
+:is(.overview-page .survey-card, .explore-board) .bridge-planet-unknown .bridge-planet-glint { display: none; }
 
 /* Only the worlds actually visible in the bounded list animate. */
 .overview-page .survey-card .survey-body-row .bridge-planet-orb::before,

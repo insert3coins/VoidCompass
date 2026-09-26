@@ -1,46 +1,349 @@
-/* Explore & Survey / Exploration Scout ---------------------------------- */
-.return-later-board { margin-bottom:13px; overflow:hidden; border:1px solid var(--border); border-top:2px solid var(--orange); background:linear-gradient(135deg,color-mix(in srgb,var(--orange) 5%,var(--panel)),var(--panel) 58%); }
-.return-later-board > header { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:17px 20px 14px; border-bottom:1px solid var(--border-soft); }
-.return-later-board > header small { color:var(--orange); font:700 8px Consolas,monospace; letter-spacing:.1em; }
-.return-later-board > header h3 { margin:4px 0; color:var(--text); font:700 23px "Bahnschrift SemiCondensed",sans-serif; letter-spacing:.04em; }
-.return-later-board > header p { max-width:720px; margin:0; color:var(--muted); font:9px/1.55 Consolas,monospace; }
-.return-later-board > header > b { flex:none; padding:7px 10px; border:1px solid color-mix(in srgb,var(--orange) 40%,var(--border)); color:var(--orange); font:700 9px Consolas,monospace; white-space:nowrap; }
-.return-later-entries { display:grid; gap:8px; max-height:450px; overflow:auto; padding:12px; scrollbar-color:var(--border) transparent; }
-.return-later-entries > .workspace-empty { margin:0; padding:17px; }
-.return-later-entry { display:flex; justify-content:space-between; gap:18px; padding:11px 13px; border:1px solid var(--border-soft); border-left:2px solid var(--accent); background:var(--inset); }
-.return-later-entry.current { border-left-color:var(--orange); background:color-mix(in srgb,var(--orange) 4%,var(--inset)); }
-.return-later-entry-main { min-width:0; }
-.return-later-entry-main > small { color:var(--dim); font:700 7px/1.4 Consolas,monospace; letter-spacing:.04em; }
-.return-later-entry-main h4 { margin:4px 0 2px; overflow-wrap:anywhere; color:var(--text); font:700 16px "Bahnschrift SemiCondensed",sans-serif; }
-.return-later-entry-main > strong { display:block; overflow-wrap:anywhere; color:var(--accent); font:700 9px Consolas,monospace; }
-.return-later-entry-main ul { display:flex; flex-wrap:wrap; gap:5px; margin:9px 0 0; padding:0; list-style:none; }
-.return-later-entry-main li { padding:4px 6px; border:1px solid var(--border-soft); color:var(--muted); font:8px/1.35 Consolas,monospace; }
-.return-later-actions { display:flex; flex:0 0 auto; align-items:center; flex-wrap:wrap; justify-content:flex-end; gap:5px; }
-.return-later-actions button { min-height:28px; padding:0 8px; border:1px solid var(--border); background:var(--panel-alt); color:var(--muted); cursor:pointer; font:700 8px Consolas,monospace; }
-.return-later-actions button:hover,.return-later-actions button:focus-visible { border-color:var(--accent); color:var(--accent); }
-.return-later-actions button.danger-action:hover,.return-later-actions button.danger-action:focus-visible { border-color:var(--red); color:var(--red); }
-@container (max-width: 680px) { .return-later-entry { flex-direction:column; gap:10px; }.return-later-actions { justify-content:flex-start; } }
-@media (max-width: 680px) { .return-later-board > header,.return-later-entry { flex-direction:column; gap:10px; }.return-later-actions { justify-content:flex-start; } }
-.exploration-scout { margin-bottom:13px; overflow:hidden; border:1px solid var(--border); border-top:2px solid var(--accent); background:linear-gradient(150deg,color-mix(in srgb,var(--accent) 5%,var(--panel)),var(--panel)); }
-.scout-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:18px 20px; border-bottom:1px solid var(--border-soft); background:radial-gradient(circle at 12% 50%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 42%); }
-.scout-heading small { color:var(--orange); font:700 8px Consolas,monospace; letter-spacing:.1em; }.scout-heading h3 { margin:4px 0; color:var(--accent); font:700 24px "Bahnschrift SemiCondensed",sans-serif; letter-spacing:.03em; }.scout-heading p { max-width:760px; margin:0; color:var(--muted); font:10px/1.5 Consolas,monospace; }.scout-heading > span { padding:6px 9px; border:1px solid var(--border); color:var(--text); font:700 9px Consolas,monospace; text-transform:uppercase; }
-.scout-audit-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; background:var(--border-soft); }.scout-audit-grid article { min-width:0; padding:13px 17px; background:var(--inset); }.scout-audit-grid small,.scout-audit-grid b,.scout-audit-grid span,.scout-audit-grid em { display:block; }.scout-audit-grid small { color:var(--dim); font:700 8px Consolas,monospace; letter-spacing:.08em; }.scout-audit-grid b { margin:5px 0 3px; color:var(--text); font:700 17px "Bahnschrift SemiCondensed",sans-serif; }.scout-audit-grid span { color:var(--muted); font:9px/1.5 Consolas,monospace; }.scout-audit-grid em { margin-top:5px; color:var(--dim); font:italic 8px/1.4 Consolas,monospace; }
-.scout-search-form { display:grid; grid-template-columns:minmax(165px,1.3fr) minmax(145px,1fr) repeat(5,minmax(90px,.65fr)) auto; align-items:end; gap:8px; padding:15px 17px 5px; }.scout-search-form label { display:grid; gap:5px; color:var(--muted); font:700 8px Consolas,monospace; letter-spacing:.06em; }.scout-search-form label small { min-height:10px; color:var(--dim); font:7px Consolas,monospace; }.scout-search-form input,.scout-search-form select { width:100%; min-width:0; height:36px; padding:0 9px; outline:0; border:1px solid var(--border); background:var(--input); color:var(--text); font:10px Consolas,monospace; }.scout-search-form button { height:36px; padding:0 12px; border:1px solid var(--accent); background:color-mix(in srgb,var(--accent) 13%,var(--panel-alt)); color:var(--accent); font:700 9px Consolas,monospace; cursor:pointer; }
-.scout-provenance { margin:0 17px 12px; padding:8px 10px; border-left:2px solid var(--orange); background:color-mix(in srgb,var(--orange) 5%,transparent); color:var(--muted); font:8px/1.45 Consolas,monospace; }
-.scout-content { display:grid; grid-template-columns:minmax(0,1fr) minmax(230px,.3fr); gap:12px; padding:0 17px 14px; }.scout-results { display:grid; gap:8px; }.scout-prospect { padding:12px 13px; border:1px solid var(--border-soft); border-left:2px solid var(--accent); background:var(--panel-alt); }.scout-prospect > header { display:flex; justify-content:space-between; gap:15px; }.scout-prospect header span { min-width:0; }.scout-prospect header small,.scout-prospect header h4,.scout-prospect header b { display:block; }.scout-prospect header small { color:var(--dim); font:8px Consolas,monospace; }.scout-prospect header h4 { margin:3px 0; overflow-wrap:anywhere; color:var(--text); font:700 16px "Bahnschrift SemiCondensed",sans-serif; }.scout-prospect header b { color:var(--muted); font:9px Consolas,monospace; }.scout-prospect header em { flex:0 0 auto; color:var(--orange); font:700 11px Consolas,monospace; font-style:normal; }.scout-prospect ul { display:flex; flex-wrap:wrap; gap:5px 15px; margin:10px 0; padding:0; list-style:none; }.scout-prospect li { color:var(--muted); font:8px Consolas,monospace; }.scout-prospect li::before { content:"◆"; margin-right:6px; color:var(--accent); }.scout-prospect footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:9px; border-top:1px solid var(--border-soft); }.scout-prospect footer small { color:var(--dim); font:7px Consolas,monospace; }.scout-prospect footer div { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; }.scout-prospect button,.exploration-scout > .workspace-actions button { min-height:27px; padding:0 8px; border:1px solid var(--border); background:var(--inset); color:var(--muted); cursor:pointer; font:700 8px Consolas,monospace; }.scout-prospect button:hover,.exploration-scout > .workspace-actions button:hover { border-color:var(--accent); color:var(--accent); }
-.scout-content > aside { min-width:0; border:1px solid var(--border-soft); background:var(--inset); }.scout-content > aside > header { padding:10px 12px; border-bottom:1px solid var(--border-soft); color:var(--orange); font:700 9px Consolas,monospace; }.scout-content > aside > p { margin:0; padding:10px 12px; color:var(--dim); font:8px/1.45 Consolas,monospace; }.scout-codex-row { display:grid; grid-template-columns:8px minmax(0,1fr); gap:8px; padding:8px 0; border-bottom:1px solid var(--border-soft); }.scout-codex-row > i { width:5px; height:5px; margin-top:5px; background:var(--orange); transform:rotate(45deg); }.scout-codex-row b,.scout-codex-row small { display:block; overflow-wrap:anywhere; }.scout-codex-row b { color:var(--text); font:700 9px "Segoe UI",sans-serif; }.scout-codex-row small { margin-top:2px; color:var(--dim); font:7px Consolas,monospace; }
+/* Explore & Survey -----------------------------------------------------------
+   One live system model in three views (explore.js). The page fills the deck
+   and every view scrolls its own lists, so each control stays on screen.
+   Loaded after the bridge sheets; rules are scoped to the Explore workspace. */
 
-@container (max-width: 560px) {
-  .scout-search-form { grid-template-columns:minmax(0,1fr); }
-  .scout-audit-grid,.scout-content { grid-template-columns:minmax(0,1fr); }
-  .scout-heading,.scout-prospect > header,.scout-prospect footer { align-items:flex-start; flex-direction:column; }
-  .scout-prospect footer div { justify-content:flex-start; }
+.page[data-page-name="explore"].active { display: flex; flex-direction: column; height: 100%; min-height: 640px; }
+.page[data-page-name="explore"] > .page-title,
+.page[data-page-name="explore"] > .suite-tabs { flex: 0 0 auto; }
+#explore-workspace { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+#explore-workspace .explore-view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+#explore-workspace .explore-view[hidden] { display: none; }
+/* Button baseline, matching workspace cards; :where() keeps it overridable. */
+:where(#explore-workspace) button { min-height: 28px; padding: 0 9px; border: 1px solid var(--border); background: var(--panel-alt); color: var(--muted); cursor: pointer; font: 700 8px Consolas, monospace; letter-spacing: .04em; }
+:where(#explore-workspace) button:disabled { cursor: default; opacity: .5; }
+
+/* View tabs and journey readouts. */
+.explore-views { flex: 0 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 8px; }
+.explore-views > button {
+  display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 11px;
+  min-width: 0; min-height: 54px; padding: 8px 14px;
+  border: 1px solid var(--border); border-bottom: 2px solid var(--border);
+  background: var(--panel); color: var(--muted); cursor: pointer; text-align: left;
+  transition: border-color .18s ease, background .18s ease, color .18s ease;
+}
+.explore-views > button:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); color: var(--text); }
+.explore-views > button:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+.explore-views > button.active {
+  border-bottom-color: var(--accent); color: var(--text);
+  background: linear-gradient(115deg, color-mix(in srgb, var(--accent) 12%, var(--panel)), var(--panel) 72%);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.explore-views > button > i { display: grid; place-items: center; width: 30px; aspect-ratio: 1; border: 1px solid var(--border); border-radius: 50%; color: var(--dim); font: normal 700 9px Consolas, monospace; }
+.explore-views > button.active > i { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent); }
+.explore-views > button > span { min-width: 0; overflow: hidden; font: 700 15px "Bahnschrift SemiCondensed", "Arial Narrow", sans-serif; letter-spacing: .04em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.explore-views > button small { display: block; margin-top: 3px; overflow: hidden; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .07em; text-overflow: ellipsis; }
+.explore-views > button.active small { color: var(--accent); }
+.explore-readouts { display: flex; gap: 1px; border: 1px solid var(--border); background: var(--border-soft); }
+.explore-readouts > span { display: grid; align-content: center; gap: 3px; min-width: 116px; max-width: 220px; padding: 6px 14px; background: var(--panel); }
+.explore-readouts small { color: var(--dim); font: 700 7px Consolas, monospace; letter-spacing: .13em; }
+.explore-readouts b { overflow: hidden; color: var(--accent); font: 700 16px "Bahnschrift SemiCondensed", sans-serif; letter-spacing: .03em; text-overflow: ellipsis; white-space: nowrap; }
+.explore-readouts > span + span b { color: var(--text); font-size: 12px; text-transform: uppercase; }
+
+/* Loading and interruption placeholders. */
+.explore-pending { flex: 1 1 auto; display: grid; place-content: center; justify-items: center; gap: 7px; min-height: 180px; padding: 24px; color: var(--dim); font: 9px/1.5 Consolas, monospace; text-align: center; }
+.explore-columns > .explore-pending { grid-column: 1 / -1; border: 1px solid var(--border-soft); background: var(--panel); }
+.explore-pending i { width: 38px; height: 38px; border: 1px solid var(--accent); border-top-color: transparent; border-radius: 50%; animation: explore-spin 1.4s linear infinite; }
+.explore-pending b { color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .1em; }
+
+/* System view: identity band. */
+.explore-band {
+  flex: 0 0 auto; display: grid; grid-template-columns: 40px minmax(150px, .85fr) minmax(270px, 1.1fr) minmax(250px, 1.25fr);
+  align-items: center; gap: 18px; min-height: 66px; padding: 9px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border)); border-left: 3px solid var(--accent);
+  background:
+    radial-gradient(circle at 36px 50%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 74px),
+    linear-gradient(100deg, color-mix(in srgb, var(--accent) 7%, var(--panel)), var(--panel) 62%);
+}
+.explore-star { --star: var(--accent); position: relative; width: 38px; height: 38px; }
+.explore-star::before { content: ""; position: absolute; inset: 0; border: 1px dashed color-mix(in srgb, var(--star) 55%, transparent); border-radius: 50%; animation: explore-star-orbit 14s linear infinite; }
+.explore-star i { position: absolute; inset: 10px; border-radius: 50%; background: radial-gradient(circle at 36% 34%, #fff 0 8%, var(--star) 32%, color-mix(in srgb, var(--star) 40%, transparent) 66%, transparent 72%); box-shadow: 0 0 16px color-mix(in srgb, var(--star) 70%, transparent); }
+/* Stellar colours follow the orrery's ORRERY_STAR_COLORS palette. */
+.explore-star[data-star-class="O"] { --star: #9bb0ff; } .explore-star[data-star-class="B"] { --star: #aabfff; }
+.explore-star[data-star-class="A"] { --star: #cad7ff; } .explore-star[data-star-class="F"] { --star: #f8f7ff; }
+.explore-star[data-star-class="G"] { --star: #fff4ea; } .explore-star[data-star-class="K"] { --star: #ffd2a1; }
+.explore-star[data-star-class="M"] { --star: #ffb56c; } .explore-star[data-star-class="L"] { --star: #ff8c5a; }
+.explore-star[data-star-class="T"] { --star: #cc6b52; } .explore-star[data-star-class="Y"] { --star: #8a4a3c; }
+.explore-star[data-star-class="D"] { --star: #dfe9ff; } .explore-star[data-star-class="N"] { --star: #b0e0ff; }
+.explore-identity { min-width: 0; }
+.explore-identity small { display: flex; gap: 8px; overflow: hidden; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .1em; white-space: nowrap; }
+.explore-identity small b { color: var(--green); }
+.explore-identity strong { display: block; margin-top: 3px; overflow: hidden; color: var(--text); font: 700 clamp(17px, 1.6vw, 23px) "Bahnschrift SemiCondensed", "Arial Narrow", sans-serif; letter-spacing: .04em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.explore-progress { display: grid; grid-template-columns: minmax(140px, 1.7fr) repeat(2, minmax(58px, .55fr)); gap: 16px; min-width: 0; }
+.explore-progress > div { display: grid; align-content: center; gap: 3px; min-width: 0; }
+.explore-progress small { color: var(--dim); font: 700 7px Consolas, monospace; letter-spacing: .13em; }
+.explore-progress b { overflow: hidden; color: var(--text); font: 700 15px "Bahnschrift SemiCondensed", sans-serif; letter-spacing: .03em; text-overflow: ellipsis; white-space: nowrap; }
+.explore-fss { grid-template-areas: "label pct" "count pct" "bar bar"; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; }
+.explore-fss > small { grid-area: label; } .explore-fss > b { grid-area: count; }
+.explore-fss > span { grid-area: pct; align-self: center; color: var(--accent); font: 700 18px Consolas, monospace; }
+.explore-fss > i { grid-area: bar; height: 5px; margin-top: 3px; overflow: hidden; border: 1px solid var(--border-soft); background: var(--inset); }
+.explore-fss > i > em { display: block; width: 0; height: 100%; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent), var(--accent)); box-shadow: 0 0 8px var(--accent); transition: width .4s ease; }
+#explore-workspace .workboard-orbits { height: 46px; min-width: 0; margin: 0; padding: 0 10px 0 32px; }
+#explore-workspace .workboard-body-marker:nth-child(even) { transform: translateY(6px); }
+#explore-workspace .workboard-body-marker:nth-child(3n) { transform: translateY(-6px); }
+#explore-workspace .workboard-body-marker b { top: 13px; font-size: 6.5px; }
+
+/* System view: survey board beside the live orrery. */
+.explore-system-grid { flex: 1 1 auto; min-height: 320px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, 1fr); gap: 12px; }
+.explore-board, .explore-instrument { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); background: var(--panel); }
+.explore-board { border-top: 2px solid var(--orange); background: linear-gradient(180deg, color-mix(in srgb, var(--orange) 5%, var(--panel)), var(--panel) 110px); }
+.explore-instrument { border-top: 2px solid var(--accent); }
+.explore-board-head, .explore-instrument-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border-bottom: 1px solid var(--border-soft); }
+.explore-board-head small, .explore-instrument-head small, .explore-card > header small { display: block; color: var(--orange); font: 700 8px Consolas, monospace; letter-spacing: .12em; }
+.explore-instrument-head small { color: var(--accent); }
+.explore-board-head h3, .explore-card > header h3 { margin: 2px 0 0; color: var(--text); font: 700 17px "Bahnschrift SemiCondensed", "Arial Narrow", sans-serif; letter-spacing: .03em; text-transform: uppercase; }
+.explore-instrument-head b { display: block; margin-top: 2px; color: var(--text); font: 700 13px "Bahnschrift SemiCondensed", sans-serif; letter-spacing: .04em; }
+.explore-instrument-head > span { min-width: 0; overflow: hidden; color: var(--dim); font: 700 7px Consolas, monospace; letter-spacing: .08em; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.explore-filters { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.explore-filters button { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 9px; border: 1px solid var(--border); background: var(--inset); color: var(--muted); cursor: pointer; font: 700 8px Consolas, monospace; letter-spacing: .06em; }
+.explore-filters button:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); color: var(--text); }
+.explore-filters button:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.explore-filters button b { color: var(--dim); font: 700 8px Consolas, monospace; }
+.explore-filters button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--inset)); color: var(--text); }
+.explore-filters button.active b { color: var(--accent); }
+.explore-board-list { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 7px 8px 8px; outline: none; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.explore-board-list[data-filter="todo"] .body-row:not([data-state="todo"]),
+.explore-board-list[data-filter="done"] .body-row:not([data-state="done"]),
+.explore-board-list[data-filter="bio"] .body-row[data-bio="0"] { display: none; }
+.explore-board-empty { flex: 0 0 auto; margin: 0; padding: 14px; color: var(--dim); font: 9px Consolas, monospace; text-align: center; }
+.explore-board-foot { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 14px; border-top: 1px solid var(--border-soft); color: var(--dim); font: 8px/1.4 Consolas, monospace; }
+.explore-board-foot button { flex: 0 0 auto; min-height: 26px; padding: 0 9px; font: 700 8px Consolas, monospace; }
+
+.explore-board .body-row {
+  --tone: var(--border);
+  position: relative; display: grid; grid-template-columns: 14px 30px minmax(0, 1fr) auto; align-items: center; gap: 4px 10px;
+  min-height: 50px; margin: 0 0 4px; padding: 6px 8px 6px 7px;
+  border: 1px solid var(--border-soft); border-left: 2px solid var(--tone);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--panel-raised) 70%, transparent), transparent 85%);
+}
+.explore-board .body-row.status-targeted { --tone: var(--yellow); }
+.explore-board .body-row.status-pinned { --tone: var(--accent); }
+.explore-board .body-row.status-pending { --tone: var(--orange); }
+.explore-board .body-row.status-awaiting, .explore-board .body-row.status-listed { --tone: var(--muted); }
+.explore-board .body-row.status-complete { --tone: var(--green); }
+.explore-board .body-row.status-skipped, .explore-board .body-row.status-known { --tone: var(--dim); }
+.explore-board .body-row:is(.status-complete, .status-skipped, .status-known):not(.selected) { opacity: .74; }
+.explore-board .body-row.next { border-color: color-mix(in srgb, var(--orange) 34%, var(--border-soft)); border-left-color: var(--orange); background: linear-gradient(90deg, color-mix(in srgb, var(--orange) 14%, var(--panel-alt)), var(--panel) 82%); }
+.explore-board .body-row:hover { border-color: color-mix(in srgb, var(--accent) 34%, var(--border-soft)); }
+.explore-board .body-row.selected { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); border-left-color: var(--accent); background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, var(--panel-alt)), var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent); }
+.explore-board .body-row:focus { outline: none; }
+.explore-board .body-row.selected:focus { outline: 1px solid var(--accent); outline-offset: -1px; }
+.explore-board .body-status { color: var(--tone); font: normal 700 11px Consolas, monospace; text-align: center; }
+.explore-board .body-row .bridge-planet-orb { grid-row: auto; width: 28px; height: 28px; }
+.explore-board .body-select { display: grid; gap: 3px; min-width: 0; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.explore-board .body-select:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+.explore-board .body-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.explore-board .body-line strong { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--text); font: 700 15px "Bahnschrift SemiCondensed", "Arial Narrow", sans-serif; letter-spacing: .03em; text-overflow: ellipsis; white-space: nowrap; }
+.explore-board .tag { flex: 0 0 auto; padding: 1px 5px; border: 1px solid currentColor; font: normal 700 7px Consolas, monospace; letter-spacing: .08em; }
+.explore-board .tag.next { color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); }
+.explore-board .tag.target { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 10%, transparent); }
+.explore-board .tag.latest { color: var(--accent); }
+.explore-board .body-chips { display: flex; gap: 4px; margin-left: auto; }
+.explore-board .chip { padding: 1px 5px; border: 1px solid var(--border-soft); color: var(--muted); font: 700 8px Consolas, monospace; white-space: nowrap; }
+.explore-board .chip.bio { border-color: color-mix(in srgb, var(--green) 40%, var(--border-soft)); color: var(--green); }
+.explore-board .chip.geo { border-color: color-mix(in srgb, var(--orange) 40%, var(--border-soft)); color: var(--orange); }
+.explore-board .chip.tf, .explore-board .chip.rare { border-color: color-mix(in srgb, var(--yellow) 40%, var(--border-soft)); color: var(--yellow); }
+.explore-board .chip.mapped { color: var(--accent); }
+.explore-board .chip.known { color: var(--dim); }
+.explore-board .body-value { flex: 0 0 auto; min-width: 58px; color: var(--yellow); font: 700 10px Consolas, monospace; text-align: right; white-space: nowrap; }
+.explore-board .body-row.status-complete .body-value { color: var(--green); }
+.explore-board .body-select > small { overflow: hidden; color: var(--muted); font: 9px Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.explore-board .body-actions { display: flex; gap: 4px; }
+.explore-board .body-actions button { min-width: 44px; min-height: 26px; padding: 0 7px; font: 700 8px Consolas, monospace; }
+.explore-board .body-actions [data-ws-op="survey_complete"]:disabled { border-color: color-mix(in srgb, var(--green) 55%, var(--border)); color: var(--green); opacity: 1; }
+.explore-board .body-row.empty { display: block; min-height: 0; padding: 16px; border-left-color: var(--border); }
+.explore-board .body-row.empty strong { display: block; color: var(--text); font: 700 12px Consolas, monospace; }
+.explore-board .body-row.empty span { display: block; margin-top: 4px; color: var(--muted); font: 9px/1.5 Consolas, monospace; }
+/* Only the worlds scrolled into view animate, as on the Dashboard list. */
+.explore-board .body-row .bridge-planet-orb::before,
+.explore-board .body-row .bridge-planet-sphere::before,
+.explore-board .body-row .bridge-planet-ring { animation-play-state: paused; }
+.explore-board .body-row.in-view .bridge-planet-orb::before,
+.explore-board .body-row.in-view .bridge-planet-sphere::before,
+.explore-board .body-row.in-view .bridge-planet-ring { animation-play-state: running; }
+
+#explore-orrery .cartography-target-lock { flex: 0 0 auto; margin: 8px 10px 0; }
+#explore-orrery .orrery-stage, #explore-orrery .orrery-empty { flex: 1 1 auto; height: auto; min-height: 210px; }
+#explore-orrery .orrery-detail { flex: 0 1 auto; min-height: 0; max-height: 48%; overflow: auto; padding: 10px 13px; scrollbar-width: thin; }
+
+/* Route view. */
+.explore-expedition {
+  flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 280px) auto; align-items: center; gap: 18px;
+  padding: 9px 16px; border: 1px solid color-mix(in srgb, var(--orange) 34%, var(--border)); border-left: 3px solid var(--orange);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--orange) 8%, var(--panel)), var(--panel) 60%);
+}
+.explore-expedition > div:first-child { min-width: 0; }
+.explore-expedition small { display: flex; gap: 8px; color: var(--orange); font: 700 8px Consolas, monospace; letter-spacing: .12em; }
+.explore-expedition small b { color: var(--muted); }
+.explore-expedition strong { display: block; margin: 2px 0; overflow: hidden; color: var(--text); font: 700 17px "Bahnschrift SemiCondensed", sans-serif; letter-spacing: .03em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.explore-expedition span { display: block; overflow: hidden; color: var(--muted); font: 9px Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.explore-expedition-track { display: grid; gap: 5px; }
+.explore-expedition-track > i { height: 6px; overflow: hidden; border: 1px solid var(--border); background: var(--inset); }
+.explore-expedition-track em { display: block; width: 0; height: 100%; background: linear-gradient(90deg, color-mix(in srgb, var(--orange) 50%, transparent), var(--orange)); box-shadow: 0 0 8px var(--orange); transition: width .4s ease; }
+.explore-expedition-track > span { color: var(--muted); font: 700 9px Consolas, monospace; text-align: right; }
+.explore-expedition > button { min-height: 32px; padding: 0 12px; font: 700 9px Consolas, monospace; }
+
+.explore-columns { flex: 1 1 auto; min-height: 0; display: grid; gap: 12px; }
+/* Minimum working heights: on a very short window the page scrolls a little
+   rather than clipping a card's form or footer. */
+.explore-route-grid { min-height: 330px; grid-template-columns: minmax(0, .82fr) minmax(0, 1.15fr) minmax(0, 1.2fr); }
+.explore-prospect-grid { min-height: 390px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); }
+.explore-stack { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; }
+.explore-card { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-top: 2px solid var(--accent); background: var(--panel); }
+.explore-card.waypoint-card, .explore-card.return-later-board { border-top-color: var(--orange); }
+.explore-card.codex-card { border-top-color: var(--yellow); }
+.explore-card > header { flex: 0 0 auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 9px 14px; border-bottom: 1px solid var(--border-soft); }
+.explore-card > header > div { min-width: 0; }
+.explore-card.nav-route-card > header small, .explore-card.neutron-card > header small, .explore-card.exploration-scout > header small { color: var(--accent); }
+.explore-card.codex-card > header small { color: var(--yellow); }
+.explore-card > header > b { flex: 0 0 auto; padding: 5px 8px; border: 1px solid var(--border); color: var(--accent); font: 700 8px Consolas, monospace; white-space: nowrap; }
+.explore-card.waypoint-card > header > b, .explore-card.return-later-board > header > b { border-color: color-mix(in srgb, var(--orange) 40%, var(--border)); color: var(--orange); }
+.explore-card-lead { flex: 0 0 auto; margin: 0; padding: 7px 14px; border-bottom: 1px solid var(--border-soft); color: var(--muted); font: 9px/1.45 Consolas, monospace; }
+.explore-card-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 12px 8px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.explore-card-note { flex: 0 0 auto; margin: 0; padding: 8px 14px; border-top: 1px solid var(--border-soft); color: var(--dim); font: 8px/1.45 Consolas, monospace; }
+.explore-card > footer { flex: 0 0 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--border-soft); }
+.explore-card > footer button { min-height: 28px; padding: 0 9px; font: 700 8px Consolas, monospace; }
+.explore-card .workspace-empty { margin: 10px 0; }
+.explore-card .workspace-status { flex: 0 0 auto; margin: 8px 12px 4px; }
+
+#explore-workspace .route-system, #explore-workspace .waypoint-row { gap: 9px; padding: 7px 2px; border-bottom: 1px solid var(--border-soft); }
+#explore-workspace .route-system b, #explore-workspace .waypoint-row b { display: block; overflow: hidden; color: var(--text); font: 700 13px "Bahnschrift SemiCondensed", sans-serif; letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
+#explore-workspace .route-system small, #explore-workspace .waypoint-row small { font: 8px/1.4 Consolas, monospace; }
+#explore-workspace .route-system.current b { color: var(--orange); }
+#explore-workspace .route-system.current { box-shadow: inset 3px 0 var(--orange); background: color-mix(in srgb, var(--orange) 7%, transparent); }
+#explore-workspace .waypoint-row > button { width: 28px; min-width: 28px; height: 28px; padding: 0; }
+#explore-workspace .waypoint-row > div { gap: 3px; }
+#explore-workspace .waypoint-row > div button { min-width: 26px; min-height: 26px; padding: 0 6px; font: 700 8px Consolas, monospace; }
+#explore-workspace .waypoint-row:not(.visited):hover { box-shadow: inset 3px 0 var(--orange); background: color-mix(in srgb, var(--orange) 6%, transparent); }
+#explore-workspace .route-add-form { flex: 0 0 auto; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) auto; margin: 10px 12px 0; }
+#explore-workspace .route-add-form input, #explore-workspace .neutron-form input, #explore-workspace .neutron-form select { height: 32px; }
+#explore-workspace .route-add-form button { min-height: 32px; padding: 0 12px; font: 700 9px Consolas, monospace; }
+.waypoint-next { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; margin: 8px 12px 2px; padding: 7px 9px; border-left: 2px solid var(--orange); background: var(--inset); }
+.waypoint-next > span { flex: 1 1 auto; min-width: 0; }
+.waypoint-next small { display: block; color: var(--dim); font: 700 7px Consolas, monospace; letter-spacing: .12em; }
+.waypoint-next b { display: block; overflow: hidden; color: var(--text); font: 700 13px "Bahnschrift SemiCondensed", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.waypoint-next button { flex: 0 0 auto; min-height: 26px; padding: 0 8px; font: 700 8px Consolas, monospace; }
+/* Two rows: the endpoints, then the ship settings beside PLOT ROUTE. */
+#explore-workspace .neutron-form { flex: 0 0 auto; grid-template-columns: minmax(0, .85fr) minmax(0, .85fr) minmax(0, 1.25fr) minmax(0, 1.05fr); align-items: end; margin: 10px 12px 0; }
+#explore-workspace .neutron-form label { min-width: 0; font-size: 8px; }
+#explore-workspace .neutron-form label.wide { grid-column: span 2; }
+#explore-workspace .neutron-form > button { min-height: 32px; padding: 0 6px; font: 700 8px Consolas, monospace; }
+.neutron-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--border-soft); }
+.neutron-row > i { color: var(--dim); font: normal 700 8px Consolas, monospace; }
+.neutron-row b { display: block; overflow: hidden; color: var(--text); font: 700 12px "Bahnschrift SemiCondensed", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.neutron-row small { color: var(--muted); font: 8px Consolas, monospace; }
+.neutron-row em { color: var(--dim); font: normal 700 7px Consolas, monospace; letter-spacing: .06em; }
+.neutron-row em.neutron { color: var(--accent); }
+
+/* Prospects view: Return Later, Codex gaps and the Exploration Scout. */
+.return-later-entries { flex: 1 1 auto; min-height: 0; display: grid; align-content: start; gap: 8px; overflow: auto; padding: 10px 12px; container-type: inline-size; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.return-later-entries > .workspace-empty { margin: 0; padding: 14px; }
+.return-later-entry { display: flex; flex-direction: column; gap: 9px; padding: 10px 12px; border: 1px solid var(--border-soft); border-left: 2px solid var(--accent); background: var(--inset); }
+.return-later-entry.current { border-left-color: var(--orange); background: color-mix(in srgb, var(--orange) 4%, var(--inset)); }
+.return-later-entry-main { min-width: 0; }
+.return-later-entry-main > small { color: var(--dim); font: 700 7px/1.4 Consolas, monospace; letter-spacing: .04em; }
+.return-later-entry-main h4 { margin: 3px 0 1px; overflow-wrap: anywhere; color: var(--text); font: 700 15px "Bahnschrift SemiCondensed", sans-serif; }
+.return-later-entry-main > strong { display: block; overflow-wrap: anywhere; color: var(--accent); font: 700 9px Consolas, monospace; }
+.return-later-entry-main ul { display: flex; flex-wrap: wrap; gap: 5px; margin: 7px 0 0; padding: 0; list-style: none; }
+.return-later-entry-main li { padding: 3px 6px; border: 1px solid var(--border-soft); color: var(--muted); font: 8px/1.35 Consolas, monospace; }
+.return-later-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.return-later-actions button { min-height: 26px; padding: 0 8px; border: 1px solid var(--border); background: var(--panel-alt); color: var(--muted); cursor: pointer; font: 700 8px Consolas, monospace; }
+.return-later-actions button:hover, .return-later-actions button:focus-visible { border-color: var(--accent); color: var(--accent); }
+.return-later-actions button.danger-action:hover, .return-later-actions button.danger-action:focus-visible { border-color: var(--red); color: var(--red); }
+@container (min-width: 400px) {
+  .return-later-entry { flex-direction: row; justify-content: space-between; align-items: center; gap: 12px; }
+  .return-later-actions { flex: 0 0 auto; flex-wrap: nowrap; justify-content: flex-end; }
 }
 
-@media (max-width: 1180px) {
-  .scout-search-form { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.scout-codex-row { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border-soft); }
+.scout-codex-row > i { width: 5px; height: 5px; margin-top: 5px; background: var(--yellow); transform: rotate(45deg); }
+.scout-codex-row b, .scout-codex-row small { display: block; overflow-wrap: anywhere; }
+.scout-codex-row b { color: var(--text); font: 700 10px "Segoe UI", sans-serif; }
+.scout-codex-row small { margin-top: 2px; color: var(--dim); font: 7px Consolas, monospace; }
+
+.exploration-scout > header h3 { color: var(--accent); }
+.scout-audit { flex: 0 0 auto; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 14px; padding: 9px 14px; border-bottom: 1px solid var(--border-soft); background: var(--inset); }
+.scout-audit small { display: block; color: var(--dim); font: 700 7px Consolas, monospace; letter-spacing: .1em; }
+.scout-audit b { display: block; margin-top: 2px; color: var(--text); font: 700 14px "Bahnschrift SemiCondensed", sans-serif; white-space: nowrap; }
+.scout-audit p { margin: 0; color: var(--muted); font: 9px/1.5 Consolas, monospace; }
+.scout-audit em { color: var(--dim); font-style: italic; }
+/* Two rows of five: reference, type and radius; then the numeric limits. */
+.scout-search-form { flex: 0 0 auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: start; gap: 8px; padding: 10px 12px 2px; }
+.scout-search-form label { display: grid; gap: 4px; min-width: 0; color: var(--muted); font: 700 8px Consolas, monospace; letter-spacing: .06em; }
+.scout-search-form label.wide { grid-column: span 2; }
+.scout-search-form label small { min-height: 10px; color: var(--dim); font: 7px Consolas, monospace; letter-spacing: 0; }
+.scout-search-form input, .scout-search-form select { width: 100%; min-width: 0; height: 32px; padding: 0 9px; outline: 0; border: 1px solid var(--border); background: var(--input); color: var(--text); font: 10px Consolas, monospace; }
+.scout-search-form input:focus, .scout-search-form select:focus { border-color: var(--accent); }
+.scout-search-form > button { align-self: end; height: 32px; margin-bottom: 14px; padding: 0 12px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 13%, var(--panel-alt)); color: var(--accent); font: 700 9px Consolas, monospace; cursor: pointer; }
+.scout-provenance { flex: 0 0 auto; margin: 2px 12px 6px; padding: 7px 10px; border-left: 2px solid var(--orange); background: color-mix(in srgb, var(--orange) 5%, transparent); color: var(--muted); font: 8px/1.45 Consolas, monospace; }
+.scout-results { flex: 1 1 auto; min-height: 0; display: grid; align-content: start; gap: 8px; overflow: auto; padding: 6px 12px 10px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.scout-results > .workspace-empty { margin: 4px 0; }
+.scout-prospect { padding: 11px 12px; border: 1px solid var(--border-soft); border-left: 2px solid var(--accent); background: var(--panel-alt); }
+.scout-prospect > header { display: flex; justify-content: space-between; gap: 15px; }
+.scout-prospect header span { min-width: 0; }
+.scout-prospect header small, .scout-prospect header h4, .scout-prospect header b { display: block; }
+.scout-prospect header small { color: var(--dim); font: 8px Consolas, monospace; }
+.scout-prospect header h4 { margin: 3px 0; overflow-wrap: anywhere; color: var(--text); font: 700 15px "Bahnschrift SemiCondensed", sans-serif; }
+.scout-prospect header b { color: var(--muted); font: 9px Consolas, monospace; }
+.scout-prospect header em { flex: 0 0 auto; color: var(--orange); font: 700 11px Consolas, monospace; font-style: normal; }
+.scout-prospect ul { display: flex; flex-wrap: wrap; gap: 5px 14px; margin: 8px 0; padding: 0; list-style: none; }
+.scout-prospect li { color: var(--muted); font: 8px Consolas, monospace; }
+.scout-prospect li::before { content: "◆"; margin-right: 6px; color: var(--accent); }
+.scout-prospect footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid var(--border-soft); }
+.scout-prospect footer small { color: var(--dim); font: 7px Consolas, monospace; }
+.scout-prospect footer div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.scout-prospect button { min-height: 26px; padding: 0 8px; border: 1px solid var(--border); background: var(--inset); color: var(--muted); cursor: pointer; font: 700 8px Consolas, monospace; }
+.scout-prospect button:hover { border-color: var(--accent); color: var(--accent); }
+
+@keyframes explore-star-orbit { to { transform: rotate(360deg); } }
+@keyframes explore-spin { to { transform: rotate(360deg); } }
+
+/* Mid-size windows keep every view on one screen with two columns: the
+   region readout (also in the status bar) and the decorative orbit strip
+   give way, and the route cards regroup around the waypoint list. */
+@media (max-width: 1240px) {
+  .explore-views { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+  .explore-views > button { grid-template-columns: minmax(0, 1fr); padding: 8px 12px; }
+  .explore-views > button > i, .explore-readouts > span + span { display: none; }
+  .explore-readouts > span { min-width: 0; padding: 6px 12px; }
+  .explore-band { grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1.3fr); }
+  #explore-workspace .workboard-orbits { display: none; }
+  .explore-system-grid { grid-template-columns: minmax(0, 1.15fr) minmax(300px, 1fr); }
+  .explore-route-grid { min-height: 470px; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-rows: minmax(150px, .7fr) minmax(300px, 1.3fr); }
+  .explore-route-grid > .waypoint-card { grid-column: 1; grid-row: 1 / span 2; }
+  .explore-route-grid > .nav-route-card { grid-column: 2; grid-row: 1; }
+  .explore-route-grid > .neutron-card { grid-column: 2; grid-row: 2; }
+  .explore-prospect-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
 }
 
+/* Narrow windows: stack the columns and let the page scroll instead. */
 @media (max-width: 980px) {
-  .scout-search-form { grid-template-columns:1fr; }
+  .page[data-page-name="explore"].active { height: auto; min-height: 100%; }
+  #explore-workspace, #explore-workspace .explore-view, .explore-columns, .explore-system-grid { flex: 0 0 auto; }
+  .explore-system-grid, .explore-route-grid, .explore-prospect-grid { grid-template-columns: minmax(0, 1fr); }
+  .explore-route-grid { grid-template-rows: none; }
+  .explore-route-grid > * { grid-column: auto; grid-row: auto; }
+  .explore-stack { grid-template-rows: auto auto; }
+  .explore-board-list { max-height: 470px; }
+  .explore-card-body, .return-later-entries, .scout-results { max-height: 420px; }
+  #explore-orrery .orrery-stage, #explore-orrery .orrery-empty { min-height: 380px; }
+  .explore-views { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .explore-readouts { grid-column: 1 / -1; }
+  .explore-readouts > span { flex: 1 1 0; max-width: none; }
+  .explore-band { grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1.2fr); }
+}
+
+@media (max-width: 760px) {
+  .explore-views { grid-template-columns: minmax(0, 1fr); }
+  .explore-band { grid-template-columns: 40px minmax(0, 1fr); }
+  .explore-progress { grid-column: 1 / -1; }
+  .explore-board-head { align-items: flex-start; flex-direction: column; }
+  .explore-filters { justify-content: flex-start; }
+  .explore-board .body-row { grid-template-columns: 14px 30px minmax(0, 1fr); }
+  .explore-board .body-actions { grid-column: 3; }
+  .explore-expedition { grid-template-columns: minmax(0, 1fr); }
+  .scout-search-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .scout-audit { grid-template-columns: minmax(0, 1fr); }
+  .scout-prospect > header, .scout-prospect footer { align-items: flex-start; flex-direction: column; }
+  .scout-prospect footer div { justify-content: flex-start; }
 }

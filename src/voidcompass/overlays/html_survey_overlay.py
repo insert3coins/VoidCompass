@@ -11,6 +11,7 @@ from voidcompass.overlays.html_overlay_runtime import (
     HtmlOverlaySurface,
     overlay_opacity_ratio,
 )
+from voidcompass.overlays.survey_options import survey_overlay_options, survey_text_scale
 
 
 def _safe_int(value, default=0):
@@ -111,9 +112,7 @@ class HtmlSurveyOverlayBridge(HtmlOverlayBridgeLifecycle):
 
     def _snapshot(self):
         try:
-            text_scale = max(75, min(200, _safe_int(
-                self.config.get("overlay_text_scale_percent"), 100,
-            ))) / 100.0
+            text_scale = survey_text_scale(self.config)
         except Exception:
             text_scale = 1.0
         return {
@@ -128,6 +127,7 @@ class HtmlSurveyOverlayBridge(HtmlOverlayBridgeLifecycle):
                 "text_scale": text_scale,
                 "opacity": overlay_opacity_ratio(self.config),
             },
+            "options": survey_overlay_options(self.config),
             "window": self._window_payload(),
         }
 
@@ -140,6 +140,9 @@ class HtmlSurveyOverlayBridge(HtmlOverlayBridgeLifecycle):
             palette,
             tuple(sorted(window.items())),
             self.config.get("overlay_text_scale_percent"),
+            self.config.get("survey_text_scale_percent"),
+            self.config.get("survey_spotlight_rotation"),
+            self.config.get("survey_spotlight_threshold"),
             self.config.get("overlay_opacity_percent", 100),
             bool(self.config.get("hud_crt_enabled", True)),
             bool(self.config.get("reduced_motion_enabled", False)),

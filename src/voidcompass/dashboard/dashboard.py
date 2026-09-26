@@ -116,6 +116,10 @@ HUD_REGION_CROSSED_S = 45.0
 # Sagittarius A* in Elite's Sol-centred X/Y/Z journal coordinate frame.  The
 # X/Z plane is the galactic disc and Y is height above/below it.
 GALACTIC_CENTRE_XZ = (25.21875, 25899.96875)
+# Startup waits on two browser milestones: its boot frame and the dashboard
+# reveal (about six seconds after the boot ends). A page that cannot deliver
+# them, never loaded or wedged, must not hold the live app and overlays forever.
+STARTUP_BROWSER_ACK_TIMEOUT_MS = 15_000
 
 
 def _journal_epoch(value, default=None):
@@ -1997,6 +2001,9 @@ class MainDashboard(
         self._startup_boot_handoff_job = None
         self._startup_boot_journal_timeout_job = None
         self._startup_boot_history_timeout_job = None
+        self._startup_boot_ack_job = None
+        self._startup_boot_ack_bypassed = False
+        self._startup_handoff_ack_job = None
         self._startup_overlay_resync_job = None
         self._startup_overlay_resync_attempt = 0
         self._startup_history_handoff_bypassed = False
@@ -2793,9 +2800,6 @@ class MainDashboard(
             or getattr(self, "_startup_boot_handoff_job", None) is not None
             or self._startup_overlay_handoff_pending is not None):
             return
-        boot = self._startup_boot()
-        if boot is not None and not getattr(boot, "_ready_emitted", False):
-            return
         if not getattr(self, "_startup_live_tail_ready", False) or not getattr(
             self, "_startup_presentation_ready", False,
         ):
@@ -2804,6 +2808,15 @@ class MainDashboard(
             getattr(self, "_startup_history_pending", set())
             and not getattr(self, "_startup_history_handoff_bypassed", False)
         ):
+            return
+        boot = self._startup_boot()
+        if (boot is not None and not getattr(boot, "_ready_emitted", False)
+                and not getattr(self, "_startup_boot_ack_bypassed", False)):
+            # Only the browser is outstanding now; give it a bounded wait.
+            if getattr(self, "_startup_boot_ack_job", None) is None:
+                self._startup_boot_ack_job = self.root.call_later(
+                    STARTUP_BROWSER_ACK_TIMEOUT_MS, self._startup_boot_ack_timeout,
+                )
             return
         self._startup_boot_update(
             "VOID COMPASS LIVE",
@@ -2815,12 +2828,26 @@ class MainDashboard(
         )
         self._trace_bump("startup_handoff_scheduled")
 
+    def _startup_boot_ack_timeout(self):
+        """Finish startup when the browser never confirms its boot frame."""
+        self._startup_boot_ack_job = None
+        boot = self._startup_boot()
+        if boot is None or getattr(boot, "_ready_emitted", False):
+            return
+        self._startup_boot_ack_bypassed = True
+        self._trace_bump("startup_browser_ack_timeout")
+        logging.warning(
+            "Command deck never confirmed its boot frame; completing startup without it",
+        )
+        self._maybe_complete_startup_presentation()
+
     def _finish_startup_presentation(self):
         self._startup_boot_handoff_job = None
         self._trace_bump("startup_handoff_finished")
         for job_attr in (
             "_startup_boot_journal_timeout_job",
             "_startup_boot_history_timeout_job",
+            "_startup_boot_ack_job",
         ):
             job = getattr(self, job_attr, None)
             if job is not None:
@@ -2840,11 +2867,32 @@ class MainDashboard(
         boot = self._startup_boot()
         if boot is not None:
             boot.stop()
+        self._startup_handoff_ack_job = self.root.call_later(
+            STARTUP_BROWSER_ACK_TIMEOUT_MS, self._startup_handoff_ack_timeout,
+        )
+
+    def _startup_handoff_ack_timeout(self):
+        """Release overlays when the browser never confirms the reveal."""
+        self._startup_handoff_ack_job = None
+        if self._startup_overlay_handoff_pending is None:
+            return
+        self._trace_bump("startup_browser_handoff_timeout")
+        logging.warning(
+            "Command deck never confirmed its reveal; releasing overlays without it",
+        )
+        self._complete_startup_overlay_handoff()
 
     def _complete_startup_overlay_handoff(self):
         restore = self._startup_overlay_handoff_pending
         if restore is None:
             return
+        job = getattr(self, "_startup_handoff_ack_job", None)
+        self._startup_handoff_ack_job = None
+        if job is not None:
+            try:
+                self.root.cancel(job)
+            except RuntimeError:
+                pass
         self._trace_bump("startup_browser_handoff_complete")
         # An event-driven overlay may have become pending during the browser's
         # five-second handoff. Reconcile it under the curtain before release.

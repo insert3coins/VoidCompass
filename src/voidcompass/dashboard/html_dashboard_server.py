@@ -39,6 +39,9 @@ class HtmlDashboardServer:
         self._snapshot_json = "{}"
         self._revision = 0
         self._last_client_seen = 0.0
+        # Only the page's own client calls snapshot/events (the native host
+        # polls /api/host), so this count tells the host its page is running.
+        self._page_requests = 0
         self._stopping = threading.Event()
         self._closing = False
         self._host_state = dict(host_state or {})
@@ -230,6 +233,9 @@ class HtmlDashboardServer:
                 self._send_json(handler, {"error": "unauthorised"}, 403)
                 return
             self._last_client_seen = time.monotonic()
+            if path in {"/api/snapshot", "/api/events"}:
+                with self._condition:
+                    self._page_requests += 1
             if path == "/api/snapshot":
                 with self._condition:
                     payload = self._snapshot_json.encode("utf-8")
@@ -244,6 +250,7 @@ class HtmlDashboardServer:
                     "closing": self._closing,
                     "revision": self._revision,
                     "host_revision": self._host_revision,
+                    "page_requests": self._page_requests,
                 })
             else:
                 self._send_json(handler, {
