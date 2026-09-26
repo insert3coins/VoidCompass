@@ -46,10 +46,11 @@ body {
   height: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  /* The status plate takes the route block's spare height for the scene
-     deck, so the window keeps its size. */
-  grid-template-rows: 94px 42px 70px 62px 18px;
-  row-gap: 5px;
+  /* The status plate takes the route block's spare height and a pixel from
+     each gap for the scene deck, so the window keeps its size. The deck
+     needs the height: scenes drawn in too flat a strip look squashed. */
+  grid-template-rows: 102px 42px 66px 62px 18px;
+  row-gap: 4px;
   padding: 10px 12px 9px;
   color: var(--text);
   font-size: 10px;
@@ -64,7 +65,7 @@ body {
   isolation: isolate;
 }
 .hud.expanded {
-  grid-template-rows: 100px 44px 72px 64px 18px;
+  grid-template-rows: 110px 44px 68px 64px 18px;
   padding: 11px 16px 10px;
 }
 
@@ -145,11 +146,11 @@ body {
 .status-main {
   min-width: 0;
   display: grid;
-  grid-template-rows: 27px 38px 18px;
-  row-gap: 4px;
+  grid-template-rows: 26px 52px 18px;
+  row-gap: 3px;
   align-content: center;
 }
-.hud.expanded .status-main { grid-template-rows: 28px 44px 18px; }
+.hud.expanded .status-main { grid-template-rows: 27px 59px 18px; }
 
 .notice {
   position: relative;
