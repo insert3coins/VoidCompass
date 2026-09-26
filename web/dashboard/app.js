@@ -4973,4 +4973,6 @@ installPageSuites();
 decorateCockpitButtons();
 cockpitButtonObserver.observe(document.body, {childList: true, subtree: true});
 showPage("overview");
+// page-start.js watches for this: a page that never sets it is reported.
+window.__voidcompassDeckStarted = true;
 eventLoop();

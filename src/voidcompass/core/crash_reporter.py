@@ -1,5 +1,6 @@
 import datetime
 import faulthandler
+import logging
 import os
 import platform
 import sys
@@ -16,6 +17,47 @@ _HEARTBEAT_TS = time.monotonic()
 _WATCHDOG_STARTED = False
 _WATCHDOG_STOP = threading.Event()
 _WATCHDOG_LAST_DUMP = 0.0
+_LOG_HANDLER = None
+_LOG_REPEATS_SHOWN = 3
+_LOG_REPEAT_WINDOW_S = 60.0
+_LOG_SESSION_LIMIT = 200
+
+
+class _LoggedErrors(logging.Handler):
+    """Copy errors logged anywhere in the app into the crash report.
+
+    The packaged app has no console, so the root logger's stderr handler
+    writes nowhere: a callback failure caught and logged with
+    logging.exception left only a failure count in the runtime trace. Repeats
+    of one message are capped (three, then one a minute with a tally) so a
+    persistent fault cannot flood the report.
+    """
+
+    def __init__(self):
+        super().__init__(level=logging.ERROR)
+        self.setFormatter(logging.Formatter("%(message)s"))
+        self._repeats = {}
+        self._written = 0
+
+    def emit(self, record):
+        if _CRASH_FILE is None or self._written >= _LOG_SESSION_LIMIT:
+            return
+        try:
+            now = time.monotonic()
+            state = self._repeats.setdefault((record.name, str(record.msg)), [0, 0, 0.0])
+            shown, hidden, last = state
+            if shown >= _LOG_REPEATS_SHOWN and now - last < _LOG_REPEAT_WINDOW_S:
+                state[1] += 1
+                return
+            note = f" ({hidden} repeats not shown)" if hidden else ""
+            _CRASH_FILE.write("\n" + "-" * 80 + "\n")
+            _CRASH_FILE.write(f"{datetime.datetime.now().isoformat()} [logged {record.levelname.lower()}]{note}\n")
+            _CRASH_FILE.write(self.format(record) + "\n")
+            _CRASH_FILE.flush()
+            state[:] = [shown + 1, 0, now]
+            self._written += 1
+        except Exception:
+            pass
 
 
 def crash_log_path():
@@ -109,7 +151,7 @@ def install_ui_freeze_watchdog(root, interval_ms=500, timeout_s=5.0, dump_cooldo
 
 
 def install(root=None):
-    global _CRASH_FILE, _CRASH_PATH
+    global _CRASH_FILE, _CRASH_PATH, _LOG_HANDLER
     if _CRASH_FILE is not None:
         if root is not None:
             install_runtime(root)
@@ -130,6 +172,10 @@ def install(root=None):
         faulthandler.enable(file=_CRASH_FILE, all_threads=True)
     except Exception:
         _CRASH_FILE = None
+
+    if _LOG_HANDLER is None:
+        _LOG_HANDLER = _LoggedErrors()
+        logging.getLogger().addHandler(_LOG_HANDLER)
 
     def _sys_hook(exc_type, exc_value, exc_tb):
         log_exception(exc_type, exc_value, exc_tb, "sys.excepthook")

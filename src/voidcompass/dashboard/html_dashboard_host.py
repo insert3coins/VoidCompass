@@ -18,7 +18,7 @@ _BOOT_RECOVERY_RETRY_S = 1.0
 # Navigation errors show no error document (see webview_bootstrap), so a failed
 # or stillborn page would otherwise stay an empty window for the whole session.
 _PAGE_RETRY_DELAYS_S = (0.5, 1.5, 3.0, 6.0)
-_PAGE_START_TIMEOUT_S = 6.0  # A live client polls the API before load completes.
+_PAGE_START_TIMEOUT_S = 3.0  # A live client polls the API before load completes.
 # WebView2 cannot retry a failed start in-process; ask the parent for a new host.
 HOST_RELAUNCH_EXIT_CODE = 75
 
@@ -184,6 +184,64 @@ class DashboardHost:
         window.load_url(f"{self.dashboard_url}&host_retry={self.page_retries}")
         return False
 
+    def watch_network(self, webview_control):
+        """Log each failed page request with Chromium's own error code.
+
+        Some launches lose a burst of the deck's files in its first second.
+        The page can only see that a file failed; the DevTools network events
+        say why (refused, reset, aborted...), which is what this records.
+        """
+        core = getattr(webview_control, "CoreWebView2", None)
+        if core is None:
+            return False
+        urls = {}
+
+        def payload(args):
+            return json.loads(str(args.ParameterObjectAsJson or "{}"))
+
+        def remember(_sender, args):
+            try:
+                data = payload(args)
+                urls[data.get("requestId")] = str((data.get("request") or {}).get("url") or "")
+                while len(urls) > 500:
+                    urls.pop(next(iter(urls)))
+            except Exception:
+                pass
+
+        def finished(_sender, args):
+            try:
+                urls.pop(payload(args).get("requestId"), None)
+            except Exception:
+                pass
+
+        def failed(_sender, args):
+            try:
+                data = payload(args)
+                path = urlparse(urls.pop(data.get("requestId"), "")).path or "?"
+                canceled = bool(data.get("canceled"))
+                if canceled and path.startswith("/api/"):
+                    return  # A long-poll ended by a reload or close.
+                detail = str(data.get("errorText") or "unknown error")
+                if canceled:
+                    detail += " (canceled)"
+                if data.get("blockedReason"):
+                    detail += f" (blocked: {data['blockedReason']})"
+                print(f"Dashboard request failed: {path} {detail}", flush=True)
+            except Exception:
+                pass
+
+        handlers = (
+            ("Network.requestWillBeSent", remember),
+            ("Network.loadingFinished", finished),
+            ("Network.loadingFailed", failed),
+        )
+        for event, handler in handlers:
+            core.GetDevToolsProtocolEventReceiver(event).DevToolsProtocolEventReceived += handler
+        # pythonnet delegates must outlive this call.
+        self._network_handlers = handlers
+        core.CallDevToolsProtocolMethodAsync("Network.enable", "{}")
+        return True
+
     def monitor(self):
         while self.window is not None:
             try:
@@ -278,6 +336,11 @@ class DashboardApi:
 
 def main(argv=None):
     argv = list(argv or [])
+    from voidcompass.core.diagnostic_logs import TimestampedStream
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name, None)
+        if stream is not None and not isinstance(stream, TimestampedStream):
+            setattr(sys, name, TimestampedStream(stream))
     if not argv:
         return 2
     dashboard_url = str(argv[0])
@@ -315,6 +378,7 @@ def main(argv=None):
         text_select=True,
     )
     host.window = window
+    window._voidcompass_after_ready = host.watch_network
     host.host_revision = int(state.get("host_revision") or 0)
     window.events.moved += host.moved
     window.events.resized += host.resized

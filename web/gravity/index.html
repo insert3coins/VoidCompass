@@ -8,16 +8,33 @@
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
-  <main id="gravity" class="gravity warning" aria-live="assertive">
-    <div class="warning-field" aria-hidden="true"><i></i><i></i><i></i></div>
-    <header><span>PLANETARY FLIGHT ENVELOPE</span><b id="severity">WARNING</b></header>
-    <section>
-      <div class="gravity-sigil" aria-hidden="true"><i></i><b>G</b></div>
-      <div class="gravity-copy"><small>HIGH GRAVITY WORLD</small><strong id="body">UNKNOWN BODY</strong><span id="detail">AWAITING GRAVITY FIX</span></div>
-      <div class="gravity-value"><strong id="value">—</strong><small>LOCAL G</small></div>
-    </section>
-    <div class="load"><i id="load-fill"></i></div>
-    <div class="scanlines"></div>
+  <main id="gravity" class="gravity" data-severity="warning" data-phase="approach" aria-live="assertive">
+    <div class="corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+    <div class="notice">
+      <span id="tag" class="tag">CAUTION</span>
+      <strong class="title">HIGH GRAVITY</strong>
+      <b id="value" class="value">—</b>
+    </div>
+    <div class="identity">
+      <span id="body">UNKNOWN BODY</span>
+      <small id="ratio"></small>
+    </div>
+
+    <div class="gauge" aria-hidden="true">
+      <i class="zone caution"></i><i class="zone high"></i><i class="zone critical"></i>
+      <i id="one-g-tick" class="tick"></i><i class="tick limit"></i>
+      <b id="marker" class="marker"></b>
+    </div>
+    <div class="scale" aria-hidden="true">
+      <span class="zero">0</span>
+      <span id="one-g">1 G</span>
+      <span id="limit" class="limit-label">LIMIT</span>
+      <span id="max" class="max">—</span>
+    </div>
+
+    <div id="phase" class="phase">APPROACH</div>
+    <div class="scanlines" aria-hidden="true"></div>
   </main>
   <script src="/assets/overlay-client.js"></script>
   <script src="app.js"></script>

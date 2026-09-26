@@ -717,6 +717,11 @@ def run(url):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    from voidcompass.core.diagnostic_logs import TimestampedStream
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name, None)
+        if stream is not None and not isinstance(stream, TimestampedStream):
+            setattr(sys, name, TimestampedStream(stream))
     if not argv:
         return 1
     return run(argv[0])

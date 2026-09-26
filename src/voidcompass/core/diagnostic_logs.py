@@ -86,3 +86,38 @@ def prepare_log(path, legacy_paths=(), keep=LOG_ARCHIVE_LIMIT):
             pass
     _prune_archives(target, keep)
     return str(target)
+
+
+def log_clock():
+    """Wall-clock time to the millisecond, as the runtime trace records it."""
+    now = datetime.now()
+    return now.strftime("%H:%M:%S.") + f"{now.microsecond // 1000:03d}"
+
+
+class TimestampedStream:
+    """Prefix each line a host process prints with ``log_clock()``.
+
+    The WebView host processes write their stdout and stderr into the
+    per-run host logs; without times, a slow or failed page start cannot be
+    lined up against the runtime trace.
+    """
+
+    def __init__(self, stream):
+        self._stream = stream
+        self._line_start = True
+
+    def write(self, text):
+        text = str(text)
+        pieces = []
+        for part in text.splitlines(keepends=True):
+            if self._line_start and part.strip():
+                pieces.append(f"{log_clock()} ")
+            pieces.append(part)
+            self._line_start = part.endswith(("\n", "\r"))
+        return self._stream.write("".join(pieces))
+
+    def flush(self):
+        return self._stream.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)

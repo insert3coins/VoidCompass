@@ -55,13 +55,22 @@ def configure_embedded_navigation(edge_module=None):
         def on_webview_ready(browser, sender, args):
             # pywebview only logs a failed WebView2 start and leaves the window
             # empty for good; a fresh host process is the only way back.
+            window = getattr(browser, "pywebview_window", None)
             if not bool(getattr(args, "IsSuccess", True)):
-                window = getattr(browser, "pywebview_window", None)
                 if window is not None:
                     window._voidcompass_renderer_failed = True
                 error = getattr(args, "InitializationException", None)
                 print(f"WebView2 failed to initialise: {type(error).__name__}", flush=True)
-            return original_ready(browser, sender, args)
+                return original_ready(browser, sender, args)
+            result = original_ready(browser, sender, args)
+            # A host may attach its own listeners once the WebView2 core exists.
+            hook = getattr(window, "_voidcompass_after_ready", None)
+            if callable(hook):
+                try:
+                    hook(sender)
+                except Exception as exc:
+                    print(f"WebView ready hook unavailable: {type(exc).__name__}", flush=True)
+            return result
 
         on_navigation_start._voidcompass_navigation = True
         browser_type.on_navigation_start = on_navigation_start

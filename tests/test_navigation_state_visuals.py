@@ -2,9 +2,11 @@
 
 Elite's cockpit reports state with a few notice styles and its own indicator
 lamps. The HUD follows that: Python chooses the state and its family, and the
-page gives each family one instrument that only draws journal-backed values.
-The browser portion reads the DOM, not screenshots, so these tests run
-headlessly. Playwright remains an optional development dependency.
+page shows the family's notice plus a measured instrument that only draws
+journal-backed values. Each state's animated scene is covered separately in
+test_navigation_scene.py. The browser portion reads the DOM, not screenshots,
+so these tests run headlessly. Playwright remains an optional development
+dependency.
 """
 
 import json
@@ -132,6 +134,8 @@ class NavigationStatePresentationTests(unittest.TestCase):
             "SUIT OXYGEN LOW": "alert", "SYSTEM REBOOT": "alert",
             "GLIDE": "planet", "LANDED": "planet", "SURFACE STATION": "planet",
             "FSS": "scan", "GALAXY MAP": "scan", "BODY TARGET": "scan",
+            # A targeted signal source is a target, not a signal lock.
+            "SIGNAL TARGET": "scan",
             "DOCKED": "dock", "PAD 07 CLEARED": "dock", "DOCK DENIED": "dock",
             "SRV": "vehicle", "ONFOOT": "vehicle", "FIGHTER": "vehicle",
             # Someone else's ship: its lamps are not the commander's.
@@ -184,6 +188,9 @@ class NavigationStatePresentationTests(unittest.TestCase):
                 model = hud._html_last_model
                 self.assertEqual(model["state"]["category"], "drive")
                 self.assertEqual(model["state"]["notice"]["text"], "BODY SCANNED")
+                # Every pulse also reaches the scene, as a one-shot accent.
+                self.assertEqual((model["state"]["event_sequence"], model["state"]["event_kind"],
+                                  model["state"]["event_tone"]), (3, "body_scan", "accent"))
                 dynamics = model["state"]["dynamics"]
                 self.assertTrue(dynamics["silent_running"] and dynamics["flight_assist_off"])
                 self.assertIn("srv_handbrake", dynamics)
@@ -247,7 +254,6 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
     def plate(self, page):
         return page.evaluate("""() => ({
           instrument: dom.instrument.dataset.instrument,
-          variant: dom.instrument.dataset.variant || '',
           supercharged: dom.instrument.classList.contains('supercharged'),
           readout: dom['instrument-readout'].textContent,
           markerHidden: dom['instrument-marker'].hidden,
@@ -262,13 +268,13 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
     def test_each_family_gets_one_instrument_fed_only_by_journal_values(self):
         page = self.open()
         cases = [
-            (hud_state("SUPERCRUISE"), {"instrument": "flow", "variant": "cruise", "tag": "FSD",
+            (hud_state("SUPERCRUISE"), {"instrument": "flow", "tag": "FSD",
                                         "label": "SUPERCRUISE", "readout": ""}),
             (hud_state("SUPERCRUISE", neutron_boost=True, neutron_boost_value=4),
              {"instrument": "flow", "supercharged": True, "readout": "SUPERCHARGED ×4.0"}),
-            (hud_state("FSD CHARGE"), {"instrument": "flow", "variant": "charge", "label": "FSD CHARGING"}),
-            (hud_state("HYPERSPACE"), {"instrument": "flow", "variant": "jump"}),
-            (hud_state("FSD COOLDOWN"), {"instrument": "flow", "variant": "cool"}),
+            (hud_state("FSD CHARGE"), {"instrument": "flow", "label": "FSD CHARGING"}),
+            (hud_state("HYPERSPACE"), {"instrument": "flow"}),
+            (hud_state("FSD COOLDOWN"), {"instrument": "flow"}),
             (hud_state("CARRIER TRANSIT"), {"instrument": "flow", "tag": "CARRIER"}),
             (hud_state("GLIDE", altitude_m=18400, vertical_mps=310, gravity_g=.42),
              {"instrument": "altimeter", "tag": "PLANETARY",
@@ -358,18 +364,20 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
         self.render(page, hud_snapshot(hud_state("INTERDICTION"), reduced=False))
         self.assertTrue(page.evaluate("document.querySelector('.notice').getAnimations().length > 0"))
         self.render(page, hud_snapshot(hud_state("FSD CHARGE"), reduced=False))
-        self.assertTrue(page.evaluate("document.querySelector('.band-flow').getAnimations().length > 0"))
+        self.assertTrue(page.evaluate("navigationScene.running"), "the state's scene animates")
         self.assertFalse(page.evaluate("document.querySelector('.notice').getAnimations()"
                                        ".some((animation) => animation.animationName === 'warning-flash')"))
-        # A hidden overlay pauses its looping animations rather than spending
-        # frames on them (a one-shot transition may still finish its run).
+        # A hidden overlay pauses its looping animations and its scene rather
+        # than spending frames on them (a one-shot transition may finish).
         self.render(page, hud_snapshot(hud_state("FSD CHARGE"), reduced=False, window={"visible": False}))
         self.assertTrue(page.evaluate("""() => {
           const loops = document.getAnimations().filter((animation) => animation instanceof CSSAnimation);
           return loops.length > 0 && loops.every((animation) => animation.playState === 'paused');
         }"""))
+        self.assertFalse(page.evaluate("navigationScene.running"))
         self.render(page, hud_snapshot(hud_state("INTERDICTION"), reduced=True))
         self.assertEqual(page.evaluate("document.getAnimations().length"), 0)
+        self.assertFalse(page.evaluate("navigationScene.running"))
 
     def test_every_state_fits_both_layouts_at_normal_and_larger_text(self):
         long_labels = [

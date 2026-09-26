@@ -514,6 +514,8 @@ class TacticalHUD:
             return COLOR_ORANGE
         if state_text == "INTERDICTION EVADED":
             return COLOR_GREEN
+        if state_text.startswith("FSD INJECTION"):
+            return COLOR_ACCENT  # An armed boost, in the boost readout's blue.
         if state_text.startswith("DSS EFFICIENT"):
             return COLOR_GREEN
         if state_text.startswith("DSS ") or state_text.startswith("TARGET ") or state_text.endswith(" TARGET"):
@@ -524,10 +526,11 @@ class TacticalHUD:
             return COLOR_YELLOW
         return "#7d8891"
 
-    # Elite's cockpit reports its state through a handful of notice styles, not
-    # a scene per state. Every motion profile belongs to one family, and the
-    # HUD gives each family one instrument: the drive flow, the altimeter, the
-    # scan bar or the warning band. Everything else is a quiet notice.
+    # Elite's cockpit reports its state through a handful of notice styles.
+    # Every motion profile belongs to one family, which sets the notice's tag
+    # and colour and the measured instrument the page may show (the altimeter
+    # or the FSS scan). The per-state scene is chosen in the page from the
+    # motion and label, so it never needs a family of its own.
     _MOTION_CATEGORIES = {
         "supercruise": "drive", "supercruise_assist": "drive",
         "supercruise_overcharge": "drive", "fsd_charge": "drive", "jump": "drive",
@@ -652,6 +655,10 @@ class TacticalHUD:
             return "combat"
         if state == "INTERDICTION EVADED":
             return "arrival"
+        # Before the SIGNAL prefix: a targeted signal source is a target, not
+        # a signal lock.
+        if state.startswith("TARGET ") or state.endswith(" TARGET"):
+            return "target_lock"
         if state.startswith("SIGNAL "):
             return "fsd_lock"
         if state == "SC ASSIST":
@@ -688,8 +695,6 @@ class TacticalHUD:
             return "surface_station"
         if state in {"STATION VICINITY", "CARRIER VICINITY"}:
             return "station"
-        if state.startswith("TARGET ") or state.endswith(" TARGET"):
-            return "target_lock"
         if state.startswith("DSS "):
             return "scanner"
         if state.startswith("FSD INJECTION"):
@@ -1186,6 +1191,11 @@ class TacticalHUD:
                 "surface": str(nav_context.get("vehicle_name") or "").upper(),
             },
             "notice": self._navigation_event_notice(journal_event, current_display),
+            # Every live journal pulse also plays a one-shot accent in the
+            # state's scene, including the ones that earn no written notice.
+            "event_sequence": journal_event.get("seq"),
+            "event_kind": str(journal_event.get("kind") or ""),
+            "event_tone": str(journal_event.get("tone") or ""),
             "dynamics": {
                 "gravity_g": finite_number(nav_context.get("gravity_g"), 0.0),
                 "altitude_m": finite_number(approach.get("altitude_m")),
