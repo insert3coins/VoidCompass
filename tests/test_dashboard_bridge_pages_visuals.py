@@ -152,8 +152,79 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
         payload = submitted.value.post_data_json
         self.assertEqual(payload["operation"], "set_opacity")
         self.assertEqual(payload["value"], 65)
-        self.assertEqual(self.page.locator("#studio-overlay-opacity").input_value(), "65")
         self.assertEqual(self.page.locator("#studio-global-fade-value").text_content(), "65%")
+        self.assertFalse(self.errors, self.errors)
+
+    def studio_snapshot(self):
+        snapshot = overview_state()
+        monitors = [
+            {"id": "display-1", "number": 1, "label": "DISPLAY 1", "primary": True,
+             "left": 0, "top": 0, "width": 2560, "height": 1440},
+            {"id": "display-2", "number": 2, "label": "DISPLAY 2", "primary": False,
+             "left": 2560, "top": 0, "width": 2560, "height": 1440},
+        ]
+        row = lambda id, label, short, x, monitor, enabled=True: {
+            "id": id, "label": label, "short_label": short, "x": x, "y": 200,
+            "width": 520, "height": 340, "enabled": enabled, "shown": enabled,
+            "html_ready": enabled, "state": "HTML" if enabled else "OFF", "monitor": monitor}
+        snapshot["overlay_studio"] = {
+            "desktop": {"left": 0, "top": 0, "width": 5120, "height": 1440}, "monitors": monitors,
+            "overlays": [row("hud", "Navigation HUD", "NAVIGATION", 40, "display-1"),
+                         row("survey_status_hud", "Survey Operations", "SURVEY", 900, "display-1"),
+                         row("cargo_hud", "Cargo Manifest", "CARGO", 3000, "display-2", False)],
+            "presets": [], "ground_target": {},
+            "options": {"overlay_opacity_percent": 90, "survey_spotlight_rotation": "auto",
+                        "survey_spotlight_threshold": 15, "overlay_text_scale_percent": 100},
+        }
+        return snapshot
+
+    def test_studio_is_one_view_showing_one_display_at_a_time(self):
+        snapshot = self.studio_snapshot()
+        self.page.evaluate("data => window.__bridgeHarness.render(data)", snapshot)
+        self.page.evaluate("data => window.__bridgeHarness.studio(data)", snapshot["overlay_studio"])
+        self.assertEqual(self.page.locator("[data-studio-view]").count(), 0, "no second view to switch to")
+        cards = lambda: self.page.locator(".studio-overlay-card").evaluate_all(
+            "nodes => nodes.map(node => node.dataset.overlayId)")
+        self.assertEqual(cards(), ["hud", "survey_status_hud"])
+        self.assertEqual(self.page.locator(".studio-monitor").count(), 2)
+        # A display tab brings that screen onto the stage.
+        self.page.locator('[data-studio-display="display-2"]').click()
+        self.assertEqual(cards(), ["cargo_hud"])
+        self.assertIn("DISPLAY 2", self.page.locator("#studio-desktop-label").text_content())
+        # Choosing a surface in the roster follows it to its display.
+        self.page.locator('.studio-index-row[data-overlay-id="survey_status_hud"] .studio-index-select').click()
+        self.assertEqual(cards(), ["hud", "survey_status_hud"])
+        # The inspector shows only that surface's own settings.
+        visible = self.page.locator("[data-studio-settings]:visible").evaluate_all(
+            "nodes => nodes.map(node => node.dataset.studioSettings)")
+        self.assertEqual(visible, ["survey_status_hud"])
+        self.assertEqual(self.page.locator("#studio-survey-threshold").input_value(), "15")
+        self.assertFalse(self.errors, self.errors)
+
+    def test_studio_saves_each_setting_alone_and_moves_between_displays(self):
+        snapshot = self.studio_snapshot()
+        self.page.evaluate("data => window.__bridgeHarness.render(data)", snapshot)
+        self.page.evaluate("data => window.__bridgeHarness.studio(data)", snapshot["overlay_studio"])
+        self.page.locator('.studio-index-row[data-overlay-id="survey_status_hud"] .studio-index-select').click()
+        with self.page.expect_request(lambda request: "/api/command" in request.url
+                                      and '"save_settings"' in (request.post_data or "")) as saved:
+            self.page.locator("#studio-survey-threshold").fill("20")
+            self.page.locator("#studio-survey-threshold").dispatch_event("change")
+        payload = saved.value.post_data_json
+        self.assertEqual({key: payload[key] for key in payload if key not in {"action", "page"}},
+                         {"operation": "save_settings", "survey_spotlight_threshold": "20"})
+        # A surface keeps its place on its screen when it moves display.
+        with self.page.expect_request(lambda request: "/api/command" in request.url
+                                      and '"move"' in (request.post_data or "")) as moved:
+            self.page.locator('[data-studio-move-display="display-2"]').click()
+        payload = moved.value.post_data_json
+        self.assertEqual((payload["overlay_id"], payload["x"], payload["y"], payload["commit"]),
+                         ("survey_status_hud", 2560 + 900, 200, True))
+        # The roster's switch enables a surface without selecting away.
+        with self.page.expect_request(lambda request: "/api/command" in request.url
+                                      and '"toggle"' in (request.post_data or "")) as toggled:
+            self.page.locator('.studio-index-row[data-overlay-id="cargo_hud"] .studio-row-switch').click()
+        self.assertEqual(toggled.value.post_data_json["overlay_id"], "cargo_hud")
         self.assertFalse(self.errors, self.errors)
 
     def test_live_workspaces_render_without_clipping_or_script_errors(self):

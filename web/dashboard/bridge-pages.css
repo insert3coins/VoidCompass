@@ -191,16 +191,16 @@
 
 /* Common workbench affordances. Structural tabs stay rectangular and retain
    their existing active-state and keyboard semantics. */
-:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.suite-tabs, .workspace-tabs, .studio-view-tabs) {
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.suite-tabs, .workspace-tabs) {
   border-color: var(--bridge-page-line);
   background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, var(--header)), var(--header));
   box-shadow: inset 0 1px color-mix(in srgb, var(--text) 3%, transparent);
 }
-:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.suite-tabs, .workspace-tabs, .studio-view-tabs) button {
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.suite-tabs, .workspace-tabs) button {
   letter-spacing: .05em;
   transition: color .16s, border-color .16s, background .16s, box-shadow .16s;
 }
-:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.suite-tabs, .workspace-tabs, .studio-view-tabs) button:focus-visible {
+:where(.page:not([data-page-name="map"]):not([data-page-name="overview"])) :is(.suite-tabs, .workspace-tabs) button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
