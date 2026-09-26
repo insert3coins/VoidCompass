@@ -30,6 +30,8 @@
   // exceed it, the lowest-priority regions give up lines first — the quiet
   // catalogue before the biology manifest — and page instead of growing.
   const HEIGHT_BUDGET = {normal: 640, large: 680, huge: 700};
+  // A still overlay may use the full cap rather than page its worlds.
+  const STILL_BUDGET = 700;
   const MANIFEST_MIN_ROWS = 3;
   const MANIFEST_FLOOR_ROWS = 2;
   const SHRINK_ORDER = ["other", "landable", "notable", "surface"];
@@ -778,23 +780,33 @@
     cycle = null;
   }
 
-  // The Studio's Spotlight rotation choice: "auto" turns worlds only when the
-  // system has more than the threshold, "always" whenever there are two or
-  // more, and "off" keeps the spotlight on the latest journal activity.
-  function spotlightRotates(options = {}, worlds = 0) {
+  // The Studio's rotation choice. "off" holds the overlay still, and "auto"
+  // holds it still until the system has more biology worlds than the
+  // threshold. Still means nothing turns on the clock: the spotlight stays
+  // on the latest journal activity and every world is listed at once (see
+  // manifestPagesAlone). "always" keeps everything turning.
+  function holdsStill(options = {}, worlds = 0) {
     const mode = String(options.spotlight_rotation || "auto").toLowerCase();
-    if (worlds < 2 || mode === "off") return false;
-    if (mode === "always") return true;
+    if (mode === "off") return true;
+    if (mode === "always") return false;
     const threshold = Math.max(2, Math.min(40, Math.round(safeNumber(options.spotlight_threshold) || 8)));
-    return worlds > threshold;
+    return worlds <= threshold;
+  }
+
+  function spotlightRotates(options = {}, worlds = 0) {
+    return worlds >= 2 && !holdsStill(options, worlds);
   }
 
   function spotlightTurns() {
     return Boolean(cycle && cycle.rotates && !cycle.locked && cycle.keys.length > 1);
   }
 
-  // A manifest follows a turning spotlight; otherwise an overflowing
-  // manifest pages on the clock by itself so every world still comes round.
+  // A manifest follows a turning spotlight. When the Studio choice keeps the
+  // spotlight still (Off, or Auto at or below its threshold) the whole
+  // overlay holds still: the manifest lists every world, and the catalogue
+  // shows what fits and counts the rest instead of paging. Only a manifest
+  // too long for even the 700 px cap pages by itself, as the last resort,
+  // because a biology world is never hidden.
   function manifestPagesAlone() {
     return Boolean(cycle?.manifest && !spotlightTurns() && cycle.manifest.pages > 1);
   }
@@ -887,7 +899,12 @@
 
   function paintCounter(pager) {
     // A group that fits shows its bodies; the count earns its line only when
-    // some of them are on another page.
+    // some of them are on another page or, holding still, left unshown.
+    if (pager.unshown > 0) {
+      pager.counter.textContent = `+${pager.unshown} MORE`;
+      pager.counter.hidden = false;
+      return;
+    }
     pager.counter.textContent = pager.pages.length > 1
       ? `${pager.total} ${pageDots(pager.page, pager.pages.length)}` : "";
     pager.counter.hidden = pager.pages.length <= 1;
@@ -922,7 +939,7 @@
 
   // Split rendered items into pages of whole visual lines. A row is one line;
   // chips wrap, so their lines are read back from the live layout.
-  function linePages(container, items, maxLines) {
+  function wrappedLines(container, items) {
     container.replaceChildren(...items);
     const lines = [];
     let lineTop = null;
@@ -934,16 +951,24 @@
       }
       lines[lines.length - 1].push(item);
     }
-    const pages = [];
-    for (let index = 0; index < lines.length; index += maxLines) {
-      pages.push(lines.slice(index, index + maxLines).flat());
-    }
-    return pages.length ? pages : [[]];
+    return lines;
   }
 
   function buildLinePager(pager) {
     pager.items.style.minHeight = "";
-    pager.pages = linePages(pager.items, pager.elements, pager.lines);
+    const lines = wrappedLines(pager.items, pager.elements);
+    // Never budget for more lines than the group has; fitBudget divides the
+    // first page's height by this to size its steps.
+    pager.lines = Math.max(1, Math.min(pager.lines, lines.length));
+    pager.pages = [];
+    for (let index = 0; index < lines.length; index += pager.lines) {
+      pager.pages.push(lines.slice(index, index + pager.lines).flat());
+    }
+    if (!pager.pages.length) pager.pages.push([]);
+    // Holding still, the catalogue never pages: what fits shows and the rest
+    // is counted in the group's label.
+    pager.unshown = cycle?.still ? pager.elements.length - pager.pages[0].length : 0;
+    if (cycle?.still) pager.pages.length = 1;
     pager.page = Math.min(pager.page, pager.pages.length - 1);
     // Reserve the first (fullest) page so turning never resizes the band.
     pager.items.replaceChildren(...pager.pages[0]);
@@ -989,9 +1014,10 @@
   function reserveSpotlight() {
     // Worlds differ in species count. Reserve the tallest so rotation never
     // resizes the overlay window or shifts the manifest beneath it. A locked
-    // (sampling) spotlight does not rotate, so it reserves only itself.
+    // (sampling) or still spotlight does not rotate, so it reserves only
+    // itself and leaves the height for the manifest.
     const slot = cycle.spotlight;
-    const rows = cycle.locked ? [spotlightRow()] : cycle.biology;
+    const rows = cycle.locked || cycle.still ? [spotlightRow()] : cycle.biology;
     let tallest = 0;
     const measured = new Set();
     for (const row of rows) {
@@ -1015,20 +1041,31 @@
   // Give up height from the least important region first: catalogue lines
   // (quietest tier first), then a folded catalogue, then manifest rows.
   function fitBudget(budget) {
-    const shrinkManifest = (floor) => {
-      if (!cycle.manifest || cycle.manifest.limit <= Math.min(floor, cycle.biology.length)) return false;
-      cycle.manifest.limit -= 1;
+    // Each step gives back as many lines as the overflow needs: a still
+    // overlay can start a group or the manifest with dozens of them.
+    const steps = (overflow, element, lines) => {
+      const lineHeight = element.getBoundingClientRect().height / Math.max(1, lines);
+      return Math.max(1, Math.ceil(overflow / Math.max(8, lineHeight)));
+    };
+    const shrinkManifest = (floor, overflow) => {
+      const manifest = cycle.manifest;
+      const lowest = Math.min(floor, cycle.biology.length);
+      if (!manifest || manifest.limit <= lowest) return false;
+      const shown = Math.min(manifest.limit, cycle.biology.length);
+      manifest.limit = Math.max(lowest, shown - steps(overflow, manifest.list, shown));
       buildManifest();
       return true;
     };
-    for (let guard = 0; guard < 64 && renderedContentHeight() > budget; guard += 1) {
+    for (let guard = 0; guard < 64; guard += 1) {
+      const overflow = renderedContentHeight() - budget;
+      if (overflow <= 0) break;
       const pager = SHRINK_ORDER.map((key) => cycle.pagers.find((item) => item.key === key))
         .find((item) => item && item.lines > 1);
       if (pager) {
-        pager.lines -= 1;
+        pager.lines = Math.max(1, pager.lines - steps(overflow, pager.items, pager.lines));
         buildLinePager(pager);
-      } else if (!foldCatalogue() && !shrinkManifest(MANIFEST_MIN_ROWS)
-          && !shrinkManifest(MANIFEST_FLOOR_ROWS)) {
+      } else if (!foldCatalogue() && !shrinkManifest(MANIFEST_MIN_ROWS, overflow)
+          && !shrinkManifest(MANIFEST_FLOOR_ROWS, overflow)) {
         break;
       }
     }
@@ -1075,6 +1112,7 @@
       locked: Boolean(sampleRow),
       samplingSpecies: sampleRow ? String(model.sampling.species || "").trim().toLowerCase() : "",
       rotates: spotlightRotates(options, keys.length),
+      still: holdsStill(options, keys.length),
       pagers: [], spotlight: null, manifest: null, catalogue: null,
       periodStart: previous?.periodStart || 0, nextAt: previous?.nextAt || 0,
     };
@@ -1095,7 +1133,9 @@
       section.append(head, list);
       dom.content.appendChild(section);
       cycle.manifest = {list, counter, page: -1, pages: 1,
-        limit: Math.max(1, limits.manifest),
+        // Still, every world gets a row (the height budget may take some
+        // back); turning, the manifest windows along with the spotlight.
+        limit: cycle.still ? groups.biology.length : Math.max(1, limits.manifest),
         min: Math.min(MANIFEST_MIN_ROWS, groups.biology.length)};
       buildManifest(motion.rows);
     }
@@ -1132,11 +1172,15 @@
         const pager = {key, items, counter, elements, identity, total: rows.length,
           lines: Math.max(1, lines), pages: [[]],
           page: kept?.identity === identity ? kept.page : 0};
+        // Still, a group takes every line it needs; fitBudget takes lines
+        // back (and the group counts what it cannot show) only when the
+        // overlay would outgrow its height budget.
+        if (cycle.still) pager.lines = Math.max(pager.lines, wrappedLines(items, elements).length);
         buildLinePager(pager);
         cycle.pagers.push(pager);
       }
     }
-    fitBudget(HEIGHT_BUDGET[tier]);
+    fitBudget(cycle.still ? STILL_BUDGET : HEIGHT_BUDGET[tier]);
 
     // Show the spotlit world's manifest page after a journal jump or while it
     // turns; otherwise a self-paging manifest keeps the page it was on.
