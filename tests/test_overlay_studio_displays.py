@@ -8,8 +8,10 @@ time without resetting the others.
 """
 
 import unittest
+from types import SimpleNamespace
 
 from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
+from voidcompass.overlays.html_survey_overlay import HtmlSurveyOverlayBridge
 
 
 DISPLAYS = [
@@ -61,6 +63,11 @@ class _Studio(HtmlOverlayStudioMixin):
         return False
 
 
+class _LiveSizeStudio(_Studio):
+    def _html_overlay_records(self, **kwargs):
+        return HtmlOverlayStudioMixin._html_overlay_records(self, **kwargs)
+
+
 def surface(x, y=200, width=520, height=340):
     return {"id": "survey_status_hud", "label": "Survey Operations", "short_label": "SURVEY",
             "x": x, "y": y, "width": width, "height": height,
@@ -88,6 +95,46 @@ class OverlayStudioDisplayTests(unittest.TestCase):
         studio = _Studio([surface(2572)])
         self.assertTrue(studio._html_overlay_snap("survey_status_hud"))
         self.assertEqual(studio.moves[-1], ("survey_status_hud", 2560, 200))
+
+    def test_survey_html_size_reaches_the_right_display_edge(self):
+        overlay = SimpleNamespace(_html_ready=True, _html_render_model={"mode": "system", "rows": [1]})
+        window = SimpleNamespace(
+            master=SimpleNamespace(), state=lambda: "normal",
+            winfo_x=lambda: 3000, winfo_y=lambda: 200,
+            winfo_viewable=lambda: True,
+        )
+        overlay.win = window
+        bridge = HtmlSurveyOverlayBridge.__new__(HtmlSurveyOverlayBridge)
+        bridge.overlay = overlay
+        bridge.win = window
+        bridge.config = {"survey_status_hud_x": 3000, "survey_status_hud_y": 200,
+                         "survey_status_overlay_enabled": True}
+        bridge.x_key = "survey_status_hud_x"
+        bridge.y_key = "survey_status_hud_y"
+        bridge.enabled_key = "survey_status_overlay_enabled"
+        bridge._browser_content_height = 180
+        self.assertEqual(bridge._window_payload()["width"], 420)
+
+        studio = _LiveSizeStudio([])
+        studio.config.update(bridge.config)
+        studio.survey_status_hud = overlay
+        overlay._html_ready = False
+        self.assertEqual(studio._html_overlay_records()[0]["width"], 420)
+        overlay._html_ready = True
+        record = studio._html_overlay_records()[0]
+        self.assertEqual((record["width"], record["height"]), (420, 180))
+        self.assertTrue(studio._html_overlay_position("survey_status_hud", 9999, 200))
+        self.assertEqual(studio.moves[-1], ("survey_status_hud", 5120 - 420, 200))
+
+    def test_empty_notifications_keep_a_useful_placement_card(self):
+        studio = _LiveSizeStudio([])
+        studio._OVERLAY_POSITION_SPECS = [("toast_hud", "toast_hud_x", "toast_hud_y")]
+        studio.toast_hud = SimpleNamespace(
+            _html_ready=True, _html_window_size=(400, 24), _toasts=[],
+            win=SimpleNamespace(winfo_viewable=lambda: False, state=lambda: "withdrawn"),
+        )
+        record = studio._html_overlay_records()[0]
+        self.assertEqual((record["width"], record["height"]), (400, 94))
 
     def test_a_single_setting_saves_without_resetting_the_rest(self):
         studio = _Studio([])

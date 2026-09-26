@@ -78,6 +78,7 @@ class HtmlToastOverlayBridge(HtmlOverlayBridgeLifecycle):
     def _window_payload(self, notifications=None):
         notifications = notifications if notifications is not None else self._notifications()
         width, height = self._dimensions(notifications)
+        self.overlay._html_window_size = (width, height)
         try:
             shown = str(self.win.state()) not in {"withdrawn", "iconic"}
             fallback_x, fallback_y = self.win.winfo_x(), self.win.winfo_y()
