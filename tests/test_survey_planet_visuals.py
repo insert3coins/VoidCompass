@@ -563,6 +563,17 @@ class SurveyOverlayBrowserTests(unittest.TestCase):
         self.render(stress)
         self.assertEqual(self.page.locator(".spotlight, .manifest").count(), 0)
         self.assertLessEqual(self.check_geometry(), 700)
+        # Auto holds a system without biology still: the catalogue shows what
+        # fits the height cap and counts the rest rather than paging.
+        shown = self.group_names("other")
+        self.assertEqual(self.state()["groups"]["other"]["pages"], 1)
+        self.assertEqual(shown, names[:len(shown)])
+        self.assertEqual(self.page.locator('.catalogue-group[data-group="other"] .group-count').text_content(),
+                         f"+{101 - len(shown)} MORE")
+        self.assertFalse(self.state()["rotating"])
+        # Always keeps every body coming round on the clock.
+        stress["options"] = ALWAYS
+        self.render(stress)
         chip_size = lambda: self.page.evaluate("""() => parseFloat(getComputedStyle(
           document.querySelector('.chip-name')).fontSize)""")
         normal_size = chip_size()
@@ -639,6 +650,46 @@ class SurveyOverlayBrowserTests(unittest.TestCase):
         self.tick()
         self.assertNotEqual(self.state()["spotlight"], before)
 
+    def test_auto_holds_the_overlay_still_up_to_its_threshold(self):
+        # Reported live: Auto set to rotate above 15 worlds still cycled a
+        # smaller system, because its manifest and catalogue kept paging.
+        def worlds(count, system):
+            return [bio_world(f"{system} R {index}", "Rocky body",
+                              [{"name": f"Tussock {index}", "kind": "detected"}])
+                    for index in range(1, count + 1)]
+        # More quiet bodies than the default three chip lines hold, which a
+        # rotating overlay would page.
+        quiet = [quiet_body(f"Atlas Still B {index}") for index in range(1, 17)]
+        limit = {"spotlight_rotation": "auto", "spotlight_threshold": 15}
+        self.render(system_snapshot(worlds(12, "Atlas Still") + quiet, name="Atlas Still", rotation=limit))
+        state = self.state()
+        self.assertEqual((state["spotlightTurns"], state["rotating"], state["manifestPages"]),
+                         (False, False, 1), state)
+        self.assertEqual(len(self.manifest_names()), 12, "every world listed at once")
+        self.assertEqual(state["groups"]["other"], {"total": 16, "page": 1, "pages": 1}, state)
+        self.assertEqual(len(self.group_names("other")), 16, "every body shown at once")
+        before = (state["spotlight"], self.manifest_names(), self.page.locator("#content").inner_text())
+        self.tick()
+        self.assertEqual((self.state()["spotlight"], self.manifest_names(),
+                          self.page.locator("#content").inner_text()), before)
+        self.assertLessEqual(self.check_geometry(), 700)
+        # At the threshold, with more quiet bodies than fit, the worlds all
+        # still show; the catalogue counts what it cannot fit, and nothing
+        # pages.
+        crowd = [quiet_body(f"Atlas Crowd B {index}") for index in range(1, 61)]
+        self.render(system_snapshot(worlds(15, "Atlas Crowd") + crowd, name="Atlas Crowd", rotation=limit))
+        state = self.state()
+        self.assertEqual((state["rotating"], state["manifestPages"]), (False, 1), state)
+        self.assertEqual(len(self.manifest_names()), 15)
+        self.assertTrue(all(group["pages"] == 1 for group in state["groups"].values()), state)
+        counts = self.page.locator(".group-count:visible").all_text_contents()
+        self.assertTrue(any(text.startswith("+") and text.endswith(" MORE") for text in counts), counts)
+        self.assertLessEqual(self.check_geometry(), 700)
+        # Above the threshold the same overlay turns again.
+        self.render(system_snapshot(worlds(16, "Atlas Turn") + quiet, name="Atlas Turn", rotation=limit))
+        self.assertTrue(self.state()["spotlightTurns"])
+        self.assertTrue(self.state()["rotating"])
+
     def test_spotlight_rotation_follows_the_studio_choice(self):
         few = [bio_world(f"Atlas P {index}", "Rocky body",
                          [{"name": f"Bacterium {index}", "kind": "detected"}]) for index in range(1, 4)]
@@ -665,23 +716,21 @@ class SurveyOverlayBrowserTests(unittest.TestCase):
         off = system_snapshot(many, name="Atlas Off", rotation={"spotlight_rotation": "off"})
         self.render(off)
         state = self.state()
+        # Off holds the whole overlay still: every world is listed at once
+        # and nothing turns on the clock.
         self.assertFalse(state["spotlightTurns"], state)
-        self.assertGreater(state["manifestPages"], 1, state)
-        start = state["spotlight"]
-        # Off never turns worlds, but an overflowing manifest still pages by
-        # itself so every world comes round.
-        seen = []
-        for _ in range(state["manifestPages"]):
-            self.assertEqual(self.state()["spotlight"], start)
-            seen.extend(self.manifest_names())
-            self.tick()
-        self.assertEqual(sorted(seen, key=lambda name: int(name.split()[-1])),
+        self.assertFalse(state["rotating"], state)
+        self.assertEqual(state["manifestPages"], 1, state)
+        listed = self.manifest_names()
+        self.assertEqual(sorted(listed, key=lambda name: int(name.split()[-1])),
                          [f"Q {index}" for index in range(1, 13)])
+        start = state["spotlight"]
+        self.tick()
+        self.assertEqual((self.state()["spotlight"], self.manifest_names()), (start, listed))
         # Journal activity still moves the spotlight, which then stays put.
         many[10]["bio_details"] = [{"name": "Stratum 11", "kind": "sample", "progress": 1}]
         self.render(off)
         self.assertEqual(self.state()["spotlight"], "Q 11")
-        self.assertEqual(self.state()["manifestPage"], 2)
         self.assertEqual(self.page.locator(".manifest .body-row.spotlit").count(), 1)
         self.tick()
         self.tick()
