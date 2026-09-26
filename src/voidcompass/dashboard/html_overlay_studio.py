@@ -54,6 +54,97 @@ class HtmlOverlayStudioMixin:
             "primary": {"left": 0, "top": 0, "width": width, "height": height},
         }
 
+    def _html_overlay_monitors(self):
+        """Every display, left to right, in the overlays' screen coordinates.
+
+        Overlay positions are stored in virtual-desktop coordinates, so the
+        Studio shows one display at a time and still places surfaces on it
+        exactly. Without the Windows API the whole desktop is one display.
+        """
+        monitors = []
+        try:
+            import ctypes
+            import re
+            from ctypes import wintypes
+
+            class MonitorInfo(ctypes.Structure):
+                _fields_ = [
+                    ("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
+                    ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD),
+                    ("szDevice", wintypes.WCHAR * 32),
+                ]
+
+            user32 = ctypes.windll.user32
+            found = []
+
+            def collect(handle, _dc, _rect, _data):
+                info = MonitorInfo()
+                info.cbSize = ctypes.sizeof(MonitorInfo)
+                if user32.GetMonitorInfoW(handle, ctypes.byref(info)):
+                    bounds, work = info.rcMonitor, info.rcWork
+                    match = re.search(r"DISPLAY(\d+)", str(info.szDevice or ""))
+                    found.append({
+                        "number": int(match.group(1)) if match else 0,
+                        "primary": bool(info.dwFlags & 1),
+                        "left": int(bounds.left), "top": int(bounds.top),
+                        "width": int(bounds.right - bounds.left),
+                        "height": int(bounds.bottom - bounds.top),
+                        "work": {
+                            "left": int(work.left), "top": int(work.top),
+                            "width": int(work.right - work.left),
+                            "height": int(work.bottom - work.top),
+                        },
+                    })
+                return 1
+
+            callback = ctypes.WINFUNCTYPE(
+                ctypes.c_int, wintypes.HANDLE, wintypes.HANDLE,
+                ctypes.POINTER(wintypes.RECT), wintypes.LPARAM,
+            )(collect)
+            user32.EnumDisplayMonitors(None, None, callback, 0)
+            monitors = [row for row in found if row["width"] > 0 and row["height"] > 0]
+        except (AttributeError, OSError, TypeError, ValueError):
+            monitors = []
+        if not monitors:
+            desktop = self._html_overlay_desktop()
+            monitors = [{
+                "number": 1, "primary": True,
+                "left": desktop["left"], "top": desktop["top"],
+                "width": desktop["width"], "height": desktop["height"],
+                "work": {key: desktop[key] for key in ("left", "top", "width", "height")},
+            }]
+        monitors.sort(key=lambda row: (row["left"], row["top"]))
+        used = set()
+        for index, row in enumerate(monitors, 1):
+            # Windows' own display number where it is unique, so the Studio's
+            # labels match Display settings; otherwise left-to-right order.
+            number = row["number"] if row["number"] and row["number"] not in used else index
+            while number in used:
+                number += 1
+            used.add(number)
+            row.update({"id": f"display-{number}", "number": number, "label": f"DISPLAY {number}"})
+        return monitors
+
+    @staticmethod
+    def _html_overlay_monitor_for(row, monitors):
+        """The display holding most of a surface, or the nearest one."""
+        best, best_area = None, 0
+        for monitor in monitors:
+            width = (min(row["x"] + row["width"], monitor["left"] + monitor["width"])
+                     - max(row["x"], monitor["left"]))
+            height = (min(row["y"] + row["height"], monitor["top"] + monitor["height"])
+                      - max(row["y"], monitor["top"]))
+            area = max(0, width) * max(0, height)
+            if area > best_area:
+                best, best_area = monitor, area
+        if best is None and monitors:
+            cx, cy = row["x"] + row["width"] / 2, row["y"] + row["height"] / 2
+            best = min(monitors, key=lambda monitor: (
+                (monitor["left"] + monitor["width"] / 2 - cx) ** 2
+                + (monitor["top"] + monitor["height"] / 2 - cy) ** 2
+            ))
+        return best
+
     @staticmethod
     def _html_overlay_window_shown(window):
         try:
@@ -132,11 +223,17 @@ class HtmlOverlayStudioMixin:
         rhino_maps_count, rhino_maps_size = (
             rhino_tracker.usage() if rhino_tracker is not None else (0, 0)
         )
+        monitors = self._html_overlay_monitors()
+        overlays = self._html_overlay_records(
+            live=getattr(self, "_html_dashboard_active_page", "") == "overlay-studio",
+        )
+        for row in overlays:
+            monitor = self._html_overlay_monitor_for(row, monitors)
+            row["monitor"] = monitor["id"] if monitor else ""
         return {
             "desktop": self._html_overlay_desktop(),
-            "overlays": self._html_overlay_records(
-                live=getattr(self, "_html_dashboard_active_page", "") == "overlay-studio",
-            ),
+            "monitors": monitors,
+            "overlays": overlays,
             "presets": preset_names,
             "ground_target": {
                 "active": ground_configured,
@@ -236,9 +333,12 @@ class HtmlOverlayStudioMixin:
         selected = records.get(overlay_id)
         if selected is None:
             return False
-        desktop = self._html_overlay_desktop()
-        left, top = desktop["left"], desktop["top"]
-        right, bottom = left + desktop["width"], top + desktop["height"]
+        # Snap to the edges of the display the surface is on, not the whole
+        # desktop: the seam between two monitors is an edge too.
+        monitor = self._html_overlay_monitor_for(selected, self._html_overlay_monitors())
+        area = monitor or self._html_overlay_desktop()
+        left, top = area["left"], area["top"]
+        right, bottom = left + area["width"], top + area["height"]
         width, height = selected["width"], selected["height"]
         x, y = selected["x"], selected["y"]
         candidates_x = [left, max(left, right - width)]
@@ -336,16 +436,20 @@ class HtmlOverlayStudioMixin:
             "contact_scope_timeout_s": (0.0, 3600.0, 45.0, True),
             "gravity_warning_threshold_g": (0.5, 20.0, 3.0, False),
         }
+        # Studio saves one field as it changes, so a key missing from the
+        # payload keeps the commander's current value rather than resetting.
         for key, (low, high, default, integer) in numeric.items():
+            if key not in payload:
+                continue
             value = _number(payload.get(key), default)
             value = max(low, min(high, value if value is not None else default))
             self.config[key] = int(round(value)) if integer else round(value, 2)
-        intensity = _text(payload.get("hud_crt_intensity") or "Subtle", 20).title()
-        self.config["hud_crt_intensity"] = (
-            intensity if intensity in {"Subtle", "Standard", "Strong"} else "Subtle"
-        )
-        # Survey Operations presentation. A payload without these keys keeps
-        # the commander's current choice rather than resetting it.
+        if "hud_crt_intensity" in payload:
+            intensity = _text(payload.get("hud_crt_intensity") or "Subtle", 20).title()
+            self.config["hud_crt_intensity"] = (
+                intensity if intensity in {"Subtle", "Standard", "Strong"} else "Subtle"
+            )
+        # Survey Operations presentation.
         if "survey_spotlight_rotation" in payload:
             mode = _text(payload.get("survey_spotlight_rotation"), 20).casefold()
             self.config["survey_spotlight_rotation"] = (

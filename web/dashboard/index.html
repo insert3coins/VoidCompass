@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="explore.css">
   <link rel="stylesheet" href="archive.css">
   <link rel="stylesheet" href="bridge-systems.css">
+  <link rel="stylesheet" href="overlay-studio.css">
   <link rel="stylesheet" href="focused-log.css">
   <link rel="stylesheet" href="boot.css">
   <script defer src="boot-starfield.js"></script>
@@ -513,161 +514,131 @@
 
         <section class="page overlay-studio-page" data-page-name="overlay-studio">
           <header class="page-title studio-title">
-            <div><p>COCKPIT PRESENTATION</p><h2>Overlay Layout Studio</h2><span>Arrange, inspect and tune every commander-specific cockpit surface</span></div>
-            <div class="studio-view-tabs" role="tablist" aria-label="Overlay Studio view">
-              <button class="active" type="button" data-studio-view="layout">LAYOUT BOARD</button>
-              <button type="button" data-studio-view="options">DISPLAY RULES</button>
+            <div><p>COCKPIT PRESENTATION</p><h2>Overlay Studio</h2><span>Place, enable and tune every cockpit overlay, one display at a time</span></div>
+            <div class="studio-presets" aria-label="Saved layouts">
+              <select id="studio-preset-select" aria-label="Saved overlay layout"></select>
+              <button id="studio-apply-preset" type="button">APPLY</button>
+              <button id="studio-save-preset" type="button">SAVE CURRENT</button>
+              <button id="studio-delete-preset" type="button" class="danger-action">DELETE</button>
             </div>
           </header>
 
-          <section id="studio-layout-view" class="studio-view active">
-            <section class="studio-status-strip" aria-label="Overlay Studio status">
-              <article><small>SURFACES</small><strong id="studio-total-count">0</strong><span>PROFILE MODULES</span></article>
-              <article><small>ENABLED</small><strong id="studio-enabled-total">0</strong><span>ACTIVE POLICY</span></article>
-              <article><small>ON SCREEN</small><strong id="studio-live-count">0</strong><span>VISIBLE NOW</span></article>
-              <article><small>HTML LINK</small><strong id="studio-html-count">0</strong><span>WEBVIEW READY</span></article>
+          <div class="studio-shell">
+            <aside class="card studio-roster" aria-label="Overlay surfaces">
+              <header><span>SURFACES</span><b id="studio-enabled-count">0 OF 0 ON</b></header>
+              <div class="studio-roster-tools">
+                <input id="studio-search" type="search" placeholder="FILTER SURFACES" autocomplete="off">
+                <select id="studio-filter" aria-label="Filter overlay surfaces"><option value="all">ALL</option><option value="enabled">ON</option><option value="disabled">OFF</option><option value="visible">ON SCREEN</option><option value="display">THIS DISPLAY</option></select>
+              </div>
+              <div id="studio-overlay-index" class="studio-overlay-index"></div>
+              <footer id="studio-roster-summary" class="studio-roster-summary">0 ON SCREEN</footer>
+            </aside>
+
+            <section class="card studio-stage-card" aria-label="Display layout">
+              <header>
+                <span>LAYOUT</span>
+                <div class="studio-display-picker">
+                  <div id="studio-monitors" class="studio-monitor-map" role="tablist" aria-label="Displays"></div>
+                  <b id="studio-desktop-label">DISPLAY 1</b>
+                </div>
+              </header>
+              <div id="studio-desktop-viewport" class="studio-stage-viewport">
+                <div id="studio-desktop" class="studio-stage" tabindex="0" aria-label="Overlay layout for the selected display; arrow keys nudge the selected surface">
+                  <div id="studio-overlay-cards" class="studio-overlay-cards"></div>
+                </div>
+              </div>
+              <footer class="studio-stage-footer"><span><i></i> DRAG TO PLACE · ARROW KEYS NUDGE · CHANGES APPLY LIVE</span><b id="studio-pointer-position">—</b></footer>
             </section>
 
-            <article class="card studio-global-fade-card">
-              <header><span>GLOBAL OVERLAY FADE</span><b>LIVE · ALL SURFACES</b></header>
-              <div class="studio-global-fade-body">
-                <div><strong>Whole-overlay opacity</strong><p>Fade every cockpit overlay together, including its text, icons, planets and borders. Saved for this commander.</p></div>
-                <label for="studio-global-fade"><span>MORE TRANSPARENT</span><input id="studio-global-fade" type="range" min="40" max="100" step="5" aria-label="Global whole-overlay opacity"><span>OPAQUE</span><b id="studio-global-fade-value">100%</b></label>
+            <aside class="card studio-inspector" aria-label="Selected surface">
+              <header><span>SELECTED SURFACE</span><b id="studio-selected-state">READY</b></header>
+              <div class="studio-inspector-scroll">
+                <div class="studio-selection-head">
+                  <small id="studio-selected-short">NO SELECTION</small>
+                  <h3 id="studio-selected-name">Select an overlay</h3>
+                  <label class="studio-switch studio-enable"><span><b>Enabled</b><small id="studio-selected-visibility">—</small></span><input id="studio-selected-enabled" type="checkbox"><i></i></label>
+                </div>
+                <div class="studio-selection-facts">
+                  <div><small>POSITION</small><b id="studio-selected-position">—</b></div>
+                  <div><small>SIZE</small><b id="studio-selected-size">—</b></div>
+                  <div><small>DISPLAY</small><b id="studio-selected-display">—</b></div>
+                  <div><small>RENDERER</small><b id="studio-selected-renderer">—</b></div>
+                </div>
+                <div class="studio-placement">
+                  <div class="studio-nudge" aria-label="Nudge 10 px"><button type="button" data-studio-nudge="0,-10" aria-label="Move up">↑</button><button type="button" data-studio-nudge="-10,0" aria-label="Move left">←</button><i></i><button type="button" data-studio-nudge="10,0" aria-label="Move right">→</button><button type="button" data-studio-nudge="0,10" aria-label="Move down">↓</button></div>
+                  <div class="studio-placement-actions">
+                    <button id="studio-snap-selected" type="button">SMART SNAP</button>
+                    <button id="studio-reset-selected" type="button" class="danger-action">RESET POSITION</button>
+                    <div id="studio-move-display" class="studio-move-display"></div>
+                  </div>
+                </div>
+
+                <div class="studio-surface-settings">
+                  <section data-studio-settings="hud">
+                    <h4>NAVIGATION HUD</h4>
+                    <label class="studio-switch"><span><b>Compact layout</b><small>The everyday standard plate; off shows the expanded one.</small></span><input type="checkbox" data-overlay-option="hud_compact_mode"><i></i></label>
+                  </section>
+                  <section data-studio-settings="survey_status_hud">
+                    <h4>SURVEY OPERATIONS</h4>
+                    <label class="studio-field"><span>Rotation</span><select id="studio-survey-rotation" data-studio-setting="survey_spotlight_rotation"><option value="auto">Auto</option><option value="always">Always</option><option value="off">Off</option></select></label>
+                    <label class="studio-field"><span>Auto rotates above<small>Still at or below</small></span><div><input id="studio-survey-threshold" type="number" min="2" max="40" step="1" data-studio-setting="survey_spotlight_threshold"><b>WORLDS</b></div></label>
+                    <label class="studio-field"><span>Text size<small>0 follows all overlays</small></span><div><input id="studio-survey-text-scale" type="number" min="0" max="200" step="5" data-studio-setting="survey_text_scale_percent"><b>%</b></div></label>
+                    <label class="studio-switch"><span><b>Expand routine bodies</b><small>Landable and other bodies as full rows, not chips.</small></span><input type="checkbox" data-overlay-option="survey_status_show_all_bodies"><i></i></label>
+                  </section>
+                  <section data-studio-settings="gravity_warning_hud">
+                    <h4>GRAVITY WARNING</h4>
+                    <label class="studio-field"><span>Warn above</span><div><input id="studio-gravity-threshold" type="number" min="0.5" max="20" step="0.1" data-studio-setting="gravity_warning_threshold_g"><b>G</b></div></label>
+                    <label class="studio-field"><span>Auto-hide after</span><div><input id="studio-gravity-timeout" type="number" min="5" max="3600" data-studio-setting="gravity_warning_hud_timeout_s"><b>SEC</b></div></label>
+                  </section>
+                  <section data-studio-settings="prospector_hud">
+                    <h4>PROSPECTOR ANALYSIS</h4>
+                    <label class="studio-field"><span>Auto-hide after</span><div><input id="studio-prospector-timeout" type="number" min="5" max="3600" data-studio-setting="prospector_hud_timeout_s"><b>SEC</b></div></label>
+                  </section>
+                  <section data-studio-settings="station_info_hud">
+                    <h4>STATION INFORMATION</h4>
+                    <label class="studio-switch"><span><b>Auto-hide when docked</b><small>Otherwise it stays up until you launch.</small></span><input type="checkbox" data-overlay-option="station_info_auto_hide_enabled"><i></i></label>
+                    <label class="studio-field"><span>Hide after</span><div><input id="studio-station-timeout" type="number" min="5" max="3600" data-studio-setting="station_info_timeout_s"><b>SEC</b></div></label>
+                  </section>
+                  <section data-studio-settings="contact_scope_hud">
+                    <h4>DEEP SPACE CONTACTS</h4>
+                    <label class="studio-field"><span>Auto-hide after<small>0 keeps it up</small></span><div><input id="studio-contact-timeout" type="number" min="0" max="3600" data-studio-setting="contact_scope_timeout_s"><b>SEC</b></div></label>
+                  </section>
+                  <section data-studio-settings="toast_hud">
+                    <h4>COCKPIT NOTIFICATIONS</h4>
+                    <label class="studio-switch"><span><b>Rebuy cover warnings</b><small>When your balance cannot cover the rebuy.</small></span><input type="checkbox" data-overlay-option="rebuy_warnings_enabled"><i></i></label>
+                    <label class="studio-switch"><span><b>Unsold data-risk warnings</b><small>When unsold exploration data is genuinely at risk.</small></span><input type="checkbox" data-overlay-option="data_risk_warnings_enabled"><i></i></label>
+                  </section>
+                  <section data-studio-settings="ground_popup" class="studio-ground-target-card">
+                    <h4>WAYPOINT <b id="studio-ground-target-state">TARGET OFF</b></h4>
+                    <p class="studio-option-note">The compass stays hidden until live planetary coordinates are available.</p>
+                    <div class="coordinate-form">
+                      <label>LATITUDE<input id="studio-ground-lat" type="number" min="-90" max="90" step="0.000001" placeholder="32.328000"></label>
+                      <label>LONGITUDE<input id="studio-ground-lon" type="number" min="-180" max="180" step="0.000001" placeholder="108.838000"></label>
+                    </div>
+                    <div class="workspace-actions wrap studio-ground-actions">
+                      <button data-ws-page="ground" data-ws-op="set" data-ground-source="studio">SET</button>
+                      <button id="studio-ground-current" data-ws-page="ground" data-ws-op="set_current">USE CURRENT</button>
+                      <button id="studio-ground-clear" data-ws-page="ground" data-ws-op="clear">CLEAR</button>
+                      <button data-page="ground">GROUND &amp; EXOBIO</button>
+                    </div>
+                    <div class="studio-ground-readout"><span id="studio-ground-target-detail">NO COORDINATES SET</span><b id="studio-ground-visibility">HIDDEN UNTIL APPROACH</b></div>
+                  </section>
+                  <p class="studio-no-settings" data-studio-settings="none">No settings of its own: place it here, and use All overlays below.</p>
+                </div>
               </div>
-            </article>
+            </aside>
+          </div>
 
-            <div class="studio-console-grid">
-              <aside class="studio-roster-column">
-                <article class="card studio-index-card">
-                  <header><span>SURFACE ROSTER</span><b id="studio-enabled-count">0 ENABLED</b></header>
-                  <div class="studio-roster-tools">
-                    <input id="studio-search" type="search" placeholder="FILTER SURFACES" autocomplete="off">
-                    <select id="studio-filter" aria-label="Filter overlay surfaces"><option value="all">ALL</option><option value="enabled">ENABLED</option><option value="disabled">DISABLED</option><option value="visible">ON SCREEN</option></select>
-                  </div>
-                  <div id="studio-overlay-index" class="studio-overlay-index"></div>
-                </article>
-
-                <article class="card studio-preset-card">
-                  <header><span>PROFILE LAYOUTS</span><b>PRESETS</b></header>
-                  <div><select id="studio-preset-select" aria-label="Saved overlay layout"></select><button id="studio-apply-preset" type="button">APPLY</button></div>
-                  <div><button id="studio-save-preset" type="button">SAVE CURRENT</button><button id="studio-delete-preset" type="button" class="danger-action">DELETE</button></div>
-                </article>
-              </aside>
-
-              <article class="card studio-desktop-card">
-                <header><span>LIVE VIRTUAL DESKTOP</span><b id="studio-desktop-label">PRIMARY DISPLAY</b></header>
-                <div id="studio-desktop-viewport" class="studio-desktop-viewport">
-                  <div id="studio-desktop" class="studio-desktop" aria-label="Draggable overlay desktop preview">
-                    <div id="studio-primary-monitor" class="studio-primary-monitor"><span>PRIMARY</span></div>
-                    <div id="studio-overlay-cards"></div>
-                  </div>
-                </div>
-                <footer class="studio-desktop-footer"><span><i></i> DRAG A SURFACE · CHANGES APPLY LIVE</span><b id="studio-pointer-position">SCREEN COORDINATES</b></footer>
-              </article>
-
-              <aside class="studio-inspector-column">
-                <article class="card studio-selection-card">
-                  <header><span>SELECTED SURFACE</span><b id="studio-selected-state">READY</b></header>
-                  <div class="studio-selection-copy"><i><span></span></i><div><small id="studio-selected-short">NO SELECTION</small><h3 id="studio-selected-name">Select an overlay</h3><p>Live commander-profile placement</p></div></div>
-                  <div class="studio-selection-facts">
-                    <div><small>POSITION</small><b id="studio-selected-position">—</b></div>
-                    <div><small>FOOTPRINT</small><b id="studio-selected-size">—</b></div>
-                    <div><small>RENDERER</small><b id="studio-selected-renderer">—</b></div>
-                    <div><small>VISIBILITY</small><b id="studio-selected-visibility">—</b></div>
-                  </div>
-                  <p id="studio-selected-metrics" class="studio-selection-detail">Choose a surface on the desktop or in the roster.</p>
-                  <div class="studio-actions"><button id="studio-toggle-selected" type="button">ENABLE</button><button id="studio-snap-selected" type="button">SMART SNAP</button><button id="studio-reset-selected" type="button" class="danger-action">RESET</button></div>
-                  <div class="studio-nudge-panel"><span>PRECISION NUDGE · 10 PX</span><div><button type="button" data-studio-nudge="0,-10" aria-label="Move up">↑</button><button type="button" data-studio-nudge="-10,0" aria-label="Move left">←</button><i></i><button type="button" data-studio-nudge="10,0" aria-label="Move right">→</button><button type="button" data-studio-nudge="0,10" aria-label="Move down">↓</button></div></div>
-                </article>
-
-                <article class="card studio-legend-card">
-                  <header><span>LAYOUT SIGNALS</span><b>LIVE</b></header>
-                  <div><p><i class="enabled"></i><span><b>Enabled</b><small>Surface is part of this profile.</small></span></p><p><i class="shown"></i><span><b>On screen</b><small>Currently mapped over Elite.</small></span></p><p><i class="selected"></i><span><b>Selected</b><small>Drag or nudge this surface.</small></span></p></div>
-                </article>
-              </aside>
+          <section class="card studio-global" aria-label="All overlays">
+            <header><span>ALL OVERLAYS</span><b>SAVED FOR THIS COMMANDER</b></header>
+            <div class="studio-global-body">
+              <label class="studio-global-fade" for="studio-global-fade"><span>OPACITY</span><input id="studio-global-fade" type="range" min="40" max="100" step="5" aria-label="Opacity of every overlay"><b id="studio-global-fade-value">100%</b></label>
+              <label class="studio-field compact"><span>Text size</span><div><input id="studio-text-scale" type="number" min="75" max="200" step="5" data-studio-setting="overlay_text_scale_percent"><b>%</b></div></label>
+              <label class="studio-switch compact"><span><b>Mouse passthrough</b></span><input type="checkbox" data-overlay-option="overlay_mouse_passthrough"><i></i></label>
+              <label class="studio-switch compact"><span><b>CRT effects</b></span><input type="checkbox" data-overlay-option="hud_crt_enabled"><i></i></label>
+              <label class="studio-switch compact"><span><b>Shimmer</b></span><input type="checkbox" data-overlay-option="hud_crt_motion_enabled"><i></i></label>
+              <label class="studio-field compact"><span>CRT</span><select id="studio-crt-intensity" data-studio-setting="hud_crt_intensity"><option>Subtle</option><option>Standard</option><option>Strong</option></select></label>
             </div>
-          </section>
-
-          <section id="studio-options-view" class="studio-view">
-            <article class="card studio-module-card">
-              <header><span>PROFILE SURFACE POLICY</span><b>LIVE CONTROL</b></header>
-              <p>Choose which cockpit surfaces belong to this commander. Disabled modules retain their prepared position and can still be arranged on the Layout Board.</p>
-              <div id="studio-module-grid" class="studio-module-grid"></div>
-            </article>
-
-            <div class="studio-options-grid">
-              <article class="card studio-option-card">
-                <header><span>DISPLAY & INTERACTION</span></header>
-                <label class="studio-switch"><span><b>Mouse passthrough</b><small>Let Elite receive input through cockpit overlays.</small></span><input type="checkbox" data-overlay-option="overlay_mouse_passthrough"><i></i></label>
-                <label class="studio-switch"><span><b>Compact Navigation HUD</b><small>Use the compact-first navigation surface.</small></span><input type="checkbox" data-overlay-option="hud_compact_mode"><i></i></label>
-                <label class="studio-field"><span>Overlay text scale</span><div><input id="studio-text-scale" type="number" min="75" max="200" step="5"><b>%</b></div></label>
-                <label class="studio-field studio-opacity-field"><span>Global whole-overlay opacity</span><div><input id="studio-overlay-opacity" type="range" min="40" max="100" step="5"><b id="studio-overlay-opacity-value">100%</b></div></label>
-              </article>
-
-              <article class="card studio-option-card studio-ground-target-card">
-                <header><span>PLANET WAYPOINT NAVIGATION</span><b id="studio-ground-target-state">TARGET OFF</b></header>
-                <p class="studio-option-note">Enter an Elite surface latitude and longitude. The compass remains hidden through startup and ordinary flight, then appears automatically when live planetary coordinates are available.</p>
-                <div class="coordinate-form">
-                  <label>LATITUDE<input id="studio-ground-lat" type="number" min="-90" max="90" step="0.000001" placeholder="32.328000"></label>
-                  <label>LONGITUDE<input id="studio-ground-lon" type="number" min="-180" max="180" step="0.000001" placeholder="108.838000"></label>
-                </div>
-                <div class="workspace-actions wrap studio-ground-actions">
-                  <button data-ws-page="ground" data-ws-op="set" data-ground-source="studio">SET COORDINATES</button>
-                  <button id="studio-ground-current" data-ws-page="ground" data-ws-op="set_current">USE CURRENT</button>
-                  <button id="studio-ground-clear" data-ws-page="ground" data-ws-op="clear">CLEAR</button>
-                  <button id="studio-ground-overlay-toggle" type="button">OVERLAY ON</button>
-                  <button data-page="ground">OPEN GROUND &amp; EXOBIO</button>
-                </div>
-                <div class="studio-ground-readout"><span id="studio-ground-target-detail">NO COORDINATES SET</span><b id="studio-ground-visibility">HIDDEN UNTIL APPROACH</b></div>
-              </article>
-
-              <article class="card studio-option-card studio-rhino-map-card">
-                <header><span>RHINO COVERAGE MINIMAP</span><b id="studio-rhino-state">AWAITING RHINO</b></header>
-                <p class="studio-option-note">Coverage is painted from Status.json positions using the estimated 2 km Rhino scanner radius. Set a center, drive to the location edge to set its border, and mark each deployed drill from the Rhino.</p>
-                <div class="workspace-actions wrap">
-                  <button id="studio-rhino-center" type="button">SET CENTER HERE</button>
-                  <button id="studio-rhino-border" type="button">SET BORDER HERE</button>
-                  <button id="studio-rhino-drill" type="button">MARK DRILL HERE</button>
-                  <button id="studio-rhino-reset" type="button">RESET CURRENT MAP</button>
-                  <button id="studio-rhino-overlay-toggle" type="button">OVERLAY ON</button>
-                  <button id="studio-rhino-open-maps" type="button">OPEN SAVED MAPS</button>
-                </div>
-                <div class="studio-ground-readout"><span id="studio-rhino-detail">NO ACTIVE COVERAGE MAP</span><b id="studio-rhino-hotkeys">CENTER · BORDER · DRILL · RESET</b></div>
-                <p id="studio-rhino-storage" class="studio-option-note">0 SAVED MAPS</p>
-              </article>
-
-              <article class="card studio-option-card">
-                <header><span>ACTIONABLE ALERTS</span></header>
-                <label class="studio-switch"><span><b>Rebuy coverage warnings</b><small>Warn when current funds do not cover rebuy.</small></span><input type="checkbox" data-overlay-option="rebuy_warnings_enabled"><i></i></label>
-                <label class="studio-switch"><span><b>Unsold data-risk warnings</b><small>Surface genuinely at-risk exploration data.</small></span><input type="checkbox" data-overlay-option="data_risk_warnings_enabled"><i></i></label>
-              </article>
-
-              <article class="card studio-option-card">
-                <header><span>SURVEY OPERATIONS</span></header>
-                <label class="studio-field"><span>Rotation (Off holds still on the latest activity)</span><select id="studio-survey-rotation"><option value="auto">Auto</option><option value="always">Always</option><option value="off">Off</option></select></label>
-                <label class="studio-field"><span>Auto rotates above (still at or below)</span><div><input id="studio-survey-threshold" type="number" min="2" max="40" step="1"><b>WORLDS</b></div></label>
-                <label class="studio-field"><span>Survey text size (0 = overlay scale)</span><div><input id="studio-survey-text-scale" type="number" min="0" max="200" step="5"><b>%</b></div></label>
-                <label class="studio-switch"><span><b>Expand routine bodies</b><small>Landable and other bodies list as full rows instead of compact chips.</small></span><input type="checkbox" data-overlay-option="survey_status_show_all_bodies"><i></i></label>
-              </article>
-
-              <article class="card studio-option-card">
-                <header><span>TIMING & THRESHOLDS</span></header>
-                <label class="studio-field"><span>Prospector auto-hide</span><div><input id="studio-prospector-timeout" type="number" min="5" max="3600"><b>SEC</b></div></label>
-                <label class="studio-field"><span>Gravity warning auto-hide</span><div><input id="studio-gravity-timeout" type="number" min="5" max="3600"><b>SEC</b></div></label>
-                <label class="studio-field"><span>Deep Space Contacts auto-hide (0 = persistent)</span><div><input id="studio-contact-timeout" type="number" min="0" max="3600"><b>SEC</b></div></label>
-                <label class="studio-switch compact"><span><b>Auto-hide Station Link</b></span><input type="checkbox" data-overlay-option="station_info_auto_hide_enabled"><i></i></label>
-                <label class="studio-field"><span>Station Link hide delay</span><div><input id="studio-station-timeout" type="number" min="5" max="3600"><b>SEC</b></div></label>
-                <label class="studio-field"><span>Gravity warning threshold</span><div><input id="studio-gravity-threshold" type="number" min="0.5" max="20" step="0.1"><b>G</b></div></label>
-              </article>
-
-              <article class="card studio-option-card">
-                <header><span>COCKPIT RENDERING</span></header>
-                <label class="studio-switch"><span><b>CRT effects</b><small>Apply the theme-aware cockpit treatment.</small></span><input type="checkbox" data-overlay-option="hud_crt_enabled"><i></i></label>
-                <label class="studio-switch"><span><b>Subtle phosphor shimmer</b><small>Keep restrained motion on active displays.</small></span><input type="checkbox" data-overlay-option="hud_crt_motion_enabled"><i></i></label>
-                <label class="studio-field"><span>CRT intensity</span><select id="studio-crt-intensity"><option>Subtle</option><option>Standard</option><option>Strong</option></select></label>
-              </article>
-            </div>
-            <footer class="studio-options-footer"><span>Presentation rules and positions belong to the active commander profile.</span><button id="studio-save-settings" type="button">APPLY DISPLAY RULES</button></footer>
           </section>
         </section>
 

@@ -573,20 +573,29 @@
     }
   }
 
-  // Confirmed neutron and white-dwarf boosts add jet-cone threads to the
-  // drive scenes; the tier shows, never an invented speed.
-  function boostThreads(s, st, pal, x) {
+  // A confirmed neutron or white-dwarf supercharge charges the corridor
+  // itself: a blue sheath inside its rails, blue-white streaks, and charge
+  // rings rolling back from the heading round the corridor. The tier (from
+  // the journal's boost value) shows as chevrons ahead of the marker; the
+  // scene never invents a speed.
+  function boostCharge(s, st, pal, vx) {
     const tier = boostTier(st.d);
+    if (!tier) return;
+    const cy = s.H / 2, blue = pal.accent;
+    streaks(s, st, {x: vx, count: 4 + tier * 3, speed: .46, strength: .5, width: 1.1, color: blue});
+    for (const side of [-1, 1]) {
+      s.poly([[-4, cy + side * s.H * .42], [vx * .42, cy + side * s.H * .25],
+        [vx * .78, cy + side * s.H * .09], [vx - 8, cy + side * 1.4]], blue, .55, 1.2);
+    }
+    const rings = 2 + tier;
+    for (let index = 0; index < rings; index += 1) {
+      const t = fract(st.p * .32 + index / rings), k = t * t;
+      const r = lerp(2.5, s.H * .52, k);
+      s.arc(lerp(vx - 6, -8, k), cy, r * .32, r, 0, TAU, blue, Math.sin(t * Math.PI) * .5, .8 + k * .8);
+    }
+    s.bloom(vx, cy, 12 + tier * 3, blue, .4 + .15 * wave(st.p * .6));
     for (let index = 0; index < tier; index += 1) {
-      for (const side of [-1, 1]) {
-        const points = [];
-        for (let step = 0; step <= 24; step += 1) {
-          const t = step / 24;
-          points.push([lerp(4, x - 6, t), s.H / 2 + side * (2 + index * 2.2 + (1 - t) * (6 + index * 3))
-            + Math.sin(t * 14 - st.p * 1.9 + index) * (1 - t) * 1.8]);
-        }
-        s.poly(points, pal.accent, .42, 1);
-      }
+      s.chevron(vx + 13 + index * 6, cy, 1, blue, .9 - index * .12, 3.2, 1.4);
     }
   }
 
@@ -935,7 +944,7 @@
           Math.sin(t * Math.PI) * .7, 1.3);
       }
     }
-    boostThreads(s, st, pal, vx);
+    boostCharge(s, st, pal, vx);
   }
 
   function taxi(s, st, pal) {

@@ -1,0 +1,219 @@
+/* Overlay Studio: one screen. Surfaces on the left, the selected display on
+   the stage, the selected surface and its own settings on the right, and the
+   settings every overlay shares along the foot. Colours are theme tokens. */
+
+.overlay-studio-page { max-width: none; }
+.studio-title { align-items: center; margin-bottom: 13px; }
+.studio-presets { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.studio-presets select { min-width: 170px; }
+
+.overlay-studio-page :is(.studio-presets, .studio-placement-actions, .studio-move-display, .studio-nudge) button {
+  min-height: 33px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--muted);
+  font: 700 9px Consolas, monospace;
+  letter-spacing: .05em;
+  cursor: pointer;
+}
+.overlay-studio-page :is(.studio-presets, .studio-placement-actions, .studio-move-display, .studio-nudge) button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.overlay-studio-page :is(.studio-presets select, .studio-roster-tools input, .studio-roster-tools select, .studio-field input, .studio-field select) {
+  min-width: 0;
+  height: 33px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  outline: 0;
+  background: var(--input);
+  color: var(--text);
+  font: 9px Consolas, monospace;
+}
+.overlay-studio-page :is(.studio-presets select, .studio-roster-tools input, .studio-roster-tools select, .studio-field input, .studio-field select):focus {
+  border-color: var(--accent);
+}
+
+.studio-shell {
+  display: grid;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(270px, 320px);
+  gap: 13px;
+  height: clamp(520px, calc(100vh - 335px), 860px);
+}
+.studio-shell > .card { min-height: 0; display: grid; }
+
+/* -------------------------------------------------------------- roster -- */
+.studio-roster { grid-template-rows: 38px auto minmax(0, 1fr) auto; border-top: 2px solid var(--orange); }
+.studio-roster-tools { display: grid; grid-template-columns: minmax(0, 1fr) 100px; gap: 6px; padding: 9px 10px; border-bottom: 1px solid var(--border-soft); background: var(--inset); }
+.studio-overlay-index { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.studio-index-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-bottom: 1px solid var(--border-soft); }
+.studio-index-row:hover, .studio-index-row.selected { background: var(--selection); }
+.studio-index-row.selected { box-shadow: inset 3px 0 var(--orange); }
+.overlay-studio-page .studio-index-select { min-width: 0; min-height: 46px; text-transform: none; letter-spacing: 0; box-shadow: none; display: grid; grid-template-columns: 9px minmax(0, 1fr); align-items: center; gap: 9px; padding: 6px 4px 6px 12px; border: 0; background: none; text-align: left; cursor: pointer; }
+.studio-index-select > i { width: 6px; height: 6px; border: 1px solid var(--dim); transform: rotate(45deg); }
+.studio-index-row.enabled .studio-index-select > i { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 7px var(--accent); }
+.studio-index-row.shown .studio-index-select > i { border-color: var(--green); background: var(--green); box-shadow: 0 0 7px var(--green); }
+.studio-index-select span { min-width: 0; }
+.studio-index-select b, .studio-index-select small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-index-select b { color: var(--text); font: 700 11px "Segoe UI", sans-serif; }
+.studio-index-row:not(.enabled) .studio-index-select b { color: var(--muted); }
+.studio-index-select small { margin-top: 3px; color: var(--dim); font: 8px Consolas, monospace; letter-spacing: .04em; }
+.studio-index-row.selected .studio-index-select b { color: var(--accent); }
+.studio-roster-summary { padding: 9px 12px; border-top: 1px solid var(--border-soft); background: var(--inset); color: var(--dim); font: 8px Consolas, monospace; letter-spacing: .06em; }
+
+/* Switches: the roster's, the inspector's and the shared settings'. */
+.studio-row-switch, .studio-switch { position: relative; cursor: pointer; }
+.studio-row-switch { padding: 0 12px 0 6px; }
+:is(.studio-row-switch, .studio-switch) input { position: absolute; opacity: 0; pointer-events: none; }
+:is(.studio-row-switch, .studio-switch) > i { display: block; flex: 0 0 34px; width: 34px; height: 17px; position: relative; border: 1px solid var(--border); background: var(--inset); }
+:is(.studio-row-switch, .studio-switch) > i::after { content: ""; position: absolute; left: 3px; top: 3px; width: 9px; height: 9px; background: var(--dim); transition: .18s; }
+:is(.studio-row-switch, .studio-switch) input:checked + i { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--inset)); }
+:is(.studio-row-switch, .studio-switch) input:checked + i::after { left: 20px; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+:is(.studio-row-switch, .studio-switch) input:focus-visible + i { outline: 1px solid var(--accent); outline-offset: 2px; }
+
+/* --------------------------------------------------------------- stage -- */
+.studio-stage-card { grid-template-rows: 38px minmax(0, 1fr) 34px; border-top: 2px solid var(--accent); }
+.studio-stage-card > header { gap: 12px; }
+.studio-display-picker { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.studio-display-picker > b { color: var(--accent); background: none; padding: 0; font: 700 9px Consolas, monospace; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The displays as they are arranged on the desk, each one a tab. */
+.studio-monitor-map { position: relative; flex: 0 0 auto; height: 26px; aspect-ratio: var(--studio-map-aspect, 16 / 9); max-width: 160px; }
+.studio-monitor-map > .studio-monitor { position: absolute; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0; margin: 0; border: 1px solid var(--border); background: var(--inset); color: var(--dim); cursor: pointer; }
+.studio-monitor b { font: 700 10px "Bahnschrift SemiCondensed", sans-serif; }
+.studio-monitor small { color: inherit; opacity: .7; font: 700 7px Consolas, monospace; }
+.studio-monitor.main-display { border-bottom-color: color-mix(in srgb, var(--orange) 60%, var(--border)); }
+.studio-monitor:hover { color: var(--accent); border-color: var(--accent); }
+.studio-monitor.active { color: var(--bg); background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent); }
+
+.studio-stage-viewport {
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  container-type: size;
+  background:
+    radial-gradient(circle at 50% 44%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 55%),
+    linear-gradient(150deg, var(--inset), color-mix(in srgb, var(--panel) 64%, var(--bg)));
+}
+/* The stage keeps the display's aspect ratio in whatever room it has. */
+.studio-stage {
+  position: relative;
+  width: min(100cqw, 100cqh * (var(--studio-aspect-number, 1.7778)));
+  aspect-ratio: var(--studio-aspect, 16 / 9);
+  overflow: hidden;
+  touch-action: none;
+  outline: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background:
+    linear-gradient(color-mix(in srgb, var(--text) 3%, transparent) 1px, transparent 1px) 0 0 / 10% 10%,
+    linear-gradient(90deg, color-mix(in srgb, var(--text) 3%, transparent) 1px, transparent 1px) 0 0 / 10% 10%,
+    color-mix(in srgb, var(--bg) 88%, black);
+  box-shadow: inset 0 0 45px rgba(0, 0, 0, .45), 0 12px 30px rgba(0, 0, 0, .3);
+}
+.studio-stage:focus-visible { border-color: var(--accent); box-shadow: inset 0 0 45px rgba(0, 0, 0, .45), 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+.studio-stage::before, .studio-stage::after { content: ""; position: absolute; z-index: 1; pointer-events: none; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.studio-stage::before { left: 50%; top: 0; bottom: 0; width: 1px; }
+.studio-stage::after { top: 50%; left: 0; right: 0; height: 1px; }
+.studio-overlay-cards { position: absolute; inset: 0; z-index: 2; }
+.studio-overlay-cards > .studio-overlay-card {
+  position: absolute;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 5px 7px;
+  overflow: hidden;
+  border: 1px dashed var(--border);
+  background: color-mix(in srgb, var(--panel-raised) 70%, transparent);
+  color: var(--dim);
+  text-align: left;
+  cursor: grab;
+  touch-action: none;
+  transition: border-color .15s, box-shadow .15s, filter .15s;
+}
+.studio-overlay-card.enabled { opacity: var(--studio-global-opacity, 1); border-style: solid; border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); background: color-mix(in srgb, var(--accent) 11%, var(--panel)); color: var(--accent); }
+.studio-overlay-card span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 10px "Bahnschrift SemiCondensed", sans-serif; letter-spacing: .06em; }
+.studio-overlay-card small { overflow: hidden; color: var(--dim); font: 8px Consolas, monospace; white-space: nowrap; }
+.studio-overlay-card.shown span::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: 5px; vertical-align: middle; background: var(--green); box-shadow: 0 0 7px var(--green); }
+.studio-overlay-card.selected { z-index: 5; border-color: var(--orange); color: var(--text); box-shadow: 0 0 0 1px color-mix(in srgb, var(--orange) 35%, transparent), 0 0 18px color-mix(in srgb, var(--orange) 20%, transparent); }
+.studio-overlay-card.dragging { cursor: grabbing; filter: brightness(1.2); transition: none; }
+.studio-overlay-card.filtered-out { opacity: .12; pointer-events: none; }
+.studio-stage-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 13px; border-top: 1px solid var(--border-soft); color: var(--dim); font: 8px Consolas, monospace; letter-spacing: .04em; }
+.studio-stage-footer span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-stage-footer span i { display: inline-block; width: 5px; height: 5px; margin-right: 5px; background: var(--green); box-shadow: 0 0 7px var(--green); }
+.studio-stage-footer b { color: var(--accent); white-space: nowrap; }
+
+/* ----------------------------------------------------------- inspector -- */
+.studio-inspector { grid-template-rows: 38px minmax(0, 1fr); border-top: 2px solid var(--green); }
+.studio-inspector-scroll { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.studio-selection-head { padding: 13px 14px 6px; }
+.studio-selection-head > small { color: var(--orange); font: 700 8px Consolas, monospace; letter-spacing: .1em; }
+.studio-selection-head h3 { margin: 3px 0 8px; overflow: hidden; color: var(--text); font: 700 19px "Bahnschrift SemiCondensed", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.studio-selection-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0 14px 10px; border: 1px solid var(--border-soft); background: var(--border-soft); }
+.studio-selection-facts div { min-width: 0; padding: 8px 9px; background: var(--inset); }
+.studio-selection-facts small, .studio-selection-facts b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-selection-facts small { color: var(--dim); font: 7px Consolas, monospace; letter-spacing: .08em; }
+.studio-selection-facts b { margin-top: 3px; color: var(--text); font: 700 10px Consolas, monospace; }
+.studio-placement { display: grid; grid-template-columns: 99px minmax(0, 1fr); gap: 10px; margin: 0 14px 12px; }
+.studio-nudge { display: grid; grid-template-columns: repeat(3, 31px); grid-template-rows: repeat(3, 31px); gap: 3px; }
+.studio-nudge button { min-height: 31px !important; padding: 0 !important; font-size: 13px !important; }
+.studio-nudge button:nth-child(1) { grid-column: 2; grid-row: 1; }
+.studio-nudge button:nth-child(2) { grid-column: 1; grid-row: 2; }
+.studio-nudge i { grid-column: 2; grid-row: 2; align-self: center; justify-self: center; width: 6px; height: 6px; background: var(--orange); box-shadow: 0 0 8px var(--orange); transform: rotate(45deg); }
+.studio-nudge button:nth-child(4) { grid-column: 3; grid-row: 2; }
+.studio-nudge button:nth-child(5) { grid-column: 2; grid-row: 3; }
+.studio-placement-actions, .studio-move-display { min-width: 0; display: grid; gap: 5px; align-content: start; }
+.studio-placement-actions button { width: 100%; padding: 0 6px !important; }
+
+.studio-surface-settings { border-top: 1px solid var(--border-soft); }
+.studio-surface-settings > section { padding: 4px 0 8px; }
+.studio-surface-settings h4 { display: flex; justify-content: space-between; align-items: center; margin: 10px 14px 2px; color: var(--orange); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.studio-surface-settings h4 b { color: var(--dim); font-size: 8px; }
+.studio-no-settings { margin: 14px; color: var(--dim); font: 10px/1.5 "Segoe UI", sans-serif; }
+.studio-switch, .studio-field { min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 14px; border-bottom: 1px solid var(--border-soft); }
+.studio-switch > span, .studio-field > span { min-width: 0; color: var(--text); font: 11px "Segoe UI", sans-serif; }
+.studio-switch b, .studio-switch small, .studio-field small { display: block; }
+.studio-switch small, .studio-field small { margin-top: 2px; color: var(--dim); font: 9px Consolas, monospace; }
+.studio-enable { margin: 0; padding: 8px 10px; border: 1px solid var(--border-soft); background: var(--inset); }
+.studio-field > div { display: flex; align-items: center; }
+.studio-field input { width: 76px; text-align: right; }
+.studio-field select { width: 110px; }
+.studio-field div > b { min-width: 42px; height: 33px; display: grid; place-items: center; border: 1px solid var(--border); border-left: 0; color: var(--dim); font: 700 8px Consolas, monospace; }
+.studio-field input:disabled { opacity: .42; }
+/* A field flashes as its own setting is saved (or refused). */
+.studio-field.saved :is(input, select) { animation: studio-saved .9s ease-out; }
+.studio-field.rejected :is(input, select) { border-color: var(--red); }
+@keyframes studio-saved { 0% { border-color: var(--green); box-shadow: 0 0 10px color-mix(in srgb, var(--green) 45%, transparent); } }
+
+.studio-option-note { margin: 4px 14px 8px; color: var(--muted); font: 10px/1.5 "Segoe UI", sans-serif; }
+.studio-ground-target-card .coordinate-form { padding: 0 14px 8px; }
+.studio-ground-target-card .workspace-actions { padding: 0 14px 8px; }
+.studio-ground-readout { display: flex; justify-content: space-between; gap: 10px; margin: 0 14px 6px; padding: 8px 9px; border-left: 2px solid var(--border); background: var(--inset); color: var(--muted); font: 8px Consolas, monospace; }
+.studio-ground-readout b { color: var(--dim); text-align: right; }
+.studio-ground-readout.live { border-left-color: var(--green); }
+.studio-ground-readout.live b { color: var(--green); }
+.studio-ground-readout.armed { border-left-color: var(--accent); }
+.studio-ground-readout.armed b { color: var(--accent); }
+
+/* -------------------------------------------------------- all overlays -- */
+.studio-global { margin-top: 13px; border-top: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.studio-global-body { display: flex; align-items: center; gap: 6px 22px; flex-wrap: wrap; padding: 8px 16px; }
+.studio-global-body > .studio-switch, .studio-global-body > .studio-field { min-height: 40px; margin: 0; gap: 10px; border: 0; }
+.studio-global-fade { display: flex; align-items: center; gap: 10px; flex: 1 1 280px; min-width: 220px; max-width: 420px; }
+.studio-global-fade span { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .08em; }
+.studio-global-fade input { flex: 1 1 auto; min-width: 90px; accent-color: var(--accent); cursor: ew-resize; }
+.studio-global-fade b { min-width: 40px; color: var(--accent); font: 700 12px Consolas, monospace; text-align: right; }
+
+/* The content deck narrows with the rail: stage on top, lists beneath. */
+@media (max-width: 1260px) {
+  .studio-shell { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(360px, 58vh) minmax(420px, auto); height: auto; }
+  .studio-stage-card { grid-column: 1 / -1; grid-row: 1; }
+  .studio-roster { grid-row: 2; max-height: 560px; }
+  .studio-inspector { grid-row: 2; max-height: 560px; }
+}
+@media (max-width: 760px) {
+  .studio-shell { grid-template-columns: 1fr; }
+  .studio-roster, .studio-inspector { grid-row: auto; }
+}

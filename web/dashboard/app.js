@@ -44,7 +44,7 @@ let bootStageTransitionTimer = 0;
 let themeFingerprint = "";
 let pageRequestId = 0;
 let studioSelectedId = "";
-let studioView = "layout";
+let studioMonitorId = "";
 let engineeringView = "operations";
 let engineeringData = null;
 // Retained while legacy profile-built ships are rendered read-only during the
@@ -139,9 +139,9 @@ const HOTKEY_CODE_NAMES = {
 };
 
 const STRUCTURAL_BUTTON_SELECTOR = [
-  ".nav-item", "[data-feed-filter]", ".studio-overlay-card",
-  ".studio-index-row", ".mission-row", ".workspace-tabs button",
-  ".suite-tabs button", "[data-analytics-view]", "[data-studio-view]",
+  ".nav-item", "[data-feed-filter]", ".studio-overlay-card", ".studio-monitor",
+  ".studio-index-select", ".mission-row", ".workspace-tabs button",
+  ".suite-tabs button", "[data-analytics-view]",
   ".galnet-headline-row", "#status-galnet", ".bp-group-tabs button",
   ".bp-slot", ".bp-module", ".bp-analysis > nav button",
   ".survey-body-row", ".explore-views button", "[data-explore-filter]", ".body-select",
@@ -1590,38 +1590,112 @@ function syncAtlasLayerRequest() {
 }
 
 function studioData() {
-  return model.overlay_studio || {desktop: {}, overlays: [], presets: [], options: {}};
+  return model.overlay_studio || {desktop: {}, monitors: [], overlays: [], presets: [], options: {}};
 }
 
 function studioOverlay(id) {
   return (studioData().overlays || []).find((row) => row.id === id) || null;
 }
 
-function selectStudioOverlay(id) {
+// Displays in the overlays' own screen coordinates. The Studio shows one at a
+// time; without a monitor list the whole virtual desktop is one display.
+function studioMonitors() {
+  const studio = studioData();
+  if (Array.isArray(studio.monitors) && studio.monitors.length) return studio.monitors;
+  const desktop = studio.desktop || {};
+  return [{
+    id: "display-1", number: 1, label: "DISPLAY 1", primary: true,
+    left: number(desktop.left), top: number(desktop.top),
+    width: Math.max(1, number(desktop.width, 1920)), height: Math.max(1, number(desktop.height, 1080)),
+  }];
+}
+
+function studioMonitor(id = studioMonitorId) {
+  const monitors = studioMonitors();
+  return monitors.find((monitor) => monitor.id === id)
+    || monitors.find((monitor) => monitor.primary) || monitors[0];
+}
+
+function studioMonitorOf(row) {
+  return studioMonitors().find((monitor) => monitor.id === row?.monitor) || studioMonitor();
+}
+
+function studioIntersects(row, monitor) {
+  return row.x < monitor.left + monitor.width && row.x + row.width > monitor.left
+    && row.y < monitor.top + monitor.height && row.y + row.height > monitor.top;
+}
+
+function studioDisplayTag(id) {
+  const monitor = studioMonitors().find((item) => item.id === id);
+  return monitor ? `D${monitor.number}` : "";
+}
+
+function placeStudioCard(node, row, monitor) {
+  node.style.left = `${(row.x - monitor.left) * 100 / monitor.width}%`;
+  node.style.top = `${(row.y - monitor.top) * 100 / monitor.height}%`;
+  node.style.width = `${Math.max(2.5, row.width * 100 / monitor.width)}%`;
+  node.style.height = `${Math.max(3.5, row.height * 100 / monitor.height)}%`;
+}
+
+function renderStudioMoveDisplay(row, monitor) {
+  const host = byId("studio-move-display");
+  if (!host) return;
+  const others = studioMonitors().filter((item) => item.id !== monitor?.id);
+  host.replaceChildren(...others.map((target) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.studioMoveDisplay = target.id;
+    button.textContent = `MOVE TO ${target.label}`;
+    return button;
+  }));
+  host.hidden = !row || !others.length;
+}
+
+function selectStudioOverlay(id, follow = false) {
   const selected = studioOverlay(id);
   if (!selected) return;
   studioSelectedId = id;
+  // Choosing a surface from the roster brings its display onto the stage.
+  if (follow && selected.monitor && selected.monitor !== studioMonitorId) {
+    studioMonitorId = selected.monitor;
+    studioFingerprint = "";
+    renderOverlayStudio(model);
+    return;
+  }
   document.querySelectorAll(".studio-overlay-card, .studio-index-row").forEach((node) => {
     node.classList.toggle("selected", node.dataset.overlayId === id);
   });
+  const monitor = studioMonitorOf(selected);
   text("studio-selected-state", selected.state, "READY");
   text("studio-selected-short", selected.short_label, "SURFACE");
   text("studio-selected-name", selected.label, "Overlay");
-  text("studio-selected-metrics", `${selected.x}, ${selected.y}  //  ${selected.width} × ${selected.height} PX`);
-  text("studio-selected-position", `X ${selected.x} · Y ${selected.y}`);
-  text("studio-selected-size", `${selected.width} × ${selected.height} PX`);
+  text("studio-selected-position", `X ${selected.x - monitor.left} · Y ${selected.y - monitor.top}`);
+  text("studio-selected-size", `${selected.width} × ${selected.height}`);
+  text("studio-selected-display", monitor.label);
   text("studio-selected-renderer", selected.html_ready ? "HTML READY" : selected.enabled ? "LINKING" : "STANDBY");
-  text("studio-selected-visibility", selected.shown ? "ON SCREEN" : selected.enabled ? "READY" : "DISABLED");
-  const toggle = byId("studio-toggle-selected");
-  toggle.textContent = selected.enabled ? "DISABLE" : "ENABLE";
-  toggle.classList.toggle("enabled", selected.enabled);
+  text("studio-selected-visibility", selected.shown ? "On screen now"
+    : selected.enabled ? "Shows when it has something to report" : "Off for this commander");
+  const enable = byId("studio-selected-enabled");
+  if (enable && document.activeElement !== enable) enable.checked = Boolean(selected.enabled);
+  // The inspector shows only this surface's own settings.
+  let own = false;
+  document.querySelectorAll("[data-studio-settings]").forEach((node) => {
+    const match = node.dataset.studioSettings === id;
+    node.hidden = !match;
+    own ||= match;
+  });
+  const none = document.querySelector('[data-studio-settings="none"]');
+  if (none) none.hidden = own;
+  renderStudioMoveDisplay(selected, monitor);
 }
 
 function applyStudioFilters() {
   const queryText = studioSearch.trim().toLocaleLowerCase();
   const matches = (row) => {
     if (!row) return false;
-    const stateMatch = studioFilter === "all" || (studioFilter === "enabled" && row.enabled) || (studioFilter === "disabled" && !row.enabled) || (studioFilter === "visible" && row.shown);
+    const stateMatch = studioFilter === "all" || (studioFilter === "enabled" && row.enabled)
+      || (studioFilter === "disabled" && !row.enabled) || (studioFilter === "visible" && row.shown)
+      || (studioFilter === "display" && studioIntersects(row, studioMonitor()));
     const textMatch = !queryText || `${row.label} ${row.short_label} ${row.id}`.toLocaleLowerCase().includes(queryText);
     return stateMatch && textMatch;
   };
@@ -1633,22 +1707,12 @@ function applyStudioFilters() {
   });
 }
 
-function setStudioView(name) {
-  studioView = name === "options" ? "options" : "layout";
-  document.querySelectorAll("[data-studio-view]").forEach((node) => node.classList.toggle("active", node.dataset.studioView === studioView));
-  byId("studio-layout-view").classList.toggle("active", studioView === "layout");
-  byId("studio-options-view").classList.toggle("active", studioView === "options");
-}
-
 function syncStudioOpacity(value) {
   const percent = Math.max(40, Math.min(100, Math.round(number(value, 100))));
   byId("studio-desktop-viewport")?.style.setProperty("--studio-global-opacity", String(percent / 100));
-  for (const id of ["studio-global-fade", "studio-overlay-opacity"]) {
-    const input = byId(id);
-    if (input) input.value = percent;
-  }
+  const input = byId("studio-global-fade");
+  if (input) input.value = percent;
   text("studio-global-fade-value", `${percent}%`);
-  text("studio-overlay-opacity-value", `${percent}%`);
   return percent;
 }
 
@@ -1678,33 +1742,19 @@ function queueStudioOpacity(value, flush = false) {
   else studioOpacityTimer = setTimeout(() => sendStudioOpacity(percent), delay);
 }
 
-function updateStudioOptionControls(options, groundTarget = {}, rhinoMinimap = {}) {
+function updateStudioOptionControls(options, groundTarget = {}) {
   document.querySelectorAll("[data-overlay-option]").forEach((input) => {
     if (document.activeElement !== input) input.checked = Boolean(options[input.dataset.overlayOption]);
   });
-  const fields = {
-    "studio-text-scale": options.overlay_text_scale_percent,
-    "studio-prospector-timeout": options.prospector_hud_timeout_s,
-    "studio-gravity-timeout": options.gravity_warning_hud_timeout_s,
-    "studio-contact-timeout": options.contact_scope_timeout_s,
-    "studio-station-timeout": options.station_info_timeout_s,
-    "studio-gravity-threshold": options.gravity_warning_threshold_g,
-    "studio-crt-intensity": options.hud_crt_intensity,
-    "studio-survey-rotation": options.survey_spotlight_rotation,
-    "studio-survey-threshold": options.survey_spotlight_threshold,
-    "studio-survey-text-scale": options.survey_text_scale_percent,
-  };
-  for (const [id, value] of Object.entries(fields)) {
-    const field = byId(id);
-    if (field && document.activeElement !== field) field.value = value ?? "";
-  }
+  document.querySelectorAll("[data-studio-setting]").forEach((field) => {
+    if (document.activeElement !== field) field.value = options[field.dataset.studioSetting] ?? "";
+  });
   const savedOpacity = Math.max(40, Math.min(100, Math.round(number(options.overlay_opacity_percent, 100))));
   if (studioOpacityPending === savedOpacity || Date.now() - studioOpacityPendingAt > 3000) {
     studioOpacityPending = null;
   }
-  const activeOpacity = ["studio-global-fade", "studio-overlay-opacity"]
-    .map(byId).find((input) => input === document.activeElement);
-  syncStudioOpacity(activeOpacity?.value ?? studioOpacityPending ?? savedOpacity);
+  const fade = byId("studio-global-fade");
+  syncStudioOpacity(document.activeElement === fade ? fade.value : studioOpacityPending ?? savedOpacity);
   const stationTimeout = byId("studio-station-timeout");
   if (stationTimeout) stationTimeout.disabled = !Boolean(options.station_info_auto_hide_enabled);
   const targetFields = {
@@ -1717,16 +1767,14 @@ function updateStudioOptionControls(options, groundTarget = {}, rhinoMinimap = {
       field.value = value === null || value === undefined ? "" : Number(value).toFixed(6);
     }
   }
-  const groundOverlay = studioOverlay("ground_popup");
-  const overlayEnabled = Boolean(groundOverlay?.enabled);
-  const state = groundTarget.navigation_ready ? "COMPASS LIVE" : groundTarget.active ? "TARGET ARMED" : "TARGET OFF";
-  text("studio-ground-target-state", state);
+  const overlayEnabled = Boolean(studioOverlay("ground_popup")?.enabled);
+  text("studio-ground-target-state", groundTarget.navigation_ready ? "COMPASS LIVE"
+    : groundTarget.active ? "TARGET ARMED" : "TARGET OFF");
   text("studio-ground-target-detail", groundTarget.active
     ? `${Number(groundTarget.lat).toFixed(6)}, ${Number(groundTarget.lon).toFixed(6)}`
     : "NO COORDINATES SET");
-  text("studio-ground-visibility", !overlayEnabled
-    ? "OVERLAY DISABLED"
-    : groundTarget.navigation_ready ? "LIVE PLANET GUIDANCE" : "HIDDEN UNTIL PLANET APPROACH");
+  text("studio-ground-visibility", !overlayEnabled ? "OVERLAY OFF"
+    : groundTarget.navigation_ready ? "LIVE PLANET GUIDANCE" : "HIDDEN UNTIL APPROACH");
   const readout = document.querySelector(".studio-ground-readout");
   readout?.classList.toggle("live", Boolean(groundTarget.navigation_ready && overlayEnabled));
   readout?.classList.toggle("armed", Boolean(groundTarget.active && !groundTarget.navigation_ready && overlayEnabled));
@@ -1734,95 +1782,99 @@ function updateStudioOptionControls(options, groundTarget = {}, rhinoMinimap = {
   if (current) current.disabled = !Boolean(groundTarget.current_available);
   const clear = byId("studio-ground-clear");
   if (clear) clear.disabled = !Boolean(groundTarget.active);
-  const toggle = byId("studio-ground-overlay-toggle");
-  if (toggle) toggle.textContent = `OVERLAY ${overlayEnabled ? "ON" : "OFF"}`;
-  text("studio-rhino-state", rhinoMinimap.active ? "RHINO MAP LIVE" : "AWAITING RHINO");
-  text("studio-rhino-detail", rhinoMinimap.map_name
-    ? `${String(rhinoMinimap.map_name).toUpperCase()} · ${number(rhinoMinimap.painted_km2, 0).toFixed(2)} KM² · ${number(rhinoMinimap.drill_count, 0)} DRILLS · ${rhinoMinimap.centered ? "CENTER SET" : "DROP POINT CENTER"}${rhinoMinimap.border_m == null ? " · BORDER OPEN" : ` · BORDER ${(number(rhinoMinimap.border_m) / 1000).toFixed(1)} KM`}`
-    : "NO ACTIVE COVERAGE MAP");
-  text("studio-rhino-hotkeys", "COVERAGE OVERLAY AND HOTKEYS DISABLED");
-  const savedBytes = number(rhinoMinimap.saved_bytes, 0), savedAmount = savedBytes >= 1048576 ? `${(savedBytes / 1048576).toFixed(1)} MB` : `${Math.round(savedBytes / 1024)} KB`;
-  text("studio-rhino-storage", `${number(rhinoMinimap.saved_maps, 0)} SAVED MAPS · ${savedAmount}`);
-  const rhinoCenter = byId("studio-rhino-center"), rhinoBorder = byId("studio-rhino-border"), rhinoDrill = byId("studio-rhino-drill"), rhinoReset = byId("studio-rhino-reset"), rhinoToggle = byId("studio-rhino-overlay-toggle");
-  if (rhinoCenter) rhinoCenter.disabled = !Boolean(rhinoMinimap.active);
-  if (rhinoBorder) rhinoBorder.disabled = !Boolean(rhinoMinimap.active && rhinoMinimap.centered);
-  if (rhinoDrill) rhinoDrill.disabled = !Boolean(rhinoMinimap.active);
-  if (rhinoReset) rhinoReset.disabled = !Boolean(rhinoMinimap.active);
-  if (rhinoToggle) {
-    rhinoToggle.textContent = "OVERLAY DISABLED";
-    rhinoToggle.disabled = true;
+}
+
+// A small map of the desktop's displays, in their real arrangement; each
+// display is a tab that brings it onto the stage.
+function renderStudioMonitors(monitors, overlays) {
+  const host = byId("studio-monitors");
+  const left = Math.min(...monitors.map((item) => item.left));
+  const top = Math.min(...monitors.map((item) => item.top));
+  const width = Math.max(1, Math.max(...monitors.map((item) => item.left + item.width)) - left);
+  const height = Math.max(1, Math.max(...monitors.map((item) => item.top + item.height)) - top);
+  host.style.setProperty("--studio-map-aspect", `${width} / ${height}`);
+  host.hidden = monitors.length < 2;
+  host.replaceChildren(...monitors.map((monitor) => {
+    const button = document.createElement("button");
+    const active = monitor.id === studioMonitorId;
+    const count = overlays.filter((row) => row.enabled && row.monitor === monitor.id).length;
+    button.type = "button";
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", active ? "true" : "false");
+    button.dataset.studioDisplay = monitor.id;
+    button.className = `studio-monitor${active ? " active" : ""}${monitor.primary ? " main-display" : ""}`;
+    button.style.left = `${(monitor.left - left) * 100 / width}%`;
+    button.style.top = `${(monitor.top - top) * 100 / height}%`;
+    button.style.width = `${monitor.width * 100 / width}%`;
+    button.style.height = `${monitor.height * 100 / height}%`;
+    button.title = `${monitor.label} · ${monitor.width} × ${monitor.height}${monitor.primary ? " · primary" : ""} · ${count} on`;
+    button.innerHTML = `<b>${monitor.number}</b><small>${count}</small>`;
+    return button;
+  }));
+}
+
+function showStudioDisplay(id) {
+  if (!studioMonitors().some((monitor) => monitor.id === id) || id === studioMonitorId) return;
+  studioMonitorId = id;
+  // Keep a selection the stage can show.
+  const selected = studioOverlay(studioSelectedId);
+  if (!selected || !studioIntersects(selected, studioMonitor())) {
+    const onDisplay = (studioData().overlays || []).filter((row) => studioIntersects(row, studioMonitor()));
+    studioSelectedId = (onDisplay.find((row) => row.enabled) || onDisplay[0] || selected || {}).id || "";
   }
+  studioFingerprint = "";
+  renderOverlayStudio(model);
 }
 
 function renderOverlayStudio(state) {
   const studio = state.overlay_studio || {};
-  const desktop = studio.desktop || {};
   const overlays = Array.isArray(studio.overlays) ? studio.overlays : [];
-  const desktopWidth = Math.max(1, number(desktop.width, 1920));
-  const desktopHeight = Math.max(1, number(desktop.height, 1080));
-  const left = number(desktop.left);
-  const top = number(desktop.top);
-  const primary = desktop.primary || {left: 0, top: 0, width: desktopWidth, height: desktopHeight};
+  const monitors = studioMonitors();
   if (!studioSelectedId || !overlays.some((row) => row.id === studioSelectedId)) {
     studioSelectedId = overlays.find((row) => row.enabled)?.id || overlays[0]?.id || "";
   }
+  if (!monitors.some((monitor) => monitor.id === studioMonitorId)) {
+    studioMonitorId = studioOverlay(studioSelectedId)?.monitor || studioMonitor("").id;
+  }
+  const monitor = studioMonitor();
 
-  const fingerprint = JSON.stringify({desktop, overlays});
+  const fingerprint = JSON.stringify({monitors, overlays, display: studioMonitorId});
   if (!studioDragging && fingerprint !== studioFingerprint) {
     studioFingerprint = fingerprint;
-    const desktopNode = byId("studio-desktop");
-    desktopNode.style.aspectRatio = `${desktopWidth} / ${desktopHeight}`;
-    const primaryNode = byId("studio-primary-monitor");
-    primaryNode.style.left = `${(number(primary.left) - left) * 100 / desktopWidth}%`;
-    primaryNode.style.top = `${(number(primary.top) - top) * 100 / desktopHeight}%`;
-    primaryNode.style.width = `${number(primary.width, desktopWidth) * 100 / desktopWidth}%`;
-    primaryNode.style.height = `${number(primary.height, desktopHeight) * 100 / desktopHeight}%`;
-
-    const cards = overlays.map((row) => {
+    renderStudioMonitors(monitors, overlays);
+    const stage = byId("studio-desktop");
+    stage.style.setProperty("--studio-aspect", `${monitor.width} / ${monitor.height}`);
+    stage.style.setProperty("--studio-aspect-number", String(monitor.width / monitor.height));
+    const cards = overlays.filter((row) => studioIntersects(row, monitor)).map((row) => {
       const node = document.createElement("button");
       node.type = "button";
       node.className = `studio-overlay-card${row.enabled ? " enabled" : " disabled"}${row.shown ? " shown" : ""}`;
       node.dataset.overlayId = row.id;
-      node.style.left = `${(row.x - left) * 100 / desktopWidth}%`;
-      node.style.top = `${(row.y - top) * 100 / desktopHeight}%`;
-      node.style.width = `${Math.max(1.2, row.width * 100 / desktopWidth)}%`;
-      node.style.height = `${Math.max(1.8, row.height * 100 / desktopHeight)}%`;
-      node.innerHTML = `<span>${escapeHtml(row.short_label)}</span><small>${escapeHtml(row.state)}</small>`;
+      node.title = `${row.label}: drag to place`;
+      placeStudioCard(node, row, monitor);
+      node.innerHTML = `<span>${escapeHtml(row.short_label)}</span><small>${row.width} × ${row.height}</small>`;
       return node;
     });
     byId("studio-overlay-cards").replaceChildren(...cards);
 
+    const several = monitors.length > 1;
     const index = overlays.map((row) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `studio-index-row${row.enabled ? " enabled" : ""}${row.shown ? " shown" : ""}`;
-      button.dataset.overlayId = row.id;
-      button.innerHTML = `<i></i><span><b>${escapeHtml(row.label)}</b><small>X ${row.x} · Y ${row.y} · ${row.width} × ${row.height}</small></span><em>${escapeHtml(row.state)}</em>`;
-      return button;
+      const item = document.createElement("div");
+      item.className = `studio-index-row${row.enabled ? " enabled" : ""}${row.shown ? " shown" : ""}`;
+      item.dataset.overlayId = row.id;
+      const status = row.shown ? "ON SCREEN" : row.enabled ? "READY" : "OFF";
+      item.innerHTML = `<button type="button" class="studio-index-select"><i></i><span><b>${escapeHtml(row.label)}</b><small>${several ? `${studioDisplayTag(row.monitor)} · ` : ""}${status}</small></span></button>`
+        + `<label class="studio-row-switch" title="Enable or disable ${escapeHtml(row.label)}"><input type="checkbox" data-overlay-enable="${escapeHtml(row.id)}"${row.enabled ? " checked" : ""} aria-label="Enable ${escapeHtml(row.label)}"><i></i></label>`;
+      return item;
     });
     byId("studio-overlay-index").replaceChildren(...index);
-
-    const modules = overlays.map((row) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = row.enabled ? "enabled" : "";
-      button.dataset.overlayToggle = row.id;
-      button.textContent = `${row.short_label}  //  ${row.enabled ? "ON" : "OFF"}`;
-      return button;
-    });
-    byId("studio-module-grid").replaceChildren(...modules);
-    applyStudioFilters();
   }
 
   const enabled = overlays.filter((row) => row.enabled).length;
   const shown = overlays.filter((row) => row.shown).length;
-  const htmlReady = overlays.filter((row) => row.html_ready).length;
-  text("studio-enabled-count", `${enabled} ENABLED`);
-  text("studio-total-count", overlays.length);
-  text("studio-enabled-total", enabled);
-  text("studio-live-count", shown);
-  text("studio-html-count", htmlReady);
-  text("studio-desktop-label", `${desktopWidth} × ${desktopHeight} // ${overlays.length} SURFACES`);
+  text("studio-enabled-count", `${enabled} OF ${overlays.length} ON`);
+  text("studio-roster-summary", `${shown} ON SCREEN · ${overlays.filter((row) => row.html_ready).length} LINKED`);
+  text("studio-desktop-label", `${monitor.label} · ${monitor.width} × ${monitor.height}${monitor.primary ? " · PRIMARY" : ""}`);
   const presetSelect = byId("studio-preset-select");
   const previousPreset = presetSelect.value;
   const presetNames = Array.isArray(studio.presets) ? studio.presets : [];
@@ -1830,7 +1882,7 @@ function renderOverlayStudio(state) {
   if (presetSelect.dataset.presets !== presetKey) {
     const empty = document.createElement("option");
     empty.value = "";
-    empty.textContent = presetNames.length ? "SELECT SAVED LAYOUT" : "NO SAVED LAYOUTS";
+    empty.textContent = presetNames.length ? "SAVED LAYOUTS" : "NO SAVED LAYOUTS";
     presetSelect.replaceChildren(empty, ...presetNames.map((name) => {
       const option = document.createElement("option");
       option.value = name;
@@ -1840,7 +1892,7 @@ function renderOverlayStudio(state) {
     presetSelect.dataset.presets = presetKey;
     if (presetNames.includes(previousPreset)) presetSelect.value = previousPreset;
   }
-  updateStudioOptionControls(studio.options || {}, studio.ground_target || {}, studio.rhino_minimap || {});
+  updateStudioOptionControls(studio.options || {}, studio.ground_target || {});
   if (studioSelectedId) selectStudioOverlay(studioSelectedId);
   applyStudioFilters();
 }
@@ -3844,22 +3896,19 @@ function requestPageChange(name) {
   workspaceSyncTimer = window.setTimeout(retry, 450);
 }
 
+// Drags happen on one display: the pointer maps onto that display's pixels
+// and the surface stays inside it. MOVE TO DISPLAY crosses between screens.
 function studioPointerPosition(event, drag) {
-  const desktopNode = byId("studio-desktop");
-  const rect = desktopNode.getBoundingClientRect();
-  const desktop = studioData().desktop || {};
-  const width = Math.max(1, number(desktop.width, 1920));
-  const height = Math.max(1, number(desktop.height, 1080));
+  const rect = byId("studio-desktop").getBoundingClientRect();
+  const monitor = studioMonitor();
   const row = studioOverlay(drag.id);
-  if (!row || rect.width <= 0 || rect.height <= 0) return null;
-  const x = Math.round(drag.startX + (event.clientX - drag.clientX) * width / rect.width);
-  const y = Math.round(drag.startY + (event.clientY - drag.clientY) * height / rect.height);
-  const left = number(desktop.left);
-  const top = number(desktop.top);
+  if (!row || !monitor || rect.width <= 0 || rect.height <= 0) return null;
+  const x = Math.round(drag.startX + (event.clientX - drag.clientX) * monitor.width / rect.width);
+  const y = Math.round(drag.startY + (event.clientY - drag.clientY) * monitor.height / rect.height);
   return {
-    x: Math.max(left, Math.min(x, left + width - row.width)),
-    y: Math.max(top, Math.min(y, top + height - row.height)),
-    left, top, width, height,
+    x: Math.max(monitor.left, Math.min(x, monitor.left + monitor.width - row.width)),
+    y: Math.max(monitor.top, Math.min(y, monitor.top + monitor.height - row.height)),
+    monitor,
   };
 }
 
@@ -3888,12 +3937,11 @@ function moveStudioDrag(event, card) {
     studioPendingPosition = null;
     if (!pending || !studioDragging) return;
     const {card: activeCard, position: active} = pending;
-    activeCard.style.left = `${(active.x - active.left) * 100 / active.width}%`;
-    activeCard.style.top = `${(active.y - active.top) * 100 / active.height}%`;
-    text("studio-pointer-position", `X ${active.x}  //  Y ${active.y}`);
     const row = studioOverlay(studioDragging.id);
-    text("studio-selected-metrics", `${active.x}, ${active.y}  //  ${row.width} × ${row.height} PX`);
-    text("studio-selected-position", `X ${active.x} · Y ${active.y}`);
+    placeStudioCard(activeCard, {...row, x: active.x, y: active.y}, active.monitor);
+    const local = `X ${active.x - active.monitor.left} · Y ${active.y - active.monitor.top}`;
+    text("studio-pointer-position", `${active.monitor.label} · ${local}`);
+    text("studio-selected-position", local);
   });
   const now = performance.now();
   if (now - studioMoveSentAt >= 50) {
@@ -3913,12 +3961,12 @@ function endStudioDrag(event, card) {
     studioDragging = null;
     return;
   }
-  card.style.left = `${(position.x - position.left) * 100 / position.width}%`;
-  card.style.top = `${(position.y - position.top) * 100 / position.height}%`;
+  const row = studioOverlay(drag.id);
+  placeStudioCard(card, {...row, x: position.x, y: position.y}, position.monitor);
   command("overlay_studio", {operation: "move", overlay_id: drag.id, x: position.x, y: position.y, commit: true, sequence: ++studioMoveSequence})
     .finally(() => {
-      const row = studioOverlay(drag.id);
-      if (row) { row.x = position.x; row.y = position.y; }
+      const current = studioOverlay(drag.id);
+      if (current) Object.assign(current, {x: position.x, y: position.y, monitor: position.monitor.id});
       studioDragging = null;
       studioFingerprint = "";
       renderOverlayStudio(model);
@@ -3929,14 +3977,36 @@ async function nudgeStudioOverlay(vector) {
   const row = studioOverlay(studioSelectedId);
   if (!row) return false;
   const [dx, dy] = String(vector || "0,0").split(",").map((value) => number(value));
-  const desktop = studioData().desktop || {};
-  const left = number(desktop.left);
-  const top = number(desktop.top);
-  const width = Math.max(1, number(desktop.width, 1920));
-  const height = Math.max(1, number(desktop.height, 1080));
-  const x = Math.max(left, Math.min(row.x + dx, left + width - row.width));
-  const y = Math.max(top, Math.min(row.y + dy, top + height - row.height));
+  const monitor = studioMonitorOf(row);
+  const x = Math.max(monitor.left, Math.min(row.x + dx, monitor.left + monitor.width - row.width));
+  const y = Math.max(monitor.top, Math.min(row.y + dy, monitor.top + monitor.height - row.height));
   return command("overlay_studio", {operation: "move", overlay_id: row.id, x, y, commit: true, sequence: ++studioMoveSequence});
+}
+
+// Keep the surface's place on its screen when it moves to another display.
+async function moveStudioToDisplay(targetId) {
+  const row = studioOverlay(studioSelectedId);
+  const target = studioMonitors().find((monitor) => monitor.id === targetId);
+  if (!row || !target) return false;
+  const source = studioMonitorOf(row);
+  const x = target.left + Math.max(0, Math.min(row.x - source.left, target.width - row.width));
+  const y = target.top + Math.max(0, Math.min(row.y - source.top, target.height - row.height));
+  const accepted = await command("overlay_studio", {operation: "move", overlay_id: row.id, x, y, commit: true, sequence: ++studioMoveSequence});
+  if (accepted) {
+    Object.assign(row, {x, y, monitor: target.id});
+    studioMonitorId = target.id;
+    studioFingerprint = "";
+    renderOverlayStudio(model);
+  }
+  return accepted;
+}
+
+async function toggleStudioOverlay(id, wanted) {
+  const row = studioOverlay(id);
+  if (!row || Boolean(row.enabled) === Boolean(wanted)) return true;
+  const accepted = await command("overlay_studio", {operation: "toggle", overlay_id: id});
+  if (accepted) showToast(`${row.label} ${wanted ? "enabled" : "disabled"}`);
+  return accepted;
 }
 
 document.addEventListener("click", async (event) => {
@@ -4004,9 +4074,15 @@ document.addEventListener("click", async (event) => {
     }
     return;
   }
-  const studioTab = event.target.closest("[data-studio-view]");
-  if (studioTab) {
-    setStudioView(studioTab.dataset.studioView);
+  const studioDisplay = event.target.closest("[data-studio-display]");
+  if (studioDisplay) {
+    showStudioDisplay(studioDisplay.dataset.studioDisplay);
+    return;
+  }
+  const studioMoveDisplay = event.target.closest("[data-studio-move-display]");
+  if (studioMoveDisplay) {
+    const target = studioMonitors().find((monitor) => monitor.id === studioMoveDisplay.dataset.studioMoveDisplay);
+    if (await moveStudioToDisplay(studioMoveDisplay.dataset.studioMoveDisplay)) showToast(`Moved to ${target?.label || "the other display"}`);
     return;
   }
   const engineeringTab = event.target.closest("[data-engineering-view]");
@@ -4070,45 +4146,21 @@ document.addEventListener("click", async (event) => {
     showToast(accepted ? "Module fitted" : "That module cannot be fitted in this slot");
     return;
   }
-  const studioOverlayButton = event.target.closest(".studio-overlay-card, .studio-index-row");
-  if (studioOverlayButton) {
-    selectStudioOverlay(studioOverlayButton.dataset.overlayId);
+  const studioCard = event.target.closest(".studio-overlay-card");
+  if (studioCard) {
+    selectStudioOverlay(studioCard.dataset.overlayId);
+    return;
+  }
+  // A row's switch toggles the surface in its change handler; the rest of the
+  // row selects it and brings its display onto the stage.
+  const studioRow = event.target.closest(".studio-index-row");
+  if (studioRow && !event.target.closest(".studio-row-switch")) {
+    selectStudioOverlay(studioRow.dataset.overlayId, true);
     return;
   }
   const studioNudge = event.target.closest("[data-studio-nudge]");
   if (studioNudge) {
     await nudgeStudioOverlay(studioNudge.dataset.studioNudge);
-    return;
-  }
-  if (event.target.closest("#studio-ground-overlay-toggle")) {
-    const accepted = await command("overlay_studio", {operation: "toggle", overlay_id: "ground_popup"});
-    showToast(accepted ? "Planet Waypoint overlay updated" : "Planet Waypoint overlay could not be changed");
-    return;
-  }
-  if (event.target.closest("#studio-rhino-overlay-toggle")) {
-    const accepted = await command("overlay_studio", {operation: "toggle", overlay_id: "rhino_minimap_hud"});
-    showToast(accepted ? "Rhino minimap overlay updated" : "Rhino minimap could not be changed");
-    return;
-  }
-  if (event.target.closest("#studio-rhino-center")) {
-    showToast(await command("overlay_studio", {operation: "rhino_center"}) ? "Rhino coverage center set" : "Deploy the Rhino first");
-    return;
-  }
-  if (event.target.closest("#studio-rhino-border")) {
-    showToast(await command("overlay_studio", {operation: "rhino_border"}) ? "Rhino coverage border set" : "Set the center first");
-    return;
-  }
-  if (event.target.closest("#studio-rhino-drill")) {
-    showToast(await command("overlay_studio", {operation: "rhino_drill"}) ? "Drill marked at current position" : "Deploy the Rhino first");
-    return;
-  }
-  if (event.target.closest("#studio-rhino-reset")) {
-    if (!window.confirm("Reset the current Rhino coverage map? All painted coverage, its center, border and drill markers will be cleared.")) return;
-    showToast(await command("overlay_studio", {operation: "rhino_reset", confirmed: true}) ? "Rhino coverage map reset" : "Deploy the Rhino first");
-    return;
-  }
-  if (event.target.closest("#studio-rhino-open-maps")) {
-    showToast(await command("overlay_studio", {operation: "rhino_open_maps"}) ? "Opened saved Rhino maps" : "Saved map folder could not be opened");
     return;
   }
   const surveyBodyButton = event.target.closest("#survey-body-list .survey-body-row");
@@ -4661,24 +4713,31 @@ byId("studio-overlay-cards").addEventListener("pointercancel", (event) => {
   if (card) endStudioDrag(event, card);
 });
 
-byId("studio-toggle-selected").addEventListener("click", async () => {
-  if (!studioSelectedId) return;
-  if (await command("overlay_studio", {operation: "toggle", overlay_id: studioSelectedId})) showToast("Overlay module updated");
+byId("studio-selected-enabled").addEventListener("change", async (event) => {
+  const wanted = event.target.checked;
+  if (!studioSelectedId || !(await toggleStudioOverlay(studioSelectedId, wanted))) event.target.checked = !wanted;
+});
+byId("studio-overlay-index").addEventListener("change", async (event) => {
+  const input = event.target.closest("[data-overlay-enable]");
+  if (!input) return;
+  const wanted = input.checked;
+  if (!(await toggleStudioOverlay(input.dataset.overlayEnable, wanted))) input.checked = !wanted;
 });
 byId("studio-snap-selected").addEventListener("click", async () => {
   if (!studioSelectedId) return;
-  if (await command("overlay_studio", {operation: "snap", overlay_id: studioSelectedId})) showToast("Overlay snapped to the nearest edge");
+  if (await command("overlay_studio", {operation: "snap", overlay_id: studioSelectedId})) showToast("Snapped to the nearest edge");
 });
 byId("studio-reset-selected").addEventListener("click", async () => {
   if (!studioSelectedId || !window.confirm("Reset this overlay to its default screen position?")) return;
   if (await command("overlay_studio", {operation: "reset", overlay_id: studioSelectedId})) showToast("Overlay position reset");
 });
-
-byId("studio-module-grid").addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-overlay-toggle]");
-  if (!button) return;
-  selectStudioOverlay(button.dataset.overlayToggle);
-  await command("overlay_studio", {operation: "toggle", overlay_id: button.dataset.overlayToggle});
+// Arrow keys nudge the selected surface 1 px, or 10 px with Shift.
+byId("studio-desktop").addEventListener("keydown", async (event) => {
+  const step = event.shiftKey ? 10 : 1;
+  const vector = {ArrowUp: [0, -step], ArrowDown: [0, step], ArrowLeft: [-step, 0], ArrowRight: [step, 0]}[event.key];
+  if (!vector || !studioSelectedId) return;
+  event.preventDefault();
+  await nudgeStudioOverlay(vector.join(","));
 });
 
 byId("studio-search").addEventListener("input", (event) => {
@@ -4704,28 +4763,22 @@ document.querySelectorAll("[data-overlay-option]").forEach((input) => {
   });
 });
 
-byId("studio-save-settings").addEventListener("click", async () => {
-  const accepted = await command("overlay_studio", {
-    operation: "save_settings",
-    overlay_text_scale_percent: byId("studio-text-scale").value,
-    overlay_opacity_percent: byId("studio-overlay-opacity").value,
-    prospector_hud_timeout_s: byId("studio-prospector-timeout").value,
-    gravity_warning_hud_timeout_s: byId("studio-gravity-timeout").value,
-    contact_scope_timeout_s: byId("studio-contact-timeout").value,
-    station_info_timeout_s: byId("studio-station-timeout").value,
-    gravity_warning_threshold_g: byId("studio-gravity-threshold").value,
-    hud_crt_intensity: byId("studio-crt-intensity").value,
-    survey_spotlight_rotation: byId("studio-survey-rotation").value,
-    survey_spotlight_threshold: byId("studio-survey-threshold").value,
-    survey_text_scale_percent: byId("studio-survey-text-scale").value,
+// Each setting saves on its own as it changes; nothing waits on an Apply.
+document.querySelectorAll("[data-studio-setting]").forEach((field) => {
+  field.addEventListener("change", async () => {
+    const accepted = await command("overlay_studio", {
+      operation: "save_settings", [field.dataset.studioSetting]: field.value,
+    });
+    const flag = field.closest(".studio-field");
+    if (!flag) return;
+    flag.classList.remove("saved", "rejected");
+    void flag.offsetWidth;
+    flag.classList.add(accepted ? "saved" : "rejected");
   });
-  if (accepted) showToast("Overlay settings saved for this commander");
 });
 
-for (const id of ["studio-global-fade", "studio-overlay-opacity"]) {
-  byId(id).addEventListener("input", (event) => queueStudioOpacity(event.target.value));
-  byId(id).addEventListener("change", (event) => queueStudioOpacity(event.target.value, true));
-}
+byId("studio-global-fade").addEventListener("input", (event) => queueStudioOpacity(event.target.value));
+byId("studio-global-fade").addEventListener("change", (event) => queueStudioOpacity(event.target.value, true));
 
 byId("studio-save-preset").addEventListener("click", async () => {
   const name = window.prompt("Name this overlay layout preset:", "");

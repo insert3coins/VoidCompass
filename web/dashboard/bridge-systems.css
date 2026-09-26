@@ -310,43 +310,6 @@
   box-shadow: 0 -10px 26px rgba(0, 0, 0, .24), inset 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
-/* Overlay Studio: preserve the physical desktop preview and inspector sizing;
-   add a quiet instrument bezel to the workspace around it. */
-[data-page-name="overlay-studio"] .studio-status-strip {
-  border-color: var(--systems-line);
-  background: var(--systems-line);
-}
-[data-page-name="overlay-studio"] .studio-status-strip article {
-  box-shadow: inset 3px 0 color-mix(in srgb, var(--accent) 22%, transparent);
-  border-top: 2px solid color-mix(in srgb, var(--accent) 35%, var(--border));
-  background: linear-gradient(125deg, var(--systems-wash), var(--systems-surface));
-}
-[data-page-name="overlay-studio"] .studio-desktop-card,
-[data-page-name="overlay-studio"] .studio-index-card,
-[data-page-name="overlay-studio"] .studio-selection-card,
-[data-page-name="overlay-studio"] .studio-option-card {
-  border-color: var(--systems-line);
-}
-[data-page-name="overlay-studio"] .studio-desktop-card { border-top: 2px solid var(--accent); }
-[data-page-name="overlay-studio"] .studio-index-card { border-top: 2px solid var(--orange); }
-[data-page-name="overlay-studio"] .studio-selection-card { border-top: 2px solid var(--green); }
-[data-page-name="overlay-studio"] .studio-desktop-viewport {
-  background:
-    radial-gradient(circle at 50% 44%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 52%),
-    linear-gradient(90deg, transparent 0 97%, color-mix(in srgb, var(--accent) 6%, transparent) 98% 100%) 0 0 / 28px 28px,
-    linear-gradient(transparent 0 97%, color-mix(in srgb, var(--accent) 6%, transparent) 98% 100%) 0 0 / 28px 28px,
-    linear-gradient(150deg, var(--inset), color-mix(in srgb, var(--panel) 64%, var(--bg)));
-}
-[data-page-name="overlay-studio"] .studio-desktop {
-  border-color: color-mix(in srgb, var(--accent) 47%, var(--border));
-  box-shadow: inset 0 0 45px rgba(0, 0, 0, .4), 0 0 0 3px color-mix(in srgb, var(--accent) 6%, transparent);
-}
-[data-page-name="overlay-studio"] .studio-index-row.selected {
-  background: color-mix(in srgb, var(--accent) 10%, var(--inset));
-  box-shadow: inset 3px 0 var(--orange);
-}
-[data-page-name="overlay-studio"] .studio-view-tabs button.active { box-shadow: inset 0 -2px color-mix(in srgb, var(--header) 55%, transparent); }
-
 /* About already has its own neon identity; connect its information cards to
    the Bridge border language without flattening the signature artwork. */
 [data-page-name="about"] .about-hero {
@@ -370,7 +333,6 @@
 @media (max-width: 1180px) {
   [data-page-name="engineering"] .engineering-next-action { min-height: 185px; }
   [data-page-name="build-planner"] .bp-hero { min-width: 0; }
-  [data-page-name="overlay-studio"] .studio-console-grid > * { min-width: 0; }
 }
 
 @media (max-width: 980px) {
