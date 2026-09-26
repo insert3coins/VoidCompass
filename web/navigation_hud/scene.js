@@ -26,6 +26,14 @@
   // Reduced motion paints one pose per state; this phase shows every scene
   // with its moving parts spread out rather than bunched at the origin.
   const STILL_PHASE = 1.37;
+  // Deck scenes are composed for a deck this tall and scaled up uniformly
+  // to the real one, so a taller deck enlarges a scene instead of
+  // stretching it.
+  const DECK_DESIGN_HEIGHT = 38;
+  // A disc seen at the cockpit's viewing angle. Rings, dishes, orbits and
+  // ripples keep this tilt at any deck width; stretching them to fill a
+  // wide strip is what made scenes look squashed.
+  const TILT = .3;
 
   const fract = (value) => ((value % 1) + 1) % 1;
   const clamp = (value, low = 0, high = 1) => Math.max(low, Math.min(high, value));
@@ -252,6 +260,9 @@
       this.H = 1;
       this.alpha = 1;
       this.halo = 1;
+      // Scaled scenes thicken their lines by the square root of the scale
+      // only, so a larger deck reads bolder without turning heavy.
+      this.stroke = 1;
     }
 
     finish(color, alpha = 1, width = 1, fill = 0) {
@@ -266,11 +277,11 @@
       }
       if (this.halo > .01 && width > .3) {
         ctx.globalAlpha = a * .15 * this.halo;
-        ctx.lineWidth = width * 3 + 1.2;
+        ctx.lineWidth = (width * 3 + 1.2) * this.stroke;
         ctx.stroke();
       }
       ctx.globalAlpha = a;
-      ctx.lineWidth = width;
+      ctx.lineWidth = width * this.stroke;
       ctx.stroke();
     }
 
@@ -419,7 +430,7 @@
       const ctx = this.ctx;
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';
-      ctx.lineWidth = .45;
+      ctx.lineWidth = .45 * this.stroke;
       ctx.lineJoin = 'round';
       for (const [first, second, third] of mesh.faces) {
         const v = points[first], w = points[second], u = points[third];
@@ -528,9 +539,11 @@
   // Elite's scanner disc: flattened range rings, a sweep and the ship at its
   // centre. It never plots contacts, because the journal does not report them.
   function radar(s, st, x, {sweep = .16, alpha = 1, color = st.c} = {}) {
-    const y = s.H / 2 + 2;
-    const rx = Math.min(s.W * .21, 86);
-    const ry = s.H * .34;
+    const y = s.H / 2 + 1;
+    // Sized from the deck's height, so it keeps the scanner's tilt however
+    // wide the deck is.
+    const rx = Math.min(s.H * 1.4, s.W * .22);
+    const ry = rx * TILT;
     s.arc(x, y, rx, ry, 0, TAU, color, .5 * alpha, 1.1);
     s.arc(x, y, rx * .64, ry * .64, 0, TAU, color, .26 * alpha);
     s.arc(x, y, rx * .3, ry * .3, 0, TAU, color, .2 * alpha);
@@ -549,9 +562,8 @@
   }
 
   // Horizon wings either side of the scanner, as the cockpit frames it.
-  function attitude(s, st, x, alpha = 1) {
-    const y = s.H / 2;
-    const rx = Math.min(s.W * .21, 86);
+  function attitude(s, st, scope, alpha = 1) {
+    const {x, rx} = scope, y = s.H / 2;
     for (const side of [-1, 1]) {
       const reach = Math.min(46, side < 0 ? x - rx - 10 : s.W - x - rx - 10);
       s.poly([[x + side * (rx + reach), y], [x + side * (rx + 10), y], [x + side * (rx + 5), y - 5]],
@@ -1008,15 +1020,15 @@
   function tunnel(s, st, pal) {
     const c = st.c, cy = s.H / 2, opening = st.key === 'jumping';
     const vx = s.W * .72 + Math.sin(st.p * .17) * 6;
-    // Witch-space: rings stream out of the vanishing point and twist.
+    // Witch-space: rings stream out of the vanishing point and twist. They
+    // grow in true perspective, so their sides sweep past like a tunnel's.
     for (let index = 0; index < 8; index += 1) {
-      const t = fract(st.p * .3 + index / 8), k = t * t;
+      const t = fract(st.p * .3 + index / 8), k = t * t, reach = 5 + k * s.H * 3.4;
       const points = [];
       for (let step = 0; step < 16; step += 1) {
         const angle = step * TAU / 16 + Math.sin(st.p * .12) * .12;
         const warp = opening ? 1 : 1 + .14 * Math.sin(angle * 3 + st.p * .45 + index);
-        points.push([vx + Math.cos(angle) * (5 + k * s.W * .85) * warp,
-          cy + Math.sin(angle) * (2 + k * s.H * 1.05) * warp]);
+        points.push([vx + Math.cos(angle) * reach * warp, cy + Math.sin(angle) * reach * .55 * warp]);
       }
       s.poly(points, c, Math.sin(t * Math.PI) * .5, .9 + t * .7, true);
     }
@@ -1024,7 +1036,7 @@
       const points = [];
       for (let step = 0; step <= 22; step += 1) {
         const r = step / 22, angle = filament * TAU / 5 + r * 2.6 + st.p * .22;
-        points.push([vx + Math.cos(angle) * r * r * s.W * .8, cy + Math.sin(angle) * r * r * s.H * .95]);
+        points.push([vx + Math.cos(angle) * r * r * s.H * 3, cy + Math.sin(angle) * r * r * s.H * 1.65]);
       }
       s.poly(points, c, .2, .9);
     }
@@ -1061,8 +1073,8 @@
     s.dot(fx, cy, 5.5, star, .9);
     s.dot(fx - 1.4, cy - 1.4, 2.2, pal.text, .85);
     s.brackets(fx, cy, 17 + (1 - settle) * 40, 13, c, .35 + .4 * settle);
-    const ring = clamp(st.age / 1.6);
-    s.arc(fx, cy, 8 + ring * s.W * .55, 4 + ring * s.H * .7, 0, TAU, c, (1 - ring) * .6, 1.2);
+    const ring = clamp(st.age / 1.6), reach = 8 + ring * s.H * 2.6;
+    s.arc(fx, cy, reach, reach * .55, 0, TAU, c, (1 - ring) * .6, 1.2);
     for (let index = 0; index < 6; index += 1) {
       s.line(10 + index * 8, s.H - 4, 14 + index * 8, s.H - 4, c, .2 + .3 * settle);
     }
@@ -1073,8 +1085,8 @@
     if (key === 'carrier_transit') {
       // A broad hyperspace wake round a capital hull, not the ship's own FSD.
       for (let index = 0; index < 6; index += 1) {
-        const t = fract(st.p * .23 + index / 6);
-        s.ring(fx, cy + 1, 19 + t * s.W * .6, 3 + t * s.H * .7, 8, c, Math.sin(t * Math.PI) * .38, 1.2);
+        const t = fract(st.p * .23 + index / 6), reach = 19 + t * s.H * 3.2;
+        s.ring(fx, cy + 1, reach, reach * TILT, 8, c, Math.sin(t * Math.PI) * .38, 1.2);
       }
     } else if (key === 'carrier_arrival') {
       streaks(s, st, {x: fx, count: 12, speed: .2, strength: (1 - smooth(st.age / 2)) * .8});
@@ -1195,11 +1207,14 @@
   }
 
   function orrery(s, st, pal) {
-    const c = st.c, ox = s.W * .52, oy = s.H / 2, star = st.starTone || c;
+    const c = st.c, ox = s.W * .54, oy = s.H / 2, star = st.starTone || c;
+    dust(s, st, {count: 16, speed: .006, alpha: .25});
+    s.line(8, oy, s.W - 8, oy, c, .1);
     s.bloom(ox, oy, 13, star, .5);
     s.dot(ox, oy, 3.3, star, .9);
+    // Orbits share one tilted plane, sized from the deck's height.
     for (let index = 0; index < 5; index += 1) {
-      const rx = 20 + index * s.W * .085, ry = Math.min(s.H * .47, 4 + index * 3.2);
+      const rx = Math.min(s.H * lerp(.42, 1.55, index / 4), s.W * .46), ry = rx * TILT;
       const angle = st.p * .28 / (index + 1) + index * 1.4;
       s.arc(ox, oy, rx, ry, 0, TAU, c, .3);
       s.dot(ox + Math.cos(angle) * rx, oy + Math.sin(angle) * ry, 1.8, c, .8);
@@ -1296,20 +1311,29 @@
   }
 
   function exploration(s, st, pal) {
-    const c = st.c, x = s.W * .62, y = s.H * .6, rx = s.W * .3, ry = s.H * .28;
+    const c = st.c;
     dust(s, st, {count: 18, speed: .015, alpha: .3});
-    // A tilted holographic scanner dish, with soft echoes.
-    s.arc(x, y, rx, ry, 0, TAU, c, .48);
-    s.arc(x, y, rx * .62, ry * .62, 0, TAU, c, .23);
-    s.line(x - rx - 10, y, x + rx + 10, y, c, .18);
+    // A tilted scanner dish sends a ping out across the system and echoes
+    // light as the wavefront passes. Decorative: it plots no real bodies.
+    const x = s.W * .74, y = s.H * .62, rx = Math.min(s.H * 1.15, s.W * .2), ry = rx * TILT;
+    s.arc(x, y, rx, ry, 0, TAU, c, .55, 1.1);
+    s.arc(x, y, rx * .62, ry * .62, 0, TAU, c, .26);
+    s.arc(x, y, rx * .25, ry * .25, 0, TAU, c, .3);
+    const mast = y - s.H * .42;
+    s.line(x, y, x, mast, c, .45);
+    s.spark(x, mast, 1.2, c, pal.text, .5 + .4 * wave(st.p * .5));
     const angle = st.p * .38;
     s.poly([[x, y], [x + Math.cos(angle) * rx, y + Math.sin(angle) * ry],
       [x + Math.cos(angle + .38) * rx, y + Math.sin(angle + .38) * ry]], c, .4, 1, true, .12);
-    for (let index = 0; index < 7; index += 1) {
-      const px = x - rx * .8 + hash(index + 2) * rx * 1.6, py = y - 2 + hash(index + 8) * ry * .8;
-      const h = 5 + hash(index) * 7;
-      s.line(px, py, px, py - h, c, .3);
-      s.dot(px, py - h, 1.2, c, .3 + .4 * wave(st.p * .2 - index * .14));
+    const ping = fract(st.p * .14), front = lerp(x - rx, -6, ping);
+    const reach = x - front;
+    s.arc(x, y - s.H * .1, reach, Math.min(s.H * .55, reach * .45), Math.PI * .72, Math.PI * 1.28, c,
+      (1 - ping) * .55, 1.2);
+    for (let index = 0; index < 10; index += 1) {
+      const ex = s.W * (.04 + index * .058), ey = s.H * (.34 + hash(index + 8) * .44);
+      const h = 3 + hash(index) * 6, lit = clamp(1 - Math.abs(ex - front) / 26);
+      s.line(ex, ey + h / 2, ex, ey - h / 2, c, .18 + .6 * lit);
+      s.dot(ex, ey - h / 2 - 1.6, .9 + lit * .5, c, .25 + .65 * lit);
     }
   }
 
@@ -1506,8 +1530,8 @@
     const c = st.c, cy = s.H / 2, fx = s.W * .62;
     // Space bends round a nearby mass: ripples compress onto the lock.
     for (let index = 0; index < 7; index += 1) {
-      const t = fract(st.p * .25 + index / 7), r = lerp(s.W * .55, 16, t);
-      s.arc(fx, cy, r, Math.min(s.H * .48, r * .35), 0, TAU, c, Math.sin(t * Math.PI) * .28);
+      const t = fract(st.p * .25 + index / 7), r = lerp(s.H * 2.8, 14, t);
+      s.arc(fx, cy, r, r * .4, 0, TAU, c, Math.sin(t * Math.PI) * .28);
     }
     s.ring(fx, cy, 14, 11, 6, c, .6, 1.2);
     s.ship(fx, cy, c, .82, 1.1);
@@ -1527,9 +1551,9 @@
     s.dot(fx, cy, 2, c, .8);
     s.bloom(fx, cy, 10, c, .3);
     for (let index = 0; index < 6; index += 1) {
-      const t = fract(st.p * .2 + index / 6), r = 5 + (drop ? 1 - t : t) * s.W * .3;
+      const t = fract(st.p * .2 + index / 6), r = 5 + (drop ? 1 - t : t) * s.H * 1.9;
       for (const [start, end] of [[-.9, .9], [Math.PI - .9, Math.PI + .9]]) {
-        s.arc(fx, cy, r, Math.min(s.H * .48, r * .5), start, end, c, Math.sin(t * Math.PI) * .5);
+        s.arc(fx, cy, r, r * .5, start, end, c, Math.sin(t * Math.PI) * .5);
       }
     }
     if (drop) {
@@ -1541,7 +1565,7 @@
   }
 
   function contact(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .62, key = st.key;
+    const c = st.c, cy = s.H / 2, fx = s.W * .56, key = st.key;
     if (key === 'unknown_contact') {
       // Something unexplained: slow interference bands, not a plotted contact.
       for (let index = 0; index < 5; index += 1) {
@@ -1560,9 +1584,9 @@
   }
 
   function threat(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .62;
-    // A wide sweep round the alarm frame; it never plots a contact.
-    const rx = s.W * .34, ry = s.H * .44, angle = st.p * TAU * .22;
+    const c = st.c, cy = s.H / 2, fx = s.W * .55;
+    // A sweep round the alarm frame; it never plots a contact.
+    const rx = Math.min(s.H * 1.7, s.W * .3), ry = rx * TILT, angle = st.p * TAU * .22;
     s.arc(fx, cy + 1, rx, ry, 0, TAU, c, .2);
     for (let trail = 0; trail < 6; trail += 1) {
       s.arc(fx, cy + 1, rx, ry, angle - (trail + 1) * .12, angle - trail * .12, c, .6 * (1 - trail / 6), 1.4);
@@ -1574,8 +1598,8 @@
     const c = st.c, cy = s.H / 2, fx = s.W * .6, lost = st.key === 'interdicted';
     // The capture field closes in, the escape vector wanders, the tether pulls.
     for (let index = 0; index < 6; index += 1) {
-      const t = fract(st.p * .17 + index / 6);
-      s.arc(fx, cy, lerp(s.W * .6, 8, t), lerp(s.H * .8, 4, t), 0, TAU, c, Math.sin(t * Math.PI) * .3);
+      const t = fract(st.p * .17 + index / 6), r = lerp(s.H * 2.6, 8, t);
+      s.arc(fx, cy, r, r * .4, 0, TAU, c, Math.sin(t * Math.PI) * .3);
     }
     const tether = [];
     for (let step = 0; step <= 20; step += 1) {
@@ -1628,9 +1652,9 @@
     if (label.includes('OXYGEN')) {
       // Breath rings pulse outward from the visor.
       for (let index = 0; index < 5; index += 1) {
-        const t = fract(st.p * .2 + index / 5);
-        s.arc(fx, cy + 1, 4 + t * s.W * .3, 2 + t * s.H * .42, Math.PI * .08, Math.PI * .92, c, Math.sin(t * Math.PI) * .6, 1.2);
-        s.arc(fx, cy + 1, 4 + t * s.W * .3, 2 + t * s.H * .42, Math.PI * 1.08, Math.PI * 1.92, c, Math.sin(t * Math.PI) * .4, 1.2);
+        const t = fract(st.p * .2 + index / 5), r = 4 + t * s.H * 1.9;
+        s.arc(fx, cy + 1, r, r * .4, Math.PI * .08, Math.PI * .92, c, Math.sin(t * Math.PI) * .6, 1.2);
+        s.arc(fx, cy + 1, r, r * .4, Math.PI * 1.08, Math.PI * 1.92, c, Math.sin(t * Math.PI) * .4, 1.2);
       }
     } else if (label.includes('HEALTH')) {
       // A heart trace runs the width of the deck.
@@ -1894,7 +1918,7 @@
   function flight(s, st, pal) {
     starfield(s, st);
     const scope = radar(s, st, s.W * .64);
-    attitude(s, st, scope.x);
+    attitude(s, st, scope);
   }
 
   function assistOff(s, st, pal) {
@@ -1905,7 +1929,7 @@
     const vy = scope.y + Math.cos(st.p * .31) * scope.ry * .8;
     s.poly([[scope.x, scope.y], [lerp(scope.x, vx, .45), vy], [vx, vy]], st.c, .5, 1.1);
     s.ring(vx, vy, 4.5, 4.5, 4, st.c, .9, 1.3, Math.PI / 4);
-    attitude(s, st, scope.x, .7);
+    attitude(s, st, scope, .7);
   }
 
   function silent(s, st, pal) {
@@ -1947,7 +1971,7 @@
   function localArrival(s, st, pal) {
     const c = st.c, cy = s.H / 2 + 1, fx = s.W * .64, settle = smooth(st.age / 2.2);
     streaks(s, st, {x: fx, count: 12, speed: .2, strength: (1 - settle) * .6});
-    const rx = s.W * .2, ry = s.H * .32;
+    const rx = Math.min(s.H * 1.5, s.W * .22), ry = rx * TILT;
     s.arc(fx, cy, rx, ry, 0, TAU, c, .35);
     const bearing = st.p * TAU * .32;
     s.arc(fx, cy, rx, ry, bearing, bearing + .8, c, .8, 1.5);
@@ -2312,7 +2336,8 @@
       for (let index = 0; index < 3; index += 1) {
         const r = clamp(p * 1.15 - index * .12);
         if (r <= 0) continue;
-        s.arc(0, y, r * s.W * 1.05, r * s.H * 1.3, -Math.PI / 2, Math.PI / 2, c, fade * (1 - r * .6) * (.9 - index * .2), 1.6 - index * .3);
+        const reach = r * s.W * 1.05;
+        s.arc(0, y, reach, reach * .55, -Math.PI / 2, Math.PI / 2, c, fade * (1 - r * .6) * (.9 - index * .2), 1.6 - index * .3);
       }
     } else if (group === 'route') {
       const head = at(p);
@@ -2359,9 +2384,9 @@
       for (const yy of [1, s.H - 1]) s.line(0, yy, s.W, yy, c, fade * flash, 2);
       for (const xx of [1, s.W - 1]) s.line(xx, 0, xx, s.H, c, fade * flash, 2);
     } else if (group === 'arrival') {
-      const cx = s.W * .7, flare = event.kind === 'arrival_neutron';
-      s.bloom(cx, y, 8 + p * s.W * .3, c, fade * .45);
-      s.arc(cx, y, 6 + p * s.W * .5, 3 + p * s.H * .6, 0, TAU, c, fade * .7, 1.5);
+      const cx = s.W * .7, flare = event.kind === 'arrival_neutron', reach = 6 + p * s.H * 3;
+      s.bloom(cx, y, 8 + p * s.H * 1.6, c, fade * .45);
+      s.arc(cx, y, reach, reach * .5, 0, TAU, c, fade * .7, 1.5);
       if (flare) {
         // Neutron stars fire twin jets along their axis.
         s.line(cx - p * s.W * .5, y + p * 10, cx + p * s.W * .5, y - p * 10, pal.text, fade * .7, 1.4);
@@ -2377,8 +2402,8 @@
       s.brackets(cx, y, 12 + (1 - p) * 30, 12, c, fade, 6, 1.4);
     } else if (group === 'release') {
       for (let index = 0; index < 3; index += 1) {
-        const r = clamp(p * 1.2 - index * .1);
-        s.arc(s.W * .6, y, 8 + r * s.W * .6, 4 + r * s.H * .8, 0, TAU, c, fade * (1 - r), 1.4);
+        const r = clamp(p * 1.2 - index * .1), reach = 8 + r * s.H * 3;
+        s.arc(s.W * .6, y, reach, reach * .45, 0, TAU, c, fade * (1 - r), 1.4);
       }
     } else if (group === 'wake') {
       const x = at(p);
@@ -2421,9 +2446,10 @@
   // ---------------------------------------------------------------------
 
   class Surface {
-    constructor(canvas, role) {
+    constructor(canvas, role, designHeight = 0) {
       this.canvas = canvas;
       this.role = role;
+      this.designHeight = designHeight;
       this.ctx = canvas.getContext('2d');
       this.painter = new Painter(this.ctx);
       this.W = 0;
@@ -2459,13 +2485,15 @@
       ctx.globalAlpha = 1;
       ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       if (this.W < 2 || this.H < 2) return false;
-      ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
+      const scale = this.designHeight ? this.H / this.designHeight : 1;
+      ctx.setTransform(this.ratio * scale, 0, 0, this.ratio * scale, 0, 0);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.globalCompositeOperation = 'lighter';
       const painter = this.painter;
-      painter.W = this.W;
-      painter.H = this.H;
+      painter.W = this.W / scale;
+      painter.H = this.H / scale;
+      painter.stroke = 1 / Math.sqrt(scale);
       painter.alpha = 1;
       painter.halo = 1;
       return true;
@@ -2475,7 +2503,7 @@
   class NavigationScene {
     constructor({deck = null, bay = null} = {}) {
       this.surfaces = [];
-      if (deck?.getContext) this.surfaces.push(new Surface(deck, 'deck'));
+      if (deck?.getContext) this.surfaces.push(new Surface(deck, 'deck', DECK_DESIGN_HEIGHT));
       if (bay?.getContext) this.surfaces.push(new Surface(bay, 'bay'));
       this.state = null;
       this.previous = null;
