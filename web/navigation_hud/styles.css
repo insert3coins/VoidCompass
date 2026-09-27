@@ -203,8 +203,6 @@ body {
   align-content: center;
 }
 .hud.expanded .status-main { grid-template-rows: 27px 59px 18px; }
-.hud.event-active .status-main { grid-template-rows: 48px 30px 18px; }
-.hud.expanded.event-active .status-main { grid-template-rows: 48px 38px 18px; }
 
 .notice {
   position: relative;
@@ -219,7 +217,7 @@ body {
   clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
 }
 .notice::after { content: ""; position: absolute; left: 0; right: 9px; top: 0; height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--state) 70%, transparent), transparent); }
-.hud.event-active .notice { grid-template-rows: 19px minmax(0, 1fr); }
+.hud.event-inline .notice { grid-template-columns: auto max-content minmax(0, 1fr); }
 .notice-tag {
   padding: 2px 5px 1px;
   border: 1px solid color-mix(in srgb, var(--state) 55%, transparent);
@@ -239,21 +237,32 @@ body {
 .event-notice {
   --event-tone: var(--accent);
   display: none;
-  grid-column: 1 / -1;
-  grid-row: 2;
   min-width: 0;
-  align-self: stretch;
-  padding-top: 1px;
-  border-top: 1px solid color-mix(in srgb, var(--event-tone) 60%, transparent);
   color: var(--event-tone);
-  font: var(--type-weight) var(--size-9)/1.05 var(--font-wide);
+  font: var(--type-weight) var(--size-9)/1.3 var(--font-wide);
   letter-spacing: calc(.1em * var(--track));
-  overflow-wrap: anywhere;
   opacity: 0;
-  transform: translateX(6px);
-  transition: opacity .35s ease, transform .35s ease;
+  transition: opacity .35s ease;
 }
-.event-notice.showing { display: block; opacity: 1; transform: translateX(0); animation: event-arrive calc(.6s * var(--motion-scale)) steps(2, end) 2; }
+.event-notice.showing { display: block; opacity: 1; animation: event-arrive calc(.6s * var(--motion-scale)) steps(2, end) 2; }
+.hud.event-inline .event-notice {
+  grid-column: 3;
+  grid-row: 1;
+  max-height: 24px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  padding-left: 7px;
+  border-left: 1px solid color-mix(in srgb, var(--event-tone) 60%, transparent);
+}
+.hud.event-footer .context-rail { grid-template-columns: minmax(0, 1fr); }
+.hud.event-footer .context-rail > :not(#event-notice) { display: none; }
+.hud.event-footer .event-notice {
+  grid-column: 1;
+  grid-row: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
 
 /* Warnings flash the way the cockpit's do; every other notice holds steady. */
 .hud[data-category="alert"] .notice { animation: warning-flash calc(1.2s * var(--motion-scale)) steps(1, end) infinite; }

@@ -140,16 +140,25 @@ FLOOR = {"standard": 0, "large": 10, "larger": 11.5}
 NOTICE_FITS = """() => {
   const state = document.getElementById('state-label');
   const event = document.getElementById('event-notice');
-  const plate = document.getElementById('notice').getBoundingClientRect();
+  const host = event.parentElement.getBoundingClientRect();
+  const eventBox = event.getBoundingClientRect();
+  const deck = document.querySelector('.deck').getBoundingClientRect();
   const failures = [];
   if (getComputedStyle(state).textOverflow === 'ellipsis') failures.push('state uses ellipsis');
   if (state.scrollWidth > state.clientWidth + 1) failures.push('state text clipped');
   if (event.scrollWidth > event.clientWidth + 1 || event.scrollHeight > event.clientHeight + 1)
     failures.push('event text clipped');
-  if (event.getBoundingClientRect().bottom > plate.bottom + 1)
-    failures.push('event escapes status plate');
+  if (eventBox.left < host.left - 1 || eventBox.right > host.right + 1
+      || eventBox.top < host.top - 1 || eventBox.bottom > host.bottom + 1)
+    failures.push('event escapes its row');
+  if (eventBox.left < deck.right && eventBox.right > deck.left
+      && eventBox.top < deck.bottom && eventBox.bottom > deck.top)
+    failures.push('event covers state visualization');
   return failures;
 }"""
+STATUS_GEOMETRY = """() => ['.instrument', '.deck', '#deck-canvas', '.systems-row']
+  .map(selector => { const box = document.querySelector(selector).getBoundingClientRect();
+    return [box.x, box.y, box.width, box.height].map(value => Math.round(value * 100) / 100); })"""
 
 
 class NavigationTypeBrowserTests(unittest.TestCase):
@@ -233,6 +242,9 @@ class NavigationTypeBrowserTests(unittest.TestCase):
             ("expanded", 620, 342, 1),
         ):
             page = self.open(width, height)
+            page.evaluate("snapshot => render(snapshot)",
+                          hud_snapshot(hud_state("SUPERCRUISE"), layout=layout, scale=scale))
+            normal_geometry = page.evaluate(STATUS_GEOMETRY)
             labels_to_check = page.evaluate(
                 "() => [...Object.keys(DISPLAY_LABELS), 'SUPERCRUISE', 'PAD 07 CLEARED', 'PAD 999 CLEARED']"
             )
@@ -251,6 +263,7 @@ class NavigationTypeBrowserTests(unittest.TestCase):
                         with self.subTest(layout=layout, scale=scale, face=face, labels=labels, state=label):
                             page.evaluate("snapshot => render(snapshot)", snapshot)
                             self.assertEqual(page.evaluate(NOTICE_FITS), [])
+                            self.assertEqual(page.evaluate(STATUS_GEOMETRY), normal_geometry)
 
             # Once the transient notice expires, it must stop taking space.
             sequence += 1
@@ -261,10 +274,30 @@ class NavigationTypeBrowserTests(unittest.TestCase):
             self.assertEqual(page.evaluate("""() => {
               const event = document.getElementById('event-notice');
               const state = document.getElementById('state-label');
-              return [document.getElementById('hud').classList.contains('event-active'),
+              return [document.getElementById('hud').classList.contains('event-inline')
+                  || document.getElementById('hud').classList.contains('event-footer'),
                 getComputedStyle(event).display, event.textContent,
                 state.scrollWidth > state.clientWidth + 1];
             }"""), [False, "none", "", False])
+            self.assertEqual(page.evaluate(STATUS_GEOMETRY), normal_geometry)
+
+    def test_event_repositions_when_status_tag_changes(self):
+        page = self.open(500, 326)
+        state = hud_state("SC ASSIST")
+        state["category"] = "drive"
+        state["notice"] = {
+            "seq": 1, "text": "FIRST DISCOVERY", "detail": "XXXXXX", "duration": 5,
+        }
+        page.evaluate("snapshot => render(snapshot)", hud_snapshot(state))
+        geometry = page.evaluate(STATUS_GEOMETRY)
+        self.assertTrue(page.evaluate("() => document.getElementById('hud').classList.contains('event-inline')"))
+
+        # A telemetry update may widen the tag while the same notice is active.
+        state["category"] = "alert"
+        page.evaluate("snapshot => render(snapshot)", hud_snapshot(state))
+        self.assertTrue(page.evaluate("() => document.getElementById('hud').classList.contains('event-footer')"))
+        self.assertEqual(page.evaluate(NOTICE_FITS), [])
+        self.assertEqual(page.evaluate(STATUS_GEOMETRY), geometry)
 
 
 if __name__ == "__main__":

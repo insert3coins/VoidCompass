@@ -426,7 +426,7 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
                               failures.push(`${name} escapes`);
                           };
                           inside(dom['state-label'], dom.notice, 'state label');
-                          inside(dom['event-notice'], dom.notice, 'event notice');
+                          inside(dom['event-notice'], dom['event-notice'].parentElement, 'event notice');
                           inside(dom.notice, document.querySelector('.status-plate'), 'notice');
                           inside(dom.lamps, document.querySelector('.systems-row'), 'lamps');
                           inside(dom['fuel-gauge'], document.querySelector('.systems-row'), 'fuel');
