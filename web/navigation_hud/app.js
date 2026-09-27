@@ -36,6 +36,7 @@ let routeNoticeTimer = null;
 let lastLampSignature = '';
 let lastNoticeSequence = null;
 let eventNoticeTimer = null;
+let eventPlacementSignature = '';
 const osMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 // Each state's hologram: the deck scene and the ship's aura (scene.js).
 const scene = window.NavigationScene
@@ -335,6 +336,39 @@ function renderFuel(fuel = {}, dynamics = {}, theme = {}) {
   gauge.classList.toggle('scooping', Boolean(dynamics.fuel_scooping));
 }
 
+function eventPlacementKey(node) {
+  const hud = dom.hud;
+  return [
+    node.textContent, dom['state-tag'].textContent, dom['state-label'].textContent,
+    hud.dataset.face, hud.dataset.labels,
+    hud.classList.contains('expanded'), hud.clientWidth,
+  ].join('|');
+}
+
+function placeEventNotice(node) {
+  const hud = dom.hud;
+  node.style.fontSize = '';
+  dom.notice.appendChild(node);
+  hud.classList.remove('event-footer');
+  hud.classList.add('event-inline');
+  const noticeRight = dom.notice.getBoundingClientRect().right;
+  const clipped = node.scrollWidth > node.clientWidth + 1
+    || node.scrollHeight > node.clientHeight + 1
+    || node.getBoundingClientRect().right > noticeRight - 8
+    || dom['state-label'].getBoundingClientRect().right > noticeRight - 8;
+  if (clipped) {
+    document.querySelector('.context-rail').appendChild(node);
+    hud.classList.remove('event-inline');
+    hud.classList.add('event-footer');
+    let size = parseFloat(getComputedStyle(node).fontSize);
+    for (let attempt = 0; attempt < 3 && node.scrollWidth > node.clientWidth + 1; attempt += 1) {
+      size *= (node.clientWidth - 2) / node.scrollWidth;
+      node.style.fontSize = `${size}px`;
+    }
+  }
+  eventPlacementSignature = eventPlacementKey(node);
+}
+
 function renderEventNotice(notice, theme, reducedMotion) {
   const node = dom['event-notice'];
   if (!notice || notice.seq == null) return;
@@ -343,6 +377,9 @@ function renderEventNotice(notice, theme, reducedMotion) {
     // only once: later snapshots repeat the same sequence until it expires.
     lastNoticeSequence = notice.seq;
   } else if (notice.seq === lastNoticeSequence) {
+    if (node.classList.contains('showing')) {
+      if (eventPlacementKey(node) !== eventPlacementSignature) placeEventNotice(node);
+    }
     return;
   }
   lastNoticeSequence = notice.seq;
@@ -352,12 +389,14 @@ function renderEventNotice(notice, theme, reducedMotion) {
   node.classList.remove('showing');
   if (!reducedMotion) void node.offsetWidth;
   node.classList.add('showing');
-  dom.hud.classList.add('event-active');
+  placeEventNotice(node);
   clearTimeout(eventNoticeTimer);
   eventNoticeTimer = setTimeout(() => {
     node.classList.remove('showing');
-    dom.hud.classList.remove('event-active');
+    dom.hud.classList.remove('event-inline', 'event-footer');
     node.textContent = '';
+    dom.notice.appendChild(node);
+    eventPlacementSignature = '';
     eventNoticeTimer = null;
   }, Math.max(1000, Number(notice.duration || 2.4) * 1000));
 }
