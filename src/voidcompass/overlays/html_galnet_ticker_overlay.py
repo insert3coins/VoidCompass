@@ -1,6 +1,8 @@
 """Dedicated semantic HTML renderer for the Galnet ticker bar."""
 
-from voidcompass.overlays.galnet_ticker_hud import TICKER_HEIGHT, ticker_options, ticker_text_scale
+from voidcompass.overlays.galnet_ticker_hud import (
+    TICKER_HEIGHT, ticker_crt_level, ticker_options, ticker_text_scale,
+)
 from voidcompass.overlays.html_model_overlay import (
     HtmlModelOverlayBridge,
     attach_html_model_overlay,
@@ -18,7 +20,17 @@ class HtmlGalnetTickerBridge(HtmlModelOverlayBridge):
         # its own size rather than the one every overlay shares.
         payload = super()._snapshot()
         payload["effects"]["text_scale"] = ticker_text_scale(self.config)
+        # Its CRT screen may be its own or follow the shared CRT switch and
+        # intensity; the page draws whichever level this resolves to.
+        level = ticker_crt_level(self.config)
+        payload["effects"]["crt"] = level != "off"
+        payload["effects"]["crt_level"] = level
         return payload
+
+    def _quick_fingerprint(self):
+        # The shared CRT intensity is not in the base fingerprint, but the
+        # ticker follows it by default.
+        return super()._quick_fingerprint(), ticker_crt_level(self.config)
 
 
 def attach_html_galnet_ticker_overlay(overlay, overlay_id, title, enabled_key, x_key, y_key):

@@ -1,6 +1,6 @@
 /* Galnet ticker: a GALNET badge, then headlines and their stories scrolling
-   right to left. Sizes follow the overlay text size (--scale); colours are
-   theme tokens. */
+   right to left, on a CRT tube whose signal glitches now and then. Sizes
+   follow the overlay text size (--scale); colours are theme tokens. */
 :root {
   color-scheme: dark;
   --bg: #070b10;
@@ -31,7 +31,7 @@ body { pointer-events: none; user-select: none; }
   box-shadow: inset 0 0 calc(14px * var(--scale)) rgba(0, 0, 0, .55);
 }
 .ticker::before { content: ""; position: absolute; z-index: 3; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 20%, transparent) 45%, transparent); }
-.ticker::after { content: ""; position: absolute; z-index: 4; inset: 0; pointer-events: none; opacity: .16; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .45) 2px 3px); }
+.ticker::after { content: ""; position: absolute; z-index: 4; inset: 0; pointer-events: none; opacity: var(--crt-scan); background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .45) 2px 3px); }
 .ticker.no-crt::after { display: none; }
 
 .ticker-badge {
@@ -85,7 +85,92 @@ body { pointer-events: none; user-select: none; }
 .ticker.still .ticker-story span { overflow: hidden; text-overflow: ellipsis; }
 .ticker.still .ticker-sep { display: none; }
 
+/* CRT screen. The level (data-crt, resolved in Python) sets how hard each
+   part of the tube shows: scanlines, phosphor glow, the red and cyan fringe
+   of guns slightly out of register, the vignette and glass sheen, grain and,
+   from Standard up, the phosphor mask. The --glitch-* values stay at zero
+   until a glitch sets them. */
+.ticker {
+  --crt-scan: .16; --crt-glow: 0px; --crt-glow-mix: 0%; --crt-split: 0px; --crt-split-mix: 0%;
+  --crt-vignette: 0%; --crt-glass: 0%; --crt-noise: 0; --crt-grille: 0; --crt-flicker: 0%; --crt-roll: 0%;
+  --glitch-x: 0px; --glitch-skew: 0deg; --glitch-split: 0px; --glitch-noise: 0;
+  --split-mix: var(--crt-split-mix);
+}
+.ticker[data-crt="subtle"] { --crt-scan: .16; --crt-glow: 6px; --crt-glow-mix: 34%; --crt-split: .5px; --crt-split-mix: 34%; --crt-vignette: 30%; --crt-glass: 4%; --crt-noise: .05; --crt-flicker: 3%; --crt-roll: 5%; }
+.ticker[data-crt="standard"] { --crt-scan: .24; --crt-glow: 9px; --crt-glow-mix: 48%; --crt-split: .8px; --crt-split-mix: 48%; --crt-vignette: 44%; --crt-glass: 6%; --crt-noise: .08; --crt-grille: .04; --crt-flicker: 5%; --crt-roll: 8%; }
+.ticker[data-crt="strong"] { --crt-scan: .34; --crt-glow: 12px; --crt-glow-mix: 62%; --crt-split: 1.2px; --crt-split-mix: 62%; --crt-vignette: 56%; --crt-glass: 8%; --crt-noise: .12; --crt-grille: .07; --crt-flicker: 8%; --crt-roll: 12%; }
+.ticker.glitching { --split-mix: 80%; }
+
+.ticker:not(.no-crt) :is(.ticker-story b, .ticker-story span, .ticker-story time, .ticker-sep, .ticker-idle),
+.ticker.glitching :is(.ticker-story b, .ticker-story span, .ticker-story time, .ticker-sep, .ticker-idle) {
+  text-shadow:
+    calc((var(--crt-split) + var(--glitch-split)) * -1 * var(--scale)) 0 color-mix(in srgb, var(--red) var(--split-mix), transparent),
+    calc((var(--crt-split) + var(--glitch-split)) * var(--scale)) 0 color-mix(in srgb, var(--accent) var(--split-mix), transparent),
+    0 0 calc(var(--crt-glow) * var(--scale)) color-mix(in srgb, currentColor var(--crt-glow-mix), transparent);
+}
+/* The badge keeps its own glow under the fringe. */
+.ticker:not(.no-crt) .ticker-badge b, .ticker.glitching .ticker-badge b {
+  text-shadow:
+    calc((var(--crt-split) + var(--glitch-split)) * -1 * var(--scale)) 0 color-mix(in srgb, var(--red) var(--split-mix), transparent),
+    calc((var(--crt-split) + var(--glitch-split)) * var(--scale)) 0 color-mix(in srgb, var(--accent) var(--split-mix), transparent),
+    0 0 calc(max(9px, var(--crt-glow)) * var(--scale)) color-mix(in srgb, var(--accent) 50%, transparent);
+}
+#ticker-name { display: inline-block; overflow: hidden; white-space: nowrap; }
+
+/* The glass: sheen along the top, the tube darkening towards its ends and
+   edges, a flicker (::before) and the phosphor mask (::after). */
+.ticker-crt { position: absolute; z-index: 5; inset: 0; overflow: hidden; pointer-events: none; }
+.ticker:not(.no-crt) .ticker-crt {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text) var(--crt-glass), transparent), transparent 42%),
+    radial-gradient(62% 170% at 50% 50%, transparent 70%, color-mix(in srgb, var(--bg) var(--crt-vignette), transparent) 100%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) calc(var(--crt-vignette) * .5), transparent), transparent 24%, transparent 76%, color-mix(in srgb, var(--bg) calc(var(--crt-vignette) * .5), transparent));
+}
+.ticker-crt::before { content: ""; position: absolute; inset: 0; opacity: 0; background: color-mix(in srgb, var(--text) var(--crt-flicker), transparent); }
+.ticker-crt::after { content: ""; position: absolute; inset: 0; opacity: var(--crt-grille); mix-blend-mode: multiply; background: repeating-linear-gradient(90deg, var(--red) 0 1px, var(--green) 1px 2px, var(--accent) 2px 3px); }
+.ticker.no-crt .ticker-crt::after { display: none; }
+.ticker.crt-motion .ticker-crt::before { animation: ticker-flicker 5.3s steps(1, end) infinite; }
+
+/* Grain, painted by app.js in the theme's text colour. It crawls while the
+   screen has motion and surges in a glitch. */
+.ticker-noise { position: absolute; inset: 0; opacity: calc(var(--crt-noise) + var(--glitch-noise)); background-image: var(--noise-image, none); background-size: 160px 60px; mix-blend-mode: screen; }
+.ticker.no-crt:not(.glitching) .ticker-noise { display: none; }
+.ticker.crt-motion .ticker-noise, .ticker.glitching .ticker-noise { animation: ticker-noise .48s steps(1, end) infinite; }
+
+/* The rolling scan bar: a soft band of light that drifts down the tube. */
+.ticker-roll { position: absolute; inset: 0; opacity: 0; transform: translateY(-100%); background: linear-gradient(180deg, transparent 20%, color-mix(in srgb, var(--text) var(--crt-roll), transparent) 62%, color-mix(in srgb, var(--text) calc(var(--crt-roll) * 1.5), transparent) 70%, transparent 78%); }
+.ticker.crt-motion .ticker-roll { opacity: 1; animation: ticker-roll 8s linear infinite; }
+
+/* A glitch: the picture jumps and leans, the fringe opens, a bright tear
+   line crosses the tube and bands of text slip sideways. The first frame
+   flashes. */
+.ticker.glitching .ticker-window { transform: translateX(var(--glitch-x)) skewX(var(--glitch-skew)); }
+.ticker.glitching .ticker-badge { transform: translateX(calc(var(--glitch-x) * -.35)); }
+.ticker.glitch-flash .ticker-crt { background-color: color-mix(in srgb, var(--accent) 12%, transparent); }
+.ticker-tear { position: absolute; left: 0; right: 0; top: var(--tear-y, 50%); height: max(1px, calc(1.5px * var(--scale))); opacity: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 70%, var(--text)) 12%, color-mix(in srgb, var(--accent) 70%, var(--text)) 88%, transparent); box-shadow: 0 0 calc(6px * var(--scale)) var(--accent); }
+.ticker.tearing .ticker-tear { opacity: .9; }
+/* Its bands are copies of the scrolling text, clipped to a strip: a shifted
+   band covers what is beneath it, a ghost lays one gun's colour over it. */
+.ticker-slice { position: absolute; inset: 0; overflow: hidden; pointer-events: none; transform: translateX(var(--slice-x, 0px)); clip-path: inset(var(--slice-top, 40%) 0 var(--slice-bottom, 40%) 0); }
+.ticker-slice * { text-shadow: none !important; }
+.ticker-slice.shift { background: color-mix(in srgb, var(--panel) 92%, var(--accent)); }
+.ticker-slice.ghost { opacity: .75; mix-blend-mode: screen; }
+.ticker-slice.ghost.red * { color: var(--red) !important; }
+.ticker-slice.ghost.cyan * { color: var(--accent) !important; }
+
+/* Power-on: a bright line that opens into the picture. */
+.ticker.power-on { animation: ticker-power-on .8s cubic-bezier(.2, .7, .2, 1) both; }
+
 @keyframes ticker-lamp { 50% { opacity: .45; } }
 @keyframes ticker-new { 50% { opacity: .35; } }
+@keyframes ticker-flicker { 0%, 100% { opacity: 0; } 2% { opacity: .9; } 3% { opacity: .25; } 5% { opacity: 0; } 38% { opacity: .55; } 39% { opacity: 0; } 71% { opacity: 1; } 72% { opacity: .3; } 73.5% { opacity: .8; } 75% { opacity: 0; } }
+@keyframes ticker-noise { 0% { background-position: 0 0; } 25% { background-position: -37px 13px; } 50% { background-position: 51px -29px; } 75% { background-position: -83px 41px; } }
+@keyframes ticker-roll { 0% { transform: translateY(-100%); } 34%, 100% { transform: translateY(100%); } }
+@keyframes ticker-power-on {
+  0% { transform: scale(.02, .05); filter: brightness(3.5); opacity: .3; }
+  28% { transform: scale(1, .06); filter: brightness(3); opacity: 1; }
+  58% { transform: scale(1, 1.08); filter: brightness(1.6); }
+  100% { transform: none; filter: none; opacity: 1; }
+}
 .ticker.reduced-motion *, .ticker.reduced-motion { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .ticker * { animation: none !important; } }

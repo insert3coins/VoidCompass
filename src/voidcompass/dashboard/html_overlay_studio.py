@@ -20,7 +20,8 @@ from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, hud_typogr
 # How lively the Navigation HUD's holographic scenes are.
 HUD_ANIMATION_LEVELS = ("Calm", "Standard", "Energetic")
 from voidcompass.overlays.galnet_ticker_hud import (
-    TICKER_CONTENT, TICKER_SPEEDS, TICKER_STORIES, TICKER_WIDTH_RANGE, ticker_options,
+    TICKER_CONTENT, TICKER_CRT, TICKER_GLITCH, TICKER_GLITCH_STRENGTH, TICKER_SPEEDS,
+    TICKER_STORIES, TICKER_WIDTH_RANGE, ticker_options,
 )
 from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
 
@@ -419,7 +420,7 @@ class HtmlOverlayStudioMixin:
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
-            "galnet_ticker_show_date",
+            "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
         }
         key = _text(key, 80)
         if key not in allowed:
@@ -443,7 +444,7 @@ class HtmlOverlayStudioMixin:
                     station.on_docked(self)
                 else:
                     station.hide()
-        elif key == "galnet_ticker_show_date":
+        elif key in {"galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news"}:
             ticker = getattr(self, "galnet_ticker_hud", None)
             if ticker is not None:
                 ticker.apply_settings()
@@ -524,6 +525,15 @@ class HtmlOverlayStudioMixin:
             # 0 follows the overlay-wide text size; otherwise 75-200 %.
             scale = _number(payload.get("galnet_ticker_text_scale_percent"), 0) or 0
             self.config["galnet_ticker_text_scale_percent"] = 0 if scale <= 0 else int(round(max(75, min(200, scale))))
+        # Its CRT screen and signal glitches.
+        for key, choices, default in (
+            ("galnet_ticker_crt", TICKER_CRT, "follow"),
+            ("galnet_ticker_glitch", TICKER_GLITCH, "occasional"),
+            ("galnet_ticker_glitch_strength", TICKER_GLITCH_STRENGTH, "standard"),
+        ):
+            if key in payload:
+                choice = _text(payload.get(key), 20).casefold()
+                self.config[key] = choice if choice in choices else default
         # Journal heartbeat orb: its window size and resting eye colour.
         if "heartbeat_orb_size" in payload:
             size = _integer(payload.get("heartbeat_orb_size"), orb_size(self.config))

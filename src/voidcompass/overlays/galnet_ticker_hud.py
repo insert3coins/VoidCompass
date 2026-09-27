@@ -20,6 +20,11 @@ DEFAULT_TICKER_WIDTH = 860
 TICKER_SPEEDS = {"slow": 45, "standard": 75, "fast": 115}
 TICKER_CONTENT = ("headlines", "summary", "full")
 TICKER_STORIES = (3, 5, 8, 16)
+# The bar's CRT screen: the one every overlay shares ("follow"), or its own.
+TICKER_CRT = ("follow", "off", "subtle", "standard", "strong")
+# How often the signal glitches by itself, and how hard each glitch hits.
+TICKER_GLITCH = ("off", "rare", "occasional", "frequent")
+TICKER_GLITCH_STRENGTH = ("subtle", "standard", "strong")
 SUMMARY_CHARS = 280
 FULL_CHARS = 1600
 
@@ -37,6 +42,9 @@ def ticker_options(config):
     speed = str(config.get("galnet_ticker_speed") or "standard").casefold()
     content = str(config.get("galnet_ticker_content") or "summary").casefold()
     stories = _integer(config.get("galnet_ticker_stories"), 5)
+    crt = str(config.get("galnet_ticker_crt") or "follow").casefold()
+    glitch = str(config.get("galnet_ticker_glitch") or "occasional").casefold()
+    strength = str(config.get("galnet_ticker_glitch_strength") or "standard").casefold()
     # The ticker's own text size; 0 follows the size set for all overlays.
     text_scale = _integer(config.get("galnet_ticker_text_scale_percent"), 0)
     low, high = TICKER_WIDTH_RANGE
@@ -47,6 +55,14 @@ def ticker_options(config):
         "stories": stories if stories in TICKER_STORIES else 5,
         "show_date": bool(config.get("galnet_ticker_show_date", True)),
         "text_scale_percent": 0 if text_scale <= 0 else max(75, min(200, text_scale)),
+        "crt": crt if crt in TICKER_CRT else "follow",
+        # The roll bar, flicker and power-on; static CRT stays when it is off.
+        "crt_motion": bool(config.get("galnet_ticker_crt_motion", True)),
+        "glitch": glitch if glitch in TICKER_GLITCH else "occasional",
+        "glitch_strength": strength if strength in TICKER_GLITCH_STRENGTH else "standard",
+        # A burst of interference as a new dispatch comes in, whatever the
+        # glitch frequency.
+        "glitch_on_news": bool(config.get("galnet_ticker_glitch_on_news", True)),
     }
 
 
@@ -55,6 +71,18 @@ def ticker_text_scale(config):
     own = ticker_options(config)["text_scale_percent"]
     chosen = own if own > 0 else _integer((config or {}).get("overlay_text_scale_percent"), 100)
     return max(75, min(200, chosen)) / 100.0
+
+
+def ticker_crt_level(config):
+    """The CRT screen the bar draws: its own, or the shared CRT switch and intensity."""
+    chosen = ticker_options(config)["crt"]
+    if chosen != "follow":
+        return chosen
+    config = config or {}
+    if not bool(config.get("hud_crt_enabled", True)):
+        return "off"
+    shared = str(config.get("hud_crt_intensity") or "Subtle").casefold()
+    return shared if shared in TICKER_CRT[2:] else "subtle"
 
 
 def ticker_text(body, content):
