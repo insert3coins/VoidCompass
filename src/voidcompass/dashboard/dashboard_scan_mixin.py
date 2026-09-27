@@ -230,6 +230,14 @@ class DashboardScanMixin:
             pass
         return None
 
+    def _surface_vehicle_fuel_active(self):
+        """Whether the commander is in a surface vehicle with its own reservoir."""
+        return bool(
+            getattr(self, "current_in_srv", False)
+            or (getattr(self, "current_in_fighter", False)
+                and str(getattr(self, "current_vehicle_name", "") or "").upper() == "NOMAD")
+        )
+
     @staticmethod
     def _surface_position_distance_m(previous, current):
         """Return great-circle distance between two Status surface fixes."""
@@ -436,6 +444,7 @@ class DashboardScanMixin:
         ).upper()
         was_gui_focus = getattr(self, "current_gui_focus", -1)
         was_fuel_percent = self._current_fuel_percent()
+        was_surface_fuel = getattr(self, "current_surface_fuel_reservoir", None)
         was_navigation_awareness = (
             getattr(self, "current_altitude_m", None),
             bool(getattr(self, "current_landing_gear_down", False)),
@@ -475,23 +484,6 @@ class DashboardScanMixin:
             str(getattr(self, "_navigation_jump_phase", "") or ""),
             dict(getattr(self, "current_destination_details", None) or {}),
         )
-        fuel = data.get("Fuel") or {}
-        # Status.json is the live source while scooping and during ordinary
-        # supercruise consumption. Some vehicle/on-foot snapshots omit Fuel,
-        # so never erase the last verified mothership reading with ``None``.
-        if isinstance(fuel, dict):
-            fuel_main = fuel.get("FuelMain")
-            fuel_reservoir = fuel.get("FuelReservoir")
-            try:
-                if fuel_main is not None:
-                    self.current_fuel_main = float(fuel_main)
-            except (TypeError, ValueError):
-                pass
-            try:
-                if fuel_reservoir is not None:
-                    self.current_fuel_reservoir = float(fuel_reservoir)
-            except (TypeError, ValueError):
-                pass
         self.current_legal_state = data.get("LegalState")
         dest = data.get("Destination") or {}
         if isinstance(dest, dict):
@@ -650,6 +642,42 @@ class DashboardScanMixin:
         # completed vehicle transfer while a just-late Status snapshot still
         # carries the former on-foot flags.
         self._apply_navigation_vehicle_handoff_latch()
+        fuel = data.get("Fuel") or {}
+        status_in_surface_vehicle = (
+            isinstance(flags, int) and bool(flags & self._STATUS_IN_SRV)
+        )
+        if status_in_surface_vehicle:
+            # Elite reports a surface vehicle's remaining fuel in
+            # FuelReservoir, with FuelMain=0. Keep this independent of the
+            # mothership tank and its capacity; the vehicle's capacity is not
+            # available in Status or the launch journal event.
+            # A later snapshot without Fuel withdraws that vehicle reading.
+            self.current_surface_fuel_reservoir = None
+            if isinstance(fuel, dict) and fuel.get("FuelReservoir") is not None:
+                try:
+                    reservoir = float(fuel["FuelReservoir"])
+                    if math.isfinite(reservoir) and reservoir >= 0:
+                        self.current_surface_fuel_reservoir = reservoir
+                except (TypeError, ValueError):
+                    pass
+        elif not self._surface_vehicle_fuel_active():
+            self.current_surface_fuel_reservoir = None
+            # Status.json is the live source while scooping and during
+            # ordinary supercruise consumption. Missing Fuel must not erase
+            # the last verified mothership reading.
+            if isinstance(fuel, dict):
+                fuel_main = fuel.get("FuelMain")
+                fuel_reservoir = fuel.get("FuelReservoir")
+                try:
+                    if fuel_main is not None:
+                        self.current_fuel_main = float(fuel_main)
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    if fuel_reservoir is not None:
+                        self.current_fuel_reservoir = float(fuel_reservoir)
+                except (TypeError, ValueError):
+                    pass
         jump_phase = str(getattr(self, "_navigation_jump_phase", "") or "")
         set_jump_phase = getattr(self, "_set_navigation_jump_phase", None)
         if jump_phase in {"arrival", "carrier_arrival"}:
@@ -854,6 +882,12 @@ class DashboardScanMixin:
             if callable(force_cargo):
                 force_cargo()
         fuel_percent_changed = self._current_fuel_percent() != was_fuel_percent
+        surface_fuel = getattr(self, "current_surface_fuel_reservoir", None)
+        surface_fuel_changed = (
+            None if was_surface_fuel is None else round(was_surface_fuel, 3)
+        ) != (
+            None if surface_fuel is None else round(surface_fuel, 3)
+        )
         navigation_readiness_changed = was_navigation_readiness != (
             bool(getattr(self, "current_fsd_mass_locked", False)),
             bool(getattr(self, "current_fsd_charging", False)),
@@ -896,6 +930,7 @@ class DashboardScanMixin:
         if fuel_percent_changed:
             self._invalidate_exploration_intelligence()
         if (vehicle_state_changed or hud_state_changed or fuel_percent_changed
+                or surface_fuel_changed
                 or navigation_readiness_changed or navigation_awareness_changed) and not self.batch_mode:
             self.update_hud()
         if not self.batch_mode:

@@ -371,6 +371,7 @@ body {
 .fuel-cells i.lit { background: var(--fuel-tone); border-color: var(--fuel-tone); box-shadow: 0 0 4px color-mix(in srgb, var(--fuel-tone) 55%, transparent); }
 .fuel-gauge strong { min-width: 30px; text-align: right; color: var(--fuel-tone); font: var(--type-weight) var(--size-11) var(--font-wide); }
 .fuel-gauge.unknown strong { color: var(--label-dim); }
+.fuel-gauge.quantity .fuel-cells { display: none; }
 .fuel-gauge.scooping .fuel-cells i.lit { animation: fuel-scoop calc(1.1s * var(--motion-scale)) ease-in-out infinite; }
 .fuel-gauge.scooping .fuel-cells i.lit:nth-child(2n) { animation-delay: calc(-.35s * var(--motion-scale)); }
 

@@ -588,13 +588,16 @@ class JournalWatcher:
         if not isinstance(raw, dict):
             return None
         event = str(raw.get("event") or "")
+        if event in ("LaunchFighter", "LaunchVessel") and raw.get("PlayerControlled") is False:
+            return None
         values = [
             raw.get("SRVType_Localised"), raw.get("SRVType"),
+            raw.get("VesselType_Localised"), raw.get("VesselType"),
             raw.get("VehicleType"),
         ]
         if event == "LoadGame":
             values.extend((raw.get("Ship_Localised"), raw.get("Ship")))
-        if event == "LaunchFighter" and str(raw.get("Loadout") or "").casefold() == "galactic":
+        if event in ("LaunchFighter", "LaunchVessel") and str(raw.get("Loadout") or "").casefold() == "galactic":
             values.insert(0, "Nomad")
         name = ""
         for value in values:

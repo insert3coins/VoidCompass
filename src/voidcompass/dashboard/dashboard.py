@@ -277,6 +277,7 @@ class MainDashboard(
         "ApproachBody": ("body_approach", "center", "accent", 1.1, 42),
         "LeaveBody": ("planet_clear", "all", "green", 2.0, 74),
         "LaunchSRV": ("vehicle_deploy", "center", "accent", 1.4, 68),
+        "LaunchVessel": ("vehicle_deploy", "center", "accent", 1.4, 68),
         "DockSRV": ("vehicle_board", "center", "accent", 1.4, 68),
         "LaunchFighter": ("vehicle_deploy", "center", "accent", 1.4, 68),
         "DockFighter": ("vehicle_board", "center", "accent", 1.4, 68),
@@ -1135,6 +1136,7 @@ class MainDashboard(
         self._last_music_event_ts = 0.0
         self.current_fuel_main = None
         self.current_fuel_reservoir = None
+        self.current_surface_fuel_reservoir = None
         self.fuel_capacity_main = None
         self.current_hull_percent = None
         self._fuel_used_samples = deque(maxlen=8)
@@ -2101,6 +2103,7 @@ class MainDashboard(
         self._last_music_event_ts = 0.0
         self.current_fuel_main = None
         self.current_fuel_reservoir = None
+        self.current_surface_fuel_reservoir = None
         self.fuel_capacity_main = None
         self._fuel_used_samples = deque(maxlen=8)
         self._low_fuel_warned = False
@@ -5168,7 +5171,12 @@ class MainDashboard(
         next_star = self._navigation_next_star_intelligence(
             next_name, hops, route_safety,
         )
-        fuel_percent = self._current_fuel_percent()
+        surface_vehicle_fuel = self._surface_vehicle_fuel_active()
+        fuel_percent = None if surface_vehicle_fuel else self._current_fuel_percent()
+        fuel_reservoir_t = (
+            getattr(self, "current_surface_fuel_reservoir", None)
+            if surface_vehicle_fuel else None
+        )
         fsd_readiness = self._navigation_fsd_readiness_context()
         local_target = self._navigation_local_target_context(next_name)
         galactic_vector = _galactic_vector_context(
@@ -5324,6 +5332,7 @@ class MainDashboard(
             "latitude": getattr(self, "current_latitude", None),
             "longitude": getattr(self, "current_longitude", None),
             "fuel_percent": fuel_percent,
+            "fuel_reservoir_t": fuel_reservoir_t,
             "fuel_scooping": bool(getattr(self, "current_scooping_fuel", False)),
             "supercruise_overcharge": bool(
                 getattr(self, "current_supercruise_overcharge", False)
@@ -5457,7 +5466,7 @@ class MainDashboard(
         event = str(event or "")
         raw = raw if isinstance(raw, dict) else {}
         data = data if isinstance(data, dict) else {}
-        if event in {"LaunchSRV", "DockSRV"}:
+        if event in {"LaunchSRV", "LaunchVessel", "DockSRV"}:
             vehicle = self._srv_toast_vehicle_name(raw, data)
         elif event in {"LaunchFighter", "DockFighter"}:
             loadout = data.get("Loadout") or raw.get("Loadout")
@@ -5572,6 +5581,12 @@ class MainDashboard(
         payload = raw if isinstance(raw, dict) else {}
         normalised = data if isinstance(data, dict) else {}
         self._observe_navigation_docking_state(event, payload, normalised)
+        if event == "LaunchVessel":
+            player_controlled = normalised.get("PlayerControlled")
+            if player_controlled is None:
+                player_controlled = payload.get("PlayerControlled")
+            if player_controlled is False:
+                return False
         if event in {"FSSAllBodiesFound", "ScanOrganic"}:
             # Completion/sample state already has authoritative, persistent
             # presentation below the top instrument and in Survey Operations.
@@ -7051,6 +7066,8 @@ class MainDashboard(
         explicit = (
             data.get("SRVType_Localised") or data.get("SRVType")
             or raw.get("SRVType_Localised") or raw.get("SRVType")
+            or data.get("VesselType_Localised") or data.get("VesselType")
+            or raw.get("VesselType_Localised") or raw.get("VesselType")
             or data.get("VehicleType") or raw.get("VehicleType")
         )
         explicit_key = str(explicit or "").strip().casefold()
@@ -7080,6 +7097,27 @@ class MainDashboard(
             if candidate in {"NOMAD", "SCARAB", "SCORPION", "RHINO"}:
                 return candidate
         return "SRV"
+
+    def _apply_surface_vehicle_launch(self, raw, data):
+        """Transfer HUD ownership to the vehicle in a launch journal event."""
+        self._clear_navigation_vehicle_handoff()
+        self.current_surface_fuel_reservoir = None
+        self.current_in_fighter = False
+        self.current_in_srv = True
+        self.current_on_foot = False
+        self.current_in_taxi = False
+        self.current_in_multicrew = False
+        vehicle_id = data.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
+        vehicle_name = self._srv_toast_vehicle_name(raw, data)
+        self.current_vehicle_id = vehicle_id
+        self.current_vehicle_name = vehicle_name
+        if vehicle_id is not None:
+            self._vehicle_name_by_id[vehicle_id] = vehicle_name
+        self._last_surface_vehicle_name = vehicle_name
+        self.hud_flight_state = vehicle_name
+        self._surface_departure_active = False
+        self.update_hud()
+        self._refresh_cargo_consumers()
 
     def _handle_live_journal_toast(self, ev, raw, d, startup_replay=False):
         """Surface selected, actionable journal events without replay noise."""
@@ -7645,13 +7683,14 @@ class MainDashboard(
         elif ev == "ReservoirReplenished":
             # This event is emitted very frequently while the main tank feeds
             # the active reservoir. Treat it strictly as quiet telemetry.
-            try:
-                if d.get("fuel_main") is not None:
-                    self.current_fuel_main = float(d.get("fuel_main"))
-                if d.get("fuel_reservoir") is not None:
-                    self.current_fuel_reservoir = float(d.get("fuel_reservoir"))
-            except (TypeError, ValueError):
-                pass
+            if not self._surface_vehicle_fuel_active():
+                try:
+                    if d.get("fuel_main") is not None:
+                        self.current_fuel_main = float(d.get("fuel_main"))
+                    if d.get("fuel_reservoir") is not None:
+                        self.current_fuel_reservoir = float(d.get("fuel_reservoir"))
+                except (TypeError, ValueError):
+                    pass
             self.maintenance_state["last_reservoir"] = {
                 "timestamp": raw.get("timestamp") if isinstance(raw, dict) else None,
                 "fuel_main": self.current_fuel_main,
@@ -8226,6 +8265,7 @@ class MainDashboard(
 
         elif ev == "Disembark":
             self._clear_navigation_vehicle_handoff()
+            self.current_surface_fuel_reservoir = None
             vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
             if vehicle_id is not None and self.current_vehicle_name:
                 self._vehicle_name_by_id[vehicle_id] = self.current_vehicle_name
@@ -8241,6 +8281,7 @@ class MainDashboard(
             self.update_hud()
 
         elif ev == "Embark":
+            self.current_surface_fuel_reservoir = None
             vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
             from_srv = bool(d.get("SRV") or (raw.get("SRV") if isinstance(raw, dict) else False))
             in_taxi, in_multicrew = self._navigation_passenger_flags(raw, d)
@@ -8301,6 +8342,7 @@ class MainDashboard(
             if player_controlled is None and isinstance(raw, dict):
                 player_controlled = raw.get("PlayerControlled")
             if player_controlled is not False:
+                self.current_surface_fuel_reservoir = None
                 self.current_in_fighter = True
                 self.current_in_srv = False
                 self.current_on_foot = False
@@ -8315,34 +8357,23 @@ class MainDashboard(
                 if self.current_vehicle_name == "NOMAD":
                     self._last_surface_vehicle_name = self.current_vehicle_name
                 self.hud_flight_state = self.current_vehicle_name
-                # Elite exposes the Nomad as LaunchFighter/Loadout=galactic.
+                # A galactic LaunchFighter loadout also identifies a Nomad.
                 # Both it and a commander-controlled SLF launch are vehicle
                 # hand-offs, not evidence of mothership approach/departure.
                 self._surface_departure_active = False
             self.update_hud()
             self._refresh_cargo_consumers()
 
-        elif ev == "LaunchSRV":
-            self._clear_navigation_vehicle_handoff()
-            self.current_in_fighter = False
-            self.current_in_srv = True
-            self.current_on_foot = False
-            self.current_in_taxi = False
-            self.current_in_multicrew = False
-            vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
-            vehicle_name = self._srv_toast_vehicle_name(raw, d)
-            self.current_vehicle_id = vehicle_id
-            self.current_vehicle_name = vehicle_name
-            if vehicle_id is not None:
-                self._vehicle_name_by_id[vehicle_id] = vehicle_name
-            self._last_surface_vehicle_name = vehicle_name
-            self.hud_flight_state = vehicle_name
-            self._surface_departure_active = False
-            self.update_hud()
-            self._refresh_cargo_consumers()
+        elif ev in ("LaunchSRV", "LaunchVessel"):
+            player_controlled = d.get("PlayerControlled")
+            if player_controlled is None and isinstance(raw, dict):
+                player_controlled = raw.get("PlayerControlled")
+            if ev != "LaunchVessel" or player_controlled is not False:
+                self._apply_surface_vehicle_launch(raw, d)
 
         elif ev in ("DockFighter", "FighterDestroyed"):
             self._clear_navigation_vehicle_handoff()
+            self.current_surface_fuel_reservoir = None
             self.current_in_fighter = False
             self.current_in_srv = False
             self.current_vehicle_id = None
@@ -8355,6 +8386,7 @@ class MainDashboard(
 
         elif ev == "DockSRV":
             self._clear_navigation_vehicle_handoff()
+            self.current_surface_fuel_reservoir = None
             departure_active = bool(getattr(self, "_surface_departure_active", False))
             vehicle_id = d.get("ID") or (raw.get("ID") if isinstance(raw, dict) else None)
             vehicle_name = self._srv_toast_vehicle_name(raw, d)
@@ -8982,7 +9014,7 @@ class MainDashboard(
             and ev in {
                 "ApproachBody", "LeaveBody", "Location", "FSDJump", "CarrierJump",
                 "Scan", "FSSBodySignals", "SAASignalsFound", "Touchdown", "Liftoff",
-                "LaunchSRV", "DockSRV", "Embark", "Disembark", "LoadGame",
+                "LaunchSRV", "LaunchVessel", "DockSRV", "Embark", "Disembark", "LoadGame",
             }
         ):
             self._refresh_planet_materials_overlay()
