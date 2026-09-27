@@ -37,6 +37,8 @@ def ticker_options(config):
     speed = str(config.get("galnet_ticker_speed") or "standard").casefold()
     content = str(config.get("galnet_ticker_content") or "summary").casefold()
     stories = _integer(config.get("galnet_ticker_stories"), 5)
+    # The ticker's own text size; 0 follows the size set for all overlays.
+    text_scale = _integer(config.get("galnet_ticker_text_scale_percent"), 0)
     low, high = TICKER_WIDTH_RANGE
     return {
         "width": max(low, min(high, _integer(config.get("galnet_ticker_width"), DEFAULT_TICKER_WIDTH))),
@@ -44,7 +46,15 @@ def ticker_options(config):
         "content": content if content in TICKER_CONTENT else "summary",
         "stories": stories if stories in TICKER_STORIES else 5,
         "show_date": bool(config.get("galnet_ticker_show_date", True)),
+        "text_scale_percent": 0 if text_scale <= 0 else max(75, min(200, text_scale)),
     }
+
+
+def ticker_text_scale(config):
+    """The ticker's text size as a factor: its own, else all overlays' size."""
+    own = ticker_options(config)["text_scale_percent"]
+    chosen = own if own > 0 else _integer((config or {}).get("overlay_text_scale_percent"), 100)
+    return max(75, min(200, chosen)) / 100.0
 
 
 def ticker_text(body, content):

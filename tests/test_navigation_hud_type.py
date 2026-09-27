@@ -147,6 +147,11 @@ class NavigationTypeSettingsTests(unittest.TestCase):
         self.assertEqual((studio.config["hud_font_face"], studio.config["hud_label_size"],
                           studio.config["hud_text_scale_percent"]), ("cockpit", "standard", 0))
         self.assertEqual(studio.config["survey_spotlight_threshold"], 12)
+        # Scene animation belongs to the HUD, so Overlay Studio owns it.
+        studio._html_overlay_settings_save({"hud_animation_intensity": "energetic"})
+        self.assertEqual(studio.config["hud_animation_intensity"], "Energetic")
+        studio._html_overlay_settings_save({"hud_animation_intensity": "wild"})
+        self.assertEqual(studio.config["hud_animation_intensity"], "Standard")
         self.assertTrue(studio._html_overlay_option_toggle("hud_bright_labels", True))
         self.assertTrue(studio.config["hud_bright_labels"])
         self.assertGreaterEqual(studio.hud_updates, 5, "the HUD picks every change up live")
@@ -166,6 +171,8 @@ class NavigationTypeSettingsTests(unittest.TestCase):
         self.assertEqual(tuple(re.findall(r'value="([a-z]+)"', labels)), HUD_LABEL_SIZES)
         self.assertIn('data-studio-setting="hud_text_scale_percent"', section)
         self.assertIn('data-overlay-option="hud_bright_labels"', section)
+        animation = re.search(r'data-studio-setting="hud_animation_intensity">(.*?)</select>', section, re.S).group(1)
+        self.assertEqual(tuple(re.findall(r'value="([A-Za-z]+)"', animation)), ("Calm", "Standard", "Energetic"))
 
 
 # Every visible piece of text inside its row, and the chosen type applied.

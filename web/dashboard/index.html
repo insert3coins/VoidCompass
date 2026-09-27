@@ -570,6 +570,7 @@
                   <section data-studio-settings="hud">
                     <h4>NAVIGATION HUD</h4>
                     <label class="studio-switch"><span><b>Compact layout</b><small>The everyday standard plate; off shows the expanded one.</small></span><input type="checkbox" data-overlay-option="hud_compact_mode"><i></i></label>
+                    <label class="studio-field"><span>Scene animation<small>How lively each state's hologram is</small></span><select id="studio-hud-animation" data-studio-setting="hud_animation_intensity"><option value="Calm">Calm</option><option value="Standard">Standard</option><option value="Energetic">Energetic</option></select></label>
                     <label class="studio-field"><span>Typeface</span><select id="studio-hud-font" data-studio-setting="hud_font_face"><option value="cockpit">Cockpit</option><option value="clear">Clear</option><option value="terminal">Terminal</option></select></label>
                     <label class="studio-field"><span>Text size<small>0 follows all overlays</small></span><div><input id="studio-hud-text-scale" type="number" min="0" max="200" step="5" data-studio-setting="hud_text_scale_percent"><b>%</b></div></label>
                     <label class="studio-field"><span>Small text<small>Labels grow; the HUD keeps its size</small></span><select id="studio-hud-labels" data-studio-setting="hud_label_size"><option value="standard">Standard</option><option value="large">Large</option><option value="larger">Larger</option></select></label>
@@ -613,6 +614,7 @@
                   <section data-studio-settings="galnet_ticker_hud">
                     <h4>GALNET TICKER</h4>
                     <label class="studio-field"><span>Bar length<small>360 to 2560</small></span><div><input id="studio-ticker-width" type="number" min="360" max="2560" step="20" data-studio-setting="galnet_ticker_width"><b>PX</b></div></label>
+                    <label class="studio-field"><span>Text size<small>0 follows all overlays</small></span><div><input id="studio-ticker-text-scale" type="number" min="0" max="200" step="5" data-studio-setting="galnet_ticker_text_scale_percent"><b>%</b></div></label>
                     <label class="studio-field"><span>Scroll speed</span><select id="studio-ticker-speed" data-studio-setting="galnet_ticker_speed"><option value="slow">Slow</option><option value="standard">Standard</option><option value="fast">Fast</option></select></label>
                     <label class="studio-field"><span>After each headline</span><select id="studio-ticker-content" data-studio-setting="galnet_ticker_content"><option value="headlines">Nothing</option><option value="summary">A summary</option><option value="full">The whole story</option></select></label>
                     <label class="studio-field"><span>Stories</span><select id="studio-ticker-stories" data-studio-setting="galnet_ticker_stories"><option value="3">Latest 3</option><option value="5">Latest 5</option><option value="8">Latest 8</option><option value="16">All cached</option></select></label>

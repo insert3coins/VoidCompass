@@ -37,7 +37,7 @@ from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_mat
 from voidcompass.mining.rhino_intelligence import ground_intelligence
 from voidcompass.mining.rhino_minimap import location_index
 from voidcompass.core.config import get_active_profile, get_profile_dir
-from voidcompass.core.overlay_registry import OVERLAY_SPECS, RHINO_MAP_AVAILABLE
+from voidcompass.core.overlay_registry import RHINO_MAP_AVAILABLE
 from voidcompass.exploration.deep_survey import recon_report
 from voidcompass.exploration.exploration_intelligence import body_completion
 from voidcompass.core.diagnostic_logs import application_base_dir
@@ -2010,8 +2010,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
         values = {}
         for key in (
             "journal_path", "screenshots_path", "screenshots_enabled",
-            "ui_scale_percent", "reduced_motion_enabled", "hud_animation_intensity",
-            "overlay_hotkeys_enabled", "overlay_mouse_passthrough",
+            "ui_scale_percent", "reduced_motion_enabled",
+            "overlay_hotkeys_enabled",
             "edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled",
             "eddn_market_upload_enabled", "carrier_discord_webhook_url",
             "runtime_trace_enabled", "crash_reporting_enabled",
@@ -2025,7 +2025,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             value = self.config.get(key)
             values[key] = value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
         for key, default in (
-            ("overlay_mouse_passthrough", True), ("low_fuel_threshold_pct", 0.25),
+            ("low_fuel_threshold_pct", 0.25),
             ("auto_copy_waypoint", False), ("achievement_notifications_enabled", True),
             ("adaptive_command_enabled", True),
         ):
@@ -2088,14 +2088,6 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                 getattr(self, "_html_settings_last_save", None) or {"id": 0, "ok": True, "detail": ""}
             ),
             "themes": theme_cards,
-            "overlays": [
-                {
-                    "id": spec.attr,
-                    "label": spec.label,
-                    "enabled": bool(self.config.get(spec.enabled_key, spec.default_enabled)),
-                }
-                for spec in OVERLAY_SPECS if spec.available
-            ],
             "theme_editor": {
                 "name": theme_name,
                 "palette": theme_palette,
@@ -2164,17 +2156,15 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                 pass
         if "ui_scale_percent" in changed:
             apply_ui_scale(self.root, self.config.get("ui_scale_percent", 100))
-        if changed & {"reduced_motion_enabled", "hud_animation_intensity"}:
+        if "reduced_motion_enabled" in changed:
             self._apply_active_profile_theme()
-        if changed & {"screenshots_enabled", "screenshots_path", "reduced_motion_enabled", "hud_animation_intensity"}:
+        if changed & {"screenshots_enabled", "screenshots_path", "reduced_motion_enabled"}:
             self._apply_runtime_feature_toggles()
         if changed & {"hotkeys", "overlay_hotkeys_enabled"}:
             self._configure_overlay_hotkeys()
         if changed & {"galnet_enabled", "galnet_refresh_minutes"}:
             self._restart_galnet_feed_schedule(delay_ms=250)
             self._update_galnet_ticker()
-        if "overlay_mouse_passthrough" in changed:
-            self._apply_overlay_mouse_passthrough()
         if "achievements_enabled" in changed:
             engine = getattr(self, "achievement_engine", None)
             if engine is not None:
@@ -2183,7 +2173,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             path = str(self.config.get("journal_path") or "")
             if path and os.path.isdir(path):
                 self.watcher.switch_folder(path)
-        if changed & {"low_fuel_threshold_pct", "hud_animation_intensity"}:
+        if "low_fuel_threshold_pct" in changed:
             self.update_hud()
         self._html_settings_paths_cache = None
 
@@ -4107,8 +4097,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                 allowed = {
                     "journal_path": str, "screenshots_path": str,
                     "screenshots_enabled": bool, "ui_scale_percent": int,
-                    "reduced_motion_enabled": bool, "hud_animation_intensity": str,
-                    "overlay_hotkeys_enabled": bool, "overlay_mouse_passthrough": bool,
+                    "reduced_motion_enabled": bool,
+                    "overlay_hotkeys_enabled": bool,
                     "edsm_cmdr_name": str,
                     "edsm_api_key": str, "edsm_upload_enabled": bool,
                     "eddn_market_upload_enabled": bool,
@@ -4142,9 +4132,6 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                         updates[key] = max(75, min(200, _integer(value, 100)))
                     elif key == "low_fuel_threshold_pct":
                         updates[key] = round(max(0.05, min(0.6, _number(value, 0.25))), 2)
-                    elif key == "hud_animation_intensity":
-                        intensity = _text(value, 20).title()
-                        updates[key] = intensity if intensity in {"Calm", "Standard", "Energetic"} else "Standard"
                     else:
                         updates[key] = _text(value, 1000)
                 changed_keys = {key for key, value in updates.items() if self.config.get(key) != value}
