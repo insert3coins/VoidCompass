@@ -173,6 +173,33 @@ class NavigationSceneBrowserTests(unittest.TestCase):
         kinds = page.evaluate("[...new Set(NavigationModels.carrier().f.map((face) => face.k))]")
         self.assertTrue({f"pad{index}" for index in range(8)} <= set(kinds))
 
+    def test_each_kind_of_star_has_its_own_form(self):
+        # The star takes its colour from its class and its form from what it
+        # is: a sun, a white dwarf, a neutron star's jets, a black hole's
+        # disc, a Wolf-Rayet's shells, a T Tauri's dust, a brown dwarf.
+        page = self.open()
+        frames = {}
+        for star in ("G", "DA", "N", "H", "W", "TTS", "T"):
+            with self.subTest(star=star):
+                snapshot = hud_snapshot(hud_state("SYSTEM MAP"), reduced=False)
+                snapshot["system"]["star_class"] = star
+                page.evaluate("snapshot => render(snapshot)", snapshot)
+                frames[star] = self.controlled_frame(page, 1.37)["deck"]
+        for left, right in combinations(frames, 2):
+            with self.subTest(left=left, right=right):
+                self.assertNotEqual(frames[left], frames[right])
+        # A targeted system shows the route's next star, not the local one.
+        targets = {}
+        for star in ("H", "N"):
+            snapshot = hud_snapshot(hud_state("SYSTEM TARGET"), reduced=False)
+            snapshot["system"]["star_class"] = "G"
+            snapshot["route"]["next_star"]["star_class"] = star
+            page.evaluate("snapshot => render(snapshot)", snapshot)
+            self.assertEqual(page.evaluate("[navigationScene.state.starFamily, navigationScene.state.targetFamily]"),
+                             ["g", "blackhole" if star == "H" else "neutron"])
+            targets[star] = self.controlled_frame(page, 1.37)["deck"]
+        self.assertNotEqual(targets["H"], targets["N"])
+
     def test_every_state_projects_into_the_deck_and_round_the_ship(self):
         page = self.open()
         for label in LABELS:

@@ -407,6 +407,20 @@
       }
     }
 
+    // Blot out a disc: additive light can brighten but never darken, so a
+    // black hole's hole is painted over what is behind it.
+    occlude(x, y, r, color) {
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = this.alpha;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(.2, r), 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
     // Pose and draw a model from models.js (a rock, the station, a ship):
     // solid facets, lit from the upper left, hiding whatever is behind them.
     // Solids paint normally rather than additively, so they occlude. `cam` is the scene's camera, `place` sets the model in it
@@ -813,6 +827,146 @@
   }
 
   // ---------------------------------------------------------------------
+  // Stars by kind. A star's colour comes from its class (the HUD's star
+  // badge uses the same); its form from what it is: a sun, a white dwarf's
+  // hard point, a neutron star's sweeping jets, a black hole's disc, a
+  // Wolf-Rayet shedding shells, a T Tauri in its dust, a brown dwarf's
+  // banded glow. `family` is starFamily() from app.js.
+  // ---------------------------------------------------------------------
+
+  function stellarBody(s, st, pal, x, y, r, {family = st.starFamily, tone = st.starTone, flares = true} = {}) {
+    const color = tone || st.c, phase = st.p;
+    if (family === 'neutron') neutronStar(s, pal, x, y, r, color, phase);
+    else if (family === 'dwarf') whiteDwarf(s, pal, x, y, r, color, phase);
+    else if (family === 'blackhole') blackHole(s, pal, x, y, r, color, phase);
+    else if (family === 'wolf') wolfRayet(s, pal, x, y, r, color, phase, flares);
+    else if (family === 'tauri') tTauri(s, pal, x, y, r, color, phase, flares);
+    else if (family === 'l' || family === 't' || family === 'y') brownDwarf(s, pal, x, y, r, color, phase);
+    else s.sun(x, y, r * ({o: 1.12, b: 1.08, m: .86}[family] || 1), color, pal.text, phase, {flares});
+  }
+
+  // A tilted ellipse as points, for loops that need their own angle.
+  function loop(x, y, a, b, angle, steps = 28) {
+    const ca = Math.cos(angle), sa = Math.sin(angle), points = [];
+    for (let step = 0; step <= steps; step += 1) {
+      const t = step * TAU / steps, u = Math.cos(t) * a, v = Math.sin(t) * b;
+      points.push([x + u * ca - v * sa, y + u * sa + v * ca]);
+    }
+    return points;
+  }
+
+  // A neutron star: a tiny, fierce core, twin jets along its magnetic axis
+  // sweeping round as it spins, field loops either side and a pulse ring
+  // on each turn.
+  function neutronStar(s, pal, x, y, r, color, phase) {
+    const core = Math.max(1.2, r * .32), reach = r * 3.4;
+    const axis = -1.15 + Math.sin(phase * .6) * .35;
+    for (const side of [-1, 1]) {
+      const ux = Math.cos(axis) * side, uy = Math.sin(axis) * side, nx = -uy, ny = ux;
+      // An open cone: a hot core beam between two fading edges, which
+      // reads as a jet at any size (a closed shape turns into a bar).
+      const tip = [x + ux * reach, y + uy * reach], spread = Math.max(1.2, core * 1.4);
+      s.line(x, y, tip[0], tip[1], pal.text, .55, Math.max(.8, core * .2));
+      s.line(x, y, tip[0], tip[1], color, .5, Math.max(1.2, core * .45));
+      for (const edge of [-1, 1]) {
+        s.line(x + nx * edge * core * .4, y + ny * edge * core * .4, tip[0] + nx * edge * spread,
+          tip[1] + ny * edge * spread, color, .22, .8);
+      }
+      for (let index = 0; index < 4; index += 1) {
+        const t = fract(phase * 1.4 + index / 4);
+        s.spark(x + ux * reach * t, y + uy * reach * t, .6, color, pal.text, ends(t) * .8);
+      }
+      s.poly(loop(x + nx * core * 1.9, y + ny * core * 1.9, core * 1.9, core * .9, axis), color, .35, .8);
+    }
+    const beat = fract(phase * 1.1), ring = core + beat * r * 1.3;
+    s.arc(x, y, ring, ring, 0, TAU, color, (1 - beat) * .45, 1);
+    s.bloom(x, y, r * 1.6, color, .45);
+    s.bloom(x, y, core * 3.2, pal.text, .65);
+    s.dot(x, y, core, pal.text, 1);
+  }
+
+  // A white dwarf: a small, intensely white point with a tight, hard corona.
+  function whiteDwarf(s, pal, x, y, r, color, phase) {
+    const core = Math.max(1.2, r * .3);
+    s.bloom(x, y, r * 2.2, color, .42);
+    s.bloom(x, y, core * 3.4, pal.text, .7);
+    for (let index = 0; index < 12; index += 1) {
+      const angle = index * TAU / 12 + phase * .02, length = core * (1 + .9 * wave(phase * .3 + index * .37));
+      s.line(x + Math.cos(angle) * core * 1.15, y + Math.sin(angle) * core * 1.15,
+        x + Math.cos(angle) * (core * 1.15 + length), y + Math.sin(angle) * (core * 1.15 + length), color, .55, .8);
+    }
+    s.arc(x, y, core * 1.55, core * 1.55, 0, TAU, color, .55, .9);
+    s.dot(x, y, core, pal.text, 1);
+  }
+
+  // A black hole: no light of its own. A hot accretion disc turns round
+  // it, the far side of the disc bent up over the top and under the
+  // bottom by the hole's gravity, and a thin photon ring at its edge.
+  function blackHole(s, pal, x, y, r, color, phase) {
+    const hole = r * .5, tilt = .24;
+    const disc = (from, to) => {
+      for (let band = 0; band < 5; band += 1) {
+        const rr = hole * (1.4 + band * .4);
+        s.arc(x, y, rr, rr * tilt, from, to, band < 2 ? pal.text : color, .72 - band * .12, 1.7 - band * .22);
+      }
+      for (let clump = 0; clump < 10; clump += 1) {
+        const rr = hole * (1.5 + (clump % 4) * .4), angle = fract(phase * (.2 - (clump % 4) * .03) + clump / 10) * TAU;
+        const behind = Math.sin(angle) < 0;
+        if ((from === Math.PI) !== behind) continue;
+        s.dot(x + Math.cos(angle) * rr, y + Math.sin(angle) * rr * tilt, .6, pal.text, .7);
+      }
+    };
+    s.bloom(x, y, r * 2.2, color, .22);
+    disc(Math.PI, TAU);
+    s.arc(x, y, hole * 1.3, hole * 1.3, Math.PI * 1.04, Math.PI * 1.96, color, .65, 1.8);
+    s.arc(x, y, hole * 1.2, hole * 1.2, Math.PI * .1, Math.PI * .9, color, .35, 1.2);
+    s.occlude(x, y, hole, pal.bg);
+    s.arc(x, y, hole * 1.04, hole * 1.04, 0, TAU, pal.text, .7, .8);
+    disc(0, Math.PI);
+  }
+
+  // A Wolf-Rayet star: hot and violent, throwing off shells of its own
+  // atmosphere that expand and thin as they go.
+  function wolfRayet(s, pal, x, y, r, color, phase, flares) {
+    for (let shell = 0; shell < 3; shell += 1) {
+      const t = fract(phase * .18 + shell / 3), rr = r * (1 + t * 2.4);
+      for (let arc = 0; arc < 6; arc += 1) {
+        const start = arc * TAU / 6 + shell + hash(arc + shell * 7) * .4;
+        s.arc(x, y, rr, rr * .92, start, start + .7, color, (1 - t) * .5, 1.3 - t * .6);
+      }
+    }
+    s.sun(x, y, r * .82, color, pal.text, phase * 1.8, {flares});
+  }
+
+  // A T Tauri star: young, half-hidden in the disc of dust it formed from,
+  // with faint jets out of its poles.
+  function tTauri(s, pal, x, y, r, color, phase, flares) {
+    const dust = (from, to) => {
+      for (let band = 0; band < 4; band += 1) {
+        const rr = r * (1.35 + band * .42);
+        s.arc(x, y, rr, rr * .2, from, to, color, .34 - band * .06, 2.2 - band * .35);
+      }
+      for (let grain = 0; grain < 14; grain += 1) {
+        const rr = r * (1.4 + hash(grain + 60) * 1.3), angle = fract(phase * .05 * (1.6 - rr / r * .3) + hash(grain + 61)) * TAU;
+        if ((from === Math.PI) !== (Math.sin(angle) < 0)) continue;
+        s.dot(x + Math.cos(angle) * rr, y + Math.sin(angle) * rr * .2, .5, color, .6);
+      }
+    };
+    dust(Math.PI, TAU);
+    for (const side of [-1, 1]) s.line(x, y + side * r * .7, x + side * r * .15, y + side * r * 2.2, color, .25, .9);
+    s.sun(x, y, r * .72, color, pal.text, phase, {flares});
+    dust(0, Math.PI);
+  }
+
+  // A brown dwarf (classes L, T and Y): too small to shine like a star,
+  // a dim, banded world glowing faintly in its own heat.
+  function brownDwarf(s, pal, x, y, r, color, phase) {
+    s.bloom(x, y, r * 1.9, color, .28);
+    s.sphere(x, y, r * .82, color, pal.bg, {kind: 'gas', spin: phase * .05, seed: 23, sheen: [-.15, -.2]});
+    s.bloom(x, y, r * .95, color, .22);
+  }
+
+  // ---------------------------------------------------------------------
   // Normal space.
   // ---------------------------------------------------------------------
 
@@ -1095,9 +1249,9 @@
   // Arrival: the star the jump landed at, huge and close in its own class
   // colour, the ship just out of witch-space and settling.
   function arrival(s, st, pal) {
-    const settle = smooth(st.age / 2.2), star = st.starTone || st.c;
+    const settle = smooth(st.age / 2.2);
     streaks(s, st, {x: s.W * .82, count: 14, speed: .22 * (1 - settle * .8), strength: (1 - settle) * .6});
-    s.sun(s.W * .86, s.H * .52, s.H * .6, star, pal.text, st.p);
+    stellarBody(s, st, pal, s.W * .86, s.H * .52, s.H * .6);
     const x = lerp(s.W * .18, s.W * .38, settle), y = s.H * .55;
     trail(s, [x - 10, y], [x - 50, y], st.c, .6 * (1 - settle * .6), 9);
     const cam = camera(x, y, 5.5, {yaw: -.4, pitch: -.3, persp: 14});
@@ -1390,9 +1544,9 @@
   // The system map, as the game lays it out: the star at the left and its
   // bodies in a row, moons hanging beneath, the cursor stepping along.
   function systemMap(s, st, pal) {
-    const c = st.c, cy = s.H * .42, star = st.starTone || c;
+    const c = st.c, cy = s.H * .42;
     sky(s, st, .4, .2);
-    s.sun(s.W * .08, cy, s.H * .2, star, pal.text, st.p, {flares: false});
+    stellarBody(s, st, pal, s.W * .08, cy, s.H * .2, {flares: false});
     const bodies = [[.25, .1, 'rock', 0], [.38, .13, 'ice', 1], [.55, .22, 'gas', 3], [.74, .17, 'gas', 2],
       [.9, .09, 'rock', 1]];
     s.line(s.W * .14, cy, s.W * .96, cy, c, .15);
@@ -1412,7 +1566,7 @@
 
   // The orrery: worlds on their orbits round the star, in perspective.
   function orrery(s, st, pal) {
-    const c = st.c, ox = s.W * .55, oy = s.H * .5, star = st.starTone || c;
+    const c = st.c, ox = s.W * .55, oy = s.H * .5;
     sky(s, st, .5, .2);
     const cam = camera(ox, oy, s.W * .1, {yaw: st.p * .02, pitch: -.42, persp: 14});
     const worlds = [];
@@ -1430,13 +1584,13 @@
     let starDrawn = false;
     for (const {at: [x, y, depth, k], index} of worlds) {
       if (!starDrawn && depth > 0) {
-        s.sun(sx, sy, s.H * .13, star, pal.text, st.p, {flares: false});
+        stellarBody(s, st, pal, sx, sy, s.H * .13, {flares: false});
         starDrawn = true;
       }
       s.sphere(x, y, (1.8 + (index % 3) * 1.1) * k, c, pal.bg, {spin: st.p * .1, seed: index + 40,
         kind: index === 3 ? 'gas' : 'rock', detail: .4});
     }
-    if (!starDrawn) s.sun(sx, sy, s.H * .13, star, pal.text, st.p, {flares: false});
+    if (!starDrawn) stellarBody(s, st, pal, sx, sy, s.H * .13, {flares: false});
   }
 
   // Powerplay: two powers' spheres of influence over a bubble of systems,
@@ -1538,7 +1692,9 @@
       s.line(px, y - 2.5, px, y + 2.5, c, Math.sin(t * Math.PI) * .45);
     }
     if (key === 'target_system') {
-      s.sun(x, y, s.H * .17, st.starTone || c, pal.text, st.p, {flares: false});
+      // The targeted system's star, as the route knows it; a plain star in
+      // the HUD's colour when its class is not known.
+      stellarBody(s, st, pal, x, y, s.H * .17, {family: st.targetFamily, tone: st.targetTone, flares: false});
     } else if (key === 'target_body') {
       s.sphere(x, y, s.H * .3, c, pal.bg, {spin: st.p * .08, seed: 14, grid: true, atmosphere: pal.accent});
     } else if (key === 'target_signal') {
@@ -2586,6 +2742,22 @@
         return;
       }
       const star = st.starTone || st.c;
+      if (st.starFamily === 'blackhole') {
+        // A black hole sheds no light: its disc rings the ship instead.
+        for (let band = 0; band < 3; band += 1) {
+          const rx = b.W * (.4 + band * .06);
+          b.arc(cx, cy + b.H * .08, rx, rx * .2, 0, TAU, band ? star : pal.text, .5 - band * .12, 1.3 - band * .2);
+        }
+        return;
+      }
+      if (st.starFamily === 'neutron') {
+        // A neutron star's jets sweep past behind the ship.
+        const axis = -1.15 + Math.sin(st.p * .6) * .35;
+        for (const side of [-1, 1]) {
+          b.line(cx + b.W * .12, cy, cx + b.W * .12 + Math.cos(axis) * side * b.W * .6,
+            cy + Math.sin(axis) * side * b.W * .6, star, .45, 1.4);
+        }
+      }
       b.bloom(cx + b.W * .12, cy - b.H * .05, b.W * .5, star, .32);
       for (let index = 0; index < 10; index += 1) {
         const angle = index * TAU / 10 + st.p * .03, r = b.W * (.34 + wave(st.p * .2 + index / 10) * .1);
@@ -3120,6 +3292,9 @@
         d,
         target: {altitude: d.altitude, vertical: d.vertical, gravity: d.gravity},
         starTone: String(input.starTone || ''),
+        starFamily: String(input.starFamily || ''),
+        targetTone: String(input.targetTone || ''),
+        targetFamily: String(input.targetFamily || ''),
         // Silent running seals the ship's emissions; its hologram dims too.
         halo: d.silentRunning ? .35 : 1,
         level: input.quiet ? .8 : 1,
@@ -3167,6 +3342,9 @@
       const state = this.state;
       state.c = next.c;
       state.starTone = next.starTone;
+      state.starFamily = next.starFamily;
+      state.targetTone = next.targetTone;
+      state.targetFamily = next.targetFamily;
       state.halo = next.halo;
       state.level = next.level;
       for (const [field, value] of Object.entries(next.d)) {
