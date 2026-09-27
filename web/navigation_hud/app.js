@@ -352,9 +352,12 @@ function renderEventNotice(notice, theme, reducedMotion) {
   node.classList.remove('showing');
   if (!reducedMotion) void node.offsetWidth;
   node.classList.add('showing');
+  dom.hud.classList.add('event-active');
   clearTimeout(eventNoticeTimer);
   eventNoticeTimer = setTimeout(() => {
     node.classList.remove('showing');
+    dom.hud.classList.remove('event-active');
+    node.textContent = '';
     eventNoticeTimer = null;
   }, Math.max(1000, Number(notice.duration || 2.4) * 1000));
 }

@@ -137,6 +137,20 @@ FIT = """(expected) => {
 FAMILY = {"cockpit": "Bahnschrift", "clear": "Segoe UI", "terminal": "Cascadia Mono"}
 FLOOR = {"standard": 0, "large": 10, "larger": 11.5}
 
+NOTICE_FITS = """() => {
+  const state = document.getElementById('state-label');
+  const event = document.getElementById('event-notice');
+  const plate = document.getElementById('notice').getBoundingClientRect();
+  const failures = [];
+  if (getComputedStyle(state).textOverflow === 'ellipsis') failures.push('state uses ellipsis');
+  if (state.scrollWidth > state.clientWidth + 1) failures.push('state text clipped');
+  if (event.scrollWidth > event.clientWidth + 1 || event.scrollHeight > event.clientHeight + 1)
+    failures.push('event text clipped');
+  if (event.getBoundingClientRect().bottom > plate.bottom + 1)
+    failures.push('event escapes status plate');
+  return failures;
+}"""
+
 
 class NavigationTypeBrowserTests(unittest.TestCase):
     @classmethod
@@ -210,6 +224,47 @@ class NavigationTypeBrowserTests(unittest.TestCase):
         page.evaluate("snapshot => render(snapshot)", snapshot)
         self.assertEqual(page.evaluate("""() => [document.getElementById('hud').dataset.face,
           getComputedStyle(document.getElementById('region-label')).fontSize]"""), ["cockpit", "8.5px"])
+
+    def test_flight_state_and_event_text_remain_complete(self):
+        sequence = 0
+        for layout, width, height, scale in (
+            ("standard", 500, 326, 1), ("standard", 750, 489, 1.5),
+            ("standard", 1000, 652, 2),
+            ("expanded", 620, 342, 1),
+        ):
+            page = self.open(width, height)
+            labels_to_check = page.evaluate(
+                "() => [...Object.keys(DISPLAY_LABELS), 'SUPERCRUISE', 'PAD 07 CLEARED', 'PAD 999 CLEARED']"
+            )
+            for face in HUD_FONT_FACES:
+                for labels in HUD_LABEL_SIZES:
+                    for label in labels_to_check:
+                        sequence += 1
+                        state = hud_state(label)
+                        state["notice"] = {
+                            "seq": sequence, "text": "FIRST DISCOVERY",
+                            "detail": "SYNUEFE XR-H D11-102 ABCDEFGHIJKLMNOPQRSTUVWXYZ123456",
+                            "duration": 5,
+                        }
+                        snapshot = hud_snapshot(state, layout=layout, scale=scale)
+                        snapshot["theme"]["type"] = {"face": face, "labels": labels, "bright": True}
+                        with self.subTest(layout=layout, scale=scale, face=face, labels=labels, state=label):
+                            page.evaluate("snapshot => render(snapshot)", snapshot)
+                            self.assertEqual(page.evaluate(NOTICE_FITS), [])
+
+            # Once the transient notice expires, it must stop taking space.
+            sequence += 1
+            state = hud_state("SUPERCRUISE")
+            state["notice"] = {"seq": sequence, "text": "SYSTEM SCAN", "duration": .01}
+            page.evaluate("snapshot => render(snapshot)", hud_snapshot(state, layout=layout, scale=scale))
+            page.wait_for_timeout(1100)
+            self.assertEqual(page.evaluate("""() => {
+              const event = document.getElementById('event-notice');
+              const state = document.getElementById('state-label');
+              return [document.getElementById('hud').classList.contains('event-active'),
+                getComputedStyle(event).display, event.textContent,
+                state.scrollWidth > state.clientWidth + 1];
+            }"""), [False, "none", "", False])
 
 
 if __name__ == "__main__":

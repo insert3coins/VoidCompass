@@ -203,12 +203,14 @@ body {
   align-content: center;
 }
 .hud.expanded .status-main { grid-template-rows: 27px 59px 18px; }
+.hud.event-active .status-main { grid-template-rows: 48px 30px 18px; }
+.hud.expanded.event-active .status-main { grid-template-rows: 48px 38px 18px; }
 
 .notice {
   position: relative;
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   column-gap: 8px;
   padding: 0 8px 0 7px;
@@ -217,6 +219,7 @@ body {
   clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
 }
 .notice::after { content: ""; position: absolute; left: 0; right: 9px; top: 0; height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--state) 70%, transparent), transparent); }
+.hud.event-active .notice { grid-template-rows: 19px minmax(0, 1fr); }
 .notice-tag {
   padding: 2px 5px 1px;
   border: 1px solid color-mix(in srgb, var(--state) 55%, transparent);
@@ -227,8 +230,6 @@ body {
 }
 #state-label {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--state);
   font: var(--type-weight) var(--size-19)/1 var(--font-hud);
@@ -237,21 +238,22 @@ body {
 }
 .event-notice {
   --event-tone: var(--accent);
-  max-width: 190px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding-left: 8px;
-  border-left: 1px solid color-mix(in srgb, var(--event-tone) 60%, transparent);
+  display: none;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+  align-self: stretch;
+  padding-top: 1px;
+  border-top: 1px solid color-mix(in srgb, var(--event-tone) 60%, transparent);
   color: var(--event-tone);
-  font: var(--type-weight) var(--size-9) var(--font-wide);
+  font: var(--type-weight) var(--size-9)/1.05 var(--font-wide);
   letter-spacing: calc(.1em * var(--track));
+  overflow-wrap: anywhere;
   opacity: 0;
   transform: translateX(6px);
   transition: opacity .35s ease, transform .35s ease;
 }
-.event-notice.showing { opacity: 1; transform: translateX(0); animation: event-arrive calc(.6s * var(--motion-scale)) steps(2, end) 2; }
-.hud.expanded .event-notice { max-width: 250px; }
+.event-notice.showing { display: block; opacity: 1; transform: translateX(0); animation: event-arrive calc(.6s * var(--motion-scale)) steps(2, end) 2; }
 
 /* Warnings flash the way the cockpit's do; every other notice holds steady. */
 .hud[data-category="alert"] .notice { animation: warning-flash calc(1.2s * var(--motion-scale)) steps(1, end) infinite; }
