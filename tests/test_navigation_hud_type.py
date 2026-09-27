@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from urllib.parse import unquote, urlsplit
 
 from voidcompass.core import config as config_module
+from voidcompass.core import theme_state, themes
 from voidcompass.core.application_runtime import ApplicationRuntime
 from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
 from voidcompass.overlays.hud import (
@@ -59,6 +60,33 @@ class NavigationTypeSettingsTests(unittest.TestCase):
             finally:
                 hud.win.destroy()
         finally:
+            root.close()
+
+    def test_live_profile_theme_updates_flight_state_colour(self):
+        original_name = themes.ACTIVE_THEME_NAME
+        original_palette = dict(themes.ACTIVE_PALETTE)
+        root = ApplicationRuntime()
+        hud = None
+        try:
+            hud = TacticalHUD(root, {})
+            hud.update("SYNUEFE XR-H D11-102", "", 0, 7, 16, None, {},
+                       nav_context={"flight_state": "SUPERCRUISE", "fuel_percent": 71})
+            _, profile_palette = themes.resolve_theme("Emerald")
+            theme_state.apply_theme_live(root, "Emerald", profile_palette)
+            hud.apply_theme(profile_palette)
+            model = hud._html_last_model
+            self.assertEqual(model["theme"]["orange"], profile_palette["orange"])
+            self.assertEqual(model["state"]["color"], profile_palette["orange"])
+            self.assertEqual(model["metrics"]["fuel"]["color"], profile_palette["green"])
+            for label, slot in (
+                ("FSS", "accent"), ("MASS LOCK", "yellow"),
+                ("DOCK CLEARED", "green"), ("FLIGHT", "dim"),
+            ):
+                self.assertEqual(hud._state_color(label), profile_palette[slot], label)
+        finally:
+            theme_state.apply_theme_live(root, original_name, original_palette)
+            if hud is not None:
+                hud.win.destroy()
             root.close()
 
     def test_studio_saves_each_type_setting_on_its_own(self):
@@ -233,6 +261,19 @@ class NavigationTypeBrowserTests(unittest.TestCase):
         page.evaluate("snapshot => render(snapshot)", snapshot)
         self.assertEqual(page.evaluate("""() => [document.getElementById('hud').dataset.face,
           getComputedStyle(document.getElementById('region-label')).fontSize]"""), ["cockpit", "8.5px"])
+
+    def test_display_label_uses_exact_custom_profile_colour(self):
+        page = self.open(500, 326)
+        # The chosen accent deliberately matches a former hardcoded orange
+        # mapping. It must remain the commander's accent, not become orange.
+        palette = themes.normalize_theme({"accent": "#ff7a18", "orange": "#2874c2"})
+        state = hud_state("FSS")
+        state["color"] = palette["accent"]
+        snapshot = hud_snapshot(state)
+        snapshot["theme"].update(palette)
+        page.evaluate("snapshot => render(snapshot)", snapshot)
+        self.assertEqual(page.evaluate("""() => getComputedStyle(
+            document.getElementById('state-label')).color"""), "rgb(255, 122, 24)")
 
     def test_flight_state_and_event_text_remain_complete(self):
         sequence = 0

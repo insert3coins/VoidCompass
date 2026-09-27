@@ -501,16 +501,17 @@ class TacticalHUD:
 
     def _state_color(self, state_text):
         state_text = str(state_text or "").upper()
+        theme = ui_theme.THEME
         if (state_text.endswith((" DEPLOY", " RECOVERY", " DEPART", " CONTROL"))
                 or state_text.startswith("BOARDING ")
                 or state_text in {"MULTICREW LINK", "CREW RETURN"}):
-            return COLOR_ACCENT
+            return theme.accent
         if state_text in {"ARRIVAL", "CARRIER ARRIVAL"}:
-            return COLOR_GREEN
+            return theme.green
         if state_text.startswith("PAD ") or state_text == "DOCK CLEARED":
-            return COLOR_GREEN
+            return theme.green
         if state_text in {"PHENOMENA", "LOCAL ARRIVAL"}:
-            return COLOR_GREEN
+            return theme.green
         if state_text in (
             "DOCKED", "LANDED", "FSS", "DSS", "FIGHTER", "SRV", "SCARAB", "SCORPION", "RHINO", "NOMAD",
             "TAXI", "MULTICREW", "CARRIER DECK",
@@ -522,13 +523,13 @@ class TacticalHUD:
             "AFMU REPAIR", "DOCK REQUEST", "STATION VICINITY", "CARRIER VICINITY",
             "SURFACE STATION",
         ):
-            return COLOR_ACCENT
+            return theme.accent
         if state_text in {
                 "MASS LOCK", "ASTEROID FIELD", "GLIDE",
                 "SURFACE APPROACH", "SURFACE DEPARTURE", "UNIDENTIFIED",
                 "SETTLEMENT", "FLIGHT ASSIST OFF", "SILENT RUNNING",
                 "SYSTEM REBOOT", "DOCK CANCELLED", "DOCK TIMEOUT"}:
-            return COLOR_YELLOW
+            return theme.yellow
         if state_text in (
             "HYPERSPACE", "SUPERCRUISE", "JUMPING", "COMBAT",
             "FSD CHARGE", "HYPER CHARGE", "SCO OVERCHARGE",
@@ -539,20 +540,20 @@ class TacticalHUD:
             "EXTREME HEAT", "EXTREME COLD", "SUIT HEAT", "SUIT COLD",
             "JET CONE DAMAGE", "DOCK DENIED",
         ):
-            return COLOR_ORANGE
+            return theme.orange
         if state_text == "INTERDICTION EVADED":
-            return COLOR_GREEN
+            return theme.green
         if state_text.startswith("FSD INJECTION"):
-            return COLOR_ACCENT  # An armed boost, in the boost readout's blue.
+            return theme.accent  # An armed boost follows the profile's accent.
         if state_text.startswith("DSS EFFICIENT"):
-            return COLOR_GREEN
+            return theme.green
         if state_text.startswith("DSS ") or state_text.startswith("TARGET ") or state_text.endswith(" TARGET"):
-            return COLOR_ACCENT
+            return theme.accent
         if state_text.startswith("SIGNAL THREAT"):
-            return COLOR_ORANGE
+            return theme.orange
         if state_text == "SIGNAL DROP":
-            return COLOR_YELLOW
-        return "#7d8891"
+            return theme.yellow
+        return theme.dim
 
     # Elite's cockpit reports its state through a handful of notice styles.
     # Every motion profile belongs to one family, which sets the notice's tag
@@ -857,13 +858,13 @@ class TacticalHUD:
             fuel_percent = None
         fuel_color = COLOR_GREEN if fuel_percent is not None and fuel_percent > 40 else (
             COLOR_YELLOW if fuel_percent is not None and fuel_percent > 15 else (
-                COLOR_ORANGE if fuel_percent is not None else "#7d8891"
+                COLOR_ORANGE if fuel_percent is not None else ui_theme.THEME.dim
             )
         )
         bio_done = _number("bio_complete")
         bio_total = _number("bio_signals")
         bio_color = COLOR_GREEN if bio_total > 0 and bio_done >= bio_total else (
-            COLOR_ORANGE if bio_total > 0 else "#7d8891"
+            COLOR_ORANGE if bio_total > 0 else ui_theme.THEME.dim
         )
         return (
             ("FUEL", f"{fuel_percent}%" if fuel_percent is not None else "--", fuel_color),
@@ -998,7 +999,7 @@ class TacticalHUD:
             return f"GALACTIC VECTOR · {vector_label}", COLOR_ACCENT
         if attention_text:
             return attention_text, COLOR_ORANGE if attention_state == "alert" else COLOR_YELLOW
-        return "", "#7d8891"
+        return "", ui_theme.THEME.dim
 
     @staticmethod
     def _route_presentation(nav_context, route_waypoint, route_counts, game_r_pos, r_pos):
@@ -1121,7 +1122,7 @@ class TacticalHUD:
         remaining = max(0, total - scanned) if total > 0 and not complete else 0
 
         if source == "unknown":
-            label, tone, state = "COUNT UNKNOWN", "#7d8891", "unknown"
+            label, tone, state = "COUNT UNKNOWN", ui_theme.THEME.dim, "unknown"
         elif complete:
             label, tone, state = "COMPLETE", COLOR_ACCENT, "complete"
         elif live:
@@ -1380,7 +1381,7 @@ class TacticalHUD:
             },
             "bio": metric_values.get("bio"),
             "geo": metric_values.get("geo"),
-            "traffic": {"value": traffic_value, "color": "#7d8891"},
+            "traffic": {"value": traffic_value, "color": ui_theme.THEME.dim},
         }
 
         attention_text, attention_state = self._attention_summary(nav_context)

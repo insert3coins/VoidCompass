@@ -84,17 +84,6 @@ function setTheme(theme = {}) {
   return values;
 }
 
-function themedStateColour(value, theme) {
-  const original = colour(value, theme.dim);
-  return ({
-    '#00d1ff': theme.accent,
-    '#ff7a18': theme.orange,
-    '#4ee59b': theme.green,
-    '#ffd166': theme.yellow,
-    '#7d8891': theme.dim,
-  })[original.toLowerCase()] || original;
-}
-
 // Frontier supplies a class for the arrival star, not an image or a complete
 // inventory of every star in the system. Keep unknown classes visually neutral.
 function starFamily(value) {
@@ -331,7 +320,7 @@ function renderFuel(fuel = {}, dynamics = {}, theme = {}) {
   [...cells.children].forEach((cell, index) => cell.classList.toggle('lit', index < lit));
   dom['metric-fuel'].textContent = percent == null ? '--' : `${Math.round(percent)}%`;
   gauge.style.setProperty('--fuel-tone', percent == null
-    ? 'var(--dim)' : themedStateColour(fuel?.color, theme));
+    ? 'var(--dim)' : colour(fuel?.color, theme.dim));
   gauge.classList.toggle('unknown', percent == null);
   gauge.classList.toggle('scooping', Boolean(dynamics.fuel_scooping));
 }
@@ -409,7 +398,8 @@ function renderStatus(data, theme, reducedMotion) {
   hud.dataset.motion = state.motion || 'flight';
   hud.dataset.state = label;
   hud.dataset.category = category;
-  const tone = category === 'alert' ? theme.red : themedStateColour(state.color, theme);
+  // Custom palettes may reuse any hex value, so keep the model's exact color.
+  const tone = category === 'alert' ? theme.red : colour(state.color, theme.dim);
   hud.style.setProperty('--state', tone);
   dom['state-tag'].textContent = stateTag(state);
   dom['state-label'].textContent = displayLabel(label);
@@ -707,7 +697,7 @@ function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = 
     kind, Math.max(0, Number.parseInt(rawSignals[kind], 10) || 0),
   ]));
   const tone = survey.tone
-    ? themedStateColour(survey.tone, theme)
+    ? colour(survey.tone, theme.dim)
     : (state === 'unknown' ? (theme.dim || 'var(--dim)') : (theme.accent || 'var(--accent)'));
   // Show organic progress (logged/found) once any biology is known.
   const bioText = signalCounts.bio > 0 && /^\d+\/\d+$/.test(String(bioProgress)) ? String(bioProgress) : String(signalCounts.bio);
@@ -888,9 +878,9 @@ function render(data) {
   const metrics = data.metrics || {};
   renderSurvey(data.survey, theme, system.name || '', reducedMotion, metrics.bio?.value);
   dom['context-label'].textContent = data.context?.primary || '';
-  dom['context-label'].style.color = themedStateColour(data.context?.primary_color, theme);
+  dom['context-label'].style.color = colour(data.context?.primary_color, theme.dim);
   dom['secondary-label'].textContent = expanded ? (data.context?.secondary || '') : '';
-  dom['secondary-label'].style.color = themedStateColour(data.context?.secondary_color, theme);
+  dom['secondary-label'].style.color = colour(data.context?.secondary_color, theme.dim);
   dom['traffic-label'].textContent = expanded && metrics.traffic?.value
     ? `TRAFFIC ${metrics.traffic.value}` : (data.context?.traffic || '');
   const attentionText = ['alert', 'warn', 'warning'].includes(data.context?.attention)

@@ -19,7 +19,15 @@ def apply_theme_live(runtime, theme_name, palette):
     slots = {'COLOR_BG':'bg','COLOR_PANEL':'panel','COLOR_ACCENT':'accent',
              'COLOR_ORANGE':'orange','COLOR_TEXT':'text','COLOR_MUTED':'muted',
              'COLOR_GREEN':'green','COLOR_YELLOW':'yellow', 'COLOR_RED':'red'}
-    for name in ('config','dashboard','dashboard_scan_mixin','dashboard_core_mixin','hud','route_strip'):
+    # Modules that imported these constants by value need their own bindings refreshed.
+    for name in (
+        'voidcompass.core.config',
+        'voidcompass.dashboard.dashboard',
+        'voidcompass.dashboard.dashboard_scan_mixin',
+        'voidcompass.dashboard.dashboard_core_mixin',
+        'voidcompass.overlays.hud',
+        'voidcompass.exploration.route_strip',
+    ):
         module = sys.modules.get(name)
         if module:
             for attr, key in slots.items():
