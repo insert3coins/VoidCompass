@@ -60,6 +60,56 @@ class NavigationIndicatorStateTests(unittest.TestCase):
         self.assertTrue(dashboard.current_suit_low_health)
         self.assertTrue(dashboard.current_suit_very_cold)
 
+    def test_nomad_status_preserves_ship_fuel_and_exposes_surface_reservoir(self):
+        dashboard = MainDashboard.__new__(MainDashboard)
+        dashboard.config = {
+            "ground_target_lat": 0,
+            "ground_target_lon": 0,
+            "ground_target_active": False,
+            "ground_popup_enabled": False,
+        }
+        dashboard._reset_profile_runtime_state("Commander", "F1")
+        dashboard.batch_mode = True
+        dashboard.heartbeat_hud = None
+        dashboard.mining_window = None
+        dashboard._perf_spike = lambda *_args, **_kwargs: None
+        dashboard.fuel_capacity_main = 64.0
+
+        dashboard._apply_status_update({
+            "Flags": dashboard._STATUS_IN_MAIN_SHIP,
+            "Flags2": 0,
+            "Fuel": {"FuelMain": 48.0, "FuelReservoir": 0.8},
+        })
+        self.assertEqual(dashboard._current_fuel_percent(), 75)
+
+        dashboard.current_vehicle_name = "NOMAD"
+        dashboard._apply_status_update({
+            "Flags": dashboard._STATUS_IN_SRV,
+            "Flags2": 0,
+            "Fuel": {"FuelMain": 0, "FuelReservoir": 0.470705},
+        })
+        self.assertTrue(dashboard.current_in_srv)
+        self.assertEqual(dashboard.current_vehicle_name, "NOMAD")
+        self.assertEqual(dashboard.current_surface_fuel_reservoir, 0.470705)
+        self.assertEqual(dashboard.current_fuel_main, 48.0)
+        self.assertEqual(dashboard.current_fuel_reservoir, 0.8)
+        self.assertEqual(dashboard.fuel_capacity_main, 64.0)
+
+        dashboard._apply_status_update({
+            "Flags": dashboard._STATUS_IN_SRV,
+            "Flags2": 0,
+        })
+        self.assertIsNone(dashboard.current_surface_fuel_reservoir)
+        self.assertEqual(dashboard.current_fuel_main, 48.0)
+
+        dashboard._apply_status_update({
+            "Flags": dashboard._STATUS_IN_MAIN_SHIP,
+            "Flags2": 0,
+        })
+        self.assertFalse(dashboard.current_in_srv)
+        self.assertIsNone(dashboard.current_surface_fuel_reservoir)
+        self.assertEqual(dashboard._current_fuel_percent(), 75)
+
     def test_authoritative_states_have_useful_precedence(self):
         self.assertEqual(self._state({
             "flight_state": "SUPERCRUISE",

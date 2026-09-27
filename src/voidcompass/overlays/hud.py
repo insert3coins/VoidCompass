@@ -1372,13 +1372,25 @@ class TacticalHUD:
             str(int(traffic.get(key, 0) or 0)) for key in ("day", "week", "total")
         )
         fuel_percent = finite_number(nav_context.get("fuel_percent"))
+        surface_reservoir = finite_number(nav_context.get("fuel_reservoir_t"))
+        fuel_metric = {
+            **(metric_values.get("fuel") or {}),
+            # The segmented gauge needs the number, not the "71%" label.
+            "percent": None if fuel_percent is None
+            else max(0, min(100, int(round(fuel_percent)))),
+        }
+        if surface_reservoir is not None and surface_reservoir >= 0:
+            # Elite exposes vehicle fuel as reservoir tonnes, but does not
+            # report a tank capacity from which to derive a percentage.
+            fuel_metric.update({
+                "source": "surface_reservoir",
+                "percent": None,
+                "reservoir_t": surface_reservoir,
+                "value": f"{surface_reservoir:.3f} T",
+                "color": ui_theme.THEME.accent,
+            })
         model["metrics"] = {
-            "fuel": {
-                **(metric_values.get("fuel") or {}),
-                # The segmented gauge needs the number, not the "71%" label.
-                "percent": None if fuel_percent is None
-                else max(0, min(100, int(round(fuel_percent)))),
-            },
+            "fuel": fuel_metric,
             "bio": metric_values.get("bio"),
             "geo": metric_values.get("geo"),
             "traffic": {"value": traffic_value, "color": ui_theme.THEME.dim},

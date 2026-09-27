@@ -352,6 +352,23 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
         self.assertEqual(page.evaluate("""() => [dom['fuel-cells'].querySelectorAll('i.lit').length,
           dom['metric-fuel'].textContent, dom['fuel-gauge'].classList.contains('unknown')]"""), [0, "--", True])
 
+        surface = hud_snapshot(hud_state("NOMAD", in_main_ship=False))
+        surface["metrics"]["fuel"] = {
+            "value": "0.471 T", "percent": None, "source": "surface_reservoir",
+            "color": "#ff7a18",
+        }
+        self.render(page, surface)
+        self.assertEqual(page.evaluate("""() => ({
+          text: dom['metric-fuel'].textContent,
+          quantity: dom['fuel-gauge'].classList.contains('quantity'),
+          unknown: dom['fuel-gauge'].classList.contains('unknown'),
+          cells: getComputedStyle(dom['fuel-cells']).display,
+        })"""), {"text": "0.471 T", "quantity": True, "unknown": False, "cells": "none"})
+        self.render(page, hud_snapshot(state))
+        self.assertEqual(page.evaluate("""() => [dom['metric-fuel'].textContent,
+          dom['fuel-gauge'].classList.contains('quantity'),
+          getComputedStyle(dom['fuel-cells']).display]"""), ["71%", False, "flex"])
+
         scan = dict(state, notice={"seq": 5, "text": "BODY SCANNED", "detail": "", "tone": "accent", "duration": 1})
         self.render(page, hud_snapshot(scan))
         self.assertEqual(page.evaluate("""() => [dom['event-notice'].textContent,

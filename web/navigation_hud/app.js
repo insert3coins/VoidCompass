@@ -316,13 +316,19 @@ function renderFuel(fuel = {}, dynamics = {}, theme = {}) {
     cells.replaceChildren(...Array.from({length: FUEL_CELLS}, () => document.createElement('i')));
   }
   const percent = finite(fuel?.percent) ? Math.max(0, Math.min(100, Number(fuel.percent))) : null;
+  const reservoirValue = String(fuel?.value ?? '').trim();
+  const surfaceReservoir = percent == null && fuel?.source === 'surface_reservoir'
+    && reservoirValue !== '' && reservoirValue !== '--';
   const lit = percent == null ? 0 : Math.ceil(percent / (100 / FUEL_CELLS));
   [...cells.children].forEach((cell, index) => cell.classList.toggle('lit', index < lit));
-  dom['metric-fuel'].textContent = percent == null ? '--' : `${Math.round(percent)}%`;
-  gauge.style.setProperty('--fuel-tone', percent == null
+  dom['metric-fuel'].textContent = surfaceReservoir
+    ? reservoirValue : percent == null ? '--' : `${Math.round(percent)}%`;
+  gauge.style.setProperty('--fuel-tone', percent == null && !surfaceReservoir
     ? 'var(--dim)' : colour(fuel?.color, theme.dim));
-  gauge.classList.toggle('unknown', percent == null);
-  gauge.classList.toggle('scooping', Boolean(dynamics.fuel_scooping));
+  gauge.classList.toggle('unknown', percent == null && !surfaceReservoir);
+  gauge.classList.toggle('quantity', surfaceReservoir);
+  gauge.classList.toggle('scooping', percent != null && Boolean(dynamics.fuel_scooping));
+  gauge.title = surfaceReservoir ? 'Live surface vehicle fuel; capacity unavailable' : '';
 }
 
 function eventPlacementKey(node) {

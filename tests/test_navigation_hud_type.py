@@ -89,6 +89,38 @@ class NavigationTypeSettingsTests(unittest.TestCase):
                 hud.win.destroy()
             root.close()
 
+    def test_surface_reservoir_is_tonnes_without_an_invented_percent(self):
+        root = ApplicationRuntime()
+        try:
+            hud = TacticalHUD(root, {})
+            try:
+                hud.update("SYNUEFE XR-H D11-102", "", 0, 7, 16, None, {},
+                           nav_context={"flight_state": "NOMAD", "in_srv": True,
+                                        "vehicle_name": "NOMAD",
+                                        "fuel_reservoir_t": 0.470705})
+                fuel = hud._html_last_model["metrics"]["fuel"]
+                self.assertEqual(fuel["source"], "surface_reservoir")
+                self.assertEqual(fuel["value"], "0.471 T")
+                self.assertIsNone(fuel["percent"])
+                self.assertEqual(fuel["color"], hud._html_last_model["theme"]["accent"])
+
+                hud.update("SYNUEFE XR-H D11-102", "", 0, 7, 16, None, {},
+                           nav_context={"flight_state": "NOMAD", "in_srv": True})
+                fuel = hud._html_last_model["metrics"]["fuel"]
+                self.assertEqual(fuel["value"], "--")
+                self.assertIsNone(fuel["percent"])
+                self.assertNotIn("source", fuel)
+
+                hud.update("SYNUEFE XR-H D11-102", "", 0, 7, 16, None, {},
+                           nav_context={"flight_state": "SUPERCRUISE", "fuel_percent": 71})
+                fuel = hud._html_last_model["metrics"]["fuel"]
+                self.assertEqual((fuel["value"], fuel["percent"]), ("71%", 71))
+                self.assertNotIn("source", fuel)
+            finally:
+                hud.win.destroy()
+        finally:
+            root.close()
+
     def test_studio_saves_each_type_setting_on_its_own(self):
         class Studio(HtmlOverlayStudioMixin):
             def __init__(self):
