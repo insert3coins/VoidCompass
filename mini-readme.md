@@ -1,18 +1,21 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.9.6 // The Watcher Wakes
+## v5.4.9.7 // Settings Rebuilt & the Galnet Ticker
 **Release Date:** 2026-Sep-27
 
-* Rebuilt the Journal Heartbeat as a HAL 9000-style watcher: a metal bezel round a black glass lens, with a slowly turning spiral galaxy for an iris and a white-hot star for a pupil.
-* It watches every journal event. Each one falls into the eye as a mote in its own colour, and notable events play their own effect: a jump streaks stars out of the pupil, the FSD charge pulls rings in, a discovery scan rings out through the bezel, docking closes guidance rings, an incoming message makes the eye pulse as if speaking, and a new Codex entry sparkles. Events the app does not know yet still register.
-* The orb also has a mood. Recent events tint the iris (combat turns it red, and that lingers longest), a busy journal brightens it, a long quiet spell lets it drowse, and quitting to the main menu or closing the game puts it to sleep until your next session wakes it. Status.json updates run a small light round the bezel; if the feed goes quiet a red lamp lights, but the eye stays on.
-* Overlay Studio has two new Journal Heartbeat settings, saved per commander: orb size (54, 72 or 96 px) and eye colour (theme accent or HAL red).
-* The Navigation HUD's type can now be set in Overlay Studio, per commander: a typeface (Cockpit, Clear or Terminal), its own text size, larger small text that keeps the HUD the same size, and brighter labels for the faded and grey ones.
-* Rebuilt the startup screen around the same eye, which opens as the flight computer starts, inside a ring that tracks startup progress. It sits in the core of a galaxy that the window drifts slowly toward, takes in your journal as it is restored, and reads out Elite field notes. A flight computer log lists each startup step with its time, and this release's notes rotate beside it. When the deck is ready, the five-second hold counts down from 4 and the screen jumps into the deck in a burst of hyperspace streaks. The four startup systems now show ready only when their phase has actually finished.
-* Fixed the Navigation HUD showing your ship instead of the on-foot portrait when another state held the label, such as a settlement, a suit warning or the carrier deck. The portrait now follows where you actually are, which also keeps the SRV and fighter art up during their warnings; carrier jumps still show the carrier.
+* Rebuilt Settings as one screen: a rail of eight sections (Journal & files, Appearance, Cockpit overlays, Flight & exploration, Hotkeys, Galnet, Integrations, Diagnostics & recovery), each with a live summary, and a find box that searches every setting at once.
+* Settings now save the moment you change them, and each row shows SAVED, so there is no Save button. A change Void Compass refuses is marked NOT SAVED and put back, where before a refused save could be lost without a word.
+* Settings that had no home are now there: the low fuel warning level, copying the next route system to the clipboard, the adaptive command deck, achievements and their notifications, in-game mouse passthrough and every overlay's on/off switch. Themes are picked from cards drawn in their own colours, folders have BROWSE buttons, and API keys and webhooks can be shown or hidden.
+* A new journal folder takes effect straight away, watched from the end of its newest journal so nothing already played replays as live. Hotkeys save as you record them, and a shortcut already in use is refused with the name of the action that has it.
+* Added the Galnet Ticker overlay: a slim news bar that scrolls each dispatch's headline, date and story across the cockpit, with new dispatches marked NEW. Switch it on in Overlay Studio and set its length, scroll speed, how much of each story it reads, how many stories and whether to show dates. Under reduced motion it holds one story still and steps to the next.
+* The startup screen no longer shows the release notes; the version stays under the wordmark.
+* Switched the Rhino coverage map off throughout the app: its minimap overlay, the Coverage Maps view and map export in Planet Materials, and the tracking behind them. Saved maps are kept on disk. Rhino mining itself is unchanged.
+* Fixed an overlay (most often the Journal Heartbeat) sometimes never appearing: the local page servers refused part of the burst of files every overlay asks for at startup. The same fix stops the dashboard losing files on some launches.
+* Fixed the journal history entry for a star scan failing, which logged an error on every scanned star.
 
 ## Earlier releases
 
+* **v5.4.9.6** — Rebuilt the Journal Heartbeat as a HAL 9000-style watcher orb that reacts to every journal event, rebuilt the startup screen around the same eye with an FSD countdown into the deck, added Navigation HUD typeface and text settings, and fixed the HUD's on-foot portrait.
 * **v5.4.9.5** — Brought back an animated hologram for every Navigation HUD state with journal event effects, rebuilt Gravity Warning and Overlay Studio (one display at a time), made Survey Operations hold still at or below its rotation threshold, and fixed hidden overlays reloading after five minutes.
 * **v5.4.9.4** — Rebuilt Survey Operations around one spotlight world on a single clock, split Explore & Survey into three views with a unified Survey Board, rebuilt the Navigation HUD as a cockpit status panel and Planet Waypoint Navigation as a surface compass, and fixed startup stalling when the dashboard was minimised.
 * **v5.4.9.3** — Added the profile-local Return Later board and per-commander survey queue choices, kept every discovered body reachable in the Explore workboard, rebuilt Exploration Archive as a flight-record workspace and reworked Focused Log into a live field brief.

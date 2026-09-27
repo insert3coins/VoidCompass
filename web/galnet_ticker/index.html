@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VoidCompass Galnet Ticker</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <main id="ticker" class="ticker waiting" aria-label="Galnet news">
+    <div class="ticker-badge"><i class="ticker-lamp" aria-hidden="true"></i><b>GALNET</b><em id="ticker-new" class="ticker-new" hidden>NEW</em></div>
+    <div id="ticker-window" class="ticker-window">
+      <div id="ticker-track" class="ticker-track" aria-live="off"></div>
+      <p id="ticker-idle" class="ticker-idle">AWAITING DISPATCHES</p>
+    </div>
+  </main>
+  <script src="/assets/overlay-client.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

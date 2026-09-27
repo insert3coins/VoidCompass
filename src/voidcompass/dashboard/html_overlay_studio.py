@@ -1,6 +1,6 @@
 """Overlay Layout Studio model and command controller."""
 
-from voidcompass.core.overlay_registry import OVERLAY_SPEC_BY_ATTR
+from voidcompass.core.overlay_registry import OVERLAY_SPEC_BY_ATTR, RHINO_MAP_AVAILABLE
 
 from voidcompass.dashboard.html_workspace_support import (
     integer as _integer,
@@ -16,6 +16,9 @@ from voidcompass.overlays.overlay_layout_model import (
 )
 from voidcompass.overlays.heartbeat_hud import EYE_COLORS, ORB_SIZES, eye_color, orb_size
 from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, hud_typography
+from voidcompass.overlays.galnet_ticker_hud import (
+    TICKER_CONTENT, TICKER_SPEEDS, TICKER_STORIES, TICKER_WIDTH_RANGE, ticker_options,
+)
 from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
 
 
@@ -225,7 +228,7 @@ class HtmlOverlayStudioMixin:
             ground_solution = {}
             ground_configured = False
             ground_ready = False
-        rhino_tracker = getattr(self, "rhino_minimap", None)
+        rhino_tracker = getattr(self, "rhino_minimap", None) if RHINO_MAP_AVAILABLE else None
         rhino_map = getattr(rhino_tracker, "active", None)
         rhino_maps_count, rhino_maps_size = (
             rhino_tracker.usage() if rhino_tracker is not None else (0, 0)
@@ -299,6 +302,7 @@ class HtmlOverlayStudioMixin:
                 "station_info_timeout_s": _integer(self.config.get("station_info_timeout_s"), 30),
                 "contact_scope_timeout_s": _integer(self.config.get("contact_scope_timeout_s"), 45),
                 "heartbeat_orb_size": orb_size(self.config),
+                **{f"galnet_ticker_{key}": value for key, value in ticker_options(self.config).items()},
                 "heartbeat_eye_color": eye_color(self.config),
                 "gravity_warning_threshold_g": _number(self.config.get("gravity_warning_threshold_g"), 3.0),
                 "hud_crt_enabled": bool(self.config.get("hud_crt_enabled", True)),
@@ -407,6 +411,7 @@ class HtmlOverlayStudioMixin:
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
+            "galnet_ticker_show_date",
         }
         key = _text(key, 80)
         if key not in allowed:
@@ -430,6 +435,10 @@ class HtmlOverlayStudioMixin:
                     station.on_docked(self)
                 else:
                     station.hide()
+        elif key == "galnet_ticker_show_date":
+            ticker = getattr(self, "galnet_ticker_hud", None)
+            if ticker is not None:
+                ticker.apply_settings()
         elif key == "survey_status_show_all_bodies":
             survey = getattr(self, "survey_status_hud", None)
             if survey is not None:
@@ -486,6 +495,20 @@ class HtmlOverlayStudioMixin:
         if "hud_label_size" in payload:
             labels = _text(payload.get("hud_label_size"), 20).casefold()
             self.config["hud_label_size"] = labels if labels in HUD_LABEL_SIZES else "standard"
+        # Galnet ticker: its length, scroll speed and how much it reads.
+        if "galnet_ticker_width" in payload:
+            low, high = TICKER_WIDTH_RANGE
+            width = _integer(payload.get("galnet_ticker_width"), ticker_options(self.config)["width"])
+            self.config["galnet_ticker_width"] = max(low, min(high, width))
+        if "galnet_ticker_speed" in payload:
+            speed = _text(payload.get("galnet_ticker_speed"), 20).casefold()
+            self.config["galnet_ticker_speed"] = speed if speed in TICKER_SPEEDS else "standard"
+        if "galnet_ticker_content" in payload:
+            content = _text(payload.get("galnet_ticker_content"), 20).casefold()
+            self.config["galnet_ticker_content"] = content if content in TICKER_CONTENT else "summary"
+        if "galnet_ticker_stories" in payload:
+            stories = _integer(payload.get("galnet_ticker_stories"), 5)
+            self.config["galnet_ticker_stories"] = stories if stories in TICKER_STORIES else 5
         # Journal heartbeat orb: its window size and resting eye colour.
         if "heartbeat_orb_size" in payload:
             size = _integer(payload.get("heartbeat_orb_size"), orb_size(self.config))
@@ -497,6 +520,9 @@ class HtmlOverlayStudioMixin:
         heartbeat = getattr(self, "heartbeat_hud", None)
         if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
             heartbeat.apply_settings()
+        ticker = getattr(self, "galnet_ticker_hud", None)
+        if ticker is not None and hasattr(ticker, "apply_settings"):
+            ticker.apply_settings()
         self.update_hud()
         station = getattr(self, "station_info_hud", None)
         if station is not None and getattr(self, "current_docked", False):
@@ -527,6 +553,8 @@ class HtmlOverlayStudioMixin:
                 self.update_hud()
                 self._schedule_html_dashboard_publish(immediate=True)
             return True
+        if operation.startswith("rhino_") and not RHINO_MAP_AVAILABLE:
+            return False
         if operation == "rhino_center":
             return self._set_rhino_minimap_center()
         if operation == "rhino_border":

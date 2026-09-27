@@ -12,7 +12,7 @@ WEB = Path(__file__).resolve().parents[1] / "web"
 def overview_state():
     """A small journal-shaped state with deliberately distinct work counts."""
     return {
-        "app": {"version": "5.4.9.6"},
+        "app": {"version": "5.4.9.7"},
         "profile": {"key": "overview-visual-test", "commander": "TEST CMDR",
                     "profile_label": "TEST CMDR · live field briefing"},
         "theme": {},

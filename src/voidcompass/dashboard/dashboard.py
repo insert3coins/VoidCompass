@@ -46,6 +46,7 @@ from voidcompass.overlays.station_info_hud import StationInfoHUD
 from voidcompass.overlays.survey_status_hud import SurveyStatusHUD
 from voidcompass.overlays.toast_hud import ToastHUD
 from voidcompass.overlays.heartbeat_hud import HeartbeatHUD
+from voidcompass.overlays.galnet_ticker_hud import GalnetTickerHUD
 from voidcompass.overlays.contact_scope_hud import ContactScopeHUD
 from voidcompass.overlays.html_survey_overlay import attach_html_survey_overlay
 from voidcompass.overlays.html_toast_overlay import attach_html_toast_overlay
@@ -59,6 +60,7 @@ from voidcompass.overlays.html_planet_materials_overlay import attach_html_plane
 from voidcompass.overlays.html_rhino_minimap_overlay import attach_html_rhino_minimap_overlay
 from voidcompass.overlays.html_powerplay_overlay import attach_html_powerplay_overlay
 from voidcompass.overlays.html_heartbeat_overlay import attach_html_heartbeat_overlay
+from voidcompass.overlays.html_galnet_ticker_overlay import attach_html_galnet_ticker_overlay
 from voidcompass.overlays.html_contact_overlay import attach_html_contact_overlay
 from voidcompass.core.runtime_trace import RuntimeTrace
 from voidcompass.dashboard.dashboard_db_mixin import DashboardDBMixin
@@ -107,6 +109,7 @@ from voidcompass.core.overlay_registry import (
     HTML_OVERLAY_SPECS,
     OVERLAY_POSITION_SPECS,
     OVERLAY_SPEC_BY_ATTR,
+    RHINO_MAP_AVAILABLE,
 )
 from voidcompass.mining.rhino_minimap import RhinoMinimapTracker
 
@@ -913,6 +916,7 @@ class MainDashboard(
             "survey_status_hud",
             "toast_hud",
             "heartbeat_hud",
+            "galnet_ticker_hud",
             "contact_scope_hud",
         ):
             overlay = getattr(self, attr, None)
@@ -998,7 +1002,7 @@ class MainDashboard(
         for attr in (
             "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "rhino_minimap_hud", "powerplay_hud",
             "gravity_warning_hud", "station_info_hud",
-            "survey_status_hud", "toast_hud", "heartbeat_hud",
+            "survey_status_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud",
             "contact_scope_hud",
         ):
             overlay = getattr(self, attr, None)
@@ -2427,6 +2431,13 @@ class MainDashboard(
         else:
             self.heartbeat_hud = None
 
+        if self._overlay_enabled("galnet_ticker_hud"):
+            self.galnet_ticker_hud = GalnetTickerHUD(self.root, self.config)
+            # Cached dispatches show at once; the first refresh follows.
+            self._update_galnet_ticker()
+        else:
+            self.galnet_ticker_hud = None
+
         if self._overlay_enabled("contact_scope_hud"):
             self.contact_scope_hud = ContactScopeHUD(self.root, self.config)
             self._refresh_contact_scope()
@@ -2658,7 +2669,7 @@ class MainDashboard(
         explicit visibility intent.  Event-driven overlays remain governed by
         their own pending/show policies and are deliberately excluded here.
         """
-        persistent = ("hud", "cargo_hud", "carrier_hud", "heartbeat_hud")
+        persistent = ("hud", "cargo_hud", "carrier_hud", "heartbeat_hud", "galnet_ticker_hud")
         hidden = set(getattr(self, "_overlay_hotkey_hidden", set()))
         if bool(getattr(self, "_overlay_hotkey_global_hidden", False)):
             return set()
@@ -3240,6 +3251,8 @@ class MainDashboard(
         if action == "field_bookmark":
             self._field_bookmark()
             return
+        if action.startswith("rhino_minimap") and not RHINO_MAP_AVAILABLE:
+            return
         if action == "rhino_minimap_center":
             self._set_rhino_minimap_center()
             return
@@ -3456,7 +3469,21 @@ class MainDashboard(
     def _galnet_refresh_complete(self):
         if not self.is_running:
             return
+        self._update_galnet_ticker()
         self._schedule_html_dashboard_publish(immediate=True)
+
+    def _update_galnet_ticker(self):
+        """Hand the Galnet ticker overlay the relay's current dispatches."""
+        ticker = getattr(self, "galnet_ticker_hud", None)
+        if ticker is None:
+            return
+        try:
+            ticker.update_feed(
+                self._html_dashboard_galnet(),
+                enabled=bool(self.config.get("galnet_enabled", True)),
+            )
+        except Exception as exc:
+            logging.debug("Galnet ticker update skipped: %s", exc)
 
     def _galnet_refresh_minutes(self):
         try:
@@ -3502,6 +3529,7 @@ class MainDashboard(
             force=force,
         )
         if started:
+            self._update_galnet_ticker()
             self._schedule_html_dashboard_publish(immediate=True)
         return started
 
@@ -3684,7 +3712,7 @@ class MainDashboard(
             galnet_feed.request_stop()
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
-            "gravity_warning_hud", "toast_hud", "heartbeat_hud",
+            "gravity_warning_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
             try:
@@ -4577,6 +4605,14 @@ class MainDashboard(
             self.heartbeat_hud.destroy()
             self.heartbeat_hud = None
 
+        if self._overlay_enabled("galnet_ticker_hud"):
+            if getattr(self, "galnet_ticker_hud", None) is None:
+                self.galnet_ticker_hud = GalnetTickerHUD(self.root, self.config)
+                self._update_galnet_ticker()
+        elif getattr(self, "galnet_ticker_hud", None):
+            self.galnet_ticker_hud.destroy()
+            self.galnet_ticker_hud = None
+
         if self._overlay_enabled("contact_scope_hud"):
             contact_scope_created = self.contact_scope_hud is None
             if self.contact_scope_hud is None:
@@ -4656,6 +4692,10 @@ class MainDashboard(
                 )
             elif attr == "heartbeat_hud":
                 attach_html_heartbeat_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "galnet_ticker_hud":
+                attach_html_galnet_ticker_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "contact_scope_hud":

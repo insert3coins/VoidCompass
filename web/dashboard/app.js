@@ -145,6 +145,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".galnet-headline-row", "#status-galnet", ".bp-group-tabs button",
   ".bp-slot", ".bp-module", ".bp-analysis > nav button",
   ".survey-body-row", ".explore-views button", "[data-explore-filter]", ".body-select",
+  ".settings-tab", ".theme-option",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -155,7 +156,7 @@ function decorateCockpitButtons(root = document) {
     if (button.matches(STRUCTURAL_BUTTON_SELECTOR)) continue;
     button.classList.add("cockpit-button");
     button.classList.toggle("cockpit-primary", button.matches(
-      ".primary, .commission-action, #settings-save-html, #save-deck-layout, [data-page-layout-save]",
+      ".primary, .commission-action, #save-deck-layout, [data-page-layout-save]",
     ));
     button.classList.toggle("cockpit-danger", button.matches(
       ".danger-action, .row-delete, #studio-delete-preset, #annotation-delete",
@@ -308,9 +309,8 @@ function showToast(message) {
 
 const PAGE_LAYOUT_CONTAINER_SELECTOR = [
   "#overview-modules", ".record-metrics", ".records-grid",
-  ".tool-grid", ".settings-grid", ".about-grid",
+  ".tool-grid", ".about-grid",
   ".workspace-shell .workspace-metrics", ".workspace-shell .workspace-grid",
-  ".workspace-shell .settings-workspace-grid",
   ".workspace-shell .mission-layout", ".workspace-shell .chronicle-list",
   ".workspace-shell .region-passport-grid", ".workspace-shell .achievement-grid",
   ".workspace-shell .mining-command-grid",
@@ -572,28 +572,10 @@ function applyTheme(theme = {}) {
       document.documentElement.style.setProperty(`--${key.replaceAll("_", "-")}`, value);
     }
   }
-  const select = byId("theme-select");
   const names = Array.isArray(theme.available) ? theme.available : [];
-  const optionsKey = names.join("\u0000");
-  if (select.dataset.options !== optionsKey) {
-    select.replaceChildren(...names.map((name) => {
-      const option = document.createElement("option");
-      option.value = name;
-      option.textContent = name;
-      return option;
-    }));
-    select.dataset.options = optionsKey;
-  }
-  select.value = theme.name || "Void Cyan";
   const nextFingerprint = JSON.stringify({name: theme.name || "", palette: theme.palette || {}, names});
   if (nextFingerprint !== themeFingerprint) {
     themeFingerprint = nextFingerprint;
-    const swatches = byId("theme-swatches");
-    swatches.replaceChildren(...["accent", "orange", "green", "yellow", "red", "text"].map((key) => {
-      const item = document.createElement("i");
-      item.style.background = theme.palette?.[key] || "transparent";
-      return item;
-    }));
     orreryView?.render();
   }
 }
@@ -666,7 +648,6 @@ function renderBoot(state) {
     events: number(boot.events),
     stage: activeStage.key,
     version: String(state.app?.version || ""),
-    release: state.app?.release || null,
   };
   if (!boot.active) {
     if (!bootReadyAt && !bootHoldComplete) bootReadyAt = performance.now();
@@ -2606,6 +2587,8 @@ function renderPlanetMaterialsWorkspace(data) {
     const count = (data.sites || []).filter(site => (site.body_details?.class || "Unreported") === cls && materialsFor(site).some(value => folded(value) === folded(material))).length;
     return `<td class="${count ? "planet-heat-present" : ""}">${count || "—"}</td>`;
   }).join("")}</tr>`).join("");
+  // The Rhino coverage map is switched off app-wide for now (RHINO_MAP_AVAILABLE).
+  const coverageEnabled = data.coverage_maps_enabled !== false;
   const coverageFor = body => (data.coverage_maps || []).find(row => planetKey(row) === planetKey(body));
   const coverageMaps = body => { const record=coverageFor(body); if(!record)return '<p class="workspace-empty">No Rhino coverage maps saved for this planet.</p>'; return `<div class="planet-map-summary"><b>${numeric(record.mapped_count)} / ${numeric(record.location_total)} LOCATIONS MAPPED</b><span>${numeric((record.maps||[]).length)} SAVED COVERAGE MAPS</span></div><div class="planet-map-grid">${(record.maps||[]).map(map=>`<article><header><b>${escapeHtml(map.name)}</b><span>${(map.locations||[]).length?`LOC ${(map.locations||[]).map(value=>numeric(value)).join(", ")}`:"LOCATION UNKNOWN"}</span></header><p>${numeric(map.painted_km2,2)} KM² PAINTED · ${numeric(map.bookmarks)} BOOKMARKS</p><small>${map.centered?"CENTRE SET":"DROP-POINT CENTRED"}${map.border_m?` · ${numeric(number(map.border_m)/1000,1)} KM BORDER`:" · OPEN BORDER"}</small><button type="button" data-map-export="${escapeHtml(map.name)}" data-map-body="${escapeHtml(record.body)}" data-map-system="${escapeHtml(record.system||"")}">${map.exported?"REFRESH & OPEN MAP":"EXPORT & OPEN MAP"}</button></article>`).join("")}</div>${(record.unknown_maps||[]).length?`<p>Location unknown: ${escapeHtml(record.unknown_maps.join(", "))}</p>`:""}`; };
   root.innerHTML = `<section class="planet-materials-shell"><article class="card planet-compass-quick${navigationTargetReady ? " active" : ""}">
@@ -2614,7 +2597,7 @@ function renderPlanetMaterialsWorkspace(data) {
       <div class="workspace-actions wrap planet-compass-controls"><button class="primary" data-ws-page="ground" data-ws-op="set" data-ground-source="planet">SEND TO COMPASS</button><button data-ws-page="ground" data-ws-op="set_current" ${data.current_position ? "" : "disabled"}>USE CURRENT</button><button data-ws-page="ground" data-ws-op="clear" ${navigationTargetReady ? "" : "disabled"}>CLEAR</button><button data-page="ground">GROUND &amp; EXOBIO</button></div>
       <div class="planet-compass-state"><i></i><span>${escapeHtml(navigationTargetDetail)}</span><b>${navigationTargetReady ? "TARGET ARMED" : "STANDBY"}</b></div>
     </article><article class="card planet-command-bar"><div><small>LIVE PLANET LINK</small><b data-planet-live-status></b></div><label>SCANNED OR SAVED PLANET<select data-select-planet>${bodies.map(body=>`<option value="${escapeHtml(planetKey(body))}" ${body === selected ? "selected" : ""}>${escapeHtml(planetLabel(body))}</option>`).join("") || '<option value="">No planets scanned or saved</option>'}</select></label><label>BOOKMARK MATERIAL<select data-select-body-material><option value="">All recorded materials</option></select></label><strong data-selected-count>0 SAVED LOCATIONS</strong></article>
-    <div class="workspace-actions planet-atlas-tabs">${[["body","PLANET SITES"],["maps","COVERAGE MAPS"],["heat","HEAT MAP"],["material","BY MATERIAL"]].map(([key,label])=>`<button type="button" data-atlas-view="${key}">${label}</button>`).join("")}</div>
+    <div class="workspace-actions planet-atlas-tabs">${[["body","PLANET SITES"],...(coverageEnabled ? [["maps","COVERAGE MAPS"]] : []),["heat","HEAT MAP"],["material","BY MATERIAL"]].map(([key,label])=>`<button type="button" data-atlas-view="${key}">${label}</button>`).join("")}</div>
     <section data-atlas-panel="body"><article class="card planet-condition-card"><header>SELECTED PLANET</header><div data-selected-facts></div></article>
       <div class="planet-atlas-columns"><article class="card planet-location-library"><header><span>SURFACE MINING LOCATIONS</span><b data-selected-count>0 SAVED</b></header><div data-selected-mining></div></article><article class="card"><header>EXPECTED RHINO VALUE · FIELD ESTIMATE</header><div data-selected-value></div><header>KNOWN RAW MATERIAL COMPOSITION</header><div data-selected-raw></div></article></div>
       <article class="card planet-materials-wide planet-new-site"><header>RECORD A NEW LOCATION</header><p>Use current to capture the live planet, X/Y coordinates and scanned raw materials. Mining materials and deposit density are your field observations.</p><form class="planet-site-form" data-new-site-form>${fields()}</form></article></section>
@@ -2639,7 +2622,7 @@ function renderPlanetMaterialsWorkspace(data) {
     root.querySelector('[data-selected-mining]').innerHTML = siteCards(visibleSites);
     root.querySelector('[data-selected-maps]').innerHTML = coverageMaps(selected);
     const coverage = coverageFor(selected);
-    root.querySelectorAll('[data-selected-count]').forEach(label=>{label.textContent=`${selectedSites.length} SAVED · ${numeric(coverage?.mapped_count)} / ${numeric(coverage?.location_total || selected.mining_locations)} MAPPED`;});
+    root.querySelectorAll('[data-selected-count]').forEach(label=>{label.textContent=coverageEnabled ? `${selectedSites.length} SAVED · ${numeric(coverage?.mapped_count)} / ${numeric(coverage?.location_total || selected.mining_locations)} MAPPED` : `${selectedSites.length} SAVED`;});
   }
   showBody();
   for (const [siteId, draft] of preservedDrafts) {
@@ -2672,7 +2655,7 @@ function renderPlanetMaterialsWorkspace(data) {
     root.querySelectorAll('[data-atlas-panel]').forEach(panel=>{panel.hidden=panel.dataset.atlasPanel!==key;});
     root.querySelectorAll('[data-atlas-view]').forEach(button=>button.classList.toggle('primary',button.dataset.atlasView===key));
   };
-  showView(root.dataset.atlasView || 'body');
+  showView(!coverageEnabled && root.dataset.atlasView === 'maps' ? 'body' : (root.dataset.atlasView || 'body'));
   root.onclick = async event => {
     const viewButton=event.target.closest('button[data-atlas-view]');
     if(viewButton)return showView(viewButton.dataset.atlasView);
@@ -3442,12 +3425,314 @@ function renderLedgerWorkspace(data) {
   root.dataset.rows = JSON.stringify(rows);
 }
 
-function settingToggle(id, label, detail, checked) {
-  return `<label class="settings-toggle"><span><b>${escapeHtml(label)}</b><small>${escapeHtml(detail)}</small></span><input id="${id}" type="checkbox" ${checked ? "checked" : ""}><i></i></label>`;
+// ------------------------------------------------------------- settings --
+// Settings save one control at a time as it changes, as Overlay Studio does;
+// there is no Save button. One section shows at a time, chosen from the rail,
+// and the find box searches every setting in every section. The command
+// channel answers before Python applies a save, so each save carries an id
+// and the next snapshot's last_save says whether it was kept.
+const SETTINGS_SECTIONS = [
+  {id: "journal", title: "Journal & files", heading: "Where Void Compass reads from"},
+  {id: "appearance", title: "Appearance", heading: "How the command deck looks"},
+  {id: "overlays", title: "Cockpit overlays", heading: "What flies with you in the cockpit"},
+  {id: "flight", title: "Flight & exploration", heading: "Warnings and helpers in flight"},
+  {id: "hotkeys", title: "Hotkeys", heading: "Shortcuts that work while Elite has focus"},
+  {id: "galnet", title: "Galnet", heading: "News from the Galnet relay"},
+  {id: "integrations", title: "Integrations", heading: "EDSM, EDDN and Discord"},
+  {id: "diagnostics", title: "Diagnostics & recovery", heading: "Logs, safety nets and the journal cache"},
+];
+let settingsSection = "journal";
+let settingsSaveSequence = 0;
+const settingsPendingSaves = new Map();
+let settingsWorkshopOpen = false;
+
+const settingSearchText = (...parts) => escapeHtml(parts.filter(Boolean).join(" ").toLocaleLowerCase());
+
+function settingFlag() {
+  return `<em class="setting-flag" aria-live="polite"></em>`;
 }
 
-function settingInput(id, label, value, type = "text") {
-  return `<label class="settings-input"><span>${escapeHtml(label)}</span><input id="${id}" type="${type}" value="${escapeHtml(value ?? "")}" autocomplete="off"></label>`;
+function settingSwitch({key = "", id = "", label, detail = "", checked, attrs = ""}) {
+  const target = key ? ` data-setting="${escapeHtml(key)}"` : "";
+  return `<label class="setting-row switch" data-search="${settingSearchText(label, detail, key)}"><span class="setting-copy"><b>${escapeHtml(label)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</span><span class="setting-control"><input type="checkbox"${id ? ` id="${escapeHtml(id)}"` : ""}${target} ${checked ? "checked" : ""}${attrs}><i class="setting-switch" aria-hidden="true"></i></span>${settingFlag()}</label>`;
+}
+
+function settingSelect({key, label, detail = "", value, options, type = "text"}) {
+  const choices = options.map(([option, text]) => `<option value="${escapeHtml(option)}" ${String(option) === String(value) ? "selected" : ""}>${escapeHtml(text)}</option>`).join("");
+  return `<label class="setting-row" data-search="${settingSearchText(label, detail, key, options.map((item) => item[1]).join(" "))}"><span class="setting-copy"><b>${escapeHtml(label)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</span><span class="setting-control"><select data-setting="${escapeHtml(key)}" data-setting-type="${escapeHtml(type)}">${choices}</select></span>${settingFlag()}</label>`;
+}
+
+function settingText({key, id = "", label, detail = "", value, secret = false, browse = false, status = null, placeholder = ""}) {
+  const chip = status ? `<span class="setting-status ${escapeHtml(status.tone)}">${escapeHtml(status.text)}</span>` : "";
+  const tools = [
+    browse ? `<button type="button" data-settings-browse="${escapeHtml(key)}">BROWSE</button>` : "",
+    secret ? `<button type="button" data-settings-reveal aria-pressed="false">SHOW</button>` : "",
+  ].join("");
+  return `<div class="setting-row wide" data-search="${settingSearchText(label, detail, key)}"><span class="setting-copy"><b>${escapeHtml(label)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</span>${chip}<span class="setting-control"><input${id ? ` id="${escapeHtml(id)}"` : ""} type="${secret ? "password" : "text"}" data-setting="${escapeHtml(key)}" value="${escapeHtml(value ?? "")}" placeholder="${escapeHtml(placeholder)}" autocomplete="off" spellcheck="false">${tools}</span>${settingFlag()}</div>`;
+}
+
+function settingActions(buttons, search = "") {
+  return `<div class="setting-row actions" data-search="${settingSearchText(search)}">${buttons}</div>`;
+}
+
+function settingNote(textValue, id = "") {
+  return `<p class="setting-note"${id ? ` id="${escapeHtml(id)}"` : ""}>${escapeHtml(textValue)}</p>`;
+}
+
+function settingGroup(title, body) {
+  return `<div class="settings-group"><h4>${escapeHtml(title)}</h4>${body}</div>`;
+}
+
+function settingsSummaries(data) {
+  const value = data.values || {};
+  const journal = data.paths?.journal || {};
+  const overlays = data.overlays || [];
+  const galnet = data.galnet || {};
+  const bound = (data.hotkeys || []).filter((row) => row.value).length;
+  return {
+    journal: journal.exists ? `JOURNAL LINKED · ${numeric(journal.logs)} LOGS` : "JOURNAL FOLDER NOT FOUND",
+    appearance: String(data.theme_editor?.name || "Void Cyan").toUpperCase(),
+    overlays: `${numeric(overlays.filter((row) => row.enabled).length)} OF ${numeric(overlays.length)} ON`,
+    flight: `LOW FUEL AT ${Math.round(number(value.low_fuel_threshold_pct, .25) * 100)}%`,
+    hotkeys: value.overlay_hotkeys_enabled ? `${numeric(bound)} BOUND` : "HOTKEYS OFF",
+    galnet: value.galnet_enabled ? `${String(galnet.status || "standby").toUpperCase()} · ${numeric((galnet.articles || []).length)} DISPATCHES` : "RELAY OFF",
+    integrations: [value.edsm_upload_enabled ? "EDSM ON" : "EDSM OFF", value.eddn_market_upload_enabled ? "EDDN ON" : "EDDN OFF"].join(" · "),
+    diagnostics: String(data.health?.level || "NOMINAL").toUpperCase(),
+  };
+}
+
+function settingsSectionBody(id, data) {
+  const value = data.values || {};
+  const paths = data.paths || {};
+  const galnet = data.galnet || {};
+  const health = data.health || {};
+  const editor = data.theme_editor || {};
+  if (id === "journal") {
+    const journal = paths.journal || {};
+    const journalStatus = journal.exists
+      ? {tone: "good", text: `${numeric(journal.logs)} JOURNALS${journal.latest ? ` · LATEST ${journal.latest.replace(/^Journal\./, "").replace(/\.log$/, "")}` : ""}`}
+      : {tone: "bad", text: "FOLDER NOT FOUND"};
+    const shotsStatus = paths.screenshots?.exists ? {tone: "good", text: "FOLDER FOUND"} : {tone: "bad", text: "FOLDER NOT FOUND"};
+    return settingGroup("JOURNAL", `${settingText({key: "journal_path", id: "setting-journal", label: "Journal folder", detail: "The folder holding Frontier's Journal.*.log files. Void Compass only ever reads it. A new folder is watched straight away, from the end of its newest journal.", value: value.journal_path, browse: true, status: journalStatus})}`)
+      + settingGroup("SCREENSHOTS", `${settingText({key: "screenshots_path", id: "setting-screenshots", label: "Screenshot folder", detail: "Where Elite saves its BMP screenshots.", value: value.screenshots_path, browse: true, status: shotsStatus})}${settingSwitch({key: "screenshots_enabled", label: "Convert screenshots to PNG", detail: "Watch the screenshot folder and convert each new BMP.", checked: value.screenshots_enabled})}${settingActions(`<button type="button" data-command="open_screenshots">OPEN SCREENSHOTS</button>`, "open screenshots")}`);
+  }
+  if (id === "appearance") {
+    const cards = (data.themes || []).map((theme) => {
+      const swatch = theme.swatch || {};
+      const style = ["bg", "panel", "border", "accent", "orange", "green", "yellow", "red", "text"]
+        .filter((key) => /^#[0-9a-f]{6}$/i.test(swatch[key] || "")).map((key) => `--t-${key}:${swatch[key]}`).join(";");
+      const active = theme.name === editor.name;
+      return `<button type="button" class="theme-option${active ? " active" : ""}" data-theme-name="${escapeHtml(theme.name)}" style="${escapeHtml(style)}" aria-pressed="${active}"><span class="theme-preview" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>${escapeHtml(theme.name)}</b><small>${active ? "ACTIVE" : theme.custom ? "CUSTOM" : "BUILT IN"}</small></button>`;
+    }).join("");
+    const colors = (editor.keys || []).map((key) => `<label><span>${escapeHtml(key.replaceAll("_", " "))}</span><input type="color" data-theme-color="${escapeHtml(key)}" value="${escapeHtml(editor.palette?.[key] || "#000000")}"></label>`).join("");
+    return settingGroup("THEME", `<div class="theme-options" data-search="${settingSearchText("theme palette colour color", (data.themes || []).map((theme) => theme.name).join(" "))}">${cards}</div>`)
+      + settingGroup("DISPLAY", `${settingSelect({key: "ui_scale_percent", label: "Command deck scale", detail: "The size of everything in this window.", value: number(value.ui_scale_percent, 100), options: [90, 100, 110, 125, 140].map((item) => [item, `${item}%`]), type: "number"})}${settingSwitch({key: "reduced_motion_enabled", label: "Reduced motion", detail: "Still frames instead of animation on the deck and every overlay.", checked: value.reduced_motion_enabled})}${settingSelect({key: "hud_animation_intensity", label: "Navigation HUD animation", detail: "How lively the HUD's holographic scenes are.", value: value.hud_animation_intensity || "Standard", options: [["Calm", "Calm"], ["Standard", "Standard"], ["Energetic", "Energetic"]]})}`)
+      + `<details class="settings-group theme-workshop"${settingsWorkshopOpen ? " open" : ""} data-search="${settingSearchText("theme workshop custom palette colours colors")}"><summary><h4>THEME WORKSHOP</h4><span>${numeric((editor.custom || []).length)} CUSTOM</span></summary><div class="theme-workshop-body"><div class="theme-workshop-head"><label>NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>DELETE A CUSTOM THEME<select id="custom-theme-existing"><option value="">CHOOSE ONE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><p class="setting-note">Starts from the active theme. Change any colour, then save it as your own.</p><div class="theme-colour-grid">${colors}</div><div class="setting-row actions"><button type="button" data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY</button><button type="button" class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED</button></div></div></details>`;
+  }
+  if (id === "overlays") {
+    const rows = (data.overlays || []).map((row) => settingSwitch({
+      label: row.label, detail: row.enabled ? "On" : "Off", checked: row.enabled,
+      attrs: ` data-overlay-toggle="${escapeHtml(row.id)}"`,
+    })).join("");
+    return settingGroup("OVERLAYS", `${rows}${settingActions(`<button type="button" class="primary" data-page="overlay-studio">OPEN OVERLAY STUDIO</button>`, "overlay studio position size fade text")}${settingNote("Where each overlay sits, its size, fade, text and its own options live in Overlay Studio.")}`)
+      + settingGroup("IN THE COCKPIT", `${settingSwitch({key: "overlay_mouse_passthrough", label: "Mouse passes through overlays", detail: "Clicks go to Elite, not to the overlay under the pointer.", checked: value.overlay_mouse_passthrough})}`);
+  }
+  if (id === "flight") {
+    return settingGroup("FLIGHT", `${settingSelect({key: "low_fuel_threshold_pct", label: "Low fuel warning", detail: "Warn when the main tank falls below this.", value: String(number(value.low_fuel_threshold_pct, .25)), options: [.1, .15, .2, .25, .3, .4, .5].map((item) => [String(item), `${Math.round(item * 100)}%`]), type: "number"})}${settingSwitch({key: "auto_copy_waypoint", label: "Copy the next route system", detail: "Put the next system on the clipboard as you arrive, ready to paste into the galaxy map.", checked: value.auto_copy_waypoint})}`)
+      + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
+      + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingSwitch({key: "achievement_notifications_enabled", label: "Announce unlocks", detail: "Show a cockpit notification when one unlocks.", checked: value.achievement_notifications_enabled})}`);
+  }
+  if (id === "hotkeys") {
+    const rows = (data.hotkeys || []).map((row) => `<div class="setting-row hotkey-row" data-search="${settingSearchText(row.label, row.action, row.value, "hotkey shortcut")}"><span class="setting-copy"><b>${escapeHtml(row.label)}</b><small>${escapeHtml(row.default ? `Default ${row.default}` : "No default")}</small></span><span class="setting-control"><input data-hotkey-action="${escapeHtml(row.action)}" data-saved="${escapeHtml(row.value || "")}" value="${escapeHtml(row.value || "")}" placeholder="UNBOUND" readonly aria-label="${escapeHtml(row.label)} shortcut"><button type="button" data-hotkey-record="${escapeHtml(row.action)}">RECORD</button><button type="button" data-hotkey-clear="${escapeHtml(row.action)}">CLEAR</button></span>${settingFlag()}</div>`).join("");
+    return settingGroup("SHORTCUTS", `${settingSwitch({key: "overlay_hotkeys_enabled", label: "System-wide hotkeys", detail: "Shortcuts work while Elite has focus.", checked: value.overlay_hotkeys_enabled})}<p class="hotkey-status" id="hotkey-status">Press RECORD, then the whole shortcut. It saves as soon as you press it.</p>${rows}${settingActions(`<button type="button" id="hotkey-defaults">RESTORE DEFAULTS</button>`, "restore default hotkeys")}`);
+  }
+  if (id === "galnet") {
+    const updated = galnet.updated_at ? ` · UPDATED ${String(galnet.updated_at).toUpperCase()}` : "";
+    return settingGroup("RELAY", `${settingSwitch({key: "galnet_enabled", label: "Galnet relay", detail: "Fetch Frontier's Galnet feed for the news bar, the archive and the Galnet Ticker overlay.", checked: value.galnet_enabled})}${settingSelect({key: "galnet_refresh_minutes", label: "Check for news every", value: number(value.galnet_refresh_minutes, 30), options: [5, 15, 30, 60, 120, 240].map((item) => [item, item < 60 ? `${item} minutes` : `${item / 60} hour${item === 60 ? "" : "s"}`]), type: "number"})}<p class="setting-note" id="settings-galnet-status">${escapeHtml(galnet.detail || "Galnet relay standing by.")} · ${numeric((galnet.articles || []).length)} dispatches cached${escapeHtml(updated)}</p>${settingActions(`<button type="button" id="galnet-settings-refresh">REFRESH NOW</button><button type="button" id="galnet-settings-clear" class="danger-action">CLEAR CACHE</button>`, "refresh galnet clear cache")}`)
+      + settingGroup("NEWS BAR", `${settingSwitch({key: "galnet_auto_rotate_enabled", label: "Rotate headlines", detail: "Step through the dispatches in the deck's news bar.", checked: value.galnet_auto_rotate_enabled})}${settingSelect({key: "galnet_rotation_seconds", label: "Next headline every", value: number(value.galnet_rotation_seconds, 7), options: [4, 7, 10, 15, 30, 60].map((item) => [item, `${item} seconds`]), type: "number"})}`)
+      + settingGroup("GALNET TICKER OVERLAY", `${settingNote("A scrolling news bar for the cockpit: each headline, then its story. Switch it on and set its width, speed and content in Overlay Studio.")}${settingActions(`<button type="button" class="primary" data-page="overlay-studio" data-studio-select="galnet_ticker_hud">OPEN TICKER IN OVERLAY STUDIO</button>`, "galnet ticker overlay scrolling news")}`);
+  }
+  if (id === "integrations") {
+    return settingGroup("EDSM", `${settingText({key: "edsm_cmdr_name", id: "setting-edsm-name", label: "Commander name on EDSM", value: value.edsm_cmdr_name})}${settingText({key: "edsm_api_key", id: "setting-edsm-key", label: "EDSM API key", detail: "From your EDSM account settings.", value: value.edsm_api_key, secret: true})}${settingSwitch({key: "edsm_upload_enabled", label: "Send exploration to EDSM", detail: "Upload journal events with this commander's key.", checked: value.edsm_upload_enabled})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_edsm">TEST EDSM</button>`, "test edsm credentials")}`)
+      + settingGroup("EDDN", `${settingSwitch({key: "eddn_market_upload_enabled", label: "Share markets on EDDN", detail: "Publish the markets you visit to the community network.", checked: value.eddn_market_upload_enabled})}${settingNote(`${numeric(data.eddn?.uploads)} uploads this session${data.eddn?.last_error ? ` · last error: ${data.eddn.last_error}` : ""}`)}`)
+      + settingGroup("DISCORD", `${settingText({key: "carrier_discord_webhook_url", id: "setting-discord", label: "Carrier webhook", detail: "One webhook for your personal and Squadron Carrier: status, jumps and expedition updates.", value: value.carrier_discord_webhook_url, secret: true})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_discord">SEND TEST</button><button type="button" data-page="carrier">CARRIER COMMAND</button>`, "test discord carrier")}`)
+      + `<p id="settings-test-status" class="workspace-status ${escapeHtml(data.tools?.status || "ready")}">${escapeHtml(data.tools?.detail || "Integration tests have not run this session.")}</p>`;
+  }
+  const rebuildPanel = `<div id="settings-cache-rebuild" class="cache-rebuild-state ready" role="status" aria-live="polite"><header><span><b id="settings-cache-phase">READY</b><small id="settings-cache-detail">No cache rebuild has run for this profile this session.</small></span><strong id="settings-cache-percent">0%</strong></header><div id="settings-cache-meter" class="cache-rebuild-meter" role="progressbar" aria-label="Cache rebuild progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="settings-cache-bar"></i></div><footer><span id="settings-cache-meta">WAITING TO START</span><span id="settings-cache-elapsed"></span></footer></div>`;
+  return `<div class="settings-health" id="settings-health"><b id="settings-health-level">${escapeHtml(health.level || "NOMINAL")}</b><span id="settings-health-detail">${escapeHtml(settingsHealthDetail(health))}</span></div>`
+    + settingGroup("DIAGNOSTICS", `${settingSwitch({key: "runtime_trace_enabled", label: "Performance trace", detail: "Keep startup and UI timing in the logs folder.", checked: value.runtime_trace_enabled})}${settingSwitch({key: "crash_reporting_enabled", label: "Crash and freeze reports", detail: "Keep the current and previous reports in the logs folder.", checked: value.crash_reporting_enabled})}${settingActions(`<button type="button" data-command="open_logs">OPEN LOGS</button><button type="button" data-ws-page="settings" data-ws-op="support_bundle">CREATE SUPPORT BUNDLE</button>`, "open logs support bundle")}`)
+    + settingGroup("RECOVERY", `${settingSwitch({key: "recovery_safe_mode_enabled", label: "Safe recovery after a crash", detail: "Start from the last clean profile checkpoint after an unclean shutdown.", checked: value.recovery_safe_mode_enabled})}${settingSwitch({key: "automatic_profile_backups_enabled", label: "Automatic profile snapshots", detail: "Keep up to five, taken before upgrades and cache rebuilds.", checked: value.automatic_profile_backups_enabled})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="run_setup">RUN FIRST-TIME SETUP</button>`, "run setup onboarding")}`)
+    + settingGroup("JOURNAL CACHE", `${settingNote("Rebuilds this profile's exploration history from every journal. Progress shows here and in the live feed.")}${rebuildPanel}${settingSwitch({key: "edsm_backfill_on_cache_rebuild", id: "setting-cache-edsm", label: "Send history to EDSM while rebuilding", detail: "Backfill EDSM from the journals being read.", checked: value.edsm_backfill_on_cache_rebuild})}${settingActions(`<button type="button" id="settings-cache-rebuild-button" data-ws-page="settings" data-ws-op="rebuild_cache">REBUILD CACHE</button>`, "rebuild journal cache")}`);
+}
+
+function settingsHealthDetail(health = {}) {
+  return (`UI queue ${numeric(health.ui?.pending ?? health.ui_pending)} · max lag ${numeric(health.ui?.max_lag_ms ?? health.ui_max_lag_ms)} ms · disk queue ${numeric(health.persistence?.pending ?? health.writes_pending)}`);
+}
+
+function renderSettingsWorkspace(data) {
+  const root = byId("settings-workspace");
+  const scroller = root.closest(".page");
+  const scrollTop = scroller?.scrollTop || 0;
+  const summaries = settingsSummaries(data);
+  const profile = data.profile || {};
+  if (!SETTINGS_SECTIONS.some((section) => section.id === settingsSection)) settingsSection = "journal";
+  root.classList.remove("loading-panel");
+  root.innerHTML = `<div class="settings-shell">
+    <nav class="settings-rail" aria-label="Settings sections">
+      <header class="settings-commander"><small>ACTIVE PROFILE</small><b>CMDR ${escapeHtml(String(profile.name || "Unknown Commander").toUpperCase())}</b><span>${escapeHtml(profile.fid ? `FID ${profile.fid}` : "No Frontier ID yet")}</span></header>
+      ${SETTINGS_SECTIONS.map((section, index) => `<button type="button" class="settings-tab" data-settings-section="${section.id}"><i>${String(index + 1).padStart(2, "0")}</i><span><b>${escapeHtml(section.title)}</b><small>${escapeHtml(summaries[section.id] || "")}</small></span><em class="settings-tab-count"></em></button>`).join("")}
+    </nav>
+    <div class="settings-panels">
+      ${SETTINGS_SECTIONS.map((section, index) => `<section class="settings-section" data-settings-panel="${section.id}" aria-label="${escapeHtml(section.title)}"><header class="settings-section-head"><p>${String(index + 1).padStart(2, "0")} // ${escapeHtml(section.title.toUpperCase())}</p><h3>${escapeHtml(section.heading)}</h3></header>${settingsSectionBody(section.id, data)}</section>`).join("")}
+      <p class="settings-no-match" hidden>No setting matches that. Try a shorter word.</p>
+    </div>
+  </div>`;
+  applySettingsView();
+  updateSettingsLive(data);
+  if (scroller) scroller.scrollTop = scrollTop;
+}
+
+// Shows the chosen section, or every row that matches the find box.
+function applySettingsView() {
+  const root = byId("settings-workspace");
+  const shell = root?.querySelector(".settings-shell");
+  if (!shell) return;
+  const query = String(byId("settings-search")?.value || "").trim().toLocaleLowerCase();
+  const words = query.split(/\s+/).filter(Boolean);
+  shell.classList.toggle("searching", Boolean(words.length));
+  let matches = 0;
+  for (const panel of shell.querySelectorAll("[data-settings-panel]")) {
+    const id = panel.dataset.settingsPanel;
+    let panelMatches = 0;
+    for (const row of panel.querySelectorAll("[data-search]")) {
+      const hit = !words.length || words.every((word) => row.dataset.search.includes(word));
+      row.hidden = !hit;
+      if (hit) panelMatches += 1;
+    }
+    for (const group of panel.querySelectorAll(".settings-group")) {
+      const rows = group.matches("[data-search]") ? [group] : [...group.querySelectorAll("[data-search]")];
+      group.hidden = words.length > 0 && rows.every((row) => row.hidden);
+    }
+    const health = panel.querySelector(".settings-health");
+    if (health) health.hidden = words.length > 0;
+    const status = panel.querySelector("#settings-test-status");
+    if (status) status.hidden = words.length > 0 && !panelMatches;
+    panel.hidden = words.length ? !panelMatches : id !== settingsSection;
+    matches += panelMatches;
+    const tab = shell.querySelector(`[data-settings-section="${id}"]`);
+    if (tab) {
+      tab.classList.toggle("active", !words.length && id === settingsSection);
+      tab.classList.toggle("empty", words.length > 0 && !panelMatches);
+      tab.querySelector(".settings-tab-count").textContent = words.length ? String(panelMatches) : "";
+      tab.setAttribute("aria-current", !words.length && id === settingsSection ? "page" : "false");
+    }
+  }
+  shell.querySelector(".settings-no-match").hidden = !words.length || matches > 0;
+}
+
+function settingsSaveState(state, detail = "") {
+  const badge = byId("settings-save-state");
+  if (!badge) return;
+  badge.className = `settings-save-state ${state}`;
+  badge.textContent = {
+    saving: "SAVING…", saved: "ALL CHANGES SAVED", failed: detail ? `NOT SAVED · ${detail}` : "NOT SAVED",
+  }[state] || "ALL CHANGES SAVED";
+}
+
+function flagSettingRow(row, state) {
+  const flag = row?.querySelector(":scope > .setting-flag");
+  if (!row || !flag) return;
+  row.classList.remove("saving", "saved", "rejected");
+  void row.offsetWidth;
+  row.classList.add(state);
+  flag.textContent = {saving: "SAVING", saved: "SAVED", rejected: "NOT SAVED"}[state] || "";
+}
+
+async function saveSettings(values, rows = [], extra = {}) {
+  const id = ++settingsSaveSequence;
+  settingsPendingSaves.set(id, {rows, revert: extra.revert, started: Date.now()});
+  rows.forEach((row) => flagSettingRow(row, "saving"));
+  settingsSaveState("saving");
+  const accepted = await command("workspace", {page: "settings", operation: "save", save_id: id, values, ...(extra.hotkeys ? {hotkeys: extra.hotkeys} : {})});
+  if (!accepted) settleSettingsSave(id, false, "the command deck could not reach Void Compass");
+  // Should no snapshot confirm it, a save the channel accepted stands.
+  window.setTimeout(() => { if (settingsPendingSaves.has(id)) settleSettingsSave(id, true); }, 4000);
+  return accepted;
+}
+
+function settleSettingsSave(id, ok, detail = "") {
+  const pending = settingsPendingSaves.get(id);
+  if (!pending) return;
+  settingsPendingSaves.delete(id);
+  pending.rows.forEach((row) => flagSettingRow(row, ok ? "saved" : "rejected"));
+  if (!ok) pending.revert?.();
+  settingsSaveState(ok ? (settingsPendingSaves.size ? "saving" : "saved") : "failed", ok ? "" : detail);
+}
+
+function settleSettingsSaves(data = {}) {
+  const result = data.last_save || {};
+  const id = number(result.id);
+  if (!id) return;
+  // Saves up to this one have been applied in order; this one may have failed.
+  for (const pendingId of [...settingsPendingSaves.keys()]) {
+    if (pendingId < id) settleSettingsSave(pendingId, true);
+    else if (pendingId === id) settleSettingsSave(pendingId, Boolean(result.ok), String(result.detail || ""));
+  }
+}
+
+function settingValue(input) {
+  if (input.type === "checkbox") return input.checked;
+  if (input.dataset.settingType === "number") return number(input.value);
+  return input.value.trim();
+}
+
+async function saveSettingsHotkeys(rows, message) {
+  const inputs = [...document.querySelectorAll("[data-hotkey-action]")];
+  const hotkeys = Object.fromEntries(inputs.map((input) => [input.dataset.hotkeyAction, input.value.trim()]));
+  // The same shortcut on two actions is refused by Python; say why here.
+  const owners = new Map();
+  for (const input of inputs) {
+    const chord = input.value.trim().toLocaleLowerCase();
+    if (!chord) continue;
+    if (owners.has(chord)) {
+      text("hotkey-status", `${input.value.trim()} is already used by ${owners.get(chord)}. Choose another shortcut.`);
+      inputs.forEach((item) => { item.value = item.dataset.saved || ""; });
+      rows.forEach((row) => flagSettingRow(row, "rejected"));
+      return false;
+    }
+    owners.set(chord, input.closest(".setting-row")?.querySelector(".setting-copy b")?.textContent || "another action");
+  }
+  const revert = () => {
+    inputs.forEach((item) => { item.value = item.dataset.saved || ""; });
+    text("hotkey-status", "That shortcut could not be used; the previous bindings are kept.");
+  };
+  const accepted = await saveSettings({}, rows, {hotkeys, revert});
+  if (accepted) {
+    inputs.forEach((item) => { item.dataset.saved = item.value; });
+    if (message) text("hotkey-status", message);
+  }
+  return accepted;
+}
+
+// A re-render must not wipe what the commander is doing: an input with
+// focus, a hotkey being recorded, unsaved theme colours or saves in flight.
+function settingsCanRerender() {
+  const root = byId("settings-workspace");
+  if (!root) return false;
+  if (hotkeyCaptureAction || settingsPendingSaves.size) return false;
+  if (root.querySelector(".theme-workshop[data-dirty]")) return false;
+  const focused = document.activeElement;
+  return !(focused && root.contains(focused) && focused.matches("input, select, textarea, button"));
+}
+
+// What the page shows, without the live numbers updateSettingsLive handles.
+function settingsFingerprint(data = {}) {
+  return JSON.stringify({
+    values: data.values, hotkeys: data.hotkeys, themes: data.themes, overlays: data.overlays,
+    profile: data.profile, paths: data.paths, editor: [data.theme_editor?.name, data.theme_editor?.custom],
+    galnet: [data.galnet?.status, data.galnet?.detail, (data.galnet?.articles || []).length, data.galnet?.updated_at],
+    eddn: data.eddn,
+  });
 }
 
 function cacheRebuildMeta(state = {}) {
@@ -3484,28 +3769,10 @@ function updateSettingsLive(data = {}) {
     if (running) button.setAttribute("aria-busy", "true");
     else button.removeAttribute("aria-busy");
   }
-}
-
-function renderSettingsWorkspace(data) {
-  const root = byId("settings-workspace");
-  const value = data.values || {};
-  const galnet = data.galnet || {};
-  const hotkeys = (data.hotkeys || []).map((row) => `<div class="hotkey-row"><span><b>${escapeHtml(row.label)}</b><small>${escapeHtml(row.action)}</small></span><input data-hotkey-action="${escapeHtml(row.action)}" value="${escapeHtml(row.value || "")}" placeholder="UNBOUND"><button data-hotkey-record="${escapeHtml(row.action)}">RECORD</button><button data-hotkey-clear="${escapeHtml(row.action)}">CLEAR</button></div>`).join("");
-  const health = data.health || {};
-  const editor = data.theme_editor || {};
-  const themeColors = (editor.keys || []).map((key) => `<label><span>${escapeHtml(key.replaceAll("_", " "))}</span><input type="color" data-theme-color="${escapeHtml(key)}" value="${escapeHtml(editor.palette?.[key] || "#000000")}"></label>`).join("");
-  const rebuildPanel = `<div id="settings-cache-rebuild" class="cache-rebuild-state ready" role="status" aria-live="polite"><header><span><b id="settings-cache-phase">READY</b><small id="settings-cache-detail">No cache rebuild has run for this profile this session.</small></span><strong id="settings-cache-percent">0%</strong></header><div id="settings-cache-meter" class="cache-rebuild-meter" role="progressbar" aria-label="Cache rebuild progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="settings-cache-bar"></i></div><footer><span id="settings-cache-meta">WAITING TO START</span><span id="settings-cache-elapsed"></span></footer></div>`;
-  root.classList.remove("loading-panel");
-  root.innerHTML = `<section class="settings-workspace-grid">
-    ${workspaceCard("CORE PATHS & ACCESSIBILITY", `${settingInput("setting-journal", "Journal folder", value.journal_path)}${settingInput("setting-screenshots", "Screenshot folder", value.screenshots_path)}${settingToggle("setting-screenshots-enabled", "Convert BMP screenshots to PNG", "Watch the configured screenshot folder.", value.screenshots_enabled)}<label class="settings-input"><span>Application scale</span><select id="setting-ui-scale">${[90,100,110,125,140].map((item) => `<option ${number(value.ui_scale_percent,100) === item ? "selected" : ""}>${item}</option>`).join("")}</select></label><label class="settings-input"><span>Navigation animation</span><select id="setting-motion-intensity">${["Calm","Standard","Energetic"].map((item) => `<option ${String(value.hud_animation_intensity || "Standard") === item ? "selected" : ""}>${item}</option>`).join("")}</select></label>${settingToggle("setting-reduced-motion", "Reduced motion", "Gentler activity pulses and transitions.", value.reduced_motion_enabled)}`)}
-    ${workspaceCard("GLOBAL HOTKEYS", `${settingToggle("setting-hotkeys-enabled", "Enable system-wide hotkeys", "Shortcuts remain profile-aware and work while Elite has focus.", value.overlay_hotkeys_enabled)}<div class="hotkey-status" id="hotkey-status">Click RECORD, then press the complete shortcut.</div><div class="hotkey-list">${hotkeys}</div><div class="workspace-actions"><button id="hotkey-defaults">RESTORE DEFAULTS</button></div>`, `${(data.hotkeys || []).filter((row) => row.value).length} ACTIVE`)}
-    ${workspaceCard("THEME WORKSHOP", `<div class="theme-editor-head"><label>CUSTOM THEME NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>EXISTING CUSTOM THEME<select id="custom-theme-existing"><option value="">SELECT TO DELETE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><details><summary>EDIT COMPLETE PALETTE</summary><div class="theme-colour-grid">${themeColors}</div></details><div class="workspace-actions wrap"><button data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY CUSTOM THEME</button><button class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED CUSTOM THEME</button></div>`, `${(editor.custom || []).length} CUSTOM`)}
-    ${workspaceCard("EDSM & EDDN", `${settingInput("setting-edsm-name", "EDSM commander name", value.edsm_cmdr_name)}${settingInput("setting-edsm-key", "EDSM API key", value.edsm_api_key, "password")}${settingToggle("setting-edsm-upload", "Upload exploration events to EDSM", "Uses the active commander's credentials.", value.edsm_upload_enabled)}${settingToggle("setting-eddn-upload", "Upload visited markets to EDDN", "Community market publishing remains independent from Trade UI.", value.eddn_market_upload_enabled)}<p class="settings-note">${numeric(data.eddn?.uploads)} EDDN uploads this run${data.eddn?.last_error ? ` · LAST ERROR ${escapeHtml(data.eddn.last_error)}` : ""}</p><div class="workspace-actions"><button data-ws-page="settings" data-ws-op="test_edsm">TEST EDSM CREDENTIALS</button></div>`)}
-    ${workspaceCard("GALNET RELAY", `${settingToggle("setting-galnet-enabled", "Enable Galnet relay", "Show the bottom-bar news ticker and permit background feed refreshes.", value.galnet_enabled)}${settingToggle("setting-galnet-rotate", "Rotate headlines automatically", "Hold the current dispatch when disabled; the archive remains available.", value.galnet_auto_rotate_enabled)}<label class="settings-input"><span>Headline rotation cadence</span><select id="setting-galnet-rotation">${[4,7,10,15,30,60].map((item) => `<option value="${item}" ${number(value.galnet_rotation_seconds,7) === item ? "selected" : ""}>${item} seconds</option>`).join("")}</select></label><label class="settings-input"><span>Feed refresh cadence</span><select id="setting-galnet-refresh">${[5,15,30,60,120,240].map((item) => `<option value="${item}" ${number(value.galnet_refresh_minutes,30) === item ? "selected" : ""}>${item < 60 ? `${item} minutes` : `${item / 60} hour${item === 60 ? "" : "s"}`}</option>`).join("")}</select></label><p class="settings-note">${escapeHtml(galnet.detail || "Galnet relay standing by.")} · ${numeric((galnet.articles || []).length)} cached dispatches</p><div class="workspace-actions wrap"><button id="galnet-settings-refresh">REFRESH NOW</button><button id="galnet-settings-clear" class="danger-action">CLEAR CACHE</button></div>`, galnet.busy ? "RECEIVING" : String(galnet.status || "STANDBY").toUpperCase())}
-    ${workspaceCard("CARRIER INTEGRATION", `${settingInput("setting-discord", "Discord webhook URL", value.carrier_discord_webhook_url, "password")}<p class="settings-note">One webhook handles personal and Squadron Carrier status, jump and expedition updates.</p><div class="workspace-actions"><button data-ws-page="settings" data-ws-op="test_discord">SEND TEST PREVIEW</button><button data-page="carrier">OPEN CARRIER COMMAND</button></div>`)}
-    ${workspaceCard("DIAGNOSTICS & RECOVERY", `<div class="health-readout"><b>${escapeHtml(health.level || "NOMINAL")}</b><span>UI queue ${numeric(health.ui?.pending || health.ui_pending)} · max lag ${numeric(health.ui?.max_lag_ms || health.ui_max_lag_ms)} ms · disk queue ${numeric(health.persistence?.pending || health.writes_pending)}</span></div>${settingToggle("setting-runtime-trace", "Runtime performance trace", "Retain startup and UI timing evidence.", value.runtime_trace_enabled)}${settingToggle("setting-crash-report", "Crash and UI-freeze reporter", "Rotate current and previous diagnostic logs.", value.crash_reporting_enabled)}${settingToggle("setting-safe-mode", "Safe unclean-shutdown recovery", "Restore the last graceful profile checkpoint first.", value.recovery_safe_mode_enabled)}${settingToggle("setting-auto-backups", "Automatic profile safety snapshots", "Keep up to five snapshots before upgrades and cache rebuilds. Manual backup and restore rollback remain available.", value.automatic_profile_backups_enabled)}${settingToggle("setting-cache-edsm", "Upload history during cache rebuild", "Optional EDSM backfill while reconstructing profile history.", value.edsm_backfill_on_cache_rebuild)}${rebuildPanel}<div class="workspace-actions wrap"><button id="settings-cache-rebuild-button" data-ws-page="settings" data-ws-op="rebuild_cache">REBUILD CACHE</button><button data-ws-page="settings" data-ws-op="support_bundle">CREATE SUPPORT BUNDLE</button><button data-command="open_logs">OPEN LOGS</button><button data-ws-page="settings" data-ws-op="run_setup">RUN SETUP</button></div>`)}
-  </section><p id="settings-test-status" class="workspace-status ${escapeHtml(data.tools?.status || "ready")}">${escapeHtml(data.tools?.detail || "Integration tests have not run this session.")}</p><footer class="settings-savebar"><span>All settings belong to the active commander profile.</span><button id="settings-save-html">SAVE SETTINGS</button></footer>`;
-  updateSettingsLive(data);
+  if (data.health) {
+    text("settings-health-level", data.health.level || "NOMINAL");
+    text("settings-health-detail", settingsHealthDetail(data.health));
+  }
 }
 
 function renderWorkspace(state) {
@@ -3528,14 +3795,18 @@ function renderWorkspace(state) {
   const fingerprintData = page === "analytics"
     ? {...(workspace.data || {}), current: {...(workspace.data?.current || {}), elapsed: ""}}
     : (workspace.data || {});
-  const fingerprint = JSON.stringify(fingerprintData);
+  const fingerprint = page === "settings" ? settingsFingerprint(workspace.data) : JSON.stringify(fingerprintData);
   if (page === "settings" && workspaceFingerprints[page]) {
     updateSettingsLive(workspace.data || {});
+    settleSettingsSaves(workspace.data || {});
     const status = byId("settings-test-status");
     if (status) {
       status.className = `workspace-status ${workspace.data?.tools?.status || "ready"}`;
       status.textContent = workspace.data?.tools?.detail || "Integration tests have not run this session.";
     }
+    if (fingerprint === workspaceFingerprints[page] || !settingsCanRerender()) return;
+    workspaceFingerprints[page] = fingerprint;
+    renderSettingsWorkspace(workspace.data || {});
     return;
   }
   if (page === "analytics") {
@@ -4194,7 +4465,65 @@ document.addEventListener("click", async (event) => {
     if (pageButton.dataset.page === "explore" && pageButton.dataset.exploreView) {
       setExploreView(pageButton.dataset.exploreView, EXPLORE_WORKSPACE_UI);
     }
+    // Links into Overlay Studio may name the overlay to select there.
+    if (pageButton.dataset.page === "overlay-studio" && pageButton.dataset.studioSelect) {
+      studioSelectedId = pageButton.dataset.studioSelect;
+      studioFingerprint = "";
+    }
     showPage(pageButton.dataset.page);
+    return;
+  }
+  const settingsTab = event.target.closest("[data-settings-section]");
+  if (settingsTab) {
+    settingsSection = settingsTab.dataset.settingsSection;
+    const search = byId("settings-search");
+    if (search) search.value = "";
+    applySettingsView();
+    settingsTab.closest(".page")?.scrollTo({top: 0});
+    return;
+  }
+  const themeOption = event.target.closest("[data-theme-name]");
+  if (themeOption) {
+    const name = themeOption.dataset.themeName;
+    if (themeOption.classList.contains("active")) return;
+    if (await command("set_theme", {name})) {
+      document.querySelectorAll(".theme-option").forEach((node) => {
+        const active = node === themeOption;
+        node.classList.toggle("active", active);
+        node.setAttribute("aria-pressed", String(active));
+      });
+      showToast(`Theme changed to ${name}`);
+    }
+    return;
+  }
+  const browseFolder = event.target.closest("[data-settings-browse]");
+  if (browseFolder) {
+    const input = browseFolder.closest(".setting-row")?.querySelector("input[data-setting]");
+    browseFolder.disabled = true;
+    try {
+      const api = window.pywebview?.api;
+      if (!api?.choose_folder) throw new Error("Folder picker unavailable");
+      const selected = await api.choose_folder();
+      if (selected && input) {
+        input.value = String(selected);
+        input.dispatchEvent(new Event("change", {bubbles: true}));
+      }
+    } catch (error) {
+      showToast(error.message || "Folder picker unavailable");
+    } finally {
+      browseFolder.disabled = false;
+    }
+    return;
+  }
+  const revealSecret = event.target.closest("[data-settings-reveal]");
+  if (revealSecret) {
+    const input = revealSecret.closest(".setting-control")?.querySelector("input");
+    if (input) {
+      const showing = input.type === "text";
+      input.type = showing ? "password" : "text";
+      revealSecret.textContent = showing ? "SHOW" : "HIDE";
+      revealSecret.setAttribute("aria-pressed", String(!showing));
+    }
     return;
   }
   const achievementCategory = event.target.closest("[data-achievement-category]");
@@ -4241,11 +4570,7 @@ document.addEventListener("click", async (event) => {
   if (clearHotkey) {
     const input = document.querySelector(`[data-hotkey-action="${CSS.escape(clearHotkey.dataset.hotkeyClear)}"]`);
     if (input) input.value = "";
-    text("hotkey-status", "Binding cleared. Save Settings to apply.");
-    return;
-  }
-  if (event.target.closest("[data-settings-focus]")) {
-    byId("settings-workspace")?.scrollIntoView({behavior: "smooth", block: "start"});
+    await saveSettingsHotkeys([clearHotkey.closest(".setting-row")], "Shortcut cleared.");
     return;
   }
   if (event.target.closest("#hotkey-defaults")) {
@@ -4253,7 +4578,7 @@ document.addEventListener("click", async (event) => {
       const input = document.querySelector(`[data-hotkey-action="${CSS.escape(row.action)}"]`);
       if (input) input.value = row.default || "";
     }
-    text("hotkey-status", "Default bindings restored. Save Settings to apply.");
+    await saveSettingsHotkeys([...document.querySelectorAll(".hotkey-row")], "Default shortcuts restored.");
     return;
   }
   const galnetSettingsRefresh = event.target.closest("#galnet-settings-refresh");
@@ -4265,35 +4590,6 @@ document.addEventListener("click", async (event) => {
     if (!window.confirm("Clear locally cached Galnet dispatches?")) return;
     const accepted = await command("clear_galnet_cache");
     showToast(accepted ? "Galnet cache cleared" : "Galnet is busy; try again after the current refresh");
-    return;
-  }
-  if (event.target.closest("#settings-save-html")) {
-    const values = {
-      journal_path: byId("setting-journal")?.value.trim() || "",
-      screenshots_path: byId("setting-screenshots")?.value.trim() || "",
-      screenshots_enabled: Boolean(byId("setting-screenshots-enabled")?.checked),
-      ui_scale_percent: number(byId("setting-ui-scale")?.value, 100),
-      reduced_motion_enabled: Boolean(byId("setting-reduced-motion")?.checked),
-      hud_animation_intensity: byId("setting-motion-intensity")?.value || "Standard",
-      overlay_hotkeys_enabled: Boolean(byId("setting-hotkeys-enabled")?.checked),
-      edsm_cmdr_name: byId("setting-edsm-name")?.value.trim() || "",
-      edsm_api_key: byId("setting-edsm-key")?.value.trim() || "",
-      edsm_upload_enabled: Boolean(byId("setting-edsm-upload")?.checked),
-      eddn_market_upload_enabled: Boolean(byId("setting-eddn-upload")?.checked),
-      carrier_discord_webhook_url: byId("setting-discord")?.value.trim() || "",
-      runtime_trace_enabled: Boolean(byId("setting-runtime-trace")?.checked),
-      crash_reporting_enabled: Boolean(byId("setting-crash-report")?.checked),
-      recovery_safe_mode_enabled: Boolean(byId("setting-safe-mode")?.checked),
-      automatic_profile_backups_enabled: Boolean(byId("setting-auto-backups")?.checked),
-      edsm_backfill_on_cache_rebuild: Boolean(byId("setting-cache-edsm")?.checked),
-      galnet_enabled: Boolean(byId("setting-galnet-enabled")?.checked),
-      galnet_auto_rotate_enabled: Boolean(byId("setting-galnet-rotate")?.checked),
-      galnet_rotation_seconds: number(byId("setting-galnet-rotation")?.value, 7),
-      galnet_refresh_minutes: number(byId("setting-galnet-refresh")?.value, 30),
-    };
-    const hotkeys = Object.fromEntries([...document.querySelectorAll("[data-hotkey-action]")].map((input) => [input.dataset.hotkeyAction, input.value.trim()]));
-    const accepted = await command("workspace", {page: "settings", operation: "save", values, hotkeys});
-    showToast(accepted ? "Commander settings saved" : "Settings could not be saved; check hotkey bindings");
     return;
   }
   if (event.target.closest("#mission-new")) {
@@ -4590,6 +4886,52 @@ document.addEventListener("input", (event) => {
   }
 });
 
+// Settings save as they change; overlay switches go through Overlay Studio's
+// own toggle so both screens stay in step.
+document.addEventListener("change", async (event) => {
+  const target = event.target;
+  if (!target.closest?.("#settings-workspace")) return;
+  if (target.matches("[data-setting]")) {
+    const row = target.closest(".setting-row");
+    // What to put back if Python refuses this save.
+    const previous = target.type === "checkbox" ? !target.checked
+      : target.tagName === "SELECT" ? ([...target.options].find((option) => option.defaultSelected)?.value ?? target.value)
+        : target.defaultValue;
+    const revert = () => {
+      if (target.type === "checkbox") target.checked = previous;
+      else target.value = previous;
+    };
+    const accepted = await saveSettings({[target.dataset.setting]: settingValue(target)}, [row], {revert});
+    if (accepted && target.tagName === "SELECT") [...target.options].forEach((option) => { option.defaultSelected = option.selected; });
+    else if (accepted && target.type !== "checkbox") target.defaultValue = target.value;
+  } else if (target.matches("[data-overlay-toggle]")) {
+    const row = target.closest(".setting-row");
+    flagSettingRow(row, "saving");
+    const accepted = await command("overlay_studio", {operation: "toggle", overlay_id: target.dataset.overlayToggle});
+    flagSettingRow(row, accepted ? "saved" : "rejected");
+    if (!accepted) target.checked = !target.checked;
+    const detail = row?.querySelector(".setting-copy small");
+    if (detail && accepted) detail.textContent = target.checked ? "On" : "Off";
+  } else if (target.matches("[data-theme-color], #custom-theme-name")) {
+    target.closest(".theme-workshop")?.setAttribute("data-dirty", "");
+  }
+});
+
+document.addEventListener("input", (event) => {
+  if (event.target.id === "settings-search") applySettingsView();
+});
+
+document.addEventListener("toggle", (event) => {
+  if (event.target.matches?.(".theme-workshop")) settingsWorkshopOpen = event.target.open;
+}, true);
+
+// Saving or deleting a custom theme settles the workshop's edits.
+document.addEventListener("click", (event) => {
+  if (event.target.closest('[data-ws-page="settings"][data-ws-op="save_theme"], [data-ws-page="settings"][data-ws-op="delete_theme"]')) {
+    event.target.closest(".theme-workshop")?.removeAttribute("data-dirty");
+  }
+}, true);
+
 document.addEventListener("change", async (event) => {
   if (event.target.id === "achievement-sort") {
     achievementUi.sort = event.target.value;
@@ -4818,10 +5160,6 @@ byId("studio-delete-preset").addEventListener("click", async () => {
   if (await command("overlay_studio", {operation: "delete_preset", name})) showToast(`Deleted ${name}`);
 });
 
-byId("theme-select").addEventListener("change", async (event) => {
-  if (await command("set_theme", {name: event.target.value})) showToast(`Theme changed to ${event.target.value}`);
-});
-
 byId("onboarding-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const submit = byId("onboarding-submit");
@@ -4907,7 +5245,8 @@ window.addEventListener("keydown", async (event) => {
     const chord = [...modifiers, key].join("+");
     const input = document.querySelector(`[data-hotkey-action="${CSS.escape(hotkeyCaptureAction)}"]`);
     if (input) input.value = chord;
-    await finishHotkeyCapture(`Captured ${chord}. Save Settings to activate it.`);
+    await finishHotkeyCapture(`Captured ${chord}.`);
+    if (input) await saveSettingsHotkeys([input.closest(".setting-row")], `${chord} saved.`);
     return;
   }
   if (event.key === "Escape" && !byId("galnet-reader").hidden) {

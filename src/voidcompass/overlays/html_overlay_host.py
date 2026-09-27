@@ -547,6 +547,8 @@ class _OverlayHost:
             path = "/prospector/index.html"
         elif template == "heartbeat":
             path = "/heartbeat/index.html"
+        elif template == "galnet_ticker":
+            path = "/galnet_ticker/index.html"
         elif template == "survey":
             path = "/survey/index.html"
         elif template == "toast":

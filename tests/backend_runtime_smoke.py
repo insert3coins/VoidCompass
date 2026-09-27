@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory() as folder:
     (folder/'journals').mkdir()
     for key in ['overlay_enabled','cargo_overlay_enabled','carrier_overlay_enabled','prospector_overlay_enabled',
                 'gravity_warning_overlay_enabled','station_info_overlay_enabled','survey_status_overlay_enabled',
-                'toast_overlay_enabled','heartbeat_overlay_enabled','contact_scope_overlay_enabled']:
+                'toast_overlay_enabled','heartbeat_overlay_enabled','galnet_ticker_overlay_enabled','contact_scope_overlay_enabled']:
         values[key] = True
     for name in ['waypoints','specialists','adaptive_command','engineer_materials','companion_state','colonisation_data']:
         values[name+'_file']=str(folder/(name+'.json'))

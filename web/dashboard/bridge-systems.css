@@ -285,31 +285,6 @@
 [data-page-name="carrier"] .carrier-discord-state.configured { border-left-color: var(--green); }
 [data-page-name="carrier"] .carrier-discord-state.offline { border-left-color: var(--yellow); }
 
-/* Settings: settings are grouped as equipment banks; the Save control stays
-   legible while the long integration and hotkey list scrolls. */
-[data-page-name="settings"] .settings-grid .card {
-  border-color: var(--systems-line);
-  background: linear-gradient(145deg, var(--systems-wash), var(--systems-surface) 50%);
-}
-[data-page-name="settings"] .theme-card { border-top: 2px solid var(--accent); }
-[data-page-name="settings"] .theme-swatches i { box-shadow: 0 0 9px color-mix(in srgb, var(--accent) 10%, transparent); }
-[data-page-name="settings"] .settings-toggle {
-  border-bottom-color: var(--systems-line);
-}
-[data-page-name="settings"] .settings-toggle:focus-within,
-[data-page-name="settings"] .settings-input:focus-within {
-  background: color-mix(in srgb, var(--accent) 5%, transparent);
-}
-[data-page-name="settings"] .health-readout,
-[data-page-name="settings"] .settings-note {
-  border-left-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 4%, var(--inset));
-}
-[data-page-name="settings"] .settings-savebar {
-  border-color: var(--systems-line);
-  box-shadow: 0 -10px 26px rgba(0, 0, 0, .24), inset 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
-}
-
 /* About already has its own neon identity; connect its information cards to
    the Bridge border language without flattening the signature artwork. */
 [data-page-name="about"] .about-hero {
@@ -338,8 +313,7 @@
 @media (max-width: 980px) {
   [data-page-name="mining"] .mining-current,
   [data-page-name="powerplay"] .powerplay-identity,
-  [data-page-name="carrier"] .carrier-switcher,
-  [data-page-name="settings"] .settings-workspace-grid { min-width: 0; }
+  [data-page-name="carrier"] .carrier-switcher { min-width: 0; }
   [data-page-name="engineering"] .engineering-suite-nav { top: 0; }
   [data-page-name="build-planner"] .bp-manager,
   [data-page-name="build-planner"] .bp-hero,

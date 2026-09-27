@@ -26,7 +26,6 @@ import {BOOT_FACTS} from './boot-facts.js';
 const TAU = Math.PI * 2;
 const FRAME_MS = 1000 / 30;
 const FACT_INTERVAL_MS = 6500;
-const RELEASE_INTERVAL_MS = 8000;
 const LOG_LINES = 6;
 // The five-second hold counts down from 4, as the ship's FSD does.
 const COUNTDOWN_FROM_MS = 4000;
@@ -485,44 +484,10 @@ function nextFact() {
   feedOrb();
 }
 
-// What is new in this release, one change at a time.
-const release = {notes: [], index: 0, key: ''};
-
-function showRelease(announcement) {
-  const info = announcement.release;
-  const version = announcement.version || info?.version || '';
-  const notes = Array.isArray(info?.notes) ? info.notes.filter(Boolean) : [];
-  const key = JSON.stringify([version, info?.title, notes]);
-  if (key === release.key) return;
-  release.key = key;
-  release.notes = notes;
-  release.index = 0;
-  const line = $('boot-release-line');
-  if (info?.title) {
-    line.textContent = [`V${version}`, info.title, info.date].filter(Boolean).join(' // ').toUpperCase();
-  } else if (version) {
-    line.textContent = `V${version} // LOCAL-FIRST EXPLORATION COMPANION`;
-  }
-  $('boot-release').hidden = !notes.length;
-  $('boot-release-version').textContent = version ? `V${version}` : 'THIS RELEASE';
-  paintReleaseNote();
-}
-
-function paintReleaseNote() {
-  if (!release.notes.length) return;
-  const note = $('boot-release-note');
-  note.textContent = release.notes[release.index % release.notes.length];
-  $('boot-release-page').textContent = `${release.index % release.notes.length + 1} / ${release.notes.length}`;
-  const card = $('boot-release');
-  card.classList.remove('turning');
-  void card.offsetWidth;
-  card.classList.add('turning');
-}
-
-function nextReleaseNote() {
-  if (!starting() || release.notes.length < 2) return;
-  release.index += 1;
-  paintReleaseNote();
+// The version under the wordmark.
+function showVersion(announcement) {
+  const version = String(announcement.version || '');
+  if (version) $('boot-version-line').textContent = `V${version} // LOCAL-FIRST EXPLORATION COMPANION`;
 }
 
 // The handoff countdown and jump.
@@ -575,7 +540,6 @@ function resetHandoff() {
 
 // Timers and clocks run only while the boot screen is starting up.
 let factTimer = 0;
-let releaseTimer = 0;
 let clockTimer = 0;
 let lastEvents = 0;
 let lastStatus = '';
@@ -610,16 +574,14 @@ function sync() {
       if (!fact.textContent) nextFact();
       factTimer = setInterval(nextFact, FACT_INTERVAL_MS);
     }
-    releaseTimer ||= setInterval(nextReleaseNote, RELEASE_INTERVAL_MS);
     clockTimer ||= setInterval(() => {
       clock.textContent = formatClock(performance.now());
       tickCountdown();
     }, 100);
   } else {
     clearInterval(factTimer);
-    clearInterval(releaseTimer);
     clearTimeout(voiceTimer);
-    factTimer = releaseTimer = 0;
+    factTimer = 0;
     transmission.classList.remove('speaking');
     // The countdown keeps ticking through the fade so the jump completes.
     if (!on) {
@@ -637,7 +599,7 @@ window.addEventListener('voidcompass:boot', (event) => {
     return;
   }
   syncMarkers();
-  showRelease(announcement);
+  showVersion(announcement);
   const events = Number(announcement.events) || 0;
   const status = announcement.handoffAt ? 'FLIGHT DECK READY' : announcement.status;
   const detail = announcement.handoffAt ? 'Stand by for live handoff' : announcement.detail;
@@ -677,7 +639,6 @@ window.addEventListener('pagehide', () => {
   sky.stop();
   orb?.dispose();
   clearInterval(factTimer);
-  clearInterval(releaseTimer);
   clearInterval(clockTimer);
   clearTimeout(voiceTimer);
   observer.disconnect();

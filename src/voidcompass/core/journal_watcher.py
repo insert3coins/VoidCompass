@@ -27,6 +27,8 @@ class JournalWatcher:
         self.is_running = False
         self.last_journal = None
         self.file_pos = 0
+        # A folder chosen in Settings, applied by the watcher's own thread.
+        self._pending_journal_path = None
         # Startup catch-up reads only the recent tail of the active journal to avoid UI stalls.
         self.startup_tail_bytes = int(self.config.get("watcher_startup_tail_bytes", 131072) or 131072)
         if self.startup_tail_bytes < 32768:
@@ -430,7 +432,39 @@ class JournalWatcher:
                     pass
             time.sleep(1)
 
+    def switch_folder(self, journal_path):
+        """Watch another journal folder from now on.
+
+        The watcher's thread applies it at the start of its next pass, so a
+        read in progress never mixes positions from two folders.
+        """
+        self._pending_journal_path = str(journal_path or "")
+
+    def _attach_folder(self, journal_path):
+        # Start at the end of the new folder's newest journal: its earlier
+        # lines already happened and must not replay as live events.
+        self.journal_path = journal_path
+        self._journal_files = []
+        self._journal_files_refresh_ts = 0.0
+        self.last_journal = None
+        self.file_pos = 0
+        self._skip_partial_line_once = False
+        try:
+            names = sorted(
+                name for name in os.listdir(journal_path)
+                if name.startswith("Journal.") and name.endswith(".log")
+            )
+            if names:
+                self.last_journal = os.path.join(journal_path, names[-1])
+                self.file_pos = os.path.getsize(self.last_journal)
+        except OSError:
+            pass
+        self._force_special_check = True
+
     def _check_journal(self):
+        pending, self._pending_journal_path = self._pending_journal_path, None
+        if pending:
+            self._attach_folder(pending)
         t0 = time.perf_counter()
         try:
             now = time.time()

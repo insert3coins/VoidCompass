@@ -247,7 +247,10 @@ class PlanetMaterialsTests(unittest.TestCase):
             dashboard.current_in_srv = True
             dashboard.current_vehicle_name = 'Rhino'
             dashboard._planet_materials_store = lambda: store
-            self.assertTrue(dashboard._observe_rhino_minimap_status({}))
+            # The Rhino map is switched off app-wide (RHINO_MAP_AVAILABLE); its
+            # logic is kept, and tested, until the feature is removed.
+            with patch("voidcompass.dashboard.html_dashboard.RHINO_MAP_AVAILABLE", True):
+                self.assertTrue(dashboard._observe_rhino_minimap_status({}))
             self.assertEqual(dashboard.rhino_minimap.active.location, 7)
             self.assertIn('Location 7 from Location seven', dashboard.rhino_minimap.notice)
 

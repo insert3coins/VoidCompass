@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="archive.css">
   <link rel="stylesheet" href="bridge-systems.css">
   <link rel="stylesheet" href="overlay-studio.css">
+  <link rel="stylesheet" href="settings.css">
   <link rel="stylesheet" href="focused-log.css">
   <link rel="stylesheet" href="boot.css">
   <script defer src="/assets/heartbeat-orb.js"></script>
@@ -56,7 +57,7 @@
       <section class="boot-copy">
         <p class="boot-eyebrow">EXPLORATION FLIGHT COMPUTER</p>
         <h1 class="boot-wordmark">VOID <span>COMPASS</span></h1>
-        <p id="boot-release-line" class="boot-release-line">LOCAL-FIRST EXPLORATION COMPANION</p>
+        <p id="boot-version-line" class="boot-version-line">LOCAL-FIRST EXPLORATION COMPANION</p>
 
         <div class="boot-operation">
           <div class="boot-operation-copy">
@@ -83,11 +84,6 @@
         <section class="boot-log" aria-label="Flight computer log">
           <header><span>FLIGHT COMPUTER LOG</span><b id="boot-clock">T+00:00.0</b></header>
           <ol id="boot-log"></ol>
-        </section>
-
-        <section id="boot-release" class="boot-release" aria-label="New in this release" hidden>
-          <header><span>NEW IN <b id="boot-release-version">THIS RELEASE</b></span><em id="boot-release-page"></em></header>
-          <p id="boot-release-note"></p>
         </section>
       </section>
     </section>
@@ -498,13 +494,14 @@
           <div id="ledger-workspace" class="workspace-shell loading-panel">Reading the profile value index…</div>
         </section>
 
-        <section class="page" data-page-name="settings">
-          <header class="page-title"><div><p>APPLICATION CONTROL</p><h2>Settings & presentation</h2><span>Theme-aware controls shared by the command deck and cockpit overlays</span></div></header>
-          <section class="settings-grid">
-            <article class="card theme-card"><header><span>ACTIVE PROFILE THEME</span></header><label for="theme-select">COMMAND DECK PALETTE</label><select id="theme-select"></select><div id="theme-swatches" class="theme-swatches"></div><p>The selected palette belongs to the active commander and updates the dashboard, Galactic Atlas and cockpit displays.</p></article>
-            <article class="card"><header><span>INTEGRATIONS & HOTKEYS</span></header><h3>Complete HTML controls</h3><p>EDSM, EDDN, Discord, screenshots, hotkeys, caching and diagnostics now remain inside this command deck.</p><button class="wide-button" data-settings-focus="integrations">JUMP TO CONTROLS</button></article>
-            <article class="card danger-zone"><header><span>MAINTENANCE</span></header><div class="maintenance-actions"><button data-command="rebuild_cache">REBUILD JOURNAL CACHE</button><button data-command="open_logs">OPEN LOGS</button><button data-command="open_screenshots">SCREENSHOTS</button></div><p>Cache rebuild progress is reported through the live exploration feed.</p></article>
-          </section>
+        <section class="page settings-page" data-page-name="settings">
+          <header class="page-title settings-title">
+            <div><p>APPLICATION CONTROL</p><h2>Settings</h2><span>Saved to the active commander's profile as you change them</span></div>
+            <div class="settings-find">
+              <input id="settings-search" type="search" placeholder="FIND A SETTING" aria-label="Find a setting" autocomplete="off" spellcheck="false">
+              <b id="settings-save-state" class="settings-save-state saved" role="status">ALL CHANGES SAVED</b>
+            </div>
+          </header>
           <div id="settings-workspace" class="workspace-shell loading-panel">Loading commander settings…</div>
         </section>
 
@@ -612,6 +609,14 @@
                     <h4>JOURNAL HEARTBEAT</h4>
                     <label class="studio-field"><span>Orb size</span><select id="studio-heartbeat-size" data-studio-setting="heartbeat_orb_size"><option value="54">54 PX</option><option value="72">72 PX</option><option value="96">96 PX</option></select></label>
                     <label class="studio-field"><span>Eye colour<small>At rest; danger still turns it red</small></span><select id="studio-heartbeat-eye" data-studio-setting="heartbeat_eye_color"><option value="theme">Theme accent</option><option value="hal">HAL red</option></select></label>
+                  </section>
+                  <section data-studio-settings="galnet_ticker_hud">
+                    <h4>GALNET TICKER</h4>
+                    <label class="studio-field"><span>Bar length<small>360 to 2560</small></span><div><input id="studio-ticker-width" type="number" min="360" max="2560" step="20" data-studio-setting="galnet_ticker_width"><b>PX</b></div></label>
+                    <label class="studio-field"><span>Scroll speed</span><select id="studio-ticker-speed" data-studio-setting="galnet_ticker_speed"><option value="slow">Slow</option><option value="standard">Standard</option><option value="fast">Fast</option></select></label>
+                    <label class="studio-field"><span>After each headline</span><select id="studio-ticker-content" data-studio-setting="galnet_ticker_content"><option value="headlines">Nothing</option><option value="summary">A summary</option><option value="full">The whole story</option></select></label>
+                    <label class="studio-field"><span>Stories</span><select id="studio-ticker-stories" data-studio-setting="galnet_ticker_stories"><option value="3">Latest 3</option><option value="5">Latest 5</option><option value="8">Latest 8</option><option value="16">All cached</option></select></label>
+                    <label class="studio-switch"><span><b>Dispatch dates</b><small>Show each story's Galnet date.</small></span><input type="checkbox" data-overlay-option="galnet_ticker_show_date"><i></i></label>
                   </section>
                   <section data-studio-settings="ground_popup" class="studio-ground-target-card">
                     <h4>WAYPOINT <b id="studio-ground-target-state">TARGET OFF</b></h4>
