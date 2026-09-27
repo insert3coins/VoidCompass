@@ -428,10 +428,30 @@ function renderStatus(data, theme, reducedMotion) {
   return tone;
 }
 
-// The arrival star's own colour, when the journal has named its class.
-function currentStarTone(starClass) {
-  if (starFamily(starClass) === 'unknown') return '';
-  return getComputedStyle(dom['current-star-orb']).getPropertyValue('--stellar-tone').trim();
+// A star's own colour, when the journal has named its class: the tone the
+// stylesheet gives its family, read once per family from a hidden probe.
+const stellarTones = new Map();
+function stellarTone(starClass) {
+  const family = starFamily(starClass);
+  if (family === 'unknown') return '';
+  if (!stellarTones.has(family)) {
+    const probe = document.createElement('span');
+    probe.className = `star-orb star-${family}`;
+    probe.hidden = true;
+    document.body.append(probe);
+    stellarTones.set(family, getComputedStyle(probe).getPropertyValue('--stellar-tone').trim());
+    probe.remove();
+  }
+  return stellarTones.get(family);
+}
+
+// The star the route points at: the next jump's, or the destination's once
+// the route is complete. Empty when there is no route or no known class.
+function routeStarClass(route = {}) {
+  const hops = Array.isArray(route.hops) ? route.hops : [];
+  const nextHop = hops.find(hop => hop.next);
+  return route.complete ? (hops.at(-1)?.star_class || '')
+    : route.active ? (route.next_star?.star_class || nextHop?.star_class || '') : '';
 }
 
 function renderScene(data, theme, tone, vehicle, reducedMotion, energy) {
@@ -455,7 +475,13 @@ function renderScene(data, theme, tone, vehicle, reducedMotion, energy) {
     eventTone: state.event_tone,
     palette: {...theme, hud: theme.orange, state: quiet ? theme.orange : tone},
     textScale: Number(data.theme?.text_scale) || 1,
-    starTone: currentStarTone(data.system?.star_class),
+    // The local star's class and colour, so each scene draws the right
+    // kind of star (a neutron star's jets, a black hole's disc); and the
+    // route's next star, for a targeted system.
+    starTone: stellarTone(data.system?.star_class),
+    starFamily: starFamily(data.system?.star_class),
+    targetTone: stellarTone(routeStarClass(data.route || {})),
+    targetFamily: starFamily(routeStarClass(data.route || {})),
   });
 }
 
@@ -618,8 +644,7 @@ function renderRoute(route = {}, systemName = '') {
   routeMemory = {names, present, source: route.source, systemName};
   const star = route.next_star || {};
   const nextHop = hops.find(hop => hop.next);
-  const starClass = route.complete ? (hops.at(-1)?.star_class || '')
-    : route.active ? (star.star_class || nextHop?.star_class || '') : '';
+  const starClass = routeStarClass(route);
   const scoopable = star.star_class ? star.scoopable : nextHop?.scoopable;
   renderStarOrb(dom['route-star-orb'], starClass);
   const classKnown = Boolean(starClass && route.active && !route.complete);
