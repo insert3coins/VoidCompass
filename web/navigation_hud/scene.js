@@ -970,60 +970,74 @@
 
   function charge(s, st, pal) {
     const c = st.c, cy = s.H / 2, fx = s.W * .7, hyper = st.key === 'hyper_charge';
-    // Decorative spool-up settles at a steady running intensity. It is never
-    // a charge countdown or a prediction of when the jump will happen.
-    const spool = .55 + .45 * smooth(st.age / 2.4);
-    const step = 12;
+    const gate = hyper ? 20 : 16, pace = hyper ? .72 : .52;
+    // The drive settles into a repeating field. No journal charge percentage
+    // exists here, so these pulses never imply a countdown to the jump.
+    const spool = .52 + .48 * smooth(st.age / 2.3);
+    const flare = hyper ? pal.accent : c;
+
+    // Fixed containment rails form a corridor; light travels into its focus.
     for (const side of [-1, 1]) {
-      const reach = side < 0 ? fx - 18 : s.W - fx - 14;
-      const count = Math.max(0, Math.floor(reach / step));
-      for (let index = 0; index < count; index += 1) {
-        const x = fx + side * (18 + index * step);
-        // Brightness waves travel inward, feeding the core.
-        const pulse = wave(st.p * (hyper ? 1.1 : .85) + index * .085);
-        const edge = ends(1 - index / Math.max(1, count), .2);
-        const h = (hyper ? 13 : 10) * (.45 + .55 * pulse) * spool * (1 - index / (count + 3) * .5);
-        s.line(x, cy - h, x, cy + h, c, (.14 + .62 * pulse) * edge, 1.25);
-        if (pulse > .82) s.dot(x, cy - h - 1.5, .9, pal.text, (pulse - .82) * 4 * edge);
+      s.poly([[-4, cy + side * s.H * .43], [s.W * .28, cy + side * s.H * .34],
+        [fx - gate - 5, cy + side * 5]], c, .24 * spool, 1.05);
+      s.poly([[s.W + 4, cy + side * s.H * .43], [s.W * .87, cy + side * s.H * .32],
+        [fx + gate + 5, cy + side * 5]], c, .24 * spool, 1.05);
+      s.line(-4, cy + side * s.H * .22, fx - gate - 7, cy + side * 2, c, .12 * spool);
+      s.line(s.W + 4, cy + side * s.H * .22, fx + gate + 7, cy + side * 2, c, .12 * spool);
+    }
+    s.line(-4, cy, fx - gate - 3, cy, c, .13 * spool);
+    s.line(fx + gate + 3, cy, s.W + 4, cy, c, .13 * spool);
+
+    // Two coherent streams feed the same aperture from opposite sides.
+    const packets = hyper ? 6 : 5;
+    for (const direction of [-1, 1]) {
+      const edge = direction < 0 ? -12 : s.W + 12;
+      const focus = fx + direction * (gate + 5);
+      for (const side of [-1, 1]) {
+        for (let index = 0; index < packets; index += 1) {
+          const t = fract(st.p * pace + index / packets + (side < 0 ? .07 : 0));
+          const travel = smooth(t), x = lerp(edge, focus, travel);
+          const y = cy + side * lerp(s.H * .38, 5, travel);
+          const light = ends(t, .14) * spool * (hyper ? .77 : .63);
+          const tail = (hyper ? 10 : 7) * (1 - .45 * travel);
+          s.line(x - direction * tail, y + side * 1.2, x, y, c, light, 1.2);
+          if (t > .78) s.dot(x, y, .6, pal.text, light * .6);
+        }
       }
     }
-    for (const side of [-1, 1]) {
-      const points = [];
-      for (let stepIndex = 0; stepIndex <= 40; stepIndex += 1) {
-        const x = stepIndex / 40 * s.W, distance = Math.abs(x - fx) / s.W;
-        points.push([x, cy + side * (3 + (1 - distance) * (hyper ? 12 : 9) * spool
-          * (.7 + .3 * Math.sin(st.p * 3 + stepIndex * .6)))]);
+
+    // Compression chevrons close in without ever filling like a progress bar.
+    for (let index = 0; index < (hyper ? 5 : 4); index += 1) {
+      const t = fract(st.p * pace * .65 + index / (hyper ? 5 : 4));
+      const spread = lerp(hyper ? 63 : 53, gate + 5, smooth(t));
+      const light = ends(t, .18) * spool * (hyper ? .62 : .43);
+      for (const side of [-1, 1]) {
+        const x = fx + side * spread;
+        s.poly([[x + side * 5, cy - 9], [x, cy], [x + side * 5, cy + 9]],
+          c, light, 1.15);
       }
-      s.poly(points, c, .16, .9);
     }
+
+    // A segmented containment frame; jump charging opens a luminous throat.
+    const radius = hyper ? 21 : 17, height = hyper ? 15 : 12;
+    s.ring(fx, cy, radius, height, 6, c, .23 * spool, 1, Math.PI / 6);
     for (let index = 0; index < 6; index += 1) {
-      const side = index % 2 ? 1 : -1, t = fract(st.p * (hyper ? .5 : .36) + index / 6);
-      const x = fx + side * lerp(side < 0 ? fx - 10 : s.W - fx, 12, t);
-      s.spark(x, cy, 1.1, c, pal.text, Math.sin(t * Math.PI) * .85);
+      const a = Math.PI / 6 + index * TAU / 6;
+      const b = a + TAU / 6;
+      const light = .22 + .6 * wave(st.p * (hyper ? .7 : .48) - index / 6);
+      s.line(fx + Math.cos(a) * radius, cy + Math.sin(a) * height,
+        fx + Math.cos(b) * radius, cy + Math.sin(b) * height,
+        c, light * spool, 1.25);
     }
-    // Arcs jump between the vanes a few times a second.
-    const flicker = Math.floor(st.p * 6);
-    for (let index = 0; index < 2; index += 1) {
-      const seed = flicker * 7 + index * 13;
-      if (hash(seed) < .45) continue;
-      const side = hash(seed + 1) < .5 ? -1 : 1;
-      const x0 = fx + side * (22 + hash(seed + 2) * s.W * .28);
-      const points = [];
-      for (let stepIndex = 0; stepIndex <= 5; stepIndex += 1) {
-        points.push([x0 + stepIndex * 5 * side, cy + (hash(seed + stepIndex + 4) - .5) * s.H * .6]);
-      }
-      s.poly(points, pal.text, .45 * spool, .8);
-    }
+    s.bloom(fx, cy, hyper ? 25 : 18, flare, (.22 + .2 * wave(st.p * .45)) * spool);
     if (hyper) {
-      s.ring(fx, cy, 16, 14, 6, c, .5, 1.15, Math.PI / 6);
-      s.ring(fx, cy, 10 + wave(st.p * .44) * 1.6, 9, 6, c, .9, 1.35, Math.PI / 6 + st.p * .075);
+      s.ring(fx, cy, 12, 10, 6, flare, .8 * spool, 1.35, Math.PI / 6 - st.p * .035);
+      s.line(fx, cy - 8, fx, cy + 8, pal.text, (.45 + .4 * wave(st.p * .6)) * spool, 1.4);
+      s.spark(fx, cy, 2.1, flare, pal.text, .9 * spool);
     } else {
-      s.poly([[fx - 14, cy], [fx - 7, cy - 7], [fx + 7, cy - 7], [fx + 14, cy], [fx + 7, cy + 7],
-        [fx - 7, cy + 7]], c, .75, 1.25, true, .07);
-      s.arc(fx, cy, 11, 7, st.p * .3, st.p * .3 + 2.3, c, .38 + .37 * spool, 1.8);
+      s.ring(fx, cy, 9, 6, 6, c, .75 * spool, 1.2, Math.PI / 6 + st.p * .025);
+      s.spark(fx, cy, 1.7, c, pal.text, .78 * spool);
     }
-    s.bloom(fx, cy, 16, c, .3 + .25 * spool);
-    s.spark(fx, cy, 2 + wave(st.p * .55) * .8, c, pal.text, .95);
   }
 
   function tunnel(s, st, pal) {
@@ -2115,22 +2129,19 @@
       }
     },
     charge(b, st, pal, cx, cy) {
-      const spool = .55 + .45 * smooth(st.age / 2.4);
+      const hyper = st.key === 'hyper_charge', pace = hyper ? .72 : .52;
+      const spool = .52 + .48 * smooth(st.age / 2.3);
       for (let index = 0; index < 4; index += 1) {
-        const t = fract(st.p * .5 + index / 4);
-        b.arc(cx, cy, lerp(b.W * .6, 6, t), lerp(b.H * .55, 4, t), 0, TAU, st.c, Math.sin(t * Math.PI) * .38 * spool, 1.1);
+        const t = fract(st.p * pace + index / 4), travel = smooth(t);
+        const rx = lerp(b.W * .59, b.W * .24, travel);
+        const ry = lerp(b.H * .5, b.H * .22, travel);
+        const light = ends(t, .15) * spool * (hyper ? .52 : .36);
+        b.arc(cx, cy, rx, ry, Math.PI * .18, Math.PI * .82, st.c, light, 1.1);
+        b.arc(cx, cy, rx, ry, Math.PI * 1.18, Math.PI * 1.82, st.c, light, 1.1);
       }
-      const flicker = Math.floor(st.p * 7);
-      for (let index = 0; index < 2; index += 1) {
-        const seed = flicker * 5 + index * 17;
-        if (hash(seed) < .4) continue;
-        const angle = hash(seed + 1) * TAU, r = b.W * .36;
-        const points = [];
-        for (let step = 0; step <= 4; step += 1) {
-          const a = angle + (step - 2) * .12;
-          points.push([cx + Math.cos(a) * (r + (hash(seed + step) - .5) * 6), cy + Math.sin(a) * (r * .55 + (hash(seed + step + 9) - .5) * 5)]);
-        }
-        b.poly(points, pal.text, .55, .8);
+      if (hyper) {
+        b.bloom(cx, cy, b.W * .36, pal.accent, .16 * spool);
+        b.arc(cx, cy, b.W * .25, b.H * .28, 0, TAU, pal.accent, .27 * spool, 1.1);
       }
     },
     tunnel(b, st, pal, cx, cy) {
