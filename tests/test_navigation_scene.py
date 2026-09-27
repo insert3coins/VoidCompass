@@ -116,6 +116,58 @@ class NavigationSceneBrowserTests(unittest.TestCase):
                 self.assertGreater(page.evaluate(LIT_PIXELS, "deck-canvas"), .01, "an empty deck")
                 self.assertGreater(page.evaluate(LIT_PIXELS, "bay-canvas"), .01, "no aura round the ship")
 
+    def test_fsd_charge_scenes_remain_distinct_and_alive(self):
+        page = self.open()
+        opening_frames = {}
+        reduced_stills = {}
+        for label, key in (("FSD CHARGE", "fsd_charge"), ("HYPER CHARGE", "hyper_charge")):
+            with self.subTest(label=label):
+                self.render(page, hud_state(label))
+                frames = page.evaluate("""() => {
+                  const scene = navigationScene;
+                  const canvas = document.getElementById('deck-canvas');
+                  scene.transition = null;
+                  scene.previous = null;
+                  const capture = (age, phase) => {
+                    scene.state.age = age;
+                    scene.state.p = phase;
+                    scene.draw(performance.now());
+                    const data = canvas.getContext('2d').getImageData(
+                      0, 0, canvas.width, canvas.height).data;
+                    let lit = 0;
+                    for (let i = 3; i < data.length; i += 4) if (data[i] > 12) lit += 1;
+                    return {image: canvas.toDataURL(), coverage: lit / (canvas.width * canvas.height)};
+                  };
+                  return {
+                    key: scene.key,
+                    opening: capture(.5, 1.37),
+                    moving: capture(1.2, 1.73),
+                    mature: capture(60, 1.37),
+                    matureMoving: capture(120, 1.73),
+                    running: scene.running,
+                  };
+                }""")
+                self.assertEqual(frames["key"], key)
+                self.assertTrue(frames["running"], "charge animation stopped")
+                for frame in ("opening", "moving", "mature", "matureMoving"):
+                    self.assertGreater(frames[frame]["coverage"], .01, frame)
+                self.assertNotEqual(frames["opening"]["image"], frames["moving"]["image"])
+                # Charge is a continuing state, not a timer that empties at an
+                # invented deadline while waiting for the next journal event.
+                self.assertNotEqual(frames["mature"]["image"], frames["matureMoving"]["image"])
+                opening_frames[key] = frames["opening"]["image"]
+
+                self.render(page, hud_state(label), reduced=True)
+                self.assertFalse(page.evaluate("navigationScene.running"))
+                self.assertGreater(page.evaluate(LIT_PIXELS, "deck-canvas"), .01)
+                still = page.evaluate("document.getElementById('deck-canvas').toDataURL()")
+                page.wait_for_timeout(120)
+                self.assertEqual(page.evaluate("document.getElementById('deck-canvas').toDataURL()"), still)
+                reduced_stills[key] = still
+
+        self.assertNotEqual(opening_frames["fsd_charge"], opening_frames["hyper_charge"])
+        self.assertNotEqual(reduced_stills["fsd_charge"], reduced_stills["hyper_charge"])
+
     def test_the_clock_runs_only_while_someone_can_see_it(self):
         page = self.open()
         self.render(page, hud_state("SUPERCRUISE"))
@@ -217,7 +269,8 @@ class NavigationSceneBrowserTests(unittest.TestCase):
     def test_scenes_are_cheap_to_draw(self):
         page = self.open()
         worst = []
-        for label in ("ASTEROID FIELD", "HYPERSPACE", "SCO OVERCHARGE", "FSD CHARGE", "SETTLEMENT", "FSS"):
+        for label in ("ASTEROID FIELD", "HYPERSPACE", "SCO OVERCHARGE", "FSD CHARGE",
+                      "HYPER CHARGE", "SETTLEMENT", "FSS"):
             self.render(page, hud_state(label, shields_known=True, shields_up=False, fuel_scooping=True))
             page.wait_for_timeout(600)
             worst.append(page.evaluate("""() => {
