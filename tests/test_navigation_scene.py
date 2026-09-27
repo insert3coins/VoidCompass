@@ -131,6 +131,48 @@ class NavigationSceneBrowserTests(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertEqual(by_label[label], key)
 
+    def test_every_model_is_a_well_formed_solid(self):
+        # Scenes stage solid models (models.js): rocks, the station, the
+        # carrier, ships, vehicles, the commander. A face pointing at a missing
+        # vertex, or a light without a direction, would fail silently.
+        page = self.open()
+        report = page.evaluate("""() => {
+          const M = window.NavigationModels;
+          const models = {
+            coriolis: M.coriolis(), city: M.stationCity(), carrier: M.carrier(), capital: M.capital(),
+            wedge: M.ship(), fighter: M.ship('fighter'), taxi: M.ship('taxi'), interdictor: M.ship('interdictor'),
+            thargoid: M.thargoid(), scarab: M.vehicle('scarab'), scorpion: M.vehicle('scorpion'),
+            rhino: M.vehicle('rhino'), nomad: M.vehicle('nomad'), skimmer: M.skimmer(), pad: M.hexPad(),
+            port: M.surfacePort(), dome: M.building('dome'), tower: M.building('tower', 1),
+            hangar: M.building('hangar'), block: M.building('block'), beacon: M.beacon(),
+            canister: M.canister(), crystal: M.crystal(), cone: M.cone(12, 1.4), segment: M.driveSegment(),
+            walking: M.commander(1.2), standing: M.commander(0, {walking: false}), limpet: M.limpet(),
+            ...Object.fromEntries(Array.from({length: 12}, (_, seed) => [`rock${seed}`, M.rock(seed)])),
+          };
+          return Object.fromEntries(Object.entries(models).map(([name, model]) => {
+            const faults = [];
+            model.f.forEach((face, index) => {
+              if (face.i.length < 3) faults.push(`face ${index} has ${face.i.length} corners`);
+              if (face.i.some((vertex) => !Array.isArray(model.v[vertex]))) faults.push(`face ${index} misses a vertex`);
+              if (typeof face.k !== 'string') faults.push(`face ${index} has no kind`);
+            });
+            (model.lights || []).forEach((light, index) => {
+              if (![light.at, light.n].every((v) => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))) {
+                faults.push(`light ${index} is malformed`);
+              }
+            });
+            if (!model.v.every((v) => v.length === 3 && v.every(Number.isFinite))) faults.push('bad vertex');
+            return [name, {faces: model.f.length, faults}];
+          }));
+        }""")
+        for name, result in report.items():
+            with self.subTest(model=name):
+                self.assertGreater(result["faces"], 0)
+                self.assertEqual(result["faults"], [])
+        # The carrier's pads are separate lamps so a scene can light them in turn.
+        kinds = page.evaluate("[...new Set(NavigationModels.carrier().f.map((face) => face.k))]")
+        self.assertTrue({f"pad{index}" for index in range(8)} <= set(kinds))
+
     def test_every_state_projects_into_the_deck_and_round_the_ship(self):
         page = self.open()
         for label in LABELS:
