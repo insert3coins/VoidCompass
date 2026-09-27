@@ -606,44 +606,56 @@
 
   function carrierGlyph(s, st, variant = st.key) {
     const c = st.c, p = st.p;
-    if (variant === 'carrier_transit') {
-      for (const side of [-1, 1]) {
-        s.poly([[62 + side * 15, 5], [62 + side * 39, 3], [62 + side * 54, 9]], c, .58, 1.5);
-      }
-    } else if (variant === 'carrier_arrival') {
-      s.brackets(60, 18, 50, 14, c, .4);
-      s.arc(62, 19, 53, 17, Math.PI * .15, Math.PI * .85, c, .48, 1.4);
-    } else {
-      s.poly([[16, 29], [32, 10], [97, 10], [108, 29]], c, .24);
-      s.line(6, 32, 115, 32, c, .22);
+    const deck = variant === 'carrier_deck';
+    // An angular capital hull with a raised bridge and two launch shoulders.
+    // Its outline stays fixed while the surrounding scene changes phase.
+    s.poly([[11, 21], [24, 17], [40, 17], [45, 12], [92, 12], [105, 18],
+      [109, 23], [105, 26], [29, 26]], c, .82, 1.35, true, .1);
+    s.poly([[20, 19], [31, 10], [44, 10]], c, .53, 1.3);
+    s.poly([[94, 12], [105, 10], [111, 18]], c, .53, 1.3);
+    s.poly([[68, 12], [72, 5], [81, 5], [87, 12]], c, .73, 1.3, true, .07);
+    s.line(77, 5, 77, 2, c, .61);
+    s.line(33, 23, 102, 23, c, .38, 1);
+    for (let index = 0; index < 5; index += 1) {
+      const x = 43 + index * 11;
+      s.poly([[x, 18], [x + 3, 16], [x + 7, 18]], c, .3, 1);
+      const light = variant === 'carrier_lockdown' ? .6
+        : deck ? .22 + .26 * wave(p * .18 - index / 5)
+          : .16 + .65 * Math.pow(wave(p * .35 - index / 5), 4);
+      s.line(x, 27, x + 7, 27, c, light, 1.45);
     }
     if (variant === 'carrier_lockdown') {
-      const close = smooth(Math.min(st.age / 3, 1));
-      s.line(18, 4 + close * 10, 108, 4 + close * 10, c, .65);
-      s.brackets(62, 19, 48 - close * 5, 16, c, .7);
+      // One closure, then latched. The journal gives a phase, not a timer.
+      const close = smooth(st.age / 2.5);
+      const top = lerp(3, 13, close), bottom = lerp(34, 28, close);
+      s.line(26, top, 108, top, c, .7, 1.8);
+      s.line(26, bottom, 108, bottom, c, .58, 1.6);
       for (const side of [-1, 1]) {
-        s.poly([[62 + side * 50, 3], [62 + side * 34, 9], [62 + side * 34, 28], [62 + side * 50, 33]], c, .64, 1.6);
+        const x = 62 + side * lerp(58, 46, close);
+        s.poly([[x, top - 2], [x - side * 8, top + 4],
+          [x - side * 8, bottom - 3], [x, bottom + 2]], c, .65, 1.5);
       }
+      s.brackets(62, 19, 44, 14, c, .55);
     } else if (variant === 'carrier_preparing') {
-      for (let index = 0; index < 4; index += 1) {
-        s.line(30 + index * 20, 8, 40 + index * 20, 8, c, .2 + .65 * wave(p * .35 - index / 4), 1.6);
+      for (let index = 0; index < 5; index += 1) {
+        const x = 29 + index * 17;
+        s.line(x, 8, x + 8, 8, c, .2 + .55 * Math.pow(wave(p * .28 - index / 5), 3), 1.5);
       }
-      for (const side of [-1, 1]) s.chevron(62 + side * 47, 18, -side, c, .65, 4);
-    } else if (variant === 'carrier_deck' || variant === 'carrier_vicinity') {
-      const deck = variant === 'carrier_deck';
-      s.poly([[11, 31], [34, deck ? 27 : 24], [87, deck ? 27 : 24], [111, 31]], c, .58, 1.35);
-      for (const x of [22, 99]) s.line(x, 24, x, 32, c, .6, 1.3);
-      if (deck) s.brackets(63, 22, 27, 10, c, .47);
-      else s.arc(63, 20, 44, 13, Math.PI * 1.1, Math.PI * 1.9, c, .44, 1.3);
-    }
-    s.poly([[14, 21], [26, 17], [42, 17], [45, 13], [91, 13], [105, 18], [105, 24], [32, 24]],
-      c, .75, 1.2, true, .08);
-    s.poly([[71, 13], [73, 6], [80, 6], [85, 13]], c, .65);
-    s.line(77, 6, 77, 3, c, .65);
-    for (let index = 0; index < 6; index += 1) {
-      s.poly([[40 + index * 9, 18], [43 + index * 9, 16], [47 + index * 9, 18]], c, .35);
-      const light = .18 + .7 * Math.pow(wave(p * .5 - index / 6), 3);
-      s.line(40 + index * 9, 25, 46 + index * 9, 25, c, light, 1.5);
+      for (const side of [-1, 1]) s.chevron(62 + side * 51, 18, -side, c, .62, 3.7);
+    } else if (deck || variant === 'carrier_vicinity') {
+      s.poly([[13, 32], [35, deck ? 28 : 30], [87, deck ? 28 : 30], [110, 32]],
+        c, deck ? .72 : .4, 1.3);
+      for (const x of [25, 100]) s.line(x, 25, x, 33, c, .57, 1.2);
+      if (deck) s.brackets(62, 24, 30, 9, c, .55);
+      else s.arc(62, 20, 47, 14, Math.PI * 1.1, Math.PI * 1.9, c, .4, 1.2);
+    } else if (variant === 'carrier_transit') {
+      for (const side of [-1, 1]) {
+        s.poly([[62 + side * 20, 9], [62 + side * 42, 5], [62 + side * 55, 9]], c, .62, 1.5);
+        s.poly([[62 + side * 20, 28], [62 + side * 42, 32], [62 + side * 55, 28]], c, .44, 1.2);
+      }
+    } else if (variant === 'carrier_arrival') {
+      s.brackets(62, 19, 52, 15, c, .5);
+      s.arc(62, 19, 54, 17, Math.PI * .15, Math.PI * .85, c, .45, 1.3);
     }
   }
 
@@ -787,13 +799,22 @@
   function stationGlyph(s, st) {
     const c = st.c, p = st.p, key = st.key;
     const denied = ['docking_denied', 'docking_cancelled', 'docking_timeout'].includes(key);
-    // Station approach is a gate. Clearance locks its letterbox and denial
-    // visibly seals it; no pad location is implied.
-    s.ring(60, 18, 27, 16, 8, c, .69, 1.2, Math.PI / 8);
-    s.ring(60, 18, 18, 11, 8, c, .28, 1, Math.PI / 8);
-    s.poly([[47, 14], [73, 14], [73, 22], [47, 22]], c, denied ? .44 : .81, 1.25, true, .05);
+    // The octagonal housing turns round a fixed letterbox. The gate holds
+    // position even when a docking request or denial changes the light.
+    const rotation = Math.PI / 8 + p * .045;
+    s.ring(60, 18, 30, 17, 8, c, .55, 1.25, rotation);
+    s.ring(60, 18, 21, 12, 8, c, .25, 1, rotation);
+    for (let index = 0; index < 8; index += 1) {
+      const angle = rotation + index * TAU / 8;
+      s.line(60 + Math.cos(angle) * 22, 18 + Math.sin(angle) * 12,
+        60 + Math.cos(angle) * 29, 18 + Math.sin(angle) * 17, c, .32, 1);
+    }
+    s.poly([[45, 13], [75, 13], [75, 23], [45, 23]],
+      c, denied ? .5 : .88, 1.3, true, .055);
+    s.line(48, 18, 72, 18, c, denied ? .18 : .34, 1);
     for (let index = 0; index < 5; index += 1) {
-      s.line(50 + index * 5, 15, 50 + index * 5, 17, c, .2 + .65 * Math.pow(wave(p * .5 - index / 5), 3), 1.4);
+      s.line(49 + index * 5.5, 14, 49 + index * 5.5, 16,
+        c, .2 + .58 * Math.pow(wave(p * .35 - index / 5), 3), 1.3);
     }
     if (key === 'docking_cancelled') {
       for (const side of [-1, 1]) {
@@ -815,13 +836,20 @@
       for (const side of [-1, 1]) s.line(60 + side * 32, 9, 60 + side * 32, 27, c, confirmed ? .65 : .28, 1.4);
     } else if (key === 'station_vicinity' || key === 'docking_assist') {
       s.brackets(60, 18, 35, 16, c, .52);
+    } else if (key === 'station') {
+      // Already berthed: keep the gate and docking clamps latched.
+      for (const side of [-1, 1]) {
+        s.poly([[60 + side * 16, 12], [60 + side * 22, 16],
+          [60 + side * 22, 22], [60 + side * 16, 25]], c, .65, 1.4);
+      }
+      s.line(48, 27, 72, 27, c, .53, 1.4);
     } else {
       // A lit facet circuit runs round the station silhouette.
       const facets = Array.from({length: 8}, (_, index) => {
-        const angle = Math.PI / 8 + index * TAU / 8;
-        return [60 + Math.cos(angle) * 25, 18 + Math.sin(angle) * 16];
+        const angle = rotation + index * TAU / 8;
+        return [60 + Math.cos(angle) * 30, 18 + Math.sin(angle) * 17];
       });
-      s.traceEdges(facets, p * .5, c, .88);
+      s.traceEdges(facets, p * .3, c, .74);
     }
   }
 
@@ -851,21 +879,32 @@
     }
   }
 
+  function groundVehicleType(st) {
+    for (const type of ['rhino', 'scorpion', 'nomad', 'scarab']) {
+      if (st.key === type || st.key.endsWith(`_${type}`)) return type;
+    }
+    return ['rhino', 'scorpion', 'nomad', 'scarab'].includes(st.vehicleKey)
+      ? st.vehicleKey : 'scarab';
+  }
+
   function vehicleGlyph(s, st) {
     const c = st.c, p = st.p, key = st.key;
-    const type = key === 'srv' ? 'scarab' : ['rhino', 'scorpion', 'nomad'].includes(key) ? key
-      : ['rhino', 'scorpion', 'nomad', 'scarab'].includes(st.vehicleKey) ? st.vehicleKey : 'scarab';
+    const type = groundVehicleType(st);
     const brake = key === 'srv_handbrake';
     if (type === 'nomad') {
-      s.poly([[32, 18], [41, 11], [79, 11], [88, 18], [78, 23], [42, 23]], c, .78, 1.2, true, .08);
-      s.poly([[43, 11], [52, 6], [69, 6], [78, 11]], c, .5);
+      const lift = brake ? 0 : Math.sin(p * .55) * .7;
+      s.poly([[32, 18 + lift], [41, 11 + lift], [79, 11 + lift], [88, 18 + lift],
+        [78, 23 + lift], [42, 23 + lift]], c, .78, 1.2, true, .08);
+      s.poly([[43, 11 + lift], [52, 6 + lift], [69, 6 + lift], [78, 11 + lift]], c, .5);
       for (const x of [40, 80]) {
-        s.arc(x, 22, 8, 2.5, 0, TAU, c, .65);
-        for (let index = 0; index < 3; index += 1) {
-          const t = fract(p * .3 + index / 3);
-          s.arc(x, brake ? 29 : 25 + t * 8, brake ? 9 : 5 + t * 7, 1.7, 0, TAU, c,
-            brake ? .16 : Math.sin(t * Math.PI) * .5);
-        }
+        s.poly([[x - 6, 22 + lift], [x - 3, 25 + lift], [x + 3, 25 + lift], [x + 6, 22 + lift]],
+          c, .65, 1.1, true, .09);
+      }
+      s.arc(60, 28, 29, 2.2, 0, TAU, c, .22, 1.1);
+      for (let index = 0; index < 3; index += 1) {
+        const t = brake ? index / 3 : fract(p * .3 + index / 3);
+        s.arc(60, 29, 10 + t * 25, 1 + t * 3, 0, TAU, c,
+          brake ? .13 : (1 - t) * .4, 1);
       }
       return;
     }
@@ -874,7 +913,9 @@
     const heavy = type === 'rhino', armed = type === 'scorpion';
     const wheels = heavy ? 4 : armed ? 2 : 3;
     const width = heavy ? 62 : armed ? 48 : 54;
-    const x0 = 60 - width / 2, bob = brake ? 0 : Math.sin(p * .8) * .6;
+    const x0 = 60 - width / 2;
+    const bob = brake ? 0 : Math.sin(p * (heavy ? .42 : armed ? .36 : 1.05))
+      * (heavy ? .28 : armed ? .32 : .9);
     s.poly([[x0, 17 + bob], [x0 + 9, 11 + bob], [x0 + width - 11, 11 + bob], [x0 + width, 17 + bob],
       [x0 + width - 5, 23], [x0 + 5, 23]], c, .78, 1.2, true, .06);
     if (heavy) {
@@ -882,17 +923,23 @@
       for (let index = 0; index < 4; index += 1) s.line(47 + index * 7, 8, 47 + index * 7, 17, c, .25);
     } else if (armed) {
       s.poly([[50, 11], [52, 6], [64, 6], [69, 11]], c, .65);
-      s.line(61, 7, 83, 7, c, .8, 1.8);
+      const aim = brake ? 0 : Math.sin(p * .38) * 2.1;
+      s.line(61, 7, 83, 7 + aim, c, .8, 1.8);
+      s.dot(83, 7 + aim, .7, c, .65);
     } else {
       s.poly([[49, 11], [51, 6], [60, 4], [65, 11]], c, .6);
     }
     for (let index = 0; index < wheels; index += 1) {
       const x = x0 + 5 + index * (width - 10) / (wheels - 1);
-      const y = 26 + (brake ? 0 : Math.sin(p * .8 + index * 1.4) * .8);
+      const travel = brake ? 0 : Math.sin(p * (heavy ? .5 : armed ? .4 : 1.1)
+        + index * (heavy ? .5 : 1.7)) * (heavy ? .3 : armed ? .25 : 1.15);
+      const y = 26 + travel;
       s.poly([[x - 3, 20], [x + 2, 23], [x, y]], c, .4);
       s.arc(x, y, 4, 4, 0, TAU, c, .75, 1.15);
-      if (!brake) s.line(x - 2, y + Math.sin(p * .8 + index) * 2, x + 2, y - Math.sin(p * .8 + index) * 2, c, .35);
+      if (!brake) s.line(x - 2, y + Math.sin(p * .8 + index) * 2,
+        x + 2, y - Math.sin(p * .8 + index) * 2, c, .35);
     }
+    if (heavy) s.line(x0 + 8, 27, x0 + width - 8, 27, c, .52, 1.3);
   }
 
   // ---------------------------------------------------------------------
@@ -1106,15 +1153,64 @@
   function carrierScene(s, st, pal) {
     const c = st.c, cy = s.H / 2, key = st.key, fx = s.W * .6;
     if (key === 'carrier_transit') {
-      // A broad hyperspace wake round a capital hull, not the ship's own FSD.
-      for (let index = 0; index < 6; index += 1) {
-        const t = fract(st.p * .23 + index / 6), reach = 19 + t * s.H * 3.2;
-        s.ring(fx, cy + 1, reach, reach * TILT, 8, c, Math.sin(t * Math.PI) * .38, 1.2);
+      // Slow, angular wake carried by the capital hull. It does not borrow
+      // the ship's fast FSD tunnel or suggest a transit countdown.
+      dust(s, st, {count: 10, speed: .035, alpha: .28});
+      for (let index = 0; index < 5; index += 1) {
+        const t = fract(st.p * .19 + index / 5), reach = 22 + smooth(t) * s.H * 3.2;
+        const height = 8 + smooth(t) * s.H * .58;
+        const light = Math.sin(t * Math.PI) * .49;
+        for (const side of [-1, 1]) {
+          s.poly([[fx + side * reach, cy - height], [fx + side * reach * .78, cy - height * 1.25],
+            [fx + side * reach * .5, cy - height * 1.25]], c, light, 1.35);
+          s.poly([[fx + side * reach, cy + height], [fx + side * reach * .78, cy + height * 1.25],
+            [fx + side * reach * .5, cy + height * 1.25]], c, light * .7, 1.15);
+        }
       }
     } else if (key === 'carrier_arrival') {
-      streaks(s, st, {x: fx, count: 12, speed: .2, strength: (1 - smooth(st.age / 2)) * .8});
+      const settle = smooth(st.age / 2.8);
+      streaks(s, st, {x: fx, count: 10, speed: .13, strength: (1 - settle) * .5});
+      for (let index = 0; index < 3; index += 1) {
+        const t = clamp(st.age / 2.2 - index * .26);
+        const reach = 24 + smooth(t) * s.H * 2.4;
+        s.ring(fx, cy, reach, 7 + smooth(t) * s.H * .45, 8,
+          c, (1 - t) * .45, 1.2, Math.PI / 8);
+      }
+      for (const side of [-1, 1]) {
+        s.line(fx + side * 63, 5, fx + side * 63, s.H - 5,
+          c, .2 + .37 * wave(st.p * .2), 1.25);
+      }
+    } else if (key === 'carrier_preparing') {
+      dust(s, st, {count: 10, speed: .008, alpha: .24});
+      for (const side of [-1, 1]) {
+        s.poly([[8, cy + side * 14], [fx - 70, cy + side * 14],
+          [fx - 52, cy + side * 8]], c, .26, 1);
+      }
+      for (let index = 0; index < 8; index += 1) {
+        const x = 12 + index * Math.max(8, (fx - 75) / 8);
+        const light = .12 + .58 * Math.pow(wave(st.p * .31 - index / 8), 4);
+        s.line(x, cy - 13, x + 5, cy - 13, c, light, 1.5);
+        s.line(x, cy + 13, x + 5, cy + 13, c, light, 1.5);
+      }
+    } else if (key === 'carrier_lockdown') {
+      dust(s, st, {count: 9, speed: .006, alpha: .18});
+      const close = smooth(st.age / 2.5);
+      for (const side of [-1, 1]) {
+        const y = cy + side * lerp(17, 11, close);
+        s.poly([[8, y], [fx - 67, y], [fx - 53, cy + side * 8]], c, .4, 1.5);
+      }
+      for (let index = 0; index < 5; index += 1) {
+        const x = 12 + index * (fx - 85) / 4;
+        s.line(x, 5, x + 7, 5, c, .18 + .4 * wave(st.p * .18 + index * .2), 1.4);
+      }
     } else {
-      dust(s, st, {count: 16, speed: .01, alpha: .28});
+      // Vicinity: a broad, quiet silhouette with perimeter beacons.
+      dust(s, st, {count: 13, speed: .009, alpha: .24});
+      for (const side of [-1, 1]) {
+        s.poly([[fx + side * 68, cy - 12], [fx + side * 76, cy],
+          [fx + side * 68, cy + 12]], c, .22, 1.1);
+        s.dot(fx + side * 75, cy, 1.2, c, .2 + .55 * wave(st.p * .2 + (side + 1) / 4));
+      }
     }
     s.glyph(fx, cy, s.H * .96, () => carrierGlyph(s, st));
   }
@@ -1723,11 +1819,19 @@
   function station(s, st, pal) {
     const c = st.c, cy = s.H / 2, fx = s.W * .7, key = st.key;
     const denied = ['docking_denied', 'docking_cancelled', 'docking_timeout'].includes(key);
-    if (!denied) {
-      // Approach chevrons lead in toward the letterbox.
+    if (key === 'station') {
+      // STATION is a docked state. The distant lane remains in view, but no
+      // approach cue keeps flying toward a ship that has already berthed.
+      s.line(8, cy, fx - 37, cy, c, .18);
+      for (const x of [18, 37, 56]) s.line(x, cy - 3, x, cy + 3, c, .27, 1);
+      s.poly([[fx - 39, cy - 7], [fx - 32, cy - 7],
+        [fx - 32, cy + 7], [fx - 39, cy + 7]], c, .42, 1.2);
+    } else if (!denied) {
+      // Only vicinity, clearance, and assist animate an inward approach.
       for (let index = 0; index < 6; index += 1) {
-        const t = fract(st.p * .2 + index / 6), x = lerp(8, fx - 40, t);
-        s.chevron(x, cy, 1, c, Math.sin(t * Math.PI) * .72, 3.2);
+        const t = fract(st.p * (key === 'station_vicinity' ? .14 : .22) + index / 6);
+        const x = lerp(8, fx - 42, t);
+        s.chevron(x, cy, 1, c, Math.sin(t * Math.PI) * .68, 3);
       }
       s.line(8, cy, fx - 36, cy, c, .14);
     } else {
@@ -1738,10 +1842,11 @@
     if (key === 'docking_assist') {
       for (const side of [-1, 1]) s.poly([[8, cy + side * 9], [fx * .55, cy + side * 9], [fx - 34, cy + side * 3]], pal.accent, .45);
     }
-    // Station traffic lights blink round the structure.
-    for (let index = 0; index < 5; index += 1) {
-      const angle = index * TAU / 5 + st.p * .05;
-      s.dot(fx + Math.cos(angle) * 34, cy + Math.sin(angle) * 18, .9, c, .2 + .6 * wave(st.p * .3 + index * .2));
+    // Independent traffic beacons track the station's octagonal rim.
+    for (let index = 0; index < 8; index += 1) {
+      const angle = Math.PI / 8 + index * TAU / 8 + st.p * .045;
+      s.dot(fx + Math.cos(angle) * 35, cy + Math.sin(angle) * 19, .75,
+        c, .13 + .55 * Math.pow(wave(st.p * .2 + index / 8), 3));
     }
     s.glyph(fx, cy, s.H * .96, () => stationGlyph(s, st));
   }
@@ -1791,31 +1896,66 @@
   function rover(s, st, pal) {
     const c = st.c, cy = s.H / 2, fx = s.W * .62, key = st.key;
     const brake = key === 'srv_handbrake', assist = key === 'srv_drive_assist';
-    // Parallax ridges roll past while the chassis rides its suspension.
-    // Folded sines give peaks rather than waves, so the ground reads as rock.
+    const type = groundVehicleType(st), hover = type === 'nomad';
+    const heavy = type === 'rhino', armed = type === 'scorpion';
+    // Decorative terrain drift changes character with the craft; it is not
+    // a speed or position readout. Handbrake holds the ground still.
     const ridge = (u, seed) => Math.abs(Math.sin(u * .019 + seed)) * 5
       + Math.abs(Math.sin(u * .053 + seed * 2)) * 2.4 + Math.sin(u * .13 + seed) * .7;
-    const near = brake ? 0 : st.p * 16;
+    const near = brake ? 0 : st.p * (heavy ? 10 : armed ? 12 : hover ? 14 : 18);
     for (let layer = 0; layer < 2; layer += 1) {
       const points = [], shift = layer ? near : near / 2;
       for (let x = -10; x <= s.W + 10; x += 6) {
         const u = x + shift;
-        points.push([x, layer ? s.H * .86 - ridge(u * 1.8, 4) * .45 : s.H * .6 - ridge(u, 1) * 1.15]);
+        points.push([x, layer
+          ? s.H * (hover ? .92 : .86) - ridge(u * 1.8, 4) * (hover ? .22 : heavy ? .35 : .45)
+          : s.H * (hover ? .7 : .6) - ridge(u, 1) * (hover ? .58 : 1.15)]);
       }
-      s.poly(points, c, layer ? .5 : .24, layer ? 1.1 : .9);
+      s.poly(points, c, layer ? (hover ? .27 : .5) : .24, layer ? 1.1 : .9);
     }
-    // Loose rocks pass at the ground's own pace.
     const span = s.W + 30;
-    for (let index = 0; index < 6; index += 1) {
-      const x = fract((hash(index + 80) * span - near) / span) * span - 15;
-      const size = 1.4 + hash(index + 81) * 2.2, y = s.H * .86 + 1 + hash(index + 82) * 3;
-      s.poly([[x - size, y], [x - size * .4, y - size * .9], [x + size * .6, y - size * .7], [x + size, y]],
-        c, .45, .9, true, .15);
+    if (!hover) {
+      // Wheeled vehicles meet the ground; the Nomad's pressure field does not.
+      for (let index = 0; index < 6; index += 1) {
+        const x = fract((hash(index + 80) * span - near) / span) * span - 15;
+        const size = 1.4 + hash(index + 81) * 2.2, y = s.H * .86 + 1 + hash(index + 82) * 3;
+        s.poly([[x - size, y], [x - size * .4, y - size * .9],
+          [x + size * .6, y - size * .7], [x + size, y]], c, .45, .9, true, .15);
+      }
     }
-    if (!brake) {
+    if (!brake && !hover) {
       for (let index = 0; index < 8; index += 1) {
         const x = fract((index / 8 * span - near * 1.3) / span) * span - 15;
         s.line(x, s.H - 2, x + 4, s.H - 2, c, .4 * ends(clamp((x + 15) / span), .15), 1.4);
+      }
+    }
+    if (hover) {
+      // A quiet cushion and spreading pressure rings keep the skimmer aloft.
+      s.arc(fx, s.H * .82, 32, 3, 0, TAU, c, .28, 1.2);
+      for (let index = 0; index < 3; index += 1) {
+        const t = brake ? index / 3 : fract(st.p * .28 + index / 3);
+        s.arc(fx, s.H * .84, 12 + t * 40, 1.2 + t * 4, 0, TAU, c,
+          brake ? .12 : (1 - t) * .35, 1);
+      }
+      s.bloom(fx, s.H * .81, 18, pal.accent, .14 + .06 * wave(st.p * .35));
+    } else if (heavy) {
+      // Broad contact patches and a slow compression give the Rhino weight.
+      for (const side of [-1, 1]) {
+        const x = fx + side * 25;
+        s.arc(x, s.H * .82, 19, 2.8, 0, TAU, c, .19 + .1 * wave(st.p * .35), 1.15);
+        s.line(x - 13, s.H * .87, x + 13, s.H * .87, c, .34, 1.5);
+      }
+    } else if (armed) {
+      // The Scorpion's turret sweeps a small, stabilised arc, not a target.
+      const aim = Math.sin(st.p * .38) * .22;
+      s.arc(fx, cy - 4, 33, 12, Math.PI * 1.12 + aim, Math.PI * 1.88 + aim, c, .3, 1.1);
+      s.brackets(fx + 34, cy - 3, 5, 3, c, .28);
+    } else {
+      // Three alternating contact ripples echo the Scarab's articulated axles.
+      for (let index = 0; index < 3; index += 1) {
+        const x = fx + (index - 1) * 23;
+        s.arc(x, s.H * .82, 7, 2, 0, TAU, c,
+          .16 + .24 * wave(st.p * .6 + index / 3), 1);
       }
     }
     if (key === 'srv_turret') {
@@ -1859,8 +1999,19 @@
   }
 
   function carrierDeck(s, st, pal) {
-    dust(s, st, {count: 14, speed: .008, alpha: .24});
-    s.glyph(s.W * .6, s.H / 2, s.H * .96, () => carrierGlyph(s, st, 'carrier_deck'));
+    const c = st.c, cy = s.H / 2, fx = s.W * .6;
+    // A parked capital hull and a quiet deck plane, distinct from flight
+    // traffic in the carrier's vicinity.
+    dust(s, st, {count: 8, speed: .004, alpha: .14});
+    s.poly([[7, s.H - 4], [fx - 44, cy + 10], [fx + 44, cy + 10],
+      [s.W - 7, s.H - 4]], c, .3, 1.1);
+    s.line(7, s.H - 4, s.W - 7, s.H - 4, c, .35, 1);
+    for (let index = 0; index < 7; index += 1) {
+      const x = lerp(14, s.W - 14, index / 6);
+      const light = .14 + .38 * Math.pow(wave(st.p * .14 - index / 7), 4);
+      s.line(x, s.H - 8, x + 4, s.H - 8, c, light, 1.3);
+    }
+    s.glyph(fx, cy, s.H * .96, () => carrierGlyph(s, st, 'carrier_deck'));
   }
 
   // The craft changing hands in a handoff, drawn at deck scale.
@@ -1874,10 +2025,17 @@
       s.ship(x, y, c, .9, (key.endsWith('fighter') ? 1.25 : 1.5) * k, direction);
       if (!key.endsWith('fighter')) s.arc(x, y, 13 * k, 7 * k, 0, TAU, c, .31, 1.1);
     } else {
-      const size = (key.endsWith('rhino') ? 11 : 8) * k;
+      const type = groundVehicleType(st), size = (type === 'rhino' ? 11 : 8) * k;
       s.poly([[x - size, y], [x - size + 3 * k, y - 5 * k], [x + size - 3 * k, y - 5 * k], [x + size, y]], c, .85);
-      for (const side of [-1, 1]) s.arc(x + side * (size - 3 * k), y + 2 * k, 2.7 * k, 2.7 * k, 0, TAU, c, .7);
-      if (key.endsWith('nomad')) s.arc(x, y + 6 * k, size, 1.5 * k, 0, TAU, c, .5);
+      if (type === 'nomad') {
+        s.arc(x, y + 6 * k, size * 1.3, 1.5 * k, 0, TAU, c, .5);
+      } else {
+        const wheels = type === 'rhino' ? 4 : type === 'scarab' ? 3 : 2;
+        for (let index = 0; index < wheels; index += 1) {
+          const wheelX = lerp(x - size + 3 * k, x + size - 3 * k, index / (wheels - 1));
+          s.arc(wheelX, y + 2 * k, 2.7 * k, 2.7 * k, 0, TAU, c, .7);
+        }
+      }
     }
   }
 
@@ -2145,12 +2303,43 @@
       }
     },
     tunnel(b, st, pal, cx, cy) {
+      if (st.key === 'carrier_transit') {
+        // A slow, squared wake surrounds the carrier projection, separate
+        // from the commander's concentric ship-jump tunnel.
+        for (let index = 0; index < 4; index += 1) {
+          const t = fract(st.p * .19 + index / 4);
+          const rx = b.W * lerp(.2, .72, smooth(t));
+          const ry = b.H * lerp(.19, .64, smooth(t));
+          const light = Math.sin(t * Math.PI) * .42;
+          for (const side of [-1, 1]) {
+            b.poly([[cx + side * rx, cy - ry * .5],
+              [cx + side * rx * .7, cy - ry], [cx - side * rx * .25, cy - ry]],
+              st.c, light, 1.15);
+            b.poly([[cx + side * rx, cy + ry * .5],
+              [cx + side * rx * .7, cy + ry], [cx - side * rx * .25, cy + ry]],
+              st.c, light * .72, 1.1);
+          }
+        }
+        return;
+      }
       for (let index = 0; index < 6; index += 1) {
         const t = fract(st.p * .32 + index / 6), k = t * t;
         b.ring(cx, cy, 4 + k * b.W * .7, 3 + k * b.H * .7, 10, st.c, Math.sin(t * Math.PI) * .45, 1, st.p * .1 + index);
       }
     },
     flare(b, st, pal, cx, cy) {
+      if (st.key === 'carrier_arrival') {
+        const settle = smooth(st.age / 2.8);
+        const spread = lerp(b.W * .56, b.W * .43, settle);
+        b.brackets(cx, cy, spread, b.H * .44, st.c, .32 + .19 * settle, 9, 1.3);
+        for (const side of [-1, 1]) {
+          b.line(cx + side * b.W * .34, cy - b.H * .27,
+            cx + side * b.W * .34, cy + b.H * .27, st.c, .28, 1.2);
+          b.dot(cx + side * b.W * .4, cy + b.H * .28, 1.3,
+            st.c, .3 + .48 * wave(st.p * .22 + (side + 1) / 4));
+        }
+        return;
+      }
       const star = st.starTone || st.c;
       b.bloom(cx + b.W * .12, cy - b.H * .05, b.W * .5, star, .32);
       for (let index = 0; index < 10; index += 1) {
@@ -2186,26 +2375,90 @@
       b.traceEdges(pad, st.p * .5, st.c, .7);
     },
     dock(b, st, pal, cx, cy) {
+      if (st.key.startsWith('carrier_')) {
+        // Broad deck rails and paired mooring beacons read as a capital
+        // ship, rather than the station's revolving letterbox.
+        const close = st.key === 'carrier_lockdown' ? smooth(st.age / 2.5) : 0;
+        const railY = b.H * .69;
+        b.poly([[cx - b.W * .48, railY], [cx - b.W * .3, railY - 6],
+          [cx + b.W * .3, railY - 6], [cx + b.W * .48, railY]], st.c, .42, 1.2);
+        for (const side of [-1, 1]) {
+          const x = cx + side * lerp(b.W * .49, b.W * .38, close);
+          b.poly([[x, cy - b.H * .38], [x - side * b.W * .12, cy - b.H * .24],
+            [x - side * b.W * .12, cy + b.H * .25], [x, cy + b.H * .38]],
+            st.c, .38 + close * .2, 1.15);
+          const pulse = st.key === 'carrier_lockdown' ? .66
+            : .2 + .5 * wave(st.p * .2 + (side + 1) / 4);
+          b.dot(x, railY, 1.4, st.c, pulse);
+        }
+        if (st.key === 'carrier_preparing') {
+          for (let index = 0; index < 4; index += 1) {
+            const x = cx - b.W * .24 + index * b.W * .16;
+            b.line(x, b.H * .82, x + b.W * .07, b.H * .82,
+              st.c, .15 + .52 * Math.pow(wave(st.p * .28 - index / 4), 3), 1.4);
+          }
+        }
+        return;
+      }
+      // The station has a smaller rotating octagonal aperture.
       b.ring(cx, cy, b.W * .46, b.H * .44, 8, st.c, .28, 1.1, Math.PI / 8 + st.p * .02);
       const facets = Array.from({length: 8}, (_, index) => {
         const angle = Math.PI / 8 + index * TAU / 8 + st.p * .02;
         return [cx + Math.cos(angle) * b.W * .46, cy + Math.sin(angle) * b.H * .44];
       });
       b.traceEdges(facets, st.p * .4, st.c, .6);
-    },
-    ground(b, st, pal, cx, cy) {
-      const brake = st.key === 'srv_handbrake', shift = brake ? 0 : st.p * 12;
-      const points = [];
-      for (let x = -4; x <= b.W + 4; x += 6) points.push([x, b.H * .86 - Math.sin((x + shift) * .07) * 2.2]);
-      b.poly(points, st.c, .45, 1);
-      if (!brake) {
-        for (let index = 0; index < 5; index += 1) {
-          const t = fract(st.p * .5 + index / 5);
-          b.bloom(b.W * (.3 - t * .25), b.H * .84 - t * 5, 3 + t * 6, st.c, (1 - t) * .25);
+      if (st.key === 'station' || st.key === 'docked') {
+        b.line(cx - b.W * .22, b.H * .78, cx + b.W * .22, b.H * .78, st.c, .48, 1.3);
+        for (const side of [-1, 1]) {
+          b.poly([[cx + side * b.W * .2, b.H * .69],
+            [cx + side * b.W * .25, b.H * .77],
+            [cx + side * b.W * .2, b.H * .84]], st.c, .5, 1.1);
         }
       }
     },
+    ground(b, st, pal, cx, cy) {
+      const type = groundVehicleType(st), hover = type === 'nomad';
+      const brake = st.key === 'srv_handbrake', shift = brake ? 0 : st.p * (type === 'rhino' ? 8 : 12);
+      if (hover) {
+        b.arc(cx, b.H * .88, b.W * .43, b.H * .09, 0, TAU, st.c, .28, 1.1);
+        for (let index = 0; index < 3; index += 1) {
+          const t = brake ? index / 3 : fract(st.p * .28 + index / 3);
+          b.arc(cx, b.H * .86, lerp(b.W * .18, b.W * .55, t),
+            lerp(2, b.H * .13, t), 0, TAU, st.c, brake ? .12 : (1 - t) * .35, 1);
+        }
+        b.bloom(cx, b.H * .82, b.W * .3, pal.accent, .12);
+        return;
+      }
+      const points = [];
+      for (let x = -4; x <= b.W + 4; x += 6) {
+        points.push([x, b.H * .86 - Math.sin((x + shift) * .07) * (type === 'rhino' ? 1.2 : 2.2)]);
+      }
+      b.poly(points, st.c, .45, 1);
+      if (!brake) {
+        const count = type === 'rhino' ? 3 : 5;
+        for (let index = 0; index < count; index += 1) {
+          const t = fract(st.p * (type === 'rhino' ? .3 : .5) + index / count);
+          b.bloom(b.W * (.3 - t * .25), b.H * .84 - t * 5,
+            3 + t * (type === 'rhino' ? 4 : 6), st.c, (1 - t) * .25);
+        }
+      }
+      if (type === 'scorpion') {
+        b.arc(cx, cy, b.W * .38, b.H * .3, Math.PI * 1.18 + st.p * .08,
+          Math.PI * 1.82 + st.p * .08, st.c, .25, 1);
+      }
+    },
     foot(b, st, pal, cx, cy) {
+      if (st.key === 'carrier_deck') {
+        const y = b.H * .87;
+        b.poly([[3, y + 4], [b.W * .25, y - 3], [b.W * .75, y - 3],
+          [b.W - 3, y + 4]], st.c, .48, 1.1);
+        for (let index = 0; index < 5; index += 1) {
+          const x = lerp(b.W * .17, b.W * .83, index / 4);
+          b.line(x, y - 3, x, y + 3, st.c,
+            .2 + .38 * wave(st.p * .13 - index / 5), 1.1);
+        }
+        return;
+      }
       for (let index = 0; index < 3; index += 1) {
         const t = fract(st.p * .3 + index / 3);
         b.arc(cx, b.H * .9, 6 + t * b.W * .4, 1.5 + t * 5, 0, TAU, st.c, (1 - t) * .45);

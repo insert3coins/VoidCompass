@@ -8,6 +8,7 @@ rather than cutting, journal pulses play once, and the canvases stay sharp at
 any text size. They read canvas pixels and scene state, not screenshots.
 """
 
+from itertools import combinations
 from pathlib import Path
 import time
 import unittest
@@ -76,6 +77,30 @@ class NavigationSceneBrowserTests(unittest.TestCase):
 
     def frames(self, page):
         return page.evaluate("navigationScene.frames")
+
+    def controlled_frame(self, page, phase, age=8):
+        """Capture a settled scene at a known phase, independent of wall time."""
+        return page.evaluate("""({phase, age}) => {
+          const scene = navigationScene;
+          scene.transition = null;
+          scene.previous = null;
+          scene.state.p = phase;
+          scene.state.terrain = phase;
+          scene.state.age = age;
+          scene.draw(performance.now());
+          const canvas = document.getElementById('deck-canvas');
+          const data = canvas.getContext('2d').getImageData(
+            0, 0, canvas.width, canvas.height).data;
+          let lit = 0;
+          for (let index = 3; index < data.length; index += 4) if (data[index] > 12) lit += 1;
+          const lane = document.createElement('canvas');
+          lane.width = Math.floor(canvas.width * .3);
+          lane.height = canvas.height;
+          lane.getContext('2d').drawImage(canvas, 0, 0, lane.width, lane.height,
+            0, 0, lane.width, lane.height);
+          return {key: scene.key, deck: canvas.toDataURL(), lane: lane.toDataURL(),
+            coverage: lit / (canvas.width * canvas.height)};
+        }""", {"phase": phase, "age": age})
 
     def test_every_state_reaches_a_scene_of_its_own(self):
         page = self.open()
@@ -167,6 +192,67 @@ class NavigationSceneBrowserTests(unittest.TestCase):
 
         self.assertNotEqual(opening_frames["fsd_charge"], opening_frames["hyper_charge"])
         self.assertNotEqual(reduced_stills["fsd_charge"], reduced_stills["hyper_charge"])
+
+    def test_surface_vehicles_have_distinct_living_scenes(self):
+        page = self.open()
+        frames = {}
+        for label in ("SRV", "SCARAB", "SCORPION", "RHINO", "NOMAD"):
+            with self.subTest(label=label):
+                state = hud_state(label)
+                state["color"] = "#ef8938"
+                self.render(page, state)
+                first = self.controlled_frame(page, 1.37)
+                second = self.controlled_frame(page, 2.17)
+                self.assertGreater(first["coverage"], .01, "an empty vehicle deck")
+                self.assertNotEqual(first["deck"], second["deck"], "vehicle scene stopped")
+                frames[label] = first["deck"]
+        # SRV is the generic Scarab presentation; named vehicle types each
+        # need their own recognizable deck motion and silhouette.
+        for left, right in combinations(("SCARAB", "SCORPION", "RHINO", "NOMAD"), 2):
+            with self.subTest(left=left, right=right):
+                self.assertNotEqual(frames[left], frames[right])
+
+    def test_station_and_carrier_phases_have_distinct_scenes(self):
+        page = self.open()
+        labels = ("STATION", "STATION VICINITY", "CARRIER VICINITY",
+                  "CARRIER PREPARING", "CARRIER LOCKDOWN", "CARRIER TRANSIT",
+                  "CARRIER ARRIVAL", "CARRIER DECK")
+        frames, later = {}, {}
+        for label in labels:
+            with self.subTest(label=label):
+                state = hud_state(label)
+                state["color"] = "#ef8938"
+                self.render(page, state)
+                first = self.controlled_frame(page, 1.37, age=.8 if label == "CARRIER ARRIVAL" else 8)
+                second = self.controlled_frame(page, 2.17, age=.8 if label == "CARRIER ARRIVAL" else 8)
+                frames[label] = first
+                later[label] = second
+                self.assertGreater(first["coverage"], .01, "an empty station/carrier deck")
+                if label == "STATION":
+                    # A settled port no longer sends approach traffic past the pilot.
+                    self.assertTrue(first["lane"] == second["lane"],
+                                    "station approach lane kept moving after settling")
+                else:
+                    self.assertNotEqual(first["deck"], second["deck"], "scene stopped")
+        for left, right in combinations(labels, 2):
+            with self.subTest(left=left, right=right):
+                self.assertNotEqual(frames[left]["deck"], frames[right]["deck"])
+        self.assertNotEqual(frames["STATION VICINITY"]["lane"],
+                            later["STATION VICINITY"]["lane"],
+                            "station vicinity lost its approach motion")
+
+    def test_new_vehicle_and_port_scenes_hold_reduced_motion_stills(self):
+        page = self.open()
+        for label in ("SRV", "SCARAB", "SCORPION", "RHINO", "NOMAD", "STATION",
+                      "STATION VICINITY", "CARRIER VICINITY", "CARRIER PREPARING",
+                      "CARRIER LOCKDOWN", "CARRIER TRANSIT", "CARRIER ARRIVAL", "CARRIER DECK"):
+            with self.subTest(label=label):
+                self.render(page, hud_state(label), reduced=True)
+                self.assertFalse(page.evaluate("navigationScene.running"))
+                self.assertGreater(page.evaluate(LIT_PIXELS, "deck-canvas"), .01)
+                still = page.evaluate("document.getElementById('deck-canvas').toDataURL()")
+                page.wait_for_timeout(90)
+                self.assertEqual(page.evaluate("document.getElementById('deck-canvas').toDataURL()"), still)
 
     def test_the_clock_runs_only_while_someone_can_see_it(self):
         page = self.open()
@@ -270,7 +356,10 @@ class NavigationSceneBrowserTests(unittest.TestCase):
         page = self.open()
         worst = []
         for label in ("ASTEROID FIELD", "HYPERSPACE", "SCO OVERCHARGE", "FSD CHARGE",
-                      "HYPER CHARGE", "SETTLEMENT", "FSS"):
+                      "HYPER CHARGE", "SETTLEMENT", "FSS", "SCARAB", "SCORPION",
+                      "RHINO", "NOMAD", "STATION", "STATION VICINITY",
+                      "CARRIER VICINITY", "CARRIER PREPARING", "CARRIER LOCKDOWN",
+                      "CARRIER TRANSIT", "CARRIER ARRIVAL", "CARRIER DECK"):
             self.render(page, hud_state(label, shields_known=True, shields_up=False, fuel_scooping=True))
             page.wait_for_timeout(600)
             worst.append(page.evaluate("""() => {
