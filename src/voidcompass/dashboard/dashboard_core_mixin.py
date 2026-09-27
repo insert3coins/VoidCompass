@@ -9,6 +9,7 @@ from voidcompass.core.application_runtime import OverlayWindowState
 from voidcompass.core.config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE
 from voidcompass.core.version import APP_VERSION
 from voidcompass.core import themes
+from voidcompass.exploration.stellar_types import star_type_label
 from voidcompass.overlays.html_ground_overlay import attach_html_ground_overlay
 
 

@@ -16,6 +16,12 @@ from voidcompass.core.static_assets import asset_type, read_asset
 class _OverlayHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+    # Every overlay page asks for its files at once as the host starts. At
+    # socketserver's default listen backlog of 5, Windows refuses part of that
+    # burst (WSAECONNREFUSED): a page that loses a script never renders, and
+    # one that loses its document fails navigation. That was the overlay that
+    # "sometimes" never came up.
+    request_queue_size = 128
 
 
 class _OverlayState:

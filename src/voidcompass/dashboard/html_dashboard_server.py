@@ -25,6 +25,11 @@ MAX_COMMAND_BYTES = 2 * 1024 * 1024
 class _DashboardHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+    # The dashboard page loads a dozen stylesheets and scripts at once. At
+    # socketserver's default listen backlog of 5, Windows refuses part of
+    # that burst, which is how launches lost files in their first second
+    # (see page-start.js, which still repairs any loss that remains).
+    request_queue_size = 128
 
 
 class HtmlDashboardServer:
