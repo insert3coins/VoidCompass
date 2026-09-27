@@ -50,24 +50,36 @@
   // Fade a 0..1 journey in and out at both ends of its travel.
   const ends = (t, edge = .12) => smooth(t / edge) * smooth((1 - t) / edge);
 
-  // Stable low-poly geology, built once rather than changing silhouettes on
-  // every frame. Shared vertices keep the shaded facets joined as rocks tumble.
-  const ASTEROIDS = (() => {
-    const t = (1 + Math.sqrt(5)) / 2;
-    const vertices = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
-      [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]];
-    const faces = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
-      [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
-      [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
-      [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
-    return Array.from({length: 12}, (_, seed) => {
-      const shape = vertices.map((vertex, index) => {
-        const radius = (.78 + hash(seed * 17 + index) * .26) / Math.hypot(...vertex);
-        return vertex.map((n, axis) => n * radius * (axis === 1 ? .7 + hash(seed + 41) * .25 : 1));
-      });
-      return {vertices: shape, faces};
-    });
-  })();
+  // The models (station, carrier, ships, vehicles...) from models.js.
+  const MODELS = window.NavigationModels;
+
+  // Roll about z, then yaw about y, then pitch about x: a model is turned
+  // on its own axes before the camera looks at it the same way.
+  function rotor(yaw = 0, pitch = 0, roll = 0) {
+    const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cr = Math.cos(roll), sr = Math.sin(roll);
+    return ([x, y, z]) => {
+      const x1 = x * cr - y * sr, y1 = x * sr + y * cr;
+      const x2 = x1 * cy + z * sy, z2 = z * cy - x1 * sy;
+      return [x2, y1 * cp - z2 * sp, y1 * sp + z2 * cp];
+    };
+  }
+
+  // A scene's camera: the deck point its origin lands on, pixels per unit,
+  // the angle it looks from and, when `persp` is set, the distance whose
+  // perspective it draws with (nearer things larger).
+  function camera(x, y, unit, {yaw = 0, pitch = 0, persp = 0} = {}) {
+    const look = rotor(yaw, pitch, 0);
+    const scaleAt = (depth) => (persp ? persp / Math.max(persp * .12, persp - depth) : 1);
+    return {
+      x, y, unit, look, scaleAt,
+      project(point) {
+        const [vx, vy, vz] = look(point);
+        const k = scaleAt(vz);
+        return [x + vx * k * unit, y + vy * k * unit, vz, k];
+      },
+    };
+  }
 
   // ---------------------------------------------------------------------
   // State keys. Python publishes a motion family and a label; the scene
@@ -385,23 +397,6 @@
         color, alpha, width);
     }
 
-    ship(x, y, color, alpha = 1, scale = 1, direction = 1) {
-      const s = scale * direction;
-      this.poly([[x + 6 * s, y], [x - 4 * s, y - 3.5 * scale], [x - 1.5 * s, y],
-        [x - 4 * s, y + 3.5 * scale], [x + 6 * s, y]], color, alpha, 1.2, false, .12);
-    }
-
-    globe(x, y, r, color, phase = 0, alpha = .7) {
-      this.arc(x, y, r, r, 0, TAU, color, alpha, 1.2);
-      this.arc(x, y, r, r * .31, 0, TAU, color, alpha * .4);
-      this.arc(x, y, r * .7, r * .7, 0, TAU, color, alpha * .17);
-      for (let index = 0; index < 3; index += 1) {
-        const angle = phase * .32 + index * Math.PI / 3;
-        this.arc(x, y, Math.max(.2, Math.abs(Math.cos(angle)) * r), r, 0, TAU,
-          color, alpha * (.23 + .2 * Math.abs(Math.sin(angle))));
-      }
-    }
-
     // Energise a fixed housing without moving it. Overlapping edge fades keep
     // the contour's seam smooth as the light runs round.
     traceEdges(points, cycle, color, alpha = .8) {
@@ -412,69 +407,269 @@
       }
     }
 
-    // Shaded facets need real occlusion, so rocks paint normally rather than
-    // additively; the shadow fill hides whatever tumbles behind them.
-    asteroid(x, y, size, color, phase, alpha, seed, shadow) {
+    // Pose and draw a model from models.js (a rock, the station, a ship):
+    // solid facets, lit from the upper left, hiding whatever is behind them.
+    // Solids paint normally rather than additively, so they occlude. `cam` is the scene's camera, `place` sets the model in it
+    // ({x, y, z, yaw, pitch, roll, scale}). `lamps` colours the model's
+    // named lamp faces and lights: {slot: colour} or {slot: [colour, level]};
+    // false puts a lamp out. Returns a projector for points on the model,
+    // so a scene can fly traffic into a slot or hang a beacon on a mast.
+    solid(model, cam, place, color, alpha = 1, shadow = '#000', lamps = {}) {
       const a = clamp(alpha) * this.alpha;
-      if (a <= .004) return;
-      const mesh = ASTEROIDS[seed % ASTEROIDS.length];
-      const yaw = phase * (seed % 2 ? -.31 : .24) + seed * 2.1;
-      const pitch = phase * .17 + seed * .83;
-      const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const cx = Math.cos(pitch), sx = Math.sin(pitch);
-      const points = mesh.vertices.map(([vx, vy, vz]) => {
-        const xx = vx * cy + vz * sy;
-        const zz = vz * cy - vx * sy;
-        return [xx, vy * cx - zz * sx, vy * sx + zz * cx];
+      const spin = rotor(place.yaw, place.pitch, place.roll);
+      const size = place.scale ?? 1, px = place.x || 0, py = place.y || 0, pz = place.z || 0;
+      const toWorld = (point) => {
+        const r = spin(point);
+        return [r[0] * size + px, r[1] * size + py, r[2] * size + pz];
+      };
+      const at = (point) => cam.project(toWorld(point));
+      if (a <= .004) return at;
+      const view = model.v.map((vertex) => cam.look(toWorld(vertex)));
+      const screen = view.map(([vx, vy, vz]) => {
+        const k = cam.scaleAt(vz);
+        return [cam.x + vx * k * cam.unit, cam.y + vy * k * cam.unit];
       });
+      const lamp = (kind) => {
+        const value = lamps[kind];
+        if (value === false) return null;
+        if (Array.isArray(value)) return value;
+        return [value || color, .85];
+      };
+      const shown = [];
+      for (const face of model.f) {
+        const ids = face.i;
+        let area = 0, depth = 0, nx = 0, ny = 0, nz = 0;
+        for (let index = 0; index < ids.length; index += 1) {
+          const p = screen[ids[index]], q = screen[ids[(index + 1) % ids.length]];
+          area += p[0] * q[1] - q[0] * p[1];
+          const u = view[ids[index]], w = view[ids[(index + 1) % ids.length]];
+          nx += (u[1] - w[1]) * (u[2] + w[2]);
+          ny += (u[2] - w[2]) * (u[0] + w[0]);
+          nz += (u[0] - w[0]) * (u[1] + w[1]);
+          depth += u[2];
+        }
+        // Screen winding says which way a face turns once perspective has
+        // had its say; the view-space normal says how the light falls.
+        if (area <= 0) continue;
+        const light = clamp((-nx * .45 - ny * .65 + nz * .6) / (Math.hypot(nx, ny, nz) || 1));
+        shown.push({face, depth: depth / ids.length, light});
+      }
+      shown.sort((left, right) => left.depth - right.depth);
       const ctx = this.ctx;
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';
-      ctx.lineWidth = .45 * this.stroke;
+      ctx.lineWidth = .5 * this.stroke;
       ctx.lineJoin = 'round';
-      for (const [first, second, third] of mesh.faces) {
-        const v = points[first], w = points[second], u = points[third];
-        const ax = w[0] - v[0], ay = w[1] - v[1], az = w[2] - v[2];
-        const bx = u[0] - v[0], by = u[1] - v[1], bz = u[2] - v[2];
-        const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
-        if (nz <= 0) continue;
-        // A fixed upper-left light reveals solid facets, not a wire cage.
-        const light = clamp((-nx * .45 - ny * .65 + nz * .6) / Math.hypot(nx, ny, nz));
+      for (const {face, light} of shown) {
+        const ids = face.i;
         ctx.beginPath();
-        ctx.moveTo(x + v[0] * size, y + v[1] * size);
-        ctx.lineTo(x + w[0] * size, y + w[1] * size);
-        ctx.lineTo(x + u[0] * size, y + u[1] * size);
+        ctx.moveTo(screen[ids[0]][0], screen[ids[0]][1]);
+        for (let index = 1; index < ids.length; index += 1) ctx.lineTo(screen[ids[index]][0], screen[ids[index]][1]);
         ctx.closePath();
         ctx.globalAlpha = a;
         ctx.fillStyle = shadow;
         ctx.fill();
-        ctx.globalAlpha = a * (.1 + light * .47);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.globalAlpha = a * (.14 + light * .35);
-        ctx.strokeStyle = color;
+        let kind = face.k;
+        let tone = null;
+        if (kind !== 'hull' && kind !== 'trim' && kind !== 'dark') {
+          tone = lamp(kind);
+          if (!tone) kind = 'trim';
+        }
+        if (tone) {
+          ctx.globalAlpha = a * clamp(tone[1]);
+          ctx.fillStyle = tone[0];
+          ctx.fill();
+          ctx.globalAlpha = a * clamp(tone[1] + .1);
+          ctx.strokeStyle = tone[0];
+        } else if (kind === 'dark') {
+          ctx.globalAlpha = a * .3;
+          ctx.strokeStyle = color;
+        } else {
+          const trim = kind === 'trim';
+          ctx.globalAlpha = a * ((trim ? .17 : .1) + light * (trim ? .52 : .47));
+          ctx.fillStyle = color;
+          ctx.fill();
+          ctx.globalAlpha = a * ((trim ? .24 : .14) + light * .35);
+          ctx.strokeStyle = color;
+        }
         ctx.stroke();
       }
       ctx.restore();
+      // Lights shine only from the side of the model facing the viewer.
+      for (const point of model.lights || []) {
+        const tone = lamp(point.k);
+        if (!tone || tone[1] <= .01) continue;
+        const facing = cam.look(spin(point.n))[2];
+        if (facing <= 0) continue;
+        const [sx, sy] = at(point.at);
+        this.spark(sx, sy, .55, tone[0], null, a * tone[1] / this.alpha * clamp(facing * 2));
+      }
+      return at;
     }
 
-    // Draw a legacy instrument designed in a 120 x 36 space, centred on
-    // (cx, cy) at the given height. Proportions, and so circles, are kept.
-    glyph(cx, cy, height, draw) {
+    // A shaded world: lit from the key light's side with a night side
+    // beyond the terminator, surface detail that turns with it, an
+    // atmosphere rim and, if asked, rings. Decorative: no real body's
+    // appearance is claimed.
+    sphere(x, y, r, color, shadow, {spin = 0, tilt = .35, kind = 'rock', seed = 1, atmosphere = null,
+      rings = null, grid = false, detail = 1, sheen = [-.45, -.5]} = {}) {
+      const a = this.alpha;
+      if (a <= .004 || r < .4) return;
       const ctx = this.ctx;
-      const scale = height / 36;
+      const ct = Math.cos(tilt), stl = Math.sin(tilt);
+      // A point on the unit sphere at (lat, lon), turned and tilted.
+      const surface = (lat, lon) => {
+        const cx = Math.cos(lat) * Math.sin(lon + spin), cy = -Math.sin(lat), cz = Math.cos(lat) * Math.cos(lon + spin);
+        return [cx, cy * ct - cz * stl, cy * stl + cz * ct];
+      };
+      const litBy = ([px, py, pz]) => clamp(-px * .45 - py * .65 + pz * .6);
+      const ringArc = (from, to) => {
+        if (!rings) return;
+        for (let band = 0; band < 3; band += 1) {
+          const rx = r * lerp(rings.inner || 1.45, rings.outer || 2.2, band / 2), ry = rx * (rings.tilt || .22);
+          this.arc(x, y, rx, ry, from, to, color, (rings.alpha || .5) * (1 - band * .22), 1.4 - band * .3);
+        }
+      };
+      ringArc(Math.PI, TAU);
       ctx.save();
-      ctx.translate(cx, cy);
-      ctx.scale(scale, scale);
-      ctx.translate(-60, -18);
-      draw();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, TAU);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = shadow;
+      ctx.fill();
+      ctx.clip();
+      // Where the light strikes, as a fraction of the radius from centre: a
+      // world far bigger than the deck is lit on the cap that shows.
+      const lx = x + r * sheen[0], ly = y + r * sheen[1];
+      const body = ctx.createRadialGradient(lx, ly, r * .05, lx, ly, r * 1.55);
+      body.addColorStop(0, color);
+      body.addColorStop(1, 'transparent');
+      ctx.globalAlpha = a * (kind === 'ice' ? .72 : .6);
+      ctx.fillStyle = body;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      ctx.lineWidth = Math.max(.5, r * .045) * this.stroke;
+      ctx.strokeStyle = color;
+      if (kind === 'gas') {
+        // Cloud bands along the latitudes, and a storm that turns with them.
+        for (let band = 0; band < 7; band += 1) {
+          const lat = -1.1 + band * .37 + hash(seed + band) * .12;
+          ctx.beginPath();
+          let drawing = false;
+          for (let step = 0; step <= 24; step += 1) {
+            const [px, py, pz] = surface(lat, step * TAU / 24);
+            if (pz < 0) {
+              drawing = false;
+              continue;
+            }
+            if (drawing) ctx.lineTo(x + px * r, y + py * r);
+            else ctx.moveTo(x + px * r, y + py * r);
+            drawing = true;
+          }
+          ctx.globalAlpha = a * (.16 + hash(seed + band * 3) * .22);
+          ctx.lineWidth = r * (.06 + hash(seed + band * 5) * .1) * this.stroke;
+          ctx.stroke();
+        }
+        ctx.lineWidth = Math.max(.5, r * .045) * this.stroke;
+      }
+      // Craters, storms or ice fields: surface marks that turn with it.
+      const marks = kind === 'gas' ? 2 : Math.round((kind === 'ice' ? 9 : 16) * detail);
+      for (let index = 0; index < marks; index += 1) {
+        const lat = (hash(seed * 7 + index) - .5) * 2.6, lon = hash(seed * 13 + index) * TAU;
+        const [px, py, pz] = surface(lat, lon);
+        if (pz <= .08) continue;
+        const size = (kind === 'gas' ? .16 : .05 + hash(seed * 3 + index) * .12) * r;
+        ctx.beginPath();
+        ctx.ellipse(x + px * r, y + py * r, Math.max(.3, size * pz), size, Math.atan2(py, px), 0, TAU);
+        ctx.globalAlpha = a * (.18 + litBy([px, py, pz]) * .45) * pz;
+        ctx.stroke();
+      }
+      if (grid) {
+        // The hologram's lattice across the near hemisphere.
+        ctx.lineWidth = .5 * this.stroke;
+        for (let meridian = 0; meridian < 6; meridian += 1) {
+          ctx.beginPath();
+          let drawing = false;
+          for (let step = 0; step <= 16; step += 1) {
+            const [px, py, pz] = surface(-Math.PI / 2 + step * Math.PI / 16, meridian * TAU / 6);
+            if (pz < 0) {
+              drawing = false;
+              continue;
+            }
+            if (drawing) ctx.lineTo(x + px * r, y + py * r);
+            else ctx.moveTo(x + px * r, y + py * r);
+            drawing = true;
+          }
+          ctx.globalAlpha = a * .16;
+          ctx.stroke();
+        }
+      }
+      // Night side: the terminator falls away from the light.
+      const night = ctx.createRadialGradient(lx, ly, r * .75, lx, ly, r * 2.1);
+      night.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      night.addColorStop(1, shadow);
+      ctx.globalAlpha = a * .92;
+      ctx.fillStyle = night;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
       ctx.restore();
+      // The lit limb, and an atmosphere's glow beyond it.
+      this.arc(x, y, r, r, Math.PI * .92, Math.PI * 1.62, color, .55, 1);
+      if (atmosphere) {
+        this.arc(x, y, r + 1.2, r + 1.2, Math.PI * .75, Math.PI * 1.85, atmosphere, .5, 1.6);
+        this.arc(x, y, r + 2.6, r + 2.6, Math.PI * .9, Math.PI * 1.7, atmosphere, .18, 2);
+      }
+      ringArc(0, Math.PI);
+    }
+
+    // A star: a hot disc in its class colour with a white core, a surface
+    // that boils, a corona that breathes and loops of plasma at the limb.
+    sun(x, y, r, color, core, phase, {flares = true} = {}) {
+      this.bloom(x, y, r * 3.2, color, .42);
+      this.bloom(x, y, r * 1.7, color, .5);
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      const body = ctx.createRadialGradient(x - r * .2, y - r * .2, r * .1, x, y, r);
+      body.addColorStop(0, core);
+      body.addColorStop(.45, color);
+      body.addColorStop(1, color);
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, TAU);
+      ctx.globalAlpha = this.alpha * .95;
+      ctx.fillStyle = body;
+      ctx.fill();
+      ctx.restore();
+      for (let index = 0; index < 9; index += 1) {
+        const angle = hash(index + 3) * TAU + phase * (.05 + hash(index) * .08);
+        const reach = r * (.2 + hash(index + 9) * .6);
+        this.bloom(x + Math.cos(angle) * reach, y + Math.sin(angle) * reach * .9, r * .28,
+          core, .18 + .18 * wave(phase * .3 + index * .2));
+      }
+      for (let index = 0; index < 18; index += 1) {
+        const angle = index * TAU / 18 + hash(index + 40) * .2;
+        const length = r * (.25 + .45 * wave(phase * .22 + hash(index + 41)));
+        this.line(x + Math.cos(angle) * r * 1.02, y + Math.sin(angle) * r * 1.02,
+          x + Math.cos(angle) * (r + length), y + Math.sin(angle) * (r + length), color, .3, .9);
+      }
+      if (flares) {
+        for (let index = 0; index < 2; index += 1) {
+          const base = -1.9 + index * 1.3 + Math.sin(phase * .1 + index) * .15;
+          const rise = r * (.35 + .25 * wave(phase * .18 + index * .5));
+          const points = [];
+          for (let step = 0; step <= 10; step += 1) {
+            const u = step / 10, angle = base + (u - .5) * .5;
+            const lift = Math.sin(u * Math.PI) * rise;
+            points.push([x + Math.cos(angle) * (r + lift), y + Math.sin(angle) * (r + lift)]);
+          }
+          this.poly(points, color, .55, 1.2);
+        }
+      }
     }
   }
 
   // ---------------------------------------------------------------------
   // Shared fields: the wide backdrops that fill the deck around each
-  // state's focal instrument.
+  // state's subject.
   // ---------------------------------------------------------------------
 
   // Distant dust drifting past. Decorative only: never a positional plot.
@@ -485,17 +680,6 @@
       const y = 2 + hash(index + 11) * (s.H - 4);
       s.dot(x, y, .35 + hash(index + 19) * .6, color,
         alpha * (.3 + .7 * hash(index + 23)) * ends(t, .08));
-    }
-  }
-
-  // Normal-space backdrop: two depths of dust, the nearer faster and longer.
-  // Decorative only: the journal reports no speed or heading to draw.
-  function starfield(s, st, alpha = 1) {
-    dust(s, st, {count: 26, speed: .012, alpha: .45 * alpha});
-    for (let index = 0; index < 7; index += 1) {
-      const t = fract(hash(index + 61) + st.p * .05 * (.6 + hash(index + 62) * .8));
-      const x = (1 - t) * (s.W + 20) - 10, y = 3 + hash(index + 63) * (s.H - 6);
-      s.line(x, y, x + 3 + hash(index + 64) * 5, y, st.c, .5 * alpha * ends(t, .1), .9);
     }
   }
 
@@ -512,64 +696,6 @@
       const near = Math.max(0, t - .1 - t * .14) ** 2;
       s.line(x + dx * rx * near, y + dy * ry * near, x + dx * rx * far, y + dy * ry * far,
         color, strength * Math.sin(t * Math.PI), width * (.55 + t * .9));
-    }
-  }
-
-  // Ground plane: rays converge on the horizon while rows roll toward the
-  // viewer, or away on departure. Pace follows the real descent rate only.
-  function terrain(s, st, {horizon = s.H * .36, x = s.W * .62, speed = 1, alpha = .3,
-    depart = false, still = false, rows = 6, color = st.c} = {}) {
-    for (let index = -9; index <= 9; index += 1) {
-      s.line(x + index * 5, horizon, x + index * s.W * .085, s.H + 2, color, alpha * .5, .8);
-    }
-    for (let index = 0; index < rows; index += 1) {
-      const t = still ? (index + .55) / rows : fract(st.terrain * .16 * speed + index / rows);
-      const depth = (depart ? 1 - t : t) ** 2;
-      const y = horizon + depth * (s.H - horizon);
-      s.line(0, y, s.W, y, color, (still ? .62 : Math.sin(t * Math.PI)) * alpha, .9);
-    }
-    const ridge = [];
-    for (let px = -6; px <= s.W + 6; px += 9) {
-      ridge.push([px, horizon - 1 - (Math.max(0, Math.sin(px * .021 + 1.3)) * 3.4
-        + Math.sin(px * .083 + .4) * 1.1 + 1.2)]);
-    }
-    s.poly(ridge, color, .5, 1);
-  }
-
-  // Elite's scanner disc: flattened range rings, a sweep and the ship at its
-  // centre. It never plots contacts, because the journal does not report them.
-  function radar(s, st, x, {sweep = .16, alpha = 1, color = st.c} = {}) {
-    const y = s.H / 2 + 1;
-    // Sized from the deck's height, so it keeps the scanner's tilt however
-    // wide the deck is.
-    const rx = Math.min(s.H * 1.4, s.W * .22);
-    const ry = rx * TILT;
-    s.arc(x, y, rx, ry, 0, TAU, color, .5 * alpha, 1.1);
-    s.arc(x, y, rx * .64, ry * .64, 0, TAU, color, .26 * alpha);
-    s.arc(x, y, rx * .3, ry * .3, 0, TAU, color, .2 * alpha);
-    s.line(x - rx, y, x + rx, y, color, .16 * alpha);
-    s.line(x, y - ry, x, y + ry, color, .12 * alpha);
-    if (sweep) {
-      const angle = st.p * TAU * sweep;
-      for (let trail = 0; trail < 6; trail += 1) {
-        s.arc(x, y, rx, ry, angle - (trail + 1) * .14, angle - trail * .14, color,
-          .75 * alpha * (1 - trail / 6), 1.5);
-      }
-      s.line(x, y, x + Math.cos(angle) * rx, y + Math.sin(angle) * ry, color, .32 * alpha);
-    }
-    s.poly([[x - 7, y + 4], [x, y - 5], [x + 7, y + 4], [x, y + 1]], color, .9 * alpha, 1.3, true, .16);
-    return {x, y, rx, ry};
-  }
-
-  // Horizon wings either side of the scanner, as the cockpit frames it.
-  function attitude(s, st, scope, alpha = 1) {
-    const {x, rx} = scope, y = s.H / 2;
-    for (const side of [-1, 1]) {
-      const reach = Math.min(46, side < 0 ? x - rx - 10 : s.W - x - rx - 10);
-      s.poly([[x + side * (rx + reach), y], [x + side * (rx + 10), y], [x + side * (rx + 5), y - 5]],
-        st.c, .45 * alpha, 1.1);
-      s.line(x + side * (rx + 12), y + 6, x + side * (rx + reach * .6), y + 6, st.c, .24 * alpha);
-      s.line(x + side * (rx + 12), y - 7, x + side * (rx + reach * .4), y - 7, st.c, .16 * alpha);
     }
   }
 
@@ -600,954 +726,889 @@
   }
 
   // ---------------------------------------------------------------------
-  // Legacy focal instruments, drawn in their original 120 x 36 space and
-  // placed by Painter.glyph. The wide fields around them are new.
+  // Solid scenes. Each state stages its own subject (the station, the
+  // carrier, a world, a star, a vehicle, the commander) as lit, occluding
+  // solids like the asteroid field's rocks, with light and motion round
+  // it. `s` is the painter, `st` the state (colour, dynamics, phase) and
+  // `pal` the theme palette. Anything that reads as a quantity comes from
+  // the journal or Status.json; the rest is decorative.
   // ---------------------------------------------------------------------
 
-  function carrierGlyph(s, st, variant = st.key) {
-    const c = st.c, p = st.p;
-    const deck = variant === 'carrier_deck';
-    // An angular capital hull with a raised bridge and two launch shoulders.
-    // Its outline stays fixed while the surrounding scene changes phase.
-    s.poly([[11, 21], [24, 17], [40, 17], [45, 12], [92, 12], [105, 18],
-      [109, 23], [105, 26], [29, 26]], c, .82, 1.35, true, .1);
-    s.poly([[20, 19], [31, 10], [44, 10]], c, .53, 1.3);
-    s.poly([[94, 12], [105, 10], [111, 18]], c, .53, 1.3);
-    s.poly([[68, 12], [72, 5], [81, 5], [87, 12]], c, .73, 1.3, true, .07);
-    s.line(77, 5, 77, 2, c, .61);
-    s.line(33, 23, 102, 23, c, .38, 1);
-    for (let index = 0; index < 5; index += 1) {
-      const x = 43 + index * 11;
-      s.poly([[x, 18], [x + 3, 16], [x + 7, 18]], c, .3, 1);
-      const light = variant === 'carrier_lockdown' ? .6
-        : deck ? .22 + .26 * wave(p * .18 - index / 5)
-          : .16 + .65 * Math.pow(wave(p * .35 - index / 5), 4);
-      s.line(x, 27, x + 7, 27, c, light, 1.45);
+  // Low-poly ground seen through `cam`: a height field of lit facets drawn
+  // far to near so ridges hide what lies behind them. `travel` slides the
+  // ground under the viewer ([along x, along z], in ground units) on a
+  // fixed lattice, so hills keep their shape as they pass. `flat` levels a
+  // round clearing ({x, z, radius}) for a pad or a landing; `road` levels a
+  // band across the view ({z, width}) for a vehicle driving along it. The
+  // far rows rise into hills and fade in, so nothing pops over the horizon.
+  function landscape(s, cam, st, pal, {x0 = -36, x1 = 36, z0 = -18, z1 = 3, cols = 18, rows = 8,
+    travel = [0, 0], lift = 1, seed = 1, flat = null, road = null, alpha = 1, color = st.c, floor = 0} = {}) {
+    const dx = (x1 - x0) / cols, dz = (z1 - z0) / rows;
+    const baseX = Math.floor(travel[0] / dx), baseZ = Math.floor(travel[1] / dz);
+    const sx = (travel[0] / dx - baseX) * dx, sz = (travel[1] / dz - baseZ) * dz;
+    const grid = [];
+    for (let j = 0; j <= rows; j += 1) {
+      const row = [];
+      const z = z0 + j * dz + sz, wz = z0 + (j - baseZ) * dz;
+      for (let i = 0; i <= cols; i += 1) {
+        const x = x0 + i * dx - sx, wx = x0 + (i + baseX) * dx;
+        let h = .55 * Math.sin(wx * .55 + seed) + .7 * Math.sin(wz * .42 + wx * .18 + seed * 3)
+          + .45 * Math.sin((wx - wz) * .31 + seed * 5) + .35 * hash(i + baseX * 7 + (j - baseZ) * 13) + .8;
+        h = Math.max(0, h) * lift * (.5 + Math.pow(clamp(-z / Math.abs(z0)), 1.5) * 2.4);
+        if (flat) h *= smooth((Math.hypot(x - flat.x, z - (flat.z || 0)) - flat.radius) / 3);
+        if (road) h *= smooth((Math.abs(z - road.z) - road.width) / 3);
+        const [vx, vy, vz] = cam.look([x, floor - h, z]), k = cam.scaleAt(vz);
+        row.push([cam.x + vx * k * cam.unit, cam.y + vy * k * cam.unit, vx, vy, vz]);
+      }
+      grid.push(row);
     }
-    if (variant === 'carrier_lockdown') {
-      // One closure, then latched. The journal gives a phase, not a timer.
-      const close = smooth(st.age / 2.5);
-      const top = lerp(3, 13, close), bottom = lerp(34, 28, close);
-      s.line(26, top, 108, top, c, .7, 1.8);
-      s.line(26, bottom, 108, bottom, c, .58, 1.6);
-      for (const side of [-1, 1]) {
-        const x = 62 + side * lerp(58, 46, close);
-        s.poly([[x, top - 2], [x - side * 8, top + 4],
-          [x - side * 8, bottom - 3], [x, bottom + 2]], c, .65, 1.5);
+    const ctx = s.ctx, a = s.alpha * alpha;
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.lineWidth = .45 * s.stroke;
+    for (let j = 0; j < rows; j += 1) {
+      // Fade the far rows in as they arrive over the horizon.
+      const fog = smooth((j + 1 - sz / dz) / 2.2);
+      if (fog <= .01) continue;
+      for (let i = 0; i < cols; i += 1) {
+        const p = grid[j][i], q = grid[j][i + 1], r = grid[j + 1][i + 1], u = grid[j + 1][i];
+        // The slope of the facet, from its diagonals in view space, sets
+        // its light the way a model's faces are lit.
+        const ax = r[2] - p[2], ay = r[3] - p[3], az = r[4] - p[4];
+        const bx = u[2] - q[2], by = u[3] - q[3], bz = u[4] - q[4];
+        const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+        const light = clamp((-nx * .45 - ny * .65 + nz * .6) / (Math.hypot(nx, ny, nz) || 1));
+        ctx.beginPath();
+        ctx.moveTo(p[0], p[1]);
+        ctx.lineTo(q[0], q[1]);
+        ctx.lineTo(r[0], r[1]);
+        ctx.lineTo(u[0], u[1]);
+        ctx.closePath();
+        ctx.globalAlpha = a * fog;
+        ctx.fillStyle = pal.bg;
+        ctx.fill();
+        ctx.globalAlpha = a * fog * (.03 + light * .2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = a * fog * (.06 + light * .22);
+        ctx.strokeStyle = color;
+        ctx.stroke();
       }
-      s.brackets(62, 19, 44, 14, c, .55);
-    } else if (variant === 'carrier_preparing') {
-      for (let index = 0; index < 5; index += 1) {
-        const x = 29 + index * 17;
-        s.line(x, 8, x + 8, 8, c, .2 + .55 * Math.pow(wave(p * .28 - index / 5), 3), 1.5);
-      }
-      for (const side of [-1, 1]) s.chevron(62 + side * 51, 18, -side, c, .62, 3.7);
-    } else if (deck || variant === 'carrier_vicinity') {
-      s.poly([[13, 32], [35, deck ? 28 : 30], [87, deck ? 28 : 30], [110, 32]],
-        c, deck ? .72 : .4, 1.3);
-      for (const x of [25, 100]) s.line(x, 25, x, 33, c, .57, 1.2);
-      if (deck) s.brackets(62, 24, 30, 9, c, .55);
-      else s.arc(62, 20, 47, 14, Math.PI * 1.1, Math.PI * 1.9, c, .4, 1.2);
-    } else if (variant === 'carrier_transit') {
-      for (const side of [-1, 1]) {
-        s.poly([[62 + side * 20, 9], [62 + side * 42, 5], [62 + side * 55, 9]], c, .62, 1.5);
-        s.poly([[62 + side * 20, 28], [62 + side * 42, 32], [62 + side * 55, 28]], c, .44, 1.2);
-      }
-    } else if (variant === 'carrier_arrival') {
-      s.brackets(62, 19, 52, 15, c, .5);
-      s.arc(62, 19, 54, 17, Math.PI * .15, Math.PI * .85, c, .45, 1.3);
     }
+    ctx.restore();
   }
 
-  function targetGlyph(s, st) {
-    const c = st.c, p = st.p, key = st.key;
-    if (key === 'target_clear') {
-      for (const side of [-1, 1]) {
-        s.poly([[60 + side * 14, 6], [60 + side * 38, 6], [60 + side * 46, 13]], c, .63, 1.4);
-        s.poly([[60 + side * 14, 30], [60 + side * 38, 30], [60 + side * 46, 23]], c, .63, 1.4);
-      }
-      s.arc(60, 18, 10, 10, -.8, .8, c, .48, 1.3);
-      s.arc(60, 18, 10, 10, Math.PI - .8, Math.PI + .8, c, .48, 1.3);
-      s.line(44, 27, 76, 9, c, .62, 1.5);
-      return;
-    }
-    const locked = smooth(st.age / 1.2);
-    s.arc(60, 18, 10, 10, 0, TAU, c, .4);
-    s.brackets(60, 18, 16 + (1 - locked) * 23, 13, c, .8);
-    s.line(60, 3, 60, 7, c, .5);
-    s.line(60, 29, 60, 33, c, .5);
-    s.line(29, 18, 46, 18, c, .4);
-    s.line(74, 18, 91, 18, c, .4);
-    if (key === 'target_system') {
-      s.ring(60, 18, 8, 8, 8, c, .65, 1.1, Math.PI / 8);
-      s.spark(60, 18, 1.7, c, null, .84);
-      for (const x of [21, 99]) s.poly([[x - 4, 18], [x, 14], [x + 4, 18], [x, 22]], c, .49, 1.1, true);
-    } else if (key === 'target_body') {
-      s.globe(60, 18, 7, c, p * .28, .76);
-      s.arc(60, 18, 16, 7, Math.PI * .12, Math.PI * .88, c, .48, 1.2);
-    } else if (key === 'target_signal') {
-      s.dot(60, 18, 1.5, c, .8);
-      for (const side of [-1, 1]) {
-        for (let index = 0; index < 2; index += 1) {
-          s.arc(60, 18, 14 + index * 9, 8 + index * 5, side < 0 ? Math.PI - .75 : -.75,
-            side < 0 ? Math.PI + .75 : .75, c, .38 + .24 * wave(p * .3 - index * .25), 1.2);
-        }
-      }
-    } else {
-      s.dot(60, 18, 1.3, c, .8);
-    }
-    const track = p * TAU * .45;
-    for (const offset of [0, Math.PI]) s.arc(60, 18, 10, 10, track + offset, track + offset + .65, c, .75, 1.5);
+  // Stars drifting deep in the background: three depths, the nearest fastest.
+  function sky(s, st, alpha = 1, speed = 1) {
+    dust(s, st, {count: 30, speed: .006 * speed, alpha: .45 * alpha});
+    dust(s, st, {count: 12, speed: .016 * speed, alpha: .6 * alpha});
   }
 
-  function threatGlyph(s, st) {
-    const c = st.c, p = st.p, key = st.key;
-    const heavy = key === 'heavy_combat', ground = key === 'srv_threat';
-    const lock = .37 + .48 * wave(p * (heavy ? .82 : .57));
-    // Threat geometry is an alarm frame, never a fabricated target count.
-    s.ring(60, 18, heavy ? 28 : 24, 14, 8, c, heavy ? .69 : .51, heavy ? 1.5 : 1.2, Math.PI / 8);
-    s.ring(60, 18, 14, 9, 8, c, .25 + lock * .35, 1.15, Math.PI / 8);
-    s.poly([[60, 8], [69, 18], [60, 28], [51, 18]], c, .8, 1.5, true, .07);
-    for (const side of [-1, 1]) {
-      s.poly([[60 + side * 35, 4], [60 + side * 47, 4], [60 + side * 47, 12]], c, lock, 1.6);
-      s.poly([[60 + side * 35, 32], [60 + side * 47, 32], [60 + side * 47, 24]], c, lock, 1.6);
-      s.line(60 + side * 18, 18, 60 + side * 42, 18, c, .23 + lock * .36, 1.3);
+  // A small craft's engine trail: fading dots behind it.
+  function trail(s, from, to, color, alpha = .6, count = 7) {
+    for (let index = 1; index <= count; index += 1) {
+      const u = index / count;
+      s.dot(lerp(from[0], to[0], u), lerp(from[1], to[1], u), .9 - u * .5, color, alpha * (1 - u));
     }
-    if (ground) {
-      s.poly([[10, 33], [30, 29], [48, 31], [60, 29], [77, 31], [94, 29], [111, 33]], c, .61, 1.2);
-      for (const x of [24, 96]) s.line(x, 28, x, 34, c, .7, 1.2);
-    } else if (heavy) {
-      s.line(60, 1, 60, 6, c, lock, 1.8);
-      s.line(60, 30, 60, 35, c, lock, 1.8);
-      for (const side of [-1, 1]) s.chevron(60 + side * 52, 18, -side, c, lock, 4);
-    }
-  }
-
-  function contactGlyph(s, st) {
-    const c = st.c, p = st.p, key = st.key;
-    const threat = key === 'signal_threat', drop = key === 'signal_drop';
-    s.arc(60, 22, 45, 10, 0, TAU, c, .3);
-    s.arc(60, 22, 22, 5, 0, TAU, c, .2);
-    const x = 62 + Math.sin(p * .18) * 2, y = 14 + Math.cos(p * .2) * 2;
-    s.line(x, 23, x, y, c, .4);
-    if (key === 'unknown_contact') {
-      s.ring(x, y, 5, 5, 6, c, .6);
-      s.arc(x, y, 10, 8, p * .5, p * .5 + Math.PI, c, .4);
-    } else {
-      s.poly([[x, y - 4], [x + 4, y + 3], [x - 4, y + 3]], c, .8, 1.1, true, .13);
-      s.brackets(x, y, 10 + (drop ? 4 * wave(p * .2) : 0), 8, c, .6);
-    }
-    if (threat) {
-      // The USS threat level comes from the journal label, SIGNAL THREAT n.
-      const level = clamp(Number(st.label.match(/\d+$/)?.[0] || 0), 0, 8);
-      for (let index = 0; index < level; index += 1) {
-        const px = 34 + index * 7;
-        s.poly([[px - 2, 31], [px, 25], [px + 2, 31]], c, .42 + .35 * wave(p * .47 - index * .11), 1.2);
-      }
-    }
-  }
-
-  function panelGlyph(s, st) {
-    const c = st.c, p = st.p, key = st.key;
-    s.poly([[6, 5], [114, 5], [114, 31], [6, 31]], c, .2, 1, true, .015);
-    if (key === 'comms_panel') {
-      s.poly([[15, 10], [30, 10], [30, 22], [21, 22], [16, 27], [16, 22], [12, 22], [12, 10]], c, .6);
-      for (let index = 0; index < 21; index += 1) {
-        const amp = 2 + 10 * wave(p * .25 - index * .12) * Math.sin(index / 20 * Math.PI);
-        s.line(39 + index * 3.5, 18 - amp, 39 + index * 3.5, 18 + amp, c, .4 + .25 * wave(p * .2 - index * .1));
-      }
-      for (let index = 0; index < 3; index += 1) s.dot(104 + index * 4, 9, 1.1, c, .31 + .39 * wave(p * .38 - index * .18));
-    } else if (key === 'role_panel') {
-      for (let index = 0; index < 3; index += 1) {
-        const x = 30 + index * 30;
-        s.dot(x, 12, 3.2, c, .7);
-        s.poly([[x - 7, 26], [x - 6, 20], [x, 17], [x + 6, 20], [x + 7, 26]], c, .55);
-      }
-      s.brackets(60, 18, 13, 13, c, .25 + .6 * wave(p * .5));
-      s.poly([[30, 12], [60, 6], [90, 12]], c, .39);
-    } else if (key === 'station_services') {
-      for (let index = 0; index < 4; index += 1) {
-        const x = 25 + index * 24;
-        s.ring(x, 18, 8, 8, 6, c, .35 + .3 * wave(p * .16 - index / 4), 1.1, Math.PI / 6);
-        s.line(x - 3, 18, x + 3, 18, c, .6);
-        if (index % 2) s.line(x, 15, x, 21, c, .6);
-      }
-      s.poly([[11, 30], [11, 8], [18, 8]], c, .58, 1.3);
-      s.poly([[109, 30], [109, 8], [102, 8]], c, .58, 1.3);
-    } else {
-      const left = key === 'left_panel';
-      s.poly(left ? [[18, 7], [100, 3], [100, 32], [18, 27]] : [[20, 3], [102, 7], [102, 27], [20, 32]],
-        c, .55, 1, true, .04);
-      if (left) {
-        for (let index = 0; index < 4; index += 1) {
-          const x = 29 + index * 18, y = 17 + Math.sin(index * 1.7) * 6;
-          s.ring(x, y, 2.5, 2.5, 4, c, .75);
-          if (index < 3) s.line(x + 3, y, x + 15, 17 + Math.sin((index + 1) * 1.7) * 6, c, .3);
-          s.arc(x, y, 5.5, 5.5, 0, TAU, c, .7 * Math.pow(wave(p * .45 - index / 4), 4), 1.3);
-        }
-        s.poly([[8, 7], [15, 7], [15, 30], [8, 30]], c, .52, 1.3, true, .06);
-      } else {
-        for (let index = 0; index < 4; index += 1) {
-          s.rect(31, 9 + index * 5, 5, 2, c, .4, true);
-          s.line(41, 10 + index * 5, 82 - index * 4, 10 + index * 5, c, .28 + .3 * wave(p * .2 - index * .2));
-        }
-        s.poly([[105, 7], [112, 7], [112, 30], [105, 30]], c, .52, 1.3, true, .06);
-      }
-    }
-  }
-
-  function stationGlyph(s, st) {
-    const c = st.c, p = st.p, key = st.key;
-    const denied = ['docking_denied', 'docking_cancelled', 'docking_timeout'].includes(key);
-    // The octagonal housing turns round a fixed letterbox. The gate holds
-    // position even when a docking request or denial changes the light.
-    const rotation = Math.PI / 8 + p * .045;
-    s.ring(60, 18, 30, 17, 8, c, .55, 1.25, rotation);
-    s.ring(60, 18, 21, 12, 8, c, .25, 1, rotation);
-    for (let index = 0; index < 8; index += 1) {
-      const angle = rotation + index * TAU / 8;
-      s.line(60 + Math.cos(angle) * 22, 18 + Math.sin(angle) * 12,
-        60 + Math.cos(angle) * 29, 18 + Math.sin(angle) * 17, c, .32, 1);
-    }
-    s.poly([[45, 13], [75, 13], [75, 23], [45, 23]],
-      c, denied ? .5 : .88, 1.3, true, .055);
-    s.line(48, 18, 72, 18, c, denied ? .18 : .34, 1);
-    for (let index = 0; index < 5; index += 1) {
-      s.line(49 + index * 5.5, 14, 49 + index * 5.5, 16,
-        c, .2 + .58 * Math.pow(wave(p * .35 - index / 5), 3), 1.3);
-    }
-    if (key === 'docking_cancelled') {
-      for (const side of [-1, 1]) {
-        s.poly([[60 + side * 8, 7], [60 + side * 19, 3], [60 + side * 31, 3]], c, .68, 1.5);
-        s.poly([[60 + side * 8, 29], [60 + side * 19, 33], [60 + side * 31, 33]], c, .68, 1.5);
-      }
-    } else if (key === 'docking_timeout') {
-      s.arc(60, 18, 32, 17, -2.6, -.3, c, .7, 1.6);
-      s.arc(60, 18, 32, 17, .4, 2.3, c, .7, 1.6);
-      s.line(60, 18, 60, 8, c, .8, 1.5);
-      s.line(60, 18, 69, 20, c, .8, 1.5);
-    } else if (denied) {
-      const caution = .41 + .51 * wave(p * .38);
-      s.line(46, 9, 74, 27, c, caution, 2);
-      s.line(46, 27, 74, 9, c, caution, 2);
-    } else if (key === 'docking_clearance') {
-      const confirmed = st.label.includes('CLEARED');
-      s.brackets(60, 18, 18, 9, c, confirmed ? .86 : .46);
-      for (const side of [-1, 1]) s.line(60 + side * 32, 9, 60 + side * 32, 27, c, confirmed ? .65 : .28, 1.4);
-    } else if (key === 'station_vicinity' || key === 'docking_assist') {
-      s.brackets(60, 18, 35, 16, c, .52);
-    } else if (key === 'station') {
-      // Already berthed: keep the gate and docking clamps latched.
-      for (const side of [-1, 1]) {
-        s.poly([[60 + side * 16, 12], [60 + side * 22, 16],
-          [60 + side * 22, 22], [60 + side * 16, 25]], c, .65, 1.4);
-      }
-      s.line(48, 27, 72, 27, c, .53, 1.4);
-    } else {
-      // A lit facet circuit runs round the station silhouette.
-      const facets = Array.from({length: 8}, (_, index) => {
-        const angle = rotation + index * TAU / 8;
-        return [60 + Math.cos(angle) * 30, 18 + Math.sin(angle) * 17];
-      });
-      s.traceEdges(facets, p * .3, c, .74);
-    }
-  }
-
-  function dockedGlyph(s, st) {
-    const c = st.c, p = st.p;
-    // Docked: pad clamps stay latched; no endless docking manoeuvre.
-    s.poly([[25, 24], [44, 8], [83, 8], [102, 24], [83, 32], [44, 32]], c, .65, 1.1, true, .06);
-    const pad = [[38, 24], [49, 14], [78, 14], [88, 24], [78, 28], [49, 28]];
-    s.poly(pad, c, .32, 1, true);
-    s.ship(63, 21, c, .85, 1.7);
-    for (const x of [38, 88]) s.poly([[x - 3, 23], [x, 20], [x + 3, 23]], c, .75, 1.6);
-    s.traceEdges(pad, p * .55, c);
-    for (let index = 0; index < 4; index += 1) s.rect(47 + index * 10, 32, 4, 1.4, c, .3 + .5 * wave(p * .55 + index / 4), true);
-  }
-
-  function suitGlyph(s, st) {
-    const c = st.c, p = st.p, label = st.label;
-    const alarm = .43 + .43 * wave(p * .5);
-    s.poly([[45, 30], [40, 23], [40, 12], [47, 4], [73, 4], [80, 12], [80, 23], [75, 30]], c, .78, 1.25);
-    s.poly([[44, 14], [76, 14], [73, 23], [47, 23]], c, .55, 1, true, .06);
-    if (label.startsWith('EXTREME')) {
-      // Status distinguishes an extreme environment from a suit caution.
-      for (const side of [-1, 1]) {
-        const x = 60 + side * 28;
-        s.poly([[x, 5], [x + side * 5, 10], [x, 15], [x + side * 5, 20], [x, 29]], c, alarm, 1.6);
-      }
-    }
-  }
-
-  function groundVehicleType(st) {
-    for (const type of ['rhino', 'scorpion', 'nomad', 'scarab']) {
-      if (st.key === type || st.key.endsWith(`_${type}`)) return type;
-    }
-    return ['rhino', 'scorpion', 'nomad', 'scarab'].includes(st.vehicleKey)
-      ? st.vehicleKey : 'scarab';
-  }
-
-  function vehicleGlyph(s, st) {
-    const c = st.c, p = st.p, key = st.key;
-    const type = groundVehicleType(st);
-    const brake = key === 'srv_handbrake';
-    if (type === 'nomad') {
-      const lift = brake ? 0 : Math.sin(p * .55) * .7;
-      s.poly([[32, 18 + lift], [41, 11 + lift], [79, 11 + lift], [88, 18 + lift],
-        [78, 23 + lift], [42, 23 + lift]], c, .78, 1.2, true, .08);
-      s.poly([[43, 11 + lift], [52, 6 + lift], [69, 6 + lift], [78, 11 + lift]], c, .5);
-      for (const x of [40, 80]) {
-        s.poly([[x - 6, 22 + lift], [x - 3, 25 + lift], [x + 3, 25 + lift], [x + 6, 22 + lift]],
-          c, .65, 1.1, true, .09);
-      }
-      s.arc(60, 28, 29, 2.2, 0, TAU, c, .22, 1.1);
-      for (let index = 0; index < 3; index += 1) {
-        const t = brake ? index / 3 : fract(p * .3 + index / 3);
-        s.arc(60, 29, 10 + t * 25, 1 + t * 3, 0, TAU, c,
-          brake ? .13 : (1 - t) * .4, 1);
-      }
-      return;
-    }
-    // Suspension motif: Rhino's load-bearing chassis, Scarab's articulated
-    // axles and Scorpion's protected turret stay recognisable.
-    const heavy = type === 'rhino', armed = type === 'scorpion';
-    const wheels = heavy ? 4 : armed ? 2 : 3;
-    const width = heavy ? 62 : armed ? 48 : 54;
-    const x0 = 60 - width / 2;
-    const bob = brake ? 0 : Math.sin(p * (heavy ? .42 : armed ? .36 : 1.05))
-      * (heavy ? .28 : armed ? .32 : .9);
-    s.poly([[x0, 17 + bob], [x0 + 9, 11 + bob], [x0 + width - 11, 11 + bob], [x0 + width, 17 + bob],
-      [x0 + width - 5, 23], [x0 + 5, 23]], c, .78, 1.2, true, .06);
-    if (heavy) {
-      s.poly([[44, 10], [44, 6], [72, 6], [80, 10]], c, .65);
-      for (let index = 0; index < 4; index += 1) s.line(47 + index * 7, 8, 47 + index * 7, 17, c, .25);
-    } else if (armed) {
-      s.poly([[50, 11], [52, 6], [64, 6], [69, 11]], c, .65);
-      const aim = brake ? 0 : Math.sin(p * .38) * 2.1;
-      s.line(61, 7, 83, 7 + aim, c, .8, 1.8);
-      s.dot(83, 7 + aim, .7, c, .65);
-    } else {
-      s.poly([[49, 11], [51, 6], [60, 4], [65, 11]], c, .6);
-    }
-    for (let index = 0; index < wheels; index += 1) {
-      const x = x0 + 5 + index * (width - 10) / (wheels - 1);
-      const travel = brake ? 0 : Math.sin(p * (heavy ? .5 : armed ? .4 : 1.1)
-        + index * (heavy ? .5 : 1.7)) * (heavy ? .3 : armed ? .25 : 1.15);
-      const y = 26 + travel;
-      s.poly([[x - 3, 20], [x + 2, 23], [x, y]], c, .4);
-      s.arc(x, y, 4, 4, 0, TAU, c, .75, 1.15);
-      if (!brake) s.line(x - 2, y + Math.sin(p * .8 + index) * 2,
-        x + 2, y - Math.sin(p * .8 + index) * 2, c, .35);
-    }
-    if (heavy) s.line(x0 + 8, 27, x0 + width - 8, 27, c, .52, 1.3);
   }
 
   // ---------------------------------------------------------------------
-  // Deck scenes, one per state. Each fills the deck; `s` is the painter,
-  // `st` the state (colour, dynamics, phase), `pal` the theme palette.
+  // Normal space.
+  // ---------------------------------------------------------------------
+
+  // Normal space: a ringed world low on the right with its moon, a
+  // distant Coriolis catching the light, stars drifting past.
+  function vista(s, st, pal, {alpha = 1, station = true} = {}) {
+    const saved = s.alpha;
+    s.alpha *= alpha;
+    sky(s, st);
+    const px = s.W * .82, py = s.H * 1.08, r = s.H * .78;
+    const orbit = st.p * .045 + 2.2;
+    const mx = px + Math.cos(orbit) * r * 1.55, my = py - r * .78 + Math.sin(orbit) * r * .2;
+    const moon = () => s.sphere(mx, my, s.H * .09, st.c, pal.bg, {spin: st.p * .08, seed: 7, kind: 'ice'});
+    if (Math.sin(orbit) < 0) moon();
+    s.sphere(px, py, r, st.c, pal.bg, {spin: st.p * .025, tilt: .28, seed: 3, atmosphere: pal.accent, detail: 1.5});
+    if (Math.sin(orbit) >= 0) moon();
+    if (station) {
+      const cam = camera(s.W * .55, s.H * .34, 3.1, {yaw: -.5, pitch: -.3});
+      s.solid(MODELS.coriolis(), cam, {roll: st.p * .2}, st.c, .9, pal.bg, {slot: [pal.green, .6], window: [st.c, .4]});
+    }
+    s.alpha = saved;
+  }
+
+  function flight(s, st, pal) {
+    vista(s, st, pal);
+  }
+
+  // Flight assist off: the nose swings free of the ship's line of travel,
+  // which carries on straight ahead as a steady line of motion.
+  function assistOff(s, st, pal) {
+    vista(s, st, pal, {alpha: .45, station: false});
+    const x = s.W * .44, y = s.H * .5;
+    const cam = camera(x, y, 6, {yaw: 0, pitch: -.3, persp: 14});
+    for (let index = 0; index < 7; index += 1) {
+      const t = fract(st.p * .35 + index / 7);
+      s.dot(x + 16 + t * s.W * .36, y + 1 + t * 2, .8, pal.accent, (1 - t) * .7);
+    }
+    s.ring(x + s.W * .42, y + 4, 3.5, 3.5, 4, pal.accent, .75, 1.2, Math.PI / 4);
+    const at = s.solid(MODELS.ship(), cam, {yaw: .35 + Math.sin(st.p * .35) * 1.15, roll: Math.sin(st.p * .5) * .35},
+      st.c, 1, pal.bg, {engine: [st.c, .7]});
+    const [nx, ny] = at([3, 0, 0]), [cx, cy] = at([1.9, 0, 0]);
+    s.line(cx, cy, nx, ny, pal.text, .5, .8);
+  }
+
+  // Silent running: the ship dark and cold, its heat signature drawn in
+  // and held; nothing radiates.
+  function silent(s, st, pal) {
+    sky(s, st, .45, .5);
+    const x = s.W * .58, y = s.H * .52;
+    for (let index = 0; index < 4; index += 1) {
+      const t = fract(st.p * .16 + index / 4), r = lerp(s.W * .34, 10, smooth(t));
+      s.arc(x, y + 2, r, r * .3, 0, TAU, pal.accent, Math.sin(t * Math.PI) * .32, .9);
+    }
+    const cam = camera(x, y, 6.5, {yaw: -.35, pitch: -.3, persp: 14});
+    s.solid(MODELS.ship(), cam, {yaw: Math.sin(st.p * .1) * .1}, st.c, .55, pal.bg, {engine: false});
+    const seal = .35 + .4 * wave(st.p * .3);
+    for (const side of [-1, 1]) s.brackets(x, y, 26, 13, pal.accent, seal * .7, 5, 1.1 + side * 0);
+  }
+
+  // A fighter weaving ahead of its mothership.
+  function fighter(s, st, pal) {
+    sky(s, st, .8, 1.6);
+    const mother = camera(s.W * .78, s.H * .45, 7, {yaw: -.45, pitch: -.3, persp: 14});
+    s.solid(MODELS.ship(), mother, {}, st.c, .5, pal.bg, {engine: [st.c, .5]});
+    const fx = s.W * .38 + Math.sin(st.p * .45) * s.W * .08, fy = s.H * .52 + Math.sin(st.p * .7) * 4;
+    const bank = Math.cos(st.p * .45) * .6;
+    const cam = camera(fx, fy, 7.5, {yaw: -.5, pitch: -.3, persp: 12});
+    trail(s, [fx - 12, fy], [fx - 44, fy - Math.sin(st.p * .7 - .5) * 5], pal.accent, .7);
+    s.solid(MODELS.ship('fighter'), cam, {roll: bank, yaw: Math.sin(st.p * .7) * .2}, st.c, 1, pal.bg,
+      {engine: [pal.accent, .9], window: [pal.accent, .6]});
+  }
+
+  // Multicrew: the ship with its crew standing on holo-pads either side,
+  // linked to it.
+  function multicrew(s, st, pal) {
+    sky(s, st, .6);
+    const x = s.W * .55, y = s.H * .52;
+    const cam = camera(x, y, 6.5, {yaw: -.45, pitch: -.3, persp: 14});
+    s.solid(MODELS.ship(), cam, {yaw: Math.sin(st.p * .12) * .15}, st.c, 1, pal.bg, {engine: [st.c, .6]});
+    for (const [side, delay] of [[-1, 0], [1, .5]]) {
+      const cx = x + side * s.W * .27, base = s.H * .86;
+      s.arc(cx, base, 8, 2.2, 0, TAU, pal.accent, .5, 1);
+      const person = camera(cx, base, 9, {yaw: side * .6, pitch: -.15});
+      s.solid(MODELS.commander(0, {walking: false}), person, {scale: 1.05}, st.c, .9, pal.bg,
+        {visor: [pal.accent, .8], lamp: false});
+      const t = fract(st.p * .4 + delay);
+      const from = [cx - side * 5, s.H * .45], to = [x - side * 14, y];
+      s.line(...from, ...to, pal.accent, .22);
+      s.spark(lerp(from[0], to[0], t), lerp(from[1], to[1], t), .9, pal.accent, pal.text, Math.sin(t * Math.PI) * .9);
+    }
+  }
+
+  // Exploration: the discovery scanner's wave rolls out across the system
+  // and each world lights as it passes. The worlds are decorative.
+  function exploration(s, st, pal) {
+    sky(s, st, .7);
+    const x = s.W * .16, y = s.H * .56;
+    const ping = fract(st.p * .12), reach = ping * s.W * 1.05;
+    s.arc(x, y, reach, reach * .3, 0, TAU, st.c, (1 - ping) * .6, 1.4);
+    s.arc(x, y, reach * .92, reach * .28, 0, TAU, st.c, (1 - ping) * .25, 1);
+    const worlds = [[.42, .5, .16, 'rock'], [.6, .38, .09, 'ice'], [.76, .6, .26, 'gas'], [.92, .34, .07, 'rock']];
+    worlds.forEach(([u, v, size, kind], index) => {
+      const wx = s.W * u, wy = s.H * v, lit = clamp(1 - Math.abs(wx - x - reach) / 24);
+      s.sphere(wx, wy, s.H * size, st.c, pal.bg, {spin: st.p * .05, seed: index + 2, kind, grid: lit > .1,
+        rings: kind === 'gas' ? {tilt: .3, alpha: .35} : null});
+      if (lit > .01) s.bloom(wx, wy, s.H * size * 2, st.c, lit * .5);
+    });
+    const cam = camera(x, y, 5, {yaw: -.3, pitch: -.3, persp: 14});
+    s.solid(MODELS.ship(), cam, {}, st.c, 1, pal.bg, {engine: [st.c, .6]});
+  }
+
+  // ---------------------------------------------------------------------
+  // The frame shift drive: supercruise, charging, witch-space, arrival.
   // ---------------------------------------------------------------------
 
   function cruise(s, st, pal) {
-    const c = st.c, cy = s.H / 2, vx = s.W * .76, key = st.key;
+    const c = st.c, cy = s.H / 2, vx = s.W * .74, key = st.key;
     const sco = key === 'supercruise_overcharge', assist = key === 'supercruise_assist';
-    streaks(s, st, {x: vx, count: sco ? 30 : 20, speed: sco ? .5 : .28, strength: sco ? .72 : .5,
-      width: sco ? 1.15 : 1});
-    // A compression corridor converging on the heading marker ahead.
-    for (const side of [-1, 1]) {
-      s.poly([[-4, cy + side * s.H * .52], [vx * .42, cy + side * s.H * .32],
-        [vx * .78, cy + side * s.H * .13], [vx - 7, cy + side * 2]], c, .36, 1.1);
-      for (let index = 0; index < 5; index += 1) {
-        const t = fract(st.p * (sco ? .46 : .28) + index / 5), k = t * t;
-        const x = lerp(vx - 8, -12, k), y = cy + side * lerp(2, s.H * .52, k);
-        const length = 3 + k * 12;
-        s.line(x + length, y - side * k * 1.4, x - length, y + side * k * 1.4, c,
-          Math.sin(t * Math.PI) * (sco ? .9 : .62), sco ? 1.6 : 1.2);
-      }
+    const tint = sco ? pal.accent : c;
+    // The destination waits at the vanishing point, ringed and turning.
+    s.sphere(vx, cy, s.H * .2, c, pal.bg, {spin: st.p * .04, seed: 5, kind: 'gas', rings: {tilt: .26, alpha: .5}});
+    // The frame shift bubble ripples outward round the heading.
+    for (let index = 0; index < 4; index += 1) {
+      const t = fract(st.p * (sco ? .5 : .22) + index / 4), k = t * t, r = lerp(s.H * .4, s.W * .95, k);
+      s.arc(vx, cy, r, r * .4, 0, TAU, tint, Math.sin(t * Math.PI) * (sco ? .42 : .24), .8 + k);
     }
-    s.poly([[vx - 7, cy], [vx, cy - 5], [vx + 7, cy], [vx, cy + 5]], c, .86, 1.3, true, .16);
-    s.line(vx + 10, cy, s.W + 2, cy, c, .22);
+    streaks(s, st, {x: vx, count: sco ? 34 : 24, speed: sco ? .56 : .3, strength: sco ? .85 : .6,
+      width: sco ? 1.2 : 1, color: tint});
     if (assist) {
-      // Supercruise assist holds a clean guide lane onto the destination.
+      // Supercruise assist holds a lane onto the destination.
       for (const side of [-1, 1]) {
-        s.poly([[8, cy + side * 1.5], [vx * .55, cy + side * 1.5], [vx * .7, cy + side * 5],
-          [vx - 13, cy + side * 5]], pal.accent, .5, 1);
+        s.poly([[-4, cy + side * s.H * .46], [vx * .5, cy + side * s.H * .2], [vx - 12, cy + side * 3]],
+          pal.accent, .5, 1.1);
       }
-      s.brackets(vx, cy, 15, 9, pal.accent, .78);
-      s.spark(vx + 28, cy, 1.3, pal.accent, pal.text, .35 + .5 * wave(st.p * .5));
+      for (let index = 0; index < 5; index += 1) {
+        const t = fract(st.p * .3 + index / 5), k = smooth(t);
+        s.chevron(lerp(6, vx - 14, k), cy, 1, pal.accent, Math.sin(t * Math.PI) * .8, lerp(4, 2, k), 1.3);
+      }
     }
     if (sco) {
-      // Overcharge fractures the outer rails and runs hot down the axis.
-      for (const side of [-1, 1]) {
-        const points = [];
-        for (let step = 0; step <= 30; step += 1) {
-          const x = step * s.W / 30;
-          points.push([x, cy + side * (s.H * .34 + Math.sin(step * .9 - st.p * 2.4) * 2.6 * (x / s.W))]);
+      // Overcharge crackles along the bubble's edge.
+      for (let bolt = 0; bolt < 3; bolt += 1) {
+        const seedTick = Math.floor(st.p * 6 + bolt * 3.3);
+        if (hash(seedTick) < .35) continue;
+        const side = hash(seedTick + 1) > .5 ? 1 : -1, points = [];
+        for (let step = 0; step <= 8; step += 1) {
+          const u = step / 8;
+          points.push([lerp(s.W * (.1 + hash(seedTick + 2) * .3), vx - 16, u),
+            cy + side * (s.H * .42 * (1 - u) + 2) + (hash(seedTick * 7 + step) - .5) * 5]);
         }
-        s.poly(points, c, .42, 1.3);
-      }
-      for (let index = 0; index < 4; index += 1) {
-        const t = fract(st.p * .7 + index / 4), k = t * t;
-        s.line(lerp(vx - 10, 0, k), cy, lerp(vx - 10, 0, Math.max(0, k - .12)), cy, pal.text,
-          Math.sin(t * Math.PI) * .7, 1.3);
+        s.poly(points, pal.text, .6, .9);
       }
     }
     boostCharge(s, st, pal, vx);
   }
 
+  // A passenger taxi carries the commander: the Apex shuttle in its lane.
   function taxi(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .6;
-    // A passenger shuttle in a paired lane: not the commander's own drive.
-    streaks(s, st, {x: s.W * .8, count: 12, speed: .2, strength: .32});
-    for (const side of [-1, 1]) {
-      s.poly([[-4, cy + side * 15], [s.W * .3, cy + side * 11], [s.W * .55, cy + side * 7],
-        [s.W + 4, cy + side * 7]], c, .45, 1.1);
-      for (let index = 0; index < 5; index += 1) {
-        const t = fract(st.p * .16 + index / 5), x = lerp(-10, s.W, t);
-        const y = cy + side * lerp(13, 7, t);
-        s.line(x - 7, y, x, y, c, Math.sin(t * Math.PI) * .6, 1.4);
-      }
+    const cy = s.H / 2;
+    streaks(s, st, {x: s.W * .92, count: 16, speed: .22, strength: .4});
+    const x = s.W * .5, y = cy + Math.sin(st.p * .3) * 1.2;
+    const cam = camera(x, y, 7, {yaw: -.55, pitch: -.3, persp: 14});
+    trail(s, [x - 14, y + 1], [x - 60, y + 3], st.c, .5, 9);
+    s.solid(MODELS.ship('taxi'), cam, {roll: Math.sin(st.p * .25) * .06}, st.c, 1, pal.bg,
+      {window: [pal.text, .7], engine: [pal.accent, .85]});
+  }
+
+  // The drive's containment ring: twelve segments round a core, seen three
+  // quarters on. `lit(index)` lights each segment; `spin` turns the ring;
+  // `arcs` throws charge from the segments into the core.
+  function driveRing(s, st, pal, x, y, unit, {spin = 0, color = st.c, lit = () => .5, core = 1, tilt = .45,
+    arcs = 0} = {}) {
+    const cam = camera(x, y, unit, {yaw: tilt, pitch: -.3, persp: 12});
+    const segment = MODELS.driveSegment();
+    const order = [];
+    for (let index = 0; index < 12; index += 1) {
+      const angle = index * TAU / 12 + spin;
+      const place = {y: Math.sin(angle) * 1.55, z: Math.cos(angle) * 1.55, pitch: -angle};
+      order.push({index, place, depth: cam.look([0, place.y, place.z])[2]});
     }
-    s.glyph(fx, cy, s.H * .92, () => {
-      s.poly([[42, 18], [50, 13], [70, 13], [77, 18], [70, 23], [50, 23]], c, .8, 1.3, true, .1);
-      s.poly([[53, 13], [55, 10], [67, 10], [70, 13]], c, .53);
-      s.line(49, 18, 73, 18, c, .34);
-      s.brackets(60, 18, 26, 12, c, .44);
-    });
+    order.sort((left, right) => left.depth - right.depth);
+    const draw = (list) => {
+      for (const {index, place} of list) {
+        const light = clamp(lit(index));
+        s.solid(segment, cam, place, color, 1, pal.bg);
+        const [sx, sy] = cam.project([0, place.y, place.z]);
+        s.bloom(sx, sy, unit * 1.1, color, light * .6);
+        s.dot(sx, sy, .9, pal.text, light * .85);
+      }
+    };
+    draw(order.slice(0, 6));
+    s.bloom(x, y, unit * 2.4 * core, color, .5 * core);
+    s.spark(x, y, 1.6 * core, color, pal.text, .95 * core);
+    for (let arc = 0; arc < arcs; arc += 1) {
+      const tick = Math.floor(st.p * 7 + arc * 5.3);
+      if (hash(tick) < .3) continue;
+      const angle = hash(tick + 1) * TAU;
+      const [ex, ey] = cam.project([0, Math.sin(angle) * 1.4, Math.cos(angle) * 1.4]);
+      const points = [];
+      for (let step = 0; step <= 6; step += 1) {
+        const u = step / 6;
+        points.push([lerp(ex, x, u) + (hash(tick * 3 + step) - .5) * 4 * Math.sin(u * Math.PI),
+          lerp(ey, y, u) + (hash(tick * 5 + step) - .5) * 4 * Math.sin(u * Math.PI)]);
+      }
+      s.poly(points, pal.text, .7, .8);
+    }
+    draw(order.slice(6));
+    return cam;
   }
 
   function charge(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .7, hyper = st.key === 'hyper_charge';
-    const gate = hyper ? 20 : 16, pace = hyper ? .72 : .52;
-    // The drive settles into a repeating field. No journal charge percentage
-    // exists here, so these pulses never imply a countdown to the jump.
-    const spool = .52 + .48 * smooth(st.age / 2.3);
-    const flare = hyper ? pal.accent : c;
-
-    // Fixed containment rails form a corridor; light travels into its focus.
-    for (const side of [-1, 1]) {
-      s.poly([[-4, cy + side * s.H * .43], [s.W * .28, cy + side * s.H * .34],
-        [fx - gate - 5, cy + side * 5]], c, .24 * spool, 1.05);
-      s.poly([[s.W + 4, cy + side * s.H * .43], [s.W * .87, cy + side * s.H * .32],
-        [fx + gate + 5, cy + side * 5]], c, .24 * spool, 1.05);
-      s.line(-4, cy + side * s.H * .22, fx - gate - 7, cy + side * 2, c, .12 * spool);
-      s.line(s.W + 4, cy + side * s.H * .22, fx + gate + 7, cy + side * 2, c, .12 * spool);
+    const c = st.c, cy = s.H / 2, hyper = st.key === 'hyper_charge';
+    const fx = s.W * (hyper ? .5 : .6), spool = .52 + .48 * smooth(st.age / 2.3);
+    const color = hyper ? pal.accent : c;
+    // Space folds toward the drive: streams drawn into the ring.
+    for (let index = 0; index < 22; index += 1) {
+      const angle = index * TAU / 22 + st.p * .06, t = fract(st.p * (hyper ? .5 : .36) + hash(index + 3));
+      const far = s.W * .55, near = 10;
+      const r0 = lerp(far, near, smooth(t)), r1 = lerp(far, near, smooth(Math.min(1, t + .1)));
+      s.line(fx + Math.cos(angle) * r0, cy + Math.sin(angle) * r0 * .42, fx + Math.cos(angle) * r1,
+        cy + Math.sin(angle) * r1 * .42, color, ends(t, .2) * .6 * spool, 1);
     }
-    s.line(-4, cy, fx - gate - 3, cy, c, .13 * spool);
-    s.line(fx + gate + 3, cy, s.W + 4, cy, c, .13 * spool);
-
-    // Two coherent streams feed the same aperture from opposite sides.
-    const packets = hyper ? 6 : 5;
-    for (const direction of [-1, 1]) {
-      const edge = direction < 0 ? -12 : s.W + 12;
-      const focus = fx + direction * (gate + 5);
-      for (const side of [-1, 1]) {
-        for (let index = 0; index < packets; index += 1) {
-          const t = fract(st.p * pace + index / packets + (side < 0 ? .07 : 0));
-          const travel = smooth(t), x = lerp(edge, focus, travel);
-          const y = cy + side * lerp(s.H * .38, 5, travel);
-          const light = ends(t, .14) * spool * (hyper ? .77 : .63);
-          const tail = (hyper ? 10 : 7) * (1 - .45 * travel);
-          s.line(x - direction * tail, y + side * 1.2, x, y, c, light, 1.2);
-          if (t > .78) s.dot(x, y, .6, pal.text, light * .6);
-        }
-      }
-    }
-
-    // Compression chevrons close in without ever filling like a progress bar.
-    for (let index = 0; index < (hyper ? 5 : 4); index += 1) {
-      const t = fract(st.p * pace * .65 + index / (hyper ? 5 : 4));
-      const spread = lerp(hyper ? 63 : 53, gate + 5, smooth(t));
-      const light = ends(t, .18) * spool * (hyper ? .62 : .43);
-      for (const side of [-1, 1]) {
-        const x = fx + side * spread;
-        s.poly([[x + side * 5, cy - 9], [x, cy], [x + side * 5, cy + 9]],
-          c, light, 1.15);
-      }
-    }
-
-    // A segmented containment frame; jump charging opens a luminous throat.
-    const radius = hyper ? 21 : 17, height = hyper ? 15 : 12;
-    s.ring(fx, cy, radius, height, 6, c, .23 * spool, 1, Math.PI / 6);
-    for (let index = 0; index < 6; index += 1) {
-      const a = Math.PI / 6 + index * TAU / 6;
-      const b = a + TAU / 6;
-      const light = .22 + .6 * wave(st.p * (hyper ? .7 : .48) - index / 6);
-      s.line(fx + Math.cos(a) * radius, cy + Math.sin(a) * height,
-        fx + Math.cos(b) * radius, cy + Math.sin(b) * height,
-        c, light * spool, 1.25);
-    }
-    s.bloom(fx, cy, hyper ? 25 : 18, flare, (.22 + .2 * wave(st.p * .45)) * spool);
+    driveRing(s, st, pal, fx, cy, hyper ? 9.5 : 8.6, {
+      spin: st.p * (hyper ? 1.1 : .75) * spool, color, arcs: hyper ? 3 : 2,
+      lit: (index) => .2 + .8 * Math.pow(wave(st.p * (hyper ? 1.1 : .8) - index / 12), 3) * spool,
+      core: .6 + .4 * spool,
+    });
     if (hyper) {
-      s.ring(fx, cy, 12, 10, 6, flare, .8 * spool, 1.35, Math.PI / 6 - st.p * .035);
-      s.line(fx, cy - 8, fx, cy + 8, pal.text, (.45 + .4 * wave(st.p * .6)) * spool, 1.4);
-      s.spark(fx, cy, 2.1, flare, pal.text, .9 * spool);
-    } else {
-      s.ring(fx, cy, 9, 6, 6, c, .75 * spool, 1.2, Math.PI / 6 + st.p * .025);
-      s.spark(fx, cy, 1.7, c, pal.text, .78 * spool);
+      // The destination star brightens ahead as the throat opens toward it.
+      const sx = s.W * .9;
+      for (let index = 0; index < 5; index += 1) {
+        const t = fract(st.p * .4 + index / 5), r = lerp(5, 17, t);
+        s.arc(lerp(fx + 26, sx - 6, t), cy, r * .35, r, 0, TAU, pal.accent, Math.sin(t * Math.PI) * .5 * spool, 1.1);
+      }
+      s.bloom(sx, cy, 14 + 6 * spool, pal.text, .3 + .3 * spool);
+      s.spark(sx, cy, 2.2, pal.accent, pal.text, .6 + .4 * spool);
+      s.line(sx - 18, cy, sx + 18, cy, pal.text, .25 * spool, .8);
     }
+  }
+
+  // Witch-space: rings of the tunnel stream out of the vanishing point in
+  // true perspective, twisting, with gas filaments spiralling past.
+  function witchSpace(s, st, pal, x, {speed = .3, color = st.c, gas = pal.accent, rings = 12, alpha = 1} = {}) {
+    const cy = s.H / 2;
+    for (let index = 0; index < rings; index += 1) {
+      const t = fract(st.p * speed + index / rings), k = .07 / (1.07 - t);
+      const radius = k * s.W * .75, points = [];
+      for (let step = 0; step < 36; step += 1) {
+        const angle = step * TAU / 36 + t * 2.4 + st.p * .08;
+        const wobble = 1 + .06 * Math.sin(angle * 3 + index * 1.7 + st.p * .5);
+        points.push([x + Math.cos(angle) * radius * wobble, cy + Math.sin(angle) * radius * wobble * .82]);
+      }
+      s.poly(points, index % 3 ? color : gas, smooth(t / .25) * (1 - smooth((t - .8) / .2)) * .45 * alpha,
+        .5 + t * 1.2, true);
+    }
+    for (let strand = 0; strand < 8; strand += 1) {
+      const points = [];
+      for (let step = 0; step <= 22; step += 1) {
+        const u = step / 22, k = .07 / (1.07 - u * .9);
+        const angle = strand * TAU / 8 + u * 3.2 + st.p * .5;
+        points.push([x + Math.cos(angle) * k * s.W * .6, cy + Math.sin(angle) * k * s.W * .45]);
+      }
+      s.poly(points, strand % 2 ? gas : color, .16 * alpha, 1.2);
+    }
+    s.bloom(x, cy, s.H * .8, gas, .2 * alpha);
+    streaks(s, st, {x, count: 20, speed: speed * 1.3, strength: .6 * alpha, twist: .2, color});
   }
 
   function tunnel(s, st, pal) {
-    const c = st.c, cy = s.H / 2, opening = st.key === 'jumping';
-    const vx = s.W * .72 + Math.sin(st.p * .17) * 6;
-    // Witch-space: rings stream out of the vanishing point and twist. They
-    // grow in true perspective, so their sides sweep past like a tunnel's.
-    for (let index = 0; index < 8; index += 1) {
-      const t = fract(st.p * .3 + index / 8), k = t * t, reach = 5 + k * s.H * 3.4;
-      const points = [];
-      for (let step = 0; step < 16; step += 1) {
-        const angle = step * TAU / 16 + Math.sin(st.p * .12) * .12;
-        const warp = opening ? 1 : 1 + .14 * Math.sin(angle * 3 + st.p * .45 + index);
-        points.push([vx + Math.cos(angle) * reach * warp, cy + Math.sin(angle) * reach * .55 * warp]);
-      }
-      s.poly(points, c, Math.sin(t * Math.PI) * .5, .9 + t * .7, true);
-    }
-    for (let filament = 0; filament < 5; filament += 1) {
-      const points = [];
-      for (let step = 0; step <= 22; step += 1) {
-        const r = step / 22, angle = filament * TAU / 5 + r * 2.6 + st.p * .22;
-        points.push([vx + Math.cos(angle) * r * r * s.H * 3, cy + Math.sin(angle) * r * r * s.H * 1.65]);
-      }
-      s.poly(points, c, .2, .9);
-    }
-    streaks(s, st, {x: vx, count: 24, speed: .4, strength: .62, twist: .15});
-    if (opening) {
-      // The threshold splits once; the journal, not this animation, decides
-      // when the ship has actually arrived.
-      const t = smooth(st.age / 1.8);
-      s.line(0, cy, s.W, cy, pal.text, (1 - t) * .7, 1 + t * 2);
-      for (const side of [-1, 1]) {
-        s.poly([[vx + side * (5 + t * 8), 4], [vx + side * (14 + t * 22), cy],
-          [vx + side * (5 + t * 8), s.H - 4]], c, .78, 1.5);
-      }
-    } else {
-      s.ring(vx, cy, 10, 8, 10, c, .8, 1.2, st.p * .08);
-      s.arc(vx, cy, 5, 4, 0, TAU, c, .35);
-    }
-    s.bloom(vx, cy, 18, c, .4);
-    s.spark(vx, cy, 1.8, c, pal.text, .9);
+    const cy = s.H / 2, x = s.W * .68 + Math.sin(st.p * .15) * 5, opening = st.key === 'jumping';
+    witchSpace(s, st, pal, x, {speed: opening ? .45 : .32});
+    // The destination star waits at the tunnel's end; on the way out it
+    // swells to fill the throat.
+    const swell = opening ? smooth(st.age / 1.8) : 0;
+    s.bloom(x, cy, 12 + swell * s.H * 1.4, pal.text, .35 + swell * .35);
+    s.spark(x, cy, 1.6 + swell * 3, st.c, pal.text, .9);
+    if (opening) s.line(0, cy, s.W, cy, pal.text, (1 - swell) * .6, 1 + swell * 2);
   }
 
+  // Arrival: the star the jump landed at, huge and close in its own class
+  // colour, the ship just out of witch-space and settling.
   function arrival(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .7, settle = smooth(st.age / 2.2);
-    // The arrival star glows in its own class colour, as the journal reports it.
-    const star = st.starTone || c;
-    streaks(s, st, {x: fx, count: 16, speed: .24 * (1 - settle * .7), strength: (1 - settle) * .7});
-    s.bloom(fx, cy, 24 + wave(st.p * .2) * 3, star, .5);
-    for (let index = 0; index < 16; index += 1) {
-      const angle = index * TAU / 16 + st.p * .02;
-      const inner = 8, outer = 10 + wave(st.p * .24 + index / 16) * 3.5;
-      s.line(fx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner * .8,
-        fx + Math.cos(angle) * outer, cy + Math.sin(angle) * outer * .8, star, .45);
-    }
-    s.dot(fx, cy, 5.5, star, .9);
-    s.dot(fx - 1.4, cy - 1.4, 2.2, pal.text, .85);
-    s.brackets(fx, cy, 17 + (1 - settle) * 40, 13, c, .35 + .4 * settle);
-    const ring = clamp(st.age / 1.6), reach = 8 + ring * s.H * 2.6;
-    s.arc(fx, cy, reach, reach * .55, 0, TAU, c, (1 - ring) * .6, 1.2);
-    for (let index = 0; index < 6; index += 1) {
-      s.line(10 + index * 8, s.H - 4, 14 + index * 8, s.H - 4, c, .2 + .3 * settle);
-    }
+    const settle = smooth(st.age / 2.2), star = st.starTone || st.c;
+    streaks(s, st, {x: s.W * .82, count: 14, speed: .22 * (1 - settle * .8), strength: (1 - settle) * .6});
+    s.sun(s.W * .86, s.H * .52, s.H * .6, star, pal.text, st.p);
+    const x = lerp(s.W * .18, s.W * .38, settle), y = s.H * .55;
+    trail(s, [x - 10, y], [x - 50, y], st.c, .6 * (1 - settle * .6), 9);
+    const cam = camera(x, y, 5.5, {yaw: -.4, pitch: -.3, persp: 14});
+    s.solid(MODELS.ship(), cam, {}, st.c, 1, pal.bg, {engine: [st.c, .8]});
+    const ring = clamp(st.age / 1.4);
+    s.arc(x, y, 6 + ring * 40, 3 + ring * 16, 0, TAU, pal.text, (1 - ring) * .6, 1.3);
   }
+
+  // Dropping out of supercruise at the destination: the drop flash, the
+  // world ahead coming up to meet the ship, the streaks dying away.
+  function localArrival(s, st, pal) {
+    const settle = smooth(st.age / 2.2), cy = s.H / 2;
+    sky(s, st, settle * .8);
+    streaks(s, st, {x: s.W * .76, count: 16, speed: .2 * (1 - settle), strength: (1 - settle) * .6});
+    s.sphere(s.W * .76, cy + 4, s.H * lerp(.3, .42, settle), st.c, pal.bg, {spin: st.p * .03, seed: 9,
+      atmosphere: pal.accent, detail: 1.2});
+    const x = s.W * .36, flash = clamp(st.age / 1.2);
+    s.arc(x, cy, 4 + flash * 34, 2 + flash * 14, 0, TAU, pal.text, (1 - flash) * .7, 1.3);
+    const cam = camera(x, cy, 5.5, {yaw: -.45, pitch: -.3, persp: 14});
+    s.solid(MODELS.ship(), cam, {}, st.c, 1, pal.bg, {engine: [st.c, .7]});
+    s.brackets(s.W * .76, cy + 4, s.H * .5 + (1 - settle) * 14, s.H * .48, st.c, .3 + .4 * settle);
+  }
+
+  // Escaping an interdiction: the tether snaps into pieces that tumble
+  // away while the ship breaks for its destination.
+  function evaded(s, st, pal) {
+    const settle = smooth(st.age / 2.2), cy = s.H / 2;
+    streaks(s, st, {x: s.W * .9, count: 18, speed: .3, strength: .5});
+    const enemy = camera(s.W * .1, cy - 4, 5, {yaw: -.3, pitch: -.3, persp: 14});
+    s.solid(MODELS.ship('interdictor'), enemy, {}, st.c, .4 + .3 * (1 - settle), pal.bg, {engine: [pal.red, .5]});
+    for (let index = 0; index < 7; index += 1) {
+      const u = (index + .5) / 7, drift = settle * (6 + hash(index) * 8);
+      const x = lerp(s.W * .16, s.W * .5, u), y = cy + Math.sin(u * 9) * 3 + (hash(index + 4) - .5) * drift * 2;
+      const angle = hash(index + 8) * settle * 3;
+      s.line(x - Math.cos(angle) * 4, y - Math.sin(angle) * 4, x + Math.cos(angle) * 4, y + Math.sin(angle) * 4,
+        pal.red, .7 * (1 - settle * .6), 1.2);
+    }
+    const x = s.W * lerp(.56, .66, settle);
+    const cam = camera(x, cy, 6, {yaw: -.45, pitch: -.3, persp: 14});
+    trail(s, [x - 12, cy], [x - 44, cy], pal.accent, .7, 8);
+    s.solid(MODELS.ship(), cam, {roll: Math.sin(st.p * .6) * .2 * (1 - settle)}, st.c, 1, pal.bg,
+      {engine: [pal.accent, .9]});
+    s.ring(s.W * .86, cy, 7, 7, 16, pal.accent, .5 + .3 * wave(st.p * .4), 1.2);
+  }
+
+  // The drive cooling after a jump: the ring slows and its segments fade
+  // from white heat to dark, the nearest the core last. Not a timer.
+  function cooldown(s, st, pal) {
+    const cy = s.H / 2, fx = s.W * .64, heat = 1 - smooth(st.age / 3.2);
+    for (let index = 0; index < 9; index += 1) {
+      const t = fract(st.p * .2 + index / 9), x = fx + (hash(index + 40) - .5) * s.W * .5;
+      s.line(x, cy - 4 - t * 16, x + Math.sin(t * 6 + index) * 2, cy - 8 - t * 16, st.c,
+        Math.sin(t * Math.PI) * (.12 + heat * .45));
+    }
+    driveRing(s, st, pal, fx, cy, 6.4, {
+      spin: st.p * (.1 + .45 * heat),
+      lit: (index) => heat * (.6 + .4 * hash(index)) + .12,
+      core: .35 + .5 * heat,
+    });
+  }
+
+  // FSD injection armed: synthesis feeds the drive's ring; the chevrons
+  // show the boost the journal reports.
+  function injection(s, st, pal) {
+    const cy = s.H / 2, fx = s.W * .6;
+    for (let index = 0; index < 3; index += 1) {
+      const y = 6 + index * (s.H - 12) / 2;
+      s.poly([[6, y], [fx * .5, y], [fx - 20, cy]], st.c, .28);
+      const t = fract(st.p * .3 + index / 3);
+      const x = lerp(6, fx - 20, t), yy = t < .55 ? y : lerp(y, cy, (t - .55) / .45);
+      s.spark(x, yy, 1, st.c, pal.text, Math.sin(t * Math.PI) * .85);
+    }
+    driveRing(s, st, pal, fx, cy, 5.6, {spin: st.p * .4, lit: (index) => .35 + .5 * wave(st.p * .5 - index / 12)});
+    const percent = st.d.fsdInjectionPercent;
+    const level = percent >= 100 ? 3 : percent >= 50 ? 2 : 1;
+    for (let index = 0; index < level; index += 1) s.chevron(fx + 26 + index * 8, cy, 1, pal.accent, .85, 4, 1.4);
+  }
+
+  // ---------------------------------------------------------------------
+  // The fleet carrier.
+  // ---------------------------------------------------------------------
+
+  function carrierAt(s, st, pal, {x, y, unit, yaw = -.42, pitch = -.24, lamps = {}, alpha = 1, persp = 30,
+    place = {}} = {}) {
+    const cam = camera(x, y, unit, {yaw, pitch, persp});
+    const blink = .2 + .8 * Math.pow(wave(st.p * .5), 6);
+    return s.solid(MODELS.carrier(), cam, place, st.c, alpha, pal.bg,
+      {engine: [st.c, .5], window: [st.c, .6], beacon: [pal.red, blink], ...lamps});
+  }
+
+  const padLamps = (level) => Object.fromEntries(Array.from({length: 8}, (_, index) => [`pad${index}`, level(index)]));
 
   function carrierScene(s, st, pal) {
-    const c = st.c, cy = s.H / 2, key = st.key, fx = s.W * .6;
+    const key = st.key, cy = s.H / 2, x = s.W * .6, y = s.H * .64, unit = 6.4;
     if (key === 'carrier_transit') {
-      // Slow, angular wake carried by the capital hull. It does not borrow
-      // the ship's fast FSD tunnel or suggest a transit countdown.
-      dust(s, st, {count: 10, speed: .035, alpha: .28});
-      for (let index = 0; index < 5; index += 1) {
-        const t = fract(st.p * .19 + index / 5), reach = 22 + smooth(t) * s.H * 3.2;
-        const height = 8 + smooth(t) * s.H * .58;
-        const light = Math.sin(t * Math.PI) * .49;
-        for (const side of [-1, 1]) {
-          s.poly([[fx + side * reach, cy - height], [fx + side * reach * .78, cy - height * 1.25],
-            [fx + side * reach * .5, cy - height * 1.25]], c, light, 1.35);
-          s.poly([[fx + side * reach, cy + height], [fx + side * reach * .78, cy + height * 1.25],
-            [fx + side * reach * .5, cy + height * 1.25]], c, light * .7, 1.15);
-        }
-      }
-    } else if (key === 'carrier_arrival') {
+      // The carrier's own slow jump: the hull held steady in a wide tunnel.
+      witchSpace(s, st, pal, s.W * .6, {speed: .16, rings: 8, alpha: .8});
+      carrierAt(s, st, pal, {x, y: y + Math.sin(st.p * .3) * .6, unit,
+        lamps: {engine: [pal.accent, .9], ...padLamps(() => [st.c, .2])}});
+      return;
+    }
+    if (key === 'carrier_arrival') {
       const settle = smooth(st.age / 2.8);
-      streaks(s, st, {x: fx, count: 10, speed: .13, strength: (1 - settle) * .5});
+      sky(s, st, settle);
+      s.bloom(x, cy, s.H * (2.2 - settle * 1.4), pal.text, (1 - settle) * .7);
       for (let index = 0; index < 3; index += 1) {
-        const t = clamp(st.age / 2.2 - index * .26);
-        const reach = 24 + smooth(t) * s.H * 2.4;
-        s.ring(fx, cy, reach, 7 + smooth(t) * s.H * .45, 8,
-          c, (1 - t) * .45, 1.2, Math.PI / 8);
+        const t = clamp(st.age / 2.2 - index * .25), r = 20 + smooth(t) * s.W * .6;
+        s.arc(x, cy, r, r * .3, 0, TAU, st.c, (1 - t) * .5, 1.2);
       }
-      for (const side of [-1, 1]) {
-        s.line(fx + side * 63, 5, fx + side * 63, s.H - 5,
-          c, .2 + .37 * wave(st.p * .2), 1.25);
-      }
-    } else if (key === 'carrier_preparing') {
-      dust(s, st, {count: 10, speed: .008, alpha: .24});
-      for (const side of [-1, 1]) {
-        s.poly([[8, cy + side * 14], [fx - 70, cy + side * 14],
-          [fx - 52, cy + side * 8]], c, .26, 1);
-      }
-      for (let index = 0; index < 8; index += 1) {
-        const x = 12 + index * Math.max(8, (fx - 75) / 8);
-        const light = .12 + .58 * Math.pow(wave(st.p * .31 - index / 8), 4);
-        s.line(x, cy - 13, x + 5, cy - 13, c, light, 1.5);
-        s.line(x, cy + 13, x + 5, cy + 13, c, light, 1.5);
+      carrierAt(s, st, pal, {x: lerp(s.W * .42, x, settle), y, unit,
+        lamps: {engine: [pal.accent, .9 - settle * .5], ...padLamps(() => [st.c, .4])}});
+      return;
+    }
+    sky(s, st, .8, .4);
+    if (key === 'carrier_preparing') {
+      // Spooling for a jump: the drive bells brighten, pads light in turn
+      // and charge rings run the hull's length. No countdown is implied.
+      const at = carrierAt(s, st, pal, {x, y, unit, lamps: {
+        engine: [pal.accent, .5 + .45 * wave(st.p * .8)],
+        ...padLamps((index) => [st.c, .15 + .8 * Math.pow(wave(st.p * .35 - index / 8), 4)]),
+      }});
+      for (let index = 0; index < 3; index += 1) {
+        const t = fract(st.p * .3 + index / 3);
+        const [rx, ry] = at([lerp(6.5, -6.5, t), 0, 0]);
+        s.arc(rx, ry, 5, 11, 0, TAU, pal.accent, Math.sin(t * Math.PI) * .5, 1.1);
       }
     } else if (key === 'carrier_lockdown') {
-      dust(s, st, {count: 9, speed: .006, alpha: .18});
+      // Locked down: pads red, drives cold, armoured shutters close over
+      // the deck once and stay shut.
       const close = smooth(st.age / 2.5);
+      const at = carrierAt(s, st, pal, {x, y, unit, lamps: {
+        engine: [st.c, .12], beacon: [pal.red, .9], window: [pal.red, .5],
+        ...padLamps(() => [pal.red, .35 + .3 * (1 - close)]),
+      }});
       for (const side of [-1, 1]) {
-        const y = cy + side * lerp(17, 11, close);
-        s.poly([[8, y], [fx - 67, y], [fx - 53, cy + side * 8]], c, .4, 1.5);
-      }
-      for (let index = 0; index < 5; index += 1) {
-        const x = 12 + index * (fx - 85) / 4;
-        s.line(x, 5, x + 7, 5, c, .18 + .4 * wave(st.p * .18 + index * .2), 1.4);
+        const [ax, ay] = at([-1.4, -1, side * lerp(2.6, .1, close)]), [bx, by] = at([4.6, -1, side * lerp(2.6, .1, close)]);
+        s.line(ax, ay, bx, by, pal.red, .75, 1.6);
       }
     } else {
-      // Vicinity: a broad, quiet silhouette with perimeter beacons.
-      dust(s, st, {count: 13, speed: .009, alpha: .24});
-      for (const side of [-1, 1]) {
-        s.poly([[fx + side * 68, cy - 12], [fx + side * 76, cy],
-          [fx + side * 68, cy + 12]], c, .22, 1.1);
-        s.dot(fx + side * 75, cy, 1.2, c, .2 + .55 * wave(st.p * .2 + (side + 1) / 4));
-      }
+      // In the carrier's vicinity: a shuttle of traffic settles onto a pad
+      // while the beacons turn over.
+      const at = carrierAt(s, st, pal, {x, y, unit, lamps: padLamps((index) => [st.c, index === 5 ? .9 : .45])});
+      const t = fract(st.p * .09);
+      const [px, py] = at([2.25, -.74, .55]);
+      const sx = lerp(-10, px, smooth(t)), sy = lerp(s.H * .2, py - 3, smooth(t)) - Math.sin(t * Math.PI) * 6;
+      const cam = camera(sx, sy, 3.2, {yaw: -.4, pitch: -.3});
+      trail(s, [sx - 6, sy - 1], [sx - 26, sy - 6], st.c, ends(t) * .6, 6);
+      s.solid(MODELS.ship(), cam, {}, st.c, ends(t, .1), pal.bg, {engine: [st.c, .8]});
     }
-    s.glyph(fx, cy, s.H * .96, () => carrierGlyph(s, st));
   }
 
+  // On foot on a carrier's flight deck: the hull under the commander's
+  // boots, the command tower behind and the pads lit along the deck.
+  function carrierDeck(s, st, pal) {
+    sky(s, st, .7, .3);
+    const at = carrierAt(s, st, pal, {x: s.W * .56, y: s.H * .98, unit: 11.5, yaw: -.3, pitch: -.42, persp: 24,
+      lamps: padLamps((index) => [st.c, .25 + .35 * Math.pow(wave(st.p * .14 - index / 8), 4)])});
+    const walk = fract(st.p * .04);
+    const [fx, fy] = at([lerp(-.4, 4.4, walk), -.74, .15]);
+    const person = camera(fx, fy, 7.5, {yaw: -.5, pitch: -.1});
+    s.solid(MODELS.commander(st.p * 2.2), person, {}, st.c, ends(walk, .06), pal.bg,
+      {visor: [pal.accent, .8], lamp: [pal.text, .7]});
+  }
+
+  // ---------------------------------------------------------------------
+  // Scanners and maps.
+  // ---------------------------------------------------------------------
+
+  // The Full Spectrum Scanner: the signal band along the foot, filled as
+  // far as the journal's scan progress, and the scanner's lens resolving a
+  // world from its lattice as it focuses.
   function fss(s, st, pal) {
-    const c = st.c, cy = s.H / 2, base = s.H - 8, x0 = 6, x1 = s.W * .62;
-    const peaks = [.08, .19, .31, .44, .57, .7, .83, .94];
-    const points = [];
-    for (let index = 0; index <= 96; index += 1) {
-      const u = index / 96;
-      let amp = .6 + Math.sin(u * 61 + st.p * .7) * .35;
+    const c = st.c, base = s.H - 5, x0 = 6, x1 = s.W * .56;
+    sky(s, st, .7, .3);
+    const peaks = [.08, .19, .31, .44, .57, .7, .83, .94], points = [];
+    for (let index = 0; index <= 90; index += 1) {
+      const u = index / 90;
+      let amp = .5 + Math.sin(u * 61 + st.p * .7) * .3;
       peaks.forEach((at, n) => {
-        amp += Math.exp(-(((u - at) / .018) ** 2)) * (5 + (n % 3) * 2.4 + wave(st.p * .26 + n * .37) * 2.2);
+        amp += Math.exp(-(((u - at) / .018) ** 2)) * (4 + (n % 3) * 2.4 + wave(st.p * .26 + n * .37) * 2);
       });
       points.push([lerp(x0, x1, u), base - amp]);
     }
-    // The resolved share of the band follows the journal's FSS progress.
-    const cut = Math.max(1, Math.round(clamp(st.d.scan) * 96));
-    s.poly(points.slice(0, cut + 1), c, .92, 1.3);
-    if (cut < 96) s.poly(points.slice(cut), c, .28, 1);
+    const cut = Math.max(1, Math.round(clamp(st.d.scan) * 90));
+    s.poly(points.slice(0, cut + 1), pal.accent, .9, 1.2);
+    if (cut < 90) s.poly(points.slice(cut), c, .3, 1);
     s.line(x0, base + 1, x1, base + 1, c, .3);
-    for (let index = 0; index <= 24; index += 1) {
-      const x = lerp(x0, x1, index / 24);
-      s.line(x, base + 2, x, base + (index % 4 ? 3.5 : 5.5), c, .3);
-    }
     const needle = lerp(x0, x1, wave(st.p * .12));
-    s.line(needle, 3, needle, base, pal.text, .35, 1);
-    s.bloom(needle, base - 6, 7, c, .35);
-    const ax = s.W * .8;
-    s.line(x1 + 4, cy, ax - 19, cy, c, .3);
-    s.ring(ax, cy, 17, 15, 8, c, .48, 1.1, Math.PI / 8);
-    s.arc(ax, cy, 9, 8, 0, TAU, c, .3);
-    const focus = st.p * TAU * .2;
-    s.arc(ax, cy, 17, 15, focus, focus + .96, c, .9, 1.6);
-    s.poly([[ax - 3.5, cy], [ax, cy - 3.5], [ax + 3.5, cy], [ax, cy + 3.5]], c, .8, 1.2, true, .2);
-    for (const side of [-1, 1]) s.line(ax + side * 21, cy, ax + side * 26, cy, c, .5);
+    s.line(needle, 5, needle, base, pal.text, .3, .8);
+    s.bloom(needle, base - 5, 6, pal.accent, .35);
+    // The lens.
+    const lx = s.W * .76, ly = s.H / 2, lr = s.H * .42, focus = .35 + .65 * clamp(st.d.scan);
+    s.sphere(lx, ly, lr * .72, c, pal.bg, {spin: st.p * .06, seed: 11, grid: true, detail: focus,
+      atmosphere: focus > .6 ? pal.accent : null});
+    s.arc(lx, ly, lr, lr, 0, TAU, c, .55, 1.2);
+    s.arc(lx, ly, lr * 1.12, lr * 1.12, 0, TAU, c, .2);
+    const sweep = st.p * TAU * .18;
+    s.arc(lx, ly, lr, lr, sweep, sweep + .8, pal.accent, .8, 1.6);
+    for (let index = 0; index < 4; index += 1) {
+      const angle = index * Math.PI / 2;
+      s.line(lx + Math.cos(angle) * lr * .84, ly + Math.sin(angle) * lr * .84,
+        lx + Math.cos(angle) * lr * 1.18, ly + Math.sin(angle) * lr * 1.18, c, .6, 1.1);
+    }
+    s.line(x1 + 3, ly, lx - lr * 1.2, ly, c, .22);
   }
 
+  // A point on a turning world, as scene.sphere draws it.
+  function onWorld(x, y, r, lat, lon, spin, tilt = .35) {
+    const cx = Math.cos(lat) * Math.sin(lon + spin), cy = -Math.sin(lat), cz = Math.cos(lat) * Math.cos(lon + spin);
+    const py = cy * Math.cos(tilt) - cz * Math.sin(tilt), pz = cy * Math.sin(tilt) + cz * Math.cos(tilt);
+    return [x + cx * r, y + py * r, pz];
+  }
+
+  // The Detailed Surface Scanner: probes arc from the ship onto a turning
+  // world and each impact leaves its mapped patch glowing on the surface.
+  // Probe counts come from the journal's DSS label when it gives them.
   function dss(s, st, pal) {
-    const c = st.c, cy = s.H / 2, gx = s.W * .72, r = s.H * .42;
-    s.globe(gx, cy, r, c, st.p, .72);
-    s.arc(gx, cy, r * 1.35, r * .5, Math.PI * .96, Math.PI * 2.04, c, .45);
-    const lx = s.W * .1, ly = s.H - 6, target = gx - r * .3;
-    for (let index = 0; index < 3; index += 1) {
-      const t = fract(st.p * .16 + index / 3), lift = 8 + index * 3, landing = cy - 2 + index * 2;
-      const path = [];
-      for (let step = 0; step <= 18; step += 1) {
-        const u = step / 18;
-        path.push([lerp(lx, target, u), lerp(ly, landing, u) - Math.sin(u * Math.PI) * lift]);
-      }
-      s.poly(path, c, .18);
-      s.spark(lerp(lx, target, t), lerp(ly, landing, t) - Math.sin(t * Math.PI) * lift, 1.2, c,
-        pal.text, Math.sin(t * Math.PI) * .9);
-      if (t > .85) {
-        const splash = (t - .85) / .15;
-        s.arc(target + index * 3, landing, 2 + splash * 6, 1 + splash * 2.6, 0, TAU, c, (1 - splash) * .5);
+    const c = st.c, cy = s.H / 2, gx = s.W * .7, r = s.H * .5, spin = st.p * .08;
+    sky(s, st, .6, .3);
+    s.sphere(gx, cy + 4, r, c, pal.bg, {spin, seed: 4, grid: true, detail: 1.3});
+    const probes = /(\d+)\s*\/\s*(\d+)/.exec(st.label);
+    const mapped = probes ? Math.min(12, Number(probes[1])) : 5;
+    for (let index = 0; index < mapped; index += 1) {
+      const lat = (hash(index + 30) - .5) * 1.6, lon = index * TAU / Math.max(1, mapped);
+      const [px, py, pz] = onWorld(gx, cy + 4, r, lat, lon, spin);
+      if (pz > .05) {
+        s.bloom(px, py, r * .34 * pz, pal.accent, .8 * pz);
+        s.arc(px, py, r * .16 * pz, r * .16, 0, TAU, pal.accent, .7 * pz, .9);
       }
     }
-    s.poly([[lx - 7, ly], [lx, ly - 4], [lx + 7, ly - 1], [lx, ly + 3]], c, .85, 1.1, true, .13);
-    // Probes used against the efficiency target, both straight from the
-    // journal's DSS EFFICIENT/COMPLETE label. Nothing is counted here.
-    const probes = /(\d+)\s*\/\s*(\d+)/.exec(st.label);
+    const lx = s.W * .12, ly = s.H * .72;
+    for (let index = 0; index < 3; index += 1) {
+      const t = fract(st.p * .2 + index / 3);
+      const [tx, ty, tz] = onWorld(gx, cy + 4, r, (index - 1) * .45, -.7 + index * .5, 0, 0);
+      const x = lerp(lx, tx, t), y = lerp(ly, ty, t) - Math.sin(t * Math.PI) * (12 + index * 4);
+      s.spark(x, y, 1.2, pal.accent, pal.text, Math.sin(t * Math.PI) * .9 + .1);
+      if (t > .86 && tz > 0) {
+        const splash = (t - .86) / .14;
+        s.arc(tx, ty, 2 + splash * 7, 1 + splash * 3, 0, TAU, pal.accent, (1 - splash) * .7, 1.1);
+      }
+    }
+    const cam = camera(lx, ly, 4.6, {yaw: -.4, pitch: -.3, persp: 14});
+    s.solid(MODELS.ship(), cam, {}, c, 1, pal.bg, {engine: [c, .6]});
     if (probes) {
       const used = Math.min(16, Number(probes[1])), goal = Math.min(16, Number(probes[2]));
       for (let index = 0; index < Math.max(used, goal); index += 1) {
-        const x = lx + 14 + index * 7, lit = index < used;
+        const x = 8 + index * 7, lit = index < used;
         s.poly([[x, 6], [x + 2.5, 3], [x + 5, 6], [x + 2.5, 9]], index >= goal ? pal.yellow : c,
           lit ? .88 : .25, 1, true, lit ? .35 : 0);
       }
     }
-    const bx = s.W * .91;
-    if (st.label.startsWith('DSS EFFICIENT')) {
-      s.ring(bx, cy, 10, 9, 6, pal.green, .8, 1.25, Math.PI / 6);
-      s.poly([[bx - 5, cy], [bx - 1, cy + 4], [bx + 6, cy - 5]], pal.green, .95, 1.8);
-    } else if (st.label.startsWith('DSS COMPLETE')) {
-      s.ring(bx, cy, 10, 9, 8, c, .8, 1.3, Math.PI / 8);
-      s.spark(bx, cy, 1.8, c, pal.text, .85);
-    }
   }
+
+  // The galaxy: a few hundred stars on four spiral arms round a bright
+  // bar, turning slowly on a tilted plane, with the commander's own spot
+  // marked in the Orion Spur. Decorative, not a star chart.
+  const GALAXY = Array.from({length: 320}, (_, index) => {
+    const arm = index % 4, r = Math.pow(hash(index + 500), .85);
+    const core = index < 70;
+    const reach = core ? Math.pow(hash(index + 503), 1.6) * .24 : .12 + r * .88;
+    const angle = core ? hash(index + 501) * TAU
+      : arm * Math.PI / 2 + reach * 4.4 + (hash(index + 502) - .5) * .42 * (1 - r * .45);
+    return [Math.cos(angle) * reach, (hash(index + 504) - .5) * (core ? .1 : .04), Math.sin(angle) * reach,
+      .3 + hash(index + 505) * .7];
+  });
 
   function galaxyMap(s, st, pal) {
-    const c = st.c, gx = s.W * .6, gy = s.H / 2, spin = st.p * .05;
+    const c = st.c, gx = s.W * .58, gy = s.H * .5;
+    const cam = camera(gx, gy, s.W * .3, {yaw: st.p * .05, pitch: -.9, persp: 5});
+    s.bloom(gx, gy, s.H * .8, c, .4);
+    // Dust lanes along each arm give the spiral its shape.
     for (let arm = 0; arm < 4; arm += 1) {
-      const points = [];
-      for (let index = 0; index <= 30; index += 1) {
-        const r = 3 + index * (s.W * .3) / 30, angle = arm * Math.PI / 2 + index * .15 + .35 + spin;
-        points.push([gx + Math.cos(angle) * r, gy + Math.sin(angle) * r * .24]);
+      const lane = [];
+      for (let step = 0; step <= 24; step += 1) {
+        const r = .12 + step / 24 * .88, angle = arm * Math.PI / 2 + r * 4.4;
+        lane.push(cam.project([Math.cos(angle) * r, 0, Math.sin(angle) * r]));
       }
-      s.poly(points, c, .4);
-      for (let index = 3; index < points.length; index += 3) {
-        s.dot(points[index][0], points[index][1], .9 + hash(index + arm * 7) * .6, c,
-          .3 + .5 * wave(st.p * .15 - index * .04 - arm * .2));
-      }
+      s.poly(lane, c, arm % 2 ? .18 : .3, arm % 2 ? 1.4 : 2.2);
     }
-    s.bloom(gx, gy, 16, c, .5);
-    s.spark(gx, gy, 2.2, c, pal.text, .85);
-    s.line(8, s.H - 4, s.W - 8, s.H - 4, c, .14);
+    for (const [x, y, z, bright] of GALAXY) {
+      const [sx, sy, depth] = cam.project([x, y, z]);
+      s.dot(sx, sy, .4 + bright * .45, c, (.25 + bright * .6) * (.65 + depth * .35));
+    }
+    s.bloom(gx, gy, s.H * .3, pal.text, .45);
+    const [hx, hy] = cam.project([.52, 0, -.36]);
+    s.ring(hx, hy, 3.5 + wave(st.p * .5) * 2, 2.6, 4, pal.accent, .9, 1.2, Math.PI / 4);
+    s.dot(hx, hy, 1, pal.text, .9);
   }
 
+  // The system map, as the game lays it out: the star at the left and its
+  // bodies in a row, moons hanging beneath, the cursor stepping along.
   function systemMap(s, st, pal) {
-    const c = st.c, cy = s.H / 2, sx = s.W * .1, star = st.starTone || c;
-    s.bloom(sx, cy, 15, star, .55);
-    s.dot(sx, cy, 4, star, .92);
-    // Local orbits and bodies laid out from the star: decorative, not a plot.
-    const span = s.W * .82 / 5;
-    for (let index = 0; index < 5; index += 1) {
-      const x = sx + (index + 1) * span, radius = 7 + (index % 2) * 2.5;
-      s.line(index ? x - span + radius + 2 : sx + 7, cy, x - radius - 2, cy, c, .22);
-      s.globe(x, cy, 3 + (index % 2), c, st.p * .4, .66);
-      s.arc(x, cy, radius, radius * .73, st.p * .16 + index, st.p * .16 + index + Math.PI * 1.2, c, .35);
-      s.dot(x + Math.cos(st.p * .3 + index) * radius, cy + Math.sin(st.p * .3 + index) * radius * .73, .9, c, .66);
-    }
+    const c = st.c, cy = s.H * .42, star = st.starTone || c;
+    sky(s, st, .4, .2);
+    s.sun(s.W * .08, cy, s.H * .2, star, pal.text, st.p, {flares: false});
+    const bodies = [[.25, .1, 'rock', 0], [.38, .13, 'ice', 1], [.55, .22, 'gas', 3], [.74, .17, 'gas', 2],
+      [.9, .09, 'rock', 1]];
+    s.line(s.W * .14, cy, s.W * .96, cy, c, .15);
+    const pick = Math.floor(fract(st.p * .05) * bodies.length);
+    bodies.forEach(([u, size, kind, moons], index) => {
+      const x = s.W * u, r = s.H * size;
+      s.sphere(x, cy, r, c, pal.bg, {spin: st.p * .06, seed: index + 20, kind,
+        rings: index === 2 ? {tilt: .3, alpha: .4} : null});
+      for (let moon = 0; moon < moons; moon += 1) {
+        const my = cy + r + 5 + moon * 6;
+        s.line(x, cy + r + 1, x, my - 2, c, .2, .7);
+        s.sphere(x, my, 1.8, c, pal.bg, {seed: index * 5 + moon, kind: 'ice', detail: .3});
+      }
+      if (index === pick) s.brackets(x, cy, r + 5, r + 4, pal.accent, .85, 3, 1.1);
+    });
   }
 
+  // The orrery: worlds on their orbits round the star, in perspective.
   function orrery(s, st, pal) {
-    const c = st.c, ox = s.W * .54, oy = s.H / 2, star = st.starTone || c;
-    dust(s, st, {count: 16, speed: .006, alpha: .25});
-    s.line(8, oy, s.W - 8, oy, c, .1);
-    s.bloom(ox, oy, 13, star, .5);
-    s.dot(ox, oy, 3.3, star, .9);
-    // Orbits share one tilted plane, sized from the deck's height.
+    const c = st.c, ox = s.W * .55, oy = s.H * .5, star = st.starTone || c;
+    sky(s, st, .5, .2);
+    const cam = camera(ox, oy, s.W * .1, {yaw: st.p * .02, pitch: -.42, persp: 14});
+    const worlds = [];
     for (let index = 0; index < 5; index += 1) {
-      const rx = Math.min(s.H * lerp(.42, 1.55, index / 4), s.W * .46), ry = rx * TILT;
-      const angle = st.p * .28 / (index + 1) + index * 1.4;
-      s.arc(ox, oy, rx, ry, 0, TAU, c, .3);
-      s.dot(ox + Math.cos(angle) * rx, oy + Math.sin(angle) * ry, 1.8, c, .8);
+      const radius = .9 + index * .85, angle = st.p * .5 / (index + 1) + index * 1.9, ring = [];
+      for (let step = 0; step <= 40; step += 1) {
+        const a = step * TAU / 40;
+        ring.push(cam.project([Math.cos(a) * radius, 0, Math.sin(a) * radius]));
+      }
+      s.poly(ring, c, .25, .8);
+      worlds.push({at: cam.project([Math.cos(angle) * radius, 0, Math.sin(angle) * radius]), index});
     }
+    worlds.sort((left, right) => left.at[2] - right.at[2]);
+    const [sx, sy] = cam.project([0, 0, 0]);
+    let starDrawn = false;
+    for (const {at: [x, y, depth, k], index} of worlds) {
+      if (!starDrawn && depth > 0) {
+        s.sun(sx, sy, s.H * .13, star, pal.text, st.p, {flares: false});
+        starDrawn = true;
+      }
+      s.sphere(x, y, (1.8 + (index % 3) * 1.1) * k, c, pal.bg, {spin: st.p * .1, seed: index + 40,
+        kind: index === 3 ? 'gas' : 'rock', detail: .4});
+    }
+    if (!starDrawn) s.sun(sx, sy, s.H * .13, star, pal.text, st.p, {flares: false});
   }
+
+  // Powerplay: two powers' spheres of influence over a bubble of systems,
+  // their control systems ringed. Decorative, not real territory.
+  const BUBBLE = Array.from({length: 90}, (_, index) => {
+    const u = hash(index + 700) * TAU, v = Math.acos(2 * hash(index + 701) - 1), r = Math.cbrt(hash(index + 702));
+    return [Math.sin(v) * Math.cos(u) * r * 1.6, Math.cos(v) * r * .7, Math.sin(v) * Math.sin(u) * r * 1.6];
+  });
 
   function powerMap(s, st, pal) {
-    const c = st.c;
-    // Powerplay territory is a linked influence lattice, unlike the galaxy
-    // map's spiral. The cells are decorative, not a map of real territory.
-    const columns = 6, cells = [];
-    for (let row = 0; row < 2; row += 1) {
-      for (let column = 0; column < columns; column += 1) {
-        cells.push([s.W * (.08 + column * .84 / (columns - 1)) + (row ? 6 : 0),
-          s.H * (row ? .74 : .26) + (hash(column + row * 9) - .5) * 4]);
-      }
+    const c = st.c, cam = camera(s.W * .56, s.H * .5, s.H * .55, {yaw: st.p * .06, pitch: -.4, persp: 6});
+    const powers = [{centre: [-.7, 0, .2], color: c}, {centre: [.8, -.1, -.3], color: pal.accent}];
+    for (const power of powers) {
+      const [x, y, , k] = cam.project(power.centre);
+      s.bloom(x, y, s.H * .6 * k, power.color, .35);
+      s.arc(x, y, s.H * .5 * k, s.H * .5 * k, 0, TAU, power.color, .3, 1);
     }
-    for (let column = 0; column < columns; column += 1) {
-      s.line(...cells[column], ...cells[column + columns], c, .2);
-      if (column < columns - 1) {
-        s.line(...cells[column], ...cells[column + 1], c, .3);
-        s.line(...cells[column + columns], ...cells[column + columns + 1], c, .3);
+    BUBBLE.forEach((point, index) => {
+      const [x, y, depth] = cam.project(point);
+      const owner = powers.find((power) => Math.hypot(...point.map((value, axis) => value - power.centre[axis])) < .75);
+      s.dot(x, y, owner ? .9 : .6, owner ? owner.color : c, (owner ? .8 : .35) * (.6 + depth * .3));
+      if (owner && index % 9 === 0) {
+        s.ring(x, y, 2.6, 2.6, 6, owner.color, .5 + .35 * wave(st.p * .3 + index * .1), 1, Math.PI / 6);
+        const [cx, cy] = cam.project(owner.centre);
+        s.line(x, y, cx, cy, owner.color, .25, .7);
       }
-    }
-    const active = new Set([1, 2, 7, 8, 9]);
-    cells.forEach(([x, y], index) => {
-      const lit = active.has(index);
-      s.ring(x, y, lit ? 8 : 5, lit ? 6 : 4, 6, c, lit ? .65 : .35, 1.1, Math.PI / 6);
-      if (lit) s.dot(x, y, 1.3, c, .62 + .25 * wave(st.p * .22 - index * .1));
     });
-    s.poly([cells[1], cells[2], cells[9], cells[8], cells[7]], c, .6, 1.4, true, .08);
   }
 
+  // The Codex: a specimen crystal turning in a scanning cradle while
+  // entries orbit it.
   function codex(s, st, pal) {
-    const c = st.c, cx = s.W * .56, cy = s.H / 2;
-    const w = Math.min(s.W * .3, 110), h = s.H * .42;
-    s.poly([[cx - w, cy - h], [cx - 10, cy - h + 3], [cx, cy - h + 7], [cx + 10, cy - h + 3], [cx + w, cy - h],
-      [cx + w, cy + h], [cx + 11, cy + h - 1], [cx, cy + h + 3], [cx - 11, cy + h - 1], [cx - w, cy + h]],
-    c, .6, 1, true, .06);
-    s.line(cx, cy - h + 7, cx, cy + h + 2, c, .4);
-    for (let index = 0; index < 4; index += 1) {
-      for (const side of [-1, 1]) {
-        s.line(cx + side * 14, cy - h + 7 + index * 5, cx + side * (w - 8 - (index % 2) * 14), cy - h + 5 + index * 5,
-          c, .22 + .4 * wave(st.p * .18 - index * .12));
+    const c = st.c, x = s.W * .6, y = s.H * .5;
+    sky(s, st, .5, .2);
+    const cam = camera(x, y, 9, {yaw: st.p * .3, pitch: -.35, persp: 12});
+    for (let ring = 0; ring < 2; ring += 1) {
+      const radius = 2 + ring * .8, orbit = [];
+      for (let step = 0; step <= 36; step += 1) {
+        const angle = step * TAU / 36;
+        orbit.push(cam.project([Math.cos(angle) * radius, ring ? -.4 : .5, Math.sin(angle) * radius]));
+      }
+      s.poly(orbit, c, .25, .8);
+      for (let entry = 0; entry < 5; entry += 1) {
+        const angle = entry * TAU / 5 - st.p * (.2 + ring * .1);
+        const [ex, ey] = cam.project([Math.cos(angle) * radius, ring ? -.4 : .5, Math.sin(angle) * radius]);
+        s.rect(ex - 1.5, ey - 1.1, 3, 2.2, ring ? pal.accent : c, .7, true);
       }
     }
-    dust(s, st, {count: 14, speed: .008, alpha: .25});
+    s.solid(MODELS.crystal(3), cam, {roll: Math.PI / 2, yaw: st.p * .2}, c, 1, pal.bg);
+    const scan = y - 14 + wave(st.p * .25) * 28;
+    s.line(x - 26, scan, x + 26, scan, pal.accent, .55, 1);
+    s.bloom(x, scan, 10, pal.accent, .25);
   }
 
+  // An unspecified map: a navigable grid in perspective and a cursor.
   function genericMap(s, st, pal) {
-    const c = st.c, cy = s.H / 2;
-    // An unspecified map: a navigable grid, not an invented star system.
-    s.poly([[s.W * .08, 4], [s.W * .88, 4], [s.W * .95, 12], [s.W * .88, s.H - 4], [s.W * .08, s.H - 4],
-      [s.W * .03, cy]], c, .45, 1.1, true, .03);
-    for (let index = 0; index < 8; index += 1) {
-      const x = s.W * (.14 + index * .1);
-      s.line(x, 6, x - 5, s.H - 6, c, .2);
+    const c = st.c, cam = camera(s.W * .55, s.H * .6, s.W * .07, {pitch: -.9, yaw: st.p * .03, persp: 10});
+    for (let index = -5; index <= 5; index += 1) {
+      s.line(...cam.project([index, 0, -5]).slice(0, 2), ...cam.project([index, 0, 5]).slice(0, 2), c, .22, .8);
+      s.line(...cam.project([-5, 0, index]).slice(0, 2), ...cam.project([5, 0, index]).slice(0, 2), c, .22, .8);
     }
-    for (const y of [s.H * .33, cy, s.H * .72]) s.line(s.W * .05, y, s.W * .93, y, c, .18);
-    const x = s.W * .5 + Math.sin(st.p * .21) * s.W * .25, y = cy + Math.cos(st.p * .17) * s.H * .2;
-    s.poly([[x, y - 5], [x + 5, y], [x, y + 5], [x - 5, y]], c, .85, 1.3, true, .1);
-    s.brackets(x, y, 13, 10, c, .42);
+    const [x, y] = cam.project([Math.sin(st.p * .21) * 3.5, 0, Math.cos(st.p * .17) * 3]);
+    s.poly([[x, y - 6], [x + 4, y], [x, y + 3], [x - 4, y]], pal.accent, .9, 1.2, true, .2);
+    s.line(x, y - 6, x, y - 14, pal.accent, .5);
+    s.brackets(x, y - 2, 9, 7, c, .45);
   }
+
+  // Nebulae and Lagrange clouds: glowing gas and slow-tumbling crystals.
+  function phenomena(s, st, pal) {
+    const c = st.c, tones = [c, pal.accent, pal.green, pal.yellow];
+    for (let index = 0; index < 9; index += 1) {
+      const x = s.W * (.08 + hash(index + 70) * .86) + Math.sin(st.p * .05 + index) * 6;
+      const y = s.H * (.2 + hash(index + 71) * .6);
+      s.bloom(x, y, s.H * (.5 + hash(index + 72) * .5), tones[index % 4], .24 + .14 * wave(st.p * .1 + index * .3));
+    }
+    sky(s, st, .6, .3);
+    for (let index = 0; index < 6; index += 1) {
+      const x = s.W * (.16 + index * .14), y = s.H * (.3 + hash(index + 80) * .4);
+      const cam = camera(x, y, 5.5 + hash(index + 81) * 3.5, {pitch: -.2, persp: 12});
+      s.bloom(x, y, 10, tones[index % 4], .25);
+      s.solid(MODELS.crystal(), cam, {yaw: st.p * (.1 + hash(index + 82) * .15) + index,
+        roll: st.p * .07 + index * 1.3, pitch: index}, tones[index % 4], 1, pal.bg);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Targets: what the pilot has selected, held in closing brackets.
+  // ---------------------------------------------------------------------
 
   function target(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .66;
-    dust(s, st, {count: 16, speed: .012, alpha: .26});
-    // A range ladder closes toward the selected target.
-    s.line(10, cy, fx - 36, cy, c, .18);
-    for (let index = 0; index < 6; index += 1) {
-      const t = fract(st.p * .12 + index / 6), x = lerp(10, fx - 36, t);
-      s.line(x, cy - 3, x, cy + 3, c, Math.sin(t * Math.PI) * .5);
-    }
-    s.glyph(fx, cy, s.H * .96, () => targetGlyph(s, st));
-  }
-
-  function phenomena(s, st, pal) {
-    const c = st.c, cy = s.H / 2;
-    for (let ribbon = 0; ribbon < 4; ribbon += 1) {
-      const points = [];
-      for (let step = 0; step <= 48; step += 1) {
-        const u = step / 48;
-        points.push([u * s.W, cy + Math.sin(u * TAU * (1.2 + ribbon * .35) + st.p * (.3 + ribbon * .08) + ribbon)
-          * (4 + ribbon * 3) * Math.sin(u * Math.PI)]);
-      }
-      s.poly(points, ribbon % 2 ? pal.accent : c, .2 + ribbon * .09, 1 + ribbon * .15);
-    }
-    dust(s, st, {count: 30, speed: .01, alpha: .35});
+    const c = st.c, key = st.key, x = s.W * .66, y = s.H * .5;
+    sky(s, st, .6, .4);
+    const locked = smooth(st.age / 1.2);
+    const clear = key === 'target_clear', gone = clear ? smooth(st.age / 1.6) : 0;
+    const spread = clear ? 18 + gone * 40 : 16 + (1 - locked) * 26;
+    s.line(10, y, x - spread - 6, y, c, .18);
     for (let index = 0; index < 5; index += 1) {
-      const x = s.W * (.15 + hash(index + 70) * .7), y = cy + (hash(index + 71) - .5) * s.H * .6;
-      s.bloom(x, y, 7 + wave(st.p * .2 + index * .3) * 4, c, .2);
+      const t = fract(st.p * .14 + index / 5), px = lerp(10, x - spread - 6, t);
+      s.line(px, y - 2.5, px, y + 2.5, c, Math.sin(t * Math.PI) * .45);
     }
-    s.brackets(s.W * .5, cy, s.W * .46, s.H / 2 - 3, c, .25);
-  }
-
-  function exploration(s, st, pal) {
-    const c = st.c;
-    dust(s, st, {count: 18, speed: .015, alpha: .3});
-    // A tilted scanner dish sends a ping out across the system and echoes
-    // light as the wavefront passes. Decorative: it plots no real bodies.
-    const x = s.W * .74, y = s.H * .62, rx = Math.min(s.H * 1.15, s.W * .2), ry = rx * TILT;
-    s.arc(x, y, rx, ry, 0, TAU, c, .55, 1.1);
-    s.arc(x, y, rx * .62, ry * .62, 0, TAU, c, .26);
-    s.arc(x, y, rx * .25, ry * .25, 0, TAU, c, .3);
-    const mast = y - s.H * .42;
-    s.line(x, y, x, mast, c, .45);
-    s.spark(x, mast, 1.2, c, pal.text, .5 + .4 * wave(st.p * .5));
-    const angle = st.p * .38;
-    s.poly([[x, y], [x + Math.cos(angle) * rx, y + Math.sin(angle) * ry],
-      [x + Math.cos(angle + .38) * rx, y + Math.sin(angle + .38) * ry]], c, .4, 1, true, .12);
-    const ping = fract(st.p * .14), front = lerp(x - rx, -6, ping);
-    const reach = x - front;
-    s.arc(x, y - s.H * .1, reach, Math.min(s.H * .55, reach * .45), Math.PI * .72, Math.PI * 1.28, c,
-      (1 - ping) * .55, 1.2);
-    for (let index = 0; index < 10; index += 1) {
-      const ex = s.W * (.04 + index * .058), ey = s.H * (.34 + hash(index + 8) * .44);
-      const h = 3 + hash(index) * 6, lit = clamp(1 - Math.abs(ex - front) / 26);
-      s.line(ex, ey + h / 2, ex, ey - h / 2, c, .18 + .6 * lit);
-      s.dot(ex, ey - h / 2 - 1.6, .9 + lit * .5, c, .25 + .65 * lit);
+    if (key === 'target_system') {
+      s.sun(x, y, s.H * .17, st.starTone || c, pal.text, st.p, {flares: false});
+    } else if (key === 'target_body') {
+      s.sphere(x, y, s.H * .3, c, pal.bg, {spin: st.p * .08, seed: 14, grid: true, atmosphere: pal.accent});
+    } else if (key === 'target_signal') {
+      for (let index = 0; index < 3; index += 1) {
+        const t = fract(st.p * .3 + index / 3), r = 5 + t * 26;
+        s.arc(x, y, r, r * .45, 0, TAU, pal.accent, (1 - t) * .5, 1);
+      }
+      const cam = camera(x, y, 6, {pitch: -.3, persp: 12});
+      s.solid(MODELS.beacon(), cam, {yaw: st.p * .25}, c, 1, pal.bg, {beacon: [pal.accent, .5 + .5 * wave(st.p * .8)]});
+    } else {
+      // Cleared, the target drifts on unmarked and fades from the lock.
+      const cam = camera(x + gone * 16, y, 5.4, {pitch: -.32, persp: 14});
+      s.solid(MODELS.ship(), cam, {yaw: st.p * .35}, c, 1 - gone * .75, pal.bg, {engine: [c, .7]});
+    }
+    const bracket = clear ? .7 * (1 - gone) : .5 + .4 * locked;
+    s.brackets(x, y, spread, s.H * .42, clear ? c : pal.accent, bracket, 5, 1.3);
+    if (!clear) {
+      const track = st.p * TAU * .4;
+      s.arc(x, y, spread * .8, s.H * .38, track, track + .6, pal.accent, .6, 1.2);
+    } else {
+      s.line(x - 12, y + 9, x + 12, y - 9, c, .55 * (1 - gone * .5), 1.3);
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Planets: approach, descent, the surface.
+  // ---------------------------------------------------------------------
+
+  // Orbital approach or departure: the world beneath, more of its curve
+  // showing the higher the journal says the ship is, and the ship on its
+  // glide path down to it or away.
   function orbital(s, st, pal) {
-    const c = st.c, depart = st.key === 'orbital_departure', alt = st.d.altitude;
-    // The planet below. Higher orbits show more of its curve; altitude only
-    // changes the view when the journal reports it.
+    const depart = st.key === 'orbital_departure', alt = st.d.altitude;
     const height = alt < 0 ? .55 : clamp(Math.log10(1 + alt) / 6.3);
-    const R = lerp(s.W * .9, s.W * .36, height), top = lerp(s.H * .3, s.H * .48, height);
-    const cx = s.W * .6, centre = top + R;
-    s.dot(cx, centre, R, c, .09);
-    s.arc(cx, centre, R + 1.5, R + 1.5, Math.PI, TAU, c, .28, 3.2);
-    s.arc(cx, centre, R, R, Math.PI, TAU, c, .8, 1.2);
-    s.arc(cx, centre, R + 7, R + 7, Math.PI * 1.1, Math.PI * 1.9, c, .12 + .1 * wave(st.p * .23), 1);
-    for (const inset of [6, 14, 26]) s.arc(cx, centre, R - inset, R - inset, Math.PI * 1.02, Math.PI * 1.98, c, .12);
-    // Surface features turn beneath the ship: short craters along the limb.
-    for (let index = 0; index < 14; index += 1) {
-      const angle = Math.PI + fract(index / 14 + hash(index + 12) * .04 + st.p * .012 * (depart ? -1 : 1)) * Math.PI;
-      const facing = Math.sin(angle - Math.PI);
-      const depth = 5 + hash(index + 13) * 10;
-      const x = cx + Math.cos(angle) * (R - depth), y = centre + Math.sin(angle) * (R - depth);
-      s.arc(x, y, 2 + hash(index + 14) * 3, (1 + hash(index + 15)) * facing, 0, TAU, c, .3 * facing);
-    }
-    // Approach and departure keep to the right half, clear of the readout.
+    sky(s, st, .7, .3);
+    const R = lerp(s.W * .95, s.W * .3, height), cx = s.W * .62, top = lerp(s.H * .46, s.H * .62, height);
+    s.sphere(cx, top + R, R, st.c, pal.bg, {spin: st.p * .006 * (depart ? -1 : 1), tilt: .1, seed: 6,
+      atmosphere: pal.accent, detail: 3, sheen: [-.25, -.88], grid: true});
     const path = depart
-      ? [[s.W * .5, top - 1], [s.W * .64, top - 5], [s.W * .8, top * .45], [s.W * .97, 2]]
-      : [[s.W * .98, 2], [s.W * .88, top * .5 + 1], [s.W * .74, top - 4], [s.W * .6, top - 1.5]];
-    s.poly(path, c, .62, 1.15);
-    const t = fract(st.p * .15), leg = Math.min(2, Math.floor(t * 3)), f = t * 3 - leg;
-    s.spark(lerp(path[leg][0], path[leg + 1][0], f), lerp(path[leg][1], path[leg + 1][1], f), 1.3, c, pal.text,
-      Math.sin(t * Math.PI) * .9);
-    if (depart) {
-      for (let index = 0; index < 3; index += 1) {
-        const u = .3 + index * .25;
-        s.chevron(lerp(path[2][0], path[3][0], u), lerp(path[2][1], path[3][1], u) + 3, 1, c,
-          .42 + .25 * wave(st.p * .3 - index * .2), 2.4);
-      }
-    } else {
-      s.brackets(path[3][0], path[3][1], 11, 5, c, .65);
-    }
+      ? [[s.W * .44, top - 3], [s.W * .6, top - 8], [s.W * .78, top * .5], [s.W * .96, 3]]
+      : [[s.W * .96, 3], [s.W * .82, top * .45], [s.W * .66, top - 7], [s.W * .48, top - 3]];
+    for (let index = 0; index < 3; index += 1) s.line(...path[index], ...path[index + 1], pal.accent, .4, .9);
+    const t = fract(st.p * .12), leg = Math.min(2, Math.floor(t * 3)), f = t * 3 - leg;
+    const x = lerp(path[leg][0], path[leg + 1][0], f), y = lerp(path[leg][1], path[leg + 1][1], f);
+    const heading = Math.atan2(path[leg + 1][1] - path[leg][1], path[leg + 1][0] - path[leg][0]);
+    const cam = camera(x, y, 4.2, {pitch: -.35});
+    s.solid(MODELS.ship(), cam, {roll: heading, yaw: -.25}, st.c, ends(t, .08), pal.bg, {engine: [st.c, .8]});
   }
 
+  // Glide: through the atmosphere, nose down over the terrain far below,
+  // the air round the hull glowing with the heat of entry.
   function glide(s, st, pal) {
-    const c = st.c, horizon = s.H * .3, fx = s.W * .62, cy = s.H / 2;
-    terrain(s, st, {horizon, speed: 2.2, alpha: .34, x: fx});
-    // Friction glow over the nose while gliding through atmosphere.
+    const cam = camera(s.W * .5, s.H * .1, 6, {pitch: -.34, persp: 16});
+    landscape(s, cam, st, pal, {z0: -26, z1: 4, rows: 7, lift: .9, floor: 6, travel: [0, st.p * 3],
+      alpha: .8, seed: 2});
+    for (let index = 0; index < 5; index += 1) {
+      const t = fract(st.p * .12 + hash(index + 90));
+      s.bloom(s.W * (1.1 - t * 1.2), s.H * (.2 + hash(index + 91) * .35), s.H * .5, pal.text, .08 * ends(t, .2));
+    }
+    const x = s.W * .6, y = s.H * .42;
+    const shipCam = camera(x, y, 5.6, {yaw: -.5, pitch: -.1, persp: 14});
+    const at = s.solid(MODELS.ship(), shipCam, {roll: .35}, st.c, 1, pal.bg, {engine: [st.c, .7]});
+    const [nx, ny] = at([2.1, 0, 0]);
+    s.bloom(nx, ny, 10 + wave(st.p * 2) * 3, pal.orange, .45);
     for (let index = 0; index < 8; index += 1) {
-      const t = fract(st.p * .5 + hash(index + 60)), y = 3 + hash(index + 61) * (horizon - 4);
-      s.line(s.W * (1 - t), y, s.W * (1 - t) + 10 + t * 18, y, pal.hud, Math.sin(t * Math.PI) * .45, 1);
+      const t = fract(st.p * .9 + index / 8), spread = (hash(index + 95) - .5) * 10;
+      s.line(nx - t * 30, ny - t * 12 + spread * t, nx - t * 30 - 6, ny - t * 12 + spread * t - 2, pal.orange,
+        (1 - t) * .6, 1);
     }
-    for (const side of [-1, 1]) {
-      s.poly([[fx + side * 48, 3], [fx + side * 32, 11], [fx + side * 19, s.H - 10]], c, .47, 1.3);
-    }
-    for (let index = 0; index < 4; index += 1) {
-      const t = fract(st.p * .18 + index / 4), w = 9 + t * t * 48, h = 2 + t * t * s.H * .42;
-      s.poly([[fx - w, cy + h], [fx - w * .7, cy - h], [fx + w * .7, cy - h], [fx + w, cy + h]],
-        c, Math.sin(t * Math.PI) * .6, 1.1);
-    }
-    s.poly([[fx - 13, cy], [fx - 4, cy], [fx, cy + 3], [fx + 4, cy], [fx + 13, cy]], c, .85, 1.4);
-    gravityLoad(s, st, fx);
-  }
-
-  function surface(s, st, pal) {
-    const c = st.c, key = st.key, fx = s.W * .62, cy = s.H / 2;
-    const depart = key === 'surface_departure', hold = key === 'surface_hold';
-    // Descent pace answers to the real vertical speed; nothing is estimated.
-    const pace = clamp(.6 + Math.abs(st.d.vertical) / 90, .4, 2.4);
-    terrain(s, st, {horizon: hold ? s.H * .42 : s.H * .34, speed: pace, still: hold, depart, alpha: .32, x: fx});
-    if (hold) {
-      for (const side of [-1, 1]) {
-        s.poly([[fx + side * 30, 5], [fx + side * 24, 9], [fx + side * 24, s.H - 12], [fx + side * 30, s.H - 8]],
-          c, .31 + .19 * wave(st.p * .27), 1.2);
-      }
-      s.brackets(fx, cy - 1, 19, 8, c, .65);
-      s.line(fx - 12, cy - 1, fx - 4, cy - 1, c, .8);
-      s.line(fx + 4, cy - 1, fx + 12, cy - 1, c, .8);
-      s.dot(fx, cy - 1, 1.4, c, .75);
-      s.arc(fx, s.H - 7, 16, 3, 0, TAU, c, .3);
-      const stabiliser = st.p * TAU * .5;
-      for (const offset of [0, Math.PI]) s.arc(fx, s.H - 7, 16, 3, stabiliser + offset, stabiliser + offset + .9, c, .8, 1.6);
-    } else {
-      // Descent ladder and ascent vector have different silhouettes.
-      const direction = depart ? -1 : 1;
-      for (const side of [-1, 1]) {
-        s.poly(depart
-          ? [[fx + side * 11, s.H - 9], [fx + side * 30, cy - 5], [fx + side * 46, 5]]
-          : [[fx + side * 46, 5], [fx + side * 30, cy - 3], [fx + side * 11, s.H - 9]], c, .51, 1.3);
-      }
-      s.poly([[fx - 13, cy - 2], [fx - 4, cy - 2], [fx, cy + 1], [fx + 4, cy - 2], [fx + 13, cy - 2]], c, .8, 1.2);
-      for (let index = 0; index < 3; index += 1) {
-        const t = fract(st.terrain * .18 + index / 3), y = cy + direction * (2 + t * (s.H * .34));
-        s.poly([[fx - 5, y - direction * 2], [fx, y], [fx + 5, y - direction * 2]], c, Math.sin(t * Math.PI) * .72, 1.1);
-      }
-    }
-    gravityLoad(s, st, fx);
+    gravityLoad(s, st, x);
   }
 
   // Heavy gravity presses bars in from the sides, from the reported value.
@@ -1561,197 +1622,613 @@
     }
   }
 
+  // Surface approach, hold and departure: low over the ground, the ship
+  // descending toward it, hovering over its landing spot or climbing away.
+  // The ground's pace follows the reported vertical speed only.
+  function surface(s, st, pal) {
+    const key = st.key, depart = key === 'surface_departure', hold = key === 'surface_hold';
+    const pace = clamp(.6 + Math.abs(st.d.vertical) / 90, .4, 2.4);
+    const climb = depart ? smooth(fract(st.p * .1)) : 0;
+    const cam = camera(s.W * .5, s.H * (.1 - climb * .2), 6.5, {pitch: -.22, persp: 14});
+    landscape(s, cam, st, pal, {z0: -22, z1: 5, rows: 7, lift: 1, floor: 5 + climb * 3,
+      travel: [0, hold ? 0 : st.terrain * 1.2 * pace], flat: {x: 0, z: -1, radius: 2.5}, seed: 4});
+    const x = s.W * .5, y = s.H * (hold ? .44 : depart ? .5 - climb * .25 : .38 + .08 * wave(st.p * .2));
+    if (hold) {
+      const [gx, gy] = cam.project([0, 5, -1]);
+      for (let index = 0; index < 2; index += 1) {
+        const t = fract(st.p * .3 + index / 2);
+        s.arc(gx, gy, 6 + t * 16, 1.6 + t * 4, 0, TAU, pal.accent, (1 - t) * .7, 1.1);
+      }
+      s.arc(gx, gy, 9, 2.4, 0, TAU, pal.accent, .7, 1.2);
+      s.line(x, y + 5, gx, gy - 2, pal.accent, .3, .8);
+    }
+    const shipCam = camera(x, y, 6, {yaw: -.6, pitch: -.35, persp: 14});
+    const at = s.solid(MODELS.ship(), shipCam, {roll: depart ? -.2 : 0, yaw: Math.sin(st.p * .2) * .06}, st.c, 1,
+      pal.bg, {engine: [st.c, .8]});
+    const [bx, by] = at([-.3, .5, 0]);
+    s.bloom(bx, by + 2, 7 + wave(st.p * 1.5) * 2, pal.accent, depart ? .55 : .4);
+    gravityLoad(s, st, x);
+  }
+
+  // Landed: the ship down on its gear on a quiet surface, a moon hanging
+  // over the horizon. The ground holds still; only the lights breathe.
   function landed(s, st, pal) {
-    const c = st.c, fx = s.W * .62, y = s.H * .62;
-    terrain(s, st, {horizon: s.H * .3, still: true, alpha: .24, x: fx});
-    // Pad shoes are latched; only the edge lights breathe while landed.
-    s.poly([[fx - 34, s.H - 1], [fx - 24, y + 3], [fx + 24, y + 3], [fx + 34, s.H - 1]], c, .45, 1.4);
-    const pad = [[fx - 25, y], [fx - 14, y - 6], [fx + 14, y - 6], [fx + 25, y], [fx + 14, y + 6], [fx - 14, y + 6]];
-    s.poly(pad, c, .72, 1.2, true, .08);
-    s.traceEdges(pad, st.p * .5, c);
-    s.ship(fx, y - 1, c, .85, 1.35);
-    for (const x of [fx - 17, fx + 17]) s.line(x, y + 1, x, y + 5, c, .8, 1.5);
-    for (let index = 0; index < 10; index += 1) {
-      const x = 10 + index * (s.W - 20) / 9;
-      s.dot(x, s.H - 3, 1, c, .18 + .62 * Math.pow(wave(st.p * .45 - index / 10), 3));
+    sky(s, st, .6, .2);
+    s.sphere(s.W * .2, s.H * .26, s.H * .16, st.c, pal.bg, {seed: 13, kind: 'ice', spin: st.p * .02});
+    const cam = camera(s.W * .55, s.H * .26, 6.5, {pitch: -.16, persp: 14});
+    landscape(s, cam, st, pal, {z0: -22, z1: 5, rows: 7, lift: .9, floor: 4.2, flat: {x: .5, z: 0, radius: 3.5},
+      seed: 8});
+    const [gx, gy] = cam.project([.5, 4.2, 0]);
+    const shipCam = camera(gx, gy - 7, 6.2, {yaw: -.55, pitch: -.3, persp: 14});
+    s.arc(gx, gy - 1, 18, 3.4, 0, TAU, pal.bg, .8, 3);
+    const at = s.solid(MODELS.ship(), shipCam, {}, st.c, 1, pal.bg, {engine: [st.c, .2]});
+    for (const point of [[-.6, .3, -.9], [-.6, .3, .9], [1.2, .2, 0]]) {
+      const [fx, fy] = at(point), [lx, ly] = at([point[0], .85, point[2]]);
+      s.line(fx, fy, lx, ly, st.c, .75, 1.1);
+    }
+    for (let index = 0; index < 2; index += 1) {
+      const [lx, ly] = at([-.9, 0, index ? 1.5 : -1.5]);
+      s.spark(lx, ly, .6, index ? pal.green : pal.red, null, .3 + .7 * Math.pow(wave(st.p * .5 + index * .5), 4));
     }
   }
 
-  // One settlement structure: domes, masts, blocks and hangars, so the
-  // skyline reads as a base rather than a row of identical towers.
-  function structure(s, st, kind, x, w, h, base, index) {
-    const c = st.c;
-    if (kind === 0) {
-      s.arc(x + w / 2, base, w / 2, Math.min(h, w * .7), Math.PI, TAU, c, .6, 1.1);
-      s.line(x + w * .2, base - 1, x + w * .8, base - 1, c, .25);
-    } else if (kind === 1) {
-      s.poly([[x + w * .3, base], [x + w * .4, base - h], [x + w * .6, base - h], [x + w * .7, base]], c, .55);
-      s.line(x + w / 2, base - h, x + w / 2, base - h - 5, c, .5);
-      s.spark(x + w / 2, base - h - 6, .9, c, null, .3 + .6 * wave(st.p * .25 + index * .3));
-    } else if (kind === 2) {
-      s.poly([[x, base], [x, base - h * .55], [x + w, base - h * .55], [x + w, base]], c, .55, 1, false, .05);
-      for (let row = 1; row < 3; row += 1) s.line(x + 2, base - h * .55 * row / 3, x + w - 2, base - h * .55 * row / 3, c, .18);
-    } else {
-      s.poly([[x - 2, base], [x + w * .25, base - h * .45], [x + w * .75, base - h * .45], [x + w + 2, base]], c, .55);
-      s.line(x + w * .3, base - 2, x + w * .7, base - 2, c, .12 + .6 * Math.pow(wave(st.p * .5 - index * .2), 3), 1.5);
-    }
+  // Planetary ports and settlements share a flat site on the ground.
+  function site(s, st, pal, draw) {
+    sky(s, st, .6, .2);
+    const cam = camera(s.W * .55, s.H * .2, 6, {yaw: .2, pitch: -.22, persp: 14});
+    landscape(s, cam, st, pal, {z0: -24, z1: 5, rows: 7, lift: 1, floor: 5, flat: {x: 0, z: -3, radius: 7},
+      seed: 12, alpha: .9});
+    draw(cam);
   }
 
   function port(s, st, pal) {
-    const c = st.c, base = s.H - 6, fx = s.W * .62, station = st.key === 'surface_station';
-    s.line(0, base + 2, s.W, base + 2, c, .3);
-    const count = Math.max(7, Math.round(s.W / 30));
-    for (let index = 0; index < count; index += 1) {
-      const x = 6 + index * (s.W - 12) / count, w = 12 + hash(index + 3) * 9;
-      if (station && Math.abs(x + w / 2 - fx) < 38) continue;
-      const h = 8 + hash(index + 5) * s.H * .5;
-      structure(s, st, Math.floor(hash(index + 7) * 4), x, w, h, base, index);
+    if (st.key === 'surface_station') {
+      site(s, st, pal, (cam) => {
+        const [x, y] = cam.project([0, 5, -3]);
+        const portCam = camera(x, y, 4.2, {yaw: .3 + st.p * .01, pitch: -.42, persp: 14});
+        const at = s.solid(MODELS.surfacePort(), portCam, {}, st.c, 1, pal.bg,
+          {window: [st.c, .6], beacon: [pal.red, .3 + .7 * Math.pow(wave(st.p * .5), 6)]});
+        // Traffic settles onto the ring's pads.
+        const t = fract(st.p * .1);
+        const [px, py] = at([3.2, -.6, 0]);
+        const sx = lerp(s.W * .95, px, smooth(t)), sy = lerp(-4, py - 3, smooth(t));
+        s.solid(MODELS.ship(), camera(sx, sy, 2.6, {yaw: .5, pitch: -.3}), {yaw: Math.PI}, st.c, ends(t, .1), pal.bg,
+          {engine: [st.c, .8]});
+        s.bloom(sx, sy + 2, 5, pal.accent, ends(t, .1) * .4);
+      });
+      return;
     }
-    // Perimeter lights chase along the base.
-    for (let index = 0; index < 16; index += 1) {
-      const x = 4 + index * (s.W - 8) / 15;
-      s.dot(x, base + 2, .9, c, .15 + .6 * Math.pow(wave(st.p * .4 - index / 16), 4));
-    }
-    if (station) {
-      s.arc(fx, base, 25, 5, Math.PI, TAU, c, .6);
-      s.poly([[fx - 20, base + 2], [fx - 20, base - 7], [fx - 13, base - 10], [fx + 13, base - 10],
-        [fx + 20, base - 7], [fx + 20, base + 2]], c, .67, 1.25);
-      for (const x of [fx - 16, fx + 16]) s.line(x, base - 8, x, base, c, .55, 1.1);
-    } else {
-      for (const x of [9, s.W - 9]) s.poly([[x - 3, base], [x - 3, base - 10], [x, base - 15], [x + 3, base - 10], [x + 3, base]], c, .54, 1.2);
-    }
+    // A settlement: habitats, domes, hangars and a mast, lights in windows.
+    site(s, st, pal, (cam) => {
+      const layout = [['block', -6, -3, 0], ['dome', -3.4, -1.2, 1], ['tower', -1, -4.5, 0], ['hangar', 1.6, -1, 0],
+        ['block', 4, -3.2, 1], ['dome', 6.2, -.5, 0], ['block', 1.2, -6, 1]];
+      layout.sort((left, right) => left[2] - right[2]);
+      for (const [kind, x, z, seed] of layout) {
+        const [bx, by] = cam.project([x, 5, z]);
+        const buildingCam = camera(bx, by, 4.4 * cam.scaleAt(cam.look([x, 5, z])[2]), {yaw: .2, pitch: -.3});
+        s.solid(MODELS.building(kind, seed), buildingCam, {yaw: kind === 'hangar' ? .6 : 0}, st.c, 1, pal.bg, {
+          window: [st.c, .35 + .45 * Math.pow(wave(st.p * .3 + x * .2), 3)],
+          beacon: [pal.red, .3 + .7 * Math.pow(wave(st.p * .6), 6)],
+        });
+      }
+    });
   }
 
-  function asteroids(s, st, pal) {
-    const c = st.c;
-    // Decorative parallax, not a claim about real asteroid positions. Every
-    // crossing fades outside the scene; rotations use unwrapped time.
-    for (let index = 0; index < 40; index += 1) {
-      const t = fract(hash(index + 150) + st.p * .017);
-      const x = (1 - t) * (s.W + 12) - 6;
-      const y = s.H / 2 + (hash(index + 204) - .5) * s.H * .7 + (x - s.W / 2) * .03;
-      s.dot(x, y, .25 + hash(index + 98) * .4, c, .16 * ends(t, .08));
+  // ---------------------------------------------------------------------
+  // On the ground: surface vehicles and the commander on foot.
+  // ---------------------------------------------------------------------
+
+  function groundVehicleType(st) {
+    for (const type of ['rhino', 'scorpion', 'nomad', 'scarab']) {
+      if (st.key === type || st.key.endsWith(`_${type}`)) return type;
     }
-    const counts = [11, 8, 4], scale = s.H / 36;
-    for (let layer = 0; layer < 3; layer += 1) {
-      for (let index = 0; index < counts[layer]; index += 1) {
-        const seed = layer * 11 + index;
-        const t = fract(index / counts[layer] + hash(seed + 60) * .11 + st.p * [.022, .037, .057][layer]);
-        const x = (s.W + 40) * (1 - t) - 20;
-        const y = s.H * .2 + hash(seed + 33) * s.H * .6 + Math.sin(st.p * .22 + seed) * 1.3;
-        const size = [2.4, 5.1, 8.5][layer] * scale + hash(seed + 29) * [1.7, 2.5, 3][layer];
-        s.asteroid(x, y, size, c, st.p, ends(t, .1) * [.35, .7, .95][layer], seed, pal.bg);
+    return ['rhino', 'scorpion', 'nomad', 'scarab'].includes(st.vehicleKey)
+      ? st.vehicleKey : 'scarab';
+  }
+
+  // A vehicle on the ground at a deck point: the model, its wheels'
+  // spokes turning with `roll` distance, and a hover glow for the Nomad.
+  function groundVehicle(s, st, pal, x, y, unit, {type = groundVehicleType(st), roll = 0, yaw = -.62,
+    bob = 0, lamps = {}} = {}) {
+    const model = MODELS.vehicle(type), cam = camera(x, y, unit, {yaw, pitch: -.28, persp: 12});
+    const place = {y: bob, pitch: 0};
+    const at = s.solid(model, cam, place, st.c, 1, pal.bg, {window: [pal.accent, .75], hover: [pal.accent, .85],
+      headlamp: [pal.text, .7], ...lamps});
+    for (const wheel of model.wheels || []) {
+      if (cam.look(wheel.at)[2] < 0) continue;
+      const hub = [wheel.at[0], wheel.at[1] + bob, wheel.at[2] + Math.sign(wheel.at[2]) * .14];
+      for (let spoke = 0; spoke < 3; spoke += 1) {
+        const angle = roll / wheel.r + spoke * TAU / 3;
+        const [ax, ay] = at([hub[0] + Math.cos(angle) * wheel.r * .75, hub[1] + Math.sin(angle) * wheel.r * .75, hub[2]]);
+        const [bx, by] = at([hub[0] - Math.cos(angle) * wheel.r * .75, hub[1] - Math.sin(angle) * wheel.r * .75, hub[2]]);
+        s.line(ax, ay, bx, by, st.c, .45, .7);
       }
     }
+    if (type === 'nomad') {
+      const [gx, gy] = at([0, .1, 0]);
+      s.arc(gx, gy + 3, 18, 3, 0, TAU, pal.accent, .3 + .2 * wave(st.p * .6), 1);
+      s.bloom(gx, gy + 2, 12, pal.accent, .25);
+    }
+    return at;
   }
 
-  function massLock(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .62;
-    // Space bends round a nearby mass: ripples compress onto the lock.
-    for (let index = 0; index < 7; index += 1) {
-      const t = fract(st.p * .25 + index / 7), r = lerp(s.H * 2.8, 14, t);
-      s.arc(fx, cy, r, r * .4, 0, TAU, c, Math.sin(t * Math.PI) * .28);
-    }
-    s.ring(fx, cy, 14, 11, 6, c, .6, 1.2);
-    s.ship(fx, cy, c, .82, 1.1);
-    for (const side of [-1, 1]) {
-      s.poly([[fx + side * 33, 6], [fx + side * 24, 6], [fx + side * 19, cy], [fx + side * 24, s.H - 6],
-        [fx + side * 33, s.H - 6]], c, .72, 1.6);
-      for (let index = 0; index < 3; index += 1) {
-        s.line(fx + side * (36 + index * 7), 13, fx + side * (33 + index * 7), s.H - 13, c,
-          .25 + .2 * wave(st.p * .3 - index / 3));
+  // The rover scenes: the vehicle three-quarters on, crossing ground that
+  // streams past, dust thrown from its wheels. Handbrake stills it all;
+  // turret view swings the gun; drive assist lays guide rails.
+  function rover(s, st, pal) {
+    const key = st.key, type = groundVehicleType(st), brake = key === 'srv_handbrake';
+    const pace = {rhino: 2.4, scorpion: 3.4, nomad: 4.2, scarab: 3}[type] || 3;
+    const travel = brake || key === 'srv_turret' ? 0 : st.p * pace;
+    sky(s, st, .6, .2);
+    const cam = camera(s.W * .5, s.H * .22, 6.2, {yaw: -.12, pitch: -.14, persp: 14});
+    landscape(s, cam, st, pal, {z0: -22, z1: 5, rows: 7, lift: .9, floor: 5,
+      travel: [travel, 0], road: {z: 0, width: 2.5}, seed: {rhino: 3, scorpion: 5, nomad: 7}[type] || 1, alpha: .9});
+    const x = s.W * .5, y = s.H * .8;
+    const bob = brake ? 0 : Math.sin(st.p * 2.2) * (type === 'rhino' ? .02 : .05);
+    if (!brake && type !== 'nomad' && key !== 'srv_turret') {
+      for (let index = 0; index < 6; index += 1) {
+        const t = fract(st.p * .9 + index / 6);
+        s.bloom(x - 12 - t * 34, y - 2 - t * 6, 3 + t * 6, st.c, (1 - t) * .22);
       }
     }
+    if (key === 'srv_drive_assist') {
+      for (const side of [-1, 1]) {
+        s.poly([[x - s.W * .5, y + side * 5 + 2], [x - 10, y + side * 3 + 1], [x + s.W * .5, y + side * 3]],
+          pal.accent, .45, 1.1);
+      }
+    }
+    const at = groundVehicle(s, st, pal, x, y, 8.2, {type, roll: travel * 1.6, bob,
+      lamps: brake ? {headlamp: [pal.red, .9]} : {}});
+    if (key === 'srv_turret') {
+      // The turret sweeps a stabilised arc; the reticle is not a target.
+      const aim = Math.sin(st.p * .4) * .5;
+      const [tx, ty] = at([0, -1, 0]), rx = tx + Math.cos(aim) * s.W * .3, ry = ty - 6 + Math.sin(aim) * 8;
+      s.line(tx, ty, rx, ry, pal.accent, .6, 1.1);
+      s.brackets(rx, ry, 6, 4, pal.accent, .8, 2.5, 1.1);
+    }
+    if (brake) {
+      const latch = .3 + .6 * wave(st.p * .6);
+      for (const side of [-1, 1]) s.brackets(x, y - 6, 24, 11, st.c, latch * (side > 0 ? 1 : 1), 4, 1.3);
+    }
   }
 
-  function signal(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .66, drop = st.key === 'signal_drop';
-    dust(s, st, {count: 14, speed: .012, alpha: .24});
-    s.dot(fx, cy, 2, c, .8);
-    s.bloom(fx, cy, 10, c, .3);
+  // Skimmer drones hunting the SRV across the ground.
+  function srvThreat(s, st, pal) {
+    sky(s, st, .5, .2);
+    const cam = camera(s.W * .5, s.H * .22, 6.2, {yaw: -.12, pitch: -.14, persp: 14});
+    landscape(s, cam, st, pal, {z0: -22, z1: 5, rows: 7, lift: .9, floor: 5,
+      travel: [st.p * 2, 0], road: {z: 0, width: 2.5}, seed: 1, alpha: .9});
+    const x = s.W * .3, y = s.H * .8;
+    groundVehicle(s, st, pal, x, y, 7.5, {roll: st.p * 3});
+    for (let index = 0; index < 3; index += 1) {
+      const dx = s.W * (.62 + index * .13) + Math.sin(st.p * .6 + index * 2) * 8;
+      const dy = s.H * (.42 + index * .08) + Math.sin(st.p * 1.1 + index) * 3;
+      const drone = camera(dx, dy, 5, {pitch: -.4});
+      s.solid(MODELS.skimmer(), drone, {yaw: st.p * .3 + index}, st.c, 1, pal.bg, {eye: [pal.red, .9]});
+      if (fract(st.p * .5 + index / 3) < .12) s.line(dx - 3, dy, x + 6, y - 8, pal.red, .8, 1.1);
+    }
+  }
+
+  // On foot: the commander walking the surface, helmet lamp lit.
+  function onFoot(s, st, pal) {
+    sky(s, st, .6, .2);
+    const cam = camera(s.W * .5, s.H * .22, 6.2, {yaw: -.12, pitch: -.14, persp: 14});
+    landscape(s, cam, st, pal, {z0: -22, z1: 5, rows: 7, lift: 1, floor: 5,
+      travel: [st.p * 1.1, 0], road: {z: 0, width: 2.5}, seed: 6, alpha: .9});
+    const x = s.W * .55, y = s.H * .93;
+    const person = camera(x, y, 14, {yaw: -.55, pitch: -.12, persp: 12});
+    const at = s.solid(MODELS.commander(st.p * 3.2), person, {}, st.c, 1, pal.bg,
+      {visor: [pal.accent, .85], lamp: [pal.text, .9]});
+    const [hx, hy] = at([.2, -1.76, 0]);
+    s.poly([[hx, hy], [hx + 44, hy - 4], [hx + 44, hy + 12]], pal.text, .06, 0, true, .5);
+  }
+
+  // A craft changing hands: deploying or recovering a vehicle or fighter,
+  // dismissing or recalling the ship, or passing control along a link.
+  // Transfers run once and wait for the journal; they do not loop.
+  function handoff(s, st, pal) {
+    const key = st.key, cy = s.H / 2;
+    const deploy = key.includes('deploy'), board = key.includes('board');
+    const t = smooth(st.age / 2.4), progress = board ? 1 - t : t;
+    if (key.endsWith('crew') || key.includes('switch')) {
+      sky(s, st, .6, .3);
+      const left = s.W * .3, right = s.W * .74;
+      const ship = camera(left, cy, 6, {yaw: -.4, pitch: -.3, persp: 14});
+      s.solid(MODELS.ship(), ship, {}, st.c, 1, pal.bg, {engine: [st.c, .6]});
+      if (key.endsWith('crew')) {
+        const person = camera(right, s.H * .92, 13, {yaw: -.6, pitch: -.1});
+        s.solid(MODELS.commander(0, {walking: false}), person, {}, st.c, 1, pal.bg, {visor: [pal.accent, .8], lamp: false});
+      } else if (key.endsWith('fighter')) {
+        s.solid(MODELS.ship('fighter'), camera(right, cy, 6, {yaw: -.5, pitch: -.3}), {}, st.c, 1, pal.bg,
+          {engine: [pal.accent, .8], window: [pal.accent, .6]});
+      } else {
+        groundVehicle(s, st, pal, right, s.H * .8, 7.5);
+      }
+      const link = (u) => cy + Math.sin(u * TAU * 3 - st.p * 2) * 3 * Math.sin(u * Math.PI);
+      const points = [];
+      for (let step = 0; step <= 30; step += 1) points.push([lerp(left + 16, right - 16, step / 30), link(step / 30)]);
+      s.poly(points, pal.accent, .55, 1.1);
+      const u = fract(st.p * .5);
+      s.spark(lerp(left + 16, right - 16, u), link(u), 1.1, pal.accent, pal.text, Math.sin(u * Math.PI));
+      return;
+    }
+    if (key.endsWith('fighter')) {
+      // The fighter drops from the mothership's bay and away, or returns.
+      sky(s, st, .7, .5);
+      const mother = camera(s.W * .3, s.H * .38, 6.4, {yaw: -.45, pitch: -.3, persp: 14});
+      const at = s.solid(MODELS.ship(), mother, {}, st.c, 1, pal.bg, {engine: [st.c, .6]});
+      const [bx, by] = at([-.2, .45, 0]);
+      const fx = lerp(bx, s.W * .85, progress), fy = lerp(by + 2, s.H * .6, Math.sqrt(progress));
+      s.solid(MODELS.ship('fighter'), camera(fx, fy, 4.4, {yaw: -.5, pitch: -.3}), {}, st.c, .4 + .6 * clamp(progress * 4),
+        pal.bg, {engine: [pal.accent, .9], window: [pal.accent, .6]});
+      trail(s, [fx - 8, fy], [lerp(bx, fx, .4), lerp(by, fy, .4)], pal.accent, .5 * clamp(progress * 3), 6);
+      return;
+    }
+    // Surface handoffs: the ship hangs over the ground and the SRV rides a
+    // light column down (or up); a dismissed ship lifts off and leaves.
+    sky(s, st, .6, .2);
+    const cam = camera(s.W * .55, s.H * .24, 6, {pitch: -.16, persp: 14});
+    landscape(s, cam, st, pal, {z0: -22, z1: 5, rows: 7, lift: .9, floor: 5, flat: {x: 0, z: 0, radius: 4},
+      seed: 10, alpha: .85});
+    const [gx, gy] = cam.project([0, 5, 0]);
+    if (key.endsWith('ship')) {
+      const rise = deploy ? progress : 1 - progress;
+      const sx = gx + rise * s.W * .35, sy = gy - 6 - rise * s.H * .7;
+      s.bloom(sx, sy + 4, 8, pal.accent, .5);
+      s.solid(MODELS.ship(), camera(sx, sy, 6 - rise * 2, {yaw: -.55, pitch: -.3, persp: 14}), {roll: -rise * .4},
+        st.c, 1 - rise * .5, pal.bg, {engine: [pal.accent, .9]});
+      return;
+    }
+    const shipY = s.H * .2;
+    s.solid(MODELS.ship(), camera(gx, shipY, 6.4, {yaw: -.55, pitch: -.35, persp: 14}), {}, st.c, 1, pal.bg,
+      {engine: [st.c, .6]});
+    s.poly([[gx - 5, shipY + 5], [gx + 5, shipY + 5], [gx + 11, gy], [gx - 11, gy]], pal.accent, .2, 0, true, .35);
+    const vy = lerp(shipY + 8, gy - 1, progress);
+    groundVehicle(s, st, pal, gx, vy, 5.5 + progress * 1.5, {roll: 0});
+  }
+
+  // ---------------------------------------------------------------------
+  // Stations and docking.
+  // ---------------------------------------------------------------------
+
+  // The mail slot's traffic lights: green once cleared, amber while a
+  // request waits or after a cancel, red when refused.
+  function slotLamp(st, pal) {
+    const key = st.key, p = st.p;
+    if (key === 'docking_denied') return [pal.red, .4 + .55 * wave(p * .9)];
+    if (key === 'docking_timeout') return [wave(p * .45) > .5 ? pal.red : pal.yellow, .85];
+    if (key === 'docking_cancelled') return [pal.yellow, .45 + .35 * wave(p * .5)];
+    if (key === 'docking_clearance') {
+      return st.label.includes('CLEARED') ? [pal.green, .95] : [pal.yellow, .35 + .55 * wave(p * .8)];
+    }
+    return [pal.green, .6 + .3 * wave(p * .4)];
+  }
+
+  // The Coriolis, turning about its slot with the slot facing the lane.
+  function coriolisAt(s, st, pal, x, y, unit) {
+    const cam = camera(x, y, unit, {yaw: -.72, pitch: -.28, persp: 18});
+    const roll = st.p * .16;
+    const at = s.solid(MODELS.coriolis(), cam, {roll}, st.c, 1, pal.bg,
+      {slot: slotLamp(st, pal), window: [st.c, .45]});
+    return {cam, at};
+  }
+
+  // A craft on the slot's approach axis, `u` out from the slot (0 at the
+  // slot), facing in or out.
+  function onApproach(s, st, pal, station, u, {inbound = true, scale = .16, color = st.c, alpha = 1, offset = 0,
+    model = MODELS.ship(), turnAway = 0} = {}) {
+    const place = {x: offset, y: offset * .3, z: 1.1 + u * 4.2, yaw: inbound ? Math.PI / 2 : -Math.PI / 2,
+      scale};
+    place.yaw += turnAway;
+    s.solid(model, station.cam, place, color, alpha, pal.bg, {engine: [inbound ? color : pal.accent, .8]});
+    return station.cam.project([place.x, place.y, place.z]);
+  }
+
+  function station(s, st, pal) {
+    const key = st.key, x = s.W * .8, y = s.H * .5;
+    if (key === 'station') {
+      stationInterior(s, st, pal);
+      return;
+    }
+    sky(s, st, .7, .3);
+    // The approach lane from the far left toward the slot: traffic that
+    // is not the commander's comes and goes along it.
+    const lane = key === 'station_vicinity' || key === 'docking_clearance' || key === 'docking_assist';
+    if (lane) {
+      for (let index = 0; index < 4; index += 1) {
+        const t = fract(st.p * .07 + index / 4), lx = lerp(-6, s.W * .5, t), ly = lerp(s.H * .3, s.H * .46, t);
+        s.solid(MODELS.ship(), camera(lx, ly, 1.7 + t * 1.2, {yaw: -.2, pitch: -.3}), {}, st.c,
+          ends(t, .15) * .8, pal.bg, {engine: [st.c, .9]});
+        trail(s, [lx - 4, ly - .3], [lx - 16, ly - 2], st.c, ends(t, .15) * .5, 5);
+      }
+    }
+    const station = coriolisAt(s, st, pal, x, y, 10.8);
+    if (key === 'station_vicinity') {
+      const t = fract(st.p * .11);
+      onApproach(s, st, pal, station, 1 - t, {alpha: ends(t, .12)});
+      const out = fract(st.p * .11 + .5);
+      onApproach(s, st, pal, station, out, {inbound: false, alpha: ends(out, .12), offset: .35});
+      return;
+    }
+    if (key === 'docking_clearance' || key === 'docking_assist') {
+      // The commander's own ship lines up on the slot. Assist lays the
+      // docking computer's guide rails in.
+      const t = fract(st.p * .08), u = lerp(1, .15, smooth(t));
+      if (key === 'docking_assist') {
+        const [ax, ay] = station.cam.project([0, 0, 1.1]), [bx, by] = station.cam.project([0, 0, 5.3]);
+        for (const side of [-1, 1]) s.line(ax, ay + side * 2, bx, by + side * 8, pal.accent, .55, 1);
+      }
+      const [sx, sy] = onApproach(s, st, pal, station, u, {scale: .26, alpha: ends(t, .1)});
+      s.brackets(sx, sy, 9, 6, pal.accent, .7 * ends(t, .1), 3, 1.1);
+      return;
+    }
+    // Refused, cancelled or timed out: the ship turns away from the slot.
+    const turn = smooth(clamp(st.age / 2)) * (key === 'docking_cancelled' ? Math.PI : 1.2);
+    const u = .8 + (key === 'docking_timeout' ? Math.sin(st.p * .2) * .05 : 0);
+    onApproach(s, st, pal, station, u, {scale: .26, turnAway: -turn, offset: key === 'docking_timeout' ? .5 : 0});
+  }
+
+  // Inside the station: down the length of the turning cylinder, city
+  // blocks standing in from its walls and the docking wall far ahead.
+  // Behind the pilot, on the left, the mail slot's frame holds still.
+  function stationInterior(s, st, pal) {
+    const c = st.c, cx = s.W * .68, cy = s.H * .5, roll = st.p * .08;
+    const lx = s.W * .12;
+    s.rect(lx - 18, cy - 5, 36, 10, c, .45);
+    s.rect(lx - 14, cy - 2, 28, 4, pal.green, .5, true);
+    for (const side of [-1, 1]) s.line(lx - 24, cy + side * 9, lx + 24, cy + side * 9, c, .3, 1);
+    const cam = camera(cx, cy, 11, {persp: 4});
+    // The cylinder's wall: rings receding and streets running its length.
+    for (const z of [.6, -1.5, -3.8, -6.5, -11]) {
+      const [, , , k] = cam.project([0, 0, z]);
+      s.arc(cx, cy, 3 * k * 11, 3 * k * 11, 0, TAU, c, .12 + .12 * k, .8);
+    }
+    for (let street = 0; street < 12; street += 1) {
+      const angle = street * TAU / 12 + roll;
+      const [ax, ay] = cam.project([Math.cos(angle) * 3, Math.sin(angle) * 3, .6]);
+      const [bx, by] = cam.project([Math.cos(angle) * 3, Math.sin(angle) * 3, -11]);
+      s.line(ax, ay, bx, by, c, .14, .7);
+    }
+    // The docking wall: a lit disc of pads at the far end.
+    const [, , , far] = cam.project([0, 0, -11]);
+    s.bloom(cx, cy, 3 * far * 11 * 1.4, c, .35);
+    for (let pad = 0; pad < 8; pad += 1) {
+      const angle = pad * TAU / 8 + roll;
+      s.dot(cx + Math.cos(angle) * 3 * far * 11 * .62, cy + Math.sin(angle) * 3 * far * 11 * .62, .8, pal.text,
+        .5 + .4 * wave(st.p * .4 + pad / 8));
+    }
+    s.solid(MODELS.stationCity(), cam, {roll}, c, 1, pal.bg, {window: [c, .7]});
+  }
+
+  // Docked: the ship on its pad in the hangar, the lift lights chasing
+  // round the walls. The pad and the ship hold still.
+  function docked(s, st, pal) {
+    const c = st.c, x = s.W * .6, y = s.H * .66;
+    const cam = camera(x, y, 8.5, {yaw: -.35, pitch: -.52, persp: 14});
+    for (let index = 0; index < 14; index += 1) {
+      const angle = Math.PI * (.95 + index / 13 * 1.1);
+      const [ax, ay] = cam.project([Math.cos(angle) * 3.3, -2.2, Math.sin(angle) * 2.6]);
+      const [bx, by] = cam.project([Math.cos(angle) * 3.3, .15, Math.sin(angle) * 2.6]);
+      s.line(ax, ay, bx, by, c, .1 + .45 * Math.pow(wave(st.p * .3 - index / 14), 4), 1);
+    }
+    s.solid(MODELS.hexPad(), cam, {scale: 2.3}, c, 1, pal.bg);
+    const pad = [];
     for (let index = 0; index < 6; index += 1) {
-      const t = fract(st.p * .2 + index / 6), r = 5 + (drop ? 1 - t : t) * s.H * 1.9;
-      for (const [start, end] of [[-.9, .9], [Math.PI - .9, Math.PI + .9]]) {
-        s.arc(fx, cy, r, r * .5, start, end, c, Math.sin(t * Math.PI) * .5);
+      const angle = index * TAU / 6;
+      pad.push(cam.project([Math.cos(angle) * 2.36, -.01, Math.sin(angle) * 2.36 * .86]).slice(0, 2));
+    }
+    s.traceEdges(pad, st.p * .4, pal.accent, .7);
+    s.solid(MODELS.ship(), cam, {y: -.4, scale: .9, yaw: .25}, c, 1, pal.bg, {engine: [c, .15]});
+  }
+
+  // Module repairs: a sweep passes along the ship and the repair points
+  // spark as it reaches them. Not a progress readout.
+  function maintenance(s, st, pal) {
+    const reboot = st.key === 'system_reboot', x = s.W * .58, y = s.H * .5;
+    sky(s, st, .4, .2);
+    const cam = camera(x, y, 9, {yaw: -.4, pitch: -.3, persp: 14});
+    const sweep = fract(st.p * .16);
+    s.solid(MODELS.ship(), cam, {}, st.c, reboot ? .35 + .65 * sweep : 1, pal.bg,
+      {engine: reboot ? [st.c, sweep > .8 ? .8 : .05] : [st.c, .5]});
+    const [ax, ay] = cam.project([lerp(-1.2, 2.2, sweep), -1, 0]), [bx, by] = cam.project([lerp(-1.2, 2.2, sweep), 1, 0]);
+    s.line(ax, ay - 6, bx, by + 6, reboot ? st.c : pal.accent, .7, 1.2);
+    s.bloom((ax + bx) / 2, (ay + by) / 2, 10, reboot ? st.c : pal.accent, .3);
+    if (!reboot) {
+      for (let index = 0; index < 5; index += 1) {
+        const px = lerp(-1, 1.8, index / 4), [sx, sy] = cam.project([px, -.25, (hash(index) - .5) * 1.4]);
+        const near = clamp(1 - Math.abs(px - lerp(-1.2, 2.2, sweep)) * 2.5);
+        if (near > .05) {
+          for (let spark = 0; spark < 3; spark += 1) {
+            const angle = hash(index * 3 + spark + Math.floor(st.p * 8)) * TAU;
+            s.line(sx, sy, sx + Math.cos(angle) * 4, sy + Math.sin(angle) * 4, pal.yellow, near * .8, .8);
+          }
+        }
+      }
+    } else {
+      alarmChevrons(s, st, .43 + .43 * wave(st.p * .5));
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Restrictions, contacts and danger.
+  // ---------------------------------------------------------------------
+
+  // Mass lock: space sags round a nearby mass in a well, and the ship at
+  // its rim is held by rings that will not let the drive engage.
+  function massLock(s, st, pal) {
+    const c = st.c, cam = camera(s.W * .55, s.H * .42, s.W * .06, {yaw: st.p * .02, pitch: -.62, persp: 12});
+    const sag = (x, z) => 2.2 / (1 + (x * x + z * z) * .35);
+    for (let index = -6; index <= 6; index += 1) {
+      const across = [], along = [];
+      for (let step = -6; step <= 6; step += .5) {
+        across.push(cam.project([step, sag(step, index), index]));
+        along.push(cam.project([index, sag(index, step), step]));
+      }
+      s.poly(across, c, .22, .8);
+      s.poly(along, c, .22, .8);
+    }
+    const [mx, my] = cam.project([0, 1.2, 0]);
+    s.sphere(mx, my, s.H * .24, c, pal.bg, {spin: st.p * .05, seed: 15, grid: true});
+    const [sx, sy] = cam.project([4.6, sag(4.6, 1.4) - .6, 1.4]);
+    s.solid(MODELS.ship(), camera(sx, sy, 3.8, {yaw: -.9, pitch: -.3, persp: 14}), {}, c, 1, pal.bg, {engine: [c, .5]});
+    for (let index = 0; index < 3; index += 1) {
+      const t = fract(st.p * .3 + index / 3), r = lerp(20, 7, t);
+      s.arc(sx, sy, r, r * .45, 0, TAU, pal.yellow || c, Math.sin(t * Math.PI) * .6, 1.1);
+    }
+  }
+
+  // A signal source: a beacon amid tumbling cargo and wreckage, pulsing.
+  // Dropping in, the streaks die as the field comes up; a threat signal
+  // pulses red and shows the journal's threat level.
+  function signal(s, st, pal) {
+    const c = st.c, key = st.key, x = s.W * .64, y = s.H * .5;
+    const threatened = key === 'signal_threat', drop = key === 'signal_drop';
+    const settle = drop ? smooth(st.age / 2) : 1;
+    sky(s, st, .6, .3);
+    if (drop) streaks(s, st, {x, count: 18, speed: .3 * (1 - settle), strength: (1 - settle) * .7});
+    const pulse = threatened ? pal.red : pal.accent;
+    for (let index = 0; index < 3; index += 1) {
+      const t = fract(st.p * .25 + index / 3), r = 6 + t * s.W * .3;
+      s.arc(x, y, r, r * .32, 0, TAU, pulse, (1 - t) * .45 * settle, 1.1);
+    }
+    for (let index = 0; index < 6; index += 1) {
+      const angle = index * TAU / 6 + st.p * .03, reach = s.W * (.12 + hash(index + 60) * .16);
+      const dx = x + Math.cos(angle) * reach, dy = y + Math.sin(angle) * reach * .22;
+      if (index % 2) {
+        rockAt(s, pal, dx, dy, 3.2 + hash(index) * 2, c, st.p, .9 * settle, index + 2);
+      } else {
+        s.solid(MODELS.canister(), camera(dx, dy, 3.2, {pitch: -.3}), {yaw: st.p * .3 + index,
+          roll: st.p * .2 + index}, c, settle, pal.bg, {window: [pulse, .6]});
       }
     }
-    if (drop) {
-      s.poly([[8, 7], [s.W * .2, 7], [s.W * .32, cy], [fx - 14, cy]], c, .65);
-      s.chevron(fx - 16, cy, 1, c, .8, 3);
-    } else {
-      s.brackets(fx, cy, 31, 15, c, .3);
+    s.solid(MODELS.beacon(), camera(x, y, 5.6, {pitch: -.3, persp: 12}), {yaw: st.p * .2}, c, settle, pal.bg,
+      {beacon: [pulse, .5 + .5 * wave(st.p * .8)], window: [pulse, .6]});
+    if (threatened) {
+      const level = clamp(Number(st.label.match(/\d+$/)?.[0] || 0), 0, 8);
+      for (let index = 0; index < level; index += 1) {
+        const px = 10 + index * 7;
+        s.poly([[px - 2.2, s.H - 5], [px, s.H - 11], [px + 2.2, s.H - 5]], pal.red,
+          .45 + .4 * wave(st.p * .5 - index * .1), 1.2, true, .25);
+      }
+      const orbit = st.p * .25;
+      const [ex, ey] = [x + Math.cos(orbit) * s.W * .3, y + Math.sin(orbit) * 7];
+      s.solid(MODELS.ship('interdictor'), camera(ex, ey, 3.6, {pitch: -.3}), {yaw: -orbit - Math.PI / 2}, pal.red,
+        .8, pal.bg, {engine: [pal.red, .8]});
     }
   }
 
   function contact(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .56, key = st.key;
-    if (key === 'unknown_contact') {
-      // Something unexplained: slow interference bands, not a plotted contact.
+    const c = st.c, x = s.W * .6, y = s.H * .55;
+    if (st.key === 'unknown_contact') {
+      // Something not human: a Thargoid interceptor, petals turning round
+      // its heart, and the interference it throws across the scanner.
       for (let index = 0; index < 5; index += 1) {
-        const y = 4 + index * (s.H - 8) / 4 + Math.sin(st.p * .7 + index) * 2;
-        s.line(0, y, s.W, y + Math.sin(st.p * .4 + index * 2) * 3, c, .1 + .12 * wave(st.p * .35 + index * .3), .8);
+        const yy = 4 + index * (s.H - 8) / 4 + Math.sin(st.p * .7 + index) * 2;
+        s.line(0, yy, s.W, yy + Math.sin(st.p * .4 + index * 2) * 3, pal.green, .08 + .1 * wave(st.p * .35 + index * .3), .8);
+      }
+      const cam = camera(x, s.H * .5, 8.4, {yaw: Math.sin(st.p * .1) * .5, pitch: -.35 + Math.sin(st.p * .07) * .15,
+        persp: 12});
+      s.bloom(x, s.H * .5, 20, pal.green, .25 + .15 * wave(st.p * .4));
+      s.solid(MODELS.thargoid(), cam, {roll: st.p * .15}, c, 1, pal.bg, {core: [pal.green, .6 + .35 * wave(st.p * .5)]});
+      return;
+    }
+    // A capital ship: a warship's long blade drifting past, running lights
+    // blinking along its flank.
+    sky(s, st, .7, .3);
+    const cam = camera(x, y, 6.2, {yaw: -.35 + Math.sin(st.p * .05) * .08, pitch: -.22, persp: 30});
+    s.solid(MODELS.capital(), cam, {}, c, 1, pal.bg, {engine: [pal.accent, .7],
+      window: [c, .3 + .5 * Math.pow(wave(st.p * .3), 3)]});
+    s.brackets(x, y - 4, s.W * .36, s.H * .44, c, .45, 6, 1.1);
+  }
+
+  // Combat: ships turning about each other, lasers crossing, shields
+  // flaring where they land. Heavy combat adds more ships and explosions.
+  // Decorative: the journal reports no contacts to plot.
+  function threat(s, st, pal) {
+    const c = st.c, key = st.key;
+    if (key === 'srv_threat') {
+      srvThreat(s, st, pal);
+      return;
+    }
+    const heavy = key === 'heavy_combat', x = s.W * .56, y = s.H * .5;
+    sky(s, st, .6, .6);
+    const ships = heavy ? 4 : 2, placed = [];
+    for (let index = 0; index < ships; index += 1) {
+      const orbit = st.p * (.45 + index * .08) + index * TAU / ships;
+      const reach = s.W * (.12 + (index % 2) * .09);
+      placed.push({
+        x: x + Math.cos(orbit) * reach, y: y + Math.sin(orbit * 2) * 5 + (index - ships / 2) * 2,
+        depth: Math.sin(orbit), yaw: -orbit - Math.PI / 2, enemy: index % 2 === 1,
+      });
+    }
+    placed.sort((left, right) => left.depth - right.depth);
+    for (const ship of placed) {
+      s.solid(MODELS.ship(ship.enemy ? 'interdictor' : 'wedge'), camera(ship.x, ship.y, 5 + ship.depth * 1.2,
+        {pitch: -.35, persp: 14}), {yaw: ship.yaw, roll: Math.sin(st.p + ship.depth) * .4},
+      ship.enemy ? pal.red : c, .85 + ship.depth * .15, pal.bg, {engine: [ship.enemy ? pal.red : c, .8]});
+    }
+    for (let index = 0; index < placed.length; index += 1) {
+      const from = placed[index], to = placed[(index + 1) % placed.length];
+      if (fract(st.p * 1.3 + index * .37) > .45) continue;
+      s.line(from.x, from.y, to.x, to.y, from.enemy ? pal.red : pal.accent, .75, 1.1);
+      s.arc(to.x, to.y, 8, 6, 0, TAU, pal.accent, .5, 1);
+    }
+    if (heavy) {
+      const t = fract(st.p * .35), ex = x + (hash(Math.floor(st.p * .35)) - .5) * s.W * .5;
+      s.bloom(ex, y, 4 + t * 18, pal.yellow, (1 - t) * .6);
+      for (let index = 0; index < 6; index += 1) {
+        const angle = index * TAU / 6 + hash(index);
+        s.dot(ex + Math.cos(angle) * t * 16, y + Math.sin(angle) * t * 8, .8, pal.yellow, (1 - t) * .8);
+      }
+    }
+    alarmChevrons(s, st, .3 + .4 * wave(st.p * .5));
+  }
+
+  // Interdiction: the interdictor behind, its tether writhing to the ship,
+  // the escape vector ahead. Interdicted, the tether has won: the ship
+  // tumbles out of supercruise.
+  function interdiction(s, st, pal) {
+    const lost = st.key === 'interdicted', cy = s.H / 2;
+    streaks(s, st, {x: s.W * .92, count: lost ? 8 : 20, speed: lost ? .1 : .34, strength: lost ? .25 : .5});
+    const ex = s.W * .14, ey = cy - 3;
+    s.solid(MODELS.ship('interdictor'), camera(ex, ey, 5.5, {yaw: -.35, pitch: -.3, persp: 14}), {}, pal.red, 1,
+      pal.bg, {engine: [pal.red, .8]});
+    const x = s.W * .56 + (lost ? 0 : Math.sin(st.p * .6) * 10), y = cy + (lost ? 0 : Math.sin(st.p * .9) * 4);
+    const points = [];
+    for (let step = 0; step <= 24; step += 1) {
+      const u = step / 24;
+      points.push([lerp(ex + 12, x - 8, u), lerp(ey, y, u) + Math.sin(u * 12 - st.p * 4) * 3 * Math.sin(u * Math.PI)]);
+    }
+    s.poly(points, pal.red, lost ? .35 : .7, 1.3);
+    s.solid(MODELS.ship(), camera(x, y, 6, {yaw: -.4, pitch: -.3, persp: 14}),
+      {roll: lost ? st.p * 1.2 : Math.sin(st.p * .9) * .4, yaw: lost ? st.p * .8 : 0}, st.c, 1, pal.bg,
+      {engine: [st.c, .8]});
+    if (lost) {
+      for (let index = 0; index < 6; index += 1) {
+        const angle = hash(index + Math.floor(st.p * 5)) * TAU;
+        s.line(x, y, x + Math.cos(angle) * 9, y + Math.sin(angle) * 5, pal.yellow, .6, .8);
       }
     } else {
-      dust(s, st, {count: 16, speed: .014, alpha: .26});
-    }
-    if (key === 'capital_contact') {
-      s.glyph(fx, cy, s.H * .96, () => carrierGlyph(s, st, 'carrier_deck'));
-      s.brackets(fx, cy, s.H * 1.5, s.H / 2 - 2, c, .65);
-    } else {
-      s.glyph(fx, cy, s.H * .96, () => contactGlyph(s, st));
+      const vx = s.W * .86 + Math.sin(st.p * .4) * 8;
+      s.ring(vx, cy, 8, 8, 16, pal.accent, .75, 1.4);
+      s.chevron(vx, cy, 1, pal.accent, .8, 3, 1.3);
     }
   }
 
-  function threat(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .55;
-    // A sweep round the alarm frame; it never plots a contact.
-    const rx = Math.min(s.H * 1.7, s.W * .3), ry = rx * TILT, angle = st.p * TAU * .22;
-    s.arc(fx, cy + 1, rx, ry, 0, TAU, c, .2);
-    for (let trail = 0; trail < 6; trail += 1) {
-      s.arc(fx, cy + 1, rx, ry, angle - (trail + 1) * .12, angle - trail * .12, c, .6 * (1 - trail / 6), 1.4);
-    }
-    s.glyph(fx, cy, s.H * .96, () => threatGlyph(s, st));
-  }
-
-  function interdiction(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .6, lost = st.key === 'interdicted';
-    // The capture field closes in, the escape vector wanders, the tether pulls.
-    for (let index = 0; index < 6; index += 1) {
-      const t = fract(st.p * .17 + index / 6), r = lerp(s.H * 2.6, 8, t);
-      s.arc(fx, cy, r, r * .4, 0, TAU, c, Math.sin(t * Math.PI) * .3);
-    }
-    const tether = [];
-    for (let step = 0; step <= 20; step += 1) {
-      const u = step / 20;
-      tether.push([lerp(4, fx - 16, u), cy + Math.sin(u * 9 - st.p * 3) * 3 * (1 - u)]);
-    }
-    s.poly(tether, c, .55, 1.2);
-    const x = fx + Math.sin(st.p * .5) * (lost ? 40 : 22), y = cy + Math.cos(st.p * .5) * 5;
-    s.brackets(x, y, 10, 8, c, .85);
-    s.poly([[fx - 14, cy], [fx - 4, cy], [fx, cy + 3], [fx + 4, cy], [fx + 14, cy]], c, .85, 1.4);
-    if (lost) {
-      s.line(s.W * .06, 4, s.W * .12, s.H - 4, c, .6);
-      s.line(s.W * .94, 4, s.W * .88, s.H - 4, c, .6);
-    }
-  }
-
+  // Heat critical: the ship glowing red-hot, heat shimmering off it.
   function heat(s, st, pal) {
-    const c = st.c, fx = s.W * .62;
-    const alarm = .43 + .43 * wave(st.p * .5);
-    // Heat shimmer rises across the deck while the radiators glow.
-    for (let index = 0; index < 9; index += 1) {
-      const points = [], x0 = (index + .5) * s.W / 9;
+    const x = s.W * .58, y = s.H * .52, alarm = .43 + .43 * wave(st.p * .5);
+    for (let index = 0; index < 11; index += 1) {
+      const points = [], x0 = x + (index - 5) * 9;
       for (let step = 0; step <= 10; step += 1) {
         const u = step / 10;
-        points.push([x0 + Math.sin(u * 6 + st.p * 2 + index) * 3, s.H - 2 - u * (s.H - 4)]);
+        points.push([x0 + Math.sin(u * 6 + st.p * 2 + index) * 2.5, s.H - 2 - u * (s.H - 4)]);
       }
-      s.poly(points, c, .16 + .2 * wave(st.p * .6 + index * .2), 1);
+      s.poly(points, pal.red, .14 + .18 * wave(st.p * .6 + index * .2), 1);
     }
-    s.poly([[fx - 13, s.H - 4], [fx - 13, 7], [fx - 9, 3], [fx + 9, 3], [fx + 13, 7], [fx + 13, s.H - 4]], c, .7);
-    for (let index = 0; index < 6; index += 1) {
-      const y = s.H - 7 - index * (s.H - 12) / 6;
-      s.line(fx - 9, y, fx + 9, y, c, .3 + .5 * wave(st.p * .25 - index * .1), 1.8);
-    }
+    s.bloom(x, y, 26, pal.red, .35 + .25 * alarm);
+    s.solid(MODELS.ship(), camera(x, y, 8, {yaw: -.45, pitch: -.3, persp: 14}), {yaw: Math.sin(st.p * .2) * .05},
+      pal.red, 1, pal.bg, {engine: [pal.yellow, .9]});
     alarmChevrons(s, st, alarm);
   }
 
@@ -1765,459 +2242,227 @@
     }
   }
 
+  // The commander's suit in trouble, by what Status reports: oxygen, health,
+  // cold or heat.
   function suit(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .62, label = st.label;
-    const alarm = .43 + .43 * wave(st.p * .5);
-    if (label.includes('OXYGEN')) {
-      // Breath rings pulse outward from the visor.
-      for (let index = 0; index < 5; index += 1) {
-        const t = fract(st.p * .2 + index / 5), r = 4 + t * s.H * 1.9;
-        s.arc(fx, cy + 1, r, r * .4, Math.PI * .08, Math.PI * .92, c, Math.sin(t * Math.PI) * .6, 1.2);
-        s.arc(fx, cy + 1, r, r * .4, Math.PI * 1.08, Math.PI * 1.92, c, Math.sin(t * Math.PI) * .4, 1.2);
-      }
-    } else if (label.includes('HEALTH')) {
-      // A heart trace runs the width of the deck.
-      const points = [];
-      for (let step = 0; step <= 80; step += 1) {
-        const x = step / 80 * s.W, beat = fract(x / s.W * 3 - st.p * .5);
-        const y = beat < .08 ? cy - Math.sin(beat / .08 * Math.PI) * s.H * .38 : beat < .12 ? cy + 4 : cy;
-        points.push([x, y]);
-      }
-      s.poly(points, c, alarm, 1.4);
-    } else if (label.includes('COLD')) {
-      for (let index = 0; index < 9; index += 1) {
-        const t = fract(hash(index + 5) + st.p * .05), x = s.W * (1 - t), y = 5 + hash(index + 9) * (s.H - 10);
-        const size = 2.5 + hash(index) * 2;
-        s.line(x - size, y, x + size, y, c, alarm * .8 * ends(t));
-        s.line(x, y - size, x, y + size, c, alarm * .8 * ends(t));
-        s.line(x - size * .7, y - size * .7, x + size * .7, y + size * .7, c, alarm * .5 * ends(t));
-      }
-    } else {
+    const c = st.c, x = s.W * .6, label = st.label, alarm = .43 + .43 * wave(st.p * .5);
+    if (label.includes('HEAT') && !label.includes('HEALTH')) {
       heat(s, st, pal);
       return;
     }
-    s.glyph(fx, cy, s.H * .96, () => suitGlyph(s, st));
-    alarmChevrons(s, st, alarm);
-  }
-
-  function jetCone(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .62;
-    // Turbulent streams from the star's jet buffet the hull.
-    for (let index = 0; index < 5; index += 1) {
-      const points = [];
-      for (let step = 0; step <= 40; step += 1) {
-        const x = step / 40 * s.W;
-        points.push([x, cy + (index - 2) * 5 + Math.sin(step * .45 - st.p + index) * 4]);
-      }
-      s.poly(points, c, .22 + index * .1, 1);
-    }
-    s.ring(fx, cy, 14, 12, 6, c, .8, 1.55, Math.PI / 6);
-    s.poly([[fx - 7, cy], [fx - 2, cy - 5], [fx + 5, cy + 2], [fx + 8, cy - 2]], c, .84, 1.6);
-    alarmChevrons(s, st, .43 + .43 * wave(st.p * .5));
-  }
-
-  function station(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .7, key = st.key;
-    const denied = ['docking_denied', 'docking_cancelled', 'docking_timeout'].includes(key);
-    if (key === 'station') {
-      // STATION is a docked state. The distant lane remains in view, but no
-      // approach cue keeps flying toward a ship that has already berthed.
-      s.line(8, cy, fx - 37, cy, c, .18);
-      for (const x of [18, 37, 56]) s.line(x, cy - 3, x, cy + 3, c, .27, 1);
-      s.poly([[fx - 39, cy - 7], [fx - 32, cy - 7],
-        [fx - 32, cy + 7], [fx - 39, cy + 7]], c, .42, 1.2);
-    } else if (!denied) {
-      // Only vicinity, clearance, and assist animate an inward approach.
-      for (let index = 0; index < 6; index += 1) {
-        const t = fract(st.p * (key === 'station_vicinity' ? .14 : .22) + index / 6);
-        const x = lerp(8, fx - 42, t);
-        s.chevron(x, cy, 1, c, Math.sin(t * Math.PI) * .68, 3);
-      }
-      s.line(8, cy, fx - 36, cy, c, .14);
-    } else {
-      // Refused: the approach lane breaks off and turns away.
-      s.poly([[8, cy], [fx * .45, cy], [fx * .6, cy - 8], [fx * .7, cy - 8]], c, .45, 1.3);
-      s.chevron(12, cy, -1, c, .8, 3);
-    }
-    if (key === 'docking_assist') {
-      for (const side of [-1, 1]) s.poly([[8, cy + side * 9], [fx * .55, cy + side * 9], [fx - 34, cy + side * 3]], pal.accent, .45);
-    }
-    // Independent traffic beacons track the station's octagonal rim.
-    for (let index = 0; index < 8; index += 1) {
-      const angle = Math.PI / 8 + index * TAU / 8 + st.p * .045;
-      s.dot(fx + Math.cos(angle) * 35, cy + Math.sin(angle) * 19, .75,
-        c, .13 + .55 * Math.pow(wave(st.p * .2 + index / 8), 3));
-    }
-    s.glyph(fx, cy, s.H * .96, () => stationGlyph(s, st));
-  }
-
-  function docked(s, st, pal) {
-    const c = st.c, cy = s.H / 2;
-    // Hangar lights chase along the deck while the pad holds the ship.
-    for (let index = 0; index < 14; index += 1) {
-      const x = 8 + index * (s.W - 16) / 13;
-      s.line(x, 3, x + 5, 3, c, .12 + .5 * Math.pow(wave(st.p * .45 - index / 14), 3), 1.2);
-      s.line(x, s.H - 3, x + 5, s.H - 3, c, .12 + .5 * Math.pow(wave(st.p * .45 - index / 14 + .5), 3), 1.2);
-    }
-    s.glyph(s.W * .6, cy, s.H * .96, () => dockedGlyph(s, st));
-  }
-
-  function maintenance(s, st, pal) {
-    const c = st.c, cy = s.H / 2, reboot = st.key === 'system_reboot', k = s.H / 36;
-    // Module bays along the deck. A repair sweep services each in turn; a
-    // reboot brings them back one by one. Neither is a progress readout.
-    const count = Math.max(6, Math.floor((s.W - 24) / 24)), step = (s.W - 24) / count;
-    const sweep = fract(st.p * .18), mx = s.W * .5;
-    for (let index = 0; index < count; index += 1) {
-      const x = 12 + (index + .5) * step, u = (index + .5) / count;
-      if (Math.abs(x - mx) < 22) continue;
-      const activity = reboot ? (u < sweep ? .78 : .16) : .25 + .45 * wave(st.p * .2 - index / count);
-      s.rect(x - 6, cy - 7, 12, 14, c, activity);
-      if (reboot) {
-        s.line(x - 3, cy, x + 3, cy, c, activity, 1.7);
-      } else {
-        s.line(x, cy - 3.5, x, cy + 3.5, c, activity, 1.5);
-        s.line(x - 3.5, cy, x + 3.5, cy, c, activity, 1.5);
-      }
-    }
-    const sx = lerp(6, s.W - 6, sweep);
-    s.line(sx, 3, sx, s.H - 3, c, Math.sin(sweep * Math.PI) * .6);
-    if (reboot) {
-      s.poly([[mx - 8 * k, cy - 14 * k], [mx + 6 * k, cy - 14 * k], [mx + 1 * k, cy - 5 * k], [mx + 10 * k, cy - 5 * k],
-        [mx - 6 * k, cy + 13 * k], [mx - 1 * k, cy + 2 * k], [mx - 10 * k, cy + 2 * k]], c, .85, 1.45, true, .1);
-      alarmChevrons(s, st, .43 + .43 * wave(st.p * .5));
-    } else {
-      s.ring(mx, cy, 13, 12, 6, c, .55, 1.2, Math.PI / 6);
-      s.line(mx, cy - 6, mx, cy + 6, c, .75, 1.5);
-      s.line(mx - 6, cy, mx + 6, cy, c, .75, 1.5);
-    }
-  }
-
-  function rover(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .62, key = st.key;
-    const brake = key === 'srv_handbrake', assist = key === 'srv_drive_assist';
-    const type = groundVehicleType(st), hover = type === 'nomad';
-    const heavy = type === 'rhino', armed = type === 'scorpion';
-    // Decorative terrain drift changes character with the craft; it is not
-    // a speed or position readout. Handbrake holds the ground still.
-    const ridge = (u, seed) => Math.abs(Math.sin(u * .019 + seed)) * 5
-      + Math.abs(Math.sin(u * .053 + seed * 2)) * 2.4 + Math.sin(u * .13 + seed) * .7;
-    const near = brake ? 0 : st.p * (heavy ? 10 : armed ? 12 : hover ? 14 : 18);
-    for (let layer = 0; layer < 2; layer += 1) {
-      const points = [], shift = layer ? near : near / 2;
-      for (let x = -10; x <= s.W + 10; x += 6) {
-        const u = x + shift;
-        points.push([x, layer
-          ? s.H * (hover ? .92 : .86) - ridge(u * 1.8, 4) * (hover ? .22 : heavy ? .35 : .45)
-          : s.H * (hover ? .7 : .6) - ridge(u, 1) * (hover ? .58 : 1.15)]);
-      }
-      s.poly(points, c, layer ? (hover ? .27 : .5) : .24, layer ? 1.1 : .9);
-    }
-    const span = s.W + 30;
-    if (!hover) {
-      // Wheeled vehicles meet the ground; the Nomad's pressure field does not.
-      for (let index = 0; index < 6; index += 1) {
-        const x = fract((hash(index + 80) * span - near) / span) * span - 15;
-        const size = 1.4 + hash(index + 81) * 2.2, y = s.H * .86 + 1 + hash(index + 82) * 3;
-        s.poly([[x - size, y], [x - size * .4, y - size * .9],
-          [x + size * .6, y - size * .7], [x + size, y]], c, .45, .9, true, .15);
-      }
-    }
-    if (!brake && !hover) {
+    const person = camera(x, s.H * 1.3, 20, {yaw: -.7, pitch: -.05});
+    s.solid(MODELS.commander(0, {walking: false}), person, {}, c, 1, pal.bg,
+      {visor: [label.includes('OXYGEN') ? pal.red : pal.accent, .5 + .4 * alarm], lamp: false});
+    if (label.includes('OXYGEN')) {
       for (let index = 0; index < 8; index += 1) {
-        const x = fract((index / 8 * span - near * 1.3) / span) * span - 15;
-        s.line(x, s.H - 2, x + 4, s.H - 2, c, .4 * ends(clamp((x + 15) / span), .15), 1.4);
+        const t = fract(st.p * .25 + hash(index + 5)), bx = x + 10 + (hash(index + 6) - .5) * 20;
+        s.arc(bx + Math.sin(t * 6 + index) * 2, s.H * (1 - t), 1.2 + hash(index) * 1.4, 1.2 + hash(index) * 1.4,
+          0, TAU, pal.accent, ends(t) * .6, .8);
       }
-    }
-    if (hover) {
-      // A quiet cushion and spreading pressure rings keep the skimmer aloft.
-      s.arc(fx, s.H * .82, 32, 3, 0, TAU, c, .28, 1.2);
-      for (let index = 0; index < 3; index += 1) {
-        const t = brake ? index / 3 : fract(st.p * .28 + index / 3);
-        s.arc(fx, s.H * .84, 12 + t * 40, 1.2 + t * 4, 0, TAU, c,
-          brake ? .12 : (1 - t) * .35, 1);
+    } else if (label.includes('HEALTH')) {
+      const points = [];
+      for (let step = 0; step <= 80; step += 1) {
+        const px = step / 80 * s.W * .42, beat = fract(step / 80 * 2 - st.p * .5);
+        points.push([6 + px, beat < .08 ? s.H * .62 - Math.sin(beat / .08 * Math.PI) * s.H * .38
+          : beat < .12 ? s.H * .62 + 4 : s.H * .62]);
       }
-      s.bloom(fx, s.H * .81, 18, pal.accent, .14 + .06 * wave(st.p * .35));
-    } else if (heavy) {
-      // Broad contact patches and a slow compression give the Rhino weight.
-      for (const side of [-1, 1]) {
-        const x = fx + side * 25;
-        s.arc(x, s.H * .82, 19, 2.8, 0, TAU, c, .19 + .1 * wave(st.p * .35), 1.15);
-        s.line(x - 13, s.H * .87, x + 13, s.H * .87, c, .34, 1.5);
-      }
-    } else if (armed) {
-      // The Scorpion's turret sweeps a small, stabilised arc, not a target.
-      const aim = Math.sin(st.p * .38) * .22;
-      s.arc(fx, cy - 4, 33, 12, Math.PI * 1.12 + aim, Math.PI * 1.88 + aim, c, .3, 1.1);
-      s.brackets(fx + 34, cy - 3, 5, 3, c, .28);
+      s.poly(points, pal.red, alarm, 1.3);
     } else {
-      // Three alternating contact ripples echo the Scarab's articulated axles.
-      for (let index = 0; index < 3; index += 1) {
-        const x = fx + (index - 1) * 23;
-        s.arc(x, s.H * .82, 7, 2, 0, TAU, c,
-          .16 + .24 * wave(st.p * .6 + index / 3), 1);
-      }
-    }
-    if (key === 'srv_turret') {
-      // Turret view: the gun arc sweeps above the chassis.
-      const angle = -Math.PI / 2 + Math.sin(st.p * .4) * .6;
-      s.arc(fx, s.H - 4, s.W * .2, s.H * .8, Math.PI, TAU, c, .35);
-      s.line(fx, s.H - 6, fx + Math.cos(angle) * s.W * .18, s.H - 6 + Math.sin(angle) * s.H * .7, c, .85, 1.8);
-      s.brackets(fx + Math.cos(angle) * s.W * .18, s.H - 6 + Math.sin(angle) * s.H * .7, 7, 4, c, .6);
-    }
-    if (assist) {
-      for (const side of [-1, 1]) s.poly([[fx + side * 70, s.H - 2], [fx + side * 50, cy], [fx + side * 50, 4]], pal.accent, .5);
-    }
-    if (brake) {
-      // Latched calipers breathe; the wheels and chassis stay still.
-      const latch = .2 + .65 * wave(st.p * .6);
-      for (const side of [-1, 1]) {
-        const x = fx + side * 56;
-        s.poly([[x - side * 3, 8], [x, 11], [x, s.H - 11], [x - side * 3, s.H - 8]], c, latch, 1.8);
-      }
-    }
-    if (key !== 'srv_turret') s.glyph(fx, cy, s.H * .96, () => vehicleGlyph(s, st));
-  }
-
-  function onFoot(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .62;
-    // Footfalls cross the ground ahead of the visor frame.
-    s.arc(fx, s.H + s.H * .5, s.W * .5, s.H * .9, Math.PI, TAU, c, .3);
-    for (let index = 0; index < 6; index += 1) {
-      const t = fract(st.p * .18 + index / 6), x = lerp(8, s.W - 8, t);
-      const y = s.H - 6 - (index % 2) * 4;
-      s.poly([[x - 2, y - 2], [x + 2, y - 2], [x + 3, y + 1], [x - 2, y + 2]], c, ends(t) * .6, 1, true, .2);
-    }
-    s.glyph(fx, cy, s.H * .96, () => {
-      s.poly([[28, 9], [42, 4], [78, 4], [92, 9], [85, 28], [35, 28]], c, .55, 1.25, true, .04);
-      s.poly([[38, 13], [48, 10], [72, 10], [82, 13], [77, 22], [43, 22]], c, .45, 1.1, true, .07);
-      s.line(48, 16, 72, 16, c, .43);
-      s.brackets(60, 18, 43, 14, c, .3);
-      const scan = fract(st.p * .25);
-      s.line(40 + scan * 40, 11, 40 + scan * 40, 21, c, Math.sin(scan * Math.PI) * .6);
-    });
-  }
-
-  function carrierDeck(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .6;
-    // A parked capital hull and a quiet deck plane, distinct from flight
-    // traffic in the carrier's vicinity.
-    dust(s, st, {count: 8, speed: .004, alpha: .14});
-    s.poly([[7, s.H - 4], [fx - 44, cy + 10], [fx + 44, cy + 10],
-      [s.W - 7, s.H - 4]], c, .3, 1.1);
-    s.line(7, s.H - 4, s.W - 7, s.H - 4, c, .35, 1);
-    for (let index = 0; index < 7; index += 1) {
-      const x = lerp(14, s.W - 14, index / 6);
-      const light = .14 + .38 * Math.pow(wave(st.p * .14 - index / 7), 4);
-      s.line(x, s.H - 8, x + 4, s.H - 8, c, light, 1.3);
-    }
-    s.glyph(fx, cy, s.H * .96, () => carrierGlyph(s, st, 'carrier_deck'));
-  }
-
-  // The craft changing hands in a handoff, drawn at deck scale.
-  function craft(s, st, x, y, direction = 1) {
-    const c = st.c, key = st.key, k = s.H / 36 * 1.25;
-    if (key.endsWith('crew')) {
-      s.dot(x, y - 5 * k, 2 * k, c, .85);
-      s.poly([[x, y - 2 * k], [x, y + 3 * k], [x - 3 * k, y + 7 * k]], c, .8);
-      s.line(x, y + 3 * k, x + 3 * k, y + 7 * k, c, .8);
-    } else if (key.endsWith('fighter') || key.endsWith('ship')) {
-      s.ship(x, y, c, .9, (key.endsWith('fighter') ? 1.25 : 1.5) * k, direction);
-      if (!key.endsWith('fighter')) s.arc(x, y, 13 * k, 7 * k, 0, TAU, c, .31, 1.1);
-    } else {
-      const type = groundVehicleType(st), size = (type === 'rhino' ? 11 : 8) * k;
-      s.poly([[x - size, y], [x - size + 3 * k, y - 5 * k], [x + size - 3 * k, y - 5 * k], [x + size, y]], c, .85);
-      if (type === 'nomad') {
-        s.arc(x, y + 6 * k, size * 1.3, 1.5 * k, 0, TAU, c, .5);
-      } else {
-        const wheels = type === 'rhino' ? 4 : type === 'scarab' ? 3 : 2;
-        for (let index = 0; index < wheels; index += 1) {
-          const wheelX = lerp(x - size + 3 * k, x + size - 3 * k, index / (wheels - 1));
-          s.arc(wheelX, y + 2 * k, 2.7 * k, 2.7 * k, 0, TAU, c, .7);
+      for (let index = 0; index < 12; index += 1) {
+        const t = fract(hash(index + 5) + st.p * .05), fx = s.W * (1 - t), fy = 5 + hash(index + 9) * (s.H - 10);
+        const size = 1.8 + hash(index) * 1.6;
+        for (let arm = 0; arm < 3; arm += 1) {
+          const angle = arm * Math.PI / 3;
+          s.line(fx - Math.cos(angle) * size, fy - Math.sin(angle) * size, fx + Math.cos(angle) * size,
+            fy + Math.sin(angle) * size, pal.accent, alarm * .7 * ends(t), .8);
         }
       }
     }
+    alarmChevrons(s, st, alarm);
   }
 
-  function handoff(s, st, pal) {
-    const c = st.c, cy = s.H / 2, key = st.key;
-    if (key.includes('switch')) {
-      // Control passes along a link between two stations, not down a ramp.
-      const left = s.W * .3, right = s.W * .74;
-      for (const [x, side] of [[left, -1], [right, 1]]) {
-        s.ring(x, cy, 15, 13, 6, c, .63, 1.25, Math.PI / 6);
-        s.brackets(x, cy, 11, 9, c, .54);
-        craft(s, st, x, cy + (key.endsWith('crew') ? 1 : 0), -side);
+  // Jet cone damage: inside a neutron star's jet, the ship buffeted. Both
+  // jets fire along the star's axis; the ship rides the nearer one.
+  function jetCone(s, st, pal) {
+    const sx = s.W * .68, sy = s.H * .5, alarm = .43 + .43 * wave(st.p * .5);
+    const axis = -.32, reach = s.W * .5;
+    for (const side of [-1, 1]) {
+      const tipX = sx + Math.cos(axis) * reach * side, tipY = sy + Math.sin(axis) * reach * side;
+      const normalX = -Math.sin(axis), normalY = Math.cos(axis);
+      for (const width of [9, 5]) {
+        s.poly([[sx, sy], [tipX + normalX * width, tipY + normalY * width], [tipX - normalX * width, tipY - normalY * width]],
+          pal.accent, width === 9 ? .25 : .45, .9, true, width === 9 ? .08 : .12);
       }
-      const link = (u) => cy + Math.sin(u * TAU * 3 - st.p * 2) * 4 * Math.sin(u * Math.PI);
-      const points = [];
-      for (let step = 0; step <= 30; step += 1) points.push([lerp(left + 17, right - 17, step / 30), link(step / 30)]);
-      s.poly(points, c, .6, 1.3);
-      const t = fract(st.p * .5);
-      s.spark(lerp(left + 17, right - 17, t), link(t), 1.2, c, pal.text, Math.sin(t * Math.PI));
-      return;
+      for (let index = 0; index < 4; index += 1) {
+        const t = fract(st.p * .9 + index / 4);
+        s.spark(lerp(sx, tipX, t), lerp(sy, tipY, t), .9, pal.accent, pal.text, ends(t) * .8);
+      }
     }
-    // A bay transfer runs once, then waits for the journal to confirm the
-    // final vehicle state; the door and the craft do not loop.
-    const board = key.includes('board'), t = smooth(st.age / 2), progress = board ? 1 - t : t;
-    const flyer = key.endsWith('fighter') || key.endsWith('ship');
-    const doorX = s.W * .24, y = flyer ? cy - 1 : s.H - 10;
-    s.poly([[s.W * .03, s.H - 3], [s.W * .03, 4], [doorX - 6, 4], [doorX, 10], [doorX, s.H - 3]], c, .58, 1.1, false, .04);
-    const opening = (board ? 1 - t : t) * s.H * .3;
-    s.line(doorX, 11, doorX, cy - opening, c, .75, 1.5);
-    s.line(doorX, cy + opening, doorX, s.H - 4, c, .75, 1.5);
-    if (flyer) {
-      s.line(doorX + 3, y, s.W - 8, y, c, .22);
-    } else {
-      s.poly([[doorX, s.H - 5], [doorX + 18, s.H - 3], [s.W - 6, s.H - 3]], c, .35);
+    s.sun(sx, sy, s.H * .11, pal.accent, pal.text, st.p * 3, {flares: false});
+    const shake = Math.floor(st.p * 9);
+    const x = s.W * .34 + (hash(shake) - .5) * 3, y = sy - Math.sin(axis) * s.W * .34 + (hash(shake + 1) - .5) * 3;
+    s.solid(MODELS.ship(), camera(x, y, 6, {yaw: -.4, pitch: -.3, persp: 14}), {roll: Math.sin(st.p * 2) * .3},
+      st.c, 1, pal.bg, {engine: [st.c, .8]});
+    for (let index = 0; index < 5; index += 1) {
+      const angle = hash(index + shake) * TAU;
+      s.line(x, y, x + Math.cos(angle) * 8, y + Math.sin(angle) * 5, pal.yellow, alarm * .7, .8);
     }
-    const x = lerp(s.W * .13, s.W * .8, progress);
-    craft(s, st, x, y, board ? -1 : 1);
-    s.brackets(board ? s.W * .13 : s.W * .8, y, 14, 10, c, .2 + .45 * t);
-    for (let index = 0; index < 4; index += 1) {
-      s.line(s.W * .05 + index * 7, 2.5, s.W * .05 + index * 7 + 4, 2.5, c,
-        .14 + .65 * Math.pow(wave(st.p * .5 - index / 4), 3), 1.6);
-    }
+    alarmChevrons(s, st, alarm);
+  }
+
+  // ---------------------------------------------------------------------
+  // Cockpit panels: angled holographic boards, as the cockpit hangs them.
+  // ---------------------------------------------------------------------
+
+  // A board in perspective; `mark(u, v)` maps a point on it (0..1 across,
+  // 0..1 down) to the deck.
+  function board(s, st, pal, {x, y, w, h, yaw = 0, pitch = 0}) {
+    const cam = camera(x, y, 1, {yaw, pitch, persp: 220});
+    const mark = (u, v) => cam.project([(u - .5) * w, (v - .5) * h, 0]).slice(0, 2);
+    s.poly([mark(0, 0), mark(1, 0), mark(1, 1), mark(0, 1)], st.c, .45, 1, true, .06);
+    s.poly([mark(.02, .08), mark(.02, .92)], st.c, .5, 1.4);
+    return mark;
   }
 
   function panel(s, st, pal) {
-    const c = st.c, focus = Math.floor(fract(st.p * .06) * 5);
-    // The panel's tab strip, the focus stepping along it, and a scroll bar.
-    for (let index = 0; index < 5; index += 1) {
-      const x = 8 + index * 17, lit = index === focus;
-      s.poly([[x, 11], [x + 3, 5], [x + 14, 5], [x + 14, 11]], c, lit ? .85 : .3, 1, true, lit ? .22 : 0);
+    const c = st.c, key = st.key, p = st.p;
+    sky(s, st, .4, .2);
+    if (key === 'left_panel' || key === 'right_panel') {
+      const left = key === 'left_panel';
+      const mark = board(s, st, pal, {x: s.W * (left ? .38 : .72), y: s.H * .5, w: s.W * .5, h: s.H * .8,
+        yaw: left ? .75 : -.75});
+      const focus = Math.floor(fract(p * .07) * 5);
+      for (let row = 0; row < 5; row += 1) {
+        const v = .16 + row * .17, lit = row === focus;
+        if (left) {
+          s.poly([mark(.08, v), mark(.72, v), mark(.72, v + .11), mark(.08, v + .11)], c, lit ? .85 : .25, 1, true,
+            lit ? .22 : 0);
+          s.dot(...mark(.82, v + .05), 1.1, row % 2 ? pal.accent : c, .7);
+        } else {
+          const fill = .3 + .6 * hash(row + 7);
+          s.poly([mark(.1, v + .02), mark(.1 + fill * .8, v + .02)], lit ? pal.accent : c, .75, 2.4);
+          s.poly([mark(.1, v + .09), mark(.9, v + .09)], c, .15, .6);
+        }
+      }
+      return;
     }
-    for (let row = 0; row < 3; row += 1) {
-      s.line(8, 16 + row * 6, 90, 16 + row * 6, c, row === focus % 3 ? .5 : .14, 1.1);
+    if (key === 'comms_panel') {
+      const mark = board(s, st, pal, {x: s.W * .55, y: s.H * .5, w: s.W * .62, h: s.H * .8, yaw: .25});
+      for (let row = 0; row < 4; row += 1) {
+        const v = .18 + row * .19, length = .3 + hash(row + 20) * .45;
+        s.poly([mark(.08, v), mark(.08 + length, v)], row === 3 ? pal.accent : c,
+          row === 3 ? .4 + .5 * wave(p * .6) : .35, 1.4);
+      }
+      for (let index = 0; index < 18; index += 1) {
+        const u = .5 + index * .025, amp = .05 + .25 * wave(p * .4 - index * .12);
+        s.poly([mark(u, .8 - amp), mark(u, .8 + amp)], pal.accent, .6, 1);
+      }
+      return;
     }
-    const thumb = lerp(6, s.H - 14, wave(st.p * .08));
-    s.line(s.W - 9, 5, s.W - 9, s.H - 5, c, .2);
-    s.line(s.W - 9, thumb, s.W - 9, thumb + 8, c, .75, 2);
-    s.glyph(s.W * .6, s.H / 2, s.H * .96, () => panelGlyph(s, st));
-  }
-
-  function flight(s, st, pal) {
-    starfield(s, st);
-    const scope = radar(s, st, s.W * .64);
-    attitude(s, st, scope);
-  }
-
-  function assistOff(s, st, pal) {
-    starfield(s, st);
-    const scope = radar(s, st, s.W * .66, {sweep: .2});
-    // The velocity vector drifts free of the nose: flight assist is off.
-    const vx = scope.x + Math.sin(st.p * .38) * scope.rx * .9;
-    const vy = scope.y + Math.cos(st.p * .31) * scope.ry * .8;
-    s.poly([[scope.x, scope.y], [lerp(scope.x, vx, .45), vy], [vx, vy]], st.c, .5, 1.1);
-    s.ring(vx, vy, 4.5, 4.5, 4, st.c, .9, 1.3, Math.PI / 4);
-    attitude(s, st, scope, .7);
-  }
-
-  function silent(s, st, pal) {
-    // Heat signature sealed: the scanner dims behind closing shutters.
-    dust(s, st, {count: 14, speed: .012, alpha: .2});
-    const scope = radar(s, st, s.W * .66, {sweep: .08, alpha: .45});
-    const seal = .42 + .46 * wave(st.p * .42);
-    for (const side of [-1, 1]) {
-      const x = scope.x + side * (scope.rx + 6);
-      s.poly([[x + side * 14, 3], [x, 9], [x, s.H - 9], [x + side * 14, s.H - 3]], st.c, seal, 1.8);
-      s.poly([[x - side * 4, 11], [x - side * 10, 15], [x - side * 10, s.H - 15], [x - side * 4, s.H - 11]],
-        st.c, seal * .6, 1.2);
+    if (key === 'role_panel') {
+      const mark = board(s, st, pal, {x: s.W * .56, y: s.H * .55, w: s.W * .6, h: s.H * .75, pitch: -.6});
+      for (let seat = 0; seat < 3; seat += 1) {
+        const u = .22 + seat * .28, active = seat === Math.floor(fract(p * .08) * 3);
+        const [hx, hy] = mark(u, .4);
+        s.solid(MODELS.commander(0, {walking: false}), camera(hx, hy + 12, 7, {yaw: -.3}), {}, active ? pal.accent : c,
+          active ? 1 : .6, pal.bg, {visor: [pal.accent, .6], lamp: false});
+      }
+      return;
     }
-  }
-
-  function fighter(s, st, pal) {
-    starfield(s, st);
-    const scope = radar(s, st, s.W * .66, {sweep: .22});
-    s.brackets(scope.x, scope.y - 2, scope.rx + 16, s.H / 2 - 4, st.c, .54);
-    for (const side of [-1, 1]) {
-      s.chevron(scope.x + side * (scope.rx + 26), scope.y - 2, -side, st.c, .4 + .35 * wave(st.p * .6), 3.2);
-    }
-  }
-
-  function multicrew(s, st, pal) {
-    dust(s, st, {count: 18, speed: .02, alpha: .3});
-    const scope = radar(s, st, s.W * .5, {sweep: .12, alpha: .7});
-    for (const side of [-1, 1]) {
-      const x = scope.x + side * (scope.rx + 30);
-      s.ring(x, scope.y, 7, 8, 6, st.c, .7, 1.2);
-      s.ring(x, scope.y, 10, 11, 6, st.c, .19 + .55 * wave(st.p * .42 + (side < 0 ? 0 : .5)), 1.3);
-      // Crew links pass between the seats.
-      const t = fract(st.p * .4 + (side < 0 ? 0 : .5));
-      s.line(scope.x + side * 12, scope.y, x - side * 12, scope.y, st.c, .25);
-      s.spark(lerp(scope.x + side * 12, x - side * 12, t), scope.y, 1, st.c, pal.text, Math.sin(t * Math.PI) * .85);
+    // Station services: the menu's tiles lighting in turn.
+    const mark = board(s, st, pal, {x: s.W * .56, y: s.H * .5, w: s.W * .66, h: s.H * .82, yaw: .2});
+    for (let tile = 0; tile < 8; tile += 1) {
+      const u = .08 + (tile % 4) * .23, v = tile < 4 ? .14 : .56;
+      const lit = .2 + .7 * Math.pow(wave(p * .2 - tile / 8), 4);
+      s.poly([mark(u, v), mark(u + .19, v), mark(u + .19, v + .32), mark(u, v + .32)], c, .3 + lit * .5, 1, true, lit * .25);
     }
   }
 
-  function localArrival(s, st, pal) {
-    const c = st.c, cy = s.H / 2 + 1, fx = s.W * .64, settle = smooth(st.age / 2.2);
-    streaks(s, st, {x: fx, count: 12, speed: .2, strength: (1 - settle) * .6});
-    const rx = Math.min(s.H * 1.5, s.W * .22), ry = rx * TILT;
-    s.arc(fx, cy, rx, ry, 0, TAU, c, .35);
-    const bearing = st.p * TAU * .32;
-    s.arc(fx, cy, rx, ry, bearing, bearing + .8, c, .8, 1.5);
-    s.ship(fx, cy, c, .9, 1.3);
-    s.brackets(fx, cy, 22 + (1 - settle) * 30, 13, c, .35 + .4 * settle);
+  // One tumbling rock at a deck point, `size` pixels to a unit: the
+  // signal source's debris and the rocks round the ship's portrait.
+  function rockAt(s, pal, x, y, size, color, phase, alpha, seed) {
+    s.solid(MODELS.rock(seed), camera(x, y, size), {
+      yaw: phase * (seed % 2 ? -.31 : .24) + seed * 2.1, pitch: phase * .17 + seed * .83,
+    }, color, alpha, pal.bg);
   }
 
-  function evaded(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .5, settle = smooth(st.age / 2.2);
-    // Two capture rails peel away from a stable ship.
-    s.ship(fx, cy, c, .9, 1.3);
-    for (const side of [-1, 1]) {
-      s.poly([[8, cy + side * 3], [fx * .6, cy + side * 5], [fx + 20, cy + side * 9],
-        [s.W - 6, cy + side * (s.H / 2 - 2)]], c, .58, 1.3);
-      for (let index = 0; index < 4; index += 1) {
-        const v = fract(st.p * .16 + index / 4);
-        s.chevron(lerp(10, s.W - 10, v), cy + side * lerp(3, s.H / 2 - 3, v), 1, c, Math.sin(v * Math.PI) * .7, 2.6);
+  // The asteroid field: inside a planet's ring. Rocks tumble past at every
+  // depth, the nearer larger and quicker, over the ring's plane running
+  // away to its bright far edge, with grit drifting through. Now and then
+  // a facet catches the light, and a miner in the middle distance works a
+  // rock with its laser while a prospector limpet flies out to it.
+  // Decorative: the journal reports no rock, ship or position here.
+  const FIELD = Array.from({length: 26}, (_, index) => ({
+    seed: index,
+    start: hash(index + 150),
+    y: (hash(index + 204) - .5) * 4.2,
+    z: lerp(-16, 2.4, Math.pow(hash(index + 60), .75)),
+    size: .5 + Math.pow(hash(index + 29), 2) * 1.15,
+  }));
+
+  function asteroids(s, st, pal) {
+    const c = st.c, unit = 6.2, travel = st.p * .6;
+    const cam = camera(s.W * .5, s.H * .52, unit, {pitch: -.03, persp: 16});
+    // Where something at this depth is on its lap: it wraps just beyond
+    // the deck's edges, so nothing pops in or out in view.
+    const along = (start, y, z, size) => {
+      const k = cam.scaleAt(cam.look([0, y, z])[2]);
+      const half = (s.W / 2 + 6) / (unit * k) + size * 1.6;
+      return -half + fract(start - travel / (2 * half)) * 2 * half;
+    };
+    // The ring's plane, nearly edge on: its far edge a bright line, nearer
+    // bands fainter as they come toward the viewer.
+    for (const [z, alpha] of [[-600, .22], [-40, .08], [-14, .05]]) {
+      const [, y] = cam.project([0, 0, z]);
+      s.line(0, y, s.W, y, c, alpha, z < -100 ? 1.1 : .8);
+    }
+    for (let index = 0; index < 40; index += 1) {
+      const y = (hash(index + 400) - .5) * 5, z = lerp(-18, 3, hash(index + 401));
+      const [gx, gy, , k] = cam.project([along(hash(index + 402), y, z, 0), y, z]);
+      s.dot(gx, gy, .3 + k * .35, c, .18 + .3 * hash(index + 403));
+    }
+    const items = FIELD.map((rock) => ({z: rock.z, draw() {
+      const x = along(rock.start, rock.y, rock.z, rock.size);
+      const fog = .45 + .55 * smooth((rock.z + 16) / 12);
+      const at = s.solid(MODELS.rock(rock.seed), cam, {x, y: rock.y, z: rock.z, scale: rock.size,
+        yaw: st.p * (rock.seed % 2 ? -.31 : .24) + rock.seed * 2.1, pitch: st.p * .17 + rock.seed * .83},
+      c, fog, pal.bg);
+      // A facet catching the light as the rock turns.
+      const glint = fract(st.p * .31 + hash(rock.seed + 7));
+      if (glint < .05) {
+        const [gx, gy, , k] = at([-.35, -.4, .5]);
+        s.spark(gx, gy, .5 + k * .3, pal.text, null, Math.sin(glint / .05 * Math.PI) * fog);
+      }
+    }}));
+    items.push({z: -5.6, draw: () => miner(s, st, pal, cam, along)});
+    items.sort((left, right) => left.z - right.z);
+    for (const item of items) item.draw();
+  }
+
+  // A miner working a rock: its laser pulses onto the face and chips fly
+  // off, while a prospector limpet arcs across and latches onto the rock.
+  function miner(s, st, pal, cam, along) {
+    const z = -5.6, x = along(.35, -.2, z, 4);
+    const rockPlace = {x: x + 1.4, y: .5, z: z + .2, scale: 1.55, yaw: st.p * .05 + 1, pitch: .6};
+    const ship = s.solid(MODELS.ship(), cam, {x: x - 1.6, y: -1.2, z: z - .3, scale: .42, yaw: -.25, roll: .15},
+      st.c, .9, pal.bg, {engine: [st.c, .6]});
+    const face = s.solid(MODELS.rock(5), cam, rockPlace, st.c, .95, pal.bg);
+    const pulse = fract(st.p * .5);
+    const [nx, ny] = ship([2.1, 0, 0]), [hx, hy] = face([-.7, -.25, .2]);
+    if (pulse < .62) {
+      s.line(nx, ny, hx, hy, pal.orange, .75, 1.1);
+      s.bloom(hx, hy, 4, pal.orange, .6);
+      for (let chip = 0; chip < 3; chip += 1) {
+        const t = fract(pulse * 2.4 + chip / 3), angle = -2.4 + hash(chip + 9) * 1.4;
+        s.dot(hx + Math.cos(angle) * t * 9, hy + Math.sin(angle) * t * 6 + t * t * 3, .6, pal.yellow, (1 - t) * .8);
       }
     }
-    s.brackets(fx, cy, 14 + (1 - settle) * 20, 9, c, .76);
-  }
-
-  function cooldown(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .7;
-    // Radiator fins either side of the drive core shed their heat, the ones
-    // nearest the core last. The fade is decorative, not a cooldown timer.
-    const heat = 1 - smooth(st.age / 3.2);
-    for (const side of [-1, 1]) {
-      const count = Math.floor((side < 0 ? fx - 24 : s.W - fx - 16) / 8);
-      for (let index = 0; index < count; index += 1) {
-        const x = fx + side * (20 + index * 8), reach = index / Math.max(1, count);
-        const warmth = clamp(heat * 1.4 - reach * .9);
-        const h = 7 + (1 - reach) * 4;
-        s.line(x, cy - h, x, cy + h, c, (.14 + .6 * warmth) * ends(1 - reach, .15), 1.4);
-        if (warmth > .3) s.bloom(x, cy, 6, c, (warmth - .3) * .5);
-      }
-    }
-    for (let index = 0; index < 8; index += 1) {
-      const t = fract(st.p * .22 + index / 8), x = fx + (hash(index + 40) - .5) * s.W * .7;
-      const warmth = clamp(heat * 1.4 - Math.abs(x - fx) / (s.W * .5));
-      s.line(x, cy - 8 - t * (cy - 6), x + Math.sin(t * 6 + index) * 2, cy - 12 - t * (cy - 6), c,
-        Math.sin(t * Math.PI) * (.1 + warmth * .5));
-    }
-    s.ring(fx, cy, 13, 12, 6, c, .65, 1.2, Math.PI / 6);
-    s.ring(fx, cy, 7, 6, 6, c, .35 + .3 * heat, 1, Math.PI / 6);
-    s.bloom(fx, cy, 14, c, .15 + .35 * heat);
-  }
-
-  function injection(s, st, pal) {
-    const c = st.c, cy = s.H / 2, fx = s.W * .6;
-    // Synthesis feeds the drive core: an armed buff, never a recipe meter.
-    s.ring(fx, cy, 13, 11, 6, c, .72, 1.2, Math.PI / 6);
-    s.ring(fx, cy, 6, 5, 6, c, .45, 1, Math.PI / 6);
-    s.bloom(fx, cy, 14, c, .35);
-    for (let index = 0; index < 3; index += 1) {
-      const y = 5 + index * (s.H - 10) / 2;
-      s.poly([[6, y], [fx * .55, y], [fx - 22, cy], [fx - 14, cy]], c, .3);
-      const t = fract(st.p * .3 + index / 3);
-      const x = lerp(6, fx - 14, t), yy = t < .6 ? y : lerp(y, cy, (t - .6) / .4);
-      s.spark(x, yy, 1.1, c, pal.text, Math.sin(t * Math.PI) * .85);
-    }
-    const percent = st.d.fsdInjectionPercent;
-    const level = percent >= 100 ? 3 : percent >= 50 ? 2 : 1;
-    for (let index = 0; index < level; index += 1) s.chevron(fx + 26 + index * 9, cy, 1, pal.accent, .75, 4);
-    s.line(fx + 30 + level * 9, cy, s.W, cy, c, .2);
+    // The limpet: out along an arc to the next rock, then held there.
+    const trip = fract(st.p * .09), flight = smooth(clamp(trip / .7));
+    const [lx0, ly0] = ship([-.4, .4, 0]), [lx1, ly1] = face([.9, -.6, -.2]);
+    const lx = lerp(lx0, lx1, flight), ly = lerp(ly0, ly1, flight) - Math.sin(flight * Math.PI) * 6;
+    s.solid(MODELS.limpet(), camera(lx, ly, 1.8, {pitch: -.3}), {yaw: st.p * .6}, st.c, ends(trip, .06), pal.bg,
+      {eye: [trip > .7 ? pal.green : pal.accent, .5 + .5 * wave(st.p * 2)]});
   }
 
   const DECK = {
@@ -2235,7 +2480,7 @@
     surface_approach: surface, surface_hold: surface, surface_departure: surface,
     landed, surface_station: port, settlement_area: port,
     asteroid_field: asteroids, mass_lock: massLock, signal_lock: signal, signal_drop: signal,
-    capital_contact: contact, unknown_contact: contact, signal_threat: contact,
+    signal_threat: signal, capital_contact: contact, unknown_contact: contact,
     combat: threat, heavy_combat: threat, srv_threat: threat,
     interdiction, interdicted: interdiction,
     heat_critical: heat, suit_hazard: suit, jet_cone_damage: jetCone, system_reboot: maintenance,
@@ -2474,7 +2719,7 @@
       for (let index = 0; index < 5; index += 1) {
         const t = fract(index / 5 + st.p * .035 + hash(index + 90) * .1);
         const x = (b.W + 20) * (1 - t) - 10, y = b.H * (.15 + hash(index + 91) * .7);
-        b.asteroid(x, y, 2.4 + hash(index + 92) * 2.2, st.c, st.p, ends(t) * .6, index + 3, pal.bg);
+        rockAt(b, pal, x, y, 2.4 + hash(index + 92) * 2.2, st.c, st.p, ends(t) * .6, index + 3);
       }
     },
     lock(b, st, pal, cx, cy) {
