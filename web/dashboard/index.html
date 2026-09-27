@@ -15,16 +15,14 @@
   <link rel="stylesheet" href="overlay-studio.css">
   <link rel="stylesheet" href="focused-log.css">
   <link rel="stylesheet" href="boot.css">
-  <script defer src="boot-starfield.js"></script>
-  <script type="module" src="boot-companion.js"></script>
+  <script defer src="/assets/heartbeat-orb.js"></script>
+  <script type="module" src="boot-scene.js"></script>
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
-  <div id="boot" class="boot" aria-live="polite">
-    <canvas id="boot-starfield" aria-hidden="true"></canvas>
-    <div class="boot-nebula" aria-hidden="true"></div>
-    <div class="boot-scanline" aria-hidden="true"></div>
-    <div class="boot-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div id="boot" class="boot">
+    <canvas id="boot-sky" class="boot-sky" aria-hidden="true"></canvas>
+    <canvas id="boot-drift" class="boot-drift" aria-hidden="true"></canvas>
     <header class="boot-command-bar">
       <span>VOID COMPASS // EXPLORATION FLIGHT COMPUTER</span>
       <b><i></i>LOCAL JOURNAL LINK</b>
@@ -37,63 +35,61 @@
     </footer>
 
     <section id="boot-loader" class="boot-loader" data-boot-stage="profile">
-      <section class="boot-companion" aria-label="Exploration companion">
-      <div class="boot-instrument" aria-hidden="true">
-        <div class="boot-optic-halo"></div>
-        <div class="boot-optic-ticks"></div>
-        <div class="boot-optic-orbit orbit-a"></div>
-        <div class="boot-optic-orbit orbit-b"></div>
-        <div class="boot-companion-orbit"><i></i></div>
-        <div class="boot-activity-wave"></div><div class="boot-activity-wave"></div>
-        <svg class="boot-optic-progress" viewBox="0 0 200 200">
-          <circle class="optic-track" cx="100" cy="100" r="85" pathLength="100"/>
-          <circle class="optic-fill" cx="100" cy="100" r="85" pathLength="100"/>
-        </svg>
-        <div class="boot-optic-lens">
-          <div class="boot-optic-iris"></div>
-          <div class="boot-optic-core"><i></i></div>
-          <div class="boot-optic-glass"></div>
+      <section class="boot-watcher" aria-label="Compass, the journal watcher">
+        <div id="boot-track" class="boot-instrument" role="progressbar" aria-label="Flight computer startup" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <svg class="boot-ring" viewBox="0 0 400 400" aria-hidden="true">
+            <circle class="ring-bed" cx="200" cy="200" r="194"/>
+            <circle class="ring-ticks" cx="200" cy="200" r="184" pathLength="100"/>
+            <circle class="ring-track" cx="200" cy="200" r="194" pathLength="100"/>
+            <circle class="ring-fill" cx="200" cy="200" r="194" pathLength="100"/>
+            <circle class="ring-sweep" cx="200" cy="200" r="173" pathLength="100"/>
+            <g id="boot-ring-stages" class="ring-stages"></g>
+          </svg>
+          <canvas id="boot-orb" class="boot-orb" aria-hidden="true"></canvas>
         </div>
-        <div class="boot-optic-caption">EXPLORATION CORE <span>LOCAL SIGNAL / HUMAN HORIZON</span></div>
-      </div>
-        <div class="boot-chat" aria-live="off">
-          <p id="boot-fact-previous" class="boot-chat-previous" hidden></p>
-          <article class="boot-chat-bubble">
-            <header><span>COMPASS / FIELD NOTES</span><i class="boot-voice" aria-hidden="true"><b></b><b></b><b></b></i></header>
-            <p id="boot-fact"></p>
-          </article>
+        <div class="boot-transmission">
+          <header><span><i></i>COMPASS</span><b>FIELD NOTE</b></header>
+          <p id="boot-fact"></p>
         </div>
       </section>
 
       <section class="boot-copy">
-        <div class="boot-identity"><p class="eyebrow">YOUR NEXT HORIZON AWAITS</p><b>EXPLORER / LOCAL FIRST</b></div>
-        <h1>VOID <span>COMPASS</span></h1>
+        <p class="boot-eyebrow">EXPLORATION FLIGHT COMPUTER</p>
+        <h1 class="boot-wordmark">VOID <span>COMPASS</span></h1>
+        <p id="boot-release-line" class="boot-release-line">LOCAL-FIRST EXPLORATION COMPANION</p>
+
         <div class="boot-operation">
-          <div class="boot-stage-code"><small>SEQUENCE</small><strong id="boot-stage-code">01</strong></div>
           <div class="boot-operation-copy">
-            <div class="boot-status-line"><i></i><p id="boot-status" class="boot-status">INITIALISING FLIGHT COMPUTER</p></div>
+            <p class="boot-stage-kicker"><span id="boot-stage-code">01</span><b id="boot-stage-label">PROFILE CORE</b></p>
+            <p id="boot-status" class="boot-status" role="status" aria-live="polite">INITIALISING FLIGHT COMPUTER</p>
             <p id="boot-detail" class="boot-detail">Starting the private command deck</p>
           </div>
-          <strong id="boot-progress-percent" class="boot-progress-percent">00%</strong>
+          <div class="boot-readout">
+            <strong id="boot-progress-percent" class="boot-progress-percent">00%</strong>
+            <span id="boot-countdown" class="boot-countdown" hidden><small>FRAME SHIFT TO DECK</small><b>4</b></span>
+          </div>
         </div>
-        <div id="boot-track" class="boot-track" role="progressbar" aria-label="Flight computer startup" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="boot-progress"></i><em></em></div>
-        <div class="boot-track-labels"><span>POWER ON</span><b id="boot-stage-label">PROFILE CORE</b><span>LIVE DECK</span></div>
-        <div class="boot-readouts">
-          <div><span>PROFILE VAULT</span><b id="boot-profile">WAIT</b></div>
-          <div><span>SURVEY INDEX</span><b id="boot-survey">WAIT</b></div>
-          <div><span>LIVE JOURNAL</span><b id="boot-journal">WAIT</b></div>
-          <div><span>COCKPIT BUS</span><b id="boot-cockpit">WAIT</b></div>
-        </div>
-      </section>
+        <div class="boot-rail" aria-hidden="true"><i id="boot-progress"></i></div>
 
-      <aside class="boot-sequence" aria-hidden="true">
-        <header><span>STARTUP SEQUENCE</span><b>04 SYSTEMS</b></header>
-        <div data-boot-stage="profile"><i></i><span>01</span><p>COMMANDER PROFILE<small>LOCAL IDENTITY CORE</small></p><b>ACTIVE</b></div>
-        <div data-boot-stage="survey"><i></i><span>02</span><p>SURVEY ARCHIVE<small>DISCOVERY INDEX</small></p><b>QUEUED</b></div>
-        <div data-boot-stage="journal"><i></i><span>03</span><p>JOURNAL TAIL<small>RECENT EVENT REDUCER</small></p><b>QUEUED</b></div>
-        <div data-boot-stage="cockpit"><i></i><span>04</span><p>COCKPIT LINK<small>LIVE HTML SURFACES</small></p><b>QUEUED</b></div>
-        <div class="sequence-vector"><i></i></div>
-      </aside>
+        <!-- Each system is ready at the progress the backend reports as its phase finishes: core built .46,
+             historical index .76, live journal tail .88, everything live 1. renderBoot and the ring read these. -->
+        <ol class="boot-sequence" aria-label="Startup systems">
+          <li data-boot-stage="profile" data-boot-threshold=".46" data-boot-label="PROFILE CORE"><i></i><span>01</span><p>PROFILE VAULT<small>Commander identity</small></p><b id="boot-profile">WAIT</b></li>
+          <li data-boot-stage="survey" data-boot-threshold=".76" data-boot-label="SURVEY ARCHIVE"><i></i><span>02</span><p>SURVEY ARCHIVE<small>Discovery index</small></p><b id="boot-survey">WAIT</b></li>
+          <li data-boot-stage="journal" data-boot-threshold=".88" data-boot-label="JOURNAL TAIL"><i></i><span>03</span><p>JOURNAL TAIL<small id="boot-events">Recent events</small></p><b id="boot-journal">WAIT</b></li>
+          <li data-boot-stage="cockpit" data-boot-threshold="1" data-boot-label="COCKPIT LINK"><i></i><span>04</span><p>COCKPIT LINK<small>Live overlays</small></p><b id="boot-cockpit">WAIT</b></li>
+        </ol>
+
+        <section class="boot-log" aria-label="Flight computer log">
+          <header><span>FLIGHT COMPUTER LOG</span><b id="boot-clock">T+00:00.0</b></header>
+          <ol id="boot-log"></ol>
+        </section>
+
+        <section id="boot-release" class="boot-release" aria-label="New in this release" hidden>
+          <header><span>NEW IN <b id="boot-release-version">THIS RELEASE</b></span><em id="boot-release-page"></em></header>
+          <p id="boot-release-note"></p>
+        </section>
+      </section>
     </section>
 
     <section id="commissioning" class="commissioning" hidden>
@@ -577,6 +573,10 @@
                   <section data-studio-settings="hud">
                     <h4>NAVIGATION HUD</h4>
                     <label class="studio-switch"><span><b>Compact layout</b><small>The everyday standard plate; off shows the expanded one.</small></span><input type="checkbox" data-overlay-option="hud_compact_mode"><i></i></label>
+                    <label class="studio-field"><span>Typeface</span><select id="studio-hud-font" data-studio-setting="hud_font_face"><option value="cockpit">Cockpit</option><option value="clear">Clear</option><option value="terminal">Terminal</option></select></label>
+                    <label class="studio-field"><span>Text size<small>0 follows all overlays</small></span><div><input id="studio-hud-text-scale" type="number" min="0" max="200" step="5" data-studio-setting="hud_text_scale_percent"><b>%</b></div></label>
+                    <label class="studio-field"><span>Small text<small>Labels grow; the HUD keeps its size</small></span><select id="studio-hud-labels" data-studio-setting="hud_label_size"><option value="standard">Standard</option><option value="large">Large</option><option value="larger">Larger</option></select></label>
+                    <label class="studio-switch"><span><b>Brighter labels</b><small>Faded and grey labels at full strength.</small></span><input type="checkbox" data-overlay-option="hud_bright_labels"><i></i></label>
                   </section>
                   <section data-studio-settings="survey_status_hud">
                     <h4>SURVEY OPERATIONS</h4>
@@ -607,6 +607,11 @@
                     <h4>COCKPIT NOTIFICATIONS</h4>
                     <label class="studio-switch"><span><b>Rebuy cover warnings</b><small>When your balance cannot cover the rebuy.</small></span><input type="checkbox" data-overlay-option="rebuy_warnings_enabled"><i></i></label>
                     <label class="studio-switch"><span><b>Unsold data-risk warnings</b><small>When unsold exploration data is genuinely at risk.</small></span><input type="checkbox" data-overlay-option="data_risk_warnings_enabled"><i></i></label>
+                  </section>
+                  <section data-studio-settings="heartbeat_hud">
+                    <h4>JOURNAL HEARTBEAT</h4>
+                    <label class="studio-field"><span>Orb size</span><select id="studio-heartbeat-size" data-studio-setting="heartbeat_orb_size"><option value="54">54 PX</option><option value="72">72 PX</option><option value="96">96 PX</option></select></label>
+                    <label class="studio-field"><span>Eye colour<small>At rest; danger still turns it red</small></span><select id="studio-heartbeat-eye" data-studio-setting="heartbeat_eye_color"><option value="theme">Theme accent</option><option value="hal">HAL red</option></select></label>
                   </section>
                   <section data-studio-settings="ground_popup" class="studio-ground-target-card">
                     <h4>WAYPOINT <b id="studio-ground-target-state">TARGET OFF</b></h4>

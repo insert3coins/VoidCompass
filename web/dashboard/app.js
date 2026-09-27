@@ -617,6 +617,7 @@ function renderBoot(state) {
     document.body.classList.remove("ready");
     byId("app").setAttribute("aria-hidden", "true");
     renderCommissioning(onboarding);
+    announceBoot({commissioning: true});
     return;
   }
 
@@ -627,12 +628,7 @@ function renderBoot(state) {
   percentWidth("boot-progress", progressPercent);
   text("boot-progress-percent", `${String(progressPercent).padStart(2, "0")}%`);
   byId("boot-track").setAttribute("aria-valuenow", String(progressPercent));
-  const stages = [
-    {id: "boot-profile", key: "profile", label: "PROFILE CORE", ready: progress >= .18},
-    {id: "boot-survey", key: "survey", label: "SURVEY ARCHIVE", ready: progress >= .64},
-    {id: "boot-journal", key: "journal", label: "JOURNAL TAIL", ready: progress >= .76},
-    {id: "boot-cockpit", key: "cockpit", label: "COCKPIT LINK", ready: progress >= .90},
-  ];
+  const stages = bootStages().map((stage) => ({...stage, ready: progress >= stage.threshold}));
   const activeIndex = stages.findIndex((stage) => !stage.ready);
   const activeStage = activeIndex >= 0 ? stages[activeIndex] : {
     key: "handoff", label: "LIVE HANDOFF",
@@ -655,19 +651,23 @@ function renderBoot(state) {
     }, 720);
   }
   lastBootStage = activeStage.key;
-  for (const [index, item] of stages.entries()) {
-    const {id, ready} = item;
+  for (const [index, stage] of stages.entries()) {
     const active = index === activeIndex;
-    text(id, ready ? "READY" : active ? "ACTIVE" : "WAIT");
-    byId(id).classList.toggle("ready", ready);
-    const stage = document.querySelector(`.boot-sequence > [data-boot-stage="${id.replace("boot-", "")}"]`);
-    if (stage) {
-      stage.classList.toggle("ready", ready);
-      stage.classList.toggle("active", active);
-      const state = stage.querySelector(":scope > b");
-      if (state) state.textContent = ready ? "READY" : active ? "ACTIVE" : "QUEUED";
-    }
+    stage.node.classList.toggle("ready", stage.ready);
+    stage.node.classList.toggle("active", active);
+    const badge = stage.node.querySelector(":scope > b");
+    if (badge) badge.textContent = stage.ready ? "READY" : active ? "ACTIVE" : "WAIT";
   }
+  const announcement = {
+    active: Boolean(boot.active),
+    status: String(boot.status || ""),
+    detail: String(boot.detail || ""),
+    progress,
+    events: number(boot.events),
+    stage: activeStage.key,
+    version: String(state.app?.version || ""),
+    release: state.app?.release || null,
+  };
   if (!boot.active) {
     if (!bootReadyAt && !bootHoldComplete) bootReadyAt = performance.now();
     const remaining = bootHoldComplete ? 0 : BOOT_READY_HOLD_MS - (performance.now() - bootReadyAt);
@@ -677,6 +677,8 @@ function renderBoot(state) {
       byId("app").setAttribute("aria-hidden", "true");
       text("boot-status", "FLIGHT DECK READY");
       text("boot-detail", "Stand by for live handoff");
+      // The boot scene counts down to this moment and jumps into the deck.
+      announceBoot({...announcement, handoffAt: performance.now() + remaining});
       if (!bootHoldTimer) {
         bootHoldTimer = window.setTimeout(() => {
           bootHoldTimer = 0;
@@ -687,6 +689,7 @@ function renderBoot(state) {
     }
     bootReadyAt = 0;
     bootHoldComplete = true;
+    announceBoot({...announcement, handoffAt: performance.now()});
     document.body.classList.add("ready");
     byId("app").setAttribute("aria-hidden", "false");
     if (!bootRoot.hidden && !bootHideTimer) {
@@ -710,7 +713,24 @@ function renderBoot(state) {
     document.body.classList.remove("ready");
     byId("app").setAttribute("aria-hidden", "true");
     acknowledgeBootPresented();
+    announceBoot(announcement);
   }
+}
+
+// The startup systems and the progress each one completes at live in the
+// boot markup, so the progress ring's markers and this code agree.
+function bootStages() {
+  return [...document.querySelectorAll(".boot-sequence > [data-boot-stage]")].map((node) => ({
+    node,
+    key: node.dataset.bootStage,
+    label: node.dataset.bootLabel || node.dataset.bootStage.toUpperCase(),
+    threshold: number(node.dataset.bootThreshold),
+  }));
+}
+
+// boot-scene.js draws the watcher, sky, log and countdown from these.
+function announceBoot(detail) {
+  window.dispatchEvent(new CustomEvent("voidcompass:boot", {detail}));
 }
 
 function renderCommissioning(onboarding) {

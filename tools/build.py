@@ -151,6 +151,8 @@ VSVersionInfo(
         f'--add-data={project_dir / "assets" / "icons"}{data_sep}assets/icons',
         f'--add-data={project_dir / "assets" / "images"}{data_sep}assets/images',
         f'--add-data={project_dir / "web"}{data_sep}web',
+        # The boot screen shows this release's notes from the update log.
+        f'--add-data={project_dir / "mini-readme.md"}{data_sep}.',
         f'--add-data={project_dir / "data" / "mining_data.db"}{data_sep}data',
         f'--add-data={project_dir / "data" / "codexRef.json"}{data_sep}data',
         f'--add-data={project_dir / "data" / "achievements.json"}{data_sep}data',

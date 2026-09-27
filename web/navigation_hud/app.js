@@ -433,10 +433,21 @@ function vehiclePresentation(state = {}) {
   const surfaceControl = [
     'srv_handbrake', 'srv_turret', 'srv_drive_assist',
   ].includes(motion);
-  if (motion.startsWith('carrier_')) {
+  // A carrier jump belongs to the carrier, whoever is aboard and wherever.
+  if (motion.startsWith('carrier_') && motion !== 'carrier_deck') {
     return catalog.carrier();
   }
-  if (motion === 'on_foot' || label === 'ONFOOT' || label === 'ON FOOT') {
+  // Otherwise where the commander actually is wins over the state label,
+  // which other states can take (SETTLEMENT, SUIT COLD, SRV THREAT...). A
+  // deploy or board transition still shows the craft changing hands.
+  const mode = String(vehicle.mode || '');
+  if (!motion.startsWith('vehicle_')) {
+    if (mode === 'on_foot') return catalog.onFoot();
+    if (mode === 'srv') return catalog.resolveSurface(vehicle.surface || 'SRV');
+    if (mode === 'fighter') return catalog.fighter();
+  }
+  if (motion === 'on_foot' || motion === 'carrier_deck'
+      || label === 'ONFOOT' || label === 'ON FOOT') {
     return catalog.onFoot();
   }
   if (motion === 'surface_vehicle' || motion.startsWith('vehicle_') || surfaceControl) {
@@ -797,6 +808,12 @@ function render(data) {
   hud.classList.toggle('standard', !expanded);
   hud.classList.toggle('expanded', expanded);
   hud.classList.toggle('no-crt', !data.effects?.crt);
+  // Overlay Studio's type choices: typeface, a floor for the small text,
+  // and brighter labels. The stylesheet does the rest.
+  const type = data.theme?.type || {};
+  hud.dataset.face = ['clear', 'terminal'].includes(type.face) ? type.face : 'cockpit';
+  hud.dataset.labels = ['large', 'larger'].includes(type.labels) ? type.labels : 'standard';
+  hud.classList.toggle('bright-labels', Boolean(type.bright));
   // A hidden overlay keeps its state but stops spending frames on it.
   hud.classList.toggle('dormant', data.window?.visible === false);
   const reducedMotion = Boolean(data.effects?.reduced_motion || osMotionPreference.matches);

@@ -200,6 +200,12 @@ class NavigationStatePresentationTests(unittest.TestCase):
                 self.assertEqual((model["window"]["width"], model["window"]["height"]), (750, 489))
                 self.assertEqual(hud._html_window_size, (750, 489))
                 self.assertEqual(model["theme"]["text_scale"], 1.5)
+                # The portrait follows where the commander is, from Status.json.
+                self.assertEqual(model["state"]["vehicle"]["mode"], "ship")
+                for flag, mode in (("on_foot", "on_foot"), ("in_srv", "srv"), ("in_fighter", "fighter")):
+                    hud.update("SYNUEFE XR-H D11-102", "", 0, 7, 16, None, {},
+                               nav_context={"current": "SYNUEFE XR-H D11-102", flag: True})
+                    self.assertEqual(hud._html_last_model["state"]["vehicle"]["mode"], mode, flag)
             finally:
                 hud.win.destroy()
         finally:
@@ -447,6 +453,23 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
         self.assertEqual(page.evaluate(read)["name"], "", "an SRV has no ship name")
         self.render(page, hud_snapshot(hud_state("ONFOOT")))
         self.assertEqual(page.evaluate(read)["src"], "/ship-art/Commander%20On%20Foot.png")
+        # Other states take the label while the commander is out of the ship;
+        # the portrait follows where they are, not what the label says.
+        for label, mode, surface, art in (
+                ("SETTLEMENT", "on_foot", "", "Commander%20On%20Foot.png"),
+                ("SUIT COLD", "on_foot", "", "Commander%20On%20Foot.png"),
+                ("CARRIER DECK", "on_foot", "", "Commander%20On%20Foot.png"),
+                ("SRV THREAT", "srv", "SCORPION", "SRV%20Scorpion.png"),
+                ("SUPERCRUISE", "ship", "", "DiamondBack%20Explorer.png")):
+            state = hud_state(label)
+            state["vehicle"].update(mode=mode, surface=surface)
+            self.render(page, hud_snapshot(state))
+            self.assertEqual(page.evaluate(read)["src"], "/ship-art/" + art, label)
+        # A carrier jump still shows the carrier with the commander aboard.
+        jump = hud_state("CARRIER TRANSIT")
+        jump["vehicle"]["mode"] = "on_foot"
+        self.render(page, hud_snapshot(jump))
+        self.assertNotIn("On%20Foot", page.evaluate(read)["src"])
         unknown = hud_state("SUPERCRUISE")
         unknown["vehicle"] = {"ship_symbol": "not_a_ship", "ship_type": "", "ship_name": ""}
         self.render(page, hud_snapshot(unknown))
