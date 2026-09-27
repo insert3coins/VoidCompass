@@ -15,6 +15,7 @@ import time
 import unittest
 from urllib.parse import unquote, urlsplit
 
+from voidcompass.core import themes
 from voidcompass.core.application_runtime import ApplicationRuntime
 from voidcompass.overlays.hud import TacticalHUD
 
@@ -77,7 +78,7 @@ def hud_snapshot(state, layout="standard", scale=1.0, reduced=True, **extra):
     ]
     snapshot = {
         "schema": 1, "layout": layout,
-        "theme": {"text_scale": scale},
+        "theme": {**themes.ACTIVE_PALETTE, "text_scale": scale},
         "effects": {"reduced_motion": reduced, "crt": True, "opacity": 1},
         "state": state,
         "system": {"name": "SYNUEFE XR-H D11-102", "star_class": "G",
