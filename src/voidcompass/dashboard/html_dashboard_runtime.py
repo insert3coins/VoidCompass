@@ -21,7 +21,6 @@ from voidcompass.core.diagnostic_logs import (
 )
 from voidcompass.core import themes
 from voidcompass.core.paths import resource_path, source_launcher_path
-from voidcompass.core.release_notes import current_release
 
 
 # A WebView2 start failure is usually transient (a runtime update in progress,
@@ -108,8 +107,6 @@ class HtmlDashboardRuntime:
             "detail": "Starting the private command deck",
             "progress": 0.06,
         }
-        # The boot screen presents what is new in this release.
-        self._release = current_release(self.app_version)
         geometry = _geometry_payload(
             config.get("dashboard_window_geometry") or config.get("main_geometry")
         )
@@ -268,7 +265,6 @@ class HtmlDashboardRuntime:
         payload["app"] = {
             "name": "Void Compass",
             "version": self.app_version,
-            "release": self._release,
             **dict(payload.get("app") or {}),
         }
         payload["boot"] = dict(self._boot)

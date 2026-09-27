@@ -108,6 +108,7 @@ class OverlayStartupRestoreTests(unittest.TestCase):
                 "carrier_hud": "carrier",
                 "prospector_hud": "prospector",
                 "heartbeat_hud": "heartbeat",
+                "galnet_ticker_hud": "galnet_ticker",
                 "cargo_hud": "cargo",
                 "toast_hud": "toast",
             }[spec.attr]

@@ -11,8 +11,6 @@ RENDER = SOURCE[SOURCE.index("function renderBoot(state)"):SOURCE.index("functio
 STATE_RENDER = SOURCE[SOURCE.index("function renderState(state)"):SOURCE.index("function aboutMatrixNodes(")]
 SCENE = (WEB / "dashboard/boot-scene.js").read_text(encoding="utf-8")
 FACT_INTERVAL_MS = int(re.search(r"const FACT_INTERVAL_MS = (\d+);", SCENE).group(1))
-RELEASE = {"version": "9.9.9", "title": "Test Flight", "date": "2026-Sep-27",
-           "notes": ["First change.", "Second change.", "Third change."]}
 
 
 def run():
@@ -77,8 +75,8 @@ def run():
         for width, height in [(1440, 900), (1024, 768), (800, 600), (480, 740), (960, 480)]:
             page.set_viewport_size({"width": width, "height": height})
             for progress, stage in [(0, "profile"), (.5, "survey"), (.8, "journal"), (.9, "cockpit"), (1, "handoff")]:
-                page.evaluate("""({progress, stage, release}) => {
-                  bootTest({app: {version: '9.9.9', release}, boot: {active: true, progress, status: 'INITIALISING FLIGHT COMPUTER', detail: 'Preparing the local exploration archive'}});
+                page.evaluate("""({progress, stage}) => {
+                  bootTest({app: {version: '9.9.9'}, boot: {active: true, progress, status: 'INITIALISING FLIGHT COMPUTER', detail: 'Preparing the local exploration archive'}});
                   const loader = document.getElementById('boot-loader');
                   if (loader.dataset.bootStage !== stage) throw Error(`Wrong stage at ${progress}: ${loader.dataset.bootStage}`);
                   if (loader.style.getPropertyValue('--boot-progress') !== String(Math.round(progress * 100))) throw Error('Ring disagrees with progress');
@@ -92,15 +90,14 @@ def run():
                   }
                   if (document.documentElement.scrollWidth > innerWidth + 1) throw Error('Boot scrolls sideways');
                   if (document.body.classList.contains('ready')) throw Error('Premature handoff');
-                }""", {"progress": progress, "stage": stage, "release": RELEASE})
+                }""", {"progress": progress, "stage": stage})
         page.wait_for_timeout(100)
         assert "boot_presented" in signals, "Browser never acknowledged its first boot frame"
         page.evaluate("""() => {
-          if (document.getElementById('boot-release').hidden) throw Error('Release notes hidden');
-          if (!document.getElementById('boot-release-line').textContent.includes('TEST FLIGHT')) throw Error('Release title missing');
-          if (document.getElementById('boot-release-note').textContent !== 'First change.') throw Error('Release note missing');
-          bootTest({app: {version: '9.9.9', release: null}, boot: {active: true, progress: .2, status: 'BUILDING DASHBOARD CORE', detail: 'Loading profile', events: 0}});
-          if (!document.getElementById('boot-release').hidden) throw Error('Stale release notes still shown');
+          // The version, and no release notes: the log has the room.
+          if (!document.getElementById('boot-version-line').textContent.startsWith('V9.9.9')) throw Error('Version missing');
+          if (document.querySelector('#boot-release, .boot-release')) throw Error('Release notes are back on the boot screen');
+          bootTest({app: {version: '9.9.9'}, boot: {active: true, progress: .2, status: 'BUILDING DASHBOARD CORE', detail: 'Loading profile', events: 0}});
           bootTest({boot: {active: true, progress: .8, status: 'RESTORING RECENT JOURNAL', detail: 'Reduced 400 events', events: 400}});
           const state = bootScene.state();
           if (!state.log.includes('BUILDING DASHBOARD CORE') || state.log.at(-1) !== 'RESTORING RECENT JOURNAL') throw Error('Log missed a status');
@@ -200,7 +197,7 @@ def run():
         }""")
         assert not errors, errors
         browser.close()
-    print("PASS: boot stages and ring, 5 viewport sizes, sky and watcher, log and release notes, reduced motion, "
+    print("PASS: boot stages and ring, 5 viewport sizes, sky and watcher, log and version, reduced motion, "
           "commissioning, countdown and jump, single hydrated handoff and stale-snapshot rejection")
 
 

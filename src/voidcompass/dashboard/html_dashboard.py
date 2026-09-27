@@ -37,6 +37,7 @@ from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_mat
 from voidcompass.mining.rhino_intelligence import ground_intelligence
 from voidcompass.mining.rhino_minimap import location_index
 from voidcompass.core.config import get_active_profile, get_profile_dir
+from voidcompass.core.overlay_registry import OVERLAY_SPECS, RHINO_MAP_AVAILABLE
 from voidcompass.exploration.deep_survey import recon_report
 from voidcompass.exploration.exploration_intelligence import body_completion
 from voidcompass.core.diagnostic_logs import application_base_dir
@@ -2010,7 +2011,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
         for key in (
             "journal_path", "screenshots_path", "screenshots_enabled",
             "ui_scale_percent", "reduced_motion_enabled", "hud_animation_intensity",
-            "overlay_hotkeys_enabled",
+            "overlay_hotkeys_enabled", "overlay_mouse_passthrough",
             "edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled",
             "eddn_market_upload_enabled", "carrier_discord_webhook_url",
             "runtime_trace_enabled", "crash_reporting_enabled",
@@ -2018,9 +2019,22 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             "automatic_profile_backups_enabled",
             "galnet_enabled", "galnet_auto_rotate_enabled",
             "galnet_rotation_seconds", "galnet_refresh_minutes",
+            "low_fuel_threshold_pct", "auto_copy_waypoint",
+            "achievement_notifications_enabled", "adaptive_command_enabled",
         ):
             value = self.config.get(key)
             values[key] = value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
+        for key, default in (
+            ("overlay_mouse_passthrough", True), ("low_fuel_threshold_pct", 0.25),
+            ("auto_copy_waypoint", False), ("achievement_notifications_enabled", True),
+            ("adaptive_command_enabled", True),
+        ):
+            if values.get(key) is None:
+                values[key] = default
+        engine = getattr(self, "achievement_engine", None)
+        values["achievements_enabled"] = bool(
+            getattr(engine, "enabled", self.config.get("achievements_enabled", True))
+        )
         theme_name, theme_palette = themes.resolve_theme(
             self.config.get("ui_theme_name"), self.config.get("ui_custom_themes") or {},
         )
@@ -2050,9 +2064,38 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             elapsed = max(0.0, time.time() - started_at)
         elif not elapsed and started_at and finished_at:
             elapsed = max(0.0, finished_at - started_at)
+        custom_themes = self.config.get("ui_custom_themes") or {}
+        theme_cards = []
+        for name in [*themes.BUILTIN_THEMES, *sorted(n for n in custom_themes if n not in themes.BUILTIN_THEMES)]:
+            _resolved, palette = themes.resolve_theme(name, custom_themes)
+            theme_cards.append({
+                "name": name,
+                "custom": name not in themes.BUILTIN_THEMES,
+                "swatch": {key: palette.get(key, "") for key in (
+                    "bg", "panel", "border", "accent", "orange", "green", "yellow", "red", "text",
+                )},
+            })
         return {
             "values": values, "hotkeys": hotkeys, "health": health, "eddn": eddn,
             "galnet": self._html_dashboard_galnet(),
+            "profile": {
+                "key": profile,
+                "name": _text(self.config.get("active_commander_name") or "Unknown Commander", 120),
+                "fid": _text(self.config.get("active_commander_fid"), 40),
+            },
+            "paths": self._html_settings_paths(),
+            "last_save": dict(
+                getattr(self, "_html_settings_last_save", None) or {"id": 0, "ok": True, "detail": ""}
+            ),
+            "themes": theme_cards,
+            "overlays": [
+                {
+                    "id": spec.attr,
+                    "label": spec.label,
+                    "enabled": bool(self.config.get(spec.enabled_key, spec.default_enabled)),
+                }
+                for spec in OVERLAY_SPECS if spec.available
+            ],
             "theme_editor": {
                 "name": theme_name,
                 "palette": theme_palette,
@@ -2075,6 +2118,74 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                 "elapsed_seconds": round(max(0.0, elapsed), 1),
             },
         }
+
+    def _html_settings_paths(self):
+        """Whether the configured folders exist, and what the journal holds.
+
+        The settings snapshot republishes often; a journal folder can hold
+        thousands of files, so the count is kept for 20 seconds per path.
+        """
+        journal = str(self.config.get("journal_path") or "")
+        screenshots = str(self.config.get("screenshots_path") or "")
+        cache = getattr(self, "_html_settings_paths_cache", None)
+        now = time.monotonic()
+        if cache and cache[0] == (journal, screenshots) and now - cache[1] < 20.0:
+            return cache[2]
+        logs, latest = 0, ""
+        if journal and os.path.isdir(journal):
+            try:
+                names = sorted(
+                    name for name in os.listdir(journal)
+                    if name.startswith("Journal.") and name.endswith(".log")
+                )
+                logs, latest = len(names), (names[-1] if names else "")
+            except OSError:
+                pass
+        result = {
+            "journal": {"exists": bool(journal and os.path.isdir(journal)), "logs": logs, "latest": latest},
+            "screenshots": {"exists": bool(screenshots and os.path.isdir(screenshots))},
+        }
+        self._html_settings_paths_cache = ((journal, screenshots), now, result)
+        return result
+
+    def _apply_settings_changes(self, changed):
+        """Apply only what a settings change affects.
+
+        Settings save one control at a time, so this runs on every change:
+        it must not refetch Galnet or re-register hotkeys unless those
+        settings actually changed.
+        """
+        changed = set(changed)
+        if "eddn_market_upload_enabled" in changed:
+            try:
+                from voidcompass.services.eddn_upload import UPLOADER as eddn_market_uploader
+                eddn_market_uploader.set_enabled(bool(self.config.get("eddn_market_upload_enabled", True)))
+            except Exception:
+                pass
+        if "ui_scale_percent" in changed:
+            apply_ui_scale(self.root, self.config.get("ui_scale_percent", 100))
+        if changed & {"reduced_motion_enabled", "hud_animation_intensity"}:
+            self._apply_active_profile_theme()
+        if changed & {"screenshots_enabled", "screenshots_path", "reduced_motion_enabled", "hud_animation_intensity"}:
+            self._apply_runtime_feature_toggles()
+        if changed & {"hotkeys", "overlay_hotkeys_enabled"}:
+            self._configure_overlay_hotkeys()
+        if changed & {"galnet_enabled", "galnet_refresh_minutes"}:
+            self._restart_galnet_feed_schedule(delay_ms=250)
+            self._update_galnet_ticker()
+        if "overlay_mouse_passthrough" in changed:
+            self._apply_overlay_mouse_passthrough()
+        if "achievements_enabled" in changed:
+            engine = getattr(self, "achievement_engine", None)
+            if engine is not None:
+                engine.set_options(enabled=bool(self.config.get("achievements_enabled", True)))
+        if "journal_path" in changed and getattr(self, "watcher", None) is not None:
+            path = str(self.config.get("journal_path") or "")
+            if path and os.path.isdir(path):
+                self.watcher.switch_folder(path)
+        if changed & {"low_fuel_threshold_pct", "hud_animation_intensity"}:
+            self.update_hud()
+        self._html_settings_paths_cache = None
 
     def _planet_materials_store(self):
         return PlanetMaterialsStore(os.path.join(
@@ -2156,7 +2267,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                 body_totals[saved_body] = _integer(saved_details.get("mining_locations"))
         coverage_maps = tracker.map_catalogue(
             sites, body_totals, getattr(self, "current_sys", ""),
-        ) if tracker is not None and include_coverage_maps else []
+        ) if tracker is not None and include_coverage_maps and RHINO_MAP_AVAILABLE else []
         return {
             "on_planet": bool(getattr(self, "on_planet", False)),
             "bodies": bodies,
@@ -2169,6 +2280,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             "resources": resources,
             "sites": sites,
             "coverage_maps": coverage_maps,
+            "coverage_maps_enabled": RHINO_MAP_AVAILABLE,
             "navigation_target": {
                 "active": bool(getattr(self, "target_latlon_active", False)),
                 "system": getattr(self, "ground_target_system", ""),
@@ -2230,7 +2342,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
 
     def _observe_rhino_minimap_status(self, status):
         tracker = getattr(self, "rhino_minimap", None)
-        if tracker is None:
+        if tracker is None or not RHINO_MAP_AVAILABLE:
             return False
         status = status if isinstance(status, dict) else {}
         was_active = bool(tracker.in_rhino)
@@ -2759,7 +2871,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                     return False
             elif operation == "export_map":
                 tracker = getattr(self, "rhino_minimap", None)
-                if tracker is None:
+                if tracker is None or not RHINO_MAP_AVAILABLE:
                     return False
                 target = tracker.export_picture_for(
                     _text(payload.get("body"), 180), _text(payload.get("map_name"), 120),
@@ -3986,12 +4098,18 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                 self._rerun_first_run_onboarding()
                 return True
             if operation == "save":
+                # Settings save as they change: a payload carries any subset
+                # of these, and anything it leaves out keeps its value.
                 values = payload.get("values") or {}
+                # The command channel answers before this runs, so the page
+                # learns whether its save was kept from the next snapshot.
+                save_id = _integer(payload.get("save_id"), 0)
                 allowed = {
                     "journal_path": str, "screenshots_path": str,
                     "screenshots_enabled": bool, "ui_scale_percent": int,
                     "reduced_motion_enabled": bool, "hud_animation_intensity": str,
-                    "overlay_hotkeys_enabled": bool, "edsm_cmdr_name": str,
+                    "overlay_hotkeys_enabled": bool, "overlay_mouse_passthrough": bool,
+                    "edsm_cmdr_name": str,
                     "edsm_api_key": str, "edsm_upload_enabled": bool,
                     "eddn_market_upload_enabled": bool,
                     "carrier_discord_webhook_url": str,
@@ -4003,38 +4121,52 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
                     "galnet_auto_rotate_enabled": bool,
                     "galnet_rotation_seconds": int,
                     "galnet_refresh_minutes": int,
+                    "low_fuel_threshold_pct": float,
+                    "auto_copy_waypoint": bool,
+                    "achievements_enabled": bool,
+                    "achievement_notifications_enabled": bool,
+                    "adaptive_command_enabled": bool,
                 }
+                updates = {}
                 for key, cast in allowed.items():
                     if key not in values:
                         continue
                     value = values[key]
                     if cast is bool:
-                        self.config[key] = bool(value)
+                        updates[key] = bool(value)
                     elif key == "galnet_rotation_seconds":
-                        self.config[key] = max(4, min(60, _integer(value, 7)))
+                        updates[key] = max(4, min(60, _integer(value, 7)))
                     elif key == "galnet_refresh_minutes":
-                        self.config[key] = max(5, min(240, _integer(value, 30)))
-                    elif cast is int:
-                        self.config[key] = max(75, min(200, _integer(value, 100)))
+                        updates[key] = max(5, min(240, _integer(value, 30)))
+                    elif key == "ui_scale_percent":
+                        updates[key] = max(75, min(200, _integer(value, 100)))
+                    elif key == "low_fuel_threshold_pct":
+                        updates[key] = round(max(0.05, min(0.6, _number(value, 0.25))), 2)
+                    elif key == "hud_animation_intensity":
+                        intensity = _text(value, 20).title()
+                        updates[key] = intensity if intensity in {"Calm", "Standard", "Energetic"} else "Standard"
                     else:
-                        self.config[key] = _text(value, 1000)
-                raw_hotkeys = payload.get("hotkeys") or {}
-                normalized, errors = validate_hotkey_bindings(raw_hotkeys)
-                if errors:
-                    return False
-                for action, key, _label, _attr in OVERLAY_HOTKEY_SPECS:
-                    self.config[key] = normalized.get(action, "")
+                        updates[key] = _text(value, 1000)
+                changed_keys = {key for key, value in updates.items() if self.config.get(key) != value}
+                if "hotkeys" in payload:
+                    # A binding that clashes is refused before anything is
+                    # written, so a rejected save changes nothing.
+                    normalized, errors = validate_hotkey_bindings(payload.get("hotkeys") or {})
+                    if errors:
+                        self._html_settings_last_save = {
+                            "id": save_id, "ok": False,
+                            "detail": "; ".join(f"{action} {message}" for action, message in errors.items())[:500],
+                        }
+                        self._schedule_html_dashboard_publish(immediate=True)
+                        return False
+                    for action, key, _label, _attr in OVERLAY_HOTKEY_SPECS:
+                        if self.config.get(key, "") != normalized.get(action, ""):
+                            changed_keys.add("hotkeys")
+                        self.config[key] = normalized.get(action, "")
+                self.config.update(updates)
                 self._persist_config()
-                try:
-                    from voidcompass.services.eddn_upload import UPLOADER as eddn_market_uploader
-                    eddn_market_uploader.set_enabled(bool(self.config.get("eddn_market_upload_enabled", True)))
-                except Exception:
-                    pass
-                apply_ui_scale(self.root, self.config.get("ui_scale_percent", 100))
-                self._apply_active_profile_theme()
-                self._apply_runtime_feature_toggles()
-                self._configure_overlay_hotkeys()
-                self._restart_galnet_feed_schedule(delay_ms=250)
+                self._apply_settings_changes(changed_keys)
+                self._html_settings_last_save = {"id": save_id, "ok": True, "detail": ""}
                 changed = True
             elif operation == "rebuild_cache":
                 self.config["edsm_backfill_on_cache_rebuild"] = bool(payload.get("upload_edsm"))
@@ -4092,6 +4224,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             service = getattr(self, "galnet_feed", None)
             if service is None or not service.clear_cache():
                 return False
+            self._update_galnet_ticker()
             self._schedule_html_dashboard_publish(immediate=True)
             return True
         if action == "check_updates":

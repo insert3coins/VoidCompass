@@ -59,7 +59,7 @@ body.ready .boot * { animation-play-state: paused !important; }
 .boot-eyebrow { margin: 0; color: var(--boot-stage-color); font: 700 10px/1 Consolas,monospace; letter-spacing: .32em; transition: color .8s ease; }
 .boot-wordmark { margin: 14px 0 0; color: var(--text); font: 700 clamp(44px,5vw,84px)/.92 "Bahnschrift SemiCondensed","Arial Narrow",sans-serif; letter-spacing: .08em; text-wrap: balance; animation: boot-wordmark-in 1.6s cubic-bezier(.2,.8,.2,1) both; }
 .boot-wordmark span { color: var(--accent); text-shadow: 0 0 30px color-mix(in srgb,var(--accent) 35%,transparent); }
-.boot-release-line { margin: 16px 0 0; color: var(--muted); font: 700 10px/1.5 Consolas,monospace; letter-spacing: .16em; }
+.boot-version-line { margin: 16px 0 0; color: var(--muted); font: 700 10px/1.5 Consolas,monospace; letter-spacing: .16em; }
 
 .boot-operation { margin-top: clamp(22px,4vh,44px); display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 18px; padding: 15px 0 14px 18px; border-left: 2px solid var(--boot-stage-color); background: linear-gradient(90deg,color-mix(in srgb,var(--boot-stage-color) 9%,transparent),transparent 72%); transition: border-color .8s ease; }
 .boot-operation-copy { min-width: 0; }
@@ -108,14 +108,6 @@ body.ready .boot * { animation-play-state: paused !important; }
 #boot-log li.current > span { color: var(--text); }
 #boot-log li.current > span::after { content: "\258C"; margin-left: 5px; color: var(--boot-stage-color); animation: boot-cursor 1s steps(2,end) infinite; }
 
-.boot-release { position: relative; margin-top: clamp(16px,2.6vh,24px); padding: 12px 16px 13px; border: 1px solid color-mix(in srgb,var(--accent) 28%,var(--border)); background: linear-gradient(135deg,color-mix(in srgb,var(--accent) 8%,var(--panel)),color-mix(in srgb,var(--panel) 55%,transparent)); }
-.boot-release[hidden] { display: none; }
-.boot-release::before { content: ""; position: absolute; left: -1px; top: -1px; width: 28px; height: 2px; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-.boot-release header { display: flex; justify-content: space-between; gap: 12px; color: var(--accent); font: 700 9px/1 Consolas,monospace; letter-spacing: .18em; }
-.boot-release header b { color: var(--text); }
-.boot-release header em { color: var(--dim); font-style: normal; font-variant-numeric: tabular-nums; }
-#boot-release-note { margin: 9px 0 0; min-height: calc(1.55em * 4); color: var(--text); font: 13px/1.55 "Segoe UI",sans-serif; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; opacity: .92; }
-.boot-release.turning #boot-release-note { animation: boot-note-in .7s ease-out; }
 
 /* The jump: the sky rushes past the eye while the deck's type falls away. */
 .boot.jumping .boot-sky { transform: scale(1.7); opacity: .3; }
@@ -138,7 +130,6 @@ body.ready .boot * { animation-play-state: paused !important; }
   .boot-wordmark { font-size: clamp(40px,4.4vw,70px); }
   .boot-sequence li > p small { display: none; }
   #boot-log li:nth-last-child(n+5) { display: none; }
-  #boot-release-note { -webkit-line-clamp: 3; min-height: calc(1.55em * 3); }
   .boot-transmission p { min-height: 3.2em; }
 }
 @media (max-width: 1180px) {
@@ -161,7 +152,7 @@ body.ready .boot * { animation-play-state: paused !important; }
   #boot-log li > span { display: none; }
 }
 @media (max-height: 560px) and (min-width: 901px) {
-  .boot-log, .boot-release { display: none; }
+  .boot-log { display: none; }
   .boot-transmission p { min-height: 0; }
 }
 body.reduced-motion .boot *, body.reduced-motion .boot::after { animation: none !important; transition: none !important; }
