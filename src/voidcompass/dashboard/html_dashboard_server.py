@@ -209,8 +209,10 @@ class HtmlDashboardServer:
                 return None
             return candidate
         # Shared browser assets live beside the dashboard folder so every
-        # overlay can use the same branded cursor without duplicating it.
-        if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png"}:
+        # overlay can use the same branded cursor without duplicating it, and
+        # the boot screen wakes the same watcher orb the heartbeat overlay draws.
+        if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png",
+                            "/assets/heartbeat-orb.js"}:
             candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()
             try:
                 candidate.relative_to(self.static_root.parent)

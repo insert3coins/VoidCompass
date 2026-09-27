@@ -2601,10 +2601,14 @@ class MainDashboard(
         splash = getattr(self.root, "_voidcompass_startup_splash", None)
         return getattr(splash, "_voidcompass_boot", None) if splash is not None else None
 
-    def _startup_boot_update(self, status, detail="", progress=None):
+    def _startup_boot_update(self, status, detail="", progress=None, events=None):
         boot = self._startup_boot()
-        if boot is not None:
+        if boot is None:
+            return
+        if events is None:
             boot.set_runtime_status(status, detail, progress)
+        else:
+            boot.set_runtime_status(status, detail, progress, events)
 
     def _hold_startup_presentation(self):
         """Keep Dashboard and enabled overlays behind the boot handoff."""
@@ -2792,6 +2796,7 @@ class MainDashboard(
             "LIVE JOURNAL TAIL REACHED",
             f"{self._startup_journal_events_loaded:,} recent events restored",
             0.88,
+            self._startup_journal_events_loaded,
         )
 
     def _maybe_complete_startup_presentation(self):
@@ -7332,6 +7337,7 @@ class MainDashboard(
                 self.heartbeat_hud.pulse(
                     "journal", ev,
                     getattr(self, "hud_flight_state", None) or "FLIGHT",
+                    raw if isinstance(raw, dict) else d,
                 )
         # Apply personal-credit changes before toast and tool
         # handlers. A failure in a secondary feature must never leave the HUD
@@ -9697,6 +9703,7 @@ class MainDashboard(
                 "RESTORING RECENT JOURNAL",
                 f"Reduced {self._startup_journal_events_loaded:,} events toward the live tail",
                 min(0.84, 0.72 + self._startup_journal_events_loaded / 10_000.0),
+                self._startup_journal_events_loaded,
             )
         self._hud_event_batch_priority = None
         self.batch_mode = True

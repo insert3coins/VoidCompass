@@ -10,6 +10,36 @@ from voidcompass.core.config import COLOR_ACCENT, COLOR_GREEN, COLOR_TEXT, COLOR
 from voidcompass.overlays.html_navigation_hud import HtmlNavigationHudBridge
 from voidcompass.overlays.html_overlay_runtime import overlay_opacity_ratio
 
+# Overlay Studio's type choices for the Navigation HUD. Cockpit is the
+# original Bahnschrift; Clear is Segoe UI, easiest to read at small sizes;
+# Terminal is a fixed-width face. The small-text size puts a floor under
+# every label (standard keeps the designed sizes).
+HUD_FONT_FACES = ("cockpit", "clear", "terminal")
+HUD_LABEL_SIZES = ("standard", "large", "larger")
+
+
+def hud_typography(config):
+    """The Navigation HUD's typeface, small-text size and label brightness."""
+    face = str((config or {}).get("hud_font_face") or "cockpit").casefold()
+    labels = str((config or {}).get("hud_label_size") or "standard").casefold()
+    return {
+        "face": face if face in HUD_FONT_FACES else "cockpit",
+        "labels": labels if labels in HUD_LABEL_SIZES else "standard",
+        "bright": bool((config or {}).get("hud_bright_labels", False)),
+    }
+
+
+def hud_text_scale_percent(config):
+    """The HUD's own text size when set, else the overlay-wide one (75-200)."""
+    def percent(key, default):
+        try:
+            return int(float((config or {}).get(key, default)))
+        except (TypeError, ValueError):
+            return default
+    own = percent("hud_text_scale_percent", 0)
+    chosen = own if own > 0 else percent("overlay_text_scale_percent", 100)
+    return max(75, min(200, chosen))
+
 class TacticalHUD:
     def __init__(self, root, config, on_widget_click=None):
         self.config = config
@@ -98,6 +128,7 @@ class TacticalHUD:
                 "bg": str(theme.bg), "panel": str(theme.panel),
                 "border": str(theme.border), "inset": str(theme.inset),
                 "text_scale": self._text_scale_percent() / 100.0,
+                "type": hud_typography(self.config),
             },
             "effects": {
                 "crt": self._crt_enabled(),
@@ -234,10 +265,7 @@ class TacticalHUD:
         return value if value in ("Subtle", "Standard", "Strong") else "Subtle"
 
     def _text_scale_percent(self):
-        try:
-            return max(75, min(200, int(float(self.config.get("overlay_text_scale_percent", 100)))))
-        except (TypeError, ValueError):
-            return 100
+        return hud_text_scale_percent(self.config)
 
     def _badge_color(self, state):
         if state == "alert":
@@ -1189,6 +1217,17 @@ class TacticalHUD:
                 "ship_type": str(nav_context.get("ship_type") or ""),
                 "ship_name": str(nav_context.get("ship_name") or ""),
                 "surface": str(nav_context.get("vehicle_name") or "").upper(),
+                # Where the commander actually is, from Status.json. The
+                # portrait follows this rather than the state label: on foot
+                # in a settlement the label reads SETTLEMENT, not ONFOOT.
+                "mode": (
+                    "on_foot" if nav_context.get("on_foot")
+                    else "srv" if nav_context.get("in_srv")
+                    else "fighter" if nav_context.get("in_fighter")
+                    else "taxi" if nav_context.get("in_taxi")
+                    else "multicrew" if nav_context.get("in_multicrew")
+                    else "ship"
+                ),
             },
             "notice": self._navigation_event_notice(journal_event, current_display),
             # Every live journal pulse also plays a one-shot accent in the

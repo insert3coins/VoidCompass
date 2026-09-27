@@ -33,22 +33,23 @@ def run():
         page.route("http://overlay.test/**", serve)
         page.goto("http://overlay.test/heartbeat/index.html")
         page.evaluate("""() => {
-          renderHeartbeat({heartbeat: {pulse_id: 0}});
-          if (document.getAnimations().length < 5) throw Error('Missing idle motion');
-          renderHeartbeat({theme: {accent: '#aa44ff'}, heartbeat: {pulse_id: 1, kind: 'journal'}});
-          if (!document.querySelector('.lens-optics').getAnimations().length) throw Error('Missing activity focus');
-          renderHeartbeat({heartbeat: {pulse_id: 2, stalled: true}});
-          if (document.querySelector('.lens-optics').getAnimations().length) throw Error('Stalled activity still playing');
-          const core = document.querySelector('.signal-core');
-          if (Number(getComputedStyle(core).opacity) < .9) throw Error('Quiet lens is dimmed');
-          if (!document.querySelector('.lens-emitter').getAnimations().length) throw Error('Quiet lens stopped breathing');
-          if (document.querySelector('.orbital-satellite').getAnimations()[0].playState !== 'paused') throw Error('Stalled feed still orbiting');
-          renderHeartbeat({heartbeat: {pulse_id: 3}});
+          const jump = {seq: 1, event: 'FSDJump', family: 'travel', tone: 'accent', effect: 'warp', weight: .95};
+          renderHeartbeat({heartbeat: {events: [], status_seq: 0}});
+          if (!heartbeatOrb.state().running) throw Error('Missing idle motion');
+          renderHeartbeat({theme: {accent: '#aa44ff'}, heartbeat: {events: [jump], status_seq: 1}});
+          const active = heartbeatOrb.state();
+          if (!active.effects.includes('warp') || !active.motes) throw Error('Missing journal reaction');
+          if (active.base !== '#aa44ff') throw Error('Theme accent not applied');
+          renderHeartbeat({heartbeat: {events: [jump], stalled: true}});
+          const quiet = heartbeatOrb.state();
+          if (quiet.effects.length || quiet.motes) throw Error('Stalled activity still playing');
+          if (!quiet.running) throw Error('Quiet eye stopped breathing');
+          renderHeartbeat({heartbeat: {events: [jump]}});
         }""")
         page.emulate_media(reduced_motion="reduce")
         page.evaluate("""() => {
-          renderHeartbeat({heartbeat: {pulse_id: 4, kind: 'journal'}});
-          if (document.getAnimations().length) throw Error('Reduced motion still animating');
+          renderHeartbeat({heartbeat: {events: [{seq: 2, event: 'Scan', tone: 'accent', effect: 'sweep', weight: .4}]}});
+          if (heartbeatOrb.state().running || document.getAnimations().length) throw Error('Reduced motion still animating');
         }""")
         page.emulate_media(reduced_motion="no-preference")
         page.goto("http://overlay.test/navigation_hud/index.html")

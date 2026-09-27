@@ -8,31 +8,11 @@
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
-  <main id="heartbeat" class="heartbeat" aria-label="Telemetry heartbeat" title="Telemetry heartbeat">
-    <div class="instrument" aria-hidden="true">
-      <div class="faceplate"></div>
-      <div class="orbital-ticks"></div>
-      <div class="orbital-arc arc-outer"></div>
-      <div class="orbital-arc arc-inner"></div>
-      <div class="orbital-satellite"><i></i></div>
-      <div class="feed-warning"></div>
-      <div class="signal-pulse">
-        <div class="signal-core">
-          <div class="lens-housing"></div>
-          <div class="lens-orbit"></div>
-          <div class="lens-optics">
-            <div class="lens-focus"><div class="lens-drift"><div class="lens-emitter"></div></div></div>
-            <div class="lens-blades"></div>
-            <div class="lens-glass"></div>
-          </div>
-        </div>
-      </div>
-      <div class="event-wave wave-first"></div><div class="event-wave wave-second"></div>
-      <div class="event-rays"></div>
-      <div class="scanlines"></div>
-    </div>
+  <main id="heartbeat" class="heartbeat" role="img" aria-label="Journal watcher" title="Journal watcher">
+    <canvas id="orb" aria-hidden="true"></canvas>
   </main>
   <script src="/assets/overlay-client.js"></script>
+  <script src="/assets/heartbeat-orb.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

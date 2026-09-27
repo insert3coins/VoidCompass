@@ -2,65 +2,18 @@
   color-scheme: dark;
   --bg: #070b10;
   --panel: #0d141c;
-  --inset: #0a1118;
   --border: #243746;
+  --text: #d8e6ee;
+  --muted: #7d93a3;
   --accent: #00d1ff;
   --orange: #ff7a18;
   --green: #4ee59b;
+  --yellow: #ffd54a;
   --red: #ff6075;
 }
 * { box-sizing: border-box; }
-html, body { width: 54px; height: 54px; margin: 0; overflow: hidden; background: transparent; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
 body { pointer-events: none; user-select: none; }
-.heartbeat { width: 54px; height: 54px; color: color-mix(in srgb,var(--accent) 80%,white); contain: strict; transition: color .8s ease; }
-.heartbeat[data-activity="status"] { color: var(--green); }
-.heartbeat[data-activity="change"] { color: var(--orange); }
-.instrument { position: relative; width: 54px; height: 54px; isolation: isolate; }
-.instrument > div { position: absolute; }
-
-/* A floating optical assembly: broken orbital arcs, fine indexing and a beacon. */
-.faceplate {
-  inset: 4px;
-  border-radius: 50%;
-  background: radial-gradient(circle,var(--inset) 45%,color-mix(in srgb,currentColor 12%,var(--panel)) 65%,transparent 72%);
-}
-.orbital-ticks { inset: 2px; border-radius: 50%; background: repeating-conic-gradient(currentColor 0deg 2deg,transparent 2deg 30deg); mask-image: radial-gradient(circle,transparent 64%,#000 66% 70%,transparent 72%); opacity: .55; animation: index-breathe 6s ease-in-out infinite; }
-.orbital-arc { border-radius: 50%; mask-image: radial-gradient(circle,transparent 64%,#000 66%); }
-.arc-outer { inset: 5px; background: conic-gradient(from 20deg,transparent 0deg 30deg,currentColor 80deg 145deg,transparent 148deg 225deg,color-mix(in srgb,currentColor 45%,transparent) 280deg 330deg,transparent 333deg); animation: lens-orbit 18s linear infinite; }
-.arc-inner { inset: 8px; background: conic-gradient(transparent 0deg 80deg,currentColor 82deg 120deg,transparent 122deg 260deg,currentColor 262deg 300deg,transparent 302deg); opacity: .45; animation: lens-orbit 13s linear infinite reverse; }
-.orbital-satellite { inset: 3px; border-radius: 50%; animation: lens-orbit 9s linear infinite; }
-.orbital-satellite i { position: absolute; left: 23px; top: 0; width: 2px; height: 2px; border-radius: 50%; background: #fff; box-shadow: 0 0 4px currentColor,0 0 7px currentColor; }
-.feed-warning { right: 3px; bottom: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--red); box-shadow: 0 0 4px var(--red); opacity: 0; transition: opacity .6s ease; }
-
-/* Camera optics: independent idle layers keep moving through telemetry bursts. */
-.signal-pulse { inset: 11px; }
-.signal-core { position: absolute; inset: 0; transition: opacity 1s ease; }
-.lens-housing { position: absolute; inset: 0; border-radius: 50%; border: 1px solid color-mix(in srgb,currentColor 55%,var(--border)); background: radial-gradient(circle,var(--bg) 55%,color-mix(in srgb,currentColor 28%,var(--panel)) 68%,var(--bg) 74%); box-shadow: 0 0 6px color-mix(in srgb,currentColor 20%,transparent),inset 0 0 3px #000; }
-.lens-orbit { position: absolute; inset: 2px; border-radius: 50%; border: 1px solid transparent; border-top-color: currentColor; border-bottom-color: color-mix(in srgb,currentColor 30%,transparent); animation: lens-orbit 12s linear infinite; opacity: .7; }
-.lens-optics { position: absolute; inset: 5px; border-radius: 50%; overflow: hidden; background: radial-gradient(circle,color-mix(in srgb,currentColor 35%,var(--bg)),var(--bg) 72%); box-shadow: inset 0 0 4px #000,0 0 3px currentColor; }
-.lens-focus { position: absolute; inset: 3px; transform: translate(var(--gaze-x,0px),var(--gaze-y,0px)); transition: transform .8s cubic-bezier(.22,.61,.36,1); }
-.lens-drift { width: 100%; height: 100%; animation: lens-drift 14s ease-in-out infinite; }
-.lens-emitter { width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle,#fff 0%,color-mix(in srgb,currentColor 30%,white) 9%,currentColor 23%,color-mix(in srgb,currentColor 50%,transparent) 48%,transparent 72%); box-shadow: 0 0 7px currentColor; animation: lens-breathe 4.8s ease-in-out infinite; }
-.lens-blades { position: absolute; inset: 1px; border-radius: 50%; background: repeating-conic-gradient(from 0deg,transparent 0deg 43deg,color-mix(in srgb,currentColor 24%,transparent) 45deg,transparent 47deg 60deg); mask-image: radial-gradient(circle,transparent 28%,#000 65%); animation: lens-orbit 24s linear infinite reverse; }
-.lens-glass { position: absolute; inset: 1px; border-radius: 50%; background: radial-gradient(ellipse at 30% 22%,#ffffff80,transparent 24%),linear-gradient(130deg,#ffffff18,transparent 45%,#ffffff0a); animation: lens-glint 8s ease-in-out infinite; }
-.event-wave { left: 17px; top: 17px; width: 20px; height: 20px; opacity: 0; border: 1px solid currentColor; border-radius: 50%; }
-.event-rays { left: 9px; top: 26px; width: 36px; height: 1px; opacity: 0; background: currentColor; box-shadow: 0 0 4px currentColor; }
-.scanlines { inset: 6px; border-radius: 50%; opacity: .12; background: repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.5) 2px 3px); pointer-events: none; }
-.no-crt .scanlines { display: none; }
-
-/* A quiet feed must not extinguish the lens. Keep the warning local to a dot. */
-.heartbeat.stalled .orbital-arc, .heartbeat.stalled .orbital-satellite, .heartbeat.stalled .lens-orbit, .heartbeat.stalled .lens-blades, .heartbeat.stalled .lens-drift { animation-play-state: paused; }
-.heartbeat.stalled .lens-focus, .heartbeat.stalled .lens-drift { transform: none; }
-.heartbeat.stalled .feed-warning { opacity: 1; animation: fault-breathe 3s ease-in-out infinite; }
-.heartbeat.reduced-motion .instrument * { animation: none !important; }
-.heartbeat.reduced-motion, .heartbeat.reduced-motion .instrument * { transition: none !important; }
-@media (prefers-reduced-motion: reduce) {
-  .heartbeat .instrument * { animation: none !important; }
-  .heartbeat, .heartbeat .instrument * { transition: none !important; }
-}
-@keyframes index-breathe { 0%,100% { opacity: .4; } 50% { opacity: .75; } }
-@keyframes lens-orbit { to { transform: rotate(360deg); } }
-@keyframes lens-breathe { 0%,100% { transform: scale(.94); opacity: .9; } 50% { transform: scale(1.12); opacity: 1; } }
-@keyframes lens-drift { 0%,100% { transform: translate(0,0); } 25% { transform: translate(.8px,-.6px); } 50% { transform: translate(-.6px,.8px); } 75% { transform: translate(-.8px,-.5px); } }
-@keyframes lens-glint { 0%,100% { opacity: .45; transform: rotate(-8deg); } 50% { opacity: .9; transform: rotate(18deg); } }
-@keyframes fault-breathe { 0%,100% { opacity: .25; } 50% { opacity: .85; } }
+/* The window is the orb's own square; the canvas draws everything. */
+.heartbeat { width: 100vmin; height: 100vmin; contain: strict; }
+#orb { display: block; width: 100%; height: 100%; }

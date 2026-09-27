@@ -14,6 +14,8 @@ from voidcompass.overlays.overlay_layout_model import (
     OVERLAY_ENABLE_KEYS,
     OVERLAY_LABELS,
 )
+from voidcompass.overlays.heartbeat_hud import EYE_COLORS, ORB_SIZES, eye_color, orb_size
+from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, hud_typography
 from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
 
 
@@ -277,6 +279,10 @@ class HtmlOverlayStudioMixin:
             "options": {
                 "overlay_mouse_passthrough": bool(self.config.get("overlay_mouse_passthrough", True)),
                 "hud_compact_mode": bool(self.config.get("hud_compact_mode", True)),
+                "hud_text_scale_percent": _integer(self.config.get("hud_text_scale_percent"), 0),
+                "hud_font_face": hud_typography(self.config)["face"],
+                "hud_label_size": hud_typography(self.config)["labels"],
+                "hud_bright_labels": hud_typography(self.config)["bright"],
                 "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
                 "overlay_opacity_percent": _integer(self.config.get("overlay_opacity_percent"), 100),
                 "rebuy_warnings_enabled": bool(self.config.get("rebuy_warnings_enabled", True)),
@@ -292,6 +298,8 @@ class HtmlOverlayStudioMixin:
                 "survey_text_scale_percent": _integer(self.config.get("survey_text_scale_percent"), 0),
                 "station_info_timeout_s": _integer(self.config.get("station_info_timeout_s"), 30),
                 "contact_scope_timeout_s": _integer(self.config.get("contact_scope_timeout_s"), 45),
+                "heartbeat_orb_size": orb_size(self.config),
+                "heartbeat_eye_color": eye_color(self.config),
                 "gravity_warning_threshold_g": _number(self.config.get("gravity_warning_threshold_g"), 3.0),
                 "hud_crt_enabled": bool(self.config.get("hud_crt_enabled", True)),
                 "hud_crt_motion_enabled": bool(self.config.get("hud_crt_motion_enabled", True)),
@@ -398,7 +406,7 @@ class HtmlOverlayStudioMixin:
             "rebuy_warnings_enabled",
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies",
-            "hud_crt_enabled", "hud_crt_motion_enabled",
+            "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
         }
         key = _text(key, 80)
         if key not in allowed:
@@ -410,7 +418,7 @@ class HtmlOverlayStudioMixin:
         self._persist_config()
         if key == "overlay_mouse_passthrough":
             self._apply_overlay_mouse_passthrough()
-        elif key in {"hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled"}:
+        elif key in {"hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels"}:
             self.update_hud()
         elif key == "station_info_auto_hide_enabled":
             station = getattr(self, "station_info_hud", None)
@@ -467,7 +475,28 @@ class HtmlOverlayStudioMixin:
             # 0 follows the overlay-wide text scale; otherwise 75-200 %.
             scale = _number(payload.get("survey_text_scale_percent"), 0) or 0
             self.config["survey_text_scale_percent"] = 0 if scale <= 0 else int(round(max(75, min(200, scale))))
+        # Navigation HUD type: its own text size (0 follows all overlays; the
+        # window grows with it), typeface and small-text size.
+        if "hud_text_scale_percent" in payload:
+            scale = _number(payload.get("hud_text_scale_percent"), 0) or 0
+            self.config["hud_text_scale_percent"] = 0 if scale <= 0 else int(round(max(75, min(200, scale))))
+        if "hud_font_face" in payload:
+            face = _text(payload.get("hud_font_face"), 20).casefold()
+            self.config["hud_font_face"] = face if face in HUD_FONT_FACES else "cockpit"
+        if "hud_label_size" in payload:
+            labels = _text(payload.get("hud_label_size"), 20).casefold()
+            self.config["hud_label_size"] = labels if labels in HUD_LABEL_SIZES else "standard"
+        # Journal heartbeat orb: its window size and resting eye colour.
+        if "heartbeat_orb_size" in payload:
+            size = _integer(payload.get("heartbeat_orb_size"), orb_size(self.config))
+            self.config["heartbeat_orb_size"] = size if size in ORB_SIZES else orb_size(self.config)
+        if "heartbeat_eye_color" in payload:
+            eye = _text(payload.get("heartbeat_eye_color"), 20).casefold()
+            self.config["heartbeat_eye_color"] = eye if eye in EYE_COLORS else "theme"
         self._persist_config()
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
+            heartbeat.apply_settings()
         self.update_hud()
         station = getattr(self, "station_info_hud", None)
         if station is not None and getattr(self, "current_docked", False):

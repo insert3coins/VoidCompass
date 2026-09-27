@@ -21,6 +21,7 @@ from voidcompass.core.diagnostic_logs import (
 )
 from voidcompass.core import themes
 from voidcompass.core.paths import resource_path, source_launcher_path
+from voidcompass.core.release_notes import current_release
 
 
 # A WebView2 start failure is usually transient (a runtime update in progress,
@@ -107,6 +108,8 @@ class HtmlDashboardRuntime:
             "detail": "Starting the private command deck",
             "progress": 0.06,
         }
+        # The boot screen presents what is new in this release.
+        self._release = current_release(self.app_version)
         geometry = _geometry_payload(
             config.get("dashboard_window_geometry") or config.get("main_geometry")
         )
@@ -218,7 +221,7 @@ class HtmlDashboardRuntime:
         self._schedule_command_pump()
         return True
 
-    def set_runtime_status(self, status, detail="", progress=None):
+    def set_runtime_status(self, status, detail="", progress=None, events=None):
         self._boot.update({
             "active": True,
             "status": str(status or "PREPARING COMMAND DECK"),
@@ -227,6 +230,13 @@ class HtmlDashboardRuntime:
         if progress is not None:
             try:
                 self._boot["progress"] = max(0.0, min(1.0, float(progress)))
+            except (TypeError, ValueError):
+                pass
+        if events is not None:
+            # Journal events restored so far; the boot screen's watcher takes
+            # each batch in as it arrives.
+            try:
+                self._boot["events"] = max(0, int(events))
             except (TypeError, ValueError):
                 pass
         self._publish()
@@ -258,6 +268,7 @@ class HtmlDashboardRuntime:
         payload["app"] = {
             "name": "Void Compass",
             "version": self.app_version,
+            "release": self._release,
             **dict(payload.get("app") or {}),
         }
         payload["boot"] = dict(self._boot)

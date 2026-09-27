@@ -222,12 +222,12 @@ class HtmlModelOverlayBridge(HtmlOverlayBridgeLifecycle):
 def attach_html_model_overlay(
     overlay, overlay_id, title, enabled_key, x_key, y_key, *,
     bridge_attr, template, snapshot_key, model_attr, log_name,
-    width, min_height, default_height, max_height,
+    width, min_height, default_height, max_height, bridge_class=None,
 ):
     """Attach one semantic model bridge and expose the common HUD hooks."""
     if overlay is None or getattr(overlay, bridge_attr, None) is not None:
         return overlay
-    bridge = HtmlModelOverlayBridge(
+    bridge = (bridge_class or HtmlModelOverlayBridge)(
         overlay, overlay_id, title, enabled_key, x_key, y_key,
         template=template, snapshot_key=snapshot_key, model_attr=model_attr,
         log_name=log_name, width=width, min_height=min_height,
