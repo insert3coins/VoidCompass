@@ -288,6 +288,7 @@ PROFILE_VALUE_SETTINGS = (
     "galnet_ticker_hud_y",
     "galnet_ticker_width",
     "galnet_ticker_stories",
+    "galnet_ticker_text_scale_percent",
     "low_fuel_threshold_pct",
     "ground_target_window_geometry",
     "ground_popup_geometry",
@@ -617,6 +618,7 @@ def apply_profile_config(config, profile_key=None):
                 "heartbeat_orb_size": 54,
                 "galnet_ticker_width": 860,
                 "galnet_ticker_stories": 5,
+                "galnet_ticker_text_scale_percent": 0,
                 "dss_efficiency_stats": {
                     "mapped": 0, "efficient": 0, "probes": 0,
                     "target": 0, "seen": [],
@@ -771,6 +773,7 @@ def load_config():
         'galnet_ticker_hud_y': 12,
         'galnet_ticker_width': 860,
         'galnet_ticker_stories': 5,
+        'galnet_ticker_text_scale_percent': 0,
         'galnet_ticker_speed': 'standard',
         'galnet_ticker_content': 'summary',
         'galnet_ticker_show_date': True,

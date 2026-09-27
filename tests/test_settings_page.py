@@ -12,6 +12,7 @@ of its newest journal, so nothing replays as live.
 
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -58,10 +59,10 @@ class SettingsSaveTests(unittest.TestCase):
         app = dashboard()
         app._apply_settings_changes = Mock()
         self.save(app, values={"low_fuel_threshold_pct": 5, "ui_scale_percent": 999,
-                               "hud_animation_intensity": "wild", "galnet_rotation_seconds": 1})
+                               "galnet_rotation_seconds": 1, "galnet_refresh_minutes": 9999})
         self.assertEqual((app.config["low_fuel_threshold_pct"], app.config["ui_scale_percent"],
-                          app.config["hud_animation_intensity"], app.config["galnet_rotation_seconds"]),
-                         (0.6, 200, "Standard", 4))
+                          app.config["galnet_rotation_seconds"], app.config["galnet_refresh_minutes"]),
+                         (0.6, 200, 4, 240))
 
     def test_a_clashing_hotkey_changes_nothing_and_says_so(self):
         app = dashboard()
@@ -113,12 +114,29 @@ class SettingsSaveTests(unittest.TestCase):
         data = app._html_settings_workspace()
         self.assertEqual(data["profile"]["name"], "Jeff")
         self.assertEqual([theme["name"] for theme in data["themes"]][:len(themes.BUILTIN_THEMES)], list(themes.BUILTIN_THEMES))
-        self.assertEqual({row["id"] for row in data["overlays"]}, {spec.attr for spec in OVERLAY_SPECS if spec.available})
+        self.assertNotIn("overlays", data, "overlays are Overlay Studio's")
         self.assertIn("journal", data["paths"])
         self.assertEqual(data["last_save"], {"id": 0, "ok": True, "detail": ""})
         for key in ("low_fuel_threshold_pct", "auto_copy_waypoint", "achievements_enabled",
-                    "achievement_notifications_enabled", "adaptive_command_enabled", "overlay_mouse_passthrough"):
+                    "achievement_notifications_enabled", "adaptive_command_enabled"):
             self.assertIn(key, data["values"])
+        for key in ("overlay_mouse_passthrough", "hud_animation_intensity"):
+            self.assertNotIn(key, data["values"])
+
+    def test_no_setting_lives_in_both_settings_and_overlay_studio(self):
+        # Overlay Studio holds everything about overlays; Settings holds the rest.
+        html = (WEB / "dashboard" / "index.html").read_text(encoding="utf-8")
+        studio = set(re.findall(r'data-(?:studio-setting|overlay-option)="([a-z_]+)"', html))
+        source = (WEB / "dashboard" / "app.js").read_text(encoding="utf-8")
+        settings_code = source[source.index("function settingsSectionBody"):source.index("function settingsHealthDetail")]
+        settings = set(re.findall(r'key: "([a-z_]+)"', settings_code))
+        self.assertTrue(studio and settings)
+        self.assertEqual(studio & settings, set())
+        app = dashboard()
+        app._apply_settings_changes = Mock()
+        self.save(app, values={"overlay_mouse_passthrough": False, "hud_animation_intensity": "Calm"})
+        self.assertNotIn("overlay_mouse_passthrough", app.config, "Settings will not save an overlay setting")
+        self.assertNotIn("hud_animation_intensity", app.config)
 
 
 class JournalFolderSwitchTests(unittest.TestCase):
@@ -151,8 +169,8 @@ class JournalFolderSwitchTests(unittest.TestCase):
 
 SETTINGS = {
     "values": {"journal_path": "C:/Journals", "screenshots_path": "C:/Shots", "screenshots_enabled": True,
-               "ui_scale_percent": 100, "reduced_motion_enabled": False, "hud_animation_intensity": "Standard",
-               "overlay_hotkeys_enabled": True, "overlay_mouse_passthrough": True, "edsm_cmdr_name": "Jeff",
+               "ui_scale_percent": 100, "reduced_motion_enabled": False,
+               "overlay_hotkeys_enabled": True, "edsm_cmdr_name": "Jeff",
                "edsm_api_key": "key", "edsm_upload_enabled": True, "eddn_market_upload_enabled": True,
                "carrier_discord_webhook_url": "", "runtime_trace_enabled": True, "crash_reporting_enabled": True,
                "recovery_safe_mode_enabled": True, "edsm_backfill_on_cache_rebuild": False,
@@ -170,8 +188,6 @@ SETTINGS = {
     "paths": {"journal": {"exists": True, "logs": 12, "latest": "Journal.x.log"}, "screenshots": {"exists": True}},
     "themes": [{"name": "Void Cyan", "custom": False, "swatch": {"accent": "#00d1ff"}},
                {"name": "Elite Orange", "custom": False, "swatch": {"accent": "#ff8c1a"}}],
-    "overlays": [{"id": "hud", "label": "Navigation HUD", "enabled": True},
-                 {"id": "galnet_ticker_hud", "label": "Galnet Ticker", "enabled": False}],
     "theme_editor": {"name": "Void Cyan", "palette": {}, "custom": [], "keys": ["accent"]},
     "tools": {"status": "ready", "detail": ""}, "cache_rebuild": {},
     "last_save": {"id": 0, "ok": True, "detail": ""},
@@ -313,15 +329,13 @@ class SettingsPageBrowserTests(unittest.TestCase):
         self.wait_for(lambda: self.saves(), "the new shortcut was not saved")
         self.assertEqual(self.saves()[-1]["hotkeys"]["navigation"], "Ctrl+Alt+Shift+F5")
 
-    def test_themes_and_overlays_act_straight_away(self):
+    def test_a_theme_applies_straight_away_and_overlays_stay_in_studio(self):
         self.page.click('[data-settings-section="appearance"]')
         self.page.click('[data-theme-name="Elite Orange"]')
         self.page.wait_for_function("document.querySelector('[data-theme-name=\"Elite Orange\"]').classList.contains('active')")
         self.assertIn({"action": "set_theme", "name": "Elite Orange"}, self.commands)
-        self.page.click('[data-settings-section="overlays"]')
-        self.page.click('.setting-row:has([data-overlay-toggle="galnet_ticker_hud"])')
-        toggle = {"action": "overlay_studio", "operation": "toggle", "overlay_id": "galnet_ticker_hud"}
-        self.wait_for(lambda: toggle in self.commands, "the overlay switch never reached Overlay Studio")
+        self.assertEqual(self.page.locator('[data-settings-section="overlays"], [data-overlay-toggle]').count(), 0)
+        self.assertEqual(self.page.locator('[data-setting="hud_animation_intensity"], [data-setting="overlay_mouse_passthrough"]').count(), 0)
 
     def test_a_publish_redraws_only_when_nothing_is_in_hand(self):
         self.page.click('[data-settings-section="galnet"]')

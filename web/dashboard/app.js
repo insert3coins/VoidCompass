@@ -1636,6 +1636,18 @@ function placeStudioCard(node, row, monitor) {
   node.style.top = `${(row.y - monitor.top) * 100 / monitor.height}%`;
   node.style.width = `${Math.max(2.5, row.width * 100 / monitor.width)}%`;
   node.style.height = `${Math.max(3.5, row.height * 100 / monitor.height)}%`;
+  // Every surface stays named: a short card (the Galnet ticker's bar) puts its
+  // name and size in one row, and one too small for its name (the heartbeat
+  // orb) hangs the name beside it, on the left when it sits near the right.
+  // New cards are placed before they are attached, so measure the stage itself.
+  const stage = byId("studio-overlay-cards");
+  if (stage?.clientWidth && stage.clientHeight) {
+    const width = stage.clientWidth * parseFloat(node.style.width) / 100;
+    const height = stage.clientHeight * parseFloat(node.style.height) / 100;
+    node.classList.toggle("slim", height < 30);
+    node.classList.toggle("tiny", width < 70);
+    node.classList.toggle("label-left", (row.x - monitor.left + row.width) / monitor.width > .85);
+  }
 }
 
 function renderStudioMoveDisplay(row, monitor) {
@@ -3434,7 +3446,6 @@ function renderLedgerWorkspace(data) {
 const SETTINGS_SECTIONS = [
   {id: "journal", title: "Journal & files", heading: "Where Void Compass reads from"},
   {id: "appearance", title: "Appearance", heading: "How the command deck looks"},
-  {id: "overlays", title: "Cockpit overlays", heading: "What flies with you in the cockpit"},
   {id: "flight", title: "Flight & exploration", heading: "Warnings and helpers in flight"},
   {id: "hotkeys", title: "Hotkeys", heading: "Shortcuts that work while Elite has focus"},
   {id: "galnet", title: "Galnet", heading: "News from the Galnet relay"},
@@ -3486,13 +3497,11 @@ function settingGroup(title, body) {
 function settingsSummaries(data) {
   const value = data.values || {};
   const journal = data.paths?.journal || {};
-  const overlays = data.overlays || [];
   const galnet = data.galnet || {};
   const bound = (data.hotkeys || []).filter((row) => row.value).length;
   return {
     journal: journal.exists ? `JOURNAL LINKED · ${numeric(journal.logs)} LOGS` : "JOURNAL FOLDER NOT FOUND",
     appearance: String(data.theme_editor?.name || "Void Cyan").toUpperCase(),
-    overlays: `${numeric(overlays.filter((row) => row.enabled).length)} OF ${numeric(overlays.length)} ON`,
     flight: `LOW FUEL AT ${Math.round(number(value.low_fuel_threshold_pct, .25) * 100)}%`,
     hotkeys: value.overlay_hotkeys_enabled ? `${numeric(bound)} BOUND` : "HOTKEYS OFF",
     galnet: value.galnet_enabled ? `${String(galnet.status || "standby").toUpperCase()} · ${numeric((galnet.articles || []).length)} DISPATCHES` : "RELAY OFF",
@@ -3526,16 +3535,8 @@ function settingsSectionBody(id, data) {
     }).join("");
     const colors = (editor.keys || []).map((key) => `<label><span>${escapeHtml(key.replaceAll("_", " "))}</span><input type="color" data-theme-color="${escapeHtml(key)}" value="${escapeHtml(editor.palette?.[key] || "#000000")}"></label>`).join("");
     return settingGroup("THEME", `<div class="theme-options" data-search="${settingSearchText("theme palette colour color", (data.themes || []).map((theme) => theme.name).join(" "))}">${cards}</div>`)
-      + settingGroup("DISPLAY", `${settingSelect({key: "ui_scale_percent", label: "Command deck scale", detail: "The size of everything in this window.", value: number(value.ui_scale_percent, 100), options: [90, 100, 110, 125, 140].map((item) => [item, `${item}%`]), type: "number"})}${settingSwitch({key: "reduced_motion_enabled", label: "Reduced motion", detail: "Still frames instead of animation on the deck and every overlay.", checked: value.reduced_motion_enabled})}${settingSelect({key: "hud_animation_intensity", label: "Navigation HUD animation", detail: "How lively the HUD's holographic scenes are.", value: value.hud_animation_intensity || "Standard", options: [["Calm", "Calm"], ["Standard", "Standard"], ["Energetic", "Energetic"]]})}`)
+      + settingGroup("DISPLAY", `${settingSelect({key: "ui_scale_percent", label: "Command deck scale", detail: "The size of everything in this window.", value: number(value.ui_scale_percent, 100), options: [90, 100, 110, 125, 140].map((item) => [item, `${item}%`]), type: "number"})}${settingSwitch({key: "reduced_motion_enabled", label: "Reduced motion", detail: "Still frames instead of animation on the deck and every overlay.", checked: value.reduced_motion_enabled})}`)
       + `<details class="settings-group theme-workshop"${settingsWorkshopOpen ? " open" : ""} data-search="${settingSearchText("theme workshop custom palette colours colors")}"><summary><h4>THEME WORKSHOP</h4><span>${numeric((editor.custom || []).length)} CUSTOM</span></summary><div class="theme-workshop-body"><div class="theme-workshop-head"><label>NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>DELETE A CUSTOM THEME<select id="custom-theme-existing"><option value="">CHOOSE ONE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><p class="setting-note">Starts from the active theme. Change any colour, then save it as your own.</p><div class="theme-colour-grid">${colors}</div><div class="setting-row actions"><button type="button" data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY</button><button type="button" class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED</button></div></div></details>`;
-  }
-  if (id === "overlays") {
-    const rows = (data.overlays || []).map((row) => settingSwitch({
-      label: row.label, detail: row.enabled ? "On" : "Off", checked: row.enabled,
-      attrs: ` data-overlay-toggle="${escapeHtml(row.id)}"`,
-    })).join("");
-    return settingGroup("OVERLAYS", `${rows}${settingActions(`<button type="button" class="primary" data-page="overlay-studio">OPEN OVERLAY STUDIO</button>`, "overlay studio position size fade text")}${settingNote("Where each overlay sits, its size, fade, text and its own options live in Overlay Studio.")}`)
-      + settingGroup("IN THE COCKPIT", `${settingSwitch({key: "overlay_mouse_passthrough", label: "Mouse passes through overlays", detail: "Clicks go to Elite, not to the overlay under the pointer.", checked: value.overlay_mouse_passthrough})}`);
   }
   if (id === "flight") {
     return settingGroup("FLIGHT", `${settingSelect({key: "low_fuel_threshold_pct", label: "Low fuel warning", detail: "Warn when the main tank falls below this.", value: String(number(value.low_fuel_threshold_pct, .25)), options: [.1, .15, .2, .25, .3, .4, .5].map((item) => [String(item), `${Math.round(item * 100)}%`]), type: "number"})}${settingSwitch({key: "auto_copy_waypoint", label: "Copy the next route system", detail: "Put the next system on the clipboard as you arrive, ready to paste into the galaxy map.", checked: value.auto_copy_waypoint})}`)
@@ -3548,9 +3549,9 @@ function settingsSectionBody(id, data) {
   }
   if (id === "galnet") {
     const updated = galnet.updated_at ? ` · UPDATED ${String(galnet.updated_at).toUpperCase()}` : "";
-    return settingGroup("RELAY", `${settingSwitch({key: "galnet_enabled", label: "Galnet relay", detail: "Fetch Frontier's Galnet feed for the news bar, the archive and the Galnet Ticker overlay.", checked: value.galnet_enabled})}${settingSelect({key: "galnet_refresh_minutes", label: "Check for news every", value: number(value.galnet_refresh_minutes, 30), options: [5, 15, 30, 60, 120, 240].map((item) => [item, item < 60 ? `${item} minutes` : `${item / 60} hour${item === 60 ? "" : "s"}`]), type: "number"})}<p class="setting-note" id="settings-galnet-status">${escapeHtml(galnet.detail || "Galnet relay standing by.")} · ${numeric((galnet.articles || []).length)} dispatches cached${escapeHtml(updated)}</p>${settingActions(`<button type="button" id="galnet-settings-refresh">REFRESH NOW</button><button type="button" id="galnet-settings-clear" class="danger-action">CLEAR CACHE</button>`, "refresh galnet clear cache")}`)
+    return settingGroup("RELAY", `${settingSwitch({key: "galnet_enabled", label: "Galnet relay", detail: "Fetch Frontier's Galnet feed for the news bar, the archive and the cockpit's Galnet Ticker.", checked: value.galnet_enabled})}${settingSelect({key: "galnet_refresh_minutes", label: "Check for news every", value: number(value.galnet_refresh_minutes, 30), options: [5, 15, 30, 60, 120, 240].map((item) => [item, item < 60 ? `${item} minutes` : `${item / 60} hour${item === 60 ? "" : "s"}`]), type: "number"})}<p class="setting-note" id="settings-galnet-status">${escapeHtml(galnet.detail || "Galnet relay standing by.")} · ${numeric((galnet.articles || []).length)} dispatches cached${escapeHtml(updated)}</p>${settingActions(`<button type="button" id="galnet-settings-refresh">REFRESH NOW</button><button type="button" id="galnet-settings-clear" class="danger-action">CLEAR CACHE</button>`, "refresh galnet clear cache")}`)
       + settingGroup("NEWS BAR", `${settingSwitch({key: "galnet_auto_rotate_enabled", label: "Rotate headlines", detail: "Step through the dispatches in the deck's news bar.", checked: value.galnet_auto_rotate_enabled})}${settingSelect({key: "galnet_rotation_seconds", label: "Next headline every", value: number(value.galnet_rotation_seconds, 7), options: [4, 7, 10, 15, 30, 60].map((item) => [item, `${item} seconds`]), type: "number"})}`)
-      + settingGroup("GALNET TICKER OVERLAY", `${settingNote("A scrolling news bar for the cockpit: each headline, then its story. Switch it on and set its width, speed and content in Overlay Studio.")}${settingActions(`<button type="button" class="primary" data-page="overlay-studio" data-studio-select="galnet_ticker_hud">OPEN TICKER IN OVERLAY STUDIO</button>`, "galnet ticker overlay scrolling news")}`);
+;
   }
   if (id === "integrations") {
     return settingGroup("EDSM", `${settingText({key: "edsm_cmdr_name", id: "setting-edsm-name", label: "Commander name on EDSM", value: value.edsm_cmdr_name})}${settingText({key: "edsm_api_key", id: "setting-edsm-key", label: "EDSM API key", detail: "From your EDSM account settings.", value: value.edsm_api_key, secret: true})}${settingSwitch({key: "edsm_upload_enabled", label: "Send exploration to EDSM", detail: "Upload journal events with this commander's key.", checked: value.edsm_upload_enabled})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_edsm">TEST EDSM</button>`, "test edsm credentials")}`)
@@ -3728,7 +3729,7 @@ function settingsCanRerender() {
 // What the page shows, without the live numbers updateSettingsLive handles.
 function settingsFingerprint(data = {}) {
   return JSON.stringify({
-    values: data.values, hotkeys: data.hotkeys, themes: data.themes, overlays: data.overlays,
+    values: data.values, hotkeys: data.hotkeys, themes: data.themes,
     profile: data.profile, paths: data.paths, editor: [data.theme_editor?.name, data.theme_editor?.custom],
     galnet: [data.galnet?.status, data.galnet?.detail, (data.galnet?.articles || []).length, data.galnet?.updated_at],
     eddn: data.eddn,
@@ -4886,8 +4887,7 @@ document.addEventListener("input", (event) => {
   }
 });
 
-// Settings save as they change; overlay switches go through Overlay Studio's
-// own toggle so both screens stay in step.
+// Settings save as they change. Overlays are Overlay Studio's alone.
 document.addEventListener("change", async (event) => {
   const target = event.target;
   if (!target.closest?.("#settings-workspace")) return;
@@ -4904,14 +4904,6 @@ document.addEventListener("change", async (event) => {
     const accepted = await saveSettings({[target.dataset.setting]: settingValue(target)}, [row], {revert});
     if (accepted && target.tagName === "SELECT") [...target.options].forEach((option) => { option.defaultSelected = option.selected; });
     else if (accepted && target.type !== "checkbox") target.defaultValue = target.value;
-  } else if (target.matches("[data-overlay-toggle]")) {
-    const row = target.closest(".setting-row");
-    flagSettingRow(row, "saving");
-    const accepted = await command("overlay_studio", {operation: "toggle", overlay_id: target.dataset.overlayToggle});
-    flagSettingRow(row, accepted ? "saved" : "rejected");
-    if (!accepted) target.checked = !target.checked;
-    const detail = row?.querySelector(".setting-copy small");
-    if (detail && accepted) detail.textContent = target.checked ? "On" : "Off";
   } else if (target.matches("[data-theme-color], #custom-theme-name")) {
     target.closest(".theme-workshop")?.setAttribute("data-dirty", "");
   }

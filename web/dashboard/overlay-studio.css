@@ -136,6 +136,16 @@
 .studio-overlay-card.enabled { opacity: var(--studio-global-opacity, 1); border-style: solid; border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); background: color-mix(in srgb, var(--accent) 11%, var(--panel)); color: var(--accent); }
 .studio-overlay-card span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 10px "Bahnschrift SemiCondensed", sans-serif; letter-spacing: .06em; }
 .studio-overlay-card small { overflow: hidden; color: var(--dim); font: 8px Consolas, monospace; white-space: nowrap; }
+/* A short card names itself in one row; a card too small for its name hangs
+   the name beside it. */
+.studio-overlay-cards > .studio-overlay-card.slim { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 0 7px; }
+.studio-overlay-card.slim span { min-width: 0; font-size: 9px; line-height: 1; }
+.studio-overlay-card.slim small { flex: 0 0 auto; line-height: 1; }
+.studio-overlay-cards > .studio-overlay-card.tiny { overflow: visible; padding: 0; }
+.studio-overlay-card.tiny small { display: none; }
+.studio-overlay-card.tiny span { position: absolute; top: 50%; left: calc(100% + 6px); padding: 3px 6px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 88%, transparent); font-size: 9px; line-height: 1; overflow: visible; transform: translateY(-50%); pointer-events: none; }
+.studio-overlay-card.tiny.label-left span { left: auto; right: calc(100% + 6px); }
+.studio-overlay-card.tiny.selected span { border-color: var(--orange); color: var(--text); }
 .studio-overlay-card.shown span::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: 5px; vertical-align: middle; background: var(--green); box-shadow: 0 0 7px var(--green); }
 .studio-overlay-card.selected { z-index: 5; border-color: var(--orange); color: var(--text); box-shadow: 0 0 0 1px color-mix(in srgb, var(--orange) 35%, transparent), 0 0 18px color-mix(in srgb, var(--orange) 20%, transparent); }
 .studio-overlay-card.dragging { cursor: grabbing; filter: brightness(1.2); transition: none; }

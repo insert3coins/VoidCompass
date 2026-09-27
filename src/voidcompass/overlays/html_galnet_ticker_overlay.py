@@ -1,31 +1,30 @@
 """Dedicated semantic HTML renderer for the Galnet ticker bar."""
 
-from voidcompass.overlays.galnet_ticker_hud import TICKER_HEIGHT, ticker_options
+from voidcompass.overlays.galnet_ticker_hud import TICKER_HEIGHT, ticker_options, ticker_text_scale
 from voidcompass.overlays.html_model_overlay import (
     HtmlModelOverlayBridge,
     attach_html_model_overlay,
 )
 
 
-def _text_scale(config):
-    try:
-        percent = int(float((config or {}).get("overlay_text_scale_percent", 100)))
-    except (TypeError, ValueError):
-        percent = 100
-    return max(75, min(200, percent)) / 100.0
-
-
 class HtmlGalnetTickerBridge(HtmlModelOverlayBridge):
-    """The bar is as long as Overlay Studio says; its height follows text size."""
+    """The bar is as long as Overlay Studio says; its height follows its text size."""
 
     def _dimensions(self):
-        return ticker_options(self.config)["width"], round(TICKER_HEIGHT * _text_scale(self.config))
+        return ticker_options(self.config)["width"], round(TICKER_HEIGHT * ticker_text_scale(self.config))
+
+    def _snapshot(self):
+        # The page sizes its type from effects.text_scale; the ticker can have
+        # its own size rather than the one every overlay shares.
+        payload = super()._snapshot()
+        payload["effects"]["text_scale"] = ticker_text_scale(self.config)
+        return payload
 
 
 def attach_html_galnet_ticker_overlay(overlay, overlay_id, title, enabled_key, x_key, y_key):
     config = getattr(overlay, "config", {})
     width = ticker_options(config)["width"]
-    height = round(TICKER_HEIGHT * _text_scale(config))
+    height = round(TICKER_HEIGHT * ticker_text_scale(config))
     return attach_html_model_overlay(
         overlay, overlay_id, title, enabled_key, x_key, y_key,
         bridge_attr="_html_galnet_ticker_bridge", template="galnet_ticker",

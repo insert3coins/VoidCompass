@@ -201,6 +201,47 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
         self.assertEqual(self.page.locator("#studio-survey-threshold").input_value(), "15")
         self.assertFalse(self.errors, self.errors)
 
+    def test_studio_names_every_surface_however_small(self):
+        # A 34 px bar and a 54 px orb shrink to a sliver on the stage; each
+        # still has to show its name in full, as the larger cards do.
+        snapshot = self.studio_snapshot()
+        studio = snapshot["overlay_studio"]
+        sized = lambda id, short, x, y, width, height: {
+            **studio["overlays"][0], "id": id, "label": short.title(), "short_label": short,
+            "x": x, "y": y, "width": width, "height": height}
+        studio["overlays"] = [studio["overlays"][0],
+                              sized("galnet_ticker_hud", "GALNET", 850, 12, 860, 34),
+                              sized("heartbeat_hud", "HEARTBEAT", 24, 1360, 54, 54),
+                              sized("toast_hud", "NOTIFY", 2480, 80, 54, 54)]
+        self.page.evaluate("data => window.__bridgeHarness.render(data)", snapshot)
+        self.page.evaluate("data => window.__bridgeHarness.studio(data)", studio)
+        labels = self.page.evaluate("""() => {
+          const stage = document.getElementById('studio-overlay-cards').getBoundingClientRect();
+          return Object.fromEntries([...document.querySelectorAll('.studio-overlay-card')].map(card => {
+            const span = card.querySelector('span');
+            const box = span.getBoundingClientRect();
+            return [card.dataset.overlayId, {
+              text: span.textContent.trim(),
+              whole: span.scrollWidth <= span.clientWidth + 1 && box.height >= 8,
+              onStage: box.left >= stage.left - 1 && box.right <= stage.right + 1,
+              classes: [...card.classList].filter(name => ['slim', 'tiny', 'label-left'].includes(name)),
+            }];
+          }));
+        }""")
+        for overlay_id, text in (("hud", "NAVIGATION"), ("galnet_ticker_hud", "GALNET"),
+                                 ("heartbeat_hud", "HEARTBEAT"), ("toast_hud", "NOTIFY")):
+            with self.subTest(overlay=overlay_id):
+                self.assertEqual(labels[overlay_id]["text"], text)
+                self.assertTrue(labels[overlay_id]["whole"], labels[overlay_id])
+                self.assertTrue(labels[overlay_id]["onStage"], labels[overlay_id])
+        self.assertEqual(labels["hud"]["classes"], [])
+        self.assertEqual(labels["galnet_ticker_hud"]["classes"], ["slim"])
+        self.assertIn("tiny", labels["heartbeat_hud"]["classes"])
+        self.assertNotIn("label-left", labels["heartbeat_hud"]["classes"])
+        # One at the screen's right edge hangs its name inward.
+        self.assertIn("label-left", labels["toast_hud"]["classes"])
+        self.assertFalse(self.errors, self.errors)
+
     def test_studio_saves_each_setting_alone_and_moves_between_displays(self):
         snapshot = self.studio_snapshot()
         self.page.evaluate("data => window.__bridgeHarness.render(data)", snapshot)

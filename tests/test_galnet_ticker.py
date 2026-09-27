@@ -22,7 +22,7 @@ from voidcompass.dashboard.dashboard import MainDashboard
 from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
 from voidcompass.overlays.galnet_ticker_hud import (
     FULL_CHARS, SUMMARY_CHARS, TICKER_CONTENT, TICKER_SPEEDS, TICKER_STORIES,
-    GalnetTickerHUD, ticker_options, ticker_text,
+    GalnetTickerHUD, ticker_options, ticker_text, ticker_text_scale,
 )
 from voidcompass.overlays.html_galnet_ticker_overlay import HtmlGalnetTickerBridge
 from voidcompass.overlays.html_overlay_host import _OverlayHost
@@ -45,13 +45,20 @@ def feed(*titles, busy=False, status="ready"):
 class TickerOptionTests(unittest.TestCase):
     def test_options_stay_within_their_choices(self):
         self.assertEqual(ticker_options({}), {"width": 860, "speed": "standard", "content": "summary",
-                                              "stories": 5, "show_date": True})
+                                              "stories": 5, "show_date": True, "text_scale_percent": 0})
         wild = ticker_options({"galnet_ticker_width": 99999, "galnet_ticker_speed": "warp",
                                "galnet_ticker_content": "poem", "galnet_ticker_stories": 7,
-                               "galnet_ticker_show_date": False})
+                               "galnet_ticker_show_date": False, "galnet_ticker_text_scale_percent": 999})
         self.assertEqual(wild, {"width": 2560, "speed": "standard", "content": "summary",
-                                "stories": 5, "show_date": False})
+                                "stories": 5, "show_date": False, "text_scale_percent": 200})
         self.assertEqual(ticker_options({"galnet_ticker_width": 10})["width"], 360)
+        self.assertEqual(ticker_options({"galnet_ticker_text_scale_percent": 10})["text_scale_percent"], 75)
+        self.assertEqual(ticker_options({"galnet_ticker_text_scale_percent": -5})["text_scale_percent"], 0)
+
+    def test_its_own_text_size_wins_over_the_overlay_wide_one(self):
+        self.assertEqual(ticker_text_scale({"overlay_text_scale_percent": 125}), 1.25)
+        self.assertEqual(ticker_text_scale({"overlay_text_scale_percent": 125, "galnet_ticker_text_scale_percent": 0}), 1.25)
+        self.assertEqual(ticker_text_scale({"overlay_text_scale_percent": 125, "galnet_ticker_text_scale_percent": 150}), 1.5)
 
     def test_story_text_follows_the_content_choice(self):
         self.assertEqual(ticker_text("A short story.", "headlines"), "")
@@ -116,6 +123,17 @@ class TickerModelTests(unittest.TestCase):
         self.assertEqual(bridge._dimensions(), (1200, 51))
         bridge.config = {}
         self.assertEqual(bridge._dimensions(), (860, 34))
+        # Its own text size sets the bar's height and the page's type.
+        bridge.config = {"overlay_text_scale_percent": 100, "galnet_ticker_text_scale_percent": 200}
+        self.assertEqual(bridge._dimensions(), (860, 68))
+        window = SimpleNamespace(state=lambda: "normal", winfo_x=lambda: 10, winfo_y=lambda: 20,
+                                 master=SimpleNamespace())
+        bridge.overlay = SimpleNamespace(_palette={}, _html_render_model={"status": "live"})
+        bridge.win = window
+        bridge.template, bridge.overlay_id, bridge.snapshot_key = "galnet_ticker", "galnet-ticker", "ticker"
+        bridge.model_attr, bridge.enabled_key = "_html_render_model", "galnet_ticker_overlay_enabled"
+        bridge.x_key, bridge.y_key = "galnet_ticker_hud_x", "galnet_ticker_hud_y"
+        self.assertEqual(bridge._snapshot()["effects"]["text_scale"], 2.0)
 
     def test_dashboard_hands_the_ticker_the_relay_and_its_switch(self):
         app = MainDashboard.__new__(MainDashboard)
@@ -142,7 +160,8 @@ class TickerRegistrationTests(unittest.TestCase):
             self.assertIn(key, config_module.PROFILE_BOOL_SETTINGS)
         for key in ("galnet_ticker_speed", "galnet_ticker_content", "overlay_hotkey_galnet_ticker"):
             self.assertIn(key, config_module.PROFILE_TEXT_SETTINGS)
-        for key in ("galnet_ticker_width", "galnet_ticker_stories", "galnet_ticker_hud_x", "galnet_ticker_hud_y"):
+        for key in ("galnet_ticker_width", "galnet_ticker_stories", "galnet_ticker_text_scale_percent",
+                    "galnet_ticker_hud_x", "galnet_ticker_hud_y"):
             self.assertIn(key, config_module.PROFILE_VALUE_SETTINGS)
 
     def test_studio_saves_and_validates_each_option(self):
@@ -168,6 +187,10 @@ class TickerRegistrationTests(unittest.TestCase):
                           "galnet_ticker_content": "full", "galnet_ticker_stories": 8})
         studio._html_overlay_settings_save({"galnet_ticker_speed": "warp", "galnet_ticker_stories": "7"})
         self.assertEqual((studio.config["galnet_ticker_speed"], studio.config["galnet_ticker_stories"]), ("standard", 5))
+        studio._html_overlay_settings_save({"galnet_ticker_text_scale_percent": "140"})
+        self.assertEqual(studio.config["galnet_ticker_text_scale_percent"], 140)
+        studio._html_overlay_settings_save({"galnet_ticker_text_scale_percent": "0"})
+        self.assertEqual(studio.config["galnet_ticker_text_scale_percent"], 0)
         self.assertTrue(studio._html_overlay_option_toggle("galnet_ticker_show_date", False))
         self.assertFalse(studio.config["galnet_ticker_show_date"])
         self.assertGreaterEqual(studio.galnet_ticker_hud.apply_settings.call_count, 3)
@@ -180,6 +203,7 @@ class TickerRegistrationTests(unittest.TestCase):
         self.assertEqual(tuple(re.findall(r'value="([a-z]+)"', choices("galnet_ticker_content"))), TICKER_CONTENT)
         self.assertEqual(tuple(int(v) for v in re.findall(r'value="(\d+)"', choices("galnet_ticker_stories"))), TICKER_STORIES)
         self.assertIn('data-studio-setting="galnet_ticker_width"', section)
+        self.assertIn('data-studio-setting="galnet_ticker_text_scale_percent"', section)
         self.assertIn('data-overlay-option="galnet_ticker_show_date"', section)
 
 

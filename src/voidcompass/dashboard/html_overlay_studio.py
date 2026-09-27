@@ -16,6 +16,9 @@ from voidcompass.overlays.overlay_layout_model import (
 )
 from voidcompass.overlays.heartbeat_hud import EYE_COLORS, ORB_SIZES, eye_color, orb_size
 from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, hud_typography
+
+# How lively the Navigation HUD's holographic scenes are.
+HUD_ANIMATION_LEVELS = ("Calm", "Standard", "Energetic")
 from voidcompass.overlays.galnet_ticker_hud import (
     TICKER_CONTENT, TICKER_SPEEDS, TICKER_STORIES, TICKER_WIDTH_RANGE, ticker_options,
 )
@@ -282,6 +285,11 @@ class HtmlOverlayStudioMixin:
             "options": {
                 "overlay_mouse_passthrough": bool(self.config.get("overlay_mouse_passthrough", True)),
                 "hud_compact_mode": bool(self.config.get("hud_compact_mode", True)),
+                "hud_animation_intensity": (
+                    str(self.config.get("hud_animation_intensity") or "Standard").title()
+                    if str(self.config.get("hud_animation_intensity") or "Standard").title() in HUD_ANIMATION_LEVELS
+                    else "Standard"
+                ),
                 "hud_text_scale_percent": _integer(self.config.get("hud_text_scale_percent"), 0),
                 "hud_font_face": hud_typography(self.config)["face"],
                 "hud_label_size": hud_typography(self.config)["labels"],
@@ -489,6 +497,9 @@ class HtmlOverlayStudioMixin:
         if "hud_text_scale_percent" in payload:
             scale = _number(payload.get("hud_text_scale_percent"), 0) or 0
             self.config["hud_text_scale_percent"] = 0 if scale <= 0 else int(round(max(75, min(200, scale))))
+        if "hud_animation_intensity" in payload:
+            intensity = _text(payload.get("hud_animation_intensity"), 20).title()
+            self.config["hud_animation_intensity"] = intensity if intensity in HUD_ANIMATION_LEVELS else "Standard"
         if "hud_font_face" in payload:
             face = _text(payload.get("hud_font_face"), 20).casefold()
             self.config["hud_font_face"] = face if face in HUD_FONT_FACES else "cockpit"
@@ -509,6 +520,10 @@ class HtmlOverlayStudioMixin:
         if "galnet_ticker_stories" in payload:
             stories = _integer(payload.get("galnet_ticker_stories"), 5)
             self.config["galnet_ticker_stories"] = stories if stories in TICKER_STORIES else 5
+        if "galnet_ticker_text_scale_percent" in payload:
+            # 0 follows the overlay-wide text size; otherwise 75-200 %.
+            scale = _number(payload.get("galnet_ticker_text_scale_percent"), 0) or 0
+            self.config["galnet_ticker_text_scale_percent"] = 0 if scale <= 0 else int(round(max(75, min(200, scale))))
         # Journal heartbeat orb: its window size and resting eye colour.
         if "heartbeat_orb_size" in payload:
             size = _integer(payload.get("heartbeat_orb_size"), orb_size(self.config))
