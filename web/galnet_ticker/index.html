@@ -9,11 +9,14 @@
 </head>
 <body>
   <main id="ticker" class="ticker waiting" aria-label="Galnet news">
-    <div class="ticker-badge"><i class="ticker-lamp" aria-hidden="true"></i><b>GALNET</b><em id="ticker-new" class="ticker-new" hidden>NEW</em></div>
+    <div id="ticker-badge" class="ticker-badge"><i class="ticker-lamp" aria-hidden="true"></i><b id="ticker-name">GALNET</b><em id="ticker-new" class="ticker-new" hidden>NEW</em></div>
     <div id="ticker-window" class="ticker-window">
       <div id="ticker-track" class="ticker-track" aria-live="off"></div>
       <p id="ticker-idle" class="ticker-idle">AWAITING DISPATCHES</p>
     </div>
+    <!-- The glass over the tube: grain, the rolling scan bar and the tear a
+         glitch leaves; the vignette, flicker and phosphor mask are drawn on it. -->
+    <div class="ticker-crt" aria-hidden="true"><i class="ticker-noise"></i><i class="ticker-roll"></i><i class="ticker-tear"></i></div>
   </main>
   <script src="/assets/overlay-client.js"></script>
   <script src="app.js"></script>
