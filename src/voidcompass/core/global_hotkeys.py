@@ -51,7 +51,17 @@ _NAMED_KEYS = {
     "INS": (0x2D, "Insert"),
     "DELETE": (0x2E, "Delete"),
     "DEL": (0x2E, "Delete"),
+    # The keyboard's media keys, for the music player.
+    "MEDIAPLAYPAUSE": (0xB3, "MediaPlayPause"),
+    "MEDIANEXT": (0xB0, "MediaNext"),
+    "MEDIANEXTTRACK": (0xB0, "MediaNext"),
+    "MEDIAPREVIOUS": (0xB1, "MediaPrevious"),
+    "MEDIAPREV": (0xB1, "MediaPrevious"),
+    "MEDIAPREVIOUSTRACK": (0xB1, "MediaPrevious"),
+    "MEDIASTOP": (0xB2, "MediaStop"),
 }
+# Media keys are made to be pressed alone; every other key needs a modifier.
+_BARE_KEYS = {0xB0, 0xB1, 0xB2, 0xB3}
 
 _TK_MODIFIER_KEYSYMS = {
     "ALT", "ALTL", "ALTR",
@@ -206,10 +216,10 @@ def parse_hotkey(value):
             key_value, key_label = 0x6F + number, f"F{number}"
         else:
             raise ValueError(f"unsupported key '{part}'")
-    if not modifier_mask:
-        raise ValueError("include Ctrl, Alt, Shift or Win")
     if key_value is None:
         raise ValueError("include a letter, number, function or navigation key")
+    if not modifier_mask and key_value not in _BARE_KEYS:
+        raise ValueError("include Ctrl, Alt, Shift or Win")
     labels = [label for bit, label in _MODIFIER_ORDER if modifier_mask & bit]
     labels.append(key_label)
     return modifier_mask, key_value, "+".join(labels)

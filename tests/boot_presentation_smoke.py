@@ -53,6 +53,8 @@ def run():
                   const applyTheme = () => {};
                   const startAboutMatrix = () => {};
                   const renderDashboard = () => { window.deckHydrations++; };
+                  // The music player (music.js) is not part of the boot.
+                  let musicDeck = {update() {}, showPage() {}};
                 """ + MILESTONES + RENDER + STATE_RENDER + "\nwindow.bootTest = state => { model = state; renderBoot(state); };"
                     + "\nwindow.bootStateTest = state => renderState(state);")
             elif path.is_file():

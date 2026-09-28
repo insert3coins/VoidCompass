@@ -95,6 +95,36 @@ class HostLogTests(unittest.TestCase):
         self.assertEqual(lines, ["Dashboard request failed: /explore.css net::ERR_CONNECTION_RESET"])
         self.assertNotIn("secret", "".join(lines))
 
+    def test_a_lost_renderer_is_logged_and_the_page_reloaded(self):
+        # A crashed renderer used to leave the deck blank with nothing logged
+        # while the backend and every overlay carried on.
+        host = DashboardHost("http://127.0.0.1:8765/?token=secret")
+        host.window = SimpleNamespace()
+        core = SimpleNamespace(ProcessFailed=_Receiver(), reloads=0)
+        core.Reload = lambda: setattr(core, "reloads", core.reloads + 1)
+        self.assertTrue(host.watch_process(SimpleNamespace(CoreWebView2=core)))
+
+        def fail(kind, reason="Crashed"):
+            for handler in core.ProcessFailed.handlers:
+                handler(core, SimpleNamespace(ProcessFailedKind=kind, Reason=reason, ExitCode=-1))
+
+        clock = iter((100.0, 103.0, 130.0))
+        with patch("builtins.print") as output, \
+                patch("voidcompass.dashboard.html_dashboard_host.time.monotonic", lambda: next(clock)):
+            fail("RenderProcessExited")
+            fail("RenderProcessExited")          # straight after: no reload loop
+            fail("FrameRenderProcessExited")     # an atlas frame: the deck is fine
+            fail("RenderProcessUnresponsive", "Unresponsive")
+            fail("BrowserProcessExited")
+        lines = [call.args[0] for call in output.call_args_list]
+        self.assertEqual(core.reloads, 2)
+        self.assertIn("Dashboard WebView2 RenderProcessExited (Crashed, exit code -1)", lines)
+        self.assertIn("Dashboard renderer lost; reloading the page (1)", lines)
+        self.assertIn("Dashboard renderer lost; reloading the page (2)", lines)
+        # WebView2 itself is gone: the monitor asks for a new host.
+        self.assertTrue(host.window._voidcompass_renderer_failed)
+        self.assertTrue(host._service_page_recovery(0, 131.0))
+
     def test_ready_hook_runs_after_pywebview_on_success_only(self):
         order = []
         browser_type = type("Browser", (), {

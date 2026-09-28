@@ -6,11 +6,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import secrets
+import sys
 import threading
 import time
 from urllib.parse import parse_qs, unquote, urlparse
 
 from voidcompass.core.static_assets import asset_type, read_asset
+
+
+def _body_read(handler):
+    """The request body has been read in full: the connection may be reused."""
+    handler.close_connection = not getattr(handler, "keep_after_body", False)
 
 
 class _OverlayHTTPServer(ThreadingHTTPServer):
@@ -22,6 +28,13 @@ class _OverlayHTTPServer(ThreadingHTTPServer):
     # one that loses its document fails navigation. That was the overlay that
     # "sometimes" never came up.
     request_queue_size = 128
+
+    def handle_error(self, request, client_address):
+        # Browsers drop kept-alive connections whenever they like (an idle
+        # socket, a closed page); that is not worth a traceback in the log.
+        if isinstance(sys.exc_info()[1], (ConnectionError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
 
 
 class _OverlayState:
@@ -65,6 +78,9 @@ class HtmlOverlayServer:
         self._presentation_held = bool(presentation_held)
         self._host_shutdown = False
         self._stopping = threading.Event()
+        # Per-overlay sources of data that change too quickly to republish as
+        # snapshots (the music visualizer's levels), served at /api/live.
+        self._live_providers = {}
         self._server = _OverlayHTTPServer(("127.0.0.1", 0), self._handler_type())
         self.port = int(self._server.server_address[1])
         self._thread = threading.Thread(
@@ -278,6 +294,13 @@ class HtmlOverlayServer:
         except Exception:
             pass
 
+    def set_live_provider(self, overlay_id, provider):
+        """Serve `provider()` at /api/live for one overlay; None removes it."""
+        if provider is None:
+            self._live_providers.pop(str(overlay_id), None)
+        else:
+            self._live_providers[str(overlay_id)] = provider
+
     def stop_async(self):
         threading.Thread(target=self.stop, name="html-overlay-stop", daemon=True).start()
 
@@ -287,14 +310,30 @@ class HtmlOverlayServer:
         class Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
             server_version = "VoidCompassOverlay/2"
+            # Connections are reused (HTTP/1.1 keep-alive). Every overlay
+            # polls several times a second, and the music visualizer's levels
+            # travel fifteen times a second each way; a fresh TCP connection
+            # per request left thousands of sockets in TIME_WAIT, and Windows
+            # began refusing new ones (net::ERR_NO_BUFFER_SPACE). An idle
+            # connection is dropped after a minute.
+            timeout = 60
 
             def log_message(self, _format, *_args):
                 return
 
             def do_GET(self):
+                # A GET never carries a body here; if one does, don't guess
+                # where it ends.
+                if self.headers.get("Transfer-Encoding") or self.headers.get("Content-Length", "0").strip() not in {"", "0"}:
+                    self.close_connection = True
                 owner._handle_get(self)
 
             def do_POST(self):
+                # Reuse the connection only once this request's body has been
+                # read in full (see _body_read): an unread body would be taken
+                # for the next request line.
+                self.keep_after_body = not self.close_connection
+                self.close_connection = True
                 owner._handle_post(self)
 
         return Handler
@@ -323,7 +362,7 @@ class HtmlOverlayServer:
             handler.send_header("Cache-Control", cache)
             handler.send_header("Content-Type", content_type)
             handler.send_header("Content-Length", str(len(payload)))
-            handler.send_header("Connection", "close")
+            handler.send_header("Connection", "close" if handler.close_connection else "keep-alive")
             handler.end_headers()
             handler.wfile.write(payload)
         except (BrokenPipeError, ConnectionResetError, OSError):
@@ -413,6 +452,14 @@ class HtmlOverlayServer:
             if parsed.path == "/api/events":
                 self._serve_events(handler, state)
                 return
+            if parsed.path == "/api/live":
+                provider = self._live_providers.get(state.overlay_id)
+                try:
+                    live = provider() if callable(provider) else {}
+                except Exception:
+                    live = {}
+                self._send_json(handler, live if isinstance(live, dict) else {})
+                return
             self._touch(state)
             if parsed.path == "/api/snapshot":
                 with self._condition:
@@ -479,6 +526,7 @@ class HtmlOverlayServer:
                 except (BrokenPipeError, ConnectionResetError, OSError):
                     break
         finally:
+            handler.close_connection = True
             self._touch(state, -1)
 
     def _handle_post(self, handler):
@@ -493,8 +541,10 @@ class HtmlOverlayServer:
             return
         if parsed.path == "/api/host-status":
             try:
-                length = min(4096, max(0, int(handler.headers.get("Content-Length", "0"))))
-                payload = json.loads(handler.rfile.read(length) or b"{}")
+                declared = max(0, int(handler.headers.get("Content-Length", "0")))
+                payload = json.loads(handler.rfile.read(min(4096, declared)) or b"{}")
+                if declared <= 4096:
+                    _body_read(handler)
                 state.host_status = payload if isinstance(payload, dict) else {}
             except (TypeError, ValueError, json.JSONDecodeError, OSError):
                 state.host_status = {"ok": False, "reason": "invalid host status"}
@@ -502,8 +552,10 @@ class HtmlOverlayServer:
             return
         if parsed.path == "/api/rendered":
             try:
-                length = min(1024, max(0, int(handler.headers.get("Content-Length", "0"))))
-                payload = json.loads(handler.rfile.read(length) or b"{}")
+                declared = max(0, int(handler.headers.get("Content-Length", "0")))
+                payload = json.loads(handler.rfile.read(min(1024, declared)) or b"{}")
+                if declared <= 1024:
+                    _body_read(handler)
                 revision = int(payload.get("revision"))
                 content_height = max(0, min(4096, int(payload.get("content_height") or 0)))
             except (TypeError, ValueError, json.JSONDecodeError, OSError):
@@ -532,6 +584,7 @@ class HtmlOverlayServer:
             if not 0 <= length <= 1024:
                 raise ValueError("invalid ready payload length")
             handler.rfile.read(length)
+            _body_read(handler)
         except (TypeError, ValueError, OSError):
             handler.close_connection = True
             self._send_json(handler, {"error": "invalid ready payload"}, 400)

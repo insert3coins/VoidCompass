@@ -162,5 +162,140 @@ class PowerplayOperations544Tests(unittest.TestCase):
         self.assertEqual(dashboard.companion_state["powerplay"]["selected_dossier"], "nakato_kaine")
 
 
+def _jump(ts, system, **fields):
+    raw = {"timestamp": ts, "StarSystem": system}
+    names = {"controller": "ControllingPower", "powers": "Powers", "state": "PowerplayState",
+             "progress": "PowerplayStateControlProgress", "reinforcement": "PowerplayStateReinforcement",
+             "undermining": "PowerplayStateUndermining", "conflict": "PowerplayConflictProgress"}
+    raw.update({names[key]: value for key, value in fields.items()})
+    return raw
+
+
+class PowerplayRework5498Tests(unittest.TestCase):
+    """The rebuilt page: rank curve, system intel, relations and the cycle's days."""
+
+    def test_rank_curve_matches_powerplay_2(self):
+        self.assertEqual([powerplay.rank_threshold(rank) for rank in range(1, 9)],
+                         [0, 2000, 5000, 9000, 15000, 23000, 31000, 39000])
+        progress = powerplay.rank_progress(8, 43000)
+        self.assertEqual((progress["floor"], progress["next"], progress["to_go"]), (39000, 47000, 4000))
+        self.assertAlmostEqual(progress["fraction"], 0.5)
+        self.assertTrue(progress["consistent"])
+        # A total outside the rank's band is shown without a bar, never "fixed".
+        self.assertFalse(powerplay.rank_progress(8, 60000)["consistent"])
+        self.assertEqual(powerplay.rank_progress(None, 100), {})
+
+    def test_jumps_log_powerplay_systems_with_the_change_since_last_reading(self):
+        state = powerplay.fresh_powerplay_state()
+        state = powerplay.reduce_event(state, "FSDJump", _jump("2026-09-24T09:00:00Z", "Sol"))
+        self.assertEqual(state["system_intel"], [])  # no power reported: not logged
+        first = _jump("2026-09-24T10:00:00Z", "LHS 3447", controller="Nakato Kaine",
+                      powers=["Nakato Kaine"], state="Fortified", progress=0.41,
+                      reinforcement=12050, undermining=8870)
+        state = powerplay.reduce_event(state, "FSDJump", first)
+        same = dict(first, timestamp="2026-09-24T11:00:00Z")
+        state = powerplay.reduce_event(state, "FSDJump", same)
+        self.assertEqual(state["system_intel"][0]["visits"], 2)
+        self.assertEqual(state["system_intel"][0]["previous"], {})  # nothing changed yet
+        moved = dict(first, timestamp="2026-09-25T10:00:00Z", PowerplayStateControlProgress=0.47)
+        state = powerplay.reduce_event(state, "FSDJump", moved)
+        # A journal replayed at start-up never rolls a newer reading back.
+        state = powerplay.reduce_event(state, "Location", dict(first))
+        row = state["system_intel"][0]
+        self.assertEqual((row["visits"], row["control_progress"]), (3, 0.47))
+        self.assertEqual(row["previous"]["control_progress"], 0.41)
+        workspace = powerplay.build_workspace({**state, "pledged": True, "power": "Nakato Kaine"},
+                                              now="2026-09-25T12:00:00Z")
+        intel = workspace["intel"][0]
+        self.assertAlmostEqual(intel["progress_delta"], 0.06)
+        self.assertEqual((intel["relation"], intel["action"], intel["tier"]), ("ours", "REINFORCE", 2))
+        self.assertEqual(intel["ethos"], "Covert")
+        # After the Thursday tick the reading is marked as pre-tick.
+        later = powerplay.build_workspace({**state, "pledged": True, "power": "Nakato Kaine"},
+                                          now="2026-10-02T12:00:00Z")
+        self.assertTrue(later["intel"][0]["stale"])
+        self.assertEqual(later["intel_counts"]["stale"], 1)
+
+    def test_the_current_system_card_uses_its_intel_row(self):
+        state = {**powerplay.fresh_powerplay_state(), "pledged": True, "power": "Nakato Kaine"}
+        for stamp, progress in (("2026-09-24T10:00:00Z", 0.41), ("2026-09-25T10:00:00Z", 0.47)):
+            state = powerplay.reduce_event(state, "FSDJump", _jump(
+                stamp, "LHS 3447", controller="Nakato Kaine", state="Fortified", progress=progress))
+        here = powerplay.build_workspace(state, now="2026-09-25T12:00:00Z")["location"]
+        self.assertAlmostEqual(here["progress_delta"], 0.06)
+        self.assertEqual(here["visits"], 2)
+        self.assertFalse(here["stale"])
+        # Still sitting in it after the Thursday tick: the reading is old news.
+        self.assertTrue(powerplay.build_workspace(state, now="2026-10-01T08:00:00Z")["location"]["stale"])
+
+    def test_relation_decides_the_orders(self):
+        rival = {"controlling_power": "Edmund Mahon", "powers": ["Edmund Mahon"], "state": "Exploited"}
+        open_fight = {"powers": ["Nakato Kaine", "Zemina Torval"], "state": "Unoccupied",
+                      "conflict": [{"power": "Nakato Kaine", "progress": 0.3}]}
+        elsewhere = {"powers": ["Archon Delaine"], "state": "Unoccupied"}
+        self.assertEqual(powerplay.system_relation(rival, "Nakato Kaine"), "hostile")
+        self.assertEqual(powerplay.system_relation(open_fight, "Nakato Kaine"), "acquisition")
+        self.assertEqual(powerplay.system_relation(elsewhere, "Nakato Kaine"), "out_of_reach")
+        self.assertEqual(powerplay.system_relation(rival, ""), "unaligned")
+        self.assertEqual(powerplay.system_relation({"state": ""}, "Nakato Kaine"), "none")
+        self.assertEqual(powerplay.control_tier("Stronghold"), 3)
+        self.assertEqual(powerplay.control_tier("Unoccupied"), 0)
+
+    def test_conflict_progress_keeps_only_well_formed_rows(self):
+        state = powerplay.reduce_event(powerplay.fresh_powerplay_state(), "FSDJump", _jump(
+            "2026-09-24T10:00:00Z", "Wolf 359", powers=["Nakato Kaine"], state="Unoccupied",
+            conflict=[{"Power": "Zemina Torval", "ConflictProgress": 0.2},
+                      {"Power": "Nakato Kaine", "ConflictProgress": 0.35},
+                      {"Power": "", "ConflictProgress": 1}, {"ConflictProgress": "x"}, "junk"]))
+        self.assertEqual(state["location"]["conflict"], [
+            {"power": "Nakato Kaine", "progress": 0.35}, {"power": "Zemina Torval", "progress": 0.2}])
+
+    def test_cycle_days_start_at_0700_utc(self):
+        state = powerplay.fresh_powerplay_state()
+        total = 0
+        for stamp, gain in (("2026-09-24T07:30:00Z", 100), ("2026-09-25T06:59:00Z", 50),
+                            ("2026-09-25T07:00:00Z", 25), ("2026-09-30T20:00:00Z", 10)):
+            total += gain
+            state = powerplay.reduce_event(state, "PowerplayMerits", {
+                "timestamp": stamp, "Power": "Edmund Mahon", "MeritsGained": gain, "TotalMerits": total})
+        days = powerplay.build_workspace(state, now="2026-09-30T21:00:00Z")["cycle_days"]
+        self.assertEqual([day["label"] for day in days], ["THU", "FRI", "SAT", "SUN", "MON", "TUE", "WED"])
+        self.assertEqual([day["merits"] for day in days], [150, 25, 0, 0, 0, 0, 10])
+
+    def test_hand_counted_assignments_step_from_the_dashboard(self):
+        dashboard = _PowerplayDashboard()
+        dashboard._handle_html_workspace_command({
+            "page": "powerplay", "operation": "add_objective",
+            "title": "Take Wolf 359", "kind": "system", "target": 3,
+        })
+        objective_id = dashboard.companion_state["powerplay"]["objectives"][0]["id"]
+        for offset in (1, 1, 5):
+            self.assertTrue(dashboard._handle_html_workspace_command({
+                "page": "powerplay", "operation": "step_objective",
+                "objective_id": objective_id, "offset": offset,
+            }))
+        objective = dashboard.companion_state["powerplay"]["objectives"][0]
+        self.assertEqual((objective["current"], objective["complete"]), (3, True))
+        self.assertFalse(dashboard._handle_html_workspace_command({
+            "page": "powerplay", "operation": "step_objective",
+            "objective_id": objective_id, "offset": 0,
+        }))
+
+    def test_page_assets_are_wired(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1] / "web" / "dashboard"
+        index = (root / "index.html").read_text(encoding="utf-8")
+        app = (root / "app.js").read_text(encoding="utf-8")
+        page = (root / "powerplay.js").read_text(encoding="utf-8")
+        self.assertIn('href="powerplay.css"', index)
+        self.assertIn('".pp-tabs button"', app)
+        for operation in ("add_objective", "select_objective", "toggle_objective",
+                          "delete_objective", "step_objective", "select_dossier", "copy_system"):
+            self.assertIn(f'data-ws-op="{operation}"', page)
+        # The assignment form keeps the ids app.js reads when ADD is pressed.
+        for field in ("title", "kind", "system", "commodity", "target", "notes"):
+            self.assertIn(f'id="powerplay-objective-{field}"', page)
+
+
 if __name__ == "__main__":
     unittest.main()

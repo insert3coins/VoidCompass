@@ -23,6 +23,9 @@ from voidcompass.overlays.galnet_ticker_hud import (
     TICKER_CONTENT, TICKER_CRT, TICKER_GLITCH, TICKER_GLITCH_STRENGTH, TICKER_SPEEDS,
     TICKER_STORIES, TICKER_WIDTH_RANGE, ticker_options,
 )
+from voidcompass.overlays.music_player_hud import (
+    MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_VISUALIZERS, music_overlay_options,
+)
 from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
 
 
@@ -312,6 +315,7 @@ class HtmlOverlayStudioMixin:
                 "contact_scope_timeout_s": _integer(self.config.get("contact_scope_timeout_s"), 45),
                 "heartbeat_orb_size": orb_size(self.config),
                 **{f"galnet_ticker_{key}": value for key, value in ticker_options(self.config).items()},
+                **{f"music_player_{key}": value for key, value in music_overlay_options(self.config).items()},
                 "heartbeat_eye_color": eye_color(self.config),
                 "gravity_warning_threshold_g": _number(self.config.get("gravity_warning_threshold_g"), 3.0),
                 "hud_crt_enabled": bool(self.config.get("hud_crt_enabled", True)),
@@ -421,6 +425,7 @@ class HtmlOverlayStudioMixin:
             "survey_status_show_all_bodies",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
+            "music_player_show_art", "music_player_show_details", "music_player_show_next",
         }
         key = _text(key, 80)
         if key not in allowed:
@@ -444,6 +449,10 @@ class HtmlOverlayStudioMixin:
                     station.on_docked(self)
                 else:
                     station.hide()
+        elif key.startswith("music_player_"):
+            music = getattr(self, "music_player_hud", None)
+            if music is not None:
+                music.apply_settings()
         elif key in {"galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news"}:
             ticker = getattr(self, "galnet_ticker_hud", None)
             if ticker is not None:
@@ -534,6 +543,22 @@ class HtmlOverlayStudioMixin:
             if key in payload:
                 choice = _text(payload.get(key), 20).casefold()
                 self.config[key] = choice if choice in choices else default
+        # The music player overlay: layout, visualizer and colours, text size
+        # and how long a pause lasts before it hides.
+        for key, choices, default in (
+            ("music_player_layout", tuple(MUSIC_LAYOUTS), "card"),
+            ("music_player_visualizer", MUSIC_VISUALIZERS, "bars"),
+            ("music_player_colour", MUSIC_COLOURS, "theme"),
+        ):
+            if key in payload:
+                choice = _text(payload.get(key), 20).casefold()
+                self.config[key] = choice if choice in choices else default
+        if "music_player_text_scale_percent" in payload:
+            scale = _number(payload.get("music_player_text_scale_percent"), 0) or 0
+            self.config["music_player_text_scale_percent"] = 0 if scale <= 0 else int(round(max(75, min(200, scale))))
+        if "music_player_auto_hide" in payload:
+            wait = _integer(payload.get("music_player_auto_hide"), 0)
+            self.config["music_player_auto_hide"] = wait if wait in MUSIC_AUTO_HIDE else 0
         # Journal heartbeat orb: its window size and resting eye colour.
         if "heartbeat_orb_size" in payload:
             size = _integer(payload.get("heartbeat_orb_size"), orb_size(self.config))
@@ -548,6 +573,9 @@ class HtmlOverlayStudioMixin:
         ticker = getattr(self, "galnet_ticker_hud", None)
         if ticker is not None and hasattr(ticker, "apply_settings"):
             ticker.apply_settings()
+        music = getattr(self, "music_player_hud", None)
+        if music is not None and hasattr(music, "apply_settings"):
+            music.apply_settings()
         self.update_hud()
         station = getattr(self, "station_info_hud", None)
         if station is not None and getattr(self, "current_docked", False):

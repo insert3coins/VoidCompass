@@ -3,11 +3,14 @@ import {
   openExploreBody, renderExploreSystem, renderExploreWorkspace, resetExploreProfile, setExploreView,
 } from "./explore.js";
 import {renderExplorationArchive} from "./archive.js";
+import {createMusicDeck} from "./music.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
 let revision = -1;
 let model = {};
+// The music player runs behind every page once the deck is up (music.js).
+let musicDeck = null;
 let currentPage = "overview";
 let aboutMatrixFrame = 0;
 let aboutMatrixState = null;
@@ -130,6 +133,11 @@ const LEGACY_PAGE_REDIRECTS = {operations: "overview"};
 const HOTKEY_MODIFIER_KEYS = new Set([
   "Alt", "AltGraph", "Control", "Meta", "OS", "Shift",
 ]);
+// The keyboard's media keys: the only keys a shortcut may use on their own.
+const HOTKEY_MEDIA_KEYS = {
+  MediaPlayPause: "MediaPlayPause", MediaTrackNext: "MediaNext",
+  MediaTrackPrevious: "MediaPrevious", MediaStop: "MediaStop",
+};
 const HOTKEY_CODE_NAMES = {
   Space: "Space", ArrowLeft: "Left", ArrowRight: "Right",
   ArrowUp: "Up", ArrowDown: "Down", PageUp: "PageUp",
@@ -146,6 +154,8 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".bp-slot", ".bp-module", ".bp-analysis > nav button",
   ".survey-body-row", ".explore-views button", "[data-explore-filter]", ".body-select",
   ".settings-tab", ".theme-option",
+  ".music-button", ".music-mode", ".music-playlist", ".music-row-actions button",
+  ".pp-tabs button", ".pp-task-main", ".pp-power", "[data-pp-filter]",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -3955,6 +3965,11 @@ function renderState(state) {
   // handoff hold below is the safe window to hydrate the deck behind it.
   renderBoot(model);
   if (nextBootActive) return true;
+  if (!musicDeck) {
+    musicDeck = createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration});
+    musicDeck.showPage(currentPage === "music");
+  }
+  musicDeck.update(model);
   if (leavingBoot) {
     // The boot curtain remains visible for five seconds. Hydrate the deck
     // behind it now so the first revealed frame is already complete.
@@ -4165,6 +4180,7 @@ function showPage(name) {
   if (name === "map") syncAtlasViewport();
   if (name === "map") window.setTimeout(syncAtlasLayerRequest, 160);
   if (name === "overlay-studio") renderOverlayStudio(model);
+  musicDeck?.showPage(name === "music");
   preparePageLayout(name);
 }
 
@@ -5229,9 +5245,10 @@ window.addEventListener("keydown", async (event) => {
     if (event.altKey) modifiers.push("Alt");
     if (event.shiftKey) modifiers.push("Shift");
     if (event.metaKey) modifiers.push("Win");
-    const key = hotkeyFinalKey(event);
-    if (!modifiers.length || !key) {
-      text("hotkey-status", "Use Ctrl, Alt, Shift or Win plus a letter, number, F-key or navigation key.");
+    const media = HOTKEY_MEDIA_KEYS[event.key] || HOTKEY_MEDIA_KEYS[event.code] || "";
+    const key = media || hotkeyFinalKey(event);
+    if ((!modifiers.length && !media) || !key) {
+      text("hotkey-status", "Use Ctrl, Alt, Shift or Win plus a letter, number, F-key or navigation key, or a media key on its own.");
       return;
     }
     const chord = [...modifiers, key].join("+");

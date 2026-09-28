@@ -221,27 +221,6 @@
   border-top: 2px solid color-mix(in srgb, var(--accent) 37%, var(--border));
 }
 
-/* Powerplay: the leader portrait and selected dossier are the hierarchy, not
-   the assignment controls. Profile colours still supply every accent. */
-[data-page-name="powerplay"] { --systems-line: color-mix(in srgb, var(--orange) 28%, var(--border-soft)); }
-[data-page-name="powerplay"] .powerplay-identity {
-  border-color: var(--systems-line);
-  border-top: 2px solid var(--orange);
-  background:
-    radial-gradient(ellipse at 16% 48%, color-mix(in srgb, var(--orange) 13%, transparent), transparent 39%),
-    linear-gradient(105deg, var(--panel), color-mix(in srgb, var(--panel-raised) 18%, var(--panel)));
-}
-[data-page-name="powerplay"] .powerplay-identity h2 { color: var(--text); text-shadow: 0 0 25px color-mix(in srgb, var(--orange) 13%, transparent); }
-[data-page-name="powerplay"] .powerplay-dossier-layout > aside,
-[data-page-name="powerplay"] .powerplay-dossier-detail { border-color: var(--systems-line); }
-[data-page-name="powerplay"] .powerplay-dossier-layout > aside > button.active {
-  border-color: var(--orange);
-  background: color-mix(in srgb, var(--orange) 9%, var(--panel));
-  box-shadow: inset 3px 0 var(--orange);
-}
-[data-page-name="powerplay"] .powerplay-assignment.selected { border-color: var(--orange); }
-[data-page-name="powerplay"] .powerplay-assignment.complete { border-left: 3px solid var(--green); }
-
 /* Carrier Command: route and fuel are primary, with the current carrier
    selector reading like a real vessel switch rather than a form option. */
 [data-page-name="carrier"] .carrier-switcher button {
@@ -312,7 +291,6 @@
 
 @media (max-width: 980px) {
   [data-page-name="mining"] .mining-current,
-  [data-page-name="powerplay"] .powerplay-identity,
   [data-page-name="carrier"] .carrier-switcher { min-width: 0; }
   [data-page-name="engineering"] .engineering-suite-nav { top: 0; }
   [data-page-name="build-planner"] .bp-manager,

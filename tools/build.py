@@ -69,6 +69,13 @@ if __name__ == '__main__':
             "pywebview is required for the HTML command deck and cockpit overlays. "
             "Run: python -m pip install -r requirements.txt"
         )
+    # Without mutagen a build still runs, but the music player falls back to
+    # file names: no titles, artists, albums or cover art. Refuse instead.
+    if importlib.util.find_spec("mutagen") is None:
+        raise SystemExit(
+            "mutagen is required for the music player's tags and album art. "
+            "Run: python -m pip install -r requirements.txt"
+        )
     print(f"Building with PyInstaller {PyInstaller.__version__}")
 
     runtime_images = validate_runtime_images(project_dir)
@@ -144,6 +151,10 @@ VSVersionInfo(
         '--exclude-module=_tkinter',
         '--exclude-module=PIL.ImageTk',
         '--exclude-module=PIL._tkinter_finder',
+        # mutagen imports each audio format's reader only when a file of that
+        # kind is opened; collect them all so the music player reads every
+        # format it plays.
+        '--collect-submodules=mutagen',
         f'--paths={SRC_ROOT}',
         f'--workpath={project_dir / "build"}',
         f'--specpath={project_dir / "build"}',
