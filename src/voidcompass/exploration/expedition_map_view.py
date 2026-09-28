@@ -16,16 +16,19 @@ import time
 from voidcompass.exploration.explorer_fieldcraft import sector_grid
 from voidcompass.exploration.exploration_intelligence import route_context
 from voidcompass.exploration.galactic_map_server import GalacticMapServer
-from voidcompass.exploration.galactic_regions import X0, Z0, SOURCE_SCALE, SOURCE_SIZE, find_region, region_fills, region_geometry
+from voidcompass.exploration.galactic_regions import find_region, region_labels, region_raster
 from voidcompass.core.theme_state import THEME
 from voidcompass.core.paths import resource_path
 ANNOTATION_TYPES = ('Note', 'Danger', 'Region of Interest', 'Survey Target', 'Waypoint')
 LAYER_NAMES = ('Regions', 'Travel', 'Planned', 'Return', 'Sectors', 'Valuable', 'Biology', 'Codex', 'Photos', 'Recon', 'Revisit', 'Bookmarks', 'Annotations')
-VIEW_MODES = ('Galactic Atlas', 'Route Focus', 'Current Vicinity')
 SCOPES = ('All History', 'Current Session', 'Active Expedition')
 GALACTIC_CENTRE = (0.0, 0.0, 25899.0)
 GALAXY_RADIUS_LY = 51500.0
-MAP_ORIENTATION = 'galactic-north-up-east-right-v2'
+# v3: the camera is a target, a distance, a heading and a tilt; older
+# saved cameras (a free position) are dropped rather than misread.
+MAP_ORIENTATION = 'galactic-north-up-east-right-v3'
+CAMERA_DISTANCE_LY = (20.0, 400000.0)
+CAMERA_TILT_DEG = (0.0, 72.0)
 MAX_ROUTE_POINTS = 5000
 STATIC_ROOT = Path('web') / 'galactic_map'
 ATLAS_ASSET = Path('assets') / 'images' / 'Galaxy' / 'voidcompass-galactic-atlas.png'
@@ -64,10 +67,10 @@ def _theme_payload():
     return {key: str(getattr(THEME, key)) for key in ('bg', 'panel', 'panel_alt', 'panel_raised', 'header', 'input', 'inset', 'border', 'border_soft', 'selection', 'accent', 'orange', 'text', 'muted', 'dim', 'green', 'yellow', 'red')}
 
 def galactic_region_payload():
-    """Return the complete static region mesh consumed by Three.js."""
-    segments, labels = region_geometry(16)
-    fills = region_fills(32)
-    return {'extent': {'x': X0, 'z': Z0, 'size': SOURCE_SIZE * SOURCE_SCALE, 'centre': list(GALACTIC_CENTRE), 'radius': GALAXY_RADIUS_LY}, 'segments': [list(row[:4]) for row in segments], 'fills': [list(row) for row in fills], 'labels': [{'id': int(row['id']), 'name': str(row['name']), 'position': list(row['position']), 'weight': int(row.get('cells') or 0)} for row in labels]}
+    """The 42 Codex regions as the atlas draws them: the raster and its labels."""
+    return {'schema': 2, **region_raster(), 'centre': list(GALACTIC_CENTRE), 'radius': GALAXY_RADIUS_LY,
+            'labels': [{'id': int(row['id']), 'name': str(row['name']), 'position': list(row['position']),
+                        'weight': int(row['cells'])} for row in region_labels()]}
 
 class ExpeditionMapView:
     """Native status surface and live bridge for the embedded Galactic Atlas."""
@@ -115,21 +118,26 @@ class ExpeditionMapView:
         for name, enabled in (state.get('layers') or {}).items():
             if name in layers:
                 layers[name] = bool(enabled)
-        mode = str(state.get('mode') or 'Galactic Atlas')
-        if mode not in VIEW_MODES:
-            mode = 'Galactic Atlas'
         scope = str(state.get('scope') or self.config.get('explore_map_scope') or 'All History')
         if scope not in SCOPES:
             scope = 'All History'
         camera = state.get('camera') if isinstance(state.get('camera'), dict) else {}
-        orientation_matches = state.get('orientation') == MAP_ORIENTATION
-        position = _position(camera.get('position')) if orientation_matches else None
-        target = _position(camera.get('target')) if orientation_matches else None
+        target = _position(camera.get('target')) if state.get('orientation') == MAP_ORIENTATION else None
+        saved_camera = None
+        if target is not None:
+            try:
+                distance = max(CAMERA_DISTANCE_LY[0], min(CAMERA_DISTANCE_LY[1], float(camera.get('distance'))))
+                heading = float(camera.get('heading') or 0.0) % 360.0
+                tilt = max(CAMERA_TILT_DEG[0], min(CAMERA_TILT_DEG[1], float(camera.get('tilt') or 0.0)))
+                if all(math.isfinite(value) for value in (distance, heading, tilt)):
+                    saved_camera = {'target': list(target), 'distance': distance, 'heading': heading, 'tilt': tilt}
+            except (TypeError, ValueError):
+                saved_camera = None
         try:
             depth_scale = max(1.0, min(20.0, float(state.get('depth_scale', 4.0))))
         except (TypeError, ValueError):
             depth_scale = 4.0
-        return {'renderer': 'webgl', 'orientation': MAP_ORIENTATION, 'mode': mode, 'scope': scope, 'layers': layers, 'camera': {'position': list(position) if position else None, 'target': list(target) if target else None}, 'depth_scale': depth_scale, 'grid': state.get('grid') is not False, 'atmosphere': state.get('atmosphere') is not False, 'top_down': bool(state.get('top_down', False)) if orientation_matches else False}
+        return {'renderer': 'webgl', 'orientation': MAP_ORIENTATION, 'scope': scope, 'layers': layers, 'camera': saved_camera, 'depth_scale': depth_scale, 'grid': state.get('grid') is not False, 'atmosphere': state.get('atmosphere') is not False, 'labels': state.get('labels') is not False}
 
     def apply_view_state(self, state):
         self._view_state = self._normalise_view_state(state)

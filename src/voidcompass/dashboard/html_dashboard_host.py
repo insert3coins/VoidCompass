@@ -33,7 +33,13 @@ _RENDERER_RELOAD_GAP_S = 10.0
 # variable replaces pywebview's own browser arguments rather than adding to
 # them, so it carries pywebview's ElasticOverscroll setting as well; Chromium
 # honours only one --disable-features.
-DASHBOARD_BROWSER_ARGUMENTS = "--disable-features=ElasticOverscroll,AudioServiceOutOfProcess"
+# The deck is this app's own page, so its music may start without a click in
+# the window first: a hotkey can start it, and a page that reloads mid-song
+# (a lost renderer) can carry on playing.
+DASHBOARD_BROWSER_ARGUMENTS = (
+    "--disable-features=ElasticOverscroll,AudioServiceOutOfProcess "
+    "--autoplay-policy=no-user-gesture-required"
+)
 
 
 def configure_browser_arguments(environ=None):

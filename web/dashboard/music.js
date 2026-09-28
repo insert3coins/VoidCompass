@@ -46,6 +46,12 @@ const FIRST_LISTEN_SWING_DB = 6;
 const ICON_PATHS = {play: "M8 5v14l11-7z", pause: "M6 5h4v14H6zM14 5h4v14h-4z"};
 const REPEAT_NEXT = {off: "all", all: "one", one: "off"};
 const REPEAT_LABEL = {off: "OFF", all: "ALL", one: "ONE"};
+// The player's live state, kept in session storage: it survives this page
+// reloading (WebView2 losing its renderer, say) but not the app closing. A
+// page that finds it playing moments ago carries on instead of resuming
+// paused as a fresh start does.
+const LIVE_KEY = "voidcompass.music.live";
+const LIVE_RESUME_MS = 15000;
 
 export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration}) {
   const audio = new Audio();
@@ -287,7 +293,24 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
 
   function report() {
     window.clearTimeout(reportTimer);
-    reportTimer = window.setTimeout(() => music("status", status()), 60);
+    reportTimer = window.setTimeout(() => {
+      const now = status();
+      music("status", now);
+      try {
+        window.sessionStorage.setItem(LIVE_KEY, JSON.stringify({
+          track: now.track_id, playlist: now.playlist_id, position: now.position, playing: now.playing, at: Date.now(),
+        }));
+      } catch (_error) { /* storage may be unavailable; a reload then resumes paused */ }
+    }, 60);
+  }
+
+  function liveBeforeReload() {
+    try {
+      const live = JSON.parse(window.sessionStorage.getItem(LIVE_KEY) || "null");
+      if (live?.playing && Date.now() - Number(live.at) < LIVE_RESUME_MS
+          && playlistOf(live.playlist) && playable(live.playlist).includes(live.track)) return live;
+    } catch (_error) { /* nothing usable */ }
+    return null;
   }
 
   function startTimers() {
@@ -352,8 +375,15 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     repeat = REPEAT_NEXT[settings.repeat] ? settings.repeat : "all";
     playlistId = playlistOf(settings.playlist_id) ? settings.playlist_id : "";
     viewId = playlistId || library.playlists[0]?.id || "";
-    // Back where the commander left off, paused: it never starts by surprise.
-    if (playlistId && playable(playlistId).includes(settings.track_id)) {
+    // Back where the commander left off, paused: it never starts by surprise,
+    // unless this page is reloading mid-song, when the music carries on.
+    const live = liveBeforeReload();
+    if (live) {
+      playlistId = live.playlist;
+      viewId = playlistId;
+      arrange(live.track);
+      load(live.track, {play: true, at: Number(live.position || 0) + (Date.now() - Number(live.at)) / 1000});
+    } else if (playlistId && playable(playlistId).includes(settings.track_id)) {
       arrange(settings.track_id);
       load(settings.track_id, {play: false, at: Number(settings.position) || 0});
     }

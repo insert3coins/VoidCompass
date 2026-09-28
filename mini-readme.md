@@ -1,6 +1,6 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.9.8 // Cockpit Music
+## v5.4.9.8 // Cockpit Music - Galatic Map re-work
 **Release Date:** 2026-Sep-28
 
 * Added Music, a new page in the command deck: your own music, played straight from wherever it lives on this PC. Nothing is copied or moved; Void Compass remembers where each file is and plays it from there.
@@ -11,8 +11,14 @@
 * New hotkeys in Settings: Music play/pause, next and previous (media keys work on their own), and showing or hiding the Music Player overlay.
 * The volume slider moves in even steps of loudness, and full volume sits comfortably under game audio, so the whole slider is usable instead of only its bottom few steps.
 * LEVEL (on by default) plays every track equally loud, however loudly it was mastered. It uses a track's ReplayGain or R128 tags when it has them; otherwise it listens to the track the first time it plays and remembers it, so it starts at the right level from then on.
+* The Music Player overlay's slim strip scrolls its whole line, title and artist, when it doesn't fit, as the card does.
+* If the command deck's page reloads mid-song (WebView2 can drop its renderer), the music carries on from where it was instead of stopping. The deck's music also no longer needs a click in its window before a hotkey can start it.
 * OBS can record the music: add an Application Audio Capture source and pick the Void Compass command deck window. Before, WebView2 played the sound from a separate process that OBS couldn't see.
 * Void Compass now reads music tags with mutagen (GPL-2.0-or-later).
+* Rebuilt the Galactic Atlas as a map of Elite's 42 Codex regions and everywhere you have been. The region borders are drawn exactly from Universal Cartographics' region map, the galaxy glows along its arms, and hovering anywhere names the region and your distance to it.
+* Your travels are a line that brightens towards the present, with each visited system coloured by its star class. The regions you have flown through glow, and REGIONS lists all 42 with your systems and the date you first entered each.
+* Replay the journey from the first jump to the last on the timeline. Tilt into 3D (right-drag or 3D), zoom from the whole galaxy down to a single system, and jump to Sol, Sagittarius A*, Colonia, Beagle Point, the Pleiades or your destination.
+* Right-click anywhere to leave a map mark. Intel layers (valuable worlds, biology, Codex, screenshots, recon, unfinished surveys, bookmarks, expedition sectors) switch on and off under LAYERS.
 * Rebuilt Powerplay Operations. A pledge banner shows your leader, rank and total merits, how far the next rank is (on Powerplay 2.0's merit curve), your salary and time pledged, and a live countdown to Thursday's 07:00 UTC tick.
 * Operations shows the system you are in: its state from Unoccupied to Stronghold, who controls it, control progress and the change since your last reading, reinforcement against undermining, and each power's conflict progress. It then gives your orders there (reinforce, undermine or acquire) with your power's ethos bonus. Beside it, Cycle Pulse charts merits for each day of the week against your last and best cycles, with the systems that paid most. Assignments can now be counted up and down by hand.
 * New System Intel log: every Powerplay system you jump into, filterable by ours, hostile, acquisition or out of reach, with what changed since your last visit. Readings from before the weekly tick are marked as such.

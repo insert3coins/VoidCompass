@@ -459,11 +459,49 @@ class BrowserTests(Folder):
         deck.state["music"]["remote"] = {"seq": 2, "op": "next"}
         deck.server.publish(deck.state)
         page.wait_for_function(f"window.voidcompassMusic.state().currentId === '{deck.tracks[1]}'", timeout=6000)
-        # A fresh page does not replay the hotkeys that came before it.
+        # A reloaded page doesn't replay the hotkeys that came before it (a
+        # replayed "next" would move it on to track 3). Reloaded mid-song, as
+        # when WebView2 loses its renderer, the music carries on.
+        page.wait_for_timeout(1300)
+        mark = len(deck.commands)
         page.reload()
         page.wait_for_function("document.body.classList.contains('ready') && window.voidcompassMusic")
-        page.wait_for_timeout(600)
+        page.wait_for_function("window.voidcompassMusic.state().playing", timeout=6000)
+        # The reloaded page's reports: it carried on with track 2 from where it
+        # was (these tracks are short, so it may have moved on since).
+        reports = [command for command in deck.commands[mark + 1:]
+                   if command.get("operation") == "status" and command.get("playing")]
+        self.assertEqual(reports[0]["track_id"], deck.tracks[1])
+        self.assertGreater(reports[0]["position"], 1.0)
+
+    def test_a_fresh_start_resumes_paused_even_after_playing_last_time(self):
+        # Paused before the reload: it comes back paused, as on any fresh start.
+        deck = self.deck()
+        page = deck.page
+        page.locator('.nav-item[data-page="music"]').click()
+        page.wait_for_selector(".music-row")
+        page.locator(".music-row").nth(0).dblclick()
+        page.wait_for_function("window.voidcompassMusic.state().playing")
+        page.locator("#music-play").click()
+        page.wait_for_function("!window.voidcompassMusic.state().playing")
+        page.wait_for_timeout(300)
+        page.reload()
+        page.wait_for_function("document.body.classList.contains('ready') && window.voidcompassMusic")
+        page.wait_for_timeout(1200)
         self.assertFalse(page.evaluate("window.voidcompassMusic.state().playing"))
+
+    def test_repeat_all_goes_round_to_the_first_track_after_the_last(self):
+        deck = self.deck(settings=lambda playlist, tracks: {"repeat": "all"})
+        page, tracks = deck.page, deck.tracks
+        page.locator('.nav-item[data-page="music"]').click()
+        page.wait_for_selector(".music-row")
+        page.locator(".music-row").nth(2).dblclick()
+        page.wait_for_function(f"window.voidcompassMusic.state().currentId === '{tracks[2]}' && window.voidcompassMusic.state().playing")
+        self.assertEqual(page.evaluate("window.voidcompassMusic.state().repeat"), "all")
+        page.wait_for_function("Number.isFinite(window.voidcompassMusic.audio.duration)")
+        page.evaluate("() => { const a = window.voidcompassMusic.audio; a.currentTime = Math.max(0, a.duration - .4); }")
+        page.wait_for_function(f"window.voidcompassMusic.state().currentId === '{tracks[0]}'", timeout=8000)
+        page.wait_for_function("window.voidcompassMusic.state().playing", timeout=4000)
 
     def test_it_resumes_paused_where_the_commander_left_off(self):
         deck = self.deck(settings=lambda playlist, tracks: {
@@ -552,6 +590,21 @@ class OverlayBrowserTests(unittest.TestCase):
                           "art": "", "options": {"layout": "card", "visualizer": "bars", "colour": "theme",
                                                  "show_art": True, "show_details": True, "show_next": True,
                                                  **options}}}
+
+    def test_the_strip_scrolls_its_whole_line_title_and_artist(self):
+        page, _ = self.open(width=580, height=44)
+        snapshot = self.snapshot(layout="strip")
+        snapshot["music"]["track"].update(title="Hyperspace Is A Long Way Down, And It Keeps Going",
+                                          artist="Erasmus Kodiak and the Witch-space Orchestra")
+        page.evaluate("s => renderMusic(s)", snapshot)
+        page.wait_for_timeout(300)
+        self.assertIn("Erasmus Kodiak", page.inner_text("#title"), "the artist rides in the title's window")
+        self.assertTrue(page.evaluate("musicPlayerOverlay.state().scrolling"))
+        # A line that fits stays still.
+        snapshot["music"]["track"].update(id="b" * 16, title="Aurora", artist="Solar Fields")
+        page.evaluate("s => renderMusic(s)", snapshot)
+        page.wait_for_timeout(300)
+        self.assertFalse(page.evaluate("musicPlayerOverlay.state().scrolling"))
 
     def test_it_shows_the_track_and_runs_the_clock_on(self):
         page, _ = self.open()

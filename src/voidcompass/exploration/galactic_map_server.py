@@ -198,10 +198,12 @@ class GalacticMapServer:
             "/index.html": "index.html",
             "/app.js": "app.js",
             "/boot.js": "boot.js",
+            "/regions.js": "regions.js",
+            "/camera.js": "camera.js",
+            "/scene.js": "scene.js",
             "/styles.css": "styles.css",
             "/vendor/three.module.min.js": "vendor/three.module.min.js",
             "/vendor/three.core.min.js": "vendor/three.core.min.js",
-            "/vendor/OrbitControls.js": "vendor/OrbitControls.js",
         }
         relative = aliases.get(request_path)
         if relative is None:

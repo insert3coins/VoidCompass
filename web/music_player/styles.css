@@ -110,11 +110,10 @@ body { pointer-events: none; user-select: none; }
 .player.strip .cover span { font-size: calc(16px * var(--scale)); }
 .player.strip .info { grid-row: 1; display: flex; gap: calc(8px * var(--scale)); align-items: baseline; }
 .player.strip .kicker, .player.strip .details { display: none; }
-.player.strip .title-window { flex: 0 1 auto; min-width: 0; }
+.player.strip .title-window { flex: 1 1 auto; min-width: 0; }
 .player.strip #title { padding-right: calc(6px * var(--scale)); font-size: calc(15px * var(--scale)); }
-.player.strip .artist { flex: 0 1 auto; min-width: 0; font-size: calc(12px * var(--scale)); }
-.player.strip .artist::before { content: "— "; color: var(--dim); }
-.player.strip .artist:empty::before { content: none; }
+.player.strip .artist { display: none; }
+#title .by { color: var(--text); opacity: .75; font: 400 calc(12px * var(--scale)) "Segoe UI", sans-serif; letter-spacing: 0; text-shadow: none; }
 .player.strip .visualizer { position: relative; grid-column: 3; grid-row: 1; height: calc(28px * var(--scale)); }
 /* The strip's progress is a hairline along its bottom edge. */
 .player.strip .progress { position: static; grid-column: 4; grid-row: 1; grid-template-columns: auto; margin: 0; }

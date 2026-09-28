@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
   <link rel="icon" href="data:,">
   <title>Void Compass // Galactic Atlas</title>
@@ -10,177 +10,121 @@
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
-  <main id="app">
-    <div id="viewport" aria-label="Interactive three-dimensional Galactic Atlas"></div>
-    <svg id="route-overlay" class="route-overlay" aria-hidden="true">
-      <path id="travel-overlay-halo" class="travel-overlay-halo"></path>
-      <path id="travel-overlay-path" class="travel-overlay-path"></path>
-      <path id="return-overlay-path" class="return-overlay-path"></path>
-      <path id="nav-overlay-halo" class="nav-overlay-halo"></path>
-      <path id="nav-overlay-path" class="nav-overlay-path"></path>
-    </svg>
-    <div id="region-labels" class="map-label-layer" aria-hidden="true"></div>
-    <div id="cluster-labels" class="map-label-layer" aria-hidden="true"></div>
+  <main id="atlas">
+    <div id="viewport" aria-label="Galactic Atlas: the 42 Codex regions and everywhere you have been"></div>
+    <div id="labels" class="labels" aria-hidden="true"></div>
 
-    <header class="topbar glass angular">
-      <div class="brand-block">
-        <span class="eyebrow">VOID COMPASS // UNIVERSAL CARTOGRAPHICS</span>
-        <h1>GALACTIC ATLAS</h1>
+    <header class="brand card">
+      <p class="eyebrow">UNIVERSAL CARTOGRAPHICS</p>
+      <h1>Galactic Atlas</h1>
+      <div class="brand-here">
+        <i class="here-dot" aria-hidden="true"></i>
+        <div><strong id="here-system">Position unknown</strong><small id="here-region">Waiting for the journal</small></div>
       </div>
-      <div class="location-block">
-        <span id="current-system">POSITION UNKNOWN</span>
-        <small id="current-region">AWAITING JOURNAL COORDINATES</small>
-      </div>
-      <div class="link-state">
-        <span id="live-dot" class="live-dot"></span>
-        <div><strong id="connection-state">CONNECTING</strong><small id="commander-name">LOCAL SESSION</small></div>
-      </div>
+      <p class="link"><i id="link-dot" class="link-dot"></i><span id="link-state">CONNECTING</span><span id="commander"></span></p>
     </header>
 
-    <nav class="map-tools" aria-label="Map tools">
-      <button data-map-panel="navigation" aria-controls="map-controls" aria-expanded="true" class="active" title="Navigation"><span>⌖</span><small>NAV</small></button>
-      <button data-map-panel="layers" aria-controls="map-controls" aria-expanded="false" title="Map filters"><span>◈</span><small>FILTERS</small></button>
-      <button data-map-panel="reference" aria-controls="map-controls" aria-expanded="false" title="Position and controls"><span>⊕</span><small>POSITION</small></button>
-    </nav>
-    <aside id="map-controls" class="control-deck glass angular">
-      <header class="panel-heading"><div><span class="eyebrow">UNIVERSAL CARTOGRAPHICS</span><h2 id="panel-title">NAVIGATION</h2></div><button id="collapse-controls" class="text-button" aria-label="Collapse map controls">‹</button></header>
-      <div data-panel="navigation">
-      <section class="control-section search-section">
-        <label for="search">SYSTEM / REGION / ANNOTATION</label>
-        <div class="search-row">
-          <input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="Search systems & regions">
-          <button id="search-button" class="icon-button" title="Search">⌖</button>
+    <section class="side card" aria-label="Atlas panels">
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="find" class="active">FIND</button>
+        <button type="button" role="tab" data-tab="regions">REGIONS <b id="tab-regions-count">0</b></button>
+        <button type="button" role="tab" data-tab="layers">LAYERS</button>
+        <button type="button" id="side-collapse" class="collapse" title="Hide panel" aria-label="Hide panel">‹</button>
+      </nav>
+      <div class="side-body">
+        <div data-panel="find">
+          <label class="search"><input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="System, region or map mark…"></label>
+          <div id="search-results" class="results" hidden></div>
+          <p class="section-title">JUMP TO</p>
+          <div id="places" class="places"></div>
+          <p class="hint">Drag to pan · wheel to zoom · right-drag to turn and tilt · double-click to focus · right-click to mark</p>
         </div>
-        <div id="search-results" class="search-results" hidden></div>
-      </section>
-
-      <section class="control-section split-controls">
-        <label for="view-mode">VIEW</label>
-        <select id="view-mode">
-          <option>Galactic Atlas</option>
-          <option>Route Focus</option>
-          <option>Current Vicinity</option>
-        </select>
-        <label for="scope-mode">SCOPE</label>
-        <select id="scope-mode">
-          <option>All History</option>
-          <option>Current Session</option>
-          <option>Active Expedition</option>
-        </select>
-      </section>
-
-      <section class="control-section button-grid">
-        <button id="current-button">CURRENT</button>
-        <button id="route-button">ROUTE</button>
-        <button id="atlas-button">ATLAS</button>
-        <button id="top-button">TOP VIEW</button>
-        <button id="mark-button">ADD MARK</button>
-        <button id="reset-button">RESET</button>
-      </section>
-      <p class="panel-note">Search your recorded systems, map marks and all 42 galactic regions.</p>
-      </div>
-      <div data-panel="layers" hidden>
-      <section class="control-section depth-control">
-        <div class="section-heading"><span>VERTICAL STRUCTURE</span><output id="depth-value">4×</output></div>
-        <input id="depth-scale" aria-label="Vertical structure scale" type="range" min="1" max="20" step="1" value="4">
-      </section>
-      <section class="control-section layers-section">
-        <div class="section-heading"><span>INTELLIGENCE LAYERS</span><button id="layers-toggle" class="text-button">ALL</button></div>
-        <div id="layer-grid" class="layer-grid"></div>
-      </section>
-      <section class="control-section display-options">
-        <label><input id="grid-toggle" type="checkbox" checked> GALACTIC GRID</label>
-        <label><input id="atmosphere-toggle" type="checkbox" checked> GALAXY BACKGROUND</label>
-      </section>
-      <p class="panel-note">The galaxy background is illustrative. Plotted systems and routes use your recorded Elite coordinates.</p>
-      </div>
-      <div data-panel="reference" hidden>
-
-
-      <section class="control-section atlas-reference">
-        <div class="section-heading"><span>LIVE GALACTIC FIX</span><span>XYZ // LY</span></div>
-        <div class="coordinate-readout">
-          <span><small>X // EAST</small><strong id="coord-x">—</strong></span>
-          <span><small>Y // HEIGHT</small><strong id="coord-y">—</strong></span>
-          <span><small>Z // NORTH</small><strong id="coord-z">—</strong></span>
+        <div data-panel="regions" hidden>
+          <div class="regions-head"><strong id="regions-visited">0</strong><span>OF 42 CODEX REGIONS VISITED</span></div>
+          <i class="meter"><b id="regions-meter"></b></i>
+          <div id="region-list" class="region-list"></div>
         </div>
-        <div class="gesture-guide">
-          <span>LEFT DRAG <strong>ORBIT</strong></span>
-          <span>RIGHT DRAG <strong>PAN</strong></span>
-          <span>WHEEL <strong>RANGE</strong></span>
+        <div data-panel="layers" hidden>
+          <label class="field">HISTORY<select id="scope"><option>All History</option><option>Current Session</option><option>Active Expedition</option></select></label>
+          <div id="layer-list" class="layer-list"></div>
+          <p class="section-title">DISPLAY</p>
+          <div class="toggles">
+            <label><input type="checkbox" id="toggle-glow" checked><span>Galaxy glow</span></label>
+            <label><input type="checkbox" id="toggle-grid" checked><span>Light-year grid</span></label>
+            <label><input type="checkbox" id="toggle-labels" checked><span>Region names</span></label>
+          </div>
+          <label class="field depth">HEIGHT ABOVE THE PLANE <output id="depth-value">4×</output><input id="depth" type="range" min="1" max="20" step="1" value="4"></label>
+          <p class="hint">The galaxy is thin: heights are exaggerated so they show when the map is tilted.</p>
         </div>
-      </section>
-      <p class="panel-note">Select a system or region to inspect it. Double-click to focus. Right-click to place a map annotation.</p>
       </div>
+    </section>
+
+    <aside id="inspector" class="inspector card" hidden aria-live="polite">
+      <button type="button" id="inspector-close" class="close" aria-label="Close">×</button>
+      <p id="inspect-kind" class="eyebrow"></p>
+      <h2 id="inspect-title"></h2>
+      <p id="inspect-sub" class="sub"></p>
+      <dl id="inspect-facts" class="facts"></dl>
+      <div id="inspect-records" class="records"></div>
+      <div id="inspect-actions" class="actions"></div>
     </aside>
 
-    <div class="map-view-toolbar" aria-label="Map zoom"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button></div>
-
-    <aside id="inspector" class="inspector glass angular" aria-live="polite">
-      <button id="close-inspector" class="close-button" aria-label="Close inspector">×</button>
-      <span id="inspect-kind" class="eyebrow">MAP INTELLIGENCE</span>
-      <h2 id="inspect-title">Select a system, marker or region</h2>
-      <p id="inspect-system" class="inspect-system"></p>
-      <p id="inspect-detail" class="inspect-detail">Click a plotted item to inspect retained commander evidence.</p>
-      <dl id="inspect-coordinates" class="coordinate-grid"></dl>
-      <div id="inspect-actions" class="inspect-actions"></div>
-    </aside>
-
-    <div class="map-reticle" aria-hidden="true"><i></i><i></i></div>
-    <aside class="atlas-instruments glass angular" aria-label="Galactic map orientation and scale">
-      <div class="scale-instrument">
-        <span class="eyebrow">FIELD SCALE</span>
-        <div><i id="scale-line"></i><strong id="scale-label">— LY</strong></div>
+    <div class="instruments">
+      <button type="button" id="compass" class="compass card" title="North up (N)" aria-label="Turn north up">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27"/><g id="compass-needle"><path class="north" d="M32 8 L38 32 L32 29 L26 32 Z"/><path class="south" d="M32 56 L26 32 L32 35 L38 32 Z"/><text x="32" y="6">N</text></g></svg>
+      </button>
+      <div class="zoom card">
+        <button type="button" id="zoom-in" title="Zoom in (+)" aria-label="Zoom in">+</button>
+        <button type="button" id="zoom-out" title="Zoom out (−)" aria-label="Zoom out">−</button>
+        <button type="button" id="tilt" title="Tilt into 3D" aria-label="Tilt">3D</button>
       </div>
-      <svg id="axis-compass" class="axis-compass" viewBox="0 0 92 92" aria-label="Dynamic galactic axes">
-        <circle cx="46" cy="46" r="31"></circle>
-        <circle cx="46" cy="46" r="3" class="axis-core"></circle>
-        <line id="axis-east-line" x1="46" y1="46" x2="73" y2="46" class="axis-east"></line>
-        <line id="axis-north-line" x1="46" y1="46" x2="46" y2="19" class="axis-north"></line>
-        <text id="axis-east-label" x="79" y="49" class="axis-east-label">+X</text>
-        <text id="axis-north-label" x="46" y="12" class="axis-north-label">+Z</text>
-      </svg>
-      <div class="axis-caption"><strong>GALACTIC AXES</strong><span>+X EAST // +Z NORTH</span></div>
-    </aside>
+      <div class="scale card"><i id="scale-bar"></i><span id="scale-label">—</span></div>
+    </div>
 
-    <footer class="statusbar glass angular">
-      <div class="stat"><span>SYSTEMS</span><strong id="stat-systems">0</strong></div>
-      <div class="stat"><span>JOURNALLED</span><strong id="stat-distance">0 LY</strong></div>
-      <div class="stat"><span>INTELLIGENCE</span><strong id="stat-markers">0</strong></div>
-      <div class="stat"><span>MAP MARKS</span><strong id="stat-annotations">0</strong></div>
-      <div class="route-state"><span id="route-state">NO ACTIVE ROUTE</span><small id="camera-state">GALACTIC ATLAS · GPU READY</small></div>
+    <footer class="journey card">
+      <div class="stats">
+        <div><span>SYSTEMS</span><b id="stat-systems">0</b></div>
+        <div><span>TRAVELLED</span><b id="stat-distance">0 LY</b></div>
+        <div><span>REGIONS</span><b id="stat-regions">0 / 42</b></div>
+        <div><span>INTEL</span><b id="stat-intel">0</b></div>
+        <div><span>MARKS</span><b id="stat-marks">0</b></div>
+      </div>
+      <div class="replay">
+        <button type="button" id="replay-play" class="play" title="Replay the journey" aria-label="Replay the journey"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+        <div class="replay-track">
+          <input id="replay" type="range" min="0" max="1000" value="1000" aria-label="Journey position">
+          <div class="replay-labels"><span id="replay-start">—</span><strong id="replay-now">FULL HISTORY</strong><span id="replay-end">—</span></div>
+        </div>
+      </div>
+      <div class="route-state"><span id="route-state">NO ROUTE PLOTTED</span><small id="route-detail"></small></div>
     </footer>
 
     <div id="tooltip" class="tooltip" hidden></div>
-    <div id="context-menu" class="context-menu glass" hidden></div>
+    <div id="menu" class="menu card" hidden role="menu"></div>
 
-    <dialog id="annotation-dialog" class="annotation-dialog angular">
-      <form id="annotation-form" method="dialog">
-        <header><span class="eyebrow">COMMANDER-OWNED INTELLIGENCE</span><h2>GALACTIC MAP ANNOTATION</h2></header>
-        <p id="annotation-location" class="annotation-location"></p>
-        <input id="annotation-id" type="hidden">
-        <input id="annotation-position" type="hidden">
-        <input id="annotation-system" type="hidden">
-        <label>TYPE<select id="annotation-category">
-          <option>Note</option><option>Danger</option><option>Region of Interest</option>
-          <option>Survey Target</option><option>Waypoint</option>
-        </select></label>
-        <label>TITLE<input id="annotation-title" maxlength="120" required></label>
-        <label>NOTES<textarea id="annotation-note" maxlength="2000" rows="6"></textarea></label>
+    <dialog id="mark-dialog" class="mark-dialog card">
+      <form id="mark-form" method="dialog">
+        <p class="eyebrow">YOUR MAP MARK</p>
+        <h2 id="mark-heading">New map mark</h2>
+        <p id="mark-where" class="sub"></p>
+        <input id="mark-id" type="hidden"><input id="mark-position" type="hidden"><input id="mark-system" type="hidden">
+        <label class="field">TYPE<select id="mark-category"><option>Note</option><option>Danger</option><option>Region of Interest</option><option>Survey Target</option><option>Waypoint</option></select></label>
+        <label class="field">TITLE<input id="mark-title" maxlength="120" required></label>
+        <label class="field">NOTES<textarea id="mark-note" maxlength="2000" rows="5"></textarea></label>
         <div class="dialog-actions">
-          <button id="annotation-delete" type="button" class="danger-button" hidden>DELETE</button>
+          <button type="button" id="mark-delete" class="danger" hidden>DELETE</button>
           <span></span>
-          <button id="annotation-cancel" type="button">CANCEL</button>
-          <button type="submit" class="primary-button">SAVE MARK</button>
+          <button type="button" id="mark-cancel">CANCEL</button>
+          <button type="submit" class="primary">SAVE MARK</button>
         </div>
       </form>
     </dialog>
 
-    <div id="loading" class="loading-screen">
-      <div class="loading-core"><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="core-dot"></div></div>
-      <span class="eyebrow">VOID COMPASS // LOCAL MAP SERVICE</span>
-      <h2>ASSEMBLING GALACTIC ATLAS</h2>
-      <p id="loading-status">Connecting to live commander state…</p>
+    <div id="loading" class="loading">
+      <div class="loading-disc" aria-hidden="true"><i></i><i></i><i></i></div>
+      <p class="eyebrow">UNIVERSAL CARTOGRAPHICS</p>
+      <h2>Charting the galaxy</h2>
+      <p id="loading-status">Connecting to your commander record…</p>
     </div>
   </main>
   <script src="/boot.js" defer></script>
