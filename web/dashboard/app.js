@@ -246,6 +246,8 @@ async function command(action, payload = {}) {
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({action, ...payload}),
     });
+    // Read to the end: an unread reply holds native buffers until GC.
+    await response.arrayBuffer().catch(() => null);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return true;
   } catch (error) {
@@ -260,7 +262,8 @@ function postBootMilestone(action) {
     cache: "no-store",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({action}),
-  }).then((response) => {
+  }).then(async (response) => {
+    await response.arrayBuffer().catch(() => null);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
   }).catch(() => window.setTimeout(() => postBootMilestone(action), 1000));
 }

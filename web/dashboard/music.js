@@ -267,11 +267,15 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
 
   // --- Talking to Python --------------------------------------------------------
   // Quiet: status and levels are routine, and a missed one is soon replaced.
+  // Every reply is read to its end. An unread fetch reply keeps its native
+  // buffers until the garbage collector happens by, which on this small heap
+  // is rarely: at fifteen level reports a second that held about 40 MB more
+  // each minute, and WebView2 dropped the page after about 18 minutes.
   function post(payload, keepalive = false) {
     return fetch(apiUrl("/api/command"), {
       method: "POST", cache: "no-store", keepalive,
       headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload),
-    }).catch(() => {});
+    }).then((response) => response.arrayBuffer()).catch(() => {});
   }
   const music = (operation, payload = {}) => post({action: "music", operation, ...payload});
 

@@ -31,7 +31,9 @@ LIMITS = {
     "field_discoveries": 1200,
     "milestone_keys": 1200,
     "seen": 12000,
-    "imported_files": 400,
+    # One per journal file read. At 400 a commander with more journals than
+    # that re-read the oldest ones at every start; 10,000 is years of play.
+    "imported_files": 10000,
 }
 
 HIGH_VALUE_WORLDS = {"Earthlike body", "Water world", "Ammonia world"}
@@ -609,7 +611,7 @@ class DeepSurveyTracker:
             # handing it over as the producer avoids copying the whole survey
             # twice, and once per coalesced write rather than once per event.
             persistence_queue().submit_json(
-                path, indent=2, source=self.snapshot,
+                path, indent=None, source=self.snapshot,
                 delay_s=0.25 if immediate else 1.0, immediate=immediate,
             )
 

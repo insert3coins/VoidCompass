@@ -12,6 +12,8 @@
 * The volume slider moves in even steps of loudness, and full volume sits comfortably under game audio, so the whole slider is usable instead of only its bottom few steps.
 * LEVEL (on by default) plays every track equally loud, however loudly it was mastered. It uses a track's ReplayGain or R128 tags when it has them; otherwise it listens to the track the first time it plays and remembers it, so it starts at the right level from then on.
 * The Music Player overlay's slim strip scrolls its whole line, title and artist, when it doesn't fit, as the card does.
+* Fixed the command deck dropping its page every 17-20 minutes while music played with the overlay on. The deck never read the replies to its fifteen-a-second visualizer reports, and each unread reply held memory, about 40 MB a minute. Every page now reads its replies, overlays included.
+* Deep Survey and the Captain's Log now remember every journal they have read: past 400 files they were rereading the oldest at every start. Large profile files (survey, Captain's Log, specialists, expeditions) save compact with the fast JSON encoder, about four times less work and a quarter smaller.
 * If the command deck's page reloads mid-song (WebView2 can drop its renderer), the music carries on from where it was instead of stopping. The deck's music also no longer needs a click in its window before a hotkey can start it.
 * OBS can record the music: add an Application Audio Capture source and pick the Void Compass command deck window. Before, WebView2 played the sound from a separate process that OBS couldn't see.
 * Void Compass now reads music tags with mutagen (GPL-2.0-or-later).

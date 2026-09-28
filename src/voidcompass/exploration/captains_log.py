@@ -70,7 +70,7 @@ class CaptainsLog:
             # save() runs for every journal event, and copying the whole log
             # each time was wasted on all but the write that actually happens.
             persistence_queue().submit_json(
-                self.path, indent=2, delay_s=1.0, source=self._persist_snapshot,
+                self.path, indent=None, delay_s=1.0, source=self._persist_snapshot,
             )
         except Exception:
             pass
@@ -350,7 +350,9 @@ class CaptainsLog:
                 (rebuilt.data.get("seen") or []) + (self.data.get("seen") or [])
             ))[-6000:]
             self._seen_set = set(self.data["seen"])
-            self.data["imported_files"] = dict(list(imported.items())[-400:])
+            # Keep every journal read (see deep_survey's LIMITS): at 400 the
+            # oldest files were read again at every start.
+            self.data["imported_files"] = dict(list(imported.items())[-10000:])
             self.data["schema"] = 2
             self.save()
         return count
