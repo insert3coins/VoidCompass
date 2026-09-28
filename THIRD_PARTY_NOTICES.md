@@ -37,13 +37,43 @@ Frontier Developments plc and are used here by an unofficial fan project.
 
 ## three.js
 
-The offline HTML Galactic Atlas bundles three.js 0.185.1 and its OrbitControls
-addon from [three.js](https://threejs.org/). They provide the local WebGL 2
-renderer and camera controls; Void Compass does not load the library from a CDN.
+The offline HTML Galactic Atlas bundles three.js 0.185.1 from
+[three.js](https://threejs.org/). It provides the local WebGL 2 renderer; Void
+Compass does not load the library from a CDN.
 
 MIT License
 
 Copyright © 2010-2026 three.js authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## EliteDangerousRegionMap
+
+The 42 Codex region boundaries used to name a position's region, and drawn by
+the Galactic Atlas, come from `RegionMapData.json` in Ben Peddell's
+[EliteDangerousRegionMap](https://github.com/klightspeed/EliteDangerousRegionMap)
+at commit 6c1191a58e1e593966f44f16235ab39d1ad24d84, stored compressed but
+otherwise unchanged.
+
+MIT License
+
+Copyright (c) 2020 Ben Peddell
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -136,6 +136,8 @@ class HostLogTests(unittest.TestCase):
         self.assertEqual(arguments.count("--disable-features="), 1)
         self.assertIn("AudioServiceOutOfProcess", arguments)
         self.assertIn("ElasticOverscroll", arguments)  # pywebview's own setting
+        # The deck's own music may start without a click (a hotkey, a reload).
+        self.assertIn("--autoplay-policy=no-user-gesture-required", arguments)
         source = Path(host_module.__file__).read_text(encoding="utf-8")
         main = source[source.index("def main("):]
         self.assertLess(main.index("configure_browser_arguments()"), main.index("webview.start("))

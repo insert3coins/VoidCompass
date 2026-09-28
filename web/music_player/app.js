@@ -93,8 +93,18 @@
     nodes.modes.textContent = [model.shuffle ? "SHUFFLE" : "", {one: "REPEAT ONE", off: "", all: "REPEAT"}[model.repeat] || ""]
       .filter(Boolean).join(" · ");
     const nextKey = JSON.stringify([track?.title, track?.artist, track?.album, options.layout, effects.text_scale]);
+    // The strip is one line: its artist rides in the title's window, so the
+    // whole "title — artist" scrolls when it doesn't fit, rather than the
+    // artist being cut off beside a scrolling title.
+    const artist = track ? track.artist || "Unknown artist" : "Play something on the Music page";
     nodes.title.textContent = track?.title || "Nothing playing";
-    nodes.artist.textContent = track ? track.artist || "Unknown artist" : "Play something on the Music page";
+    if (options.layout === "strip" && track?.artist) {
+      const by = document.createElement("span");
+      by.className = "by";
+      by.textContent = `  —  ${track.artist}`;
+      nodes.title.append(by);
+    }
+    nodes.artist.textContent = artist;
     nodes.details.textContent = track && options.show_details !== false
       ? [track.album, track.year, track.format].filter(Boolean).join("  ·  ") : "";
     if (nodes.cover.dataset.src !== (model.art || "")) {
@@ -121,6 +131,9 @@
     }
     if (nextKey !== titleKey) {
       titleKey = nextKey;
+      // Measured now and again once laid out: an overlay hidden while the
+      // music was paused gets no animation frames until it shows again.
+      fitTitle();
       window.requestAnimationFrame(fitTitle);
     }
     root.setAttribute("aria-label", track ? `Now playing: ${track.title}${track.artist ? ` by ${track.artist}` : ""}` : "Music: nothing playing");
@@ -256,6 +269,9 @@
     run();
   }).observe(root);
   motionPreference.addEventListener("change", () => poller?.rerender());
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) fitTitle();
+  });
   window.addEventListener("pagehide", () => {
     window.clearTimeout(livePoll);
     window.cancelAnimationFrame(frame);
