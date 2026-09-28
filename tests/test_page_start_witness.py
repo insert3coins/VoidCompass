@@ -125,6 +125,21 @@ class HostLogTests(unittest.TestCase):
         self.assertTrue(host.window._voidcompass_renderer_failed)
         self.assertTrue(host._service_page_recovery(0, 131.0))
 
+    def test_deck_audio_stays_where_obs_can_capture_it(self):
+        # OBS's Application Audio Capture heard nothing from the deck until
+        # Chromium's audio service stayed inside the WebView2 browser process.
+        from voidcompass.dashboard import html_dashboard_host as host_module
+        environ = {}
+        host_module.configure_browser_arguments(environ)
+        arguments = environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"]
+        # One --disable-features only: Chromium ignores all but the last.
+        self.assertEqual(arguments.count("--disable-features="), 1)
+        self.assertIn("AudioServiceOutOfProcess", arguments)
+        self.assertIn("ElasticOverscroll", arguments)  # pywebview's own setting
+        source = Path(host_module.__file__).read_text(encoding="utf-8")
+        main = source[source.index("def main("):]
+        self.assertLess(main.index("configure_browser_arguments()"), main.index("webview.start("))
+
     def test_ready_hook_runs_after_pywebview_on_success_only(self):
         order = []
         browser_type = type("Browser", (), {

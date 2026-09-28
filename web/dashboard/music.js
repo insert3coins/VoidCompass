@@ -11,11 +11,38 @@
 //
 // The analyser listens to a captured copy of the sound (captureStream), so
 // it can never be what silences playback: sound always goes straight from
-// the <audio> element to the speakers.
+// the <audio> element to the speakers. The copy is taken before the
+// element's volume, so the same capture also measures each track's own
+// loudness for levelling.
 
 const BANDS = 32;
 const LEVELS_MS = 66;
 const STATUS_MS = 1000;
+// Loudness is in LUFS, the scale streaming services and broadcasters use.
+// Tracks are mastered anywhere from about -6 LUFS (loud modern masters) to
+// -20 (older and classical), so one slider position is too loud for some and
+// too quiet for others, and a straight 0-1 slider crowds everything useful
+// into its bottom few steps. Levelling plays every track at LEVEL_TARGET at
+// full volume, and the slider is an even taper in decibels below that.
+const LEVEL_TARGET = -20;
+// A track not measured yet is taken to be as loud as a typical modern master,
+// so at full volume it starts about 11 dB down, as it does with levelling off.
+const LEVEL_ASSUMED = -9;
+// A quiet track is raised by at most this much (the player can't go above
+// full scale in any case).
+const LEVEL_MAX_BOOST_DB = 12;
+// The slider covers this many dB, from full volume down to its first step.
+const VOLUME_RANGE_DB = 40;
+// A track with no loudness tag is measured as it first plays: 100 ms samples
+// of the captured copy. After TRUST samples the estimate steers the level, at
+// no more than SLEW dB a second and never beyond SWING dB of the assumption,
+// so a quiet intro can't make the chorus blast. KEEP samples make a
+// measurement worth remembering; the next play starts at the right level.
+const METER_MS = 100;
+const METER_TRUST = 80;
+const METER_KEEP = 300;
+const LEVEL_SLEW_DB_S = 1;
+const FIRST_LISTEN_SWING_DB = 6;
 const ICON_PATHS = {play: "M8 5v14l11-7z", pause: "M6 5h4v14H6zM14 5h4v14h-4z"};
 const REPEAT_NEXT = {off: "all", all: "one", one: "off"};
 const REPEAT_LABEL = {off: "OFF", all: "ALL", one: "ONE"};
@@ -38,6 +65,10 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
   let shuffle = false;
   let repeat = "all";
   let volume = 80;
+  let normalise = true;
+  // The current track's level offset in dB, eased toward wantedLevel().
+  let levelDb = LEVEL_TARGET - LEVEL_ASSUMED;
+  let meterTimer = 0;
   let blocked = false;
   let failures = 0;
   let resumeAt = null;
@@ -59,6 +90,7 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
   let boundTrack = null;
   let bins = null;
   let edges = null;
+  let meterNodes = null;
 
   function listen() {
     const Context = window.AudioContext || window.webkitAudioContext;
@@ -73,6 +105,7 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
       const nyquist = context.sampleRate / 2;
       edges = Array.from({length: BANDS + 1}, (_, band) =>
         Math.min(bins.length - 1, Math.round(40 * Math.pow(400, band / BANDS) / nyquist * bins.length)));
+      meterNodes = buildMeter(context);
     }
     if (context.state === "suspended") context.resume().catch(() => {});
     try {
@@ -87,11 +120,133 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
         source?.disconnect();
         source = context.createMediaStreamSource(new MediaStream([track]));
         source.connect(analyser);
+        source.connect(meterNodes.input);
         boundTrack = track;
+        meter.skip = 3;
       }
     } catch (_error) {
       // Nothing loaded to capture yet; the next 'playing' tries again.
     }
+  }
+
+  // BS.1770 loudness as closely as Web Audio allows: K-weighting (a high
+  // shelf, then a high pass) on both channels, their powers summed. A mono
+  // file is spread to both sides first, as the speakers play it.
+  function buildMeter(audioContext) {
+    const input = audioContext.createGain();
+    input.channelCount = 2;
+    input.channelCountMode = "explicit";
+    input.channelInterpretation = "speakers";
+    const shelf = audioContext.createBiquadFilter();
+    shelf.type = "highshelf";
+    shelf.frequency.value = 1681.97;
+    shelf.gain.value = 4;
+    const pass = audioContext.createBiquadFilter();
+    pass.type = "highpass";
+    pass.frequency.value = 38.13;
+    pass.Q.value = .5;
+    const split = audioContext.createChannelSplitter(2);
+    input.connect(shelf).connect(pass).connect(split);
+    const sides = [0, 1].map((channel) => {
+      const side = audioContext.createAnalyser();
+      side.fftSize = 4096;
+      split.connect(side, channel);
+      return side;
+    });
+    return {input, sides, data: new Float32Array(4096)};
+  }
+
+  // What the meter has heard of the current track. It waits for the track to
+  // be playing, then lets the analyser's buffer (the previous track's last
+  // 85 ms) pass before counting: one stray block of a loud track would read a
+  // quiet one 3 dB too loud.
+  const meter = {track: "", blocks: [], firstListen: false, kept: false, skip: Infinity};
+
+  function resetMeter(id) {
+    keepMeasurement();
+    meter.track = id;
+    meter.blocks = [];
+    meter.kept = false;
+    meter.skip = Infinity;
+    meter.firstListen = Boolean(id) && !Number.isFinite(trackOf(id)?.loudness);
+  }
+
+  function sampleMeter() {
+    if (!meterNodes || !currentId || audio.paused || audio.seeking || meter.track !== currentId) return;
+    if (meter.skip > 0) {
+      meter.skip -= 1;
+      return;
+    }
+    let power = 0;
+    for (const side of meterNodes.sides) {
+      side.getFloatTimeDomainData(meterNodes.data);
+      let sum = 0;
+      for (const value of meterNodes.data) sum += value * value;
+      power += sum / meterNodes.data.length;
+    }
+    meter.blocks.push(power);
+    if (meter.blocks.length === METER_KEEP) keepMeasurement();
+  }
+
+  // Integrated loudness of the blocks heard: silence (below -70 LUFS) and
+  // the quiet passages (10 LU under the rest) don't count, as in BS.1770.
+  const SILENCE_POWER = 10 ** ((-70 + 0.691) / 10);
+  function measuredLoudness() {
+    const audible = meter.blocks.filter((power) => power > SILENCE_POWER);
+    if (!audible.length) return null;
+    const mean = (rows) => rows.reduce((sum, value) => sum + value, 0) / rows.length;
+    const floor = mean(audible) / 10;
+    const counted = audible.filter((power) => power > floor);
+    return -0.691 + 10 * Math.log10(mean(counted.length ? counted : audible));
+  }
+
+  function keepMeasurement() {
+    if (!meter.track || meter.blocks.length < METER_KEEP || trackOf(meter.track)?.loudness_source === "tag") return;
+    const lufs = measuredLoudness();
+    if (lufs == null) return;
+    meter.kept = true;
+    music("set_loudness", {track_id: meter.track, lufs: Math.round(lufs * 100) / 100});
+  }
+
+  // The level offset the current track should play at, in dB.
+  function wantedLevel() {
+    if (!normalise) return LEVEL_TARGET - LEVEL_ASSUMED;
+    const known = trackOf(currentId)?.loudness;
+    if (!meter.firstListen && Number.isFinite(known)) return Math.min(LEVEL_MAX_BOOST_DB, LEVEL_TARGET - known);
+    const heard = meter.blocks.length >= METER_TRUST ? measuredLoudness() : null;
+    if (heard == null) return LEVEL_TARGET - LEVEL_ASSUMED;
+    const bounded = Math.max(LEVEL_ASSUMED - FIRST_LISTEN_SWING_DB, Math.min(LEVEL_ASSUMED + FIRST_LISTEN_SWING_DB, heard));
+    return LEVEL_TARGET - bounded;
+  }
+
+  function applyVolume() {
+    const taper = -VOLUME_RANGE_DB * (1 - volume / 100);
+    audio.volume = volume > 0 ? Math.min(1, 10 ** ((taper + levelDb) / 20)) : 0;
+  }
+
+  function setVolume(value) {
+    volume = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+    applyVolume();
+  }
+
+  // A new track or a change of mode takes its level at once; a measurement
+  // arriving mid-track eases in.
+  function settleLevel(instant = false) {
+    const wanted = wantedLevel();
+    const step = LEVEL_SLEW_DB_S * METER_MS / 1000;
+    levelDb = instant ? wanted : levelDb + Math.max(-step, Math.min(step, wanted - levelDb));
+    applyVolume();
+  }
+
+  function levelDescription() {
+    if (!normalise) return "Levelling off: tracks play as they were mastered, 11 dB down at full volume.";
+    const track = trackOf(currentId);
+    if (!track) return "Levelling on: every track plays equally loud.";
+    const known = Number.isFinite(track.loudness) ? `${track.loudness.toFixed(1)} LUFS` : "";
+    const source = meter.firstListen ? "measuring on this first play"
+      : track.loudness_source === "tag" ? `${known}, from its ReplayGain tag`
+        : known ? `${known}, measured` : "not measured yet";
+    return `Levelling on: every track plays equally loud. This track: ${source}.`;
   }
 
   function levels() {
@@ -126,7 +281,7 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
       track_id: currentId, next_id: upNext(), playlist_id: playlistId,
       position: resumeAt ?? audio.currentTime ?? 0,
       duration: Number.isFinite(audio.duration) ? audio.duration : (trackOf(currentId)?.duration || 0),
-      playing: !audio.paused, blocked, volume, shuffle, repeat, reported_at: Date.now(),
+      playing: !audio.paused, blocked, volume, shuffle, repeat, normalise, reported_at: Date.now(),
     };
   }
 
@@ -139,6 +294,11 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     window.clearInterval(statusTimer);
     window.clearInterval(levelsTimer);
     statusTimer = window.setInterval(report, STATUS_MS);
+    window.clearInterval(meterTimer);
+    meterTimer = window.setInterval(() => {
+      sampleMeter();
+      settleLevel();
+    }, METER_MS);
     levelsTimer = overlayOn
       ? window.setInterval(() => post({action: "music_levels", bands: levels(), playing: true}), LEVELS_MS) : 0;
   }
@@ -146,7 +306,8 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
   function stopTimers() {
     window.clearInterval(statusTimer);
     window.clearInterval(levelsTimer);
-    statusTimer = levelsTimer = 0;
+    window.clearInterval(meterTimer);
+    statusTimer = levelsTimer = meterTimer = 0;
     if (overlayOn) post({action: "music_levels", bands: new Array(BANDS).fill(0), playing: false});
   }
 
@@ -185,10 +346,10 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
 
   function restore(settings) {
     restored = true;
-    volume = Math.max(0, Math.min(100, Number(settings.volume ?? 80)));
+    normalise = settings.normalise !== false;
+    setVolume(settings.volume ?? 80);
     shuffle = Boolean(settings.shuffle);
     repeat = REPEAT_NEXT[settings.repeat] ? settings.repeat : "all";
-    audio.volume = volume / 100;
     playlistId = playlistOf(settings.playlist_id) ? settings.playlist_id : "";
     viewId = playlistId || library.playlists[0]?.id || "";
     // Back where the commander left off, paused: it never starts by surprise.
@@ -224,6 +385,8 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     if (!trackOf(id)) return;
     currentId = id;
     resumeAt = at > 0 ? at : null;
+    resetMeter(id);
+    settleLevel(true);
     audio.src = apiUrl(`/media/music/${id}`);
     audio.load();
     describeToWindows();
@@ -262,6 +425,7 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     audio.pause();
     audio.removeAttribute("src");
     audio.load();
+    resetMeter("");
     currentId = "";
     order = [];
     index = -1;
@@ -277,6 +441,7 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
       return undefined;
     }
     if (automatic && repeat === "one") {
+      keepMeasurement();
       audio.currentTime = 0;
       return play();
     }
@@ -326,6 +491,7 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
   audio.addEventListener("playing", () => {
     failures = 0;
     listen();
+    meter.skip = Math.min(meter.skip, 3);
     startTimers();
     renderNow();
     report();
@@ -345,7 +511,13 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     if (failures < Math.max(1, order.length)) window.setTimeout(() => skip(true, true), 700);
     else stopTimers();
   });
-  window.addEventListener("pagehide", () => post({action: "music", operation: "status", ...status()}, true));
+  window.addEventListener("pagehide", () => {
+    post({action: "music", operation: "status", ...status()}, true);
+    if (meter.track && meter.blocks.length >= METER_KEEP && !meter.kept) {
+      const lufs = measuredLoudness();
+      if (lufs != null) post({action: "music", operation: "set_loudness", track_id: meter.track, lufs}, true);
+    }
+  });
 
   // What is playing, for Windows' own media controls and the keyboard's
   // media keys, where the WebView offers them. The app's hotkeys work either way.
@@ -402,6 +574,11 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     repeatButton.setAttribute("aria-pressed", String(repeat !== "off"));
     repeatButton.querySelector("span").textContent = REPEAT_LABEL[repeat];
     repeatButton.title = `Repeat: ${REPEAT_LABEL[repeat].toLowerCase()}`;
+    const levelButton = byId("music-level");
+    if (levelButton) {
+      levelButton.setAttribute("aria-pressed", String(normalise));
+      levelButton.title = levelDescription();
+    }
     const slider = byId("music-volume");
     if (document.activeElement !== slider) slider.value = String(volume);
     slider.style.setProperty("--fill", `${volume}%`);
@@ -544,9 +721,14 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     renderNow();
     report();
   });
+  byId("music-level")?.addEventListener("click", () => {
+    normalise = !normalise;
+    settleLevel(true);
+    renderNow();
+    report();
+  });
   byId("music-volume")?.addEventListener("input", (event) => {
-    volume = Math.round(Number(event.target.value));
-    audio.volume = volume / 100;
+    setVolume(Math.round(Number(event.target.value)));
     event.target.style.setProperty("--fill", `${volume}%`);
     byId("music-volume-value").textContent = String(volume);
   });
@@ -670,9 +852,15 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     if (working) working.hidden = !state.working;
   }
 
+  // Until the saved settings arrive the player is already at a sane level,
+  // never the element's full-scale default.
+  applyVolume();
+
   window.voidcompassMusic = {
     state: () => ({currentId, playlistId, viewId, order: [...order], index, playing: !audio.paused, shuffle,
-      repeat, volume, blocked, src: audio.getAttribute("src") || "", revision: library.revision}),
+      repeat, volume, blocked, src: audio.getAttribute("src") || "", revision: library.revision,
+      normalise, levelDb, gain: audio.volume, measured: measuredLoudness(), samples: meter.blocks.length,
+      firstListen: meter.firstListen}),
     audio,
   };
 

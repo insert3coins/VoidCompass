@@ -18,7 +18,8 @@ import unittest
 import wave
 
 from voidcompass.services.music_library import (
-    MusicLibrary, folder_cover, is_audio, parse_m3u, read_tags, tags_from_name, track_id, write_m3u,
+    TAG_VERSION, MusicLibrary, _loudness, folder_cover, is_audio, parse_m3u, read_tags, tags_from_name,
+    track_id, write_m3u,
 )
 
 
@@ -49,6 +50,9 @@ def make_wav(path, seconds=1.0, **tags):
                 audio.tags.add(frame(encoding=3, text=str(tags[key])))
         if tags.get("cover"):
             audio.tags.add(APIC(encoding=3, mime="image/png", type=3, desc="Cover", data=picture_bytes()))
+        if tags.get("replaygain"):
+            from mutagen.id3 import TXXX
+            audio.tags.add(TXXX(encoding=3, desc="replaygain_track_gain", text=tags["replaygain"]))
         audio.save()
     return path
 
@@ -64,7 +68,8 @@ def make_flac(path, seconds=3, **tags):
     from mutagen.flac import FLAC, Picture
     audio = FLAC(str(path))
     audio.add_tags()
-    for key in ("title", "artist", "album", "date", "genre", "tracknumber", "albumartist"):
+    for key in ("title", "artist", "album", "date", "genre", "tracknumber", "albumartist",
+                "replaygain_track_gain"):
         if tags.get(key):
             audio[key] = str(tags[key])
     if tags.get("cover"):
@@ -109,6 +114,18 @@ class TagTests(unittest.TestCase):
         self.assertAlmostEqual(tags["duration"], 3.0, places=1)
         self.assertEqual(tags["format"], "FLAC · 44.1 kHz · 24-bit")
         self.assertTrue(tags["cover"].startswith(b"\xff\xd8"))
+
+    def test_loudness_comes_from_replaygain_or_r128_tags(self):
+        # ReplayGain brings a track to -18 LUFS, so -7.25 dB means -10.75 LUFS.
+        tagged = read_tags(make_wav(self.root / "c.wav", title="Loud", replaygain="-7.25 dB"))
+        self.assertEqual(tagged["loudness"], -10.75)
+        flac = read_tags(make_flac(self.root / "d.flac", title="Quiet", replaygain_track_gain="+3.50 dB"))
+        self.assertEqual(flac["loudness"], -21.5)
+        # Opus: R128_TRACK_GAIN is 1/256 dB against -23 LUFS.
+        opus = {"r128_track_gain": ["-2048"]}
+        self.assertEqual(_loudness(opus, set(opus), opus), -15.0)
+        self.assertIsNone(read_tags(make_wav(self.root / "e.wav", title="Plain"))["loudness"])
+        self.assertIsNone(_loudness({"replaygain_track_gain": ["loud"]}, {"replaygain_track_gain"}))
 
     def test_a_file_without_tags_keeps_its_name(self):
         tags = read_tags(make_wav(self.root / "Vangelis - Rachel's Song.wav"))
@@ -246,6 +263,42 @@ class LibraryTests(unittest.TestCase):
         self.assertFalse(self.library.set_duration(key, "nonsense"))
         stored = json.loads((self.root / "library" / "library.json").read_text(encoding="utf-8"))
         self.assertEqual(stored["tracks"][key]["duration"], 42)
+
+    def test_the_player_remembers_loudness_it_measured_but_a_tag_wins(self):
+        playlist = self.library.create_playlist("P")
+        self.library.add_files(playlist, [make_wav(self.root / "a.wav", title="A"),
+                                          make_wav(self.root / "b.wav", title="B", replaygain="-4 dB")])
+        self.assertTrue(self.library.wait_idle())
+        plain, tagged = self.library.playlist(playlist)["tracks"]
+        tracks = self.library.payload()["tracks"]
+        self.assertEqual((tracks[plain]["loudness"], tracks[tagged]["loudness"]), (None, -14.0))
+        self.assertEqual(tracks[tagged]["loudness_source"], "tag")
+        self.assertTrue(self.library.set_loudness(plain, -8.4))
+        self.assertFalse(self.library.set_loudness(plain, -8.5), "within 0.3 LU is not news")
+        self.assertFalse(self.library.set_loudness(plain, -90), "not a real loudness")
+        self.assertFalse(self.library.set_loudness(tagged, -6), "the file's own tag is kept")
+        stored = json.loads((self.root / "library" / "library.json").read_text(encoding="utf-8"))
+        self.assertEqual((stored["tracks"][plain]["loudness"], stored["tracks"][plain]["loudness_source"]),
+                         (-8.4, "measured"))
+
+    def test_tracks_read_before_loudness_tags_are_read_again(self):
+        playlist = self.library.create_playlist("P")
+        self.library.add_files(playlist, [make_wav(self.root / "a.wav", title="A", replaygain="-2 dB")])
+        self.assertTrue(self.library.wait_idle())
+        # As a library saved by the previous version would have it.
+        file = self.root / "library" / "library.json"
+        stored = json.loads(file.read_text(encoding="utf-8"))
+        for track in stored["tracks"].values():
+            track["tagged"] = True
+            track.pop("loudness", None)
+            track.pop("loudness_source", None)
+        file.write_text(json.dumps(stored), encoding="utf-8")
+        reopened = MusicLibrary(self.root / "library")
+        self.addCleanup(reopened.wait_idle)
+        self.assertTrue(reopened.wait_idle())
+        track = next(iter(reopened.payload()["tracks"].values()))
+        self.assertEqual(track["loudness"], -16.0)
+        self.assertEqual(next(iter(reopened._tracks.values()))["tagged"], TAG_VERSION)
 
 
 if __name__ == "__main__":

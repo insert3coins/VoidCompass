@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sys
 import threading
@@ -24,6 +25,21 @@ HOST_RELAUNCH_EXIT_CODE = 75
 # A renderer that dies again within this long of its last reload is left for
 # the page recovery to handle, rather than reloaded in a tight loop.
 _RENDERER_RELOAD_GAP_S = 10.0
+# OBS's Application Audio Capture records a program and its process tree, but
+# Windows does not count WebView2's separate audio process as part of ours:
+# capturing Void Compass recorded silence while music played. With Chromium's
+# audio service kept inside the WebView2 browser process, the same capture
+# hears it (both measured with a WASAPI process-loopback capture). The
+# variable replaces pywebview's own browser arguments rather than adding to
+# them, so it carries pywebview's ElasticOverscroll setting as well; Chromium
+# honours only one --disable-features.
+DASHBOARD_BROWSER_ARGUMENTS = "--disable-features=ElasticOverscroll,AudioServiceOutOfProcess"
+
+
+def configure_browser_arguments(environ=None):
+    """Set the command deck's WebView2 arguments before WebView2 starts."""
+    environ = os.environ if environ is None else environ
+    environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = DASHBOARD_BROWSER_ARGUMENTS
 
 
 def _request_json(url, payload=None, timeout=2.0):
@@ -456,6 +472,7 @@ def main(argv=None):
         traceback.print_exc()
         return 3
 
+    configure_browser_arguments()
     import webview
 
     from voidcompass.core.webview_bootstrap import configure_embedded_navigation
