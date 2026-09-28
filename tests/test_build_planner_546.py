@@ -33,13 +33,16 @@ class BuildPlanner546Tests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         html = (root / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")
         script = (root / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
-        styles = (root / "web" / "dashboard" / "styles.css").read_text(encoding="utf-8")
+        workshop = (root / "web" / "dashboard" / "workshop.js").read_text(encoding="utf-8")
+        styles = (root / "web" / "dashboard" / "workshop.css").read_text(encoding="utf-8")
 
+        # 5.4.9.9: the header button opens the hangar's hull picker.
         self.assertIn('class="primary" data-bp-focus="new"', html)
-        self.assertIn('<section class="bp-new-build" id="bp-new-build">', script)
-        self.assertNotIn("<summary>NEW STOCK BUILD</summary>", script)
-        self.assertIn(".bp-manager-actions button", styles)
-        self.assertIn('".bp-slot", ".bp-module"', script)
+        self.assertIn('class="bp-new-build wk-drawer" id="bp-new-build"', workshop)
+        self.assertIn("[data-bp-focus='new']", workshop)
+        self.assertNotIn("<summary>NEW STOCK BUILD</summary>", workshop)
+        self.assertIn(".bp-new-build > header", styles)
+        self.assertIn('".wk-slot", ".wk-module"', script)
 
     def test_catalogue_contains_current_ship_and_module_sets(self):
         self.assertEqual(len(build_planner.ship_catalogue()), 48)
