@@ -87,6 +87,7 @@ from voidcompass.exploration.achievement_engine import AchievementEngine
 from voidcompass.mining.specialist_engine import SpecialistEngine
 from voidcompass.exploration.captains_log import CaptainsLog
 from voidcompass.exploration.deep_survey import DeepSurveyTracker
+from voidcompass.exploration.travel_history import TravelHistory
 from voidcompass.exploration.galactic_regions import find_region
 from voidcompass.exploration.explorer_fieldcraft import (
     HIGH_VALUE_WORLDS, WHITE_DWARF_CLASSES, revisit_candidate,
@@ -1366,11 +1367,24 @@ class MainDashboard(
         except Exception as exc:
             logging.warning("Deep Survey history import skipped: %s", exc)
 
+    def _import_travel_history(self, journal_path, history=None, commander=None, fid=None):
+        history = history or getattr(self, "travel_history", None)
+        if history is None:
+            return
+        try:
+            added = history.import_journals(journal_path, commander=commander, fid=fid)
+            if added and history is getattr(self, "travel_history", None):
+                self.log(f"Galactic Atlas charted {added:,} journal jumps")
+                self._refresh_exploration_window()
+        except Exception as exc:
+            logging.warning("Travel history import skipped: %s", exc)
+
     def _import_exploration_history(self, journal_path, logbook, tracker, commander=None, fid=None,
-                                    scan_db_path=None, profile_key=None):
+                                    scan_db_path=None, profile_key=None, travel=None):
         """Read history sequentially so indexers never contend for the journal folder."""
         self._import_captains_log_history(journal_path, logbook, commander, fid)
         self._import_deep_survey_history(journal_path, tracker, commander, fid)
+        self._import_travel_history(journal_path, travel, commander, fid)
         try:
             repaired = self.import_scan_journal_history(
                 journal_path, commander, fid, db_path=scan_db_path,
@@ -1848,6 +1862,11 @@ class MainDashboard(
         self.deep_survey = DeepSurveyTracker(
             get_profile_file(new_key, "deep_survey.json")
         )
+        if getattr(self, "travel_history", None):
+            self.travel_history.flush(wait=False)
+        self.travel_history = TravelHistory(
+            get_profile_file(new_key, "travel_history.json")
+        )
         if getattr(self, "expedition_manager", None):
             self.expedition_manager.flush(wait=False)
         self.expedition_manager = ExpeditionManager(
@@ -1896,7 +1915,7 @@ class MainDashboard(
             args=(
                 journal_path, self.captains_log, self.deep_survey,
                 self.cmdr_name, self.cmdr_fid, self.db_path,
-                get_active_profile(self.config),
+                get_active_profile(self.config), self.travel_history,
             ),
             name="exploration-history", daemon=True,
         ).start()
@@ -1968,6 +1987,12 @@ class MainDashboard(
         )
         self.deep_survey = DeepSurveyTracker(
             get_profile_file(get_active_profile(self.config), "deep_survey.json")
+        )
+        # Every jump from every journal, for the Galactic Atlas: Deep Survey
+        # keeps only the latest 5,000, and older trips (Beagle Point, say)
+        # vanished from the map.
+        self.travel_history = TravelHistory(
+            get_profile_file(get_active_profile(self.config), "travel_history.json")
         )
         self.rhino_minimap = RhinoMinimapTracker(
             get_profile_file(get_active_profile(self.config), "rhino_minimap.json.gz")
@@ -2557,7 +2582,7 @@ class MainDashboard(
                 (
                     journal_path, self.captains_log, self.deep_survey,
                     self.cmdr_name, self.cmdr_fid, self.db_path,
-                    get_active_profile(self.config),
+                    get_active_profile(self.config), self.travel_history,
                 ),
             ),
             name="exploration-history", daemon=True,
@@ -3786,6 +3811,11 @@ class MainDashboard(
         if getattr(self, "deep_survey", None):
             try:
                 self.deep_survey.flush(wait=False)
+            except Exception:
+                pass
+        if getattr(self, "travel_history", None):
+            try:
+                self.travel_history.flush(wait=False)
             except Exception:
                 pass
         if getattr(self, "expedition_manager", None):
@@ -7476,6 +7506,15 @@ class MainDashboard(
                     self._refresh_exploration_window()
             except Exception as exc:
                 logging.debug("Deep Survey event skipped [%s]: %s", ev, exc)
+        if getattr(self, "travel_history", None):
+            try:
+                history_raw = raw if isinstance(raw, dict) else d
+                if isinstance(history_raw, dict) and not history_raw.get("event"):
+                    history_raw = dict(history_raw, event=ev)
+                if self.travel_history.observe(history_raw):
+                    self._refresh_exploration_window()
+            except Exception as exc:
+                logging.debug("Travel history event skipped [%s]: %s", ev, exc)
         expedition_result = None
         if getattr(self, "expedition_manager", None):
             try:

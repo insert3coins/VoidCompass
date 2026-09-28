@@ -16,6 +16,7 @@
 * OBS can record the music: add an Application Audio Capture source and pick the Void Compass command deck window. Before, WebView2 played the sound from a separate process that OBS couldn't see.
 * Void Compass now reads music tags with mutagen (GPL-2.0-or-later).
 * Rebuilt the Galactic Atlas as a map of Elite's 42 Codex regions and everywhere you have been. The region borders are drawn exactly from Universal Cartographics' region map, the galaxy glows along its arms, and hovering anywhere names the region and your distance to it.
+* The atlas charts your whole journey, read from every journal on this PC, not just your most recent 5,000 jumps: trips from months ago (a run to Beagle Point, say) show as they should. The first start reads the journals in a few seconds, and after that new jumps are added as you make them.
 * Your travels are a line that brightens towards the present, with each visited system coloured by its star class. The regions you have flown through glow, and REGIONS lists all 42 with your systems and the date you first entered each.
 * Replay the journey from the first jump to the last on the timeline. Tilt into 3D (right-drag or 3D), zoom from the whole galaxy down to a single system, and jump to Sol, Sagittarius A*, Colonia, Beagle Point, the Pleiades or your destination.
 * Right-click anywhere to leave a map mark. Intel layers (valuable worlds, biology, Codex, screenshots, recon, unfinished surveys, bookmarks, expedition sectors) switch on and off under LAYERS.

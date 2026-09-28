@@ -13,6 +13,7 @@ import json
 import mimetypes
 from pathlib import Path
 import secrets
+import sys
 import threading
 import time
 from urllib.parse import parse_qs, urlparse
@@ -24,6 +25,13 @@ MAX_COMMAND_BYTES = 96 * 1024
 class _AtlasHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+
+    def handle_error(self, request, client_address):
+        # The atlas's event stream is cut whenever its page closes or reloads;
+        # that is not worth a traceback in the log.
+        if isinstance(sys.exc_info()[1], (ConnectionError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
 
 
 class GalacticMapServer:

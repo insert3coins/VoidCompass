@@ -182,7 +182,24 @@ function derive() {
   currentRegion = current && regions ? regions.idAt(current[0], current[2]) : 0;
   const planned = (data.planned || []).filter((row) => validPos(row.pos) && !row.visited);
   plannedLine = planned.length ? [...(current ? [{pos: current, system: data.current.system}] : []), ...planned] : [];
-  visits = regions ? regionVisits(regions, route) : new Map();
+  // The whole journey's region visits come counted from every jump, even when
+  // a very long history is thinned for drawing; narrower scopes are recent
+  // and drawn in full, so they are counted here.
+  const journey = data.summary?.journey;
+  if (viewState.scope === 'All History' && journey?.regions) {
+    visits = new Map(Object.entries(journey.regions).map(([id, entry]) => [Number(id), {id: Number(id), ...entry}]));
+  } else {
+    visits = regions ? regionVisits(regions, route) : new Map();
+  }
+}
+
+// Totals for the stats bar: the whole journey's in All History.
+function journeyTotals() {
+  const journey = snapshot.summary?.journey;
+  if (viewState.scope === 'All History' && journey?.systems) {
+    return {systems: journey.systems, distance: journey.distance_ly};
+  }
+  return {systems: systems.size, distance: route.reduce((sum, row) => sum + Number(row.jump_dist || 0), 0)};
 }
 
 function pushScene() {
@@ -285,8 +302,9 @@ function renderHeader() {
 }
 
 function renderStats() {
-  $('stat-systems').textContent = number(systems.size);
-  $('stat-distance').textContent = ly(route.reduce((sum, row) => sum + Number(row.jump_dist || 0), 0));
+  const totals = journeyTotals();
+  $('stat-systems').textContent = number(totals.systems);
+  $('stat-distance').textContent = ly(totals.distance);
   $('stat-regions').textContent = `${visits.size} / 42`;
   $('stat-intel').textContent = number(markers.filter((row) => row.layer !== 'Annotations' && row.layer !== 'Sectors').length);
   $('stat-marks').textContent = number((snapshot.annotations || []).length);
@@ -298,7 +316,7 @@ function renderPlaces() {
   const rows = [];
   if (current) rows.push({key: 'here', icon: '◎', title: snapshot.current.system || 'Your position', sub: 'YOU ARE HERE'});
   if (plannedLine.length > 1) rows.push({key: 'dest', icon: '★', title: plannedLine.at(-1).system || 'Destination', sub: `ROUTE DESTINATION · ${plannedLine.length - 1} JUMPS`});
-  if (route.length > 1) rows.push({key: 'journey', icon: '⤳', title: 'Your journey', sub: `${number(systems.size)} SYSTEMS · ${visits.size} REGIONS`});
+  if (route.length > 1) rows.push({key: 'journey', icon: '⤳', title: 'Your journey', sub: `${number(journeyTotals().systems)} SYSTEMS · ${visits.size} REGIONS`});
   rows.push({key: 'galaxy', icon: '✺', title: 'The whole galaxy', sub: '42 CODEX REGIONS'});
   PLACES.forEach((place, index) => rows.push({key: `place-${index}`, icon: '◇', title: place.name, sub: place.note.toUpperCase()}));
   $('places').innerHTML = rows.map((row) => `<button type="button" class="row-button" data-place="${row.key}"><i>${row.icon}</i><span><b>${escape(row.title)}</b><small>${escape(row.sub)}</small></span></button>`).join('');
@@ -320,7 +338,7 @@ function renderRegionList() {
 
 function layerCount(name) {
   if (name === 'Regions') return 42;
-  if (name === 'Travel') return systems.size;
+  if (name === 'Travel') return journeyTotals().systems;
   if (name === 'Planned') return Math.max(0, plannedLine.length - 1);
   if (name === 'Return') return Math.min(60, Math.max(0, route.length - 1));
   return markers.filter((row) => row.layer === name).length;
