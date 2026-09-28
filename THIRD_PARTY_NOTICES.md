@@ -98,3 +98,17 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+## mutagen
+
+The music player reads each track's tags (title, artist, album, length) and its
+embedded album art with [mutagen](https://github.com/quodlibet/mutagen). Tags
+are only read; your music files are never changed or copied.
+
+mutagen is distributed under the GNU General Public License, version 2 or (at
+your option) any later version, which is compatible with Void Compass's own
+GNU General Public License version 3.
+
+Copyright (C) 2005-2024 Joe Wreschnig, Michael Urman, Lukáš Lalinský,
+Christoph Reiter, Ben Ockmore and contributors.
+

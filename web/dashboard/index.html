@@ -14,6 +14,8 @@
   <link rel="stylesheet" href="bridge-systems.css">
   <link rel="stylesheet" href="overlay-studio.css">
   <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="music.css">
+  <link rel="stylesheet" href="powerplay.css">
   <link rel="stylesheet" href="focused-log.css">
   <link rel="stylesheet" href="boot.css">
   <script defer src="/assets/heartbeat-orb.js"></script>
@@ -209,10 +211,12 @@
         <button class="nav-item" data-page="build-planner" aria-label="Ship Workshop" title="Ship Workshop"><i>▤</i><span>Ship Workshop</span><b>08</b></button>
         <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>09</b></button>
         <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>10</b></button>
+        <p>COCKPIT</p>
+        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>11</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>11</b></button>
-        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>12</b></button>
-        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>13</b></button>
+        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>12</b></button>
+        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>13</b></button>
+        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>14</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -470,7 +474,7 @@
         </section>
 
         <section class="page specialist-page" data-page-name="powerplay">
-          <header class="page-title"><div><p>GALACTIC POWERS</p><h2>Powerplay Operations</h2><span>Offline dossiers, profile-aware assignments, cycle history and live Journal evidence</span></div><div class="title-actions"><button data-page="overview">COMMAND DECK</button></div></header>
+          <header class="page-title"><div><p>GALACTIC POWERS</p><h2>Powerplay Operations</h2><span>Your pledge, the weekly cycle, every Powerplay system you fly through, and the ledgers, all from the journal</span></div><div class="title-actions"><button data-page="overview">COMMAND DECK</button></div></header>
           <div id="powerplay-workspace" class="workspace-shell loading-panel">Synchronising Powerplay operations…</div>
         </section>
 
@@ -482,6 +486,53 @@
         <section class="page specialist-page" data-page-name="recon">
           <header class="page-title"><div><p>COLONISATION RECON</p><h2>System assessment</h2><span>Survey completeness, value, traffic and retained candidates</span></div><div class="title-actions"><button data-page="explore">EXPLORE & SURVEY</button><button class="primary" data-ws-page="recon" data-ws-op="save">SAVE CURRENT</button></div></header>
           <div id="recon-workspace" class="workspace-shell loading-panel">Assessing the current system…</div>
+        </section>
+
+        <section class="page music-page" data-page-name="music">
+          <header class="page-title"><div><p>COCKPIT AUDIO</p><h2>Music</h2><span>Your own music for the long jumps, played from wherever it lives on this PC. Nothing is copied or moved.</span></div><div class="title-actions"><button type="button" data-page="overlay-studio" data-studio-select="music_player_hud">MUSIC OVERLAY</button></div></header>
+          <section id="music-deck" class="music-deck idle" aria-label="Now playing">
+            <canvas id="music-visualizer" class="music-visualizer" aria-hidden="true"></canvas>
+            <figure class="music-cover"><img id="music-cover" alt="" hidden><span aria-hidden="true">♪</span></figure>
+            <div class="music-now">
+              <p class="music-kicker"><span id="music-state">STANDBY</span><b id="music-source">NO PLAYLIST</b><em id="music-working" hidden>WORKING…</em></p>
+              <h3 id="music-title">Nothing playing</h3>
+              <p id="music-artist" class="music-artist">Choose a playlist below and double-click a track.</p>
+              <p id="music-details" class="music-details"></p>
+              <div class="music-seek"><span id="music-elapsed">0:00</span><input id="music-seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Position in the track"><span id="music-total">0:00</span></div>
+              <div class="music-transport">
+                <button type="button" id="music-shuffle" class="music-mode" aria-pressed="false" title="Shuffle"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M4 7h3.5l8 10H20M4 17h3.5l2.4-3M13.6 10l1.9-3H20M17 4l3 3-3 3M17 14l3 3-3 3"/></svg><span>SHUFFLE</span></button>
+                <button type="button" id="music-previous" class="music-button" aria-label="Previous track" title="Previous (or back to the start)"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg></button>
+                <button type="button" id="music-play" class="music-button music-play" aria-label="Play" title="Play"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M8 5v14l11-7z"/></svg></button>
+                <button type="button" id="music-next" class="music-button" aria-label="Next track" title="Next"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M16 5h2v14h-2zM4 5l10.5 7L4 19z"/></svg></button>
+                <button type="button" id="music-repeat" class="music-mode" aria-pressed="true" title="Repeat"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M5 11V9a2 2 0 0 1 2-2h11M15 4l3 3-3 3M19 13v2a2 2 0 0 1-2 2H6M9 20l-3-3 3-3"/></svg><span>ALL</span></button>
+                <label class="music-volume" title="Volume"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg><input id="music-volume" type="range" min="0" max="100" step="1" value="80" aria-label="Volume"><b id="music-volume-value">80</b></label>
+              </div>
+              <p id="music-blocked" class="music-blocked" hidden>Windows wants one click in this window before music may start by itself. Press play once; hotkeys work from then on.</p>
+            </div>
+          </section>
+          <div class="music-library">
+            <aside class="card music-playlists" aria-label="Playlists">
+              <header><span>PLAYLISTS</span><b id="music-playlist-count">0</b></header>
+              <form id="music-create" class="music-create"><input id="music-create-name" maxlength="60" placeholder="New playlist" aria-label="New playlist name"><button type="submit">CREATE</button></form>
+              <div id="music-playlists" class="music-playlist-list"></div>
+              <footer class="music-playlists-foot"><button type="button" id="music-import">IMPORT M3U</button></footer>
+            </aside>
+            <section class="card music-tracks" aria-label="Tracks">
+              <header class="music-tracks-head">
+                <div class="music-list-title"><b id="music-list-name">No playlist</b><small id="music-list-meta"></small></div>
+                <div class="music-list-actions">
+                  <input id="music-find" type="search" placeholder="Find" aria-label="Find in this playlist">
+                  <button type="button" id="music-add-files" data-music-list>＋ FILES</button>
+                  <button type="button" id="music-add-folder" data-music-list>＋ FOLDER</button>
+                  <button type="button" id="music-export" data-music-list>EXPORT</button>
+                  <button type="button" id="music-rename" data-music-list>RENAME</button>
+                  <button type="button" id="music-delete" class="danger-action" data-music-list>DELETE</button>
+                </div>
+              </header>
+              <div class="music-track-head" aria-hidden="true"><span>#</span><span></span><span>TITLE</span><span>ALBUM</span><span>TIME</span><span></span></div>
+              <div id="music-tracks" class="music-track-list" role="list"></div>
+            </section>
+          </div>
         </section>
 
         <section class="page specialist-page" data-page-name="achievements">
@@ -610,6 +661,18 @@
                     <h4>JOURNAL HEARTBEAT</h4>
                     <label class="studio-field"><span>Orb size</span><select id="studio-heartbeat-size" data-studio-setting="heartbeat_orb_size"><option value="54">54 PX</option><option value="72">72 PX</option><option value="96">96 PX</option></select></label>
                     <label class="studio-field"><span>Eye colour<small>At rest; danger still turns it red</small></span><select id="studio-heartbeat-eye" data-studio-setting="heartbeat_eye_color"><option value="theme">Theme accent</option><option value="hal">HAL red</option></select></label>
+                  </section>
+                  <section data-studio-settings="music_player_hud">
+                    <h4>MUSIC PLAYER</h4>
+                    <p class="studio-option-note">Shows what the Music page is playing. Play and choose music on the Music page.</p>
+                    <label class="studio-field"><span>Layout</span><select id="studio-music-layout" data-studio-setting="music_player_layout"><option value="card">Card</option><option value="strip">Slim strip</option></select></label>
+                    <label class="studio-field"><span>Text size<small>0 follows all overlays</small></span><div><input id="studio-music-text-scale" type="number" min="0" max="200" step="5" data-studio-setting="music_player_text_scale_percent"><b>%</b></div></label>
+                    <label class="studio-field"><span>Visualizer</span><select id="studio-music-visualizer" data-studio-setting="music_player_visualizer"><option value="bars">Spectrum bars</option><option value="mirror">Mirrored</option><option value="wave">Wave</option><option value="off">Off</option></select></label>
+                    <label class="studio-field"><span>Visualizer colour</span><select id="studio-music-colour" data-studio-setting="music_player_colour"><option value="theme">Theme</option><option value="warm">Warm</option><option value="spectrum">Spectrum</option></select></label>
+                    <label class="studio-switch"><span><b>Album art</b><small>The cover beside the track.</small></span><input type="checkbox" data-overlay-option="music_player_show_art"><i></i></label>
+                    <label class="studio-switch"><span><b>Album and year</b><small>Album, year and format under the artist.</small></span><input type="checkbox" data-overlay-option="music_player_show_details"><i></i></label>
+                    <label class="studio-switch"><span><b>Up next</b><small>The track that plays after this one.</small></span><input type="checkbox" data-overlay-option="music_player_show_next"><i></i></label>
+                    <label class="studio-field"><span>Hide when paused</span><select id="studio-music-auto-hide" data-studio-setting="music_player_auto_hide"><option value="0">Never</option><option value="10">After 10 s</option><option value="30">After 30 s</option><option value="120">After 2 min</option></select></label>
                   </section>
                   <section data-studio-settings="galnet_ticker_hud">
                     <h4>GALNET TICKER</h4>

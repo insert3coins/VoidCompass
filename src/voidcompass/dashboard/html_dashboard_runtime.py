@@ -305,10 +305,15 @@ class HtmlDashboardRuntime:
         if action in {"boot_presented", "boot_handoff_complete"}:
             self._commands.put(dict(payload))
             return True
+        if action == "music_levels":
+            # The visualizer's levels arrive many times a second; they are
+            # kept for the music overlay here, not queued behind app work.
+            receive = getattr(self.app, "receive_music_levels", None)
+            return bool(callable(receive) and receive(payload))
         if action not in {
             "open", "copy_next", "set_theme", "rebuild_cache",
             "open_screenshots", "open_logs", "quit",
-            "page_changed", "overlay_studio", "workspace",
+            "page_changed", "overlay_studio", "workspace", "music",
             "set_flight_log_mode",
             "set_exploration_doctrine", "save_dashboard_layout",
             "refresh_galnet", "clear_galnet_cache",

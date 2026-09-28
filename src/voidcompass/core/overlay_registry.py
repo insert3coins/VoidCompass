@@ -44,6 +44,7 @@ OVERLAY_SPECS = (
     OverlaySpec("survey_status_hud", "survey", "Void Compass Survey Operations", "survey_status_overlay_enabled", "survey_status_hud_x", "survey_status_hud_y", (30, 520), (420, 340), "Survey Operations", "SURVEY", True, "survey", "overlay_hotkey_survey", "Survey Operations"),
     OverlaySpec("toast_hud", "toast", "Void Compass Cockpit Notifications", "toast_overlay_enabled", "toast_hud_x", "toast_hud_y", (1200, 80), (400, 94), "Cockpit Notifications", "NOTIFY", True, "notifications", "overlay_hotkey_notifications", "Cockpit Notifications"),
     OverlaySpec("galnet_ticker_hud", "galnet-ticker", "Void Compass Galnet Ticker", "galnet_ticker_overlay_enabled", "galnet_ticker_hud_x", "galnet_ticker_hud_y", (360, 12), (860, 34), "Galnet Ticker", "GALNET", False, "galnet_ticker", "overlay_hotkey_galnet_ticker", "Galnet Ticker"),
+    OverlaySpec("music_player_hud", "music-player", "Void Compass Music Player", "music_player_overlay_enabled", "music_player_hud_x", "music_player_hud_y", (40, 880), (460, 154), "Music Player", "MUSIC", False, "music_player", "overlay_hotkey_music_player", "Music Player"),
     OverlaySpec("heartbeat_hud", "heartbeat", "Void Compass Journal Heartbeat", "heartbeat_overlay_enabled", "heartbeat_hud_x", "heartbeat_hud_y", (24, 24), (54, 54), "Journal Heartbeat", "HEARTBEAT", True, "heartbeat", "overlay_hotkey_heartbeat", "Journal Heartbeat"),
     OverlaySpec("contact_scope_hud", "contact-scope", "Void Compass Deep Space Contacts", "contact_scope_overlay_enabled", "contact_scope_hud_x", "contact_scope_hud_y", (1180, 250), (480, 270), "Deep Space Contact Scope", "CONTACTS", True, "contact_scope", "overlay_hotkey_contact_scope", "Deep Space Contacts"),
     OverlaySpec("ground_popup", "ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled", "ground_popup_x", "ground_popup_y", (1320, 160), (420, 208), "Planet Waypoint Navigation", "SURFACE NAV", True, "planet_waypoint", "overlay_hotkey_planet_waypoint", "Planet Waypoint Navigation"),
@@ -87,6 +88,11 @@ OVERLAY_HOTKEY_SPECS = (
     _overlay_hotkey("notifications"),
     _overlay_hotkey("heartbeat"),
     _overlay_hotkey("galnet_ticker"),
+    _overlay_hotkey("music_player"),
+    # The player itself, from anywhere: in game, or with the deck on another screen.
+    ("music_play_pause", "overlay_hotkey_music_play_pause", "Music: play / pause", None),
+    ("music_next", "overlay_hotkey_music_next", "Music: next track", None),
+    ("music_previous", "overlay_hotkey_music_previous", "Music: previous track", None),
     _overlay_hotkey("planet_waypoint"),
     ("field_bookmark", "overlay_hotkey_field_bookmark", "Save field bookmark", None),
 )

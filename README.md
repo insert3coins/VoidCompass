@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.4.9.7**
+**Current version: 5.4.9.8**
 
 Void Compass is a local exploration companion for *Elite Dangerous*. It reads the game’s journal, status and companion files, then turns them into a useful command deck, survey record and set of in-game overlays. It is built for commanders who want to keep track of a long trip without handing their flight history to a cloud service.
 
@@ -19,7 +19,7 @@ The main window is an HTML command deck backed by a Python application. It follo
 - **Build Planner** is a complete offline shipyard and outfitting workspace with all current hulls and modules, Engineering modifications, power priorities, fuel/cargo/pip load states, flight, range, defence, offence, heat, handling, cost and rebuy analysis. Builds are profile-local, can be compared side-by-side, cloned from the live Journal ship, imported from EDSY/SLEF, exported to SLEF and sent to the Engineering material wishlist.
 - **Mining and Ground tools** cover ring evidence, prospector details, refinery and cargo records, surface survey trails, exobiology work and journal-backed planetary mining signals.
 - **Carrier Command** follows personal and Squadron Carriers separately. It keeps their location, fuel, cargo, routes and jump history, and shows preparation, lockdown, transit and journal-confirmed arrival states.
-- **Powerplay Operations, Colonisation Recon and Explorer Achievements** are available under Field Tools. Powerplay includes all 12 leader dossiers, journal-backed merits and cargo history, weekly cycle records, commander assignments and an optional cockpit overlay.
+- **Powerplay Operations, Colonisation Recon and Explorer Achievements** are available under Field Tools. Powerplay shows your pledge, rank progress and a live cycle countdown. It covers the current system's state, control, reinforcement and undermining, with your orders there, a log of every Powerplay system you visit, merits by day and by cycle, all 12 leader dossiers, commander assignments and an optional cockpit overlay.
 - **Galnet Relay** provides an optional local ticker and article reader using Frontier’s news feed.
 
 The app is deliberately quiet. Feedback appears in the dashboard, Flight Log, notifications and overlays instead of through speech, personas or an AI service.

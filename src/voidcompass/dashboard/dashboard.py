@@ -47,6 +47,7 @@ from voidcompass.overlays.survey_status_hud import SurveyStatusHUD
 from voidcompass.overlays.toast_hud import ToastHUD
 from voidcompass.overlays.heartbeat_hud import HeartbeatHUD
 from voidcompass.overlays.galnet_ticker_hud import GalnetTickerHUD
+from voidcompass.overlays.music_player_hud import MusicPlayerHUD
 from voidcompass.overlays.contact_scope_hud import ContactScopeHUD
 from voidcompass.overlays.html_survey_overlay import attach_html_survey_overlay
 from voidcompass.overlays.html_toast_overlay import attach_html_toast_overlay
@@ -61,6 +62,7 @@ from voidcompass.overlays.html_rhino_minimap_overlay import attach_html_rhino_mi
 from voidcompass.overlays.html_powerplay_overlay import attach_html_powerplay_overlay
 from voidcompass.overlays.html_heartbeat_overlay import attach_html_heartbeat_overlay
 from voidcompass.overlays.html_galnet_ticker_overlay import attach_html_galnet_ticker_overlay
+from voidcompass.overlays.html_music_overlay import attach_html_music_overlay
 from voidcompass.overlays.html_contact_overlay import attach_html_contact_overlay
 from voidcompass.core.runtime_trace import RuntimeTrace
 from voidcompass.dashboard.dashboard_db_mixin import DashboardDBMixin
@@ -917,6 +919,7 @@ class MainDashboard(
             "toast_hud",
             "heartbeat_hud",
             "galnet_ticker_hud",
+            "music_player_hud",
             "contact_scope_hud",
         ):
             overlay = getattr(self, attr, None)
@@ -1003,7 +1006,7 @@ class MainDashboard(
             "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "rhino_minimap_hud", "powerplay_hud",
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud",
-            "contact_scope_hud",
+            "music_player_hud", "contact_scope_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -2438,6 +2441,12 @@ class MainDashboard(
         else:
             self.galnet_ticker_hud = None
 
+        if self._overlay_enabled("music_player_hud"):
+            self.music_player_hud = MusicPlayerHUD(self.root, self.config)
+            self._music_update_overlay()
+        else:
+            self.music_player_hud = None
+
         if self._overlay_enabled("contact_scope_hud"):
             self.contact_scope_hud = ContactScopeHUD(self.root, self.config)
             self._refresh_contact_scope()
@@ -2669,7 +2678,7 @@ class MainDashboard(
         explicit visibility intent.  Event-driven overlays remain governed by
         their own pending/show policies and are deliberately excluded here.
         """
-        persistent = ("hud", "cargo_hud", "carrier_hud", "heartbeat_hud", "galnet_ticker_hud")
+        persistent = ("hud", "cargo_hud", "carrier_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud")
         hidden = set(getattr(self, "_overlay_hotkey_hidden", set()))
         if bool(getattr(self, "_overlay_hotkey_global_hidden", False)):
             return set()
@@ -3251,6 +3260,10 @@ class MainDashboard(
         if action == "field_bookmark":
             self._field_bookmark()
             return
+        if action in {"music_play_pause", "music_next", "music_previous"}:
+            self.music_remote({"music_play_pause": "toggle", "music_next": "next",
+                               "music_previous": "previous"}[action])
+            return
         if action.startswith("rhino_minimap") and not RHINO_MAP_AVAILABLE:
             return
         if action == "rhino_minimap_center":
@@ -3712,7 +3725,7 @@ class MainDashboard(
             galnet_feed.request_stop()
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
-            "gravity_warning_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud",
+            "gravity_warning_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
             try:
@@ -4613,6 +4626,14 @@ class MainDashboard(
             self.galnet_ticker_hud.destroy()
             self.galnet_ticker_hud = None
 
+        if self._overlay_enabled("music_player_hud"):
+            if getattr(self, "music_player_hud", None) is None:
+                self.music_player_hud = MusicPlayerHUD(self.root, self.config)
+                self._music_update_overlay()
+        elif getattr(self, "music_player_hud", None):
+            self.music_player_hud.destroy()
+            self.music_player_hud = None
+
         if self._overlay_enabled("contact_scope_hud"):
             contact_scope_created = self.contact_scope_hud is None
             if self.contact_scope_hud is None:
@@ -4697,6 +4718,10 @@ class MainDashboard(
             elif attr == "galnet_ticker_hud":
                 attach_html_galnet_ticker_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "music_player_hud":
+                attach_html_music_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key, levels=self.music_levels,
                 )
             elif attr == "contact_scope_hud":
                 attach_html_contact_overlay(

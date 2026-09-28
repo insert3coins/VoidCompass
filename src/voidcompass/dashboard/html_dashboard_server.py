@@ -9,7 +9,9 @@ from __future__ import annotations
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
+import re
 import secrets
+import sys
 import threading
 import time
 from urllib.parse import parse_qs, urlparse
@@ -20,6 +22,15 @@ from voidcompass.core.static_assets import asset_type, read_asset
 # Engineering build exports can carry a complete outfitting document.  Keep a
 # firm loopback limit while allowing normal EDEC/EDSY/SLEF/Coriolis payloads.
 MAX_COMMAND_BYTES = 2 * 1024 * 1024
+# Music streams in the slices the player asks for; a file is never read whole.
+MEDIA_CHUNK_BYTES = 64 * 1024
+_MEDIA_ID = re.compile(r"[0-9a-f]{16}")
+_RANGE = re.compile(r"bytes=(\d*)-(\d*)")
+
+
+def _body_read(handler):
+    """The request body has been read in full: the connection may be reused."""
+    handler.close_connection = not getattr(handler, "keep_after_body", False)
 
 
 class _DashboardHTTPServer(ThreadingHTTPServer):
@@ -30,6 +41,13 @@ class _DashboardHTTPServer(ThreadingHTTPServer):
     # that burst, which is how launches lost files in their first second
     # (see page-start.js, which still repairs any loss that remains).
     request_queue_size = 128
+
+    def handle_error(self, request, client_address):
+        # Browsers drop kept-alive connections whenever they like (an idle
+        # socket, a closed page); that is not worth a traceback in the log.
+        if isinstance(sys.exc_info()[1], (ConnectionError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
 
 
 class HtmlDashboardServer:
@@ -53,6 +71,9 @@ class HtmlDashboardServer:
         self._closing = False
         self._host_state = dict(host_state or {})
         self._host_revision = 0
+        # The music library (services.music_library.MusicLibrary). The page
+        # lists it and streams tracks and covers by id, never by file path.
+        self.music = None
         # The atlas receives a random loopback port after the journal backend
         # is constructed. The parent still supplies the exact private URL and
         # the atlas independently restricts its frame ancestor to this deck.
@@ -145,14 +166,30 @@ class HtmlDashboardServer:
         class Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
             server_version = "VoidCompassDashboard/1"
+            # Connections are reused (HTTP/1.1 keep-alive). Every overlay
+            # polls several times a second, and the music visualizer's levels
+            # travel fifteen times a second each way; a fresh TCP connection
+            # per request left thousands of sockets in TIME_WAIT, and Windows
+            # began refusing new ones (net::ERR_NO_BUFFER_SPACE). An idle
+            # connection is dropped after a minute.
+            timeout = 60
 
             def log_message(self, _format, *_args):
                 return
 
             def do_GET(self):
+                # A GET never carries a body here; if one does, don't guess
+                # where it ends.
+                if self.headers.get("Transfer-Encoding") or self.headers.get("Content-Length", "0").strip() not in {"", "0"}:
+                    self.close_connection = True
                 owner._handle_get(self)
 
             def do_POST(self):
+                # Reuse the connection only once this request's body has been
+                # read in full (see _body_read): an unread body would be taken
+                # for the next request line.
+                self.keep_after_body = not self.close_connection
+                self.close_connection = True
                 owner._handle_post(self)
 
         return Handler
@@ -185,7 +222,7 @@ class HtmlDashboardServer:
         handler.send_header("Cache-Control", cache)
         handler.send_header("Content-Type", content_type)
         handler.send_header("Content-Length", str(len(payload)))
-        handler.send_header("Connection", "close")
+        handler.send_header("Connection", "close" if handler.close_connection else "keep-alive")
         handler.end_headers()
         try:
             handler.wfile.write(payload)
@@ -270,6 +307,13 @@ class HtmlDashboardServer:
                 })
             return
 
+        if path == "/api/music/library" or path.startswith("/media/"):
+            if not self._authorised(handler, parsed):
+                self._send_json(handler, {"error": "unauthorised"}, 403)
+                return
+            self._serve_music(handler, path)
+            return
+
         candidate = self._static_path(path)
         if candidate is None or not candidate.is_file():
             self._report_asset_error(path, "not found")
@@ -288,6 +332,87 @@ class HtmlDashboardServer:
             content_type,
             cache="no-store" if candidate.name == "index.html" else "no-cache",
         )
+
+    def _serve_music(self, handler, path):
+        library = self.music
+        if library is None:
+            self._send_json(handler, {"error": "music unavailable"}, 404)
+            return
+        if path == "/api/music/library":
+            self._send_json(handler, library.payload())
+            return
+        kind, _, name = path.removeprefix("/media/").partition("/")
+        identifier = name.removesuffix(".jpg")
+        file = None
+        if _MEDIA_ID.fullmatch(identifier):
+            if kind == "music":
+                file = library.track_file(identifier)
+            elif kind == "art":
+                file = library.art_file(identifier)
+        if file is None:
+            self._send_json(handler, {"error": "not found"}, 404)
+            return
+        if kind == "art":
+            try:
+                payload = file.read_bytes()
+            except OSError:
+                self._send_json(handler, {"error": "not found"}, 404)
+                return
+            self._send_bytes(handler, payload, "image/jpeg", cache="no-cache")
+            return
+        from voidcompass.services.music_library import audio_type
+        self._send_file_range(handler, file, audio_type(file))
+
+    def _send_file_range(self, handler, file, content_type):
+        """Send a file, or the byte range the player asks for when it seeks."""
+        try:
+            size = file.stat().st_size
+        except OSError:
+            self._send_json(handler, {"error": "not found"}, 404)
+            return
+        start, end, status = 0, max(0, size - 1), 200
+        match = _RANGE.fullmatch(str(handler.headers.get("Range") or "").strip())
+        if match and (match.group(1) or match.group(2)):
+            if match.group(1):
+                start = int(match.group(1))
+                end = min(int(match.group(2)), size - 1) if match.group(2) else size - 1
+            else:
+                start = max(0, size - int(match.group(2)))
+            if start >= size or start > end:
+                handler.send_response(416)
+                self._security_headers(handler)
+                handler.send_header("Content-Range", f"bytes */{size}")
+                handler.send_header("Content-Length", "0")
+                handler.send_header("Connection", "close")
+                handler.end_headers()
+                return
+            status = 206
+        length = end - start + 1 if size else 0
+        handler.send_response(status)
+        self._security_headers(handler)
+        handler.send_header("Content-Type", content_type)
+        handler.send_header("Accept-Ranges", "bytes")
+        handler.send_header("Cache-Control", "no-cache")
+        handler.send_header("Content-Length", str(length))
+        if status == 206:
+            handler.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        handler.send_header("Connection", "close")
+        handler.end_headers()
+        try:
+            # Paused music stops reading; the idle timeout is for requests.
+            handler.connection.settimeout(None)
+            with open(file, "rb") as source:
+                source.seek(start)
+                remaining = length
+                while remaining > 0:
+                    chunk = source.read(min(MEDIA_CHUNK_BYTES, remaining))
+                    if not chunk:
+                        break
+                    handler.wfile.write(chunk)
+                    remaining -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            # The player moved on (a seek or a skip) part-way through.
+            pass
 
     def _report_asset_error(self, path, reason):
         # A missing script leaves the page frozen, so say which one it was.
@@ -333,7 +458,9 @@ class HtmlDashboardServer:
             self._send_json(handler, {"error": "invalid command size"}, 413)
             return
         try:
-            payload = json.loads(handler.rfile.read(length).decode("utf-8"))
+            body = handler.rfile.read(length)
+            _body_read(handler)
+            payload = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             self._send_json(handler, {"error": "invalid json"}, 400)
             return

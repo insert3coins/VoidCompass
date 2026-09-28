@@ -4,6 +4,8 @@ profiles/
 
 # Application Cache
 backups/
+# The music library: playlists and cover thumbnails for this machine.
+music/
 cache/
 webview/
 edsm_cache

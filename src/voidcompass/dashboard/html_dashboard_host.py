@@ -21,6 +21,9 @@ _PAGE_RETRY_DELAYS_S = (0.5, 1.5, 3.0, 6.0)
 _PAGE_START_TIMEOUT_S = 3.0  # A live client polls the API before load completes.
 # WebView2 cannot retry a failed start in-process; ask the parent for a new host.
 HOST_RELAUNCH_EXIT_CODE = 75
+# A renderer that dies again within this long of its last reload is left for
+# the page recovery to handle, rather than reloaded in a tight loop.
+_RENDERER_RELOAD_GAP_S = 10.0
 
 
 def _request_json(url, payload=None, timeout=2.0):
@@ -58,6 +61,8 @@ class DashboardHost:
         self.page_reloaded_at = 0.0
         self.page_gave_up = False
         self.relaunch_requested = False
+        self.renderer_reloads = 0
+        self._renderer_reload_at = -_RENDERER_RELOAD_GAP_S
 
     def url(self, path):
         return f"{self.origin}{path}?token={quote(self.token)}"
@@ -183,6 +188,54 @@ class DashboardHost:
         print(f"Dashboard page {reason}; reloading ({self.page_retries})", flush=True)
         window.load_url(f"{self.dashboard_url}&host_retry={self.page_retries}")
         return False
+
+    def after_ready(self, webview_control):
+        """Attach the host's WebView2 listeners once the core exists."""
+        self.watch_network(webview_control)
+        self.watch_process(webview_control)
+
+    def watch_process(self, webview_control):
+        """Log every lost WebView2 process, and bring the deck back from one.
+
+        A dead renderer leaves the window blank and logs nothing, while the
+        backend and the overlays carry on; only the page needs to come back,
+        so the page is reloaded (music resumes paused, as on any reload). A
+        lost browser process takes WebView2 with it: the monitor then asks
+        for a new host, as for a WebView2 that never started.
+        """
+        core = getattr(webview_control, "CoreWebView2", None)
+        if core is None:
+            return False
+
+        def failed(_sender, args):
+            try:
+                kind = str(getattr(args, "ProcessFailedKind", "") or "UnknownProcessExited")
+                reason = str(getattr(args, "Reason", "") or "no reason given")
+                print(f"Dashboard WebView2 {kind} ({reason}, exit code "
+                      f"{getattr(args, 'ExitCode', '?')})", flush=True)
+                if kind == "BrowserProcessExited":
+                    if self.window is not None:
+                        self.window._voidcompass_renderer_failed = True
+                    return
+                # A frame's renderer (the Galactic Atlas) takes only its frame.
+                if kind not in {"RenderProcessExited", "RenderProcessUnresponsive"}:
+                    return
+                now = time.monotonic()
+                if now - self._renderer_reload_at < _RENDERER_RELOAD_GAP_S:
+                    print("Dashboard renderer lost again straight after a reload; "
+                          "leaving it to page recovery", flush=True)
+                    return
+                self._renderer_reload_at = now
+                self.renderer_reloads += 1
+                print(f"Dashboard renderer lost; reloading the page ({self.renderer_reloads})", flush=True)
+                core.Reload()
+            except Exception as exc:
+                print(f"Dashboard process watch failed: {type(exc).__name__}", flush=True)
+
+        core.ProcessFailed += failed
+        # pythonnet delegates must outlive this call.
+        self._process_handler = failed
+        return True
 
     def watch_network(self, webview_control):
         """Log each failed page request with Chromium's own error code.
@@ -318,6 +371,57 @@ class DashboardApi:
             save_filename='VoidCompass-Replay.html', file_types=('Interactive HTML (*.html)',))
         return str(selected[0]) if selected else ''
 
+    def choose_music_files(self):
+        """Pick audio files for a playlist, several at once, from anywhere."""
+        window = self._host.window
+        if window is None:
+            return []
+        try:
+            import webview
+
+            selected = window.create_file_dialog(
+                webview.FileDialog.OPEN, allow_multiple=True,
+                file_types=("Audio (*.mp3;*.flac;*.m4a;*.aac;*.ogg;*.oga;*.opus;*.wav;*.webm)",
+                            "All files (*.*)"),
+            )
+        except Exception:
+            return []
+        return [str(path) for path in (selected or []) if path]
+
+    def choose_playlist_file(self):
+        """Pick an M3U/M3U8 playlist to import."""
+        window = self._host.window
+        if window is None:
+            return ""
+        try:
+            import webview
+
+            selected = window.create_file_dialog(
+                webview.FileDialog.OPEN, file_types=("Playlists (*.m3u;*.m3u8)", "All files (*.*)"),
+            )
+        except Exception:
+            return ""
+        return str(selected[0]) if selected else ""
+
+    def choose_playlist_export(self, name="Playlist"):
+        """Choose where to save a playlist as M3U8."""
+        window = self._host.window
+        if window is None:
+            return ""
+        safe = "".join(char for char in str(name or "") if char not in '<>:"/\\|?*').strip() or "Playlist"
+        try:
+            import webview
+
+            selected = window.create_file_dialog(
+                webview.FileDialog.SAVE, save_filename=f"{safe[:60]}.m3u8",
+                file_types=("M3U8 playlist (*.m3u8)", "M3U playlist (*.m3u)"),
+            )
+        except Exception:
+            return ""
+        if not selected:
+            return ""
+        return str(selected[0] if isinstance(selected, (list, tuple)) else selected)
+
     def choose_folder(self):
         """Choose a local directory for profile backup/restore and paths."""
         window = self._host.window
@@ -378,7 +482,7 @@ def main(argv=None):
         text_select=True,
     )
     host.window = window
-    window._voidcompass_after_ready = host.watch_network
+    window._voidcompass_after_ready = host.after_ready
     host.host_revision = int(state.get("host_revision") or 0)
     window.events.moved += host.moved
     window.events.resized += host.resized

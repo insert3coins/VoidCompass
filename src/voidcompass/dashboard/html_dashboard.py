@@ -75,6 +75,7 @@ from voidcompass.dashboard.html_workspace_support import (
     text as _text,
 )
 from voidcompass.dashboard.html_explore_workspace import HtmlExploreWorkspaceMixin
+from voidcompass.dashboard.html_music import HtmlMusicMixin
 from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
 
 
@@ -150,13 +151,14 @@ def _local_departure_timestamp(value):
     return int(time.mktime(parsed.timetuple()))
 
 
-class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
+class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin):
     """Publish exploration state and accept private dashboard commands."""
 
     def start_html_dashboard_bridge(self):
         runtime = getattr(self.root, "_voidcompass_html_dashboard_runtime", None)
         if runtime is None:
             return False
+        self._attach_music_library(runtime)
         runtime.attach_app(self)
         self._html_dashboard_publish_job = None
         self._html_dashboard_last_payload = None
@@ -2743,6 +2745,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             "preflight": preflight,
             "codex_hunt": codex_hunt,
             "galnet": self._html_dashboard_galnet(),
+            # The player runs behind every page, so its state is always here;
+            # the library itself is fetched from /api/music/library on change.
+            "music": self._html_music_snapshot(),
             "dashboard_layout": {
                 "module_order": module_order,
                 "hidden_modules": hidden_modules,
@@ -3664,11 +3669,14 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             state = companion.get("powerplay") or {}
             if operation == "add_objective":
                 state, changed = powerplay_operations.add_objective(state, payload)
-            elif operation in {"select_objective", "toggle_objective", "delete_objective"}:
+            elif operation in {"select_objective", "toggle_objective", "delete_objective", "step_objective"}:
                 if operation == "delete_objective" and not payload.get("confirmed"):
                     return False
+                # step_objective moves a hand-counted assignment by the
+                # button's data-offset (the journal can't count those).
                 state, changed = powerplay_operations.change_objective(
                     state, payload.get("objective_id"), operation,
+                    step=payload.get("offset") or 0,
                 )
             elif operation == "select_dossier":
                 state, changed = powerplay_operations.select_dossier(
@@ -4188,7 +4196,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             page = _text(payload.get("page"), 40).casefold()
             if page not in {
                 "overview", "explore", "map", "records", "operations",
-                "overlay-studio", "settings", "about", *_HTML_WORKSPACE_PAGES,
+                "overlay-studio", "settings", "about", "music", *_HTML_WORKSPACE_PAGES,
             }:
                 return False
             self._html_dashboard_active_page = page
@@ -4198,6 +4206,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin):
             return self._handle_html_overlay_studio_command(payload)
         if action == "workspace":
             return self._handle_html_workspace_command(payload)
+        if action == "music":
+            return self._handle_html_music_command(payload)
         if action == "quit":
             self.on_close()
             return True
