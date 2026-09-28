@@ -29,7 +29,10 @@ GALAXY_RADIUS_LY = 51500.0
 MAP_ORIENTATION = 'galactic-north-up-east-right-v3'
 CAMERA_DISTANCE_LY = (20.0, 400000.0)
 CAMERA_TILT_DEG = (0.0, 72.0)
-MAX_ROUTE_POINTS = 5000
+# The journey the atlas draws: all of it up to this many jumps; beyond that,
+# every recent jump and an even spread of the older ones.
+MAX_ROUTE_POINTS = 8000
+RECENT_ROUTE_POINTS = 3000
 STATIC_ROOT = Path('web') / 'galactic_map'
 ATLAS_ASSET = Path('assets') / 'images' / 'Galaxy' / 'voidcompass-galactic-atlas.png'
 
@@ -63,6 +66,12 @@ def _sample_rows(rows, limit=MAX_ROUTE_POINTS):
     last = len(rows) - 1
     return [rows[round(index * last / (limit - 1))] for index in range(limit)]
 
+def _journey_rows(rows, limit=MAX_ROUTE_POINTS, recent=RECENT_ROUTE_POINTS):
+    rows = list(rows or [])
+    if len(rows) <= limit:
+        return rows
+    return _sample_rows(rows[:-recent], limit - recent) + rows[-recent:]
+
 def _theme_payload():
     return {key: str(getattr(THEME, key)) for key in ('bg', 'panel', 'panel_alt', 'panel_raised', 'header', 'input', 'inset', 'border', 'border_soft', 'selection', 'accent', 'orange', 'text', 'muted', 'dim', 'green', 'yellow', 'red')}
 
@@ -91,6 +100,8 @@ class ExpeditionMapView:
         self._embedded_parent_origin = ''
         self._status_job = None
         self._browser_commands = queue.SimpleQueue()
+        self._journey_cache = (None, [], {})
+        self._region_by_system = {}
         self._server_status_hint = (0, 0.0)
         pass
         self.server = GalacticMapServer(_resource_path(STATIC_ROOT), _resource_path(ATLAS_ASSET), command_callback=self._queue_browser_command, regions_provider=galactic_region_payload, status_callback=self._server_status_changed)
@@ -227,7 +238,7 @@ class ExpeditionMapView:
         tracker = getattr(self.app, 'deep_survey', None)
         survey = tracker.snapshot() if tracker else {}
         raw_route = [row for row in survey.get('route_points') or () if isinstance(row, dict) and _position(row.get('pos')) is not None]
-        route = [light for row in _sample_rows(raw_route) if (light := self._light_route_row(row)) is not None]
+        route, journey = self._journey(raw_route)
         positions = {str(row.get('system') or '').casefold(): tuple(row['pos']) for row in route if row.get('system')}
         current_system = _bounded_text(getattr(self.app, 'current_sys', ''), 120)
         current_position = _position(getattr(self.app, 'current_coords', None))
@@ -254,13 +265,73 @@ class ExpeditionMapView:
         active_stats = (active or {}).get('stats') or {}
         active_systems = [str(value) for value in active_stats.get('systems') or []]
         region = find_region(*current_position) if current_position else None
-        total_ly = sum((float(row.get('jump_dist') or 0.0) for row in route))
-        unique_systems = len({row.get('system') for row in route if row.get('system')})
+        total_ly = journey.get('distance_ly', 0.0)
+        unique_systems = journey.get('systems', 0)
         profile = _bounded_text(self.config.get('active_commander_profile'), 160)
         commander = _bounded_text(self.config.get('active_commander_name') or getattr(self.app, 'cmdr_name', ''), 120)
         ship = getattr(self.app, 'cmdr_ship', None)
         ship = ship if isinstance(ship, dict) else {}
-        return {'schema': 1, 'generated_at': datetime.now().astimezone().isoformat(timespec='seconds'), 'profile': {'id': profile, 'commander': commander}, 'theme': _theme_payload(), 'reduced_motion': bool(self.config.get('reduced_motion_enabled', False)), 'view_state': self._view_state, 'current': {'system': current_system, 'position': list(current_position) if current_position else None, 'region': {'id': int(region[0]), 'name': str(region[1])} if region else None, 'ship': _bounded_text(ship.get('ship_name') or ship.get('ship_localised') or ship.get('ship'), 100)}, 'summary': {'systems': unique_systems, 'distance_ly': round(total_ly, 1), 'markers': len(markers), 'annotations': len(self._annotations), 'regions': 42}, 'session': {'started_epoch': float(getattr(self.app, 'session_start_ts', 0.0) or 0.0)}, 'expedition': {'id': (active or {}).get('id'), 'name': (active or {}).get('name'), 'started': (active or {}).get('started'), 'start_system': (active or {}).get('start_system'), 'systems': active_systems} if active else None, 'route': route, 'planned': planned, 'route_context': {key: planned_context.get(key) for key in ('on_route', 'off_route', 'nearest_system', 'nearest_distance_ly', 'next_system', 'remaining')}, 'markers': markers, 'annotations': self._annotations, 'focus_request': self._focus_request}
+        return {'schema': 1, 'generated_at': datetime.now().astimezone().isoformat(timespec='seconds'), 'profile': {'id': profile, 'commander': commander}, 'theme': _theme_payload(), 'reduced_motion': bool(self.config.get('reduced_motion_enabled', False)), 'view_state': self._view_state, 'current': {'system': current_system, 'position': list(current_position) if current_position else None, 'region': {'id': int(region[0]), 'name': str(region[1])} if region else None, 'ship': _bounded_text(ship.get('ship_name') or ship.get('ship_localised') or ship.get('ship'), 100)}, 'summary': {'systems': unique_systems, 'distance_ly': round(total_ly, 1), 'markers': len(markers), 'annotations': len(self._annotations), 'regions': 42, 'journey': journey}, 'session': {'started_epoch': float(getattr(self.app, 'session_start_ts', 0.0) or 0.0)}, 'expedition': {'id': (active or {}).get('id'), 'name': (active or {}).get('name'), 'started': (active or {}).get('started'), 'start_system': (active or {}).get('start_system'), 'systems': active_systems} if active else None, 'route': route, 'planned': planned, 'route_context': {key: planned_context.get(key) for key in ('on_route', 'off_route', 'nearest_system', 'nearest_distance_ly', 'next_system', 'remaining')}, 'markers': markers, 'annotations': self._annotations, 'focus_request': self._focus_request}
+
+    def _journey(self, survey_route):
+        """The whole journey from the travel history, as the atlas draws it.
+
+        Deep Survey keeps only the latest 5,000 jumps; the travel history
+        keeps every one from every journal. Deep Survey's rows lend the FSS
+        state and fill in any star class, and cover jumps the history has not
+        read yet (it imports in the background at start-up). The totals and
+        region visits are counted over the whole journey, before a very long
+        one is thinned for drawing. Rebuilt only when either source changes.
+        """
+        history = getattr(self.app, 'travel_history', None)
+        fss_count = sum(1 for row in survey_route if row.get('fss_complete'))
+        key = (getattr(history, 'revision', None), len(survey_route),
+               str((survey_route[-1] if survey_route else {}).get('timestamp') or ''), fss_count)
+        if key == self._journey_cache[0]:
+            return self._journey_cache[1], self._journey_cache[2]
+        rows = history.route_rows() if history is not None else []
+        if rows:
+            facts = {str(row.get('system') or '').casefold(): row for row in survey_route}
+            latest = rows[-1]['timestamp']
+            source = []
+            for row in rows:
+                fact = facts.get(row['system'].casefold()) or {}
+                source.append({**row, 'star_class': row.get('star_class') or fact.get('star_class') or '',
+                               'fss_complete': bool(fact.get('fss_complete'))})
+            source += [row for row in survey_route if str(row.get('timestamp') or '') > latest]
+        else:
+            source = list(survey_route)
+        systems = set()
+        regions = {}
+        distance = 0.0
+        for row in source:
+            name = str(row.get('system') or '')
+            position = _position(row.get('pos'))
+            distance += float(row.get('jump_dist') or 0.0)
+            if not name or position is None:
+                continue
+            key_name = name.casefold()
+            first_here = key_name not in systems
+            systems.add(key_name)
+            if key_name not in self._region_by_system:
+                found = find_region(*position)
+                self._region_by_system[key_name] = int(found[0]) if found else 0
+            region_id = self._region_by_system[key_name]
+            if not region_id:
+                continue
+            stamp = _bounded_text(row.get('timestamp'), 80)
+            entry = regions.setdefault(str(region_id), {'systems': 0, 'first': stamp, 'last': stamp})
+            entry['systems'] += int(first_here)
+            if stamp and (not entry['first'] or stamp < entry['first']):
+                entry['first'] = stamp
+            if stamp > entry['last']:
+                entry['last'] = stamp
+        route = [light for row in _journey_rows(source) if (light := self._light_route_row(row)) is not None]
+        journey = {'jumps': len(source), 'systems': len(systems), 'distance_ly': round(distance, 1),
+                   'first': _bounded_text((source[0] if source else {}).get('timestamp'), 80),
+                   'regions': regions, 'drawn': len(route)}
+        self._journey_cache = (key, route, journey)
+        return route, journey
 
     def refresh(self, system_rows=None, value_rows=None):
         if self._disposed:
