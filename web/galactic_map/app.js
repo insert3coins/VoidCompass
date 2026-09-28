@@ -119,8 +119,10 @@ function glyph(shape, colour) {
 
 // --- Talking to Python -----------------------------------------------------------------
 function command(payload) {
+  // Read to the end: an unread reply holds native buffers until GC, and the
+  // atlas shares the command deck's renderer (same site, 127.0.0.1).
   return fetch(api('/api/command'), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)})
-    .then((response) => response.ok).catch(() => false);
+    .then(async (response) => { await response.arrayBuffer().catch(() => null); return response.ok; }).catch(() => false);
 }
 
 function scheduleSave() {
@@ -947,7 +949,10 @@ function runSearch() {
 // --- Start ----------------------------------------------------------------------------------------------------------
 async function fetchSnapshot() {
   const response = await fetch(api('/api/snapshot'), {cache: 'no-store'});
-  if (!response.ok) throw new Error(`snapshot ${response.status}`);
+  if (!response.ok) {
+    await response.arrayBuffer().catch(() => null);
+    throw new Error(`snapshot ${response.status}`);
+  }
   return response.json();
 }
 

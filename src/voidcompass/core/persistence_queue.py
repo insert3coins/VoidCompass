@@ -30,6 +30,7 @@ class PersistenceQueue:
         self._failures = 0
         self._last_write_ms = 0.0
         self._max_write_ms = 0.0
+        self._max_write_file = ""
         self._thread = threading.Thread(
             target=self._run, name="void-persistence", daemon=True,
         )
@@ -142,7 +143,11 @@ class PersistenceQueue:
             finally:
                 elapsed = (time.perf_counter() - started) * 1000.0
                 self._last_write_ms = elapsed
-                self._max_write_ms = max(self._max_write_ms, elapsed)
+                if elapsed > self._max_write_ms:
+                    # Name the slowest file, so a slow save in the runtime
+                    # trace says which one it was.
+                    self._max_write_ms = elapsed
+                    self._max_write_file = Path(job["path"]).name
                 with self._condition:
                     self._active_path = None
                     self._condition.notify_all()
@@ -158,9 +163,16 @@ class PersistenceQueue:
             return
         source = job.get("source")
         value = source() if source is not None else job["value"]
+        indent = job.get("indent", 2)
+        # json.dumps without indentation takes CPython's C encoder; json.dump
+        # to a file, or any indent, runs the pure-Python encoder: about four
+        # times slower on a 5 MB survey, holding the interpreter lock the UI
+        # thread needs all the while. Large files are saved compact.
+        text = json.dumps(value, indent=indent, ensure_ascii=False,
+                          separators=(",", ":") if indent is None else None)
         temporary = path.with_name(path.name + ".tmp")
         with temporary.open("w", encoding="utf-8") as handle:
-            json.dump(value, handle, indent=job.get("indent", 2), ensure_ascii=False)
+            handle.write(text)
         os.replace(temporary, path)
 
     def flush(self, path=None, timeout=5.0):
@@ -194,6 +206,7 @@ class PersistenceQueue:
                 "failures": self._failures,
                 "last_write_ms": round(self._last_write_ms, 1),
                 "max_write_ms": round(self._max_write_ms, 1),
+                "max_write_file": self._max_write_file,
                 "oldest_due_ms": round(max(0.0, (oldest_due or 0) - time.monotonic()) * 1000.0, 1)
                 if oldest_due is not None else 0.0,
             }

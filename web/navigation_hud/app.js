@@ -938,6 +938,7 @@ async function acknowledgeRendered(revision) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({revision}),
     });
+    await response.arrayBuffer().catch(() => null);
     return response.ok;
   } catch (_error) {
     return false;
@@ -950,6 +951,7 @@ async function acknowledgeReady() {
     const response = await fetch(api('/api/ready'), {
       method: 'POST', body: '{}',
     });
+    await response.arrayBuffer().catch(() => null);
     pageReady = response.ok;
   } catch (_error) {}
 }

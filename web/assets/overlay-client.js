@@ -37,6 +37,11 @@
     return resolved;
   }
 
+  // Every reply is read to its end: an unread one keeps native buffers until
+  // the garbage collector happens by, and overlays acknowledge many times an
+  // hour (a leak that slowly grew the command deck's renderer the same way).
+  const drain = (response) => response.arrayBuffer().catch(() => null);
+
   function startPolling(options) {
     const token = String(options.token || "");
     const overlay = String(options.overlay || "");
@@ -53,13 +58,14 @@
         const response = await fetch(`/api/ready?${suffix}`, {
           method: "POST", body: "{}",
         });
+        await drain(response);
         ready = response.ok;
       } catch (_) { /* A later health poll retries the handshake. */ }
     }
 
     async function refresh(nextRevision) {
       const response = await fetch(`/api/snapshot?${suffix}`, {cache: "no-store"});
-      if (!response.ok) return;
+      if (!response.ok) return void drain(response);
       snapshot = await response.json();
       options.render(snapshot);
       // Hidden WebViews may suspend animation frames. A page must still be
@@ -84,6 +90,7 @@
           method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify(rendered),
         });
+        await drain(response);
         if (response.ok) {
           revision = nextRevision;
           renderedRevision = nextRevision;
@@ -97,6 +104,7 @@
       polling = true;
       try {
         const response = await fetch(`/api/health?${suffix}`, {cache: "no-store"});
+        if (!response.ok) await drain(response);
         if (response.ok) {
           const nextRevision = Number((await response.json()).revision);
           if (Number.isFinite(nextRevision) && nextRevision !== revision) {

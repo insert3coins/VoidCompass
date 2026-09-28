@@ -154,7 +154,7 @@
       try {
         const response = await fetch(`/api/live?token=${encodeURIComponent(token)}&overlay=${encodeURIComponent(overlayId)}`,
           {cache: "no-store"});
-        const data = response.ok ? await response.json() : {};
+        const data = response.ok ? await response.json() : (await response.arrayBuffer(), {});
         const bands = Array.isArray(data.bands) ? data.bands : [];
         for (let band = 0; band < BANDS; band += 1) target[band] = data.playing ? (Number(bands[band]) || 0) / 255 : 0;
       } catch (_error) {

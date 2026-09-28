@@ -233,7 +233,7 @@ class SpecialistEngine:
 
     def _save(self, immediate=False):
         persistence_queue().submit_json(
-            self.path, indent=2, source=self._persistence_snapshot,
+            self.path, indent=None, source=self._persistence_snapshot,
             delay_s=0.75, immediate=immediate,
         )
         self._dirty = False

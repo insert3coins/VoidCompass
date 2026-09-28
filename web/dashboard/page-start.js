@@ -20,7 +20,7 @@
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({action: "client_error", source: "page-start", message: String(message).slice(0, 2000)}),
         keepalive: true,
-      }).catch(() => {});
+      }).then((response) => response.arrayBuffer()).catch(() => {});
     } catch (_error) { /* Reporting must never break the page. */ }
   }
 

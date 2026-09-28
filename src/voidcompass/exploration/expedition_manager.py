@@ -364,14 +364,14 @@ class ExpeditionManager:
                     self._save_timer.start()
             return
         persistence_queue().submit_json(
-            self.path, self.snapshot(), indent=2, delay_s=0.1, immediate=True,
+            self.path, self.snapshot(), indent=None, delay_s=0.1, immediate=True,
         )
 
     def _save_due(self):
         with self.lock:
             self._save_timer = None
         persistence_queue().submit_json(
-            self.path, indent=2, delay_s=0.2, source=self.snapshot,
+            self.path, indent=None, delay_s=0.2, source=self.snapshot,
         )
 
     def flush(self, wait=False):
