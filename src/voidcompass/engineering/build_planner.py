@@ -160,6 +160,18 @@ def _slot_label(ship: dict, group: str, index: int, size: int) -> str:
     return f"Class {size} {singular} {index + 1}"
 
 
+@lru_cache(maxsize=1)
+def journal_engineering_names() -> dict[str, str]:
+    """Readable names for the journal's BlueprintName and ExperimentalEffect
+    symbols (FSD_LongRange → Increased Range), keyed by the normalised symbol."""
+    names = {}
+    for table in ("blueprints", "experimentalEffects"):
+        for row in (catalogue().get(table) or {}).values():
+            if row.get("fdname") and row.get("name"):
+                names[_key(row["fdname"])] = str(row["name"])
+    return names
+
+
 def _ship_asset(name: str) -> str:
     from voidcompass.engineering.engineering_companion import ship_catalogue
 
@@ -642,6 +654,13 @@ def calculate(build: dict) -> dict:
             "ladenRange": _total_jump_range(totals["mass"] + totals["cargo"], totals["fuel"], fsd, totals["jumpBoost"]),
             "unladenRange": _total_jump_range(totals["mass"], totals["fuel"], fsd, totals["jumpBoost"]),
         })
+        # The Ship Workshop's range chart: a full tank's jump as the hold
+        # fills, in eighths, by the same formula as unladen and laden above.
+        if totals["cargo"] > 0:
+            navigation["curve"] = [{
+                "cargo": totals["cargo"] * step / 8,
+                "jump": _jump_distance(totals["mass"] + totals["cargo"] * step / 8, totals["fuel"], fsd, totals["jumpBoost"]),
+            } for step in range(9)]
     if thrusters:
         multiplier = _mass_curve(
             totals["currentMass"], thrusters.get("engminmass", 0.0), thrusters.get("engoptmass", 0.0), thrusters.get("engmaxmass", 0.0),
@@ -1190,8 +1209,10 @@ def workspace(state: dict, companion: dict, transient: dict | None = None) -> di
     source = catalogue().get("source") or {}
     return {
         "version": APP_VERSION, "catalogueVersion": source.get("databaseVersion"), "catalogueDate": source.get("lastModified"),
-        "ships": ship_catalogue(), "builds": [{"id": row["id"], "name": row["name"], "ship": _ship(row["ship_id"]).get("name"), "updated": row.get("updated"), "source": row.get("source")} for row in stored],
-        "live": {"available": live is not None, "warning": live_warning},
+        "ships": ship_catalogue(), "builds": [{"id": row["id"], "name": row["name"], "ship": _ship(row["ship_id"]).get("name"), "asset": _ship_asset(_ship(row["ship_id"]).get("name") or ""), "updated": row.get("updated"), "source": row.get("source")} for row in stored],
+        "live": {"available": live is not None, "warning": live_warning,
+                 **({"name": str(((companion or {}).get("loadout") or {}).get("ShipName") or "").strip() or _ship(live["ship_id"]).get("name"),
+                     "ship": _ship(live["ship_id"]).get("name"), "asset": _ship_asset(_ship(live["ship_id"]).get("name") or "")} if live else {})},
         "selected": {"id": selected.get("id"), "name": selected.get("name"), "tag": selected.get("tag"), "shipId": selected["ship_id"], "ship": _ship(selected["ship_id"]).get("name"), "symbol": _ship(selected["ship_id"]).get("fdname"), "asset": _ship_asset(_ship(selected["ship_id"]).get("name") or ""), "source": selected.get("source"), "fuel": selected.get("fuel"), "cargo": selected.get("cargo"), "pips": selected.get("pips"), "editable": editable},
         "slots": slots, "modules": _compact_modules(selected["ship_id"]),
         "blueprints": blueprints, "effects": effects,

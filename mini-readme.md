@@ -1,35 +1,37 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.9.8 // Cockpit Music - Galatic Map re-work
-**Release Date:** 2026-Sep-28
+## v5.4.9.9 // Ship Workshop re-work
+**Release Date:** 2026-Sep-29
 
-* Added Music, a new page in the command deck: your own music, played straight from wherever it lives on this PC. Nothing is copied or moved; Void Compass remembers where each file is and plays it from there.
-* Make playlists, then add music files or whole folders with the file picker. Reorder, remove and find tracks, and rename or delete playlists (your music files are never touched). Import M3U/M3U8 playlists from other players, and export your own.
-* Tracks show their tags: title, artist, album, year, genre, track number and format, with the album art embedded in the file or kept beside it as cover.jpg or folder.jpg. MP3, FLAC, M4A/AAC, OGG, Opus and WAV all play.
-* The Now Playing deck has play and pause, previous and next, a seek bar, volume, shuffle and repeat (off, all or one) over a live visualizer. Music keeps playing whichever page is open, and next time it is back where you left it, paused.
-* Added the Music Player overlay: the cover, the track and its tags, progress and what plays next, with a visualizer that moves to the music. In Overlay Studio choose a card or slim strip, its text size, spectrum bars, mirrored or wave in theme, warm or spectrum colours, whether to show album art, the album and year, and up next, and whether it hides when the music is paused.
-* New hotkeys in Settings: Music play/pause, next and previous (media keys work on their own), and showing or hiding the Music Player overlay.
-* The volume slider moves in even steps of loudness, and full volume sits comfortably under game audio, so the whole slider is usable instead of only its bottom few steps.
-* LEVEL (on by default) plays every track equally loud, however loudly it was mastered. It uses a track's ReplayGain or R128 tags when it has them; otherwise it listens to the track the first time it plays and remembers it, so it starts at the right level from then on.
-* The Music Player overlay's slim strip scrolls its whole line, title and artist, when it doesn't fit, as the card does.
-* Fixed the command deck dropping its page every 17-20 minutes while music played with the overlay on. The deck never read the replies to its fifteen-a-second visualizer reports, and each unread reply held memory, about 40 MB a minute. Every page now reads its replies, overlays included.
-* Deep Survey and the Captain's Log now remember every journal they have read: past 400 files they were rereading the oldest at every start. Large profile files (survey, Captain's Log, specialists, expeditions) save compact with the fast JSON encoder, about four times less work and a quarter smaller.
-* If the command deck's page reloads mid-song (WebView2 can drop its renderer), the music carries on from where it was instead of stopping. The deck's music also no longer needs a click in its window before a hotkey can start it.
-* OBS can record the music: add an Application Audio Capture source and pick the Void Compass command deck window. Before, WebView2 played the sound from a separate process that OBS couldn't see.
-* Void Compass now reads music tags with mutagen (GPL-2.0-or-later).
-* Rebuilt the Galactic Atlas as a map of Elite's 42 Codex regions and everywhere you have been. The region borders are drawn exactly from Universal Cartographics' region map, the galaxy glows along its arms, and hovering anywhere names the region and your distance to it.
-* The atlas charts your whole journey, read from every journal on this PC, not just your most recent 5,000 jumps: trips from months ago (a run to Beagle Point, say) show as they should. The first start reads the journals in a few seconds, and after that new jumps are added as you make them.
-* Your travels are a line that brightens towards the present, with each visited system coloured by its star class. The regions you have flown through glow, and REGIONS lists all 42 with your systems and the date you first entered each.
-* Replay the journey from the first jump to the last on the timeline. Tilt into 3D (right-drag or 3D), zoom from the whole galaxy down to a single system, and jump to Sol, Sagittarius A*, Colonia, Beagle Point, the Pleiades or your destination.
-* Right-click anywhere to leave a map mark. Intel layers (valuable worlds, biology, Codex, screenshots, recon, unfinished surveys, bookmarks, expedition sectors) switch on and off under LAYERS.
-* Rebuilt Powerplay Operations. A pledge banner shows your leader, rank and total merits, how far the next rank is (on Powerplay 2.0's merit curve), your salary and time pledged, and a live countdown to Thursday's 07:00 UTC tick.
-* Operations shows the system you are in: its state from Unoccupied to Stronghold, who controls it, control progress and the change since your last reading, reinforcement against undermining, and each power's conflict progress. It then gives your orders there (reinforce, undermine or acquire) with your power's ethos bonus. Beside it, Cycle Pulse charts merits for each day of the week against your last and best cycles, with the systems that paid most. Assignments can now be counted up and down by hand.
-* New System Intel log: every Powerplay system you jump into, filterable by ours, hostile, acquisition or out of reach, with what changed since your last visit. Readings from before the weekly tick are marked as such.
-* Ledgers draws your merit total over time with each gain, the cargo you collect and deliver, and your cycle archive with the best week highlighted. Powers shows all twelve leaders with their ethos and how many systems you have seen them hold this cycle.
-* Fixed the command deck going blank after a long session with music and overlays running. Every overlay poll and music update opened a new connection, and Windows eventually refused new ones (net::ERR_NO_BUFFER_SPACE). Connections are now reused. If the deck's page crashes it is logged and reloaded instead of staying blank.
+* Rebuilt the Ship Workshop: the Build Planner and Engineering pages.
+* The Build Planner opens on a hangar: your live ship and every saved build as cards, with New build and Import beside them. New build picks the hull from a board of all 48 ships. Pick a build to compare against and every figure on the page shows the difference, green when it is better and red when it is worse.
+* The bay shows the ship's line drawing, which lights up the hardpoint or utility mount you pick (hover a slot to find it on the hull), with the build cost and rebuy. Set the power distributor by clicking its pips, as in the cockpit: SYS, ENG and WEP always add up to six pips. Fuel and cargo apply as you change them.
+* Eight readouts sit under the bay: jump, total range, speed, shields, armour, DPS, power draw and heat. Power and heat turn red when they are over the limit.
+* The loadout board shows every slot on the ship at once, grouped as in the outfitting screen, with each module's blueprint, experimental and grade.
+* Beside the board, the module dock works on the slot you pick:
+  * OUTFIT lists every module that fits, with its mass and power against what is fitted now.
+  * ENGINEER sets the blueprint, grade G1 to G5, roll, experimental, power priority and power switch.
+  * ATTRIBUTES lists the module's statistics.
+* Performance panels show everything the planner calculates, all at once:
+  * Frame shift: jump range, and a chart of your jump as the hold fills.
+  * Flight and handling.
+  * Shields and armour, with their resistances.
+  * Damage per second, with the damage mix.
+  * Power priorities against the power plant.
+  * Heat for idle, thrusting, FSD charging, weapons firing and shield cells.
+  * Mass and value.
+* The live loadout follows the journal and can't be edited. CLONE TO EDIT makes an editable copy.
+* Engineering opens on your fleet. Pick any ship, or let it follow the ship you fly.
+* SHIP shows what the journal says is engineered on that ship: each blueprint as the game names it, its grade, how far the roll got, and any experimental. A chart counts the ship's engineered modules at each grade, and the next thing to do (which engineer to fly to, or what to collect) sits beside it.
+* PLANS lists the plans sent from the Build Planner, with the materials they reserve.
+* MATERIALS lays out the material locker by category and grade. A filter or search dims everything else, so the locker keeps its shape.
+* ENGINEERS is a portrait board marked by unlock state. Each engineer shows the steps to unlock them and every blueprint they offer.
+* New BLUEPRINTS reference: pick a module to see each blueprint's effects, which engineers do it (the ones you have unlocked are lit), and how many top-grade rolls your locker can pay for now, plus the experimentals for that module.
+* SOURCES, TECH BROKERS (the ones you can unlock listed first) and ODYSSEY carry on as before, redrawn to match.
 
 ## Earlier releases
 
+* **v5.4.9.8** — Added Music, a local player with playlists, loudness levelling, OBS capture and a Music Player overlay; rebuilt the Galactic Atlas as a regions map of your whole journey and Powerplay Operations around the weekly cycle; and fixed the command deck going blank or dropping its page in long sessions.
 * **v5.4.9.7** — Rebuilt Settings as one screen that saves as you go, added the Galnet Ticker overlay with CRT and glitch effects, rebuilt the Navigation HUD's state scenes as solid 3D holograms with stars shaped by their class, switched the Rhino coverage map off, and fixed overlays sometimes not appearing at startup.
 * **v5.4.9.6** — Rebuilt the Journal Heartbeat as a HAL 9000-style watcher orb that reacts to every journal event, rebuilt the startup screen around the same eye with an FSD countdown into the deck, added Navigation HUD typeface and text settings, and fixed the HUD's on-foot portrait.
 * **v5.4.9.5** — Brought back an animated hologram for every Navigation HUD state with journal event effects, rebuilt Gravity Warning and Overlay Studio (one display at a time), made Survey Operations hold still at or below its rotation threshold, and fixed hidden overlays reloading after five minutes.

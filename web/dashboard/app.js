@@ -4,6 +4,10 @@ import {
 } from "./explore.js";
 import {renderExplorationArchive} from "./archive.js";
 import {createMusicDeck} from "./music.js";
+import {
+  engineeringPayload, handleWorkshopChange, handleWorkshopClick, handleWorkshopInput,
+  renderBuildPlanner, renderEngineering, resetWorkshop,
+} from "./workshop.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
@@ -48,19 +52,6 @@ let themeFingerprint = "";
 let pageRequestId = 0;
 let studioSelectedId = "";
 let studioMonitorId = "";
-let engineeringView = "operations";
-let engineeringData = null;
-// Retained while legacy profile-built ships are rendered read-only during the
-// Build Planner migration. New loadout authoring is owned by Build Planner.
-let engineeringSelectedEngineer = "";
-let engineeringMaterialFilter = "all";
-let engineeringSearch = "";
-let engineeringSearchTimer = 0;
-let buildPlannerData = null;
-let buildPlannerSelectedSlot = "";
-let buildPlannerGroup = "component";
-let buildPlannerSearch = "";
-let buildPlannerStatsView = "summary";
 let studioDragging = null;
 let studioFingerprint = "";
 let studioMoveSentAt = 0;
@@ -150,8 +141,9 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".nav-item", "[data-feed-filter]", ".studio-overlay-card", ".studio-monitor",
   ".studio-index-select", ".mission-row", ".workspace-tabs button",
   ".suite-tabs button", "[data-analytics-view]",
-  ".galnet-headline-row", "#status-galnet", ".bp-group-tabs button",
-  ".bp-slot", ".bp-module", ".bp-analysis > nav button",
+  ".galnet-headline-row", "#status-galnet",
+  ".wk-tile", ".wk-hullpick", ".wk-slot", ".wk-module", ".wk-docktab", ".wk-segbtn", ".wk-pip",
+  ".wk-mini", ".wk-tab", ".wk-chip", ".wk-engineer", ".wk-type", ".wk-follow",
   ".survey-body-row", ".explore-views button", "[data-explore-filter]", ".body-select",
   ".settings-tab", ".theme-option",
   ".music-button", ".music-mode", ".music-playlist", ".music-row-actions button",
@@ -224,6 +216,13 @@ const apiUrl = (path) => `${path}${path.includes("?") ? "&" : "?"}token=${encode
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[char]));
 const credits = (value) => Number.isFinite(Number(value)) ? `${Math.round(Number(value)).toLocaleString()} CR` : "—";
 const numeric = (value, digits = 0) => Number.isFinite(Number(value)) ? Number(value).toLocaleString(undefined, {minimumFractionDigits: digits, maximumFractionDigits: digits}) : "—";
+// What workshop.js draws and talks with.
+// A rounded −0 (an empty hold, a zero resistance) reads as 0.
+const WORKSHOP_UI = {
+  byId, escapeHtml, credits, showToast, command,
+  numeric: (value, digits = 0) => numeric(value, digits).replace(/^-(?=0(?:[.,]0+)?$)/, ""),
+  workspaceCard: (...args) => workspaceCard(...args), workspaceTable: (...args) => workspaceTable(...args),
+};
 const duration = (seconds) => {
   const total = Math.max(0, Math.round(number(seconds)));
   const hours = Math.floor(total / 3600);
@@ -3091,50 +3090,9 @@ function renderMiningWorkspace(data) {
   </section>`;
 }
 
+// The Ship Workshop pages live in workshop.js.
 function renderEngineeringWorkspace(data) {
-  const root = byId("engineering-workspace");
-  engineeringData = data;
-  const ship = data.ship || {};
-  const slots = data.slots || [];
-  const pins = data.pins || [];
-  const wishlist = data.wishlist || {};
-  const pinCards = pins.map((row) => `<article class="engineering-wishlist-card ${row.craftable ? "ready" : "missing"}"><header><span>${escapeHtml(row.type || "ENGINEERING")}</span><b>${row.craftable ? "READY" : "COLLECT"}</b></header><h3>${escapeHtml(row.name)}</h3><p>${escapeHtml(row.slot || "UNBOUND PLAN")} · G${numeric(row.current_grade)} → G${numeric(row.grade)}${row.experimental ? ` · ${escapeHtml(row.experimental)}` : ""}</p><div class="engineering-plan-materials">${(row.materials || []).map((item) => `<span class="${item.missing ? "missing" : "ready"}"><b>${numeric(item.have)} / ${numeric(item.amount)}</b>${escapeHtml(item.name)}</span>`).join("") || "<small>Legacy plan uses the original VoidCompass recipe catalogue.</small>"}</div><button class="danger-action" data-ws-page="engineering" data-ws-op="unpin" data-plan-id="${escapeHtml(row.id)}">REMOVE</button></article>`).join("");
-  const requiredRows = (data.materials || []).filter((row) => row.need > 0).sort((a,b) => b.missing-a.missing || a.name.localeCompare(b.name));
-  const wishlistPanel = `${workspaceMetrics([{label:"Plans",value:numeric(wishlist.plans),detail:`${numeric(wishlist.ready)} READY`},{label:"Required units",value:numeric(wishlist.required),detail:"RESERVED FOR BUILD"},{label:"Missing units",value:numeric(wishlist.missing),detail:wishlist.missing?"COLLECTION REQUIRED":"ALL MATERIALS READY"}])}<section class="engineering-wishlist-grid">${pinCards || `<p class="workspace-empty">Send an engineered loadout from Build Planner to create a ship-bound material wishlist.</p>`}</section>${workspaceCard("PROTECTED BUILD RESERVES", workspaceTable([{label:"Material",render:(row)=>`<b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.category)} · G${numeric(row.grade)}</small>`},{label:"Have",key:"have"},{label:"Reserved",key:"need"},{label:"Missing",render:(row)=>`<b class="${row.missing ? "warn-text" : "ok-text"}">${numeric(row.missing)}</b>`}], requiredRows, "No materials reserved."), `${requiredRows.length} MATERIAL TYPES`)}${workspaceCard("BUILD PLANNER HANDOFF", `<p class="workspace-note">Loadout creation, module selection and EDSY/SLEF imports live in Build Planner. Send a completed build here to reserve its Engineering materials.</p><div class="workspace-actions"><button data-page="build-planner">OPEN BUILD PLANNER</button></div>`, "ONE BUILD SOURCE")}`;
-
-  if (!engineeringSelectedEngineer || !(data.engineers || []).some((row) => row.name === engineeringSelectedEngineer)) engineeringSelectedEngineer = data.engineers?.[0]?.name || "";
-  const engineer = (data.engineers || []).find((row) => row.name === engineeringSelectedEngineer) || {};
-  const engineerList = (data.engineers || []).filter((row) => !engineeringSearch || `${row.name} ${row.system} ${row.station}`.toLowerCase().includes(engineeringSearch)).map((row) => `<button class="engineering-engineer-row ${row.name === engineeringSelectedEngineer ? "active" : ""}" data-engineering-engineer="${escapeHtml(row.name)}"><img src="${escapeHtml(row.portrait)}" onerror="this.hidden=true"><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.system)} · ${escapeHtml(row.progress || "UNKNOWN")}${row.rank ? ` G${numeric(row.rank)}` : ""}</small></span></button>`).join("");
-  const engineersPanel = `<section class="engineering-engineers-layout"><aside><input id="engineering-search" value="${escapeHtml(engineeringSearch)}" placeholder="ENGINEER, SYSTEM OR BLUEPRINT…">${engineerList}</aside><article class="engineering-engineer-detail">${engineer.name ? `<header><img src="${escapeHtml(engineer.portrait)}" onerror="this.hidden=true"><div><small>${escapeHtml(engineer.discipline || "SHIP ENGINEERING")}</small><h2>${escapeHtml(engineer.name)}</h2><p>${escapeHtml(engineer.system)} · ${escapeHtml(engineer.station)}</p></div><button data-ws-page="engineering" data-ws-op="copy_system" data-system="${escapeHtml(engineer.system)}">COPY SYSTEM</button></header><div class="engineering-unlock-progress">${(engineer.steps || []).map((step,index)=>`<div class="${step.done ? "done" : "pending"}"><i>${step.done ? "✓" : index+1}</i><span><b>${escapeHtml(step.label)}</b><small>${escapeHtml(step.detail)}</small></span><em>${step.done ? "READY" : "PENDING"}</em></div>`).join("")}</div><h3>CAPABILITIES</h3><div class="engineering-offers">${(engineer.offers || []).map((row)=>`<span><b>${escapeHtml(row.name)}</b>${escapeHtml(row.type)} · G${numeric(row.grade)}</span>`).join("") || "<small>No ship blueprint catalogue entries.</small>"}</div>` : ""}</article></section>`;
-
-  const filters = ["all","needed","missing","ready","surplus","tradeable"];
-  const shownMaterials = (data.materials || []).filter((row) => engineeringMaterialFilter === "all" || (engineeringMaterialFilter === "needed" && row.need) || (engineeringMaterialFilter === "missing" && row.missing) || (engineeringMaterialFilter === "ready" && row.need && !row.missing) || (engineeringMaterialFilter === "surplus" && row.surplus) || (engineeringMaterialFilter === "tradeable" && row.tradeable)).filter((row)=>!engineeringSearch || `${row.name} ${row.category}`.toLowerCase().includes(engineeringSearch));
-  const materialColumns = ["Raw","Manufactured","Encoded"].map((category)=>`<section class="engineering-material-column"><header><h3>${category}</h3><b>${shownMaterials.filter((row)=>row.category===category).length}</b></header>${shownMaterials.filter((row)=>row.category===category).map((row)=>`<article><div><b>${escapeHtml(row.name)}</b><em>G${numeric(row.grade)}</em></div><i><span style="width:${row.capacity ? Math.min(100,100*row.have/row.capacity) : 0}%"></span></i><p>STOCK ${numeric(row.have)} / ${numeric(row.capacity)}<strong class="${row.missing ? "warn-text" : row.need ? "ok-text" : ""}">${row.missing ? `${numeric(row.missing)} MISSING` : row.need ? "BUILD READY" : row.surplus ? `+${numeric(row.surplus)} SURPLUS` : "NOT NEEDED"}</strong></p><small>${escapeHtml((row.origins || []).slice(0,2).join(" · "))}</small></article>`).join("") || `<p class="workspace-empty">NO MATCHES</p>`}</section>`).join("");
-  const materialsPanel = `<div class="engineering-material-toolbar"><div>${filters.map((name)=>`<button class="${engineeringMaterialFilter===name?"active":""}" data-engineering-material-filter="${name}">${name.toUpperCase()}</button>`).join("")}</div><input id="engineering-search" value="${escapeHtml(engineeringSearch)}" placeholder="SEARCH MATERIAL OR CATEGORY…"></div><section class="engineering-materials-grid">${materialColumns}</section>`;
-
-  const brokerCards = (data.tech_brokers || []).map((row)=>`<article class="engineering-broker-card ${row.ready?"ready":""}"><header><span>${escapeHtml(row.broker)} TECH BROKER</span><b>${row.ready?"READY":"INCOMPLETE"}</b></header><h3>${escapeHtml(row.name)}</h3>${(row.materials||[]).map((item)=>`<p><span>${escapeHtml(item.name)}</span><b class="${item.have>=item.need?"ok-text":"warn-text"}">${numeric(item.have)} / ${numeric(item.need)}</b></p>`).join("")}</article>`).join("");
-  const brokerGuide = data.tech_broker_guidance?.recommended_destinations || {};
-  const brokersPanel = `${workspaceMetrics(Object.entries(brokerGuide).map(([kind,row])=>({label:`${kind} broker`,value:row.system,detail:row.station}))) }<section class="engineering-broker-grid">${brokerCards || `<p class="workspace-empty">Tech Broker catalogue unavailable.</p>`}</section>`;
-
-  const missingSources = (data.materials || []).filter((row)=>row.missing).sort((a,b)=>b.missing-a.missing);
-  const sourceRows = workspaceTable([{label:"Material",render:(row)=>`<b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.category)} · G${numeric(row.grade)}</small>`},{label:"Missing",render:(row)=>`<b class="warn-text">${numeric(row.missing)}</b>`},{label:"Acquisition",render:(row)=>escapeHtml((row.origins||[]).join(" · ") || "No verified source in catalogue")}],missingSources,"Your current wishlist has no missing materials.");
-  const traderRows = workspaceTable([{label:"Type",key:"category"},{label:"System",render:(row)=>`<b>${escapeHtml(row.system)}</b><small>${escapeHtml(row.station)}</small>`},{label:"Distance",render:(row)=>row.distance==null?"COORDS UNKNOWN":`${numeric(row.distance,1)} LY`},{label:"Arrival",render:(row)=>row.distance_ls==null?"—":`${numeric(row.distance_ls)} LS`},{label:"Pad",key:"pad"},{label:"Action",render:(row)=>`<button data-ws-page="engineering" data-ws-op="copy_system" data-system="${escapeHtml(row.system)}">COPY</button>`}],data.material_traders||[],"Journal coordinates are required to rank the bundled trader catalogue.");
-  const sourcesPanel = `${workspaceMetrics([{label:"Missing types",value:numeric(missingSources.length),detail:`${numeric(wishlist.missing)} UNITS`},{label:"Trader catalogue",value:numeric((data.material_traders||[]).length),detail:"NEAREST OFFLINE MATCHES"}])}${workspaceCard("MATERIAL ACQUISITION",sourceRows,`${missingSources.length} PRIORITIES`)}${workspaceCard("NEAREST MATERIAL TRADERS",traderRows,"RAW · MANUFACTURED · ENCODED")}<div class="workspace-actions"><button data-page="planet-materials">OPEN PLANET MATERIALS</button></div>`;
-
-  const odyssey = data.odyssey || {};
-  const odysseyGoals = (odyssey.goals || []).map((row)=>`<article class="engineering-wishlist-card ${odyssey.complete?"ready":"missing"}"><header><span>ODYSSEY WORKSHOP</span><b>QTY ${numeric(row.quantity)}</b></header><h3>${escapeHtml(row.name)}</h3><button class="danger-action" data-ws-page="engineering" data-ws-op="odyssey_unpin" data-name="${escapeHtml(row.name)}">REMOVE</button></article>`).join("");
-  const odysseyPanel = `${workspaceMetrics([{label:"Workshop goals",value:numeric((odyssey.goals||[]).length),detail:"SUITS · PERSONAL WEAPONS"},{label:"Required units",value:numeric(odyssey.required),detail:"PROFILE LOCKER"},{label:"Missing units",value:numeric(odyssey.missing),detail:odyssey.complete?"ALL GOALS READY":"COLLECTION REQUIRED"}])}<section class="engineering-odyssey-add"><select id="odyssey-blueprint">${(odyssey.catalogue||[]).map((name)=>`<option>${escapeHtml(name)}</option>`).join("")}</select><input id="odyssey-quantity" type="number" min="1" max="99" value="1"><button data-ws-page="engineering" data-ws-op="odyssey_pin">ADD GOAL</button></section><section class="engineering-wishlist-grid">${odysseyGoals||`<p class="workspace-empty">No Odyssey suit or personal-weapon goals pinned.</p>`}</section>${workspaceCard("ODYSSEY SHOPPING LIST",workspaceTable([{label:"Material",key:"name"},{label:"Have",key:"have"},{label:"Need",key:"need"},{label:"Missing",render:(row)=>`<b class="${row.deficit?"warn-text":"ok-text"}">${numeric(row.deficit)}</b>`}],odyssey.materials||[],"Add an Odyssey goal to calculate its locker requirements."),`${numeric(odyssey.missing)} MISSING`)}`;
-
-  const nextPlan = pins.find((row)=>row.craftable) || pins[0];
-  const nextEngineer = nextPlan ? (data.engineers||[]).find((person)=>(person.offers||[]).some((offer)=>offer.name===nextPlan.name && (!nextPlan.type || offer.type===nextPlan.type))) : null;
-  const nextMissing = nextPlan ? (nextPlan.materials||[]).filter((row)=>row.missing).sort((a,b)=>b.missing-a.missing) : [];
-  const operationPanel = `${workspaceMetrics([{label:"Selected ship",value:ship.label||"NONE",detail:ship.planned?`${slots.length} LEGACY PLAN SLOTS`:ship.observed?`${slots.length} OBSERVED SLOTS`:"LOADOUT AWAITING JOURNAL"},{label:"Wishlist",value:numeric(pins.length),detail:`${numeric(wishlist.ready)} READY`},{label:"Material deficit",value:numeric(wishlist.missing),detail:`${missingSources.length} MATERIAL TYPES`},{label:"Engineer access",value:numeric((data.engineers||[]).filter((row)=>String(row.progress).toLowerCase()==="unlocked").length),detail:`${(data.engineers||[]).length} CATALOGUED`}])}<section class="engineering-operation-grid">${workspaceCard("NEXT ACTION",nextPlan?`<div class="engineering-next-action"><small>${nextPlan.craftable?"MATERIALS READY":"COLLECTION REQUIRED"}</small><h2>${nextPlan.craftable?`FLY TO ${escapeHtml(nextEngineer?.name||"AN ENGINEER")}`:`COLLECT ${escapeHtml(nextMissing[0]?.name||"REQUIRED MATERIALS")}`}</h2><p>${escapeHtml(nextPlan.name)} · ${escapeHtml(nextPlan.type)} · ${escapeHtml(nextPlan.slot||"UNBOUND")} · TARGET G${numeric(nextPlan.grade)}</p>${nextEngineer?`<button data-ws-page="engineering" data-ws-op="copy_system" data-system="${escapeHtml(nextEngineer.system)}">COPY ${escapeHtml(nextEngineer.system)}</button>`:""}</div>`:`<div class="engineering-next-action"><small>PLAN REQUIRED</small><h2>CREATE OR IMPORT A BUILD</h2><p>Use Build Planner for the loadout, then send it to Engineering to reserve its materials.</p><button data-page="build-planner">OPEN BUILD PLANNER</button></div>`,nextPlan?(nextPlan.craftable?"CRAFT":"COLLECT"):"IDLE")}${workspaceCard("MISSING FOR NEXT PLAN",workspaceTable([{label:"Material",key:"name"},{label:"Have",key:"have"},{label:"Need",key:"amount"},{label:"Missing",key:"missing"}],nextMissing,"The next plan has all required stock."),`${nextMissing.length} TYPES`)}${workspaceCard("WORKFLOW",`<div class="engineering-workflow-links"><button data-page="build-planner">1 · PLAN THE LOADOUT</button><button data-engineering-view="wishlist">2 · PROTECT BUILD RESERVES</button><button data-engineering-view="sources">3 · COLLECT OR TRADE</button><button data-engineering-view="engineers">4 · NAVIGATE TO ENGINEER</button></div>`)}</section>`;
-
-  const tabs = [{id:"operations",label:"⌂ OPERATIONS"},{id:"wishlist",label:"▣ WISHLIST"},{id:"engineers",label:"♙ ENGINEERS"},{id:"materials",label:"▢ MATERIALS"},{id:"odyssey",label:"◈ ODYSSEY"},{id:"sources",label:"⌖ STATE FINDS"},{id:"brokers",label:"◇ TECH BROKERS"}];
-  root.classList.remove("loading-panel");
-  if (engineeringView === "engineering") engineeringView = "operations";
-  const activePanel = engineeringView==="operations"?operationPanel:engineeringView==="wishlist"?wishlistPanel:engineeringView==="engineers"?engineersPanel:engineeringView==="materials"?materialsPanel:engineeringView==="odyssey"?odysseyPanel:engineeringView==="sources"?sourcesPanel:brokersPanel;
-  root.innerHTML = `<nav class="engineering-suite-nav">${tabs.map((tab)=>`<button class="${engineeringView===tab.id?"active":""}" data-engineering-view="${tab.id}">${tab.label}<small>${tab.id==="wishlist"?pins.length:tab.id==="engineers"?(data.engineers||[]).length:tab.id==="materials"?(data.materials||[]).length:""}</small></button>`).join("")}</nav><div class="engineering-suite-body">${activePanel}</div><footer class="engineering-suite-source">${escapeHtml(data.source || "")} · LIVE JOURNAL STOCK · PROFILE-AWARE PLANS</footer>`;
+  renderEngineering(data, WORKSHOP_UI);
 }
 
 function installPageSuites() {
@@ -3182,95 +3140,7 @@ function dismissUpdateNotice() {
 }
 
 function renderBuildPlannerWorkspace(data) {
-  const root = byId("build-planner-workspace");
-  if (!root) return;
-  buildPlannerData = data;
-  const selected = data.selected || {};
-  const analysis = data.analysis || {};
-  const totals = analysis.totals || {};
-  const navigation = analysis.navigation || {};
-  const power = analysis.power || {};
-  const defenses = analysis.defenses || {};
-  const weapons = analysis.weapons || {};
-  const thermal = analysis.thermal || {};
-  const handling = analysis.handling || {};
-  const slots = data.slots || [];
-  const groupOrder = ["ship", "hardpoint", "utility", "component", "military", "internal"];
-  const groups = groupOrder.filter((group) => slots.some((row) => row.group === group));
-  if (!groups.includes(buildPlannerGroup)) buildPlannerGroup = groups[0] || "component";
-  if (!buildPlannerSelectedSlot || !slots.some((row) => row.key === buildPlannerSelectedSlot)) {
-    buildPlannerSelectedSlot = slots.find((row) => row.group === buildPlannerGroup)?.key || slots[0]?.key || "";
-  }
-  let slot = slots.find((row) => row.key === buildPlannerSelectedSlot) || {};
-  if (slot.group !== buildPlannerGroup) {
-    buildPlannerSelectedSlot = slots.find((row) => row.group === buildPlannerGroup)?.key || buildPlannerSelectedSlot;
-    slot = slots.find((row) => row.key === buildPlannerSelectedSlot) || {};
-  }
-  const module = (data.modules || []).find((row) => number(row.id) === number(slot.module)) || {};
-  const candidateModules = (data.modules || []).filter((row) => {
-    const groupFit = slot.group === "component" ? (row.components || []).includes(number(slot.index)) : (row.groups || []).includes(slot.group);
-    const specialisedFit = !(slot.allowedTypes || []).length || slot.allowedTypes.includes(row.type);
-    const hullFit = !(row.reservedShips || []).length || row.reservedShips.includes(String(selected.shipId));
-    const searchFit = !buildPlannerSearch || `${row.name} ${row.label} ${row.typeName} ${row.mount}`.toLocaleLowerCase().includes(buildPlannerSearch);
-    return groupFit && specialisedFit && hullFit && !row.hidden && number(row.class) <= number(slot.size) && searchFit;
-  }).slice(0, 240);
-  const buildOptions = [
-    ...(data.live?.available ? [{id:"live", name:"LIVE JOURNAL LOADOUT", ship:"Current ship"}] : []),
-    ...(data.builds || []),
-  ].map((row) => `<option value="${escapeHtml(row.id)}" ${row.id === selected.id ? "selected" : ""}>${escapeHtml(row.name)} · ${escapeHtml(row.ship || "")}</option>`).join("");
-  const compareOptions = [`<option value="">NO COMPARISON</option>`, ...(data.builds || []).filter((row) => row.id !== selected.id).map((row) => `<option value="${escapeHtml(row.id)}" ${data.comparison?.build?.id === row.id ? "selected" : ""}>${escapeHtml(row.name)} · ${escapeHtml(row.ship)}</option>`)].join("");
-  const shipOptions = (data.ships || []).map((row) => `<option value="${row.id}">${escapeHtml(row.name)} · ${escapeHtml(row.manufacturer)} · ${credits(row.cost)}</option>`).join("");
-  const status = analysis.valid ? `<span class="bp-valid">VALID BUILD</span>` : `<span class="bp-invalid">${numeric((analysis.invalid || []).length)} FITTING ERROR(S)</span>`;
-  const alerts = [
-    ...(data.error ? [`<p class="bp-alert error">${escapeHtml(data.error)}</p>`] : []),
-    ...(data.notice ? [`<p class="bp-alert notice">${escapeHtml(data.notice)}</p>`] : []),
-    ...(analysis.invalid || []).map((row) => `<p class="bp-alert error">${escapeHtml(row)}</p>`),
-    ...(analysis.warnings || []).map((row) => `<p class="bp-alert warning">${escapeHtml(row)}</p>`),
-  ].join("");
-  const groupLabels = {ship:"SYSTEMS", hardpoint:"HARDPOINTS", utility:"UTILITIES", component:"CORE", military:"MILITARY", internal:"OPTIONAL"};
-  const groupTabs = groups.map((group) => `<button class="${group === buildPlannerGroup ? "active" : ""}" data-bp-group="${group}"><span>${groupLabels[group] || group.toUpperCase()}</span><b>${slots.filter((row) => row.group === group).length}</b></button>`).join("");
-  const slotRows = slots.filter((row) => row.group === buildPlannerGroup).map((row) => `<button class="bp-slot ${row.key === buildPlannerSelectedSlot ? "active" : ""}" data-bp-slot="${escapeHtml(row.key)}"><i>${escapeHtml(row.rating || "—")}</i><span><b>${escapeHtml(row.label)}</b><small>${escapeHtml(row.moduleLabel || "Empty")}</small></span>${row.blueprint ? `<em>G${numeric(row.grade)} ${escapeHtml((data.blueprints || []).find((entry) => entry.id === row.blueprint)?.name || row.blueprint)}</em>` : ""}</button>`).join("");
-  const moduleRows = candidateModules.map((row) => `<button class="bp-module ${number(row.id) === number(slot.module) ? "active" : ""}" data-bp-module="${row.id}" ${selected.editable ? "" : "disabled"}><i>${numeric(row.class)}${escapeHtml(row.rating)}</i><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.typeName)}${row.mount ? ` · ${escapeHtml(row.mount)}` : ""}</small></span><em>${numeric(row.mass, 2)} T · ${numeric(row.power, 2)} MW</em></button>`).join("");
-  const blueprintOptions = [`<option value="">NO ENGINEERING</option>`, ...(module.blueprints || []).map((id) => { const row=(data.blueprints||[]).find((item)=>item.id===id)||{}; return `<option value="${escapeHtml(id)}" ${slot.blueprint===id?"selected":""}>${escapeHtml(row.name||id)} · G${numeric(row.maxGrade||5)}</option>`; })].join("");
-  const effectOptions = [`<option value="">NO EXPERIMENTAL</option>`, ...(module.effects || []).map((id) => { const row=(data.effects||[]).find((item)=>item.id===id)||{}; return `<option value="${escapeHtml(id)}" ${slot.experimental===id?"selected":""}>${escapeHtml(row.name||id)}</option>`; })].join("");
-  const attributeMetadata = Object.fromEntries((data.attributes || []).map((row)=>[row.id,row]));
-  const attributeRows = Object.entries(slot.attrs || {}).filter(([,value])=>number(value)!==0).map(([id,value])=>{
-    const metadata=attributeMetadata[id]||{}; const unit=String(metadata.unit||"").replace("&deg;","°");
-    return `<div title="${escapeHtml(metadata.description||"")}"><span>${escapeHtml(metadata.name||id)}</span><b>${numeric(value,3)} ${escapeHtml(unit)}</b></div>`;
-  }).join("");
-  const moduleDetail = slot.key ? `<section class="bp-module-detail"><header><div><small>${escapeHtml(slot.label || "SELECTED SLOT")}</small><h3>${escapeHtml(slot.moduleLabel || "Empty")}</h3></div><b>CLASS ${numeric(slot.size)}</b></header><div class="bp-module-facts"><span><small>MASS</small><b>${numeric(slot.mass,2)} T</b></span><span><small>POWER</small><b>${numeric(slot.power,2)} MW</b></span><span><small>COST</small><b>${credits(slot.cost)}</b></span><span><small>PRIORITY</small><b>${numeric(slot.priority)}</b></span></div>${slot.module ? `<div class="bp-engineering-form"><label>BLUEPRINT<select id="bp-blueprint" ${selected.editable?"":"disabled"}>${blueprintOptions}</select></label><label>GRADE<input id="bp-grade" type="number" min="0" max="5" value="${numeric(slot.grade)}" ${selected.editable?"":"disabled"}></label><label>ROLL %<input id="bp-roll" type="number" min="0" max="100" value="${numeric(number(slot.roll,1)*100)}" ${selected.editable?"":"disabled"}></label><label>EXPERIMENTAL<select id="bp-experimental" ${selected.editable?"":"disabled"}>${effectOptions}</select></label><label>POWER PRIORITY<select id="bp-priority" ${selected.editable?"":"disabled"}>${[1,2,3,4,5].map((value)=>`<option ${number(slot.priority)===value?"selected":""}>${value}</option>`).join("")}</select></label><label class="check"><input id="bp-enabled" type="checkbox" ${slot.enabled?"checked":""} ${selected.editable?"":"disabled"}>MODULE ENABLED</label><button class="primary" data-ws-page="build-planner" data-ws-op="configure_slot" ${selected.editable?"":"disabled"}>APPLY ENGINEERING</button></div><details class="bp-attributes"><summary>MODULE ATTRIBUTES · ${Object.keys(slot.attrs||{}).length}</summary><div>${attributeRows||"<span>NO NUMERIC ATTRIBUTES</span>"}</div></details>`:`<p class="workspace-empty">Choose a compatible module from the outfitting catalogue.</p>`}</section>` : "";
-
-  const comparison = data.comparison?.analysis || {};
-  const delta = (value, other, suffix="") => {
-    if (other === undefined || other === null) return "";
-    const difference = number(value) - number(other);
-    return `<small class="${difference > 0 ? "ok-text" : difference < 0 ? "warn-text" : ""}">${difference >= 0 ? "+" : ""}${numeric(difference,2)}${suffix}</small>`;
-  };
-  const stats = {
-    summary: [
-      ["CURRENT JUMP", navigation.currentJump, " LY", comparison.navigation?.currentJump], ["UNLADEN MASS", totals.unladenMass, " T", comparison.totals?.unladenMass],
-      ["SPEED", navigation.speed, " M/S", comparison.navigation?.speed], ["BOOST", navigation.boost, " M/S", comparison.navigation?.boost],
-      ["SHIELDS", defenses.shield, " MJ", comparison.defenses?.shield], ["ARMOUR", defenses.armour, "", comparison.defenses?.armour],
-      ["DPS", weapons.dps, "", comparison.weapons?.dps], ["CARGO", totals.cargo, " T", comparison.totals?.cargo],
-    ],
-    navigation: [["CURRENT JUMP",navigation.currentJump," LY",comparison.navigation?.currentJump],["MAX JUMP",navigation.maxJump," LY",comparison.navigation?.maxJump],["UNLADEN JUMP",navigation.unladenJump," LY",comparison.navigation?.unladenJump],["LADEN JUMP",navigation.ladenJump," LY",comparison.navigation?.ladenJump],["UNLADEN RANGE",navigation.unladenRange," LY",comparison.navigation?.unladenRange],["LADEN RANGE",navigation.ladenRange," LY",comparison.navigation?.ladenRange],["SPEED",navigation.speed," M/S",comparison.navigation?.speed],["BOOST",navigation.boost," M/S",comparison.navigation?.boost],["BOOST INTERVAL",navigation.boostInterval," S",comparison.navigation?.boostInterval]],
-    offence: [["BURST DPS",weapons.dps,"",comparison.weapons?.dps],["SUSTAINED DPS",weapons.sustainedDps,"",comparison.weapons?.sustainedDps],["THERMAL",weapons.thermal," DPS",comparison.weapons?.thermal],["KINETIC",weapons.kinetic," DPS",comparison.weapons?.kinetic],["EXPLOSIVE",weapons.explosive," DPS",comparison.weapons?.explosive],["ABSOLUTE",weapons.absolute," DPS",comparison.weapons?.absolute],["WEP DRAW",weapons.distributorDraw," MW",comparison.weapons?.distributorDraw],["CAP DURATION",weapons.capacitorDuration," S",comparison.weapons?.capacitorDuration]],
-    defence: [["SHIELD",defenses.shield," MJ",comparison.defenses?.shield],["ARMOUR",defenses.armour,"",comparison.defenses?.armour],["HARDNESS",defenses.hardness,"",comparison.defenses?.hardness],["SHIELD KINETIC",defenses.shieldResistances?.kinres,"%",comparison.defenses?.shieldResistances?.kinres],["SHIELD THERMAL",defenses.shieldResistances?.thmres,"%",comparison.defenses?.shieldResistances?.thmres],["SHIELD EXPLOSIVE",defenses.shieldResistances?.expres,"%",comparison.defenses?.shieldResistances?.expres],["ARMOUR KINETIC",defenses.armourResistances?.kinres,"%",comparison.defenses?.armourResistances?.kinres],["ARMOUR THERMAL",defenses.armourResistances?.thmres,"%",comparison.defenses?.armourResistances?.thmres]],
-    thermal: [["IDLE HEAT",thermal.idle,"%",comparison.thermal?.idle],["THRUST HEAT",thermal.thrust,"%",comparison.thermal?.thrust],["FSD CHARGE",thermal.fsdCharge,"%",comparison.thermal?.fsdCharge],["WEAPONS FIRING",thermal.weaponsFiring,"%",comparison.thermal?.weaponsFiring],["SHIELD CELL",thermal.shieldCell,"%",comparison.thermal?.shieldCell],["HEAT CAPACITY",thermal.capacity,"",comparison.thermal?.capacity],["PITCH",handling.pitch," °/S",comparison.handling?.pitch],["ROLL",handling.roll," °/S",comparison.handling?.roll],["YAW",handling.yaw," °/S",comparison.handling?.yaw]],
-    cost: [["BUILD COST",totals.cost," CR",comparison.totals?.cost],["REBUY",totals.rebuy," CR",comparison.totals?.rebuy],["DRY MASS",totals.mass," T",comparison.totals?.mass],["UNLADEN MASS",totals.unladenMass," T",comparison.totals?.unladenMass],["LADEN MASS",totals.ladenMass," T",comparison.totals?.ladenMass],["FUEL CAPACITY",totals.fuel," T",comparison.totals?.fuel],["CARGO CAPACITY",totals.cargo," T",comparison.totals?.cargo],["PASSENGERS",totals.passengers,"",comparison.totals?.passengers]],
-  };
-  const statTabs = [["summary","SUMMARY"],["navigation","FLIGHT & RANGE"],["offence","OFFENCE"],["defence","DEFENCE"],["thermal","THERMAL & HANDLING"],["cost","MASS & COST"]].map(([id,label])=>`<button class="${buildPlannerStatsView===id?"active":""}" data-bp-stats="${id}">${label}</button>`).join("");
-  const statCards = (stats[buildPlannerStatsView] || stats.summary).map(([label,value,suffix,other])=>`<article><small>${label}</small><strong>${suffix===" CR"?credits(value):`${numeric(value,2)}${suffix}`}</strong>${delta(value,other,suffix)}</article>`).join("");
-  const powerRows = [1,2,3,4,5].map((priority,index)=>{ const amount=number((power.prioritiesDeployed||[])[index]); const percent=amount*100/Math.max(.001,number(power.capacity)); return `<div><b>P${priority}</b><i><span class="${percent>100?"over":""}" style="width:${Math.min(100,percent)}%"></span></i><em>${numeric(amount,2)} MW · ${numeric(percent,1)}%</em></div>`; }).join("");
-  const preview = data.importPreview || {};
-  const previewRows = (preview.summary || []).map((row)=>`<div><b>${escapeHtml(row.name)}</b><span>${escapeHtml(row.ship)} · ${numeric(row.modules)} MODULES</span></div>`).join("");
-
-  root.classList.remove("loading-panel");
-  root.innerHTML = `${alerts}<section class="bp-manager"><label>ACTIVE BUILD<select id="bp-build-select" data-refresh-on-change>${buildOptions}</select></label><label>COMPARE AGAINST<select id="bp-compare-select" data-refresh-on-change>${compareOptions}</select></label><div class="bp-manager-actions"><button data-ws-page="build-planner" data-ws-op="clone" title="Duplicate the selected build into a new editable build">DUPLICATE BUILD</button><button data-ws-page="build-planner" data-ws-op="export_copy" title="Copy the selected build as a SLEF loadout">COPY SLEF EXPORT</button><button data-ws-page="build-planner" data-ws-op="send_engineering" title="Add this build's material requirements to Engineering" ${selected.editable?"":"disabled"}>SEND TO ENGINEERING</button></div><section class="bp-new-build" id="bp-new-build"><header><i>＋</i><span><small>START A LOADOUT</small><strong>NEW STOCK BUILD</strong></span></header><label>SHIP HULL<select id="bp-new-ship">${shipOptions}</select></label><label>BUILD NAME<input id="bp-new-name" placeholder="OPTIONAL — USES SHIP NAME BY DEFAULT"></label><button class="primary" data-ws-page="build-planner" data-ws-op="create"><span>CREATE BUILD</span><small>FROM STOCK LOADOUT</small></button></section><details class="bp-import-panel"><summary>IMPORT BUILD · EDSY / SLEF</summary><div><textarea id="bp-import" placeholder="PASTE AN EDSY LONG URL, EDSY BACKUP JSON, SLEF OR JOURNAL LOADOUT"></textarea><button data-ws-page="build-planner" data-ws-op="import_preview">VALIDATE IMPORT</button>${previewRows?`<section class="bp-import-preview">${previewRows}<button class="primary" data-ws-page="build-planner" data-ws-op="import_apply">IMPORT ${numeric(preview.count)} BUILD(S)</button></section>`:""}</div></details></section>
-  <section class="bp-hero"><div class="bp-ship-art">${selected.asset?`<img src="${escapeHtml(selected.asset)}" alt="${escapeHtml(selected.ship)}">`:`<span>SHIP ART UNAVAILABLE</span>`}</div><div><small>${escapeHtml(selected.source || "VOIDCOMPASS BUILD")}</small><h2>${escapeHtml(selected.name || selected.ship || "Ship build")}</h2><p>${escapeHtml(selected.ship || "")} · ${escapeHtml(selected.symbol || "")}</p><div class="bp-hero-status">${status}<b>${credits(totals.cost)}</b><span>${numeric(slots.filter((row)=>row.module).length)} MODULES</span></div></div><form class="bp-load-form"><label>BUILD NAME<input id="bp-name" value="${escapeHtml(selected.name||"")}" ${selected.editable?"":"disabled"}></label><label>FUEL T<input id="bp-fuel" type="number" min="0" step="0.1" placeholder="FULL" value="${selected.fuel==null?"":numeric(selected.fuel,2)}" ${selected.editable?"":"disabled"}></label><label>CARGO T<input id="bp-cargo" type="number" min="0" step="1" value="${numeric(selected.cargo)}" ${selected.editable?"":"disabled"}></label><div class="bp-pips"><label>SYS<input id="bp-pip-sys" type="number" min="0" max="8" value="${numeric(selected.pips?.sys,0)}" ${selected.editable?"":"disabled"}></label><label>ENG<input id="bp-pip-eng" type="number" min="0" max="8" value="${numeric(selected.pips?.eng,0)}" ${selected.editable?"":"disabled"}></label><label>WEP<input id="bp-pip-wep" type="number" min="0" max="8" value="${numeric(selected.pips?.wep,0)}" ${selected.editable?"":"disabled"}></label></div><div><button data-ws-page="build-planner" data-ws-op="rename" ${selected.editable?"":"disabled"}>RENAME</button><button data-ws-page="build-planner" data-ws-op="set_load" ${selected.editable?"":"disabled"}>APPLY LOAD</button><button class="danger-action" data-ws-page="build-planner" data-ws-op="delete" ${selected.editable?"":"disabled"}>DELETE</button></div></form></section>
-  <nav class="bp-group-tabs">${groupTabs}</nav><section class="bp-outfitting"><aside class="bp-slots">${slotRows}</aside><article class="bp-catalogue"><header><div><small>OUTFITTING CATALOGUE</small><h3>${escapeHtml(slot.label || "SELECT A SLOT")}</h3></div><input id="bp-search" value="${escapeHtml(buildPlannerSearch)}" placeholder="SEARCH MODULES…"></header><div class="bp-module-list">${slot.group!=="component"&&selected.editable?`<button class="bp-module empty" data-bp-module="0"><i>—</i><span><b>Empty slot</b><small>Remove the fitted module</small></span></button>`:""}${moduleRows||`<p class="workspace-empty">No compatible modules match this search.</p>`}</div></article>${moduleDetail}</section>
-  <section class="bp-analysis"><nav>${statTabs}</nav><div class="bp-stat-grid">${statCards}</div><article class="bp-power"><header><span>POWER PRIORITIES · DEPLOYED</span><b class="${number(power.deployedPercent)>100?"warn-text":"ok-text"}">${numeric(power.deployed,2)} / ${numeric(power.capacity,2)} MW · ${numeric(power.deployedPercent,1)}%</b></header>${powerRows}</article></section>
-  <footer class="engineering-suite-source">EDSY DATA ${escapeHtml(data.catalogueVersion || "")} · ${escapeHtml(data.catalogueDate || "")} · OFFLINE CALCULATIONS · PROFILE-AWARE BUILDS</footer>`;
+  renderBuildPlanner(data, WORKSHOP_UI);
 }
 
 function renderPowerplayWorkspace(data) {
@@ -3865,10 +3735,7 @@ function renderDashboard(state) {
     Object.keys(pageLayoutDefaults).forEach((page) => delete pageLayoutDefaults[page]);
     workspaceFingerprints = {};
     missionSelectedId = "";
-    buildPlannerData = null;
-    buildPlannerSelectedSlot = "";
-    buildPlannerGroup = "component";
-    buildPlannerSearch = "";
+    resetWorkshop();
     orrerySelectedBodyId = "";
     analyticsView = "trends";
     replaySelectedSessionIndex = 0;
@@ -4396,67 +4263,7 @@ document.addEventListener("click", async (event) => {
     if (await moveStudioToDisplay(studioMoveDisplay.dataset.studioMoveDisplay)) showToast(`Moved to ${target?.label || "the other display"}`);
     return;
   }
-  const engineeringTab = event.target.closest("[data-engineering-view]");
-  if (engineeringTab) {
-    engineeringView = engineeringTab.dataset.engineeringView || "operations";
-    engineeringSearch = "";
-    if (engineeringData) renderEngineeringWorkspace(engineeringData);
-    return;
-  }
-  const engineeringEngineer = event.target.closest("[data-engineering-engineer]");
-  if (engineeringEngineer) {
-    engineeringSelectedEngineer = engineeringEngineer.dataset.engineeringEngineer || "";
-    if (engineeringData) renderEngineeringWorkspace(engineeringData);
-    return;
-  }
-  const engineeringFilter = event.target.closest("[data-engineering-material-filter]");
-  if (engineeringFilter) {
-    engineeringMaterialFilter = engineeringFilter.dataset.engineeringMaterialFilter || "all";
-    if (engineeringData) renderEngineeringWorkspace(engineeringData);
-    return;
-  }
-  const buildPlannerFocus = event.target.closest("[data-bp-focus='new']");
-  if (buildPlannerFocus) {
-    const panel = byId("bp-new-build");
-    panel?.scrollIntoView({behavior: "smooth", block: "center"});
-    panel?.classList.remove("attention");
-    void panel?.offsetWidth;
-    panel?.classList.add("attention");
-    window.setTimeout(() => panel?.classList.remove("attention"), 900);
-    byId("bp-new-ship")?.focus({preventScroll: true});
-    return;
-  }
-  const buildPlannerGroupButton = event.target.closest("[data-bp-group]");
-  if (buildPlannerGroupButton) {
-    buildPlannerGroup = buildPlannerGroupButton.dataset.bpGroup || "component";
-    buildPlannerSelectedSlot = (buildPlannerData?.slots || []).find((row) => row.group === buildPlannerGroup)?.key || "";
-    buildPlannerSearch = "";
-    if (buildPlannerData) renderBuildPlannerWorkspace(buildPlannerData);
-    return;
-  }
-  const buildPlannerSlotButton = event.target.closest("[data-bp-slot]");
-  if (buildPlannerSlotButton) {
-    buildPlannerSelectedSlot = buildPlannerSlotButton.dataset.bpSlot || "";
-    buildPlannerGroup = (buildPlannerData?.slots || []).find((row) => row.key === buildPlannerSelectedSlot)?.group || buildPlannerGroup;
-    buildPlannerSearch = "";
-    if (buildPlannerData) renderBuildPlannerWorkspace(buildPlannerData);
-    return;
-  }
-  const buildPlannerStatsButton = event.target.closest("[data-bp-stats]");
-  if (buildPlannerStatsButton) {
-    buildPlannerStatsView = buildPlannerStatsButton.dataset.bpStats || "summary";
-    if (buildPlannerData) renderBuildPlannerWorkspace(buildPlannerData);
-    return;
-  }
-  const buildPlannerModuleButton = event.target.closest("[data-bp-module]");
-  if (buildPlannerModuleButton && !buildPlannerModuleButton.disabled) {
-    const accepted = await command("workspace", {
-      page: "build-planner", operation: "set_module", slot: buildPlannerSelectedSlot,
-      module_id: buildPlannerModuleButton.dataset.bpModule,
-    });
-    showToast(accepted ? "Module fitted" : "That module cannot be fitted in this slot");
-    return;
-  }
+  if (handleWorkshopClick(event, WORKSHOP_UI)) return;
   const studioCard = event.target.closest(".studio-overlay-card");
   if (studioCard) {
     selectStudioOverlay(studioCard.dataset.overlayId);
@@ -4755,12 +4562,7 @@ document.addEventListener("click", async (event) => {
         showToast("SYS, ENG and WEP must add up to 12 half-pips"); return;
       }
     } else if (page === "build-planner" && operation === "configure_slot") {
-      Object.assign(payload, {
-        slot: buildPlannerSelectedSlot, blueprint: byId("bp-blueprint")?.value || "",
-        grade: byId("bp-grade")?.value || 0, roll: number(byId("bp-roll")?.value,100)/100,
-        experimental: byId("bp-experimental")?.value || "", priority: byId("bp-priority")?.value || 1,
-        enabled: Boolean(byId("bp-enabled")?.checked),
-      });
+      Object.assign(payload, engineeringPayload(WORKSHOP_UI));
       if (!payload.slot) return;
     } else if (page === "build-planner" && operation === "import_preview") {
       payload.build = byId("bp-import")?.value || "";
@@ -4883,26 +4685,8 @@ document.addEventListener("input", (event) => {
       {label: "Mapped", render: (row) => row.mapped ? "YES" : "NO"},
       {label: "Flags", render: (row) => escapeHtml((row.flags || []).join(" · "))},
     ], filtered, "No valuable bodies match that filter.");
-  } else if (event.target.id === "bp-search") {
-    buildPlannerSearch = event.target.value.toLocaleLowerCase();
-    if (buildPlannerData) {
-      renderBuildPlannerWorkspace(buildPlannerData);
-      const input = byId("bp-search");
-      if (input) { input.focus({preventScroll:true}); input.setSelectionRange(input.value.length,input.value.length); }
-    }
-  } else if (event.target.id === "engineering-search") {
-    const value = event.target.value.toLocaleLowerCase();
-    clearTimeout(engineeringSearchTimer);
-    engineeringSearchTimer = window.setTimeout(() => {
-      engineeringSearch = value;
-      if (!engineeringData) return;
-      renderEngineeringWorkspace(engineeringData);
-      const input = byId("engineering-search");
-      if (input) {
-        input.focus({preventScroll: true});
-        input.setSelectionRange(input.value.length, input.value.length);
-      }
-    }, 180);
+  } else {
+    handleWorkshopInput(event, WORKSHOP_UI);
   }
 });
 
@@ -4956,12 +4740,8 @@ document.addEventListener("change", async (event) => {
   } else if (event.target.id === "replay-session") {
     replaySelectedSessionIndex = Math.max(0, number(event.target.value));
     renderChronicleWorkspace(model.workspace?.data || {});
-  } else if (event.target.id === "bp-build-select") {
-    const accepted = await command("workspace", {page:"build-planner", operation:"select", build_id:event.target.value});
-    showToast(accepted ? "Planner build selected" : "That build is unavailable");
-  } else if (event.target.id === "bp-compare-select") {
-    const accepted = await command("workspace", {page:"build-planner", operation:"compare", build_id:event.target.value});
-    showToast(accepted ? (event.target.value ? "Build comparison enabled" : "Build comparison cleared") : "Comparison could not be changed");
+  } else {
+    handleWorkshopChange(event, WORKSHOP_UI);
   }
 });
 

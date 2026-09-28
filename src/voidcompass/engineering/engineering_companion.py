@@ -608,6 +608,12 @@ def build_workspace(state: dict, companion: dict, *, selected_ship_id: str = "",
     if not selected_id:
         selected_id = next((row["id"] for row in fleet if row.get("current")), fleet[0]["id"] if fleet else "")
     slots = loadout_slots(loadout)
+    # The journal names blueprints by symbol; the planner's catalogue has
+    # the words the game shows. Imported here: the planner imports this module.
+    from voidcompass.engineering.build_planner import _key as planner_key, journal_engineering_names
+    names = journal_engineering_names()
+    for row in slots:
+        row["blueprintName"] = names.get(planner_key(row["engineeringBlueprint"]), "") if row["engineeringBlueprint"] else ""
     pins = []
     required: dict[str, dict] = {}
     for index, source in enumerate(state.get("pinned_blueprints") or []):
