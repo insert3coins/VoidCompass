@@ -182,6 +182,19 @@ class CommandTests(Folder):
         self.assertEqual((settings["volume"], settings["repeat"], settings["position"]), (55, "one", 47))
         self.command("status", **{**report, "repeat": "sideways", "volume": 900})
         self.assertEqual((self.player.config["music_repeat"], self.player.config["music_volume"]), ("all", 100))
+        # Levelling is on unless the commander turns it off.
+        self.assertTrue(self.player._html_music_snapshot()["settings"]["normalise"])
+        self.command("status", **{**report, "normalise": False})
+        self.assertFalse(self.player.config["music_normalise"])
+        self.assertFalse(self.player._html_music_snapshot()["settings"]["normalise"])
+
+    def test_measured_loudness_is_kept_in_the_library(self):
+        playlist = self.library.create_playlist("P")
+        self.library.add_files(playlist, [make_wav(self.folder / "a.wav", title="A")])
+        self.library.wait_idle()
+        key = self.library.playlist(playlist)["tracks"][0]
+        self.assertTrue(self.command("set_loudness", track_id=key, lufs=-7.5))
+        self.assertEqual(self.library.payload()["tracks"][key]["loudness"], -7.5)
 
     def test_hotkeys_reach_the_page_in_order(self):
         self.assertTrue(self.player.music_remote("toggle"))
@@ -293,7 +306,7 @@ class RegistrationTests(unittest.TestCase):
 
     def test_every_setting_follows_the_commander_profile(self):
         for key in ("music_player_overlay_enabled", "music_player_show_art", "music_player_show_details",
-                    "music_player_show_next", "music_shuffle"):
+                    "music_player_show_next", "music_shuffle", "music_normalise"):
             self.assertIn(key, config_module.PROFILE_BOOL_SETTINGS)
         for key in ("music_repeat", "music_playlist_id", "music_track_id", "music_player_layout",
                     "music_player_visualizer", "music_player_colour"):
@@ -367,10 +380,11 @@ class BrowserTests(Folder):
         cls.browser.close()
         cls.playwright.stop()
 
-    def deck(self, settings=None):
+    def deck(self, settings=None, prepare=None):
         """The real dashboard server and page, with a real library behind it.
 
-        `settings(playlist, tracks)` gives the saved player state to resume.
+        `settings(playlist, tracks)` gives the saved player state to resume;
+        `prepare(library, tracks)` changes the library before the page loads.
         """
         from tests.test_dashboard_overview_visuals import overview_state
         library = MusicLibrary(self.folder / "library")
@@ -380,6 +394,8 @@ class BrowserTests(Folder):
         library.add_files(playlist, files)
         library.wait_idle()
         tracks = library.playlist(playlist)["tracks"]
+        if prepare:
+            prepare(library, tracks)
         commands = []
         server = HtmlDashboardServer(WEB / "dashboard", image_root=ROOT / "assets" / "images",
                                      command_callback=lambda payload: commands.append(payload) or True)
@@ -452,13 +468,38 @@ class BrowserTests(Folder):
     def test_it_resumes_paused_where_the_commander_left_off(self):
         deck = self.deck(settings=lambda playlist, tracks: {
             "playlist_id": playlist, "track_id": tracks[2], "position": 4.0,
-            "shuffle": True, "repeat": "one", "volume": 35})
+            "shuffle": True, "repeat": "one", "volume": 35},
+            prepare=lambda library, tracks: library.set_loudness(tracks[2], -14))
         page, tracks = deck.page, deck.tracks
         page.wait_for_function(f"window.voidcompassMusic.state().currentId === '{tracks[2]}'", timeout=8000)
         state = page.evaluate("window.voidcompassMusic.state()")
         self.assertEqual((state["playing"], state["shuffle"], state["repeat"], state["volume"]), (False, True, "one", 35))
+        # 35% is 26 dB under full volume, and this -14 LUFS track is levelled
+        # 6 dB down to the -20 LUFS target.
+        self.assertAlmostEqual(page.evaluate("window.voidcompassMusic.audio.volume"), 10 ** (-32 / 20))
+        page.locator('.nav-item[data-page="music"]').click()
+        page.locator("#music-level").click()
+        # Levelling off: every track 11 dB down, as mastered.
+        self.assertAlmostEqual(page.evaluate("window.voidcompassMusic.audio.volume"), 10 ** (-37 / 20))
+        self.assertEqual(page.locator("#music-level").get_attribute("aria-pressed"), "false")
         self.assertEqual(state["order"][0], tracks[2], "a shuffle starts from the remembered track")
         page.wait_for_function("Math.abs(window.voidcompassMusic.audio.currentTime - 4) < .6", timeout=8000)
+
+    def test_volume_slider_is_an_even_taper_in_decibels(self):
+        # Full volume puts an unmeasured track 11 dB down; every step below is
+        # 0.4 dB, so the whole slider is usable instead of its bottom few steps.
+        deck = self.deck()
+        page = deck.page
+        page.locator('.nav-item[data-page="music"]').click()
+        for setting, output in ((0, 0.0), (50, 10 ** (-31 / 20)), (75, 10 ** (-21 / 20)), (100, 10 ** (-11 / 20))):
+            page.evaluate("""value => {
+                const slider = document.querySelector('#music-volume');
+                slider.value = String(value);
+                slider.dispatchEvent(new Event('input', {bubbles: true}));
+            }""", setting)
+            self.assertEqual(page.evaluate("window.voidcompassMusic.state().volume"), setting)
+            self.assertEqual(page.locator("#music-volume-value").inner_text(), str(setting))
+            self.assertAlmostEqual(page.evaluate("window.voidcompassMusic.audio.volume"), output)
 
 
 class OverlayBrowserTests(unittest.TestCase):

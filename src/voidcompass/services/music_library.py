@@ -8,6 +8,9 @@ player reads.
 
 The dashboard page does the playing (it streams each track from the local
 dashboard server by id), so this module keeps the lists and reads the tags.
+It also keeps each track's loudness, so every track can play equally loud:
+from its ReplayGain or R128 tags when it has them, otherwise as the player
+measured it the first time it played.
 Tags are read in the background: a thousand files appear at once under their
 file names and fill in with their real titles, artists and covers.
 
@@ -45,6 +48,13 @@ MAX_NAME = 60
 ART_SIZE = 360
 OVERLAY_ART_SIZE = 128
 _ID = re.compile(r"[0-9a-f]{16}")
+# Bumped when read_tags learns something new, so tracks read before are read
+# once more in the background (2: ReplayGain and R128 loudness).
+TAG_VERSION = 2
+# ReplayGain 2 and EBU R128 state a track's gain against these loudnesses (LUFS).
+REPLAYGAIN_REFERENCE = -18.0
+R128_REFERENCE = -23.0
+_GAIN = re.compile(r"\s*([-+]?\d+(?:\.\d+)?)")
 
 
 def track_id(path) -> str:
@@ -112,6 +122,36 @@ def _number(value) -> str:
     return match.group(1).lstrip("0") if match else ""
 
 
+def _gain(value):
+    """A ReplayGain value ("-7.25 dB") in dB, or None."""
+    match = _GAIN.match(_first(value))
+    if not match:
+        return None
+    gain = float(match.group(1))
+    return gain if -60 <= gain <= 60 else None
+
+
+def _loudness(tags, keys, lower=None):
+    """A track's loudness in LUFS from ReplayGain or R128 tags, or None.
+
+    ReplayGain's track gain brings a track to -18 LUFS, so the track itself
+    is -18 minus that gain. Opus files carry R128_TRACK_GAIN instead: a whole
+    number of 1/256 dB against -23 LUFS.
+    """
+    wanted = {"txxx:replaygain_track_gain", "----:com.apple.itunes:replaygain_track_gain",
+              "replaygain_track_gain"}
+    for key in keys:
+        if key.casefold() in wanted:
+            gain = _gain(tags.get(key))
+            if gain is not None:
+                return round(REPLAYGAIN_REFERENCE - gain, 2)
+    if lower is not None and lower.get("r128_track_gain") is not None:
+        match = _GAIN.match(_first(lower.get("r128_track_gain")))
+        if match and "." not in match.group(1):
+            return round(R128_REFERENCE - int(match.group(1)) / 256, 2)
+    return None
+
+
 def _format(audio, path) -> str:
     """A short description of the audio itself: "FLAC · 44.1 kHz · 24-bit"."""
     info = getattr(audio, "info", None)
@@ -134,7 +174,7 @@ def read_tags(path) -> dict:
     named = tags_from_name(path)
     result = {"title": named["title"], "artist": named["artist"], "album": "", "album_artist": "",
               "year": "", "genre": "", "number": named["number"], "duration": 0.0,
-              "format": Path(str(path)).suffix.lstrip(".").upper(), "cover": None}
+              "format": Path(str(path)).suffix.lstrip(".").upper(), "cover": None, "loudness": None}
     try:
         import mutagen
     except ImportError:
@@ -163,6 +203,7 @@ def read_tags(path) -> dict:
         pictures = [frame for key, frame in tags.items() if str(key).startswith("APIC")]
         pictures.sort(key=lambda frame: 0 if getattr(frame, "type", 0) == 3 else 1)  # front cover first
         cover = pictures[0].data if pictures else None
+        result["loudness"] = _loudness(tags, keys)
     elif keys & {"\xa9nam", "\xa9ART", "\xa9alb", "covr"}:
         # MP4 atoms: M4A/AAC/ALAC.
         found = {"title": _first(tags.get("\xa9nam")), "artist": _first(tags.get("\xa9ART")),
@@ -171,9 +212,11 @@ def read_tags(path) -> dict:
                  "number": _number(tags.get("trkn"))}
         covers = tags.get("covr") or []
         cover = bytes(covers[0]) if covers else None
+        result["loudness"] = _loudness(tags, keys)
     else:
         # Vorbis comments: FLAC, Ogg Vorbis, Opus.
         lower = {str(key).casefold(): value for key, value in tags.items()}
+        result["loudness"] = _loudness(lower, set(lower), lower)
         found = {"title": _first(lower.get("title")), "artist": _first(lower.get("artist")),
                  "album": _first(lower.get("album")), "album_artist": _first(lower.get("albumartist")),
                  "year": _year(lower.get("date") or lower.get("year")), "genre": _first(lower.get("genre")),
@@ -319,7 +362,7 @@ class MusicLibrary:
                     "created": float(item.get("created") or 0),
                 })
         self.revision = int(data.get("revision") or 0)
-        untagged = [key for key, track in self._tracks.items() if not track.get("tagged")]
+        untagged = [key for key, track in self._tracks.items() if track.get("tagged") != TAG_VERSION]
         if untagged:
             self._queue_tags(untagged)
 
@@ -418,6 +461,7 @@ class MusicLibrary:
                         "number": track.get("number") or "", "format": track.get("format") or "",
                         "duration": float(track.get("duration") or 0), "art": bool(track.get("art")),
                         "missing": self.missing(key),
+                        "loudness": track.get("loudness"), "loudness_source": track.get("loudness_source") or "",
                     }
                     for key, track in self._tracks.items()
                 },
@@ -550,7 +594,8 @@ class MusicLibrary:
                 added.append(key)
             if added:
                 self._changed()
-                self._queue_tags([key for key in dict.fromkeys(added) if not self._tracks[key].get("tagged")])
+                self._queue_tags([key for key in dict.fromkeys(added)
+                                  if self._tracks[key].get("tagged") != TAG_VERSION])
             return len(added)
 
     def import_m3u(self, path, playlist_id=None) -> dict:
@@ -585,6 +630,26 @@ class MusicLibrary:
             self._changed()
             return True
 
+    def set_loudness(self, identifier, lufs) -> bool:
+        """The player measured a track's loudness (LUFS) while playing it.
+
+        A track's own ReplayGain or R128 tag is the better figure and is kept.
+        """
+        try:
+            lufs = round(float(lufs), 2)
+        except (TypeError, ValueError):
+            return False
+        with self._lock:
+            track = self._tracks.get(str(identifier))
+            if not track or not -70 < lufs < 10 or track.get("loudness_source") == "tag":
+                return False
+            if track.get("loudness") is not None and abs(float(track["loudness"]) - lufs) < .3:
+                return False
+            track["loudness"] = lufs
+            track["loudness_source"] = "measured"
+            self._changed()
+            return True
+
     # -- tags, read in the background -------------------------------------------------
     def _queue_tags(self, identifiers):
         with self._lock:
@@ -616,8 +681,15 @@ class MusicLibrary:
                             current[field] = tags[field]
                     if tags.get("duration"):
                         current["duration"] = tags["duration"]
+                    if tags.get("loudness") is not None:
+                        current["loudness"] = tags["loudness"]
+                        current["loudness_source"] = "tag"
+                    elif current.get("loudness_source") == "tag":
+                        # The tag was removed: measure the track again.
+                        current.pop("loudness", None)
+                        current.pop("loudness_source", None)
                     current["art"] = art
-                    current["tagged"] = True
+                    current["tagged"] = TAG_VERSION
                     self._overlay_art.pop(key, None)
                 # A big import shows its progress without saving after every file.
                 if time.monotonic() - shown_at > 1.5:

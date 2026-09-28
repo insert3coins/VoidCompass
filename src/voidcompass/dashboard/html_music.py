@@ -78,6 +78,7 @@ class HtmlMusicMixin:
                 "volume": max(0, min(100, int(_number(config.get("music_volume"), 80)))),
                 "shuffle": bool(config.get("music_shuffle", False)),
                 "repeat": repeat if repeat in MUSIC_REPEAT else "all",
+                "normalise": bool(config.get("music_normalise", True)),
                 "playlist_id": _text(config.get("music_playlist_id"), 40),
                 "track_id": _text(config.get("music_track_id"), 16),
                 "position": max(0.0, _number(config.get("music_position"))),
@@ -117,6 +118,8 @@ class HtmlMusicMixin:
             return True
         if operation == "set_duration":
             library.set_duration(_text(payload.get("track_id"), 16), payload.get("duration"))
+        elif operation == "set_loudness":
+            library.set_loudness(_text(payload.get("track_id"), 16), payload.get("lufs"))
             return True
         if operation == "recheck":
             library.recheck_files()
@@ -207,6 +210,7 @@ class HtmlMusicMixin:
             "volume": max(0, min(100, int(_number(payload.get("volume"), 80)))),
             "shuffle": bool(payload.get("shuffle")),
             "repeat": repeat if repeat in MUSIC_REPEAT else "all",
+            "normalise": bool(payload.get("normalise", True)),
             "reported_at": _number(payload.get("reported_at")),
         }
         self._music_status = status
@@ -218,7 +222,8 @@ class HtmlMusicMixin:
         config = self.config
         lasting = {
             "music_volume": status["volume"], "music_shuffle": status["shuffle"],
-            "music_repeat": status["repeat"], "music_playlist_id": status["playlist_id"],
+            "music_repeat": status["repeat"], "music_normalise": status["normalise"],
+            "music_playlist_id": status["playlist_id"],
             "music_track_id": status["track_id"],
         }
         changed = any(config.get(key) != value for key, value in lasting.items())

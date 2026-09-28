@@ -248,6 +248,7 @@ PROFILE_BOOL_SETTINGS = (
     "music_player_show_details",
     "music_player_show_next",
     "music_shuffle",
+    "music_normalise",
     "screenshots_enabled",
     "ground_popup_enabled",
     "ground_popup_position_migrated",
@@ -606,6 +607,7 @@ def apply_profile_config(config, profile_key=None):
         "music_player_show_details": True,
         "music_player_show_next": True,
         "music_shuffle": False,
+        "music_normalise": True,
         "overlay_mouse_passthrough": os.name == "nt",
         "overlay_hotkeys_enabled": os.name == "nt",
         # Existing profile files without the old boolean retain Expanded;
@@ -847,6 +849,7 @@ def load_config():
         'music_player_auto_hide': 0,
         'music_volume': 80,
         'music_shuffle': False,
+        'music_normalise': True,
         'music_repeat': 'all',
         'music_playlist_id': '',
         'music_track_id': '',
