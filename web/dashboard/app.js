@@ -4,6 +4,7 @@ import {
 } from "./explore.js";
 import {renderExplorationArchive} from "./archive.js";
 import {createMusicDeck} from "./music.js";
+import {installSetup, renderSetup} from "./setup.js";
 import {
   engineeringPayload, handleWorkshopChange, handleWorkshopClick, handleWorkshopInput,
   renderBuildPlanner, renderEngineering, resetWorkshop,
@@ -32,7 +33,6 @@ let galnetTickerId = "";
 let galnetSelectedId = "";
 let galnetRotationTimer = 0;
 let galnetRotationSettingsKey = "";
-let onboardingSession = -1;
 let atlasRequested = false;
 let lastClientError = "";
 let bootActive = true;
@@ -138,7 +138,7 @@ const HOTKEY_CODE_NAMES = {
 };
 
 const STRUCTURAL_BUTTON_SELECTOR = [
-  ".nav-item", "[data-feed-filter]", ".studio-overlay-card", ".studio-monitor",
+  ".nav-item", "[data-feed-filter]", ".studio-overlay-card", ".studio-monitor", "[data-setup-go]",
   ".studio-index-select", ".mission-row", ".workspace-tabs button",
   ".suite-tabs button", "[data-analytics-view]",
   ".galnet-headline-row", "#status-galnet",
@@ -726,19 +726,10 @@ function announceBoot(detail) {
   window.dispatchEvent(new CustomEvent("voidcompass:boot", {detail}));
 }
 
+// First commissioning lives in setup.js.
+const SETUP_UI = {command: (...args) => command(...args), showToast: (...args) => showToast(...args), applyTheme: (...args) => applyTheme(...args)};
 function renderCommissioning(onboarding) {
-  const session = number(onboarding.session, 0);
-  if (session !== onboardingSession) {
-    onboardingSession = session;
-    byId("onboarding-journal").value = onboarding.journal_path || "";
-    byId("onboarding-adaptive").checked = Boolean(onboarding.adaptive_command_enabled);
-    byId("onboarding-overlays").checked = Boolean(onboarding.overlay_enabled);
-    byId("onboarding-passthrough").checked = Boolean(onboarding.overlay_mouse_passthrough);
-  }
-  text("onboarding-error", onboarding.error, "");
-  const submitting = Boolean(onboarding.submitting);
-  for (const control of byId("onboarding-form").querySelectorAll("input,button")) control.disabled = submitting;
-  text("onboarding-submit", submitting ? "COMMISSIONING…" : "COMMISSION VOID COMPASS");
+  renderSetup(onboarding, SETUP_UI);
 }
 
 function renderHeader(state) {
@@ -4951,41 +4942,7 @@ byId("studio-delete-preset").addEventListener("click", async () => {
   if (await command("overlay_studio", {operation: "delete_preset", name})) showToast(`Deleted ${name}`);
 });
 
-byId("onboarding-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const submit = byId("onboarding-submit");
-  submit.disabled = true;
-  submit.textContent = "COMMISSIONING…";
-  const accepted = await command("onboarding_submit", {
-    journal_path: byId("onboarding-journal").value.trim(),
-    adaptive_command_enabled: byId("onboarding-adaptive").checked,
-    overlay_enabled: byId("onboarding-overlays").checked,
-    overlay_mouse_passthrough: byId("onboarding-passthrough").checked,
-  });
-  if (!accepted) {
-    submit.disabled = false;
-    submit.textContent = "COMMISSION VOID COMPASS";
-  }
-});
-
-byId("onboarding-browse").addEventListener("click", async () => {
-  const browse = byId("onboarding-browse");
-  browse.disabled = true;
-  try {
-    const api = window.pywebview?.api;
-    if (!api?.choose_journal_folder) throw new Error("Native folder picker is not ready");
-    const selected = await api.choose_journal_folder();
-    if (selected) byId("onboarding-journal").value = String(selected);
-  } catch (error) {
-    showToast(error.message || "Folder picker unavailable");
-  } finally {
-    browse.disabled = false;
-  }
-});
-
-byId("onboarding-exit").addEventListener("click", async () => {
-  await command("onboarding_cancel");
-});
+installSetup(SETUP_UI);
 
 byId("atlas-frame").addEventListener("load", () => {
   text("atlas-status", "Initialising map scene and commander layers…");

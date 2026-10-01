@@ -1,36 +1,16 @@
 # VoidCompass // UPDATE LOG
 
-## v5.4.9.9 // Ship Workshop re-work
-**Release Date:** 2026-Sep-29
+## v5.5.1.1 // First-time setup re-work
+**Release Date:** 2026-Oct-02
 
-* Rebuilt the Ship Workshop: the Build Planner and Engineering pages.
-* The Build Planner opens on a hangar: your live ship and every saved build as cards, with New build and Import beside them. New build picks the hull from a board of all 48 ships. Pick a build to compare against and every figure on the page shows the difference, green when it is better and red when it is worse.
-* The bay shows the ship's line drawing, which lights up the hardpoint or utility mount you pick (hover a slot to find it on the hull), with the build cost and rebuy. Set the power distributor by clicking its pips, as in the cockpit: SYS, ENG and WEP always add up to six pips. Fuel and cargo apply as you change them.
-* Eight readouts sit under the bay: jump, total range, speed, shields, armour, DPS, power draw and heat. Power and heat turn red when they are over the limit.
-* The loadout board shows every slot on the ship at once, grouped as in the outfitting screen, with each module's blueprint, experimental and grade.
-* Beside the board, the module dock works on the slot you pick:
-  * OUTFIT lists every module that fits, with its mass and power against what is fitted now.
-  * ENGINEER sets the blueprint, grade G1 to G5, roll, experimental, power priority and power switch.
-  * ATTRIBUTES lists the module's statistics.
-* Performance panels show everything the planner calculates, all at once:
-  * Frame shift: jump range, and a chart of your jump as the hold fills.
-  * Flight and handling.
-  * Shields and armour, with their resistances.
-  * Damage per second, with the damage mix.
-  * Power priorities against the power plant.
-  * Heat for idle, thrusting, FSD charging, weapons firing and shield cells.
-  * Mass and value.
-* The live loadout follows the journal and can't be edited. CLONE TO EDIT makes an editable copy.
-* Engineering opens on your fleet. Pick any ship, or let it follow the ship you fly.
-* SHIP shows what the journal says is engineered on that ship: each blueprint as the game names it, its grade, how far the roll got, and any experimental. A chart counts the ship's engineered modules at each grade, and the next thing to do (which engineer to fly to, or what to collect) sits beside it.
-* PLANS lists the plans sent from the Build Planner, with the materials they reserve.
-* MATERIALS lays out the material locker by category and grade. A filter or search dims everything else, so the locker keeps its shape.
-* ENGINEERS is a portrait board marked by unlock state. Each engineer shows the steps to unlock them and every blueprint they offer.
-* New BLUEPRINTS reference: pick a module to see each blueprint's effects, which engineers do it (the ones you have unlocked are lit), and how many top-grade rolls your locker can pay for now, plus the experimentals for that module.
-* SOURCES, TECH BROKERS (the ones you can unlock listed first) and ODYSSEY carry on as before, redrawn to match.
+* Rebuilt the first-time setup into four steps on the startup galaxy: Welcome, Journal link, Cockpit and Launch.
+* Journal link finds Elite's journal folder by itself and checks it as you type or browse: how many journals it holds, the dates they cover, your commander, ship and last system. You can see it is the right folder before going on.
+* Cockpit sets the overlays, mouse passthrough and the adaptive deck, and now picks a theme. The whole screen previews each theme as you click it, and the deck starts in the one you choose.
+* Launch sums up your choices before you commission. Settings > Recovery can run the setup again at any time.
 
 ## Earlier releases
 
+* **v5.4.9.9** — Rebuilt the Ship Workshop: a Build Planner with a hangar of builds, a hull drawing that lights the slot you fit, the distributor's pips, a loadout board, a module dock and every performance figure at once; and Engineering with your fleet, what is engineered on each ship, the material locker, the engineers and a new blueprint reference.
 * **v5.4.9.8** — Added Music, a local player with playlists, loudness levelling, OBS capture and a Music Player overlay; rebuilt the Galactic Atlas as a regions map of your whole journey and Powerplay Operations around the weekly cycle; and fixed the command deck going blank or dropping its page in long sessions.
 * **v5.4.9.7** — Rebuilt Settings as one screen that saves as you go, added the Galnet Ticker overlay with CRT and glitch effects, rebuilt the Navigation HUD's state scenes as solid 3D holograms with stars shaped by their class, switched the Rhino coverage map off, and fixed overlays sometimes not appearing at startup.
 * **v5.4.9.6** — Rebuilt the Journal Heartbeat as a HAL 9000-style watcher orb that reacts to every journal event, rebuilt the startup screen around the same eye with an FSD countdown into the deck, added Navigation HUD typeface and text settings, and fixed the HUD's on-foot portrait.

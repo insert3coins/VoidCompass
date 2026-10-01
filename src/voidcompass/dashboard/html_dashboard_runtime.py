@@ -19,7 +19,7 @@ from voidcompass.dashboard.html_dashboard_server import HtmlDashboardServer
 from voidcompass.core.diagnostic_logs import (
     LOG_ARCHIVE_LIMIT, application_base_dir, log_clock, prepare_log, resolve_log_path,
 )
-from voidcompass.core import themes
+from voidcompass.core import onboarding, themes
 from voidcompass.core.paths import resource_path, source_launcher_path
 
 
@@ -194,9 +194,19 @@ class HtmlDashboardRuntime:
         """Present first-run/setup commissioning entirely inside WebView2."""
         self._commissioning_session += 1
         self._commissioning_callback = callback
+        custom = (config or {}).get("ui_custom_themes")
+        custom = custom if isinstance(custom, dict) else {}
+        theme_name, _palette = themes.resolve_theme((config or {}).get("ui_theme_name"), custom)
+        # Every theme the setup screen can preview, by name.
+        palettes = {name: dict(palette) for name, palette in themes.BUILTIN_THEMES.items()}
+        palettes.update({name: themes.normalize_theme(palette) for name, palette in custom.items()
+                         if name not in palettes and isinstance(palette, dict)})
         self._onboarding = {
             "active": True,
             "session": self._commissioning_session,
+            "theme": theme_name,
+            "themes": palettes,
+            "probe": None,
             "journal_path": str((config or {}).get("journal_path") or "")[:2048],
             "adaptive_command_enabled": bool(
                 (config or {}).get("adaptive_command_enabled", True)
@@ -216,7 +226,34 @@ class HtmlDashboardRuntime:
         })
         self._publish()
         self._schedule_command_pump()
+        self._probe_journals(self._onboarding["journal_path"])
         return True
+
+    def _probe_journals(self, path):
+        """Check a journal folder off the UI thread; the newest request wins."""
+        self._probe_seq = getattr(self, "_probe_seq", 0) + 1
+        seq = self._probe_seq
+        self._onboarding["probing"] = True
+        self._publish()
+
+        def work():
+            try:
+                probe = onboarding.probe_journal_folder(path)
+            except Exception as exc:
+                probe = {"path": str(path or ""), "status": "invalid", "message": f"The folder could not be checked: {exc}"}
+
+            def done():
+                if self._disposed or seq != self._probe_seq or not self._onboarding.get("active"):
+                    return
+                self._onboarding.update(probe=probe, probing=False)
+                self._publish()
+
+            try:
+                self.root.call_later(0, done)
+            except Exception:
+                done()
+
+        threading.Thread(target=work, name="setup-journal-probe", daemon=True).start()
 
     def set_runtime_status(self, status, detail="", progress=None, events=None):
         self._boot.update({
@@ -320,7 +357,7 @@ class HtmlDashboardRuntime:
             "check_updates",
             "save_page_layout", "reset_page_layout",
             "add_codex_objective", "open_codex_atlas",
-            "onboarding_submit", "onboarding_cancel",
+            "onboarding_submit", "onboarding_cancel", "onboarding_probe",
         }:
             return False
         self._commands.put(dict(payload))
@@ -447,7 +484,7 @@ class HtmlDashboardRuntime:
                         if app is not None and not self._boot.get("active"):
                             self._write_host_log("Browser dashboard handoff complete")
                             app._complete_startup_overlay_handoff()
-                    elif action in {"onboarding_submit", "onboarding_cancel"}:
+                    elif action in {"onboarding_submit", "onboarding_cancel", "onboarding_probe"}:
                         self._handle_commissioning_command(payload)
                     elif app is not None:
                         app.handle_html_dashboard_command(payload)
@@ -467,6 +504,9 @@ class HtmlDashboardRuntime:
         action = str(payload.get("action") or "").strip().casefold()
         if action == "onboarding_cancel":
             self._close_from_window()
+            return True
+        if action == "onboarding_probe":
+            self._probe_journals(str(payload.get("journal_path") or "").strip()[:2048])
             return True
         if action != "onboarding_submit" or self._onboarding.get("submitting"):
             return False
@@ -489,6 +529,14 @@ class HtmlDashboardRuntime:
             ),
             "onboarding_complete": True,
         }
+        theme = str(payload.get("ui_theme_name") or "")
+        palettes = self._onboarding.get("themes") or {}
+        if theme in palettes:
+            values["ui_theme_name"] = theme
+            # The boot screen that follows wears the chosen theme too.
+            self._latest_app_model["theme"] = {
+                **dict(self._latest_app_model.get("theme") or {}), "name": theme, "palette": dict(palettes[theme]),
+            }
         self._onboarding.update({
             "submitting": True,
             "error": "",

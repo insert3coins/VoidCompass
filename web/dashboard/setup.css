@@ -1,0 +1,143 @@
+/* First commissioning (setup.js): a console on the boot galaxy. The rail
+   tracks the four steps; the accent marks what is linked and on, orange the
+   step you are on; every colour is a theme token, so picking a theme
+   repaints the setup itself. */
+
+.commissioning {
+  position: relative; z-index: 9; width: min(1180px, calc(100% - 64px)); height: min(740px, calc(100% - 64px)); margin: 32px auto;
+  animation: setup-in .5s cubic-bezier(.2, .7, .2, 1) both;
+}
+@keyframes setup-in { from { opacity: 0; transform: translateY(10px) scale(.99); } to { opacity: 1; transform: none; } }
+.setup {
+  position: relative; height: 100%; display: grid; grid-template-columns: 268px minmax(0, 1fr); overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  box-shadow: 0 30px 110px rgba(0, 0, 0, .6), 0 0 0 1px color-mix(in srgb, var(--bg) 60%, transparent);
+  backdrop-filter: blur(6px);
+}
+.setup::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; background: linear-gradient(90deg, var(--accent), var(--orange) 55%, transparent); }
+
+/* The rail -------------------------------------------------------------- */
+.setup-rail { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; border-right: 1px solid var(--border-soft); background: color-mix(in srgb, var(--panel) 78%, transparent); }
+.setup-rail > header { display: flex; align-items: center; gap: 12px; padding: 24px 22px 20px; border-bottom: 1px solid var(--border-soft); }
+.setup-mark {
+  display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--accent); border-radius: 50%;
+  color: var(--accent); font: 700 13px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; letter-spacing: .08em;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 30%, transparent), inset 0 0 12px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.setup-rail > header small { display: block; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .2em; }
+.setup-rail > header b { color: var(--text); font: 700 15px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; letter-spacing: .06em; }
+.setup-rail ol { display: grid; align-content: start; gap: 4px; margin: 0; padding: 18px 12px; list-style: none; }
+.setup-rail button {
+  position: relative; width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center;
+  padding: 11px 10px; border: 1px solid transparent; background: transparent; color: var(--muted); text-align: left; cursor: pointer;
+}
+.setup-rail button > b { display: grid; place-items: center; height: 30px; border: 1px solid var(--border); color: var(--dim); font: 700 11px Consolas, monospace; }
+.setup-rail button span { display: grid; gap: 2px; font: 600 14px "Segoe UI", sans-serif; }
+.setup-rail button small { color: var(--dim); font: 10px "Segoe UI", sans-serif; }
+.setup-rail button:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.setup-rail button.done > b { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); color: var(--accent); }
+.setup-rail button.current { border-color: color-mix(in srgb, var(--orange) 40%, var(--border)); background: color-mix(in srgb, var(--orange) 9%, transparent); color: var(--text); }
+.setup-rail button.current > b { border-color: var(--orange); background: var(--orange); color: var(--bg); }
+.setup-rail > footer { display: flex; align-items: center; gap: 8px; padding: 16px 22px; border-top: 1px solid var(--border-soft); color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .12em; }
+.setup-rail > footer i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+/* The step ------------------------------------------------------------------ */
+.setup-body { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; }
+.setup-step { min-height: 0; overflow-y: auto; padding: 38px 44px 20px; scrollbar-width: thin; animation: setup-step .3s ease-out both; }
+@keyframes setup-step { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+.setup-kicker { margin: 0 0 8px; color: var(--orange); font: 700 10px Consolas, monospace; letter-spacing: .2em; }
+.setup-step h2 {
+  margin: 0 0 12px; color: var(--text); font: 700 38px/1.05 "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif;
+  letter-spacing: .01em; outline: none; text-wrap: balance;
+}
+.setup-step h2 span { color: var(--accent); text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 40%, transparent); }
+.setup-welcome h2 { font-size: 52px; text-transform: uppercase; }
+.setup-lede { max-width: 64ch; margin: 0 0 24px; color: var(--muted); font: 14px/1.6 "Segoe UI", sans-serif; }
+
+.setup-features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 22px; padding: 0; list-style: none; }
+.setup-features li { display: grid; gap: 5px; padding: 14px 15px; border: 1px solid var(--border-soft); border-top: 2px solid color-mix(in srgb, var(--accent) 50%, var(--border)); background: color-mix(in srgb, var(--panel) 80%, transparent); }
+.setup-features b { color: var(--text); font: 600 15px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; letter-spacing: .03em; }
+.setup-features span { color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif; }
+.setup-promises { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0; padding: 0; list-style: none; }
+.setup-promises li { display: flex; align-items: center; gap: 8px; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.setup-promises i { display: grid; place-items: center; width: 18px; height: 18px; border: 1px solid var(--green); color: var(--green); font: normal 700 10px sans-serif; }
+
+.setup-label { display: block; margin: 0 0 7px; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.setup-path { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; margin-bottom: 16px; }
+.setup-path input {
+  min-width: 0; height: 40px; padding: 0 12px; border: 1px solid var(--border); background: var(--input); color: var(--text);
+  font: 12px Consolas, monospace; outline: none;
+}
+.setup-path input:focus { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent); }
+.setup-path button { min-height: 40px; padding: 0 16px; }
+
+.setup-probe { --tone: var(--dim); display: grid; gap: 12px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--tone) 40%, var(--border)); border-left: 3px solid var(--tone); background: color-mix(in srgb, var(--tone) 6%, var(--panel)); }
+.setup-probe.ok { --tone: var(--green); }
+.setup-probe.warn { --tone: var(--yellow); }
+.setup-probe.bad { --tone: var(--red); }
+.setup-probe.checking { --tone: var(--accent); }
+.setup-probe > header { display: flex; align-items: center; gap: 10px; }
+.setup-probe > header i { width: 9px; height: 9px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 10px var(--tone); }
+.setup-probe.checking > header i { animation: setup-pulse 1s ease-in-out infinite; }
+@keyframes setup-pulse { 50% { opacity: .25; } }
+.setup-probe > header b { color: var(--tone); font: 700 12px Consolas, monospace; letter-spacing: .16em; }
+.setup-probe > header em { margin-left: auto; color: var(--dim); font: normal 700 8px Consolas, monospace; letter-spacing: .12em; }
+.setup-probe > p { margin: 0; color: var(--muted); font: 13px/1.5 "Segoe UI", sans-serif; }
+.setup-probe dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0; border: 1px solid var(--border-soft); background: var(--border-soft); }
+.setup-probe dl > div { min-width: 0; display: grid; gap: 4px; padding: 10px 12px; background: var(--inset); }
+.setup-probe dt { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
+.setup-probe dd { margin: 0; overflow: hidden; color: var(--text); font: 600 15px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+
+.setup-toggles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
+.setup-toggle { position: relative; display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px; border: 1px solid var(--border-soft); background: color-mix(in srgb, var(--panel) 80%, transparent); cursor: pointer; }
+.setup-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.setup-toggle > i { position: relative; width: 38px; height: 20px; margin-top: 1px; border: 1px solid var(--border); background: var(--inset); transition: background .15s, border-color .15s; }
+.setup-toggle > i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; background: var(--dim); transition: transform .15s, background .15s; }
+.setup-toggle input:checked + i { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, var(--inset)); }
+.setup-toggle input:checked + i::after { transform: translateX(18px); background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.setup-toggle input:focus-visible + i { outline: 1px solid var(--accent); outline-offset: 2px; }
+.setup-toggle:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.setup-toggle span { display: grid; gap: 4px; }
+.setup-toggle b { color: var(--text); font: 600 14px "Segoe UI", sans-serif; }
+.setup-toggle small { color: var(--muted); font: 11px/1.45 "Segoe UI", sans-serif; }
+
+.setup-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.setup-theme { position: relative; display: grid; gap: 7px; padding: 8px; border: 1px solid var(--border-soft); background: var(--inset); cursor: pointer; }
+.setup-theme input { position: absolute; opacity: 0; pointer-events: none; }
+.setup-swatch { display: grid; grid-template-columns: 2fr 1fr 1fr; height: 34px; overflow: hidden; border: 1px solid var(--border-soft); background: var(--sw-bg); }
+/* The swatch shows each theme's own colours, which is the point. */
+.setup-swatch i:nth-child(1) { margin: 6px; border-left: 3px solid var(--sw-accent); background: var(--sw-panel); }
+.setup-swatch i:nth-child(2) { background: var(--sw-accent); }
+.setup-swatch i:nth-child(3) { background: var(--sw-orange); }
+.setup-theme b { color: var(--muted); font: 600 11px "Segoe UI", sans-serif; }
+.setup-theme:hover { border-color: var(--border); }
+.setup-theme:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--inset)); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 20%, transparent); }
+.setup-theme:has(input:checked) b { color: var(--text); }
+.setup-theme:has(input:focus-visible) { outline: 1px solid var(--accent); outline-offset: 2px; }
+
+.setup-summary { display: grid; gap: 1px; max-width: 760px; margin: 6px 0 20px; border: 1px solid var(--border-soft); background: var(--border-soft); }
+.setup-summary > div { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 14px; align-items: center; padding: 12px 16px; background: color-mix(in srgb, var(--panel) 85%, transparent); border-left: 3px solid var(--border); }
+.setup-summary > div.ok { border-left-color: var(--green); }
+.setup-summary > div.warn { border-left-color: var(--yellow); }
+.setup-summary dt { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.setup-summary dd { margin: 0; overflow-wrap: anywhere; color: var(--text); font: 13px "Segoe UI", sans-serif; }
+.setup-note { max-width: 70ch; margin: 0; color: var(--dim); font: 12px/1.6 "Segoe UI", sans-serif; }
+
+.setup-error { margin: 0; padding: 0 44px; color: var(--red); font: 12px "Segoe UI", sans-serif; }
+.setup-error:empty { display: none; }
+.setup-actions { display: flex; align-items: center; gap: 8px; padding: 16px 44px 20px; border-top: 1px solid var(--border-soft); background: color-mix(in srgb, var(--header) 70%, transparent); }
+.setup-actions > span { margin-left: auto; margin-right: 8px; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.setup-actions button { min-height: 38px; padding: 0 20px; }
+.setup-actions .quiet-action { background: transparent; }
+.setup-actions button:disabled, .setup-path button:disabled { opacity: .45; pointer-events: none; }
+
+@media (max-width: 1100px) {
+  .commissioning { width: calc(100% - 32px); height: calc(100% - 32px); margin: 16px auto; }
+  .setup { grid-template-columns: 210px minmax(0, 1fr); }
+  .setup-rail button small { display: none; }
+  .setup-features, .setup-toggles, .setup-probe dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .setup-step { padding: 28px 28px 16px; }
+  .setup-actions, .setup-error { padding-inline: 28px; }
+  .setup-welcome h2 { font-size: 40px; }
+}
