@@ -3011,6 +3011,8 @@ class MainDashboard(
                 self.watcher.file_pos = 0
             self._apply_runtime_feature_toggles()
             self._enforce_overlay_hotkey_visibility()
+            if "ui_theme_name" in values:
+                self._apply_active_profile_theme()
             self.schedule_dashboard_refresh(full=True)
             self.add_event_feed_entry(
                 "SYSTEM", "First-run setup complete", severity="INFO",

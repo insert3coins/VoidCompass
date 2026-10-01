@@ -553,65 +553,6 @@ body[data-activity="exploration"] .survey-card, body[data-activity="ground"] .co
 
 @keyframes instrument-orbit { to { transform: rotate(360deg); } }
 
-.commissioning { position: relative; z-index: 9; width: min(1320px,calc(100% - 92px)); height: min(780px,calc(100% - 100px)); margin: 50px auto; display: grid; grid-template-rows: auto 1fr; border: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 95%, transparent); box-shadow: 0 24px 90px rgba(0,0,0,.58), inset 0 0 45px rgba(0,0,0,.24); overflow: hidden; animation: commission-in .5s ease both; }
-.commissioning::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: linear-gradient(90deg, var(--accent), var(--orange), transparent 85%); }
-.commission-header { min-height: 92px; display: flex; align-items: center; justify-content: space-between; padding: 17px 28px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--header) 90%, transparent); }
-.commission-header p { margin: 0 0 3px; color: var(--orange); font: 700 8px Consolas, monospace; letter-spacing: .16em; }
-.commission-header h1 { margin: 0; color: var(--text); font: 700 28px "Bahnschrift SemiCondensed", sans-serif; text-transform: uppercase; }
-.commission-header h1 span { color: var(--accent); }
-.commission-header > b { color: var(--dim); font: 8px Consolas, monospace; }
-.commission-grid { min-height: 0; display: grid; grid-template-columns: minmax(330px,.8fr) minmax(500px,1.2fr); }
-.commission-manifest { position: relative; min-width: 0; padding: 31px 35px 26px; border-right: 1px solid var(--border); background: radial-gradient(circle at 77% 13%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 30%), color-mix(in srgb, var(--panel) 82%, transparent); overflow: hidden; }
-.manifest-instrument { position: absolute; right: 31px; top: 29px; width: 88px; height: 88px; border: 1px solid var(--border); border-radius: 50%; display: grid; place-items: center; }
-.manifest-instrument::before, .manifest-instrument::after { content: ""; position: absolute; border-radius: 50%; border: 1px dashed var(--accent); animation: instrument-orbit 9s linear infinite; }
-.manifest-instrument::before { inset: 8px; }.manifest-instrument::after { inset: 22px; animation-direction: reverse; animation-duration: 5s; }
-.manifest-instrument i { width: 1px; height: 100%; background: linear-gradient(transparent,var(--orange),transparent); transform: rotate(37deg); }
-.manifest-instrument b { position: absolute; width: 6px; height: 6px; background: var(--accent); box-shadow: 0 0 10px var(--accent); transform: rotate(45deg); }
-.manifest-instrument span { position: absolute; color: var(--text); font: 700 9px Consolas, monospace; }
-.commission-manifest > p { margin: 0 0 9px; color: var(--orange); font: 700 8px Consolas, monospace; letter-spacing: .15em; }
-.commission-manifest > h2 { max-width: 330px; margin: 0 0 18px; color: var(--accent); font: 700 32px/1.05 "Bahnschrift SemiCondensed", sans-serif; text-transform: uppercase; }
-.commission-manifest > span { display: block; max-width: 440px; color: var(--muted); font: 10px/1.65 Consolas, monospace; }
-.commission-manifest ol { list-style: none; padding: 17px 0 0; margin: 21px 0 0; border-top: 1px solid var(--border-soft); }
-.commission-manifest li { display: grid; grid-template-columns: 34px 1fr; gap: 11px; align-items: center; margin: 13px 0; }
-.commission-manifest li > b { width: 31px; height: 31px; display: grid; place-items: center; color: var(--accent); border: 1px solid var(--border); font: 700 8px Consolas, monospace; }
-.commission-manifest li strong, .commission-manifest li small { display: block; }
-.commission-manifest li strong { color: var(--text); font: 700 10px Consolas, monospace; }.commission-manifest li small { color: var(--dim); font: 8px Consolas, monospace; margin-top: 2px; }
-.commission-manifest > footer { position: absolute; left: 35px; bottom: 27px; display: flex; align-items: center; gap: 9px; color: var(--green); font: 700 8px Consolas, monospace; }
-.commission-manifest > footer i { width: 6px; height: 6px; background: var(--green); box-shadow: 0 0 8px var(--green); }
-
-.commission-form { min-width: 0; min-height: 0; padding: 30px 37px 25px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-.form-heading small, .field-label { color: var(--orange); font: 700 8px Consolas, monospace; letter-spacing: .12em; }
-.form-heading h2 { margin: 3px 0 3px; color: var(--text); font: 700 24px "Bahnschrift SemiCondensed", sans-serif; text-transform: uppercase; }
-.form-heading p, .field-help { color: var(--muted); font: 9px Consolas, monospace; }
-.field-label { display: block; margin-top: 24px; }
-.field-help { margin: 5px 0 8px; }.field-help code { color: var(--accent); }
-.path-field { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
-.path-field input { min-width: 0; height: 42px; border: 1px solid var(--border); outline: 0; background: var(--input); color: var(--text); padding: 0 12px; font: 10px Consolas, monospace; }
-.path-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent); }
-.path-field button, .commission-actions button { border: 1px solid var(--border); background: var(--panel-alt); color: var(--muted); cursor: pointer; padding: 0 15px; font: 700 9px Consolas, monospace; }
-.path-field button:hover, .commission-actions button:hover { color: var(--accent); border-color: var(--accent); }
-.privacy-note { display: flex; align-items: center; gap: 10px; margin: 9px 0 18px; color: var(--muted); font: 8px Consolas, monospace; }
-.privacy-note > i { width: 23px; height: 23px; display: grid; place-items: center; color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 44%, var(--border)); font-style: normal; }
-.privacy-note b { display: block; color: var(--green); font-size: 7px; margin-bottom: 1px; }
-.commission-form fieldset { margin: 0; padding: 8px 14px 7px; border: 1px solid var(--border-soft); background: color-mix(in srgb, var(--panel) 72%, transparent); }
-.commission-form legend { padding: 0 7px; color: var(--orange); font: 700 8px Consolas, monospace; letter-spacing: .1em; }
-.switch-row { display: grid; grid-template-columns: 33px 1fr; align-items: center; gap: 10px; padding: 9px 3px; cursor: pointer; }
-.switch-row input { position: absolute; opacity: 0; pointer-events: none; }
-.switch-row > i { width: 31px; height: 16px; border: 1px solid var(--border); background: var(--inset); position: relative; transition: .18s; }
-.switch-row > i::after { content: ""; position: absolute; width: 10px; height: 10px; left: 2px; top: 2px; background: var(--dim); transition: .18s; }
-.switch-row input:checked + i { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, var(--inset)); }
-.switch-row input:checked + i::after { left: 17px; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-.switch-row b, .switch-row small { display: block; }.switch-row b { color: var(--text); font: 700 10px "Segoe UI", sans-serif; }.switch-row small { color: var(--dim); font: 8px Consolas, monospace; margin-top: 2px; }
-.commission-error { min-height: 17px; margin: 10px 0 0; color: var(--red); font: 9px Consolas, monospace; }
-.commission-actions { display: flex; justify-content: space-between; align-items: flex-end; gap: 15px; margin-top: 8px; }
-.commission-actions > div { display: flex; align-items: center; gap: 13px; }
-.commission-actions small { color: var(--green); font: 700 7px Consolas, monospace; }
-.commission-actions button { min-height: 38px; }
-.commission-actions .commission-action { border-color: var(--accent); background: var(--accent); color: #031015; padding: 0 19px; }
-.commission-actions .commission-action:hover { color: #000; filter: brightness(1.13); }
-.commission-actions button:disabled, .path-field button:disabled { opacity: .45; pointer-events: none; }
-.commission-actions .quiet-action { background: transparent; }
-@keyframes commission-in { from { opacity: 0; transform: translateY(8px) scale(.995); } to { opacity: 1; transform: none; } }
 
 /* Fully native HTML specialist workspaces */
 .specialist-page { max-width: 1680px; }
@@ -1099,11 +1040,6 @@ input,select,textarea,button { max-width: 100%; }
   .route-add-form,.neutron-form { grid-template-columns: 1fr; }
   .workspace-metrics { grid-template-columns: repeat(2,1fr); }
   .record-metrics { grid-template-columns: repeat(2,1fr); }
-  .commissioning { width: calc(100% - 44px); height: calc(100% - 76px); margin: 38px auto; }
-  .commission-grid { grid-template-columns: 300px 1fr; }
-  .commission-manifest { padding: 25px; }
-  .manifest-instrument { display: none; }
-  .commission-manifest > footer { left: 25px; }
   .page-layout-toolbar { align-items: stretch; flex-direction: column; }
   .page-layout-toolbar > div:last-child { flex-wrap: wrap; }
 }

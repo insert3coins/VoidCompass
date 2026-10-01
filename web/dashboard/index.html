@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="music.css">
   <link rel="stylesheet" href="powerplay.css">
   <link rel="stylesheet" href="workshop.css">
+  <link rel="stylesheet" href="setup.css">
   <link rel="stylesheet" href="focused-log.css">
   <link rel="stylesheet" href="boot.css">
   <script defer src="/assets/heartbeat-orb.js"></script>
@@ -92,48 +93,81 @@
     </section>
 
     <section id="commissioning" class="commissioning" hidden>
-      <header class="commission-header">
-        <div><p>VOID COMPASS // FIRST COMMISSIONING</p><h1>Bring the flight deck <span>online.</span></h1></div>
-        <b>01 / LOCAL SETUP</b>
-      </header>
-      <div class="commission-grid">
-        <aside class="commission-manifest">
-          <div class="manifest-instrument" aria-hidden="true"><i></i><b></b><span>VC</span></div>
-          <p>EXPLORATION SYSTEM</p>
-          <h2>Your journals.<br>Your profiles.<br>Your machine.</h2>
-          <span>Void Compass reads Frontier's local journal files and builds commander-aware exploration intelligence without requiring an account or cloud database.</span>
+      <form id="onboarding-form" class="setup" novalidate>
+        <nav class="setup-rail" aria-label="Setup steps">
+          <header><span class="setup-mark" aria-hidden="true">VC</span><div><small>VOID COMPASS</small><b>FIRST COMMISSIONING</b></div></header>
           <ol>
-            <li><b>01</b><div><strong>JOURNAL LINK</strong><small>Read-only live telemetry</small></div></li>
-            <li><b>02</b><div><strong>SURVEY CORE</strong><small>FSS, DSS and exobiology</small></div></li>
-            <li><b>03</b><div><strong>COCKPIT LAYER</strong><small>Profile-aware HTML overlays</small></div></li>
+            <li><button type="button" data-setup-go="welcome"><b>01</b><span>Welcome<small>What Void Compass does</small></span></button></li>
+            <li><button type="button" data-setup-go="journal"><b>02</b><span>Journal link<small>Where Elite writes its logs</small></span></button></li>
+            <li><button type="button" data-setup-go="cockpit"><b>03</b><span>Cockpit<small>Overlays and theme</small></span></button></li>
+            <li><button type="button" data-setup-go="launch"><b>04</b><span>Launch<small>Check and commission</small></span></button></li>
           </ol>
-          <footer><i></i> LOCAL-FIRST // PRIVATE BY DEFAULT</footer>
-        </aside>
+          <footer><i></i>LOCAL-FIRST · READ-ONLY · NO ACCOUNT</footer>
+        </nav>
 
-        <form id="onboarding-form" class="commission-form">
-          <div class="form-heading"><small>COMMANDER ENVIRONMENT</small><h2>Connect Elite Dangerous</h2><p>Everything here remains editable later from Settings.</p></div>
-          <label class="field-label" for="onboarding-journal">ELITE DANGEROUS JOURNAL FOLDER</label>
-          <p class="field-help">Select the folder containing Frontier's <code>Journal.*.log</code> files.</p>
-          <div class="path-field">
-            <input id="onboarding-journal" type="text" spellcheck="false" autocomplete="off" placeholder="Auto-detected journal folder">
-            <button id="onboarding-browse" type="button">BROWSE</button>
-          </div>
-          <div class="privacy-note"><i>✓</i><span><b>READ-ONLY SOURCE</b>Void Compass never modifies game journals.</span></div>
+        <div class="setup-body">
+          <section class="setup-step setup-welcome" data-step="welcome">
+            <p class="setup-kicker">WELCOME, COMMANDER</p>
+            <h2 tabindex="-1">Bring the flight deck <span>online.</span></h2>
+            <p class="setup-lede">Void Compass follows your Elite Dangerous journals as you fly and turns them into a command deck, a survey record and in-game overlays. It runs on this PC, from files the game already writes.</p>
+            <ul class="setup-features">
+              <li><b>Survey</b><span>Every body in the system, what it is worth, and the biology still to sample.</span></li>
+              <li><b>Galactic Atlas</b><span>Every system you have visited, across Elite's 42 regions.</span></li>
+              <li><b>Expeditions</b><span>Routes, waypoints, fuel stops and your carrier.</span></li>
+              <li><b>Ship Workshop</b><span>Plan builds offline and track engineering materials.</span></li>
+              <li><b>Cockpit overlays</b><span>Navigation, survey and field HUDs over the game.</span></li>
+              <li><b>Your record</b><span>Captain's log, achievements, Powerplay and music.</span></li>
+            </ul>
+            <ul class="setup-promises">
+              <li><i>✓</i>Reads your journals and never changes them</li>
+              <li><i>✓</i>Keeps everything on this PC, one profile per commander</li>
+              <li><i>✓</i>Needs no account, no sign-in and no cloud</li>
+            </ul>
+          </section>
 
-          <fieldset>
-            <legend>INITIAL FLIGHT DECK</legend>
-            <label class="switch-row"><input id="onboarding-adaptive" type="checkbox"><i></i><span><b>Adaptive command deck</b><small>Keep the dashboard responsive to current exploration activity.</small></span></label>
-            <label class="switch-row"><input id="onboarding-overlays" type="checkbox"><i></i><span><b>HTML cockpit overlays</b><small>Enable Navigation, Survey Operations and field HUD surfaces.</small></span></label>
-            <label class="switch-row"><input id="onboarding-passthrough" type="checkbox"><i></i><span><b>In-game mouse passthrough</b><small>Let game input pass through enabled overlays.</small></span></label>
-          </fieldset>
+          <section class="setup-step" data-step="journal" hidden>
+            <p class="setup-kicker">STEP 02 · JOURNAL LINK</p>
+            <h2 tabindex="-1">Link your journals</h2>
+            <p class="setup-lede">Elite writes a journal of everything you do to a folder in Saved Games. Void Compass found the usual one below; change it only if you keep your journals somewhere else.</p>
+            <label class="setup-label" for="onboarding-journal">JOURNAL FOLDER</label>
+            <div class="setup-path">
+              <input id="onboarding-journal" type="text" spellcheck="false" autocomplete="off" placeholder="C:\Users\…\Saved Games\Frontier Developments\Elite Dangerous">
+              <button id="onboarding-browse" type="button">BROWSE</button>
+              <button id="setup-check" type="button">CHECK</button>
+            </div>
+            <article id="setup-probe" class="setup-probe checking" aria-live="polite"><header><i></i><b>CHECKING THE FOLDER…</b></header></article>
+          </section>
 
-          <p id="onboarding-error" class="commission-error" role="alert"></p>
-          <footer class="commission-actions">
+          <section class="setup-step" data-step="cockpit" hidden>
+            <p class="setup-kicker">STEP 03 · COCKPIT</p>
+            <h2 tabindex="-1">Set up the cockpit</h2>
+            <p class="setup-lede">Overlays sit over the game window. Pick a theme to see the whole deck change colour.</p>
+            <div class="setup-toggles">
+              <label class="setup-toggle"><input id="onboarding-overlays" type="checkbox"><i></i><span><b>Cockpit overlays</b><small>Navigation, Survey Operations and the field HUDs over the game. Each one can be set up in Overlay Studio.</small></span></label>
+              <label class="setup-toggle"><input id="onboarding-passthrough" type="checkbox"><i></i><span><b>Mouse passthrough</b><small>Clicks go through the overlays to the game, so they never get in the way.</small></span></label>
+              <label class="setup-toggle"><input id="onboarding-adaptive" type="checkbox"><i></i><span><b>Adaptive deck</b><small>The command deck brings forward what matters for what you are doing.</small></span></label>
+            </div>
+            <p class="setup-label">THEME</p>
+            <div id="setup-themes" class="setup-themes" role="radiogroup" aria-label="Theme"></div>
+          </section>
+
+          <section class="setup-step" data-step="launch" hidden>
+            <p class="setup-kicker">STEP 04 · LAUNCH</p>
+            <h2 tabindex="-1">Ready for first flight</h2>
+            <dl id="setup-summary" class="setup-summary"></dl>
+            <p class="setup-note">The first start reads every journal once to build your history, which can take a minute with years of flying. After that it follows the game live. Everything here can be changed later in Settings, where Recovery can also run this setup again.</p>
+          </section>
+
+          <p id="onboarding-error" class="setup-error" role="alert"></p>
+          <footer class="setup-actions">
             <button id="onboarding-exit" type="button" class="quiet-action">EXIT</button>
-            <div><small>READY FOR FIRST FLIGHT</small><button id="onboarding-submit" type="submit" class="commission-action">COMMISSION VOID COMPASS</button></div>
+            <span id="setup-progress">STEP 1 OF 4</span>
+            <button id="setup-back" type="button" hidden>BACK</button>
+            <button id="setup-next" type="button" class="primary">NEXT</button>
+            <button id="onboarding-submit" type="submit" class="commission-action" hidden>COMMISSION VOID COMPASS</button>
           </footer>
-        </form>
-      </div>
+        </div>
+      </form>
     </section>
   </div>
 
