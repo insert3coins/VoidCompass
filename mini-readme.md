@@ -1,27 +1,13 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.1.3 // Readability, scaled displays and first-run fixes
+## v5.5.1.4 // Overlay Studio displays fix
 **Release Date:** 2026-Oct-02
 
-* Fixed a new install not picking up the commander's name. Void Compass looked only at the end of the newest journal, which missed the commander when that journal was long or when the last launch never left the main menu. It now checks back through the newest journals until it finds one.
-* The first start after setup now picks up your ranks, progress, credits, ship and materials from your last session straight away, instead of waiting until you next play.
-* The first start after setup also reads every journal to build your survey history, the same as Settings > Rebuild cache. It runs once in the background after setup and uploads nothing to EDSM.
-* Journals are now read in date order across both of Frontier's file-name styles. Before, journals from 2021 and earlier (the old `Journal.YYMMDD…` names) could be taken for the newest one.
-* New in Settings > Appearance > Display:
-  * **Text size** (up to 150%) makes all of the command deck's text bigger without changing its layout.
-  * **Smallest text** raises the small labels to at least 10–14 px and leaves the headings alone. It's the quickest fix if the fine print is hard to read.
-  * **Overlay text size**, which used to be in Overlay Studio, sets the text size of every overlay. The overlays grow to fit it. One overlay can still have its own size in Overlay Studio.
-* **Command deck scale** now works. It zooms the whole command deck window, as Ctrl+ does in a browser. Before, it was saved but did nothing.
-* Fixed overlays on displays with Windows scaling above 100% (common on 1440p and 4K screens):
-  * Overlays were cut off, and the survey overlay didn't show all of a world's biology. Overlays are now sized for each display's scaling, so everything fits.
-  * Overlay Studio couldn't move an overlay to the right or bottom edge of the screen. It now uses the screen's real size and each overlay's real size.
-* The survey overlay never grows past the bottom of its screen. When there isn't room it pages its lists instead.
-* The survey overlay no longer disappears while a body you're near hasn't been scanned yet, or has a name the journal gives differently. It shows the whole system instead, so worlds that still have biology stay on screen.
-* New overlay **Frame rate** setting in Overlay Studio (All overlays): Full 60, Standard 30 or Light 15. It sets how often every overlay redraws its animation. Light helps if the overlays cost you game frames. The default is Standard.
-* Creating a support bundle no longer freezes Void Compass. A "bundle created" message box used to stop the journal and every overlay until it was closed, and it could sit hidden behind the game. Now the bundle is shown in Explorer and reported in the live feed.
+* Fixed Overlay Studio showing all of your monitors as one wide display instead of one display at a time. A 5.5.1.3 change for scaled displays stopped Studio from listing the displays once the survey overlay had started.
 
 ## Earlier releases
 
+* **v5.5.1.3** — Text size, smallest text and overlay text size in Settings > Appearance, a working Command deck scale, overlays sized for Windows display scaling, survey overlay fixes, an overlay frame-rate setting, and new installs picking up the commander and their whole history.
 * **v5.5.1.2** — OBS can capture each cockpit overlay on its own with Window Capture ("Windows 10 (1903 and up)" method), while the overlays stay off the taskbar and out of Alt-Tab.
 * **v5.5.1.1** — Rebuilt the first-time setup into four steps (Welcome, Journal link, Cockpit, Launch), with a live check of the journal folder that shows your journals, commander, ship and last system, and a theme picker that previews each theme as you click it.
 * **v5.4.9.9** — Rebuilt the Ship Workshop: a Build Planner with a hangar of builds, a hull drawing that lights the slot you fit, the distributor's pips, a loadout board, a module dock and every performance figure at once; and Engineering with your fleet, what is engineered on each ship, the material locker, the engineers and a new blueprint reference.
