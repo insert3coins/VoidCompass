@@ -78,7 +78,7 @@ body.ready .app { opacity: 1; visibility: visible; }
 .rail-footer small { display: block; margin-top: 11px; color: var(--dim); font: 8px Consolas, monospace; }
 
 .deck { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-rows: var(--topbar) minmax(0,1fr); overflow: hidden; padding-bottom: 29px; }
-.topbar { display: grid; grid-template-columns: minmax(250px, 1fr) minmax(430px, 1.5fr) minmax(210px,.75fr); background: color-mix(in srgb, var(--header) 96%, transparent); border-bottom: 1px solid var(--border); }
+.topbar { display: grid; grid-template-columns: minmax(230px, 1fr) minmax(400px, 1.5fr) auto minmax(190px,.75fr); background: color-mix(in srgb, var(--header) 96%, transparent); border-bottom: 1px solid var(--border); }
 .system-identity, .commander { display: flex; min-width: 0; flex-direction: column; justify-content: center; padding: 0 24px; position: relative; }
 .system-identity::after { content: ""; position: absolute; right: 0; top: 17px; bottom: 17px; width: 1px; background: var(--border); }
 .system-identity small, .commander small, .top-metrics small { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .12em; }
@@ -89,6 +89,43 @@ body.ready .app { opacity: 1; visibility: visible; }
 .top-metrics div:last-child { border: 0; }
 .top-metrics strong { display: block; color: var(--text); font: 700 12px Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
 .commander { text-align: right; border-left: 1px solid var(--border); }
+/* Header overlay switchboard: ALL (hide every overlay for now) and one
+   switch per overlay (its Overlay Studio on/off), on every page. */
+.overlay-switchboard { min-width: 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-left: 1px solid var(--border); }
+.overlay-switchboard[hidden] { display: none; }
+.overlay-all { flex: 0 0 auto; display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; align-items: center; gap: 3px 8px; padding: 7px 10px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text); cursor: pointer; text-align: left; }
+.overlay-all small { grid-column: 1 / -1; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .12em; }
+.overlay-all b { color: var(--accent); font: 700 11px Consolas, monospace; letter-spacing: .08em; }
+.overlay-all i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.overlay-all:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.overlay-all[aria-pressed="true"] { border-color: color-mix(in srgb, var(--orange) 55%, var(--border)); background: color-mix(in srgb, var(--orange) 9%, transparent); }
+.overlay-all[aria-pressed="true"] b { color: var(--orange); }
+.overlay-all[aria-pressed="true"] i { background: transparent; border: 1px solid var(--orange); box-shadow: none; }
+.overlay-quick { min-width: 0; display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, 21px); gap: 4px; }
+.overlay-quick button { min-width: 0; display: flex; align-items: center; gap: 5px; padding: 0 7px; border: 1px solid var(--border-soft); background: color-mix(in srgb, var(--inset) 70%, transparent); color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .08em; white-space: nowrap; cursor: pointer; }
+.overlay-quick button span { overflow: hidden; text-overflow: ellipsis; }
+.overlay-quick button i { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--dim); }
+.overlay-quick button:hover { border-color: var(--border); color: var(--muted); }
+.overlay-quick button.on { border-color: color-mix(in srgb, var(--accent) 40%, var(--border-soft)); color: var(--text); }
+.overlay-quick button.on i { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.overlay-switchboard.all-hidden .overlay-quick button.on { color: var(--muted); }
+.overlay-switchboard.all-hidden .overlay-quick button.on i { border-color: var(--orange); background: transparent; box-shadow: none; }
+.overlay-quick button:focus-visible, .overlay-all:focus-visible, .overlay-more:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.overlay-more { display: none; flex: 0 0 auto; grid-template-columns: auto auto; align-items: center; gap: 3px 8px; padding: 7px 10px; border: 1px solid var(--border); background: color-mix(in srgb, var(--inset) 70%, transparent); color: var(--text); cursor: pointer; text-align: left; }
+.overlay-more small { grid-column: 1 / -1; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .12em; }
+.overlay-more b { color: var(--text); font: 700 11px Consolas, monospace; letter-spacing: .06em; white-space: nowrap; }
+.overlay-more i { color: var(--accent); font-style: normal; font-size: 10px; transition: transform .15s ease; }
+.overlay-switchboard.open .overlay-more { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.overlay-switchboard.open .overlay-more i { transform: rotate(180deg); }
+/* Sixteen labelled switches need a wide deck; narrower, they open from
+   PANELS as a dropdown instead of squeezing the header's readouts. */
+@media (max-width: 1799px) {
+  .overlay-switchboard { position: relative; z-index: 60; }
+  .overlay-more { display: grid; }
+  .overlay-quick { position: absolute; top: calc(100% + 8px); right: 8px; width: min(560px, calc(100vw - 32px)); grid-auto-flow: row; grid-template-rows: none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 12px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 18px 44px rgba(0, 0, 0, .5); }
+  .overlay-quick button { height: 28px; font-size: 9.5px; }
+  .overlay-switchboard:not(.open) .overlay-quick { display: none; }
+}
 .commander strong { color: var(--orange); font: 700 13px Consolas, monospace; text-transform: uppercase; }
 
 .pages { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--border) var(--bg); }
@@ -989,7 +1026,7 @@ input,select,textarea,button { max-width: 100%; }
 @media (max-width: 1250px) {
   :root { --rail: 210px; }
   .galnet-reader-telemetry > span:nth-child(3) { display: none; }
-  .topbar { grid-template-columns: 1fr 1.3fr; }
+  .topbar { grid-template-columns: 1fr 1.3fr auto; }
   .commander { display: none; }
   .overview-modules > .survey-card, .overview-modules > .route-card { grid-column: span 6; }
   .overview-modules > .session-card, .overview-modules > .priority-card { grid-column: span 6; }
@@ -1015,7 +1052,7 @@ input,select,textarea,button { max-width: 100%; }
   .brand > div:last-child, .nav-item span, .nav-item b, .nav > p, .rail-footer { display: none; }
   .nav-item { grid-template-columns: 1fr; height: 48px; }
   .nav-item i { font-size: 18px; }
-  .topbar { grid-template-columns: minmax(220px,.9fr) minmax(0,1.5fr); }
+  .topbar { grid-template-columns: minmax(200px,.9fr) minmax(0,1.5fr) auto; }
   .top-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); padding: 0 8px; }
   .top-metrics div { padding: 0 8px; }
   .top-metrics div:last-child { display: none; }

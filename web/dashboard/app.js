@@ -139,7 +139,7 @@ const HOTKEY_CODE_NAMES = {
 };
 
 const STRUCTURAL_BUTTON_SELECTOR = [
-  ".nav-item", "[data-feed-filter]", ".studio-overlay-card", ".studio-monitor", "[data-setup-go]", ".studio-text-link",
+  ".nav-item", "[data-feed-filter]", ".overlay-quick button", "#overlay-all-toggle", "#overlay-quick-more", ".studio-overlay-card", ".studio-monitor", "[data-setup-go]", ".studio-text-link",
   ".studio-index-select", ".mission-row", ".workspace-tabs button",
   ".suite-tabs button", "[data-analytics-view]",
   ".galnet-headline-row", "#status-galnet",
@@ -748,8 +748,43 @@ function renderHeader(state) {
   text("header-traffic", `${number(traffic.day)} / ${number(traffic.week)} / ${number(traffic.total)}`);
   text("header-commander", state.profile?.commander, "UNKNOWN");
   text("header-ship", `${flight.ship || "SHIP"} // ${flight.state || "FLIGHT"}`.toUpperCase());
+  renderOverlaySwitchboard(state.overlay_studio || {});
   text("overview-link-state", `JOURNAL ${source}`);
   byId("overview-link-state").dataset.source = source.toLowerCase();
+}
+
+// The header switchboard: one switch per overlay (its Overlay Studio on/off)
+// and ALL, the show/hide-all curtain, reachable from every page.
+let overlayQuickFingerprint = "";
+function renderOverlaySwitchboard(studio = {}) {
+  const host = byId("overlay-quick");
+  if (!host) return;
+  const overlays = Array.isArray(studio.overlays) ? studio.overlays : [];
+  const allHidden = Boolean((studio.options || {}).all_hidden);
+  const board = host.closest(".overlay-switchboard");
+  board.hidden = !overlays.length;
+  board.classList.toggle("all-hidden", allHidden);
+  const all = byId("overlay-all-toggle");
+  all.setAttribute("aria-pressed", String(allHidden));
+  all.title = allHidden ? "Overlays are hidden: show them again" : "Hide every overlay for now (each keeps its own setting)";
+  text("overlay-all-state", allHidden ? "HIDDEN" : "SHOWN");
+  text("overlay-quick-count", `${overlays.filter((row) => row.enabled).length} / ${overlays.length} ON`);
+  const fingerprint = JSON.stringify(overlays.map((row) => [row.id, row.short_label, row.label, Boolean(row.enabled)]));
+  if (fingerprint === overlayQuickFingerprint) return;
+  overlayQuickFingerprint = fingerprint;
+  host.replaceChildren(...overlays.map((row) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.overlayQuick = row.id;
+    button.className = row.enabled ? "on" : "";
+    button.setAttribute("aria-pressed", String(Boolean(row.enabled)));
+    button.title = `${row.label}: ${row.enabled ? "on. Click to turn it off" : "off. Click to turn it on"}`;
+    button.append(document.createElement("i"));
+    const label = document.createElement("span");
+    label.textContent = row.short_label || row.label;
+    button.append(label);
+    return button;
+  }));
 }
 
 function renderAdaptive(state) {
@@ -4888,6 +4923,45 @@ byId("studio-selected-maphide").addEventListener("change", async (event) => {
 byId("studio-selected-enabled").addEventListener("change", async (event) => {
   const wanted = event.target.checked;
   if (!studioSelectedId || !(await toggleStudioOverlay(studioSelectedId, wanted))) event.target.checked = !wanted;
+});
+byId("overlay-quick")?.addEventListener("click", async (event) => {
+  const chip = event.target.closest("[data-overlay-quick]");
+  if (!chip || chip.disabled) return;
+  const wanted = chip.getAttribute("aria-pressed") !== "true";
+  chip.disabled = true;
+  try {
+    if (await toggleStudioOverlay(chip.dataset.overlayQuick, wanted)) {
+      chip.classList.toggle("on", wanted);
+      chip.setAttribute("aria-pressed", String(wanted));
+    }
+  } finally {
+    chip.disabled = false;
+  }
+});
+function setOverlayQuickOpen(open) {
+  const board = byId("overlay-quick")?.closest(".overlay-switchboard");
+  if (!board) return;
+  board.classList.toggle("open", open);
+  byId("overlay-quick-more")?.setAttribute("aria-expanded", String(open));
+}
+byId("overlay-quick-more")?.addEventListener("click", () => {
+  setOverlayQuickOpen(byId("overlay-quick-more").getAttribute("aria-expanded") !== "true");
+});
+// The dropdown closes on a click elsewhere or Escape, as menus do.
+document.addEventListener("pointerdown", (event) => {
+  if (!event.target.closest?.(".overlay-switchboard")) setOverlayQuickOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setOverlayQuickOpen(false);
+});
+byId("overlay-all-toggle")?.addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const hide = button.getAttribute("aria-pressed") !== "true";
+  if (await command("overlay_studio", {operation: "hide_all"})) {
+    button.setAttribute("aria-pressed", String(hide));
+    button.closest(".overlay-switchboard")?.classList.toggle("all-hidden", hide);
+    text("overlay-all-state", hide ? "HIDDEN" : "SHOWN");
+  }
 });
 byId("studio-overlay-index").addEventListener("change", async (event) => {
   const input = event.target.closest("[data-overlay-enable]");

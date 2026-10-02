@@ -325,6 +325,9 @@ class HtmlOverlayStudioMixin:
                 "overlay_frame_rate": overlay_frame_rate(self.config),
                 "overlay_hide_on_maps": bool(self.config.get("overlay_hide_on_maps", True)),
                 "layout_mode": HtmlOverlayServer.layout_mode,
+                # The show/hide-all curtain (the header's ALL switch and the
+                # all-overlays hotkey share it).
+                "all_hidden": bool(getattr(self, "_overlay_hotkey_global_hidden", False)),
                 "overlay_opacity_percent": _integer(self.config.get("overlay_opacity_percent"), 100),
                 "rebuy_warnings_enabled": bool(self.config.get("rebuy_warnings_enabled", True)),
                 "toast_fss_signals_enabled": bool(self.config.get("toast_fss_signals_enabled", True)),
@@ -334,6 +337,7 @@ class HtmlOverlayStudioMixin:
                 "gravity_warning_hud_timeout_s": _integer(self.config.get("gravity_warning_hud_timeout_s"), 20),
                 "station_info_auto_hide_enabled": bool(self.config.get("station_info_auto_hide_enabled", False)),
                 "survey_status_show_all_bodies": bool(self.config.get("survey_status_show_all_bodies", False)),
+                "survey_codex_flags": bool(self.config.get("survey_codex_flags", False)),
                 **{
                     f"survey_{key}": value
                     for key, value in survey_overlay_options(self.config).items()
@@ -496,7 +500,7 @@ class HtmlOverlayStudioMixin:
             "rebuy_warnings_enabled",
             "toast_fss_signals_enabled", "toast_dss_signals_enabled",
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
-            "survey_status_show_all_bodies",
+            "survey_status_show_all_bodies", "survey_codex_flags",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
@@ -534,7 +538,7 @@ class HtmlOverlayStudioMixin:
             ticker = getattr(self, "galnet_ticker_hud", None)
             if ticker is not None:
                 ticker.apply_settings()
-        elif key == "survey_status_show_all_bodies":
+        elif key in {"survey_status_show_all_bodies", "survey_codex_flags"}:
             survey = getattr(self, "survey_status_hud", None)
             if survey is not None:
                 survey._last_render_key = None
@@ -717,6 +721,11 @@ class HtmlOverlayStudioMixin:
                 persist=bool(payload.get("commit")),
                 preview=not bool(payload.get("commit")),
             )
+        if operation == "hide_all":
+            # The command deck header's ALL switch: the all-overlays hotkey's
+            # curtain. Every overlay keeps its own on/off setting underneath.
+            self._handle_overlay_hotkey("toggle_all")
+            return True
         if operation == "map_hiding":
             return self._set_overlay_map_hiding(overlay_id, bool(payload.get("hide")))
         if operation == "layout_mode":

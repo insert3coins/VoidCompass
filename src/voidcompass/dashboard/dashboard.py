@@ -49,6 +49,7 @@ from voidcompass.overlays.galnet_ticker_hud import GalnetTickerHUD
 from voidcompass.overlays.music_player_hud import MusicPlayerHUD
 from voidcompass.overlays.contact_scope_hud import ContactScopeHUD
 from voidcompass.overlays.jump_info_hud import JumpInfoHUD
+from voidcompass.exploration.codex_index import CodexIndex
 from voidcompass.overlays.html_survey_overlay import attach_html_survey_overlay
 from voidcompass.overlays.html_toast_overlay import attach_html_toast_overlay
 from voidcompass.overlays.html_gravity_overlay import attach_html_gravity_overlay
@@ -566,6 +567,8 @@ class MainDashboard(
                     "species": species,
                     "genus": data.get("genus"),
                     "variant": data.get("variant"),
+                    "species_codex": data.get("species_key"),
+                    "variant_codex": data.get("variant_key"),
                     "species_value": bio_values.species_value(species),
                     "genus_value": bio_values.genus_info(data.get("genus") or species),
                     "colony_m": bio_values.GENUS_COLONY_M.get(data.get("genus") or species),
@@ -1086,6 +1089,7 @@ class MainDashboard(
         self.body_dss_complete = set()
         self.system_undiscovered = False
         self.fss_all_bodies = False
+        self._fss_honk_total = 0
         self.system_stars = {}
         self.body_scan_data = {}
         self.current_body_id = None
@@ -1383,12 +1387,35 @@ class MainDashboard(
         except Exception as exc:
             logging.warning("Travel history import skipped: %s", exc)
 
+    def _import_codex_index(self, journal_path, codex=None, commander=None, fid=None):
+        codex = codex or getattr(self, "codex_index", None)
+        if codex is None:
+            return
+        try:
+            added = codex.import_journals(journal_path, commander=commander, fid=fid)
+            if added and codex is getattr(self, "codex_index", None):
+                self.log(f"Codex record indexed {added:,} biological entries")
+                self._ui_post(self._refresh_survey_status_progress, key="codex-index-survey")
+        except Exception as exc:
+            logging.warning("Codex history import skipped: %s", exc)
+
+    def _survey_codex_lookup(self, kind, key, body_id=None):
+        """Survey Operations' Codex flags, for the current region and system."""
+        index = getattr(self, "codex_index", None)
+        if index is None:
+            return ""
+        region, _position = self._bio_location_context()
+        if kind == "variant":
+            return index.variant_flag(key, region, getattr(self, "current_system_address", None), body_id)
+        return index.species_flag(key, region)
+
     def _import_exploration_history(self, journal_path, logbook, tracker, commander=None, fid=None,
-                                    scan_db_path=None, profile_key=None, travel=None):
+                                    scan_db_path=None, profile_key=None, travel=None, codex=None):
         """Read history sequentially so indexers never contend for the journal folder."""
         self._import_captains_log_history(journal_path, logbook, commander, fid)
         self._import_deep_survey_history(journal_path, tracker, commander, fid)
         self._import_travel_history(journal_path, travel, commander, fid)
+        self._import_codex_index(journal_path, codex, commander, fid)
         try:
             repaired = self.import_scan_journal_history(
                 journal_path, commander, fid, db_path=scan_db_path,
@@ -1871,6 +1898,9 @@ class MainDashboard(
         self.travel_history = TravelHistory(
             get_profile_file(new_key, "travel_history.json")
         )
+        if getattr(self, "codex_index", None):
+            self.codex_index.flush(wait=False)
+        self.codex_index = CodexIndex(get_profile_file(new_key, "codex_index.json"))
         if getattr(self, "expedition_manager", None):
             self.expedition_manager.flush(wait=False)
         self.expedition_manager = ExpeditionManager(
@@ -1920,6 +1950,7 @@ class MainDashboard(
                 journal_path, self.captains_log, self.deep_survey,
                 self.cmdr_name, self.cmdr_fid, self.db_path,
                 get_active_profile(self.config), self.travel_history,
+                self.codex_index,
             ),
             name="exploration-history", daemon=True,
         ).start()
@@ -2002,6 +2033,9 @@ class MainDashboard(
         self.travel_history = TravelHistory(
             get_profile_file(get_active_profile(self.config), "travel_history.json")
         )
+        self.codex_index = CodexIndex(
+            get_profile_file(get_active_profile(self.config), "codex_index.json")
+        )
         self.rhino_minimap = RhinoMinimapTracker(
             get_profile_file(get_active_profile(self.config), "rhino_minimap.json.gz")
         )
@@ -2080,6 +2114,7 @@ class MainDashboard(
         self.body_dss_complete = set()
         self.system_undiscovered = False
         self.fss_all_bodies = False
+        self._fss_honk_total = 0
         self.cmdr_name = self.config.get("active_commander_name") or "CMDR"
         self.cmdr_fid = self.config.get("active_commander_fid") or ""
         self.cmdr_balance = None
@@ -2454,6 +2489,7 @@ class MainDashboard(
 
         if self._overlay_enabled("survey_status_hud"):
             self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
+            self.survey_status_hud.codex_lookup = self._survey_codex_lookup
         else:
             self.survey_status_hud = None
 
@@ -2597,6 +2633,7 @@ class MainDashboard(
                     journal_path, self.captains_log, self.deep_survey,
                     self.cmdr_name, self.cmdr_fid, self.db_path,
                     get_active_profile(self.config), self.travel_history,
+                    self.codex_index,
                 ),
             ),
             name="exploration-history", daemon=True,
@@ -3355,6 +3392,10 @@ class MainDashboard(
                     except (AttributeError, RuntimeError):
                         continue
                 message = "Overlays hidden"
+            # The command deck header shows the curtain's state.
+            publish = getattr(self, "_schedule_html_dashboard_publish", None)
+            if callable(publish):
+                publish(immediate=True)
         else:
             if self._overlay_hotkey_global_hidden:
                 self.add_event_feed_entry(
@@ -4495,6 +4536,28 @@ class MainDashboard(
         self.belt_clusters.append(cluster)
         return True
 
+    def _apply_discovery_scan(self, discovered):
+        """DiscoveryScan: bodies revealed without the FSS. True when it moved
+        the system total.
+
+        Its count adds to the bodies scanned only while the game hasn't said
+        how many bodies the system has. After a honk (FSSDiscoveryScan's
+        BodyCount) or an all-bodies-found, those bodies are already counted:
+        mapping a ring with probes logs DiscoveryScan "Bodies":1 too, which
+        turned a finished 33/33 into 33/34 that could never complete.
+        """
+        if not isinstance(discovered, int) or discovered <= 0:
+            return False
+        if (getattr(self, "fss_all_bodies", False)
+                or getattr(self, "_fss_honk_total", 0)
+                or (getattr(self, "scan_total_confirmed", False) and self.scanned >= self.total > 0)):
+            return False
+        self.total = max(self.total, self.scanned + discovered)
+        # A live discovery scan is the authority the Smart Next Action card
+        # was waiting for; do not keep suggesting another honk.
+        self.scan_total_confirmed = True
+        return True
+
     def _mark_system_scan_complete(self, total=None):
         try:
             total = int(total or 0)
@@ -4657,6 +4720,7 @@ class MainDashboard(
         if self._overlay_enabled("survey_status_hud"):
             if self.survey_status_hud is None:
                 self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
+                self.survey_status_hud.codex_lookup = self._survey_codex_lookup
                 if self.current_docked:
                     self.survey_status_hud.suppress()
         elif self.survey_status_hud:
@@ -7593,6 +7657,12 @@ class MainDashboard(
                     self._refresh_exploration_window()
             except Exception as exc:
                 logging.debug("Deep Survey event skipped [%s]: %s", ev, exc)
+        if getattr(self, "codex_index", None) and ev == "CodexEntry" and isinstance(raw, dict):
+            try:
+                if self.codex_index.observe(raw) and not startup_replay:
+                    self._refresh_survey_status_progress()
+            except Exception as exc:
+                logging.debug("Codex index event skipped: %s", exc)
         if getattr(self, "travel_history", None):
             try:
                 history_raw = raw if isinstance(raw, dict) else d
@@ -7975,6 +8045,8 @@ class MainDashboard(
                 "species":        species,
                 "genus":          d.get("genus"),
                 "variant":        d.get("variant"),
+                "species_codex":  d.get("species_key") or existing.get("species_codex"),
+                "variant_codex":  d.get("variant_key") or existing.get("variant_codex"),
                 "species_value":  bio_values.species_value(species),
                 "genus_value":    bio_values.genus_info(d.get("genus") or species),
                 "colony_m":       bio_values.GENUS_COLONY_M.get(d.get("genus") or species),
@@ -8207,6 +8279,7 @@ class MainDashboard(
             self.body_dss_complete = set()
             self.system_undiscovered = False
             self.fss_all_bodies = False
+            self._fss_honk_total = 0
             self.fss_summary_active = False
             self._rebuild_scan_index()
             self._rebuild_system_state_from_scan_items()
@@ -8623,6 +8696,7 @@ class MainDashboard(
             if body_count > 0:
                 self.total = max(body_count, self.total)
                 self.scan_total_confirmed = True
+                self._fss_honk_total = body_count
                 self._queue_edsm_upload(raw, startup_replay=startup_replay)
             progress = d.get("progress", raw.get("Progress") if isinstance(raw, dict) else None)
             try:
@@ -8666,12 +8740,7 @@ class MainDashboard(
         elif ev == "DiscoveryScan":
             if not self._matches_current_system_address(d):
                 return
-            discovered = d.get("bodies", 0)
-            if isinstance(discovered, int) and discovered > 0:
-                self.total = max(self.total, self.scanned + discovered)
-                # A live discovery scan is the authority the Smart Next Action
-                # card was waiting for; do not keep suggesting another honk.
-                self.scan_total_confirmed = True
+            if self._apply_discovery_scan(d.get("bodies", 0)):
                 self.db_update_system(self.current_sys, self.total, self.scanned)
                 if not self.batch_mode:
                     scan_text = self._scan_progress_count_text()

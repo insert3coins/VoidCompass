@@ -143,6 +143,7 @@ def predict_genera(planet_class, atmosphere, temp_k, gravity_g, volcanism,
             entry["species"].append({
                 "name": row.get("name"), "value": row.get("value"),
                 "unchecked": row.get("unchecked"), "confirmed": row.get("confirmed"),
+                "key": row.get("species_key"),
             })
             entry["confirmed"] = entry["confirmed"] or bool(row.get("confirmed"))
         for entry in grouped.values():

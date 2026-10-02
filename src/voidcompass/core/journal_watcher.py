@@ -1083,6 +1083,10 @@ class JournalWatcher:
                     "species": data.get("Species_Localised") or data.get("Species"),
                     "genus": data.get("Genus_Localised") or data.get("Genus"),
                     "variant": data.get("Variant_Localised") or data.get("Variant"),
+                    # The game's identifiers read the same in every language
+                    # (Survey Operations' Codex flags match on them).
+                    "species_key": data.get("Species"),
+                    "variant_key": data.get("Variant"),
                     "sample_idx": data.get("Sample"),
                     "scan_type": data.get("ScanType_Localised") or data.get("ScanType"),
                     "is_new_entry": bool(data.get("IsNewEntry")),
@@ -1467,6 +1471,11 @@ class JournalWatcher:
                 name, {"total": 0, "bodies": [], "scanned_count": 0},
             )
 
+        # Systems whose body count the game has stated (a honk's BodyCount
+        # or an all-bodies-found). DiscoveryScan must not add to those: it
+        # is also logged for mapping a ring, after every body is counted.
+        counted_by_game = set()
+
         for filepath in files:
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
@@ -1496,6 +1505,8 @@ class JournalWatcher:
                                     row = system_row(sys_name)
                                     count = int(data.get("BodyCount") or 0)
                                     row["total"] = max(row["total"], count)
+                                    if count:
+                                        counted_by_game.add(sys_name)
                                     try:
                                         complete = float(data.get("Progress")) >= 1.0
                                     except (TypeError, ValueError):
@@ -1505,7 +1516,7 @@ class JournalWatcher:
 
                             elif ev == "DiscoveryScan":
                                 sys_name = current_sys_context
-                                if sys_name:
+                                if sys_name and sys_name not in counted_by_game:
                                     row = system_row(sys_name)
                                     discovered = data.get("Bodies", 0)
                                     if isinstance(discovered, int) and discovered > 0:
@@ -1527,6 +1538,8 @@ class JournalWatcher:
                                     count = int(data.get("Count") or data.get("BodyCount") or 0)
                                     row["total"] = max(row["total"], count)
                                     row["scanned_count"] = max(row["scanned_count"], count)
+                                    if count:
+                                        counted_by_game.add(sys_name)
 
                             elif ev == "Scan":
                                 sys_name = data.get("StarSystem", current_sys_context)

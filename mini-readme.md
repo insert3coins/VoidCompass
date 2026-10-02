@@ -1,25 +1,19 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.1.5 // Jump Info overlay, overlays hide on the maps, layout mode, system discovery on the HUD
+## v5.5.1.6 // Overlay switches in the header, Codex flags, survey count fix
 **Release Date:** 2026-Oct-03
 
-* New **Jump Info** overlay, after SrvSurvey's jump panel. While your frame shift drive charges and through witch space, it shows the system you're jumping to:
-  * its star class, and whether you can scoop it or it's a neutron star, white dwarf or black hole;
-  * the jump's distance, and where it sits on your plotted route, drawn to scale with scoopable stars marked;
-  * who discovered it and when, and when EDSM last updated it;
-  * its traffic, bodies (Earth-like, water and ammonia worlds, terraformable, landable) and ports;
-  * the region you're entering, when it's a new one.
-  It asks EDSM as soon as the next system is targeted, so the facts are usually there before the jump. It follows your theme and text size, and it's on by default. Place it and choose how long it stays after you arrive in Overlay Studio (it hides on arrival by default).
-* Overlays now hide while the Galaxy Map, System Map or Orrery is open, and come straight back when you close it. It's on by default: switch **Hide on maps** off in Overlay Studio (All overlays) to keep them showing.
-* You can choose which overlays hide. Select one in Overlay Studio and switch its own **Hide on maps** off to keep just that overlay showing on the maps (each profile remembers its choices).
-* New **Layout mode** in Overlay Studio (All overlays) shows every enabled overlay at once, even ones that have nothing to show yet. Each is drawn with a dashed outline, its name and its size, so you can line them all up. It turns itself off when you leave Overlay Studio.
-* The Navigation HUD now shows who discovered the system you're in and when, and when EDSM last updated it, as SrvSurvey does. It shows in orange on the line under the system name, taking turns with the region every few seconds. Dates use the in-game year, such as 4 APR 3308. It comes from EDSM, one extra lookup per jump, and only for systems EDSM already knows.
-* Fixed "discovered by" missing for systems you've just discovered. Void Compass asked EDSM the moment you arrived, before your own upload of the jump reached it, and EDSM's servers then kept that empty answer for a day. Now it asks again a minute later, and once more at five minutes, getting past that stored answer.
-* You can now turn off the **Surface signals** cockpit notifications, which can pile up while you scan a system. **Mapped signals** (after probing a body) has its own switch. Both are in Overlay Studio under Cockpit Notifications. The signals are still recorded and shown everywhere else.
-* Thanks to CMDR Nyx Evera for the ideas.
+* New overlay switches in the command deck header, next to your commander name, on every page:
+  * **OVERLAYS** hides every overlay for now, and shows them again (the same as the show/hide-all hotkey). Each overlay keeps its own setting underneath.
+  * One switch per overlay turns it on or off, the same as its switch in Overlay Studio, so a panel you only need now and then is one click away without a hotkey.
+  * On a narrower command deck the per-overlay switches open from **PANELS**, so the header's readouts keep their room.
+  Thanks to CMDR Nyx Evera for the idea.
+* New **Codex flags** for Survey Operations. A filled yellow flag marks a species you've never logged in your Codex; an outline flag, one you've never logged in this galactic region. They sit beside each possible species, and on the variant you're sampling where you first logged it. A genus the DSS found, with no species predicted, is flagged only when none of its species is logged. They're built from your whole journal history, per commander, and work in any game language. Off by default: turn on **Codex flags** in Overlay Studio under Survey Operations. Thanks to CMDR Payden for the idea.
+* Fixed a finished system survey showing one body still to go (such as 33 / 34). Mapping a planetary ring with probes logs a "bodies discovered" event, and Void Compass added that to a body count the game had already given. Now the game's own count stands once the system has been honked or fully scanned, live and when the cache is rebuilt. Honking a system that's stuck one short puts it right.
 
 ## Earlier releases
 
+* **v5.5.1.5** — Jump Info overlay, overlays hide on the maps (each can opt out), Overlay Studio layout mode, who discovered the system on the Navigation HUD, and switches for the surface and mapped signal notifications.
 * **v5.5.1.4** — Fixed Overlay Studio merging every monitor into one wide display, and the command deck reopening in the wrong place on monitors with different Windows scaling.
 * **v5.5.1.3** — Text size, smallest text and overlay text size in Settings > Appearance, a working Command deck scale, overlays sized for Windows display scaling, survey overlay fixes, an overlay frame-rate setting, and new installs picking up the commander and their whole history.
 * **v5.5.1.2** — OBS can capture each cockpit overlay on its own with Window Capture ("Windows 10 (1903 and up)" method), while the overlays stay off the taskbar and out of Alt-Tab.
