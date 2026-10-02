@@ -1,13 +1,25 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.1.4 // Overlay Studio displays and deck window fixes
-**Release Date:** 2026-Oct-02
+## v5.5.1.5 // Jump Info overlay, overlays hide on the maps, layout mode, system discovery on the HUD
+**Release Date:** 2026-Oct-03
 
-* Fixed Overlay Studio showing all of your monitors as one wide display instead of one display at a time. A 5.5.1.3 change for scaled displays stopped Studio from listing the displays once the survey overlay had started.
-* Fixed the command deck reopening in the wrong place, sometimes on the other monitor, when your monitors use different Windows scaling (say a 4K screen at 150% beside a 1080p one at 100%). The deck now remembers exactly where it was on screen. Setups where every monitor uses the same scaling were not affected.
+* New **Jump Info** overlay, after SrvSurvey's jump panel. While your frame shift drive charges and through witch space, it shows the system you're jumping to:
+  * its star class, and whether you can scoop it or it's a neutron star, white dwarf or black hole;
+  * the jump's distance, and where it sits on your plotted route, drawn to scale with scoopable stars marked;
+  * who discovered it and when, and when EDSM last updated it;
+  * its traffic, bodies (Earth-like, water and ammonia worlds, terraformable, landable) and ports;
+  * the region you're entering, when it's a new one.
+  It asks EDSM as soon as the next system is targeted, so the facts are usually there before the jump. It follows your theme and text size, and it's on by default. Place it and choose how long it stays after you arrive in Overlay Studio (it hides on arrival by default).
+* Overlays now hide while the Galaxy Map, System Map or Orrery is open, and come straight back when you close it. It's on by default: switch **Hide on maps** off in Overlay Studio (All overlays) to keep them showing.
+* You can choose which overlays hide. Select one in Overlay Studio and switch its own **Hide on maps** off to keep just that overlay showing on the maps (each profile remembers its choices).
+* New **Layout mode** in Overlay Studio (All overlays) shows every enabled overlay at once, even ones that have nothing to show yet. Each is drawn with a dashed outline, its name and its size, so you can line them all up. It turns itself off when you leave Overlay Studio.
+* The Navigation HUD now shows who discovered the system you're in and when, and when EDSM last updated it, as SrvSurvey does. It shows in orange on the line under the system name, taking turns with the region every few seconds. Dates use the in-game year, such as 4 APR 3308. It comes from EDSM, one extra lookup per jump, and only for systems EDSM already knows.
+* Fixed "discovered by" missing for systems you've just discovered. Void Compass asked EDSM the moment you arrived, before your own upload of the jump reached it, and EDSM's servers then kept that empty answer for a day. Now it asks again a minute later, and once more at five minutes, getting past that stored answer.
+* Thanks to CMDR Nyx Evera for the ideas.
 
 ## Earlier releases
 
+* **v5.5.1.4** — Fixed Overlay Studio merging every monitor into one wide display, and the command deck reopening in the wrong place on monitors with different Windows scaling.
 * **v5.5.1.3** — Text size, smallest text and overlay text size in Settings > Appearance, a working Command deck scale, overlays sized for Windows display scaling, survey overlay fixes, an overlay frame-rate setting, and new installs picking up the commander and their whole history.
 * **v5.5.1.2** — OBS can capture each cockpit overlay on its own with Window Capture ("Windows 10 (1903 and up)" method), while the overlays stay off the taskbar and out of Alt-Tab.
 * **v5.5.1.1** — Rebuilt the first-time setup into four steps (Welcome, Journal link, Cockpit, Launch), with a live check of the journal folder that shows your journals, commander, ship and last system, and a theme picker that previews each theme as you click it.

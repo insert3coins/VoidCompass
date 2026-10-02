@@ -64,6 +64,13 @@ function routeFeedback(message) {
 }
 let lastSurveyProgress = null;
 let lastSurveySignature = '';
+// The line under the system name takes turns: the region, then who
+// discovered the system and when, then when EDSM last updated it.
+const LOCATION_LINE_MS = 6000;
+let locationLines = [];
+let locationLineIndex = 0;
+let locationLineKey = '';
+let locationLineTimer = 0;
 
 function colour(value, fallback) {
   return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback;
@@ -841,6 +848,31 @@ function formatClock(epoch) {
     : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+function showLocationLine() {
+  const label = dom['region-label'];
+  const text = locationLines[locationLineIndex % locationLines.length] || '';
+  label.textContent = text;
+  label.title = text;
+  label.classList.toggle('system-history', locationLineIndex % locationLines.length > 0);
+}
+
+function renderLocationLines(system) {
+  const lines = [system.region || 'REGION UNKNOWN', ...(Array.isArray(system.history) ? system.history : [])]
+    .map((line) => String(line || '').trim()).filter(Boolean);
+  const key = `${system.name || ''}|${lines.join('|')}`;
+  if (key === locationLineKey) return;
+  // A new system (or new EDSM history) starts again from the region.
+  locationLineKey = key;
+  locationLines = lines;
+  locationLineIndex = 0;
+  showLocationLine();
+  window.clearInterval(locationLineTimer);
+  locationLineTimer = lines.length > 1 ? window.setInterval(() => {
+    locationLineIndex = (locationLineIndex + 1) % locationLines.length;
+    showLocationLine();
+  }, LOCATION_LINE_MS) : 0;
+}
+
 function updateClock() {
   dom['system-clock'].textContent = formatClock(snapshot?.system?.arrival_epoch);
 }
@@ -903,7 +935,7 @@ function render(data) {
   renderScene(data, theme, tone, vehicle, reducedMotion, energy);
   dom['current-star-label'].textContent = currentStarClass ? `STAR ${currentStarClass.toUpperCase()}` : 'STAR ?';
   dom['current-star-label'].title = currentStarClass ? `Known local star class ${currentStarClass}` : 'Local star class unknown';
-  dom['region-label'].textContent = system.region || 'REGION UNKNOWN';
+  renderLocationLines(system);
   hud.classList.toggle('surface-focus', Boolean(data.context?.surface));
   renderRoute(data.route, system.name || '');
   const metrics = data.metrics || {};
@@ -964,6 +996,7 @@ async function checkHostHealth() {
     if (!response.ok) throw new Error(`Health HTTP ${response.status}`);
     const health = await response.json();
     window.VoidCompassFrameCap?.set(health.frame_rate);
+    window.VoidCompassLayout?.apply(health);
     lastServerContact = Date.now();
     const revision = Number(health.revision);
     pageReady = pageReady || Boolean(health.ready);

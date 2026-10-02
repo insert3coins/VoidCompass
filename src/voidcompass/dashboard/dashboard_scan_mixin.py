@@ -825,6 +825,8 @@ class DashboardScanMixin:
         if fss_changed:
             self.in_fss = in_fss
             self.fss_summary_active = not in_fss
+        if gui_focus_changed:
+            self._apply_map_overlay_hiding()
         if (gui_focus_changed or fss_changed) and not self.batch_mode:
             self.update_hud()
         if fss_changed and not self.batch_mode:

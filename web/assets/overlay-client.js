@@ -108,6 +108,7 @@
         if (response.ok) {
           const health = await response.json();
           global.VoidCompassFrameCap?.set(health.frame_rate);
+          global.VoidCompassLayout?.apply(health);
           const nextRevision = Number(health.revision);
           if (Number.isFinite(nextRevision) && nextRevision !== revision) {
             await refresh(nextRevision);

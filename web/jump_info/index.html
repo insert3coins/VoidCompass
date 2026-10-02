@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Jump Info</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <main id="jump" class="jump empty" data-phase="">
+    <div class="edge top"></div><div class="edge bottom"></div>
+    <div id="content" class="content">
+      <header>
+        <div class="title"><i></i><span>NEXT JUMP</span></div>
+        <b id="phase" class="phase">FSD CHARGING</b>
+      </header>
+      <section class="target">
+        <i id="star-glyph" class="star-glyph" aria-hidden="true"><b></b></i>
+        <div class="name-block">
+          <strong id="system-name">SYSTEM</strong>
+          <span id="star-line" class="star-line"></span>
+        </div>
+        <div id="jump-distance" class="jump-distance" hidden><b id="jump-ly">0</b><small>LY</small></div>
+      </section>
+      <section id="route" class="route" hidden>
+        <span id="route-count" class="route-count"></span>
+        <svg id="route-line" class="route-line" aria-hidden="true"></svg>
+        <span id="route-total" class="route-total"></span>
+      </section>
+      <section id="lines" class="lines"></section>
+    </div>
+    <div class="scanlines"></div><div class="vignette"></div>
+  </main>
+  <script src="/assets/frame-cap.js"></script>
+  <script src="/assets/overlay-layout.js"></script>
+  <script src="/assets/overlay-client.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

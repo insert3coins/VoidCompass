@@ -21,6 +21,7 @@ from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, hud_typogr
 
 # How lively the Navigation HUD's holographic scenes are.
 HUD_ANIMATION_LEVELS = ("Calm", "Standard", "Energetic")
+from voidcompass.overlays.jump_info_hud import LINGER_CHOICES as JUMP_INFO_LINGER_CHOICES, linger_seconds
 from voidcompass.overlays.galnet_ticker_hud import (
     TICKER_CONTENT, TICKER_CRT, TICKER_GLITCH, TICKER_GLITCH_STRENGTH, TICKER_SPEEDS,
     TICKER_STORIES, TICKER_WIDTH_RANGE, ticker_options,
@@ -225,6 +226,7 @@ class HtmlOverlayStudioMixin:
                 "short_label": OVERLAY_CARD_LABELS.get(attr, attr.upper()),
                 "x": x, "y": y, "width": width, "height": height,
                 "enabled": enabled,
+                "hide_on_maps": attr not in self._map_keep_visible(),
                 "shown": shown,
                 "html_ready": html_ready,
                 "state": (
@@ -321,6 +323,8 @@ class HtmlOverlayStudioMixin:
                 "hud_bright_labels": hud_typography(self.config)["bright"],
                 "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
                 "overlay_frame_rate": overlay_frame_rate(self.config),
+                "overlay_hide_on_maps": bool(self.config.get("overlay_hide_on_maps", True)),
+                "layout_mode": HtmlOverlayServer.layout_mode,
                 "overlay_opacity_percent": _integer(self.config.get("overlay_opacity_percent"), 100),
                 "rebuy_warnings_enabled": bool(self.config.get("rebuy_warnings_enabled", True)),
                 "data_risk_warnings_enabled": bool(self.config.get("data_risk_warnings_enabled", True)),
@@ -335,6 +339,7 @@ class HtmlOverlayStudioMixin:
                 "survey_text_scale_percent": _integer(self.config.get("survey_text_scale_percent"), 0),
                 "station_info_timeout_s": _integer(self.config.get("station_info_timeout_s"), 30),
                 "contact_scope_timeout_s": _integer(self.config.get("contact_scope_timeout_s"), 45),
+                "jump_info_linger_s": linger_seconds(self.config),
                 "heartbeat_orb_size": orb_size(self.config),
                 **{f"galnet_ticker_{key}": value for key, value in ticker_options(self.config).items()},
                 **{f"music_player_{key}": value for key, value in music_overlay_options(self.config).items()},
@@ -444,6 +449,45 @@ class HtmlOverlayStudioMixin:
         self._schedule_html_dashboard_publish(immediate=True)
         return True
 
+    # Status.json GuiFocus: the Galaxy Map, the System Map and the Orrery.
+    _MAP_GUI_FOCUS = {6, 7, 8}
+
+    def _map_keep_visible(self):
+        """Overlays (Studio ids) that stay on screen with a map open."""
+        keep = self.config.get("overlay_map_keep_visible")
+        return {str(item) for item in keep} if isinstance(keep, (list, tuple, set)) else set()
+
+    def _apply_map_overlay_hiding(self):
+        """While a map is open, hide the overlays the commander wants hidden:
+        all of them, less any that opted out in Overlay Studio."""
+        focus = getattr(self, "current_gui_focus", -1)
+        hidden = set()
+        if bool(self.config.get("overlay_hide_on_maps", True)) and focus in self._MAP_GUI_FOCUS:
+            keep = self._map_keep_visible()
+            hidden = {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in keep}
+        return HtmlOverlayServer.set_overrides(hidden=hidden)
+
+    def _set_overlay_map_hiding(self, overlay_id, hide):
+        """Overlay Studio inspector: whether one overlay hides on the maps."""
+        if overlay_id not in OVERLAY_SPEC_BY_ATTR:
+            return False
+        keep = self._map_keep_visible()
+        if hide:
+            keep.discard(overlay_id)
+        else:
+            keep.add(overlay_id)
+        self.config["overlay_map_keep_visible"] = sorted(keep)
+        self._persist_config()
+        self._apply_map_overlay_hiding()
+        self._schedule_html_dashboard_publish(immediate=True)
+        return True
+
+    def _set_overlay_layout_mode(self, enabled):
+        """Overlay Studio's layout mode: every enabled overlay on screen with
+        its outline, so ones that are empty right now can be placed too."""
+        if HtmlOverlayServer.set_overrides(layout=bool(enabled)):
+            self._schedule_html_dashboard_publish(immediate=True)
+
     def _html_overlay_option_toggle(self, key, requested_value=None):
         allowed = {
             "overlay_mouse_passthrough", "hud_compact_mode",
@@ -453,6 +497,7 @@ class HtmlOverlayStudioMixin:
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
+            "overlay_hide_on_maps",
         }
         key = _text(key, 80)
         if key not in allowed:
@@ -464,6 +509,8 @@ class HtmlOverlayStudioMixin:
         self._persist_config()
         if key == "overlay_mouse_passthrough":
             self._apply_overlay_mouse_passthrough()
+        elif key == "overlay_hide_on_maps":
+            self._apply_map_overlay_hiding()
         elif key in {"hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels"}:
             self.update_hud()
         elif key == "station_info_auto_hide_enabled":
@@ -592,6 +639,9 @@ class HtmlOverlayStudioMixin:
             wait = _integer(payload.get("music_player_auto_hide"), 0)
             self.config["music_player_auto_hide"] = wait if wait in MUSIC_AUTO_HIDE else 0
         # Journal heartbeat orb: its window size and resting eye colour.
+        if "jump_info_linger_s" in payload:
+            linger = _integer(payload.get("jump_info_linger_s"), 0)
+            self.config["jump_info_linger_s"] = linger if linger in JUMP_INFO_LINGER_CHOICES else 0
         if "heartbeat_orb_size" in payload:
             size = _integer(payload.get("heartbeat_orb_size"), orb_size(self.config))
             self.config["heartbeat_orb_size"] = size if size in ORB_SIZES else orb_size(self.config)
@@ -664,6 +714,11 @@ class HtmlOverlayStudioMixin:
                 persist=bool(payload.get("commit")),
                 preview=not bool(payload.get("commit")),
             )
+        if operation == "map_hiding":
+            return self._set_overlay_map_hiding(overlay_id, bool(payload.get("hide")))
+        if operation == "layout_mode":
+            self._set_overlay_layout_mode(bool(payload.get("enabled")))
+            return True
         if operation == "toggle":
             return self._html_overlay_toggle(overlay_id)
         if operation == "snap":

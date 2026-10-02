@@ -637,6 +637,7 @@
                   <small id="studio-selected-short">NO SELECTION</small>
                   <h3 id="studio-selected-name">Select an overlay</h3>
                   <label class="studio-switch studio-enable"><span><b>Enabled</b><small id="studio-selected-visibility">—</small></span><input id="studio-selected-enabled" type="checkbox"><i></i></label>
+                  <label class="studio-switch studio-enable"><span><b>Hide on maps</b><small id="studio-selected-maphide-note">—</small></span><input id="studio-selected-maphide" type="checkbox"><i></i></label>
                 </div>
                 <div class="studio-selection-facts">
                   <div><small>POSITION</small><b id="studio-selected-position">—</b></div>
@@ -687,6 +688,10 @@
                   <section data-studio-settings="contact_scope_hud">
                     <h4>DEEP SPACE CONTACTS</h4>
                     <label class="studio-field"><span>Auto-hide after<small>0 keeps it up</small></span><div><input id="studio-contact-timeout" type="number" min="0" max="3600" data-studio-setting="contact_scope_timeout_s"><b>SEC</b></div></label>
+                  </section>
+                  <section data-studio-settings="jump_info_hud">
+                    <h4>JUMP INFO</h4>
+                    <label class="studio-field"><span>After arrival<small>It shows while the drive charges and in witch space</small></span><select id="studio-jump-linger" data-studio-setting="jump_info_linger_s"><option value="0">Hide at once</option><option value="5">5 SEC</option><option value="10">10 SEC</option><option value="20">20 SEC</option><option value="30">30 SEC</option></select></label>
                   </section>
                   <section data-studio-settings="toast_hud">
                     <h4>COCKPIT NOTIFICATIONS</h4>
@@ -752,6 +757,8 @@
               <label class="studio-global-fade" for="studio-global-fade"><span>OPACITY</span><input id="studio-global-fade" type="range" min="40" max="100" step="5" aria-label="Opacity of every overlay"><b id="studio-global-fade-value">100%</b></label>
               <button type="button" class="studio-field compact studio-text-link" data-page="settings" data-settings-section="appearance" title="Text size for every overlay is in Settings, Appearance"><span>Text size</span><b>SETTINGS › APPEARANCE</b></button>
               <label class="studio-field compact" title="How often every overlay redraws its animation. Lower is lighter on the game's frame rate."><span>Frame rate</span><select data-studio-setting="overlay_frame_rate"><option value="60">Full · 60</option><option value="30">Standard · 30</option><option value="15">Light · 15</option></select></label>
+              <label class="studio-switch compact" title="Show every enabled overlay with its outline, even ones with nothing to show yet, so they can be placed. Turns off when you leave Overlay Studio."><span><b>Layout mode</b></span><input type="checkbox" id="studio-layout-mode"><i></i></label>
+              <label class="studio-switch compact" title="Hide every overlay while the Galaxy Map, System Map or Orrery is open."><span><b>Hide on maps</b></span><input type="checkbox" data-overlay-option="overlay_hide_on_maps"><i></i></label>
               <label class="studio-switch compact"><span><b>Mouse passthrough</b></span><input type="checkbox" data-overlay-option="overlay_mouse_passthrough"><i></i></label>
               <label class="studio-switch compact"><span><b>CRT effects</b></span><input type="checkbox" data-overlay-option="hud_crt_enabled"><i></i></label>
               <label class="studio-switch compact"><span><b>Shimmer</b></span><input type="checkbox" data-overlay-option="hud_crt_motion_enabled"><i></i></label>

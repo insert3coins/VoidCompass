@@ -4218,6 +4218,10 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             }:
                 return False
             self._html_dashboard_active_page = page
+            # Layout mode belongs to Overlay Studio: leaving it puts every
+            # overlay back to showing only when it has something to show.
+            if page != "overlay-studio":
+                self._set_overlay_layout_mode(False)
             self._schedule_html_dashboard_publish(immediate=True)
             return True
         if action == "overlay_studio":

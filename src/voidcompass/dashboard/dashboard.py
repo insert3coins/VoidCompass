@@ -48,6 +48,7 @@ from voidcompass.overlays.heartbeat_hud import HeartbeatHUD
 from voidcompass.overlays.galnet_ticker_hud import GalnetTickerHUD
 from voidcompass.overlays.music_player_hud import MusicPlayerHUD
 from voidcompass.overlays.contact_scope_hud import ContactScopeHUD
+from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.html_survey_overlay import attach_html_survey_overlay
 from voidcompass.overlays.html_toast_overlay import attach_html_toast_overlay
 from voidcompass.overlays.html_gravity_overlay import attach_html_gravity_overlay
@@ -63,11 +64,13 @@ from voidcompass.overlays.html_heartbeat_overlay import attach_html_heartbeat_ov
 from voidcompass.overlays.html_galnet_ticker_overlay import attach_html_galnet_ticker_overlay
 from voidcompass.overlays.html_music_overlay import attach_html_music_overlay
 from voidcompass.overlays.html_contact_overlay import attach_html_contact_overlay
+from voidcompass.overlays.html_jump_info_overlay import attach_html_jump_info_overlay
 from voidcompass.core.runtime_trace import RuntimeTrace
 from voidcompass.dashboard.dashboard_db_mixin import DashboardDBMixin
 from voidcompass.dashboard.dashboard_core_mixin import DashboardCoreMixin
 from voidcompass.dashboard.dashboard_scan_mixin import DashboardScanMixin
 from voidcompass.dashboard.dashboard_exploration_mixin import DashboardExplorationMixin
+from voidcompass.dashboard.dashboard_jump_info_mixin import DashboardJumpInfoMixin
 from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
 from voidcompass.core.field_state import (
     get_material_category, load_colonisation_data, load_engineer_materials,
@@ -243,6 +246,7 @@ class MainDashboard(
     HtmlDashboardMixin,
     DashboardScanMixin,
     DashboardExplorationMixin,
+    DashboardJumpInfoMixin,
     DashboardCoreMixin,
     DashboardDBMixin,
 ):
@@ -921,6 +925,7 @@ class MainDashboard(
             "galnet_ticker_hud",
             "music_player_hud",
             "contact_scope_hud",
+            "jump_info_hud",
         ):
             overlay = getattr(self, attr, None)
             apply_overlay_theme = getattr(overlay, "apply_theme", None)
@@ -1006,7 +1011,7 @@ class MainDashboard(
             "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "rhino_minimap_hud", "powerplay_hud",
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud",
-            "music_player_hud", "contact_scope_hud",
+            "music_player_hud", "contact_scope_hud", "jump_info_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -2483,6 +2488,11 @@ class MainDashboard(
         else:
             self.contact_scope_hud = None
 
+        if self._overlay_enabled("jump_info_hud"):
+            self.jump_info_hud = JumpInfoHUD(self.root, self.config)
+        else:
+            self.jump_info_hud = None
+
         self._attach_html_overlay_renderers()
 
         # Navigation owns its bridge directly; the other HUDs attach through
@@ -3770,6 +3780,7 @@ class MainDashboard(
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
+            "jump_info_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
             try:
@@ -4703,6 +4714,14 @@ class MainDashboard(
             self.contact_scope_hud.destroy()
             self.contact_scope_hud = None
 
+        if self._overlay_enabled("jump_info_hud"):
+            if getattr(self, "jump_info_hud", None) is None:
+                self.jump_info_hud = JumpInfoHUD(self.root, self.config)
+                self._update_jump_info()
+        elif getattr(self, "jump_info_hud", None):
+            self.jump_info_hud.destroy()
+            self.jump_info_hud = None
+
         self._attach_html_overlay_renderers()
         self._apply_html_overlay_renderer()
 
@@ -4781,6 +4800,10 @@ class MainDashboard(
                 attach_html_contact_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
+            elif attr == "jump_info_hud":
+                attach_html_jump_info_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
             else:
                 logging.warning("No semantic HTML renderer registered for %s", attr)
 
@@ -4799,18 +4822,46 @@ class MainDashboard(
         """Open the profile-aware Studio inside the HTML command deck."""
         self._request_html_dashboard_page("overlay-studio")
 
-    def fetch_system_traffic(self, system_name):
+    # A system EDSM had not heard of on arrival (often one just discovered,
+    # asked about before our own upload of the jump reached EDSM) is asked
+    # again, past EDSM's day-long reply cache, after these delays.
+    _TRAFFIC_RECHECK_MS = (60000, 300000)
+
+    def fetch_system_traffic(self, system_name, recheck=0):
         self.last_edsm_request_ts = time.time()
-        self._system_traffic_resolved = False
+        if not recheck:
+            self._system_traffic_resolved = False
         def callback(traffic_data):
             def _apply():
                 if self.current_sys != system_name:
                     return
+                if recheck and not (traffic_data or {}).get("known"):
+                    # Still unknown: keep what is shown and maybe try again.
+                    self._schedule_traffic_recheck(system_name, recheck)
+                    return
                 self._apply_system_traffic_context(system_name, traffic_data)
                 self.update_dashboard_ui()
                 self.update_hud()
+                if not (traffic_data or {}).get("known"):
+                    self._schedule_traffic_recheck(system_name, recheck)
             self._ui_post(_apply, key="edsm-traffic")
-        self.edsm.fetch_traffic(system_name, callback)
+        self.edsm.fetch_traffic(system_name, callback, recheck=bool(recheck))
+
+    def _schedule_traffic_recheck(self, system_name, done):
+        if done >= len(self._TRAFFIC_RECHECK_MS):
+            return False
+        after = getattr(getattr(self, "root", None), "call_later", None)
+        if not callable(after):
+            return False
+
+        def again():
+            if self.is_running and self.current_sys == system_name:
+                self.fetch_system_traffic(system_name, recheck=done + 1)
+        try:
+            after(self._TRAFFIC_RECHECK_MS[done], again)
+            return True
+        except Exception:
+            return False
 
     def _ensure_known_system_orrery(self, system_name=None):
         """Hydrate missing architecture for an already-complete known system.
@@ -4881,6 +4932,12 @@ class MainDashboard(
                 normalized[key] = max(0, int(float((traffic or {}).get(key) or 0)))
             except (AttributeError, TypeError, ValueError):
                 normalized[key] = 0
+        # EDSM's discoverer and dates ride along for the Navigation HUD.
+        for key, limit in (("discovered_by", 64), ("discovered_at", 32), ("updated_at", 32)):
+            try:
+                normalized[key] = str((traffic or {}).get(key) or "")[:limit]
+            except AttributeError:
+                normalized[key] = ""
         return normalized
 
     def _system_has_known_traffic(self, system_name=None):
@@ -6136,6 +6193,8 @@ class MainDashboard(
                 self._cancel_navigation_transition_job()
         if changed and refresh and not getattr(self, "batch_mode", False):
             self.update_hud()
+        if changed:
+            self._update_jump_info()
         return changed
 
     def _clear_navigation_jump_phase(self, *, refresh=True):
@@ -7393,6 +7452,10 @@ class MainDashboard(
             fid = d.get("fid")
             if commander:
                 self._switch_commander_profile(commander, fid)
+        # Jump Info learns the target before the jump phase moves on.
+        self._jump_info_observe(
+            ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
+        )
         self._observe_navigation_jump_event(
             ev,
             raw if isinstance(raw, dict) else d,

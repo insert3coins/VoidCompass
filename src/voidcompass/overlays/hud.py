@@ -813,6 +813,26 @@ class TacticalHUD:
         return "flight"
 
     @staticmethod
+    def _elite_date(value):
+        """EDSM's '2022-04-04 12:00:00' (UTC) as Elite writes dates: 4 APR 3308."""
+        from voidcompass.overlays.jump_info_hud import elite_date
+
+        return elite_date(value)
+
+    @classmethod
+    def _system_history(cls, system_traffic):
+        traffic = system_traffic or {}
+        lines = []
+        commander = str(traffic.get("discovered_by") or "").strip()
+        discovered, discovered_at = cls._elite_date(traffic.get("discovered_at"))
+        if commander:
+            lines.append(f"DISCOVERED BY {commander.upper()}" + (f" · {discovered}" if discovered else ""))
+        updated, updated_at = cls._elite_date(traffic.get("updated_at"))
+        if updated and (discovered_at is None or updated_at > discovered_at):
+            lines.append(f"UPDATED {updated}")
+        return lines
+
+    @staticmethod
     def _traffic_summary(system_traffic, compact=False):
         traffic = system_traffic or {}
         try:
@@ -1282,6 +1302,9 @@ class TacticalHUD:
         model["system"] = {
             "name": current_display,
             "region": region_text,
+            # EDSM: who discovered the system and when, and when it was last
+            # updated (shown only when later than the discovery).
+            "history": self._system_history(system_traffic),
             "arrival_epoch": float(nav_context.get("system_arrival_epoch") or 0.0),
             "star_class": str(nav_context.get("current_star_class") or "").strip()[:40],
         }

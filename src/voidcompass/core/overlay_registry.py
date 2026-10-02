@@ -47,6 +47,8 @@ OVERLAY_SPECS = (
     OverlaySpec("music_player_hud", "music-player", "Void Compass Music Player", "music_player_overlay_enabled", "music_player_hud_x", "music_player_hud_y", (40, 880), (460, 154), "Music Player", "MUSIC", False, "music_player", "overlay_hotkey_music_player", "Music Player"),
     OverlaySpec("heartbeat_hud", "heartbeat", "Void Compass Journal Heartbeat", "heartbeat_overlay_enabled", "heartbeat_hud_x", "heartbeat_hud_y", (24, 24), (54, 54), "Journal Heartbeat", "HEARTBEAT", True, "heartbeat", "overlay_hotkey_heartbeat", "Journal Heartbeat"),
     OverlaySpec("contact_scope_hud", "contact-scope", "Void Compass Deep Space Contacts", "contact_scope_overlay_enabled", "contact_scope_hud_x", "contact_scope_hud_y", (1180, 250), (480, 270), "Deep Space Contact Scope", "CONTACTS", True, "contact_scope", "overlay_hotkey_contact_scope", "Deep Space Contacts"),
+    # Shown only while the frame shift drive charges and in witch space.
+    OverlaySpec("jump_info_hud", "jump-info", "Void Compass Jump Info", "jump_info_overlay_enabled", "jump_info_hud_x", "jump_info_hud_y", (680, 64), (560, 180), "Jump Info", "JUMP INFO", True, "jump_info", "overlay_hotkey_jump_info", "Jump Info"),
     OverlaySpec("ground_popup", "ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled", "ground_popup_x", "ground_popup_y", (1320, 160), (420, 208), "Planet Waypoint Navigation", "SURFACE NAV", True, "planet_waypoint", "overlay_hotkey_planet_waypoint", "Planet Waypoint Navigation"),
 )
 
@@ -76,6 +78,7 @@ OVERLAY_HOTKEY_SPECS = (
     ("toggle_all", "overlay_hotkey_toggle_all", "Show / hide all overlays", None),
     _overlay_hotkey("navigation"),
     ("navigation_layout", "overlay_hotkey_navigation_layout", "Navigation HUD layout", None),
+    _overlay_hotkey("jump_info"),
     _overlay_hotkey("survey"),
     _overlay_hotkey("contact_scope"),
     _overlay_hotkey("station_info"),

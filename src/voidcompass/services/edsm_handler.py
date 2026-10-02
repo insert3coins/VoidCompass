@@ -728,25 +728,149 @@ class EDSMHandler:
                 time.sleep(0.25 * (attempt + 1))
         raise last_exc
 
-    def fetch_traffic(self, system_name, callback):
+    @staticmethod
+    def _recheck_params(params, recheck):
+        """EDSM's API sits behind a CDN that keeps each reply for a day, keyed
+        by the URL. A system asked about before EDSM heard of it (on arrival,
+        ahead of our own upload of the jump; or as Jump Info's next system)
+        stays "unknown" there all day. A recheck adds a parameter EDSM
+        ignores, so it reaches EDSM itself."""
+        if recheck:
+            params = {**params, "recheck": int(time.time())}
+        return params
+
+    def fetch_traffic(self, system_name, callback, recheck=False):
         def _fetch():
             result = None
             try:
-                params = {'systemName': system_name}
+                params = self._recheck_params({'systemName': system_name}, recheck)
                 url = "https://www.edsm.net/api-system-v1/traffic"
                 r = self._limited_get(url, params=params, timeout=10, retries=1)
                 data = r.json()
                 if isinstance(data, dict):
                     traffic = data.get("traffic") or {}
+                    discovery = data.get("discovery") if isinstance(data.get("discovery"), dict) else {}
                     result = {
+                        # False while EDSM has no record of the system yet.
+                        "known": bool(data.get("id") or data.get("name")),
                         "day": int(traffic.get("day") or 0),
                         "week": int(traffic.get("week") or 0),
                         "total": int(traffic.get("total") or 0),
+                        # Who first reported the system to EDSM, and when
+                        # (as SrvSurvey shows it on its jump panel).
+                        "discovered_by": str(discovery.get("commander") or "")[:64],
+                        "discovered_at": str(discovery.get("date") or "")[:32],
+                        "updated_at": "",
                     }
+                    if result["discovered_by"] or result["total"]:
+                        result["updated_at"] = self._latest_body_update(system_name, recheck)
             except Exception as e:
                 logging.warning(f"Traffic fetch failed: {e}")
             callback(result)
         threading.Thread(target=_fetch, daemon=True).start()
+
+    def _latest_body_update(self, system_name, recheck=False):
+        """When EDSM last had new data for the system: its bodies' newest
+        update time, as SrvSurvey reads it. Empty when unknown."""
+        try:
+            response = self._limited_get("https://www.edsm.net/api-system-v1/bodies",
+                                         params=self._recheck_params({"systemName": system_name}, recheck),
+                                         timeout=12, retries=0)
+            bodies = (response.json() or {}).get("bodies") or []
+            times = [str(body.get("updateTime") or "") for body in bodies if isinstance(body, dict)]
+            return max((value for value in times if value), default="")[:32]
+        except Exception as exc:
+            logging.debug("EDSM body update time unavailable for %s: %s", system_name, exc)
+            return ""
+
+    # EDSM station types (as SrvSurvey groups them for its jump panel).
+    _JUMP_STARPORTS = {
+        "coriolis starport", "orbis starport", "ocellus starport",
+        "asteroid base", "planetary port", "mega ship",
+    }
+    _JUMP_NOTABLE_WORLDS = (
+        ("earth_like", "Earth-like world"),
+        ("water", "Water world"),
+        ("ammonia", "Ammonia world"),
+    )
+
+    def fetch_jump_intel(self, system_name, callback):
+        """What EDSM knows of the system a jump is heading for (Jump Info).
+
+        ``callback`` gets a dict: ``available`` False when EDSM could not be
+        asked, ``known`` False when EDSM has never logged the system.
+        """
+        def _fetch():
+            callback(self._jump_intel(system_name))
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _jump_intel(self, system_name):
+        name = str(system_name or "").strip()
+        intel = {
+            "system": name, "available": True, "known": False,
+            "discovered_by": "", "discovered_at": "", "updated_at": "",
+            "traffic": {"day": 0, "week": 0, "total": 0},
+            "body_count": 0, "bodies_logged": 0, "landable": 0, "terraformable": 0,
+            "notable": {key: 0 for key, _sub_type in self._JUMP_NOTABLE_WORLDS},
+            "ports": {"starports": 0, "outposts": 0, "settlements": 0, "carriers": 0},
+        }
+        params = {"systemName": name}
+        try:
+            data = self._limited_get("https://www.edsm.net/api-system-v1/traffic",
+                                     params=params, timeout=10, retries=1).json()
+        except Exception as exc:
+            logging.info("EDSM jump intel unavailable for %s: %s", name, exc)
+            return {**intel, "available": False}
+        # EDSM answers an unlogged system with an empty list or object.
+        if not isinstance(data, dict) or not (data.get("id") or data.get("name")):
+            return intel
+        intel["known"] = True
+        traffic = data.get("traffic") if isinstance(data.get("traffic"), dict) else {}
+        intel["traffic"] = {key: max(0, int(traffic.get(key) or 0)) for key in ("day", "week", "total")}
+        discovery = data.get("discovery") if isinstance(data.get("discovery"), dict) else {}
+        intel["discovered_by"] = str(discovery.get("commander") or "")[:64]
+        intel["discovered_at"] = str(discovery.get("date") or "")[:32]
+        try:
+            bodies_reply = self._limited_get("https://www.edsm.net/api-system-v1/bodies",
+                                             params=params, timeout=12, retries=0).json() or {}
+            bodies = [body for body in bodies_reply.get("bodies") or () if isinstance(body, dict)]
+            intel["bodies_logged"] = len(bodies)
+            intel["body_count"] = max(len(bodies), int(bodies_reply.get("bodyCount") or 0))
+            intel["landable"] = sum(1 for body in bodies if body.get("isLandable"))
+            intel["terraformable"] = sum(
+                1 for body in bodies
+                if str(body.get("terraformingState") or "").casefold() == "candidate for terraforming")
+            for key, sub_type in self._JUMP_NOTABLE_WORLDS:
+                intel["notable"][key] = sum(1 for body in bodies if body.get("subType") == sub_type)
+            times = [str(body.get("updateTime") or "") for body in bodies]
+            intel["updated_at"] = max((value for value in times if value), default="")[:32]
+            if not intel["discovered_by"]:
+                # Older systems: the earliest body discovery stands in.
+                found = sorted(
+                    (str(body["discovery"].get("date") or ""), str(body["discovery"].get("commander") or ""))
+                    for body in bodies if isinstance(body.get("discovery"), dict)
+                    and body["discovery"].get("commander"))
+                if found:
+                    intel["discovered_at"], intel["discovered_by"] = found[0][0][:32], found[0][1][:64]
+        except Exception as exc:
+            logging.debug("EDSM bodies unavailable for %s: %s", name, exc)
+        try:
+            stations_reply = self._limited_get("https://www.edsm.net/api-system-v1/stations",
+                                               params=params, timeout=12, retries=0).json() or {}
+            ports = intel["ports"]
+            for station in stations_reply.get("stations") or ():
+                kind = str((station or {}).get("type") or "").casefold()
+                if "carrier" in kind:
+                    ports["carriers"] += 1
+                elif "settlement" in kind:
+                    ports["settlements"] += 1
+                elif "outpost" in kind:
+                    ports["outposts"] += 1
+                elif kind in self._JUMP_STARPORTS or "starport" in kind:
+                    ports["starports"] += 1
+        except Exception as exc:
+            logging.debug("EDSM stations unavailable for %s: %s", name, exc)
+        return intel
 
     def fetch_system_bodies(self, system_name, callback):
         """Fetch public body architecture for a known system."""
