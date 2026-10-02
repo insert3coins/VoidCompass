@@ -32,6 +32,37 @@ HIDDEN_WINDOW_X = -32000
 HIDDEN_WINDOW_Y = -32000
 WINDOW_CREATE_INTERVAL_S = 0.25
 _LOOPBACK_OPENER = build_opener(ProxyHandler({}))
+# One hidden, never-shown form owns every overlay (see _own_overlay_form).
+_OVERLAY_OWNER = None
+
+
+def _own_overlay_form(form, winforms_module):
+    """Keep an overlay off the taskbar and out of Alt-Tab by giving it a
+    hidden owner, rather than with the tool-window style.
+
+    Windows gives owned windows no taskbar button and leaves them out of
+    Alt-Tab, exactly like tool windows. The difference is OBS: its Window
+    Capture lists ordinary windows but skips every tool window, so an owned
+    overlay can be captured on its own ("Void Compass Navigation HUD").
+    WinForms' Owner property sets the owner in place (no HWND recreation, so
+    WebView2 stays attached) and WinForms keeps it. Returns False when the
+    owner can't be made, and the overlay then stays a tool window.
+    """
+    global _OVERLAY_OWNER
+    try:
+        forms = winforms_module.WinForms
+        if _OVERLAY_OWNER is None:
+            owner = forms.Form()
+            owner.ShowInTaskbar = False
+            owner.Text = "Void Compass overlays"
+            # Creating the handle makes the owner without ever showing it.
+            if not owner.Handle:
+                return False
+            _OVERLAY_OWNER = owner
+        form.Owner = _OVERLAY_OWNER
+        return True
+    except Exception:
+        return False
 
 
 def _patch_pywebview_overlay_focus(winforms_module=None):
@@ -62,9 +93,12 @@ def _patch_pywebview_overlay_focus(winforms_module=None):
                 window = getattr(form, "pywebview_window", None)
                 if getattr(window, "focus", True):
                     return
+                # Owned before pywebview's first show, so Explorer never gives
+                # the transient form a taskbar button. When an owner can't be
+                # made, TOOLWINDOW does the same job (but hides it from OBS).
+                window._voidcompass_owned = _own_overlay_form(form, winforms_module)
                 # Change the existing HWND in place. SetWindowLongPtr preserves
-                # WebView2's parent handle while TOOLWINDOW keeps Explorer from
-                # registering the transient form on the taskbar.
+                # WebView2's parent handle.
                 _apply_windows_style(window, click_through=True)
 
             __init__._voidcompass_no_taskbar = True
@@ -160,10 +194,18 @@ def _restore_foreground_window(hwnd):
         return False
 
 
-def _overlay_window_style(style, click_through=True):
-    """Return taskbar-free extended styles for an on-screen overlay."""
+def _overlay_window_style(style, click_through=True, owned=False):
+    """Return taskbar-free extended styles for an on-screen overlay.
+
+    An owned overlay is already off the taskbar, and drops TOOLWINDOW so
+    OBS's Window Capture can list it; an unowned one keeps TOOLWINDOW.
+    """
     style = int(style) & ~WS_EX_APPWINDOW
-    style |= WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
+    style |= WS_EX_LAYERED | WS_EX_NOACTIVATE
+    if owned:
+        style &= ~WS_EX_TOOLWINDOW
+    else:
+        style |= WS_EX_TOOLWINDOW
     if click_through:
         style |= WS_EX_TRANSPARENT
     else:
@@ -225,7 +267,7 @@ def _apply_windows_style(window, click_through=True):
         set_style.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.c_ssize_t)
         set_style.restype = ctypes.c_ssize_t
         old_style = int(get_style(hwnd, GWL_EXSTYLE))
-        style = _overlay_window_style(old_style, click_through)
+        style = _overlay_window_style(old_style, click_through, bool(getattr(window, "_voidcompass_owned", False)))
         style_changed = style != old_style
         # APPWINDOW explicitly asks Explorer to create a taskbar button and
         # takes precedence over the tool-window intent on some WebView2/

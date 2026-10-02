@@ -179,6 +179,56 @@ class OverlayInputStyleTests(unittest.TestCase):
         self.assertTrue(updated & WS_EX_TRANSPARENT)
         self.assertTrue(updated & WS_EX_NOACTIVATE)
 
+    def test_owned_overlays_drop_the_tool_style_so_obs_can_list_them(self):
+        # An owned window gets no taskbar button and no Alt-Tab entry anyway;
+        # dropping TOOLWINDOW is what puts it in OBS's Window Capture list.
+        updated = overlay_ex_style(WS_EX_TOOLWINDOW, True, owned=True)
+        self.assertFalse(updated & WS_EX_TOOLWINDOW)
+        self.assertTrue(updated & WS_EX_LAYERED)
+        self.assertTrue(updated & WS_EX_TRANSPARENT)
+        self.assertTrue(updated & WS_EX_NOACTIVATE)
+
+    def test_overlays_share_one_hidden_owner_and_fall_back_to_tool_windows(self):
+        from voidcompass.overlays import html_overlay_host as host_module
+
+        class FakeForm:
+            made = 0
+
+            def __init__(self):
+                FakeForm.made += 1
+                self.Handle = 1234
+                self.ShowInTaskbar = True
+                self.Owner = None
+
+        class FakeBrowserForm:
+            def __init__(self, window):
+                self.pywebview_window = window
+                self.Owner = None
+
+            def on_shown(self, *_):
+                return None
+
+        winforms = SimpleNamespace(
+            WinForms=SimpleNamespace(Form=FakeForm),
+            BrowserView=SimpleNamespace(BrowserForm=FakeBrowserForm),
+        )
+        styles = []
+        with patch.object(host_module, "_OVERLAY_OWNER", None), \
+             patch.object(host_module, "_apply_windows_style",
+                          side_effect=lambda window, **_: styles.append(window._voidcompass_owned) or True):
+            self.assertTrue(_patch_pywebview_overlay_focus(winforms))
+            first = FakeBrowserForm(SimpleNamespace(focus=False))
+            second = FakeBrowserForm(SimpleNamespace(focus=False))
+            owner = host_module._OVERLAY_OWNER
+        self.assertEqual(FakeForm.made, 1)
+        self.assertIs(first.Owner, owner)
+        self.assertIs(second.Owner, owner)
+        self.assertFalse(owner.ShowInTaskbar)
+        self.assertEqual(styles, [True, True])
+        # Without WinForms the overlay stays a tool window.
+        with patch.object(host_module, "_OVERLAY_OWNER", None):
+            self.assertFalse(host_module._own_overlay_form(first, SimpleNamespace()))
+
     def test_interaction_mode_removes_only_input_blocking_styles(self):
         retained = 0x00000080 | WS_EX_LAYERED
         original = retained | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE
