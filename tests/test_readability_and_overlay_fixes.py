@@ -45,6 +45,27 @@ class DisplayScalingTests(unittest.TestCase):
             controller.apply({"x": 2400, "y": 1200, "width": 420, "height": 150, "visible": True, "click_through": True})
         geometry.assert_called_with(controller.window, 2400, 1200, 630, 225)
 
+    def test_the_scaling_helpers_leave_overlay_studios_display_list_alone(self):
+        # They once set argument types on the shared ctypes.windll functions,
+        # and Overlay Studio's own GetMonitorInfoW then failed: every display
+        # merged into one. Run them first, as the survey overlay does.
+        import os
+        if os.name != "nt":
+            self.skipTest("Windows display APIs")
+        from voidcompass.core import display_scale
+        from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
+
+        display_scale.room_below(100, 100)
+        display_scale.monitor_scale(100, 100)
+        studio = HtmlOverlayStudioMixin.__new__(type("Studio", (HtmlOverlayStudioMixin,), {}))
+        import ctypes
+
+        # SM_CMONITORS: how many displays Windows has. A failed listing falls
+        # back to one desktop-wide display, which this catches on any setup
+        # with two or more.
+        expected = ctypes.WinDLL("user32").GetSystemMetrics(80)
+        self.assertEqual(len(studio._html_overlay_monitors()), expected)
+
     def test_every_process_becomes_per_monitor_dpi_aware_first(self):
         entry = (ROOT / "VoidCompass.py").read_text(encoding="utf-8")
         dispatch = entry[entry.index("def _dispatch"):]

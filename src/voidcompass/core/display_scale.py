@@ -21,6 +21,17 @@ _MONITOR_DEFAULTTONEAREST = 2
 _MDT_EFFECTIVE_DPI = 0
 
 
+def _library(name):
+    """A private handle on a Windows DLL. Argument types set on the shared
+    ctypes.windll objects apply to every caller in the process: setting them
+    here once broke Overlay Studio's own GetMonitorInfoW, which then could not
+    list the displays and showed the whole desktop as one."""
+    cache = _library.__dict__.setdefault("cache", {})
+    if name not in cache:
+        cache[name] = ctypes.WinDLL(name, use_last_error=True)
+    return cache[name]
+
+
 def enable_per_monitor_dpi() -> bool:
     """Make this process per-monitor DPI aware. Call before any window or
     screen metric. Later calls (pywebview's SetProcessDPIAware) then fail
@@ -28,7 +39,7 @@ def enable_per_monitor_dpi() -> bool:
     if os.name != "nt":
         return False
     try:
-        user32 = ctypes.windll.user32
+        user32 = _library("user32")
         setter = getattr(user32, "SetProcessDpiAwarenessContext", None)
         if setter is not None:
             setter.argtypes = (ctypes.c_void_p,)
@@ -36,7 +47,7 @@ def enable_per_monitor_dpi() -> bool:
             if setter(ctypes.c_void_p(_PER_MONITOR_V2)):
                 return True
         # Windows 8.1: PROCESS_PER_MONITOR_DPI_AWARE.
-        return ctypes.windll.shcore.SetProcessDpiAwareness(2) == 0
+        return _library("shcore").SetProcessDpiAwareness(2) == 0
     except (AttributeError, OSError):
         return False
 
@@ -50,12 +61,12 @@ def monitor_scale(x, y) -> float:
     if os.name != "nt":
         return 1.0
     try:
-        user32 = ctypes.windll.user32
+        user32 = _library("user32")
         user32.MonitorFromPoint.argtypes = (_Point, ctypes.c_uint32)
         user32.MonitorFromPoint.restype = ctypes.c_void_p
         monitor = user32.MonitorFromPoint(_Point(int(x), int(y)), _MONITOR_DEFAULTTONEAREST)
         dpi_x, dpi_y = ctypes.c_uint(), ctypes.c_uint()
-        shcore = ctypes.windll.shcore
+        shcore = _library("shcore")
         shcore.GetDpiForMonitor.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint))
         if shcore.GetDpiForMonitor(monitor, _MDT_EFFECTIVE_DPI, ctypes.byref(dpi_x), ctypes.byref(dpi_y)) != 0:
             return 1.0
@@ -70,7 +81,7 @@ def monitor_handle_scale(handle) -> float:
         return 1.0
     try:
         dpi_x, dpi_y = ctypes.c_uint(), ctypes.c_uint()
-        shcore = ctypes.windll.shcore
+        shcore = _library("shcore")
         shcore.GetDpiForMonitor.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint))
         if shcore.GetDpiForMonitor(ctypes.c_void_p(handle), _MDT_EFFECTIVE_DPI, ctypes.byref(dpi_x), ctypes.byref(dpi_y)) != 0:
             return 1.0
@@ -95,7 +106,7 @@ def room_below(x, y) -> int | None:
     if os.name != "nt":
         return None
     try:
-        user32 = ctypes.windll.user32
+        user32 = _library("user32")
         user32.MonitorFromPoint.argtypes = (_Point, ctypes.c_uint32)
         user32.MonitorFromPoint.restype = ctypes.c_void_p
         monitor = user32.MonitorFromPoint(_Point(int(x), int(y)), _MONITOR_DEFAULTTONEAREST)
