@@ -1,15 +1,16 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.1.1 // First-time setup re-work
+## v5.5.1.2 // OBS overlay capture
 **Release Date:** 2026-Oct-02
 
-* Rebuilt the first-time setup into four steps on the startup galaxy: Welcome, Journal link, Cockpit and Launch.
-* Journal link finds Elite's journal folder by itself and checks it as you type or browse: how many journals it holds, the dates they cover, your commander, ship and last system. You can see it is the right folder before going on.
-* Cockpit sets the overlays, mouse passthrough and the adaptive deck, and now picks a theme. The whole screen previews each theme as you click it, and the deck starts in the one you choose.
-* Launch sums up your choices before you commission. Settings > Recovery can run the setup again at any time.
+* OBS can now capture the cockpit overlays one at a time. Add a Window Capture, pick the overlay (for example "Void Compass Navigation HUD") and set Capture Method to "Windows 10 (1903 and up)". Before, OBS couldn't see the overlays at all, so only a whole-display capture showed them.
+* The overlays still stay off the taskbar and out of Alt-Tab.
+* An overlay must be on screen when you add it in OBS. After that OBS finds it again by name, even after Void Compass restarts.
+* The command deck captures the same way: Window Capture on "VOID COMPASS" with the "Windows 10 (1903 and up)" capture method.
 
 ## Earlier releases
 
+* **v5.5.1.1** — Rebuilt the first-time setup into four steps (Welcome, Journal link, Cockpit, Launch), with a live check of the journal folder that shows your journals, commander, ship and last system, and a theme picker that previews each theme as you click it.
 * **v5.4.9.9** — Rebuilt the Ship Workshop: a Build Planner with a hangar of builds, a hull drawing that lights the slot you fit, the distributor's pips, a loadout board, a module dock and every performance figure at once; and Engineering with your fleet, what is engineered on each ship, the material locker, the engineers and a new blueprint reference.
 * **v5.4.9.8** — Added Music, a local player with playlists, loudness levelling, OBS capture and a Music Player overlay; rebuilt the Galactic Atlas as a regions map of your whole journey and Powerplay Operations around the weekly cycle; and fixed the command deck going blank or dropping its page in long sessions.
 * **v5.4.9.7** — Rebuilt Settings as one screen that saves as you go, added the Galnet Ticker overlay with CRT and glitch effects, rebuilt the Navigation HUD's state scenes as solid 3D holograms with stars shaped by their class, switched the Rhino coverage map off, and fixed overlays sometimes not appearing at startup.
