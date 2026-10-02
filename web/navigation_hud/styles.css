@@ -389,6 +389,8 @@ body {
 .star-chip { flex: 0 0 auto; padding: 1px 6px; border: 1px solid var(--hud-faint); color: var(--label-muted); font: var(--type-weight) var(--size-85) var(--font-wide); letter-spacing: calc(.12em * var(--track)); }
 .location-meta { min-width: 0; display: flex; justify-content: space-between; gap: 12px; padding-left: 26px; color: var(--label-soft); font: var(--type-weight) var(--size-85)/1.15 var(--font-wide); letter-spacing: calc(.12em * var(--track)); white-space: nowrap; }
 #region-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* EDSM history (discovered by, updated) in its turn on the region line. */
+#region-label.system-history { color: var(--orange); }
 .clock small { color: var(--label-dim); font-size: inherit; }
 .clock b { color: var(--text); font-weight: 700; }
 

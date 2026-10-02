@@ -91,6 +91,7 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
                       model.overlay_studio = data;
                       renderOverlayStudio(model);
                     },
+                    select(id) { selectStudioOverlay(id); },
                     theme(value) { applyTheme(value); }
                   };
                 """
@@ -266,6 +267,38 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
                                       and '"toggle"' in (request.post_data or "")) as toggled:
             self.page.locator('.studio-index-row[data-overlay-id="cargo_hud"] .studio-row-switch').click()
         self.assertEqual(toggled.value.post_data_json["overlay_id"], "cargo_hud")
+        self.assertFalse(self.errors, self.errors)
+
+    def test_each_overlay_chooses_whether_it_hides_on_the_maps(self):
+        snapshot = self.studio_snapshot()
+        snapshot["overlay_studio"].setdefault("options", {})["overlay_hide_on_maps"] = True
+        self.page.evaluate("data => window.__bridgeHarness.render(data)", snapshot)
+        self.page.evaluate("data => window.__bridgeHarness.studio(data)", snapshot["overlay_studio"])
+        self.page.locator('.studio-index-row[data-overlay-id="survey_status_hud"] .studio-index-select').click()
+        switch = self.page.locator("#studio-selected-maphide")
+        self.assertTrue(switch.is_checked(), "hides on the maps unless told otherwise")
+        with self.page.expect_request(lambda request: "/api/command" in request.url
+                                      and '"map_hiding"' in (request.post_data or "")) as chosen:
+            switch.evaluate("node => node.parentElement.click()")
+        payload = chosen.value.post_data_json
+        self.assertEqual((payload["overlay_id"], payload["hide"]), ("survey_status_hud", False))
+        # The switch keeps focus after the click; choosing another overlay
+        # (stage cards don't take focus) must still show that overlay's state.
+        for row in snapshot["overlay_studio"]["overlays"]:
+            if row["id"] == "survey_status_hud":
+                row["hide_on_maps"] = False
+        self.page.evaluate("data => window.__bridgeHarness.studio(data)", snapshot["overlay_studio"])
+        switch.focus()
+        self.page.evaluate("window.__bridgeHarness.select('cargo_hud')")
+        self.assertTrue(switch.is_checked(), "cargo still hides on the maps")
+        switch.focus()
+        self.page.evaluate("window.__bridgeHarness.select('survey_status_hud')")
+        self.assertFalse(switch.is_checked(), "survey stays on the maps")
+        # With the All overlays switch off there is nothing to choose.
+        snapshot["overlay_studio"]["options"]["overlay_hide_on_maps"] = False
+        self.page.evaluate("data => window.__bridgeHarness.studio(data)", snapshot["overlay_studio"])
+        self.assertTrue(switch.is_disabled())
+        self.assertIn("All overlays", self.page.locator("#studio-selected-maphide-note").inner_text())
         self.assertFalse(self.errors, self.errors)
 
     def test_live_workspaces_render_without_clipping_or_script_errors(self):

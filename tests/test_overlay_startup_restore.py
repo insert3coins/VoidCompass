@@ -102,6 +102,7 @@ class OverlayStartupRestoreTests(unittest.TestCase):
                 "powerplay_hud": "powerplay-overlay",
                 "rhino_minimap_hud": "rhino-minimap",
                 "contact_scope_hud": "contact_scope",
+                "jump_info_hud": "jump_info",
                 "survey_status_hud": "survey",
                 "station_info_hud": "station",
                 "gravity_warning_hud": "gravity",

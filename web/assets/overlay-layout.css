@@ -1,0 +1,10 @@
+/* Overlay Studio layout mode outline (overlay-layout.js). A file, not an
+   inline style: overlay pages allow stylesheets from their own server only. */
+#vc-layout-frame { position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; box-sizing: border-box;
+  border: 2px dashed var(--accent, #00d1ff); background: color-mix(in srgb, var(--accent, #00d1ff) 7%, transparent);
+  font: 700 11px/1.3 Consolas, "Cascadia Mono", monospace; letter-spacing: .08em; color: var(--text, #dcebf3); }
+#vc-layout-frame > b { position: absolute; left: 6px; top: 6px; max-width: calc(100% - 12px); overflow: hidden;
+  padding: 3px 7px; border-left: 3px solid var(--accent, #00d1ff); background: rgba(5, 9, 14, .86);
+  text-overflow: ellipsis; white-space: nowrap; }
+#vc-layout-frame > small { position: absolute; right: 6px; bottom: 5px; padding: 2px 6px; background: rgba(5, 9, 14, .86);
+  color: var(--accent, #00d1ff); font-size: 10px; }

@@ -227,3 +227,8 @@
   .studio-shell { grid-template-columns: 1fr; }
   .studio-roster, .studio-inspector { grid-row: auto; }
 }
+
+/* Text size for every overlay is in Settings > Appearance; this is the way there. */
+.studio-global-body > .studio-text-link { padding: 0 2px; border: 0; background: none; color: var(--text); cursor: pointer; font: inherit; }
+.studio-global-body > .studio-text-link b { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.studio-global-body > .studio-text-link:hover b { text-decoration: underline; }

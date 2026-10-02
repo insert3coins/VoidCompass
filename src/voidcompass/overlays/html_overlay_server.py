@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import secrets
+import weakref
 import sys
 import threading
 import time
@@ -75,6 +76,7 @@ class HtmlOverlayServer:
         self._condition = threading.Condition()
         self._overlays = {}
         self._window_revision = 0
+        HtmlOverlayServer._instances.add(self)
         self._presentation_held = bool(presentation_held)
         self._host_shutdown = False
         self._stopping = threading.Event()
@@ -96,6 +98,38 @@ class HtmlOverlayServer:
 
     # Animation frames per second for every overlay page; 0 is uncapped.
     frame_rate = 30
+    # Every overlay at once (5.5.1.5): hidden while the Galaxy or System Map
+    # is open, or all shown with an outline while Overlay Studio's layout
+    # mode is on, so empty ones can be placed too. Layout mode wins.
+    # Overlay ids hidden while a map is open (each overlay can opt out).
+    overlays_hidden = frozenset()
+    layout_mode = False
+    _instances = weakref.WeakSet()
+
+    @classmethod
+    def set_overrides(cls, hidden=None, layout=None):
+        """Change the all-overlay overrides; True when one changed.
+
+        ``hidden`` is the overlay ids to hide (an empty set shows them all).
+        """
+        changed = False
+        if hidden is not None:
+            hidden = frozenset(str(item) for item in hidden)
+            if hidden != cls.overlays_hidden:
+                cls.overlays_hidden = hidden
+                changed = True
+        if layout is not None and bool(layout) != cls.layout_mode:
+            cls.layout_mode = bool(layout)
+            changed = True
+        if changed:
+            for server in list(cls._instances):
+                with server._condition:
+                    server._window_revision += 1
+                    for state in server._overlays.values():
+                        # Pages repaint their layout outline from health.
+                        state.revision += 1
+                    server._condition.notify_all()
+        return changed
 
     def register(self, overlay_id, template=None, title=None):
         overlay_id = str(overlay_id)
@@ -225,10 +259,16 @@ class HtmlOverlayServer:
         with self._condition:
             result = {}
             for overlay_id, state in self._overlays.items():
+                window = dict(state.window)
+                if not state.shutdown:
+                    if self.layout_mode:
+                        window["visible"] = True
+                    elif overlay_id in self.overlays_hidden:
+                        window["visible"] = False
                 result[overlay_id] = {
                     "template": state.template,
                     "title": state.title,
-                    "window": dict(state.window),
+                    "window": window,
                     "shutdown": state.shutdown,
                     # Native WebView creation and page rendering are separate
                     # milestones.  The host must not reveal a surface until
@@ -476,6 +516,10 @@ class HtmlOverlayServer:
                     # Overlay Studio > All overlays > Frame rate: every page's
                     # animation loops follow it (web/assets/frame-cap.js).
                     "frame_rate": self.frame_rate,
+                    # Overlay Studio's layout mode: pages draw a labelled
+                    # outline of their window (web/assets/overlay-layout.js).
+                    "layout": self.layout_mode,
+                    "title": state.title,
                 })
             else:
                 self._send_json(handler, {"error": "not found"}, 404)

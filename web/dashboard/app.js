@@ -139,7 +139,7 @@ const HOTKEY_CODE_NAMES = {
 };
 
 const STRUCTURAL_BUTTON_SELECTOR = [
-  ".nav-item", "[data-feed-filter]", ".studio-overlay-card", ".studio-monitor", "[data-setup-go]",
+  ".nav-item", "[data-feed-filter]", ".studio-overlay-card", ".studio-monitor", "[data-setup-go]", ".studio-text-link",
   ".studio-index-select", ".mission-row", ".workspace-tabs button",
   ".suite-tabs button", "[data-analytics-view]",
   ".galnet-headline-row", "#status-galnet",
@@ -1692,8 +1692,22 @@ function selectStudioOverlay(id, follow = false) {
   text("studio-selected-renderer", selected.html_ready ? "HTML READY" : selected.enabled ? "LINKING" : "STANDBY");
   text("studio-selected-visibility", selected.shown ? "On screen now"
     : selected.enabled ? "Shows when it has something to report" : "Off for this commander");
-  const enable = byId("studio-selected-enabled");
-  if (enable && document.activeElement !== enable) enable.checked = Boolean(selected.enabled);
+  // A focused switch keeps the click just made while its save is in flight,
+  // but only for the overlay it was clicked for: choosing another overlay
+  // (the stage cards don't take focus) always shows that overlay's own state.
+  const fill = (input, value) => {
+    if (!input) return;
+    if (document.activeElement !== input || input.dataset.overlayId !== id) input.checked = value;
+    input.dataset.overlayId = id;
+  };
+  fill(byId("studio-selected-enabled"), Boolean(selected.enabled));
+  // Per overlay; the All overlays switch turns map hiding on or off for all.
+  const mapsOn = Boolean((studioData().options || {}).overlay_hide_on_maps ?? true);
+  const mapHide = byId("studio-selected-maphide");
+  fill(mapHide, selected.hide_on_maps !== false);
+  if (mapHide) mapHide.disabled = !mapsOn;
+  text("studio-selected-maphide-note", !mapsOn ? "Off for every overlay (All overlays)"
+    : selected.hide_on_maps !== false ? "Hides on the Galaxy Map, System Map and Orrery" : "Stays on screen on the maps");
   // The inspector shows only this surface's own settings.
   let own = false;
   document.querySelectorAll("[data-studio-settings]").forEach((node) => {
@@ -1766,6 +1780,8 @@ function updateStudioOptionControls(options, groundTarget = {}) {
   document.querySelectorAll("[data-studio-setting]").forEach((field) => {
     if (document.activeElement !== field) field.value = options[field.dataset.studioSetting] ?? "";
   });
+  const layoutMode = byId("studio-layout-mode");
+  if (layoutMode) layoutMode.checked = Boolean(options.layout_mode);
   const savedOpacity = Math.max(40, Math.min(100, Math.round(number(options.overlay_opacity_percent, 100))));
   if (studioOpacityPending === savedOpacity || Date.now() - studioOpacityPendingAt > 3000) {
     studioOpacityPending = null;
@@ -4863,6 +4879,12 @@ byId("studio-overlay-cards").addEventListener("pointercancel", (event) => {
   if (card) endStudioDrag(event, card);
 });
 
+byId("studio-selected-maphide").addEventListener("change", async (event) => {
+  const wanted = event.target.checked;
+  if (!studioSelectedId || !(await command("overlay_studio", {operation: "map_hiding", overlay_id: studioSelectedId, hide: wanted}))) {
+    event.target.checked = !wanted;
+  }
+});
 byId("studio-selected-enabled").addEventListener("change", async (event) => {
   const wanted = event.target.checked;
   if (!studioSelectedId || !(await toggleStudioOverlay(studioSelectedId, wanted))) event.target.checked = !wanted;
@@ -4925,6 +4947,10 @@ document.querySelectorAll("[data-studio-setting]").forEach((field) => {
     void flag.offsetWidth;
     flag.classList.add(accepted ? "saved" : "rejected");
   });
+});
+
+byId("studio-layout-mode")?.addEventListener("change", (event) => {
+  command("overlay_studio", {operation: "layout_mode", enabled: event.target.checked});
 });
 
 byId("studio-global-fade").addEventListener("input", (event) => queueStudioOpacity(event.target.value));
