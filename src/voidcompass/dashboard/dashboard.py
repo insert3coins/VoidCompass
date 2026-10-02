@@ -3793,6 +3793,7 @@ class MainDashboard(
             geometry = html_dashboard_runtime.geometry_string()
             if geometry:
                 self.config["dashboard_window_geometry"] = geometry
+                self.config["dashboard_window_physical"] = html_dashboard_runtime.geometry_is_physical()
                 self.config["main_geometry"] = geometry
             try:
                 html_dashboard_runtime.dispose()
