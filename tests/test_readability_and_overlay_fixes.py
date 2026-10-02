@@ -205,3 +205,53 @@ class SupportBundleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeckWindowGeometryTests(unittest.TestCase):
+    """5.5.1.4: the deck window is saved and restored in real screen pixels.
+
+    pywebview divides by the scaling of the monitor the window is on when it
+    reports a position, and multiplies by the scaling of the monitor it is
+    created on when it restores one, so on mixed-scaling setups the deck
+    reopened in the wrong place."""
+
+    def host(self):
+        from voidcompass.dashboard.html_dashboard_host import DashboardHost
+
+        host = DashboardHost("http://127.0.0.1:1/?token=t")
+        host._schedule_geometry_post = Mock()
+        return host
+
+    def test_moves_and_resizes_record_the_windows_real_rectangle(self):
+        host = self.host()
+        host._hwnd = 42
+        real = {"x": 3840, "y": 100, "width": 2250, "height": 1470}
+        with patch("voidcompass.dashboard.html_dashboard_host._native_rect", return_value=real):
+            host.moved(2560, 66)          # pywebview's scaled numbers are ignored
+            host.resized(1500, 980)
+        self.assertEqual(host._geometry, {**real, "physical": True})
+        with patch("voidcompass.dashboard.html_dashboard_host._native_rect",
+                   return_value={"x": -32000, "y": -32000, "width": 160, "height": 28}):
+            host.moved(-32000, -32000)    # minimizing keeps the last real place
+        self.assertEqual(host._geometry["x"], 3840)
+
+    def test_the_saved_rectangle_is_applied_before_the_window_shows(self):
+        host = self.host()
+        host._physical_rect = {"x": 3840, "y": 100, "width": 2250, "height": 1470}
+        window = SimpleNamespace(native=SimpleNamespace(Handle=SimpleNamespace(ToInt64=lambda: 77)))
+        with patch("voidcompass.dashboard.html_dashboard_host._set_native_rect") as place:
+            host.before_show(window)
+        place.assert_called_once_with(77, 3840, 100, 2250, 1470)
+
+    def test_the_runtime_keeps_the_real_pixel_flag(self):
+        from voidcompass.dashboard.html_dashboard_runtime import HtmlDashboardRuntime, _geometry_payload
+
+        self.assertTrue(_geometry_payload("2250x1470+3840+100", physical=True)["physical"])
+        self.assertFalse(_geometry_payload("1720x1120")["physical"], "older saves stay pywebview's")
+        runtime = HtmlDashboardRuntime.__new__(HtmlDashboardRuntime)
+        runtime.window_geometry = {}
+        runtime._receive_command({"action": "window_geometry", "x": 3840, "y": 100,
+                                  "width": 2250, "height": 1470, "physical": True})
+        self.assertTrue(runtime.geometry_is_physical())
+        self.assertEqual(runtime.geometry_string(), "2250x1470+3840+100")
+        self.assertIn("dashboard_window_physical", config_module.PROFILE_VALUE_SETTINGS)

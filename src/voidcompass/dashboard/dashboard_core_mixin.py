@@ -128,12 +128,16 @@ class DashboardCoreMixin:
             geometry = runtime.geometry_string()
             if geometry:
                 self.config['dashboard_window_geometry'] = geometry
+                self.config['dashboard_window_physical'] = runtime.geometry_is_physical()
 
     def _apply_dashboard_window_geometry(self):
         runtime = getattr(self.root, '_voidcompass_html_dashboard_runtime', None)
         if runtime:
             from voidcompass.dashboard.html_dashboard_runtime import _geometry_payload
-            runtime.server.update_host_state(_geometry_payload(self.config.get('dashboard_window_geometry')))
+            runtime.server.update_host_state(_geometry_payload(
+                self.config.get('dashboard_window_geometry'),
+                physical=bool(self.config.get('dashboard_window_physical', False)),
+            ))
 
     def _update_main_window_title(self):
         runtime = getattr(self.root, '_voidcompass_html_dashboard_runtime', None)

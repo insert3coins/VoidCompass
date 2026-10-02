@@ -36,15 +36,18 @@ def _resource_path(relative_path):
     return resource_path(relative_path)
 
 
-def _geometry_payload(value):
+def _geometry_payload(value, physical=False):
+    """The deck window's saved geometry. ``physical`` marks one saved in real
+    screen pixels by the host (5.5.1.4); older saves are pywebview's own."""
     match = _GEOMETRY_RE.fullmatch(str(value or ""))
     if not match:
-        return {"width": 1440, "height": 900, "x": None, "y": None}
+        return {"width": 1440, "height": 900, "x": None, "y": None, "physical": False}
     payload = {
         "width": max(980, int(match.group("width"))),
         "height": max(680, int(match.group("height"))),
         "x": None,
         "y": None,
+        "physical": bool(physical),
     }
     for key in ("x", "y"):
         raw = match.group(key)
@@ -108,7 +111,8 @@ class HtmlDashboardRuntime:
             "progress": 0.06,
         }
         geometry = _geometry_payload(
-            config.get("dashboard_window_geometry") or config.get("main_geometry")
+            config.get("dashboard_window_geometry") or config.get("main_geometry"),
+            physical=bool(config.get("dashboard_window_physical", False)),
         )
         host_state = {
             **geometry,
@@ -335,7 +339,8 @@ class HtmlDashboardRuntime:
                 y = int(payload.get("y") or 0)
             except (TypeError, ValueError):
                 return False
-            self.window_geometry = {"width": width, "height": height, "x": x, "y": y}
+            self.window_geometry = {"width": width, "height": height, "x": x, "y": y,
+                                    "physical": bool(payload.get("physical"))}
             return True
         if action == "window_closed":
             try:
@@ -578,8 +583,11 @@ class HtmlDashboardRuntime:
         except (KeyError, TypeError, ValueError):
             return ""
 
-    def apply_profile_geometry(self, value):
-        geometry = _geometry_payload(value)
+    def geometry_is_physical(self):
+        return bool((self.window_geometry or {}).get("physical"))
+
+    def apply_profile_geometry(self, value, physical=False):
+        geometry = _geometry_payload(value, physical=physical)
         self.window_geometry = geometry
         self.server.update_host_state(geometry)
         return True

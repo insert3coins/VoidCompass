@@ -61,6 +61,43 @@ def _request_json(url, payload=None, timeout=2.0):
         return json.loads(response.read() or b"{}")
 
 
+def _native_rect(hwnd):
+    """The window's rectangle in real screen pixels, or None."""
+    if not hwnd or os.name != "nt":
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    rect = wintypes.RECT()
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.GetWindowRect.argtypes = (ctypes.c_void_p, ctypes.POINTER(wintypes.RECT))
+    if not user32.GetWindowRect(ctypes.c_void_p(hwnd), ctypes.byref(rect)):
+        return None
+    return {"x": int(rect.left), "y": int(rect.top),
+            "width": int(rect.right - rect.left), "height": int(rect.bottom - rect.top)}
+
+
+def _set_native_rect(hwnd, x, y, width, height):
+    """Place the window at a rectangle in real screen pixels.
+
+    Done twice: moving onto a monitor with other scaling makes Windows
+    rescale the window for that monitor; the second call lands on the same
+    monitor and sets the exact size back.
+    """
+    if not hwnd or os.name != "nt":
+        return False
+    import ctypes
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.SetWindowPos.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+                                    ctypes.c_int, ctypes.c_int, ctypes.c_uint)
+    flags = 0x0004 | 0x0010  # SWP_NOZORDER | SWP_NOACTIVATE
+    ok = False
+    for _ in range(2):
+        ok = bool(user32.SetWindowPos(ctypes.c_void_p(hwnd), None, int(x), int(y), int(width), int(height), flags))
+    return ok
+
+
 class DashboardHost:
     def __init__(self, dashboard_url):
         parsed = urlparse(str(dashboard_url))
@@ -72,6 +109,12 @@ class DashboardHost:
         self._geometry = {}
         self._geometry_lock = threading.Lock()
         self._geometry_timer = None
+        # The deck's geometry in real screen pixels, read from the window
+        # itself. pywebview reports and restores it divided and multiplied by
+        # different monitors' scaling, which put the window in the wrong place
+        # on mixed-scaling setups.
+        self._hwnd = 0
+        self._physical_rect = None
         self.host_revision = -1
         self.monitor_failures = 0
         self.boot_released = False
@@ -102,14 +145,39 @@ class DashboardHost:
         except Exception:
             return {}
 
-    def moved(self, x, y):
+    def before_show(self, window):
+        """On the UI thread, after the window exists and before it first
+        shows: remember its handle and put it at its saved real rectangle."""
+        try:
+            handle = window.native.Handle
+            self._hwnd = int(handle.ToInt64() if hasattr(handle, "ToInt64") else handle)
+        except Exception:
+            self._hwnd = 0
+        rect = self._physical_rect
+        if self._hwnd and rect:
+            _set_native_rect(self._hwnd, rect["x"], rect["y"], rect["width"], rect["height"])
+
+    def _record_native_geometry(self):
+        rect = _native_rect(self._hwnd)
+        if not rect:
+            return False
+        if rect["x"] <= -30000 or rect["y"] <= -30000:
+            # Minimized windows sit at -32000: keep the last real position.
+            return True
         with self._geometry_lock:
-            self._geometry.update({"x": int(x), "y": int(y)})
+            self._geometry.update(rect, physical=True)
+        return True
+
+    def moved(self, x, y):
+        if not self._record_native_geometry():
+            with self._geometry_lock:
+                self._geometry.update({"x": int(x), "y": int(y)})
         self._schedule_geometry_post()
 
     def resized(self, width, height):
-        with self._geometry_lock:
-            self._geometry.update({"width": int(width), "height": int(height)})
+        if not self._record_native_geometry():
+            with self._geometry_lock:
+                self._geometry.update({"width": int(width), "height": int(height)})
         self._schedule_geometry_post()
 
     def _schedule_geometry_post(self):
@@ -373,9 +441,12 @@ class DashboardHost:
                     width = max(980, int(state.get("width") or self._geometry.get("width") or 1440))
                     height = max(680, int(state.get("height") or self._geometry.get("height") or 900))
                     x, y = state.get("x"), state.get("y")
-                    self.window.resize(width, height)
-                    if x is not None and y is not None:
-                        self.window.move(int(x), int(y))
+                    if state.get("physical") and self._hwnd and x is not None and y is not None:
+                        _set_native_rect(self._hwnd, int(x), int(y), width, height)
+                    else:
+                        self.window.resize(width, height)
+                        if x is not None and y is not None:
+                            self.window.move(int(x), int(y))
             except Exception as exc:
                 # Cache rebuilds and security software can briefly delay a
                 # loopback response. Require a sustained outage before
@@ -519,6 +590,16 @@ def main(argv=None):
     host._geometry = {"width": width, "height": height}
     if x is not None and y is not None:
         host._geometry.update({"x": int(x), "y": int(y)})
+    if state.get("physical") and x is not None and y is not None:
+        # Saved in real pixels: before_show puts it there exactly. pywebview
+        # gets that monitor's design size so its own first placement is close.
+        from voidcompass.core.display_scale import monitor_scale
+
+        host._physical_rect = {"x": int(x), "y": int(y), "width": width, "height": height}
+        host._geometry["physical"] = True
+        scale = monitor_scale(int(x) + width // 2, int(y) + height // 2)
+        width, height = max(980, round(width / scale)), max(680, round(height / scale))
+        x, y = round(int(x) / scale), round(int(y) / scale)
     api = DashboardApi(host)
     window = webview.create_window(
         str(state.get("title") or "Void Compass"),
@@ -535,6 +616,7 @@ def main(argv=None):
     host.window = window
     window._voidcompass_after_ready = host.after_ready
     host.host_revision = int(state.get("host_revision") or 0)
+    window.events.before_show += host.before_show
     window.events.moved += host.moved
     window.events.resized += host.resized
     window.events.closed += host.closed

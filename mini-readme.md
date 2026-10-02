@@ -1,9 +1,10 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.1.4 // Overlay Studio displays fix
+## v5.5.1.4 // Overlay Studio displays and deck window fixes
 **Release Date:** 2026-Oct-02
 
 * Fixed Overlay Studio showing all of your monitors as one wide display instead of one display at a time. A 5.5.1.3 change for scaled displays stopped Studio from listing the displays once the survey overlay had started.
+* Fixed the command deck reopening in the wrong place, sometimes on the other monitor, when your monitors use different Windows scaling (say a 4K screen at 150% beside a 1080p one at 100%). The deck now remembers exactly where it was on screen. Setups where every monitor uses the same scaling were not affected.
 
 ## Earlier releases
 
