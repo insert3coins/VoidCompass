@@ -17,6 +17,7 @@ import math
 import os
 import threading
 
+from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.core.persistence_queue import persistence_queue
 
 SCHEMA = 1
@@ -151,8 +152,8 @@ class TravelHistory:
         """Read every journal file not read before (or changed since)."""
         if not journal_path or not os.path.isdir(journal_path):
             return 0
-        names = sorted(name for name in os.listdir(journal_path)
-                       if name.startswith("Journal.") and name.endswith(".log"))
+        names = sorted((name for name in os.listdir(journal_path)
+                        if name.startswith("Journal.") and name.endswith(".log")), key=journal_sort_key)
         added = 0
         for name in names:
             path = os.path.join(journal_path, name)

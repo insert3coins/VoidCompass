@@ -282,9 +282,10 @@ def build_survey_model(system_name, scan_items, focused_body_id=None, focused_bo
     notable_by_name = {str(row.get('name') or '').casefold(): row for row in notable_rows}
     focus_requested = focused_body_id is not None or bool(focused_body_name)
     focused = next((row for row in bodies if _body_matches(row, focused_body_id, focused_body_name)), None)
-    if focus_requested:
-        if focused is None:
-            return None
+    # A focus the scan list can't match (a body not yet FSS-scanned, or one
+    # the journal names differently) falls back to the whole system rather
+    # than hiding the survey while other worlds still have biology to find.
+    if focus_requested and focused is not None:
         focused.update(_body_visual_meta(focused, system_name))
         focused['recent_scan'] = is_latest_scan(focused)
         focused_notable = notable_by_id.get(str(focused.get('body_id'))) if focused.get('body_id') is not None else None

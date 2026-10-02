@@ -750,7 +750,8 @@
             <header><span>ALL OVERLAYS</span><b>SAVED FOR THIS COMMANDER</b></header>
             <div class="studio-global-body">
               <label class="studio-global-fade" for="studio-global-fade"><span>OPACITY</span><input id="studio-global-fade" type="range" min="40" max="100" step="5" aria-label="Opacity of every overlay"><b id="studio-global-fade-value">100%</b></label>
-              <label class="studio-field compact"><span>Text size</span><div><input id="studio-text-scale" type="number" min="75" max="200" step="5" data-studio-setting="overlay_text_scale_percent"><b>%</b></div></label>
+              <button type="button" class="studio-field compact studio-text-link" data-page="settings" data-settings-section="appearance" title="Text size for every overlay is in Settings, Appearance"><span>Text size</span><b>SETTINGS › APPEARANCE</b></button>
+              <label class="studio-field compact" title="How often every overlay redraws its animation. Lower is lighter on the game's frame rate."><span>Frame rate</span><select data-studio-setting="overlay_frame_rate"><option value="60">Full · 60</option><option value="30">Standard · 30</option><option value="15">Light · 15</option></select></label>
               <label class="studio-switch compact"><span><b>Mouse passthrough</b></span><input type="checkbox" data-overlay-option="overlay_mouse_passthrough"><i></i></label>
               <label class="studio-switch compact"><span><b>CRT effects</b></span><input type="checkbox" data-overlay-option="hud_crt_enabled"><i></i></label>
               <label class="studio-switch compact"><span><b>Shimmer</b></span><input type="checkbox" data-overlay-option="hud_crt_motion_enabled"><i></i></label>

@@ -106,7 +106,9 @@
         const response = await fetch(`/api/health?${suffix}`, {cache: "no-store"});
         if (!response.ok) await drain(response);
         if (response.ok) {
-          const nextRevision = Number((await response.json()).revision);
+          const health = await response.json();
+          global.VoidCompassFrameCap?.set(health.frame_rate);
+          const nextRevision = Number(health.revision);
           if (Number.isFinite(nextRevision) && nextRevision !== revision) {
             await refresh(nextRevision);
           } else {

@@ -4,6 +4,8 @@ import time
 import threading
 import logging
 
+from voidcompass.core.journal_files import journal_sort_key, latest_session, session_header
+
 
 def carrier_jump_moves_player(data):
     """Return whether a CarrierJump is also the commander's location event.
@@ -48,6 +50,11 @@ class JournalWatcher:
         self._skip_partial_line_once = False
         self._startup_location_seeded = False
         self._startup_location_event = None
+        # Set on a first run: replay the newest session's header (commander,
+        # ranks, credits, ship) ahead of the clipped startup tail, which
+        # starts after it in any journal longer than startup_tail_bytes.
+        self.seed_session_header = False
+        self._startup_header_events = []
         self._startup_surface_vehicle_identity = {}
         self._startup_station_context = {}
         
@@ -130,7 +137,8 @@ class JournalWatcher:
                     os.path.join(self.journal_path, f)
                     for f in os.listdir(self.journal_path)
                     if f.startswith("Journal.") and f.endswith(".log")
-                ]
+                ],
+                key=journal_sort_key,
             )
             if not files:
                 return 0
@@ -173,6 +181,7 @@ class JournalWatcher:
                     for filename in os.listdir(self.journal_path)
                     if filename.startswith("Journal.") and filename.endswith(".log")
                 ),
+                key=journal_sort_key,
                 reverse=True,
             )
             if not files:
@@ -218,11 +227,11 @@ class JournalWatcher:
         path = self.last_journal
         if not path:
             try:
-                files = sorted(
+                files = sorted((
                     os.path.join(self.journal_path, filename)
                     for filename in os.listdir(self.journal_path)
                     if filename.startswith("Journal.") and filename.endswith(".log")
-                )
+                ), key=journal_sort_key)
             except (OSError, TypeError):
                 files = []
             path = files[-1] if files else None
@@ -280,11 +289,11 @@ class JournalWatcher:
         path = self.last_journal
         if not path:
             try:
-                files = sorted(
+                files = sorted((
                     os.path.join(self.journal_path, filename)
                     for filename in os.listdir(self.journal_path)
                     if filename.startswith("Journal.") and filename.endswith(".log")
-                )
+                ), key=journal_sort_key)
             except (OSError, TypeError):
                 files = []
             path = files[-1] if files else None
@@ -372,47 +381,23 @@ class JournalWatcher:
         return active
 
     @staticmethod
-    def detect_latest_commander(journal_path, tail_bytes=2 * 1024 * 1024):
-        """Best-effort commander/FID detection from the newest journal file."""
-        if not journal_path or not os.path.exists(journal_path):
+    def detect_latest_commander(journal_path, tail_bytes=None):
+        """The commander who last played, from the newest journals.
+
+        Walks back from the newest journal, reading each whole: the newest one
+        can be a launch that never left the main menu, and the commander is
+        written at the top of a journal that can run to megabytes.
+        ``tail_bytes`` is no longer used.
+        """
+        if not journal_path or not os.path.isdir(journal_path):
             return None
         try:
-            files = sorted(
-                os.path.join(journal_path, f)
-                for f in os.listdir(journal_path)
-                if f.startswith("Journal.") and f.endswith(".log")
-            )
-            if not files:
-                return None
-            latest = files[-1]
-            size = os.path.getsize(latest)
-            start = max(0, size - int(tail_bytes))
-            with open(latest, "rb") as f:
-                f.seek(start)
-                content = f.read().decode("utf-8", errors="ignore")
-            lines = content.splitlines()
-            if start > 0 and lines:
-                lines = lines[1:]
-            commander = None
-            fid = None
-            for line in reversed(lines):
-                try:
-                    raw = json.loads(line)
-                except Exception:
-                    continue
-                ev = raw.get("event")
-                if ev == "LoadGame":
-                    commander = raw.get("Commander") or commander
-                    fid = raw.get("FID") or fid
-                    if commander:
-                        return {"commander": commander, "fid": fid or "", "journal_file": latest}
-                if ev == "Commander":
-                    commander = raw.get("Name") or commander
-                    fid = raw.get("FID") or fid
-                    if commander:
-                        return {"commander": commander, "fid": fid or "", "journal_file": latest}
+            session = latest_session(journal_path)
         except Exception:
             return None
+        if not session.get("commander"):
+            return None
+        return {"commander": session["commander"], "fid": session.get("fid") or "", "journal_file": session.get("journal_file") or ""}
         return None
 
     def _worker(self):
@@ -451,8 +436,9 @@ class JournalWatcher:
         self._skip_partial_line_once = False
         try:
             names = sorted(
-                name for name in os.listdir(journal_path)
-                if name.startswith("Journal.") and name.endswith(".log")
+                (name for name in os.listdir(journal_path)
+                 if name.startswith("Journal.") and name.endswith(".log")),
+                key=journal_sort_key,
             )
             if names:
                 self.last_journal = os.path.join(journal_path, names[-1])
@@ -479,7 +465,8 @@ class JournalWatcher:
                         os.path.join(self.journal_path, f)
                         for f in os.listdir(self.journal_path)
                         if f.startswith("Journal.") and f.endswith(".log")
-                    ]
+                    ],
+                    key=journal_sort_key,
                 )
                 self._journal_files_refresh_ts = now
             files = self._journal_files
@@ -520,6 +507,8 @@ class JournalWatcher:
                 except Exception:
                     self.file_pos = 0
             self._seed_startup_location()
+            if self.seed_session_header and not self._startup_catchup_done:
+                self._seed_session_header()
         
         try:
             with open(self.last_journal, 'r', encoding='utf-8') as f:
@@ -574,6 +563,10 @@ class JournalWatcher:
                 if startup_catchup and self._startup_location_event:
                     events.insert(0, self._startup_location_event)
                     self._startup_location_event = None
+                # The session header is older than both, so it goes first.
+                if startup_catchup and self._startup_header_events:
+                    events[0:0] = self._startup_header_events
+                    self._startup_header_events = []
                 if startup_catchup and eof_reached and not events:
                     # Complete the restore handshake even for a new/empty
                     # journal so a cached UI cannot remain frozen forever.
@@ -659,6 +652,22 @@ class JournalWatcher:
     def get_startup_station_context(self):
         """Return the station that still owns the commander's startup state."""
         return dict(self._startup_station_context or {})
+
+    def _seed_session_header(self):
+        """Queue the newest session's header events for the startup replay."""
+        self.seed_session_header = False
+        try:
+            rows = session_header(self.journal_path, self.last_journal, self.startup_tail_bytes)
+        except Exception:
+            logging.warning("Could not read the newest session header", exc_info=True)
+            return
+        events = []
+        for raw in rows:
+            event = self._normalize_event(raw)
+            event["startup_catchup"] = True
+            event["startup_header_seed"] = True
+            events.append(event)
+        self._startup_header_events = events
 
     def _seed_startup_location(self, tail_bytes=2 * 1024 * 1024):
         """Retain newest location and surface-vehicle identity for startup."""
@@ -1427,7 +1436,7 @@ class JournalWatcher:
             return {}
 
         try:
-            files = sorted([os.path.join(self.journal_path, f) for f in os.listdir(self.journal_path) if f.startswith("Journal.") and f.endswith(".log")])
+            files = sorted([os.path.join(self.journal_path, f) for f in os.listdir(self.journal_path) if f.startswith("Journal.") and f.endswith(".log")], key=journal_sort_key)
         except Exception:
             report(0, 0)
             return {}

@@ -7,6 +7,7 @@ import re
 import html
 import time
 from datetime import datetime, timezone
+from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.core.version import APP_VERSION
 
 _EDSM_CREDIT_EVENTS = frozenset({
@@ -490,10 +491,10 @@ class EDSMHandler:
             if not journal_path or not os.path.exists(journal_path):
                 return
 
-            all_files = sorted(
+            all_files = sorted((
                 f for f in os.listdir(journal_path)
                 if f.startswith("Journal.") and f.endswith(".log")
-            )
+            ), key=journal_sort_key)
             if not all_files:
                 return
 

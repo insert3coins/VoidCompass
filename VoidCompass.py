@@ -11,6 +11,11 @@ if str(SRC_ROOT) not in sys.path:
 
 
 def _dispatch():
+    # Before any window or screen metric, in every process (app, deck host,
+    # overlay host): overlay positions are screen pixels everywhere.
+    from voidcompass.core.display_scale import enable_per_monitor_dpi
+
+    enable_per_monitor_dpi()
     if "--html-overlay-host" in sys.argv:
         from voidcompass.overlays.html_overlay_host import main
 

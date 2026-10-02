@@ -314,6 +314,10 @@ class HtmlDashboardRuntime:
             "boot_active": bool(self._boot.get("active")),
             "onboarding_active": bool(self._onboarding.get("active")),
         })
+        # Settings > Appearance > Command deck scale: the host zooms WebView2.
+        zoom = (payload.get("ui") or {}).get("zoom_percent")
+        if zoom is not None:
+            self.server.set_host_value("zoom_percent", zoom)
         self.server.publish(payload)
 
     def _receive_command(self, payload):

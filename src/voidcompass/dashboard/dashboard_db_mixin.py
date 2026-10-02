@@ -7,6 +7,7 @@ import threading
 import time
 
 from voidcompass.core.config import get_active_profile, get_profile_dir, get_profile_file
+from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.core.profile_backups import automatic_backup
 
 SCAN_HISTORY_FILE = "scan_history.json"
@@ -44,11 +45,11 @@ def import_scan_journal_history(db_path, journal_path, commander=None, fid=None)
     if not db_path or not journal_path or not os.path.isdir(journal_path):
         return result
     try:
-        files = sorted(
+        files = sorted((
             os.path.join(journal_path, name)
             for name in os.listdir(journal_path)
             if name.startswith("Journal.") and name.endswith(".log")
-        )
+        ), key=journal_sort_key)
     except OSError:
         return result
 
@@ -297,10 +298,10 @@ def scan_single_system_journal_evidence(journal_path, system_name, commander=Non
     if not result["system"] or not journal_path or not os.path.isdir(journal_path):
         return result
     try:
-        files = sorted(
+        files = sorted((
             os.path.join(journal_path, name) for name in os.listdir(journal_path)
             if name.startswith("Journal.") and name.endswith(".log")
-        )
+        ), key=journal_sort_key)
     except OSError:
         return result
     wanted_system = result["system"].casefold()
@@ -838,7 +839,7 @@ class DashboardDBMixin:
         except Exception as e:
             self.log(f"❌ MIGRATION FAILED: {e}")
 
-    def scan_all_logs_threaded(self):
+    def scan_all_logs_threaded(self, upload_history_to_edsm=None):
         lock = getattr(self, "_cache_rebuild_lock", None)
         if lock is None:
             lock = threading.Lock()
@@ -856,9 +857,10 @@ class DashboardDBMixin:
 
         # Snapshot the profile preference on the UI thread so this rebuild is
         # not affected by a later profile switch or checkbox change.
-        upload_history_to_edsm = bool(
-            self.config.get("edsm_backfill_on_cache_rebuild", True)
-        )
+        if upload_history_to_edsm is None:
+            upload_history_to_edsm = bool(
+                self.config.get("edsm_backfill_on_cache_rebuild", True)
+            )
         self._set_cache_rebuild_state(
             running=True,
             status="working",

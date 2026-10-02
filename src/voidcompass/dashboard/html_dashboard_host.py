@@ -213,8 +213,34 @@ class DashboardHost:
 
     def after_ready(self, webview_control):
         """Attach the host's WebView2 listeners once the core exists."""
+        self._webview_control = webview_control
         self.watch_network(webview_control)
         self.watch_process(webview_control)
+
+    def apply_zoom(self, percent):
+        """Zoom the deck the way Ctrl+ does in Edge: the page lays out at the
+        new size, crisp, with canvases and the mouse kept right (CSS zoom
+        would blur the orrery and the atlas and shift their clicks).
+        Settings > Appearance > Command deck scale."""
+        control = getattr(self, "_webview_control", None)
+        try:
+            percent = max(75, min(200, int(percent)))
+        except (TypeError, ValueError):
+            return False
+        if control is None or percent == getattr(self, "_zoom_applied", None):
+            return False
+        try:
+            from System import Action
+
+            def set_zoom():
+                control.ZoomFactor = percent / 100.0
+
+            control.BeginInvoke(Action(set_zoom))
+            self._zoom_applied = percent
+            return True
+        except Exception as exc:
+            print(f"Dashboard zoom failed: {type(exc).__name__}: {exc}", flush=True)
+            return False
 
     def watch_process(self, webview_control):
         """Log every lost WebView2 process, and bring the deck back from one.
@@ -331,6 +357,8 @@ class DashboardHost:
                 ):
                     self.window.destroy()
                     return
+                if state.get("zoom_percent") is not None:
+                    self.apply_zoom(state.get("zoom_percent"))
                 boot_active = bool(state.get("boot_active", True))
                 onboarding_active = bool(state.get("onboarding_active", False))
                 # Only a running client can answer the release nudge; a page

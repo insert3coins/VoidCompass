@@ -146,6 +146,12 @@ class HtmlDashboardServer:
                 self._condition.notify_all()
             return self._host_revision
 
+    def set_host_value(self, key, value):
+        """Store a value the host reads on its next poll, without bumping
+        host_revision (which tells the host to re-apply window geometry)."""
+        with self._condition:
+            self._host_state[str(key)] = value
+
     def stop(self):
         if self._stopping.is_set():
             return

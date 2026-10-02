@@ -10,6 +10,7 @@ from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
+from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.core.persistence_queue import persistence_queue
 from voidcompass.core.paths import resource_path
 from typing import Any, Callable
@@ -619,7 +620,7 @@ class AchievementEngine:
         journal_dir: str | os.PathLike[str],
         progress_callback: Callable[[int, int, str], None] | None = None,
     ) -> dict[str, int]:
-        files = sorted(Path(journal_dir).glob("Journal.*.log"))
+        files = sorted(Path(journal_dir).glob("Journal.*.log"), key=journal_sort_key)
         snapshots: list[tuple[Path, int]] = []
         for path in files:
             try:

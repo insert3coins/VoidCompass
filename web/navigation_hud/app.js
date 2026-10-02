@@ -963,6 +963,7 @@ async function checkHostHealth() {
     const response = await fetch(api('/api/health'), {cache: 'no-store'});
     if (!response.ok) throw new Error(`Health HTTP ${response.status}`);
     const health = await response.json();
+    window.VoidCompassFrameCap?.set(health.frame_rate);
     lastServerContact = Date.now();
     const revision = Number(health.revision);
     pageReady = pageReady || Boolean(health.ready);
