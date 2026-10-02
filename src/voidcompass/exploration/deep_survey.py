@@ -14,6 +14,7 @@ import math
 import os
 import threading
 
+from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.core.persistence_queue import persistence_queue
 from voidcompass.exploration.galactic_regions import find_region
 from voidcompass.exploration.stellar_types import star_type_label
@@ -980,8 +981,8 @@ class DeepSurveyTracker:
             return 0
         count = 0
         imported = dict(self.data.get("imported_files") or {})
-        files = sorted(os.path.join(journal_path, name) for name in os.listdir(journal_path)
-                       if name.startswith("Journal.") and name.endswith(".log"))
+        files = sorted((os.path.join(journal_path, name) for name in os.listdir(journal_path)
+                        if name.startswith("Journal.") and name.endswith(".log")), key=journal_sort_key)
         for path in files:
             try:
                 signature = f"{os.path.getsize(path)}:{int(os.path.getmtime(path))}"

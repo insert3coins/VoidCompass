@@ -8,6 +8,7 @@ import math
 import os
 import threading
 from datetime import datetime
+from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.core.persistence_queue import persistence_queue
 
 
@@ -289,10 +290,10 @@ class CaptainsLog:
             return 0
         count = 0
         rebuilt = CaptainsLog("")
-        files = sorted(
+        files = sorted((
             os.path.join(journal_path, name) for name in os.listdir(journal_path)
             if name.startswith("Journal.") and name.endswith(".log")
-        )
+        ), key=journal_sort_key)
         imported = self.data.setdefault("imported_files", {})
         for path in files:
             try:

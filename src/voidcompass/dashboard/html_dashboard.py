@@ -20,6 +20,7 @@ import time
 import webbrowser
 
 from voidcompass.core import companion_features
+from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.engineering import build_planner
 from voidcompass.engineering import engineering_companion
 from voidcompass.engineering import engineering_data
@@ -2012,7 +2013,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         values = {}
         for key in (
             "journal_path", "screenshots_path", "screenshots_enabled",
-            "ui_scale_percent", "reduced_motion_enabled",
+            "ui_scale_percent", "ui_text_scale_percent", "ui_text_min_px", "overlay_text_scale_percent",
+            "reduced_motion_enabled",
             "overlay_hotkeys_enabled",
             "edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled",
             "eddn_market_upload_enabled", "carrier_discord_webhook_url",
@@ -2128,10 +2130,10 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         logs, latest = 0, ""
         if journal and os.path.isdir(journal):
             try:
-                names = sorted(
+                names = sorted((
                     name for name in os.listdir(journal)
                     if name.startswith("Journal.") and name.endswith(".log")
-                )
+                ), key=journal_sort_key)
                 logs, latest = len(names), (names[-1] if names else "")
             except OSError:
                 pass
@@ -2158,6 +2160,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 pass
         if "ui_scale_percent" in changed:
             apply_ui_scale(self.root, self.config.get("ui_scale_percent", 100))
+        if "overlay_text_scale_percent" in changed:
+            # The same refresh Overlay Studio runs after its own settings.
+            self._html_overlay_settings_save({})
         if "reduced_motion_enabled" in changed:
             self._apply_active_profile_theme()
         if changed & {"screenshots_enabled", "screenshots_path", "reduced_motion_enabled"}:
@@ -2792,6 +2797,11 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "ui": {
                 "flight_log_mode": bool(self.config.get("flight_log_mode_enabled", False)),
                 "reduced_motion": bool(self.config.get("reduced_motion_enabled", False)),
+                # Readability: the deck's zoom (applied by the WebView2 host),
+                # its text size, and the smallest any deck text may be.
+                "zoom_percent": max(75, min(200, _integer(self.config.get("ui_scale_percent"), 100))),
+                "text_scale_percent": max(80, min(200, _integer(self.config.get("ui_text_scale_percent"), 100))),
+                "text_min_px": max(0, min(18, _integer(self.config.get("ui_text_min_px"), 0))),
                 "page_request": {
                     "id": _integer(getattr(self, "_html_dashboard_page_request_seq", 0)),
                     "page": _text(getattr(self, "_html_dashboard_page_request", ""), 40),
@@ -4105,6 +4115,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 allowed = {
                     "journal_path": str, "screenshots_path": str,
                     "screenshots_enabled": bool, "ui_scale_percent": int,
+                    "ui_text_scale_percent": int, "ui_text_min_px": int, "overlay_text_scale_percent": int,
                     "reduced_motion_enabled": bool,
                     "overlay_hotkeys_enabled": bool,
                     "edsm_cmdr_name": str,
@@ -4138,6 +4149,13 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                         updates[key] = max(5, min(240, _integer(value, 30)))
                     elif key == "ui_scale_percent":
                         updates[key] = max(75, min(200, _integer(value, 100)))
+                    elif key == "overlay_text_scale_percent":
+                        updates[key] = max(75, min(200, _integer(value, 100)))
+                    elif key == "ui_text_scale_percent":
+                        updates[key] = max(80, min(200, _integer(value, 100)))
+                    elif key == "ui_text_min_px":
+                        # 0 keeps the designed sizes; otherwise no deck text is smaller.
+                        updates[key] = 0 if _integer(value, 0) <= 0 else max(8, min(18, _integer(value, 0)))
                     elif key == "low_fuel_threshold_pct":
                         updates[key] = round(max(0.05, min(0.6, _number(value, 0.25))), 2)
                     else:

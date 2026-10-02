@@ -14,6 +14,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from urllib.parse import quote_plus
 
+from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.core.persistence_queue import persistence_queue
 from voidcompass.core import themes
 
@@ -453,7 +454,7 @@ class CarrierTracker:
                 os.path.join(journal_path, f)
                 for f in os.listdir(journal_path)
                 if f.startswith("Journal.") and f.endswith(".log")
-            ])
+            ], key=journal_sort_key)
         except Exception:
             return
 

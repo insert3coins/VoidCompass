@@ -9,7 +9,6 @@ import re
 import sys
 import time
 import traceback
-from voidcompass.core.native_services import messagebox
 import webbrowser
 import shutil
 from collections import deque
@@ -1951,6 +1950,10 @@ class MainDashboard(
         # First commissioning now completes in the HTML host before Dashboard
         # construction. Retain the flag only for the pre-upgrade backup rule.
         first_run = bool(getattr(self.root, "_voidcompass_first_commissioning", False))
+        # A new install reads the commander's whole history once, after
+        # setup: the newest session's header now, the full journal scan once
+        # the startup history has settled (_startup_history_phase_complete).
+        self._first_run_scan_pending = first_run
         previous_version = str(self.config.get("last_app_version") or "")
         if (
             not first_run
@@ -2530,6 +2533,7 @@ class MainDashboard(
         # Compatibility name for code and third-party integrations that still
         # refer to app.watcher.  It is the coordinator, never a second reader.
         self.watcher = self.journal
+        self.journal.reader.seed_session_header = bool(getattr(self, "_first_run_scan_pending", False))
         self.journal.subscribe_journal(
             self.process_event,
             batch_callback=self.process_batch,
@@ -2795,6 +2799,14 @@ class MainDashboard(
                 "Waiting for the active journal to reach its live tail",
                 0.76,
             )
+            if getattr(self, "_first_run_scan_pending", False):
+                # The same scan as Settings > Rebuild cache, without an EDSM
+                # upload nobody has asked for yet.
+                self._first_run_scan_pending = False
+                self.add_event_feed_entry(
+                    "SYSTEM", "First run: reading every journal to build your history", severity="INFO",
+                )
+                self.scan_all_logs_threaded(upload_history_to_edsm=False)
         self._maybe_complete_startup_presentation()
 
     def _startup_history_timeout(self):
@@ -3025,6 +3037,22 @@ class MainDashboard(
         self._show_first_run_onboarding()
 
     def _create_support_bundle(self):
+        # Reported in the deck (live feed, Settings' tool status) and shown in
+        # Explorer. Never a modal box: one on this thread stopped the journal
+        # and every overlay until it was closed, and it could sit hidden
+        # behind the game.
+        def report(text, ok, path=None):
+            tool = self._html_profile_transient("_html_settings_tool_state", {})
+            tool.update({"status": "ready" if ok else "failed", "detail": text})
+            self.add_event_feed_entry("SYSTEM", text, severity="INFO" if ok else "WARN")
+            if path:
+                try:
+                    import subprocess
+                    subprocess.Popen(["explorer", "/select,", str(path)])
+                except Exception:
+                    open_path(os.path.dirname(str(path)))
+            self._schedule_html_dashboard_publish(immediate=True)
+
         def worker():
             try:
                 path = create_support_bundle(
@@ -3032,20 +3060,9 @@ class MainDashboard(
                     health=self._adaptive_health_snapshot(),
                     profile_key=get_active_profile(self.config),
                 )
-                self._ui_post(
-                    lambda: messagebox.showinfo(
-                        "Support Bundle",
-                        f"Privacy-redacted support bundle created:\n{path}",
-                        parent=self.root,
-                    )
-                )
+                self._ui_post(lambda: report(f"Privacy-redacted support bundle created: {path}", True, path))
             except Exception as exc:
-                self._ui_post(
-                    lambda error=str(exc): messagebox.showerror(
-                        "Support Bundle", f"Could not create support bundle:\n{error}",
-                        parent=self.root,
-                    )
-                )
+                self._ui_post(lambda error=str(exc): report(f"Could not create a support bundle: {error}", False))
 
         threading.Thread(target=worker, name="support-bundle", daemon=True).start()
 
@@ -4524,6 +4541,10 @@ class MainDashboard(
         self.navigation_scan_progress_source = "fss"
 
     def _apply_runtime_feature_toggles(self):
+        from voidcompass.dashboard.html_overlay_studio import overlay_frame_rate
+        from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
+
+        HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
         if self.config.get("screenshots_enabled", False):
             self.log("Screenshot Converter: ACTIVE")
         else:

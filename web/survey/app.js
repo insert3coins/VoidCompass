@@ -1180,7 +1180,12 @@
         cycle.pagers.push(pager);
       }
     }
-    fitBudget(cycle.still ? STILL_BUDGET : HEIGHT_BUDGET[tier]);
+    // Never taller than the room left on its screen below it (sent by the
+    // app from the overlay's position and the display's scaling): a lower
+    // overlay pages its lists instead of running off the bottom.
+    const room = safeNumber(options.max_height);
+    const budget = cycle.still ? STILL_BUDGET : HEIGHT_BUDGET[tier];
+    fitBudget(room > 0 ? Math.min(budget, Math.max(220, room - 8)) : budget);
 
     // Show the spotlit world's manifest page after a journal jump or while it
     // turns; otherwise a self-paging manifest keeps the page it was on.

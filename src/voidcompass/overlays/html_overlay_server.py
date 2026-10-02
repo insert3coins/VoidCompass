@@ -94,6 +94,9 @@ class HtmlOverlayServer:
     def url(self):
         return f"http://127.0.0.1:{self.port}/?token={self.token}"
 
+    # Animation frames per second for every overlay page; 0 is uncapped.
+    frame_rate = 30
+
     def register(self, overlay_id, template=None, title=None):
         overlay_id = str(overlay_id)
         with self._condition:
@@ -470,6 +473,9 @@ class HtmlOverlayServer:
                     "ok": True, "revision": state.revision, "clients": state.clients,
                     "rendered_revision": state.rendered_revision,
                     "ready": state.ready.is_set(),
+                    # Overlay Studio > All overlays > Frame rate: every page's
+                    # animation loops follow it (web/assets/frame-cap.js).
+                    "frame_rate": self.frame_rate,
                 })
             else:
                 self._send_json(handler, {"error": "not found"}, 404)

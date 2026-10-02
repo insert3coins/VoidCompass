@@ -6,6 +6,8 @@ import json
 import logging
 import os
 
+from voidcompass.core.display_scale import room_below
+
 from voidcompass.overlays.html_overlay_runtime import (
     HtmlOverlayBridgeLifecycle,
     HtmlOverlaySurface,
@@ -128,9 +130,18 @@ class HtmlSurveyOverlayBridge(HtmlOverlayBridgeLifecycle):
                 "text_scale": text_scale,
                 "opacity": overlay_opacity_ratio(self.config),
             },
-            "options": survey_overlay_options(self.config),
+            "options": {**survey_overlay_options(self.config), "max_height": self._room_below()},
             "window": self._window_payload(),
         }
+
+    def _room_below(self):
+        """How tall the overlay may grow and stay on its screen, in design
+        pixels (None: no limit known). Read from where the overlay sits."""
+        try:
+            window = self._window_payload()
+            return room_below(window["x"] + window["width"] // 2, window["y"])
+        except Exception:
+            return None
 
     def _quick_fingerprint(self):
         window = self._window_payload()

@@ -5,6 +5,7 @@ import {
 import {renderExplorationArchive} from "./archive.js";
 import {createMusicDeck} from "./music.js";
 import {installSetup, renderSetup} from "./setup.js";
+import {applyTextSize} from "./text-size.js";
 import {
   engineeringPayload, handleWorkshopChange, handleWorkshopClick, handleWorkshopInput,
   renderBuildPlanner, renderEngineering, resetWorkshop,
@@ -3409,7 +3410,7 @@ function settingsSectionBody(id, data) {
     }).join("");
     const colors = (editor.keys || []).map((key) => `<label><span>${escapeHtml(key.replaceAll("_", " "))}</span><input type="color" data-theme-color="${escapeHtml(key)}" value="${escapeHtml(editor.palette?.[key] || "#000000")}"></label>`).join("");
     return settingGroup("THEME", `<div class="theme-options" data-search="${settingSearchText("theme palette colour color", (data.themes || []).map((theme) => theme.name).join(" "))}">${cards}</div>`)
-      + settingGroup("DISPLAY", `${settingSelect({key: "ui_scale_percent", label: "Command deck scale", detail: "The size of everything in this window.", value: number(value.ui_scale_percent, 100), options: [90, 100, 110, 125, 140].map((item) => [item, `${item}%`]), type: "number"})}${settingSwitch({key: "reduced_motion_enabled", label: "Reduced motion", detail: "Still frames instead of animation on the deck and every overlay.", checked: value.reduced_motion_enabled})}`)
+      + settingGroup("DISPLAY", `${settingSelect({key: "ui_text_scale_percent", label: "Text size", detail: "Makes all the deck's text bigger, keeping the layout as it is.", value: number(value.ui_text_scale_percent, 100), options: [[100, "Standard"], [110, "110%"], [120, "120%"], [135, "135%"], [150, "150%"]], type: "number"})}${settingSelect({key: "ui_text_min_px", label: "Smallest text", detail: "Raises the small labels to at least this size and leaves the headings alone. The easiest fix if the fine print is hard to read.", value: number(value.ui_text_min_px, 0), options: [[0, "As designed"], [10, "10 px"], [11, "11 px"], [12, "12 px"], [13, "13 px"], [14, "14 px"]], type: "number"})}${settingSelect({key: "overlay_text_scale_percent", label: "Overlay text size", detail: "Text on every cockpit overlay. Overlays grow to fit it; one overlay can have its own size in Overlay Studio.", value: number(value.overlay_text_scale_percent, 100), options: [75, 90, 100, 110, 125, 140, 160, 180, 200].map((item) => [item, item === 100 ? "Standard" : `${item}%`]), type: "number"})}${settingSelect({key: "ui_scale_percent", label: "Command deck scale", detail: "Zooms everything in this window, text, panels and maps, as Ctrl+ does in a browser. Less fits on screen.", value: number(value.ui_scale_percent, 100), options: [90, 100, 110, 125, 140, 160].map((item) => [item, `${item}%`]), type: "number"})}${settingSwitch({key: "reduced_motion_enabled", label: "Reduced motion", detail: "Still frames instead of animation on the deck and every overlay.", checked: value.reduced_motion_enabled})}`)
       + `<details class="settings-group theme-workshop"${settingsWorkshopOpen ? " open" : ""} data-search="${settingSearchText("theme workshop custom palette colours colors")}"><summary><h4>THEME WORKSHOP</h4><span>${numeric((editor.custom || []).length)} CUSTOM</span></summary><div class="theme-workshop-body"><div class="theme-workshop-head"><label>NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>DELETE A CUSTOM THEME<select id="custom-theme-existing"><option value="">CHOOSE ONE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><p class="setting-note">Starts from the active theme. Change any colour, then save it as your own.</p><div class="theme-colour-grid">${colors}</div><div class="setting-row actions"><button type="button" data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY</button><button type="button" class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED</button></div></div></details>`;
   }
   if (id === "flight") {
@@ -3817,6 +3818,7 @@ function renderState(state) {
   }
   model = incoming;
   applyTheme(model.theme || {});
+  applyTextSize(model.ui?.text_scale_percent, model.ui?.text_min_px);
   document.body.classList.toggle("reduced-motion", Boolean(model.ui?.reduced_motion));
   if (currentPage === "about") startAboutMatrix();
   const nextBootActive = Boolean(model.boot?.active || model.onboarding?.active);
@@ -4282,6 +4284,10 @@ document.addEventListener("click", async (event) => {
     // Links into Explore may name the view they belong to.
     if (pageButton.dataset.page === "explore" && pageButton.dataset.exploreView) {
       setExploreView(pageButton.dataset.exploreView, EXPLORE_WORKSPACE_UI);
+    }
+    // Links into Settings may name the section to open.
+    if (pageButton.dataset.page === "settings" && pageButton.dataset.settingsSection) {
+      settingsSection = pageButton.dataset.settingsSection;
     }
     // Links into Overlay Studio may name the overlay to select there.
     if (pageButton.dataset.page === "overlay-studio" && pageButton.dataset.studioSelect) {

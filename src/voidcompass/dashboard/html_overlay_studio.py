@@ -1,6 +1,8 @@
 """Overlay Layout Studio model and command controller."""
 
+from voidcompass.core.display_scale import monitor_handle_scale, monitor_scale
 from voidcompass.core.overlay_registry import OVERLAY_SPEC_BY_ATTR, RHINO_MAP_AVAILABLE
+from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 
 from voidcompass.dashboard.html_workspace_support import (
     integer as _integer,
@@ -28,6 +30,15 @@ from voidcompass.overlays.music_player_hud import (
 )
 from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
 
+
+
+# Overlay animation frame rates: 60 (full), 30 (standard), 15 (light).
+OVERLAY_FRAME_RATES = (60, 30, 15)
+
+
+def overlay_frame_rate(config):
+    rate = _integer((config or {}).get("overlay_frame_rate"), 30)
+    return rate if rate in OVERLAY_FRAME_RATES else 30
 
 class HtmlOverlayStudioMixin:
     def _html_overlay_desktop(self):
@@ -96,6 +107,9 @@ class HtmlOverlayStudioMixin:
                     bounds, work = info.rcMonitor, info.rcWork
                     match = re.search(r"DISPLAY(\d+)", str(info.szDevice or ""))
                     found.append({
+                        # Windows display scaling: overlays on it are this
+                        # much bigger on screen than their design size.
+                        "scale": monitor_handle_scale(handle),
                         "number": int(match.group(1)) if match else 0,
                         "primary": bool(info.dwFlags & 1),
                         "left": int(bounds.left), "top": int(bounds.top),
@@ -120,7 +134,7 @@ class HtmlOverlayStudioMixin:
         if not monitors:
             desktop = self._html_overlay_desktop()
             monitors = [{
-                "number": 1, "primary": True,
+                "scale": 1.0, "number": 1, "primary": True,
                 "left": desktop["left"], "top": desktop["top"],
                 "width": desktop["width"], "height": desktop["height"],
                 "work": {key: desktop[key] for key in ("left", "top", "width", "height")},
@@ -247,6 +261,13 @@ class HtmlOverlayStudioMixin:
         for row in overlays:
             monitor = self._html_overlay_monitor_for(row, monitors)
             row["monitor"] = monitor["id"] if monitor else ""
+            # Studio draws and bounds each overlay at its real on-screen size,
+            # which the overlay host makes design size x display scale.
+            scale = float((monitor or {}).get("scale") or 1.0)
+            if scale != 1.0:
+                for key in ("width", "height"):
+                    if isinstance(row.get(key), (int, float)):
+                        row[key] = round(row[key] * scale)
         return {
             "desktop": self._html_overlay_desktop(),
             "monitors": monitors,
@@ -299,6 +320,7 @@ class HtmlOverlayStudioMixin:
                 "hud_label_size": hud_typography(self.config)["labels"],
                 "hud_bright_labels": hud_typography(self.config)["bright"],
                 "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
+                "overlay_frame_rate": overlay_frame_rate(self.config),
                 "overlay_opacity_percent": _integer(self.config.get("overlay_opacity_percent"), 100),
                 "rebuy_warnings_enabled": bool(self.config.get("rebuy_warnings_enabled", True)),
                 "data_risk_warnings_enabled": bool(self.config.get("data_risk_warnings_enabled", True)),
@@ -344,6 +366,9 @@ class HtmlOverlayStudioMixin:
         desktop = self._html_overlay_desktop()
         width = max(20, _integer(record.get("width"), DEFAULT_SIZES.get(attr, (320, 160))[0]))
         height = max(20, _integer(record.get("height"), DEFAULT_SIZES.get(attr, (320, 160))[1]))
+        # Bound by the size the overlay really takes on screen there.
+        scale = monitor_scale(_integer(x, 0) + width // 2, _integer(y, 0) + height // 2)
+        width, height = round(width * scale), round(height * scale)
         left, top = desktop["left"], desktop["top"]
         right, bottom = left + desktop["width"], top + desktop["height"]
         x = max(left, min(_integer(x, left), right - width))
@@ -369,14 +394,16 @@ class HtmlOverlayStudioMixin:
         area = monitor or self._html_overlay_desktop()
         left, top = area["left"], area["top"]
         right, bottom = left + area["width"], top + area["height"]
-        width, height = selected["width"], selected["height"]
+        scale = float((monitor or {}).get("scale") or 1.0)
+        width, height = round(selected["width"] * scale), round(selected["height"] * scale)
         x, y = selected["x"], selected["y"]
         candidates_x = [left, max(left, right - width)]
         candidates_y = [top, max(top, bottom - height)]
         for attr, row in records.items():
             if attr == overlay_id:
                 continue
-            ox, oy, ow, oh = row["x"], row["y"], row["width"], row["height"]
+            ox, oy = row["x"], row["y"]
+            ow, oh = round(row["width"] * scale), round(row["height"] * scale)
             candidates_x.extend((ox, ox + ow, ox - width, ox + ow - width))
             candidates_y.extend((oy, oy + oh, oy - height, oy + oh - height))
         nearest_x = min(candidates_x, key=lambda value: abs(value - x))
@@ -484,6 +511,11 @@ class HtmlOverlayStudioMixin:
             value = _number(payload.get(key), default)
             value = max(low, min(high, value if value is not None else default))
             self.config[key] = int(round(value)) if integer else round(value, 2)
+        if "overlay_frame_rate" in payload:
+            rate = _integer(payload.get("overlay_frame_rate"), 30)
+            self.config["overlay_frame_rate"] = rate if rate in OVERLAY_FRAME_RATES else 30
+        # Applied every save (and at start), so new overlay windows follow it.
+        HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
         if "hud_crt_intensity" in payload:
             intensity = _text(payload.get("hud_crt_intensity") or "Subtle", 20).title()
             self.config["hud_crt_intensity"] = (

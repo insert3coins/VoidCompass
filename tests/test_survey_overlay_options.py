@@ -55,7 +55,11 @@ class SurveyOverlayOptionTests(unittest.TestCase):
         bridge.config.update({"survey_spotlight_rotation": "always", "survey_spotlight_threshold": 5,
                               "overlay_text_scale_percent": 100, "survey_text_scale_percent": 130})
         snapshot = bridge._snapshot()
-        self.assertEqual(snapshot["options"], {"spotlight_rotation": "always", "spotlight_threshold": 5})
+        options = dict(snapshot["options"])
+        # The room left on screen below the overlay (5.5.1.3), from its position.
+        self.assertIn("max_height", options)
+        options.pop("max_height")
+        self.assertEqual(options, {"spotlight_rotation": "always", "spotlight_threshold": 5})
         self.assertEqual(snapshot["effects"]["text_scale"], 1.3)
         # Changing a choice must change the quick fingerprint, so it applies live.
         bridge.overlay._palette = {}

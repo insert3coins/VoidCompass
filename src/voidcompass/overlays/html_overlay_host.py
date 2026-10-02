@@ -10,6 +10,8 @@ import time
 from urllib.parse import parse_qs, quote, urlparse
 from urllib.request import build_opener, ProxyHandler, Request
 
+from voidcompass.core.display_scale import monitor_scale
+
 
 GWL_EXSTYLE = -20
 WS_EX_TRANSPARENT = 0x00000020
@@ -457,6 +459,11 @@ class _WindowController:
             height = max(24, int(payload.get("height") or 180))
             x = int(payload.get("x") or 0)
             y = int(payload.get("y") or 0)
+            # Sizes are design pixels (100% scaling); WebView2 draws at the
+            # monitor's scale, so the window must be that much bigger or the
+            # overlay's lower and right parts are cut off.
+            scale = monitor_scale(x + width // 2, y + height // 2)
+            width, height = round(width * scale), round(height * scale)
             requested_geometry = (x, y, width, height)
             visible = bool(
                 payload.get("visible", False)
