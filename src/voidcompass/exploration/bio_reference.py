@@ -97,3 +97,24 @@ def genus_info(name):
         if genus_name.casefold() == wanted:
             return info
     return None
+
+
+@lru_cache(maxsize=1)
+def genus_entry_ids():
+    """Every biological Codex entry identifier by genus (``casefold``):
+    ``{"bark mounds": ["$Codex_Ent_Cone_Name;"], ...}``. Survey Operations'
+    Codex flags use it for genera the species catalogue doesn't cover."""
+    try:
+        with open(_resource_path("codexRef.json"), "r", encoding="utf-8") as handle:
+            raw = json.load(handle)
+    except (OSError, ValueError, TypeError):
+        return {}
+    result = {}
+    for entry in raw.values():
+        if entry.get("category") != "$Codex_Category_Biology;":
+            continue
+        genus, _species, _variant = _split_biology_name(entry)
+        identifier = str(entry.get("name") or "")
+        if genus and identifier.startswith("$Codex_Ent_"):
+            result.setdefault(genus.casefold(), []).append(identifier)
+    return result

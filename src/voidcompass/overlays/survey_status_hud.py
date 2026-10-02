@@ -180,6 +180,116 @@ def _predicted_display_name(genus, species):
         return genus if not epithets else f'{genus} ×{len(epithets)}'
     return f"{genus} {'/'.join(epithets)}"
 
+_SPECIES_KEYS = None
+
+
+def _species_key(entry):
+    """The game's identifier for a predicted species (older cached
+    predictions carry only its English name)."""
+    global _SPECIES_KEYS
+    key = str(entry.get('key') or '').strip()
+    if key:
+        return key
+    if _SPECIES_KEYS is None:
+        from voidcompass.exploration import bio_requirements
+        _SPECIES_KEYS = {
+            str(species.get('name') or '').casefold(): species_key
+            for species_map in bio_requirements.CATALOG.values()
+            for species_key, species in species_map.items()
+        }
+    return _SPECIES_KEYS.get(str(entry.get('name') or '').strip().casefold(), '')
+
+
+def _codex_species(genus, species):
+    """``[{'epithet', 'key'}]`` for the species behind a genus row."""
+    rows = []
+    for entry in species or ():
+        name = str(entry.get('name') or '').strip()
+        if name.casefold().startswith(genus.casefold()):
+            epithet = name[len(genus):].strip()
+        elif name.casefold().endswith(genus.casefold()):
+            epithet = name[:-len(genus)].strip()
+        else:
+            epithet = name
+        # A single-species family is named for itself (Crystalline Shards).
+        epithet = epithet or name
+        # A species whose identifier is unknown keeps its place, unflagged,
+        # so the row still names every species it could be.
+        key = _species_key(entry)
+        if epithet and all(row['epithet'] != epithet for row in rows):
+            rows.append({'epithet': epithet, 'key': key})
+    return rows
+
+
+_GENUS_SPECIES_KEYS = None
+
+
+def _genus_species_keys(genus):
+    """Every catalogue species identifier of a genus (for a DSS-detected
+    genus no prediction names)."""
+    global _GENUS_SPECIES_KEYS
+    if _GENUS_SPECIES_KEYS is None:
+        from voidcompass.exploration import bio_requirements
+        _GENUS_SPECIES_KEYS = {}
+        for genus_key, species_map in bio_requirements.CATALOG.items():
+            family = bio_requirements.GENUS_FAMILIES.get(genus_key) or ''
+            _GENUS_SPECIES_KEYS.setdefault(family.casefold(), []).extend(species_map)
+    keys = list(_GENUS_SPECIES_KEYS.get(str(genus or '').casefold(), ()))
+    if not keys:
+        # Families the species catalogue lacks (Bark Mounds, Amphora Plant):
+        # their entries from the packaged Codex reference (SrvSurvey's codexRef).
+        from voidcompass.exploration import bio_reference
+        keys = list(bio_reference.genus_entry_ids().get(str(genus or '').casefold(), ()))
+    return keys
+
+
+_CODEX_RANK = {'new': 2, 'region': 1}
+
+
+def annotate_codex(model, lookup):
+    """Mark what the Codex still lacks (SrvSurvey's flags): ``codex`` is
+    'new' (never logged), 'region' (not in this galactic region) or ''.
+
+    ``lookup(kind, key, body_id)`` answers for a 'species' or a 'variant'.
+    A predicted row naming one or two species gets ``codex_parts``, a flag
+    per species name; otherwise the row carries its strongest flag.
+    """
+    if not model or not callable(lookup):
+        return model
+
+    def mark(detail, body_id):
+        if detail.get('variant_key'):
+            detail['codex'] = lookup('variant', detail['variant_key'], body_id)
+            return
+        if detail.get('codex_genus'):
+            # Whole-genus answer: flagged only when every species of it is
+            # unlogged (anywhere, or in this region), so never overclaims.
+            flags = {lookup('species', key, body_id) for key in detail['codex_genus']}
+            detail['codex'] = 'new' if flags == {'new'} else 'region' if flags <= {'new', 'region'} else ''
+            return
+        species = detail.get('codex_species') or ()
+        if not any(row.get('key') for row in species):
+            return
+        flags = [(row['epithet'], lookup('species', row['key'], body_id) if row.get('key') else '')
+                 for row in species]
+        detail['codex'] = max((flag for _epithet, flag in flags), key=lambda flag: _CODEX_RANK.get(flag, 0))
+        # Per-name flags when the row names one or two species, unless a
+        # species is the genus itself (Crystalline Shards would read twice).
+        if (detail.get('kind') in PREDICTED_KINDS and len(flags) <= 2
+                and all(epithet.casefold() != str(detail.get('name') or '').casefold() for epithet, _flag in flags)):
+            detail['codex_parts'] = [{'text': epithet, 'flag': flag} for epithet, flag in flags]
+
+    if model.get('mode') == 'body':
+        body_id = (model.get('body') or {}).get('body_id')
+        for detail in model.get('rows') or ():
+            mark(detail, body_id)
+    else:
+        for row in model.get('rows') or ():
+            for detail in row.get('bio_details') or ():
+                mark(detail, row.get('body_id'))
+    return model
+
+
 def _body_value_range(item):
     scans = list((item.get('organic_scans') or {}).values())
     known = sum((_safe_int(bio_values.species_value(scan.get('species')) or scan.get('species_value')) for scan in scans))
@@ -212,7 +322,12 @@ def _body_detail_rows(item):
         represented.add(str(genus).casefold())
         sample = _safe_int(scan.get('sample_idx'))
         complete = bool(scan.get('is_complete'))
-        rows.append({'status': 'COMPLETE' if complete else f'SAMPLE {sample}/3' if sample else 'LOGGED', 'name': species, 'variant': scan.get('variant') or '', 'display_name': _bio_display_name(species, scan.get('variant')), 'value': bio_values.species_value(species) or _safe_int(scan.get('species_value')), 'kind': 'complete' if complete else 'sample', 'progress': 3 if complete else sample})
+        rows.append({'status': 'COMPLETE' if complete else f'SAMPLE {sample}/3' if sample else 'LOGGED', 'name': species, 'variant': scan.get('variant') or '', 'variant_key': scan.get('variant_codex') or '', 'display_name': _bio_display_name(species, scan.get('variant')), 'value': bio_values.species_value(species) or _safe_int(scan.get('species_value')), 'kind': 'complete' if complete else 'sample', 'progress': 3 if complete else sample})
+    # The species a DSS-detected genus could be come from the predictions.
+    predicted_species = {
+        _genus_name(raw).casefold(): list(raw.get('species') or ())
+        for raw in item.get('predicted_genuses') or () if isinstance(raw, dict)
+    }
     for source, kind in ((item.get('genuses') or [], 'detected'), (item.get('predicted_genuses') or [], 'predicted')):
         for raw in source:
             name = _genus_name(raw)
@@ -235,7 +350,9 @@ def _body_detail_rows(item):
                     row_kind = 'possible'
                     status = 'POSSIBLE'
                 display = _predicted_display_name(name, species)
-            rows.append({'status': status, 'name': name, 'variant': '', 'display_name': display, 'min_value': low, 'max_value': high, 'kind': row_kind, 'progress': 0})
+            codex_species = _codex_species(name, species or predicted_species.get(key) or ())
+            codex_genus = [] if codex_species else _genus_species_keys(name)
+            rows.append({'status': status, 'name': name, 'variant': '', 'display_name': display, 'min_value': low, 'max_value': high, 'kind': row_kind, 'progress': 0, 'codex_species': codex_species, 'codex_genus': codex_genus})
     return rows
 
 def _joined_lines(values, max_chars=62):
@@ -333,7 +450,7 @@ def _survey_render_key(model):
 
     def detail_key(row):
         row = row or {}
-        return (row.get('kind'), row.get('status'), row.get('display_name') or row.get('name'), row.get('value'), row.get('min_value'), row.get('max_value'), _safe_int(row.get('progress')))
+        return (row.get('kind'), row.get('status'), row.get('display_name') or row.get('name'), row.get('value'), row.get('min_value'), row.get('max_value'), _safe_int(row.get('progress')), row.get('codex'), repr(row.get('codex_parts')))
     common = (model.get('mode'), model.get('system'), sampling_key, model.get('scope'), repr(model.get('dss_stats') or {}), _safe_int(model.get('scanned')), _safe_int(model.get('total')), bool(model.get('total_known')), tuple((notable_key(row) for row in model.get('notable_rows') or ())))
     if model.get('mode') == 'body':
         body = model.get('body') or {}
@@ -453,6 +570,8 @@ class SurveyStatusHUD:
             self._html_render_model = None
             self.hide()
             return
+        if self.config.get('survey_codex_flags', False):
+            annotate_codex(model, getattr(self, 'codex_lookup', None))
         render_key = _survey_render_key(model)
         if render_key != self._last_render_key:
             self._last_render_key = render_key

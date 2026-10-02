@@ -122,6 +122,11 @@ body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none
 .biological-row.predicted .biological-symbol, .biological-row.possible .biological-symbol { color: var(--dim); }
 .biological-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-size: var(--type-body); }
 .biological-row.predicted .biological-name, .biological-row.possible .biological-name { color: var(--muted); }
+/* Codex flags: filled, never logged; outline, not logged in this region. */
+.codex-flag { display: inline-block; width: .72em; height: .86em; margin: 0 .22em 0 .08em; vertical-align: -.1em; overflow: visible; }
+.codex-flag .codex-pole { fill: none; stroke: var(--yellow); stroke-width: 1.3; stroke-linecap: round; }
+.codex-flag .codex-pennant { fill: var(--yellow); stroke: var(--yellow); stroke-width: 1.1; stroke-linejoin: round; }
+.codex-flag.region .codex-pennant { fill: none; }
 .biological-status { color: var(--muted); font-weight: 700; }
 .biological-value { color: var(--yellow); }
 .biological-row.complete .biological-value { color: var(--green); }

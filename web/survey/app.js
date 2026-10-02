@@ -398,6 +398,42 @@
     return rail;
   }
 
+  // Codex flags (Overlay Studio > Survey Operations > Codex flags): filled,
+  // never logged; outline, never logged in this galactic region.
+  const CODEX_TITLES = {new: "Never logged in your Codex", region: "Not logged in this region"};
+  function codexFlag(flag) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", `codex-flag ${flag}`);
+    svg.setAttribute("viewBox", "0 0 10 12");
+    svg.setAttribute("aria-label", CODEX_TITLES[flag] || "");
+    const pole = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    pole.setAttribute("class", "codex-pole");
+    pole.setAttribute("d", "M1.5 .5 V11.5");
+    const pennant = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    pennant.setAttribute("class", "codex-pennant");
+    pennant.setAttribute("d", "M2.2 1.2 L9 3.9 L2.2 6.6 Z");
+    svg.append(pole, pennant);
+    return svg;
+  }
+
+  function biologicalName(detail) {
+    const name = node("strong", "biological-name");
+    const parts = Array.isArray(detail.codex_parts) ? detail.codex_parts : [];
+    if (parts.length) {
+      // "Bacterium" then a flag beside each species it could be.
+      name.append(`${detail.name || "Organic"} `);
+      parts.forEach((part, index) => {
+        if (index) name.append("/");
+        if (CODEX_TITLES[part.flag]) name.appendChild(codexFlag(part.flag));
+        name.append(String(part.text || ""));
+      });
+      return name;
+    }
+    if (CODEX_TITLES[detail.codex]) name.appendChild(codexFlag(detail.codex));
+    name.append(detail.display_name || detail.name || "Organic");
+    return name;
+  }
+
   function biologicalRow(detail, event = {}) {
     const kind = String(detail.kind || "detected");
     const eventClasses = [
@@ -410,10 +446,7 @@
     const identity = node("span", "biological-identity");
     const symbol = {complete: "✓", sample: "●", detected: "○", predicted: "?", possible: "·"}[kind] || "·";
     identity.appendChild(node("i", "biological-symbol", symbol));
-    identity.appendChild(node(
-      "strong", "biological-name",
-      detail.display_name || detail.name || "Organic",
-    ));
+    identity.appendChild(biologicalName(detail));
     row.appendChild(identity);
 
     const facts = node("span", "biological-facts");

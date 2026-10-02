@@ -274,6 +274,13 @@
           <div><small>SESSION</small><strong id="header-session">00:00:00</strong></div>
           <div><small>TRAFFIC</small><strong id="header-traffic">0 / 0 / 0</strong></div>
         </div>
+        <!-- Every overlay on or off from any page (CMDR Nyx Evera's idea):
+             ALL hides them all for now; each switch is its Overlay Studio on/off. -->
+        <div class="overlay-switchboard" hidden>
+          <button id="overlay-all-toggle" type="button" class="overlay-all" aria-pressed="false"><small>OVERLAYS</small><b id="overlay-all-state">SHOWN</b><i></i></button>
+          <button id="overlay-quick-more" type="button" class="overlay-more" aria-expanded="false" aria-controls="overlay-quick"><small>PANELS</small><b id="overlay-quick-count">0 / 0 ON</b><i>▾</i></button>
+          <div id="overlay-quick" class="overlay-quick" role="group" aria-label="Turn each overlay on or off"></div>
+        </div>
         <div class="commander">
           <small>COMMANDER</small><strong id="header-commander">UNKNOWN</strong>
           <span id="header-ship">SHIP // FLIGHT</span>
@@ -670,6 +677,7 @@
                     <label class="studio-field"><span>Auto rotates above<small>Still at or below</small></span><div><input id="studio-survey-threshold" type="number" min="2" max="40" step="1" data-studio-setting="survey_spotlight_threshold"><b>WORLDS</b></div></label>
                     <label class="studio-field"><span>Text size<small>0 follows all overlays</small></span><div><input id="studio-survey-text-scale" type="number" min="0" max="200" step="5" data-studio-setting="survey_text_scale_percent"><b>%</b></div></label>
                     <label class="studio-switch"><span><b>Expand routine bodies</b><small>Landable and other bodies as full rows, not chips.</small></span><input type="checkbox" data-overlay-option="survey_status_show_all_bodies"><i></i></label>
+                    <label class="studio-switch"><span><b>Codex flags</b><small>A filled flag: never logged. An outline: not logged in this region.</small></span><input type="checkbox" data-overlay-option="survey_codex_flags"><i></i></label>
                   </section>
                   <section data-studio-settings="gravity_warning_hud">
                     <h4>GRAVITY WARNING</h4>

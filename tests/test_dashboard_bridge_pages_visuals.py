@@ -269,6 +269,40 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
         self.assertEqual(toggled.value.post_data_json["overlay_id"], "cargo_hud")
         self.assertFalse(self.errors, self.errors)
 
+    def test_header_switches_turn_overlays_on_and_off_from_any_page(self):
+        """5.5.1.6 (CMDR Nyx Evera): a switch per overlay and an ALL curtain
+        in the header, without hotkeys or a trip to Overlay Studio."""
+        snapshot = self.studio_snapshot()
+        self.page.set_viewport_size({"width": 1920, "height": 900})
+        self.page.evaluate("data => window.__bridgeHarness.render(data)", snapshot)
+        chips = self.page.locator("#overlay-quick [data-overlay-quick]")
+        self.assertEqual(chips.count(), 3)
+        self.assertEqual(self.page.locator("#overlay-quick .on").count(), 2)
+        self.assertTrue(self.page.locator("#overlay-quick").is_visible(), "inline on a wide deck")
+        with self.page.expect_request(lambda request: "/api/command" in request.url
+                                      and '"toggle"' in (request.post_data or "")) as toggled:
+            self.page.locator('[data-overlay-quick="cargo_hud"]').click()
+        self.assertEqual(toggled.value.post_data_json["overlay_id"], "cargo_hud")
+        self.page.wait_for_selector('[data-overlay-quick="cargo_hud"][aria-pressed="true"]', timeout=3000)
+        with self.page.expect_request(lambda request: "/api/command" in request.url
+                                      and '"hide_all"' in (request.post_data or "")):
+            self.page.locator("#overlay-all-toggle").click()
+        self.page.wait_for_selector('#overlay-all-toggle[aria-pressed="true"]', timeout=3000)
+        self.assertEqual(self.page.locator("#overlay-all-state").inner_text(), "HIDDEN")
+        # The published state wins (the all-overlays hotkey changes it too).
+        snapshot["overlay_studio"]["options"]["all_hidden"] = False
+        self.page.evaluate("data => window.__bridgeHarness.render(data)", snapshot)
+        self.assertEqual(self.page.locator("#overlay-all-state").inner_text(), "SHOWN")
+        # A narrower deck keeps its readouts: the switches open from PANELS.
+        self.page.set_viewport_size({"width": 1400, "height": 900})
+        self.assertFalse(self.page.locator("#overlay-quick").is_visible())
+        self.assertEqual(self.page.locator("#overlay-quick-count").inner_text(), "2 / 3 ON")
+        self.page.locator("#overlay-quick-more").click()
+        self.assertTrue(self.page.locator("#overlay-quick").is_visible())
+        self.page.keyboard.press("Escape")
+        self.assertFalse(self.page.locator("#overlay-quick").is_visible())
+        self.assertFalse(self.errors, self.errors)
+
     def test_each_overlay_chooses_whether_it_hides_on_the_maps(self):
         snapshot = self.studio_snapshot()
         snapshot["overlay_studio"].setdefault("options", {})["overlay_hide_on_maps"] = True
