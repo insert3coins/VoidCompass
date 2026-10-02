@@ -8720,7 +8720,10 @@ class MainDashboard(
                 bio_count = d.get("bio_count", 0)
                 geo_count = d.get("geo_count", 0)
                 mining_count = d.get("mining_count")
-                if not startup_replay and (bio_count or geo_count or mining_count):
+                # Scanning a system can raise one of these per body; the
+                # commander can turn them off in Overlay Studio.
+                if (not startup_replay and (bio_count or geo_count or mining_count)
+                        and self.config.get("toast_fss_signals_enabled", True)):
                     body = d.get("body_name") or f"Body {body_id}"
                     parts = []
                     if bio_count:
@@ -8763,7 +8766,8 @@ class MainDashboard(
                 bio_count = d.get("bio_count", 0)
                 geo_count = d.get("geo_count", 0)
                 mining_count = d.get("mining_count", 0)
-                if not startup_replay and (bio_count or geo_count or mining_count):
+                if (not startup_replay and (bio_count or geo_count or mining_count)
+                        and self.config.get("toast_dss_signals_enabled", True)):
                     body = d.get("body_name") or f"Body {body_id}"
                     parts = []
                     if bio_count:

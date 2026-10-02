@@ -327,6 +327,8 @@ class HtmlOverlayStudioMixin:
                 "layout_mode": HtmlOverlayServer.layout_mode,
                 "overlay_opacity_percent": _integer(self.config.get("overlay_opacity_percent"), 100),
                 "rebuy_warnings_enabled": bool(self.config.get("rebuy_warnings_enabled", True)),
+                "toast_fss_signals_enabled": bool(self.config.get("toast_fss_signals_enabled", True)),
+                "toast_dss_signals_enabled": bool(self.config.get("toast_dss_signals_enabled", True)),
                 "data_risk_warnings_enabled": bool(self.config.get("data_risk_warnings_enabled", True)),
                 "prospector_hud_timeout_s": _integer(self.config.get("prospector_hud_timeout_s"), 45),
                 "gravity_warning_hud_timeout_s": _integer(self.config.get("gravity_warning_hud_timeout_s"), 20),
@@ -492,6 +494,7 @@ class HtmlOverlayStudioMixin:
         allowed = {
             "overlay_mouse_passthrough", "hud_compact_mode",
             "rebuy_warnings_enabled",
+            "toast_fss_signals_enabled", "toast_dss_signals_enabled",
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",

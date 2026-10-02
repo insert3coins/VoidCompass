@@ -15,6 +15,7 @@
 * New **Layout mode** in Overlay Studio (All overlays) shows every enabled overlay at once, even ones that have nothing to show yet. Each is drawn with a dashed outline, its name and its size, so you can line them all up. It turns itself off when you leave Overlay Studio.
 * The Navigation HUD now shows who discovered the system you're in and when, and when EDSM last updated it, as SrvSurvey does. It shows in orange on the line under the system name, taking turns with the region every few seconds. Dates use the in-game year, such as 4 APR 3308. It comes from EDSM, one extra lookup per jump, and only for systems EDSM already knows.
 * Fixed "discovered by" missing for systems you've just discovered. Void Compass asked EDSM the moment you arrived, before your own upload of the jump reached it, and EDSM's servers then kept that empty answer for a day. Now it asks again a minute later, and once more at five minutes, getting past that stored answer.
+* You can now turn off the **Surface signals** cockpit notifications, which can pile up while you scan a system. **Mapped signals** (after probing a body) has its own switch. Both are in Overlay Studio under Cockpit Notifications. The signals are still recorded and shown everywhere else.
 * Thanks to CMDR Nyx Evera for the ideas.
 
 ## Earlier releases
