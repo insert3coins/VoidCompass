@@ -788,11 +788,6 @@ class EDSMHandler:
         "coriolis starport", "orbis starport", "ocellus starport",
         "asteroid base", "planetary port", "mega ship",
     }
-    _JUMP_NOTABLE_WORLDS = (
-        ("earth_like", "Earth-like world"),
-        ("water", "Water world"),
-        ("ammonia", "Ammonia world"),
-    )
 
     def fetch_jump_intel(self, system_name, callback):
         """What EDSM knows of the system a jump is heading for (Jump Info).
@@ -810,8 +805,6 @@ class EDSMHandler:
             "system": name, "available": True, "known": False,
             "discovered_by": "", "discovered_at": "", "updated_at": "",
             "traffic": {"day": 0, "week": 0, "total": 0},
-            "body_count": 0, "bodies_logged": 0, "landable": 0, "terraformable": 0,
-            "notable": {key: 0 for key, _sub_type in self._JUMP_NOTABLE_WORLDS},
             "ports": {"starports": 0, "outposts": 0, "settlements": 0, "carriers": 0},
         }
         params = {"systemName": name}
@@ -834,14 +827,8 @@ class EDSMHandler:
             bodies_reply = self._limited_get("https://www.edsm.net/api-system-v1/bodies",
                                              params=params, timeout=12, retries=0).json() or {}
             bodies = [body for body in bodies_reply.get("bodies") or () if isinstance(body, dict)]
-            intel["bodies_logged"] = len(bodies)
-            intel["body_count"] = max(len(bodies), int(bodies_reply.get("bodyCount") or 0))
-            intel["landable"] = sum(1 for body in bodies if body.get("isLandable"))
-            intel["terraformable"] = sum(
-                1 for body in bodies
-                if str(body.get("terraformingState") or "").casefold() == "candidate for terraforming")
-            for key, sub_type in self._JUMP_NOTABLE_WORLDS:
-                intel["notable"][key] = sum(1 for body in bodies if body.get("subType") == sub_type)
+            # Read for when EDSM last updated the system (and an older
+            # system's discoverer), not for counting its bodies.
             times = [str(body.get("updateTime") or "") for body in bodies]
             intel["updated_at"] = max((value for value in times if value), default="")[:32]
             if not intel["discovered_by"]:

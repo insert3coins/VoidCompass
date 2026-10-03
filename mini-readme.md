@@ -6,6 +6,7 @@
 * **Jump Info** now looks like the Navigation HUD: the same frame and corner brackets, typeface, FSD state notice (CHARGING, WITCH SPACE, ARRIVED), star orbs, a HERE to DEST route rail, and EDSM's counts as the HUD's boxed counters.
 * Fixed odd blocks in Jump Info's corners on some PCs. The panel clipped its whole window to cut its corners, and some graphics setups paint those clipped corners solid. Like the Navigation HUD, it now cuts only a decorative inner layer.
 * Fixed overlay **OPACITY** not applying after a restart (5.5.1.7): the overlays opened at full strength until a setting was changed. The overlay **Frame rate** setting had the same gap and now applies at startup too.
+* Jump Info no longer shows body counts. EDSM's counts are often incomplete or wrong for a system.
 
 ## Earlier releases
 
