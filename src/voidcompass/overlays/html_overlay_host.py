@@ -19,6 +19,7 @@ WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_APPWINDOW = 0x00040000
 WS_EX_LAYERED = 0x00080000
 WS_EX_NOACTIVATE = 0x08000000
+LWA_ALPHA = 0x00000002
 HWND_TOPMOST = -1
 SW_HIDE = 0
 SW_SHOWNOACTIVATE = 4
@@ -213,6 +214,36 @@ def _overlay_window_style(style, click_through=True, owned=False):
     else:
         style &= ~WS_EX_TRANSPARENT
     return style
+
+
+def _opacity_alpha(value):
+    """Overlay opacity (0.4-1) as a layered-window alpha byte."""
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        value = 1.0
+    return int(round(max(0.4, min(1.0, value)) * 255))
+
+
+def _apply_window_alpha(window, alpha):
+    """Fade the whole overlay window with Windows' layered-window alpha.
+
+    The desktop compositor applies it to everything the window shows, and
+    WebView2's per-pixel transparency is kept, so the overlay fades without
+    depending on the browser's own GPU compositing. A private user32 handle:
+    never set argtypes on the shared ctypes.windll functions.
+    """
+    hwnd = _native_handle(window)
+    if not hwnd:
+        return False
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        setter = user32.SetLayeredWindowAttributes
+        setter.argtypes = (ctypes.c_void_p, ctypes.c_uint32, ctypes.c_ubyte, ctypes.c_uint32)
+        setter.restype = ctypes.c_int
+        return bool(setter(ctypes.c_void_p(hwnd), 0, int(alpha), LWA_ALPHA))
+    except Exception:
+        return False
 
 
 def _apply_windows_overlay_chrome(window):
@@ -446,6 +477,7 @@ class _WindowController:
         self.restore_foreground = int(restore_foreground or 0)
         self.last_geometry = None
         self.last_click_through = None
+        self.last_alpha = None
         self.last_visible = None
         self.last_topmost_refresh = 0.0
         self.reload_revision = 0
@@ -486,6 +518,12 @@ class _WindowController:
                 if not _apply_windows_geometry(self.window, *geometry):
                     return {"ok": False, "reason": "native geometry unavailable", "handle": handle}
                 self.last_geometry = geometry
+            # Overlay Studio's OPACITY. A window never faded keeps Windows'
+            # default (no call at all), exactly as before.
+            alpha = _opacity_alpha(payload.get("opacity", 1.0))
+            if alpha != self.last_alpha and not (alpha == 255 and self.last_alpha is None):
+                if _apply_window_alpha(self.window, alpha):
+                    self.last_alpha = alpha
             click_through = bool(payload.get("click_through", True))
             if click_through != self.last_click_through:
                 _apply_windows_style(self.window, click_through)
