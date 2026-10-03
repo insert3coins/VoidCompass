@@ -19,7 +19,15 @@ WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_APPWINDOW = 0x00040000
 WS_EX_LAYERED = 0x00080000
 WS_EX_NOACTIVATE = 0x08000000
+LWA_COLORKEY = 0x00000001
 LWA_ALPHA = 0x00000002
+# The overlay form's own background, keyed out by Windows (5.5.1.9). Once a
+# window has layered attributes (the OPACITY fade), Windows composites the
+# form's background wherever the page is transparent: cut corners and the
+# gaps between notifications showed as grey blocks (WinForms' 240 grey, faded).
+# A colour no overlay draws, made see-through with LWA_COLORKEY.
+OVERLAY_KEY_RGB = (1, 2, 3)
+OVERLAY_KEY_COLORREF = OVERLAY_KEY_RGB[0] | (OVERLAY_KEY_RGB[1] << 8) | (OVERLAY_KEY_RGB[2] << 16)
 HWND_TOPMOST = -1
 SW_HIDE = 0
 SW_SHOWNOACTIVATE = 4
@@ -225,6 +233,31 @@ def _opacity_alpha(value):
     return int(round(max(0.4, min(1.0, value)) * 255))
 
 
+def _apply_overlay_key_background(window):
+    """Paint the overlay form's background in the key colour (UI thread)."""
+    native = getattr(window, "native", None)
+    if native is None:
+        return False
+    try:
+        from System import Func, Type
+        from System.Drawing import Color
+
+        def paint():
+            if bool(getattr(native, "IsDisposed", False)):
+                return None
+            native.BackColor = Color.FromArgb(255, *OVERLAY_KEY_RGB)
+            native.Invalidate(True)
+            return None
+
+        if bool(getattr(native, "InvokeRequired", False)):
+            native.Invoke(Func[Type](paint))
+        else:
+            paint()
+        return True
+    except Exception:
+        return False
+
+
 def _apply_window_alpha(window, alpha):
     """Fade the whole overlay window with Windows' layered-window alpha.
 
@@ -241,7 +274,10 @@ def _apply_window_alpha(window, alpha):
         setter = user32.SetLayeredWindowAttributes
         setter.argtypes = (ctypes.c_void_p, ctypes.c_uint32, ctypes.c_ubyte, ctypes.c_uint32)
         setter.restype = ctypes.c_int
-        return bool(setter(ctypes.c_void_p(hwnd), 0, int(alpha), LWA_ALPHA))
+        # The fade, and the form background keyed out so transparent page
+        # pixels stay see-through under it.
+        _apply_overlay_key_background(window)
+        return bool(setter(ctypes.c_void_p(hwnd), OVERLAY_KEY_COLORREF, int(alpha), LWA_ALPHA | LWA_COLORKEY))
     except Exception:
         return False
 
