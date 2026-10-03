@@ -3,6 +3,7 @@
 from voidcompass.core.display_scale import monitor_handle_scale, monitor_scale
 from voidcompass.core.overlay_registry import OVERLAY_SPEC_BY_ATTR, RHINO_MAP_AVAILABLE
 from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
+from voidcompass.overlays.html_overlay_runtime import overlay_opacity_ratio
 
 from voidcompass.dashboard.html_workspace_support import (
     integer as _integer,
@@ -570,6 +571,7 @@ class HtmlOverlayStudioMixin:
             self.config["overlay_frame_rate"] = rate if rate in OVERLAY_FRAME_RATES else 30
         # Applied every save (and at start), so new overlay windows follow it.
         HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
+        HtmlOverlayServer.set_opacity(overlay_opacity_ratio(self.config))
         if "hud_crt_intensity" in payload:
             intensity = _text(payload.get("hud_crt_intensity") or "Subtle", 20).title()
             self.config["hud_crt_intensity"] = (
@@ -691,6 +693,7 @@ class HtmlOverlayStudioMixin:
             opacity = int(round(max(40, min(100, requested))))
             if opacity != current:
                 self.config["overlay_opacity_percent"] = opacity
+                HtmlOverlayServer.set_opacity(opacity / 100.0)
                 self._persist_config()
                 self.update_hud()
                 self._schedule_html_dashboard_publish(immediate=True)

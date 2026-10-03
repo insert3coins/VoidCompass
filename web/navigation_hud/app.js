@@ -894,9 +894,9 @@ let lastAttentionText = '';
 function render(data) {
   if (!data || data.schema !== 1) return;
   snapshot = data;
-  const overlayOpacity = Number(data.effects?.opacity);
-  document.body.style.opacity = String(Number.isFinite(overlayOpacity)
-    ? Math.max(.4, Math.min(1, overlayOpacity)) : 1);
+  // OPACITY fades the whole window in the host (Windows' layered-window
+  // alpha), so the page itself stays at full strength.
+  document.body.style.removeProperty('opacity');
   const theme = setTheme(data.theme);
   const hud = dom.hud;
   const expanded = data.layout === 'expanded';

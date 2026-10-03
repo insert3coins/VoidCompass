@@ -1,18 +1,13 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.1.6 // Overlay switches in the header, Codex flags, survey count fix
+## v5.5.1.7 // Overlay transparency fix
 **Release Date:** 2026-Oct-03
 
-* New overlay switches in the command deck header, next to your commander name, on every page:
-  * **OVERLAYS** hides every overlay for now, and shows them again (the same as the show/hide-all hotkey). Each overlay keeps its own setting underneath.
-  * One switch per overlay turns it on or off, the same as its switch in Overlay Studio, so a panel you only need now and then is one click away without a hotkey.
-  * On a narrower command deck the per-overlay switches open from **PANELS**, so the header's readouts keep their room.
-  Thanks to CMDR Nyx Evera for the idea.
-* New **Codex flags** for Survey Operations. A filled yellow flag marks a species you've never logged in your Codex; an outline flag, one you've never logged in this galactic region. They sit beside each possible species, and on the variant you're sampling where you first logged it. A genus the DSS found, with no species predicted, is flagged only when none of its species is logged. They're built from your whole journal history, per commander, and work in any game language. Off by default: turn on **Codex flags** in Overlay Studio under Survey Operations. Thanks to CMDR Payden for the idea.
-* Fixed a finished system survey showing one body still to go (such as 33 / 34). Mapping a planetary ring with probes logs a "bodies discovered" event, and Void Compass added that to a body count the game had already given. Now the game's own count stands once the system has been honked or fully scanned, live and when the cache is rebuilt. Honking a system that's stuck one short puts it right.
+* Overlay **OPACITY** now fades each overlay window through Windows itself, rather than each overlay fading its own contents. It looks the same, but it no longer depends on the graphics card's browser compositing: on some PCs (one report from a Radeon RX 9070 XT) the overlays stayed at full strength whatever the setting. It also costs less to draw.
 
 ## Earlier releases
 
+* **v5.5.1.6** — Overlay switches in the command deck header, Codex flags for Survey Operations, and a fix for finished system surveys showing one body still to go.
 * **v5.5.1.5** — Jump Info overlay, overlays hide on the maps (each can opt out), Overlay Studio layout mode, who discovered the system on the Navigation HUD, and switches for the surface and mapped signal notifications.
 * **v5.5.1.4** — Fixed Overlay Studio merging every monitor into one wide display, and the command deck reopening in the wrong place on monitors with different Windows scaling.
 * **v5.5.1.3** — Text size, smallest text and overlay text size in Settings > Appearance, a working Command deck scale, overlays sized for Windows display scaling, survey overlay fixes, an overlay frame-rate setting, and new installs picking up the commander and their whole history.

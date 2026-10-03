@@ -4620,6 +4620,10 @@ class MainDashboard(
         from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 
         HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
+        # Overlay Studio's OPACITY, applied to every overlay window by the host
+        # (also on a profile switch, which comes through here).
+        from voidcompass.overlays.html_overlay_runtime import overlay_opacity_ratio
+        HtmlOverlayServer.set_opacity(overlay_opacity_ratio(self.config))
         if self.config.get("screenshots_enabled", False):
             self.log("Screenshot Converter: ACTIVE")
         else:

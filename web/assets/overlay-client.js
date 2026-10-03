@@ -29,7 +29,9 @@
       "--scale",
       String(clamp(effects.text_scale, options.scaleMin ?? .75, options.scaleMax ?? 2, 1)),
     );
-    document.body.style.opacity = String(clamp(effects.opacity, .4, 1, 1));
+    // Overlay Studio's OPACITY fades the whole window in the host (Windows'
+    // layered-window alpha); fading the page as well would apply it twice.
+    document.body.style.removeProperty("opacity");
     if (root) {
       root.classList.toggle("no-crt", !effects.crt);
       root.classList.toggle("reduced-motion", Boolean(effects.reduced_motion));

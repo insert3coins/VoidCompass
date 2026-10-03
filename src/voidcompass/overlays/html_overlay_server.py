@@ -104,7 +104,29 @@ class HtmlOverlayServer:
     # Overlay ids hidden while a map is open (each overlay can opt out).
     overlays_hidden = frozenset()
     layout_mode = False
+    # Overlay Studio's OPACITY for every overlay (0.4-1). The host fades each
+    # window with Windows' own layered-window alpha rather than the pages
+    # fading themselves: the desktop compositor does it, so it holds on every
+    # GPU and driver (a page-level fade did not reach the screen for one
+    # Radeon RX 9070 XT user, though full transparency did).
+    opacity = 1.0
     _instances = weakref.WeakSet()
+
+    @classmethod
+    def set_opacity(cls, value):
+        """Set every overlay window's opacity; True when it changed."""
+        try:
+            value = round(max(0.4, min(1.0, float(value))), 3)
+        except (TypeError, ValueError):
+            value = 1.0
+        if value == cls.opacity:
+            return False
+        cls.opacity = value
+        for server in list(cls._instances):
+            with server._condition:
+                server._window_revision += 1
+                server._condition.notify_all()
+        return True
 
     @classmethod
     def set_overrides(cls, hidden=None, layout=None):
@@ -260,6 +282,7 @@ class HtmlOverlayServer:
             result = {}
             for overlay_id, state in self._overlays.items():
                 window = dict(state.window)
+                window["opacity"] = self.opacity
                 if not state.shutdown:
                     if self.layout_mode:
                         window["visible"] = True
