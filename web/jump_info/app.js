@@ -4,9 +4,9 @@
   const token = params.get("token") || "";
   const overlay = params.get("overlay") || "jump-info";
   const SVG = "http://www.w3.org/2000/svg";
-  const PHASES = {charging: "FSD CHARGING", hyperspace: "IN WITCH SPACE", arrival: "ARRIVED"};
+  const PHASES = {charging: "CHARGING", hyperspace: "WITCH SPACE", arrival: "ARRIVED"};
   const dom = Object.fromEntries([
-    "jump", "content", "phase", "star-glyph", "system-name", "star-line", "jump-distance",
+    "jump", "content", "phase", "star-orb", "system-name", "star-line", "jump-distance",
     "jump-ly", "route", "route-count", "route-line", "route-total", "lines",
   ].map((id) => [id, document.getElementById(id)]));
   let lastRoute = null;
@@ -78,11 +78,30 @@
     line.replaceChildren(...parts);
   }
 
+  // The Navigation HUD's star families (styles.css carries their tones).
+  function starFamily(value) {
+    const code = String(value || "").trim().toUpperCase().split("_")[0];
+    if (!code) return "unknown";
+    if (["H", "BH", "SUPERMASSIVEBLACKHOLE"].includes(code)) return "blackhole";
+    if (["N", "NS"].includes(code)) return "neutron";
+    if (code.startsWith("D")) return "dwarf";
+    if (code === "TTS") return "tauri";
+    if (code === "AEBE") return "a";
+    if (code.startsWith("W")) return "wolf";
+    if (code.startsWith("C")) return "carbon";
+    if (code.startsWith("S")) return "m";
+    if (code === "X") return "exotic";
+    const primary = code[0].toLowerCase();
+    return "obafgkmlty".includes(primary) ? primary : "unknown";
+  }
+
   function lineNode(row, fresh) {
     const item = node("div", `line tone-${row.tone || "text"}${fresh ? " fresh" : ""}`);
     item.dataset.key = String(row.key || "");
     for (const part of Array.isArray(row.items) ? row.items : []) {
-      const span = node("span", "item");
+      // A count reads as the HUD's boxed counter; words as a label and value.
+      const count = /^[\d,]+$/.test(String(part.value || ""));
+      const span = node("span", count ? "count" : "pair");
       if (part.label) span.appendChild(node("small", "", part.label));
       span.appendChild(node("b", "", part.value || ""));
       item.appendChild(span);
@@ -104,7 +123,7 @@
     dom["system-name"].title = system;
 
     const star = model.star;
-    dom["star-glyph"].className = `star-glyph tone-${star?.tone || "muted"}`;
+    dom["star-orb"].className = `star-orb star-${starFamily(star?.class)}`;
     dom["star-line"].replaceChildren();
     if (star) {
       dom["star-line"].append(`CLASS ${String(star.class || "").toUpperCase()} · `);

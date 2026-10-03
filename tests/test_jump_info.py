@@ -203,8 +203,12 @@ class WiringTests(unittest.TestCase):
         page = (WEB / "jump_info" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn("<style", page)
         css = (WEB / "jump_info" / "styles.css").read_text(encoding="utf-8")
-        # Colours come from the theme: only the :root fallbacks name hex values.
-        self.assertNotRegex(css.split("}", 1)[1], r"#[0-9a-fA-F]{6}")
+        # Colours come from the theme: only the :root fallbacks name hex values,
+        # besides the star orbs' physical star colours (as on the Nav HUD).
+        rules = "\n".join(line for line in css.split("}", 1)[1].splitlines() if "star-" not in line)
+        self.assertNotRegex(rules, r"#[0-9a-fA-F]{6}")
+        # Never clip the page itself: clipped corners paint as blocks.
+        self.assertNotRegex(css.split(".jump::before", 1)[0], r"\.jump \{[^}]*clip-path")
 
     def test_studio_saves_the_linger_choice(self):
         from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
@@ -267,7 +271,7 @@ class PageTests(unittest.TestCase):
         model = build_jump_info_model("hyperspace", {"name": "Barnard's Star", "star_class": "N"}, ROUTE, KNOWN,
                                       current_region="Inner Orion Spur", find_region=regions)
         page.evaluate("m => __render({jump: m, theme: {accent: '#22ccff'}, effects: {reduced_motion: true}})", model)
-        self.assertEqual(page.locator("#phase").inner_text(), "IN WITCH SPACE")
+        self.assertEqual(page.locator("#phase").inner_text(), "WITCH SPACE")
         self.assertEqual(page.locator("#system-name").inner_text(), "BARNARD'S STAR")
         self.assertEqual(page.locator("#star-line").inner_text(), "CLASS N · NEUTRON STAR")
         self.assertEqual(page.locator("#route-count").inner_text(), "JUMP 2 OF 3")

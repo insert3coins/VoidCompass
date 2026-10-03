@@ -2529,6 +2529,8 @@ class MainDashboard(
         else:
             self.jump_info_hud = None
 
+        # Before the overlays register, so they open faded and capped.
+        self._apply_overlay_server_settings()
         self._attach_html_overlay_renderers()
 
         # Navigation owns its bridge directly; the other HUDs attach through
@@ -4615,15 +4617,20 @@ class MainDashboard(
         self.navigation_scan_progress = max(progress, body_progress, current)
         self.navigation_scan_progress_source = "fss"
 
-    def _apply_runtime_feature_toggles(self):
+    def _apply_overlay_server_settings(self):
+        """Overlay Studio's settings for every overlay window at once: the
+        frame-rate cap and OPACITY (the host fades each window). Called at
+        startup before any overlay registers, and on every settings or
+        profile change; a restart must not wait for a save to apply them."""
         from voidcompass.dashboard.html_overlay_studio import overlay_frame_rate
+        from voidcompass.overlays.html_overlay_runtime import overlay_opacity_ratio
         from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 
         HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
-        # Overlay Studio's OPACITY, applied to every overlay window by the host
-        # (also on a profile switch, which comes through here).
-        from voidcompass.overlays.html_overlay_runtime import overlay_opacity_ratio
         HtmlOverlayServer.set_opacity(overlay_opacity_ratio(self.config))
+
+    def _apply_runtime_feature_toggles(self):
+        self._apply_overlay_server_settings()
         if self.config.get("screenshots_enabled", False):
             self.log("Screenshot Converter: ACTIVE")
         else:
