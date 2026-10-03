@@ -3,7 +3,7 @@
 Shown while the frame shift drive charges and through witch space, as
 SrvSurvey's jump panel does: the next system and its star, where the jump
 sits on the plotted route, who discovered the system and when EDSM last
-updated it, its traffic, bodies and ports, and the region being entered.
+updated it, its traffic and ports, and the region being entered.
 Everything comes from the journal, NavRoute.json or EDSM; nothing is guessed.
 """
 from __future__ import annotations
@@ -151,17 +151,8 @@ def intel_lines(intel):
             {"label": "WEEK", "value": f"{_integer(traffic.get('week')):,}"},
             {"label": "EVER", "value": f"{_integer(traffic.get('total')):,}"},
         ]})
-    body_count = _integer(intel.get("body_count"))
-    if body_count:
-        items = [{"label": "BODIES", "value": str(body_count)}]
-        notable = intel.get("notable") or {}
-        for key, label in (("earth_like", "EARTH-LIKE"), ("water", "WATER WORLD"), ("ammonia", "AMMONIA")):
-            if _integer(notable.get(key)):
-                items.append({"label": label, "value": str(_integer(notable[key]))})
-        for key, label in (("terraformable", "TERRAFORMABLE"), ("landable", "LANDABLE")):
-            if _integer(intel.get(key)):
-                items.append({"label": label, "value": str(_integer(intel[key]))})
-        lines.append({"key": "bodies", "tone": "text", "source": "EDSM", "items": items})
+    # No body counts: EDSM's are often incomplete or wrong for a system
+    # (removed in 5.5.1.8 at the commander's request).
     ports = intel.get("ports") or {}
     port_items = [
         {"label": label, "value": str(_integer(ports.get(key)))}

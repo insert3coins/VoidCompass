@@ -30,8 +30,6 @@ KNOWN = {
     "system": "Barnard's Star", "available": True, "known": True,
     "discovered_by": "Jededdiah Stahl", "discovered_at": "2022-04-04 10:11:12",
     "updated_at": "2025-01-09 08:00:00", "traffic": {"day": 0, "week": 3, "total": 1204},
-    "body_count": 12, "bodies_logged": 12, "landable": 4, "terraformable": 2,
-    "notable": {"earth_like": 1, "water": 0, "ammonia": 0},
     "ports": {"starports": 1, "outposts": 0, "settlements": 0, "carriers": 3},
 }
 
@@ -67,8 +65,8 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(items(lines, "history"),
                          [("DISCOVERED BY", "JEDEDDIAH STAHL · 4 APR 3308"), ("UPDATED", "9 JAN 3311")])
         self.assertEqual(items(lines, "traffic"), [("TRAFFIC 24H", "0"), ("WEEK", "3"), ("EVER", "1,204")])
-        self.assertEqual(items(lines, "bodies"), [("BODIES", "12"), ("EARTH-LIKE", "1"),
-                                                   ("TERRAFORMABLE", "2"), ("LANDABLE", "4")])
+        # No body counts (removed in 5.5.1.8: EDSM's are often wrong).
+        self.assertNotIn("bodies", [line["key"] for line in lines])
         self.assertEqual(items(lines, "ports"), [("STARPORTS", "1"), ("CARRIERS", "3")])
         # Updated no later than the discovery says nothing new.
         same = intel_lines({**KNOWN, "updated_at": KNOWN["discovered_at"]})
@@ -121,8 +119,7 @@ class EdsmTests(unittest.TestCase):
         })
         self.assertEqual(calls, ["traffic", "bodies", "stations"])
         self.assertTrue(intel["known"])
-        self.assertEqual((intel["body_count"], intel["landable"], intel["terraformable"]), (14, 1, 1))
-        self.assertEqual(intel["notable"]["earth_like"], 1)
+        self.assertNotIn("body_count", intel)
         self.assertEqual(intel["updated_at"], "2023-09-01 08:00:00")
         self.assertEqual(intel["ports"], {"starports": 1, "outposts": 1, "settlements": 1, "carriers": 1})
 
@@ -279,7 +276,7 @@ class PageTests(unittest.TestCase):
         self.assertEqual(page.locator("#route-line .seg.next").count(), 1)
         self.assertEqual(page.locator("#route-line .dot.target").count(), 1)
         self.assertEqual(page.locator("#route-line .scoop").count(), 2)
-        self.assertEqual(page.locator(".line").count(), 5)
+        self.assertEqual(page.locator(".line").count(), 4)
         self.assertIn("NOW ENTERING", page.locator('.line[data-key="entering"]').inner_text())
         # Every line fits the panel's width without spilling out.
         overflow = page.evaluate("""() => [...document.querySelectorAll('.line')]
