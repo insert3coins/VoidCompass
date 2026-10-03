@@ -57,6 +57,26 @@ class HostTests(unittest.TestCase):
         self.assertNotIn("windll.user32.SetLayeredWindowAttributes", source, "private user32 handle only")
 
 
+class KeyedBackgroundTests(unittest.TestCase):
+    """5.5.1.9: with a fade applied, Windows composites the overlay form's own
+    background wherever the page is transparent (cut corners, gaps between
+    notifications): grey blocks once the window had been resized. The form's
+    background is a key colour Windows makes see-through, with the fade."""
+
+    def test_the_fade_keys_out_the_form_background(self):
+        host = html_overlay_host
+        self.assertEqual(host.OVERLAY_KEY_COLORREF,
+                         host.OVERLAY_KEY_RGB[0] | host.OVERLAY_KEY_RGB[1] << 8 | host.OVERLAY_KEY_RGB[2] << 16)
+        calls = []
+        fake_user32 = Mock()
+        fake_user32.SetLayeredWindowAttributes = Mock(side_effect=lambda *args: calls.append(args) or 1)
+        with patch.object(host, "_native_handle", return_value=1234),                 patch.object(host.ctypes, "WinDLL", return_value=fake_user32),                 patch.object(host, "_apply_overlay_key_background", return_value=True) as paint:
+            self.assertTrue(host._apply_window_alpha(object(), 166))
+        paint.assert_called_once()
+        _hwnd, key, alpha, flags = calls[0]
+        self.assertEqual((key, alpha, flags), (host.OVERLAY_KEY_COLORREF, 166, host.LWA_ALPHA | host.LWA_COLORKEY))
+
+
 class PageTests(unittest.TestCase):
     def test_pages_no_longer_fade_themselves(self):
         client = (WEB / "assets" / "overlay-client.js").read_text(encoding="utf-8")

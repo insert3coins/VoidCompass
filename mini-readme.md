@@ -1,15 +1,13 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.1.8 // Jump Info redesign
+## v5.5.1.9 // Overlay corner fix - the hard bug, found finally
 **Release Date:** 2026-Oct-03
 
-* **Jump Info** now looks like the Navigation HUD: the same frame and corner brackets, typeface, FSD state notice (CHARGING, WITCH SPACE, ARRIVED), star orbs, a HERE to DEST route rail, and EDSM's counts as the HUD's boxed counters.
-* Fixed odd blocks in Jump Info's corners on some PCs. The panel clipped its whole window to cut its corners, and some graphics setups paint those clipped corners solid. Like the Navigation HUD, it now cuts only a decorative inner layer.
-* Fixed overlay **OPACITY** not applying after a restart (5.5.1.7): the overlays opened at full strength until a setting was changed. The overlay **Frame rate** setting had the same gap and now applies at startup too.
-* Jump Info no longer shows body counts. EDSM's counts are often incomplete or wrong for a system.
+* Fixed grey blocks at the corners of most overlays, and between stacked notifications, when overlay **OPACITY** was below 100%. Windows showed each overlay window's own grey background wherever the overlay is see-through (its cut corners, the gaps between notifications) once the window had been resized. That background is now a colour Windows treats as see-through, so the corners stay clear while the fade still works. The Navigation HUD and Jump Info, which have no see-through corners, were never affected.
 
 ## Earlier releases
 
+* **v5.5.1.8** — Jump Info redesigned to match the Navigation HUD (and its body counts removed), its corner blocks fixed, and overlay opacity and frame rate now applied straight after a restart.
 * **v5.5.1.7** — Overlay opacity now fades each overlay window through Windows itself, so it works on every graphics card.
 * **v5.5.1.6** — Overlay switches in the command deck header, Codex flags for Survey Operations, and a fix for finished system surveys showing one body still to go.
 * **v5.5.1.5** — Jump Info overlay, overlays hide on the maps (each can opt out), Overlay Studio layout mode, who discovered the system on the Navigation HUD, and switches for the surface and mapped signal notifications.
