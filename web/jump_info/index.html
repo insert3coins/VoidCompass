@@ -8,29 +8,35 @@
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
+  <!-- Built in the Navigation HUD's language: its frame, corners, type,
+       state notice, star orbs and counters. -->
   <main id="jump" class="jump empty" data-phase="">
-    <div class="edge top"></div><div class="edge bottom"></div>
-    <div id="content" class="content">
-      <header>
-        <div class="title"><i></i><span>NEXT JUMP</span></div>
-        <b id="phase" class="phase">FSD CHARGING</b>
-      </header>
-      <section class="target">
-        <i id="star-glyph" class="star-glyph" aria-hidden="true"><b></b></i>
-        <div class="name-block">
-          <strong id="system-name">SYSTEM</strong>
-          <span id="star-line" class="star-line"></span>
-        </div>
-        <div id="jump-distance" class="jump-distance" hidden><b id="jump-ly">0</b><small>LY</small></div>
-      </section>
-      <section id="route" class="route" hidden>
-        <span id="route-count" class="route-count"></span>
-        <svg id="route-line" class="route-line" aria-hidden="true"></svg>
-        <span id="route-total" class="route-total"></span>
-      </section>
-      <section id="lines" class="lines"></section>
-    </div>
+    <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <div class="scanlines"></div><div class="vignette"></div>
+    <div id="content" class="content">
+      <header class="notice" role="status">
+        <span class="notice-tag">FSD</span>
+        <strong id="phase">CHARGING</strong>
+        <span class="notice-aside">NEXT JUMP</span>
+      </header>
+      <section class="target section">
+        <div class="target-line">
+          <span id="star-orb" class="star-orb star-unknown" aria-hidden="true"><i></i></span>
+          <strong id="system-name">SYSTEM</strong>
+          <span id="jump-distance" class="jump-distance" hidden><b id="jump-ly">0</b> LY</span>
+        </div>
+        <div id="star-line" class="target-meta"></div>
+      </section>
+      <section id="route" class="route section" hidden>
+        <div class="route-track-line">
+          <span class="track-end">HERE</span>
+          <svg id="route-line" class="route-line" aria-hidden="true"></svg>
+          <span class="track-end">DEST</span>
+        </div>
+        <div class="route-meta"><span id="route-count"></span><span id="route-total"></span></div>
+      </section>
+      <section id="lines" class="intel section"></section>
+    </div>
   </main>
   <script src="/assets/frame-cap.js"></script>
   <script src="/assets/overlay-layout.js"></script>

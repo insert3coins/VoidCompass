@@ -32,7 +32,8 @@ with tempfile.TemporaryDirectory() as folder:
                   active_commander_profile='migration-test', active_commander_fid='FTEST',
                   automatic_profile_backups_enabled=False, screenshots_enabled=False,
                   eddn_enabled=False, edsm_enabled=False, galnet_enabled=False,
-                  runtime_trace_enabled=False, last_app_version='5.4.2.6')
+                  runtime_trace_enabled=False, last_app_version='5.4.2.6',
+                  overlay_opacity_percent=55, overlay_frame_rate=15)
     (folder/'journals').mkdir()
     for key in ['overlay_enabled','cargo_overlay_enabled','carrier_overlay_enabled','prospector_overlay_enabled',
                 'gravity_warning_overlay_enabled','station_info_overlay_enabled','survey_status_overlay_enabled',
@@ -59,6 +60,11 @@ with tempfile.TemporaryDirectory() as folder:
             }
             assert expected <= set(surfaces), ('Missing startup renderers', expected - set(surfaces))
             assert not app.hud._html_window_payload()['visible']
+            # A restart applies the saved overlay OPACITY and frame rate at
+            # once (5.5.1.8): not only after a settings save.
+            from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
+            assert HtmlOverlayServer.opacity == 0.55, HtmlOverlayServer.opacity
+            assert HtmlOverlayServer.frame_rate == 15, HtmlOverlayServer.frame_rate
             print('CONSTRUCTED WITHOUT TK; all created HUDs registered',flush=True)
             app.open_galaxy_map_page('http://127.0.0.1:9999')
             assert app.atlas._latest_snapshot

@@ -1,12 +1,15 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.1.7 // Overlay transparency fix
+## v5.5.1.8 // Jump Info redesign
 **Release Date:** 2026-Oct-03
 
-* Overlay **OPACITY** now fades each overlay window through Windows itself, rather than each overlay fading its own contents. It looks the same, but it no longer depends on the graphics card's browser compositing: on some PCs (one report from a Radeon RX 9070 XT) the overlays stayed at full strength whatever the setting. It also costs less to draw.
+* **Jump Info** now looks like the Navigation HUD: the same frame and corner brackets, typeface, FSD state notice (CHARGING, WITCH SPACE, ARRIVED), star orbs, a HERE to DEST route rail, and EDSM's counts as the HUD's boxed counters.
+* Fixed odd blocks in Jump Info's corners on some PCs. The panel clipped its whole window to cut its corners, and some graphics setups paint those clipped corners solid. Like the Navigation HUD, it now cuts only a decorative inner layer.
+* Fixed overlay **OPACITY** not applying after a restart (5.5.1.7): the overlays opened at full strength until a setting was changed. The overlay **Frame rate** setting had the same gap and now applies at startup too.
 
 ## Earlier releases
 
+* **v5.5.1.7** — Overlay opacity now fades each overlay window through Windows itself, so it works on every graphics card.
 * **v5.5.1.6** — Overlay switches in the command deck header, Codex flags for Survey Operations, and a fix for finished system surveys showing one body still to go.
 * **v5.5.1.5** — Jump Info overlay, overlays hide on the maps (each can opt out), Overlay Studio layout mode, who discovered the system on the Navigation HUD, and switches for the surface and mapped signal notifications.
 * **v5.5.1.4** — Fixed Overlay Studio merging every monitor into one wide display, and the command deck reopening in the wrong place on monitors with different Windows scaling.
