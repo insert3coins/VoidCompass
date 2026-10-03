@@ -1,0 +1,2648 @@
+{
+ "source": "RavenColonialWeb (https://github.com/njthomson/RavenColonialWeb), GPL-3.0",
+ "generated_by": "tools/vendor_colonisation_data.py",
+ "site_types": [
+  {
+   "displayName": "Unknown",
+   "displayName2": "Unknown",
+   "subTypes": [
+    ""
+   ],
+   "haul": 0,
+   "buildClass": "unknown",
+   "tier": 0,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 0,
+    "count": 0
+   },
+   "inf": "none",
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Installation?",
+   "displayName2": "Installation?",
+   "subTypes": [
+    "installation"
+   ],
+   "haul": 0,
+   "buildClass": "unknown",
+   "tier": 0,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 0,
+    "count": 0
+   },
+   "inf": "none",
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Outpost?",
+   "displayName2": "Outpost?",
+   "subTypes": [
+    "outpost"
+   ],
+   "haul": 0,
+   "buildClass": "unknown",
+   "tier": 0,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 0,
+    "count": 0
+   },
+   "inf": "none",
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Settlement?",
+   "displayName2": "Settlement?",
+   "subTypes": [
+    "settlement"
+   ],
+   "haul": 0,
+   "buildClass": "unknown",
+   "tier": 0,
+   "padSize": "none",
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 0,
+    "count": 0
+   },
+   "inf": "none",
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Facility?",
+   "displayName2": "Facility?",
+   "subTypes": [
+    "facility"
+   ],
+   "haul": 0,
+   "buildClass": "unknown",
+   "tier": 0,
+   "padSize": "none",
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 0,
+    "count": 0
+   },
+   "inf": "none",
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Coriolis",
+   "displayName2": "Coriolis Starport",
+   "subTypes": [
+    "no_truss",
+    "dual_truss",
+    "quad_truss"
+   ],
+   "altTypes": [
+    "no truss",
+    "coriolis"
+   ],
+   "haul": 63001,
+   "buildClass": "starport",
+   "tier": 2,
+   "padSize": "large",
+   "orbital": true,
+   "needs": {
+    "tier": 2,
+    "count": 3
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "colony",
+   "score": 8,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 3,
+    "tech": 2,
+    "sol": 3,
+    "dev": 3
+   }
+  },
+  {
+   "displayName": "Asteroid base",
+   "displayName2": "Asteroid Starport",
+   "subTypes": [
+    "asteroid"
+   ],
+   "haul": 53546,
+   "buildClass": "starport",
+   "tier": 2,
+   "padSize": "large",
+   "orbital": true,
+   "needs": {
+    "tier": 2,
+    "count": 3
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "extraction",
+   "fixed": "extraction",
+   "score": 8,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 5,
+    "tech": 3,
+    "sol": -4,
+    "dev": 7
+   }
+  },
+  {
+   "displayName": "Dodec",
+   "displayName2": "Dodec Starport",
+   "subTypes": [
+    "dodec",
+    "quint_truss",
+    "dec_truss"
+   ],
+   "haul": 236000,
+   "buildClass": "starport",
+   "tier": 3,
+   "padSize": "large",
+   "orbital": true,
+   "needs": {
+    "tier": 3,
+    "count": 6
+   },
+   "gives": {
+    "tier": 0,
+    "count": 0
+   },
+   "inf": "colony",
+   "score": 15,
+   "effects": {
+    "pop": 8,
+    "mpop": 4,
+    "sec": -4,
+    "wealth": 9,
+    "tech": 8,
+    "sol": 7,
+    "dev": 10
+   }
+  },
+  {
+   "displayName": "Ocellus",
+   "displayName2": "Ocellus Starport",
+   "subTypes": [
+    "ocellus"
+   ],
+   "haul": 219135,
+   "buildClass": "starport",
+   "tier": 3,
+   "padSize": "large",
+   "orbital": true,
+   "needs": {
+    "tier": 3,
+    "count": 6
+   },
+   "gives": {
+    "tier": 0,
+    "count": 0
+   },
+   "inf": "colony",
+   "score": 15,
+   "effects": {
+    "pop": 5,
+    "mpop": 1,
+    "sec": -3,
+    "wealth": 8,
+    "tech": 7,
+    "sol": 5,
+    "dev": 9
+   }
+  },
+  {
+   "displayName": "Orbis",
+   "displayName2": "Orbis Starport",
+   "subTypes": [
+    "apollo",
+    "artemis"
+   ],
+   "altTypes": [
+    "orbis"
+   ],
+   "haul": 214878,
+   "buildClass": "starport",
+   "tier": 3,
+   "padSize": "large",
+   "orbital": true,
+   "needs": {
+    "tier": 3,
+    "count": 6
+   },
+   "gives": {
+    "tier": 0,
+    "count": 0
+   },
+   "inf": "colony",
+   "score": 15,
+   "effects": {
+    "pop": 5,
+    "mpop": 1,
+    "sec": -3,
+    "wealth": 8,
+    "tech": 7,
+    "sol": 5,
+    "dev": 9
+   }
+  },
+  {
+   "displayName": "Commercial",
+   "displayName2": "Commercial Outpost",
+   "subTypes": [
+    "plutus"
+   ],
+   "haul": 20480,
+   "buildClass": "outpost",
+   "tier": 1,
+   "padSize": "medium",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "colony",
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 5,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Industrial",
+   "displayName2": "Industrial Outpost",
+   "subTypes": [
+    "vulcan"
+   ],
+   "haul": 21181,
+   "buildClass": "outpost",
+   "tier": 1,
+   "padSize": "medium",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "industrial",
+   "fixed": "industrial",
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 3,
+    "sol": 0,
+    "dev": 3
+   }
+  },
+  {
+   "displayName": "Pirate",
+   "displayName2": "Pirate Outpost",
+   "subTypes": [
+    "dysnomia"
+   ],
+   "haul": 21797,
+   "buildClass": "outpost",
+   "tier": 1,
+   "padSize": "medium",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "service",
+   "fixed": "service",
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Civilian",
+   "displayName2": "Civilian Outpost",
+   "subTypes": [
+    "vesta"
+   ],
+   "haul": 21624,
+   "buildClass": "outpost",
+   "tier": 1,
+   "padSize": "medium",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "colony",
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 1,
+    "tech": 0,
+    "sol": 2,
+    "dev": 1
+   }
+  },
+  {
+   "displayName": "Scientific",
+   "displayName2": "Scientific Outpost",
+   "subTypes": [
+    "prometheus"
+   ],
+   "haul": 20827,
+   "buildClass": "outpost",
+   "tier": 1,
+   "padSize": "medium",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "hightech",
+   "fixed": "hightech",
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 3,
+    "sol": 0,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Military",
+   "displayName2": "Military Outpost",
+   "subTypes": [
+    "nemesis"
+   ],
+   "haul": 20952,
+   "buildClass": "outpost",
+   "tier": 1,
+   "padSize": "medium",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "military",
+   "fixed": "military",
+   "score": 3,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 2,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Satellite",
+   "displayName2": "Satellite Installation",
+   "subTypes": [
+    "angelia",
+    "eirene",
+    "hermes"
+   ],
+   "haul": 7274,
+   "buildClass": "installation",
+   "tier": 1,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "none",
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 1,
+    "tech": 0,
+    "sol": 2,
+    "dev": 1
+   },
+   "unlocks": [
+    "System unlock: Tourist Settlements",
+    "Strong link unlock: Vista Genomics at T1 Surface or T2 orbital ports",
+    "Strong link unlock: Universal Cartographics at T1 Surface or T2 orbital ports"
+   ]
+  },
+  {
+   "displayName": "Communication",
+   "displayName2": "Communication Installation",
+   "subTypes": [
+    "aletheia",
+    "pistis",
+    "soter"
+   ],
+   "haul": 6695,
+   "buildClass": "installation",
+   "tier": 1,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "none",
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 1,
+    "wealth": 0,
+    "tech": 3,
+    "sol": 0,
+    "dev": 0
+   },
+   "unlocks": [
+    "System unlock: Exploration Hub",
+    "Strong link unlock: Vista Genomics at T1 Surface or T2 orbital ports",
+    "Strong link unlock: Universal Cartographics at T1 Surface or T2 orbital ports",
+    "Strong link unlock: Commodities at Pirate, Scientific or Military Outposts"
+   ]
+  },
+  {
+   "displayName": "Space Farm",
+   "displayName2": "Space Farm",
+   "subTypes": [
+    "demeter"
+   ],
+   "haul": 6709,
+   "buildClass": "installation",
+   "tier": 1,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "agriculture",
+   "score": 2,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 5,
+    "dev": 1
+   },
+   "unlocks": [
+    "System unlock: Outpost Hub"
+   ]
+  },
+  {
+   "displayName": "Pirate Base",
+   "displayName2": "Pirate Base Installation",
+   "subTypes": [
+    "apate",
+    "laverna"
+   ],
+   "haul": 14088,
+   "buildClass": "installation",
+   "tier": 1,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "service",
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": -4,
+    "wealth": 4,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "unlocks": [
+    "Strong link unlock: Black Market"
+   ]
+  },
+  {
+   "displayName": "Mining",
+   "displayName2": "Mining/Industrial Installation",
+   "subTypes": [
+    "euthenia",
+    "phorcys"
+   ],
+   "haul": 11352,
+   "buildClass": "installation",
+   "tier": 1,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "extraction",
+   "score": 2,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 4,
+    "tech": 0,
+    "sol": -2,
+    "dev": 0
+   },
+   "unlocks": [
+    "System unlock: Industrial Hub"
+   ]
+  },
+  {
+   "displayName": "Relay",
+   "displayName2": "Relay Installation",
+   "subTypes": [
+    "enodia",
+    "ichnaea"
+   ],
+   "haul": 6855,
+   "buildClass": "installation",
+   "tier": 1,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "hightech",
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 1,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 1
+   },
+   "unlocks": [
+    "Strong link unlock: Vista Genomics at T1 Surface or T2 orbital ports",
+    "Strong link unlock: Universal Cartographics at T1 Surface or T2 orbital ports",
+    "Strong link unlock: Commodities at Pirate, Scientific or Military Outposts"
+   ]
+  },
+  {
+   "displayName": "Military",
+   "displayName2": "Military Installation",
+   "subTypes": [
+    "alastor",
+    "vacuna"
+   ],
+   "haul": 10130,
+   "buildClass": "installation",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "military",
+   "score": 4,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 7,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "preReq": "settlementMilitary",
+   "unlocks": [
+    "System unlock: Military Hub",
+    "System unlock: Shipyard at T1 surface ports",
+    "System unlock: Outfitting at non-Military Outposts",
+    "System unlock: Outfitting at non-Industrial T1 surface ports"
+   ]
+  },
+  {
+   "displayName": "Security",
+   "displayName2": "Security Installation",
+   "subTypes": [
+    "dicaeosyne",
+    "eunomia",
+    "nomos",
+    "poena"
+   ],
+   "haul": 10089,
+   "buildClass": "installation",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "military",
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 9,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 3,
+    "dev": 3
+   },
+   "preReq": "relay"
+  },
+  {
+   "displayName": "Government",
+   "displayName2": "Government Installation",
+   "subTypes": [
+    "harmonia"
+   ],
+   "haul": 10035,
+   "buildClass": "installation",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "none",
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 2,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 7,
+    "dev": 3
+   }
+  },
+  {
+   "displayName": "Medical",
+   "displayName2": "Medical Installation",
+   "subTypes": [
+    "asclepius",
+    "eupraxia"
+   ],
+   "haul": 10081,
+   "buildClass": "installation",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "hightech",
+   "score": 4,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 3,
+    "sol": 5,
+    "dev": 0
+   },
+   "unlocks": [
+    "System unlock: Vista Genomics at T1 Surface or T2 orbital ports"
+   ]
+  },
+  {
+   "displayName": "Research",
+   "displayName2": "Research Installation",
+   "subTypes": [
+    "astraeus",
+    "coeus",
+    "dione",
+    "dodona"
+   ],
+   "haul": 10010,
+   "buildClass": "installation",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "hightech",
+   "score": 4,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 8,
+    "sol": 0,
+    "dev": 3
+   },
+   "preReq": "settlementBio",
+   "unlocks": [
+    "System unlock: Universal Cartographics at T1 Surface or T2 orbital ports"
+   ]
+  },
+  {
+   "displayName": "Tourist",
+   "displayName2": "Tourist Installation",
+   "subTypes": [
+    "hedone",
+    "opora",
+    "pasithea"
+   ],
+   "haul": 10100,
+   "buildClass": "installation",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "tourism",
+   "score": 3,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": -3,
+    "wealth": 6,
+    "tech": 0,
+    "sol": 0,
+    "dev": 3
+   },
+   "preReq": "settlementTourist",
+   "unlocks": [
+    "System unlock: Commodities at Pirate, Scientific or Military Outposts"
+   ]
+  },
+  {
+   "displayName": "Bar",
+   "displayName2": "Space Bar Installation",
+   "subTypes": [
+    "bacchus",
+    "dionysus"
+   ],
+   "haul": 10092,
+   "buildClass": "installation",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": true,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "tourism",
+   "score": 4,
+   "effects": {
+    "pop": 0,
+    "mpop": 0,
+    "sec": -2,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 3,
+    "dev": 0
+   },
+   "unlocks": [
+    "System unlock: Commodities at Pirate, Scientific or Military Outposts",
+    "System unlock: Crew Lounge at non-Civilian T1 ports"
+   ]
+  },
+  {
+   "displayName": "Civilian",
+   "displayName2": "Civilian Surface Outpost",
+   "subTypes": [
+    "atropos",
+    "clotho",
+    "decima",
+    "hestia",
+    "lachesis",
+    "nona"
+   ],
+   "haul": 35950,
+   "buildClass": "outpost",
+   "tier": 1,
+   "padSize": "large",
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "colony",
+   "score": 4,
+   "effects": {
+    "pop": 2,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 3,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Industrial",
+   "displayName2": "Industrial Surface Outpost",
+   "subTypes": [
+    "bia",
+    "hephaestus",
+    "mefitis",
+    "opis",
+    "ponos",
+    "tethys"
+   ],
+   "haul": 36443,
+   "buildClass": "outpost",
+   "tier": 1,
+   "padSize": "large",
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "industrial",
+   "fixed": "industrial",
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Scientific",
+   "displayName2": "Scientific Surface Outpost",
+   "subTypes": [
+    "ananke",
+    "antevorta",
+    "fauna",
+    "necessitas",
+    "porrima",
+    "providentia"
+   ],
+   "haul": 36902,
+   "buildClass": "outpost",
+   "tier": 1,
+   "padSize": "large",
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "hightech",
+   "fixed": "hightech",
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 0,
+    "tech": 5,
+    "sol": 0,
+    "dev": 1
+   }
+  },
+  {
+   "displayName": "Planetary port",
+   "displayName2": "Large Planetary Port",
+   "subTypes": [
+    "aphrodite",
+    "hera",
+    "poseidon",
+    "zeus"
+   ],
+   "haul": 215597,
+   "buildClass": "starport",
+   "tier": 3,
+   "padSize": "large",
+   "orbital": false,
+   "needs": {
+    "tier": 3,
+    "count": 6
+   },
+   "gives": {
+    "tier": 0,
+    "count": 0
+   },
+   "inf": "colony",
+   "score": 15,
+   "effects": {
+    "pop": 10,
+    "mpop": 10,
+    "sec": -3,
+    "wealth": 5,
+    "tech": 5,
+    "sol": 7,
+    "dev": 10
+   }
+  },
+  {
+   "displayName": "Small Agriculture",
+   "displayName2": "Agriculture Settlement: Small",
+   "subTypes": [
+    "consus"
+   ],
+   "haul": 2834,
+   "buildClass": "settlement",
+   "tier": 1,
+   "padSize": "small",
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "agriculture",
+   "score": 1,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 3,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Medium Agriculture",
+   "displayName2": "Agriculture Settlement: Medium",
+   "subTypes": [
+    "annona",
+    "picumnus"
+   ],
+   "haul": 5697,
+   "buildClass": "settlement",
+   "tier": 1,
+   "padSize": "large",
+   "padMap": {
+    "picumnus": "large",
+    "annona": "small"
+   },
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "agriculture",
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 7,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Large Agriculture",
+   "displayName2": "Agriculture Settlement: Large",
+   "subTypes": [
+    "ceres",
+    "fornax"
+   ],
+   "haul": 8517,
+   "buildClass": "settlement",
+   "tier": 2,
+   "padSize": "large",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 2
+   },
+   "inf": "agriculture",
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 10,
+    "dev": 0
+   }
+  },
+  {
+   "displayName": "Small Mining",
+   "displayName2": "Mining Settlement: Small",
+   "subTypes": [
+    "ourea"
+   ],
+   "haul": 2837,
+   "buildClass": "settlement",
+   "tier": 1,
+   "padSize": "small",
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "extraction",
+   "score": 1,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "unlocks": [
+    "System unlock: Extraction Hub"
+   ]
+  },
+  {
+   "displayName": "Medium Mining",
+   "displayName2": "Mining Settlement: Medium",
+   "subTypes": [
+    "mantus",
+    "orcus"
+   ],
+   "haul": 5638,
+   "buildClass": "settlement",
+   "tier": 1,
+   "padSize": "large",
+   "padMap": {
+    "mantus": "medium",
+    "orcus": "large"
+   },
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "extraction",
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 5,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "unlocks": [
+    "System unlock: Extraction Hub"
+   ]
+  },
+  {
+   "displayName": "Large Mining",
+   "displayName2": "Mining Settlement: Large",
+   "subTypes": [
+    "aerecura",
+    "erebus"
+   ],
+   "haul": 8760,
+   "buildClass": "settlement",
+   "tier": 2,
+   "padSize": "large",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 2
+   },
+   "inf": "extraction",
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 8,
+    "tech": 2,
+    "sol": -2,
+    "dev": 0
+   },
+   "unlocks": [
+    "System unlock: Extraction Hub"
+   ]
+  },
+  {
+   "displayName": "Small Industrial",
+   "displayName2": "Industrial Settlement: Small",
+   "subTypes": [
+    "fontus"
+   ],
+   "haul": 2828,
+   "buildClass": "settlement",
+   "tier": 1,
+   "padSize": "small",
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "industrial",
+   "score": 1,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 3
+   }
+  },
+  {
+   "displayName": "Medium Industrial",
+   "displayName2": "Industrial Settlement: Medium",
+   "subTypes": [
+    "meteope",
+    "minthe",
+    "palici"
+   ],
+   "haul": 5656,
+   "buildClass": "settlement",
+   "tier": 1,
+   "padSize": "large",
+   "padMap": {
+    "meteope": "large",
+    "palici": "large",
+    "minthe": "medium"
+   },
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "industrial",
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 6
+   }
+  },
+  {
+   "displayName": "Large Industrial",
+   "displayName2": "Industrial Settlement: Large",
+   "subTypes": [
+    "gaea"
+   ],
+   "haul": 8481,
+   "buildClass": "settlement",
+   "tier": 2,
+   "padSize": "large",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 2
+   },
+   "inf": "industrial",
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 0,
+    "dev": 9
+   }
+  },
+  {
+   "displayName": "Small Military",
+   "displayName2": "Military Settlement: Small",
+   "subTypes": [
+    "ioke"
+   ],
+   "haul": 3553,
+   "buildClass": "settlement",
+   "tier": 1,
+   "padSize": "medium",
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "military",
+   "score": 1,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 2,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "unlocks": [
+    "System unlock: Military Installations"
+   ]
+  },
+  {
+   "displayName": "Medium Military",
+   "displayName2": "Military Settlement: Medium",
+   "subTypes": [
+    "bellona",
+    "enyo",
+    "polemos"
+   ],
+   "haul": 5629,
+   "buildClass": "settlement",
+   "tier": 1,
+   "padSize": "medium",
+   "padMap": {
+    "bellona": "small",
+    "enyo": "medium",
+    "polemos": "medium"
+   },
+   "orbital": false,
+   "needs": {
+    "tier": 0,
+    "count": 0
+   },
+   "gives": {
+    "tier": 2,
+    "count": 1
+   },
+   "inf": "military",
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 4,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "unlocks": [
+    "System unlock: Military Installations"
+   ]
+  },
+  {
+   "displayName": "Large Military",
+   "displayName2": "Military Settlement: Large",
+   "subTypes": [
+    "minerva"
+   ],
+   "haul": 8554,
+   "buildClass": "settlement",
+   "tier": 2,
+   "padSize": "large",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 2
+   },
+   "inf": "military",
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 7,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 3
+   },
+   "unlocks": [
+    "System unlock: Military Installations"
+   ]
+  },
+  {
+   "displayName": "Small Bio",
+   "displayName2": "Bio Settlement: Small",
+   "subTypes": [
+    "pheobe"
+   ],
+   "haul": 2897,
+   "buildClass": "settlement",
+   "tier": 2,
+   "padSize": "small",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "hightech",
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 3,
+    "sol": 0,
+    "dev": 1
+   },
+   "unlocks": [
+    "System unlock: Scientific Installations"
+   ]
+  },
+  {
+   "displayName": "Medium Bio",
+   "displayName2": "Bio Settlement: Medium",
+   "subTypes": [
+    "asteria",
+    "caerus"
+   ],
+   "haul": 5681,
+   "buildClass": "settlement",
+   "tier": 2,
+   "padSize": "small",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "hightech",
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 7,
+    "sol": 0,
+    "dev": 1
+   },
+   "unlocks": [
+    "System unlock: Scientific Installations"
+   ]
+  },
+  {
+   "displayName": "Large Bio",
+   "displayName2": "Bio Settlement: Large",
+   "subTypes": [
+    "chronos"
+   ],
+   "haul": 8537,
+   "buildClass": "settlement",
+   "tier": 2,
+   "padSize": "large",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 2
+   },
+   "inf": "hightech",
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 10,
+    "sol": 0,
+    "dev": 3
+   },
+   "unlocks": [
+    "System unlock: Scientific Installations"
+   ]
+  },
+  {
+   "displayName": "Small Tourist",
+   "displayName2": "Tourist Settlement: Small",
+   "subTypes": [
+    "aergia"
+   ],
+   "haul": 2895,
+   "buildClass": "settlement",
+   "tier": 2,
+   "padSize": "medium",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "tourism",
+   "score": 1,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 1,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "preReq": "satellite",
+   "unlocks": [
+    "System unlock: Tourist Installations"
+   ]
+  },
+  {
+   "displayName": "Medium Tourist",
+   "displayName2": "Tourist Settlement: Medium",
+   "subTypes": [
+    "comus",
+    "gelos"
+   ],
+   "altTypes": [
+    "comos"
+   ],
+   "haul": 5671,
+   "buildClass": "settlement",
+   "tier": 2,
+   "padSize": "large",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "tourism",
+   "score": 2,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 3,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "preReq": "satellite",
+   "unlocks": [
+    "System unlock: Tourist Installations"
+   ]
+  },
+  {
+   "displayName": "Large Tourist",
+   "displayName2": "Tourist Settlement: Large",
+   "subTypes": [
+    "fufluns"
+   ],
+   "haul": 8568,
+   "buildClass": "settlement",
+   "tier": 2,
+   "padSize": "large",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 2
+   },
+   "inf": "tourism",
+   "score": 4,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 5,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "preReq": "satellite",
+   "unlocks": [
+    "System unlock: Tourist Installations"
+   ]
+  },
+  {
+   "displayName": "Extraction",
+   "displayName2": "Extraction Hub",
+   "subTypes": [
+    "tartarus"
+   ],
+   "haul": 9996,
+   "buildClass": "hub",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "extraction",
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 10,
+    "tech": 0,
+    "sol": -4,
+    "dev": 3
+   },
+   "preReq": "settlementExtraction"
+  },
+  {
+   "displayName": "Civilian",
+   "displayName2": "Civilian Hub",
+   "subTypes": [
+    "aegle"
+   ],
+   "haul": 9890,
+   "buildClass": "hub",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "none",
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -3,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 3,
+    "dev": 3
+   },
+   "preReq": "settlementAgr"
+  },
+  {
+   "displayName": "Exploration",
+   "displayName2": "Exploration Hub",
+   "subTypes": [
+    "tellus_e"
+   ],
+   "haul": 9960,
+   "buildClass": "hub",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "tourism",
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 0,
+    "tech": 7,
+    "sol": 0,
+    "dev": 3
+   },
+   "preReq": "comms",
+   "unlocks": [
+    "System unlock: Universal Cartographics at T1 Surface or T2 orbital ports"
+   ]
+  },
+  {
+   "displayName": "Outpost",
+   "displayName2": "Outpost Hub",
+   "subTypes": [
+    "io"
+   ],
+   "haul": 9945,
+   "buildClass": "hub",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "none",
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 3,
+    "dev": 3
+   },
+   "preReq": "installationAgr",
+   "unlocks": [
+    "System unlock: Commodities at Pirate, Scientific or Military Outposts"
+   ]
+  },
+  {
+   "displayName": "Scientific",
+   "displayName2": "Scientific Hub",
+   "subTypes": [
+    "athena",
+    "caelus"
+   ],
+   "haul": 9958,
+   "buildClass": "hub",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "hightech",
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 0,
+    "tech": 10,
+    "sol": 0,
+    "dev": 0
+   },
+   "unlocks": [
+    "System unlock: Vista Genomics at T1 Surface or T2 orbital ports"
+   ]
+  },
+  {
+   "displayName": "Military",
+   "displayName2": "Military Hub",
+   "subTypes": [
+    "alala",
+    "ares"
+   ],
+   "haul": 10089,
+   "buildClass": "hub",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "military",
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 10,
+    "wealth": 0,
+    "tech": 0,
+    "sol": 0,
+    "dev": 0
+   },
+   "preReq": "installationMil"
+  },
+  {
+   "displayName": "Refinery",
+   "displayName2": "Refinery Hub",
+   "subTypes": [
+    "silenus"
+   ],
+   "haul": 9957,
+   "buildClass": "hub",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "refinery",
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -1,
+    "wealth": 5,
+    "tech": 3,
+    "sol": -2,
+    "dev": 7
+   }
+  },
+  {
+   "displayName": "High Tech",
+   "displayName2": "High Tech Hub",
+   "subTypes": [
+    "janus"
+   ],
+   "haul": 9881,
+   "buildClass": "hub",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "hightech",
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": -2,
+    "wealth": 3,
+    "tech": 10,
+    "sol": 0,
+    "dev": 0
+   },
+   "unlocks": [
+    "System unlock: Outfitting at non-Military Outposts",
+    "System unlock: Outfitting at non-Industrial T1 surface ports",
+    "Strong link unlock: Shipyard at T1 surface ports"
+   ]
+  },
+  {
+   "displayName": "Industrial",
+   "displayName2": "Industrial Hub",
+   "subTypes": [
+    "eunostus",
+    "molae",
+    "tellus_i"
+   ],
+   "altTypes": [
+    "tellus"
+   ],
+   "haul": 9950,
+   "buildClass": "hub",
+   "tier": 2,
+   "padSize": "none",
+   "orbital": false,
+   "needs": {
+    "tier": 2,
+    "count": 1
+   },
+   "gives": {
+    "tier": 3,
+    "count": 1
+   },
+   "inf": "industrial",
+   "score": 5,
+   "effects": {
+    "pop": 1,
+    "mpop": 1,
+    "sec": 0,
+    "wealth": 5,
+    "tech": 3,
+    "sol": -4,
+    "dev": 3
+   },
+   "preReq": "outpostMining",
+   "unlocks": [
+    "System unlock: Shipyard at T1 surface ports",
+    "Strong link unlock: Outfitting at non-Military Outposts",
+    "Strong link unlock: Outfitting at non-Industrial T1 surface ports"
+   ]
+  }
+ ],
+ "site_pads": {
+  "dodec": [
+   4,
+   11,
+   5
+  ],
+  "quint_truss": [
+   4,
+   11,
+   5
+  ],
+  "dec_truss": [
+   4,
+   11,
+   5
+  ],
+  "no_truss": [
+   8,
+   11,
+   5
+  ],
+  "dual_truss": [
+   8,
+   11,
+   5
+  ],
+  "quad_truss": [
+   8,
+   11,
+   5
+  ],
+  "asteroid": [
+   8,
+   11,
+   5
+  ],
+  "ocellus": [
+   8,
+   11,
+   5
+  ],
+  "apollo": [
+   8,
+   11,
+   5
+  ],
+  "artemis": [
+   8,
+   11,
+   5
+  ],
+  "plutus": [
+   3,
+   1,
+   0
+  ],
+  "vulcan": [
+   2,
+   1,
+   0
+  ],
+  "dysnomia": [
+   2,
+   1,
+   0
+  ],
+  "vesta": [
+   4,
+   1,
+   0
+  ],
+  "prometheus": [
+   2,
+   1,
+   0
+  ],
+  "nemesis": [
+   2,
+   1,
+   0
+  ],
+  "hestia": [
+   4,
+   4,
+   4
+  ],
+  "decima": [
+   4,
+   4,
+   4
+  ],
+  "atropos": [
+   4,
+   2,
+   2
+  ],
+  "nona": [
+   4,
+   4,
+   4
+  ],
+  "lachesis": [
+   4,
+   2,
+   2
+  ],
+  "clotho": [
+   4,
+   4,
+   2
+  ],
+  "hephaestus": [
+   4,
+   4,
+   4
+  ],
+  "opis": [
+   4,
+   4,
+   4
+  ],
+  "ponos": [
+   4,
+   2,
+   2
+  ],
+  "tethys": [
+   4,
+   4,
+   4
+  ],
+  "bia": [
+   4,
+   2,
+   2
+  ],
+  "mefitis": [
+   4,
+   4,
+   2
+  ],
+  "necessitas": [
+   4,
+   4,
+   4
+  ],
+  "ananke": [
+   4,
+   4,
+   4
+  ],
+  "fauna": [
+   4,
+   2,
+   2
+  ],
+  "providentia": [
+   4,
+   4,
+   4
+  ],
+  "antevorta": [
+   4,
+   2,
+   2
+  ],
+  "porrima": [
+   4,
+   4,
+   2
+  ],
+  "zeus": [
+   4,
+   4,
+   8
+  ],
+  "hera": [
+   4,
+   4,
+   8
+  ],
+  "poseidon": [
+   4,
+   4,
+   8
+  ],
+  "aphrodite": [
+   4,
+   4,
+   8
+  ],
+  "consus": [
+   1,
+   0,
+   0
+  ],
+  "picumnus": [
+   1,
+   0,
+   1
+  ],
+  "annona": [
+   1,
+   0,
+   0
+  ],
+  "ceres": [
+   1,
+   0,
+   1
+  ],
+  "fornax": [
+   2,
+   0,
+   1
+  ],
+  "ourea": [
+   1,
+   0,
+   0
+  ],
+  "mantus": [
+   0,
+   1,
+   0
+  ],
+  "orcus": [
+   1,
+   0,
+   1
+  ],
+  "erebus": [
+   1,
+   0,
+   1
+  ],
+  "aerecura": [
+   0,
+   0,
+   1
+  ],
+  "fontus": [
+   1,
+   0,
+   0
+  ],
+  "minthe": [
+   0,
+   1,
+   0
+  ],
+  "palici": [
+   0,
+   0,
+   1
+  ],
+  "meteope": [
+   1,
+   0,
+   1
+  ],
+  "gaea": [
+   0,
+   0,
+   1
+  ],
+  "ioke": [
+   0,
+   1,
+   0
+  ],
+  "bellona": [
+   1,
+   0,
+   0
+  ],
+  "enyo": [
+   1,
+   1,
+   0
+  ],
+  "polemos": [
+   1,
+   1,
+   0
+  ],
+  "minerva": [
+   2,
+   0,
+   1
+  ],
+  "pheobe": [
+   1,
+   0,
+   0
+  ],
+  "asteria": [
+   1,
+   0,
+   0
+  ],
+  "caerus": [
+   3,
+   0,
+   0
+  ],
+  "chronos": [
+   1,
+   0,
+   1
+  ],
+  "aergia": [
+   0,
+   1,
+   0
+  ],
+  "comus": [
+   2,
+   0,
+   1
+  ],
+  "gelos": [
+   1,
+   0,
+   1
+  ],
+  "fufluns": [
+   2,
+   0,
+   2
+  ]
+ },
+ "primary_ports": {
+  "t1": [
+   "plutus",
+   "vulcan",
+   "dysnomia",
+   "vesta",
+   "prometheus",
+   "nemesis"
+  ],
+  "t2": [
+   "no_truss",
+   "dual_truss",
+   "quad_truss",
+   "asteroid"
+  ],
+  "t3": [
+   "apollo",
+   "artemis",
+   "ocellus",
+   "dodec",
+   "quint_truss",
+   "dec_truss"
+  ]
+ },
+ "system_unlocks": {
+  "SettlementTourist": {
+   "title": "Tourist Settlements",
+   "need_types": [
+    "hermes",
+    "angelia",
+    "eirene"
+   ],
+   "needs": "A satellite"
+  },
+  "InstallationTourist": {
+   "title": "Tourist Installations",
+   "need_types": [
+    "aergia",
+    "comus",
+    "gelos",
+    "fufluns"
+   ],
+   "needs": "A tourist settlement"
+  },
+  "InstallationScientific": {
+   "title": "Scientific Installations",
+   "need_types": [
+    "pheobe",
+    "asteria",
+    "caerus",
+    "chronos"
+   ],
+   "needs": "A bio settlement"
+  },
+  "InstallationMilitary": {
+   "title": "Military Installations",
+   "need_types": [
+    "ioke",
+    "bellona",
+    "enyo",
+    "polemos",
+    "minerva"
+   ],
+   "needs": "A military settlement"
+  },
+  "HubMilitary": {
+   "title": "Military Hub",
+   "need_types": [
+    "vacuna",
+    "alastor"
+   ],
+   "needs": "A military installation"
+  },
+  "HubCivilian": {
+   "title": "Civilian Hub",
+   "need_types": [
+    "consus",
+    "picumnus",
+    "annona",
+    "ceres",
+    "fornax"
+   ],
+   "needs": "An agricultural settlement"
+  },
+  "HubExploration": {
+   "title": "Exploration Hub",
+   "need_types": [
+    "pistis",
+    "soter",
+    "aletheia"
+   ],
+   "needs": "A comms installation"
+  },
+  "HubOutpost": {
+   "title": "Outpost Hub",
+   "need_types": [
+    "demeter"
+   ],
+   "needs": "A space farm"
+  },
+  "HubIndustrial": {
+   "title": "Industrial Hub",
+   "need_types": [
+    "euthenia",
+    "phorcys"
+   ],
+   "needs": "A mining/industrial installation"
+  },
+  "HubExtraction": {
+   "title": "Extraction Hub",
+   "need_types": [
+    "ourea",
+    "mantus",
+    "orcus",
+    "aerecura",
+    "erebus"
+   ],
+   "needs": "An extraction settlement"
+  },
+  "ShipyardT1": {
+   "title": "Shipyard at T1 surface ports",
+   "need_types": [
+    "eunostus",
+    "molae",
+    "tellus_i",
+    "vacuna",
+    "alastor"
+   ],
+   "needs": "An industrial hub or military installation"
+  },
+  "OutfittingNonMilOutpost": {
+   "title": "Outfitting at non-Military Outposts",
+   "need_types": [
+    "janus",
+    "vacuna",
+    "alastor"
+   ],
+   "needs": "A high-tech hub or military installation"
+  },
+  "OutfittingT1Surface": {
+   "title": "Outfitting at non-Industrial T1 surface ports",
+   "need_types": [
+    "janus",
+    "vacuna",
+    "alastor"
+   ],
+   "needs": "A high-tech hub or military installation"
+  },
+  "VistaGenomics": {
+   "title": "Vista Genomics at T1 Surface or T2 orbital ports",
+   "need_types": [
+    "asclepius",
+    "eupraxia",
+    "athena",
+    "caelus"
+   ],
+   "needs": "A scientific hub or medical installation"
+  },
+  "UniversalCartographics": {
+   "title": "Universal Cartographics at T1 Surface or T2 orbital ports",
+   "need_types": [
+    "astraeus",
+    "coeus",
+    "dione",
+    "dodona",
+    "tellus_e"
+   ],
+   "needs": "An exploration hub or research installation"
+  },
+  "MarketOutposts": {
+   "title": "Commodities at Pirate, Scientific or Military Outposts",
+   "need_types": [
+    "bacchus",
+    "dionysus",
+    "hedone",
+    "opora",
+    "pasithea",
+    "io"
+   ],
+   "needs": "An outpost hub, tourist installation or space bar"
+  },
+  "CrewLounge": {
+   "title": "Crew Lounge at non-Civilian T1 ports",
+   "need_types": [
+    "bacchus",
+    "dionysus"
+   ],
+   "needs": "A space bar"
+  }
+ },
+ "pre_reqs": {
+  "satellite": [
+   "hermes",
+   "angelia",
+   "eirene"
+  ],
+  "comms": [
+   "pistis",
+   "soter",
+   "aletheia"
+  ],
+  "settlementAgr": [
+   "consus",
+   "picumnus",
+   "annona",
+   "ceres",
+   "fornax"
+  ],
+  "installationAgr": [
+   "demeter"
+  ],
+  "installationMil": [
+   "vacuna",
+   "alastor"
+  ],
+  "outpostMining": [
+   "euthenia",
+   "phorcys"
+  ],
+  "relay": [
+   "enodia",
+   "ichnaea"
+  ],
+  "settlementBio": [
+   "pheobe",
+   "asteria",
+   "caerus",
+   "chronos"
+  ],
+  "settlementTourist": [
+   "aergia",
+   "comus",
+   "gelos",
+   "fufluns"
+  ],
+  "settlementMilitary": [
+   "ioke",
+   "bellona",
+   "enyo",
+   "polemos",
+   "minerva"
+  ],
+  "settlementExtraction": [
+   "ourea",
+   "mantus",
+   "orcus",
+   "aerecura",
+   "erebus"
+  ]
+ }
+}

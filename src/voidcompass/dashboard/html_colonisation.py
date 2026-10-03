@@ -9,15 +9,19 @@ alone when no Raven Colonial key is set.
 from __future__ import annotations
 
 import math
-import time
 import webbrowser
 
 from voidcompass.colonisation import catalogue
 from voidcompass.colonisation.views import project_rows
-from voidcompass.services.raven_colonial import SITE_URL, project_url, system_url
+from voidcompass.dashboard.html_colonisation_planner import HtmlColonisationPlannerMixin
+from voidcompass.services.raven_colonial import SITE_URL, nexus_url, project_url, system_url
 
-_SITE_STATUSES = ("plan", "build", "complete", "demolish")
-_RESERVE_LEVELS = ("", "depleted", "low", "common", "major", "pristine")
+# The market finder's limits (the website's).
+_MAX_MARKET_DISTANCE = 1000
+_MAX_MARKET_ARRIVAL = 250_000
+_SHIP_SIZES = ("large", "medium", "small")
+# Old ids kept so older projects resolve; not offered when editing cargo.
+_RETIRED_COMMODITIES = {"microbialfurnaces", "landenrichmentsystems", "muonimager", "combatstabilizers"}
 
 
 def _text(value, limit=200):
@@ -31,11 +35,13 @@ def _integer(value, default=0):
         return default
 
 
-class HtmlColonisationMixin:
+class HtmlColonisationMixin(HtmlColonisationPlannerMixin):
     def _colony_ui_state(self):
         return self._html_profile_transient("_html_colonisation_state", {
             "selected": None, "site_plans": None, "site_plans_system": "",
-            "architect": None, "architect_system": "", "notice": "", "error": "",
+            "planner": None, "planner_system": "", "planner_mine": None, "notice": "", "error": "",
+            "stats": {}, "markets": None, "carrier_search": None, "global_stats": None,
+            "nexuses": None, "nexus": None,
         })
 
     # -- snapshot --------------------------------------------------------
@@ -58,7 +64,13 @@ class HtmlColonisationMixin:
             "build_types": [{"build_type": row.get("buildType"), "name": row.get("displayName"), "tier": row.get("tier"),
                              "location": row.get("location"), "layouts": list(row.get("layouts") or ())}
                             for row in catalogue.build_types()],
-            "architect": ui.get("architect"), "architect_system": ui.get("architect_system") or getattr(self, "current_sys", "") or "",
+            "planner": self._planner_snapshot(),
+            "stats": ui.get("stats") or {}, "markets": ui.get("markets"), "carrier_search": ui.get("carrier_search"),
+            "global_stats": ui.get("global_stats"), "nexuses": ui.get("nexuses"), "nexus": self._colony_nexus_snapshot(ui.get("nexus")),
+            "assignments": [], "current_system": getattr(self, "current_sys", "") or "",
+            "build_commodities": sorted(({"id": key, "name": row["name"]} for key, row in catalogue.commodities().items()
+                                         if key not in _RETIRED_COMMODITIES), key=lambda row: row["name"].casefold()),
+            "market_limits": {"distance": _MAX_MARKET_DISTANCE, "arrival": _MAX_MARKET_ARRIVAL, "sizes": list(_SHIP_SIZES)},
         }
         if colony is None:
             return data
@@ -71,9 +83,17 @@ class HtmlColonisationMixin:
         project = colony.project(selected_id)
         if project:
             data["selected"] = self._colony_project_detail(project, cmdr)
+        data["assignments"] = self._colony_assignments(cmdr)
         data["carriers"] = [{
             "market_id": carrier.get("marketId"), "name": carrier.get("name") or "",
-            "display_name": carrier.get("displayName") or "",
+            "display_name": carrier.get("displayName") or "", "system": carrier.get("systemName") or "",
+            "access": carrier.get("access") or "", "last_refresh": carrier.get("lastRefresh"),
+            "sales": [{"id": catalogue.commodity_id(row.get("name")), "name": catalogue.commodity_name(row.get("name")),
+                       "price": row.get("price"), "total": row.get("total"), "outstanding": row.get("outstanding")}
+                      for row in carrier.get("sales") or () if isinstance(row, dict)],
+            "purchases": [{"id": catalogue.commodity_id(row.get("name")), "name": catalogue.commodity_name(row.get("name")),
+                           "price": row.get("price"), "total": row.get("total"), "outstanding": row.get("outstanding")}
+                          for row in carrier.get("purchases") or () if isinstance(row, dict)],
             "cargo_total": sum(int(value or 0) for value in (carrier.get("cargo") or {}).values()),
             "cargo": sorted(({"id": key, "name": catalogue.commodity_name(key), "count": int(value or 0)}
                              for key, value in (carrier.get("cargo") or {}).items() if int(value or 0)),
@@ -113,6 +133,11 @@ class HtmlColonisationMixin:
             "system": project.get("systemName") or "", "body": project.get("bodyName") or "",
             "faction": project.get("factionName") or "", "architect": project.get("architectName") or "",
             "notes": project.get("notes") or "", "discord": project.get("discordLink") or "",
+            "ready": [catalogue.commodity_id(item) for item in project.get("ready") or ()],
+            "loading": str(project.get("buildType") or "").casefold() == catalogue.FC_LOADING,
+            "architect_is_me": str(project.get("architectName") or "").casefold() == cmdr.casefold(),
+            "time_due": project.get("timeDue"), "time_started": project.get("timestarted") or project.get("timeStarted"),
+            "stats": None,
             "max_need": int(project.get("maxNeed") or 0),
             "remaining": sum(int(value or 0) for value in (project.get("commodities") or {}).values()),
             "complete": bool(project.get("complete")), "primary": project.get("buildId") == colony.primary_build_id,
@@ -204,12 +229,21 @@ class HtmlColonisationMixin:
         if operation == "open_raven":
             webbrowser.open_new_tab(project_url(build_id) if build_id else SITE_URL)
             return True
+        if operation == "open_link":
+            url = _text(payload.get("url"), 400)
+            if url.startswith(("https://", "http://")):
+                webbrowser.open_new_tab(url)
+            return True
         if operation == "open_system":
             webbrowser.open_new_tab(system_url(_text(payload.get("system"), 120)))
             return True
         if not self._raven_active():
             ui["error"] = "Add your Raven Colonial key in Settings > Integrations (and leave sync on) first."
             return True
+        if operation.startswith("planner_"):
+            return self._handle_planner_command(operation, payload, ui)
+        if operation.startswith(("nexus_", "carrier_", "project_", "markets_", "stats_")):
+            return self._handle_colonisation_extra(operation, payload, ui, cmdr, build_id)
         if operation == "refresh":
             return self._colony_refresh()
         if operation == "set_primary":
@@ -231,7 +265,7 @@ class HtmlColonisationMixin:
         if operation == "save_details" and build_id:
             fields = {key: _text(payload.get(source), limit) for key, source, limit in (
                 ("buildName", "name", 120), ("notes", "notes", 2000), ("architectName", "architect", 80),
-                ("factionName", "faction", 120)) if source in payload}
+                ("factionName", "faction", 120), ("discordLink", "discord", 300)) if source in payload}
             return self._raven_call(lambda: raven.update_project(build_id, fields), colony.replace_project, pending={})
         if operation == "complete" and build_id and payload.get("confirmed"):
             return self._raven_call(lambda: raven.complete_project(build_id), lambda _r: self._colony_refresh(), pending={})
@@ -255,22 +289,201 @@ class HtmlColonisationMixin:
             market_id = _integer(payload.get("market_id"), 0)
             return bool(market_id) and self._raven_call(lambda: raven.link_project_carrier(build_id, market_id),
                                                         lambda _r: self._colony_refresh(build_id), pending={})
-        if operation == "architect_load":
-            system = _text(payload.get("system"), 160) or getattr(self, "current_sys", "")
-            ui["architect_system"] = system
+        return False
 
-            def loaded(data):
-                ui["architect"] = self._colony_architect_model(data, system)
-            return self._raven_call(lambda: raven.system(system), loaded, label="System sites")
-        if operation == "architect_import_bodies":
-            system = _text(payload.get("system"), 160) or ui.get("architect_system")
+    # -- projects, carriers, markets, stats, nexus -----------------------
+    def _colony_assignments(self, cmdr):
+        """Everything assigned to this commander, across their projects."""
+        me = cmdr.casefold()
+        rows = []
+        for project in self.colony.projects:
+            mine = next((items for who, items in (project.get("commanders") or {}).items() if who.casefold() == me), None)
+            needs = {catalogue.commodity_id(key): int(value or 0) for key, value in (project.get("commodities") or {}).items()}
+            for item in mine or ():
+                commodity = catalogue.commodity_id(item)
+                if needs.get(commodity, 0) > 0:
+                    rows.append({"build_id": project.get("buildId"), "project": project.get("buildName") or "",
+                                 "system": project.get("systemName") or "", "id": commodity,
+                                 "name": catalogue.commodity_name(commodity), "need": needs[commodity]})
+        return sorted(rows, key=lambda row: (row["name"].casefold(), row["project"].casefold()))
 
-            def imported(data):
-                ui["architect"] = self._colony_architect_model(data, system)
-                ui["notice"] = "Bodies imported."
-            return bool(system) and self._raven_call(lambda: raven.import_system_bodies(system), imported, label="Import bodies")
-        if operation == "architect_save":
-            return self._colony_architect_save(payload, ui)
+    def _colony_nexus_snapshot(self, nexus):
+        if not isinstance(nexus, dict):
+            return None
+        systems = []
+        for row in nexus.get("systems") or ():
+            if isinstance(row, dict):
+                total, progress = int(row.get("total") or 0), int(row.get("progress") or 0)
+                systems.append({"name": row.get("name"), "nickname": row.get("nickname") or "", "id64": row.get("id64"),
+                                "type": row.get("type") or "", "total": total, "progress": progress,
+                                "builds": len(row.get("builds") or ()), "fcs": list(row.get("fcs") or ()),
+                                "url": system_url(row.get("name"))})
+        return {"id": nexus.get("id"), "name": nexus.get("name") or "", "open": bool(nexus.get("open")),
+                "owner": nexus.get("owner") or "", "notes": nexus.get("notes") or "", "cmdrs": list(nexus.get("cmdrs") or ()),
+                "fcs": [{"market_id": fc.get("marketId"), "name": fc.get("name"), "display_name": fc.get("displayName") or ""}
+                        for fc in nexus.get("fcs") or () if isinstance(fc, dict)],
+                "systems": systems, "url": nexus_url(nexus.get("id")),
+                "mine": str(nexus.get("owner") or "").casefold() == self._colony_cmdr().casefold()}
+
+    def _handle_colonisation_extra(self, operation, payload, ui, cmdr, build_id):
+        colony, raven = self.colony, self.raven
+        if operation == "project_delete" and build_id and payload.get("confirmed"):
+            def deleted(_result):
+                ui["selected"] = None
+                ui["notice"] = "Project deleted."
+                self._colony_refresh()
+            return self._raven_call(lambda: raven.delete_project(build_id), deleted, pending={}, label="Delete project")
+        if operation == "project_stats" and build_id:
+            def got(stats):
+                ui.setdefault("stats", {})[build_id] = _stats_summary(stats or {})
+            return self._raven_call(lambda: raven.project_stats(build_id), got, label="Project stats")
+        if operation == "project_ready" and build_id:
+            commodity = catalogue.commodity_id(payload.get("commodity"))
+            ready = bool(payload.get("ready"))
+            return bool(commodity) and self._raven_call(lambda: raven.set_ready(build_id, [commodity], ready),
+                                                        lambda _r: self._colony_refresh(build_id), pending={}, label="Ready")
+        if operation == "project_fc_loading":
+            name = _text(payload.get("name"), 120)
+            if not name:
+                ui["error"] = "Name the loading project."
+                return True
+
+            def created(project):
+                if isinstance(project, dict) and project.get("buildId"):
+                    ui["selected"] = project["buildId"]
+                    ui["notice"] = f"Fleet carrier loading project created: {name}."
+                self._colony_refresh()
+            return self._raven_call(lambda: raven.create_fc_loading_project(name), created, pending={}, label="Create loading project")
+        if operation == "markets_find":
+            project = colony.project(build_id) if build_id else None
+            needs = {catalogue.commodity_id(key): int(value or 0) for key, value in ((project or {}).get("commodities") or {}).items()} \
+                if project else dict(colony.needs(colony.visible_projects(), cmdr)["commodities"])
+            needs = {key: value for key, value in needs.items() if value > 0}
+            if not needs:
+                ui["error"] = "Nothing left to buy."
+                return True
+            size = _text(payload.get("ship_size"), 10)
+            options = {
+                "refSystem": _text(payload.get("ref_system"), 160) or getattr(self, "current_sys", "") or (project or {}).get("systemName") or "Sol",
+                "maxDistance": max(0, min(_MAX_MARKET_DISTANCE, _integer(payload.get("max_distance"), 100))),
+                "maxArrival": max(0, min(_MAX_MARKET_ARRIVAL, _integer(payload.get("max_arrival"), 10000))),
+                "shipSize": size if size in _SHIP_SIZES else "large",
+                "noSurface": bool(payload.get("no_surface")), "noFC": bool(payload.get("no_fc")),
+                "requireNeed": bool(payload.get("require_need")), "hasShipyard": bool(payload.get("has_shipyard")),
+                "commodities": needs,
+            }
+
+            def found(result):
+                ui["markets"] = _markets_summary(result or {}, needs, options, build_id)
+            return self._raven_call(lambda: raven.find_markets(options), found, label="Find markets")
+        if operation == "markets_clear":
+            ui["markets"] = None
+            return True
+        if operation == "carrier_cargo":
+            market_id = _integer(payload.get("market_id"), 0)
+            cargo = {catalogue.commodity_id(key): max(0, _integer(value, 0)) for key, value in (payload.get("cargo") or {}).items()
+                     if catalogue.commodity_id(key)}
+            return bool(market_id) and self._raven_call(lambda: raven.set_carrier_cargo(market_id, cargo),
+                                                        lambda result: colony.apply_carrier_cargo(market_id, result),
+                                                        pending={}, label="Carrier cargo")
+        if operation == "carrier_rename":
+            market_id = _integer(payload.get("market_id"), 0)
+            name = _text(payload.get("display_name"), 80)
+            return bool(market_id) and self._raven_call(lambda: raven.rename_carrier(market_id, name),
+                                                        lambda _r: self._colony_refresh(), label="Rename carrier")
+        if operation == "carrier_search":
+            name = _text(payload.get("name"), 60)
+            if len(name) < 3:
+                ui["error"] = "Type at least 3 characters of the carrier's callsign or name."
+                return True
+
+            def found(rows):
+                ui["carrier_search"] = {"query": name, "results": [
+                    {"market_id": row.get("market_id"), "name": row.get("name") or "", "carrier_name": row.get("carrier_name") or "",
+                     "linked": colony.has_carrier(row.get("market_id"))} for row in rows or () if isinstance(row, dict)][:25]}
+            return self._raven_call(lambda: raven.find_carriers(name), found, label="Find carrier")
+        if operation == "carrier_link_found":
+            market_id = _integer(payload.get("market_id"), 0)
+
+            def link():
+                if not raven.carrier(market_id):
+                    raven.check_carrier(market_id)
+                raven.link_carrier(cmdr, market_id)
+                return True
+
+            def linked(_result):
+                ui["carrier_search"] = None
+                ui["notice"] = "Fleet carrier linked."
+                self._colony_refresh()
+            return bool(market_id) and self._raven_call(link, linked, pending={}, label="Link carrier")
+        if operation == "carrier_refresh":
+            market_id = _integer(payload.get("market_id"), 0)
+            return bool(market_id) and self._raven_call(lambda: raven.refresh_carrier(market_id),
+                                                        lambda _r: self._colony_refresh(), label="Refresh carrier")
+        if operation == "stats_load":
+            def got(stats):
+                ui["global_stats"] = _global_stats(stats or {})
+            return self._raven_call(raven.global_stats, got, label="Raven statistics")
+        if operation == "nexus_list":
+            def got(rows):
+                ui["nexuses"] = [{"id": row.get("id"), "name": row.get("name"), "open": bool(row.get("open")),
+                                  "owner": row.get("owner"), "destination": row.get("destination")}
+                                 for row in rows or () if isinstance(row, dict)]
+            return self._raven_call(raven.my_nexuses, got, label="Your nexuses")
+        if operation == "nexus_open":
+            nexus_id = _text(payload.get("id"), 80)
+
+            def got(nexus):
+                ui["nexus"] = nexus
+            return bool(nexus_id) and self._raven_call(lambda: raven.nexus(nexus_id), got, label="Nexus")
+        if operation == "nexus_close":
+            ui["nexus"] = None
+            return True
+        if operation == "nexus_create":
+            name = _text(payload.get("name"), 80)
+            if not name:
+                ui["error"] = "Name the nexus."
+                return True
+
+            def created(nexus):
+                ui["nexus"] = nexus
+                ui["nexuses"] = None
+            return self._raven_call(lambda: raven.create_nexus(name), created, label="Create nexus")
+        if operation == "nexus_delete" and payload.get("confirmed"):
+            nexus_id = _text(payload.get("id"), 80)
+
+            def deleted(_result):
+                ui["nexus"], ui["nexuses"] = None, None
+                ui["notice"] = "Nexus deleted."
+            return bool(nexus_id) and self._raven_call(lambda: raven.delete_nexus(nexus_id), deleted, label="Delete nexus")
+        if operation == "nexus_set":
+            nexus = ui.get("nexus") or {}
+            nexus_id = nexus.get("id")
+            field = payload.get("field")
+            if not nexus_id:
+                return False
+            if field == "name":
+                call = ("setName", _text(payload.get("value"), 80))
+            elif field == "notes":
+                call = ("setNotes", _text(payload.get("value"), 4000))
+            elif field == "open":
+                call = ("setPrivate", bool(payload.get("value")))
+            elif field == "systems":
+                call = ("setSystems", [_text(item, 160) for item in payload.get("value") or () if _text(item, 160)][:200])
+            elif field == "cmdrs":
+                call = ("setCmdrs", [_text(item, 80) for item in payload.get("value") or () if _text(item, 80)][:100])
+            elif field == "fcs":
+                call = ("setFCs", [_integer(item, 0) for item in payload.get("value") or () if _integer(item, 0)][:50])
+            else:
+                return False
+
+            def saved(result):
+                if isinstance(result, dict):
+                    ui["nexus"] = result
+            return self._raven_call(lambda: raven.update_nexus(nexus_id, *call), saved, label="Nexus")
+        if operation == "nexus_open_raven":
+            webbrowser.open_new_tab(nexus_url((ui.get("nexus") or {}).get("id")))
+            return True
         return False
 
     def _colony_create_project(self, payload, ui):
@@ -337,51 +550,56 @@ class HtmlColonisationMixin:
                 return name[: -len(callsign)].strip(" |")
         return ""
 
-    def _colony_architect_model(self, data, system):
-        data = data if isinstance(data, dict) else {}
-        bodies = {int(body.get("num")): body.get("name") for body in data.get("bodies") or () if isinstance(body, dict) and body.get("num") is not None}
-        return {
-            "system": data.get("name") or system, "id64": data.get("id64"),
-            "architect": data.get("architect") or "", "open": bool(data.get("open")),
-            "reserve": data.get("reserveLevel") or "", "rev": data.get("rev"),
-            "bodies": [{"num": num, "name": name} for num, name in sorted(bodies.items())],
-            "sites": [{"id": site.get("id"), "name": site.get("name") or "", "body_num": site.get("bodyNum"),
-                       "body": bodies.get(site.get("bodyNum"), ""), "build_type": site.get("buildType") or "",
-                       "type_label": catalogue.build_type_label(site.get("buildType")) if site.get("buildType") else "",
-                       "status": site.get("status") or "plan", "build_id": site.get("buildId")}
-                      for site in data.get("sites") or () if isinstance(site, dict)],
-            "statuses": list(_SITE_STATUSES), "reserves": list(_RESERVE_LEVELS), "loaded_at": time.time(),
-        }
 
-    def _colony_architect_save(self, payload, ui):
-        model = ui.get("architect")
-        if not model:
-            ui["error"] = "Load the system first."
-            return True
-        system = model["system"]
-        update, delete = [], [str(item) for item in payload.get("delete") or () if item]
-        for row in payload.get("sites") or ():
-            if not isinstance(row, dict):
-                continue
-            name = _text(row.get("name"), 120)
-            if not name:
-                continue
-            status = _text(row.get("status"), 20)
-            update.append({"id": _text(row.get("id"), 80) or f"x{int(time.time() * 1000) % 10**9}{len(update)}",
-                           "name": name, "bodyNum": _integer(row.get("body_num"), -1),
-                           "buildType": _text(row.get("build_type"), 60).casefold() or None,
-                           "status": status if status in _SITE_STATUSES else "plan"})
-        put = {"update": update, "delete": delete}
-        if "architect" in payload:
-            put["architect"] = _text(payload.get("architect"), 80) or None
-        if "open" in payload:
-            put["open"] = bool(payload.get("open"))
-        reserve = _text(payload.get("reserve"), 20)
-        if reserve in _RESERVE_LEVELS[1:]:
-            put["reserveLevel"] = reserve
-        raven = self.raven
+def _stats_summary(stats):
+    """A project's deliveries: per commander and over time."""
+    cmdrs = stats.get("cmdrs") or {}
+    timeline = []
+    for row in stats.get("stats") or ():
+        if isinstance(row, dict):
+            timeline.append({"time": row.get("time"), "cargo": int(row.get("countCargo") or 0),
+                             "deliveries": int(row.get("countDeliveries") or 0)})
+    return {"total_cargo": int(stats.get("totalCargo") or 0), "total_deliveries": int(stats.get("totalDeliveries") or 0),
+            "start": stats.get("start"), "end": stats.get("end"),
+            "cmdrs": sorted(({"name": name, "cargo": int(value or 0)} for name, value in cmdrs.items()),
+                            key=lambda row: -row["cargo"]),
+            "timeline": timeline[-60:]}
 
-        def saved(data):
-            ui["architect"] = self._colony_architect_model(data or {}, system) if data else model
-            ui["notice"] = "System sites saved to Raven Colonial."
-        return self._raven_call(lambda: raven.update_system(system, put), saved, label="Save system sites")
+
+def _markets_summary(result, needs, options, build_id):
+    rows = []
+    for market in result.get("markets") or ():
+        if not isinstance(market, dict):
+            continue
+        supplies = {catalogue.commodity_id(key): int(value or 0) for key, value in (market.get("supplies") or {}).items()}
+        covers = [{"id": key, "name": catalogue.commodity_name(key), "stock": supplies[key], "need": need}
+                  for key, need in needs.items() if supplies.get(key)]
+        rows.append({"station": market.get("stationName") or "", "system": market.get("systemName") or "",
+                     "body": market.get("bodyName") or "", "type": market.get("type") or "", "economy": market.get("economy") or "",
+                     "distance": market.get("distance"), "arrival": market.get("distanceToArrival"),
+                     "pad": market.get("padSize") or "", "surface": bool(market.get("surface")),
+                     "updated": market.get("updatedAt"), "covers": sorted(covers, key=lambda row: row["name"].casefold()),
+                     "covered": sum(1 for row in covers if row["stock"] >= row["need"])})
+    rows.sort(key=lambda row: (-row["covered"], -len(row["covers"]), float(row["distance"] or 0)))
+    return {"build_id": build_id, "options": options, "prepared_at": result.get("preparedAt"), "markets": rows[:40],
+            "needs": [{"id": key, "name": catalogue.commodity_name(key), "need": value}
+                      for key, value in sorted(needs.items(), key=lambda item: catalogue.commodity_name(item[0]).casefold())]}
+
+
+def _global_stats(stats):
+    def ranked(mapping, limit=10):
+        return [{"name": name, "value": value} for name, value in sorted((mapping or {}).items(), key=lambda item: -float(item[1] or 0))][:limit]
+    top_systems = []
+    for score, row in sorted(((int(key), value) for key, value in (stats.get("topSystemScores") or {}).items()
+                              if str(key).lstrip("-").isdigit()), reverse=True)[:10]:
+        for system, architect in (row or {}).items():
+            top_systems.append({"score": score, "system": system, "architect": architect})
+    return {
+        "at": stats.get("timeStamp"),
+        "totals": {key: stats.get(key) for key in ("activeProjects", "completeProjects", "commanders", "commanders7d",
+                                                   "fleetCarriers", "countDeliveries7d", "totalDelivered7d",
+                                                   "countDeliveriesEver", "totalDeliveredEver", "totalArchitects",
+                                                   "totalPlannedSystems")},
+        "contributors": ranked(stats.get("topContributors7d")), "helpers": ranked(stats.get("topHelpers7d")),
+        "architects": ranked(stats.get("topArchitects")), "systems": top_systems[:10],
+    }

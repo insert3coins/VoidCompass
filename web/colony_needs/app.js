@@ -29,6 +29,14 @@
     if (row.almost) name.append(" ⚑");
     item.appendChild(name);
     item.appendChild(node("span", "num need", row.state === "pending" ? "…" : count(row.need)));
+    if (columns.inline) {
+      // One HAVE column: the ship's count, else the carriers' (dimmer).
+      const ship = number(row.ship);
+      const fc = number(row.fc);
+      const tone = ship ? "" : `fc-inline ${fc >= number(row.need) ? "covered" : fc ? "short" : "none"}`;
+      item.appendChild(node("span", `num ship ${tone}`, row.state === "pending" ? "…" : ship ? count(ship) : fc ? count(fc) : ""));
+      return item;
+    }
     if (columns.fc) {
       let text = count(row.fc);
       let tone = number(row.fc) >= number(row.need) ? "covered" : number(row.fc) ? "short" : "none";
@@ -64,10 +72,10 @@
     if (model.complete) return;
 
     const columns = model.columns || {};
-    dom["needs-table"].classList.toggle("no-fc", !columns.fc);
+    dom["needs-table"].classList.toggle("no-fc", !columns.fc || Boolean(columns.inline));
     dom["needs-table"].classList.toggle("no-ship", !columns.ship);
     dom["head-fc"].textContent = columns.fc_delta ? "FC Δ" : `${number(columns.fc_count)} FC`;
-    dom["head-ship"].textContent = columns.fc ? "SHIP" : "HAVE";
+    dom["head-ship"].textContent = columns.fc && !columns.inline ? "SHIP" : "HAVE";
     const rows = [];
     for (const group of model.groups || []) {
       if (group.name) {

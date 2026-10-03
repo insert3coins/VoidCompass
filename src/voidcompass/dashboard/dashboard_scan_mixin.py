@@ -498,6 +498,10 @@ class DashboardScanMixin:
         observer = getattr(self, "_observe_navigation_target_transition", None)
         if callable(observer):
             observer(was_navigation_readiness[-1], self.current_destination_details)
+        if was_navigation_readiness[-1] != self.current_destination_details:
+            on_destination = getattr(self, "_colony_on_destination", None)
+            if callable(on_destination):
+                on_destination(dict(self.current_destination_details))
         if data.get("Cargo") is not None:
             try:
                 self.current_cargo_tons = int(data.get("Cargo") or 0)

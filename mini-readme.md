@@ -1,19 +1,29 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.2 // Colonisation - The First Installment
+## v5.5.2.1 // Colonisation - Everything Else
 **Release Date:** 2026-Oct-03
 
-* New **Colonisation** tab on the main menu:
-  * **Projects**: every construction project you are part of, with progress, what is still needed (grouped by category), what your linked fleet carriers and your ship already hold, who is assigned to what, and trips left in your current ship. Make a project your primary, hide it from the overlay, join or leave it, assign yourself commodities, edit its name, architect, faction and notes, or mark it complete.
-  * **This Site**: docked at a construction site, create its project on Raven Colonial (the build type is suggested from what the site needs, and you can pick the body and the system plan it fulfils), or join the project another commander already made. Docked at your fleet carrier, link it so its cargo counts toward your projects.
-  * **Fleet Carriers**: your linked carriers and the construction cargo aboard each, kept in step as you buy, sell and transfer.
-  * **System Sites**: load a system's planned, building and finished sites from Raven Colonial, import its bodies, then add, edit or remove sites and save them back.
-  * **Journal**: every construction depot your journal has seen, with what was required and delivered, even without Raven Colonial.
-* New **Construction Needs** overlay: what a project still needs, against what your ship and carriers hold, with remaining cargo and trips. It shows at a construction site, in station services when you have projects (or at a squadron bank), and with the ship's right-hand panel. Overlay Studio sets the carrier column, carrier difference, folding covered groups, flagging nearly-done needs and the right-panel option.
-* **Raven Colonial** in Settings > Integrations: your API key with a CHECK KEY button that confirms it belongs to this commander, a sync switch, and an option to share your ship's cargo with your team. With a key set and sync on, deliveries, depot updates, completions, fleet carrier cargo and system architects are sent as they happen. Nothing is sent without a key, with sync off, or while your journal is read at startup.
+* **System Planner** (it replaces System Sites): Raven Colonial's own planning model, worked out as you edit, so the numbers match the website's:
+  * System score, Tier 2 and Tier 3 points (with the tax on later starports), system effects (population, security, wealth, tech, standard of living, development), the economies the system will have and the 17 system unlocks.
+  * Each site's economy, with a breakdown of every boost and why, its strong and weak links, and the points it costs or gives. Build types you cannot afford yet, or whose prerequisite is missing, say so.
+  * Reorder sites (the first is the primary port), set the calculation cut, count planned sites or completed ones only, and switch the first-port buff and later nerf.
+  * Body features, orbital and surface slots (with the website's estimate), population and its history, favourites, revisions and named saves. A system you are not the architect of opens read-only, and you can save your own named copy.
+  * Start a project straight from a planned site, without docking.
+  * **Your systems**: every system you are the architect of. Saving keeps the website's snapshot of the system up to date, as the website does.
+* **Station identifier** (from SrvSurvey): fly a system and fill in its existing stations and settlements. The FSS adds stations, targeting each one sets the body it belongs to, and docking fills in its market and, for outposts, which outpost it is.
+* **Upload my scans**: once the FSS is complete, send the system's bodies to Raven Colonial from your own scans (white dwarfs are marked as white dwarfs).
+* **Where to Buy**: markets near any system that sell what a project, or all your projects, still need, filtered by distance, landing pad, surface ports, carriers, stock and shipyard.
+* **Projects**: delivery statistics (cargo over time and per commander), commodities marked ready, a Discord link, deleting a project (architect only) and fleet carrier loading projects.
+* **Assigned**: everything assigned to you across all your projects.
+* **Fleet Carriers**: edit a carrier's cargo, rename it, refresh it, see its buy and sell orders, and find and link a carrier by name.
+* **Nexus**: plans that span many systems, with their commanders and carriers.
+* **Raven Stats**: Raven Colonial's totals and leaderboards.
+* **Construction Needs overlay**: new Overlay Studio options for one HAVE column (the ship's count, or else the carriers') and for hiding the other overlays while it shows (the Navigation HUD, notifications, gravity warnings and the heartbeat stay). Two new hotkeys: refresh from Raven Colonial, and fold or unfold covered groups.
+* Fixed: when you launched while docked at a construction site, the overlay stayed empty until the next event. The journal's own record of a construction site now keeps the site's name.
 
 ## Earlier releases
 
+* **v5.5.2** — New Colonisation tab with Raven Colonial: projects, the site you are docked at, fleet carriers, system sites and your journal's construction record; the Construction Needs overlay; and Raven Colonial in Settings > Integrations.
 * **v5.5.1.9** — Fixed grey blocks at the corners of most overlays, and between stacked notifications, when overlay opacity was below 100%.
 * **v5.5.1.8** — Jump Info redesigned to match the Navigation HUD (and its body counts removed), its corner blocks fixed, and overlay opacity and frame rate now applied straight after a restart.
 * **v5.5.1.7** — Overlay opacity now fades each overlay window through Windows itself, so it works on every graphics card.

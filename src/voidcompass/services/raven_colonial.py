@@ -8,7 +8,8 @@ planned sites. These are the calls SrvSurvey makes; the API is documented at
 * Commodity ids are lower case (``liquidoxygen``); commander names are
   lower-cased by the service; path parts are URL encoded.
 * Calls that change a commander's own data (fleet carrier cargo, system
-  sites, current ship) carry the ``rcc-key`` header. Void Compass sends no
+  sites, current ship) carry the ``rcc-key`` header, and the commander's
+  name (base64, ``rcc-cmdr0``) as the website sends it. Void Compass sends no
   request at all unless the commander has entered a key and left sync on.
 * Every call runs on one background worker, in order, so deliveries and
   carrier cargo changes reach the service as they happened.
@@ -16,6 +17,7 @@ planned sites. These are the calls SrvSurvey makes; the API is documented at
 
 from __future__ import annotations
 
+import base64
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import threading
@@ -30,12 +32,20 @@ SERVICE_URL = "https://ravencolonial100-awcbdvabgze4c5cq.canadacentral-01.azurew
 SITE_URL = "https://ravencolonial.com"
 
 
+# A fleet carrier loading project: stock a carrier rather than build a site.
+FC_LOADING = "fc_loading"
+
+
 def project_url(build_id):
     return f"{SITE_URL}/#build={quote(str(build_id or ''), safe='')}"
 
 
 def system_url(system_name):
     return f"{SITE_URL}/#sys={quote(str(system_name or ''), safe='')}"
+
+
+def nexus_url(nexus_id):
+    return f"{SITE_URL}/#nexus={quote(str(nexus_id or ''), safe='')}"
 
 
 class RavenError(Exception):
@@ -59,6 +69,7 @@ def _part(value):
 class RavenColonialClient:
     def __init__(self, api_key="", base_url=SERVICE_URL, session=None, timeout=20):
         self.api_key = str(api_key or "").strip()
+        self.cmdr = ""
         self.base_url = str(base_url).rstrip("/")
         self.timeout = timeout
         self._session = session or requests.Session()
@@ -70,12 +81,17 @@ class RavenColonialClient:
     def set_api_key(self, api_key):
         self.api_key = str(api_key or "").strip()
 
+    def set_commander(self, cmdr):
+        self.cmdr = str(cmdr or "").strip()
+
     # -- transport -------------------------------------------------------
     def _request(self, method, path, body=None, keyed=False, missing_ok=False, key=None):
         headers = {"User-Agent": f"VoidCompass/{APP_VERSION}", "Accept": "application/json"}
         api_key = key if key is not None else self.api_key
         if (keyed or key is not None) and api_key:
             headers["rcc-key"] = api_key
+            if self.cmdr and key is None:
+                headers["rcc-cmdr0"] = base64.b64encode(self.cmdr.encode("utf-8")).decode("ascii")
         url = f"{self.base_url}{path}"
         try:
             with self._lock:
@@ -142,9 +158,41 @@ class RavenColonialClient:
     def publish_current_ship(self, ship):
         self._request("POST", "/api/cmdr/currentShip", ship, keyed=True)
 
+    def assigned_active(self, cmdr):
+        """``{buildId: {commodity: need}}``: what is assigned to the
+        commander across their active projects."""
+        return dict(self._request("GET", f"/api/cmdr/{_part(cmdr)}/assigned/active", missing_ok=True) or {})
+
+    def system_snapshots(self):
+        """Snapshots of every system the keyed commander architects."""
+        return list(self._request("GET", "/api/v2/system/snapshots/", keyed=True, missing_ok=True) or [])
+
     # -- projects --------------------------------------------------------
     def create_project(self, project):
         return self._request("PUT", "/api/project/", project, keyed=True)
+
+    def create_fc_loading_project(self, name):
+        """A project for stocking a fleet carrier (the website's way)."""
+        return self.create_project({"buildName": name, "buildType": FC_LOADING, "marketId": 1,
+                                    "systemAddress": 1, "prepBuilds": {}})
+
+    def create_project_from_site(self, id64, site_id, build_type=""):
+        """Start a project from a system's planned site, without docking."""
+        return self._request("POST", f"/api/project/from/{_part(id64)}/{_part(site_id)}/{_part(build_type)}", keyed=True)
+
+    def delete_project(self, build_id):
+        self._request("DELETE", f"/api/project/{_part(build_id)}", keyed=True)
+
+    def project_stats(self, build_id):
+        return self._request("GET", f"/api/project/{_part(build_id)}/stats", missing_ok=True) or {}
+
+    def set_ready(self, build_id, commodities, ready=True):
+        """Mark commodities ready (loaded and on the way) or not."""
+        self._request("POST" if ready else "DELETE", f"/api/project/{_part(build_id)}/ready", list(commodities), keyed=True)
+
+    def find_markets(self, options):
+        """Markets near a reference system selling what projects need."""
+        return self._request("POST", "/api/project/markets", dict(options)) or {}
 
     def project(self, build_id):
         return self._request("GET", f"/api/project/{_part(build_id)}", missing_ok=True)
@@ -197,6 +245,21 @@ class RavenColonialClient:
         """Set carrier cargo counts outright; returns its cargo."""
         return dict(self._request("POST", f"/api/fc/{_part(market_id)}/cargo", dict(cargo), keyed=True) or {})
 
+    def rename_carrier(self, market_id, display_name):
+        return self._request("PATCH", f"/api/fc/{_part(market_id)}", {"displayName": display_name}, keyed=True)
+
+    def find_carriers(self, name):
+        """Carriers whose callsign or name matches (Spansh search)."""
+        return list(self._request("GET", f"/api/fc/query/{_part(name)}", missing_ok=True) or [])
+
+    def check_carrier(self, market_id):
+        """Look a carrier up on Spansh and record it on Raven Colonial."""
+        return self._request("POST", f"/api/fc/{_part(market_id)}/spansh", keyed=True)
+
+    def refresh_carrier(self, name_or_market_id):
+        """Ask the service to refresh a carrier (location, market orders)."""
+        return self._request("POST", f"/api/fc/{_part(name_or_market_id)}/refresh", keyed=True)
+
     # -- systems (architect) ---------------------------------------------
     def system(self, name_or_id):
         return self._request("GET", f"/api/v2/system/{_part(name_or_id)}", missing_ok=True)
@@ -216,6 +279,67 @@ class RavenColonialClient:
 
     def update_system_bodies(self, system_address, bodies):
         return self._request("PUT", f"/api/v2/system/{_part(system_address)}/bodies", list(bodies), keyed=True)
+
+    def system_revision(self, name_or_id, rev):
+        return self._request("GET", f"/api/v2/system/{_part(name_or_id)}/.{_part(rev)}", missing_ok=True)
+
+    def system_named_save(self, name_or_id, save_name):
+        return self._request("POST", f"/api/v2/system/{_part(name_or_id)}/!", str(save_name), keyed=True)
+
+    def delete_system_named_save(self, name_or_id, save_name):
+        self._request("DELETE", f"/api/v2/system/{_part(name_or_id)}/!{_part(save_name)}", keyed=True)
+
+    def system_snapshot(self, id64, architect):
+        return self._request("GET", f"/api/v2/system/{_part(id64)}/snapshot/{_part(architect)}", missing_ok=True)
+
+    def save_system_snapshot(self, id64, snapshot):
+        return self._request("PUT", f"/api/v2/system/{_part(id64)}/snapshot", snapshot, keyed=True)
+
+    def set_system_favourite(self, id64, favourite):
+        flag = "true" if favourite else "false"
+        return self._request("POST", f"/api/v2/system/{_part(id64)}/fav/{flag}", keyed=True)
+
+    def set_body_features(self, name_or_id, body_num, features):
+        return list(self._request("PUT", f"/api/v2/system/{_part(name_or_id)}/{_part(body_num)}/features",
+                                  list(features), keyed=True) or [])
+
+    def import_system(self, name_or_id, kind=""):
+        """Import from Spansh: ``bodies``, or "" for bodies and stations."""
+        return self._request("POST", f"/api/v2/system/{_part(name_or_id)}/import/{_part(kind)}", keyed=True)
+
+    def refresh_population(self, id64):
+        return self._request("POST", f"/api/v2/system/{_part(id64)}/refreshPop", keyed=True)
+
+    def population_history(self, id64):
+        return list(self._request("GET", f"/api/v2/system/{_part(id64)}/popHistory", missing_ok=True) or [])
+
+    # -- nexus (multi-system plans; the service calls them chains) --------
+    def my_nexuses(self):
+        return list(self._request("GET", "/api/cmdr/nexus", keyed=True, missing_ok=True) or [])
+
+    def nexus(self, nexus_id):
+        return self._request("GET", f"/api/chain/{_part(nexus_id)}", keyed=True, missing_ok=True)
+
+    def create_nexus(self, name):
+        return self._request("PUT", "/api/chain/create", {"name": name}, keyed=True)
+
+    def delete_nexus(self, nexus_id):
+        self._request("DELETE", f"/api/chain/delete/{_part(nexus_id)}", keyed=True)
+
+    NEXUS_FIELDS = ("setName", "setNotes", "setPrivate", "setCmdrs", "setFCs", "setSystems")
+
+    def update_nexus(self, nexus_id, field, value):
+        """``field`` is one of NEXUS_FIELDS."""
+        if field not in self.NEXUS_FIELDS:
+            raise ValueError(field)
+        return self._request("POST", f"/api/chain/{_part(nexus_id)}/{field}", value, keyed=True)
+
+    def set_nexus_system_carriers(self, nexus_id, id64, market_ids):
+        return self._request("POST", f"/api/chain/{_part(nexus_id)}/{_part(id64)}/setFCs", list(market_ids), keyed=True)
+
+    # -- statistics ------------------------------------------------------
+    def global_stats(self):
+        return self._request("GET", "/api/stats/") or {}
 
 
 class RavenWorker:

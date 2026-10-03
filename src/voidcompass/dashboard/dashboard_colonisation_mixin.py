@@ -15,6 +15,7 @@ import time
 
 from voidcompass.colonisation import catalogue
 from voidcompass.colonisation.colony import ColonyState
+from voidcompass.colonisation.system_journal import SystemJournal
 from voidcompass.colonisation.views import overlay_model, overlay_options
 from voidcompass.core.config import get_active_profile, get_profile_file
 from voidcompass.services.raven_colonial import RavenColonialClient, RavenWorker
@@ -36,6 +37,10 @@ class DashboardColonisationMixin:
         self._colony_market = None
         self._colony_market_seen = False
         self._colony_docked = None
+        self.colony_journal = SystemJournal()
+        # The fold hotkey flips "fold covered groups" until pressed again.
+        self._colony_fold_flipped = False
+        self._colony_overlay_showing = False
 
     def _colony_switch_profile(self, profile_key):
         if getattr(self, "colony", None) is not None:
@@ -43,6 +48,7 @@ class DashboardColonisationMixin:
         self.colony = ColonyState(get_profile_file(profile_key, "colony.json"))
         self.raven.set_api_key(self.config.get("raven_api_key"))
         self._colony_docked = None
+        self.colony_journal = SystemJournal()
         self._colony_refresh()
 
     def _raven_active(self):
@@ -65,6 +71,7 @@ class DashboardColonisationMixin:
         the UI thread. ``pending`` marks the overlay "Updating..."."""
         if not self._raven_active():
             return False
+        self.raven.set_commander(self._colony_cmdr())
         colony = self.colony
         if pending is not None:
             colony.start_pending(pending)
@@ -111,6 +118,11 @@ class DashboardColonisationMixin:
     def _colony_observe(self, event, raw, startup_replay=False):
         if getattr(self, "colony", None) is None or not isinstance(raw, dict):
             return
+        journal = getattr(self, "colony_journal", None)
+        if journal is not None and journal.observe(event, raw) and not startup_replay:
+            on_journal = getattr(self, "_planner_on_journal", None)
+            if callable(on_journal):
+                on_journal(event, raw)
         handler = getattr(self, f"_colony_on_{event}", None)
         if callable(handler):
             try:
@@ -339,13 +351,29 @@ class DashboardColonisationMixin:
             return None
         return market["items"]
 
+    def _colony_on_destination(self, destination):
+        """Status.json's target changed (the station identifier listens)."""
+        on_destination = getattr(self, "_planner_on_destination", None)
+        if callable(on_destination) and getattr(self, "colony", None) is not None:
+            on_destination(destination)
+
+    def _colony_toggle_fold(self):
+        self._colony_fold_flipped = not getattr(self, "_colony_fold_flipped", False)
+        self._colony_update_overlay()
+
+    def _colony_overlay_options(self):
+        options = overlay_options(self.config)
+        if getattr(self, "_colony_fold_flipped", False):
+            options["colony_collapse_covered"] = not options["colony_collapse_covered"]
+        return options
+
     def _colony_overlay_model(self):
         return overlay_model(
             self.colony, self._colony_cmdr(), docked=self._colony_docked,
             current_address=getattr(self, "current_system_address", None),
             ship_cargo=getattr(self, "current_cargo_inventory", None) or (),
             capacity=self._active_cargo_capacity(), market_items=self._colony_market_items(),
-            options=overlay_options(self.config),
+            options=self._colony_overlay_options(),
         )
 
     def _colony_overlay_wanted(self, model):
@@ -377,6 +405,13 @@ class DashboardColonisationMixin:
         except Exception as exc:
             logging.warning("Construction Needs model failed: %s", exc)
             model = None
-        if self._colony_overlay_wanted(model):
+        showing = self._colony_overlay_wanted(model)
+        if showing != getattr(self, "_colony_overlay_showing", False):
+            # "Hide other overlays while colonising" follows the panel.
+            self._colony_overlay_showing = showing
+            apply_hiding = getattr(self, "_apply_map_overlay_hiding", None)
+            if callable(apply_hiding) and self.config.get("colony_hide_other_overlays", False):
+                apply_hiding()
+        if showing:
             return hud.update(model)
         return hud.clear()

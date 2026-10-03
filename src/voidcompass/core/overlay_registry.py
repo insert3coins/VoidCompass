@@ -83,6 +83,8 @@ OVERLAY_HOTKEY_SPECS = (
     ("navigation_layout", "overlay_hotkey_navigation_layout", "Navigation HUD layout", None),
     _overlay_hotkey("jump_info"),
     _overlay_hotkey("colony_needs"),
+    ("colony_refresh", "overlay_hotkey_colony_refresh", "Construction Needs: refresh from Raven Colonial", None),
+    ("colony_fold", "overlay_hotkey_colony_fold", "Construction Needs: fold / unfold covered groups", None),
     _overlay_hotkey("survey"),
     _overlay_hotkey("contact_scope"),
     _overlay_hotkey("station_info"),

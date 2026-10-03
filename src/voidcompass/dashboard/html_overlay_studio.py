@@ -350,6 +350,7 @@ class HtmlOverlayStudioMixin:
                 "jump_info_linger_s": linger_seconds(self.config),
                 **colony_overlay_options(self.config),
                 "colony_show_on_right_panel": bool(self.config.get("colony_show_on_right_panel", True)),
+                "colony_hide_other_overlays": bool(self.config.get("colony_hide_other_overlays", False)),
                 "heartbeat_orb_size": orb_size(self.config),
                 **{f"galnet_ticker_{key}": value for key, value in ticker_options(self.config).items()},
                 **{f"music_player_{key}": value for key, value in music_overlay_options(self.config).items()},
@@ -475,6 +476,10 @@ class HtmlOverlayStudioMixin:
         if bool(self.config.get("overlay_hide_on_maps", True)) and focus in self._MAP_GUI_FOCUS:
             keep = self._map_keep_visible()
             hidden = {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in keep}
+        if self.config.get("colony_hide_other_overlays", False) and getattr(self, "_colony_overlay_showing", False):
+            # While the Construction Needs panel is up: it, the Navigation
+            # HUD, notifications, gravity warnings and the heartbeat stay.
+            hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in self._COLONY_FOCUS_KEEP}
         return HtmlOverlayServer.set_overrides(hidden=hidden)
 
     def _set_overlay_map_hiding(self, overlay_id, hide):
@@ -498,6 +503,8 @@ class HtmlOverlayStudioMixin:
         if HtmlOverlayServer.set_overrides(layout=bool(enabled)):
             self._schedule_html_dashboard_publish(immediate=True)
 
+    _COLONY_FOCUS_KEEP = frozenset({"colony_needs_hud", "hud", "toast_hud", "gravity_warning_hud", "heartbeat_hud"})
+
     def _html_overlay_option_toggle(self, key, requested_value=None):
         allowed = {
             "overlay_mouse_passthrough", "hud_compact_mode",
@@ -511,6 +518,7 @@ class HtmlOverlayStudioMixin:
             "overlay_hide_on_maps",
             "colony_show_carriers", "colony_carrier_delta", "colony_collapse_covered",
             "colony_highlight_almost", "colony_show_on_right_panel",
+            "colony_inline_carriers", "colony_hide_other_overlays",
         }
         key = _text(key, 80)
         if key not in allowed:
@@ -548,6 +556,8 @@ class HtmlOverlayStudioMixin:
             update_colony = getattr(self, "_colony_update_overlay", None)
             if callable(update_colony):
                 update_colony()
+            if key == "colony_hide_other_overlays":
+                self._apply_map_overlay_hiding()
         elif key in {"survey_status_show_all_bodies", "survey_codex_flags"}:
             survey = getattr(self, "survey_status_hud", None)
             if survey is not None:
