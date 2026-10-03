@@ -10,9 +10,18 @@ names for every commodity. This copies the parts Colonisation needs:
                       category (SrvSurvey's mapCargoType, including the names
                       Frontier corrected).
 
-Run again to refresh from a newer SrvSurvey checkout:
+From RavenColonialWeb (https://github.com/njthomson/RavenColonialWeb,
+GPL-3.0), the website's system planner data:
 
-    python tools/vendor_colonisation_data.py D:/Programming/Elite/SrvSurvey
+* site_types.json   - every site type: class, tier, pads, economy influence,
+                      tier points it needs and gives, system effects, score,
+                      prerequisites and unlocks; pad counts per layout; the
+                      system unlocks and what enables them.
+* haul_costs.json   - approximate cargo per build type, for planning.
+
+Run again to refresh from newer checkouts:
+
+    python tools/vendor_colonisation_data.py D:/Programming/Elite/SrvSurvey D:/Programming/Elite/RavenColonialWeb
 """
 
 from __future__ import annotations
@@ -63,6 +72,62 @@ def _resx_names(path: Path) -> dict[str, str]:
     return names
 
 
+def _ts_literal(text: str):
+    """A TypeScript object/array literal (as site-data.ts writes them) as
+    Python: drops comments, quotes bare keys, swaps single quotes, drops
+    trailing commas and leading plus signs."""
+    text = re.sub(r"//[^\n]*", "", text)
+    text = re.sub(r"'([^'\\]*)'", lambda m: json.dumps(m.group(1)), text)
+    text = re.sub(r"([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:", r'\1"\2":', text)
+    text = re.sub(r":\s*\+(\d)", r": \1", text)
+    text = re.sub(r",(\s*[}\]])", r"\1", text)
+    return json.loads(text)
+
+
+def _block(source: str, start: str) -> str:
+    """The bracketed literal that follows ``start``."""
+    index = source.index(start) + len(start)
+    opener = source[index:].lstrip()[0]
+    index = source.index(opener, index)
+    closer = {"[": "]", "{": "}"}[opener]
+    depth = 0
+    for position in range(index, len(source)):
+        char = source[position]
+        if char == opener:
+            depth += 1
+        elif char == closer:
+            depth -= 1
+            if depth == 0:
+                return source[index:position + 1]
+    raise ValueError(start)
+
+
+def vendor_raven(raven: Path) -> None:
+    src = raven / "src"
+    site_data = (src / "site-data.ts").read_text(encoding="utf-8")
+    system_model = (src / "system-model2.ts").read_text(encoding="utf-8")
+    site_types = _ts_literal(_block(site_data, "export const siteTypes: SiteType[] ="))
+    pads = _ts_literal(_block(site_data, "export const mapSitePads: Record<string, [s: number, m: number, l: number,]> ="))
+    primary = {f"t{tier}": json.loads(re.search(rf"primaryPortsT{tier} = (\[[^\]]*\])", site_data).group(1).replace("'", '"'))
+               for tier in (1, 2, 3)}
+    unlocks = _ts_literal(_block(system_model, "export const mapSysUnlocks: Record<SysUnlocks, { icon: string, title: string, needTypes: string[], needs: string }> ="))
+    pre_reqs = {name: json.loads(found) for name, found in
+                re.findall(r"case '(\w+)': return (\[[^\]]*\]);", _block(system_model, "export const getPreReqNeeded = (type: SiteType): string[] =>"))}
+    if not pre_reqs or len(site_types) < 40:
+        raise SystemExit("site-data.ts changed shape: check the vendoring")
+    header = {"source": "RavenColonialWeb (https://github.com/njthomson/RavenColonialWeb), GPL-3.0",
+              "generated_by": "tools/vendor_colonisation_data.py"}
+    (OUT / "site_types.json").write_text(json.dumps({
+        **header, "site_types": site_types, "site_pads": pads, "primary_ports": primary,
+        "system_unlocks": {key: {"title": row["title"], "need_types": row["needTypes"], "needs": row["needs"]}
+                           for key, row in unlocks.items()},
+        "pre_reqs": pre_reqs,
+    }, indent=1), encoding="utf-8")
+    haul = json.loads((src / "assets" / "haul-costs.json").read_text(encoding="utf-8"))
+    (OUT / "haul_costs.json").write_text(json.dumps({**header, **haul}, indent=1), encoding="utf-8")
+    print(f"{len(site_types)} site types, {len(pads)} pad layouts, {len(unlocks)} unlocks -> {OUT}")
+
+
 def main(srvsurvey: Path) -> None:
     project = srvsurvey / "SrvSurvey"
     costs = json.loads((project / "colonization-costs2.json").read_text(encoding="utf-8"))
@@ -87,3 +152,4 @@ def main(srvsurvey: Path) -> None:
 
 if __name__ == "__main__":
     main(Path(sys.argv[1] if len(sys.argv) > 1 else r"D:\Programming\Elite\SrvSurvey"))
+    vendor_raven(Path(sys.argv[2] if len(sys.argv) > 2 else r"D:\Programming\Elite\RavenColonialWeb"))

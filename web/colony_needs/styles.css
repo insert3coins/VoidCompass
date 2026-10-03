@@ -98,6 +98,9 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 .need-row .fc.short { color: color-mix(in srgb, var(--red) 80%, var(--muted)); }
 .need-row .fc.none { color: var(--dim); }
 .need-row .fc.covered { color: var(--green); }
+.need-row .ship.fc-inline { opacity: .72; }
+.need-row .ship.fc-inline.short { color: color-mix(in srgb, var(--red) 70%, var(--muted)); }
+.need-row .ship.fc-inline.covered { color: color-mix(in srgb, var(--green) 75%, var(--muted)); }
 .need-row .warn { color: var(--yellow); }
 
 /* --------------------------------------------------------------- footer -- */

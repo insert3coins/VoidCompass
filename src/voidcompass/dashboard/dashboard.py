@@ -3367,6 +3367,13 @@ class MainDashboard(
         if action == "field_bookmark":
             self._field_bookmark()
             return
+        if action == "colony_refresh":
+            if self._colony_refresh():
+                self.add_event_feed_entry("SYSTEM", "Construction Needs: refreshing from Raven Colonial", severity="INFO")
+            return
+        if action == "colony_fold":
+            self._colony_toggle_fold()
+            return
         if action in {"music_play_pause", "music_next", "music_previous"}:
             self.music_remote({"music_play_pause": "toggle", "music_next": "next",
                                "music_previous": "previous"}[action])

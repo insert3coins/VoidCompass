@@ -16,6 +16,7 @@ OVERLAY_OPTION_DEFAULTS = {
     "colony_carrier_delta": False,      # carriers minus need, rather than their total
     "colony_collapse_covered": True,    # fold a category the carriers already cover
     "colony_highlight_almost": False,   # flag what one more trip from here completes
+    "colony_inline_carriers": False,    # one HAVE column: the ship's count, else the carriers'
 }
 
 
@@ -154,7 +155,8 @@ def overlay_model(state, cmdr, docked=None, current_address=None, ship_cargo=(),
         "complete": False, "at_site": at_site, "header": header, "subheader": subheader,
         "projects": names[:8], "warnings": warnings,
         "columns": {"fc": show_fc, "fc_delta": bool(show_fc and options["colony_carrier_delta"]),
-                    "ship": bool(ship) or show_fc, "fc_count": len(carriers)},
+                    "ship": bool(ship) or show_fc, "fc_count": len(carriers),
+                    "inline": bool(show_fc and options["colony_inline_carriers"])},
         "groups": groups, "remaining": remaining, "trips": trips, "carriers": fc_line,
         "pending": bool(state.pending), "pinned": bool(needs["assigned_me"] or needs["assigned_others"]),
     }

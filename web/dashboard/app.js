@@ -152,7 +152,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".settings-tab", ".theme-option",
   ".music-button", ".music-mode", ".music-playlist", ".music-row-actions button",
   ".pp-tabs button", ".pp-task-main", ".pp-power", "[data-pp-filter]",
-  ".co-tabs button", ".co-actions button",
+  ".co-tabs button", ".co-actions button", ".pl-mini", ".pl-chip",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {

@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 from voidcompass.colonisation import catalogue
 from voidcompass.colonisation.colony import ColonyState
+from voidcompass.colonisation.system_journal import SystemJournal
 from voidcompass.colonisation.views import overlay_model, project_rows
 from voidcompass.core import config as config_module
 from voidcompass.core.overlay_registry import OVERLAY_HOTKEY_SPECS, OVERLAY_SPEC_BY_ATTR
@@ -230,8 +231,10 @@ class Deck(DashboardColonisationMixin, HtmlColonisationMixin):
         self.current_gui_focus = 0
         self.current_cargo_inventory = []
         self.colonisation_projects = {}
+        self.colony_journal = SystemJournal()
         self._transient = {}
         self._schedule_html_dashboard_publish = Mock()
+        self._persist_config = Mock()
 
     def _ui_post(self, callback, *args, key=None):
         callback(*args)
@@ -366,23 +369,6 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(sent["commanders"], {"Nyx Evera": []})
         self.assertEqual(deck._colony_ui_state()["selected"], "new")
 
-    def test_system_sites_round_trip(self):
-        deck = Deck()
-        deck.raven.system.return_value = {"name": "Nyx", "architect": "Nyx Evera", "bodies": [{"num": 3, "name": "Nyx 3"}],
-                                          "sites": [{"id": "s1", "name": "Gate", "bodyNum": 3, "buildType": "demeter", "status": "plan"}]}
-        deck._handle_colonisation_command("architect_load", {"system": "Nyx"})
-        model = deck._colony_ui_state()["architect"]
-        self.assertEqual(model["sites"][0]["body"], "Nyx 3")
-        deck.raven.update_system.return_value = deck.raven.system.return_value
-        deck._handle_colonisation_command("architect_save", {
-            "architect": "Nyx Evera", "reserve": "major", "open": True, "delete": ["s0"],
-            "sites": [{"id": "s1", "name": "Gate", "body_num": "3", "build_type": "Demeter", "status": "build"},
-                      {"id": "", "name": "", "status": "plan"}]})
-        system, put = deck.raven.update_system.call_args.args
-        self.assertEqual(system, "Nyx")
-        self.assertEqual(put["update"], [{"id": "s1", "name": "Gate", "bodyNum": 3, "buildType": "demeter", "status": "build"}])
-        self.assertEqual((put["delete"], put["reserveLevel"], put["open"]), (["s0"], "major", True))
-
 
 class WiringTests(unittest.TestCase):
     def test_registered_profile_aware_and_themed(self):
@@ -487,17 +473,34 @@ class PageTests(unittest.TestCase):
     def test_tab_renders_every_view(self):
         deck = Deck()
         deck.colony.apply_sync(projects=[project()], primary="b1",
-                               carriers=[{"marketId": 5500, "name": "K7Q-1HT", "cargo": {"liquidoxygen": 100}}])
+                               carriers=[{"marketId": 5500, "name": "K7Q-1HT", "cargo": {"liquidoxygen": 100},
+                                          "sales": [{"name": "steel", "price": 1000, "total": 50, "outstanding": 40}]}])
         deck.colonisation_projects = {3900: {"site_name": "Nyx Gate", "system_name": "Nyx", "progress": 0.25,
                                              "resources": [{"name": "Steel", "required": 500, "provided": 100}],
                                              "activity": [{"type": "Delivery", "detail": "Steel x10"}]}}
         deck._colony_observe("Docked", DOCKED_SITE, startup_replay=True)
         deck._colony_observe("ColonisationConstructionDepot", DEPOT, startup_replay=True)
-        deck._colony_ui_state()["architect"] = deck._colony_architect_model(
-            {"name": "Nyx", "bodies": [{"num": 3, "name": "Nyx 3"}],
-             "sites": [{"id": "s1", "name": "Gate", "bodyNum": 3, "buildType": "demeter", "status": "plan"}]}, "Nyx")
+        ui = deck._colony_ui_state()
+        ui["planner"] = deck._planner_from_system({
+            "name": "Nyx", "id64": 77, "architect": "Nyx Evera", "rev": 3, "revs": [{"rev": 3, "cmdr": "Nyx Evera", "time": "2026-10-01T00:00:00Z"}],
+            "bodies": [{"num": 0, "name": "Nyx", "type": "st", "parents": [], "features": [], "distLS": 0},
+                       {"num": 3, "name": "Nyx 3", "type": "elw", "parents": [0], "features": ["bio", "landable"], "distLS": 900,
+                        "radius": 5000, "gravity": 1, "temp": 280}],
+            "sites": [{"id": "s1", "name": "Gate", "bodyNum": 3, "buildType": "dual_truss", "status": "complete"},
+                      {"id": "s2", "name": "Farm", "bodyNum": 3, "buildType": "demeter", "status": "plan"}]})
+        ui["markets"] = {"build_id": "b1", "options": {"refSystem": "Nyx", "maxDistance": 50, "maxArrival": 5000, "shipSize": "large"},
+                         "markets": [{"station": "Galileo", "system": "Sol", "body": "", "type": "Ocellus", "economy": "Refinery",
+                                      "distance": 12.5, "arrival": 500, "pad": "large", "surface": False, "updated": "2026-10-03T00:00:00Z",
+                                      "covers": [{"id": "steel", "name": "Steel", "stock": 9000, "need": 150}], "covered": 1}],
+                         "needs": [{"id": "steel", "name": "Steel", "need": 150}]}
+        ui["global_stats"] = {"at": "2026-10-03T05:00:00Z", "totals": {"activeProjects": 16613}, "contributors": [{"name": "CASSELITE", "value": 488420}],
+                              "helpers": [], "architects": [], "systems": [{"score": 830, "system": "IC 1805", "architect": "x"}]}
+        ui["nexus"] = {"id": "n1", "name": "Pioneer Road", "owner": "Nyx Evera", "open": True, "cmdrs": ["Nyx Evera"], "fcs": [],
+                       "systems": [{"name": "Nyx", "id64": 77, "type": "hub", "total": 1000, "progress": 250, "builds": []}], "notes": ""}
+        ui["stats"] = {"b1": {"total_cargo": 1200, "total_deliveries": 12, "start": "2026-10-01T00:00:00Z", "end": None,
+                              "cmdrs": [{"name": "Nyx Evera", "cargo": 1200}], "timeline": [{"time": "2026-10-01T00:00:00Z", "cargo": 1200, "deliveries": 12}]}}
         data = json.loads(json.dumps(deck._html_colonisation_workspace()))
-        page = self.open("http://colony.test/blank.html")
+        page = self.open("http://colony.test/blank.html", width=1300)
         result = page.evaluate("""async (data) => {
           const m = await import('/dashboard/colonisation.js');
           const sent = [];
@@ -506,29 +509,44 @@ class PageTests(unittest.TestCase):
           const root = document.getElementById('colonisation-workspace');
           const out = {};
           const draw = () => m.renderColonisation(data, ui);
+          const click = (selector) => m.handleColonisationClick({target: root.querySelector(selector), preventDefault() {}}, ui, draw);
           draw();
-          for (const view of ['projects', 'site', 'carriers', 'architect', 'journal']) {
-            const tab = root.querySelector(`[data-co-view="${view}"]`);
-            m.handleColonisationClick({target: tab, preventDefault() {}}, ui, draw);
-            out[view] = {text: root.innerText, wide: document.documentElement.scrollWidth > innerWidth + 1};
+          for (const view of ['projects', 'assigned', 'site', 'carriers', 'markets', 'planner', 'nexus', 'stats', 'journal']) {
+            click(`[data-co-view="${view}"]`);
+            out[view] = {text: root.innerText, wide: root.scrollWidth > root.clientWidth + 1};
           }
-          m.handleColonisationClick({target: root.querySelector('[data-co-view="architect"]'), preventDefault() {}}, ui, draw);
-          m.handleColonisationClick({target: root.querySelector('[data-co-add-site]'), preventDefault() {}}, ui, draw);
-          out.siteRows = root.querySelectorAll('.co-sites tbody tr[data-index]').length;
-          out.selectedType = root.querySelector('.co-sites [data-co-site="build_type"]').value;
-          m.handleColonisationClick({target: root.querySelector('[data-co-view="projects"]'), preventDefault() {}}, ui, draw);
-          m.handleColonisationClick({target: root.querySelector('[data-co-op="assign"], [data-co-op="unassign"]'), preventDefault() {}}, ui, draw);
+          click('[data-co-view="planner"]');
+          out.plannerRows = root.querySelectorAll('.pl-site').length;
+          out.plannerType = root.querySelector('.pl-site [data-pl-site="buildType"]').value;
+          click('[data-co-op="planner_add"]');
+          const select = root.querySelector('.pl-site[data-id="s2"] [data-pl-site="status"]');
+          select.value = 'build';
+          m.handleColonisationChange({target: select}, ui, data);
+          click('[data-pl-expand="s1"]');
+          out.detail = root.querySelector('.pl-detail')?.innerText || '';
+          click('[data-co-view="projects"]');
+          click('[data-co-op="assign"], [data-co-op="unassign"]');
           out.sent = sent;
           return out;
         }""", data)
         self.assertIn("RAVEN COLONIAL · NYX EVERA", result["projects"]["text"])
         self.assertIn("Liquid oxygen", result["projects"]["text"])
+        self.assertIn("DELIVERIES", result["projects"]["text"])
+        self.assertIn("Liquid oxygen", result["assigned"]["text"])
         self.assertIn("Tracked", result["site"]["text"])
         self.assertIn("K7Q-1HT", result["carriers"]["text"])
-        self.assertIn("SAVE TO RAVEN", result["architect"]["text"])
+        self.assertIn("SELLING", result["carriers"]["text"])
+        self.assertIn("Galileo", result["markets"]["text"])
+        self.assertIn("SYSTEM SCORE", result["planner"]["text"])
+        self.assertIn("Pioneer Road", result["nexus"]["text"])
+        self.assertIn("CASSELITE", result["stats"]["text"])
         self.assertIn("Nyx Gate", result["journal"]["text"])
-        self.assertEqual(result["siteRows"], 2)
-        self.assertEqual(result["selectedType"], "demeter")
+        self.assertEqual(result["plannerRows"], 2)
+        self.assertEqual(result["plannerType"], "dual_truss")
+        self.assertIn("ECONOMY BREAKDOWN", result["detail"])
+        operations = [row["operation"] for row in result["sent"]]
+        self.assertIn("planner_add", operations)
+        self.assertIn({"page": "colonisation", "operation": "planner_site", "id": "s2", "field": "status", "value": "build"}, result["sent"])
         self.assertEqual(result["sent"][-1]["operation"], "unassign")
         self.assertEqual(result["sent"][-1]["commodity"], "liquidoxygen")
 
