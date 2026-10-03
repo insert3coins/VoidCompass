@@ -25,7 +25,7 @@ import logging
 import atexit
 import tempfile
 from voidcompass.core import crash_reporter
-from voidcompass.core.config import commander_profile_key, load_config, save_config
+from voidcompass.core.config import load_config, rename_commander_profile, resolve_commander_profile, save_config
 from voidcompass.dashboard.dashboard import MainDashboard
 from voidcompass.core.journal_watcher import JournalWatcher
 from voidcompass.core.onboarding import should_show as should_show_onboarding
@@ -150,7 +150,9 @@ def main():
             if detected:
                 name = detected.get("commander") or "Unknown Commander"
                 fid = detected.get("fid") or ""
-                key = commander_profile_key(name, fid)
+                key, previous = resolve_commander_profile(startup_config, name, fid)
+                if previous:
+                    rename_commander_profile(startup_config, key, name, previous)
                 profile = startup_config.setdefault("commander_profiles", {}).setdefault(
                     key, {},
                 )

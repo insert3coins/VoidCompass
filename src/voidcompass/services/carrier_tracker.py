@@ -483,11 +483,14 @@ class CarrierTracker:
                                 raw.get("Commander") or raw.get("Name") or ""
                             ).strip().casefold()
                             actual_fid = str(raw.get("FID") or "").strip().casefold()
-                            active_commander = (
-                                (not expected_name or actual_name == expected_name)
-                                and (not expected_fid or not actual_fid or actual_fid == expected_fid)
-                                and bool(actual_name or actual_fid)
-                            )
+                            if expected_fid and actual_fid:
+                                # A commander renamed in game keeps their Frontier ID.
+                                active_commander = actual_fid == expected_fid
+                            else:
+                                active_commander = (
+                                    (not expected_name or actual_name == expected_name)
+                                    and bool(actual_name or actual_fid)
+                                )
                         if not active_commander:
                             continue
                         if ev.startswith("Carrier") or ev in {

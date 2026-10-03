@@ -1,5 +1,11 @@
 # VoidCompass // UPDATE LOG
 
+## v5.5.2.2 // Commander rename fix
+**Release Date:** 2026-Oct-03
+
+* Fixed commanders renamed in game: Void Compass now knows you by your Frontier ID, so after a rename you keep your profile (history, settings, theme, colonisation) and every screen shows your new name. Your EDSM name follows the rename unless you set your own. Your journals from before the rename still count as yours in the Captain's Log and fleet carrier history.
+* Also see **v5.5.2.1** below, the big Colonisation update, if you are coming from 5.5.2.
+
 ## v5.5.2.1 // Colonisation - Everything Else
 **Release Date:** 2026-Oct-03
 
