@@ -168,6 +168,7 @@ VSVersionInfo(
         f'--add-data={project_dir / "data" / "rhino_mining_sheet.json"}{data_sep}data',
         f'--add-data={project_dir / "data" / "engineering_companion"}{data_sep}data/engineering_companion',
         f'--add-data={project_dir / "data" / "build_planner"}{data_sep}data/build_planner',
+        f'--add-data={project_dir / "data" / "colonisation"}{data_sep}data/colonisation',
     ]
     if is_windows:
         opts.extend([

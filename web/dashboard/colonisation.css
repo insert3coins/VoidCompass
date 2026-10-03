@@ -1,0 +1,165 @@
+/* Colonisation tab (colonisation.js). The accent marks projects and what is
+   measured; orange marks your own assignments and the actions you take;
+   green, yellow and red keep their deck meanings (covered, short, failed).
+   Every colour is a theme token. */
+
+#colonisation-workspace { container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0; }
+#colonisation-workspace button { cursor: pointer; }
+#colonisation-workspace button.cockpit-button { min-height: 30px; padding: 0 12px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+#colonisation-workspace input, #colonisation-workspace select, #colonisation-workspace textarea {
+  min-width: 0; height: 32px; padding: 0 9px; border: 1px solid var(--border); background: var(--input); color: var(--text);
+  font: 12px "Segoe UI", sans-serif; outline: none;
+}
+#colonisation-workspace textarea { height: auto; padding: 9px; resize: vertical; font: 11px/1.5 Consolas, monospace; }
+#colonisation-workspace input:focus, #colonisation-workspace select:focus, #colonisation-workspace textarea:focus {
+  border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* Raven Colonial status strip. */
+.co-status {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 14px;
+  border: 1px solid var(--border-soft); border-left: 3px solid var(--accent); background: var(--panel);
+}
+.co-status.paused { border-left-color: var(--yellow); }
+.co-status.local { border-left-color: var(--dim); }
+.co-status > b { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .16em; }
+.co-status.paused > b { color: var(--yellow); }
+.co-status.local > b { color: var(--muted); }
+.co-status > span { flex: 1 1 260px; color: var(--dim); font: 11px/1.45 "Segoe UI", sans-serif; }
+.co-error, .co-notice { margin: 0; padding: 9px 12px; color: var(--text); font: 11px/1.45 "Segoe UI", sans-serif; }
+.co-error { border-left: 3px solid var(--red); background: color-mix(in srgb, var(--red) 9%, var(--panel)); }
+.co-notice { border-left: 3px solid var(--green); background: color-mix(in srgb, var(--green) 7%, var(--panel)); }
+
+/* Sub-tabs. */
+.co-tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--border-soft); }
+.co-tabs button {
+  padding: 9px 14px 8px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--dim);
+  font: 700 10px Consolas, monospace; letter-spacing: .14em;
+}
+.co-tabs button:hover { color: var(--text); }
+.co-tabs button.active { border-bottom-color: var(--accent); color: var(--accent); }
+.co-tabs small { margin-left: 4px; color: var(--muted); font: inherit; }
+
+.co-empty { display: grid; gap: 6px; padding: 28px 18px; border: 1px dashed var(--border-soft); text-align: center; }
+.co-empty b { color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .16em; }
+.co-empty span { color: var(--dim); font: 11px/1.5 "Segoe UI", sans-serif; }
+
+/* Progress meter. */
+.co-bar { display: block; height: 4px; overflow: hidden; background: color-mix(in srgb, var(--border) 70%, transparent); }
+.co-bar > i { display: block; width: var(--fill, 0%); height: 100%; background: var(--accent); }
+.co-bar.done > i { background: var(--green); }
+
+/* Projects: the list beside the chosen project. */
+.co-projects { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 12px; align-items: start; }
+@container (max-width: 820px) { .co-projects { grid-template-columns: minmax(0, 1fr); } }
+.co-list { display: grid; gap: 6px; }
+.co-totals { margin: 0 0 2px; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.co-project {
+  display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.co-project:hover { border-color: var(--border); }
+.co-project.selected { border-color: color-mix(in srgb, var(--accent) 70%, var(--border)); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); box-shadow: inset 3px 0 var(--accent); }
+.co-project.hidden-project { opacity: .6; }
+.co-project header { display: flex; justify-content: space-between; gap: 10px; min-width: 0; }
+.co-project header b { overflow: hidden; color: var(--text); font: 600 13px "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.co-project header span, .co-project small { color: var(--dim); font: 10px Consolas, monospace; letter-spacing: .04em; white-space: nowrap; }
+.co-project footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; font-variant-numeric: tabular-nums; }
+.co-project.done footer > span:first-child { color: var(--green); }
+.co-actions { display: inline-flex; gap: 2px; }
+.co-actions button {
+  width: 26px; height: 22px; padding: 0; border: 1px solid transparent; background: transparent; color: var(--dim); font: 13px/1 "Segoe UI Symbol", "Segoe UI", sans-serif;
+}
+.co-actions button:hover { border-color: var(--border-soft); color: var(--orange); }
+
+.co-detail { display: grid; gap: 12px; min-width: 0; padding: 14px; border: 1px solid var(--border-soft); background: var(--panel); }
+.co-detail-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.co-detail-head p, .co-kicker { margin: 0; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.co-detail-head h3, .co-site h3 { margin: 2px 0; color: var(--text); font: 600 18px "Segoe UI", sans-serif; text-wrap: balance; }
+.co-detail-head span, .co-site > span { color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.co-head-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.co-meter { display: grid; gap: 5px; }
+.co-meter > span { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; font-variant-numeric: tabular-nums; }
+
+/* Needs tables. */
+.co-needs, .co-sites { width: 100%; border-collapse: collapse; font: 11px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.co-needs th, .co-sites th { padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .12em; text-align: left; }
+.co-needs td, .co-sites td { padding: 5px 8px; border-bottom: 1px solid var(--border-soft); color: var(--text); }
+.co-needs .num { text-align: right; white-space: nowrap; }
+.co-needs th:nth-child(n+2):nth-child(-n+4) { text-align: right; }
+.co-needs .fc { color: var(--accent); }
+.co-needs tr.covered td { color: var(--muted); }
+.co-needs tr.covered td.num:last-of-type, .co-needs tr.covered td:first-child { color: var(--green); }
+.co-group th { padding-top: 10px; border-bottom: 0; color: var(--accent); }
+.co-pin { margin-right: 6px; color: var(--orange); font-style: normal; }
+.co-pin.others { color: var(--muted); }
+.co-assign { text-align: right; white-space: nowrap; color: var(--dim); font-size: 10px; }
+#colonisation-workspace .co-assign button.cockpit-button { min-height: 22px; padding: 0 8px; font-size: 9px; }
+
+.co-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.co-columns h4, .co-site h4 { margin: 0 0 6px; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.co-people { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.co-people li { display: grid; gap: 1px; padding: 6px 9px; border: 1px solid var(--border-soft); background: var(--inset); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.co-people li.me { border-color: color-mix(in srgb, var(--orange) 55%, var(--border-soft)); }
+.co-people small { color: var(--dim); font: 10px Consolas, monospace; }
+.co-inline { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.co-inline select, .co-inline input { flex: 1 1 180px; }
+
+/* Forms. */
+.co-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 12px; }
+.co-form label { display: grid; gap: 5px; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.co-form label > span { text-transform: uppercase; }
+.co-form .wide, .co-form .co-form-actions, .co-form table { grid-column: 1 / -1; }
+.co-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.co-form-actions small { color: var(--dim); font: 10px Consolas, monospace; }
+.co-form .co-check { display: flex; align-items: center; gap: 8px; align-self: end; height: 32px; }
+.co-form .co-check input { width: 16px; height: 16px; }
+
+/* This site. */
+.co-site { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--border-soft); background: var(--panel); }
+.co-site > p { margin: 0; color: var(--text); font: 12px/1.5 "Segoe UI", sans-serif; }
+.co-site > p.co-good { color: var(--green); }
+.co-site > p.co-kicker { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.co-site > button { justify-self: start; }
+.co-needlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 14px; margin: 0; padding: 0; list-style: none; }
+.co-needlist li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border-soft); color: var(--text); font: 11px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+
+/* Fleet carriers. */
+.co-carriers { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.co-carrier { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border-soft); background: var(--panel); }
+.co-carrier header { display: flex; align-items: baseline; gap: 10px; }
+.co-carrier header b { color: var(--text); font: 600 14px "Segoe UI", sans-serif; }
+.co-carrier header span { flex: 1; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .1em; }
+.co-carrier p { margin: 0; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.co-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.co-chips li { padding: 3px 8px; border: 1px solid var(--border-soft); background: var(--inset); color: var(--text); font: 10px "Segoe UI", sans-serif; }
+.co-chips b { margin-left: 4px; color: var(--accent); font: 700 10px Consolas, monospace; }
+
+/* System sites. */
+.co-architect-load { margin-top: 0; }
+.co-architect-load input { flex: 0 1 360px; }
+.co-architect { padding: 14px; border: 1px solid var(--border-soft); background: var(--panel); }
+.co-architect table { display: block; overflow-x: auto; }
+.co-sites td input, .co-sites td select { width: 100%; height: 28px; }
+.co-sites td:last-child { width: 1%; white-space: nowrap; }
+
+/* Journal. */
+.co-journal { display: grid; gap: 6px; }
+.co-local { border: 1px solid var(--border-soft); background: var(--panel); }
+.co-local summary {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(80px, 1fr) auto; align-items: center; gap: 12px;
+  padding: 10px 12px; cursor: pointer; list-style: none;
+}
+.co-local summary::-webkit-details-marker { display: none; }
+.co-local summary b { overflow: hidden; color: var(--text); font: 600 12px "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.co-local summary span { overflow: hidden; color: var(--dim); font: 10px Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.co-local summary small { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; font-variant-numeric: tabular-nums; }
+.co-local.done summary small { color: var(--green); }
+.co-local[open] summary { border-bottom: 1px solid var(--border-soft); }
+.co-local > table { margin: 6px 0; }
+.co-activity { display: grid; gap: 2px; margin: 0; padding: 8px 12px 12px; list-style: none; color: var(--dim); font: 10px/1.5 Consolas, monospace; }
+.co-activity b { color: var(--accent); }
+@container (max-width: 640px) {
+  .co-local summary { grid-template-columns: minmax(0, 1fr) auto; }
+  .co-local summary .co-bar { grid-column: 1 / -1; }
+}

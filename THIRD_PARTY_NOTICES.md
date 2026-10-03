@@ -142,3 +142,18 @@ GNU General Public License version 3.
 Copyright (C) 2005-2024 Joe Wreschnig, Michael Urman, Lukáš Lalinský,
 Christoph Reiter, Ben Ockmore and contributors.
 
+
+## SrvSurvey colonisation data and design
+
+The v5.5.2 Colonisation tab follows the colonisation features of
+[SrvSurvey](https://github.com/njthomson/SrvSurvey) by njthomson,
+released under the GNU General Public License v3.0, the same
+licence as VoidCompass. `data/colonisation/build_costs.json` (the build types
+and the cargo each takes) and `data/colonisation/commodities.json` (commodity
+names and market categories) are generated from SrvSurvey's
+`colonization-costs2.json` and commodity resources by
+`tools/vendor_colonisation_data.py`. VoidCompass's colonisation code is its own
+Python and HTML implementation of the same features, including the
+[Raven Colonial](https://ravencolonial.com) API client.
+
+Copyright © SrvSurvey contributors. Licence: <https://www.gnu.org/licenses/gpl-3.0.html>

@@ -61,6 +61,8 @@ data/*
 !data/engineering_companion/**
 !data/build_planner/
 !data/build_planner/**
+!data/colonisation/
+!data/colonisation/**
 version_info.txt
 .claude/
 

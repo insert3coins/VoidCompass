@@ -31,6 +31,7 @@ from voidcompass.overlays.music_player_hud import (
     MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_VISUALIZERS, music_overlay_options,
 )
 from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
+from voidcompass.colonisation.views import overlay_options as colony_overlay_options
 
 
 
@@ -347,6 +348,8 @@ class HtmlOverlayStudioMixin:
                 "station_info_timeout_s": _integer(self.config.get("station_info_timeout_s"), 30),
                 "contact_scope_timeout_s": _integer(self.config.get("contact_scope_timeout_s"), 45),
                 "jump_info_linger_s": linger_seconds(self.config),
+                **colony_overlay_options(self.config),
+                "colony_show_on_right_panel": bool(self.config.get("colony_show_on_right_panel", True)),
                 "heartbeat_orb_size": orb_size(self.config),
                 **{f"galnet_ticker_{key}": value for key, value in ticker_options(self.config).items()},
                 **{f"music_player_{key}": value for key, value in music_overlay_options(self.config).items()},
@@ -506,6 +509,8 @@ class HtmlOverlayStudioMixin:
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps",
+            "colony_show_carriers", "colony_carrier_delta", "colony_collapse_covered",
+            "colony_highlight_almost", "colony_show_on_right_panel",
         }
         key = _text(key, 80)
         if key not in allowed:
@@ -539,6 +544,10 @@ class HtmlOverlayStudioMixin:
             ticker = getattr(self, "galnet_ticker_hud", None)
             if ticker is not None:
                 ticker.apply_settings()
+        elif key.startswith("colony_"):
+            update_colony = getattr(self, "_colony_update_overlay", None)
+            if callable(update_colony):
+                update_colony()
         elif key in {"survey_status_show_all_bodies", "survey_codex_flags"}:
             survey = getattr(self, "survey_status_hud", None)
             if survey is not None:

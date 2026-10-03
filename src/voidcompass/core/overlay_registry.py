@@ -49,6 +49,9 @@ OVERLAY_SPECS = (
     OverlaySpec("contact_scope_hud", "contact-scope", "Void Compass Deep Space Contacts", "contact_scope_overlay_enabled", "contact_scope_hud_x", "contact_scope_hud_y", (1180, 250), (480, 270), "Deep Space Contact Scope", "CONTACTS", True, "contact_scope", "overlay_hotkey_contact_scope", "Deep Space Contacts"),
     # Shown only while the frame shift drive charges and in witch space.
     OverlaySpec("jump_info_hud", "jump-info", "Void Compass Jump Info", "jump_info_overlay_enabled", "jump_info_hud_x", "jump_info_hud_y", (680, 64), (560, 180), "Jump Info", "JUMP INFO", True, "jump_info", "overlay_hotkey_jump_info", "Jump Info"),
+    # Colonisation (5.5.2): at construction sites, in station services, or on
+    # the right-hand panel; after SrvSurvey's build commodities panel.
+    OverlaySpec("colony_needs_hud", "colony-needs", "Void Compass Construction Needs", "colony_needs_overlay_enabled", "colony_needs_hud_x", "colony_needs_hud_y", (1520, 120), (360, 320), "Construction Needs", "COLONY", True, "colony_needs", "overlay_hotkey_colony_needs", "Construction Needs"),
     OverlaySpec("ground_popup", "ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled", "ground_popup_x", "ground_popup_y", (1320, 160), (420, 208), "Planet Waypoint Navigation", "SURFACE NAV", True, "planet_waypoint", "overlay_hotkey_planet_waypoint", "Planet Waypoint Navigation"),
 )
 
@@ -79,6 +82,7 @@ OVERLAY_HOTKEY_SPECS = (
     _overlay_hotkey("navigation"),
     ("navigation_layout", "overlay_hotkey_navigation_layout", "Navigation HUD layout", None),
     _overlay_hotkey("jump_info"),
+    _overlay_hotkey("colony_needs"),
     _overlay_hotkey("survey"),
     _overlay_hotkey("contact_scope"),
     _overlay_hotkey("station_info"),
