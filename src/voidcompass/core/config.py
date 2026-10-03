@@ -424,6 +424,50 @@ def commander_profile_key(commander_name=None, fid=None):
     return base[:80]
 
 
+def resolve_commander_profile(config, commander_name=None, fid=None):
+    """The profile a journal's commander belongs to, and the name it had.
+
+    A commander is their Frontier ID: one renamed in game keeps the FID, so
+    they keep their profile (its folder is still named for the old name)
+    rather than starting an empty one. Returns ``(key, previous_name)``;
+    ``previous_name`` is set only when the commander has been renamed.
+    """
+    name = str(commander_name or "").strip()
+    fid_text = str(fid or "").strip().casefold()
+    profiles = (config or {}).get("commander_profiles") or {}
+    if fid_text:
+        matches = [(key, profile) for key, profile in profiles.items()
+                   if isinstance(profile, dict) and str(profile.get("fid") or "").strip().casefold() == fid_text]
+        if matches:
+            # The profile already under this name wins; else the one in use;
+            # else the first made.
+            exact = next(((key, profile) for key, profile in matches
+                          if str(profile.get("commander_name") or "").casefold() == name.casefold()), None)
+            active = next(((key, profile) for key, profile in matches
+                           if key == (config or {}).get("active_commander_profile")), None)
+            key, profile = exact or active or matches[0]
+            previous = str(profile.get("commander_name") or "")
+            renamed = bool(name and previous and previous.casefold() != name.casefold())
+            return key, (previous if renamed else None)
+    return commander_profile_key(name or "Unknown Commander", fid), None
+
+
+def rename_commander_profile(config, key, new_name, previous_name):
+    """Carry a renamed commander's profile over to the new name."""
+    profile = config.setdefault("commander_profiles", {}).setdefault(key, {})
+    profile["commander_name"] = new_name
+    for setting in ("edsm_cmdr_name",):
+        current = str(profile.get(setting) or "")
+        if not current or current.casefold() == str(previous_name or "").casefold():
+            profile[setting] = new_name
+            if config.get("active_commander_profile") == key:
+                config[setting] = new_name
+    renames = profile.setdefault("previous_names", [])
+    if previous_name and previous_name not in renames:
+        renames.append(previous_name)
+    return profile
+
+
 def get_profile_dir(profile_key):
     key = commander_profile_key(profile_key or "Unknown Commander")
     path = os.path.abspath(os.path.join(PROFILE_DIR, key))

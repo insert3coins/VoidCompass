@@ -279,9 +279,10 @@ class CaptainsLog:
             raw.get("Commander") or raw.get("Name") or raw.get("commander") or raw.get("name") or ""
         ).strip().casefold()
         actual_fid = str(raw.get("FID") or raw.get("fid") or "").strip().casefold()
+        if expected_fid and actual_fid:
+            # A commander renamed in game keeps their Frontier ID.
+            return actual_fid == expected_fid
         if expected_name and actual_name != expected_name:
-            return False
-        if expected_fid and actual_fid and actual_fid != expected_fid:
             return False
         return bool(actual_name or actual_fid)
 

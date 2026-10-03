@@ -18,6 +18,7 @@ from voidcompass.core.config import (
     load_config, CONFIG_FILE,
     COLOR_BG, COLOR_ACCENT, COLOR_TEXT,
     apply_profile_config, commander_profile_key, get_active_profile,
+    rename_commander_profile, resolve_commander_profile,
     get_profile_dir, get_profile_file, save_config, save_active_profile_config,
 )
 from voidcompass.core import themes
@@ -883,7 +884,11 @@ class MainDashboard(
         if detected:
             name = detected.get("commander") or "Unknown Commander"
             fid = detected.get("fid") or ""
-            key = commander_profile_key(name, fid)
+            key, previous = resolve_commander_profile(self.config, name, fid)
+            if previous:
+                # Renamed in game since the last run: same commander.
+                rename_commander_profile(self.config, key, name, previous)
+                logging.info("Commander renamed: %s -> %s (profile %s)", previous, name, key)
             profiles = self.config.setdefault("commander_profiles", {})
             profile = profiles.setdefault(key, {})
             profile["commander_name"] = name
@@ -1804,11 +1809,22 @@ class MainDashboard(
     def _switch_commander_profile(self, commander_name, fid=None):
         if not commander_name:
             return
-        new_key = commander_profile_key(commander_name, fid)
+        new_key, previous_name = resolve_commander_profile(self.config, commander_name, fid)
         old_key = get_active_profile(self.config)
+        if previous_name:
+            # Renamed in game: the same commander (by Frontier ID) keeps
+            # their profile, history and settings under the new name.
+            rename_commander_profile(self.config, new_key, commander_name, previous_name)
+            if new_key == old_key:
+                self.add_event_feed_entry(
+                    "SYSTEM", f"Commander renamed: {previous_name} is now {commander_name}", severity="INFO",
+                )
         if new_key == old_key:
             self.config["active_commander_name"] = commander_name
             self.config["active_commander_fid"] = fid or self.config.get("active_commander_fid", "")
+            self.cmdr_name = commander_name
+            if fid:
+                self.cmdr_fid = fid
             save_active_profile_config(self.config)
             try:
                 if hasattr(self, "summary_cmdr"):
