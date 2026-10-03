@@ -49,6 +49,7 @@ from voidcompass.overlays.galnet_ticker_hud import GalnetTickerHUD
 from voidcompass.overlays.music_player_hud import MusicPlayerHUD
 from voidcompass.overlays.contact_scope_hud import ContactScopeHUD
 from voidcompass.overlays.jump_info_hud import JumpInfoHUD
+from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.exploration.codex_index import CodexIndex
 from voidcompass.overlays.html_survey_overlay import attach_html_survey_overlay
 from voidcompass.overlays.html_toast_overlay import attach_html_toast_overlay
@@ -66,12 +67,14 @@ from voidcompass.overlays.html_galnet_ticker_overlay import attach_html_galnet_t
 from voidcompass.overlays.html_music_overlay import attach_html_music_overlay
 from voidcompass.overlays.html_contact_overlay import attach_html_contact_overlay
 from voidcompass.overlays.html_jump_info_overlay import attach_html_jump_info_overlay
+from voidcompass.overlays.html_colony_needs_overlay import attach_html_colony_needs_overlay
 from voidcompass.core.runtime_trace import RuntimeTrace
 from voidcompass.dashboard.dashboard_db_mixin import DashboardDBMixin
 from voidcompass.dashboard.dashboard_core_mixin import DashboardCoreMixin
 from voidcompass.dashboard.dashboard_scan_mixin import DashboardScanMixin
 from voidcompass.dashboard.dashboard_exploration_mixin import DashboardExplorationMixin
 from voidcompass.dashboard.dashboard_jump_info_mixin import DashboardJumpInfoMixin
+from voidcompass.dashboard.dashboard_colonisation_mixin import DashboardColonisationMixin
 from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
 from voidcompass.core.field_state import (
     get_material_category, load_colonisation_data, load_engineer_materials,
@@ -248,6 +251,7 @@ class MainDashboard(
     DashboardScanMixin,
     DashboardExplorationMixin,
     DashboardJumpInfoMixin,
+    DashboardColonisationMixin,
     DashboardCoreMixin,
     DashboardDBMixin,
 ):
@@ -929,6 +933,7 @@ class MainDashboard(
             "music_player_hud",
             "contact_scope_hud",
             "jump_info_hud",
+            "colony_needs_hud",
         ):
             overlay = getattr(self, attr, None)
             apply_overlay_theme = getattr(overlay, "apply_theme", None)
@@ -1014,7 +1019,7 @@ class MainDashboard(
             "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "rhino_minimap_hud", "powerplay_hud",
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud",
-            "music_player_hud", "contact_scope_hud", "jump_info_hud",
+            "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -1901,6 +1906,7 @@ class MainDashboard(
         if getattr(self, "codex_index", None):
             self.codex_index.flush(wait=False)
         self.codex_index = CodexIndex(get_profile_file(new_key, "codex_index.json"))
+        self._colony_switch_profile(new_key)
         if getattr(self, "expedition_manager", None):
             self.expedition_manager.flush(wait=False)
         self.expedition_manager = ExpeditionManager(
@@ -2036,6 +2042,7 @@ class MainDashboard(
         self.codex_index = CodexIndex(
             get_profile_file(get_active_profile(self.config), "codex_index.json")
         )
+        self._colony_init()
         self.rhino_minimap = RhinoMinimapTracker(
             get_profile_file(get_active_profile(self.config), "rhino_minimap.json.gz")
         )
@@ -2529,6 +2536,11 @@ class MainDashboard(
         else:
             self.jump_info_hud = None
 
+        if self._overlay_enabled("colony_needs_hud"):
+            self.colony_needs_hud = ColonyNeedsHUD(self.root, self.config)
+        else:
+            self.colony_needs_hud = None
+
         # Before the overlays register, so they open faded and capped.
         self._apply_overlay_server_settings()
         self._attach_html_overlay_renderers()
@@ -2607,6 +2619,8 @@ class MainDashboard(
         # replay begins reducing the recent live tail.
         self.root.call_later(75, self.watcher.start)
         self._start_eddn_market_upload()
+        # Raven Colonial projects (only with a key and sync on).
+        self._colony_refresh()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
         latest_fuel_capacity = self.watcher.get_latest_fuel_capacity()
         if latest_fuel_capacity > 0:
@@ -3820,10 +3834,13 @@ class MainDashboard(
         galnet_feed = getattr(self, "galnet_feed", None)
         if galnet_feed is not None:
             galnet_feed.request_stop()
+        raven_worker = getattr(self, "raven_worker", None)
+        if raven_worker is not None:
+            raven_worker.shutdown()
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
-            "jump_info_hud",
+            "jump_info_hud", "colony_needs_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
             try:
@@ -4797,6 +4814,14 @@ class MainDashboard(
             self.jump_info_hud.destroy()
             self.jump_info_hud = None
 
+        if self._overlay_enabled("colony_needs_hud"):
+            if getattr(self, "colony_needs_hud", None) is None:
+                self.colony_needs_hud = ColonyNeedsHUD(self.root, self.config)
+                self._colony_update_overlay()
+        elif getattr(self, "colony_needs_hud", None):
+            self.colony_needs_hud.destroy()
+            self.colony_needs_hud = None
+
         self._attach_html_overlay_renderers()
         self._apply_html_overlay_renderer()
 
@@ -4877,6 +4902,10 @@ class MainDashboard(
                 )
             elif attr == "jump_info_hud":
                 attach_html_jump_info_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "colony_needs_hud":
+                attach_html_colony_needs_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             else:
@@ -7668,6 +7697,8 @@ class MainDashboard(
                     self._refresh_exploration_window()
             except Exception as exc:
                 logging.debug("Deep Survey event skipped [%s]: %s", ev, exc)
+        # Colonisation: construction sites, deliveries, fleet carrier cargo.
+        self._colony_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
         if getattr(self, "codex_index", None) and ev == "CodexEntry" and isinstance(raw, dict):
             try:
                 if self.codex_index.observe(raw) and not startup_replay:
@@ -9103,6 +9134,7 @@ class MainDashboard(
                     "market_id":    mid,
                     "system_name":  d.get("system_name") or _existing.get("system_name") or self.current_sys or "",
                     "body_name":    d.get("body_name") or _existing.get("body_name") or "",
+                    "site_name":    _existing.get("site_name") or self._colony_site_name(mid),
                     "progress":     d.get("progress", 0.0),
                     "complete":     d.get("complete", False),
                     "failed":       d.get("failed", False),
@@ -10430,6 +10462,7 @@ class MainDashboard(
             logging.debug("Specialist cargo snapshot skipped: %s", exc)
         self.current_cargo_tons = self._cargo_inventory_total(self.current_cargo_inventory)
         self._refresh_cargo_consumers()
+        self._colony_on_cargo_file()
         self._refresh_html_workspace()
         return True
 
@@ -10451,6 +10484,7 @@ class MainDashboard(
     def update_market(self, data):
         if not isinstance(data, dict):
             return
+        self._colony_on_market_file(data)
         context = self._eddn_market_context(data)
         if not context.get("docked"):
             return

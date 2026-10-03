@@ -78,6 +78,7 @@ from voidcompass.dashboard.html_workspace_support import (
 from voidcompass.dashboard.html_explore_workspace import HtmlExploreWorkspaceMixin
 from voidcompass.dashboard.html_music import HtmlMusicMixin
 from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
+from voidcompass.dashboard.html_colonisation import HtmlColonisationMixin
 
 
 PROJECT_URL = "https://github.com/insert3coins/VoidCompass"
@@ -102,6 +103,7 @@ _CORE_RANKS = {
 _HTML_WORKSPACE_PAGES = {
     "planet-materials", "explore", "profile", "analytics", "chronicle", "mission", "ground", "mining",
     "engineering", "build-planner", "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
+    "colonisation",
 }
 
 
@@ -152,7 +154,7 @@ def _local_departure_timestamp(value):
     return int(time.mktime(parsed.timetuple()))
 
 
-class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin):
+class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin):
     """Publish exploration state and accept private dashboard commands."""
 
     def start_html_dashboard_bridge(self):
@@ -2017,6 +2019,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "reduced_motion_enabled",
             "overlay_hotkeys_enabled",
             "edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled",
+            "raven_api_key", "raven_sync_enabled", "raven_share_ship_cargo",
             "eddn_market_upload_enabled", "carrier_discord_webhook_url",
             "runtime_trace_enabled", "crash_reporting_enabled",
             "recovery_safe_mode_enabled", "edsm_backfill_on_cache_rebuild",
@@ -2032,6 +2035,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             ("low_fuel_threshold_pct", 0.25),
             ("auto_copy_waypoint", False), ("achievement_notifications_enabled", True),
             ("adaptive_command_enabled", True),
+            ("raven_sync_enabled", True), ("raven_share_ship_cargo", False),
         ):
             if values.get(key) is None:
                 values[key] = default
@@ -2521,6 +2525,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "achievements": self._html_achievements_workspace,
             "ledger": self._html_ledger_workspace,
             "settings": self._html_settings_workspace,
+            "colonisation": self._html_colonisation_workspace,
         }
         builder = builders.get(page)
         if builder is None:
@@ -2839,6 +2844,11 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
 
         if operation == "copy":
             return self._html_copy_text(_text(payload.get("text"), 20000))
+
+        if page == "colonisation":
+            result = self._handle_colonisation_command(operation, payload)
+            self._schedule_html_dashboard_publish(immediate=True)
+            return result
 
         if page == "planet-materials":
             if payload.get("profile_key") != get_active_profile(self.config):
@@ -4035,6 +4045,30 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 self._persist_config()
                 self._apply_active_profile_theme()
                 changed = True
+            elif operation == "test_raven":
+                # Raven Colonial: whose key is this, and is it this commander's?
+                api_key = _text(payload.get("api_key"), 300)
+                tool = self._html_profile_transient("_html_settings_tool_state", {})
+                tool.update({"status": "working", "detail": "Checking the Raven Colonial key…"})
+                self._schedule_html_dashboard_publish(immediate=True)
+                cmdr = str(getattr(self, "cmdr_name", "") or "")
+
+                def checked(found):
+                    if not found:
+                        tool.update({"status": "failed", "detail": "Raven Colonial did not recognise that key."})
+                    elif found.casefold() == cmdr.casefold():
+                        tool.update({"status": "ready", "detail": f"Raven Colonial key belongs to {found}: this commander."})
+                        self._colony_refresh()
+                    else:
+                        tool.update({"status": "failed", "detail": f"That key belongs to {found}, not {cmdr or 'this commander'}."})
+                    self._schedule_html_dashboard_publish(immediate=True)
+
+                def worker():
+                    found = self.raven.commander_for_key(api_key) if api_key else None
+                    self._ui_post(checked, found, key="raven-key-test")
+
+                threading.Thread(target=worker, name="RavenKeyTest", daemon=True).start()
+                return True
             elif operation in {"test_edsm", "test_discord"}:
                 profile = get_active_profile(self.config)
                 generation = time.time_ns()
@@ -4120,6 +4154,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                     "overlay_hotkeys_enabled": bool,
                     "edsm_cmdr_name": str,
                     "edsm_api_key": str, "edsm_upload_enabled": bool,
+                    "raven_api_key": str, "raven_sync_enabled": bool,
+                    "raven_share_ship_cargo": bool,
                     "eddn_market_upload_enabled": bool,
                     "carrier_discord_webhook_url": str,
                     "runtime_trace_enabled": bool, "crash_reporting_enabled": bool,
@@ -4179,6 +4215,12 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 self.config.update(updates)
                 self._persist_config()
                 self._apply_settings_changes(changed_keys)
+                if {"raven_api_key", "raven_sync_enabled"} & changed_keys:
+                    # Colonisation: a new key or sync switch takes effect now.
+                    raven = getattr(self, "raven", None)
+                    if raven is not None:
+                        raven.set_api_key(self.config.get("raven_api_key"))
+                    self._colony_refresh()
                 self._html_settings_last_save = {"id": save_id, "ok": True, "detail": ""}
                 changed = True
             elif operation == "rebuild_cache":

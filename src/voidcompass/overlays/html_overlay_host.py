@@ -688,6 +688,8 @@ class _OverlayHost:
             path = "/contact_scope/index.html"
         elif template == "jump_info":
             path = "/jump_info/index.html"
+        elif template == "colony_needs":
+            path = "/colony_needs/index.html"
         elif template == "planet-materials-overlay":
             path = "/planet-materials-overlay/index.html"
         elif template == "powerplay-overlay":

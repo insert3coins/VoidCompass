@@ -1,12 +1,20 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.1.9 // Overlay corner fix - the hard bug, found finally
+## v5.5.2 // Colonisation - The First Installment
 **Release Date:** 2026-Oct-03
 
-* Fixed grey blocks at the corners of most overlays, and between stacked notifications, when overlay **OPACITY** was below 100%. Windows showed each overlay window's own grey background wherever the overlay is see-through (its cut corners, the gaps between notifications) once the window had been resized. That background is now a colour Windows treats as see-through, so the corners stay clear while the fade still works. The Navigation HUD and Jump Info, which have no see-through corners, were never affected.
+* New **Colonisation** tab on the main menu:
+  * **Projects**: every construction project you are part of, with progress, what is still needed (grouped by category), what your linked fleet carriers and your ship already hold, who is assigned to what, and trips left in your current ship. Make a project your primary, hide it from the overlay, join or leave it, assign yourself commodities, edit its name, architect, faction and notes, or mark it complete.
+  * **This Site**: docked at a construction site, create its project on Raven Colonial (the build type is suggested from what the site needs, and you can pick the body and the system plan it fulfils), or join the project another commander already made. Docked at your fleet carrier, link it so its cargo counts toward your projects.
+  * **Fleet Carriers**: your linked carriers and the construction cargo aboard each, kept in step as you buy, sell and transfer.
+  * **System Sites**: load a system's planned, building and finished sites from Raven Colonial, import its bodies, then add, edit or remove sites and save them back.
+  * **Journal**: every construction depot your journal has seen, with what was required and delivered, even without Raven Colonial.
+* New **Construction Needs** overlay: what a project still needs, against what your ship and carriers hold, with remaining cargo and trips. It shows at a construction site, in station services when you have projects (or at a squadron bank), and with the ship's right-hand panel. Overlay Studio sets the carrier column, carrier difference, folding covered groups, flagging nearly-done needs and the right-panel option.
+* **Raven Colonial** in Settings > Integrations: your API key with a CHECK KEY button that confirms it belongs to this commander, a sync switch, and an option to share your ship's cargo with your team. With a key set and sync on, deliveries, depot updates, completions, fleet carrier cargo and system architects are sent as they happen. Nothing is sent without a key, with sync off, or while your journal is read at startup.
 
 ## Earlier releases
 
+* **v5.5.1.9** — Fixed grey blocks at the corners of most overlays, and between stacked notifications, when overlay opacity was below 100%.
 * **v5.5.1.8** — Jump Info redesigned to match the Navigation HUD (and its body counts removed), its corner blocks fixed, and overlay opacity and frame rate now applied straight after a restart.
 * **v5.5.1.7** — Overlay opacity now fades each overlay window through Windows itself, so it works on every graphics card.
 * **v5.5.1.6** — Overlay switches in the command deck header, Codex flags for Survey Operations, and a fix for finished system surveys showing one body still to go.

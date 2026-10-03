@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Construction Needs</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <!-- Construction Needs (5.5.2), after SrvSurvey's build commodities panel,
+       in the Navigation HUD's language. -->
+  <main id="needs" class="needs empty">
+    <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="scanlines"></div><div class="vignette"></div>
+    <div id="content" class="content">
+      <header class="notice">
+        <span id="needs-tag" class="notice-tag">BUILD</span>
+        <strong id="needs-title">CONSTRUCTION</strong>
+      </header>
+      <div id="needs-sub" class="needs-sub" hidden></div>
+      <ul id="needs-projects" class="needs-projects" hidden></ul>
+      <div id="needs-warnings" class="needs-warnings"></div>
+      <div id="needs-complete" class="needs-complete" hidden>✓ CONSTRUCTION COMPLETE</div>
+      <section id="needs-table" class="needs-table">
+        <div class="needs-head"><span>COMMODITY</span><span id="head-need">NEED</span><span id="head-fc">FC</span><span id="head-ship">SHIP</span></div>
+        <div id="needs-rows"></div>
+      </section>
+      <footer id="needs-footer" class="needs-footer"></footer>
+    </div>
+  </main>
+  <script src="/assets/frame-cap.js"></script>
+  <script src="/assets/overlay-layout.js"></script>
+  <script src="/assets/overlay-client.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

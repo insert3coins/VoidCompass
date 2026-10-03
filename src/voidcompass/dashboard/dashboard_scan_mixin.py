@@ -827,6 +827,10 @@ class DashboardScanMixin:
             self.fss_summary_active = not in_fss
         if gui_focus_changed:
             self._apply_map_overlay_hiding()
+            # Construction Needs shows in station services and on the right panel.
+            update_colony = getattr(self, "_colony_update_overlay", None)
+            if callable(update_colony):
+                update_colony()
         if (gui_focus_changed or fss_changed) and not self.batch_mode:
             self.update_hud()
         if fss_changed and not self.batch_mode:

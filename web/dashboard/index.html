@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="music.css">
   <link rel="stylesheet" href="powerplay.css">
   <link rel="stylesheet" href="workshop.css">
+  <link rel="stylesheet" href="colonisation.css">
   <link rel="stylesheet" href="setup.css">
   <link rel="stylesheet" href="focused-log.css">
   <link rel="stylesheet" href="boot.css">
@@ -245,13 +246,14 @@
         <button class="nav-item" data-page="mining" aria-label="Mining Command" title="Mining Command"><i>◆</i><span>Mining Command</span><b>07</b></button>
         <button class="nav-item" data-page="build-planner" aria-label="Ship Workshop" title="Ship Workshop"><i>▤</i><span>Ship Workshop</span><b>08</b></button>
         <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>09</b></button>
-        <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>10</b></button>
+        <button class="nav-item" data-page="colonisation" aria-label="Colonisation" title="Colonisation"><i>⬢</i><span>Colonisation</span><b>10</b></button>
+        <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>11</b></button>
         <p>COCKPIT</p>
-        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>11</b></button>
+        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>12</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>12</b></button>
-        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>13</b></button>
-        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>14</b></button>
+        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>13</b></button>
+        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>14</b></button>
+        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>15</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -515,6 +517,11 @@
           <div id="build-planner-workspace" class="workspace-shell loading-panel">Loading the shipyard catalogue…</div>
         </section>
 
+        <section class="page specialist-page colonisation-page" data-page-name="colonisation">
+          <header class="page-title"><div><p>COLONISATION</p><h2>Construction projects</h2><span>Every project you build, the site you are docked at, your fleet carriers and system plans, shared through Raven Colonial</span></div><div class="title-actions"><button data-ws-page="colonisation" data-ws-op="refresh">SYNC NOW</button><button data-ws-page="colonisation" data-ws-op="open_raven">RAVEN COLONIAL</button></div></header>
+          <div id="colonisation-workspace" class="workspace-shell loading-panel">Opening colonisation…</div>
+        </section>
+
         <section class="page specialist-page" data-page-name="powerplay">
           <header class="page-title"><div><p>GALACTIC POWERS</p><h2>Powerplay Operations</h2><span>Your pledge, the weekly cycle, every Powerplay system you fly through, and the ledgers, all from the journal</span></div><div class="title-actions"><button data-page="overview">COMMAND DECK</button></div></header>
           <div id="powerplay-workspace" class="workspace-shell loading-panel">Synchronising Powerplay operations…</div>
@@ -700,6 +707,14 @@
                   <section data-studio-settings="jump_info_hud">
                     <h4>JUMP INFO</h4>
                     <label class="studio-field"><span>After arrival<small>It shows while the drive charges and in witch space</small></span><select id="studio-jump-linger" data-studio-setting="jump_info_linger_s"><option value="0">Hide at once</option><option value="5">5 SEC</option><option value="10">10 SEC</option><option value="20">20 SEC</option><option value="30">30 SEC</option></select></label>
+                  </section>
+                  <section data-studio-settings="colony_needs_hud">
+                    <h4>CONSTRUCTION NEEDS</h4>
+                    <label class="studio-switch"><span><b>Fleet carrier column</b><small>What your linked carriers hold toward each need.</small></span><input type="checkbox" data-overlay-option="colony_show_carriers"><i></i></label>
+                    <label class="studio-switch"><span><b>Carrier difference</b><small>Show carrier stock minus the need, not the stock.</small></span><input type="checkbox" data-overlay-option="colony_carrier_delta"><i></i></label>
+                    <label class="studio-switch"><span><b>Fold covered groups</b><small>A group your ship and carriers already cover shows as one line.</small></span><input type="checkbox" data-overlay-option="colony_collapse_covered"><i></i></label>
+                    <label class="studio-switch"><span><b>Flag nearly done</b><small>Mark needs one trip or less from finished.</small></span><input type="checkbox" data-overlay-option="colony_highlight_almost"><i></i></label>
+                    <label class="studio-switch"><span><b>Show on the right panel</b><small>Also open it with the ship's right-hand panel.</small></span><input type="checkbox" data-overlay-option="colony_show_on_right_panel"><i></i></label>
                   </section>
                   <section data-studio-settings="toast_hud">
                     <h4>COCKPIT NOTIFICATIONS</h4>
