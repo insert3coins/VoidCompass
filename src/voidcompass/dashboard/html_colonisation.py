@@ -544,8 +544,9 @@ class HtmlColonisationMixin(HtmlColonisationPlannerMixin):
     def _colony_carrier_display_name(self, callsign):
         """A carrier's name from what the journal heard (SrvSurvey's way):
         a ReceiveText from it, or its FSS signal."""
-        for signal in reversed(list(getattr(self, "deep_space_contacts", None) or ())):
-            name = str((signal or {}).get("name") or "")
+        ledger = getattr(self, "contact_ledger", None)
+        for name in reversed(ledger.names() if ledger is not None else []):
+            name = str(name or "")
             if name.endswith(callsign) and name != callsign:
                 return name[: -len(callsign)].strip(" |")
         return ""

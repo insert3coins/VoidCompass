@@ -110,9 +110,9 @@ with tempfile.TemporaryDirectory() as folder:
                 app.scan_items = [{'name':'Sol A 1','body_id':1,'planet_class':'Rocky body','landable':True,'bio_count':1}]
                 app.survey_status_hud.update('Sol', 1, 2, app.scan_items, {})
                 app.contact_scope_hud.resume(refresh=False)
-                app.deep_space_contact_system = 'Sol'
-                app.deep_space_contact_expected = 1
-                app.deep_space_contacts = [{'name':'Notable Stellar Phenomena'}]
+                app.contact_ledger.observe('Location', {'event':'Location','StarSystem':'Sol','SystemAddress':10477373803})
+                app.contact_ledger.observe('FSSSignalDiscovered', {'event':'FSSSignalDiscovered','SystemAddress':10477373803,
+                    'SignalName':'$Fixed_Event_Life_Cloud;','SignalName_Localised':'Notable stellar phenomena','SignalType':'Codex'})
                 app._refresh_contact_scope()
                 app.toast_hud.push('Overlay check', 'Notification visibility', duration_s=30)
                 app.on_planet = True

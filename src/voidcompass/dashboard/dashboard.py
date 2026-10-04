@@ -49,6 +49,7 @@ from voidcompass.overlays.heartbeat_hud import HeartbeatHUD
 from voidcompass.overlays.galnet_ticker_hud import GalnetTickerHUD
 from voidcompass.overlays.music_player_hud import MusicPlayerHUD
 from voidcompass.overlays.contact_scope_hud import ContactScopeHUD
+from voidcompass.exploration.contact_scope import ContactLedger
 from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.exploration.codex_index import CodexIndex
@@ -368,8 +369,6 @@ class MainDashboard(
         "current_cargo_scoop_deployed", "current_analysis_mode",
         "current_scooping_fuel",
         "current_destination", "current_destination_details",
-        "deep_space_contact_system", "deep_space_contact_expected",
-        "deep_space_contacts",
         "current_local_space_body_type", "current_local_space_name",
         "current_asteroid_field_kind",
         "neutron_boost_armed", "neutron_boost_value",
@@ -388,7 +387,6 @@ class MainDashboard(
         "current_cargo_inventory": 256,
         "nav_route_entries": 256,
         "bio_sample_points": 8,
-        "deep_space_contacts": 128,
     }
     _OVERLAY_POSITION_SPECS = OVERLAY_POSITION_SPECS
     _HTML_OVERLAY_SPECS = HTML_OVERLAY_SPECS
@@ -1176,9 +1174,7 @@ class MainDashboard(
         self.current_destination = None
         self.current_destination_details = {}
         self._navigation_target_status_seen = False
-        self.deep_space_contact_system = ""
-        self.deep_space_contact_expected = 0
-        self.deep_space_contacts = []
+        self.contact_ledger = ContactLedger()
         self.current_local_space_body_type = ""
         self.current_local_space_name = ""
         self.current_asteroid_field_kind = ""
@@ -1491,7 +1487,7 @@ class MainDashboard(
         )
 
     def _refresh_contact_scope(self, *, present=True):
-        """Publish non-body FSS contacts without duplicating survey bodies."""
+        """Publish the system's non-body signals (exploration.contact_scope)."""
         overlay = getattr(self, "contact_scope_hud", None)
         if overlay is None:
             return False
@@ -1499,49 +1495,8 @@ class MainDashboard(
             overlay.suppress()
             return False
         overlay.resume(refresh=False)
-        return overlay.update(
-            getattr(self, "deep_space_contact_system", "") or self.current_sys,
-            getattr(self, "deep_space_contact_expected", 0),
-            list(getattr(self, "deep_space_contacts", None) or ()),
-            present=present,
-        )
-
-    def _clear_deep_space_contacts(self, hide=True):
-        self.deep_space_contact_system = ""
-        self.deep_space_contact_expected = 0
-        self.deep_space_contacts = []
-        overlay = getattr(self, "contact_scope_hud", None)
-        if overlay is not None and hide:
-            overlay.clear()
-
-    def _record_deep_space_contact(self, raw, data):
-        """Deduplicate one journal-confirmed non-body contact for this system."""
-        raw = raw if isinstance(raw, dict) else {}
-        data = data if isinstance(data, dict) else {}
-        name = str(data.get("signal_name") or raw.get("SignalName_Localised")
-                   or raw.get("SignalName") or "Unidentified signal").strip()
-        signal_type = str(data.get("signal_type") or raw.get("USSType_Localised")
-                          or raw.get("USSType") or "").strip()
-        key = "|".join((name.casefold(), signal_type.casefold(),
-                        "station" if data.get("is_station") else "signal"))
-        remaining = data.get("time_remaining")
-        try:
-            expires_at = _journal_epoch(raw.get("timestamp"), time.time()) + float(remaining)
-        except (TypeError, ValueError):
-            expires_at = None
-        row = {
-            "key": key, "name": name, "type": signal_type,
-            "threat": data.get("threat_level"),
-            "is_station": bool(data.get("is_station")),
-            "faction": data.get("faction"), "expires_at": expires_at,
-        }
-        rows = [item for item in (getattr(self, "deep_space_contacts", None) or ())
-                if isinstance(item, dict) and item.get("key") != key]
-        rows.append(row)
-        self.deep_space_contacts = rows[-128:]
-        self.deep_space_contact_system = self.current_sys
-        if not self.batch_mode:
-            self._refresh_contact_scope()
+        ledger = getattr(self, "contact_ledger", None)
+        return overlay.update(ledger.model() if ledger is not None else None, present=present)
 
     def _dss_efficiency_snapshot(self):
         lifetime = self.config.get("dss_efficiency_stats")
@@ -2214,9 +2169,7 @@ class MainDashboard(
         self.current_destination = None
         self.current_destination_details = {}
         self._navigation_target_status_seen = False
-        self.deep_space_contact_system = ""
-        self.deep_space_contact_expected = 0
-        self.deep_space_contacts = []
+        self.contact_ledger = ContactLedger()
         self.current_local_space_body_type = ""
         self.current_local_space_name = ""
         self.current_asteroid_field_kind = ""
@@ -7722,6 +7675,11 @@ class MainDashboard(
                 logging.debug("Deep Survey event skipped [%s]: %s", ev, exc)
         # Colonisation: construction sites, deliveries, fleet carrier cargo.
         self._colony_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
+        # Deep Space Contacts: from the journal alone, signals held until
+        # their system's arrival (the game logs them just before it).
+        ledger = getattr(self, "contact_ledger", None)
+        if ledger is not None and isinstance(raw, dict) and ledger.observe(ev, raw) and not self.batch_mode:
+            self._refresh_contact_scope()
         if getattr(self, "codex_index", None) and ev == "CodexEntry" and isinstance(raw, dict):
             try:
                 if self.codex_index.observe(raw) and not startup_replay:
@@ -8245,8 +8203,6 @@ class MainDashboard(
                 cached_confirmed=getattr(self, "_cached_scan_total_confirmed", False),
             )
             outgoing_sys = self.current_sys if self.current_sys not in ("---", "Unknown", incoming_sys) else None
-            if incoming_sys != previous_current_sys:
-                self._clear_deep_space_contacts()
             traffic_before_reset = dict(self.system_traffic or {})
             preserve_startup_traffic = (
                 startup_replay
@@ -8746,16 +8702,6 @@ class MainDashboard(
             if d.get("system_name") and d.get("system_name") != self.current_sys:
                 return
             body_count = int(d.get("body_count") or 0)
-            try:
-                non_body_count = max(0, int(d.get("non_body_count") or 0))
-            except (TypeError, ValueError):
-                non_body_count = 0
-            if non_body_count:
-                self.deep_space_contact_system = self.current_sys
-                self.deep_space_contact_expected = max(
-                    int(getattr(self, "deep_space_contact_expected", 0) or 0),
-                    non_body_count,
-                )
             # Only advance total — never let a missing/zero BodyCount wipe a
             # value that load_system_from_db already restored from the DB.
             if body_count > 0:
@@ -8797,10 +8743,6 @@ class MainDashboard(
                 self._refresh_survey_status_progress()
                 self._refresh_contact_scope()
 
-        elif ev == "FSSSignalDiscovered":
-            if not self._matches_current_system_address(d):
-                return
-            self._record_deep_space_contact(raw, d)
 
         elif ev == "DiscoveryScan":
             if not self._matches_current_system_address(d):

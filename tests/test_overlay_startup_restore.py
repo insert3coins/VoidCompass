@@ -243,7 +243,7 @@ class RuntimeOverlayVisibilityTests(unittest.TestCase):
             (name, getattr(app,name).win) for name in ('survey_status_hud','contact_scope_hud')]
         try:
             app.survey_status_hud.update('Sol',1,2,[{'name':'Sol 1','body_id':1,'bio_count':1}],{})
-            app.contact_scope_hud.update('Sol',1,[{'name':'Test signal'}])
+            app.contact_scope_hud.update({'system':'Sol','named':1,'rows':[{'key':'a','kind':'signal','name':'Test signal'}]})
             for _, window in app._overlay_hotkey_window_items():
                 self.assertEqual(window.state(),'normal')
             loop._voidcompass_startup_splash = SimpleNamespace()

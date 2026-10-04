@@ -1,18 +1,16 @@
 (() => {
   "use strict";
+  // Deep Space Contacts (5.5.2.3): draws the model the journal-driven
+  // ContactLedger builds (src/voidcompass/exploration/contact_scope.py).
   const params = new URLSearchParams(location.search);
   const token = params.get("token") || "";
   const overlay = params.get("overlay") || "contact-scope";
   const dom = Object.fromEntries([
-    "scope", "counter", "system-name", "scope-state", "resolution-label",
-    "threat-summary", "progress-fill", "progress-pulse", "radar-blips",
-    "contact-summary", "contacts", "footer-state",
+    "scope", "content", "scope-tag", "system-name", "scope-count", "resolution", "resolution-text",
+    "resolution-aside", "resolution-fill", "groups", "rows", "more", "carriers", "carriers-count", "carriers-names",
   ].map((id) => [id, document.getElementById(id)]));
   let previousSystem = "";
-  let previousResolved = -1;
-  let previousComplete = false;
-  let previousRows = new Map();
-  let activityTimer = 0;
+  let previousKeys = new Set();
 
   const number = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
   function node(tag, className = "", text = "") {
@@ -22,195 +20,111 @@
     return element;
   }
 
-  function keyOf(row = {}) {
-    return String(row.key || row.name || "unidentified").trim().toLowerCase();
-  }
-
-  function kindClass(value) {
-    const key = String(value || "signal").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    return key || "signal";
-  }
-
-  function hash(value) {
-    let result = 2166136261;
-    for (const char of String(value || "")) {
-      result ^= char.charCodeAt(0);
-      result = Math.imul(result, 16777619);
-    }
-    return result >>> 0;
-  }
-
   function remaining(expiresAt) {
     const expiry = number(expiresAt);
-    if (!expiry) return {text:"", seconds:null, state:"stable"};
+    if (!expiry) return null;
     const seconds = Math.ceil(expiry - Date.now() / 1000);
-    if (seconds <= 0) return {text:"EXPIRED", seconds:0, state:"expired"};
-    const minutes = Math.floor(seconds / 60);
-    const rest = seconds % 60;
-    return {
-      text:`${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`,
-      seconds,
-      state:seconds <= 300 ? "urgent" : seconds <= 900 ? "aging" : "stable",
-    };
+    if (seconds <= 0) return {text: "", seconds: 0};
+    return {text: `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`, seconds};
   }
 
-  function updateTimers() {
-    for (const timer of dom.contacts.querySelectorAll("[data-expires]")) {
-      const state = remaining(timer.dataset.expires);
-      timer.textContent = state.text;
-      timer.className = `timer ${state.state}`;
-      const contact = timer.closest(".contact");
-      if (contact) {
-        contact.classList.toggle("expired", state.state === "expired");
-        contact.classList.toggle("expiring", state.state === "urgent");
+  function tickTimers() {
+    for (const timer of dom.rows.querySelectorAll("[data-expires]")) {
+      const left = remaining(timer.dataset.expires);
+      const row = timer.closest(".row");
+      if (!left || left.seconds <= 0) {
+        // Gone from the game: gone from here, before the next snapshot.
+        if (row) row.hidden = true;
+        continue;
       }
+      timer.textContent = left.text;
+      timer.classList.toggle("urgent", left.seconds <= 120);
     }
   }
 
-  function blip(row, index, isNew) {
-    const key = keyOf(row);
-    const seed = hash(key);
-    const angle = ((seed % 360) / 180) * Math.PI;
-    const radius = 17 + ((seed >>> 9) % 20);
-    const x = 50 + Math.cos(angle) * radius;
-    const y = 50 + Math.sin(angle) * radius * .72;
-    const tone = String(row.tone || "muted");
-    const threat = Math.max(0, Math.round(number(row.threat)));
-    const item = node("i", `radar-blip ${tone}${threat ? " hostile" : ""}${isNew ? " acquired" : ""}`);
-    item.style.setProperty("--x", `${x.toFixed(2)}%`);
-    item.style.setProperty("--y", `${y.toFixed(2)}%`);
-    item.style.setProperty("--delay", `${-((seed % 2200) / 1000).toFixed(2)}s`);
-    item.style.setProperty("--size", `${threat ? 5.5 : 4 + (index % 2)}px`);
-    item.appendChild(node("b"));
-    return item;
-  }
-
-  function contactRow(row, event = {}) {
-    const tone = String(row.tone || "muted");
-    const threat = Math.max(0, Math.round(number(row.threat)));
-    const expiry = remaining(row.expires_at);
-    const classes = [
-      "contact", tone, `kind-${kindClass(row.kind)}`,
-      threat ? "has-threat" : "",
-      event.fresh ? "acquired" : "",
-      event.threat ? "threat-changed" : "",
-      expiry.state === "expired" ? "expired" : "",
-      expiry.state === "urgent" ? "expiring" : "",
-    ].filter(Boolean).join(" ");
-    const item = node("article", classes);
-    item.dataset.key = keyOf(row);
-
-    const mark = node("i", "contact-mark");
-    mark.appendChild(node("i", "mark-ring"));
-    mark.appendChild(node("b", "mark-core"));
-    mark.appendChild(node("em", "mark-vector"));
-    item.appendChild(mark);
-
-    const copy = node("div", "contact-copy");
-    copy.appendChild(node("strong", "contact-name", row.name || "Unidentified signal"));
-    const detail = node("span", "contact-detail");
-    detail.appendChild(node("b", "contact-kind", row.kind || "SIGNAL"));
-    if (row.faction) detail.appendChild(node("span", "contact-faction", row.faction));
-    copy.appendChild(detail);
-    const trace = node("i", "signal-trace");
-    trace.appendChild(node("b"));
-    copy.appendChild(trace);
-    item.appendChild(copy);
-
-    const facts = node("div", "contact-facts");
-    if (threat) facts.appendChild(node("b", "threat", `THREAT ${threat}`));
-    else facts.appendChild(node("b", "classification", row.is_station ? "FIXED" : "CONTACT"));
-    if (expiry.text) {
-      const timer = node("span", `timer ${expiry.state}`, expiry.text);
+  function contactRow(row, fresh) {
+    const item = node("div", `row kind-${row.kind}${fresh ? " fresh" : ""}`);
+    item.appendChild(node("i", "mark"));
+    const name = node("span", "name", row.name || row.label);
+    if (number(row.count) > 1) name.appendChild(node("small", "count", `×${number(row.count)}`));
+    if (row.faction) name.appendChild(node("small", "", row.faction));
+    item.appendChild(name);
+    const side = node("span", "side");
+    if (number(row.threat) > 0) side.appendChild(node("b", "threat", `THREAT ${number(row.threat)}`));
+    const left = remaining(row.expires_at);
+    if (left) {
+      const timer = node("span", "timer", left.text);
       timer.dataset.expires = String(number(row.expires_at));
-      facts.appendChild(timer);
+      side.appendChild(timer);
     }
-    item.appendChild(facts);
+    side.appendChild(node("span", "", String(row.kind === "uss" ? "USS" : row.label || "").toUpperCase()));
+    item.appendChild(side);
     return item;
-  }
-
-  function activityClass(name) {
-    const names = ["event-resolution", "event-threat", "event-complete", "event-system"];
-    dom.scope.classList.remove(...names);
-    if (name) {
-      void dom.scope.offsetWidth;
-      dom.scope.classList.add(name);
-    }
-    window.clearTimeout(activityTimer);
-    activityTimer = window.setTimeout(() => dom.scope.classList.remove(...names), 1150);
   }
 
   function render(snapshot = {}) {
     VoidCompassOverlay.applyTheme(dom.scope, snapshot.theme || {}, snapshot.effects || {});
-    const model = snapshot.contacts || {};
-    const rows = Array.isArray(model.contacts) ? model.contacts : [];
-    const total = Math.max(number(model.total), number(model.resolved));
-    const resolved = Math.min(total, number(model.resolved));
-    const system = String(model.system || "SYSTEM").toUpperCase();
-    const complete = Boolean(model.complete);
-    const firstRender = previousResolved < 0;
-    const sameSystem = previousSystem === system;
-    const currentRows = new Map(rows.map((row) => [keyOf(row), row]));
-    const rowEvents = new Map();
-    let threatChanged = false;
-    if (!firstRender && sameSystem) {
-      for (const [key, row] of currentRows.entries()) {
-        const previous = previousRows.get(key);
-        const event = {
-          fresh: !previous,
-          threat: Boolean(previous && number(row.threat) !== number(previous.threat)),
-        };
-        if (event.fresh || event.threat) rowEvents.set(key, event);
-        threatChanged = threatChanged || event.threat
-          || Boolean(event.fresh && number(row.threat));
-      }
+    const model = snapshot.contacts || null;
+    dom.scope.classList.toggle("empty", !model);
+    dom.scope.classList.toggle("reduced-motion", Boolean((snapshot.effects || {}).reduced_motion));
+    if (!model) return;
+    const system = String(model.system || "").toUpperCase();
+    const rows = Array.isArray(model.rows) ? model.rows : [];
+    const threat = number(model.threat);
+    const honked = Boolean(model.honked);
+    const expected = number(model.expected);
+    const named = number(model.named);
+    const unresolved = number(model.unresolved);
+
+    dom.scope.classList.toggle("threat", threat > 0);
+    dom.scope.classList.toggle("resolved", honked && expected > 0 && unresolved === 0 && threat === 0);
+    dom["scope-tag"].textContent = threat > 0 ? `THREAT ${threat}` : "FSS";
+    dom["system-name"].textContent = system || "UNKNOWN SYSTEM";
+    dom["scope-count"].textContent = `${honked ? expected : named} SIGNAL${(honked ? expected : named) === 1 ? "" : "S"}`;
+
+    dom.resolution.classList.toggle("unhonked", !honked);
+    if (!honked) {
+      dom["resolution-text"].textContent = `${named} HEARD · HONK FOR THE FULL COUNT`;
+      dom["resolution-aside"].textContent = "";
+    } else if (!expected) {
+      dom["resolution-text"].textContent = "NO SIGNALS IN THIS SYSTEM";
+      dom["resolution-aside"].textContent = "";
+    } else {
+      dom["resolution-text"].textContent = unresolved
+        ? `${named} NAMED · ${unresolved} TO RESOLVE IN THE FSS`
+        : "EVERY SIGNAL NAMED";
+      dom["resolution-aside"].textContent = `${Math.min(named, expected)} / ${expected}`;
     }
+    dom["resolution-fill"].style.width = `${expected ? Math.min(100, named / expected * 100) : 0}%`;
 
-    const maxThreat = rows.reduce((highest, row) => Math.max(highest, number(row.threat)), 0);
-    const timed = rows.filter((row) => number(row.expires_at) > 0).length;
-    const unresolved = Math.max(0, total - resolved);
-    const percentage = total ? Math.min(100, resolved / total * 100) : 0;
-    dom.scope.classList.toggle("empty", !total);
-    dom.scope.classList.toggle("complete", complete);
-    dom.scope.dataset.threat = maxThreat > 0 ? "hostile" : "clear";
-    dom.counter.textContent = `${resolved} / ${total}`;
-    dom["system-name"].textContent = system;
-    dom["scope-state"].textContent = complete ? "CONTACT SET RESOLVED" : "PASSIVE FSS ACQUISITION";
-    dom["resolution-label"].textContent = complete ? "SCOPE RESOLVED" : `${Math.round(percentage)}% RESOLVED`;
-    dom["threat-summary"].textContent = maxThreat > 0 ? `MAX THREAT ${Math.round(maxThreat)}` : "FIELD CLEAR";
-    dom["progress-fill"].style.width = `${percentage}%`;
-    dom["progress-pulse"].style.left = `${Math.max(0, Math.min(100, percentage))}%`;
-    dom["contact-summary"].textContent = `${rows.length} CONTACT${rows.length === 1 ? "" : "S"}`;
-    dom["footer-state"].textContent = complete
-      ? `RESOLUTION COMPLETE${timed ? ` · ${timed} TIMED` : ""}`
-      : `${unresolved} UNRESOLVED${timed ? ` · ${timed} TIMED` : ""}`;
+    dom.groups.replaceChildren(...(model.groups || []).map((group) => {
+      const chip = node("span", `group kind-${group.kind}`);
+      chip.appendChild(node("b", "", group.count));
+      chip.append(String(group.name || ""));
+      return chip;
+    }));
 
-    dom.contacts.replaceChildren(...rows.map((row) => contactRow(row, rowEvents.get(keyOf(row)) || {})));
-    dom["radar-blips"].replaceChildren(...rows.map((row, index) => (
-      blip(row, index, Boolean(rowEvents.get(keyOf(row))?.fresh))
-    )));
-    updateTimers();
+    const sameSystem = system === previousSystem;
+    const keys = new Set(rows.map((row) => row.key));
+    dom.rows.replaceChildren(...rows.map((row) => contactRow(row, sameSystem && !previousKeys.has(row.key))));
+    dom.more.hidden = !number(model.more);
+    dom.more.textContent = number(model.more) ? `+ ${number(model.more)} MORE` : "";
 
-    if (!firstRender) {
-      if (!sameSystem) activityClass("event-system");
-      else if (complete && !previousComplete) activityClass("event-complete");
-      else if (threatChanged) activityClass("event-threat");
-      else if (resolved !== previousResolved) activityClass("event-resolution");
-      else activityClass("");
+    const carriers = model.carriers;
+    dom.carriers.hidden = !carriers;
+    if (carriers) {
+      dom["carriers-count"].textContent = `${carriers.count} CARRIER${carriers.count === 1 ? "" : "S"}`;
+      dom["carriers-names"].textContent = (carriers.names || []).join(" · ") + (number(carriers.more) ? ` · +${number(carriers.more)}` : "");
     }
+    tickTimers();
     previousSystem = system;
-    previousResolved = resolved;
-    previousComplete = complete;
-    previousRows = currentRows;
+    previousKeys = keys;
   }
 
   function contentHeight() {
-    const rows = [...dom.contacts.children];
-    const gap = Number.parseFloat(getComputedStyle(dom.contacts).rowGap) || 0;
-    const rowHeight = rows.reduce((sum, row) => sum + row.getBoundingClientRect().height, 0);
-    return Math.max(212, Math.ceil(157 + rowHeight + Math.max(0, rows.length - 1) * gap + 29));
+    return Math.ceil(dom.content.getBoundingClientRect().height + 2);
   }
 
-  window.setInterval(updateTimers, 1000);
+  window.setInterval(tickTimers, 1000);
   VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 300});
 })();
