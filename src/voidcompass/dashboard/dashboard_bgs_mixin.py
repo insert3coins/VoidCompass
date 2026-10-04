@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 
 from voidcompass.bgs import edsm as bgs_edsm
 from voidcompass.bgs.importer import import_journals
@@ -112,18 +113,26 @@ class DashboardBgsMixin:
         return True
 
     # -- EDSM lookups ----------------------------------------------------
-    def _bgs_lookup(self, system_name, on_done):
-        """Ask EDSM for a system's factions and their history."""
+    def _bgs_lookup(self, system_name, on_done, refresh=False):
+        """Ask EDSM for a system's factions and their history. ``on_done`` gets
+        ``(address, error, outcome)``; outcome says whether EDSM had anything
+        newer than the record ("new", "same", or "older" than our own visit).
+
+        A refresh adds a parameter EDSM ignores: its CDN keeps each reply a
+        day per URL, so asking the same URL again would only repeat it."""
         if not self._bgs_online():
-            on_done(None, "Turn on BGS online in Settings > Integrations to look systems up on EDSM.")
+            on_done(None, "Turn on BGS online in Settings > Integrations to look systems up on EDSM.", None)
             return False
         edsm, store, generation = getattr(self, "edsm", None), self.bgs_store, self._bgs_generation
         name = str(system_name or "").strip()
+        params = {"systemName": name, "showHistory": 1}
+        if refresh:
+            params["recheck"] = int(time.time())
 
         def run():
-            error, address = "", None
+            error, address, outcome = "", None, None
             try:
-                reply = edsm._limited_get(bgs_edsm.URL, params={"systemName": name, "showHistory": 1}, timeout=15, retries=1)
+                reply = edsm._limited_get(bgs_edsm.URL, params=params, timeout=15, retries=1)
                 data = reply.json() if reply is not None else None
                 snapshot, points = bgs_edsm.from_edsm(data)
                 if snapshot is None:
@@ -131,12 +140,21 @@ class DashboardBgsMixin:
                     if isinstance(data, dict) and data.get("id64") and not data.get("factions"):
                         error = f"{data.get('name') or name} has no factions (unpopulated)."
                 elif generation == self._bgs_generation:
-                    store.add_snapshot(snapshot)
+                    added = store.add_snapshot(snapshot)
                     store.add_edsm_points(snapshot["system_address"], points)
                     address = snapshot["system_address"]
+                    rows = store.query("SELECT ts, source FROM systems WHERE system_address = ?", (address,))
+                    current = rows[0] if rows else {}
+                    status = "same"
+                    if current.get("ts") is not None and current["ts"] > snapshot["ts"]:
+                        status = "older"
+                    elif added:
+                        status = "new"
+                    outcome = {"status": status, "edsm_ts": snapshot["ts"], "system": snapshot["system"] or name,
+                               "record_ts": current.get("ts"), "record_source": current.get("source") or ""}
             except Exception as exc:
                 error = f"EDSM lookup failed: {exc}"
             if generation == self._bgs_generation:
-                self._ui_post(lambda: on_done(address, error), key=None)
+                self._ui_post(lambda: on_done(address, error, outcome), key=None)
         threading.Thread(target=run, name="bgs-lookup", daemon=True).start()
         return True
