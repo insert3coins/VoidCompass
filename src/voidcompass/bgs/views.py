@@ -247,7 +247,8 @@ def conflicts(store):
             out.append({"system": picture["system"], "system_address": picture["system_address"], "ts": picture["ts"],
                         "type": conflict.get("type") or "", "status": conflict.get("status") or "", "sides": sides,
                         "tracked": any(side["tracked"] for side in sides)})
-    out.sort(key=lambda row: (not row["tracked"], row["status"] != "active", -(row["ts"] or 0)))
+    # Tracked factions' first, then newest seen; active before pending only as a tie-break.
+    out.sort(key=lambda row: (not row["tracked"], -(row["ts"] or 0), row["status"] != "active"))
     return out
 
 

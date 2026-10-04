@@ -270,7 +270,7 @@ function conflictsView(data, ui) {
   const esc = ui.escapeHtml;
   const rows = data.conflicts || [];
   if (!rows.length) return `<div class="bgs-empty"><b>NO CONFLICTS IN YOUR RECORD</b><span>Wars, civil wars and elections in systems you visit show here.</span></div>`;
-  return `<p class="bgs-dim">As last seen in each system. Tracked factions' conflicts first.</p><div class="bgs-conflicts">${rows.map((row) => conflictCard(row, esc, true)).join("")}</div>`;
+  return `<p class="bgs-dim">As last seen in each system, newest first${rows.some((row) => row.tracked) ? ", with your tracked factions' conflicts at the top" : ""}.</p><div class="bgs-conflicts">${rows.map((row) => conflictCard(row, esc, true)).join("")}</div>`;
 }
 
 function activityView(data, ui) {
