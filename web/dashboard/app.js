@@ -3178,7 +3178,34 @@ function renderUpdateNotice(update = {}) {
   text("release-update-title", `VOID COMPASS v${latest} IS AVAILABLE`);
   text("release-update-summary", update.title || "A newer Void Compass release is ready on GitHub.");
   text("release-update-notes", update.notes || "Open the GitHub release page for downloads and the complete change log.");
+  renderUpdateInstaller(update.installer || {});
   dialog.hidden = false;
+}
+
+// In-app update (5.5.2.5): INSTALL UPDATE downloads and checks the release,
+// then RESTART TO UPDATE closes the app so the new version swaps itself in.
+function renderUpdateInstaller(installer) {
+  const install = byId("release-update-install");
+  const open = byId("release-update-open");
+  const progress = byId("release-update-progress");
+  const state = installer.state || "idle";
+  const mb = (bytes) => `${(Number(bytes || 0) / 1048576).toFixed(1)} MB`;
+  install.hidden = !installer.can_install;
+  open.classList.toggle("primary", !installer.can_install);
+  install.disabled = state === "downloading" || state === "verifying";
+  install.dataset.action = state === "ready" ? "restart_to_update" : "install_update";
+  install.textContent = {downloading: "DOWNLOADING…", verifying: "CHECKING…", ready: "RESTART TO UPDATE", failed: "TRY AGAIN"}[state] || "INSTALL UPDATE";
+  progress.hidden = !installer.can_install || state === "idle";
+  progress.classList.toggle("failed", state === "failed");
+  const total = Number(installer.total || 0);
+  const share = state === "ready" || state === "verifying" ? 1 : (total ? Math.min(1, Number(installer.received || 0) / total) : 0);
+  byId("release-update-bar").style.width = `${Math.round(share * 100)}%`;
+  text("release-update-status", {
+    downloading: `DOWNLOADING ${mb(installer.received)}${total ? ` OF ${mb(total)}` : ""}`,
+    verifying: "CHECKING THE DOWNLOAD AGAINST THE RELEASE CHECKSUMS",
+    ready: "READY · VOID COMPASS WILL CLOSE, UPDATE ITSELF AND OPEN AGAIN. YOUR SETTINGS AND PROFILES ARE KEPT.",
+    failed: `UPDATE FAILED: ${installer.error || "unknown error"}. NOTHING WAS CHANGED; YOU CAN STILL DOWNLOAD IT FROM GITHUB.`,
+  }[state] || "");
 }
 
 function dismissUpdateNotice() {
@@ -5266,6 +5293,11 @@ window.setInterval(() => text("footer-clock", new Date().toLocaleTimeString([], 
 byId("release-update-later").addEventListener("click", dismissUpdateNotice);
 byId("release-update-open").addEventListener("click", async () => {
   if (await command("open", {target: "release_update"})) dismissUpdateNotice();
+});
+byId("release-update-install").addEventListener("click", (event) => {
+  const action = event.currentTarget.dataset.action || "install_update";
+  event.currentTarget.disabled = true;
+  command(action, {});
 });
 installPageSuites();
 decorateCockpitButtons();

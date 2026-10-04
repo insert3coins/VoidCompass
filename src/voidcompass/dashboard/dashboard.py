@@ -2660,6 +2660,7 @@ class MainDashboard(
                 self._startup_history_timeout,
             )
 
+        self._report_last_update()
         self.check_updates()
         self._restart_galnet_feed_schedule(delay_ms=900)
 
