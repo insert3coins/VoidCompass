@@ -9,6 +9,7 @@ from voidcompass.core.application_runtime import OverlayWindowState
 from voidcompass.core.config import COLOR_ACCENT, COLOR_TEXT, COLOR_ORANGE
 from voidcompass.core.version import APP_VERSION
 from voidcompass.core import themes
+from voidcompass.core import updater
 from voidcompass.exploration.stellar_types import star_type_label
 from voidcompass.overlays.html_ground_overlay import attach_html_ground_overlay
 
@@ -291,6 +292,7 @@ class DashboardCoreMixin:
                 update = {
                     "checked": True,
                     "available": release_is_newer(tag),
+                    "asset": updater.release_asset(data),
                     "current_version": APP_VERSION,
                     "latest_version": re.sub(r"^[vV]", "", tag),
                     "title": str(data.get("name") or f"Void Compass {tag}").strip()[:240],
@@ -319,6 +321,59 @@ class DashboardCoreMixin:
                 severity="INFO",
             )
         self._schedule_html_dashboard_publish(immediate=True)
+
+    # -- in-app update (5.5.2.5): core/updater.py does the work ---------------
+    def _release_installable(self):
+        update = getattr(self, "release_update", None) or {}
+        return bool(updater.supported() and update.get("available") and update.get("asset"))
+
+    def _release_downloader(self):
+        downloader = getattr(self, "_release_download", None)
+        if downloader is None:
+            import requests
+
+            def changed():
+                self._ui_post(self._schedule_html_dashboard_publish, key="release-download")
+            downloader = updater.UpdateDownloader(requests.get, on_change=changed, user_agent=f"VoidCompass/{APP_VERSION}")
+            self._release_download = downloader
+        return downloader
+
+    def install_release_update(self):
+        """Download and check the new release; the deck then offers a restart."""
+        if not self._release_installable():
+            return False
+        update = self.release_update
+        return self._release_downloader().start(update["asset"], update.get("latest_version") or "")
+
+    def restart_to_update(self):
+        """Hand over to the staged release and close; it swaps itself in and
+        starts the updated app."""
+        state = self._release_downloader().snapshot()
+        if state["state"] != "ready" or not state["staged"]:
+            return False
+        try:
+            updater.launch_install(state["staged"], APP_VERSION)
+        except OSError as exc:
+            self._release_downloader()._set(state="failed", error=f"Could not start the installer: {exc}")
+            return False
+        self.log(f"Closing to install Void Compass v{state['version']}")
+        self.on_close()
+        return True
+
+    def _report_last_update(self):
+        """Say how the last in-app update went, then tidy its downloads."""
+        if not updater.supported():
+            return
+        result = updater.take_result()
+        if result:
+            if result.get("ok"):
+                self.add_event_feed_entry("UPDATE", f"Updated to Void Compass v{result.get('to') or APP_VERSION}", severity="INFO")
+            else:
+                self.add_event_feed_entry(
+                    "UPDATE", f"The update to v{result.get('to') or '?'} could not be installed, so v{APP_VERSION} was kept: "
+                    f"{result.get('error') or 'unknown error'}", severity="WARN")
+        threading.Thread(target=updater.clean_up, kwargs={"keep_backup": (result or {}).get("from")},
+                         name="update-clean-up", daemon=True).start()
 
     def _current_route_progress(self):
         """Return compact, truthful progress for the live route or saved waypoints."""

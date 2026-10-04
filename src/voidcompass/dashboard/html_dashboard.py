@@ -2603,6 +2603,20 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "articles": articles,
         }
 
+    def _html_release_installer(self, release_update):
+        """What the update dialog can offer: install in place (packaged app,
+        release has a Windows zip) or only the GitHub page."""
+        downloader = getattr(self, "_release_download", None)
+        state = downloader.snapshot() if downloader is not None else {}
+        return {
+            "can_install": bool(self._release_installable()),
+            "state": _text(state.get("state") or "idle", 20),
+            "version": _text(state.get("version"), 40),
+            "received": int(state.get("received") or 0),
+            "total": int(state.get("total") or (release_update.get("asset") or {}).get("size") or 0),
+            "error": _text(state.get("error"), 300),
+        }
+
     def html_dashboard_snapshot(self):
         """Return one JSON-safe immutable dashboard state."""
         # Relevant journal reducers already invalidate and rebuild this packet.
@@ -2729,6 +2743,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 "title": _text(release_update.get("title"), 240),
                 "notes": _text(release_update.get("notes"), 4000),
                 "published_at": _text(release_update.get("published_at"), 60),
+                "installer": self._html_release_installer(release_update),
             },
             "profile": {
                 "key": _text(self.config.get("active_commander_profile"), 120),
@@ -4301,6 +4316,10 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         if action == "check_updates":
             self.check_updates(manual=True)
             return True
+        if action == "install_update":
+            return self.install_release_update()
+        if action == "restart_to_update":
+            return self.restart_to_update()
         if action == "set_exploration_doctrine":
             doctrine = _text(payload.get("doctrine") or "balanced", 30).casefold()
             if doctrine not in DOCTRINES:

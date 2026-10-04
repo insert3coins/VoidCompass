@@ -11,6 +11,13 @@ if str(SRC_ROOT) not in sys.path:
 
 
 def _dispatch():
+    # The new release's exe swapping itself in (in-app update): no windows,
+    # no instance lock; the app it replaces is closing.
+    if "--finish-update" in sys.argv:
+        from voidcompass.core.updater import finish_update
+
+        flag_index = sys.argv.index("--finish-update")
+        return finish_update(sys.argv[flag_index + 1:])
     # Before any window or screen metric, in every process (app, deck host,
     # overlay host): overlay positions are screen pixels everywhere.
     from voidcompass.core.display_scale import enable_per_monitor_dpi

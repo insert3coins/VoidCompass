@@ -807,6 +807,13 @@ button:disabled { opacity: .38; cursor: default !important; }
 .release-update-shell > footer button { min-height: 36px; padding: 0 15px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); font: 700 9px Consolas,monospace; letter-spacing: .055em; cursor: pointer; }
 .release-update-shell > footer button:hover { color: var(--accent); border-color: var(--accent); }
 .release-update-shell > footer .primary { color: #021015; border-color: var(--accent); background: var(--accent); }
+.release-update-shell > footer button:disabled { opacity: .55; cursor: default; }
+.release-update-progress { display: grid; gap: 7px; margin-top: 16px; }
+.release-update-progress[hidden] { display: none; }
+.release-update-bar { height: 6px; border: 1px solid var(--border); background: var(--panel); }
+.release-update-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.release-update-progress span { color: var(--muted); font: 700 9px Consolas,monospace; letter-spacing: .06em; }
+.release-update-progress.failed span { color: var(--red); }
 
 @media (max-width: 760px) {
   .suite-tabs > span { display: none; }
