@@ -116,6 +116,7 @@ class ContactLedger:
         self.contacts = {}
         self.non_body_count = None
         self.fss_progress = None
+        self.bodies_done = False
         self.revision = getattr(self, "revision", 0) + 1
 
     # -- the journal -----------------------------------------------------
@@ -150,6 +151,13 @@ class ContactLedger:
         if event == "FSSDiscoveryScan" and raw.get("SystemAddress") in (None, self.address):
             self.non_body_count = int(raw.get("NonBodyCount") or 0)
             self.fss_progress = float(raw.get("Progress") or 0)
+            self.bodies_done = self.bodies_done or self.fss_progress >= 1
+            self.revision += 1
+            return True
+        if event == "FSSAllBodiesFound" and raw.get("SystemAddress") in (None, self.address):
+            # Every body found: the signals still unnamed need the FSS tuner,
+            # which the body scan does not do.
+            self.bodies_done = True
             self.revision += 1
             return True
         return False
@@ -217,6 +225,7 @@ class ContactLedger:
             "unresolved": max(0, expected - named) if expected is not None else None,
             "honked": expected is not None,
             "fss_progress": self.fss_progress,
+            "bodies_done": self.bodies_done,
             "groups": [{"kind": kind, "count": counts[kind],
                         "name": (KIND_NAMES_ONE if counts[kind] == 1 else KIND_NAMES).get(kind, kind.upper())}
                        for kind in sorted(counts, key=lambda kind: min(row["priority"] for row in live if row["kind"] == kind))],

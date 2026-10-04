@@ -1,57 +1,70 @@
 # Void Compass
 
-**Current version: 5.5.2.3**
+**Current version: 5.5.2.4**
 
-Void Compass is a local exploration companion for *Elite Dangerous*. It reads the game’s journal, status and companion files, then turns them into a useful command deck, survey record and set of in-game overlays. It is built for commanders who want to keep track of a long trip without handing their flight history to a cloud service.
+Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
 [Download a release](https://github.com/insert3coins/VoidCompass/releases) · [Report a problem](https://github.com/insert3coins/VoidCompass/issues/new/choose)
 
-## What it does
+## What's in it
 
-The main window is an HTML command deck backed by a Python application. It follows the active commander’s journals and keeps the important parts of an expedition in one place:
+The command deck has a tab for each part of the game:
 
-- **Dashboard and Explore & Survey** show current system progress, FSS and DSS work, biological and geological signals, valuable worlds, revisit targets and a short list of sensible next actions. Exploration Scout adds a journal-backed system audit, personal regional Codex gaps and on-demand Spansh searches for known biological, Guardian, Thargoid and high-value prospects, with source and freshness context on every result.
-- **Expedition tools** handle routes, waypoints, named objectives, neutron planning, return planning and expedition replay. Route advice is based on recorded game data and clearly marks anything that is unknown.
-- **Galactic Atlas** is an offline map of Elite's 42 Codex regions and everywhere you have been: your travels by star class, the regions you have visited, your plotted route, intel layers, your own map marks and a replay of the whole journey, in top-down or tilted 3D. It also includes a live System Orrery and body-target information.
-- **Planet Materials** records a planet’s known raw materials and lets you save surface mining sites with latitude, longitude, materials and notes. The current planet and coordinates can be filled from the live journal state, while mining observations remain editable by the commander. Its optional field overlay keeps the active body's scan composition, DSS mining-location count, saved sites, live surface fix and Rhino state visible; saved sites can also be sent to the Planet Waypoint Navigation overlay.
-- **Engineering** shows the whole fleet and what the journal says is engineered on each ship: every blueprint by name, its grade, roll and experimental. It also holds the plans sent from the Build Planner, the material locker by grade, the engineers and how to unlock them, a blueprint reference that counts the top-grade rolls your locker can pay for, material sources and traders, Tech Broker recipes and Odyssey goals. It can follow the ship currently in Elite.
-- **Build Planner** is a complete offline shipyard: a hangar of builds, a hull drawing that marks the slot you are fitting, a loadout board of every slot and a module dock, with all current hulls and modules, Engineering modifications, power priorities, fuel/cargo/pip load states, flight, range, defence, offence, heat, handling, cost and rebuy analysis. Builds are profile-local, can be compared side-by-side, cloned from the live Journal ship, imported from EDSY/SLEF, exported to SLEF and sent to the Engineering material wishlist.
-- **Mining and Ground tools** cover ring evidence, prospector details, refinery and cargo records, surface survey trails, exobiology work and journal-backed planetary mining signals.
-- **Carrier Command** follows personal and Squadron Carriers separately. It keeps their location, fuel, cargo, routes and jump history, and shows preparation, lockdown, transit and journal-confirmed arrival states.
-- **Powerplay Operations, Colonisation Recon and Explorer Achievements** are available under Field Tools. Powerplay shows your pledge, rank progress and a live cycle countdown. It covers the current system's state, control, reinforcement and undermining, with your orders there, a log of every Powerplay system you visit, merits by day and by cycle, all 12 leader dossiers, commander assignments and an optional cockpit overlay.
-- **Galnet Relay** provides an optional local ticker and article reader using Frontier’s news feed.
+- **Dashboard and Explore & Survey**: the system you're in, FSS and DSS progress, biological and geological signals, valuable worlds and what's worth doing next.
+- **Planetary Operations**: surface materials, saved mining sites, exobiology and a waypoint compass for getting around on foot or in an SRV.
+- **Galactic Atlas**: an offline map of the galaxy's regions and everywhere you've been, with a replay of the whole journey.
+- **Commander Record and Exploration Archive**: your ranks, history, achievements and a log of every trip.
+- **Mining Command**: ring evidence, prospector results, refinery and cargo.
+- **Ship Workshop**: an offline Build Planner for every hull and module, plus Engineering. Engineering covers your fleet's blueprints, your material locker, the engineers and how to unlock them.
+- **Carrier Command**: your own carrier and your squadron's, with fuel, cargo, routes and jump countdowns.
+- **Colonisation**: your construction projects, shared with your team through [Raven Colonial](https://ravencolonial.com).
+  - Track what each site still needs and what your ship and carriers hold, and find where to buy it.
+  - Plan a whole system's sites with Raven Colonial's own economy and score model.
+- **BGS**: the Background Simulation.
+  - Every faction in every system you visit: influence, states, conflicts, and how they change between ticks.
+  - Track the factions you care about and get warned when they're in trouble.
+  - Look up any system by name, and see the work you've done for each faction, per tick, with a report ready to paste into Discord.
+- **Powerplay**: your pledge, rank, merits and the current cycle, system by system.
+- **Music**: a player for your own music files, with an overlay you can show in game.
 
-The app is deliberately quiet. Feedback appears in the dashboard, Flight Log, notifications and overlays instead of through speech, personas or an AI service.
-
-Related tools are grouped into workflow suites rather than repeated as separate menu destinations: exploration planning and recon, planetary field operations, commander records, exploration archives, ship outfitting and application presentation each share a compact tabbed workspace. When GitHub reports a newer release, the command deck presents an in-app release notice with a direct link to its release page.
+Feedback is quiet on purpose: it shows up on the deck, in notifications and on the overlays. There's no voice and no AI chatter.
 
 ## Cockpit overlays
 
-Every overlay can be enabled, positioned and themed independently. They are rendered through the same local HTML/WebView2 system as the command deck, while the Python runtime owns journal processing, profiles, scheduling, hotkeys and persistence.
+Overlays sit on top of the game. Each one can be switched on and off, moved and themed on its own:
 
-Available overlays include Navigation, Cargo, Carrier, Prospector, Planet Materials, Rhino Coverage Minimap, Powerplay Operations, Gravity Warning, Station Link, Survey Operations, Cockpit Notifications, Journal Heartbeat and Planet Waypoint Navigation. The Navigation HUD includes route progress, survey state, fuel and scoop information, local targets, surface approach details, carrier countdowns and journal-confirmed arrivals. Overlay Layout Studio provides a visual way to arrange them and save commander-specific layouts.
+Navigation HUD, Survey Operations, Jump Info, Deep Space Contact Scope, Construction Needs, Cargo Manifest, Fleet/Squadron Carrier, Prospector Analysis, Planet Materials, Planet Waypoint Navigation, Powerplay Operations, Station Information, Gravity Warning, Cockpit Notifications, Journal Heartbeat, Galnet Ticker and Music Player.
 
-## Profiles and data
+**Overlay Studio** lays them out on your actual monitors. It also has their opacity, a frame-rate cap and per-overlay options. Overlays can hide themselves while the galaxy or system map is open, and the switches along the top of the deck turn any of them on or off quickly. OBS can capture each overlay as its own window.
 
-Void Compass keeps exploration history, expeditions, engineering plans, mining records, carrier state, settings and overlay layouts separate for each commander. The active commander is detected from the journal, and profiles can also be selected manually. Themes, hotkeys and window positions follow the active profile.
+## Commanders and your data
 
-Data is stored locally beside the application’s configuration and in profile folders. There is no Void Compass account or hosted database. Automatic profile safety snapshots can run before upgrades and cache rebuilds, and Settings can create a redacted support bundle containing diagnostic information without raw journal payloads, credentials or commander identifiers.
+Each commander gets their own profile: history, settings, theme, layouts and the rest. The app picks up who you're flying from the journal. It knows you by your Frontier ID, so renaming your commander in game doesn't lose anything.
 
-Void Compass does not download or maintain a local copy of the EDDN market feed. EDDN publishing, EDSM uploads and traffic lookups are optional. Spansh is used only for commander-requested route, exploration prospect, ring, trader or carrier searches. Discord webhooks are optional and can announce carrier activity using the active theme.
+Your data lives in the app's folder on your PC. On first run, Void Compass reads all your old journals, so your history starts as far back as they go.
 
-## Installation
+Some features talk to community services, and you can switch any of them off in **Settings › Integrations**:
 
-Packaged releases are Windows x64 applications. Python is not required to run a release, but Microsoft Edge WebView2 is required for the command deck and overlays. On first launch, the setup screen asks for the Elite journal folder and basic overlay preferences. The usual journal location is:
+- **EDSM**: uploading your journal (optional), plus system information and faction history for the BGS tab.
+- **EDDN**: sharing the markets you visit.
+- **Raven Colonial**: colonisation projects. Only used once you've added your own API key.
+- **EDCD tick service**: when the BGS tick happened.
+- **Spansh**: only when you ask for a search.
+- **Discord**: carrier announcements, if you add a webhook.
+
+## Installing
+
+Releases are Windows x64 apps; you don't need Python. You do need Microsoft Edge WebView2, which most Windows 10 and 11 PCs already have.
+
+The first time you run it, a short setup asks where your journals are. It usually finds them by itself, and shows your commander, ship and last system so you know it's reading the right folder. The usual place is:
 
 ```text
 C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 ```
 
-If the folder is not detected, it can be changed later in **Settings**.
+You can change it later in **Settings**.
 
 ## Running from source
-
-Source development targets Windows x64 and Python 3:
 
 ```powershell
 git clone https://github.com/insert3coins/VoidCompass.git
@@ -64,50 +77,24 @@ python -m pip install -e .
 python VoidCompass.py
 ```
 
-The application uses a local WebView2 window for its HTML interface. The source run and the packaged build use the same Python-owned state and journal pipeline. One central coordinator owns the Elite journal watcher and distributes its normalised events plus Cargo, NavRoute, Status, Market and ShipLocker snapshots to the dashboard features and overlays.
+The code lives in `src/voidcompass`, grouped by area: `core`, `dashboard`, `overlays`, `exploration`, `engineering`, `mining`, `powerplay`, `colonisation`, `bgs` and `services`. The deck and overlay pages are in `web`, reference data in `data`, tests in `tests` and build scripts in `tools`.
 
-## Project structure
-
-The source tree is organised by responsibility:
-
-```text
-src/voidcompass/
-├── core/          runtime, configuration, profiles and persistence
-├── dashboard/     command-deck state and HTML dashboard integration
-├── overlays/      cockpit overlay models, servers and host bridges
-├── engineering/   engineering catalogues and build workflows
-├── exploration/   survey, route, cartography and expedition systems
-├── mining/        mining, prospector and planetary-material systems
-├── powerplay/     Powerplay operations and reference data
-└── services/      EDSM, EDDN, Galnet, Spansh and carrier services
-```
-
-Bundled artwork lives under `assets`, static reference catalogues under `data`, browser interfaces under `web`, automated checks under `tests`, and build/release utilities under `tools`. `VoidCompass.py` remains the small repository-root launcher.
-
-## Building a release
-
-Run the build script from Windows:
-
-```powershell
-python tools/build.py
-```
-
-`tools/build.py` installs the requirements, checks the PyInstaller and WebView2 dependencies, bundles the HTML, map, Engineering, Build Planner and image assets, excludes Tk modules, and creates the executable and release archive under `dist` and `release`.
+To build a release, run `python tools/build.py`. It creates the app in `dist` and the zip in `release`.
 
 ## Contributing
 
-Bug reports, journal evidence, documentation fixes and focused code changes are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Run the test suite before submitting changes:
+Bug reports, journal snippets that show a problem, and focused fixes are all welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first, and run the tests before sending a change:
 
 ```powershell
-python -m unittest discover -s tests -t . -p "test_*.py"
+python -m unittest discover -s tests -t .
 ```
 
-Please remove commander names, Frontier IDs, API keys, Discord webhooks and other personal information from logs or journal excerpts. Do not commit local databases, profiles, configuration files, generated builds or credentials.
+Before you share a log or journal excerpt, take out your commander name, Frontier ID, API keys and webhooks.
 
 ## License
 
-Void Compass is free software released under the [GNU General Public License v3.0 only](LICENSE). The packaged regional map data retains its upstream notice in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Void Compass is free software under the [GNU General Public License v3.0](LICENSE). It builds on work from SrvSurvey, Raven Colonial, BGS-Tally and others. The credits are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Disclaimer
 
-Void Compass is an independent community project. It is not affiliated with or endorsed by Frontier Developments. *Elite Dangerous* and its related marks belong to their respective owners.
+Void Compass is a community project, not affiliated with or endorsed by Frontier Developments. *Elite Dangerous* and its marks belong to their owners.

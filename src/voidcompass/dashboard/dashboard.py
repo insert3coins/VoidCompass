@@ -77,6 +77,7 @@ from voidcompass.dashboard.dashboard_scan_mixin import DashboardScanMixin
 from voidcompass.dashboard.dashboard_exploration_mixin import DashboardExplorationMixin
 from voidcompass.dashboard.dashboard_jump_info_mixin import DashboardJumpInfoMixin
 from voidcompass.dashboard.dashboard_colonisation_mixin import DashboardColonisationMixin
+from voidcompass.dashboard.dashboard_bgs_mixin import DashboardBgsMixin
 from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
 from voidcompass.core.field_state import (
     get_material_category, load_colonisation_data, load_engineer_materials,
@@ -254,6 +255,7 @@ class MainDashboard(
     DashboardExplorationMixin,
     DashboardJumpInfoMixin,
     DashboardColonisationMixin,
+    DashboardBgsMixin,
     DashboardCoreMixin,
     DashboardDBMixin,
 ):
@@ -1878,6 +1880,7 @@ class MainDashboard(
             self.codex_index.flush(wait=False)
         self.codex_index = CodexIndex(get_profile_file(new_key, "codex_index.json"))
         self._colony_switch_profile(new_key)
+        self._bgs_switch_profile(new_key)
         if getattr(self, "expedition_manager", None):
             self.expedition_manager.flush(wait=False)
         self.expedition_manager = ExpeditionManager(
@@ -2014,6 +2017,7 @@ class MainDashboard(
             get_profile_file(get_active_profile(self.config), "codex_index.json")
         )
         self._colony_init()
+        self._bgs_init()
         self.rhino_minimap = RhinoMinimapTracker(
             get_profile_file(get_active_profile(self.config), "rhino_minimap.json.gz")
         )
@@ -2590,6 +2594,9 @@ class MainDashboard(
         self._start_eddn_market_upload()
         # Raven Colonial projects (only with a key and sync on).
         self._colony_refresh()
+        # BGS: read the journal history into the record, and ask for the tick.
+        self._bgs_start_import()
+        self._bgs_refresh_tick()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
         latest_fuel_capacity = self.watcher.get_latest_fuel_capacity()
         if latest_fuel_capacity > 0:
@@ -3813,6 +3820,7 @@ class MainDashboard(
         raven_worker = getattr(self, "raven_worker", None)
         if raven_worker is not None:
             raven_worker.shutdown()
+        self._bgs_close()
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
@@ -7680,6 +7688,8 @@ class MainDashboard(
         ledger = getattr(self, "contact_ledger", None)
         if ledger is not None and isinstance(raw, dict) and ledger.observe(ev, raw) and not self.batch_mode:
             self._refresh_contact_scope()
+        # BGS: faction snapshots and the work you do (bgs.journal).
+        self._bgs_observe(raw if isinstance(raw, dict) else None, startup_replay=startup_replay)
         if getattr(self, "codex_index", None) and ev == "CodexEntry" and isinstance(raw, dict):
             try:
                 if self.codex_index.observe(raw) and not startup_replay:

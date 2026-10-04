@@ -1,18 +1,23 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.2.3 // Deep Space Contacts rebuilt
+## v5.5.2.4 // BGS
 **Release Date:** 2026-Oct-04
 
-* Rebuilt the **Deep Space Contact Scope** from scratch, from the journal alone, so it only shows what is really there:
-  * Each signal is named for what the game says it is: starports by type, outposts, installations, megaships, conflict zones, extraction sites, nav beacons, tourist beacons, stellar phenomena, points of interest and unidentified signals. Before, every fleet carrier was listed as a station, and most other signals were plain "signal".
-  * The stations and carriers the game logs just before you arrive in a system are no longer lost. The game logs them a moment before the jump finishes, and the old scope threw them away, so busy systems showed "0 of 21 resolved" when most were known.
-  * After a honk, it shows how many of the system's signals are named and how many are still to resolve in the FSS (its total is the honk's own count).
-  * Unidentified signals show their threat and count down to when they vanish, then go. Before, they stayed listed after they had gone from the game.
-  * Fleet carriers are one line with their names, and a dozen identical conflict zones are one row with a count, so busy systems stay readable.
-* The overlay now matches the Navigation HUD and sizes to its contents.
+* New **BGS** tab on the main menu: the Background Simulation, from your own journal, kept per commander.
+  * **Every system you visit** is recorded: each faction's influence, states (active, pending and recovering), happiness, your reputation, and any war, civil war or election with its days won and stakes. Your whole journal history is read in the background the first time, so your record goes back as far as your journals do.
+  * **Look up any system** by name: its factions and their history come from EDSM, even if you have never been there.
+  * **Overview**: the system you are in with each faction's change since the last tick, alerts for what you track, your tracked factions and this tick's work.
+  * **Track factions and systems** (☆) to be warned when one is below 5% or at risk of retreat, loses or takes control, has a rival close behind, falls sharply, or goes into war, election, expansion or retreat.
+  * **Factions**: every faction in your record, and each one's systems, influence, states, conflicts and the work you have done for it.
+  * **Systems**: every system in your record with a chart of each faction's influence over the last 24 hours, 7 or 30 days, 90 days, a year or all time (hover it for the figures), its factions, conflicts and your work there.
+  * **Conflicts**: every war, civil war and election you have seen, with days won and what is at stake.
+  * **My work**: what you did for each faction in each system, per tick, counted the way BGS-Tally counts it (mission influence, bounties, combat bonds, trade profit, black market, cartographic and exobiology data, search and rescue, space and ground conflict zones, capital ship bonds, failed missions and murders), with a Discord report to copy.
+  * **States guide**: what every BGS state means.
+* **BGS online** in Settings > Integrations (on by default): asks the EDCD tick service when the galaxy tick happened, and lets the BGS tab look systems up on EDSM. Your journal record works without it; ticks from before it are estimated.
 
 ## Earlier releases
 
+* **v5.5.2.3** — Deep Space Contact Scope rebuilt from the journal alone: signals named by type, nothing missed on arrival, honk counts, expiring unidentified signals, and busy systems kept readable.
 * **v5.5.2.2** — Commanders renamed in game keep their profile and history under the new name.
 * **v5.5.2.1** — Colonisation's System Planner with Raven Colonial's own model, a station identifier, uploading your scans, Where to Buy, project stats, assignments, fleet carrier tools, Nexus plans, Raven stats and new Construction Needs options.
 * **v5.5.2** — New Colonisation tab with Raven Colonial: projects, the site you are docked at, fleet carriers, system sites and your journal's construction record; the Construction Needs overlay; and Raven Colonial in Settings > Integrations.
