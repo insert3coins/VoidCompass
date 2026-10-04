@@ -54,7 +54,7 @@ Some features talk to community services, and you can switch any of them off in 
 
 ## Installing
 
-Releases are Windows x64 apps; you don't need Python. You do need Microsoft Edge WebView2, which most Windows 10 and 11 PCs already have.
+Grab the latest zip from the [releases page](https://github.com/insert3coins/VoidCompass/releases), unzip it wherever you like, and run `VoidCompass.exe`. That's it: no installer, and you don't need Python. It's for Windows x64, and it needs Microsoft Edge WebView2, which most Windows 10 and 11 PCs already have.
 
 The first time you run it, a short setup asks where your journals are. It usually finds them by itself, and shows your commander, ship and last system so you know it's reading the right folder. The usual place is:
 
@@ -65,6 +65,8 @@ C:\Users\<You>\Saved Games\Frontier Developments\Elite Dangerous
 You can change it later in **Settings**.
 
 ## Running from source
+
+You don't need to do this to use Void Compass; the releases above are all most commanders need. If you'd like to run or change the code yourself:
 
 ```powershell
 git clone https://github.com/insert3coins/VoidCompass.git
