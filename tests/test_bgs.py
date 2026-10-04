@@ -321,10 +321,37 @@ class TabTests(unittest.TestCase):
         data = deck._html_bgs_workspace()
         self.assertEqual((data["view"], data["system"]["system"], data["system"]["source"]), ("systems", "Sol", "edsm"))
         self.assertEqual(len(data["system"]["history"][0]["points"]), 2)
+        self.assertNotIn("recheck", deck.edsm._limited_get.call_args.kwargs["params"], "a plain lookup may use EDSM's cache")
         offline = self.deck(online=False)
         offline._handle_bgs_command("lookup", {"system": "Sol"})
         self.assertIn("BGS online", offline._bgs_ui()["error"])
         offline.edsm._limited_get.assert_not_called()
+
+    def test_refresh_reaches_edsm_and_says_what_changed(self):
+        deck = self.deck()
+        reply = Mock()
+        edsm_reply = lambda ts: {"id64": 42, "name": "Sol", "controllingFaction": {"name": "Mother Gaia"},
+                                 "factions": [{"name": "Mother Gaia", "influence": 0.5, "state": "Boom", "lastUpdate": ts,
+                                               "influenceHistory": {str(ts): 0.5}}]}
+        deck.edsm._limited_get.return_value = reply
+        import threading
+        original = threading.Thread
+        threading.Thread = lambda target, **kw: Mock(start=target)
+        try:
+            def refresh(ts):
+                reply.json.return_value = edsm_reply(ts)
+                deck._handle_bgs_command("lookup", {"system": "Sol", "refresh": "1"})
+                self.assertIn("recheck", deck.edsm._limited_get.call_args.kwargs["params"],
+                              "a refresh gets past EDSM's day-long CDN cache")
+                return deck._bgs_ui()["notice"]
+            self.assertIn("Updated Sol from EDSM", refresh(1791000000))
+            self.assertIn("nothing newer", refresh(1791000000), "the same report again is said, not silent")
+            self.assertIn("Updated Sol", refresh(1791090000))
+            deck.bgs_store.add_snapshot({**deck.bgs_store.snapshots(42)[-1], "ts": 1791200000.0, "source": "journal"})
+            self.assertIn("older than your own visit", refresh(1791100000))
+            self.assertEqual(deck._html_bgs_workspace()["system"]["source"], "journal", "a fresher visit is kept")
+        finally:
+            threading.Thread = original
 
     def test_registered(self):
         self.assertIn("bgs_online_enabled", config_module.PROFILE_BOOL_SETTINGS)

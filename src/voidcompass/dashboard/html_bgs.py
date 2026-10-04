@@ -158,7 +158,7 @@ class HtmlBgsMixin:
                 return True
             return self._html_copy_text(detail["report"])
         if operation == "lookup":
-            return self._bgs_lookup_command(_text(payload.get("system"), 160), ui, store)
+            return self._bgs_lookup_command(_text(payload.get("system"), 160), ui, store, refresh=bool(payload.get("refresh")))
         if operation == "open":
             kind, name = _text(payload.get("kind"), 20), _text(payload.get("name"), 160)
             urls = {
@@ -171,7 +171,23 @@ class HtmlBgsMixin:
             return True
         return False
 
-    def _bgs_lookup_command(self, name, ui, store):
+    @staticmethod
+    def _bgs_lookup_notice(outcome, refresh):
+        """Say what the EDSM reply changed, so a refresh never looks dead."""
+        if not outcome:
+            return ""
+        system, edsm_ts = outcome["system"], outcome["edsm_ts"]
+        if outcome["status"] == "new":
+            return f"Updated {system} from EDSM: its latest report is from {tick_clock.label(edsm_ts)}."
+        if outcome["status"] == "older":
+            mine = "your own visit" if outcome["record_source"] == "journal" else "what you already have"
+            return (f"EDSM's latest report for {system} is from {tick_clock.label(edsm_ts)}, older than {mine} "
+                    f"({tick_clock.label(outcome['record_ts'])}), so that stays. Its history was still added to the chart.")
+        if refresh:
+            return f"EDSM has nothing newer for {system}: its latest report is still {tick_clock.label(edsm_ts)}."
+        return ""
+
+    def _bgs_lookup_command(self, name, ui, store, refresh=False):
         if not name:
             ui["error"] = "Type a system name to look up."
             return True
@@ -181,14 +197,15 @@ class HtmlBgsMixin:
             ui["system"] = local["system_address"]
         ui["lookup"] = {"pending": True, "name": name, "error": ""}
 
-        def done(address, error):
+        def done(address, error, outcome=None):
             ui["lookup"] = {"pending": False, "name": name, "error": error or ""}
             if address is not None:
                 ui["system"] = address
             elif not local and error:
                 ui["error"] = error
+            ui["notice"] = self._bgs_lookup_notice(outcome, refresh)
             self._schedule_html_dashboard_publish(immediate=True)
-        if not self._bgs_lookup(name, done):
+        if not self._bgs_lookup(name, done, refresh=refresh):
             ui["lookup"] = {"pending": False, "name": name, "error": ""}
             if not local:
                 ui["error"] = "Not in your journal record. Turn on BGS online in Settings > Integrations to look it up on EDSM."

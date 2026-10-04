@@ -251,7 +251,7 @@ function systemsView(data, ui, tracked) {
     right = `<header class="bgs-head"><div><p>${picture.source === "edsm" ? "FROM EDSM" : "FROM YOUR JOURNAL"} · ${ago(picture.ts).toUpperCase()}${picture.visits ? ` · ${picture.visits} VISIT${picture.visits === 1 ? "" : "S"}` : ""}</p><h3>${esc(picture.system)}</h3>
         <span>Controlled by <b>${esc(picture.controlling)}</b>${picture.control_changed ? ` (was ${esc(picture.previous_controlling)})` : ""}</span></div>
         <div class="bgs-actions">${star("track_system", picture.system_address, picture.tracked, esc)}
-          <button type="button" data-bgs-op="lookup" data-system="${esc(picture.system)}">REFRESH FROM EDSM</button>
+          <button type="button" data-bgs-op="lookup" data-system="${esc(picture.system)}" data-refresh="1"${data.lookup?.pending ? " disabled" : ""}>${data.lookup?.pending ? "REFRESHING…" : "REFRESH FROM EDSM"}</button>
           <button type="button" data-bgs-op="open" data-kind="inara_system" data-name="${esc(picture.system)}">INARA</button>
           <button type="button" data-bgs-op="open" data-kind="edsm_system" data-name="${esc(picture.system)}">EDSM</button></div></header>
       ${systemFacts(picture, esc)}${chart(picture.history, esc, picture.chart_days)}${factionsTable(picture, esc, tracked)}
