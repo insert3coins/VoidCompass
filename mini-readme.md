@@ -1,5 +1,15 @@
 # VoidCompass // UPDATE LOG
 
+## v5.5.2.4.1 // Gravity fix
+**Release Date:** 2026-Oct-05
+
+* **Surface gravity is right again** for worlds under about 0.5 G. They were shown about ten times too heavy (a 0.23 G world read 2.3 G) in Survey Operations, Planet Materials and the deck. This also fixes:
+  * Possible-species predictions for those worlds, which were judged against the wrong gravity.
+  * False gravity warnings on light worlds.
+  * Worlds you had already scanned: they're corrected as they load, with no need to scan again.
+* **BGS: Refresh from EDSM** now really asks EDSM again instead of getting a copy up to a day old. It also says what happened: updated, nothing newer, or your own visit is more recent.
+* **BGS: Conflicts** are listed newest first, with your tracked factions' conflicts still at the top.
+
 ## v5.5.2.4 // BGS
 **Release Date:** 2026-Oct-04
 

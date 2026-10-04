@@ -1523,6 +1523,22 @@ class DashboardScanMixin:
 
 
 
+    def _repair_scan_item_gravity(self, item):
+        """Saved scans from before 5.5.2.4.1 hold gravity_g undivided for worlds
+        under 0.51 g. Work it out again from the journal's m/s², and redo the
+        bio prediction that was judged against the wrong figure."""
+        gravity_g = self._gravity_to_g(item.get("surface_gravity"))
+        if gravity_g is None or item.get("gravity_g") == gravity_g:
+            return False
+        item["gravity_g"] = gravity_g
+        if item.get("planet_class") and "predicted_genuses" in item:
+            region_id, system_coords = self._bio_location_context()
+            item["predicted_genuses"] = bio_values.predict_genera(
+                item.get("planet_class"), item.get("atmosphere_type"), item.get("surface_temp"), gravity_g,
+                item.get("volcanism"), item.get("surface_pressure"), region_id, system_coords,
+            )
+        return True
+
     def add_scan_item(self, data):
         full_body_name = data.get("BodyName", "Unknown")
         body_name = full_body_name

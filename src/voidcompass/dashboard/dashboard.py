@@ -404,9 +404,10 @@ class MainDashboard(
 
     @staticmethod
     def _gravity_to_g(value):
+        """The journal's SurfaceGravity is always m/s². (It used to be divided
+        only above 5, which left every world under 0.51 g ~9.8x too heavy.)"""
         try:
-            g = float(value)
-            return round(g / 9.80665, 2) if g > 5 else round(g, 2)
+            return round(float(value) / 9.80665, 2)
         except Exception:
             return None
 
