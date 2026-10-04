@@ -99,6 +99,14 @@ class LedgerTests(unittest.TestCase):
         deep = feed(ContactLedger(), jump(), honk(4)).model(now=0)
         self.assertEqual((deep["named"], deep["unresolved"]), (0, 4), "signals the FSS has not resolved yet")
 
+    def test_a_finished_body_scan_says_the_signals_need_the_fss(self):
+        # Slatchio TU-W d2-2: 31 bodies, 9 signals, none named by the game.
+        ledger = feed(ContactLedger(), jump(), honk(9))
+        self.assertFalse(ledger.model(now=0)["bodies_done"])
+        self.assertTrue(ledger.observe("FSSAllBodiesFound", {"event": "FSSAllBodiesFound", "SystemAddress": HOME, "Count": 31}))
+        model = ledger.model(now=0)
+        self.assertEqual((model["bodies_done"], model["named"], model["unresolved"]), (True, 0, 9))
+
     def test_uss_expire_and_carry_threat(self):
         start = "2026-10-04T10:00:00Z"
         ledger = feed(ContactLedger(), jump(), signal("$USS_DegradedEmissions;", "USS", at=start, USSType="$USS_Type_Salvage;",

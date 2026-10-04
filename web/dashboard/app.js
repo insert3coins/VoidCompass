@@ -13,6 +13,7 @@ import {
 import {
   handleColonisationChange, handleColonisationClick, handleColonisationSubmit, renderColonisation, resetColonisation,
 } from "./colonisation.js";
+import {handleBgsChange, handleBgsClick, handleBgsSubmit, renderBgs} from "./bgs.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
@@ -153,6 +154,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".music-button", ".music-mode", ".music-playlist", ".music-row-actions button",
   ".pp-tabs button", ".pp-task-main", ".pp-power", "[data-pp-filter]",
   ".co-tabs button", ".co-actions button", ".pl-mini", ".pl-chip",
+  ".bgs-star", ".bgs-link", ".bgs-row-main", ".bgs-card", ".bgs-ranges button",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -3186,6 +3188,11 @@ function dismissUpdateNotice() {
   if (dialog) dialog.hidden = true;
 }
 
+// The BGS tab lives in bgs.js.
+function renderBgsWorkspace(data) {
+  renderBgs(data, WORKSHOP_UI);
+}
+
 // The Colonisation tab lives in colonisation.js.
 function renderColonisationWorkspace(data) {
   renderColonisation(data, WORKSHOP_UI);
@@ -3491,6 +3498,7 @@ function settingsSectionBody(id, data) {
   if (id === "integrations") {
     return settingGroup("EDSM", `${settingText({key: "edsm_cmdr_name", id: "setting-edsm-name", label: "Commander name on EDSM", value: value.edsm_cmdr_name})}${settingText({key: "edsm_api_key", id: "setting-edsm-key", label: "EDSM API key", detail: "From your EDSM account settings.", value: value.edsm_api_key, secret: true})}${settingSwitch({key: "edsm_upload_enabled", label: "Send exploration to EDSM", detail: "Upload journal events with this commander's key.", checked: value.edsm_upload_enabled})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_edsm">TEST EDSM</button>`, "test edsm credentials")}`)
       + settingGroup("RAVEN COLONIAL", `${settingText({key: "raven_api_key", id: "setting-raven-key", label: "Raven Colonial API key", detail: "From your account at ravencolonial.com/user. Colonisation shares your projects with it.", value: value.raven_api_key, secret: true})}${settingSwitch({key: "raven_sync_enabled", label: "Sync colonisation", detail: "Send deliveries, depot updates and fleet carrier cargo to Raven Colonial as they happen, under this commander.", checked: value.raven_sync_enabled})}${settingSwitch({key: "raven_share_ship_cargo", label: "Share your ship's cargo", detail: "Let your project's team see what you are carrying.", checked: value.raven_share_ship_cargo})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_raven">CHECK KEY</button><button type="button" data-page="colonisation">COLONISATION</button>`, "test raven colonial key colonisation")}`)
+      + settingGroup("BGS", `${settingSwitch({key: "bgs_online_enabled", label: "BGS online", detail: "Ask the EDCD tick service when the galaxy tick happened, and let the BGS tab look systems up on EDSM. Your own journal record works without it.", checked: value.bgs_online_enabled})}${settingActions(`<button type="button" data-page="bgs">BGS</button>`, "bgs tick edsm factions background simulation")}`)
       + settingGroup("EDDN", `${settingSwitch({key: "eddn_market_upload_enabled", label: "Share markets on EDDN", detail: "Publish the markets you visit to the community network.", checked: value.eddn_market_upload_enabled})}${settingNote(`${numeric(data.eddn?.uploads)} uploads this session${data.eddn?.last_error ? ` · last error: ${data.eddn.last_error}` : ""}`)}`)
       + settingGroup("DISCORD", `${settingText({key: "carrier_discord_webhook_url", id: "setting-discord", label: "Carrier webhook", detail: "One webhook for your personal and Squadron Carrier: status, jumps and expedition updates.", value: value.carrier_discord_webhook_url, secret: true})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_discord">SEND TEST</button><button type="button" data-page="carrier">CARRIER COMMAND</button>`, "test discord carrier")}`)
       + `<p id="settings-test-status" class="workspace-status ${escapeHtml(data.tools?.status || "ready")}">${escapeHtml(data.tools?.detail || "Integration tests have not run this session.")}</p>`;
@@ -3774,6 +3782,7 @@ function renderWorkspace(state) {
     recon: renderReconWorkspace, achievements: renderAchievementsWorkspace,
     ledger: renderLedgerWorkspace, settings: renderSettingsWorkspace,
     colonisation: renderColonisationWorkspace,
+    bgs: renderBgsWorkspace,
   };
   renderers[page]?.(workspace.data || {});
   preparePageLayout(page);
@@ -4321,6 +4330,7 @@ document.addEventListener("click", async (event) => {
   }
   if (handleWorkshopClick(event, WORKSHOP_UI)) return;
   if (handleColonisationClick(event, WORKSHOP_UI, () => renderColonisationWorkspace(model.workspace?.data || {}))) return;
+  if (handleBgsClick(event, WORKSHOP_UI)) return;
   const studioCard = event.target.closest(".studio-overlay-card");
   if (studioCard) {
     selectStudioOverlay(studioCard.dataset.overlayId);
@@ -4804,13 +4814,14 @@ document.addEventListener("change", async (event) => {
   } else if (event.target.id === "replay-session") {
     replaySelectedSessionIndex = Math.max(0, number(event.target.value));
     renderChronicleWorkspace(model.workspace?.data || {});
-  } else if (!handleColonisationChange(event, WORKSHOP_UI, model.workspace?.data)) {
+  } else if (!handleColonisationChange(event, WORKSHOP_UI, model.workspace?.data) && !handleBgsChange(event, WORKSHOP_UI)) {
     handleWorkshopChange(event, WORKSHOP_UI);
   }
 });
 
 document.addEventListener("submit", (event) => {
-  handleColonisationSubmit(event, WORKSHOP_UI);
+  if (handleColonisationSubmit(event, WORKSHOP_UI)) return;
+  handleBgsSubmit(event, WORKSHOP_UI);
 });
 
 byId("customise-deck").addEventListener("click", () => {

@@ -15,13 +15,13 @@ BRIDGE_PAGES = (
     "analytics", "chronicle", "mission", "ground", "mining",
     "engineering", "build-planner", "powerplay", "carrier", "recon",
     "achievements", "ledger", "settings", "overlay-studio", "about", "music",
-    "colonisation",
+    "colonisation", "bgs",
 )
 WORKSPACE_PAGES = (
     "planet-materials", "explore", "profile", "analytics", "chronicle",
     "mission", "ground", "mining", "engineering", "build-planner",
     "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
-    "colonisation",
+    "colonisation", "bgs",
 )
 
 

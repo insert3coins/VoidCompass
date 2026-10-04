@@ -1,0 +1,183 @@
+/* BGS tab (bgs.js). Interface colours are theme tokens. The eight chart
+   series colours are a fixed categorical palette, validated for colour-blind
+   separation and 3:1 contrast on the deck's dark panels; they mark faction
+   lines only, never interface or text. */
+
+#bgs-workspace {
+  --bgs-s1: #3987e5; --bgs-s2: #d95926; --bgs-s3: #199e70; --bgs-s4: #c98500;
+  --bgs-s5: #d55181; --bgs-s6: #008300; --bgs-s7: #9085e9; --bgs-s8: #e66767;
+  container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0;
+}
+#bgs-workspace button { cursor: pointer; }
+#bgs-workspace button.cockpit-button { min-height: 30px; padding: 0 12px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+#bgs-workspace input, #bgs-workspace select {
+  min-width: 0; height: 32px; padding: 0 9px; border: 1px solid var(--border); background: var(--input); color: var(--text);
+  font: 12px "Segoe UI", sans-serif; outline: none;
+}
+#bgs-workspace input:focus, #bgs-workspace select:focus { border-color: var(--accent); }
+#bgs-workspace h4 { margin: 4px 0 6px; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+
+/* Status strip and lookup. */
+.bgs-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 10px 14px; border: 1px solid var(--border-soft); border-left: 3px solid var(--accent); background: var(--panel); }
+.bgs-status > div { display: grid; gap: 2px; }
+.bgs-status b { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.bgs-status span { color: var(--text); font: 11px "Segoe UI", sans-serif; }
+.bgs-status em { color: var(--yellow); font-style: normal; }
+.bgs-lookup { display: flex; gap: 6px; margin-left: auto; }
+.bgs-lookup input { width: 230px; }
+
+.bgs-body { display: grid; gap: 12px; min-width: 0; }
+.bgs-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.bgs-grid .wide { grid-column: 1 / -1; }
+.bgs-split { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 12px; align-items: start; }
+.bgs-split > section { min-width: 0; }
+@container (max-width: 860px) { .bgs-grid, .bgs-split { grid-template-columns: minmax(0, 1fr); } }
+.bgs-panel { display: grid; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border-soft); background: var(--panel); }
+.bgs-empty { display: grid; gap: 6px; padding: 26px 18px; border: 1px dashed var(--border-soft); text-align: center; }
+.bgs-empty b { color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .16em; }
+.bgs-empty span, .bgs-dim { color: var(--dim); font: 11px/1.5 "Segoe UI", sans-serif; }
+.bgs-dim { margin: 0; }
+
+.bgs-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.bgs-head p { margin: 0; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.bgs-head h3 { margin: 2px 0; color: var(--text); font: 600 18px "Segoe UI", sans-serif; }
+.bgs-head h3 .bgs-link { font: inherit; }
+.bgs-head span { color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.bgs-head span b { color: var(--text); font-weight: 600; }
+.bgs-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+.bgs-link { padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-align: left; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 3px; }
+.bgs-link:hover { color: var(--accent); }
+.bgs-star { width: 24px; height: 24px; padding: 0; border: 1px solid transparent; background: none; color: var(--dim); font: 14px/1 "Segoe UI Symbol", sans-serif; }
+.bgs-star:hover { color: var(--orange); }
+.bgs-star.on { color: var(--orange); }
+.bgs-tag { display: inline-block; margin-left: 6px; padding: 1px 5px; border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); font: 700 8px Consolas, monospace; letter-spacing: .12em; vertical-align: middle; }
+.bgs-tag.dim { border-color: var(--border); color: var(--muted); }
+.bgs-tag.danger { border-color: color-mix(in srgb, var(--red) 60%, transparent); color: var(--red); }
+
+/* Facts. */
+.bgs-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 14px; margin: 0; }
+.bgs-facts div { display: grid; gap: 1px; }
+.bgs-facts dt { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.bgs-facts dd { margin: 0; color: var(--text); font: 12px "Segoe UI", sans-serif; }
+
+/* Faction tables. */
+.bgs-table-wrap { overflow-x: auto; }
+.bgs-table { width: 100%; min-width: 640px; border-collapse: collapse; font: 12px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.bgs-table th { padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .12em; text-align: left; }
+.bgs-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-soft); color: var(--text); vertical-align: middle; }
+.bgs-table tr.controlling td:first-child { box-shadow: inset 3px 0 var(--accent); }
+.bgs-table tr.tracked td { background: color-mix(in srgb, var(--orange) 5%, transparent); }
+.bgs-table small { display: block; margin-top: 2px; color: var(--dim); font: 10px Consolas, monospace; }
+.bgs-name { min-width: 220px; }
+.bgs-inf { min-width: 170px; white-space: nowrap; }
+.bgs-inf b { display: inline-block; min-width: 46px; margin-left: 8px; text-align: right; }
+.bgs-bar { display: inline-block; width: 80px; height: 6px; vertical-align: middle; background: color-mix(in srgb, var(--border) 70%, transparent); }
+.bgs-bar i { display: block; width: var(--fill, 0%); height: 100%; background: var(--accent); }
+.bgs-delta { margin-left: 8px; font: 700 10px Consolas, monospace; }
+.bgs-delta.up { color: var(--green); }
+.bgs-delta.down { color: var(--red); }
+.bgs-delta.flat { color: var(--dim); }
+.bgs-states { min-width: 180px; }
+.bgs-small { color: var(--muted); font-size: 11px; }
+
+.bgs-chip { display: inline-block; margin: 1px 4px 1px 0; padding: 1px 6px; border: 1px solid var(--chip-tone, var(--border)); color: var(--chip-tone, var(--muted)); font: 700 9px Consolas, monospace; letter-spacing: .06em; white-space: nowrap; }
+.bgs-chip.pending { border-style: dashed; }
+.bgs-chip.recovering { opacity: .7; }
+.tone-red { --chip-tone: var(--red); }
+.tone-orange { --chip-tone: var(--orange); }
+.tone-yellow { --chip-tone: var(--yellow); }
+.tone-green { --chip-tone: var(--green); }
+.tone-accent { --chip-tone: var(--accent); }
+.tone-muted { --chip-tone: var(--muted); }
+
+/* Alerts. */
+.bgs-alerts { display: grid; gap: 4px; max-height: 60vh; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.bgs-alerts li { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 6px 8px; border-left: 3px solid var(--border); background: var(--inset); }
+.bgs-alerts li.danger { border-left-color: var(--red); }
+.bgs-alerts li.warn { border-left-color: var(--yellow); }
+.bgs-alerts li.good { border-left-color: var(--green); }
+.bgs-alerts .bgs-level { font: 700 9px Consolas, monospace; letter-spacing: .1em; color: var(--muted); }
+.bgs-alerts .danger .bgs-level { color: var(--red); }
+.bgs-alerts .warn .bgs-level { color: var(--yellow); }
+.bgs-alerts .good .bgs-level { color: var(--green); }
+.bgs-alerts div { color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.bgs-alerts div span { display: block; color: var(--muted); font-size: 11px; }
+.bgs-alerts small { color: var(--dim); font: 10px Consolas, monospace; }
+
+.bgs-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+.bgs-card { display: grid; gap: 3px; padding: 8px 10px; border: 1px solid var(--border-soft); background: var(--inset); color: var(--text); text-align: left; }
+.bgs-card:hover { border-color: var(--border); }
+.bgs-card b { font: 600 12px "Segoe UI", sans-serif; }
+.bgs-card span, .bgs-card small { color: var(--dim); font: 10px Consolas, monospace; }
+.bgs-card em { margin-right: 8px; font-style: normal; }
+.bgs-card em.danger { color: var(--red); }
+.bgs-card em.warn { color: var(--yellow); }
+
+/* Lists beside detail. */
+.bgs-list { display: grid; gap: 6px; min-width: 0; }
+.bgs-list ul { display: grid; gap: 2px; max-height: 70vh; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.bgs-list li { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border: 1px solid transparent; }
+.bgs-list li.selected { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.bgs-row-main { display: grid; gap: 1px; flex: 1; min-width: 0; padding: 4px 2px; border: 0; background: none; color: var(--text); text-align: left; }
+.bgs-row-main b { overflow: hidden; font: 600 12px "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.bgs-row-main small { overflow: hidden; color: var(--dim); font: 10px Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.bgs-search { display: flex; flex-wrap: wrap; gap: 6px; }
+.bgs-search input { flex: 1 1 140px; }
+.bgs-search select { flex: 0 1 auto; }
+
+/* Conflicts. */
+.bgs-conflicts { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 8px; }
+.bgs-conflict { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--inset); }
+.bgs-conflict.active { border-left: 3px solid var(--red); }
+.bgs-conflict.pending { border-left: 3px solid var(--yellow); }
+.bgs-conflict header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bgs-conflict header .bgs-tag { margin-left: 0; }
+.bgs-conflict header b { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.bgs-conflict header small { color: var(--dim); font: 10px Consolas, monospace; }
+.bgs-sides { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
+.bgs-side { display: grid; gap: 2px; }
+.bgs-side:last-child { text-align: right; }
+.bgs-side b { color: var(--text); font: 600 22px "Segoe UI", sans-serif; }
+.bgs-side.tracked .bgs-link { color: var(--orange); }
+.bgs-side small { color: var(--dim); font: 10px "Segoe UI", sans-serif; }
+.bgs-vs { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
+
+/* Your work. */
+.bgs-kinds { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.bgs-kinds li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--border-soft); color: var(--text); font: 11px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.bgs-kinds li b { font: 700 11px Consolas, monospace; }
+.bgs-kinds li.bad b { color: var(--red); }
+.bgs-kinds li span { min-width: 0; overflow-wrap: anywhere; }
+.bgs-work { display: grid; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--border-soft); }
+.bgs-work-faction { display: grid; grid-template-columns: minmax(160px, 260px) minmax(0, 1fr); gap: 10px; }
+.bgs-work-faction > b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.bgs-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.bgs-report summary { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; cursor: pointer; }
+.bgs-report pre { max-height: 300px; margin: 6px 0 0; padding: 10px; overflow: auto; border: 1px solid var(--border-soft); background: var(--inset); color: var(--text); font: 11px/1.5 Consolas, monospace; white-space: pre-wrap; }
+
+/* States guide. */
+.bgs-guide { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.bgs-guide li { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 10px; align-items: baseline; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+
+/* Influence chart. */
+.bgs-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.bgs-chart-head span { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.bgs-ranges { display: flex; gap: 2px; }
+.bgs-ranges button { padding: 3px 8px; border: 1px solid var(--border-soft); background: transparent; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.bgs-ranges button.active { border-color: var(--accent); color: var(--accent); }
+.bgs-chart-box { position: relative; max-width: 1100px; }
+.bgs-chart { display: block; width: 100%; height: auto; }
+.bgs-chart .grid { stroke: var(--border-soft); stroke-width: 1; }
+.bgs-chart .axis { fill: var(--dim); font: 10px Consolas, monospace; }
+.bgs-chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.bgs-chart .end { stroke: var(--panel); stroke-width: 2; }
+.bgs-chart .end-label { fill: var(--muted); font: 10px "Segoe UI", sans-serif; }
+.bgs-chart .crosshair { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.bgs-chart .hit { fill: transparent; }
+.bgs-tooltip { position: absolute; top: 8px; z-index: 3; display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); background: var(--panel); box-shadow: 0 6px 18px rgba(0, 0, 0, .45); pointer-events: none; }
+.bgs-tooltip b { color: var(--text); font: 700 10px Consolas, monospace; }
+.bgs-tooltip span { display: flex; align-items: center; gap: 6px; color: var(--text); font: 11px "Segoe UI", sans-serif; white-space: nowrap; }
+.bgs-tooltip i, .bgs-legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; }
+.bgs-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.bgs-legend li { display: flex; align-items: center; gap: 6px; }

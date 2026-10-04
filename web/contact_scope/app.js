@@ -90,9 +90,11 @@
       dom["resolution-text"].textContent = "NO SIGNALS IN THIS SYSTEM";
       dom["resolution-aside"].textContent = "";
     } else {
-      dom["resolution-text"].textContent = unresolved
-        ? `${named} NAMED · ${unresolved} TO RESOLVE IN THE FSS`
-        : "EVERY SIGNAL NAMED";
+      dom["resolution-text"].textContent = !unresolved
+        ? "EVERY SIGNAL NAMED"
+        : model.bodies_done
+          ? `BODIES DONE · ${unresolved} SIGNAL${unresolved === 1 ? "" : "S"}: TUNE TO THEM IN THE FSS`
+          : `${named} NAMED · ${unresolved} TO RESOLVE IN THE FSS`;
       dom["resolution-aside"].textContent = `${Math.min(named, expected)} / ${expected}`;
     }
     dom["resolution-fill"].style.width = `${expected ? Math.min(100, named / expected * 100) : 0}%`;
