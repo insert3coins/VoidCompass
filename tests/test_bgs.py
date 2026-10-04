@@ -215,6 +215,20 @@ class StoreAndViewTests(unittest.TestCase):
         systems, _ = views.systems_list(store, only="conflicts")
         self.assertEqual(systems[0]["system"], "Los")
 
+    def test_conflicts_newest_first_tracked_on_top(self):
+        store = self.store()
+        base = next(value for kind, value in play(arrival())[0] if kind == "snapshot")
+        war =lambda status: [{**base["conflicts"][0], "status": status}]
+        for address, name, ts, status in ((1, "Old War", 1_790_000_000.0, "active"), (2, "New Pending", 1_791_000_000.0, "pending"),
+                                          (3, "Middle", 1_790_500_000.0, "active")):
+            store.add_snapshot({**base, "system_address": address, "system": name, "ts": ts, "conflicts": war(status)})
+        self.assertEqual([row["system"] for row in views.conflicts(store)], ["New Pending", "Middle", "Old War"],
+                         "with nothing tracked, most recent first, pending or not")
+        store.set_tracked("faction", base["conflicts"][0]["sides"][0]["name"], True)
+        store.add_snapshot({**base, "system_address": 4, "system": "Untracked", "ts": 1_792_000_000.0,
+                            "conflicts": [{**base["conflicts"][0], "sides": [{"name": "A", "stake": "", "won": 0}, {"name": "B", "stake": "", "won": 0}]}]})
+        self.assertEqual(views.conflicts(store)[-1]["system"], "Untracked", "tracked factions' conflicts stay on top")
+
 
 class EdsmAndTickTests(unittest.TestCase):
     def test_edsm_conversion(self):
