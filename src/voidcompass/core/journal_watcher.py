@@ -1163,7 +1163,7 @@ class JournalWatcher:
                     "is_body_scan": bool(star_type or planet_class),
                     "bio_signals_count": bio_signals_count,
                     # Body conditions for bio prediction (planets only)
-                    "surface_gravity":  data.get("SurfaceGravity"),      # g
+                    "surface_gravity":  data.get("SurfaceGravity"),      # m/s²
                     "surface_temp":     data.get("SurfaceTemperature"),  # K
                     "surface_pressure": data.get("SurfacePressure"),     # atm
                     "atmosphere_type":  data.get("AtmosphereType") or "",

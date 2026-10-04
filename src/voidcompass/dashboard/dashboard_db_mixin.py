@@ -729,6 +729,9 @@ class DashboardDBMixin:
                     try:
                         item = json.loads(data_json)
                         if isinstance(item, dict):
+                            repair = getattr(self, "_repair_scan_item_gravity", None)
+                            if repair:
+                                repair(item)
                             items.append(item)
                     except Exception:
                         pass
