@@ -1,11 +1,16 @@
-"""Contextual deep-space contact overlay for FSS non-body signals."""
+"""Deep Space Contacts overlay (5.5.2.3): shows the model the journal-driven
+ContactLedger (exploration.contact_scope) builds for the current system.
+
+This is the window's state; the page draws it (web/contact_scope). It hides
+after ``contact_scope_timeout_s`` (0 keeps it up), while docked, and when
+there is nothing to show.
+"""
 from __future__ import annotations
-from voidcompass.core.application_runtime import OverlayWindowState
-from voidcompass.core.config import save_config
-from voidcompass.overlays import overlay_chrome
+
 from voidcompass.core import themes
-_CHROMA = '#ff00ff'
-WIDTH = 480
+from voidcompass.core.application_runtime import OverlayWindowState
+from voidcompass.overlays import overlay_chrome
+
 
 def _integer(value, default=0):
     try:
@@ -13,97 +18,53 @@ def _integer(value, default=0):
     except (TypeError, ValueError):
         return int(default)
 
-def _text(value):
-    value = str(value or '').strip()
-    if value.startswith('$'):
-        value = value.strip('$;')
-        value = value.replace('_Name', '').replace('_', ' ')
-    return ' '.join(value.split())
-
-def _contact_kind(row):
-    name = _text(row.get('name')).casefold()
-    signal_type = _text(row.get('type')).casefold()
-    if row.get('is_station'):
-        return ('STATION', 'accent')
-    if 'notable stellar phenomena' in name or 'stellar phenomena' in name:
-        return ('PHENOMENA', 'green')
-    if 'megaship' in name or 'generation ship' in name:
-        return ('VESSEL', 'yellow')
-    if 'distress' in name or 'mayday' in name:
-        return ('DISTRESS', 'orange')
-    if signal_type:
-        return (signal_type.upper(), 'orange' if _integer(row.get('threat')) else 'accent')
-    if _integer(row.get('threat')):
-        return ('USS', 'orange')
-    return ('SIGNAL', 'muted')
-
-def build_contact_scope_model(system_name, expected, contacts):
-    """Return the unique, current-system facts shown by Contact Scope."""
-    expected = max(0, _integer(expected))
-    rows = []
-    for raw in contacts or ():
-        if not isinstance(raw, dict):
-            continue
-        name = _text(raw.get('name')) or 'Unidentified signal'
-        kind, tone = _contact_kind(raw)
-        rows.append({'key': str(raw.get('key') or name.casefold()), 'name': name, 'kind': kind, 'tone': tone, 'threat': max(0, _integer(raw.get('threat'))), 'expires_at': raw.get('expires_at'), 'is_station': bool(raw.get('is_station')), 'faction': _text(raw.get('faction'))})
-    rows.sort(key=lambda row: (row['kind'] not in {'PHENOMENA', 'DISTRESS'}, -row['threat'], row['name'].casefold()))
-    resolved = len(rows)
-    total = max(expected, resolved)
-    return {'system': str(system_name or ''), 'expected': expected, 'resolved': resolved, 'total': total, 'complete': bool(total and resolved >= total), 'contacts': rows}
 
 class ContactScopeHUD:
-    """Small native proxy and fallback for the semantic HTML contact scope."""
-
     def __init__(self, root, config):
         self.root = root
         self.config = config
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
         self._html_render_model = None
-        self._last_update = None
+        self._last_model = None
         self._visible = False
         self._suppressed = False
         self._startup_pending_visible = False
         self._hide_job = None
         self.win = OverlayWindowState(root)
-        x = _integer(config.get('contact_scope_hud_x'), 1180)
-        y = _integer(config.get('contact_scope_hud_y'), 250)
-        self._desired_pos = (x, y)
+        x = _integer(config.get("contact_scope_hud_x"), 1180)
+        y = _integer(config.get("contact_scope_hud_y"), 250)
         self.win.geometry(overlay_chrome.position_geometry(x, y))
         self.win.withdraw()
 
-    def update(self, system_name, expected, contacts, *, present=True):
-        self._last_update = (system_name, expected, list(contacts or ()))
-        model = build_contact_scope_model(system_name, expected, contacts)
-        self._html_render_model = model if model['total'] else None
+    def update(self, model, *, present=True):
+        self._last_model = model
+        self._html_render_model = model or None
         if not self._html_render_model:
             self.hide()
             return False
-        self._redraw(model)
         return self.show() if present else bool(self._visible)
 
     def clear(self):
-        self._last_update = None
+        self._last_model = None
         self._html_render_model = None
         self.hide()
 
     def show(self):
         if not self._html_render_model or self._suppressed:
             return False
-        if bool(getattr(self.root, '_voidcompass_startup_presentation_held', False)):
+        if bool(getattr(self.root, "_voidcompass_startup_presentation_held", False)):
             self._startup_pending_visible = True
             try:
                 self.win.withdraw()
             except Exception:
                 pass
             return False
-        if self._visible and self.win.state() == 'normal':
+        if self._visible and self.win.state() == "normal":
             self._schedule_hide()
             return True
         try:
-            x = _integer(self.config.get('contact_scope_hud_x'), 1180)
-            y = _integer(self.config.get('contact_scope_hud_y'), 250)
-            self._desired_pos = (x, y)
+            x = _integer(self.config.get("contact_scope_hud_x"), 1180)
+            y = _integer(self.config.get("contact_scope_hud_y"), 250)
             self.win.geometry(overlay_chrome.position_geometry(x, y))
             self.win.deiconify()
             self._visible = True
@@ -137,7 +98,7 @@ class ContactScopeHUD:
 
     def _schedule_hide(self):
         self._cancel_hide()
-        timeout_s = max(0, _integer(self.config.get('contact_scope_timeout_s'), 45))
+        timeout_s = max(0, _integer(self.config.get("contact_scope_timeout_s"), 45))
         if timeout_s <= 0:
             return False
         try:
@@ -152,7 +113,7 @@ class ContactScopeHUD:
         self.hide()
 
     def apply_auto_hide_setting(self):
-        """Apply a changed timer without resurrecting an already hidden scope."""
+        """Apply a changed timer without resurrecting a hidden scope."""
         self._cancel_hide()
         if self._visible:
             self._schedule_hide()
@@ -164,8 +125,8 @@ class ContactScopeHUD:
 
     def resume(self, refresh=True):
         self._suppressed = False
-        if refresh and self._last_update is not None:
-            return self.update(*self._last_update)
+        if refresh and self._last_model is not None:
+            return self.update(self._last_model)
         return False
 
     def release_startup_visibility(self):
@@ -176,12 +137,6 @@ class ContactScopeHUD:
 
     def apply_theme(self, palette=None):
         self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)
-        if self._html_render_model:
-            self._redraw(self._html_render_model)
-
-    def _redraw(self, model):
-        self._html_render_model = model
-        self.win.height = max(92, 70 + len(model.get('contacts') or []) * 25)
 
     def destroy(self):
         self._cancel_hide()
