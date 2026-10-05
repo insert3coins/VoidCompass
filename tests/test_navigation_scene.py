@@ -414,6 +414,9 @@ class NavigationSceneBrowserTests(unittest.TestCase):
         })""")
         for backing, css, ratio in sizes:
             self.assertAlmostEqual(backing, css * 1.5 * ratio, delta=1)
+        # Back to 100%: the app shrinks the window with the text (the HUD
+        # fits whatever window it has, 5.5.2.7).
+        page.set_viewport_size({"width": 500, "height": 326})
         self.render(page, hud_state("SUPERCRUISE"), scale=1)
         backing, css, ratio = page.evaluate("""() => {
           const canvas = document.getElementById('deck-canvas');

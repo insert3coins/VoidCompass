@@ -78,10 +78,13 @@ class HtmlSurveyOverlayBridge(HtmlOverlayBridgeLifecycle):
         return bool(model.get("rows") or model.get("notable_rows"))
 
     def _dimensions(self):
-        width, native_height = 420, 90
-        # HTML supplies measured content size; there is no secondary renderer.
+        # Survey's own text size (else the overlay-wide one) zooms the page,
+        # so its design width grows by the same factor. HTML supplies the
+        # measured content height, which already includes the zoom.
+        scale = survey_text_scale(self.config)
+        width, native_height = int(round(420 * scale)), int(round(90 * scale))
         browser_height = _safe_int(self._browser_content_height)
-        return width, max(90, browser_height) if browser_height else native_height
+        return width, max(native_height, browser_height) if browser_height else native_height
 
     def _window_payload(self):
         width, height = self._dimensions()
