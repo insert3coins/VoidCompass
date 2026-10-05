@@ -137,3 +137,23 @@
 .tr-follow.done { border-color: var(--green); background: color-mix(in srgb, var(--green) 7%, var(--panel)); }
 .tr-follow.done p { color: var(--green); }
 .tr-tabs small { color: var(--accent); }
+
+/* Picking the starting station. */
+.tr-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+.tr-picks button { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--border-soft); background: var(--inset); text-align: left; }
+.tr-picks button:hover { border-color: var(--accent); }
+.tr-picks b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.tr-picks small { color: var(--dim); font: 10px "Segoe UI", sans-serif; }
+
+/* Progress while Spansh works (it only reports queued and started). */
+.tr-result-head h3 span[data-tr-since] { color: var(--text); font: inherit; font-variant-numeric: tabular-nums; }
+.tr-bar { position: relative; height: 4px; overflow: hidden; background: var(--inset); }
+.tr-bar i { position: absolute; inset: 0 auto 0 0; width: 30%; background: var(--accent); animation: tr-sweep 1.6s ease-in-out infinite; }
+.tr-bar.determinate i { position: static; display: block; height: 100%; animation: none; transition: width .3s; }
+@keyframes tr-sweep { from { left: -30%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .tr-bar i { animation: none; width: 100%; opacity: .45; } }
+.tr-steps { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.tr-steps li { display: flex; align-items: center; gap: 8px; color: var(--dim); font: 12px "Segoe UI", sans-serif; }
+.tr-steps i { width: 14px; color: var(--accent); font-style: normal; text-align: center; }
+.tr-steps li.done { color: var(--muted); }
+.tr-steps li.now { color: var(--text); }

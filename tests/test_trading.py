@@ -25,6 +25,12 @@ WEB = ROOT / "web"
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "spansh_trade"
 
 
+SOL_STATIONS = ("Sol", [
+    {"name": "Abraham Lincoln", "type": "Orbis Starport", "market_id": 128016896, "arrival_ls": 503, "carrier": False},
+    {"name": "Daedalus", "type": "Orbis Starport", "market_id": 128016384, "arrival_ls": 7, "carrier": False},
+])
+
+
 def fixture(name):
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
@@ -255,7 +261,7 @@ class TabTests(unittest.TestCase):
         self.run_inline()
         deck = self.deck()
         result = fixture("trade_route_result.json")["result"]
-        with patch.object(spansh, "trade_route", return_value=(result, "job")) as planner:
+        with patch.object(spansh, "trade_route", return_value=(result, "job")) as planner,                 patch.object(spansh, "system_stations", return_value=SOL_STATIONS):
             deck._handle_trading_command("plan", {"max_hops": "3", "requires_large_pad": "0"})
             sent = planner.call_args.args[0]
         self.assertEqual((sent["system"], sent["station"], sent["max_hops"], sent["requires_large_pad"]), ("Sol", "Abraham Lincoln", 3, 0))
@@ -270,6 +276,45 @@ class TabTests(unittest.TestCase):
         deck._trading_observe(buy(source, "biowaste", 200, 109))
         self.assertEqual(deck.trading_route["phase"], "sell")
         self.assertEqual(deck.trading_store.value("route")["phase"], "sell", "kept across restarts")
+
+    def test_station_names_are_matched_before_planning(self):
+        self.run_inline()
+        deck = self.deck()
+        result = fixture("trade_route_result.json")["result"]
+        with patch.object(spansh, "trade_route", return_value=(result, "job")) as planner,                 patch.object(spansh, "system_stations", return_value=SOL_STATIONS) as lookup:
+            deck._handle_trading_command("plan", {"system": "sol", "station": "orbis starport"})
+            planner.assert_not_called()
+            choices = deck._trading_ui()["route"]["choices"]
+            self.assertEqual((choices["typed"], choices["stations"][0]["name"]), ("orbis starport", "Abraham Lincoln"),
+                             "a station type is not a station: offer the system's stations")
+            deck._handle_trading_command("pick_station", {"system": "Sol", "station": "abraham lincoln"})
+            self.assertEqual(planner.call_args.args[0]["station"], "Abraham Lincoln", "sent as Spansh spells it")
+            self.assertEqual(deck._trading_ui()["form"]["station"], "Abraham Lincoln")
+            self.assertEqual(lookup.call_count, 1, "a system's stations are asked for once")
+
+    def test_route_progress_stop_and_docked_shortcut(self):
+        self.run_inline()
+        deck = self.deck()
+        seen = []
+
+        def slow_router(form, on_state=None, should_stop=None):
+            on_state("queued")
+            seen.append(dict(deck._trading_ui()["route"]))
+            on_state("started")
+            seen.append(dict(deck._trading_ui()["route"]))
+            deck._handle_trading_command("stop_plan", {})
+            if should_stop():
+                raise spansh.SpanshError("Stopped.")
+            return fixture("trade_route_result.json")["result"], "job"
+        with patch.object(spansh, "trade_route", side_effect=slow_router) as planner,                 patch.object(spansh, "system_stations") as lookup:
+            deck._handle_trading_command("plan", {"system": "sol", "station": "ABRAHAM LINCOLN"})
+            lookup.assert_not_called()
+            self.assertEqual(planner.call_args.args[0]["station"], "Abraham Lincoln", "docked here: the game's own spelling")
+        self.assertEqual([row["stage"] for row in seen], ["queued", "started"])
+        self.assertTrue(seen[0]["pending"] and seen[0]["started"])
+        self.assertEqual(deck._trading_ui()["route"], {}, "stopped: no result, no error")
+        self.assertEqual(deck._trading_ui()["notice"], "Stopped the route search.")
+        self.assertNotIn("route", deck._trading_busy)
 
     def test_sell_my_cargo_and_find(self):
         self.run_inline()

@@ -244,6 +244,21 @@ function check(name, label, value) {
   return `<label class="tr-check"><input type="checkbox" name="${name}" ${n(field("route", name, value)) ? "checked" : ""}><span>${label}</span></label>`;
 }
 
+// Spansh only says queued, then started, then done: the steps show which,
+// with the time so far (it ticks on its own, see tickElapsed).
+function routeProgress(route) {
+  const order = ["station", "queued", "started"];
+  const at = order.indexOf(route.stage || "station");
+  const steps = [["station", "Finding the station"], ["queued", "Waiting in Spansh's queue"], ["started", "Spansh is working out the best cargo for each hop"]];
+  const items = steps.map(([id, label], index) => `<li class="${index < at ? "done" : index === at ? "now" : ""}"><i>${index < at ? "✓" : index === at ? "›" : ""}</i>${label}</li>`).join("");
+  const hops = n(route.hops);
+  return `<section class="tr-panel wide tr-progress"><div class="tr-result-head"><div><p>PLANNING ON SPANSH</p>
+      <h3><span data-tr-since="${n(route.started)}">0:00</span></h3>
+      <span>${hops >= 4 ? `${hops} hops usually take one to three minutes; fewer hops come back quicker.` : `${hops} hop${hops === 1 ? "" : "s"} usually take under a minute.`}</span></div>
+      <div class="tr-actions"><button type="button" data-trade-op="stop_plan">STOP</button></div></div>
+    <div class="tr-bar"><i></i></div><ol class="tr-steps">${items}</ol></section>`;
+}
+
 function routeView(data, ui) {
   const esc = ui.escapeHtml;
   const f = data.form || {};
@@ -252,7 +267,7 @@ function routeView(data, ui) {
   const form = `<form class="tr-form" data-trade-form="plan">
     <div class="tr-fields">${input("system", "FROM SYSTEM", "text", 'maxlength="120" required')}${input("station", "FROM STATION", "text", 'maxlength="120" required')}
       ${input("max_cargo", "CARGO (T)", "number", 'min="1"')}${input("starting_capital", "CREDITS", "number", 'min="0"')}
-      ${input("max_hop_distance", "MAX HOP (LY)", "number", 'min="1" step="1"')}${input("max_hops", "HOPS", "number", 'min="1" max="20"')}
+      ${input("max_hop_distance", "MAX HOP (LY)", "number", 'min="1" step="1"')}${input("max_hops", "HOPS (EACH ADDS TIME)", "number", 'min="1" max="20"')}
       ${input("max_system_distance", "MAX FROM STAR (LS)", "number", 'min="10"')}${input("max_price_age_days", "PRICES NO OLDER THAN (DAYS)", "number", 'min="1" max="365"')}</div>
     <div class="tr-checks">${check("requires_large_pad", "Large pad", f.requires_large_pad)}${check("allow_planetary", "Planetary ports", f.allow_planetary)}
       ${check("allow_player_owned", "Fleet carriers", f.allow_player_owned)}${check("allow_prohibited", "Illegal goods", f.allow_prohibited)}
@@ -262,6 +277,14 @@ function routeView(data, ui) {
   const route = data.route || {};
   let result = "";
   if (route.error) result = `<p class="co-error">${esc(route.error)}</p>`;
+  if (route.choices) {
+    const c = route.choices;
+    const shown = c.stations.filter((row) => !row.carrier || n(f.allow_player_owned));
+    result = `<section class="tr-panel wide"><h4>WHICH STATION?</h4>
+      <p class="tr-dim">${shown.length ? `There's no station called <b>${esc(c.typed)}</b> in ${esc(c.system)}. Pick one with a market:` : `Spansh has no station with a market in ${esc(c.system)}.`}</p>
+      <div class="tr-picks">${shown.map((row) => `<button type="button" data-trade-op="pick_station" data-system="${esc(c.system)}" data-station="${esc(row.name)}">
+        <b>${esc(row.name)}</b><small>${esc(row.type)}${row.arrival_ls != null ? ` · ${count(row.arrival_ls)} ls` : ""}</small></button>`).join("")}</div></section>`;
+  }
   const plan = route.result;
   if (plan?.hops?.length) {
     const top = Math.max(...plan.hops.map((hop) => hop.cumulative)) || 1;
@@ -295,7 +318,7 @@ function routeView(data, ui) {
   }
   return `${followCard(data.followed, esc)}<section class="tr-panel wide"><h4>PLAN A ROUTE</h4>
     <p class="tr-dim">Spansh's trade router finds the best cargo for each hop from a station, with prices from players' game data. Your ship, credits and location are filled in from the journal.</p>${form}</section>
-    ${busy ? `<p class="tr-dim">Spansh is working the route out; long routes take a minute.</p>` : ""}${result}${loopHtml}`;
+    ${busy && route.pending ? routeProgress(route) : ""}${result}${loopHtml}`;
 }
 
 function cargoView(data, ui) {
@@ -317,6 +340,8 @@ function cargoView(data, ui) {
   }
   return `<section class="tr-panel wide"><h4>IN YOUR HOLD</h4>${holdList}
     <div class="tr-actions"><button type="button" class="primary" data-trade-op="cargo" ${busy || !hold.length ? "disabled" : ""}>${busy ? "ASKING SPANSH…" : "FIND THE BEST PRICES NEAR ME"}</button></div>
+    ${busy && cargo.pending ? `<div class="tr-bar determinate"><i style="width:${(n(cargo.done) / Math.max(1, n(cargo.total)) * 100).toFixed(0)}%"></i></div>
+      <p class="tr-dim">Checking ${n(cargo.done) + 1} of ${n(cargo.total)}: ${esc(cargo.current || "")}</p>` : ""}
     ${cargo.rows ? `<p class="tr-dim">Near ${esc(cargo.system)} · ${ago(cargo.at)} · each commodity's best five stations by price.</p>` : ""}</section>${results}`;
 }
 
@@ -426,6 +451,7 @@ export function renderTrading(data, ui) {
   tips = [];
   root.innerHTML = `${status}${messages}${tabs}<div class="tr-body">${body(data, ui)}</div>`;
   bindCharts(root);
+  tickElapsed();
 }
 
 const snake = (key) => key.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`);
@@ -440,7 +466,7 @@ export function handleTradingClick(event, ui) {
     if (key !== "tradeOp") extra[snake(key)] = value;
   }
   // These refill the route form, so a half-typed draft must not cover them.
-  if (["form_reset", "plan_from"].includes(button.dataset.tradeOp)) delete drafts.route;
+  if (["form_reset", "plan_from", "pick_station"].includes(button.dataset.tradeOp)) delete drafts.route;
   send(ui, button.dataset.tradeOp, extra);
   return true;
 }
@@ -471,6 +497,15 @@ export function handleTradingInput(event, ui) {
   drafts[key] = {...(drafts[key] || {}), [event.target.name]: event.target.type === "checkbox" ? (event.target.checked ? 1 : 0) : event.target.value};
   return true;
 }
+
+// Running times tick here, between snapshots.
+function tickElapsed() {
+  document.querySelectorAll("#trading-workspace [data-tr-since]").forEach((node) => {
+    const seconds = Math.max(0, Math.round(Date.now() / 1000 - n(node.dataset.trSince)));
+    node.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  });
+}
+window.setInterval(tickElapsed, 1000);
 
 export function resetTrading() {
   Object.keys(drafts).forEach((key) => delete drafts[key]);
