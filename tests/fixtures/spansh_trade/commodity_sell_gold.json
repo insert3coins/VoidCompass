@@ -1,0 +1,169 @@
+{
+ "count": 4,
+ "results": [
+  {
+   "name": "Magnus Gateway",
+   "system_name": "EZ Aquarii",
+   "distance": 11.0983265208093,
+   "distance_to_arrival": 468.254052,
+   "has_large_pad": true,
+   "large_pads": 5,
+   "medium_pads": 11,
+   "small_pads": 9,
+   "is_planetary": false,
+   "type": "Coriolis Starport",
+   "market_id": 3228841728,
+   "market_updated_at": "2026-10-04T20:20:33Z",
+   "system_id64": 22661186987433,
+   "market": [
+    {
+     "buy_price": 0,
+     "category": "Metals",
+     "commodity": "Gold",
+     "demand": 34716,
+     "sell_price": 53095,
+     "supply": 0
+    },
+    {
+     "buy_price": 0,
+     "category": "Metals",
+     "commodity": "Palladium",
+     "demand": 19037,
+     "sell_price": 58599,
+     "supply": 0
+    },
+    {
+     "buy_price": 0,
+     "category": "Metals",
+     "commodity": "Silver",
+     "demand": 60803,
+     "sell_price": 48808,
+     "supply": 0
+    }
+   ]
+  },
+  {
+   "name": "Darica Station",
+   "system_name": "WISE 0350-5658",
+   "distance": 12.0939518717002,
+   "distance_to_arrival": 4985.430552,
+   "has_large_pad": true,
+   "large_pads": 6,
+   "medium_pads": 11,
+   "small_pads": 8,
+   "is_planetary": false,
+   "type": "Coriolis Starport",
+   "market_id": 4210876675,
+   "market_updated_at": "2026-10-04T16:17:04Z",
+   "system_id64": 5368172399440,
+   "market": [
+    {
+     "buy_price": 0,
+     "category": "Metals",
+     "commodity": "Gold",
+     "demand": 24185,
+     "sell_price": 56158,
+     "supply": 0
+    },
+    {
+     "buy_price": 0,
+     "category": "Metals",
+     "commodity": "Palladium",
+     "demand": 56772,
+     "sell_price": 59254,
+     "supply": 0
+    },
+    {
+     "buy_price": 0,
+     "category": "Metals",
+     "commodity": "Silver",
+     "demand": 122850,
+     "sell_price": 49064,
+     "supply": 0
+    }
+   ]
+  },
+  {
+   "name": "Cloutier's Forge",
+   "system_name": "UGPS 0722-05",
+   "distance": 13.393751458236,
+   "distance_to_arrival": 963.4141,
+   "has_large_pad": true,
+   "large_pads": 1,
+   "medium_pads": 0,
+   "small_pads": 0,
+   "is_planetary": true,
+   "type": "Settlement",
+   "market_id": 4227379459,
+   "market_updated_at": "2026-10-04T15:58:07Z",
+   "system_id64": 5368172530504,
+   "market": [
+    {
+     "buy_price": 0,
+     "category": "Metals",
+     "commodity": "Gold",
+     "demand": 599,
+     "sell_price": 51184,
+     "supply": 0
+    },
+    {
+     "buy_price": 0,
+     "category": "Metals",
+     "commodity": "Palladium",
+     "demand": 479,
+     "sell_price": 53979,
+     "supply": 0
+    },
+    {
+     "buy_price": 26808,
+     "category": "Metals",
+     "commodity": "Silver",
+     "demand": 0,
+     "sell_price": 26806,
+     "supply": 0
+    }
+   ]
+  },
+  {
+   "name": "Arai Town",
+   "system_name": "UGPS 0722-05",
+   "distance": 13.393751458236,
+   "distance_to_arrival": 963.42756,
+   "has_large_pad": true,
+   "large_pads": 5,
+   "medium_pads": 12,
+   "small_pads": 9,
+   "is_planetary": false,
+   "type": "Coriolis Starport",
+   "market_id": 4208889347,
+   "market_updated_at": "2026-10-05T00:34:31Z",
+   "system_id64": 5368172530504,
+   "market": [
+    {
+     "buy_price": 0,
+     "category": "Metals",
+     "commodity": "Gold",
+     "demand": 1962259,
+     "sell_price": 51184,
+     "supply": 0
+    },
+    {
+     "buy_price": 0,
+     "category": "Metals",
+     "commodity": "Palladium",
+     "demand": 1595724,
+     "sell_price": 53979,
+     "supply": 0
+    },
+    {
+     "buy_price": 0,
+     "category": "Metals",
+     "commodity": "Silver",
+     "demand": 1223257,
+     "sell_price": 41005,
+     "supply": 0
+    }
+   ]
+  }
+ ]
+}

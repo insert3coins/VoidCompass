@@ -104,6 +104,7 @@ class OverlayStartupRestoreTests(unittest.TestCase):
                 "contact_scope_hud": "contact_scope",
                 "jump_info_hud": "jump_info",
                 "colony_needs_hud": "colony_needs",
+                "trade_route_hud": "trade_route",
                 "survey_status_hud": "survey",
                 "station_info_hud": "station",
                 "gravity_warning_hud": "gravity",

@@ -1,0 +1,178 @@
+{
+ "created_at": "2026-10-05T02:57:16",
+ "job": "78D8E0CA-C068-11F1-8547-F34E8CE58656",
+ "parameters": {
+  "max_cargo": "200",
+  "max_hop_distance": "30",
+  "max_hops": "3",
+  "max_price_age": "259200",
+  "max_system_distance": "5000",
+  "requires_large_pad": 1,
+  "starting_capital": "20000000",
+  "starting_station_id": 45534
+ },
+ "result": [
+  {
+   "commodities": [
+    {
+     "amount": 200,
+     "destination_commodity": {
+      "buy_price": 230,
+      "demand": 1,
+      "sell_price": 138,
+      "supply": 36528
+     },
+     "name": "Biowaste",
+     "profit": 29,
+     "source_commodity": {
+      "buy_price": 109,
+      "demand": 1,
+      "sell_price": 65,
+      "supply": 78658
+     },
+     "total_profit": 5800
+    }
+   ],
+   "cumulative_profit": 5800,
+   "destination": {
+    "distance_to_arrival": 963,
+    "market_id": 4208889347,
+    "market_updated_at": 1791160471,
+    "station": "Arai Town",
+    "system": "UGPS 0722-05",
+    "system_id64": 5368172530504,
+    "x": 8.875,
+    "y": 0.03125,
+    "z": -10.03125
+   },
+   "distance": 13.393751458236,
+   "source": {
+    "distance_to_arrival": 503,
+    "market_id": 128016896,
+    "market_updated_at": 1791166320,
+    "station": "Abraham Lincoln",
+    "system": "Sol",
+    "system_id64": 10477373803,
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "total_profit": 5800
+  },
+  {
+   "commodities": [
+    {
+     "amount": 200,
+     "destination_commodity": {
+      "buy_price": 0,
+      "demand": 5365,
+      "sell_price": 20907,
+      "supply": 0
+     },
+     "name": "Bertrandite",
+     "profit": 3886,
+     "source_commodity": {
+      "buy_price": 17021,
+      "demand": 1,
+      "sell_price": 16559,
+      "supply": 12915
+     },
+     "total_profit": 777200
+    }
+   ],
+   "cumulative_profit": 783000,
+   "destination": {
+    "distance_to_arrival": 2707,
+    "market_id": 3228466432,
+    "market_updated_at": 1791104500,
+    "station": "Murray Refinery",
+    "system": "Sosolingati",
+    "system_id64": 4168022493547,
+    "x": 21.3125,
+    "y": -13.875,
+    "z": -2.09375
+   },
+   "distance": 20.2750857350222,
+   "source": {
+    "distance_to_arrival": 963,
+    "market_id": 4208889347,
+    "market_updated_at": 1791160471,
+    "station": "Arai Town",
+    "system": "UGPS 0722-05",
+    "system_id64": 5368172530504,
+    "x": 8.875,
+    "y": 0.03125,
+    "z": -10.03125
+   },
+   "total_profit": 777200
+  },
+  {
+   "commodities": [
+    {
+     "amount": 97,
+     "destination_commodity": {
+      "buy_price": 0,
+      "demand": 66,
+      "sell_price": 70110,
+      "supply": 0
+     },
+     "name": "Palladium",
+     "profit": 22359,
+     "source_commodity": {
+      "buy_price": 47751,
+      "demand": 1,
+      "sell_price": 47212,
+      "supply": 97
+     },
+     "total_profit": 2168823
+    },
+    {
+     "amount": 103,
+     "destination_commodity": {
+      "buy_price": 0,
+      "demand": 386,
+      "sell_price": 63784,
+      "supply": 0
+     },
+     "name": "Gold",
+     "profit": 19363,
+     "source_commodity": {
+      "buy_price": 44421,
+      "demand": 1,
+      "sell_price": 43914,
+      "supply": 743
+     },
+     "total_profit": 1994389
+    }
+   ],
+   "cumulative_profit": 4946212,
+   "destination": {
+    "distance_to_arrival": 75,
+    "market_id": 128114680,
+    "market_updated_at": 1791104841,
+    "station": "Robins High",
+    "system": "Luyten 205-128",
+    "system_id64": 7268024264113,
+    "x": 7.59375,
+    "y": -4.9375,
+    "z": 16.71875
+   },
+   "distance": 24.9397907782423,
+   "source": {
+    "distance_to_arrival": 2707,
+    "market_id": 3228466432,
+    "market_updated_at": 1791104500,
+    "station": "Murray Refinery",
+    "system": "Sosolingati",
+    "system_id64": 4168022493547,
+    "x": 21.3125,
+    "y": -13.875,
+    "z": -2.09375
+   },
+   "total_profit": 4163212
+  }
+ ],
+ "state": "completed",
+ "status": "ok",
+ "updated_at": "2026-10-05T02:57:59"
+}

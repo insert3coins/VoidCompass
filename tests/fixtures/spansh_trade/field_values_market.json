@@ -1,0 +1,166 @@
+{
+ "min_max": {
+  "Gold": {
+   "buy_price": {
+    "max": 4760900.0,
+    "min": 0.0
+   },
+   "demand": {
+    "max": 20973744.0,
+    "min": 0.0
+   },
+   "sell_price": {
+    "max": 4760900.0,
+    "min": 0.0
+   },
+   "supply": {
+    "max": 3597238.0,
+    "min": 0.0
+   }
+  },
+  "Silver": {
+   "buy_price": {
+    "max": 3722300.0,
+    "min": 0.0
+   },
+   "demand": {
+    "max": 39633231.0,
+    "min": 0.0
+   },
+   "sell_price": {
+    "max": 3722300.0,
+    "min": 0.0
+   },
+   "supply": {
+    "max": 9445082.0,
+    "min": 0.0
+   }
+  },
+  "Palladium": {
+   "buy_price": {
+    "max": 5063900.0,
+    "min": 0.0
+   },
+   "demand": {
+    "max": 17049461.0,
+    "min": 0.0
+   },
+   "sell_price": {
+    "max": 5063900.0,
+    "min": 0.0
+   },
+   "supply": {
+    "max": 3710345.0,
+    "min": 0.0
+   }
+  },
+  "Void Opal": {
+   "buy_price": {
+    "max": 13533900.0,
+    "min": 0.0
+   },
+   "demand": {
+    "max": 135248.0,
+    "min": 0.0
+   },
+   "sell_price": {
+    "max": 2057364.0,
+    "min": 0.0
+   },
+   "supply": {
+    "max": 23097.0,
+    "min": 0.0
+   }
+  },
+  "Low Temperature Diamonds": {
+   "buy_price": {
+    "max": 10638200.0,
+    "min": 0.0
+   },
+   "demand": {
+    "max": 154556.0,
+    "min": 0.0
+   },
+   "sell_price": {
+    "max": 9643800.0,
+    "min": 0.0
+   },
+   "supply": {
+    "max": 17480.0,
+    "min": 0.0
+   }
+  },
+  "Agri-Medicines": {
+   "buy_price": {
+    "max": 123100.0,
+    "min": 0.0
+   },
+   "demand": {
+    "max": 11455100.0,
+    "min": 0.0
+   },
+   "sell_price": {
+    "max": 12310.0,
+    "min": 0.0
+   },
+   "supply": {
+    "max": 3748333.0,
+    "min": 0.0
+   }
+  },
+  "Marine Equipment": {
+   "buy_price": {
+    "max": 413600.0,
+    "min": 0.0
+   },
+   "demand": {
+    "max": 8027534.0,
+    "min": 0.0
+   },
+   "sell_price": {
+    "max": 408400.0,
+    "min": 0.0
+   },
+   "supply": {
+    "max": 19126573.0,
+    "min": 0.0
+   }
+  },
+  "Biowaste": {
+   "buy_price": {
+    "max": 35800.0,
+    "min": 0.0
+   },
+   "demand": {
+    "max": 103771471.0,
+    "min": 0.0
+   },
+   "sell_price": {
+    "max": 35800.0,
+    "min": 0.0
+   },
+   "supply": {
+    "max": 27015714.0,
+    "min": 0.0
+   }
+  },
+  "Bertrandite": {
+   "buy_price": {
+    "max": 1881700.0,
+    "min": 0.0
+   },
+   "demand": {
+    "max": 64900750.0,
+    "min": 0.0
+   },
+   "sell_price": {
+    "max": 1881700.0,
+    "min": 0.0
+   },
+   "supply": {
+    "max": 25108895.0,
+    "min": 0.0
+   }
+  }
+ }
+}

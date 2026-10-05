@@ -1,18 +1,23 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.2.5 // Updates in the app
+## v5.5.2.6 // Trading
 **Release Date:** 2026-Oct-05
 
-* **Install updates from inside Void Compass.** When a new release is out, the update window now has **Install update**:
-  * Void Compass downloads the release from GitHub and checks it against the release's checksums before using any of it.
-  * **Restart to update** closes the app, swaps in the new version and opens it again.
-  * Your settings, commander profiles, logs and everything else you've built up are kept. Only the app's own files are replaced.
-  * If anything goes wrong, the old version is put back and opened instead, and the deck tells you what happened.
-  * The version you updated from is kept in the `updates` folder, in case you ever want it back.
-* This works from 5.5.2.5 on, so this one last update still has to be downloaded from GitHub by hand.
+* New **Trading** tab on the main menu, with routes and prices from Spansh (only when you search) and every trade you've made from your journal.
+  * **Overview**: your trading profit, profit per hour and best sale, with charts of profit per day and your running total over 24 hours, 7, 30 or 90 days, a year or all time. Hover them for the figures. Mining and salvage sales are shown beside trading, never mixed into it.
+  * **Route planner**: Spansh's trade router, filled in from your ship, credits and location. It shows each hop's cargo, prices, profit and how fresh the prices are.
+  * **Loop routes** between any two stations, worked out from both markets.
+  * **Follow a route**: it ticks along as you buy and sell, and when you dock at the next station its prices are checked again on Spansh.
+  * **Sell cargo**: the best place near you to sell everything in your hold.
+  * **Find commodity**: where to buy or sell anything, near any system.
+  * **Market**: the station you're docked at, straight from the game (with the game's galactic average), or any station's market from Spansh.
+  * **History**: profit per hour for each session, the routes you've flown, where you sell, every trade, and a report to paste into Discord.
+* New **Trade Route** overlay: the next step of the route you're following, with price warnings. It only shows while you follow a route.
+* **Trading searches (Spansh)** in Settings > Integrations, on by default. Your own trading record works without it.
 
 ## Earlier releases
 
+* **v5.5.2.5** — Install updates from inside Void Compass: downloaded and checked from GitHub, swapped in on a restart, with your settings and profiles kept and the old version put back if anything goes wrong.
 * **v5.5.2.4.1** — Surface gravity fixed for worlds under about 0.5 G (shown ten times too heavy, which also skewed species predictions and set off false gravity warnings); BGS Refresh from EDSM gets fresh data; conflicts listed newest first.
 * **v5.5.2.4** — New BGS tab: every faction in every system you visit, tracking and alerts, conflicts, any system looked up on EDSM, influence charts, your work per tick with a Discord report, and a guide to the states.
 * **v5.5.2.3** — Deep Space Contact Scope rebuilt from the journal alone: signals named by type, nothing missed on arrival, honk counts, expiring unidentified signals, and busy systems kept readable.

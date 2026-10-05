@@ -52,6 +52,7 @@ from voidcompass.overlays.contact_scope_hud import ContactScopeHUD
 from voidcompass.exploration.contact_scope import ContactLedger
 from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
+from voidcompass.overlays.trade_route_hud import TradeRouteHUD
 from voidcompass.exploration.codex_index import CodexIndex
 from voidcompass.overlays.html_survey_overlay import attach_html_survey_overlay
 from voidcompass.overlays.html_toast_overlay import attach_html_toast_overlay
@@ -70,6 +71,7 @@ from voidcompass.overlays.html_music_overlay import attach_html_music_overlay
 from voidcompass.overlays.html_contact_overlay import attach_html_contact_overlay
 from voidcompass.overlays.html_jump_info_overlay import attach_html_jump_info_overlay
 from voidcompass.overlays.html_colony_needs_overlay import attach_html_colony_needs_overlay
+from voidcompass.overlays.html_trade_route_overlay import attach_html_trade_route_overlay
 from voidcompass.core.runtime_trace import RuntimeTrace
 from voidcompass.dashboard.dashboard_db_mixin import DashboardDBMixin
 from voidcompass.dashboard.dashboard_core_mixin import DashboardCoreMixin
@@ -78,6 +80,7 @@ from voidcompass.dashboard.dashboard_exploration_mixin import DashboardExplorati
 from voidcompass.dashboard.dashboard_jump_info_mixin import DashboardJumpInfoMixin
 from voidcompass.dashboard.dashboard_colonisation_mixin import DashboardColonisationMixin
 from voidcompass.dashboard.dashboard_bgs_mixin import DashboardBgsMixin
+from voidcompass.dashboard.dashboard_trading_mixin import DashboardTradingMixin
 from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
 from voidcompass.core.field_state import (
     get_material_category, load_colonisation_data, load_engineer_materials,
@@ -256,6 +259,7 @@ class MainDashboard(
     DashboardJumpInfoMixin,
     DashboardColonisationMixin,
     DashboardBgsMixin,
+    DashboardTradingMixin,
     DashboardCoreMixin,
     DashboardDBMixin,
 ):
@@ -940,6 +944,7 @@ class MainDashboard(
             "contact_scope_hud",
             "jump_info_hud",
             "colony_needs_hud",
+            "trade_route_hud",
         ):
             overlay = getattr(self, attr, None)
             apply_overlay_theme = getattr(overlay, "apply_theme", None)
@@ -1025,7 +1030,7 @@ class MainDashboard(
             "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "rhino_minimap_hud", "powerplay_hud",
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud",
-            "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud",
+            "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -1882,6 +1887,7 @@ class MainDashboard(
         self.codex_index = CodexIndex(get_profile_file(new_key, "codex_index.json"))
         self._colony_switch_profile(new_key)
         self._bgs_switch_profile(new_key)
+        self._trading_switch_profile(new_key)
         if getattr(self, "expedition_manager", None):
             self.expedition_manager.flush(wait=False)
         self.expedition_manager = ExpeditionManager(
@@ -2019,6 +2025,7 @@ class MainDashboard(
         )
         self._colony_init()
         self._bgs_init()
+        self._trading_init()
         self.rhino_minimap = RhinoMinimapTracker(
             get_profile_file(get_active_profile(self.config), "rhino_minimap.json.gz")
         )
@@ -2515,6 +2522,11 @@ class MainDashboard(
         else:
             self.colony_needs_hud = None
 
+        if self._overlay_enabled("trade_route_hud"):
+            self.trade_route_hud = TradeRouteHUD(self.root, self.config)
+        else:
+            self.trade_route_hud = None
+
         # Before the overlays register, so they open faded and capped.
         self._apply_overlay_server_settings()
         self._attach_html_overlay_renderers()
@@ -2598,6 +2610,10 @@ class MainDashboard(
         # BGS: read the journal history into the record, and ask for the tick.
         self._bgs_start_import()
         self._bgs_refresh_tick()
+        # Trading: your own trades from the journal history, and the route
+        # you were following (on its overlay).
+        self._trading_start_import()
+        self._trading_update_overlay()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
         latest_fuel_capacity = self.watcher.get_latest_fuel_capacity()
         if latest_fuel_capacity > 0:
@@ -3823,10 +3839,11 @@ class MainDashboard(
         if raven_worker is not None:
             raven_worker.shutdown()
         self._bgs_close()
+        self._trading_close()
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
-            "jump_info_hud", "colony_needs_hud",
+            "jump_info_hud", "colony_needs_hud", "trade_route_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
             try:
@@ -4808,6 +4825,14 @@ class MainDashboard(
             self.colony_needs_hud.destroy()
             self.colony_needs_hud = None
 
+        if self._overlay_enabled("trade_route_hud"):
+            if getattr(self, "trade_route_hud", None) is None:
+                self.trade_route_hud = TradeRouteHUD(self.root, self.config)
+                self._trading_update_overlay()
+        elif getattr(self, "trade_route_hud", None):
+            self.trade_route_hud.destroy()
+            self.trade_route_hud = None
+
         self._attach_html_overlay_renderers()
         self._apply_html_overlay_renderer()
 
@@ -4892,6 +4917,10 @@ class MainDashboard(
                 )
             elif attr == "colony_needs_hud":
                 attach_html_colony_needs_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "trade_route_hud":
+                attach_html_trade_route_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             else:
@@ -7692,6 +7721,8 @@ class MainDashboard(
             self._refresh_contact_scope()
         # BGS: faction snapshots and the work you do (bgs.journal).
         self._bgs_observe(raw if isinstance(raw, dict) else None, startup_replay=startup_replay)
+        # Trading: your trades, and the route you're following (trading.journal).
+        self._trading_observe(raw if isinstance(raw, dict) else None, startup_replay=startup_replay)
         if getattr(self, "codex_index", None) and ev == "CodexEntry" and isinstance(raw, dict):
             try:
                 if self.codex_index.observe(raw) and not startup_replay:

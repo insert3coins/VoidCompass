@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.5.2.5**
+**Current version: 5.5.2.6**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
@@ -24,6 +24,7 @@ The command deck has a tab for each part of the game:
   - Every faction in every system you visit: influence, states, conflicts, and how they change between ticks.
   - Track the factions you care about and get warned when they're in trouble.
   - Look up any system by name, and see the work you've done for each faction, per tick, with a report ready to paste into Discord.
+- **Trading**: every trade you've made, with your profit per day, per hour and per route, plus trade routes, loop routes, where to sell what's in your hold, where to buy or sell any commodity, and station markets from [Spansh](https://spansh.co.uk).
 - **Powerplay**: your pledge, rank, merits and the current cycle, system by system.
 - **Music**: a player for your own music files, with an overlay you can show in game.
 
@@ -33,7 +34,7 @@ Feedback is quiet on purpose: it shows up on the deck, in notifications and on t
 
 Overlays sit on top of the game. Each one can be switched on and off, moved and themed on its own:
 
-Navigation HUD, Survey Operations, Jump Info, Deep Space Contact Scope, Construction Needs, Cargo Manifest, Fleet/Squadron Carrier, Prospector Analysis, Planet Materials, Planet Waypoint Navigation, Powerplay Operations, Station Information, Gravity Warning, Cockpit Notifications, Journal Heartbeat, Galnet Ticker and Music Player.
+Navigation HUD, Survey Operations, Jump Info, Deep Space Contact Scope, Construction Needs, Trade Route, Cargo Manifest, Fleet/Squadron Carrier, Prospector Analysis, Planet Materials, Planet Waypoint Navigation, Powerplay Operations, Station Information, Gravity Warning, Cockpit Notifications, Journal Heartbeat, Galnet Ticker and Music Player.
 
 **Overlay Studio** lays them out on your actual monitors. It also has their opacity, a frame-rate cap and per-overlay options. Overlays can hide themselves while the galaxy or system map is open, and the switches along the top of the deck turn any of them on or off quickly. OBS can capture each overlay as its own window.
 
@@ -49,7 +50,7 @@ Some features talk to community services, and you can switch any of them off in 
 - **EDDN**: sharing the markets you visit.
 - **Raven Colonial**: colonisation projects. Only used once you've added your own API key.
 - **EDCD tick service**: when the BGS tick happened.
-- **Spansh**: only when you ask for a search.
+- **Spansh**: only when you ask for a search, including trade routes and prices.
 - **Discord**: carrier announcements, if you add a webhook.
 
 ## Installing

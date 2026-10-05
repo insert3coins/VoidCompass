@@ -690,6 +690,8 @@ class _OverlayHost:
             path = "/jump_info/index.html"
         elif template == "colony_needs":
             path = "/colony_needs/index.html"
+        elif template == "trade_route":
+            path = "/trade_route/index.html"
         elif template == "planet-materials-overlay":
             path = "/planet-materials-overlay/index.html"
         elif template == "powerplay-overlay":

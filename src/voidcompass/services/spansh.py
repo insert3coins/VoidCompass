@@ -2,6 +2,7 @@
 
 import time
 import re
+from urllib.parse import quote
 
 import requests
 
@@ -30,7 +31,7 @@ class SpanshError(Exception):
     pass
 
 
-def submit_and_poll(path, payload, include_job=False):
+def submit_and_poll(path, payload, include_job=False, max_wait=MAX_WAIT_SECONDS):
     """Spansh's async job pattern: POST form payload, then poll results."""
     try:
         resp = requests.post(f"{BASE}/{path}", data=payload, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
@@ -42,7 +43,7 @@ def submit_and_poll(path, payload, include_job=False):
     if not job:
         raise SpanshError(f"Spansh did not return a job id: {resp.text[:200]}")
 
-    deadline = time.monotonic() + MAX_WAIT_SECONDS
+    deadline = time.monotonic() + max_wait
     while time.monotonic() < deadline:
         try:
             poll = requests.get(f"{BASE}/results/{job}", headers=HEADERS, timeout=POLL_TIMEOUT)
@@ -521,6 +522,58 @@ def service_stations(reference_system, service, size=8, coords=None):
         "large_pad": bool(row.get("has_large_pad")), "updated_at": row.get("updated_at"),
         "carrier": (row.get("type") or "") == "Drake-Class Carrier",
     } for row in resp.json().get("results") or []]
+
+
+# -- trading (5.5.2.6): the endpoints spansh.co.uk/trade itself uses ----------
+TRADE_ROUTE_FIELDS = (
+    "system", "station", "starting_capital", "max_cargo", "max_hop_distance", "max_hops",
+    "max_system_distance", "max_price_age", "requires_large_pad", "allow_planetary",
+    "allow_player_owned", "allow_prohibited", "allow_restricted_access", "permit", "unique",
+)
+
+
+def trade_route(form):
+    """The trade router: hops from a station, each with what to buy and sell.
+    Returns ``(result, job)``; ``form`` uses TRADE_ROUTE_FIELDS."""
+    payload = {key: form[key] for key in TRADE_ROUTE_FIELDS if form.get(key) not in (None, "")}
+    if not payload.get("system") or not payload.get("station"):
+        raise SpanshError("A trade route starts from a station: give its system and station.")
+    return submit_and_poll("trade/route", payload, include_job=True, max_wait=180)
+
+
+def _get_json(path):
+    try:
+        resp = requests.get(f"{BASE}/{path}", headers=HEADERS, timeout=45)
+    except requests.RequestException as exc:
+        raise SpanshError(f"Could not reach Spansh: {exc}") from exc
+    if resp.status_code >= 400:
+        raise SpanshError(_error_text(resp))
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise SpanshError("Spansh sent a reply that could not be read.") from exc
+
+
+def commodity_stations(kind, reference_system, commodity, amount=1):
+    """Stations near a system that buy (``kind`` "sell": where to sell it) or
+    sell (``kind`` "buy": where to buy it) a commodity, by Spansh's exact
+    English name, with each station's whole market."""
+    if kind not in ("buy", "sell"):
+        raise ValueError(kind)
+    if not reference_system or not commodity:
+        raise SpanshError("Give a system and a commodity to search for.")
+    return _get_json(f"commodity/{kind}/{quote(str(reference_system), safe='')}/"
+                     f"{quote(str(commodity), safe='')}/{max(1, int(amount or 1))}")
+
+
+def station_market(market_id):
+    """One station and its market (``/api/station/<market id>``)."""
+    return _get_json(f"station/{int(market_id)}")
+
+
+def market_field_values():
+    """Every commodity Spansh knows, with the best buy and sell prices anywhere."""
+    return _get_json("stations/field_values/market")
 
 
 def _error_text(resp):
