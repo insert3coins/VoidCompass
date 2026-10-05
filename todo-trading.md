@@ -1,4 +1,4 @@
-# TODO 2: Trading
+# TODO: Trading
 
 A full trading system, with **Spansh** as the online source. No local price database: every price, route and station comes from Spansh, and Spansh keeps them fresh from the EDDN feed.
 
