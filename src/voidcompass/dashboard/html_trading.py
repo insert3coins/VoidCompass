@@ -66,7 +66,7 @@ class HtmlTradingMixin:
             "max_cargo": _int(ship.get("cargo_capacity") or getattr(self, "cargo_capacity", 0), 0, 0),
             "starting_capital": _int(getattr(self, "cmdr_balance", 0), 0, 0),
             "max_hop_distance": max(10, math.floor(float(jump))) if jump else 20,
-            "max_hops": 4, "max_system_distance": 5000, "max_price_age_days": 3,
+            "max_hops": 3, "max_system_distance": 5000, "max_price_age_days": 3,
             "requires_large_pad": 1 if str(ship.get("ship") or "").casefold() in LARGE_SHIPS else 0,
             "allow_planetary": 1, "allow_player_owned": 0, "allow_prohibited": 0,
             "allow_restricted_access": 0, "permit": 0, "unique": 0,
@@ -139,6 +139,10 @@ class HtmlTradingMixin:
             return self._trading_plan(ui, payload)
         if operation == "loop":
             return self._trading_loop(ui, _int(payload.get("market_a")), _int(payload.get("market_b")))
+        if operation == "stop_plan":
+            return self._trading_stop_route(ui)
+        if operation == "pick_station":
+            return self._trading_plan(ui, {"system": _text(payload.get("system"), 120), "station": _text(payload.get("station"), 120)})
         if operation == "follow":
             result = ui["route"].get("result")
             if not result or not result.get("hops"):
@@ -210,18 +214,66 @@ class HtmlTradingMixin:
             return True
         request = {key: form[key] for key in spansh.TRADE_ROUTE_FIELDS if key in form}
         request["max_price_age"] = form["max_price_age_days"] * 86400
-        ui["route"] = {"pending": True}
+        started = time.time()
+        progress = {"pending": True, "stage": "station", "started": started, "hops": form["max_hops"]}
+        ui["route"] = progress
         ui["loop"] = {}
+        token = self.__dict__["_trading_route_token"] = getattr(self, "_trading_route_token", 0) + 1
+
+        def stage(name):
+            # From the worker thread: the deck shows each step as it happens.
+            progress.update(stage=name, stage_at=time.time())
+            self._ui_post(lambda: self._schedule_html_dashboard_publish(immediate=True), key="trading-progress")
 
         def work():
-            result, job = spansh.trade_route(request)
-            return {"result": trade_market.parse_route(result), "job": job}
+            system, station = request["system"], request["station"]
+            # Planned from where you're docked: the game's names are Spansh's.
+            here = getattr(self, "current_station_name", "") if getattr(self, "current_docked", False) else ""
+            if here and station.casefold() == here.casefold() \
+                    and system.casefold() == str(getattr(self, "current_sys", "") or "").casefold():
+                system, station = getattr(self, "current_sys", system), here
+            else:
+                # Otherwise the router only knows a station by its exact name
+                # in that system: match what was typed (any case) first.
+                system, stations = self._trading_system_stations(system)
+                match = next((row for row in stations if row["name"].casefold() == station.casefold()), None)
+                if match is None:
+                    return {"choices": {"system": system, "typed": station, "stations": stations[:40]}}
+                station = match["name"]
+            exact = {**request, "system": system, "station": station}
+            result, job = spansh.trade_route(exact, on_state=stage,
+                                             should_stop=lambda: getattr(self, "_trading_route_token", 0) != token)
+            return {"result": trade_market.parse_route(result), "job": job, "system": system, "station": station,
+                    "took": round(time.time() - started)}
 
         def done(result, error):
+            if getattr(self, "_trading_route_token", 0) != token:
+                return  # stopped, or a newer search took over
+            if result and "choices" in result:
+                ui["route"] = {"choices": result["choices"]}
+                return
             ui["route"] = {"error": error} if error else {**result, "planned_at": time.time()}
-            if result and not result["result"]["hops"]:
-                ui["route"]["error"] = "Spansh found no profitable route with these settings. Try more hops, a longer hop distance or older prices."
+            if result:
+                ui["form"].update(system=result["system"], station=result["station"])
+                if not result["result"]["hops"]:
+                    ui["route"]["error"] = "Spansh found no profitable route with these settings. Try more hops, a longer hop distance or older prices."
         return self._trading_task("route", work, done, cache_key=("route", tuple(sorted(request.items()))))
+
+    def _trading_stop_route(self, ui):
+        """Stop waiting for Spansh (the job finishes on their side unseen)."""
+        self._trading_route_token = getattr(self, "_trading_route_token", 0) + 1
+        getattr(self, "_trading_busy", {}).pop("route", None)
+        ui["route"] = {}
+        ui["notice"] = "Stopped the route search."
+        return True
+
+    def _trading_system_stations(self, system):
+        """A system's stations with markets, from Spansh, once a session."""
+        cache = self.__dict__.setdefault("_trading_station_lists", {})
+        key = system.casefold()
+        if key not in cache:
+            cache[key] = spansh.system_stations(system)
+        return cache[key]
 
     def _trading_loop(self, ui, market_a, market_b):
         if not market_a or not market_b:
@@ -263,12 +315,15 @@ class HtmlTradingMixin:
         if not hold or not system:
             ui["cargo"] = {"error": "Your hold is empty." if system else "Waiting for your location from the journal."}
             return True
-        ui["cargo"] = {"pending": True}
+        progress = {"pending": True, "done": 0, "total": len(hold), "current": ""}
+        ui["cargo"] = progress
 
         def work():
             self._trading_spansh_names()
             rows = []
-            for item in hold:
+            for index, item in enumerate(hold):
+                progress.update(done=index, current=self.trading_names.name(item["symbol"]))
+                self._ui_post(lambda: self._schedule_html_dashboard_publish(immediate=True), key="trading-progress")
                 name = self.trading_names.name(item["symbol"])
                 stations = trade_market.parse_commodity(
                     spansh.commodity_stations("sell", system, name, item["count"]), name, "sell")

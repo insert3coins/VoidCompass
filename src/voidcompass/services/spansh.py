@@ -31,8 +31,10 @@ class SpanshError(Exception):
     pass
 
 
-def submit_and_poll(path, payload, include_job=False, max_wait=MAX_WAIT_SECONDS):
-    """Spansh's async job pattern: POST form payload, then poll results."""
+def submit_and_poll(path, payload, include_job=False, max_wait=MAX_WAIT_SECONDS, on_state=None, should_stop=None):
+    """Spansh's async job pattern: POST form payload, then poll results.
+    ``on_state`` hears the job's state as it changes ("queued", "started");
+    Spansh gives no finer progress. ``should_stop`` ends the wait early."""
     try:
         resp = requests.post(f"{BASE}/{path}", data=payload, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
     except requests.RequestException as exc:
@@ -44,7 +46,12 @@ def submit_and_poll(path, payload, include_job=False, max_wait=MAX_WAIT_SECONDS)
         raise SpanshError(f"Spansh did not return a job id: {resp.text[:200]}")
 
     deadline = time.monotonic() + max_wait
+    seen = None
+    if on_state:
+        on_state("queued")
     while time.monotonic() < deadline:
+        if should_stop and should_stop():
+            raise SpanshError("Stopped.")
         try:
             poll = requests.get(f"{BASE}/results/{job}", headers=HEADERS, timeout=POLL_TIMEOUT)
         except requests.RequestException as exc:
@@ -53,6 +60,10 @@ def submit_and_poll(path, payload, include_job=False, max_wait=MAX_WAIT_SECONDS)
             raise SpanshError(_error_text(poll))
         data = poll.json()
         status = data.get("status")
+        state = data.get("state") or status
+        if on_state and state != seen and state in ("queued", "started"):
+            seen = state
+            on_state(state)
         if status == "ok":
             result = data.get("result")
             return (result, str(job)) if include_job else result
@@ -532,13 +543,13 @@ TRADE_ROUTE_FIELDS = (
 )
 
 
-def trade_route(form):
+def trade_route(form, on_state=None, should_stop=None):
     """The trade router: hops from a station, each with what to buy and sell.
     Returns ``(result, job)``; ``form`` uses TRADE_ROUTE_FIELDS."""
     payload = {key: form[key] for key in TRADE_ROUTE_FIELDS if form.get(key) not in (None, "")}
     if not payload.get("system") or not payload.get("station"):
         raise SpanshError("A trade route starts from a station: give its system and station.")
-    return submit_and_poll("trade/route", payload, include_job=True, max_wait=180)
+    return submit_and_poll("trade/route", payload, include_job=True, max_wait=180, on_state=on_state, should_stop=should_stop)
 
 
 def _get_json(path):
@@ -569,6 +580,29 @@ def commodity_stations(kind, reference_system, commodity, amount=1):
 def station_market(market_id):
     """One station and its market (``/api/station/<market id>``)."""
     return _get_json(f"station/{int(market_id)}")
+
+
+def system_stations(system_name):
+    """A system's stations that have a market, by Spansh's exact names:
+    ``(system, [{"name", "type", "market_id", "arrival_ls", "carrier"}])``.
+    The trade router only accepts a station it knows, spelled its way."""
+    wanted = str(system_name or "").strip()
+    if not wanted:
+        raise SpanshError("Give a system name.")
+    found = _get_json(f"search/systems?q={quote(wanted)}")
+    match = next((row for row in found.get("results") or () if str(row.get("name") or "").casefold() == wanted.casefold()), None)
+    if not match:
+        raise SpanshError(f"Spansh doesn't know a system called {wanted}. Check the spelling.")
+    record = _get_json(f"system/{int(match['id64'])}").get("record") or {}
+    stations = []
+    for row in record.get("stations") or ():
+        if not row.get("has_market") or not row.get("name"):
+            continue
+        kind = str(row.get("type") or "")
+        stations.append({"name": row["name"], "type": kind, "market_id": row.get("market_id"),
+                         "arrival_ls": row.get("distance_to_arrival"), "carrier": "carrier" in kind.casefold()})
+    stations.sort(key=lambda row: (row["carrier"], row["arrival_ls"] if row["arrival_ls"] is not None else 1e12))
+    return record.get("name") or match.get("name") or wanted, stations
 
 
 def market_field_values():

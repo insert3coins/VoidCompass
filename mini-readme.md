@@ -6,6 +6,8 @@
 * New **Trading** tab on the main menu, with routes and prices from Spansh (only when you search) and every trade you've made from your journal.
   * **Overview**: your trading profit, profit per hour and best sale, with charts of profit per day and your running total over 24 hours, 7, 30 or 90 days, a year or all time. Hover them for the figures. Mining and salvage sales are shown beside trading, never mixed into it.
   * **Route planner**: Spansh's trade router, filled in from your ship, credits and location. It shows each hop's cargo, prices, profit and how fresh the prices are.
+    * While Spansh works, each step ticks off with a running timer, and you can stop it. Three hops usually take under a minute; each extra hop adds time.
+    * Station names are matched for you, in any case. Type something that isn't a station there (a station type like "Orbis Starport", say) and you get that system's stations to pick from.
   * **Loop routes** between any two stations, worked out from both markets.
   * **Follow a route**: it ticks along as you buy and sell, and when you dock at the next station its prices are checked again on Spansh.
   * **Sell cargo**: the best place near you to sell everything in your hold.
