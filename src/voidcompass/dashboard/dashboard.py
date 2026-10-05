@@ -89,6 +89,7 @@ from voidcompass.core.field_state import (
 from voidcompass.engineering.engineering_data import ready_blueprints
 from voidcompass.core import companion_features
 from voidcompass.core import operational_state
+from voidcompass.core import odyssey_kit
 from voidcompass.powerplay import powerplay_operations
 from voidcompass.core.credit_events import authoritative_balance, credit_delta
 from voidcompass.exploration.stellar_types import star_type_label
@@ -1768,6 +1769,26 @@ class MainDashboard(
 
     def _save_companion_state(self):
         companion_features.save_state(self.config.get("companion_state_file"), self.companion_state)
+
+    def _record_odyssey_kit(self, ev, raw):
+        """Keep the last suit loadout and backpack with the commander's profile
+        (5.5.2.8), so Commander Record shows them after a restart too."""
+        if ev not in ("SuitLoadout", "Backpack") or not isinstance(raw, dict):
+            return False
+        try:
+            if ev == "SuitLoadout":
+                key, summary = "odyssey_loadout", odyssey_kit.loadout_summary(raw)
+            else:
+                key, summary = "odyssey_backpack", odyssey_kit.inventory_summary(raw)
+            state = getattr(self, "companion_state", None)
+            if summary is None or not isinstance(state, dict) or state.get(key) == summary:
+                return False
+            state[key] = summary
+            self._save_companion_state()
+            return True
+        except Exception as exc:
+            logging.debug("Odyssey kit skipped [%s]: %s", ev, exc)
+            return False
 
     def _switch_commander_profile(self, commander_name, fid=None):
         if not commander_name:
@@ -7783,6 +7804,7 @@ class MainDashboard(
             )
         except Exception as exc:
             logging.debug("Operational event aggregation skipped [%s]: %s", ev, exc)
+        self._record_odyssey_kit(ev, raw if isinstance(raw, dict) else d)
         self._update_adaptive_command(
             ev, raw if isinstance(raw, dict) else d,
             startup_replay=startup_replay,

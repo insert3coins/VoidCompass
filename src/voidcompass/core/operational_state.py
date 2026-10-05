@@ -196,7 +196,9 @@ def observe_event(state, event, raw=None, current_system=None, historical=False)
         ]
         changed = True
     elif event in ("Backpack", "ShipLocker"):
-        ground["backpack"] = {
+        # The ship locker is its own store; it used to overwrite the backpack
+        # (and with it the medkit and energy cell counts) (5.5.2.8).
+        ground["backpack" if event == "Backpack" else "locker"] = {
             "items": _inventory_bucket(raw.get("Items")),
             "components": _inventory_bucket(raw.get("Components")),
             "consumables": _inventory_bucket(raw.get("Consumables")),

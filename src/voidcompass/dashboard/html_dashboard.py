@@ -20,6 +20,7 @@ import time
 import webbrowser
 
 from voidcompass.core import companion_features
+from voidcompass.core import odyssey_kit
 from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.engineering import build_planner
 from voidcompass.engineering import engineering_companion
@@ -965,6 +966,24 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         except (TypeError, ValueError):
             return _text(value, 60)
 
+    def _html_on_foot(self, companion, statistics):
+        """Odyssey for Commander Record (5.5.2.8): suit and loadout, what's in
+        the backpack and ship locker, and the on-foot and exobiology record."""
+        locker = (getattr(self, "engineer_materials", None) or {}).get("ship_locker") or {}
+
+        def bucket(rows, limit=40):
+            return [{"name": _text(row.get("name"), 80), "count": _integer(row.get("count"))}
+                    for row in (rows or [])[:limit] if isinstance(row, dict) and _integer(row.get("count"))]
+        backpack = companion.get("odyssey_backpack") or {}
+        return {
+            "loadout": companion.get("odyssey_loadout"),
+            "backpack": {key: bucket(backpack.get(key)) for key in ("items", "components", "consumables", "data")},
+            "backpack_ts": backpack.get("ts"),
+            "locker": {key: bucket(locker.get(key)) for key in ("items", "components", "consumables", "data")},
+            "record": odyssey_kit.on_foot_record(statistics),
+            "exobiology": odyssey_kit.exobiology_record(statistics),
+        }
+
     def _html_profile_workspace(self):
         companion = getattr(self, "companion_state", None) or {}
         ship = dict(getattr(self, "cmdr_ship", None) or {})
@@ -1050,6 +1069,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "ranks": rank_rows,
             "reputation": reputation_rows,
             "career": career,
+            "on_foot": self._html_on_foot(companion, statistics),
             "achievements": {
                 "unlocked": _integer(achievement_snapshot.get("unlocked")),
                 "total": _integer(achievement_snapshot.get("total")),

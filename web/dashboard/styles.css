@@ -1199,3 +1199,21 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
   .planet-command-bar > strong { grid-column: auto; }
   .planet-site-card summary { grid-template-columns: minmax(0,1fr); }
 }
+
+/* Commander Record: Odyssey on foot (5.5.2.8). */
+.onfoot-suit { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.onfoot-suit > div { display: grid; gap: 2px; }
+.onfoot-suit span { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.onfoot-suit b { color: var(--text); font-size: 15px; }
+.onfoot-suit em { margin-left: 6px; padding: 1px 6px; border: 1px solid var(--accent); color: var(--accent); font: 700 10px Consolas, monospace; font-style: normal; vertical-align: middle; }
+.onfoot-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.onfoot-chips small { color: var(--dim); }
+.onfoot-chip { display: inline-block; margin: 1px 4px 1px 0; padding: 1px 7px; border: 1px solid var(--border); color: var(--muted); font: 11px "Segoe UI", sans-serif; white-space: nowrap; }
+.onfoot-stores { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 16px; }
+.onfoot-store { display: grid; gap: 2px; align-content: start; }
+.onfoot-store h5 { margin: 0 0 4px; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.onfoot-store > div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px solid var(--border-soft); font-size: 12px; }
+.onfoot-store > div span { color: var(--muted); }
+.onfoot-store > div b { color: var(--text); font-variant-numeric: tabular-nums; }
+.onfoot-store small { color: var(--dim); }
+.onfoot-body { padding: 12px 14px; }
