@@ -4,6 +4,57 @@ Parked idea, to come back to. Give The Watcher (the heartbeat orb) a voice: a ca
 
 The joke is in the spirit of Hitchhiker's depressed robot, but **The Watcher is our own character**. Never use the name Marvin, and never quote Douglas Adams.
 
+## The voice lab (built, for testing)
+
+A standalone test bench is in [`Voice/`](Voice/README.md), outside the app. It has:
+- Kokoro on this PC, the weary effect, and the piece cache with joining
+- a small line builder and spoken numbers
+- a listening page with sliders, timings and a benchmark
+- an orb that follows the voice
+
+**First results (5 Oct 2026, with Elite Dangerous running):**
+- **`fp32` runs at a real-time factor of about 0.6:** faster than real time, a pass.
+- **`int8` runs at about 4.7, around 11 times slower on this CPU.** So "int8, 90 MB" below is wrong for live use; plan on `fp32` (about 325 MB).
+- **First sound with nothing cached is about 0.9 s** against the 300 ms goal. Every piece has a fixed cost of about 0.8 s, mostly phonemising and model start-up, so short pieces don't help on their own.
+- **From the cache, first sound is about 12 ms.** Caching and generating ahead aren't optional: they are what makes live work.
+- **About 23–30% of the CPU while speaking, and about 700 MB of memory.** Whether the game's frame rate holds still needs watching.
+- **kokoro-onnx 0.4.7 sends `speed` with the wrong type** to these model files; `Voice/engine.py` works around it.
+
+**Piper, tried the same day (game running):**
+- **About 13 times faster than Kokoro:** a one-word piece takes about 50–80 ms, the median first sound is about 60 ms (a pass, with nothing cached), and the real-time factor is about 0.07.
+- **Half the memory (about 330 MB), with a 63 MB model** instead of 325 MB.
+- **It sounds more robotic,** which may fit The Watcher. **The choice now comes down to how it sounds:** compare `Voice/out/compare/`.
+- **If Piper sounds right,** it makes live speech easy: no fixed-cost problem, a small download, and the cache becomes a bonus rather than a necessity. Its code is GPL-3 (fine for us), but check the chosen voice's own licence.
+
+**Next in the lab:**
+- Cut the fixed cost per piece: phonemise once, keep the espeak process warm, and batch pieces.
+- Try `fp16` and DirectML on the GPU.
+- Measure with the cache warmed up.
+
+## The engine: Piper, with downloadable voices
+
+**Decided (5 Oct 2026): Piper is the long-term engine.** Kokoro sounds more natural, but Piper meets the live budget with room to spare, and its voices are downloadable models, which gives commanders a choice.
+
+**Why Piper:**
+- **Speed:** first sound in about 60 ms, at about 0.07 of real time, with the game running.
+- **Lighter:** about 330 MB of memory, and about 63 MB per medium voice.
+- **Its code (piper1-gpl) is GPL-3,** matching ours.
+
+**The voice catalogue:** Piper publishes `voices.json` (HuggingFace `rhasspy/piper-voices`).
+- 177 voices, 38 of them English (en_GB and en_US), in low, medium and high quality.
+- Each file is listed with its size and MD5 (and HuggingFace gives its SHA-256).
+- Multi-speaker models (VCTK, LibriTTS) hold many voices in one file, chosen by speaker number.
+
+To do:
+
+- [ ] **Pick The Watcher's default voice by ear** (start with `en_GB-alan-medium` and `en_GB-northern_english_male-medium`; compare in `Voice/out/compare/`) and tune the weary effect for it.
+- [ ] **A voice picker in Settings:** a list from the catalogue showing language, accent, quality, size and a **Preview**. Choosing a voice downloads it, checked against the catalogue's digest (the way `core/updater.py` checks releases), into the app folder. Removing a voice frees the space.
+- [ ] **Only voices we've vetted.** Each Piper voice is trained on a dataset with its own licence (in its `MODEL_CARD`), and some may not allow every use. Keep a short allow-list of checked voices in the app, rather than offering the whole catalogue blindly. Credit each shipped voice's dataset in `THIRD_PARTY_NOTICES.md`.
+- [ ] **Multi-speaker models:** for VCTK or LibriTTS, the picker lists their speakers by number with previews, since one download gives many voices.
+- [ ] **The effect suits the voice:** pitch and speed can differ per voice, so each voice keeps its own sound settings, with The Watcher's chain on top. The cache key already includes the voice.
+- [ ] **Changing voice changes the cache:** pieces are cached per voice; switching voices starts fresh, and the old voice's pieces are cleared after a while, or when the voice is removed.
+- [ ] **Kokoro stays in the lab** as the "more natural" comparison. Only revisit it if a faster Kokoro (GPU, or a newer smaller model) ever meets the budget.
+
 ## Ground rules
 
 - [ ] **Opt-in, off by default.** The README promises feedback is "quiet on purpose", and that stays true unless someone switches the voice on. Update the README line ("no voice and no AI chatter") when this ships.
@@ -108,7 +159,7 @@ The Watcher speaks lines made **at that moment**, generated on the commander's o
 
 ### Steps, with a decision gate
 
-1. **Make the generator fast:** the dev tool's `say` and `render` (next section) are the test bed. Get the voice and effect right, then make them quick.
+1. **Make the generator fast:** the dev tool's `say` and `render` (next section) are the test bed. Get the voice and effect right, then make them quick. **Done in the lab: Piper is fast.**
 2. **Benchmark with Elite Dangerous running,** on this PC and on a modest one: delay to first sound, speed, CPU and memory, and the game's frame rate with and without it.
 3. **The decision gate.** Live ships if:
    - the first sound comes within about 300 ms of the moment
@@ -120,7 +171,7 @@ The Watcher speaks lines made **at that moment**, generated on the commander's o
 ### What live needs
 
 - [ ] **One voice, shared:** the effect chain (pitch, filter, shimmer, room) and the pronunciation list are one module, used by both the dev generator and the app's live engine. If the pack is ever needed, it sounds identical.
-- [ ] **A speed budget:** the first sound within about 300 ms of the moment, and the whole line spoken faster than real time. Benchmark Kokoro on CPU (int8 model, thread count), and on GPU where there is one (onnxruntime DirectML on Windows). Try Piper if Kokoro can't meet it.
+- [ ] **A speed budget:** the first sound within about 300 ms of the moment, and the whole line spoken faster than real time. **Piper meets it** (about 60 ms, real-time factor about 0.07, with the game running; see the voice lab). Keep measuring on modest PCs.
 - [ ] **A warm engine:** a background worker process that loads the model once and stays ready, at low priority with few threads, so it never competes with the game. It's started only when the voice is on.
 - [ ] **Streaming:** speak sentence by sentence (or in chunks), so the first words play while the rest is still being made.
 - [ ] **Generating ahead:** use the quiet moments the game gives us.
@@ -139,9 +190,9 @@ The Watcher speaks lines made **at that moment**, generated on the commander's o
   - **Measure it:** the in-game readout shows how much of each line came from the cache, which feeds the decision gate too.
 - [ ] **Never late, never wrong:** a line that isn't ready in time is dropped, not delayed. The Watcher never speaks about something that's already over.
 - [ ] **Measure it in game:** a debug readout of generation time, delay to first sound, and the worker's CPU and memory, taken during real play.
-- [ ] **The model is downloaded** the first time the voice is switched on (Kokoro int8, about 90 MB), checked by SHA-256 the way `core/updater.py` checks releases, and kept in the app folder. It's not in the release zip, so commanders who never use the voice don't download it.
-- [ ] **Keep the engine out of the main exe:** `onnxruntime` adds roughly 15–50 MB. Better to ship it in the separately downloaded engine (a small worker exe plus the model), so the main app stays lean.
-- [ ] **Licences** in `THIRD_PARTY_NOTICES.md`: Kokoro (Apache-2.0), its voices, onnxruntime, kokoro-onnx.
+- [ ] **The voice is downloaded** the first time the voice is switched on (The Watcher's default Piper voice, about 63 MB), checked against the catalogue's digest the way `core/updater.py` checks releases, and kept in the app folder. It's not in the release zip, so commanders who never use the voice don't download it. Other voices come from the voice picker.
+- [ ] **Keep the engine out of the main exe:** Piper and `onnxruntime` add roughly 15–50 MB. Better to ship them in a separately downloaded voice engine (a small worker exe, plus Piper's espeak-ng data), so the main app stays lean, with voices downloaded on top.
+- [ ] **Licences** in `THIRD_PARTY_NOTICES.md`: Piper (GPL-3), espeak-ng (GPL-3), onnxruntime (MIT), and each shipped voice's dataset licence.
 - [ ] **A slow PC:** if a commander's PC can't keep up (measured, not guessed), The Watcher speaks less (only important moments, generated ahead) rather than late. If the pack ever exists, it's the fallback there too.
 
 ## Last resort: a pre-recorded voice pack
@@ -275,7 +326,8 @@ Per the Studio/Settings split, this goes in Settings, not Overlay Studio.
 
 - [ ] Add a **Watcher voice** on/off switch, plus a chattiness level (rare / sometimes / talkative) and a volume.
 - [ ] Register the new settings in the `config.py` `PROFILE_*` tuples and defaults.
-- [ ] A **Test voice** button that downloads the voice engine if needed and says one line. It also reports how fast this PC generates speech, so the commander knows what to expect.
+- [ ] A **Test voice** button that downloads the voice engine and the chosen voice if needed and says one line. It also reports how fast this PC generates speech, so the commander knows what to expect.
+- [ ] The **voice picker** (see "The engine: Piper, with downloadable voices").
 
 ## Prototype first
 
