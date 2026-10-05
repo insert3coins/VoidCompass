@@ -296,6 +296,10 @@ class HtmlOverlayServer:
                     # Native WebView creation and page rendering are separate
                     # milestones.  The host must not reveal a surface until
                     # the browser client has painted an authoritative model.
+                    # The page has drawn the latest model (not just any). A
+                    # hidden overlay is only revealed once it has, so it never
+                    # appears showing what it drew while hidden (5.5.2.7).
+                    "render_current": bool(state.rendered_revision >= state.revision),
                     "content_ready": bool(
                         state.ready.is_set()
                         and state.rendered_revision >= 0

@@ -127,6 +127,10 @@
     }
 
     poll();
+    // The host calls this to fetch new data at once while the overlay is
+    // hidden: a hidden WebView2's timers are throttled (down to about once a
+    // minute), which left a newly shown overlay drawing old data (5.5.2.7).
+    global.__voidcompassPoll = poll;
     const timer = global.setInterval(poll, Math.max(100, Number(options.interval) || 200));
     return {poll, refresh, rerender, stop: () => global.clearInterval(timer)};
   }

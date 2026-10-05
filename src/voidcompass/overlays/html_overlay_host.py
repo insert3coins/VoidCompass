@@ -515,12 +515,27 @@ class _WindowController:
         self.last_click_through = None
         self.last_alpha = None
         self.last_visible = None
+        self.reveal_waiting_since = None
+        self.last_nudge = 0.0
         self.last_topmost_refresh = 0.0
         self.reload_revision = 0
         self.navigation_retries = 0
         self.last_navigation_retry_at = 0.0
 
-    def apply(self, payload, presentation_held=False, content_ready=True):
+    def _nudge(self):
+        """Ask the page to fetch its new data now. A hidden WebView2 throttles
+        the page's own polling timer (to about once a minute after a few
+        minutes hidden); a direct call is not throttled."""
+        now = time.monotonic()
+        if now - self.last_nudge < 0.25:
+            return
+        self.last_nudge = now
+        try:
+            self.window.run_js("window.__voidcompassPoll && window.__voidcompassPoll()")
+        except Exception:
+            pass
+
+    def apply(self, payload, presentation_held=False, content_ready=True, render_current=True):
         payload = payload if isinstance(payload, dict) else {}
         try:
             width = max(24, int(payload.get("width") or 360))
@@ -539,6 +554,21 @@ class _WindowController:
                 and not presentation_held
                 and content_ready
             )
+            # A hidden overlay is revealed only once its page has drawn the
+            # latest model; otherwise it appeared showing whatever it drew
+            # while hidden (the first planet of a system missing from Survey
+            # until the next scan). Two seconds at most, so a page that never
+            # confirms still appears.
+            if not render_current:
+                self._nudge()
+            if visible and self.last_visible is not True and not render_current:
+                now = time.monotonic()
+                if self.reveal_waiting_since is None:
+                    self.reveal_waiting_since = now
+                if now - self.reveal_waiting_since < 2.0:
+                    visible = False
+            if visible or not payload.get("visible", False):
+                self.reveal_waiting_since = None
             # WebView2/WinForms can map a dynamically created window despite
             # pywebview's hidden=True request. Keep every non-presentable
             # surface outside the desktop even after the boot curtain drops.
@@ -787,6 +817,7 @@ class _OverlayHost:
                         spec.get("window"),
                         presentation_held=self.presentation_held,
                         content_ready=bool(spec.get("content_ready", False)),
+                        render_current=bool(spec.get("render_current", True)),
                     )
                     restore_shared_transparency = bool(
                         result.pop("_restore_all_transparency", False)
