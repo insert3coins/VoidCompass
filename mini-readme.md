@@ -1,16 +1,19 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.2.7 // Overlays fit larger text
+## v5.5.2.8 // On foot
 **Release Date:** 2026-Oct-05
 
-* **Overlays now grow with the text size.** With a larger overlay text size, many overlays kept their normal size, so the bigger text was squeezed into the same width and the bottom rows were cut off. Every overlay's window now grows by the same amount as its text, in width and height:
-  * Carrier, Construction Needs, Deep Space Contacts, Planet Materials, Powerplay, Prospector, Trade Route, Jump Info
-  * Cargo, Station Information, Survey Operations (with its own text size) and Notifications
-* **Overlays show up to date when they appear.** An overlay that had been hidden for a while could appear showing what it last drew, because Windows slows down hidden windows. In Survey Operations, a system's first scanned planet didn't appear until the next scan. Overlays are now told about new data straight away while hidden, and only appear once they show it.
-* **The Navigation HUD always fits its window.** It now sizes itself to the window it actually has, so it can't be clipped on the right or at the bottom, even on PCs where Windows draws pages larger than expected.
+* **Commander Record now covers Odyssey on foot**, all from your journal:
+  * **Suit and loadout:** your suit and its real grade (the game's own suit name gets the grade wrong), the loadout's name, the suit's modifications, and each weapon with its grade and modifications, in the names the game uses.
+  * **On-foot record:** distance walked, settlements visited, on-foot combat bonds, settlements defended or conquered, and what you've destroyed on foot.
+  * **Exobiology career:** organic data sold and its profits, first logged and their profits, and the genera, species and variants you've encountered and analysed.
+  * **Backpack** and **ship locker**, sorted by how much you carry.
+* Your last suit loadout and backpack are kept with your commander profile, so they show straight after a restart.
+* **Fixed:** the ship locker overwrote the backpack, so medkit and energy cell counts showed what was in the locker.
 
 ## Earlier releases
 
+* **v5.5.2.7** — Overlays grow with the text size in both directions, overlays show up to date when they appear (Survey's first planet after a jump), and the Navigation HUD always fits its window.
 * **v5.5.2.6** — New Trading tab with Spansh routes, loop routes, selling your cargo, finding any commodity, station markets and your profit history with charts; and the Trade Route overlay.
 * **v5.5.2.5** — Install updates from inside Void Compass: downloaded and checked from GitHub, swapped in on a restart, with your settings and profiles kept and the old version put back if anything goes wrong.
 * **v5.5.2.4.1** — Surface gravity fixed for worlds under about 0.5 G (shown ten times too heavy, which also skewed species predictions and set off false gravity warnings); BGS Refresh from EDSM gets fresh data; conflicts listed newest first.

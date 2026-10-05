@@ -2879,6 +2879,30 @@ function renderProfileWorkspace(data) {
     {label: "Restocks", key: "restocks"},
     {label: "Last state", render: (row) => row.destroyed ? "DESTROYED" : escapeHtml(row.last_event || "OBSERVED")},
   ], data.surface_vehicles || [], "Launch, dock or restock an SRV to establish the observed vehicle ledger.");
+  // Odyssey on foot (5.5.2.8): suit, loadout, weapons, what's carried, and
+  // the on-foot and exobiology record, all from the journal.
+  const foot = data.on_foot || {};
+  const kit = foot.loadout;
+  const figure = (row) => row.unit === "cr" ? credits(row.value)
+    : row.unit === "m" ? `${numeric(row.value / 1000, 1)} KM` : numeric(row.value);
+  const factRows = (rows) => (rows || []).map((row) => `<div><span>${escapeHtml(row.label)}</span><b>${figure(row)}</b></div>`).join("");
+  const chips = (labels) => (labels || []).map((label) => `<span class="onfoot-chip">${escapeHtml(label)}</span>`).join("");
+  const kitCard = kit ? `<div class="onfoot-body"><div class="onfoot-suit"><div><span>SUIT</span><b>${escapeHtml(kit.suit)}${kit.grade ? ` <em>G${numeric(kit.grade)}</em>` : ""}</b></div>
+      <div><span>LOADOUT</span><b>${escapeHtml(kit.loadout || "—")}</b></div></div>
+    <div class="onfoot-chips">${chips(kit.suit_mods) || "<small>No suit modifications</small>"}</div>
+    ${workspaceTable([
+      {label: "Slot", key: "slot"},
+      {label: "Weapon", render: (row) => `<b>${escapeHtml(row.name)}</b>`},
+      {label: "Grade", render: (row) => row.grade ? `G${numeric(row.grade)}` : "—"},
+      {label: "Modifications", render: (row) => chips(row.mods) || "—"},
+    ], kit.weapons || [], "No weapons in this loadout.")}</div>`
+    : "<p class='workspace-empty'>Your suit and loadout show here after the game logs them (at login, or when you change loadout).</p>";
+  const inventory = (store, empty) => {
+    const parts = [["items", "ITEMS"], ["components", "COMPONENTS"], ["consumables", "CONSUMABLES"], ["data", "DATA"]]
+      .filter(([key]) => (store?.[key] || []).length)
+      .map(([key, label]) => `<div class="onfoot-store"><h5>${label}</h5>${(store[key] || []).slice(0, 14).map((row) => `<div><span>${escapeHtml(row.name)}</span><b>${numeric(row.count)}</b></div>`).join("")}${(store[key] || []).length > 14 ? `<small>+${numeric(store[key].length - 14)} more</small>` : ""}</div>`);
+    return parts.length ? `<div class="onfoot-body"><div class="onfoot-stores">${parts.join("")}</div></div>` : `<p class='workspace-empty'>${empty}</p>`;
+  };
   root.classList.remove("loading-panel");
   root.innerHTML = `
     <section class="workspace-hero"><div><small>ACTIVE COMMANDER // ${escapeHtml(data.key)}</small><h3>${escapeHtml(data.name)}</h3><span>${escapeHtml(data.fid || "FID awaiting journal")} · ${escapeHtml(ship.name || ship.type || "No active ship")}</span></div><div><button data-ws-page="profile" data-ws-op="open_folder">OPEN PROFILE FOLDER</button><button data-ws-page="profile" data-ws-op="backup_picker">BACKUP</button><button data-ws-page="profile" data-ws-op="restore_picker">RESTORE</button></div></section>
@@ -2892,6 +2916,11 @@ function renderProfileWorkspace(data) {
       ${workspaceCard("CAREER RANKS", workspaceRows(rankRows, "Awaiting Rank and Progress journal events."), `${rankRows.length} TRACKED`)}
       ${workspaceCard("SUPERPOWER REPUTATION", workspaceRows(repRows, "Awaiting Reputation journal data."))}
       ${workspaceCard("CAREER RECORDS", `<div class="fact-list spacious">${careerRows.join("") || "<p class='workspace-empty'>Elite will provide lifetime statistics through its Statistics event.</p>"}</div>`)}
+      ${workspaceCard("ON FOOT · SUIT & LOADOUT", kitCard, kit?.ts ? `LOGGED ${escapeHtml(String(kit.ts).slice(0, 16).replace("T", " "))}` : "ODYSSEY")}
+      ${workspaceCard("ON-FOOT RECORD", `<div class="fact-list spacious">${factRows(foot.record) || "<p class='workspace-empty'>Elite sends on-foot figures in its Statistics event at login.</p>"}</div>`)}
+      ${workspaceCard("EXOBIOLOGY CAREER", `<div class="fact-list spacious">${factRows(foot.exobiology) || "<p class='workspace-empty'>Elite sends exobiology figures in its Statistics event at login.</p>"}</div>`)}
+      ${workspaceCard("BACKPACK", inventory(foot.backpack, "Your backpack is empty, or the game hasn't logged it yet."), "ON YOU")}
+      ${workspaceCard("SHIP LOCKER", inventory(foot.locker, "The ship locker shows here once the game writes it (open your locker, or log in)."), "STORED")}
       ${workspaceCard("ACTIVE SHIP & LOADOUT", `<div class="profile-ship-grid"><div><span>TYPE</span><b>${escapeHtml(ship.type || "—")}</b></div><div><span>IDENT</span><b>${escapeHtml(ship.ident || "—")}</b></div><div><span>CARGO</span><b>${numeric(ship.cargo)} T</b></div><div><span>JUMP RANGE</span><b>${numeric(ship.jump_range, 2)} LY</b></div><div><span>REBUY</span><b>${credits(ship.rebuy)}</b></div><div><span>HULL</span><b>${ship.hull === null || ship.hull === undefined ? "—" : `${numeric(Number(ship.hull) * 100, 1)}%`}</b></div></div><div class="workspace-actions"><button data-ws-page="profile" data-ws-op="open_edsy" ${data.loadout_ready ? "" : "disabled"}>OPEN IN EDSY</button><button data-ws-page="profile" data-ws-op="copy_slef" ${data.loadout_ready ? "" : "disabled"}>COPY SLEF</button></div>`, data.loadout_ready ? "EXPORT READY" : "AWAITING LOADOUT")}
       ${workspaceCard(`STORED FLEET · ${(data.fleet || []).length}`, fleet)}
       ${workspaceCard(`OBSERVED SURFACE VEHICLES · ${(data.surface_vehicles || []).length}`, surfaceVehicles, "JOURNAL OBSERVATIONS")}
