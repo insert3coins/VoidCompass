@@ -418,20 +418,36 @@
 
   function biologicalName(detail) {
     const name = node("strong", "biological-name");
-    const parts = Array.isArray(detail.codex_parts) ? detail.codex_parts : [];
-    if (parts.length) {
-      // "Bacterium" then a flag beside each species it could be.
-      name.append(`${detail.name || "Organic"} `);
-      parts.forEach((part, index) => {
-        if (index) name.append("/");
-        if (CODEX_TITLES[part.flag]) name.appendChild(codexFlag(part.flag));
-        name.append(String(part.text || ""));
-      });
-      return name;
-    }
     if (CODEX_TITLES[detail.codex]) name.appendChild(codexFlag(detail.codex));
-    name.append(detail.display_name || detail.name || "Organic");
+    // With Codex lines the species sit beneath the genus, as in SrvSurvey.
+    const lines = Array.isArray(detail.codex_lines) ? detail.codex_lines : [];
+    name.append(lines.length ? detail.name || "Organic" : detail.display_name || detail.name || "Organic");
     return name;
+  }
+
+  // "Arcus: ⚑Turquoise · Teal" per species the row could be: a flag beside
+  // each colour the Codex lacks (or the species, when no colour is known).
+  function codexLines(detail) {
+    const lines = Array.isArray(detail.codex_lines) ? detail.codex_lines : [];
+    if (!lines.length) return null;
+    const block = node("span", "codex-lines");
+    for (const line of lines) {
+      const row = node("span", "codex-line");
+      const variants = Array.isArray(line.variants) ? line.variants : [];
+      const species = node("span", "codex-species");
+      if (!variants.length && CODEX_TITLES[line.flag]) species.appendChild(codexFlag(line.flag));
+      species.append(`${line.species || ""}${variants.length ? ":" : ""}`);
+      row.appendChild(species);
+      variants.forEach((variant, index) => {
+        if (index) row.appendChild(node("i", "codex-sep", "·"));
+        const colour = node("span", `codex-colour${CODEX_TITLES[variant.flag] ? ` ${variant.flag}` : ""}`);
+        if (CODEX_TITLES[variant.flag]) colour.appendChild(codexFlag(variant.flag));
+        colour.append(String(variant.text || ""));
+        row.appendChild(colour);
+      });
+      block.appendChild(row);
+    }
+    return block;
   }
 
   function biologicalRow(detail, event = {}) {
@@ -448,6 +464,7 @@
     identity.appendChild(node("i", "biological-symbol", symbol));
     identity.appendChild(biologicalName(detail));
     row.appendChild(identity);
+    const lines = codexLines(detail);
 
     const facts = node("span", "biological-facts");
     const progress = Math.max(0, Math.min(3, Math.round(safeNumber(detail.progress))));
@@ -461,6 +478,10 @@
       : moneyRange(detail.min_value, detail.max_value);
     if (value) facts.appendChild(node("b", "biological-value", value));
     row.appendChild(facts);
+    if (lines) {
+      row.classList.add("has-codex-lines");
+      row.appendChild(lines);
+    }
     return row;
   }
 

@@ -106,8 +106,35 @@ class SurveyModelTests(unittest.TestCase):
         self.assertNotIn("codex", rows["Bacterium"])
         annotate_codex(model, lookup)
         self.assertEqual(rows["Bacterium"]["codex"], "region", "detected genus: its predicted species")
-        self.assertEqual(rows["Stratum"]["codex_parts"], [{"text": "Tectonicas", "flag": "new"}, {"text": "Paleas", "flag": ""}])
+        self.assertEqual(rows["Stratum"]["codex"], "new")
+        self.assertEqual(rows["Stratum"]["codex_lines"], [
+            {"species": "Tectonicas", "flag": "new", "variants": []},
+            {"species": "Paleas", "flag": "", "variants": []}])
         self.assertEqual(rows["Tussock Ignis"]["codex"], "new")
+
+    def test_each_predicted_colour_is_flagged(self):
+        """SrvSurvey flags colours: Aurasus logged in Emerald still has a
+        Green to find."""
+        green = "$Codex_Ent_Bacterial_01_K_Name;"
+        record = index(codex("2026-08-01T00:00:00Z", AURASUS_EMERALD, 18))
+        lookup = lambda kind, key, body: (record.entry_flag(key, 18) if kind == "entry" else record.species_flag(key, 18))
+        variants = lambda body: {"bacterium aurasus": [{"colour": "Emerald", "key": AURASUS_EMERALD},
+                                                       {"colour": "Green", "key": green}]}
+        model = build_survey_model("Prai Preia", [self.body()], focused_body_id=5, scanned=1, total=1)
+        annotate_codex(model, lookup, variants)
+        bacterium = next(row for row in model["rows"] if row["name"] == "Bacterium")
+        self.assertEqual(bacterium["codex"], "new", "the species alone would say nothing")
+        self.assertEqual(bacterium["codex_lines"], [{"species": "Aurasus", "flag": "new", "variants": [
+            {"text": "Emerald", "flag": ""}, {"text": "Green", "flag": "new"}]}])
+        record.observe(codex("2026-08-02T00:00:00Z", green, 20))
+        self.assertEqual(record.entry_flag(green, 18), "region")
+        self.assertEqual(record.entry_flag(green, 20), "")
+
+    def test_the_system_view_keeps_one_flag_per_row(self):
+        model = build_survey_model("Prai Preia", [self.body()], scanned=1, total=1)
+        annotate_codex(model, lambda kind, key, body: "new")
+        details = [detail for row in model["rows"] for detail in row["bio_details"]]
+        self.assertTrue(details and all("codex_lines" not in detail for detail in details))
 
     def test_a_detected_genus_without_predictions_is_judged_as_a_whole(self):
         from voidcompass.overlays.survey_status_hud import _genus_species_keys
@@ -126,7 +153,7 @@ class SurveyModelTests(unittest.TestCase):
         self.assertEqual(rows["Frutexa"]["codex"], "region", "logged elsewhere, never here")
         self.assertEqual(rows["Tussock"]["codex"], "", "a Tussock is logged here: no claim either way")
         shards = rows["Crystalline Shards"]
-        self.assertEqual((shards["codex"], shards.get("codex_parts")), ("new", None), "named once, flagged once")
+        self.assertEqual((shards["codex"], shards.get("codex_lines")), ("new", None), "named once, flagged once")
 
     def test_identifiers_agree_with_the_codex_reference(self):
         """codexRef.json (SrvSurvey's Codex reference, packaged) lists every
@@ -235,10 +262,22 @@ class SurveyPageTests(unittest.TestCase):
         annotate_codex(model, lambda kind, key, body: (record.variant_flag(key, 18, 1, body) if kind == "variant"
                                                        else record.species_flag(key, 18)))
         page.evaluate("s => window.__surveyRender(s)", {"survey": model, "theme": {}, "effects": {"reduced_motion": True}})
-        self.assertEqual(page.locator(".codex-flag.new").count(), 2, "Tectonicas and the Tussock variant")
-        self.assertEqual(page.locator(".codex-flag.region").count(), 1, "Aurasus, not yet in this region")
-        stratum = page.locator(".biological-name", has_text="Tectonicas").inner_text()
-        self.assertEqual(stratum, "Stratum Tectonicas/Paleas")
+        # Genus flag plus its species line: Stratum/Tectonicas, and the Tussock variant.
+        self.assertEqual(page.locator(".codex-flag.new").count(), 3)
+        self.assertEqual(page.locator(".codex-flag.region").count(), 2, "Bacterium/Aurasus, not yet in this region")
+        stratum = page.locator(".biological-row", has_text="Tectonicas")
+        self.assertEqual(stratum.locator(".biological-name").inner_text(), "Stratum")
+        self.assertEqual(stratum.locator(".codex-line").all_inner_texts(), ["Tectonicas", "Paleas"])
+        # Predicted colours: one line per species with a flag per colour.
+        colours = {AURASUS_EMERALD: "", "$Codex_Ent_Bacterial_01_K_Name;": "new"}
+        model = build_survey_model("Prai Preia", [SurveyModelTests().body()], focused_body_id=5, scanned=1, total=1)
+        annotate_codex(model, lambda kind, key, body: colours.get(key, ""),
+                       lambda body: {"bacterium aurasus": [{"colour": "Emerald", "key": AURASUS_EMERALD},
+                                                           {"colour": "Green", "key": "$Codex_Ent_Bacterial_01_K_Name;"}]})
+        page.evaluate("s => window.__surveyRender(s)", {"survey": model, "theme": {}, "effects": {"reduced_motion": True}})
+        line = page.locator(".codex-line", has_text="Aurasus")
+        self.assertEqual("".join(line.inner_text().split()), "Aurasus:Emerald·Green")
+        self.assertEqual(line.locator(".codex-colour.new .codex-flag.new").count(), 1, "Green is never logged")
         self.assertEqual(errors, [])
 
 

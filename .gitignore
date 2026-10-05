@@ -63,6 +63,8 @@ data/*
 !data/build_planner/**
 !data/colonisation/
 !data/colonisation/**
+!data/bio_criteria/
+!data/bio_criteria/**
 version_info.txt
 .claude/
 

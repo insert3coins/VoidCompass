@@ -1,0 +1,188 @@
+{
+  "genus": "Luteolum Anemone",
+  "query": [
+    "atmosType [None]"
+  ],
+  "children": [
+
+    {
+      "species": "Luteolum Anemone",
+      "variant": "",
+      "query": [
+        "# hit count: 769",
+        "     body [Rocky]",
+        "  gravity [ ~ 1.6]",
+        "     temp [200.0 ~ 440]",
+        "volcanism [Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Silicate Vapour Geysers,Minor Rocky Magma]",
+        "  regions [AnemoneBatch]",
+        "primaryStar [B,A]"
+      ]
+    },
+
+    {
+      "species": "Croceum Anemone",
+      "variant": "",
+      "query": [
+        "# hit count: 161",
+        "     body [Rocky]",
+        "  gravity [ ~ 0.42]",
+        "     temp [200 ~ 440]",
+        "volcanism [Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Silicate Vapour Geysers]",
+        "  regions [AnemoneBatch]",
+        "primaryStar [B,A]"
+      ]
+    },
+
+    {
+      "species": "Puniceum Anemone",
+      "variant": "",
+      "query": [
+        "# hit count: 35",
+        "     body [Icy]",
+        "  gravity [0.1 ~ 2.6]",
+        "     temp [75 ~ 800]",
+        "volcanism [None]",
+        "  regions [AnemoneBatch]",
+        "primaryStar [O,W]"
+      ]
+    },
+
+    {
+      "species": "Roseum Anemone",
+      "variant": "",
+      "query": [
+        "# hit count: 127",
+        "     body [Rocky]",
+        "  gravity [ ~ 0.386]",
+        "     temp [200 ~ 440]",
+        "volcanism [Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Silicate Vapour Geysers]",
+        "  regions [AnemoneBatch]",
+        "primaryStar [B]"
+      ]
+    },
+
+    {
+      "species": "Blatteum Bioluminescent Anemone",
+      "query": [
+        "primaryStar [O,B,K,N,H]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 1689",
+            "     body [HMC]",
+            "     temp [220 ~ 999.0]",
+            "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Silicate Vapour Geysers]",
+            "  regions [AnemoneBatch]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 777",
+            "     body [MRB]",
+            "     temp [800.0 ~ 6000]",
+            "volcanism [Major Metallic Magma,Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Rocky Magma,Silicate Vapour Geysers]",
+            "  regions [AnemoneBatch]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Rubeum Bioluminescent Anemone",
+      "query": [
+        "primaryStar [O,B,A,F,N,H]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 617",
+            "     body [HMC]",
+            "     temp [164 ~ 999.0]",
+            "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Silicate Vapour Geysers]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 403",
+            "     body [MRB]",
+            "     temp [1000.0 ~ 1800]",
+            "volcanism [Major Metallic Magma,Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Rocky Magma,Rocky Magma,Silicate Vapour Geysers]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Prasinum Bioluminescent Anemone",
+      "query": [
+        "primaryStar [O,B,A,Ae,W]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 350",
+            "     body [Rocky]",
+            "  gravity [ ~ 1.9]",
+            "     temp [110 ~ 999.0]",
+            "volcanism [None,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Silicate Vapour Geysers]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 151",
+            "     body [HMC]",
+            "     temp [250 ~ 2400]",
+            "volcanism [None,Major Rocky Magma,Major Silicate Vapour Geysers,Minor Metallic Magma,Minor Silicate Vapour Geysers]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 609",
+            "     body [MRB]",
+            "     temp [1000.0 ~ 4000]",
+            "volcanism [None,Major Metallic Magma,Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Rocky Magma,Silicate Vapour Geysers]"
+          ]
+        }
+      ]
+    },
+
+    {
+      "species": "Roseum Bioluminescent Anemone",
+      "query": [
+        "primaryStar [B,A,H]"
+      ],
+      "children": [
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 739",
+            "     body [HMC]",
+            "  gravity [0.24 ~ ]",
+            "     temp [400 ~ 999.0]",
+            "volcanism [Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Silicate Vapour Geysers]"
+          ]
+        },
+        {
+          "variant": "",
+          "query": [
+            "# hit count: 404",
+            "     body [MRB]",
+            "     temp [1000.0 ~ 5000]",
+            "volcanism [Major Metallic Magma,Major Rocky Magma,Major Silicate Vapour Geysers,Metallic Magma,Minor Metallic Magma,Minor Rocky Magma,Rocky Magma,Silicate Vapour Geysers]"
+          ]
+        }
+      ]
+    }
+
+  ]
+
+}
+

@@ -217,7 +217,7 @@ def _codex_species(genus, species):
         # so the row still names every species it could be.
         key = _species_key(entry)
         if epithet and all(row['epithet'] != epithet for row in rows):
-            rows.append({'epithet': epithet, 'key': key})
+            rows.append({'epithet': epithet, 'key': key, 'name': name})
     return rows
 
 
@@ -246,18 +246,37 @@ def _genus_species_keys(genus):
 _CODEX_RANK = {'new': 2, 'region': 1}
 
 
-def annotate_codex(model, lookup):
+def _strongest(flags):
+    return max(flags, key=lambda flag: _CODEX_RANK.get(flag, 0), default='')
+
+
+def annotate_codex(model, lookup, variants=None):
     """Mark what the Codex still lacks (SrvSurvey's flags): ``codex`` is
     'new' (never logged), 'region' (not in this galactic region) or ''.
 
-    ``lookup(kind, key, body_id)`` answers for a 'species' or a 'variant'.
-    A predicted row naming one or two species gets ``codex_parts``, a flag
-    per species name; otherwise the row carries its strongest flag.
+    ``lookup(kind, key, body_id)`` answers for a 'species', a 'variant' being
+    sampled or a predicted colour 'entry'. ``variants(body_id)`` names the
+    colours each species would show there (``bio_variants``), so a colour the
+    Codex lacks is flagged even when another colour of the species is logged.
+    In the focused body view a row lists its species with those colours
+    (``codex_lines``), as SrvSurvey's bio panel does; elsewhere the row
+    carries its strongest flag.
     """
     if not model or not callable(lookup):
         return model
+    colours_for = {}
 
-    def mark(detail, body_id):
+    def colours(body_id):
+        if not callable(variants) or body_id is None:
+            return {}
+        if body_id not in colours_for:
+            try:
+                colours_for[body_id] = variants(body_id) or {}
+            except Exception:
+                colours_for[body_id] = {}
+        return colours_for[body_id]
+
+    def mark(detail, body_id, lines_wanted):
         if detail.get('variant_key'):
             detail['codex'] = lookup('variant', detail['variant_key'], body_id)
             return
@@ -268,25 +287,34 @@ def annotate_codex(model, lookup):
             detail['codex'] = 'new' if flags == {'new'} else 'region' if flags <= {'new', 'region'} else ''
             return
         species = detail.get('codex_species') or ()
-        if not any(row.get('key') for row in species):
+        known = colours(body_id)
+        lines = []
+        for row in species:
+            options = known.get(str(row.get('name') or '').casefold()) or ()
+            parts = [{'text': option['colour'], 'flag': lookup('entry', option['key'], body_id)}
+                     for option in options]
+            if parts:
+                flag = _strongest(part['flag'] for part in parts)
+            else:
+                flag = lookup('species', row['key'], body_id) if row.get('key') else ''
+            lines.append({'species': row['epithet'], 'flag': flag, 'variants': parts})
+        if not any(line['variants'] for line in lines) and not any(row.get('key') for row in species):
             return
-        flags = [(row['epithet'], lookup('species', row['key'], body_id) if row.get('key') else '')
-                 for row in species]
-        detail['codex'] = max((flag for _epithet, flag in flags), key=lambda flag: _CODEX_RANK.get(flag, 0))
-        # Per-name flags when the row names one or two species, unless a
-        # species is the genus itself (Crystalline Shards would read twice).
-        if (detail.get('kind') in PREDICTED_KINDS and len(flags) <= 2
-                and all(epithet.casefold() != str(detail.get('name') or '').casefold() for epithet, _flag in flags)):
-            detail['codex_parts'] = [{'text': epithet, 'flag': flag} for epithet, flag in flags]
+        detail['codex'] = _strongest(line['flag'] for line in lines)
+        # A species named for the genus itself (Crystalline Shards) has no
+        # line of its own to add.
+        genus = str(detail.get('name') or '').casefold()
+        if lines_wanted and all(line['species'].casefold() != genus for line in lines):
+            detail['codex_lines'] = lines
 
     if model.get('mode') == 'body':
         body_id = (model.get('body') or {}).get('body_id')
         for detail in model.get('rows') or ():
-            mark(detail, body_id)
+            mark(detail, body_id, detail.get('kind') in PREDICTED_KINDS or detail.get('kind') == 'detected')
     else:
         for row in model.get('rows') or ():
             for detail in row.get('bio_details') or ():
-                mark(detail, row.get('body_id'))
+                mark(detail, row.get('body_id'), False)
     return model
 
 
@@ -450,7 +478,7 @@ def _survey_render_key(model):
 
     def detail_key(row):
         row = row or {}
-        return (row.get('kind'), row.get('status'), row.get('display_name') or row.get('name'), row.get('value'), row.get('min_value'), row.get('max_value'), _safe_int(row.get('progress')), row.get('codex'), repr(row.get('codex_parts')))
+        return (row.get('kind'), row.get('status'), row.get('display_name') or row.get('name'), row.get('value'), row.get('min_value'), row.get('max_value'), _safe_int(row.get('progress')), row.get('codex'), repr(row.get('codex_lines')))
     common = (model.get('mode'), model.get('system'), sampling_key, model.get('scope'), repr(model.get('dss_stats') or {}), _safe_int(model.get('scanned')), _safe_int(model.get('total')), bool(model.get('total_known')), tuple((notable_key(row) for row in model.get('notable_rows') or ())))
     if model.get('mode') == 'body':
         body = model.get('body') or {}
@@ -571,7 +599,7 @@ class SurveyStatusHUD:
             self.hide()
             return
         if self.config.get('survey_codex_flags', False):
-            annotate_codex(model, getattr(self, 'codex_lookup', None))
+            annotate_codex(model, getattr(self, 'codex_lookup', None), getattr(self, 'codex_variants', None))
         render_key = _survey_render_key(model)
         if render_key != self._last_render_key:
             self._last_render_key = render_key

@@ -344,7 +344,8 @@ class TickerBrowserTests(unittest.TestCase):
         page.evaluate("data => renderTicker(data)", snapshot(speed="fast"))
         state = page.evaluate("galnetTicker.state()")
         self.assertAlmostEqual(state["rate"], TICKER_SPEEDS["fast"] / 75, places=3)
-        self.assertGreaterEqual(page.evaluate(TRACK_TIME), before)
+        # Chromium can hand the time back a rounding error under where it was.
+        self.assertGreaterEqual(page.evaluate(TRACK_TIME), before - 1e-6)
         # Larger text scrolls proportionally faster, so it reads at the same pace.
         page.evaluate("data => renderTicker(data)", snapshot(scale=1.5))
         self.assertAlmostEqual(page.evaluate("galnetTicker.state().rate"), 1.5, places=3)

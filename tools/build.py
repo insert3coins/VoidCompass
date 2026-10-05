@@ -169,6 +169,9 @@ VSVersionInfo(
         f'--add-data={project_dir / "data" / "engineering_companion"}{data_sep}data/engineering_companion',
         f'--add-data={project_dir / "data" / "build_planner"}{data_sep}data/build_planner',
         f'--add-data={project_dir / "data" / "colonisation"}{data_sep}data/colonisation',
+        # SrvSurvey's bio criteria (GPL-3): the colours Survey Operations'
+        # Codex flags judge.
+        f'--add-data={project_dir / "data" / "bio_criteria"}{data_sep}data/bio_criteria',
     ]
     if is_windows:
         opts.extend([

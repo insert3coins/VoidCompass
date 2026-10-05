@@ -53,6 +53,7 @@ from voidcompass.exploration.contact_scope import ContactLedger
 from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.overlays.trade_route_hud import TradeRouteHUD
+from voidcompass.exploration import bio_variants
 from voidcompass.exploration.codex_index import CodexIndex
 from voidcompass.overlays.html_survey_overlay import attach_html_survey_overlay
 from voidcompass.overlays.html_toast_overlay import attach_html_toast_overlay
@@ -1422,7 +1423,21 @@ class MainDashboard(
         region, _position = self._bio_location_context()
         if kind == "variant":
             return index.variant_flag(key, region, getattr(self, "current_system_address", None), body_id)
+        if kind == "entry":
+            return index.entry_flag(key, region)
         return index.species_flag(key, region)
+
+    def _survey_codex_variants(self, body_id):
+        """The colour variants each predicted species would show on a body."""
+        item = (getattr(self, "scan_items_by_id", None) or {}).get(body_id)
+        if not item:
+            return {}
+        region, _position = self._bio_location_context()
+        try:
+            return bio_variants.body_variants(item, list(self.scan_items_by_id.values()), region)
+        except Exception as exc:
+            logging.debug("Codex colour prediction skipped: %s", exc)
+            return {}
 
     def _import_exploration_history(self, journal_path, logbook, tracker, commander=None, fid=None,
                                     scan_db_path=None, profile_key=None, travel=None, codex=None):
@@ -2499,6 +2514,7 @@ class MainDashboard(
         if self._overlay_enabled("survey_status_hud"):
             self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
             self.survey_status_hud.codex_lookup = self._survey_codex_lookup
+            self.survey_status_hud.codex_variants = self._survey_codex_variants
         else:
             self.survey_status_hud = None
 
@@ -4773,6 +4789,7 @@ class MainDashboard(
             if self.survey_status_hud is None:
                 self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
                 self.survey_status_hud.codex_lookup = self._survey_codex_lookup
+                self.survey_status_hud.codex_variants = self._survey_codex_variants
                 if self.current_docked:
                     self.survey_status_hud.suppress()
         elif self.survey_status_hud:

@@ -1,18 +1,17 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.2.8 // On foot
-**Release Date:** 2026-Oct-05
+## v5.5.2.9 // Codex colours
+**Release Date:** 2026-Oct-06
 
-* **Commander Record now covers Odyssey on foot**, all from your journal:
-  * **Suit and loadout:** your suit and its real grade (the game's own suit name gets the grade wrong), the loadout's name, the suit's modifications, and each weapon with its grade and modifications, in the names the game uses.
-  * **On-foot record:** distance walked, settlements visited, on-foot combat bonds, settlements defended or conquered, and what you've destroyed on foot.
-  * **Exobiology career:** organic data sold and its profits, first logged and their profits, and the genera, species and variants you've encountered and analysed.
-  * **Backpack** and **ship locker**, sorted by how much you carry.
-* Your last suit loadout and backpack are kept with your commander profile, so they show straight after a restart.
-* **Fixed:** the ship locker overwrote the backpack, so medkit and energy cell counts showed what was in the locker.
+* **Survey Operations' Codex flags now work per colour.** Before, a species you had logged in any colour showed no flag, so most predictions went unflagged.
+  * Each species the body could hold gets its own line under its genus, with the colours it will show there, for example **Arcus: ⚑Turquoise**.
+  * A **filled flag** marks a colour you've never logged, an **outline** one you haven't logged in this galactic region.
+  * The genus carries its strongest flag, so you can spot new entries at a glance (the system view keeps one flag per row).
+  * Colours come from the brightest parent star and the surface materials, using SrvSurvey's bio criteria. Until the parent star is scanned, the flags stay per species.
 
 ## Earlier releases
 
+* **v5.5.2.8** — Commander Record covers Odyssey on foot: suit and loadout with real grades, on-foot record, exobiology career, backpack and ship locker; the ship locker no longer overwrites the backpack.
 * **v5.5.2.7** — Overlays grow with the text size in both directions, overlays show up to date when they appear (Survey's first planet after a jump), and the Navigation HUD always fits its window.
 * **v5.5.2.6** — New Trading tab with Spansh routes, loop routes, selling your cargo, finding any commodity, station markets and your profit history with charts; and the Trade Route overlay.
 * **v5.5.2.5** — Install updates from inside Void Compass: downloaded and checked from GitHub, swapped in on a restart, with your settings and profiles kept and the old version put back if anything goes wrong.

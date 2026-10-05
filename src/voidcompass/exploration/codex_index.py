@@ -186,6 +186,20 @@ class CodexIndex:
             return REGION
         return ""
 
+    def entry_flag(self, entry, region):
+        """For a predicted colour variant: never logged (NEW), never in this
+        region (REGION), or "" when the Codex already has it here."""
+        entry = str(entry or "").strip()
+        if not entry.startswith("$Codex_Ent_"):
+            return ""
+        with self.lock:
+            rows = list(self._by_entry.get(entry, ()))
+        if not rows:
+            return NEW
+        if region is not None and not any(row[2] == region for row in rows):
+            return REGION
+        return ""
+
     def variant_flag(self, variant_key, region, address=None, body_id=None):
         """For a variant being sampled. Logging it writes its Codex entry, so
         it stays flagged on the body where it was first logged (anywhere, or
