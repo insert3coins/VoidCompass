@@ -1048,6 +1048,8 @@ async function start() {
   // pool. Revision checks transfer no model when unchanged and keep this
   // primary flight instrument responsive without a permanent connection.
   setInterval(checkHostHealth, 250);
+  // The host wakes a hidden HUD directly (its timers are throttled while hidden).
+  window.__voidcompassPoll = checkHostHealth;
 }
 
 window.addEventListener('beforeunload', () => {

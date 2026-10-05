@@ -6,6 +6,7 @@
 * **Overlays now grow with the text size.** With a larger overlay text size, many overlays kept their normal size, so the bigger text was squeezed into the same width and the bottom rows were cut off. Every overlay's window now grows by the same amount as its text, in width and height:
   * Carrier, Construction Needs, Deep Space Contacts, Planet Materials, Powerplay, Prospector, Trade Route, Jump Info
   * Cargo, Station Information, Survey Operations (with its own text size) and Notifications
+* **Overlays show up to date when they appear.** An overlay that had been hidden for a while could appear showing what it last drew, because Windows slows down hidden windows. In Survey Operations, a system's first scanned planet didn't appear until the next scan. Overlays are now told about new data straight away while hidden, and only appear once they show it.
 * **The Navigation HUD always fits its window.** It now sizes itself to the window it actually has, so it can't be clipped on the right or at the bottom, even on PCs where Windows draws pages larger than expected.
 
 ## Earlier releases
