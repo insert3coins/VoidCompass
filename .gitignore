@@ -74,3 +74,6 @@ mining_data.db
 mining_data.db-*
 .codex/config.toml
 temp/
+
+# The Watcher voice lab: local testing only, not part of the app
+Voice/
