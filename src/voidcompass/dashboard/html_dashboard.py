@@ -80,6 +80,7 @@ from voidcompass.dashboard.html_music import HtmlMusicMixin
 from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
 from voidcompass.dashboard.html_colonisation import HtmlColonisationMixin
 from voidcompass.dashboard.html_bgs import HtmlBgsMixin
+from voidcompass.dashboard.html_trading import HtmlTradingMixin
 
 
 PROJECT_URL = "https://github.com/insert3coins/VoidCompass"
@@ -104,7 +105,7 @@ _CORE_RANKS = {
 _HTML_WORKSPACE_PAGES = {
     "planet-materials", "explore", "profile", "analytics", "chronicle", "mission", "ground", "mining",
     "engineering", "build-planner", "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
-    "colonisation", "bgs",
+    "colonisation", "bgs", "trading",
 }
 
 
@@ -155,7 +156,7 @@ def _local_departure_timestamp(value):
     return int(time.mktime(parsed.timetuple()))
 
 
-class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin):
+class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin):
     """Publish exploration state and accept private dashboard commands."""
 
     def start_html_dashboard_bridge(self):
@@ -2021,7 +2022,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "overlay_hotkeys_enabled",
             "edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled",
             "raven_api_key", "raven_sync_enabled", "raven_share_ship_cargo",
-            "bgs_online_enabled",
+            "bgs_online_enabled", "trading_online_enabled",
             "eddn_market_upload_enabled", "carrier_discord_webhook_url",
             "runtime_trace_enabled", "crash_reporting_enabled",
             "recovery_safe_mode_enabled", "edsm_backfill_on_cache_rebuild",
@@ -2038,6 +2039,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             ("auto_copy_waypoint", False), ("achievement_notifications_enabled", True),
             ("adaptive_command_enabled", True),
             ("raven_sync_enabled", True), ("raven_share_ship_cargo", False), ("bgs_online_enabled", True),
+            ("trading_online_enabled", True),
         ):
             if values.get(key) is None:
                 values[key] = default
@@ -2529,6 +2531,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "settings": self._html_settings_workspace,
             "colonisation": self._html_colonisation_workspace,
             "bgs": self._html_bgs_workspace,
+            "trading": self._html_trading_workspace,
         }
         builder = builders.get(page)
         if builder is None:
@@ -2870,6 +2873,11 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
 
         if page == "bgs":
             result = self._handle_bgs_command(operation, payload)
+            self._schedule_html_dashboard_publish(immediate=True)
+            return result
+
+        if page == "trading":
+            result = self._handle_trading_command(operation, payload)
             self._schedule_html_dashboard_publish(immediate=True)
             return result
 
@@ -4178,7 +4186,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                     "edsm_cmdr_name": str,
                     "edsm_api_key": str, "edsm_upload_enabled": bool,
                     "raven_api_key": str, "raven_sync_enabled": bool,
-                    "raven_share_ship_cargo": bool, "bgs_online_enabled": bool,
+                    "raven_share_ship_cargo": bool, "bgs_online_enabled": bool, "trading_online_enabled": bool,
                     "eddn_market_upload_enabled": bool,
                     "carrier_discord_webhook_url": str,
                     "runtime_trace_enabled": bool, "crash_reporting_enabled": bool,

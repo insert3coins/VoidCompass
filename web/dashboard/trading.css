@@ -1,0 +1,139 @@
+/* Trading tab (trading.js). Interface colours are theme tokens. The two chart
+   series colours are the first pair of the BGS tab's categorical palette,
+   validated for colour-blind separation and contrast on the deck's dark
+   panels; they mark chart series only, never interface or text. */
+
+#trading-workspace {
+  --tr-s1: #3987e5; --tr-s2: #d95926;
+  container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0;
+}
+#trading-workspace button { cursor: pointer; }
+#trading-workspace button:disabled { cursor: default; opacity: .55; }
+#trading-workspace input, #trading-workspace select {
+  min-width: 0; height: 32px; padding: 0 9px; border: 1px solid var(--border); background: var(--input); color: var(--text);
+  font: 12px "Segoe UI", sans-serif; outline: none;
+}
+#trading-workspace input:focus, #trading-workspace select:focus { border-color: var(--accent); }
+#trading-workspace h4 { margin: 2px 0 4px; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+
+/* Status strip. */
+.tr-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; padding: 10px 14px; border: 1px solid var(--border-soft); border-left: 3px solid var(--accent); background: var(--panel); }
+.tr-status > div { display: grid; gap: 2px; }
+.tr-status b { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.tr-status span { color: var(--text); font: 11px "Segoe UI", sans-serif; }
+.tr-link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; }
+
+.tr-body { display: grid; gap: 12px; min-width: 0; }
+.tr-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+@container (max-width: 860px) { .tr-grid { grid-template-columns: minmax(0, 1fr); } }
+.tr-panel { display: grid; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border-soft); background: var(--panel); overflow-x: auto; }
+.tr-empty { display: grid; gap: 6px; padding: 26px 18px; border: 1px dashed var(--border-soft); text-align: center; }
+.tr-empty b { color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .16em; }
+.tr-dim { margin: 0; color: var(--dim); font: 11px/1.5 "Segoe UI", sans-serif; }
+.tr-warn { margin: 4px 0 0; color: var(--yellow); font: 11px "Segoe UI", sans-serif; }
+
+.tr-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.tr-head > span { color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.tr-ranges { display: flex; flex-wrap: wrap; gap: 2px; }
+.tr-ranges button { padding: 3px 8px; border: 1px solid var(--border-soft); background: transparent; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.tr-ranges button.active { border-color: var(--accent); color: var(--accent); }
+.tr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tr-actions button, .tr-table button {
+  min-height: 28px; padding: 0 11px; border: 1px solid var(--border); background: var(--panel-raised); color: var(--muted);
+  font: 700 9px Consolas, monospace; letter-spacing: .1em; text-transform: uppercase;
+}
+.tr-table button { min-height: 24px; padding: 0 8px; margin-right: 4px; }
+.tr-actions button:hover:not(:disabled), .tr-table button:hover { border-color: var(--accent); color: var(--accent); }
+.tr-actions button.primary { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+
+/* Figures. */
+.tr-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.tr-tile { display: grid; gap: 3px; padding: 12px 14px; border: 1px solid var(--border-soft); background: var(--panel); }
+.tr-tile span { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.tr-tile b { color: var(--text); font: 600 22px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.tr-tile small { color: var(--dim); font: 11px "Segoe UI", sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Charts. */
+.tr-chart-box { position: relative; max-width: 1100px; }
+.tr-chart { display: block; width: 100%; height: auto; }
+.tr-chart .grid { stroke: var(--border-soft); stroke-width: 1; }
+.tr-chart .zero { stroke: var(--muted); stroke-width: 1; }
+.tr-chart .axis { fill: var(--dim); font: 10px Consolas, monospace; }
+.tr-chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.tr-chart .end { stroke: var(--panel); stroke-width: 2; }
+.tr-chart .hit { fill: transparent; }
+.tr-chart .hit.on { fill: color-mix(in srgb, var(--text) 6%, transparent); }
+.tr-tooltip { position: absolute; top: 8px; z-index: 3; display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); background: var(--panel); box-shadow: 0 6px 18px rgba(0, 0, 0, .45); pointer-events: none; }
+.tr-tooltip b { color: var(--text); font: 700 10px Consolas, monospace; }
+.tr-tooltip span { display: flex; align-items: center; gap: 6px; color: var(--text); font: 11px "Segoe UI", sans-serif; white-space: nowrap; }
+.tr-tooltip i, .tr-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.tr-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.tr-legend li { display: flex; align-items: center; gap: 6px; }
+
+/* Ranked bars and lists. */
+.tr-ranks, .tr-list, .tr-recent, .tr-hold { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tr-ranks li { display: grid; grid-template-columns: minmax(90px, 160px) minmax(60px, 1fr) auto; grid-template-areas: "name bar value" "name bar note"; align-items: center; gap: 0 10px; }
+.tr-rank-name { grid-area: name; color: var(--text); font: 12px "Segoe UI", sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-rank-bar { grid-area: bar; height: 8px; background: var(--inset); }
+.tr-rank-bar i { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--tr-s1); }
+.tr-ranks b { grid-area: value; color: var(--text); font: 600 12px "Segoe UI", sans-serif; text-align: right; font-variant-numeric: tabular-nums; }
+.tr-ranks small { grid-area: note; color: var(--dim); font: 10px "Segoe UI", sans-serif; text-align: right; }
+.tr-list li, .tr-recent li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 10px; padding: 7px 0; border-bottom: 1px solid var(--border-soft); }
+.tr-list li > b, .tr-recent li > b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.tr-list li > span, .tr-list li > small, .tr-recent li > small { grid-column: 1; color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.tr-list li > em, .tr-recent li > em { grid-column: 2; grid-row: 1 / span 3; align-self: center; color: var(--text); font: 600 13px "Segoe UI", sans-serif; font-style: normal; font-variant-numeric: tabular-nums; }
+.tr-recent li > span { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
+.tr-recent li.sell > span { color: var(--accent); }
+.tr-hold { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.tr-hold li { display: flex; align-items: baseline; gap: 8px; padding: 8px 10px; border: 1px solid var(--border-soft); background: var(--inset); }
+.tr-hold b { color: var(--accent); font: 600 13px "Segoe UI", sans-serif; }
+.tr-hold span { color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.tr-hold small { color: var(--yellow); font: 10px "Segoe UI", sans-serif; }
+
+/* Forms. */
+.tr-form { display: grid; gap: 10px; }
+.tr-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 10px; }
+.tr-fields label { display: grid; gap: 4px; }
+.tr-fields label.grow { grid-column: span 2; }
+@container (max-width: 520px) { .tr-fields label.grow { grid-column: auto; } }
+.tr-fields span { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
+.tr-checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.tr-check { display: flex; align-items: center; gap: 6px; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+#trading-workspace .tr-check input { height: auto; accent-color: var(--accent); }
+
+/* Results. */
+.tr-result-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.tr-result-head p { margin: 0; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.tr-result-head h3 { margin: 2px 0; color: var(--text); font: 600 18px "Segoe UI", sans-serif; }
+.tr-result-head span { color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.tr-hop { display: grid; gap: 8px; padding: 10px 0 12px; border-top: 1px solid var(--border-soft); }
+.tr-hop > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+@container (max-width: 760px) { .tr-hop > header { grid-template-columns: auto minmax(0, 1fr) auto; } .tr-arrow { display: none; } }
+.tr-hop header b { display: block; color: var(--text); font: 600 13px "Segoe UI", sans-serif; }
+.tr-hop header small { color: var(--dim); font: 10px "Segoe UI", sans-serif; }
+.tr-hop header em { color: var(--text); font: 600 14px "Segoe UI", sans-serif; font-style: normal; }
+.tr-hop-n { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--accent); color: var(--accent); font: 700 11px Consolas, monospace; }
+.tr-arrow { color: var(--dim); font: 10px Consolas, monospace; white-space: nowrap; }
+.tr-hop-bar { position: relative; height: 16px; background: var(--inset); }
+.tr-hop-bar i { display: block; height: 100%; border-radius: 0 4px 4px 0; background: color-mix(in srgb, var(--tr-s1) 55%, transparent); }
+.tr-hop-bar span { position: absolute; inset: 0 8px; display: flex; align-items: center; color: var(--text); font: 10px Consolas, monospace; }
+
+.tr-table { width: 100%; min-width: 620px; border-collapse: collapse; font: 12px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.tr-table th { padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .12em; text-align: left; white-space: nowrap; }
+.tr-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-soft); color: var(--text); vertical-align: middle; }
+.tr-table td b { font-weight: 600; }
+.tr-table small { display: block; margin-top: 2px; color: var(--dim); font: 10px "Segoe UI", sans-serif; }
+.tr-table small.up { display: inline; color: var(--green); }
+.tr-table tr.cat td { padding-top: 12px; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .14em; border-bottom-color: var(--border); }
+.tr-table tr.short td { color: var(--muted); }
+.tr-table tr.buy td:nth-child(2) { color: var(--dim); }
+
+/* Following a route. */
+.tr-follow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); }
+.tr-follow p { margin: 0; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.tr-follow h3 { margin: 3px 0; color: var(--text); font: 600 16px "Segoe UI", sans-serif; }
+.tr-follow span, .tr-follow small { display: block; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.tr-follow span b { color: var(--text); }
+.tr-follow.done { border-color: var(--green); background: color-mix(in srgb, var(--green) 7%, var(--panel)); }
+.tr-follow.done p { color: var(--green); }
+.tr-tabs small { color: var(--accent); }

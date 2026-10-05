@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class CommandDeckConsolidation548Tests(unittest.TestCase):
     def test_release_version_comparison_handles_elite_style_patch_versions(self):
-        self.assertEqual(APP_VERSION, "5.5.2.5")
+        self.assertEqual(APP_VERSION, "5.5.2.6")
         self.assertTrue(release_is_newer("v5.4.8.2", "5.4.8.1"))
         self.assertTrue(release_is_newer("5.4.7.1", "5.4.7"))
         self.assertTrue(release_is_newer("5.4.10", "5.4.9.9"))
@@ -19,17 +19,18 @@ class CommandDeckConsolidation548Tests(unittest.TestCase):
         self.assertFalse(release_is_newer("5.4.7.9", "5.4.8"))
         self.assertFalse(release_is_newer("not-a-release", "5.4.8.2"))
 
-    def test_left_rail_contains_sixteen_workflow_destinations(self):
+    def test_left_rail_contains_seventeen_workflow_destinations(self):
         document = (ROOT / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")
         rail = document.split('<nav class="nav"', 1)[1].split("</nav>", 1)[0]
         labels = re.findall(r'<button class="nav-item[^>]*>.*?<span>(.*?)</span>', rail)
 
-        # 5.4.9.8 added Music, under its own COCKPIT heading; 5.5.2 Colonisation.
-        self.assertEqual(len(labels), 16)
+        # 5.4.9.8 added Music, under its own COCKPIT heading; 5.5.2 Colonisation;
+        # 5.5.2.4 BGS; 5.5.2.6 Trading.
+        self.assertEqual(len(labels), 17)
         self.assertEqual(labels, [
             "Dashboard", "Explore & Survey", "Planetary Operations", "Galactic Atlas",
             "Commander Record", "Exploration Archive", "Mining Command", "Ship Workshop",
-            "Carrier Command", "Colonisation", "BGS", "Powerplay", "Music", "Overlay Studio", "Settings", "About",
+            "Carrier Command", "Colonisation", "BGS", "Trading", "Powerplay", "Music", "Overlay Studio", "Settings", "About",
         ])
         self.assertNotIn("Field Tools", labels)
 

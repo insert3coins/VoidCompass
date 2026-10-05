@@ -1,0 +1,137 @@
+{
+ "count": 4,
+ "results": [
+  {
+   "name": "Galileo",
+   "system_name": "Sol",
+   "distance": 0.0,
+   "distance_to_arrival": 503.988175,
+   "has_large_pad": true,
+   "large_pads": 6,
+   "medium_pads": 13,
+   "small_pads": 9,
+   "is_planetary": false,
+   "type": "Ocellus Starport",
+   "market_id": 128016640,
+   "market_updated_at": "2026-10-05T01:46:34Z",
+   "system_id64": 10477373803,
+   "market": [
+    {
+     "buy_price": 45618,
+     "category": "Metals",
+     "commodity": "Gold",
+     "demand": 1,
+     "sell_price": 44653,
+     "supply": 39819
+    },
+    {
+     "buy_price": 34894,
+     "category": "Metals",
+     "commodity": "Silver",
+     "demand": 1,
+     "sell_price": 33726,
+     "supply": 104611
+    }
+   ]
+  },
+  {
+   "name": "Titan City",
+   "system_name": "Sol",
+   "distance": 0.0,
+   "distance_to_arrival": 4716.54601,
+   "has_large_pad": true,
+   "large_pads": 5,
+   "medium_pads": 13,
+   "small_pads": 7,
+   "is_planetary": false,
+   "type": "Orbis Starport",
+   "market_id": 128018176,
+   "market_updated_at": "2026-10-04T21:23:48Z",
+   "system_id64": 10477373803,
+   "market": [
+    {
+     "buy_price": 45673,
+     "category": "Metals",
+     "commodity": "Gold",
+     "demand": 1,
+     "sell_price": 44707,
+     "supply": 229
+    },
+    {
+     "buy_price": 34896,
+     "category": "Metals",
+     "commodity": "Silver",
+     "demand": 1,
+     "sell_price": 33728,
+     "supply": 1285
+    }
+   ]
+  },
+  {
+   "name": "Columbus",
+   "system_name": "Sol",
+   "distance": 0.0,
+   "distance_to_arrival": 2617.186338,
+   "has_large_pad": true,
+   "large_pads": 6,
+   "medium_pads": 12,
+   "small_pads": 7,
+   "is_planetary": false,
+   "type": "Ocellus Starport",
+   "market_id": 128017920,
+   "market_updated_at": "2026-10-04T12:05:51Z",
+   "system_id64": 10477373803,
+   "market": [
+    {
+     "buy_price": 45673,
+     "category": "Metals",
+     "commodity": "Gold",
+     "demand": 1,
+     "sell_price": 44707,
+     "supply": 409
+    },
+    {
+     "buy_price": 34895,
+     "category": "Metals",
+     "commodity": "Silver",
+     "demand": 1,
+     "sell_price": 33727,
+     "supply": 1793
+    }
+   ]
+  },
+  {
+   "name": "Burnell Station",
+   "system_name": "Sol",
+   "distance": 0.0,
+   "distance_to_arrival": 362.914083,
+   "has_large_pad": false,
+   "large_pads": 0,
+   "medium_pads": 1,
+   "small_pads": 4,
+   "is_planetary": false,
+   "type": "Outpost",
+   "market_id": 3228719104,
+   "market_updated_at": "2026-10-05T00:49:54Z",
+   "system_id64": 10477373803,
+   "market": [
+    {
+     "buy_price": 45661,
+     "category": "Metals",
+     "commodity": "Gold",
+     "demand": 1,
+     "sell_price": 44696,
+     "supply": 249
+    },
+    {
+     "buy_price": 34428,
+     "category": "Metals",
+     "commodity": "Silver",
+     "demand": 1,
+     "sell_price": 33275,
+     "supply": 1898
+    }
+   ]
+  }
+ ]
+}

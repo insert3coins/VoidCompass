@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="workshop.css">
   <link rel="stylesheet" href="colonisation.css">
   <link rel="stylesheet" href="bgs.css">
+  <link rel="stylesheet" href="trading.css">
   <link rel="stylesheet" href="setup.css">
   <link rel="stylesheet" href="focused-log.css">
   <link rel="stylesheet" href="boot.css">
@@ -249,13 +250,14 @@
         <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>09</b></button>
         <button class="nav-item" data-page="colonisation" aria-label="Colonisation" title="Colonisation"><i>⬢</i><span>Colonisation</span><b>10</b></button>
         <button class="nav-item" data-page="bgs" aria-label="BGS" title="Background Simulation: factions, influence, states and conflicts"><i>◈</i><span>BGS</span><b>11</b></button>
-        <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>12</b></button>
+        <button class="nav-item" data-page="trading" aria-label="Trading" title="Trading: routes, markets and your profits"><i>⇄</i><span>Trading</span><b>12</b></button>
+        <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>13</b></button>
         <p>COCKPIT</p>
-        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>13</b></button>
+        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>14</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>14</b></button>
-        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>15</b></button>
-        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>16</b></button>
+        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>15</b></button>
+        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>16</b></button>
+        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>17</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -519,6 +521,10 @@
           <div id="build-planner-workspace" class="workspace-shell loading-panel">Loading the shipyard catalogue…</div>
         </section>
 
+        <section class="page specialist-page trading-page" data-page-name="trading">
+          <header class="page-title"><div><p>TRADING</p><h2>Trade routes and profits</h2><span>Routes, markets and prices from Spansh when you ask, and every trade you have made from your journal</span></div><div class="title-actions"><button type="button" data-trade-op="view" data-view="route">PLAN A ROUTE</button><button type="button" data-trade-op="view" data-view="cargo">SELL MY CARGO</button></div></header>
+          <div id="trading-workspace" class="workspace-shell loading-panel">Opening your trading record…</div>
+        </section>
         <section class="page specialist-page bgs-page" data-page-name="bgs">
           <header class="page-title"><div><p>BACKGROUND SIMULATION</p><h2>Factions and influence</h2><span>Every faction in every system you visit, their influence, states and conflicts, the work you do for them each tick, and any system you look up</span></div><div class="title-actions"><button type="button" data-bgs-op="refresh_tick">CHECK TICK</button><button type="button" data-bgs-op="view" data-view="states">STATES GUIDE</button></div></header>
           <div id="bgs-workspace" class="workspace-shell loading-panel">Opening the BGS record…</div>

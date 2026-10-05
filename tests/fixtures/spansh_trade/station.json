@@ -1,0 +1,114 @@
+{
+ "record": {
+  "name": "Abraham Lincoln",
+  "system_name": "Sol",
+  "distance_to_arrival": 503.645998,
+  "has_large_pad": true,
+  "large_pads": 5,
+  "medium_pads": 9,
+  "small_pads": 8,
+  "is_planetary": false,
+  "type": "Orbis Starport",
+  "market_id": 128016896,
+  "market_updated_at": "2026-10-05T02:55:57Z",
+  "system_id64": 10477373803,
+  "market": [
+   {
+    "buy_price": 0,
+    "category": "Medicines",
+    "commodity": "Advanced Medicines",
+    "demand": 459785,
+    "sell_price": 1727,
+    "supply": 0
+   },
+   {
+    "buy_price": 0,
+    "category": "Chemicals",
+    "commodity": "Agronomic Treatment",
+    "demand": 1747,
+    "sell_price": 3650,
+    "supply": 0
+   },
+   {
+    "buy_price": 0,
+    "category": "Foods",
+    "commodity": "Animal Meat",
+    "demand": 395975,
+    "sell_price": 1891,
+    "supply": 0
+   },
+   {
+    "buy_price": 0,
+    "category": "Medicines",
+    "commodity": "Basic Medicines",
+    "demand": 102386,
+    "sell_price": 806,
+    "supply": 0
+   },
+   {
+    "buy_price": 0,
+    "category": "Legal Drugs",
+    "commodity": "Beer",
+    "demand": 1371171,
+    "sell_price": 665,
+    "supply": 0
+   },
+   {
+    "buy_price": 109,
+    "category": "Waste",
+    "commodity": "Biowaste",
+    "demand": 1,
+    "sell_price": 65,
+    "supply": 78658
+   },
+   {
+    "buy_price": 0,
+    "category": "Salvage",
+    "commodity": "Black Box",
+    "demand": 31374,
+    "sell_price": 31161,
+    "supply": 0
+   },
+   {
+    "buy_price": 0,
+    "category": "Consumer Items",
+    "commodity": "Clothing",
+    "demand": 1485164,
+    "sell_price": 815,
+    "supply": 0
+   },
+   {
+    "buy_price": 0,
+    "category": "Foods",
+    "commodity": "Coffee",
+    "demand": 112888,
+    "sell_price": 1891,
+    "supply": 0
+   },
+   {
+    "buy_price": 0,
+    "category": "Consumer Items",
+    "commodity": "Consumer Technology",
+    "demand": 205937,
+    "sell_price": 7500,
+    "supply": 0
+   },
+   {
+    "buy_price": 0,
+    "category": "Salvage",
+    "commodity": "Damaged Escape Pod",
+    "demand": 31374,
+    "sell_price": 16983,
+    "supply": 0
+   },
+   {
+    "buy_price": 0,
+    "category": "Consumer Items",
+    "commodity": "Domestic Appliances",
+    "demand": 475235,
+    "sell_price": 1053,
+    "supply": 0
+   }
+  ]
+ }
+}

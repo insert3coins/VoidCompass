@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Trade Route</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <!-- Trade Route (5.5.2.6): the next step of the route being followed, in
+       the Navigation HUD's language. -->
+  <main id="route" class="route empty">
+    <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="scanlines"></div><div class="vignette"></div>
+    <div id="content" class="content">
+      <header class="notice">
+        <span id="route-tag" class="notice-tag">BUY</span>
+        <strong id="route-title">TRADE ROUTE</strong>
+      </header>
+      <div id="route-place" class="route-place"></div>
+      <div id="route-warnings" class="route-warnings"></div>
+      <footer id="route-figures" class="route-figures"></footer>
+    </div>
+  </main>
+  <script src="/assets/frame-cap.js"></script>
+  <script src="/assets/overlay-layout.js"></script>
+  <script src="/assets/overlay-client.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

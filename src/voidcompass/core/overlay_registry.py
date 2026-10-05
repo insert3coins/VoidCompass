@@ -52,6 +52,8 @@ OVERLAY_SPECS = (
     # Colonisation (5.5.2): at construction sites, in station services, or on
     # the right-hand panel; after SrvSurvey's build commodities panel.
     OverlaySpec("colony_needs_hud", "colony-needs", "Void Compass Construction Needs", "colony_needs_overlay_enabled", "colony_needs_hud_x", "colony_needs_hud_y", (1520, 120), (360, 320), "Construction Needs", "COLONY", True, "colony_needs", "overlay_hotkey_colony_needs", "Construction Needs"),
+    # Trading (5.5.2.6): only while a trade route is being followed.
+    OverlaySpec("trade_route_hud", "trade-route", "Void Compass Trade Route", "trade_route_overlay_enabled", "trade_route_hud_x", "trade_route_hud_y", (1520, 480), (360, 150), "Trade Route", "TRADE", True, "trade_route", "overlay_hotkey_trade_route", "Trade Route"),
     OverlaySpec("ground_popup", "ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled", "ground_popup_x", "ground_popup_y", (1320, 160), (420, 208), "Planet Waypoint Navigation", "SURFACE NAV", True, "planet_waypoint", "overlay_hotkey_planet_waypoint", "Planet Waypoint Navigation"),
 )
 
@@ -83,6 +85,7 @@ OVERLAY_HOTKEY_SPECS = (
     ("navigation_layout", "overlay_hotkey_navigation_layout", "Navigation HUD layout", None),
     _overlay_hotkey("jump_info"),
     _overlay_hotkey("colony_needs"),
+    _overlay_hotkey("trade_route"),
     ("colony_refresh", "overlay_hotkey_colony_refresh", "Construction Needs: refresh from Raven Colonial", None),
     ("colony_fold", "overlay_hotkey_colony_fold", "Construction Needs: fold / unfold covered groups", None),
     _overlay_hotkey("survey"),
