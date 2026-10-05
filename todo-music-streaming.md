@@ -1,4 +1,4 @@
-# TODO 3: Spotify and YouTube in the Music player
+# TODO: Spotify and YouTube in the Music player
 
 Commanders have asked for Spotify and YouTube in the Music player alongside their local files. The rule: **we never download their music.** It plays through the services' own players, and our player is the place you see it and control it, along with the Music Player overlay.
 
