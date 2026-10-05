@@ -58,8 +58,11 @@ class HtmlCargoOverlayBridge(HtmlOverlayBridgeLifecycle):
         return model if isinstance(model, dict) else {}
 
     def _dimensions(self):
-        height = max(190, min(760, _integer(self._browser_content_height, 260)))
-        return 410, height
+        # Design size times the text size the page zooms by (see html_model_overlay).
+        scale = max(75, min(200, _integer(self.config.get("overlay_text_scale_percent"), 100))) / 100.0
+        measured = _integer(self._browser_content_height, 0) or int(round(260 * scale))
+        height = max(int(round(190 * scale)), min(int(round(760 * scale)), measured))
+        return int(round(410 * scale)), height
 
     def _window_payload(self):
         width, height = self._dimensions()

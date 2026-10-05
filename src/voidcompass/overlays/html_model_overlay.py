@@ -70,12 +70,23 @@ class HtmlModelOverlayBridge(HtmlOverlayBridgeLifecycle):
         model = getattr(self.overlay, self.model_attr, None)
         return model if isinstance(model, dict) else {}
 
+    def _text_scale(self):
+        """The overlay text size (75-200%) the page zooms its content by."""
+        return max(75, min(200, _integer(self.config.get("overlay_text_scale_percent"), 100))) / 100.0
+
     def _dimensions(self):
+        # The page zooms its content by the text size, so the window's design
+        # width and height limits grow by the same factor. Without this,
+        # larger text squeezed into the design width and hit the design
+        # height cap, cutting off the right and bottom of the overlay.
+        # (The measured height already includes the zoom.)
+        scale = self._text_scale()
+        width = int(round(self.width * scale))
+        low, high = int(round(self.min_height * scale)), int(round(self.max_height * scale))
         measured = _integer(self._browser_content_height, 0)
         if measured <= 0:
-            measured = self.default_height
-        height = max(self.min_height, min(self.max_height, measured))
-        return self.width, height
+            measured = int(round(self.default_height * scale))
+        return width, max(low, min(high, measured))
 
     def _window_payload(self):
         width, height = self._dimensions()
@@ -105,9 +116,7 @@ class HtmlModelOverlayBridge(HtmlOverlayBridgeLifecycle):
         }
 
     def _snapshot(self):
-        text_scale = max(75, min(200, _integer(
-            self.config.get("overlay_text_scale_percent"), 100,
-        ))) / 100.0
+        text_scale = self._text_scale()
         payload = {
             "schema": 1,
             "kind": self.template,

@@ -87,8 +87,27 @@ function setTheme(theme = {}) {
     border: colour(theme.border, '#243746'), inset: colour(theme.inset, '#0a1118'),
   };
   for (const [key, value] of Object.entries(values)) root.setProperty(`--${key}`, value);
-  root.setProperty('--text-scale', String(Math.max(.75, Math.min(2, Number(theme.text_scale || 1)))));
+  requestedScale = Math.max(.75, Math.min(2, Number(theme.text_scale || 1)));
+  fitToWindow();
   return values;
+}
+
+// The instrument is drawn at a fixed design size and zoomed to fill its
+// window. Python sizes the window as design x text size, so normally the zoom
+// IS the text size; but some PCs draw pages larger than the window was sized
+// for (Windows' text-size setting, mixed monitor scaling), which clipped the
+// HUD's lower and right parts. Fitting to the window actually given means the
+// whole instrument always shows, at whatever size the window really is.
+const DESIGN_SIZE = {standard: [500, 326], expanded: [620, 342]};
+let requestedScale = 1;
+let fittedScale = 1;
+
+function fitToWindow() {
+  const [width, height] = DESIGN_SIZE[dom.hud?.classList.contains('expanded') ? 'expanded' : 'standard'];
+  const fit = innerWidth > 0 && innerHeight > 0 ? Math.min(innerWidth / width, innerHeight / height) : requestedScale;
+  fittedScale = Math.max(.4, Math.min(3, Number.isFinite(fit) ? fit : requestedScale));
+  document.documentElement.style.setProperty('--text-scale', fittedScale.toFixed(4));
+  return fittedScale;
 }
 
 // Frontier supplies a class for the arrival star, not an image or a complete
@@ -481,7 +500,7 @@ function renderScene(data, theme, tone, vehicle, reducedMotion, energy) {
     eventKind: state.event_kind,
     eventTone: state.event_tone,
     palette: {...theme, hud: theme.orange, state: quiet ? theme.orange : tone},
-    textScale: Number(data.theme?.text_scale) || 1,
+    textScale: fittedScale,
     // The local star's class and colour, so each scene draws the right
     // kind of star (a neutron star's jets, a black hole's disc); and the
     // route's next star, for a targeted system.
@@ -902,6 +921,7 @@ function render(data) {
   const expanded = data.layout === 'expanded';
   hud.classList.toggle('standard', !expanded);
   hud.classList.toggle('expanded', expanded);
+  fitToWindow();
   hud.classList.toggle('no-crt', !data.effects?.crt);
   // Overlay Studio's type choices: typeface, a floor for the small text,
   // and brighter labels. The stylesheet does the rest.
@@ -1040,3 +1060,9 @@ osMotionPreference.addEventListener('change', () => {
   if (snapshot) render(snapshot);
 });
 start();
+
+// The window can change size under the page (text size, layout, monitor):
+// fit again, and let the scene re-measure on its next frame.
+window.addEventListener('resize', () => {
+  if (dom.hud) fitToWindow();
+});

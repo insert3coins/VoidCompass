@@ -66,7 +66,10 @@ class HtmlToastOverlayBridge(HtmlOverlayBridgeLifecycle):
 
     def _dimensions(self, notifications=None):
         notifications = notifications if notifications is not None else self._notifications()
-        width = _safe_int(getattr(self.overlay, "WIDTH", 400), 400)
+        # The notification page zooms by the text size, so it widens with it
+        # (toast_height already grows each notification's height).
+        scale = max(75, min(200, _safe_int(self.config.get("overlay_text_scale_percent"), 100))) / 100.0
+        width = int(round(_safe_int(getattr(self.overlay, "WIDTH", 400), 400) * scale))
         height_for = getattr(self.overlay, "toast_height", None)
         heights = [
             _safe_int(height_for(item) if callable(height_for) else 68, 68)

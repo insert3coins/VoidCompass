@@ -1,24 +1,16 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.2.6 // Trading
+## v5.5.2.7 // Overlays fit larger text
 **Release Date:** 2026-Oct-05
 
-* New **Trading** tab on the main menu, with routes and prices from Spansh (only when you search) and every trade you've made from your journal.
-  * **Overview**: your trading profit, profit per hour and best sale, with charts of profit per day and your running total over 24 hours, 7, 30 or 90 days, a year or all time. Hover them for the figures. Mining and salvage sales are shown beside trading, never mixed into it.
-  * **Route planner**: Spansh's trade router, filled in from your ship, credits and location. It shows each hop's cargo, prices, profit and how fresh the prices are.
-    * While Spansh works, each step ticks off with a running timer, and you can stop it. Three hops usually take under a minute; each extra hop adds time.
-    * Station names are matched for you, in any case. Type something that isn't a station there (a station type like "Orbis Starport", say) and you get that system's stations to pick from.
-  * **Loop routes** between any two stations, worked out from both markets.
-  * **Follow a route**: it ticks along as you buy and sell, and when you dock at the next station its prices are checked again on Spansh.
-  * **Sell cargo**: the best place near you to sell everything in your hold.
-  * **Find commodity**: where to buy or sell anything, near any system.
-  * **Market**: the station you're docked at, straight from the game (with the game's galactic average), or any station's market from Spansh.
-  * **History**: profit per hour for each session, the routes you've flown, where you sell, every trade, and a report to paste into Discord.
-* New **Trade Route** overlay: the next step of the route you're following, with price warnings. It only shows while you follow a route.
-* **Trading searches (Spansh)** in Settings > Integrations, on by default. Your own trading record works without it.
+* **Overlays now grow with the text size.** With a larger overlay text size, many overlays kept their normal size, so the bigger text was squeezed into the same width and the bottom rows were cut off. Every overlay's window now grows by the same amount as its text, in width and height:
+  * Carrier, Construction Needs, Deep Space Contacts, Planet Materials, Powerplay, Prospector, Trade Route, Jump Info
+  * Cargo, Station Information, Survey Operations (with its own text size) and Notifications
+* **The Navigation HUD always fits its window.** It now sizes itself to the window it actually has, so it can't be clipped on the right or at the bottom, even on PCs where Windows draws pages larger than expected.
 
 ## Earlier releases
 
+* **v5.5.2.6** — New Trading tab with Spansh routes, loop routes, selling your cargo, finding any commodity, station markets and your profit history with charts; and the Trade Route overlay.
 * **v5.5.2.5** — Install updates from inside Void Compass: downloaded and checked from GitHub, swapped in on a restart, with your settings and profiles kept and the old version put back if anything goes wrong.
 * **v5.5.2.4.1** — Surface gravity fixed for worlds under about 0.5 G (shown ten times too heavy, which also skewed species predictions and set off false gravity warnings); BGS Refresh from EDSM gets fresh data; conflicts listed newest first.
 * **v5.5.2.4** — New BGS tab: every faction in every system you visit, tracking and alerts, conflicts, any system looked up on EDSM, influence charts, your work per tick with a Discord report, and a guide to the states.
