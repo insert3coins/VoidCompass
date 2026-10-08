@@ -301,6 +301,7 @@ def annotate_codex(model, lookup, variants=None):
             # A genus the game found but BioScan's rules did not predict:
             # the species the bio criteria expect here, as SrvSurvey shows.
             species = _criteria_species(detail.get('name'), known)
+            _narrow_value(detail, species)
         if not species and detail.get('codex_genus'):
             # Whole-genus answer: flagged only when every species of it is
             # unlogged (anywhere, or in this region), so never overclaims.
@@ -330,11 +331,37 @@ def annotate_codex(model, lookup, variants=None):
         body_id = (model.get('body') or {}).get('body_id')
         for detail in model.get('rows') or ():
             mark(detail, body_id, detail.get('kind') in PREDICTED_KINDS or detail.get('kind') == 'detected')
+        _resum_body(model, (model.get('body') or {}).get('bio_count'), model.get('rows'))
     else:
         for row in model.get('rows') or ():
             for detail in row.get('bio_details') or ():
                 mark(detail, row.get('body_id'), False)
+            _resum_body(row, row.get('bio_count'), row.get('bio_details'))
     return model
+
+
+def _narrow_value(detail, species):
+    """Once the species a detected genus can be are known, its value is
+    theirs, not the whole genus's (Bacterium Acies is 1M, not 1-8.42M)."""
+    values = [bio_values.species_value(row.get('name')) for row in species or ()]
+    values = [_safe_int(value) for value in values if value]
+    if not values:
+        return
+    bonus = bio_values.FIRST_LOGGED_MULTIPLIER if detail.get('first_logged_bonus') else 1
+    detail['min_value'], detail['max_value'] = min(values) * bonus, max(values) * bonus
+    detail['narrowed'] = True
+
+
+def _resum_body(target, bio_count, details):
+    """Re-add a body's estimate from its rows when a row was narrowed and
+    the rows account for every biological signal on it."""
+    details = [row for row in details or () if row.get('kind') not in PREDICTED_KINDS]
+    if not any(row.get('narrowed') for row in details):
+        return
+    if not details or len(details) != _safe_int(bio_count):
+        return
+    target['min_value'] = sum(_safe_int(row.get('value') or row.get('min_value')) for row in details)
+    target['max_value'] = sum(_safe_int(row.get('value') or row.get('max_value')) for row in details)
 
 
 def body_codex_flag(item, lookup, variants=None):

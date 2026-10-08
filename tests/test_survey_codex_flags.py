@@ -146,6 +146,27 @@ class SurveyModelTests(unittest.TestCase):
         self.assertEqual(row["codex_lines"], [{"species": "Divisa", "flag": "new",
                                                "variants": [{"text": "Yellow", "flag": "new"}]}])
 
+    def test_a_named_species_narrows_the_genus_value(self):
+        """A detected Bacterium the criteria name as Acies is worth Acies'
+        value, not the 1-8.42M of every Bacterium (the Alrai Sector report)."""
+        acies = bio_values.species_value("Bacterium Acies")
+        self.assertTrue(acies)
+        body = {"body_id": 7, "name": "Alrai 7", "planet_class": "Icy body", "bio_count": 1,
+                "genuses": [{"Genus_Localised": "Bacterium"}]}
+        model = build_survey_model("Alrai", [body], focused_body_id=7, scanned=5, total=10)
+        self.assertGreater(model["max_value"], acies, "the whole genus before")
+        white = "$Codex_Ent_Bacterial_04_Tellurium_Name;"
+        annotate_codex(model, lambda kind, key, b: "",
+                       lambda b: {"bacterium acies": [{"colour": "White", "key": white, "predicted": True}]})
+        row = model["rows"][0]
+        self.assertEqual((row["min_value"], row["max_value"]), (acies, acies))
+        self.assertEqual((model["min_value"], model["max_value"]), (acies, acies))
+        # A first-footfall body pays it five times.
+        model = build_survey_model("Alrai", [{**body, "first_footfall": True}], focused_body_id=7, scanned=5, total=10)
+        annotate_codex(model, lambda kind, key, b: "",
+                       lambda b: {"bacterium acies": [{"colour": "White", "key": white, "predicted": True}]})
+        self.assertEqual(model["max_value"], acies * 5)
+
     def test_the_system_view_keeps_one_flag_per_row(self):
         model = build_survey_model("Prai Preia", [self.body()], scanned=1, total=1)
         annotate_codex(model, lambda kind, key, body: "new")

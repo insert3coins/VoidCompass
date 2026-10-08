@@ -7,6 +7,7 @@
   * Survey Operations' flags are switched on for every commander, once. Turn them off in Overlay Studio if you prefer.
   * A genus the game finds on a body but our prediction didn't expect now lists the species it is likely to be, with their colours and flags.
   * When the brightest star gives a species no colour (a neutron star, say), the planet's other parent stars are tried.
+  * Once the species is known, a detected genus shows that species' value, not the whole genus range (a Bacterium named as Acies reads 1M, not 1–8.42M), and the body estimate follows.
 * **Galnet shows each story's real date.** Stories now carry their in-game broadcast date (01 OCT 3312), read from the Galnet page. Before, every story showed the date the feed was last updated.
 * **Ship loadouts import as they are in game.**
   * Empty hardpoints stay empty. Before, they showed the stock Pulse Lasers.
