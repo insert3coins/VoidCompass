@@ -292,6 +292,43 @@ class PageTests(unittest.TestCase):
 
 
 
+class JumpFitTests(PageTests):
+    """5.5.3: Jump Info fits the window it actually gets, as the Navigation
+    HUD does: a window smaller than the text size wants (a height cap,
+    Windows scaling, an older WebView2) shrinks the panel instead of cutting
+    it off, and the page still asks for the full size."""
+
+    def test_the_panel_fits_a_window_smaller_than_its_text_wants(self):
+        page = self.open()
+        regions = lambda x, y, z: (1, "Galactic Centre") if z > 10 else (18, "Inner Orion Spur")
+        model = build_jump_info_model("charging", {"name": "Barnard's Star", "star_class": "N"}, ROUTE, KNOWN,
+                                      current_region="Inner Orion Spur", find_region=regions)
+        snapshot = {"jump": model, "theme": {}, "effects": {"reduced_motion": True, "text_scale": 1.5}}
+        inside = """() => {
+          const box = document.querySelector('.content').getBoundingClientRect();
+          return {right: box.right, bottom: box.bottom, width: innerWidth, height: innerHeight};
+        }"""
+        # The right size first: the full text size, nothing shrunk.
+        page.set_viewport_size({"width": 840, "height": 900})
+        page.evaluate("s => __render(s)", snapshot)
+        self.assertEqual(page.evaluate("__jumpFit()"), {"requested": 1.5, "fitted": 1.5})
+        natural = page.evaluate("__height()")
+        # A window made for about 115%: everything still inside it.
+        page.set_viewport_size({"width": 644, "height": 260})
+        page.evaluate("s => __render(s)", snapshot)
+        fit = page.evaluate("__jumpFit()")
+        self.assertLess(fit["fitted"], 1.5)
+        box = page.evaluate(inside)
+        self.assertLessEqual(box["right"], box["width"] + 1)
+        self.assertLessEqual(box["bottom"], box["height"] + 1, "the bottom row is inside the window")
+        # It keeps asking for the height the full text size needs.
+        self.assertAlmostEqual(page.evaluate("__height()"), natural, delta=6)
+        # The window grows back: the full size returns.
+        page.set_viewport_size({"width": 840, "height": 900})
+        page.wait_for_timeout(50)
+        self.assertEqual(page.evaluate("__jumpFit()")["fitted"], 1.5)
+
+
 class ChargeStartTests(unittest.TestCase):
     """5.5.3: Jump Info appears when the jump is pressed (Status' hyperdrive
     charging flags), not when StartJump ends the countdown."""

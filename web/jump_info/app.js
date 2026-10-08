@@ -110,8 +110,36 @@
     return item;
   }
 
+  // Fit the panel to the window it actually gets (as the Navigation HUD
+  // does, 5.5.2.7). The text size asks for a zoom; the window is sized for it
+  // from the design width and the height this page reports, but a window
+  // that ends up smaller (a height cap, Windows display scaling, an older
+  // WebView2 measuring zoom differently) cut the panel off. Now the zoom
+  // never exceeds what fits, and the page keeps reporting the height the
+  // full text size needs, so the window grows back towards it.
+  const DESIGN_WIDTH = 560;
+  let requestedScale = 1;
+  let fittedScale = 1;
+
+  function setScale(scale) {
+    fittedScale = scale;
+    document.documentElement.style.setProperty("--scale", scale.toFixed(4));
+  }
+
+  function fitToWindow() {
+    let scale = requestedScale;
+    if (innerWidth > 0) scale = Math.min(scale, innerWidth / DESIGN_WIDTH);
+    setScale(Math.max(.4, scale));
+    const height = dom.content.getBoundingClientRect().height + 2;
+    if (innerHeight > 0 && height > innerHeight + 1) {
+      setScale(Math.max(.4, fittedScale * innerHeight / height));
+    }
+    return fittedScale;
+  }
+
   function render(snapshot = {}) {
     VoidCompassOverlay.applyTheme(dom.jump, snapshot.theme || {}, snapshot.effects || {});
+    requestedScale = Number(document.documentElement.style.getPropertyValue("--scale")) || 1;
     const model = snapshot.jump || {};
     const system = String(model.system || "");
     dom.jump.classList.toggle("empty", !system);
@@ -152,11 +180,18 @@
     dom.lines.replaceChildren(...rows.map((row) => lineNode(row, fresh && !shownKeys.has(row.key))));
     shownKeys = new Set(rows.map((row) => row.key));
     shownSystem = system;
+    fitToWindow();
   }
 
+  // The height the panel needs at the requested text size (not the shrunk
+  // one), so the app sizes the window for the full text.
   function contentHeight() {
-    return Math.ceil(dom.content.getBoundingClientRect().height + 2);
+    const shown = dom.content.getBoundingClientRect().height + 2;
+    return Math.ceil(shown * requestedScale / (fittedScale || 1));
   }
+
+  window.addEventListener("resize", () => { if (!dom.jump.classList.contains("empty")) fitToWindow(); });
+  window.__jumpFit = () => ({requested: requestedScale, fitted: fittedScale});
 
   new ResizeObserver(() => { if (lastRoute && !dom.route.hidden) drawRoute(lastRoute); }).observe(dom["route-line"]);
   VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 250});

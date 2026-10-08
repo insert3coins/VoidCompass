@@ -16,6 +16,7 @@
   * Shock and Awe now needs three core asteroids cracked with seismic charges. Before, launching any limpet counted. Progress counted the old way is cleared once.
   * Drone Operator counts only prospector and collector limpets.
 * **Jump Info appears the moment you press jump,** while the drive charges, not when the countdown ends.
+* **Jump Info fits its window at any text size,** as the Navigation HUD does. If the window comes out smaller than your text size needs (Windows display scaling, say), the panel shrinks to fit rather than being cut off, and returns to full size as the window catches up.
 * **Survey Operations lists Earth-likes, water worlds and other high-value bodies right after biology,** the most valuable first, and they are the last to page out when space is short.
 * **Explore & Survey:**
   * Unsold **exobiology** has its own readout beside cartography, with the samples aboard and any first-footfall bonus.
