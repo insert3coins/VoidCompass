@@ -164,8 +164,8 @@
 .explore-board .body-row.in-view .bridge-planet-ring { animation-play-state: running; }
 
 #explore-orrery .cartography-target-lock { flex: 0 0 auto; margin: 8px 10px 0; }
-#explore-orrery .orrery-stage, #explore-orrery .orrery-empty { flex: 1 1 auto; height: auto; min-height: 210px; }
-#explore-orrery .orrery-detail { flex: 0 1 auto; min-height: 0; max-height: 48%; overflow: auto; padding: 10px 13px; scrollbar-width: thin; }
+#explore-orrery .orrery-stage, #explore-orrery .orrery-empty { flex: 1 1 auto; height: auto; min-height: 180px; }
+#explore-orrery .orrery-detail { flex: 0 1 auto; min-height: min(120px, 40%); max-height: 55%; overflow: auto; padding: 10px 13px; scrollbar-width: thin; }
 
 /* Route view. */
 .explore-expedition {
@@ -355,3 +355,6 @@
 .explore-board .chip.codex { border-color: color-mix(in srgb, var(--yellow) 55%, var(--border-soft)); color: var(--yellow); }
 .explore-board .chip.codex.region { color: var(--muted); }
 .explore-traffic b { white-space: nowrap; }
+.explore-board .chip.site { color: var(--text); }
+.explore-board .chip.site.guardian { border-color: color-mix(in srgb, var(--accent) 45%, var(--border-soft)); color: var(--accent); }
+.explore-board .chip.site.thargoid { border-color: color-mix(in srgb, var(--green) 45%, var(--border-soft)); color: var(--green); }

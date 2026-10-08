@@ -1393,6 +1393,8 @@ class TacticalHUD:
                 "geo": max(0, int(nav_context.get("geo_signals", 0) or 0)),
                 "mining": max(0, int(nav_context.get("mining_signals", 0) or 0)),
                 "valuable": max(0, int(nav_context.get("valuable_count", 0) or 0)),
+                "sites": sum((nav_context.get("site_signals") or {}).values()),
+                "sites_detail": dict(nav_context.get("site_signals") or {}),
             },
         }
 

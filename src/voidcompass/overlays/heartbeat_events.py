@@ -309,6 +309,35 @@ _EFFECT_GAZE = {
 }
 _RARE_PLANETS = {"earthlike body", "water world", "ammonia world"}
 
+# Which overlay an event concerns: the eye glances toward it on screen
+# (5.5.3.1), so it is seen watching what the commander is watching.
+_OVERLAY_EVENTS = {
+    "jump_info_hud": {"FSDTarget", "StartJump", "FSDJump", "NavRoute"},
+    "station_info_hud": {"Docked", "Undocked", "DockingGranted", "DockingRequested", "DockingDenied",
+                         "DockingCancelled", "DockingTimeout"},
+    "cargo_hud": {"Cargo", "MarketBuy", "MarketSell", "CollectCargo", "EjectCargo", "MiningRefined"},
+    "prospector_hud": {"ProspectedAsteroid", "AsteroidCracked"},
+    "contact_scope_hud": {"FSSSignalDiscovered", "USSDrop"},
+    "hud": {"SupercruiseEntry", "SupercruiseExit", "ApproachBody", "LeaveBody", "Touchdown", "Liftoff",
+            "Interdicted", "Interdiction", "EscapeInterdiction", "HullDamage", "ShieldState"},
+}
+_OVERLAY_PREFIXES = (
+    ("survey_status_hud", ("Scan", "FSS", "SAA", "Codex", "DiscoveryScan", "SellOrganic")),
+    ("colony_needs_hud", ("Colonisation", "Construction")),
+)
+
+
+def overlay_for(event):
+    """The overlay (registry attr) an event concerns, or ""."""
+    name = str(event or "")
+    for attr, names in _OVERLAY_EVENTS.items():
+        if name in names:
+            return attr
+    for attr, prefixes in _OVERLAY_PREFIXES:
+        if name.startswith(prefixes):
+            return attr
+    return ""
+
 # Channels that are real people rather than NPC or station chatter.
 _PEOPLE_CHANNELS = {"player", "wing", "friend", "squadron", "squadleaders", "local", "voicechat"}
 
@@ -368,4 +397,5 @@ def classify(event, detail=None):
         "weight": round(float(weight), 2),
         "gaze": gaze,
         "rare": rare,
+        "overlay": overlay_for(name),
     }

@@ -54,6 +54,8 @@ from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.overlays.trade_route_hud import TradeRouteHUD
 from voidcompass.exploration import bio_variants
+from voidcompass.exploration.notable_bodies import is_green_giant_codex
+from voidcompass.overlays import watcher_mind
 from voidcompass.exploration.codex_index import CodexIndex
 from voidcompass.overlays.html_survey_overlay import attach_html_survey_overlay
 from voidcompass.overlays.html_toast_overlay import attach_html_toast_overlay
@@ -514,6 +516,7 @@ class MainDashboard(
             "bio_count": int(signals.get("bio", 0) or 0),
             "geo_count": int(signals.get("geo", 0) or 0),
             "mining_count": int(signals.get("mining", 0) or 0),
+            "sites": dict(signals.get("sites") or {}),
             "genuses": list(signals.get("genuses") or []),
             "dss_complete": bool(signals.get("dss_complete")),
             "organic_scans": {},
@@ -1426,6 +1429,31 @@ class MainDashboard(
         if kind == "entry":
             return index.entry_flag(key, region)
         return index.species_flag(key, region)
+
+    def _watcher_sign_off(self):
+        """At Shutdown the Watcher sums up the session, in the Captain's
+        Log's own figures (the same as the deck's Session Pulse)."""
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        log = getattr(self, "captains_log", None)
+        if heartbeat is None or not hasattr(heartbeat, "note") or log is None:
+            return
+        try:
+            session = next(iter(log.sessions()), None)
+        except Exception:
+            return
+        if not isinstance(session, dict):
+            return
+        hours = watcher_mind.session_hours(session)
+        heartbeat.note("sign_off", {
+            "summary": watcher_mind.session_summary(session),
+            "hours": watcher_mind.session_flown(session) if hours >= .05 else "",
+        })
+
+    def _watcher_codex_new(self, body):
+        """The focused body holds a colour the commander never logged."""
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        if heartbeat is not None and hasattr(heartbeat, "note"):
+            heartbeat.note("codex_new", {"body": body})
 
     def _survey_codex_variants(self, body_id):
         """The colour variants each predicted species would show on a body."""
@@ -2515,6 +2543,7 @@ class MainDashboard(
             self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
             self.survey_status_hud.codex_lookup = self._survey_codex_lookup
             self.survey_status_hud.codex_variants = self._survey_codex_variants
+            self.survey_status_hud.on_codex_new = self._watcher_codex_new
         else:
             self.survey_status_hud = None
 
@@ -4276,6 +4305,9 @@ class MainDashboard(
     def _on_achievement_unlocked(self, achievement):
         def apply_unlock():
             title = achievement.get("title") or achievement.get("id") or "Achievement"
+            heartbeat = getattr(self, "heartbeat_hud", None)
+            if heartbeat is not None and hasattr(heartbeat, "note"):
+                heartbeat.note("achievement", {"title": title})
             icon = achievement.get("icon") or "★"
             points = int(achievement.get("points") or 0)
             description = (
@@ -4537,7 +4569,7 @@ class MainDashboard(
         return event_address is None or current_address is None or event_address == current_address
 
     def _set_body_signals(self, body_id, bio_count=0, geo_count=0, genuses=None,
-                          body_name=None, dss_complete=None, mining_count=None):
+                          body_name=None, dss_complete=None, mining_count=None, sites=None):
         body_id = self._normalize_body_id(body_id)
         if body_id is None:
             return
@@ -4553,6 +4585,8 @@ class MainDashboard(
                 else int(previous.get("mining", 0) or 0)
             ),
             "genuses": list(genuses) if genuses else list(previous.get("genuses") or []),
+            # Human, Guardian, Thargoid and Other signals (the latest scan wins).
+            "sites": dict(sites) if sites else dict(previous.get("sites") or {}),
             "body_name": body_name or previous.get("body_name") or "",
             "dss_complete": (
                 bool(dss_complete) if dss_complete is not None
@@ -4566,6 +4600,17 @@ class MainDashboard(
             int(signals.get("bio", 0) or 0)
             for signals in self.body_signals.values()
         )
+
+    def _site_signal_totals(self):
+        """Human, Guardian, Thargoid and Other signals across the system."""
+        totals = {}
+        for signals in (getattr(self, "body_signals", None) or {}).values():
+            for kind, value in ((signals or {}).get("sites") or {}).items():
+                try:
+                    totals[kind] = totals.get(kind, 0) + max(0, int(value or 0))
+                except (TypeError, ValueError):
+                    pass
+        return {kind: value for kind, value in totals.items() if value}
 
     def _record_belt_cluster(self, body_id, body_name, distance_ls=None,
                              was_discovered=None):
@@ -4790,6 +4835,7 @@ class MainDashboard(
                 self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
                 self.survey_status_hud.codex_lookup = self._survey_codex_lookup
                 self.survey_status_hud.codex_variants = self._survey_codex_variants
+                self.survey_status_hud.on_codex_new = self._watcher_codex_new
                 if self.current_docked:
                     self.survey_status_hud.suppress()
         elif self.survey_status_hud:
@@ -5695,6 +5741,7 @@ class MainDashboard(
             "bio_signals": int(getattr(self, "system_bio_signals", 0) or 0),
             "geo_signals": geo_signals,
             "mining_signals": mining_signals,
+            "site_signals": self._site_signal_totals(),
             "valuable_count": valuable_count,
             "undiscovered": bool(getattr(self, "system_undiscovered", False)),
             "body": getattr(self, "current_body_name", "") or "",
@@ -5746,6 +5793,11 @@ class MainDashboard(
             return {}
         region_id, name = region
         if region_id != getattr(self, "_hud_region_id", None):
+            # A real crossing (not the region the session starts in): the
+            # Watcher may remark on one it has not seen with this commander.
+            heartbeat = getattr(self, "heartbeat_hud", None)
+            if getattr(self, "_hud_region_id", None) is not None and heartbeat is not None and hasattr(heartbeat, "note"):
+                heartbeat.note("new_region", {"region": name})
             self._hud_region_id = region_id
             self._hud_region_since = time.monotonic()
         since = getattr(self, "_hud_region_since", 0.0)
@@ -7779,6 +7831,8 @@ class MainDashboard(
                     self._refresh_html_workspace()
             except Exception as exc:
                 logging.debug("Captain's Log event skipped [%s]: %s", ev, exc)
+        if ev == "Shutdown" and not startup_replay:
+            self._watcher_sign_off()
         if getattr(self, "deep_survey", None):
             try:
                 survey_raw = raw if isinstance(raw, dict) else d
@@ -7806,6 +7860,8 @@ class MainDashboard(
         self._bgs_observe(raw if isinstance(raw, dict) else None, startup_replay=startup_replay)
         # Trading: your trades, and the route you're following (trading.journal).
         self._trading_observe(raw if isinstance(raw, dict) else None, startup_replay=startup_replay)
+        if ev == "CodexEntry" and isinstance(raw, dict) and is_green_giant_codex(raw):
+            self._note_green_giant_codex(raw)
         if getattr(self, "codex_index", None) and ev == "CodexEntry" and isinstance(raw, dict):
             try:
                 if self.codex_index.observe(raw) and not startup_replay:
@@ -8940,11 +8996,14 @@ class MainDashboard(
                     body_id, bio_count, geo_count,
                     body_name=d.get("body_name"),
                     mining_count=mining_count,
+                    sites=d.get("sites"),
                 )
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["bio_count"] = bio_count
                     item["geo_count"] = geo_count
+                    if d.get("sites"):
+                        item["sites"] = dict(d["sites"])
                     if mining_count is not None:
                         item["mining_count"] = mining_count
                     item["color"] = COLOR_ACCENT if (
@@ -8980,17 +9039,19 @@ class MainDashboard(
                     if mining_count:
                         parts.append(f"{mining_count} mining")
                     self._push_live_toast("DSS SIGNALS", f"{body}: {', '.join(parts)}", "success", 12)
-                if bio_count or geo_count or mining_count:
+                if bio_count or geo_count or mining_count or d.get("sites"):
                     self._set_body_signals(
                         body_id, bio_count, geo_count, genuses=d.get("genuses") or [],
                         body_name=d.get("body_name"), dss_complete=True,
-                        mining_count=mining_count,
+                        mining_count=mining_count, sites=d.get("sites"),
                     )
                 item = self.scan_items_by_id.get(body_id)
                 if item:
                     item["bio_count"] = bio_count
                     item["geo_count"] = geo_count
                     item["mining_count"] = mining_count
+                    if d.get("sites"):
+                        item["sites"] = dict(d["sites"])
                     item["genuses"] = d.get("genuses") or item.get("genuses") or []
                     item["color"] = COLOR_ACCENT if (
                         bio_count > 0 or geo_count > 0 or mining_count > 0

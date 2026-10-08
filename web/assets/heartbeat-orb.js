@@ -633,7 +633,7 @@
       this.moon = 0;
       this.breath = 0;
       this.gaze = {x: 0, y: 0, tx: 0, ty: 0, until: 0};
-      // Blinks, glances and moods between events (heartbeat-life.js).
+      // Its aperture, glances, activity and moods between events (heartbeat-life.js).
       this.life = window.HeartbeatLife ? new window.HeartbeatLife() : null;
       this.pose = null;
       this.seed = 1;
@@ -678,7 +678,8 @@
       const stalled = Boolean(input.stalled);
       if (stalled || this.reduced) this.clearMotion();
       if (this.life) {
-        this.life.configure({liveliness: input.liveliness, idle: input.idle, reduced: this.reduced});
+        this.life.configure({liveliness: input.liveliness, idle: input.idle, reduced: this.reduced, state: input.state,
+          overlays: input.overlays, personality: input.personality, memory: input.memory}, now);
         if (input.vitals) this.life.vitals(input.vitals);
       }
       this.stalled = stalled;
@@ -755,14 +756,20 @@
       this.arousal *= Math.exp(-elapsed / 12000);
     }
 
-    play(event, start) {
+    // The eye speaks a thought: its pupil rises and falls like a voice.
+    speak(ms = 2000) {
+      if (this.reduced || this.stalled) return;
+      this.play({effect: 'speak', tone: 'accent', weight: .8}, performance.now(), Math.max(1200, Math.min(9000, ms)));
+    }
+
+    play(event, start, ms = null) {
       const spec = EFFECTS[event.effect];
       if (!spec) return;
       if (event.effect === 'wake') this.asleep = false;
       const next = random((this.seed += 7919));
       this.effects = this.effects.filter((effect) => effect.name !== event.effect);
       this.effects.push({
-        name: event.effect, spec, start, ms: spec.ms,
+        name: event.effect, spec, start, ms: ms || spec.ms,
         tone: TONES.includes(event.tone) ? event.tone : 'accent',
         w: .55 + .45 * clamp(Number(event.weight) || 0),
         r: Array.from({length: 64}, next),
@@ -778,6 +785,7 @@
         twist: (next() < .5 ? -1 : 1) * (.6 + next() * .8),
         tone: TONES.includes(event.tone) ? event.tone : 'muted',
         size: .7 + .6 * clamp(Number(event.weight) || 0),
+        dream: Boolean(event.dream),
       });
       if (this.motes.length > MAX_MOTES) this.motes.splice(0, this.motes.length - MAX_MOTES);
       // The eye glances toward what it just noticed (with the life module,
@@ -874,6 +882,18 @@
         this.moon += elapsed / 26000 * TAU;
       }
       this.breath += elapsed / (this.asleep || drowsy > .5 ? 8000 : 5200);
+      // With the life module the eye follows the newest event as it falls
+      // in, so every journal line gets a look, however small.
+      if (this.life && this.motes.length && !this.reduced && !this.asleep) {
+        const mote = this.motes[this.motes.length - 1];
+        const q = clamp((now - mote.start) / mote.ms);
+        if (q > 0 && q < 1) {
+          const radius = .76 * (1 - easeIn(q)) * .09;
+          this.gaze.tx = Math.cos(mote.angle + mote.twist * q) * radius;
+          this.gaze.ty = Math.sin(mote.angle + mote.twist * q) * radius;
+          this.gaze.until = now + 200;
+        }
+      }
       const looking = now < this.gaze.until;
       const ease = Math.min(1, elapsed / 260);
       this.gaze.x += ((looking ? this.gaze.tx : 0) - this.gaze.x) * ease;
@@ -889,6 +909,14 @@
         return false;
       });
       this.blips = this.blips.filter((blip) => now < blip.start + 650);
+      // Asleep, it dreams: faint motes of the session's notable moments
+      // drift through the iris.
+      const highlights = this.life?.highlights || [];
+      if (this.asleep && highlights.length && !this.reduced && now >= (this.nextDream || 0)) {
+        const tone = highlights[Math.floor(random((this.seed += 31))() * highlights.length)];
+        this.spawnMote({tone, weight: .3, dream: true}, now);
+        this.nextDream = now + 3000 + random((this.seed += 17))() * 3000;
+      }
       this.frames += 1;
     }
 
@@ -922,12 +950,14 @@
       const pal = this.pal;
       const g = geometry(ctx, R, cx, cy, pal);
       // Tension warms the iris toward red, as danger events do.
-      const tint = pose?.red ? mixHue(this.tint(), pal.red, pose.red * .55) : this.tint();
+      let tint = pose?.red ? mixHue(this.tint(), pal.red, pose.red * .55) : this.tint();
+      // An expression's own colour: pleased warms toward green, wary orange.
+      if (pose?.tone && pose.toneAmount > .01 && pal[pose.tone]) tint = mixHue(tint, pal[pose.tone], pose.toneAmount);
       const drowsy = this.drowsiness(now);
       const breath = .5 + .5 * Math.sin(this.breath * TAU);
       const level = clamp((.8 + .2 * this.arousal) * (1 - .22 * drowsy) * (this.asleep ? .32 : 1) * mods.dim, .05, 1);
       const sip = Math.exp(-(now - this.lastSip) / 300) * .15;
-      const flare = clamp(mods.flare + sip, 0, 1.6);
+      const flare = clamp(mods.flare + sip + (pose?.flare || 0) + .35 * (pose?.aperture || 0), 0, 1.6);
       g.tint = tint;
       g.level = level;
 
@@ -948,7 +978,8 @@
       const gx = cx + (this.gaze.x + (pose?.dx ?? 0)) * R;
       const gy = cy + (this.gaze.y + (pose?.dy ?? 0)) * R;
       // The iris: HAL's glow, strongest at the pupil and fading into the glass.
-      const irisRadius = .66 * R * mods.iris * (.96 + .06 * breath);
+      // The aperture tightens the iris as it thinks.
+      const irisRadius = .66 * R * mods.iris * (.96 + .06 * breath) * (1 - .1 * (pose?.aperture || 0));
       const iris = ctx.createRadialGradient(gx, gy, 0, gx, gy, irisRadius);
       iris.addColorStop(0, paint(mix(tint, pal.text, .55), .95 * level));
       iris.addColorStop(.1, paint(tint, .9 * level));
@@ -971,7 +1002,8 @@
 
       ctx.globalCompositeOperation = 'source-over';
       this.drawLensFinish(g);
-      if (pose) this.drawLids(g, pose, tint);
+      if (pose?.glint != null) this.drawGlint(g, pose.glint);
+      if (pose) this.drawLids(g, pose);
       ctx.restore();
 
       ctx.globalCompositeOperation = 'lighter';
@@ -1062,7 +1094,7 @@
         const q = (now - mote.start) / mote.ms;
         if (q <= 0 || q >= 1) continue;
         const color = mix(this.color(mote.tone), pal.text, .25);
-        const alpha = Math.min(1, q * 4) * (1 - q * .3);
+        const alpha = Math.min(1, q * 4) * (1 - q * .3) * (mote.dream ? .35 : 1);
         for (let trail = 2; trail >= 0; trail -= 1) {
           const t = Math.max(0, q - trail * .04);
           const [x, y] = g.polar(mote.angle + mote.twist * t, .76 * R * (1 - easeIn(t)));
@@ -1098,42 +1130,65 @@
       }
     }
 
-    // The lens shutter: two lids that meet in a blink, sit low when tired,
-    // squint while scooping and tilt for a side-eye.
-    drawLids(g, pose, tint) {
+    // The lids: shadow falling over the lens, not a plate across it. They
+    // hood the eye when it's tired or depressed, squint while scooping,
+    // tilt for a side-eye, and lift from below in a smile.
+    drawLids(g, pose) {
       const lid = clamp(pose.lid);
-      if (lid <= .01) return;
+      const lowerLid = clamp(pose.lidLower ?? pose.lid);
+      if (lid <= .01 && lowerLid <= .01) return;
       const {ctx, R, cx, cy, pal} = g;
       const reach = .8 * R;
-      const shade = paint(mix(pal.bg, pal.border, .18), .98);
-      const edge = paint(mix(tint, pal.text, .2), .35 * g.level);
+      const feather = .1 * R;
       const tilt = (pose.tilt || 0) * reach * lid;
-      // Upper lid: its edge comes down to the centre when shut.
-      const top = cy - reach + lid * reach;
-      ctx.beginPath();
-      ctx.moveTo(cx - R, cy - R);
-      ctx.lineTo(cx + R, cy - R);
-      ctx.lineTo(cx + R, top + tilt);
-      ctx.quadraticCurveTo(cx, top + .22 * reach * lid, cx - R, top - tilt);
-      ctx.closePath();
-      ctx.fillStyle = shade;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(cx + R, top + tilt);
-      ctx.quadraticCurveTo(cx, top + .22 * reach * lid, cx - R, top - tilt);
-      ctx.strokeStyle = edge;
-      ctx.lineWidth = g.k;
-      ctx.stroke();
-      // Lower lid: it rises to meet it.
-      const bottom = cy + reach - lid * reach;
-      ctx.beginPath();
-      ctx.moveTo(cx - R, cy + R);
-      ctx.lineTo(cx + R, cy + R);
-      ctx.lineTo(cx + R, bottom + tilt * .4);
-      ctx.quadraticCurveTo(cx, bottom - .18 * reach * lid, cx - R, bottom - tilt * .4);
-      ctx.closePath();
-      ctx.fillStyle = shade;
-      ctx.fill();
+      // The edge curves with the eye, as an eyelid's does (a flat edge read
+      // as a line drawn across the lens).
+      const sag = (lid) => reach * (.2 + .45 * lid);
+      if (lid > .01) {
+        // Upper lid: dark at the top, softening toward its edge, which
+        // comes down to the centre when shut.
+        const top = cy - reach + lid * reach - sag(lid) * .5;
+        const shade = ctx.createLinearGradient(0, cy - R, 0, top + feather);
+        shade.addColorStop(0, paint(pal.bg, .97));
+        shade.addColorStop(Math.max(0, Math.min(1, (top - (cy - R)) / (top + feather - (cy - R)))), paint(pal.bg, .88));
+        shade.addColorStop(1, paint(pal.bg, 0));
+        ctx.beginPath();
+        ctx.moveTo(cx - R, cy - R);
+        ctx.lineTo(cx + R, cy - R);
+        ctx.lineTo(cx + R, top + tilt + feather);
+        ctx.quadraticCurveTo(cx, top + sag(lid) + feather, cx - R, top - tilt + feather);
+        ctx.closePath();
+        ctx.fillStyle = shade;
+        ctx.fill();
+      }
+      if (lowerLid > .01) {
+        // Lower lid: it rises to meet it (more than the upper one in a smile).
+        const bottom = cy + reach - lowerLid * reach + sag(lowerLid) * .5;
+        const shade = ctx.createLinearGradient(0, cy + R, 0, bottom - feather);
+        shade.addColorStop(0, paint(pal.bg, .97));
+        shade.addColorStop(Math.max(0, Math.min(1, ((cy + R) - bottom) / ((cy + R) - (bottom - feather)))), paint(pal.bg, .88));
+        shade.addColorStop(1, paint(pal.bg, 0));
+        ctx.beginPath();
+        ctx.moveTo(cx - R, cy + R);
+        ctx.lineTo(cx + R, cy + R);
+        ctx.lineTo(cx + R, bottom + tilt * .4 - feather);
+        ctx.quadraticCurveTo(cx, bottom - sag(lowerLid) - feather, cx - R, bottom - tilt * .4 - feather);
+        ctx.closePath();
+        ctx.fillStyle = shade;
+        ctx.fill();
+      }
+    }
+
+    // Light sweeping across the glass, upper left to lower right.
+    drawGlint(g, position) {
+      const {ctx, R, cx, cy, pal} = g;
+      const offset = (position * 2.4 - 1.2) * R;
+      const band = ctx.createLinearGradient(cx + offset - .25 * R, cy - .25 * R, cx + offset + .25 * R, cy + .25 * R);
+      band.addColorStop(0, paint(pal.text, 0));
+      band.addColorStop(.5, paint(pal.text, .12 * Math.sin(Math.PI * position)));
+      band.addColorStop(1, paint(pal.text, 0));
+      ctx.fillStyle = band;
+      ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
     }
 
     drawLensFinish(g) {

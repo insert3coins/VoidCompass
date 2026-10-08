@@ -16,7 +16,7 @@ const dom = Object.fromEntries([
   'survey-title-text', 'survey-state', 'survey-mode', 'survey-remaining',
   'survey-count', 'survey-percent', 'survey-progress-marker',
   'survey-rail', 'survey-progress-fill', 'survey-acquisition', 'survey-signals',
-  'survey-signal-bio', 'survey-signal-geo', 'survey-signal-mining', 'survey-signal-valuable',
+  'survey-signal-bio', 'survey-signal-geo', 'survey-signal-mining', 'survey-signal-valuable', 'survey-signal-sites',
   'context-label', 'secondary-label', 'traffic-label', 'link-state',
 ].map((id) => [id, $(id)]));
 
@@ -275,7 +275,10 @@ function renderInstrument(state) {
   dom['instrument-fill'].style.transform = `scaleX(${fill})`;
   dom['instrument-marker'].hidden = marker == null;
   if (marker != null) dom['instrument-marker'].style.left = `${(marker * 100).toFixed(2)}%`;
-  dom['instrument-readout'].textContent = instrumentReadout(state, instrument);
+  const readout = instrumentReadout(state, instrument);
+  dom['instrument-readout'].textContent = readout;
+  // Something measured to show (Hologram Off folds the viewport otherwise).
+  host.classList.toggle('live', Boolean(readout) || ['altimeter', 'scan'].includes(instrument.kind));
   return instrument;
 }
 
@@ -757,7 +760,7 @@ function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = 
   const totalKnown = survey.total_known !== false && state !== 'unknown';
   const percent = Math.max(0, Math.min(100, Number(survey.percent || 0)));
   const rawSignals = survey.signals || {};
-  const signalCounts = Object.fromEntries(['bio', 'geo', 'mining', 'valuable'].map((kind) => [
+  const signalCounts = Object.fromEntries(['bio', 'geo', 'mining', 'valuable', 'sites'].map((kind) => [
     kind, Math.max(0, Number.parseInt(rawSignals[kind], 10) || 0),
   ]));
   const tone = survey.tone
@@ -767,7 +770,8 @@ function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = 
   const bioText = signalCounts.bio > 0 && /^\d+\/\d+$/.test(String(bioProgress)) ? String(bioProgress) : String(signalCounts.bio);
   const signature = JSON.stringify([
     systemName, state, scanned, total, totalKnown, Math.round(percent * 100) / 100,
-    signalCounts.bio, signalCounts.geo, signalCounts.mining, signalCounts.valuable, tone, reducedMotion, bioText,
+    signalCounts.bio, signalCounts.geo, signalCounts.mining, signalCounts.valuable, signalCounts.sites,
+    JSON.stringify(rawSignals.sites_detail || {}), tone, reducedMotion, bioText,
   ]);
   if (signature === lastSurveySignature) return;
 
@@ -839,11 +843,18 @@ function renderSurvey(survey = {}, theme = {}, systemName = '', reducedMotion = 
     ['geo', 'Geological signals'],
     ['mining', 'Planetary mining locations'],
     ['valuable', 'High-value bodies'],
+    ['sites', 'Settlements and sites'],
   ]) {
     const count = signalCounts[kind];
     const alert = dom[`survey-signal-${kind}`];
     alert.querySelector('em').textContent = kind === 'bio' ? bioText : String(count);
     alert.title = `${title}: ${count}`;
+    if (kind === 'sites') {
+      // Which kinds: "Human 3 · Guardian 1".
+      const detail = Object.entries(rawSignals.sites_detail || {})
+        .map(([name, value]) => `${name.charAt(0).toUpperCase()}${name.slice(1)} ${value}`).join(' · ');
+      if (detail) alert.title = `${title}: ${detail}`;
+    }
     alert.setAttribute('aria-label', `${title}: ${count}`);
     alert.classList.toggle('present', count > 0);
     if (count > 0) visibleSignals += 1;

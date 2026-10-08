@@ -289,7 +289,7 @@ class ExploreSurveyVisualTests(unittest.TestCase):
         rows = {row["body_id"]: row for row in state["survey"]["bodies"]}
         rows[1].update({"discovered_by": "Cmdr Hale", "discovered_at": "2024-03-01 10:00:00", "was_discovered": True})
         rows[2]["was_discovered"] = False
-        rows[3].update({"was_discovered": True, "codex": "new"})
+        rows[3].update({"was_discovered": True, "codex": "new", "sites": {"human": 2, "thargoid": 1}})
         state["traffic"] = {"day": 2, "week": 14, "total": 1204, "resolved": True,
                             "discovered_by": "Cmdr First", "discovered_at": "3301-01-01"}
         state["data"] = {"unsold_exploration": 4_200_000, "unsold_bio": 31_000_000, "unsold_total": 35_200_000,
@@ -300,6 +300,7 @@ class ExploreSurveyVisualTests(unittest.TestCase):
         self.assertEqual(row(2).locator(".body-discovery.first").inner_text(), "UNDISCOVERED · FIRST DISCOVERY YOURS")
         self.assertEqual(row(3).locator(".body-discovery").inner_text(), "DISCOVERED · NOT ON EDSM")
         self.assertIn("NEW TO CODEX", row(3).locator(".chip.codex.new").inner_text())
+        self.assertEqual(row(3).locator(".chip.site").all_inner_texts(), ["THARGOID 1", "HUMAN 2"])
         self.assertEqual(self.page.locator("#explore-traffic").inner_text(), "24H 2 · WK 14 · EVER 1,204")
         self.assertIn("Cmdr First", self.page.locator(".explore-traffic").get_attribute("title"))
         self.assertIn("31", self.page.locator("#intel-bio").inner_text())

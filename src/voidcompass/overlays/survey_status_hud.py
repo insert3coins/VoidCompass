@@ -59,7 +59,19 @@ def _body_visual_meta(item, system_name):
         'class_label': _planet_label(item.get('planet_class')),
         'atmosphere_label': str(item.get('atmosphere_type') or item.get('atmosphere') or '').strip(),
         'ring_count': len(rings) if isinstance(rings, (list, tuple)) else None,
+        # Surface temperature (EDDiscovery shows it; species depend on it).
+        'temperature_k': round(float(item['surface_temp'])) if isinstance(item.get('surface_temp'), (int, float)) else None,
+        # What stands out about it (EDDiscovery's notes).
+        'notes': _body_notes(item),
     }
+
+
+def _body_notes(item):
+    from voidcompass.exploration.stellar_cartography import _body_facts
+    try:
+        return list(_body_facts(item, bool(item.get('is_star'))).get('notes') or ())
+    except Exception:
+        return []
 
 def _body_matches(item, body_id, body_name):
     if body_id is not None and str(item.get('body_id')) == str(body_id):
@@ -105,6 +117,8 @@ def _survey_bodies(scan_items, body_signals):
                 body[key] = signals.get(key)
         if signals.get('genuses'):
             body['genuses'] = list(signals['genuses'])
+        if signals.get('sites'):
+            body['sites'] = dict(signals['sites'])
     for body_id, signals in (body_signals or {}).items():
         if not isinstance(signals, dict) or str(body_id) in represented:
             continue
@@ -536,12 +550,13 @@ def build_survey_model(system_name, scan_items, focused_body_id=None, focused_bo
         needs_dss = not bool(body.get('dss_complete'))
         notable = notable_by_id.get(str(body.get('body_id'))) if body.get('body_id') is not None else None
         notable = notable or notable_by_name.get(str(body.get('name') or '').casefold())
-        priority = bool(bio_count or geo_count or mining_count or body.get('landable') or notable)
+        sites = {key: _safe_int(value) for key, value in (body.get('sites') or {}).items() if _safe_int(value)}
+        priority = bool(bio_count or geo_count or mining_count or sites or body.get('landable') or notable)
         recent_scan = is_latest_scan(body)
         if notable:
             represented_notable.add((str(notable.get('body_id')), str(notable.get('name') or '').casefold()))
         lo, hi = _body_value_range(body)
-        rows.append({'body_id': body.get('body_id'), 'name': body.get('name') or 'Unknown body', 'display_name': _body_display_name(body.get('name'), system_name, body.get('planet_class'), body.get('terraformable')), **_body_visual_meta(body, system_name), 'planet_class': body.get('planet_class') or '', 'terraformable': bool(body.get('terraformable')), 'bio_count': bio_count, 'geo_count': geo_count, 'mining_count': mining_count, 'complete': complete, 'bio_complete': bool(bio_count and complete >= bio_count), 'needs_dss': needs_dss, 'dss_probes_used': body.get('dss_probes_used'), 'dss_efficiency_target': body.get('dss_efficiency_target'), 'dss_efficiency_met': body.get('dss_efficiency_met'), 'min_value': lo, 'max_value': hi, 'first_footfall': bool(body.get('first_footfall')), 'landable': bool(body.get('landable')), 'landable_known': 'landable' in body and body.get('landable') is not None, 'gravity_g': body.get('gravity_g'), 'notable': notable, 'priority': priority, 'expanded': bool(show_all_bodies and not priority), 'recent_scan': recent_scan, 'scan_timestamp': body.get('scan_timestamp'), 'bio_details': [detail for detail in _body_detail_rows(body) if detail.get('kind') not in PREDICTED_KINDS]})
+        rows.append({'body_id': body.get('body_id'), 'name': body.get('name') or 'Unknown body', 'display_name': _body_display_name(body.get('name'), system_name, body.get('planet_class'), body.get('terraformable')), **_body_visual_meta(body, system_name), 'planet_class': body.get('planet_class') or '', 'terraformable': bool(body.get('terraformable')), 'bio_count': bio_count, 'geo_count': geo_count, 'mining_count': mining_count, 'sites': sites, 'complete': complete, 'bio_complete': bool(bio_count and complete >= bio_count), 'needs_dss': needs_dss, 'dss_probes_used': body.get('dss_probes_used'), 'dss_efficiency_target': body.get('dss_efficiency_target'), 'dss_efficiency_met': body.get('dss_efficiency_met'), 'min_value': lo, 'max_value': hi, 'first_footfall': bool(body.get('first_footfall')), 'landable': bool(body.get('landable')), 'landable_known': 'landable' in body and body.get('landable') is not None, 'gravity_g': body.get('gravity_g'), 'notable': notable, 'priority': priority, 'expanded': bool(show_all_bodies and not priority), 'recent_scan': recent_scan, 'scan_timestamp': body.get('scan_timestamp'), 'bio_details': [detail for detail in _body_detail_rows(body) if detail.get('kind') not in PREDICTED_KINDS]})
     rows.sort(key=lambda row: (not row['recent_scan'], bool(row['bio_complete']), not bool(row['bio_count'] or row['geo_count'] or row['mining_count'] or row['landable']), not bool(row['bio_count']), row['name']))
     remaining_notable = [row for row in notable_rows if (str(row.get('body_id')), str(row.get('name') or '').casefold()) not in represented_notable]
     scan_in_progress = bool(total_known and _safe_int(total) > 0 and (_safe_int(scanned) < _safe_int(total)))
@@ -571,10 +586,10 @@ def _survey_render_key(model):
     common = (model.get('mode'), model.get('system'), sampling_key, model.get('scope'), repr(model.get('dss_stats') or {}), _safe_int(model.get('scanned')), _safe_int(model.get('total')), bool(model.get('total_known')), tuple((notable_key(row) for row in model.get('notable_rows') or ())))
     if model.get('mode') == 'body':
         body = model.get('body') or {}
-        return common + (model.get('body_display') or body.get('name'), body.get('designation'), body.get('class_label'), body.get('atmosphere_label'), body.get('ring_count'), _safe_int(body.get('bio_count')), _safe_int(body.get('organic_complete_count')), _safe_int(body.get('geo_count')), _safe_int(body.get('mining_count')), bool(body.get('dss_complete')), body.get('dss_probes_used'), body.get('dss_efficiency_target'), body.get('dss_efficiency_met'), bool(body.get('first_footfall')), body.get('landable') if 'landable' in body else None, body.get('gravity_g'), notable_key(model.get('notable')) if model.get('notable') else None, tuple((detail_key(row) for row in model.get('rows') or ())), model.get('min_value'), model.get('max_value'), bool(body.get('recent_scan')), body.get('scan_timestamp'))
+        return common + (model.get('body_display') or body.get('name'), body.get('designation'), body.get('class_label'), body.get('atmosphere_label'), body.get('ring_count'), body.get('temperature_k'), repr(body.get('notes')), _safe_int(body.get('bio_count')), _safe_int(body.get('organic_complete_count')), _safe_int(body.get('geo_count')), _safe_int(body.get('mining_count')), bool(body.get('dss_complete')), body.get('dss_probes_used'), body.get('dss_efficiency_target'), body.get('dss_efficiency_met'), bool(body.get('first_footfall')), body.get('landable') if 'landable' in body else None, body.get('gravity_g'), notable_key(model.get('notable')) if model.get('notable') else None, tuple((detail_key(row) for row in model.get('rows') or ())), model.get('min_value'), model.get('max_value'), bool(body.get('recent_scan')), body.get('scan_timestamp'), repr(sorted((body.get('sites') or {}).items())))
     row_keys = []
     for row in model.get('rows') or ():
-        row_keys.append((row.get('body_id'), row.get('display_name') or row.get('name'), row.get('designation'), row.get('class_label'), row.get('atmosphere_label'), row.get('ring_count'), bool(row.get('priority')), _safe_int(row.get('bio_count')), _safe_int(row.get('geo_count')), _safe_int(row.get('mining_count')), _safe_int(row.get('complete')), bool(row.get('bio_complete')), bool(row.get('needs_dss')), bool(row.get('landable_known')), bool(row.get('first_footfall')), row.get('dss_probes_used'), row.get('dss_efficiency_target'), row.get('dss_efficiency_met'), bool(row.get('landable')) if row.get('landable_known') else None, row.get('min_value'), row.get('max_value'), notable_key(row.get('notable')) if row.get('notable') else None, tuple((detail_key(detail) for detail in row.get('bio_details') or ()))))
+        row_keys.append((row.get('body_id'), row.get('display_name') or row.get('name'), row.get('designation'), row.get('class_label'), row.get('atmosphere_label'), row.get('ring_count'), row.get('temperature_k'), bool(row.get('priority')), _safe_int(row.get('bio_count')), _safe_int(row.get('geo_count')), _safe_int(row.get('mining_count')), _safe_int(row.get('complete')), bool(row.get('bio_complete')), bool(row.get('needs_dss')), bool(row.get('landable_known')), bool(row.get('first_footfall')), row.get('dss_probes_used'), row.get('dss_efficiency_target'), row.get('dss_efficiency_met'), bool(row.get('landable')) if row.get('landable_known') else None, row.get('min_value'), row.get('max_value'), notable_key(row.get('notable')) if row.get('notable') else None, tuple((detail_key(detail) for detail in row.get('bio_details') or ())), repr(sorted((row.get('sites') or {}).items()))))
     recent_keys = tuple((bool(row.get('recent_scan')), row.get('scan_timestamp'))
                         for row in model.get('rows') or ())
     return common + (tuple(row_keys), _safe_int(model.get('notable_count')), bool(model.get('scan_in_progress')), recent_keys)
@@ -689,12 +704,25 @@ class SurveyStatusHUD:
             return
         if self.config.get('survey_codex_flags', True):
             annotate_codex(model, getattr(self, 'codex_lookup', None), getattr(self, 'codex_variants', None))
+            self._tell_watcher(model)
         render_key = _survey_render_key(model)
         if render_key != self._last_render_key:
             self._last_render_key = render_key
             self._html_render_model = model
             self._redraw(model)
         self.show()
+
+    def _tell_watcher(self, model):
+        """Let the Watcher know a focused body holds a never-logged colour."""
+        notify = getattr(self, 'on_codex_new', None)
+        if not callable(notify) or (model or {}).get('mode') != 'body':
+            return
+        if any(row.get('codex') == 'new' for row in model.get('rows') or ()):
+            body = model.get('body_display') or (model.get('body') or {}).get('name') or ''
+            try:
+                notify(str(body))
+            except Exception:
+                pass
 
     def apply_theme(self, palette=None):
         """Adopt the active profile palette and repaint the cached survey."""

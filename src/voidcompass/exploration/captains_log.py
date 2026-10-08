@@ -10,6 +10,7 @@ import threading
 from datetime import datetime
 from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.core.persistence_queue import persistence_queue
+from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
 
 
 MAX_SESSIONS = 250
@@ -92,7 +93,7 @@ class CaptainsLog:
             "start_system": raw.get("StarSystem") or "", "end_system": raw.get("StarSystem") or "",
             "jumps": 0, "distance_ly": 0.0, "codex": 0, "bio_analyses": 0, "screenshots": 0,
             "fss_surveys": 0, "dss_maps": 0, "valuable_worlds": 0,
-            "first_discoveries": 0,
+            "first_discoveries": 0, "rare_worlds": 0,
             "trade_bought": 0, "trade_sold": 0, "trade_profit": 0,
             "exploration_sales": 0, "biology_sales": 0, "deaths": 0, "highlights": [],
         }
@@ -194,7 +195,12 @@ class CaptainsLog:
             elif ev == "CodexEntry":
                 name = raw.get("Name_Localised") or raw.get("Name") or "Codex discovery"
                 session["codex"] += 1
-                self._highlight(session, raw, "CODEX", name, raw.get("Category_Localised") or "")
+                if is_green_giant_codex(raw):
+                    # The game names a green gas giant only here (5.5.3.1).
+                    session["rare_worlds"] = int(session.get("rare_worlds") or 0) + 1
+                    self._highlight(session, raw, "RARE", "Green gas giant", raw.get("System") or "")
+                else:
+                    self._highlight(session, raw, "CODEX", name, raw.get("Category_Localised") or "")
             elif ev == "FSSAllBodiesFound":
                 session["fss_surveys"] = int(session.get("fss_surveys") or 0) + 1
                 count = int(raw.get("Count") or raw.get("BodyCount") or 0)
@@ -211,7 +217,11 @@ class CaptainsLog:
                     session["first_discoveries"] = int(session.get("first_discoveries") or 0) + 1
                 if planet_class in NOTABLE_WORLDS or terraformable:
                     session["valuable_worlds"] = int(session.get("valuable_worlds") or 0) + 1
-                if planet_class in {"Earthlike body", "Ammonia world"}:
+                rare, rare_label = rarity({"planet_class": planet_class})
+                if rare:
+                    session["rare_worlds"] = int(session.get("rare_worlds") or 0) + 1
+                    self._highlight(session, raw, "RARE", rare_label.capitalize(), raw.get("BodyName") or "")
+                elif planet_class in {"Earthlike body", "Ammonia world"}:
                     self._highlight(
                         session, raw, "VALUABLE", f"{planet_class} recorded",
                         raw.get("BodyName") or "",

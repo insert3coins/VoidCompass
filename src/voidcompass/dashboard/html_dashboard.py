@@ -19,6 +19,7 @@ import threading
 import time
 import webbrowser
 
+from voidcompass.overlays import watcher_mind
 from voidcompass.core import companion_features
 from voidcompass.core import odyssey_kit
 from voidcompass.core.journal_files import journal_sort_key
@@ -616,6 +617,12 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 ),
                 "signal_only": bool(row.get("_signal_only")),
                 "archived": row.get("_orrery_source") == "edsm",
+                # Human, Guardian, Thargoid and Other signals.
+                "sites": {
+                    key: _integer(value) for key, value in (
+                        (signal_rows.get(str(row.get("body_id"))) or {}).get("sites") or row.get("sites") or {}
+                    ).items() if _integer(value) > 0
+                },
             }
             # Who found it: the game says whether it was already discovered;
             # EDSM says by whom. Codex: the strongest flag on its biology.
@@ -805,6 +812,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "systems": len(getattr(self, "session_systems", None) or set()),
             "codex": 0, "bio_analyses": 0, "fss_surveys": 0,
             "dss_maps": 0, "valuable_worlds": 0, "first_discoveries": 0,
+            "rare_worlds": 0, "earned": 0, "flown": "",
             "highlights": [],
         }
         log = getattr(self, "captains_log", None)
@@ -820,9 +828,12 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         result = dict(fallback)
         for key in (
             "jumps", "codex", "bio_analyses", "fss_surveys", "dss_maps",
-            "valuable_worlds", "first_discoveries", "screenshots",
+            "valuable_worlds", "first_discoveries", "screenshots", "rare_worlds",
         ):
             result[key] = max(0, _integer(active.get(key)))
+        # Credits earned: data sold and trade profit (5.5.3.1).
+        result["earned"] = watcher_mind.session_earned(active)
+        result["flown"] = watcher_mind.session_flown(active)
         result["distance_ly"] = round(max(0.0, _number(active.get("distance_ly"), 0) or 0), 1)
         result["start_system"] = _text(active.get("start_system"), 140)
         result["end_system"] = _text(active.get("end_system"), 140)
@@ -2784,6 +2795,10 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "app": {"renderer": "html-command-deck", "platform": "windows"},
             "update": {
                 "checked": bool(release_update.get("checked")),
+                "checking": bool(release_update.get("checking")),
+                "checked_at": float(release_update.get("checked_at") or 0),
+                "error": _text(release_update.get("error"), 240),
+                "failed_at": float(release_update.get("failed_at") or 0),
                 "available": bool(release_update.get("available")),
                 "current_version": _text(
                     release_update.get("current_version") or APP_VERSION, 40,

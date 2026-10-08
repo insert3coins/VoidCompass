@@ -83,6 +83,23 @@ def catalogue():
     return {"genera": genera, "species": species_index, "entry_count": entry_count}
 
 
+@lru_cache(maxsize=1)
+def _english_by_entry():
+    try:
+        with open(_resource_path("codexRef.json"), "r", encoding="utf-8") as handle:
+            reference = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return {str(row.get("name")): str(row.get("english_name") or "")
+            for row in reference.values() if isinstance(row, dict) and row.get("name")}
+
+
+def english_name(entry):
+    """A Codex entry's English name ($Codex_Ent_Bacterial_04_Tellurium_Name;
+    -> Bacterium Acies - White), or ""."""
+    return _english_by_entry().get(str(entry or ""), "")
+
+
 def species_info(name):
     if not name:
         return None

@@ -47,7 +47,7 @@ class JournalClassificationTests(unittest.TestCase):
         # A future Frontier event still reaches the orb as a quiet pulse.
         self.assertEqual(classify("SomeFutureEvent"), {
             "event": "SomeFutureEvent", "family": "log", "tone": "muted",
-            "effect": "pulse", "weight": .15, "gaze": "centre", "rare": False})
+            "effect": "pulse", "weight": .15, "gaze": "centre", "rare": False, "overlay": ""})
         # Whole event groups are covered by their prefix.
         self.assertEqual(classify("CarrierNewService")["family"], "carrier")
         self.assertEqual(classify("ColonisationConstructionDepot")["effect"], "gather")
@@ -99,7 +99,7 @@ class HeartbeatModelTests(unittest.TestCase):
         self.assertEqual([event["seq"] for event in events], list(range(8, 32)))
         self.assertEqual(events[-1], {"seq": 31, "event": "ShieldState", "family": "danger",
                                       "tone": "green", "effect": "clear", "weight": .6,
-                                      "gaze": "side", "rare": False})
+                                      "gaze": "side", "rare": False, "overlay": "hud"})
         self.assertEqual(model["status_seq"], 2)
         # The dashboard's own heartbeat lamp still reads these.
         self.assertEqual((model["pulse_id"], model["activity"], model["state"]), (33, "STATUS", "SUPERCRUISE"))

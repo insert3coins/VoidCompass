@@ -13,6 +13,7 @@ from voidcompass.dashboard.html_workspace_support import (
     number as _number,
     text as _text,
 )
+from voidcompass.exploration import bio_reference
 from voidcompass.exploration.exploration_intelligence import system_completion
 from voidcompass.exploration.exploration_scout import (
     SCOUT_MODES,
@@ -181,6 +182,18 @@ class HtmlExploreWorkspaceMixin:
             orrery_items, body_target,
             getattr(self, "system_barycentres", None) or [],
         )
+        # The Codex entries the commander logged on each body (EDDiscovery
+        # lists them per body).
+        codex = getattr(self, "codex_index", None)
+        address = getattr(self, "current_system_address", None)
+        if codex is not None and address is not None and hasattr(codex, "entries_on"):
+            for body in orrery.get("bodies") or ():
+                if body.get("body_id") is None or not isinstance(body.get("facts"), dict):
+                    continue
+                names = [bio_reference.english_name(entry) or entry
+                         for entry in codex.entries_on(address, body.get("body_id"))]
+                if names:
+                    body["facts"]["codex"] = names[:12]
         orrery["loading"] = bool(
             not orrery_items
             and current.casefold() in getattr(self, "_edsm_orrery_pending", set())

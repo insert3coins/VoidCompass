@@ -272,6 +272,14 @@ class DashboardCoreMixin:
         return True
 
     def check_updates(self, manual=False):
+        current = getattr(self, "release_update", None) or {}
+        if current.get("checking"):
+            return False
+        # Settings shows CHECKING… until the answer arrives.
+        self.release_update = {**current, "checking": True}
+        if manual:
+            self._schedule_html_dashboard_publish(immediate=True)
+
         def check():
             import requests
             try:
@@ -299,12 +307,22 @@ class DashboardCoreMixin:
                     "notes": str(data.get("body") or "").strip()[:4000],
                     "published_at": str(data.get("published_at") or "").strip()[:60],
                     "url": url,
+                    "checked_at": time.time(),
                 }
                 self._ui_post(self._apply_release_update, update, manual)
             except Exception as exc:
-                if manual:
-                    self._ui_post(self.add_event_feed_entry, 'UPDATE', f'Update check failed: {exc}', severity='WARN')
+                self._ui_post(self._release_check_failed, str(exc), manual)
         threading.Thread(target=check, name='release-check', daemon=True).start()
+        return True
+
+    def _release_check_failed(self, error, manual=False):
+        """Keep the last good answer, note the failure for Settings."""
+        current = dict(getattr(self, "release_update", None) or {})
+        current.update(checking=False, error=str(error or "unknown error")[:240], failed_at=time.time())
+        self.release_update = current
+        if manual:
+            self.add_event_feed_entry('UPDATE', f'Update check failed: {error}', severity='WARN')
+        self._schedule_html_dashboard_publish(immediate=True)
 
     def _apply_release_update(self, update, manual=False):
         """Publish release-check results to the HTML command deck."""

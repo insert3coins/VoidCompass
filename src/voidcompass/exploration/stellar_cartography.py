@@ -94,6 +94,146 @@ def _body_matches_target(item, target):
     return name_matches and body_matches is not False
 
 
+# Physical constants (EDDiscovery's BodyPhysicalConstants).
+_SOL_RADIUS_M = 695_700_000.0
+_LIGHT_SECOND_M = 299_792_458.0
+_AU_M = 149_597_870_700.0
+
+
+def _zone(radius_m, temperature_k, target_k):
+    """How far (ls) a black body sits at target_k from a star of this radius
+    and surface temperature (EDDiscovery's HabZones)."""
+    distance = ((radius_m ** 2) * (temperature_k ** 4) / (4.0 * target_k ** 4)) ** .5
+    return round(distance / _LIGHT_SECOND_M)
+
+
+def circumstellar_zones(radius_m, temperature_k):
+    """Where each kind of world is likely round a star, in light seconds:
+    habitable, metal-rich, water, Earth-like, ammonia, and where icy worlds
+    begin. EDDiscovery's black-body temperature bands."""
+    radius_m, temperature_k = _number(radius_m), _number(temperature_k)
+    if not radius_m or not temperature_k:
+        return {}
+    band = lambda hot, cold: [_zone(radius_m, temperature_k, hot), _zone(radius_m, temperature_k, cold)]
+    return {
+        "habitable": band(315, 223),
+        "metal_rich": [round(_SOL_RADIUS_M / _LIGHT_SECOND_M), _zone(radius_m, temperature_k, 1100)],
+        "water_world": band(307, 156),
+        "earth_like": band(281, 227),
+        "ammonia_world": band(193, 117),
+        "icy_from": _zone(radius_m, temperature_k, 150),
+    }
+
+
+_RING_CLASSES = {
+    "eringclass_icy": "Icy", "eringclass_rocky": "Rocky",
+    "eringclass_metalrich": "Metal Rich", "eringclass_metalic": "Metallic",
+}
+
+
+def _body_facts(item, is_star):
+    """What a body's scan says about it, beyond the survey basics (the
+    detail EDDiscovery shows). Only what the journal gave."""
+    facts = {}
+
+    def put(key, value):
+        if value is not None and value != "":
+            facts[key] = value
+
+    pressure = _number(item.get("surface_pressure"))
+    put("pressure_atm", round(pressure / 101325.0, 4) if pressure is not None else None)
+    tilt = _number(item.get("axial_tilt"))
+    put("axial_tilt_deg", round(tilt * 57.29578, 2) if tilt is not None else None)
+    put("tidal_lock", True if item.get("tidal_lock") else None)
+    put("inclination_deg", _number(item.get("orbital_inclination")))
+    put("volcanism", _text(item.get("volcanism"), 80) or None)
+    put("radius_km", round(_number(item.get("radius")) / 1000.0, 1) if _number(item.get("radius")) else None)
+    for key, field in (("periapsis_deg", "periapsis"), ("ascending_node_deg", "ascending_node"),
+                       ("mean_anomaly_deg", "mean_anomaly")):
+        put(key, _number(item.get(field)))
+    put("scan_type", _text(item.get("scan_type"), 40) or None)
+    put("reserve", _text(item.get("reserve_level"), 40).replace("Resources", "") or None)
+    probes, target = _integer(item.get("dss_probes_used")), _integer(item.get("dss_efficiency_target"))
+    if probes and target:
+        facts["dss"] = {"probes": probes, "target": target, "efficient": probes <= target}
+    table = item.get("value_table")
+    if isinstance(table, dict) and table:
+        facts["value_table"] = {key: _integer(value) for key, value in table.items()}
+    radius = _number(item.get("radius"))
+    if is_star:
+        put("age_my", _number(item.get("age_my")))
+        put("solar_masses", _number(item.get("mass")))
+        put("absolute_magnitude", _number(item.get("absolute_magnitude")))
+        put("luminosity", _text(item.get("luminosity"), 12) or None)
+        put("radius_sr", round(radius / _SOL_RADIUS_M, 3) if radius else None)
+        star_type, subclass = _text(item.get("star_type"), 40), item.get("subclass")
+        put("classification", "".join(
+            part for part in (star_type, str(subclass) if subclass is not None else "", _text(item.get("luminosity"), 12)) if part
+        ) or None)
+        zones = circumstellar_zones(radius, item.get("surface_temp"))
+        if zones:
+            facts["zones"] = zones
+    else:
+        put("earth_masses", _number(item.get("mass")))
+    # What stands out (EDDiscovery's notes, its default limits).
+    notes = []
+    if not is_star and radius and radius < 300_000:
+        notes.append(f"Tiny: {radius / 1000:,.0f} km")
+    if not is_star and item.get("landable") and radius and radius > 6_000_000:
+        notes.append(f"Large landable: {radius / 1000:,.0f} km")
+    eccentricity = _number(item.get("eccentricity"))
+    if eccentricity is not None and eccentricity >= .95:
+        notes.append(f"High eccentricity: {eccentricity:.3f}")
+    if not is_star and item.get("landable") and item.get("rings"):
+        notes.append("Ringed landable")
+    volcanism = str(item.get("volcanism") or "").strip()
+    if not is_star and volcanism and volcanism.casefold() not in {"none", "no volcanism"}:
+        notes.append("Volcanism")
+    if notes:
+        facts["notes"] = notes
+    genera = [_text(row.get("Genus_Localised") or row.get("Genus"), 60) for row in item.get("genuses") or () if isinstance(row, dict)]
+    if genera:
+        facts["genera"] = [name for name in genera if name]
+    organics = []
+    for scan in (item.get("organic_scans") or {}).values():
+        if isinstance(scan, dict) and (scan.get("species") or scan.get("genus")):
+            done = bool(scan.get("is_complete"))
+            organics.append({"name": _text(scan.get("variant") or scan.get("species") or scan.get("genus"), 80),
+                             "state": "analysed" if done else f"{_integer(scan.get('sample_idx'))}/3"})
+    if organics:
+        facts["organics"] = organics
+    atmosphere = [
+        {"name": _text(row.get("Name"), 40), "percent": round(_number(row.get("Percent"), 0.0), 1)}
+        for row in item.get("atmosphere_composition") or () if isinstance(row, dict) and row.get("Name")
+    ]
+    if atmosphere:
+        facts["atmosphere_composition"] = sorted(atmosphere, key=lambda row: -row["percent"])[:6]
+    composition = {
+        _text(name, 12): round(_number(share, 0.0) * 100.0, 1)
+        for name, share in (item.get("composition") or {}).items() if _number(share, 0.0) > 0
+    }
+    if composition:
+        facts["composition"] = composition
+    rings = []
+    for ring in item.get("rings") or ():
+        if not isinstance(ring, dict):
+            continue
+        outer = _number(ring.get("OuterRad"))
+        inner = _number(ring.get("InnerRad"))
+        rings.append({
+            "name": _text(ring.get("Name"), 120),
+            "class": _RING_CLASSES.get(str(ring.get("RingClass") or "").casefold(), _text(ring.get("RingClass"), 40)),
+            "width_km": round((outer - inner) / 1000.0) if outer and inner else None,
+            "inner_km": round(inner / 1000.0) if inner else None,
+            "outer_km": round(outer / 1000.0) if outer else None,
+            "mass_mt": _number(ring.get("MassMT")),
+            "belt": "belt" in str(ring.get("Name") or "").casefold(),
+        })
+    if rings:
+        facts["rings"] = rings
+    return facts
+
+
 def edsm_bodies_to_orrery_items(payload, system_name=None):
     """Translate public EDSM body architecture into display-only scan rows.
 
@@ -334,6 +474,16 @@ def build_orrery(items, target=None, barycentres=None):
                 for row in (item.get("materials") or []) if isinstance(row, dict)
             ][:24],
             "value": max(0, item_value(item)),
+            # The value breakdown and the record (after EDDiscovery, 5.5.3.1).
+            "values": {
+                "scan": max(0, _integer(item.get("reward"))),
+                "mapped": max(0, _integer(item.get("dss_reward"))),
+                "mapped_plain": max(0, _integer(item.get("dss_reward_plain"))),
+            },
+            "was_discovered": item.get("was_discovered"),
+            "was_mapped": item.get("was_mapped"),
+            "was_footfalled": item.get("was_footfalled"),
+            "facts": _body_facts(item, is_star),
             "mapped": mapped,
             "landable": bool(item.get("landable")),
             "terraformable": bool(item.get("terraformable")),
@@ -342,6 +492,10 @@ def build_orrery(items, target=None, barycentres=None):
             "source": "edsm" if item.get("_orrery_source") == "edsm" else "journal",
         })
     by_id = {str(row["id"]): row for row in bodies}
+    for row in bodies:
+        parent = by_id.get(str(row.get("parent_id")))
+        if parent and not parent.get("hidden") and isinstance(row.get("facts"), dict):
+            row["facts"]["orbits"] = parent.get("name")
     for row in bodies:
         parent = by_id.get(str(row.get("parent_id")))
         row["is_moon"] = bool(parent and parent.get("kind") == "planet")

@@ -186,6 +186,18 @@ class CodexIndex:
             return REGION
         return ""
 
+    def entries_on(self, address, body_id):
+        """Codex entries the commander logged on one body, oldest first."""
+        with self.lock:
+            rows = [row for row in self.rows
+                    if str(row[3]) == str(address) and str(row[4]) == str(body_id)]
+        seen, entries = set(), []
+        for row in sorted(rows, key=lambda row: row[0]):
+            if row[1] not in seen:
+                seen.add(row[1])
+                entries.append(row[1])
+        return entries
+
     def entry_flag(self, entry, region):
         """For a predicted colour variant: never logged (NEW), never in this
         region (REGION), or "" when the Codex already has it here."""

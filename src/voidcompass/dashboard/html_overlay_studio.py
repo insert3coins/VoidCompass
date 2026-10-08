@@ -17,6 +17,7 @@ from voidcompass.overlays.overlay_layout_model import (
     OVERLAY_ENABLE_KEYS,
     OVERLAY_LABELS,
 )
+from voidcompass.overlays import watcher_mind
 from voidcompass.overlays.heartbeat_hud import (
     EYE_COLORS, LIVELINESS, ORB_SIZES, eye_color, idle_motion, liveliness, orb_size,
 )
@@ -360,6 +361,12 @@ class HtmlOverlayStudioMixin:
                 "heartbeat_eye_color": eye_color(self.config),
                 "heartbeat_liveliness": liveliness(self.config),
                 "heartbeat_idle_motion": idle_motion(self.config),
+                "heartbeat_thoughts": watcher_mind.frequency(self.config),
+                "heartbeat_personality": watcher_mind.personality(self.config),
+                "heartbeat_thought_backdrop": watcher_mind.thought_style(self.config)["backdrop"],
+                "heartbeat_thought_colour": watcher_mind.thought_style(self.config)["colour"],
+                "heartbeat_thought_size": watcher_mind.thought_style(self.config)["size"],
+                "heartbeat_thought_hold": watcher_mind.thought_style(self.config)["hold"],
                 "gravity_warning_threshold_g": _number(self.config.get("gravity_warning_threshold_g"), 3.0),
                 "hud_crt_enabled": bool(self.config.get("hud_crt_enabled", True)),
                 "hud_crt_motion_enabled": bool(self.config.get("hud_crt_motion_enabled", True)),
@@ -518,7 +525,7 @@ class HtmlOverlayStudioMixin:
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies", "survey_codex_flags",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
-            "heartbeat_idle_motion",
+            "heartbeat_idle_motion", "heartbeat_thought_backdrop",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps",
@@ -540,7 +547,7 @@ class HtmlOverlayStudioMixin:
             self._apply_map_overlay_hiding()
         elif key in {"hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels"}:
             self.update_hud()
-        elif key == "heartbeat_idle_motion":
+        elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop"}:
             heartbeat = getattr(self, "heartbeat_hud", None)
             if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
                 heartbeat.apply_settings()
@@ -689,6 +696,20 @@ class HtmlOverlayStudioMixin:
         if "hud_scene_mode" in payload:
             mode = _text(payload.get("hud_scene_mode"), 10).casefold()
             self.config["hud_scene_mode"] = mode if mode in HUD_SCENE_MODES else "full"
+        if "heartbeat_thoughts" in payload:
+            thoughts = _text(payload.get("heartbeat_thoughts"), 20).casefold()
+            self.config["heartbeat_thoughts"] = thoughts if thoughts in watcher_mind.FREQUENCIES else watcher_mind.DEFAULT_FREQUENCY
+        if "heartbeat_personality" in payload:
+            nature = _text(payload.get("heartbeat_personality"), 20).casefold()
+            self.config["heartbeat_personality"] = nature if nature in watcher_mind.PERSONALITIES else watcher_mind.DEFAULT_PERSONALITY
+        for key, choices, default in (
+            ("heartbeat_thought_colour", watcher_mind.THOUGHT_COLOURS, "bright"),
+            ("heartbeat_thought_size", tuple(watcher_mind.THOUGHT_SIZES), "standard"),
+            ("heartbeat_thought_hold", tuple(watcher_mind.THOUGHT_HOLDS), "standard"),
+        ):
+            if key in payload:
+                value = _text(payload.get(key), 20).casefold()
+                self.config[key] = value if value in choices else default
         if "heartbeat_liveliness" in payload:
             lively = _text(payload.get("heartbeat_liveliness"), 20).casefold()
             self.config["heartbeat_liveliness"] = lively if lively in LIVELINESS else "standard"

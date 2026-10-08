@@ -567,6 +567,9 @@ body {
 .survey-alert.geo.present { color: var(--yellow); }
 .survey-alert.mining.present { color: var(--accent); }
 .survey-alert.valuable.present { color: var(--hud); }
+/* Settlements and Guardian or Thargoid sites: shown only when there are some. */
+.survey-alert.sites:not(.present) { display: none; }
+.survey-alert.sites.present { color: var(--text); }
 .survey-alert b { font: var(--type-weight) var(--size-85) var(--font-wide); letter-spacing: calc(.12em * var(--track)); }
 .survey-alert em { padding-left: 5px; border-left: 1px solid color-mix(in srgb, currentColor 45%, transparent); color: var(--text); font: var(--type-weight) var(--size-11) var(--font-wide); font-style: normal; }
 .survey-alert:not(.present) em { color: inherit; }
@@ -636,3 +639,10 @@ body {
   .route-segment.next > b, .route-segment.next::after, .survey-progress-fill::after,
   .fuel-cells i.lit, .rail-marker) { animation: none !important; }
 .hud.scene-off #deck-canvas, .hud.scene-off #bay-canvas { visibility: hidden; }
+/* Off with nothing measured to show: the empty viewport folds away and the
+   state notice and systems row share the space. The altimeter and FSS scan
+   still get their rail and readout when they run. */
+.hud.scene-off .instrument:not(.live) { display: none; }
+.hud.scene-off .status-main:has(.instrument:not(.live)) {
+  grid-template-rows: 26px 18px; align-content: space-evenly;
+}

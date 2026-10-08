@@ -460,6 +460,29 @@ class NavigationSceneBrowserTests(unittest.TestCase):
         page.wait_for_timeout(500)
         self.assertEqual(self.frames(page), settled, "and then draws nothing")
 
+    def test_a_still_hologram_survives_a_wiped_canvas(self):
+        """WebView2 can clear a canvas (a graphics reset, memory reclaimed
+        while hidden). Still has no next frame, so it repaints on its own."""
+        page = self.open()
+        self.scene_render(page, "SUPERCRUISE", "still")
+        self.assertTrue(page.evaluate("Boolean(navigationScene.stillTimer)"), "a backstop repaint is due")
+        page.evaluate("""() => {
+          const canvas = document.getElementById('deck-canvas');
+          canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+          canvas.dispatchEvent(new Event('contextrestored'));
+        }""")
+        self.assertGreater(page.evaluate(self.LIT), .002, "drawn again at once")
+        self.scene_render(page, "SUPERCRUISE", "full")
+        self.assertFalse(page.evaluate("Boolean(navigationScene.stillTimer)"), "Full needs no backstop")
+
+    def test_hologram_off_folds_an_empty_viewport(self):
+        page = self.open()
+        self.scene_render(page, "SUPERCRUISE", "off")
+        self.assertTrue(page.evaluate("getComputedStyle(document.getElementById('instrument')).display === 'none'"))
+        # A measured instrument keeps its rail and readout.
+        self.scene_render(page, "FSS", "off")
+        self.assertFalse(page.evaluate("getComputedStyle(document.getElementById('instrument')).display === 'none'"))
+
     def test_hologram_off_draws_nothing_and_full_comes_back(self):
         page = self.open()
         self.scene_render(page, "SUPERCRUISE", "off")

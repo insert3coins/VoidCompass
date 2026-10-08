@@ -1217,3 +1217,32 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .onfoot-store > div b { color: var(--text); font-variant-numeric: tabular-nums; }
 .onfoot-store small { color: var(--dim); }
 .onfoot-body { padding: 12px 14px; }
+
+/* Orrery body panel, 5.5.3.1: value breakdown, record and scan facts. */
+.orrery-values { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; }
+.orrery-values span { color: var(--dim); font: 8px Consolas, monospace; }
+.orrery-values b { color: var(--orange); }
+.orrery-flags.record em { color: var(--muted); }
+.orrery-facts.more { margin-top: 8px; }
+.orrery-flags.composition { align-items: center; }
+.orrery-flags.composition small { color: var(--dim); font: 8px Consolas, monospace; letter-spacing: .08em; }
+.orrery-flags.composition em { color: var(--text); }
+.orrery-values.cases span { color: var(--dim); }
+.orrery-values.cases b { color: var(--muted); }
+.orrery-group { margin-top: 10px; }
+.orrery-group > small { display: block; margin-bottom: 4px; color: var(--accent); font: 700 8px Consolas, monospace; letter-spacing: .1em; }
+.orrery-group .orrery-facts.more { margin-top: 0; }
+.orrery-flags.life em { color: var(--green); }
+.orrery-flags.notes em { color: var(--yellow); }
+
+/* Settings › Diagnostics: update check status. */
+.settings-update { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--muted, var(--border)); background: color-mix(in srgb, var(--panel) 80%, transparent); }
+.settings-update b { letter-spacing: .08em; color: var(--text); }
+.settings-update span { color: var(--muted, var(--text)); font-size: .92em; }
+.settings-update[data-tone="good"] { border-left-color: var(--green); }
+.settings-update[data-tone="good"] b { color: var(--green); }
+.settings-update[data-tone="new"] { border-left-color: var(--accent); }
+.settings-update[data-tone="new"] b { color: var(--accent); }
+.settings-update[data-tone="busy"] { border-left-color: var(--yellow); }
+.settings-update[data-tone="bad"] { border-left-color: var(--red); }
+.settings-update[data-tone="bad"] b { color: var(--red); }

@@ -14,6 +14,42 @@
 * { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
 body { pointer-events: none; user-select: none; }
-/* The window is the orb's own square; the canvas draws everything. */
-.heartbeat { width: 100vmin; height: 100vmin; contain: strict; }
+/* The window is the orb's own square, wider only while it shares a
+   thought; the canvas draws the eye. */
+body { display: flex; align-items: center; }
+body.thought-left { flex-direction: row-reverse; }
+.heartbeat { flex: 0 0 auto; width: 100vh; height: 100vh; contain: strict; }
 #orb { display: block; width: 100%; height: 100%; }
+.thought {
+  flex: 1 1 auto; min-width: 0; margin: 0; padding: 0 8px;
+  display: flex; align-items: center; gap: 6px;
+  --thought-ink: #f2f8fb;
+  color: var(--thought-ink);
+  font: 600 calc(11.5px * var(--scale, 1)) / 1.3 "Cascadia Mono", Consolas, monospace;
+  letter-spacing: .02em;
+  /* A dark outline keeps it legible over a bright scene. */
+  text-shadow: 0 0 2px #000, 0 0 3px #000, 0 1px 2px #000;
+}
+body[data-thought-colour="accent"] .thought { --thought-ink: var(--accent); }
+body[data-thought-colour="red"] .thought { --thought-ink: var(--red); }
+body[data-thought-size="small"] .thought { font-size: calc(10px * var(--scale, 1)); }
+body[data-thought-size="large"] .thought { font-size: calc(13.5px * var(--scale, 1)); }
+body.thought-left .thought { flex-direction: row-reverse; text-align: right; }
+/* A thin line from the eye to its words. */
+.thought i { flex: 0 0 12px; height: 1px; background: linear-gradient(90deg, var(--accent), transparent); opacity: .8; }
+body.thought-left .thought i { background: linear-gradient(270deg, var(--accent), transparent); }
+.thought span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+/* The backdrop: a dark panel in the theme's colours. Overlay Studio's
+   opacity fades the whole window, backdrop and all. */
+body.thought-backdrop .thought span {
+  padding: 3px 7px; border-radius: 2px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  box-shadow: 0 0 8px rgba(0, 0, 0, .55);
+}
+.thought span::after { content: "\258C"; margin-left: 1px; color: var(--accent); animation: thought-caret 1s steps(1, end) infinite; }
+.thought.done span::after { content: ""; }
+@keyframes thought-caret { 50% { opacity: 0; } }
+.thought[hidden] { display: none; }
+@keyframes thought-caret { 50% { opacity: 0; } }
+

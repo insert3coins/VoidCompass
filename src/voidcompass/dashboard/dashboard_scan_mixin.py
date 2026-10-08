@@ -958,7 +958,9 @@ class DashboardScanMixin:
             self.heartbeat_hud.pulse(
                 "status", "STATUS",
                 getattr(self, "hud_flight_state", None) or "FLIGHT",
-                {"Flags": flags if isinstance(flags, int) else 0},
+                {"Flags": flags if isinstance(flags, int) else 0,
+                 "Flags2": flags2 if isinstance(flags2, int) else 0,
+                 "fuel_percent": self._watcher_fuel_percent()},
             )
         refresh_planet_materials = getattr(
             self, "_refresh_planet_materials_overlay", None,
@@ -1410,6 +1412,21 @@ class DashboardScanMixin:
             value *= 2.6
         return int(round(value))
 
+    def _value_table(self, planet_class, star_type, terraformable, mass):
+        """What a body would pay in each case (EDDiscovery's value table):
+        with no bonus, first discovered, mapped, first mapped, and both."""
+        value = lambda first, mapped, first_mapped: self._get_body_value(
+            planet_class, star_type, terraformable, mass, first, mapped, first_mapped, True)
+        if star_type:
+            return {"base": value(False, False, False)}
+        return {
+            "base": value(False, False, False),
+            "first_discovered": value(True, False, False),
+            "mapped": value(False, True, False),
+            "first_mapped": value(False, True, True),
+            "first_discovered_mapped": value(True, True, True),
+        }
+
     def _normalize_scan_item(self, item):
         if item.get("icons") is None:
             item["icons"] = []
@@ -1460,6 +1477,13 @@ class DashboardScanMixin:
             is_first_mapped = not was_mapped
             reward = self._get_body_value(planet_class, star_type, terraformable, mass, is_first_discoverer, False, is_first_mapped, True)
             dss_reward = self._get_body_value(planet_class, star_type, terraformable, mass, is_first_discoverer, True, is_first_mapped, True)
+        dss_reward_plain = item.get("dss_reward_plain")
+        if dss_reward_plain is None:
+            # Saved before 5.5.3.1: the mapped value without the efficiency bonus.
+            dss_reward_plain = self._get_body_value(
+                planet_class, star_type, terraformable, mass,
+                not was_discovered, True, not was_mapped, False,
+            )
 
         dss_complete = item.get("dss_complete")
         if dss_complete is None:
@@ -1511,6 +1535,9 @@ class DashboardScanMixin:
             "mass": mass,
             "reward": reward,
             "dss_reward": dss_reward,
+            # Mapped without the efficiency bonus (more probes than the target).
+            "dss_reward_plain": dss_reward_plain,
+            "value_table": self._value_table(planet_class, star_type, terraformable, mass),
             "dss_complete": dss_complete,
             "bio_count": bio_count,
             "is_star": is_star,
@@ -1520,6 +1547,15 @@ class DashboardScanMixin:
 
         if item.get("_ts") is None:
             item["_ts"] = int(time.time())
+
+    def _watcher_fuel_percent(self):
+        """The main tank, in percent, for the Watcher's fuel worries."""
+        try:
+            fuel = float(getattr(self, "current_fuel_main", None))
+            capacity = float(getattr(self, "fuel_capacity_main", None))
+        except (TypeError, ValueError):
+            return None
+        return round(fuel * 100.0 / capacity, 1) if capacity > 0 else None
 
     def update_status(self, data):
         if threading.current_thread() is not threading.main_thread():
@@ -1546,6 +1582,51 @@ class DashboardScanMixin:
                 item.get("planet_class"), item.get("atmosphere_type"), item.get("surface_temp"), gravity_g,
                 item.get("volcanism"), item.get("surface_pressure"), region_id, system_coords,
             )
+        return True
+
+    # Green gas giants (5.5.3.1): the game names one only in a Codex entry,
+    # logged in the same second as the gas giant's Scan (just before it).
+    _GREEN_GIANT_WINDOW_S = 3.0
+
+    @staticmethod
+    def _journal_seconds(stamp):
+        try:
+            from datetime import datetime
+            return datetime.fromisoformat(str(stamp).replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError):
+            return None
+
+    def _note_green_giant_codex(self, raw):
+        """Remember a green gas giant's Codex entry, or mark the gas giant
+        just scanned if the Scan came first."""
+        seen = self._journal_seconds(raw.get("timestamp"))
+        system = raw.get("SystemAddress")
+        self._green_giant_codex = (system, seen)
+        for item in list(getattr(self, "scan_items", None) or [])[:3]:
+            scanned = self._journal_seconds(item.get("scan_timestamp"))
+            if (seen is not None and scanned is not None and abs(seen - scanned) <= self._GREEN_GIANT_WINDOW_S
+                    and "gas giant" in str(item.get("planet_class") or "").casefold()
+                    and (system is None or item.get("system_address") in (None, system))):
+                if not item.get("green_giant"):
+                    item["green_giant"] = True
+                    self._green_giant_codex = None
+                    self.save_scan_item_to_db(self.current_sys, item)
+                    if not getattr(self, "batch_mode", False):
+                        self._refresh_survey_status_progress()
+                return
+
+    def _claim_green_giant(self, data, planet_class):
+        """True when this gas giant's Scan pairs with a green Codex entry."""
+        pending = getattr(self, "_green_giant_codex", None)
+        if not pending or "gas giant" not in str(planet_class or "").casefold():
+            return False
+        system, seen = pending
+        scanned = self._journal_seconds(data.get("timestamp"))
+        if seen is None or scanned is None or abs(scanned - seen) > self._GREEN_GIANT_WINDOW_S:
+            return False
+        if system is not None and data.get("SystemAddress") not in (None, system):
+            return False
+        self._green_giant_codex = None
         return True
 
     def add_scan_item(self, data):
@@ -1605,6 +1686,7 @@ class DashboardScanMixin:
         is_first_mapped = not was_mapped
         reward = self._get_body_value(planet_class, star_type, terraformable, mass, is_first_discoverer, False, is_first_mapped, True)
         dss_reward = self._get_body_value(planet_class, star_type, terraformable, mass, is_first_discoverer, True, is_first_mapped, True)
+        dss_reward_plain = self._get_body_value(planet_class, star_type, terraformable, mass, is_first_discoverer, True, is_first_mapped, False)
         signal_state = self.body_signals.get(body_id, {}) if body_id is not None else {}
         dss_complete = (
             was_mapped
@@ -1677,9 +1759,13 @@ class DashboardScanMixin:
             "age_my": data.get("Age_MY"),
             "luminosity": data.get("Luminosity"),
             "absolute_magnitude": data.get("AbsoluteMagnitude"),
+            "subclass": data.get("Subclass"),
+            "scan_type": data.get("ScanType"),
             "atmosphere": data.get("Atmosphere") or data.get("AtmosphereType"),
             "atmosphere_type": data.get("AtmosphereType") or data.get("Atmosphere"),
             "atmosphere_composition": list(data.get("AtmosphereComposition") or []),
+            # Rock, metal and ice, as fractions (planets only).
+            "composition": dict(data.get("Composition") or {}),
             # Scan.Materials is the authoritative planetary raw-material
             # composition. Keep it in the profile scan cache so resource
             # intelligence survives a restart and can feed Mining/Engineering.
@@ -1692,15 +1778,21 @@ class DashboardScanMixin:
             "color": color,
             "reward": reward,
             "dss_reward": dss_reward,
+            # Mapped without the efficiency bonus (more probes than the target).
+            "dss_reward_plain": dss_reward_plain,
+            "value_table": self._value_table(planet_class, star_type, terraformable, mass),
             "dss_complete": dss_complete,
             "bio_count": bio_count,
             "geo_count": signal_state.get("geo", 0),
+            "sites": dict(signal_state.get("sites") or {}),
             "mining_count": signal_state.get("mining", 0),
             "genuses": list(signal_state.get("genuses") or []),
             "is_star": is_star,
             "was_discovered": was_discovered,
             "was_footfalled": was_footfalled,
             "first_footfall": first_footfall,
+            "system_address": data.get("SystemAddress"),
+            "green_giant": self._claim_green_giant(data, planet_class),
             "_ts": ts
         }
         region_id, system_coords = self._bio_location_context()
@@ -1725,7 +1817,7 @@ class DashboardScanMixin:
             # planet record.
             for key in (
                 "genuses", "organic_scans", "organic_complete_count",
-                "geo_count", "mining_count", "materials",
+                "geo_count", "mining_count", "materials", "sites", "green_giant",
             ):
                 if existing.get(key) not in (None, [], {}):
                     item[key] = existing[key]

@@ -25,6 +25,10 @@
   // the hologram, then holds that state's settled still and draws nothing
   // until the next change. Off draws no hologram at all.
   const SCENE_MODES = new Set(['full', 'still', 'off']);
+  // A still canvas has no next frame to restore it if WebView2 wipes it
+  // (a graphics reset, memory reclaimed while hidden), so Still and reduced
+  // motion repaint their one frame this often as a backstop.
+  const STILL_REFRESH_MS = 5000;
   const REPROJECT_MS = 540;
   const CROSSFADE_MS = 380;
   const FOLD = .035;
@@ -3217,10 +3221,15 @@
       this.frameId = 0;
       this.frames = 0;
       this.frameCallback = (now) => this.frame(now);
+      this.stillTimer = 0;
       this.handleVisibility = () => {
         this.clock = performance.now();
         this.schedule();
+        if (!document.hidden) this.repaint(true);
       };
+      // A reset graphics context comes back blank: draw it again.
+      this.handleRestored = () => this.repaint(true);
+      this.surfaces.forEach((surface) => surface.canvas.addEventListener('contextrestored', this.handleRestored));
       document.addEventListener('visibilitychange', this.handleVisibility);
       if (typeof ResizeObserver === 'function') {
         // Resizing clears a canvas. Observers run before the browser paints,
@@ -3427,6 +3436,16 @@
         cancelAnimationFrame(this.frameId);
         this.frameId = 0;
       }
+      clearTimeout(this.stillTimer);
+      this.stillTimer = 0;
+      const still = (this.mode === 'still' || this.reduced) && this.mode !== 'off';
+      if (still && this.state && this.visible && !document.hidden && !this.frameId) {
+        this.stillTimer = setTimeout(() => {
+          this.stillTimer = 0;
+          this.repaint(true);
+          this.schedule();
+        }, STILL_REFRESH_MS);
+      }
     }
 
     frame(now) {
@@ -3445,6 +3464,7 @@
       if (!this.active()) {
         // Still: the change has landed. Hold its settled pose, no more frames.
         this.repaint(true);
+        this.schedule();
         return;
       }
       this.frameId = requestAnimationFrame(this.frameCallback);
@@ -3541,6 +3561,7 @@
       this.frameId = 0;
       this.observer?.disconnect();
       document.removeEventListener('visibilitychange', this.handleVisibility);
+      clearTimeout(this.stillTimer);
     }
   }
 

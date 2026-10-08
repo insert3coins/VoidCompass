@@ -21,6 +21,30 @@ def carrier_jump_moves_player(data):
     )
 
 
+
+# Surface signals beyond biology, geology and mining (5.5.3.1, after
+# EDDiscovery): settlements and installations (Human), Guardian and Thargoid
+# sites, and anything else.
+SITE_SIGNAL_TYPES = {
+    "$SAA_SignalType_Human;": "human",
+    "$SAA_SignalType_Guardian;": "guardian",
+    "$SAA_SignalType_Thargoid;": "thargoid",
+    "$SAA_SignalType_Other;": "other",
+}
+
+
+def site_signals(signals):
+    """``{human, guardian, thargoid, other}`` counts from a signal list (only
+    the kinds present)."""
+    sites = {}
+    for signal in signals or ():
+        if not isinstance(signal, dict):
+            continue
+        kind = SITE_SIGNAL_TYPES.get(str(signal.get("Type") or ""))
+        if kind:
+            sites[kind] = sites.get(kind, 0) + int(signal.get("Count", 0) or 0)
+    return sites
+
 class JournalWatcher:
     def __init__(self, journal_path, trace_callback=None, config=None):
         self.journal_path = journal_path
@@ -1034,6 +1058,7 @@ class JournalWatcher:
                     "bio_count": bio_count,
                     "geo_count": geo_count,
                     "mining_count": mining_count,
+                    "sites": site_signals(data.get("Signals")),
                 }
             }
         if ev == "SAASignalsFound":
@@ -1060,6 +1085,7 @@ class JournalWatcher:
                     "bio_count": bio_count,
                     "geo_count": geo_count,
                     "mining_count": mining_count,
+                    "sites": site_signals(data.get("Signals")),
                     "genuses": data.get("Genuses", [])
                 }
             }

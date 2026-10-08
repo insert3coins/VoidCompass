@@ -1227,6 +1227,10 @@ function renderSessionPulse(state) {
   text("pulse-distance", `${numeric(session.distance_ly, 1)} LY`);
   text("pulse-surveys", `${numeric(session.fss_surveys)} / ${numeric(session.dss_maps)}`);
   text("pulse-discoveries", `${numeric(session.bio_analyses)} / ${numeric(session.codex)}`);
+  text("pulse-flown", session.flown || session.elapsed || "—");
+  text("pulse-earned", formatCredits(session.earned));
+  text("pulse-firsts", numeric(session.first_discoveries));
+  text("pulse-rare", numeric(session.rare_worlds));
   text("session-pulse-summary", session.summary || "The current exploration session is waiting for journal activity.");
   const rows = Array.isArray(session.highlights) ? session.highlights : [];
   const highlightsFingerprint = JSON.stringify(rows.slice(0, 3));
@@ -2547,13 +2551,104 @@ function mountSystemOrrery(orrery = {}) {
   orreryView = new EliteSystemOrrery(canvas, orrery.bodies || []);
 }
 
+// The value breakdown, the discovery record and the body's scan facts
+// (after EDDiscovery's scan panel, 5.5.3.1).
+function orreryValueBlock(body) {
+  const values = body.values || {};
+  const table = (body.facts || {}).value_table || {};
+  const parts = [];
+  if (body.kind !== "star" && number(values.scan)) {
+    parts.push(`SCAN <b>${credits(values.scan)}</b>`);
+    if (number(values.mapped)) parts.push(`MAPPED <b>${credits(values.mapped)}</b>`);
+    if (number(values.mapped_plain) && number(values.mapped_plain) !== number(values.mapped)) {
+      parts.push(`WITHOUT EFFICIENCY <b>${credits(values.mapped_plain)}</b>`);
+    }
+  }
+  // What it would pay in each case (EDDiscovery's value table).
+  const cases = [
+    ["NO BONUS", table.base], ["IF FIRST DISCOVERED", table.first_discovered], ["IF MAPPED", table.mapped],
+    ["IF FIRST MAPPED", table.first_mapped], ["IF FIRST TO BOTH", table.first_discovered_mapped],
+  ].filter(([, value]) => number(value));
+  const record = [];
+  if (body.was_discovered === true) record.push("ALREADY DISCOVERED");
+  // Stars cannot be mapped.
+  if (body.kind !== "star" && body.was_mapped === true) record.push("ALREADY MAPPED");
+  else if (body.kind !== "star" && body.was_mapped === false) record.push(body.mapped ? "FIRST MAPPED" : "NEVER MAPPED");
+  if (body.was_footfalled === true) record.push("ALREADY FOOTFALLED");
+  const dss = (body.facts || {}).dss;
+  if (dss) record.push(`DSS ${dss.probes}/${dss.target} ${dss.efficient ? "· EFFICIENT" : "· OVER TARGET"}`);
+  const scanType = (body.facts || {}).scan_type;
+  if (scanType) record.push(`SCAN: ${String(scanType).replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase()}`);
+  return (parts.length ? `<div class="orrery-values">${parts.map((part) => `<span>${part}</span>`).join("")}</div>` : "")
+    + (cases.length > 1 ? `<div class="orrery-group"><small>VALUE IN EACH CASE</small><div class="orrery-values cases">${cases.map(([label, value]) => `<span>${label} <b>${credits(value)}</b></span>`).join("")}</div></div>` : "")
+    + (record.length ? `<div class="orrery-flags record">${record.map((flag) => `<em>${escapeHtml(flag)}</em>`).join("")}</div>` : "");
+}
+
+// Every fact the scan gives, grouped (after EDDiscovery's scan panel).
+function orreryFactsBlock(body) {
+  const facts = body.facts || {};
+  const star = body.kind === "star";
+  const group = (title, rows) => {
+    const cells = rows.filter(([, value]) => value !== null && value !== undefined && value !== "")
+      .map(([label, value]) => `<span>${label} <b>${escapeHtml(String(value))}</b></span>`);
+    return cells.length ? `<div class="orrery-group"><small>${title}</small><div class="orrery-facts more">${cells.join("")}</div></div>` : "";
+  };
+  const chips = (title, rows, tone = "") => rows.length
+    ? `<div class="orrery-flags composition${tone ? ` ${tone}` : ""}"><small>${title}</small>${rows.map((text) => `<em>${escapeHtml(text)}</em>`).join("")}</div>` : "";
+  const deg = (value, places = 1) => value == null ? null : `${numeric(value, places)}°`;
+  const sma = body.semi_major_axis;
+  const smaText = !sma ? null : sma < 0.01 * 149597870700
+    ? `${numeric(sma / 1000, 0)} KM` : `${numeric(sma / 149597870700, 3)} AU`;
+  const physical = group(star ? "STAR" : "BODY", [
+    ["CLASS", facts.classification || null],
+    ["TEMPERATURE", body.temperature_k == null ? null : `${numeric(body.temperature_k, 0)} K`],
+    ["PRESSURE", !(facts.pressure_atm > 0) ? null : `${numeric(facts.pressure_atm, facts.pressure_atm < .1 ? 3 : 2)} ATM`],
+    ["RADIUS", facts.radius_sr != null ? `${numeric(facts.radius_sr, 3)} SR` : facts.radius_km == null ? null : `${numeric(facts.radius_km, 0)} KM`],
+    ["MASS", facts.earth_masses != null ? `${numeric(facts.earth_masses, 4)} EM` : facts.solar_masses != null ? `${numeric(facts.solar_masses, 3)} SM` : null],
+    ["AGE", facts.age_my == null ? null : `${numeric(facts.age_my, 0)} MY`],
+    ["ABS MAGNITUDE", facts.absolute_magnitude == null ? null : numeric(facts.absolute_magnitude, 2)],
+    ["VOLCANISM", facts.volcanism || null],
+    ["RESERVES", facts.reserve || null],
+  ]);
+  const orbit = group("ORBIT", [
+    ["ORBITS", facts.orbits || null],
+    ["SEMI-MAJOR AXIS", smaText],
+    ["ECCENTRICITY", body.eccentricity == null ? null : numeric(body.eccentricity, 4)],
+    ["INCLINATION", deg(facts.inclination_deg, 2)],
+    ["PERIAPSIS", deg(facts.periapsis_deg, 2)],
+    ["ASCENDING NODE", deg(facts.ascending_node_deg, 2)],
+    ["MEAN ANOMALY", deg(facts.mean_anomaly_deg, 2)],
+    ["ROTATION", facts.tidal_lock ? "TIDALLY LOCKED" : body.rotation_period ? `${numeric(Math.abs(body.rotation_period) / 86400, 3)} DAYS${body.rotation_period < 0 ? " (RETROGRADE)" : ""}` : null],
+    ["AXIAL TILT", deg(facts.axial_tilt_deg, 2)],
+  ]);
+  const zones = facts.zones || {};
+  const range = (pair) => Array.isArray(pair) ? `${numeric(pair[0], 0)}–${numeric(pair[1], 0)} LS` : null;
+  const zoneBlock = star && Object.keys(zones).length ? group("CIRCUMSTELLAR ZONES", [
+    ["HABITABLE", range(zones.habitable)], ["EARTH-LIKE", range(zones.earth_like)],
+    ["WATER WORLDS", range(zones.water_world)], ["AMMONIA WORLDS", range(zones.ammonia_world)],
+    ["METAL-RICH", range(zones.metal_rich)], ["ICY FROM", zones.icy_from == null ? null : `${numeric(zones.icy_from, 0)} LS`],
+  ]) : "";
+  const atmosphere = (facts.atmosphere_composition || []).map((row) => `${row.name} ${numeric(row.percent, 1)}%`);
+  const composition = Object.entries(facts.composition || {}).map(([name, percent]) => `${name} ${numeric(percent, 1)}%`);
+  const rings = (facts.rings || []).map((ring) => [
+    `${ring.class || "Ring"} ${ring.belt ? "belt" : "ring"}`,
+    ring.inner_km && ring.outer_km ? `${numeric(ring.inner_km, 0)}–${numeric(ring.outer_km, 0)} KM` : ring.width_km ? `${numeric(ring.width_km, 0)} KM WIDE` : "",
+    ring.mass_mt ? `${numeric(ring.mass_mt, 0)} MT` : "",
+  ].filter(Boolean).join(" · "));
+  const organics = (facts.organics || []).map((row) => `${row.name} · ${String(row.state).toUpperCase()}`);
+  return physical + orbit + zoneBlock
+    + chips("ATMOSPHERE", atmosphere) + chips("MAKE-UP", composition) + chips("RINGS", rings)
+    + chips("GENERA", facts.genera || [], "life") + chips("ORGANICS", organics, "life") + chips("CODEX", facts.codex || [], "life")
+    + chips("NOTES", facts.notes || [], "notes");
+}
+
 function orreryDetail(body) {
   if (!body) return `<p class="workspace-empty">Select a body in the system architecture.</p>`;
   const period = body.orbital_period ? `${numeric(body.orbital_period / 86400, 2)} DAYS` : "UNREPORTED";
   const position = body.orbit?.resolved ? "LIVE KEPLER POSITION" : body.source === "edsm" ? "EDSM ORBIT · POSITION APPROXIMATE" : "SCHEMATIC POSITION";
   const flags = [...(body.flags || []), position, body.rings ? `${numeric(body.rings)} RING${number(body.rings) === 1 ? "" : "S"}` : ""].filter(Boolean);
   const materials = (body.materials || []).slice(0, 8).map((row) => `<em>${escapeHtml(row.name)} ${numeric(row.percent, 1)}%</em>`).join("");
-  return `<div class="orrery-body-title"><i class="${escapeHtml(body.kind)}"></i><div><small>BODY ${escapeHtml(body.body_id ?? "—")} · ${body.is_moon ? "MOON" : escapeHtml(String(body.kind || "BODY").toUpperCase())}</small><h3>${escapeHtml(body.name)}</h3><span>${escapeHtml(body.class)}</span></div><b>${credits(body.value)}</b></div><div class="orrery-facts"><span>ORBIT <b>${period}</b></span><span>DISTANCE <b>${body.distance_ls === null ? "—" : `${numeric(body.distance_ls, 1)} LS`}</b></span><span>GRAVITY <b>${body.gravity_g === null ? "—" : `${numeric(body.gravity_g, 2)} G`}</b></span><span>ATMOSPHERE <b>${escapeHtml(body.atmosphere || "AIRLESS")}</b></span><span>BIOLOGY <b>${numeric(body.bio_complete)} / ${numeric(body.bio)}</b></span><span>GEOLOGY <b>${numeric(body.geo)}</b></span><span>MINING SITES <b>${numeric(body.mining)}</b></span></div><div class="orrery-flags">${flags.map((flag) => `<em>${escapeHtml(flag)}</em>`).join("") || "<em>STANDARD SURVEY RECORD</em>"}</div>${materials ? `<div class="orrery-flags resource-composition">${materials}</div>` : ""}`;
+  return `<div class="orrery-body-title"><i class="${escapeHtml(body.kind)}"></i><div><small>BODY ${escapeHtml(body.body_id ?? "—")} · ${body.is_moon ? "MOON" : escapeHtml(String(body.kind || "BODY").toUpperCase())}</small><h3>${escapeHtml(body.name)}</h3><span>${escapeHtml(body.class)}</span></div><b>${credits(body.value)}</b></div><div class="orrery-facts"><span>ORBIT <b>${period}</b></span><span>DISTANCE <b>${body.distance_ls === null ? "—" : `${numeric(Math.abs(body.distance_ls), 1)} LS`}</b></span>${body.kind === "star" ? "" : `<span>GRAVITY <b>${body.gravity_g === null ? "—" : `${numeric(body.gravity_g, 2)} G`}</b></span><span>ATMOSPHERE <b>${escapeHtml(body.atmosphere || "AIRLESS")}</b></span><span>BIOLOGY <b>${numeric(body.bio_complete)} / ${numeric(body.bio)}</b></span><span>GEOLOGY <b>${numeric(body.geo)}</b></span><span>MINING SITES <b>${numeric(body.mining)}</b></span>`}</div><div class="orrery-flags">${flags.map((flag) => `<em>${escapeHtml(flag)}</em>`).join("") || "<em>STANDARD SURVEY RECORD</em>"}</div>${materials ? `<div class="orrery-flags resource-composition">${materials}</div>` : ""}${orreryValueBlock(body)}${orreryFactsBlock(body)}`;
 }
 
 // Explore's survey board and the orrery share one selection. A board pick is
@@ -3204,7 +3299,55 @@ function navigationPage(pageName) {
   return PAGE_SUITE_BY_PAGE.get(pageName)?.parent || pageName;
 }
 
+// Settings › Diagnostics: the result of the last check, live.
+function renderSettingsUpdate(update = {}) {
+  const state = byId("settings-update-state");
+  if (!state) return;
+  const box = byId("settings-update");
+  const current = update.current_version || model.app?.version || "";
+  const when = (seconds) => seconds ? new Date(seconds * 1000).toLocaleString([], {dateStyle: "medium", timeStyle: "short"}) : "";
+  let tone = "idle";
+  let label = "NOT CHECKED";
+  let detail = "Void Compass checks GitHub once when it starts.";
+  if (update.checking) {
+    tone = "busy"; label = "CHECKING…"; detail = "Asking GitHub for the latest release.";
+  } else if (update.error && Number(update.failed_at || 0) >= Number(update.checked_at || 0)) {
+    tone = "bad"; label = "CHECK FAILED"; detail = `${update.error}. Try again in a moment.`;
+  } else if (update.available) {
+    tone = "new"; label = `v${update.latest_version} AVAILABLE`;
+    detail = `You have v${current}. Checked ${when(update.checked_at) || "this session"}.`;
+  } else if (update.checked) {
+    tone = "good"; label = "UP TO DATE"; detail = `v${current} is the latest release. Checked ${when(update.checked_at) || "this session"}.`;
+  }
+  box.dataset.tone = tone;
+  state.textContent = label;
+  text("settings-update-detail", detail);
+  const check = document.querySelector("#settings-workspace [data-update-check]");
+  if (check) {
+    check.disabled = Boolean(update.checking);
+    check.textContent = update.checking ? "CHECKING…" : "CHECK FOR UPDATES";
+  }
+  const view = byId("settings-update-view");
+  if (view) view.hidden = !update.available;
+}
+
+function forgetUpdateDismissal() {
+  try {
+    Object.keys(sessionStorage).filter((key) => key.startsWith("voidcompass.update.dismissed.")).forEach((key) => sessionStorage.removeItem(key));
+  } catch (_error) { /* storage can be unavailable */ }
+}
+
+// Asking again means the answer should show, even if it was dismissed.
+document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-update-check]")) forgetUpdateDismissal();
+  if (event.target.closest("[data-update-view]")) {
+    forgetUpdateDismissal();
+    renderUpdateNotice(model.update || {});
+  }
+});
+
 function renderUpdateNotice(update = {}) {
+  renderSettingsUpdate(update);
   const dialog = byId("release-update");
   if (!dialog) return;
   const latest = String(update.latest_version || "").trim();
@@ -3579,6 +3722,7 @@ function settingsSectionBody(id, data) {
   }
   const rebuildPanel = `<div id="settings-cache-rebuild" class="cache-rebuild-state ready" role="status" aria-live="polite"><header><span><b id="settings-cache-phase">READY</b><small id="settings-cache-detail">No cache rebuild has run for this profile this session.</small></span><strong id="settings-cache-percent">0%</strong></header><div id="settings-cache-meter" class="cache-rebuild-meter" role="progressbar" aria-label="Cache rebuild progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="settings-cache-bar"></i></div><footer><span id="settings-cache-meta">WAITING TO START</span><span id="settings-cache-elapsed"></span></footer></div>`;
   return `<div class="settings-health" id="settings-health"><b id="settings-health-level">${escapeHtml(health.level || "NOMINAL")}</b><span id="settings-health-detail">${escapeHtml(settingsHealthDetail(health))}</span></div>`
+    + settingGroup("UPDATES", `<div class="settings-update" id="settings-update"><b id="settings-update-state">NOT CHECKED</b><span id="settings-update-detail">Void Compass checks GitHub once when it starts.</span></div>${settingActions(`<button type="button" data-command="check_updates" data-update-check>CHECK FOR UPDATES</button><button type="button" id="settings-update-view" data-update-view hidden>SEE THE UPDATE</button><button type="button" data-command="open" data-target="releases">RELEASES</button>`, "check for updates update version new release download install")}`)
     + settingGroup("DIAGNOSTICS", `${settingSwitch({key: "runtime_trace_enabled", label: "Performance trace", detail: "Keep startup and UI timing in the logs folder.", checked: value.runtime_trace_enabled})}${settingSwitch({key: "crash_reporting_enabled", label: "Crash and freeze reports", detail: "Keep the current and previous reports in the logs folder.", checked: value.crash_reporting_enabled})}${settingActions(`<button type="button" data-command="open_logs">OPEN LOGS</button><button type="button" data-ws-page="settings" data-ws-op="support_bundle">CREATE SUPPORT BUNDLE</button>`, "open logs support bundle")}`)
     + settingGroup("RECOVERY", `${settingSwitch({key: "recovery_safe_mode_enabled", label: "Safe recovery after a crash", detail: "Start from the last clean profile checkpoint after an unclean shutdown.", checked: value.recovery_safe_mode_enabled})}${settingSwitch({key: "automatic_profile_backups_enabled", label: "Automatic profile snapshots", detail: "Keep up to five, taken before upgrades and cache rebuilds.", checked: value.automatic_profile_backups_enabled})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="run_setup">RUN FIRST-TIME SETUP</button>`, "run setup onboarding")}`)
     + settingGroup("JOURNAL CACHE", `${settingNote("Rebuilds this profile's exploration history from every journal. Progress shows here and in the live feed.")}${rebuildPanel}${settingSwitch({key: "edsm_backfill_on_cache_rebuild", id: "setting-cache-edsm", label: "Send history to EDSM while rebuilding", detail: "Backfill EDSM from the journals being read.", checked: value.edsm_backfill_on_cache_rebuild})}${settingActions(`<button type="button" id="settings-cache-rebuild-button" data-ws-page="settings" data-ws-op="rebuild_cache">REBUILD CACHE</button>`, "rebuild journal cache")}`);
@@ -3607,6 +3751,7 @@ function renderSettingsWorkspace(data) {
     </div>
   </div>`;
   applySettingsView();
+  renderSettingsUpdate(model.update || {});
   updateSettingsLive(data);
   if (scroller) scroller.scrollTop = scrollTop;
 }

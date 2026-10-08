@@ -1,40 +1,66 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.3 // Fixes from the field
+## v5.5.3.1 // Every body tells you more
 **Release Date:** 2026-Oct-08
 
-* **Codex flags now on by default, and in more places.**
-  * Survey Operations' flags are switched on for every commander, once. Turn them off in Overlay Studio if you prefer.
-  * A genus the game finds on a body but our prediction didn't expect now lists the species it is likely to be, with their colours and flags.
-  * When the brightest star gives a species no colour (a neutron star, say), the planet's other parent stars are tried.
+* **Settlements and sites are no longer dropped.** Human, Guardian, Thargoid and other signals from FSS and DSS scans now show:
+  * as **HUMAN**, **GUARDIAN** and **THARGOID** badges in Survey Operations, and chips on the Explore survey board;
+  * as a **SITES** count on the Navigation HUD, shown only when a system has some.
+* **Explore's orrery panel shows everything the scan gives** (as EDDiscovery does):
+  * **Value:** the scan value, the mapped value with and without the efficiency bonus, and what the body would pay in each case (no bonus, first discovered, mapped, first mapped, first to both).
+  * **Record:** already discovered, mapped or footfalled; DSS probes against the target; the scan type.
+  * **The body:** temperature, pressure, radius, mass, volcanism, reserves.
+  * **Its orbit:** what it orbits, semi-major axis, eccentricity, inclination, periapsis, ascending node, mean anomaly, rotation (or tidally locked, or retrograde) and axial tilt.
+  * **Stars:** full classification (K3Vab), radius in solar radii, mass, age, absolute magnitude, and the **circumstellar zones**: where habitable, Earth-like, water, ammonia, metal-rich and icy worlds are likely.
+  * **Make-up:** the atmosphere's gases, rock, metal and ice, and each ring and belt with its type, inner and outer edge and mass.
+  * **Life:** the genera found, organics sampled, and the Codex entries you logged on that body.
+  * **Notes:** tiny, large landable, high eccentricity, ringed landable, volcanism.
+* **Survey Operations shows each body's surface temperature** beside its class, atmosphere and gravity, and its notes (tiny, large landable, high eccentricity, ringed landable, volcanism).
+* **Rare worlds lead Survey's NOTABLE.** These are now always notable, whatever they pay, and listed first, each with its name on the value line:
+  * **Green gas giants:** the game names one only in its Codex entry, so Void Compass matches that entry to the gas giant scanned at the same moment.
+  * **Helium gas giants.**
+  * **Helium-rich gas giants.**
+  * **Water giants.**
+  * Earth-likes, water worlds and ammonia worlds follow, by value, as before.
+* **Codex flags:**
   * Colours you've already logged in this region now get a dim **✓**, so no colour is left unmarked: ⚑ never logged, ⚐ not logged in this region, ✓ logged here.
   * Once the species is known, a detected genus shows that species' value, not the whole genus range (a Bacterium named as Acies reads 1M, not 1–8.42M), and the body estimate follows.
-* **Galnet shows each story's real date.** Stories now carry their in-game broadcast date (01 OCT 3312), read from the Galnet page. Before, every story showed the date the feed was last updated.
-* **Ship loadouts import as they are in game.**
-  * Empty hardpoints stay empty. Before, they showed the stock Pulse Lasers.
-  * Every module goes to the slot the journal names, so medium weapons no longer land in large hardpoints and internals sit in the right size of slot.
-  * Engineering comes across with each module, and the Rhino's vehicle hangar is recognised.
-* **Achievements:**
-  * Shock and Awe now needs three core asteroids cracked with seismic charges. Before, launching any limpet counted. Progress counted the old way is cleared once.
-  * Drone Operator counts only prospector and collector limpets.
-* **Jump Info appears the moment you press jump,** while the drive charges, not when the countdown ends.
+* **The Watcher has a mind of its own:**
+  * **Its thoughts.** Now and then it shares one beside the orb, typed out as its eye speaks, then gone. These aren't captions for events. They're its own words about what's true: your travels, your Codex, fuel, danger, a death, a sale, an achievement, the time, how long you've flown. Mostly it stays silent. It has over 500 lines to choose from, and it works through every way of saying something before it repeats one.
+  * **It remembers you,** per commander, between sessions: a welcome after a long absence, a word after a death, a remark the first time you enter a region.
+  * **It watches what you watch:** it glances at the overlay an event concerns, where it sits on your screen.
+  * **It anticipates:** its pupil widens as the drive charges, it looks down as you glide in, and it keeps glancing at the fuel gauge when fuel runs low.
+  * **No more blinking.** Between events its **aperture tightens** as it thinks and **light sweeps across the glass**; a bored eye sighs (it dims and its galaxy slows). It follows every journal event as it falls into the lens.
+  * **It watches the way you play:** relaxed when docked, looking ahead in supercruise, sweeping in the FSS, looking down on a surface, wary in danger, and drowsier late at night.
+  * **It feels things:** **startled** then **wary** at an attack, **pleased** at a sale or a docking, **curious** at finds, **focused** through a jump, it **reads** a commander's message, and it **grieves** for a while after a death. Repeats wear off; a surprise after a long quiet lands harder.
+  * **It dreams.** Asleep, faint motes of the session's highlights drift through its iris.
+  * **It notices rare worlds.** A green gas giant always gets a word, and helium gas giants, helium-rich gas giants and water giants get a remark of their own.
+  * **It signs off.** When you quit the game, it sums up the session in its own way, with the session's real figures: jumps, first discoveries, rare worlds, species analysed, worlds mapped, credits earned and time flown. These are the same numbers the overview shows. After a quiet session it just says goodbye.
+  * **Overlay Studio:**
+    * **Thoughts:** Off, Rare, Occasional or Chatty. **Rare** speaks only of what matters (a death, danger, a find, a long absence). **Occasional** adds discoveries, mapping and missions. **Chatty** also remarks on everyday play (arrivals, scooping, docking, landing, going on foot) and mutters into the quiet now and then. A minor remark stays unsaid rather than repeat itself.
+    * **Nature:** **Depressed** (the default), **Curious**, **Stoic** or **Nervous**.
+    * **Thought backdrop:** a dark panel behind its words, on by default. The overlay Opacity fades the panel along with the orb.
+    * **Thought colour, size and stay:**
+      * **Colour:** Bright, Theme accent or Eye colour.
+      * **Size:** Small, Standard or Large.
+      * **Stays:** Short, Standard or Long, which sets how long each thought stays on screen.
+  * **Easier to read.** Its words are now bright, with a dark outline, so they stand out over a bright planet or star.
+  * **The Watcher is depressed.** It's a gloomy, deadpan robot that has seen it all, with its own words for everything ("I counted the stars again. Still too many. Still too far."). Its lids hang heavy, its gaze rests low, its eye is dim and slow, it sighs, very little impresses it, and it mutters into the silence. Prefer a brighter companion? Pick another nature in Overlay Studio.
+* **Navigation HUD hologram:**
+  * **Still** redraws its scene if Windows clears it, so the viewport is never left empty.
+  * **Off** folds the empty viewport away when there's nothing measured to show; the altimeter and FSS scan keep their readout.
+* **The overview's Session Pulse shows more of the session.** Alongside jumps, distance, FSS/DSS and biology/Codex, it now shows:
+  * **time flown;**
+  * **credits earned** (data sold plus trade profit);
+  * **first discoveries;**
+  * **rare worlds found**, also listed in the session's highlights.
+
+* **Check for updates from Settings.** Settings › Diagnostics & recovery has an **Updates** group. It shows your version and what the last check found: up to date, a new version available, or a failed check. Use **CHECK FOR UPDATES** to ask again at any time, or **SEE THE UPDATE** to reopen the update window after you've closed it.
 * **Jump Info fits its window at any text size,** as the Navigation HUD does. If the window comes out smaller than your text size needs (Windows display scaling, say), the panel shrinks to fit rather than being cut off, and returns to full size as the window catches up.
-* **Survey Operations lists Earth-likes, water worlds and other high-value bodies right after biology,** the most valuable first, and they are the last to page out when space is short.
-* **Explore & Survey:**
-  * Unsold **exobiology** has its own readout beside cartography, with the samples aboard and any first-footfall bonus.
-  * Each body says who discovered it (from EDSM), or that it was undiscovered and the discovery is yours.
-  * Bodies carry their Codex flag, and the system's EDSM traffic shows in the survey band.
-* **Navigation HUD hologram: Full, Still or Off** (Overlay Studio). **Still** is for low-end PCs: the hologram plays its change animation when the state changes, then holds that state's settled scene and draws nothing until the next change. **Off** shows the readouts only. Alerts still flash in every mode.
-* **Cargo** is listed in alphabetical order.
-* **Exobiology bonuses are counted.** On a first-footfall body every species pays five times its base value (your journals: 228 of 228 such samples were paid it). Survey Operations shows those values with a **1ST FOOTFALL ×5** badge, and the unsold exobiology on the dashboard, Explore, Flight Log and the Station overlay now includes it. Exploration values already included the first-discovery and first-mapped bonuses.
-* **The Watcher has a life of its own between events:**
-  * It blinks, breathes and glances around, and looks the way each event points: up for jumps, sweeping for scans, down for docking and landing.
-  * It takes a double take at a first discovery, an Earth-like or water world, or a new Codex entry.
-  * It side-eyes danger, squints into the star while you scoop, and tires over a long session.
-  * Overlay Studio adds **Liveliness** (Calm, Standard or Alive) and an **Idle motions** switch.
 
 ## Earlier releases
 
+* **v5.5.3** — Codex flags on by default and smarter; Galnet's real story dates; loadouts imported as they are in game; achievement trigger fixes; Jump Info on the jump press; high-value bodies after biology; exobiology value and first-footfall bonus counted; body discoverers and EDSM traffic on Explore; Navigation HUD Full/Still/Off; The Watcher's idle life; cargo in alphabetical order.
 * **v5.5.2.9** — Survey Operations' Codex flags per colour, like SrvSurvey's: each species with the colours it will show and a flag on each colour you lack.
 * **v5.5.2.8** — Commander Record covers Odyssey on foot: suit and loadout with real grades, on-foot record, exobiology career, backpack and ship locker; the ship locker no longer overwrites the backpack.
 * **v5.5.2.7** — Overlays grow with the text size in both directions, overlays show up to date when they appear (Survey's first planet after a jump), and the Navigation HUD always fits its window.
@@ -61,48 +87,3 @@
 * **v5.4.9.6** — Rebuilt the Journal Heartbeat as a HAL 9000-style watcher orb that reacts to every journal event, rebuilt the startup screen around the same eye with an FSD countdown into the deck, added Navigation HUD typeface and text settings, and fixed the HUD's on-foot portrait.
 * **v5.4.9.5** — Brought back an animated hologram for every Navigation HUD state with journal event effects, rebuilt Gravity Warning and Overlay Studio (one display at a time), made Survey Operations hold still at or below its rotation threshold, and fixed hidden overlays reloading after five minutes.
 * **v5.4.9.4** — Rebuilt Survey Operations around one spotlight world on a single clock, split Explore & Survey into three views with a unified Survey Board, rebuilt the Navigation HUD as a cockpit status panel and Planet Waypoint Navigation as a surface compass, and fixed startup stalling when the dashboard was minimised.
-* **v5.4.9.3** — Added the profile-local Return Later board and per-commander survey queue choices, kept every discovered body reachable in the Explore workboard, rebuilt Exploration Archive as a flight-record workspace and reworked Focused Log into a live field brief.
-* **v5.4.9.2** — Rebuilt Planet Materials and Planet Waypoint Navigation, introduced the Expedition Bridge across non-map pages, and added animated known-world records to Current System.
-* **v5.4.9.1** — Refreshed Survey Operations for every planet scan with compact routine and pinned biology strips, improved exobiology sampling, and rebuilt Achievements and themed cockpit notifications.
-* **v5.4.9** — Rebuilt the Navigation HUD with a flight-deck layout, complete animated route, stellar-class visuals and distinct state scenes; redesigned Survey Operations as a bounded, animated planet atlas.
-* **v5.4.8.4** — Improved Navigation route and fuel guidance, redesigned startup with an optical core, starfield and rotating Elite facts, and added prompt retry for failed overlay pages.
-* **v5.4.8.3** — Rebuilt the theme-aware HAL-inspired heartbeat optics, refreshed the Navigation route rail, and disabled the Rhino Coverage overlay while retaining saved maps and underlying tools.
-* **v5.4.8.2** — Redesigned the heartbeat, added quick planetary compass coordinates and stabilised overlay startup/recovery with offscreen loading, browser error suppression and reliable readiness handshakes.
-* **v5.4.8.1** — Restored Overlay Studio as a standalone Application destination and stabilised overlay startup with staged WebView loading, rendered-page acknowledgements and isolated page recovery.
-* **v5.4.8** — Consolidated the command deck into workflow-focused destinations and shared suites, retained compatibility routes, and added an in-app GitHub release notification with matching release notes and links.
-* **v5.4.7** — Added Exploration Scout with journal-backed system audits, Codex coverage gaps and commander-requested Spansh prospect searches; split the largest dashboard domains and centralised live journal and companion-file distribution.
-* **v5.4.6.2** — Updated Rhino driving-ring guidance, deposit observations and rig estimates; added location association, Coverage Maps, ground intelligence and richer Planet Materials integration.
-* **v5.4.6.1** — Added the persistent Rhino Coverage Minimap with centres, borders, driving guidance, coloured bookmarks, manual drill markers, profile-local maps, configurable hotkeys and shareable PNG exports; consolidated overlay/runtime plumbing, clarified Build Planner and Engineering ownership, canonicalised NavRoute state and restored the complete tracked regression suite.
-* **v5.4.6** — Added the complete offline Build Planner with current ships and modules, Engineering, EDSY/SLEF/Journal interchange, profile builds and full performance analysis; refined planner controls and repaired overlay transparency after the project restructure.
-* **v5.4.5** — Reorganised the application into the `src/voidcompass` package and structured `assets`, `data`, `web`, `tests` and `tools` directories; updated imports, resource discovery, build inputs and launch compatibility.
-* **v5.4.4** — Rebuilt Powerplay as a complete operations workspace with dossiers, authentic portraits, journal-driven merit and cargo history, weekly archives, profile assignments and a cockpit overlay; fixed Navigation HUD priority after in-game route recalculation.
-* **v5.4.3.4** — Replaced generated Engineer and Powerplay artwork with authentic Elite Dangerous portraits, added the shared people-image library and completed all 34 Engineer and 12 current Powerplay leader portraits.
-* **v5.4.3.3.1** — Fixed Rhino-to-mothership cargo transfer reconciliation without affecting fleet-carrier transfers.
-* **v5.4.3.3** — Rebuilt About as a neon command-deck identity screen with creator, licence, privacy, runtime and project links.
-* **v5.4.3.2** — Added the profile-aware Planet Materials cockpit overlay with live surface telemetry, Rhino state, saved sites and Overlay Studio integration.
-* **v5.4.3.1** — Rebuilt Galactic Atlas with Elite-inspired cartography, a volumetric background, selection and focus controls, and refined Windows cursors; added Rhino dual-hold tracking and fixed stale Navigation cues.
-* **v5.4.3** — Rebuilt Engineering as a complete HTML companion with fleet and planned builds, blueprints, materials, Engineer access, Tech Brokers, Odyssey goals and build interchange; introduced the profile-aware Powerplay workspace.
-* **v5.4.2.7** — Redesigned Planet Materials saved locations, added Send to Compass, synchronized edited/deleted compass targets, hardened legacy site loading and completed Settings hotkey coverage for all 11 overlays.
-* **v5.4.2.6.1** — Corrected Carrier Transit/arrival journal ordering, moved Planet Materials into its own menu tab, added live planet/coordinate/scan capture and a commander-profile mining-site database.
-* **v5.4.2.6** — Replaced the Tk backend with the Python runtime and HTML/WebView2 overlays, repaired HUD startup visibility, added profile-aware planet mining sites and material choices, and introduced carrier preparation/lockdown countdowns for the carrier aboard.
-* **v5.4.2.5** — Improved Navigation route hierarchy, next-system and distance labels, expanded survey/discovery rows, brief attention highlights and Survey Operations window sizing.
-*   **v5.4.2.4** — Rebuilt navigation state animations with holographic instruments and a layered asteroid field, improved animation pacing, refined carrier readability, and separated personal/Squadron Carrier tracking, routes and Discord transitions.
-*   **v5.4.2.3** — Added Rhino mining haul/processing accounting, Planetary Resource Intelligence, barycentre-aware Orrery records, Field Discoveries and vehicle ledgers; tightened Mining Command layout and corrected cargo-hold recovery after returning from an SRV.
-*   **v5.4.2.2.1** — Corrected surface-control HUD states so handbrake, turret and drive-assist animations retain the active Rhino, Nomad, Scarab or Scorpion artwork instead of falling back to the mothership portrait.
-*   **v5.4.2.2** — Made Cargo Manifest vessel-aware with the Rhino's 72-tonne hold, correct active-vehicle telemetry, profile persistence and clean hold-switch animations.
-*   **v5.4.2.1** — Rebuilt the Live System Orrery as a full-width interactive Elite-inspired instrument with journal-accurate orbital architecture, known-system recovery, branch-aware scaling and lightweight profile-aware controls.
-*   **v5.4.2** — Added first-class Rhino journal and vehicle-state support, planetary mining-location DSS evidence and retained survey presentation, with Rhino mining and SRV cargo flowing through the existing unified pipelines.
-*   **v5.4.1.9** — Rebuilt Mining Command around one journal reducer with target directives, readiness, prospect/refinery yield, objectives, analytics, ring intelligence and buyer lookup; simplified Prospector Analysis and enforced HTML-only overlay presentation.
-*   **v5.4.1.8** — Added overlay recovery, Screenshot Chronicle, Exploration Preflight and Smart Next Action; hardened first-launch overlay restoration and station/carrier vicinity state.
-*   **v5.4.1.7** — Added Deep Space Contact Scope, FSD-injection and station/carrier awareness, DSS efficiency receipts, animated Cargo and Survey Operations, and profile-aware contact auto-hide.
-*   **v5.4.1.6** — Expanded authoritative Navigation states, docking guidance, cockpit modifiers, repair/reboot responses and heat, suit and jet-cone hazards.
-*   **v5.4.1.5** — Rebuilt the Navigation System Survey as a discovery-driven angular rail, rebuilt the HTML bootloader and Galnet intelligence reader, and hardened dashboard/overlay update recovery.
-*   **v5.4.1.4** — Added the persistent Galnet Relay and in-app archive, official RSS caching and profile-aware controls; repaired complex panel arranging and clarified Navigation waypoint destination, progress and distance.
-*   **v5.4.1.3** — Unified theme-aware Dashboard controls and profile panel arranging, rebuilt the System Workboard and waypoint rail, completed semantic Station, Cargo, Carrier, Prospector and Heartbeat overlays, refined vehicle handoffs and added neutron-tier flight animation.
-*   **v5.4.1.2** — Added the Explorer Decision Deck, six exploration doctrines, five-jump Route Horizon, Session Pulse, Regional Codex Hunt, profile-aware briefing-card layouts and optional automatic profile safety snapshots.
-*   **v5.4.1.1** — Refined Navigation arrival, planetary flight, landing gear, FSD cooldown, map/scanner and side-panel states; simplified vehicle departures and retired the redundant System Intelligence overlay.
-*   **v5.4.1** — Stabilised HTML overlay transparency and profile-aware opacity across hide/show cycles, and corrected the Galactic Atlas Focus Map viewport so every WebGL and overlay layer stays clipped and aligned.
-*   **v5.4.0** — Added Stellar Cartography with the live System Orrery, Exploration Survey Queue, Planetary Field Map, Expedition Replay, Explorer Science Lab and 42-region Galactic Passport; refined Navigation's vehicle and exploration states, added Survey Operations landability markers and repaired the initial Focus Map layout.
-*   **v5.3.9.3** — Completed the visible HTML overlay conversion, rebuilt Overlay Studio dragging, refined Navigation flight effects, retired obsolete speech/career/Tk code, restored Planet Waypoint lifecycle and repaired HTML hotkey recording.
-*   **v5.3.9.2** — Converted cockpit notifications and achievement unlocks to semantic HTML, prevented empty Survey Operations startup flashes and restored its planet-side focus lifecycle.
-*   **v5.3.9.1** — Rebuilt the Navigation State Spine with a complete ship/vehicle identity catalogue, state-specific 30 FPS motion, readable biological workboards and restart-safe surface context.

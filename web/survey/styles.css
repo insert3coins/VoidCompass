@@ -99,7 +99,7 @@ body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none
 .target-environment > span { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .target-environment > span + span { padding-left: 5px; border-left: 1px solid var(--soft); }
 .target-class { color: var(--accent); font-weight: 700; }
-.target-gravity, .target-rings { flex: 0 0 auto !important; }
+.target-gravity, .target-temperature, .target-rings { flex: 0 0 auto !important; }
 .target-rings { color: var(--yellow); }
 .badges { display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
 .badge { padding: 1px 4px; border: 1px solid var(--soft); color: var(--muted); font-size: calc(9.5px * var(--scale)); line-height: 1.1; white-space: nowrap; }
@@ -361,3 +361,10 @@ footer .credits { flex: 0 0 auto; color: var(--accent); text-align: right; }
 @keyframes survey-progress { from { width: var(--from-fill,0%); filter: brightness(1.8); } to { width: var(--fill,0%); filter: none; } }
 .survey.reduced-motion *, .survey.reduced-motion *::before, .survey.reduced-motion *::after { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .survey *, .survey *::before, .survey *::after { animation: none !important; transition: none !important; } }
+
+/* Settlements and sites (5.5.3.1). */
+.badge.site { color: var(--text); border-color: color-mix(in srgb, var(--text) 40%, transparent); }
+.badge.site.guardian { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.badge.site.thargoid { color: var(--green); border-color: color-mix(in srgb, var(--green) 55%, transparent); }
+.target-notes { display: flex; flex-wrap: wrap; gap: 3px 8px; margin-top: 2px; }
+.target-note { color: var(--yellow); font-size: var(--type-compact); letter-spacing: .06em; }

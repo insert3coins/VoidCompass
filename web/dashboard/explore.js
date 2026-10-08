@@ -361,6 +361,9 @@ function boardRowMarkup(row, system, ui) {
     row.rare ? `<b class="chip rare">RARE ${row.rare}</b>` : "",
     !bio && !geo && body.mapped ? `<b class="chip mapped">MAPPED</b>` : "",
     body.archived ? `<b class="chip known">KNOWN</b>` : "",
+    ...[["guardian", "GUARDIAN"], ["thargoid", "THARGOID"], ["human", "HUMAN"], ["other", "OTHER"]]
+      .filter(([kind]) => number((body.sites || {})[kind]))
+      .map(([kind, label]) => `<b class="chip site ${kind}">${label} ${number(body.sites[kind])}</b>`),
     CODEX_FLAGS[body.codex] ? `<b class="chip codex ${body.codex}" title="${CODEX_FLAGS[body.codex][2]}">${CODEX_FLAGS[body.codex][0]} ${CODEX_FLAGS[body.codex][1]}</b>` : "",
   ].join("");
   const detail = queued

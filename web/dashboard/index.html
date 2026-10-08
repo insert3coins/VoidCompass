@@ -382,6 +382,8 @@
               <div class="session-pulse-grid">
                 <div><small>JUMPS</small><strong id="pulse-jumps">0</strong></div><div><small>DISTANCE</small><strong id="pulse-distance">0.0 LY</strong></div>
                 <div><small>FSS / DSS</small><strong id="pulse-surveys">0 / 0</strong></div><div><small>BIO / CODEX</small><strong id="pulse-discoveries">0 / 0</strong></div>
+                <div><small>TIME FLOWN</small><strong id="pulse-flown">—</strong></div><div><small>EARNED</small><strong id="pulse-earned">0 CR</strong></div>
+                <div><small>FIRST DISCOVERED</small><strong id="pulse-firsts">0</strong></div><div><small>RARE WORLDS</small><strong id="pulse-rare">0</strong></div>
               </div>
               <p id="session-pulse-summary">The current exploration session is waiting for journal activity.</p>
               <div id="session-highlights" class="session-highlights"></div>
@@ -744,7 +746,14 @@
                     <label class="studio-field"><span>Orb size</span><select id="studio-heartbeat-size" data-studio-setting="heartbeat_orb_size"><option value="54">54 PX</option><option value="72">72 PX</option><option value="96">96 PX</option></select></label>
                     <label class="studio-field"><span>Eye colour<small>At rest; danger still turns it red</small></span><select id="studio-heartbeat-eye" data-studio-setting="heartbeat_eye_color"><option value="theme">Theme accent</option><option value="hal">HAL red</option></select></label>
                     <label class="studio-field"><span>Liveliness<small>How much the Watcher moves and feels between events</small></span><select id="studio-heartbeat-liveliness" data-studio-setting="heartbeat_liveliness"><option value="calm">Calm</option><option value="standard">Standard</option><option value="alive">Alive</option></select></label>
-                    <label class="studio-switch"><span><b>Idle motions</b><small>Blinks, breathing and glances between events; off, it only reacts.</small></span><input type="checkbox" data-overlay-option="heartbeat_idle_motion"><i></i></label>
+                    <p class="studio-option-note">THOUGHTS · What it says beside the orb, in its own words. Overlay opacity fades them with the orb.</p>
+                    <label class="studio-field"><span>Thoughts<small>Rare speaks of what matters; Chatty also remarks on everyday play</small></span><select id="studio-heartbeat-thoughts" data-studio-setting="heartbeat_thoughts"><option value="off">Off</option><option value="rare">Rare</option><option value="occasional">Occasional</option><option value="chatty">Chatty</option></select></label>
+                    <label class="studio-field"><span>Nature<small>How it takes what happens</small></span><select id="studio-heartbeat-personality" data-studio-setting="heartbeat_personality"><option value="weary">Depressed</option><option value="curious">Curious</option><option value="stoic">Stoic</option><option value="nervous">Nervous</option></select></label>
+                    <label class="studio-switch"><span><b>Thought backdrop</b><small>A dark panel behind its words, easier to read over the game.</small></span><input type="checkbox" data-overlay-option="heartbeat_thought_backdrop"><i></i></label>
+                    <label class="studio-field"><span>Thought colour</span><select id="studio-heartbeat-thought-colour" data-studio-setting="heartbeat_thought_colour"><option value="bright">Bright</option><option value="accent">Theme accent</option><option value="eye">Eye colour</option></select></label>
+                    <label class="studio-field"><span>Thought size</span><select id="studio-heartbeat-thought-size" data-studio-setting="heartbeat_thought_size"><option value="small">Small</option><option value="standard">Standard</option><option value="large">Large</option></select></label>
+                    <label class="studio-field"><span>Thought stays<small>How long each one stays on screen</small></span><select id="studio-heartbeat-thought-hold" data-studio-setting="heartbeat_thought_hold"><option value="short">Short</option><option value="standard">Standard</option><option value="long">Long</option></select></label>
+                    <label class="studio-switch"><span><b>Idle motions</b><small>Its aperture, breathing and glances between events; off, it only reacts.</small></span><input type="checkbox" data-overlay-option="heartbeat_idle_motion"><i></i></label>
                   </section>
                   <section data-studio-settings="music_player_hud">
                     <h4>MUSIC PLAYER</h4>
@@ -885,7 +894,7 @@
 
             <article class="card wide about-support-card">
               <header><span>SOURCE // SUPPORT // DIAGNOSTICS</span><b>OPEN CHANNELS</b></header>
-              <div class="action-grid about-actions"><button data-command="open" data-target="github">SOURCE CODE</button><button data-command="open" data-target="releases">RELEASES</button><button data-command="check_updates">CHECK FOR UPDATES</button><button data-command="open" data-target="documentation">DOCUMENTATION</button><button data-command="open" data-target="issues">REPORT AN ISSUE</button><button data-command="open_logs">OPEN LOCAL LOGS</button></div>
+              <div class="action-grid about-actions"><button data-command="open" data-target="github">SOURCE CODE</button><button data-command="open" data-target="releases">RELEASES</button><button data-command="check_updates" data-update-check>CHECK FOR UPDATES</button><button data-command="open" data-target="documentation">DOCUMENTATION</button><button data-command="open" data-target="issues">REPORT AN ISSUE</button><button data-command="open_logs">OPEN LOCAL LOGS</button></div>
               <footer><span>Bug reports and focused contributions are welcome.</span><b>github.com/insert3coins/VoidCompass</b></footer>
             </article>
           </section>

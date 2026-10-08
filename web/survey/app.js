@@ -402,6 +402,8 @@
 
   // Codex flags (Overlay Studio > Survey Operations > Codex flags): filled,
   // never logged; outline, never logged in this galactic region.
+  const SITE_KINDS = [["guardian", "GUARDIAN"], ["thargoid", "THARGOID"], ["human", "HUMAN"], ["other", "OTHER"]];
+  const hasSites = (row) => SITE_KINDS.some(([kind]) => count((row.sites || {})[kind]));
   const CODEX_TITLES = {new: "Never logged in your Codex", region: "Not logged in this region",
     logged: "Already logged in this region"};
   function codexFlag(flag) {
@@ -523,6 +525,11 @@
     if (bio) badges.appendChild(node("b", `badge bio${event.bio ? " event-signal" : ""}`, `BIO ${done}/${bio}`));
     if (geo) badges.appendChild(node("b", `badge geo${event.geo ? " event-signal" : ""}`, `GEO ${geo}`));
     if (mining) badges.appendChild(node("b", `badge mining${event.mining ? " event-signal" : ""}`, `MINING ${mining}`));
+    // Settlements and sites the scans found (after EDDiscovery, 5.5.3.1).
+    for (const [kind, label] of SITE_KINDS) {
+      const sites = count((row.sites || {})[kind]);
+      if (sites) badges.appendChild(node("b", `badge site ${kind}`, `${label} ${sites}`));
+    }
     if (landableKnown(row)) {
       const landable = Boolean(row.landable);
       const badge = node("b", `badge ${landable ? "landable" : "non-landable"}`,
@@ -592,8 +599,18 @@
     if (row.gravity_g != null && Number.isFinite(gravity) && gravity > 0) {
       environment.appendChild(node("span", "target-gravity", `${gravity.toFixed(2)} G`));
     }
+    const kelvin = Number(row.temperature_k);
+    if (row.temperature_k != null && Number.isFinite(kelvin) && kelvin > 0) {
+      environment.appendChild(node("span", "target-temperature", `${Math.round(kelvin)} K`));
+    }
     if (count(row.ring_count)) environment.appendChild(node("span", "target-rings", `RINGS ${count(row.ring_count)}`));
     head.appendChild(environment);
+    const notes = Array.isArray(row.notes) ? row.notes : [];
+    if (notes.length) {
+      const line = node("div", "target-notes");
+      for (const note of notes) line.appendChild(node("span", "target-note", String(note).toUpperCase()));
+      head.appendChild(line);
+    }
     head.appendChild(surfaceBadges(row, event));
     card.appendChild(head);
 
@@ -777,7 +794,7 @@
     for (const row of Array.isArray(model.rows) ? model.rows : []) {
       if (count(row.bio_count)) groups.biology.push(row);
       else if (row.notable) groups.notable.push(row);
-      else if (count(row.geo_count) || count(row.mining_count)) groups.surface.push(row);
+      else if (count(row.geo_count) || count(row.mining_count) || hasSites(row)) groups.surface.push(row);
       else if (row.landable && landableKnown(row)) groups.landable.push(row);
       else groups.other.push(row);
     }
@@ -789,9 +806,12 @@
     // hoisting it); completed biology settles to the bottom of the manifest.
     groups.biology.sort((left, right) => Number(Boolean(left.bio_complete))
       - Number(Boolean(right.bio_complete)) || byDesignation(left, right));
-    // The most valuable first, so the best worlds never page out of sight.
+    // Rare worlds first (a green gas giant at the very top), then the most
+    // valuable, so the best worlds never page out of sight.
     const worth = (row) => safeNumber(row.notable?.value ?? row.value);
-    groups.notable.sort((left, right) => worth(right) - worth(left) || byDesignation(left, right));
+    const rarity = (row) => safeNumber(row.notable?.rarity ?? row.rarity);
+    groups.notable.sort((left, right) => rarity(right) - rarity(left) || worth(right) - worth(left)
+      || byDesignation(left, right));
     for (const key of ["surface", "landable", "other"]) groups[key].sort(byDesignation);
     return groups;
   }
