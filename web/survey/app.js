@@ -402,13 +402,22 @@
 
   // Codex flags (Overlay Studio > Survey Operations > Codex flags): filled,
   // never logged; outline, never logged in this galactic region.
-  const CODEX_TITLES = {new: "Never logged in your Codex", region: "Not logged in this region"};
+  const CODEX_TITLES = {new: "Never logged in your Codex", region: "Not logged in this region",
+    logged: "Already logged in this region"};
   function codexFlag(flag) {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", `codex-flag ${flag}`);
     svg.setAttribute("viewBox", "0 0 10 12");
     svg.setAttribute("aria-label", CODEX_TITLES[flag] || "");
     const pole = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    if (flag === "logged") {
+      // Logged here already: a quiet tick rather than a flag.
+      const tick = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      tick.setAttribute("class", "codex-tick");
+      tick.setAttribute("d", "M1.2 6.6 L4 9.4 L9 2.6");
+      svg.appendChild(tick);
+      return svg;
+    }
     pole.setAttribute("class", "codex-pole");
     pole.setAttribute("d", "M1.5 .5 V11.5");
     const pennant = document.createElementNS("http://www.w3.org/2000/svg", "path");

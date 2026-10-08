@@ -36,7 +36,7 @@ class BodyDiscoveryTests(unittest.TestCase):
                 "predicted_genuses": [{"name": "Bacterium", "species": [
                     {"name": "Bacterium Aurasus", "key": "$Codex_Ent_Bacterial_01_Name;", "confirmed": True}]}]}
         self.assertEqual(body_codex_flag(item, lambda kind, key, body: "region"), "region")
-        self.assertEqual(body_codex_flag(item, lambda kind, key, body: ""), "")
+        self.assertEqual(body_codex_flag(item, lambda kind, key, body: ""), "logged")
         self.assertEqual(body_codex_flag(item, None), "")
 
 

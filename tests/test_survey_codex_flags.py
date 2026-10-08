@@ -110,7 +110,7 @@ class SurveyModelTests(unittest.TestCase):
         self.assertEqual(rows["Stratum"]["codex"], "new")
         self.assertEqual(rows["Stratum"]["codex_lines"], [
             {"species": "Tectonicas", "flag": "new", "variants": []},
-            {"species": "Paleas", "flag": "", "variants": []}])
+            {"species": "Paleas", "flag": "logged", "variants": []}])
         self.assertEqual(rows["Tussock Ignis"]["codex"], "new")
 
     def test_each_predicted_colour_is_flagged(self):
@@ -126,7 +126,7 @@ class SurveyModelTests(unittest.TestCase):
         bacterium = next(row for row in model["rows"] if row["name"] == "Bacterium")
         self.assertEqual(bacterium["codex"], "new", "the species alone would say nothing")
         self.assertEqual(bacterium["codex_lines"], [{"species": "Aurasus", "flag": "new", "variants": [
-            {"text": "Emerald", "flag": ""}, {"text": "Green", "flag": "new"}]}])
+            {"text": "Emerald", "flag": "logged"}, {"text": "Green", "flag": "new"}]}])
         record.observe(codex("2026-08-02T00:00:00Z", green, 20))
         self.assertEqual(record.entry_flag(green, 18), "region")
         self.assertEqual(record.entry_flag(green, 20), "")
@@ -329,6 +329,8 @@ class SurveyPageTests(unittest.TestCase):
                                                            {"colour": "Green", "key": "$Codex_Ent_Bacterial_01_K_Name;"}]})
         page.evaluate("s => window.__surveyRender(s)", {"survey": model, "theme": {}, "effects": {"reduced_motion": True}})
         line = page.locator(".codex-line", has_text="Aurasus")
+        # A colour already logged here is ticked, never left blank.
+        self.assertEqual(line.locator(".codex-colour.logged .codex-flag.logged .codex-tick").count(), 1)
         self.assertEqual("".join(line.inner_text().split()), "Aurasus:Emerald·Green")
         self.assertEqual(line.locator(".codex-colour.new .codex-flag.new").count(), 1, "Green is never logged")
         self.assertEqual(errors, [])

@@ -243,7 +243,9 @@ def _genus_species_keys(genus):
     return keys
 
 
-_CODEX_RANK = {'new': 2, 'region': 1}
+# 'logged': already in the Codex for this region. Shown as a dim tick so a
+# colour is never left unmarked (a blank read as 'unknown' to new players).
+_CODEX_RANK = {'new': 2, 'region': 1, 'logged': .5}
 
 
 def _strongest(flags):
@@ -280,6 +282,12 @@ def annotate_codex(model, lookup, variants=None):
     if not model or not callable(lookup):
         return model
     colours_for = {}
+    raw_lookup = lookup
+
+    def lookup(kind, key, body_id):
+        # Nothing missing here, for a known entry, reads as "logged".
+        flag = raw_lookup(kind, key, body_id)
+        return flag if flag else ('logged' if key else '')
 
     def colours(body_id):
         if not callable(variants) or body_id is None:
