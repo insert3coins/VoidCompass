@@ -19,6 +19,8 @@ import threading
 import time
 import webbrowser
 
+from voidcompass.trading import route as trade_route
+from voidcompass.exploration.notable_bodies import rarity as notable_rarity
 from voidcompass.overlays import watcher_mind
 from voidcompass.core import companion_features
 from voidcompass.core import odyssey_kit
@@ -31,6 +33,7 @@ from voidcompass.engineering.engineering_build_import import BuildImportError, p
 from voidcompass.exploration.explorer_decision_deck import (
     DOCTRINES,
     explorer_decision,
+    field_cues,
     personal_codex_hunt,
     route_horizon,
 )
@@ -728,8 +731,62 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "first_footfalls": _integer(completion.get("first_footfalls")),
         }
 
-    def _html_dashboard_priorities(self, intelligence, route, survey):
+    def _html_watcher_thought(self):
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        thought = getattr(getattr(heartbeat, "mind", None), "last_thought", None) or {}
+        if not thought.get("text"):
+            return {}
+        return {"text": _text(thought.get("text"), 240), "at": float(thought.get("at") or 0)}
+
+    def _html_field_cue_facts(self, flight, intelligence):
+        """The facts behind the Mission Directive's field cues (5.5.3.1)."""
+        facts = {}
+        try:
+            arrival = (intelligence or {}).get("arrival") or {}
+            facts["fuel"] = {
+                "percent": (flight or {}).get("fuel_percent"),
+                "threshold_pct": float(self.config.get("low_fuel_threshold_pct") or .25) * 100,
+                "docked": bool((flight or {}).get("docked")),
+                "scoopable_here": bool(arrival.get("scoopable")),
+            }
+        except (TypeError, ValueError):
+            pass
+        worlds = []
+        for item in list(getattr(self, "scan_items", None) or ()):
+            level, label = notable_rarity(item)
+            if level:
+                worlds.append({"body": item.get("name") or item.get("full_name") or "", "label": label,
+                               "rarity": level, "green": bool(item.get("green_giant")),
+                               "mapped": bool(item.get("dss_complete"))})
+        facts["rare_worlds"] = sorted(worlds, key=lambda row: -row["rarity"])[:2]
+        codex = getattr(self, "_codex_new_target", None) or {}
+        if codex.get("system") and codex.get("system") == getattr(self, "current_sys", None):
+            facts["codex_new"] = {"body": codex.get("body")}
+        try:
+            step = trade_route.next_step(getattr(self, "trading_route", None))
+            if step:
+                facts["trade"] = step
+        except Exception:
+            pass
+        try:
+            colony = self._colony_overlay_model() if getattr(self, "colony", None) is not None else None
+            if colony and not colony.get("complete"):
+                facts["colony"] = {"header": colony.get("header"), "remaining": colony.get("remaining"),
+                                   "trips": colony.get("trips"), "at_site": colony.get("at_site")}
+        except Exception:
+            pass
+        return facts
+
+    def _html_dashboard_priorities(self, intelligence, route, survey, cues=()):
         output = []
+        # Live field cues first (fuel, rare worlds, trade, colonisation), the
+        # most pressing at the top; then the survey's own actions.
+        for row in sorted((row for row in cues or () if isinstance(row, dict)), key=lambda row: -int(row.get("score") or 0)):
+            output.append({
+                "title": _text(row.get("title"), 120),
+                "detail": _text(row.get("detail") or "Live field cue.", 220),
+                "severity": _text(row.get("severity") or "INFO", 12).upper(),
+            })
         for row in (intelligence or {}).get("actions") or ():
             if not isinstance(row, dict):
                 continue
@@ -2759,9 +2816,10 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         intelligence_summary = self._html_dashboard_intelligence(intelligence)
         codex_hunt = self._html_dashboard_codex_hunt(intelligence_summary.get("region"))
         doctrine = _text(self.config.get("exploration_doctrine") or "balanced", 30).casefold()
+        cues = field_cues(self._html_field_cue_facts(flight, intelligence))
         decision = explorer_decision(
             doctrine, survey, route, (intelligence or {}).get("actions") or (),
-            flight, data, codex_hunt, adaptive,
+            flight, data, codex_hunt, adaptive, cues=cues,
         )
         preflight = self._html_exploration_preflight(route, flight, sources)
         configurable_modules = ("route", "session", "priorities", "codex", "feed")
@@ -2838,6 +2896,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "data": data,
             "intelligence": intelligence_summary,
             "decision": decision,
+            # The Watcher's latest thought, for the Focused Log (5.5.3.1).
+            "watcher": self._html_watcher_thought(),
             "preflight": preflight,
             "codex_hunt": codex_hunt,
             "galnet": self._html_dashboard_galnet(),
@@ -2860,7 +2920,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 ],
             },
             "page_layouts": page_layouts,
-            "priorities": self._html_dashboard_priorities(intelligence, route, survey),
+            "priorities": self._html_dashboard_priorities(intelligence, route, survey, cues),
             "expedition": self._html_dashboard_expedition(),
             "atlas": {
                 "url": atlas_url,

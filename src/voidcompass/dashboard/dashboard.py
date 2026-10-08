@@ -1451,6 +1451,7 @@ class MainDashboard(
 
     def _watcher_codex_new(self, body):
         """The focused body holds a colour the commander never logged."""
+        self._codex_new_target = {"system": getattr(self, "current_sys", None), "body": body}
         heartbeat = getattr(self, "heartbeat_hud", None)
         if heartbeat is not None and hasattr(heartbeat, "note"):
             heartbeat.note("codex_new", {"body": body})

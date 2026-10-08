@@ -201,7 +201,70 @@ def personal_codex_hunt(codex_rows, current_region="", active_expedition=None, l
     }
 
 
-def explorer_decision(doctrine, survey, route, actions, flight, data, codex_hunt, adaptive=None):
+def field_cues(facts):
+    """Live cues from the features added since the deck was built (5.5.3.1):
+    fuel, rare worlds, Codex colours never logged, the trade route being
+    followed and colonisation work. Each comes from a fact Void Compass
+    already holds; nothing is predicted."""
+    facts = facts or {}
+    cues = []
+    fuel = facts.get("fuel") or {}
+    percent = fuel.get("percent")
+    threshold = float(fuel.get("threshold_pct") or 25)
+    if percent is not None and not fuel.get("docked") and float(percent) <= threshold:
+        here = fuel.get("scoopable_here")
+        cues.append({
+            "id": "low-fuel", "kind": "fuel", "score": 165, "severity": "WARN",
+            "title": "Scoop fuel at this star" if here else "Find a scoopable star",
+            "detail": (f"Fuel is at {float(percent):.0f}%. This star is scoopable (KGBFOAM)." if here
+                       else f"Fuel is at {float(percent):.0f}% and this star can't be scooped. Plot to a K, G, B, F, O, A or M star."),
+        })
+    for world in facts.get("rare_worlds") or ():
+        if world.get("mapped"):
+            continue
+        rarity = _integer(world.get("rarity"))
+        label = str(world.get("label") or "rare world").lower()
+        body = str(world.get("body") or "a body here")
+        cues.append({
+            "id": f"rare:{body}", "kind": "rare", "score": 70 + rarity * 10,
+            "title": f"Visit the {label} · {body}",
+            "detail": ("Green gas giants are among the rarest sights in the galaxy. Map it and take a picture."
+                       if world.get("green") else f"A {label} is a rare world. Worth a closer look and a map."),
+            "body": body,
+        })
+    codex = facts.get("codex_new") or {}
+    if codex.get("body"):
+        cues.append({
+            "id": "codex-colour", "kind": "biology", "score": 95,
+            "title": f"Log a new Codex colour on {codex['body']}",
+            "detail": "Survey's Codex flags show a colour here you have never logged.",
+            "body": codex["body"],
+        })
+    trade = facts.get("trade") or {}
+    if trade and not trade.get("done") and trade.get("action"):
+        here = bool(trade.get("here"))
+        cues.append({
+            "id": "trade-route", "kind": "trade", "score": 140 if here else 76,
+            "title": f"{trade['action']} at {trade.get('station') or 'the next station'}",
+            "detail": (f"Trade route hop {trade.get('hop')}/{trade.get('hops')} · {trade.get('system') or ''}"
+                       + (" · you're docked there" if here else "")),
+        })
+    colony = facts.get("colony") or {}
+    remaining = _integer(colony.get("remaining"))
+    if remaining > 0:
+        at_site = bool(colony.get("at_site"))
+        trips = colony.get("trips")
+        cues.append({
+            "id": "colony-needs", "kind": "colony", "score": 135 if at_site else 58,
+            "title": (f"Deliver to {colony.get('header') or 'the construction site'}" if at_site
+                      else f"Colonisation: {remaining:,} t still needed"),
+            "detail": f"{colony.get('header') or 'Your project'} · {remaining:,} t to go"
+                      + (f", about {trips} trip{'s' if trips != 1 else ''}" if trips else ""),
+        })
+    return cues
+
+
+def explorer_decision(doctrine, survey, route, actions, flight, data, codex_hunt, adaptive=None, cues=None):
     """Choose one explainable next action from already-known facts."""
     doctrine = normalise_doctrine(doctrine)
     doctrine_label = DOCTRINES[doctrine]
@@ -239,6 +302,10 @@ def explorer_decision(doctrine, survey, route, actions, flight, data, codex_hunt
             "detail": route.get("horizon", {}).get("summary") or route.get("text") or "The plotted route is ready.",
         })
 
+    for cue in cues or ():
+        if isinstance(cue, dict):
+            candidates.append(dict(cue))
+
     activity_mode = str(adaptive.get("mode") or "").casefold()
     activity_cards = {
         "mining": ("mining", "Review active mining operation", "Prospector, refinery and cargo evidence are active in the mining workspace."),
@@ -254,11 +321,11 @@ def explorer_decision(doctrine, survey, route, actions, flight, data, codex_hunt
 
     modifiers = {
         "balanced": {},
-        "completionist": {"survey": 36, "body": 28, "biology": 24, "route": -12},
+        "completionist": {"survey": 36, "body": 28, "biology": 24, "route": -12, "rare": 20},
         "exobiology": {"biology": 55, "body": 12, "survey": 10, "route": -14},
-        "codex": {"codex": 60, "survey": 12, "route": -10},
-        "value": {"data": 38, "body": 20, "biology": 12},
-        "transit": {"route": 65, "survey": -28, "body": -34, "codex": -20},
+        "codex": {"codex": 60, "survey": 12, "route": -10, "rare": 40},
+        "value": {"data": 38, "body": 20, "biology": 12, "rare": 25},
+        "transit": {"route": 65, "survey": -28, "body": -34, "codex": -20, "rare": -30},
     }[doctrine]
     for row in candidates:
         row["score"] += modifiers.get(row["kind"], 0)
@@ -267,6 +334,8 @@ def explorer_decision(doctrine, survey, route, actions, flight, data, codex_hunt
             row["score"] += 35
         if doctrine == "exobiology" and "bio" in haystack:
             row["score"] += 28
+        if doctrine == "codex" and row["id"] == "codex-colour":
+            row["score"] += 50
         if row["id"] == "active-sample":
             row["score"] += 100  # Never abandon a live three-sample chain.
 
@@ -296,6 +365,15 @@ def explorer_decision(doctrine, survey, route, actions, flight, data, codex_hunt
         primary = {"label": "OPEN GROUND & EXOBIO", "command": "open", "target": "ground"}
     elif chosen_id == "review-data" or kind == "data":
         primary = {"label": "OPEN VALUE LEDGER", "command": "open", "target": "ledger"}
+    elif kind == "fuel":
+        primary = ({"label": "SCOOP AT THIS STAR", "command": "", "target": ""} if chosen_id == "low-fuel" and "this star" in str(chosen.get("title")).casefold()
+                   else {"label": "OPEN GALACTIC ATLAS", "command": "open", "target": "map"})
+    elif kind == "trade":
+        primary = {"label": "OPEN TRADING", "command": "open", "target": "trading"}
+    elif kind == "colony":
+        primary = {"label": "OPEN COLONISATION", "command": "open", "target": "colonisation"}
+    elif kind == "rare":
+        primary = {"label": "OPEN SYSTEM SURVEY", "command": "open", "target": "explore"}
     elif chosen_id == "depart-system" or kind == "departure":
         primary = {"label": "OPEN GALACTIC ATLAS", "command": "open", "target": "map"}
     elif kind == "mining":
@@ -319,7 +397,10 @@ def explorer_decision(doctrine, survey, route, actions, flight, data, codex_hunt
         "score": chosen["score"],
         "doctrine": doctrine,
         "doctrine_label": doctrine_label,
-        "confidence": "SMART JOURNAL CUE" if chosen_id != "regional-codex" else "PERSONAL COVERAGE",
+        "confidence": ("PERSONAL COVERAGE" if chosen_id == "regional-codex"
+                       else "LIVE FIELD CUE" if kind in {"fuel", "rare", "trade", "colony"} or chosen_id == "codex-colour"
+                       else "SMART JOURNAL CUE"),
+        "severity": str(chosen.get("severity") or "INFO"),
         "tags": tags[:4],
         "primary": primary,
     }

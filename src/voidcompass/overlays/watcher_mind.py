@@ -326,6 +326,8 @@ class WatcherMind:
         self.thought = {"id": self._serial, "text": text, "topic": topic, "at": now,
                         "until": now + (THOUGHT_SECONDS + len(text) * .05)
                         * THOUGHT_HOLDS[thought_style(self.config)["hold"]]}
+        # The latest thing it said, kept for the deck's Focused Log.
+        self.last_thought = {"text": text, "at": time.time()}
         with self.lock:
             self.memory["said"].append([key, now])
             self.memory["said"].append([topic, now])

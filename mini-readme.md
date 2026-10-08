@@ -49,6 +49,19 @@
 * **Navigation HUD hologram:**
   * **Still** redraws its scene if Windows clears it, so the viewport is never left empty.
   * **Off** folds the empty viewport away when there's nothing measured to show; the altimeter and FSS scan keep their readout.
+* **The Mission Directive knows the newer features.** It now also weighs:
+  * **Low fuel:** scoop at this star, or find one you can scoop. It shows in orange and comes first.
+  * **Rare worlds here:** a green gas giant most of all, until it's mapped.
+  * **A Codex colour you've never logged** on a body Survey is showing.
+  * **The trade route you're following:** the next buy or sell, and higher still when you're docked there.
+  * **Colonisation:** tonnes still needed and trips, and higher still when you're docked at the site.
+
+  Each has its own button (Trading, Colonisation, System Survey), and your doctrine still steers them: Value and Codex Hunter rate rare worlds higher, Fast Transit lower.
+* **The Focused Log:**
+  * **Directive:** has the same tags and button as the Mission Directive, and the same orange warning.
+  * **The Watcher:** its latest thought is shown under the directive, with how long ago it said it.
+  * **Session figures:** time flown, credits earned, first discoveries and rare worlds are now shown beside jumps and distance.
+  * **Field Priorities:** puts these live cues first.
 * **The overview's Session Pulse shows more of the session.** Alongside jumps, distance, FSS/DSS and biology/Codex, it now shows:
   * **time flown;**
   * **credits earned** (data sold plus trade profit);

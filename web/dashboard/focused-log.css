@@ -155,3 +155,15 @@ body.flight-log-mode .flight-log-shell { display: grid; grid-template-rows: auto
   .flightlog-mark i:last-child { animation: none; }
 }
 body.reduced-motion .flightlog-mark i:last-child { animation: none; }
+
+/* 5.5.3.1: the directive's tags and action, a warning tone (fuel), and the
+   Watcher's latest thought. */
+.flightlog-directive-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.flightlog-directive-actions .decision-tags { flex: 1 1 auto; margin: 0; }
+.flightlog-directive-actions button { flex: 0 0 auto; }
+.flightlog-directive.warn { border-left-color: var(--orange); }
+.flightlog-directive.warn h3 { color: var(--orange); }
+.flightlog-watcher { margin: 16px 0 0; padding: 9px 12px; border-left: 2px solid color-mix(in srgb, var(--red) 70%, var(--border)); background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.flightlog-watcher span { display: block; color: var(--text); font: italic 12px/1.4 Consolas, "Cascadia Mono", monospace; }
+.flightlog-watcher cite { display: block; margin-top: 6px; color: var(--dim); font: 700 8px Consolas, monospace; font-style: normal; letter-spacing: .08em; }
+.flightlog-watcher cite b { color: var(--muted, var(--dim)); font-weight: 700; margin-left: 6px; }

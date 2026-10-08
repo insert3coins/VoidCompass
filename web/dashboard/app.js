@@ -805,6 +805,7 @@ function renderAdaptive(state) {
 function renderDecision(state) {
   const decision = state.decision || {};
   text("decision-doctrine", decision.doctrine_label || "BALANCED");
+  document.querySelector(".decision-card")?.classList.toggle("warn", String(decision.severity || "").toUpperCase() === "WARN");
   text("decision-confidence", decision.confidence || "JOURNAL-BACKED");
   text("decision-title", decision.title || "HOLD FOR EXPLORATION TELEMETRY");
   text("decision-detail", decision.detail || "No unresolved journal-backed objective is currently known.");
@@ -896,6 +897,7 @@ function renderFlightLog(state) {
   text("flightlog-directive", state.decision?.title, "AWAITING JOURNAL-BACKED OBJECTIVE");
   text("flightlog-directive-detail", state.decision?.detail, "The field directive will appear when exploration evidence is available.");
   text("flightlog-directive-confidence", state.decision?.confidence, "FIELD INTELLIGENCE");
+  renderFlightLogDirective(state);
   const knownTotal = Boolean(survey.total_known);
   const progress = knownTotal ? Math.max(0, Math.min(100, number(survey.percent))) : 0;
   const gauge = byId("flightlog-survey-gauge");
@@ -931,6 +933,10 @@ function renderFlightLog(state) {
   text("flightlog-value-detail", `${credits(data.unsold_exploration)} CARTOGRAPHY · ${credits(data.unsold_bio)} BIOLOGY`);
   text("flightlog-jumps", numeric(session.jumps));
   text("flightlog-distance", `${number(session.distance_ly).toLocaleString(undefined, {maximumFractionDigits: 1})} LY`);
+  text("flightlog-flown", session.flown || session.elapsed || "—");
+  text("flightlog-earned", credits(session.earned));
+  text("flightlog-firsts", numeric(session.first_discoveries));
+  text("flightlog-rare", numeric(session.rare_worlds));
   const priorities = Array.isArray(state.priorities) ? state.priorities.slice(0, 4) : [];
   const priorityList = byId("flightlog-priorities");
   const priorityKey = JSON.stringify(priorities.map((row) => [row.title, row.detail, row.severity]));
@@ -951,6 +957,33 @@ function renderFlightLog(state) {
     }) : [Object.assign(document.createElement("li"), {className: "flightlog-priorities-empty", textContent: "No additional field priorities are pending."})]));
   }
   renderFlightLogEvents(state);
+}
+
+// The Focused Log's directive: the same tags and action as the Mission
+// Directive, a warning tone for fuel, and the Watcher's latest thought.
+function renderFlightLogDirective(state) {
+  const decision = state.decision || {};
+  const panel = document.querySelector(".flightlog-directive");
+  panel?.classList.toggle("warn", String(decision.severity || "").toUpperCase() === "WARN");
+  const tags = Array.isArray(decision.tags) ? decision.tags : [];
+  const host = byId("flightlog-directive-tags");
+  const key = tags.join(" ");
+  if (host.dataset.renderKey !== key) {
+    host.dataset.renderKey = key;
+    host.replaceChildren(...tags.map((value) => Object.assign(document.createElement("span"), {textContent: value})));
+  }
+  const primary = decision.primary || {};
+  const button = byId("flightlog-directive-primary");
+  button.hidden = !primary.command;
+  button.textContent = primary.label || "OPEN";
+  const watcher = state.watcher || {};
+  const quote = byId("flightlog-watcher");
+  quote.hidden = !watcher.text;
+  if (watcher.text) {
+    text("flightlog-watcher-text", watcher.text);
+    const minutes = Math.max(0, Math.round((Date.now() / 1000 - number(watcher.at)) / 60));
+    text("flightlog-watcher-when", minutes < 1 ? "JUST NOW" : minutes < 60 ? `${minutes} MIN AGO` : `${Math.round(minutes / 60)} H AGO`);
+  }
 }
 
 function renderFlightLogEvents(state, resetScroll = false) {
@@ -5128,6 +5161,7 @@ async function refreshGalnet(button) {
 }
 byId("galnet-reader-refresh").addEventListener("click", () => refreshGalnet(byId("galnet-reader-refresh")));
 
+byId("flightlog-directive-primary").addEventListener("click", () => byId("decision-primary").click());
 byId("decision-primary").addEventListener("click", async () => {
   const primary = model.decision?.primary || {};
   if (!primary.command) return;
