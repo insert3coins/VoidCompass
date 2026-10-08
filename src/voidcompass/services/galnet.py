@@ -1,9 +1,13 @@
-"""Small, cached Galnet RSS relay for the HTML command deck.
+"""Small, cached Galnet relay for the HTML command deck.
 
 Galnet is atmosphere rather than flight-critical telemetry.  The service is
 therefore deliberately independent of Tk and the journal pipeline: callers
 receive a JSON-safe cached snapshot immediately while a bounded daemon worker
-refreshes Frontier's public RSS feed in the background.
+refreshes Frontier's public Galnet in the background.
+
+The Galnet page is read first: it carries each article's broadcast date
+("01 OCT 3312"). The RSS feed stamps every item with the time it was last
+generated, so it is only the fallback.
 """
 
 from __future__ import annotations
@@ -23,7 +27,11 @@ from xml.etree import ElementTree
 import requests
 
 
+GALNET_PAGE_URL = "https://community.elitedangerous.com/galnet"
 GALNET_RSS_URL = "https://community.elitedangerous.com/galnet-rss"
+# The in-game calendar runs 1286 years ahead of ours (3312 is 2026).
+GAME_YEAR_OFFSET = 1286
+_MONTHS = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
 DEFAULT_REFRESH_SECONDS = 30 * 60
 MAX_ARTICLES = 24
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024
@@ -100,6 +108,60 @@ def parse_galnet_rss(payload, limit=MAX_ARTICLES):
     return articles
 
 
+_ARTICLE_SPLIT = re.compile(r'<div class="article">', re.IGNORECASE)
+_ARTICLE_TITLE = re.compile(
+    r'galnetNewsArticleTitle[^>]*>\s*<a[^>]*href="[^"]*/galnet/uid/([^"/?#]+)"[^>]*>(.*?)</a>',
+    re.IGNORECASE | re.DOTALL,
+)
+_ARTICLE_DATE = re.compile(
+    r'<p[^>]*class="small"[^>]*>\s*(\d{1,2})\s+([A-Z]{3})\s+(\d{4})\s*</p>\s*</div>',
+    re.IGNORECASE,
+)
+
+
+def _game_date(day, month, year):
+    """("01", "OCT", "3312") -> ("2026-10-01T00:00:00Z", "01 OCT 3312")."""
+    month = str(month).upper()
+    stamp = f"{int(day):02d} {month} {int(year)}"
+    try:
+        real = f"{int(year) - GAME_YEAR_OFFSET:04d}-{_MONTHS.index(month) + 1:02d}-{int(day):02d}T00:00:00Z"
+    except ValueError:
+        real = ""
+    return real, stamp
+
+
+def parse_galnet_page(payload, limit=MAX_ARTICLES):
+    """Parse Frontier's Galnet page: each article's id, title, broadcast
+    date and text, newest first as the page lists them."""
+    if isinstance(payload, bytes):
+        payload = payload.decode("utf-8", errors="replace")
+    articles = []
+    for chunk in _ARTICLE_SPLIT.split(str(payload or ""))[1:]:
+        heading = _ARTICLE_TITLE.search(chunk)
+        dated = _ARTICLE_DATE.search(chunk)
+        if not heading or not dated:
+            continue
+        title = _plain_description(heading.group(2))[:300]
+        if not title:
+            continue
+        published, stamp = _game_date(*dated.groups())
+        # The text runs to the article's closing tag (the last article is
+        # followed by the rest of the page).
+        text = chunk[dated.end():]
+        closing = text.find("</div>")
+        body = _plain_description(text[:closing] if closing >= 0 else text)[:20_000]
+        articles.append({
+            "id": heading.group(1).strip()[:300],
+            "title": title,
+            "body": body,
+            "published": published,
+            "stamp": stamp,
+        })
+        if len(articles) >= max(1, int(limit or MAX_ARTICLES)):
+            break
+    return articles
+
+
 class GalnetFeedService:
     """Thread-safe cache and non-blocking Frontier RSS refresh."""
 
@@ -129,6 +191,10 @@ class GalnetFeedService:
             self._articles = clean
             self._updated_at = str(cached.get("updated_at") or "")[:80]
             self._fetched_epoch = float(cached.get("fetched_epoch") or 0.0)
+            # A cache from the RSS feed (before 5.5.3) carries the feed's
+            # date on every dispatch: refresh it at once.
+            if not all(re.fullmatch(r"\d{2} [A-Z]{3} \d{4}", str(row.get("stamp") or "")) for row in clean):
+                self._fetched_epoch = 0.0
             self._status = "cached"
             self._detail = "Cached Galnet dispatches"
         except FileNotFoundError:
@@ -201,25 +267,14 @@ class GalnetFeedService:
         threading.Thread(
             target=self._refresh_worker,
             args=(callback,),
-            name="galnet-rss",
+            name="galnet-relay",
             daemon=True,
         ).start()
         return True
 
     def _refresh_worker(self, callback):
         try:
-            response = requests.get(
-                GALNET_RSS_URL,
-                headers={
-                    "Accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
-                    "User-Agent": f"VoidCompass/{self.app_version}",
-                },
-                timeout=(4.0, 10.0),
-            )
-            response.raise_for_status()
-            if len(response.content) > MAX_RESPONSE_BYTES:
-                raise ValueError("Galnet response exceeded the safety limit")
-            articles = parse_galnet_rss(response.content)
+            articles = self._fetch_articles()
             if not articles:
                 raise ValueError("Galnet returned no readable dispatches")
             fetched_epoch = time.time()
@@ -251,6 +306,29 @@ class GalnetFeedService:
                     callback()
                 except Exception:
                     logging.debug("Galnet completion callback failed", exc_info=True)
+
+    def _get(self, url, accept):
+        response = requests.get(
+            url,
+            headers={"Accept": accept, "User-Agent": f"VoidCompass/{self.app_version}"},
+            timeout=(4.0, 10.0),
+        )
+        response.raise_for_status()
+        if len(response.content) > MAX_RESPONSE_BYTES:
+            raise ValueError("Galnet response exceeded the safety limit")
+        return response.content
+
+    def _fetch_articles(self):
+        """The Galnet page (real broadcast dates), else the RSS feed."""
+        try:
+            articles = parse_galnet_page(self._get(GALNET_PAGE_URL, "text/html, */*;q=0.5"))
+            if articles:
+                return articles
+            logging.info("Galnet page had no readable articles; using the RSS feed")
+        except Exception as exc:
+            logging.info("Galnet page unavailable (%s); using the RSS feed", exc)
+        return parse_galnet_rss(self._get(
+            GALNET_RSS_URL, "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5"))
 
     def request_stop(self):
         self._stopped.set()

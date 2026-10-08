@@ -282,6 +282,31 @@ class ExploreSurveyVisualTests(unittest.TestCase):
         self.assertEqual(len(self.board_ids()), 8)
         self.assertFalse(self.errors, self.errors)
 
+    def test_board_names_discoverers_flags_codex_and_shows_traffic(self):
+        """5.5.3: who discovered each body (EDSM, else the game's own word),
+        its Codex flag, the system's EDSM traffic, and exobiology aboard."""
+        state = snapshot_state()
+        rows = {row["body_id"]: row for row in state["survey"]["bodies"]}
+        rows[1].update({"discovered_by": "Cmdr Hale", "discovered_at": "2024-03-01 10:00:00", "was_discovered": True})
+        rows[2]["was_discovered"] = False
+        rows[3].update({"was_discovered": True, "codex": "new"})
+        state["traffic"] = {"day": 2, "week": 14, "total": 1204, "resolved": True,
+                            "discovered_by": "Cmdr First", "discovered_at": "3301-01-01"}
+        state["data"] = {"unsold_exploration": 4_200_000, "unsold_bio": 31_000_000, "unsold_total": 35_200_000,
+                         "unsold_bio_samples": 3, "unsold_bio_bonus": 0}
+        self.open_explore(state)
+        row = lambda body_id: self.page.locator(f'#body-workboard .body-row[data-body-id="{body_id}"]')
+        self.assertEqual(row(1).locator(".body-discovery").inner_text(), "DISCOVERED BY CMDR HALE · 2024-03-01")
+        self.assertEqual(row(2).locator(".body-discovery.first").inner_text(), "UNDISCOVERED · FIRST DISCOVERY YOURS")
+        self.assertEqual(row(3).locator(".body-discovery").inner_text(), "DISCOVERED · NOT ON EDSM")
+        self.assertIn("NEW TO CODEX", row(3).locator(".chip.codex.new").inner_text())
+        self.assertEqual(self.page.locator("#explore-traffic").inner_text(), "24H 2 · WK 14 · EVER 1,204")
+        self.assertIn("Cmdr First", self.page.locator(".explore-traffic").get_attribute("title"))
+        self.assertIn("31", self.page.locator("#intel-bio").inner_text())
+        self.assertEqual(self.page.locator("#intel-bio-label").inner_text(), "EXOBIOLOGY · 3 SAMPLES")
+        self.assertIn("4.2", self.page.locator("#intel-carto").inner_text())
+        self.assertFalse(self.errors, self.errors)
+
     def test_board_and_orrery_share_one_selection(self):
         signal_only = {"body_id": 7, "name": f"{SYSTEM} C 1", "planet_class": "", "bio_count": 2,
                        "signal_only": True}

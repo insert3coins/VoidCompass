@@ -1,16 +1,38 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.2.9 // Codex colours
-**Release Date:** 2026-Oct-06
+## v5.5.3 // Fixes from the field
+**Release Date:** 2026-Oct-08
 
-* **Survey Operations' Codex flags now work per colour.** Before, a species you had logged in any colour showed no flag, so most predictions went unflagged.
-  * Each species the body could hold gets its own line under its genus, with the colours it will show there, for example **Arcus: ⚑Turquoise**.
-  * A **filled flag** marks a colour you've never logged, an **outline** one you haven't logged in this galactic region.
-  * The genus carries its strongest flag, so you can spot new entries at a glance (the system view keeps one flag per row).
-  * Colours come from the brightest parent star and the surface materials, using SrvSurvey's bio criteria. Until the parent star is scanned, the flags stay per species.
+* **Codex flags now on by default, and in more places.**
+  * Survey Operations' flags are switched on for every commander, once. Turn them off in Overlay Studio if you prefer.
+  * A genus the game finds on a body but our prediction didn't expect now lists the species it is likely to be, with their colours and flags.
+  * When the brightest star gives a species no colour (a neutron star, say), the planet's other parent stars are tried.
+* **Galnet shows each story's real date.** Stories now carry their in-game broadcast date (01 OCT 3312), read from the Galnet page. Before, every story showed the date the feed was last updated.
+* **Ship loadouts import as they are in game.**
+  * Empty hardpoints stay empty. Before, they showed the stock Pulse Lasers.
+  * Every module goes to the slot the journal names, so medium weapons no longer land in large hardpoints and internals sit in the right size of slot.
+  * Engineering comes across with each module, and the Rhino's vehicle hangar is recognised.
+* **Achievements:**
+  * Shock and Awe now needs three core asteroids cracked with seismic charges. Before, launching any limpet counted. Progress counted the old way is cleared once.
+  * Drone Operator counts only prospector and collector limpets.
+* **Jump Info appears the moment you press jump,** while the drive charges, not when the countdown ends.
+* **Survey Operations lists Earth-likes, water worlds and other high-value bodies right after biology,** the most valuable first, and they are the last to page out when space is short.
+* **Explore & Survey:**
+  * Unsold **exobiology** has its own readout beside cartography, with the samples aboard and any first-footfall bonus.
+  * Each body says who discovered it (from EDSM), or that it was undiscovered and the discovery is yours.
+  * Bodies carry their Codex flag, and the system's EDSM traffic shows in the survey band.
+* **Navigation HUD hologram: Full, Still or Off** (Overlay Studio). **Still** is for low-end PCs: the hologram plays its change animation when the state changes, then holds that state's settled scene and draws nothing until the next change. **Off** shows the readouts only. Alerts still flash in every mode.
+* **Cargo** is listed in alphabetical order.
+* **Exobiology bonuses are counted.** On a first-footfall body every species pays five times its base value (your journals: 228 of 228 such samples were paid it). Survey Operations shows those values with a **1ST FOOTFALL ×5** badge, and the unsold exobiology on the dashboard, Explore, Flight Log and the Station overlay now includes it. Exploration values already included the first-discovery and first-mapped bonuses.
+* **The Watcher has a life of its own between events:**
+  * It blinks, breathes and glances around, and looks the way each event points: up for jumps, sweeping for scans, down for docking and landing.
+  * It takes a double take at a first discovery, an Earth-like or water world, or a new Codex entry.
+  * It side-eyes danger, squints into the star while you scoop, and tires over a long session.
+  * Overlay Studio adds **Liveliness** (Calm, Standard or Alive) and an **Idle motions** switch.
 
 ## Earlier releases
 
+* **v5.5.2.9** — Survey Operations' Codex flags per colour, like SrvSurvey's: each species with the colours it will show and a flag on each colour you lack.
 * **v5.5.2.8** — Commander Record covers Odyssey on foot: suit and loadout with real grades, on-foot record, exobiology career, backpack and ship locker; the ship locker no longer overwrites the backpack.
 * **v5.5.2.7** — Overlays grow with the text size in both directions, overlays show up to date when they appear (Survey's first planet after a jump), and the Navigation HUD always fits its window.
 * **v5.5.2.6** — New Trading tab with Spansh routes, loop routes, selling your cargo, finding any commodity, station markets and your profit history with charts; and the Trade Route overlay.

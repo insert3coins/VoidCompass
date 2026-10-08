@@ -1535,9 +1535,19 @@ function renderIntelligence(state) {
   const survey = state.survey || {};
   const intel = state.intelligence || {};
   const data = state.data || {};
-  // Explore's readouts: data at stake and region. Biology and geology
-  // progress sit in the Explore survey band.
-  text("intel-value", formatCredits(data.unsold_total));
+  // Explore's readouts: the data aboard, cartography and exobiology apart
+  // (what each sells for), and the region. Biology and geology progress sit
+  // in the Explore survey band.
+  text("intel-carto", formatCredits(data.unsold_exploration));
+  text("intel-bio", formatCredits(data.unsold_bio));
+  const samples = number(data.unsold_bio_samples);
+  text("intel-bio-label", samples ? `EXOBIOLOGY · ${samples} SAMPLE${samples === 1 ? "" : "S"}` : "EXOBIOLOGY");
+  const bioReadout = document.getElementById("intel-bio");
+  if (bioReadout) {
+    bioReadout.title = number(data.unsold_bio_bonus)
+      ? `Unsold exobiology: ${formatCredits(data.unsold_bio)}, including ${formatCredits(data.unsold_bio_bonus)} first-footfall bonus (5x)`
+      : `Unsold exobiology: ${formatCredits(data.unsold_bio)}`;
+  }
   text("explore-region", intel.region, "UNKNOWN");
   setFactList("record-facts", [
     ["Current system", state.flight?.system || "UNKNOWN"],

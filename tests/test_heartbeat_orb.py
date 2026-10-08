@@ -47,7 +47,7 @@ class JournalClassificationTests(unittest.TestCase):
         # A future Frontier event still reaches the orb as a quiet pulse.
         self.assertEqual(classify("SomeFutureEvent"), {
             "event": "SomeFutureEvent", "family": "log", "tone": "muted",
-            "effect": "pulse", "weight": .15})
+            "effect": "pulse", "weight": .15, "gaze": "centre", "rare": False})
         # Whole event groups are covered by their prefix.
         self.assertEqual(classify("CarrierNewService")["family"], "carrier")
         self.assertEqual(classify("ColonisationConstructionDepot")["effect"], "gather")
@@ -98,18 +98,20 @@ class HeartbeatModelTests(unittest.TestCase):
         self.assertEqual(len(events), 24)
         self.assertEqual([event["seq"] for event in events], list(range(8, 32)))
         self.assertEqual(events[-1], {"seq": 31, "event": "ShieldState", "family": "danger",
-                                      "tone": "green", "effect": "clear", "weight": .6})
+                                      "tone": "green", "effect": "clear", "weight": .6,
+                                      "gaze": "side", "rare": False})
         self.assertEqual(model["status_seq"], 2)
         # The dashboard's own heartbeat lamp still reads these.
         self.assertEqual((model["pulse_id"], model["activity"], model["state"]), (33, "STATUS", "SUPERCRUISE"))
         self.assertFalse(model["stalled"])
-        self.assertEqual(model["orb"], {"size": 54, "eye": "theme"})
+        self.assertEqual(model["orb"], {"size": 54, "eye": "theme", "liveliness": "standard", "idle": True})
 
     def test_orb_settings_are_sanitised(self):
         self.assertEqual(self.hud(heartbeat_orb_size=96, heartbeat_eye_color="HAL")._html_render_model["orb"],
-                         {"size": 96, "eye": "hal"})
-        self.assertEqual(self.hud(heartbeat_orb_size="60", heartbeat_eye_color="blue")._html_render_model["orb"],
-                         {"size": 54, "eye": "theme"})
+                         {"size": 96, "eye": "hal", "liveliness": "standard", "idle": True})
+        self.assertEqual(self.hud(heartbeat_orb_size="60", heartbeat_eye_color="blue",
+                                  heartbeat_liveliness="frantic", heartbeat_idle_motion=False)._html_render_model["orb"],
+                         {"size": 54, "eye": "theme", "liveliness": "standard", "idle": False})
 
     def test_window_is_the_orb_square(self):
         bridge = HtmlHeartbeatBridge.__new__(HtmlHeartbeatBridge)

@@ -80,7 +80,8 @@ class BioVariantTests(unittest.TestCase):
     def test_body_variants_name_codex_entries(self):
         planet, items = system("K")
         variants = bio_variants.body_variants(planet, items, 18)
-        self.assertEqual(variants["aleoida arcus"], [{"colour": "Turquoise", "key": "$Codex_Ent_Aleoids_01_K_Name;"}])
+        self.assertEqual(variants["aleoida arcus"],
+                         [{"colour": "Turquoise", "key": "$Codex_Ent_Aleoids_01_K_Name;", "predicted": True}])
 
     def test_colours_follow_the_star_when_species_rules_disagree(self):
         """BioScan predicted the species; SrvSurvey's species rules may not
@@ -89,6 +90,18 @@ class BioVariantTests(unittest.TestCase):
         self.assertEqual(predict(body_properties(planet, items, 18)), set())
         variants = bio_variants.body_variants(planet, items, 18)
         self.assertEqual([row["colour"] for row in variants["aleoida arcus"]], ["Turquoise"])
+
+    def test_another_parent_star_when_the_brightest_gives_no_colour(self):
+        """A neutron star outshines the planet's own L star on paper, but
+        Aleoida has no neutron colour: the other parent star still answers."""
+        planet, items = system("N", temp=230.0)
+        own = {"body_id": 4, "is_star": True, "star_type": "K", "radius": 4.0e8, "surface_temp": 1,
+               "parents": [{"Null": 0}], "semi_major_axis": 1.0e12}
+        planet["parents"] = [{"Star": 4}, {"Null": 0}]
+        items[0]["parents"] = [{"Null": 0}]
+        variants = bio_variants.body_variants(planet, items + [own], 18)
+        self.assertEqual([row["colour"] for row in variants["aleoida arcus"]], ["Turquoise"])
+        self.assertFalse(variants["aleoida arcus"][0]["predicted"])
 
     def test_no_parent_star_scan_means_no_colours(self):
         planet, items = system()

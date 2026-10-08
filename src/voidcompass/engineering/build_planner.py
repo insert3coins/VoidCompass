@@ -919,7 +919,18 @@ def decode_edsy_hash(build_hash: str) -> dict:
     return normalize_build(build)
 
 
+_HARDPOINT_SIZES = {"tiny": 0, "small": 1, "medium": 2, "large": 3, "huge": 4}
+
+
 def _journal_slot_key(build: dict, journal_slot: str, module_id: int, used: set[str]) -> str | None:
+    """The planner slot a journal Loadout slot name stands for.
+
+    The names say where a module sits: ``MediumHardpoint2`` is the second
+    class 2 hardpoint, ``TinyHardpoint3`` the third utility mount,
+    ``Slot05_Size4`` a class 4 optional internal, ``Military01`` the first
+    military slot. Matching by module type alone put weapons and internals
+    into slots of the wrong size.
+    """
     core = {
         "armour": 0, "powerplant": 1, "mainengines": 2, "frameshiftdrive": 3,
         "lifesupport": 4, "powerdistributor": 5, "radar": 6, "fueltank": 7,
@@ -927,19 +938,46 @@ def _journal_slot_key(build: dict, journal_slot: str, module_id: int, used: set[
     normalized = _key(journal_slot)
     if normalized in core:
         return _slot_key("component", core[normalized])
+    if normalized == "cargohatch":
+        return "ship:hatch"
+    definitions = [row for row in _slot_definitions(build)
+                   if row["key"] not in used and row["group"] not in {"ship", "component"}]
+    slot = str(journal_slot or "")
+    # The ship's own slot names (Passenger01, Cargo01, Slot02_Size5...) are exact.
+    slot_names = _ship(build["ship_id"]).get("slotnames") or {}
+    for row in definitions:
+        named = slot_names.get(row["group"]) or []
+        if row["index"] < len(named) and _key(named[row["index"]]) == normalized:
+            return row["key"]
+
+    def nth(rows, number):
+        rows = list(rows)
+        return rows[number - 1]["key"] if 0 < number <= len(rows) else None
+
+    hardpoint = re.fullmatch(r"(Huge|Large|Medium|Small|Tiny)Hardpoint(\d+)", slot, re.I)
+    if hardpoint:
+        size = _HARDPOINT_SIZES[hardpoint.group(1).lower()]
+        everything = [row for row in _slot_definitions(build)
+                      if row["group"] == ("utility" if size == 0 else "hardpoint")
+                      and (size == 0 or row["size"] == size)]
+        key = nth(everything, int(hardpoint.group(2)))
+        return key if key and key not in used else None
+    military = re.fullmatch(r"Military(\d+)", slot, re.I)
+    if military:
+        everything = [row for row in _slot_definitions(build) if row["group"] == "military"]
+        key = nth(everything, int(military.group(1)))
+        return key if key and key not in used else None
+    internal = re.fullmatch(r"Slot(\d+)_Size(\d+)", slot, re.I)
+    if internal:
+        number, size = int(internal.group(1)), int(internal.group(2))
+        # Without the ship's own names: the internal of that class nearest
+        # the journal's slot number (the numbering skips military slots).
+        candidates = [row for row in definitions if row["group"] == "internal" and row["size"] == size]
+        if candidates:
+            return min(candidates, key=lambda row: abs(row["index"] + 1 - number))["key"]
+        return None
     module = _module(build["ship_id"], module_id)
-    possible = []
-    for definition in _slot_definitions(build):
-        if definition["key"] in used or definition["group"] in {"ship", "component"}:
-            continue
-        if module.get("mtype") in _group_mtypes(definition["group"], definition["index"]):
-            possible.append(definition)
-    number = re.search(r"(\d+)(?:_size\d+)?$", str(journal_slot or ""), re.I)
-    if number:
-        ordinal = int(number.group(1)) - 1
-        same_group = [row for row in possible if row["index"] == ordinal]
-        if same_group:
-            return same_group[0]["key"]
+    possible = [row for row in definitions if module.get("mtype") in _group_mtypes(row["group"], row["index"])]
     return possible[0]["key"] if possible else None
 
 
@@ -951,6 +989,12 @@ def journal_build(loadout: dict, name: str = "") -> tuple[dict, list[str]]:
     if not ship_id:
         raise BuildPlannerError(f"Unsupported ship in loadout: {ship_value or 'unknown'}")
     build = stock_build(ship_id, name or loadout.get("ShipName") or f"{_ship(ship_id).get('name')} import")
+    # A slot the loadout does not list is empty in game: start from an empty
+    # hull, not the stock one (stock Pulse Lasers showed in empty hardpoints).
+    # Core internals are always listed; keep stock there only as a fallback.
+    for key, slot in build["slots"].items():
+        if not key.startswith(("component:", "ship:")):
+            slot["module"] = 0
     build["source"] = "EDCD SLEF / Journal Loadout"
     build["tag"] = str(loadout.get("ShipIdent") or "")[:16]
     warnings = []
@@ -962,6 +1006,9 @@ def journal_build(loadout: dict, name: str = "") -> tuple[dict, list[str]]:
         if isinstance(item, dict):
             item = item.get("fdname") or item.get("edname") or item.get("id") or item.get("name")
         module_id = catalogue()["moduleByName"].get(_key(item))
+        if not module_id and str(item or "").lower().endswith("_free"):
+            # Modules given with a ship carry "_free" (the Rhino's hangar).
+            module_id = catalogue()["moduleByName"].get(_key(str(item)[:-5]))
         if not module_id:
             warnings.append(f"Unknown module skipped: {item}")
             continue

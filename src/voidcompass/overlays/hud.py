@@ -18,6 +18,16 @@ HUD_FONT_FACES = ("cockpit", "clear", "terminal")
 HUD_LABEL_SIZES = ("standard", "large", "larger")
 
 
+HUD_SCENE_MODES = ("full", "still", "off")
+
+
+def hud_scene_mode(config):
+    """The hologram: full, still (animates only on a state change; for
+    low-end PCs) or off."""
+    value = str((config or {}).get("hud_scene_mode") or "full").casefold()
+    return value if value in HUD_SCENE_MODES else "full"
+
+
 def hud_typography(config):
     """The Navigation HUD's typeface, small-text size and label brightness."""
     face = str((config or {}).get("hud_font_face") or "cockpit").casefold()
@@ -133,6 +143,7 @@ class TacticalHUD:
             "effects": {
                 "crt": self._crt_enabled(),
                 "reduced_motion": bool(self.config.get("reduced_motion_enabled", False)),
+                "scene": hud_scene_mode(self.config),
                 "opacity": overlay_opacity_ratio(self.config),
                 "energy": {
                     "Calm": 0.72, "Standard": 1.0, "Energetic": 1.28,

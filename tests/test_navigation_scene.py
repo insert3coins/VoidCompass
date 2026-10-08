@@ -424,6 +424,55 @@ class NavigationSceneBrowserTests(unittest.TestCase):
         }""")
         self.assertAlmostEqual(backing, css * ratio, delta=1)
 
+    LIT = """() => {
+      const canvas = document.getElementById('deck-canvas');
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      let lit = 0;
+      for (let index = 3; index < data.length; index += 4) if (data[index] > 12) lit += 1;
+      return lit / (canvas.width * canvas.height);
+    }"""
+
+    def scene_render(self, page, label, mode):
+        snapshot = hud_snapshot(hud_state(label), reduced=False)
+        snapshot["effects"]["scene"] = mode
+        page.evaluate("snapshot => render(snapshot)", snapshot)
+
+    def test_still_hologram_moves_only_when_the_state_changes(self):
+        """5.5.3 Hologram: Still (Overlay Studio, for low-end PCs) holds each
+        state's settled scene and draws only while a change re-projects it."""
+        page = self.open()
+        self.scene_render(page, "SUPERCRUISE", "still")
+        self.assertFalse(page.evaluate("navigationScene.running"), "no frames at rest")
+        self.assertTrue(page.evaluate("document.querySelector('.hud').classList.contains('scene-still')"))
+        self.assertGreater(page.evaluate(self.LIT), .002, "the settled scene is on screen")
+        before = self.frames(page)
+        page.wait_for_timeout(500)
+        self.assertEqual(self.frames(page), before)
+        # A state change re-projects the hologram, then it settles again.
+        self.scene_render(page, "HYPERSPACE", "still")
+        self.assertTrue(page.evaluate("navigationScene.running"))
+        page.wait_for_timeout(900)
+        self.assertFalse(page.evaluate("navigationScene.running"))
+        self.assertGreater(self.frames(page), before, "the change animated")
+        self.assertEqual(page.evaluate("navigationScene.state.key"), "hyperspace")
+        self.assertGreater(page.evaluate(self.LIT), .002)
+        settled = self.frames(page)
+        page.wait_for_timeout(500)
+        self.assertEqual(self.frames(page), settled, "and then draws nothing")
+
+    def test_hologram_off_draws_nothing_and_full_comes_back(self):
+        page = self.open()
+        self.scene_render(page, "SUPERCRUISE", "off")
+        self.assertFalse(page.evaluate("navigationScene.running"))
+        self.assertTrue(page.evaluate("document.querySelector('.hud').classList.contains('scene-off')"))
+        self.assertEqual(page.evaluate(self.LIT), 0)
+        self.scene_render(page, "HYPERSPACE", "off")
+        self.assertFalse(page.evaluate("navigationScene.running"))
+        self.scene_render(page, "HYPERSPACE", "full")
+        self.assertTrue(page.evaluate("navigationScene.running"))
+        page.wait_for_timeout(200)
+        self.assertGreater(page.evaluate(self.LIT), .002)
+
     def test_scenes_are_cheap_to_draw(self):
         page = self.open()
         worst = []

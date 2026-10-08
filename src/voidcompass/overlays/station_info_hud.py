@@ -9,6 +9,7 @@ import re
 from voidcompass.core.config import save_config
 from voidcompass.overlays import overlay_chrome
 from voidcompass.core import themes
+from voidcompass.core.companion_features import unsold_bio_value
 _CHROMA = '#ff00ff'
 WIDTH = 520
 _CORE_SERVICES = (('REFUEL', ('refuel',)), ('REPAIR', ('repair',)), ('REARM', ('rearm',)), ('OUTFITTING', ('outfitting',)))
@@ -119,16 +120,14 @@ def build_station_model(dash):
             authority_parts.append(label)
     state = getattr(dash, 'companion_state', None) or {}
     exploration_value = max(0, _safe_int(state.get('unsold_exploration_cr')))
-    bio_value = max(0, _safe_int(state.get('unsold_bio_cr')))
-    bio_bonus = max(0, _safe_int(state.get('unsold_bio_bonus_potential_cr')))
+    # Base values plus the first-footfall bonus those samples always earn.
+    bio_value = unsold_bio_value(state)
     bio_samples = max(0, _safe_int(state.get('unsold_bio_samples')))
     data_rows = []
     if exploration_value:
         data_rows.append({'label': 'EXPLORATION', 'value': _credits(exploration_value), 'available': 'exploration' in service_keys, 'service': 'CARTOGRAPHICS'})
     if bio_value:
         value = _credits(bio_value)
-        if bio_bonus:
-            value = f"{value.removesuffix(' CR')}–{_credits(bio_value + bio_bonus)}"
         data_rows.append({'label': f'BIOLOGY · {bio_samples} ANALYSES' if bio_samples else 'BIOLOGY', 'value': value, 'available': 'vistagenomics' in service_keys, 'service': 'VISTA'})
     station_state = _display_name(getattr(dash, 'current_station_state', None))
     type_parts = [station_type]

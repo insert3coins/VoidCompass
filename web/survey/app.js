@@ -34,7 +34,9 @@
   const STILL_BUDGET = 700;
   const MANIFEST_MIN_ROWS = 3;
   const MANIFEST_FLOOR_ROWS = 2;
-  const SHRINK_ORDER = ["other", "landable", "notable", "surface"];
+  // Earth-likes, water worlds and other high-value bodies are the last to
+  // give up lines (5.5.3).
+  const SHRINK_ORDER = ["other", "landable", "surface", "notable"];
   const collator = new Intl.Collator("en", {numeric: true, sensitivity: "base"});
   let cycle = null;
   let cycleTimer = 0;
@@ -528,7 +530,12 @@
       badge.title = efficient ? "DSS efficiency target met" : "DSS mapping complete";
       badges.appendChild(badge);
     } else if (row.needs_dss) badges.appendChild(node("b", "badge dss", "DSS"));
-    if (row.first_footfall) badges.appendChild(node("b", "badge footfall", "1ST FOOTFALL"));
+    if (row.first_footfall) {
+      // Its biology values already include the first-logged bonus.
+      const badge = node("b", "badge footfall", "1ST FOOTFALL ×5");
+      badge.title = "First footfall: every species here pays five times its base value";
+      badges.appendChild(badge);
+    }
     return badges;
   }
 
@@ -752,15 +759,16 @@
     return {head, counter};
   }
 
-  // Tier the system into what the pilot acts on: biology first, then bodies
-  // with surface signals or mapping value, then the landable and quiet rest.
+  // Tier the system into what the pilot acts on: biology first, then the
+  // high-value bodies (Earth-likes, water worlds...), then surface signals,
+  // then the landable and quiet rest.
   function classifyRows(model) {
     const system = model.system || "";
     const groups = {biology: [], surface: [], notable: [], landable: [], other: []};
     for (const row of Array.isArray(model.rows) ? model.rows : []) {
       if (count(row.bio_count)) groups.biology.push(row);
-      else if (count(row.geo_count) || count(row.mining_count)) groups.surface.push(row);
       else if (row.notable) groups.notable.push(row);
+      else if (count(row.geo_count) || count(row.mining_count)) groups.surface.push(row);
       else if (row.landable && landableKnown(row)) groups.landable.push(row);
       else groups.other.push(row);
     }
@@ -772,7 +780,10 @@
     // hoisting it); completed biology settles to the bottom of the manifest.
     groups.biology.sort((left, right) => Number(Boolean(left.bio_complete))
       - Number(Boolean(right.bio_complete)) || byDesignation(left, right));
-    for (const key of ["surface", "notable", "landable", "other"]) groups[key].sort(byDesignation);
+    // The most valuable first, so the best worlds never page out of sight.
+    const worth = (row) => safeNumber(row.notable?.value ?? row.value);
+    groups.notable.sort((left, right) => worth(right) - worth(left) || byDesignation(left, right));
+    for (const key of ["surface", "landable", "other"]) groups[key].sort(byDesignation);
     return groups;
   }
 
@@ -1196,8 +1207,8 @@
 
     const scopeAll = model.scope === "all";
     const specs = [
-      ["surface", "SURFACE", groups.surface, "rows", limits.surface],
       ["notable", "NOTABLE", groups.notable, "rows", limits.notable],
+      ["surface", "SURFACE", groups.surface, "rows", limits.surface],
       ["landable", "LANDABLE", groups.landable, scopeAll ? "rows" : "chips", scopeAll ? limits.rows : limits.chips],
       ["other", "OTHER", groups.other, scopeAll ? "rows" : "chips", scopeAll ? limits.rows : limits.chips],
     ].filter(([, , rows]) => rows.length);

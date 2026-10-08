@@ -4988,6 +4988,7 @@ class MainDashboard(
         self.last_edsm_request_ts = time.time()
         if not recheck:
             self._system_traffic_resolved = False
+            self._fetch_body_discovery(system_name)
         def callback(traffic_data):
             def _apply():
                 if self.current_sys != system_name:
@@ -5003,6 +5004,43 @@ class MainDashboard(
                     self._schedule_traffic_recheck(system_name, recheck)
             self._ui_post(_apply, key="edsm-traffic")
         self.edsm.fetch_traffic(system_name, callback, recheck=bool(recheck))
+
+    def _fetch_body_discovery(self, system_name):
+        """Who EDSM says discovered each body of the system (for the Explore
+        survey board), keyed by the journal's BodyID."""
+        key = str(system_name or "").strip().casefold()
+        edsm = getattr(self, "edsm", None)
+        if not key or key in {"---", "unknown"} or not callable(getattr(edsm, "fetch_system_bodies", None)):
+            return False
+        current = getattr(self, "_edsm_body_discovery", None) or {}
+        if current.get("system") == key:
+            return False
+
+        def callback(payload):
+            bodies = {}
+            for body in (payload or {}).get("bodies") or ():
+                if not isinstance(body, dict) or body.get("bodyId") is None:
+                    continue
+                discovery = body.get("discovery") if isinstance(body.get("discovery"), dict) else {}
+                if discovery.get("commander"):
+                    bodies[str(body["bodyId"])] = {
+                        "by": str(discovery.get("commander") or "")[:64],
+                        "at": str(discovery.get("date") or "")[:32],
+                    }
+
+            def _apply():
+                if str(getattr(self, "current_sys", "") or "").casefold() != key:
+                    return
+                self._edsm_body_discovery = {"system": key, "bodies": bodies, "known": payload is not None}
+                refresh = getattr(self, "_refresh_html_workspace", None)
+                if callable(refresh):
+                    refresh()
+
+            self._ui_post(_apply, key=f"edsm-body-discovery:{key}")
+
+        self._edsm_body_discovery = {"system": key, "bodies": {}, "known": False}
+        edsm.fetch_system_bodies(system_name, callback)
+        return True
 
     def _schedule_traffic_recheck(self, system_name, done):
         if done >= len(self._TRAFFIC_RECHECK_MS):
@@ -6268,6 +6306,12 @@ class MainDashboard(
         self._navigation_transition_job = None
         if str(getattr(self, "_navigation_jump_phase", "") or "") != expected_phase:
             return
+        if (expected_phase == "charging" and getattr(self, "current_fsd_charging", False)
+                and getattr(self, "current_fsd_hyperdrive_charging", False)):
+            # Still charging (the phase now starts at the button press, before
+            # the countdown): keep it until the drive stops or StartJump comes.
+            self._schedule_navigation_jump_phase_expiry("charging")
+            return
         self._clear_navigation_jump_phase(refresh=True)
 
     def _schedule_navigation_jump_phase_expiry(self, phase):
@@ -7026,8 +7070,9 @@ class MainDashboard(
             valuable_names.append(parts[2] if len(parts) == 3 else str(row).lstrip("- "))
 
         unsold_exploration = int(state.get("unsold_exploration_cr") or 0)
-        unsold_biology = int(state.get("unsold_bio_cr") or 0)
-        unsold_biology_potential = int(state.get("unsold_bio_bonus_potential_cr") or 0)
+        # First-footfall bonuses are certain, so they count as value held.
+        unsold_biology = companion_features.unsold_bio_value(state)
+        unsold_biology_potential = 0
         mining = self._mining_activity_snapshot(mission_rows)
         sample = self._sampling_snapshot() if getattr(self, "bio_sampling", None) else None
         snapshot = {
@@ -9888,7 +9933,7 @@ class MainDashboard(
         notify = bool(notify and self.config.get("data_risk_warnings_enabled", True))
         loadout = self.companion_state.get("loadout") or {}
         rebuy = loadout.get("Rebuy") or self.cmdr_ship.get("rebuy")
-        total = int(self.companion_state.get("unsold_exploration_cr") or 0) + int(self.companion_state.get("unsold_bio_cr") or 0)
+        total = int(self.companion_state.get("unsold_exploration_cr") or 0) + companion_features.unsold_bio_value(self.companion_state)
         if not rebuy or total < 20_000_000:
             self._data_risk_level = 0 if total < 20_000_000 else self._data_risk_level
             return

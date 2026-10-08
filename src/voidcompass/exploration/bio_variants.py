@@ -243,13 +243,14 @@ def _brightness(body, star, by_id):
     return (radius * temperature ** 2 / distance) ** 2
 
 
-def _brightest_star(item, by_id):
+def _stars_by_brightness(item, by_id):
+    """Parent stars, brightest first (SrvSurvey's relative brightness); one
+    whose brightness cannot be judged goes last."""
     stars = _parent_stars(item, by_id)
-    if len(stars) == 1:
-        return stars[0]
-    ranked = sorted(((_brightness(item, star, by_id), star) for star in stars),
-                    key=lambda pair: pair[0], reverse=True)
-    return ranked[0][1] if ranked and ranked[0][0] > 0 else None
+    if len(stars) < 2:
+        return stars
+    return [star for _value, star in sorted(((_brightness(item, star, by_id), star) for star in stars),
+                                            key=lambda pair: pair[0], reverse=True)]
 
 
 def _primary_star(by_id):
@@ -267,9 +268,10 @@ def body_properties(item, system_items, region_id=None):
         return None
     by_id = {row.get("body_id"): row for row in system_items or () if row.get("body_id") is not None}
     by_id.setdefault(item.get("body_id"), item)
-    star = _brightest_star(item, by_id)
-    if star is None or not star.get("star_type"):
+    stars = [star for star in _stars_by_brightness(item, by_id) if star.get("star_type")]
+    if not stars:
         return None
+    star = stars[0]
     primary = _primary_star(by_id)
     composition = {}
     for row in item.get("atmosphere_composition") or ():
@@ -300,6 +302,8 @@ def body_properties(item, system_items, region_id=None):
         "Materials": materials,
         "Region": region_id,
         "Star": [flatten_star_type(star.get("star_type"))],
+        # Every parent star, for colours the brightest one cannot give.
+        "AllStars": list(dict.fromkeys(flatten_star_type(row.get("star_type")) for row in stars)),
         "PrimaryStar": flatten_star_type(primary.get("star_type")) if primary else None,
         # Not known here; clauses on them are not held against a body.
         "Nebulae": None,
@@ -396,11 +400,13 @@ _CACHE_LOCK = threading.Lock()
 
 
 def body_variants(item, system_items, region_id=None):
-    """``{species name casefolded: [{'colour', 'key'}]}`` for one body.
+    """``{species name casefolded: [{'colour', 'key', 'predicted'}]}`` for one
+    body.
 
-    Where the criteria rule a species out entirely (their species rules
-    differ from BioScan's), the colours still follow from the star and
-    materials alone.
+    ``predicted`` marks species the criteria themselves expect on this body
+    (SrvSurvey's own prediction). For the others, which BioScan's rules may
+    still predict, the colours follow from the star and materials alone: the
+    brightest parent star first, then any parent star.
     """
     props = body_properties(item, system_items, region_id)
     if not props or not _criteria():
@@ -412,7 +418,11 @@ def body_variants(item, system_items, region_id=None):
         return cached
     strict = _group(predict(props))
     lenient = _group(predict(props, lenient=True))
-    result = {species: strict.get(species) or rows for species, rows in lenient.items()}
+    any_star = _group(predict({**props, "Star": props.get("AllStars") or props["Star"]}, lenient=True))
+    result = {}
+    for species in set(any_star) | set(lenient) | set(strict):
+        rows = strict.get(species) or lenient.get(species) or any_star.get(species)
+        result[species] = [{**row, "predicted": species in strict} for row in rows]
     with _CACHE_LOCK:
         if len(_CACHE) > 256:
             _CACHE.clear()

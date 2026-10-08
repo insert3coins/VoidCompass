@@ -620,7 +620,10 @@
     "trigger": {
       "type": "counter",
       "event": "LaunchDrone",
-      "target": 1
+      "target": 1,
+      "match": {
+        "Type": ["Prospector", "Collection"]
+      }
     }
   },
   {
@@ -708,14 +711,14 @@
   {
     "id": "seismic_charge",
     "title": "Shock and Awe",
-    "desc": "Use a seismic charge for the first time",
+    "desc": "Crack three core asteroids with seismic charges",
     "icon": "💥",
     "category": "Mining",
     "points": 30,
     "trigger": {
       "type": "counter",
-      "event": "LaunchDrone",
-      "target": 1
+      "event": "AsteroidCracked",
+      "target": 3
     }
   },
   {

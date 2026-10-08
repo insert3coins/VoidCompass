@@ -73,6 +73,13 @@ PREDICTION_RULES = {
 }
 
 
+# Vista Genomics pays a species' base value, plus four times that again to
+# the first commander to log it on its body: five times in all. A
+# first-footfall body always pays it (228 of 228 such samples in the
+# developer's journals; 9 of 10 on bodies already footfalled).
+FIRST_LOGGED_MULTIPLIER = 5
+
+
 def species_value(species_localised):
     if not species_localised:
         return None

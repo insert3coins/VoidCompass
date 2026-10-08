@@ -22,6 +22,11 @@
       stalled,
       events: model.events,
       statusSeq: model.status_seq,
+      // Overlay Studio's Liveliness and Idle motions, and Status.json's
+      // danger, heat, fuel and scooping for the Watcher's mood.
+      liveliness: (model.orb || {}).liveliness,
+      idle: (model.orb || {}).idle !== false,
+      vitals: model.vitals,
     });
     const label = stalled ? "Journal watcher: feed quiet"
       : orb.lastEvent ? `Journal watcher: ${orb.lastEvent}` : "Journal watcher";

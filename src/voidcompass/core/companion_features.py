@@ -37,6 +37,23 @@ DEFAULT_STATE = {
     "exploration_data_lost_at": None,
 }
 
+def unsold_bio_value(state):
+    """What the unsold exobiology will sell for at Vista Genomics.
+
+    Each sample is worth its species' base value, and four times that again
+    when the commander is the first to log the species on its body. On a
+    first-footfall body that is certain (228 of 228 such samples paid it in
+    the developer's journals), so that bonus is counted as earned. Bodies
+    others had already set foot on usually pay it too, but not always, so it
+    is not claimed there.
+    """
+    state = state or {}
+    try:
+        return max(0, int(state.get("unsold_bio_cr") or 0)) + max(0, int(state.get("unsold_bio_bonus_potential_cr") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 MISSION_KINDS = (
     ("delivery", "delivery"), ("collect", "collect"), ("salvage", "salvage"),
     ("mining", "mining"), ("courier", "courier"), ("passenger", "passenger"),

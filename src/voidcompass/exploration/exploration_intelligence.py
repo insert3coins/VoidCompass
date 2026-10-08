@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 import math
 
+from voidcompass.core.companion_features import unsold_bio_value
 from voidcompass.exploration.deep_survey import HIGH_VALUE_WORLDS, item_value, survey_plan, wonder_rows
 from voidcompass.exploration.explorer_fieldcraft import (
     bio_field_assistant, return_to_base_plan, route_endurance_monitor,
@@ -328,9 +329,7 @@ def action_queue(app, completion=None, route=None, snapshot=None):
                 "body_id": assistant.get("body_id"),
             })
     companion = getattr(app, "companion_state", None) or {}
-    unsold = _integer(companion.get("unsold_exploration_cr")) + _integer(
-        companion.get("unsold_bio_cr")
-    )
+    unsold = _integer(companion.get("unsold_exploration_cr")) + unsold_bio_value(companion)
     if unsold >= 20_000_000:
         rows.append({
             "id": "secure-survey-data", "priority": 106, "kind": "data",
@@ -589,8 +588,9 @@ def build_field_intelligence(app, tracker_snapshot=None, route=None, codex_rows=
     except (TypeError, ValueError):
         pass
     hull = _number(getattr(app, "current_hull_percent", None), None)
-    minimum_data = _integer(state.get("unsold_exploration_cr")) + _integer(state.get("unsold_bio_cr"))
-    maximum_data = minimum_data + _integer(state.get("unsold_bio_bonus_potential_cr"))
+    # First-footfall bonuses are certain, so they are in both bounds.
+    minimum_data = _integer(state.get("unsold_exploration_cr")) + unsold_bio_value(state)
+    maximum_data = minimum_data
     known_services = (
         list(getattr(app, "current_station_services", None) or [])
         if target and target.casefold() == current_system.casefold()
@@ -665,7 +665,7 @@ def checkpoint_payload(app, reason="app-close", intelligence=None):
         "active_sample": dict(sample) if isinstance(sample, dict) else None,
         "unsold": {
             "exploration_cr": _integer(state.get("unsold_exploration_cr")),
-            "biology_cr": _integer(state.get("unsold_bio_cr")),
+            "biology_cr": unsold_bio_value(state),
             "biology_bonus_potential_cr": _integer(state.get("unsold_bio_bonus_potential_cr")),
         },
         "expedition": expedition,

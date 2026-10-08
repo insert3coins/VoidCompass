@@ -79,7 +79,7 @@ function skeletonMarkup() {
   const tabs = VIEWS.map((view) => `<button type="button" role="tab" id="explore-tab-${view.id}" data-explore-view="${view.id}" aria-controls="explore-view-${view.id}" aria-selected="false" tabindex="-1"><i>${view.index}</i><span>${view.label}<small id="explore-tab-${view.id}-meta">${view.idle}</small></span></button>`).join("");
   const filters = FILTERS.map(([id, label]) => `<button type="button" data-explore-filter="${id}" aria-pressed="false">${label}<b data-filter-count="${id}">0</b></button>`).join("");
   return `<nav class="explore-views" role="tablist" aria-label="Explore and survey views">${tabs}
-      <div class="explore-readouts"><span><small>DATA ABOARD</small><b id="intel-value">0 CR</b></span><span><small>REGION</small><b id="explore-region">UNKNOWN</b></span></div>
+      <div class="explore-readouts"><span><small>CARTOGRAPHY</small><b id="intel-carto">0 CR</b></span><span class="readout-bio"><small id="intel-bio-label">EXOBIOLOGY</small><b id="intel-bio">0 CR</b></span><span class="readout-region"><small>REGION</small><b id="explore-region">UNKNOWN</b></span></div>
     </nav>
     <section class="explore-view" role="tabpanel" id="explore-view-system" data-explore-panel="system" aria-labelledby="explore-tab-system">
       <header class="explore-band">
@@ -89,6 +89,7 @@ function skeletonMarkup() {
           <div class="explore-fss"><small>FSS</small><b id="workboard-count">0 / ? BODIES</b><i aria-hidden="true"><em id="explore-fss-fill"></em></i><span id="workboard-percent">—</span></div>
           <div><small>BIOLOGY</small><b id="explore-bio">0 / 0</b></div>
           <div><small>GEOLOGY</small><b id="explore-geo">0</b></div>
+          <div class="explore-traffic"><small>EDSM TRAFFIC</small><b id="explore-traffic">—</b></div>
         </div>
         <div id="workboard-orbits" class="workboard-orbits" aria-label="System body schematic"></div>
       </header>
@@ -360,6 +361,7 @@ function boardRowMarkup(row, system, ui) {
     row.rare ? `<b class="chip rare">RARE ${row.rare}</b>` : "",
     !bio && !geo && body.mapped ? `<b class="chip mapped">MAPPED</b>` : "",
     body.archived ? `<b class="chip known">KNOWN</b>` : "",
+    CODEX_FLAGS[body.codex] ? `<b class="chip codex ${body.codex}" title="${CODEX_FLAGS[body.codex][2]}">${CODEX_FLAGS[body.codex][0]} ${CODEX_FLAGS[body.codex][1]}</b>` : "",
   ].join("");
   const detail = queued
     ? [planetClass || queued.class, queued.distance_ls ? `${numeric(queued.distance_ls, 0)} LS` : "", `${queued.action} — ${queued.reason}`]
@@ -372,6 +374,7 @@ function boardRowMarkup(row, system, ui) {
     <button type="button" class="body-select" data-explore-select aria-label="Show ${escapeHtml(name)} in the orrery · ${statusLabel}">
       <span class="body-line"><strong>${escapeHtml(designation(name, system))}</strong>${tags}<span class="body-chips">${chips}</span>${value ? `<b class="body-value">${escapeHtml(value)}</b>` : ""}</span>
       <small>${escapeHtml(detail.filter(Boolean).join(" · "))}</small>
+      ${discoveryText(body) ? `<small class="body-discovery${body.was_discovered === false && !body.discovered_by ? " first" : ""}">${escapeHtml(discoveryText(body))}</small>` : ""}
     </button>
     ${surveyActions(row, system, escapeHtml)}
   </div>`;
@@ -442,7 +445,37 @@ function renderBand(root, ui) {
   percentWidth("explore-fss-fill", survey.total_known ? completion : 0);
   text("explore-bio", `${number(survey.bio_complete)} / ${number(survey.bio_signals)}`);
   text("explore-geo", String(number(survey.geo_signals)));
+  // EDSM's visitors, as Jump Info shows them, and who discovered the system.
+  const traffic = surveyState?.traffic || {};
+  const visits = ["day", "week", "total"].map((key) => number(traffic[key]));
+  const trafficText = traffic.resolved || visits.some(Boolean)
+    ? `24H ${visits[0].toLocaleString()} · WK ${visits[1].toLocaleString()} · EVER ${visits[2].toLocaleString()}`
+    : "—";
+  text("explore-traffic", trafficText);
+  const trafficCell = root.querySelector(".explore-traffic");
+  if (trafficCell) {
+    trafficCell.title = traffic.discovered_by
+      ? `System discovered by ${traffic.discovered_by}${traffic.discovered_at ? ` · ${String(traffic.discovered_at).slice(0, 10)}` : ""}`
+      : "Commanders EDSM has logged in this system";
+  }
 }
+
+// Who found a body: EDSM's name for its discoverer, else the game's own
+// word (nobody had, so the discovery is yours to sell).
+function discoveryText(body) {
+  if (body.discovered_by) {
+    const date = String(body.discovered_at || "").slice(0, 10);
+    return `DISCOVERED BY ${String(body.discovered_by).toUpperCase()}${date ? ` · ${date}` : ""}`;
+  }
+  if (body.was_discovered === false) return "UNDISCOVERED · FIRST DISCOVERY YOURS";
+  if (body.was_discovered === true) return "DISCOVERED · NOT ON EDSM";
+  return "";
+}
+
+const CODEX_FLAGS = {
+  new: ["⚑", "NEW TO CODEX", "Biology here you have never logged in your Codex"],
+  region: ["⚐", "NEW IN REGION", "Biology here you have not logged in this galactic region"],
+};
 
 function renderStrip(root) {
   const orbits = root.querySelector("#workboard-orbits");
@@ -491,6 +524,7 @@ export function renderExploreSystem(state, ui) {
   surveyState = {
     system: String(state.flight?.system || ""),
     survey: state.survey || {},
+    traffic: state.traffic || {},
   };
   loadPrefs(ui);
   const {root, created} = ensureSkeleton(ui);

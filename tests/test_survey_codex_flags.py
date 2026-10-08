@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import unittest.mock
 from unittest.mock import Mock
 from urllib.parse import urlsplit
 
@@ -130,6 +131,21 @@ class SurveyModelTests(unittest.TestCase):
         self.assertEqual(record.entry_flag(green, 18), "region")
         self.assertEqual(record.entry_flag(green, 20), "")
 
+    def test_a_detected_genus_lists_the_species_the_criteria_expect(self):
+        """The game found a genus BioScan's rules did not predict: list the
+        bio criteria's own species for it, as SrvSurvey does."""
+        body = {"body_id": 8, "name": "Prai Preia 6", "planet_class": "Rocky body", "bio_count": 1,
+                "genuses": [{"Genus_Localised": "Tussock"}]}
+        model = build_survey_model("Prai Preia", [body], focused_body_id=8, scanned=1, total=1)
+        divisa = "$Codex_Ent_Tussocks_10_A_Name;"
+        annotate_codex(model, lambda kind, key, b: "new" if key == divisa else "",
+                       lambda b: {"tussock divisa": [{"colour": "Yellow", "key": divisa, "predicted": True}],
+                                  "tussock ignis": [{"colour": "Teal", "key": "x", "predicted": False}]})
+        row = model["rows"][0]
+        self.assertEqual(row["codex"], "new")
+        self.assertEqual(row["codex_lines"], [{"species": "Divisa", "flag": "new",
+                                               "variants": [{"text": "Yellow", "flag": "new"}]}])
+
     def test_the_system_view_keeps_one_flag_per_row(self):
         model = build_survey_model("Prai Preia", [self.body()], scanned=1, total=1)
         annotate_codex(model, lambda kind, key, body: "new")
@@ -211,10 +227,26 @@ class SurveyModelTests(unittest.TestCase):
 
 
 class WiringTests(unittest.TestCase):
-    def test_off_by_default_per_profile_and_in_overlay_studio(self):
+    def test_on_by_default_per_profile_and_in_overlay_studio(self):
+        """5.5.3: on by default, switched on once for profiles saved while it
+        was off; turning it off afterwards sticks."""
         self.assertIn("survey_codex_flags", config_module.PROFILE_BOOL_SETTINGS)
         source = (ROOT / "src/voidcompass/core/config.py").read_text(encoding="utf-8")
-        self.assertIn('"survey_codex_flags": False', source)
+        self.assertIn('"survey_codex_flags": True', source)
+        with tempfile.TemporaryDirectory() as folder,                 unittest.mock.patch.object(config_module, "PROFILE_DIR", folder):
+            key = "nyx_evera_f1"
+            Path(folder, key).mkdir()
+            Path(config_module.get_profile_config_file(key)).write_text(
+                json.dumps({"survey_codex_flags": False}), encoding="utf-8")
+            config = {"active_commander_profile": key}
+            config_module.apply_profile_config(config, key)
+            self.assertTrue(config["survey_codex_flags"])
+            config["commander_profiles"][key].update({"survey_codex_flags": False, "survey_codex_flags_version": 1})
+            Path(config_module.get_profile_config_file(key)).write_text(
+                json.dumps(config["commander_profiles"][key]), encoding="utf-8")
+            config = {"active_commander_profile": key}
+            config_module.apply_profile_config(config, key)
+            self.assertFalse(config["survey_codex_flags"])
         studio = (WEB / "dashboard" / "index.html").read_text(encoding="utf-8")
         survey = studio.split('data-studio-settings="survey_status_hud"', 1)[1].split("</section>", 1)[0]
         self.assertIn('data-overlay-option="survey_codex_flags"', survey)

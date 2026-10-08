@@ -20,6 +20,11 @@
 
   const TAU = Math.PI * 2;
   const FRAME_MS = 1000 / 30;
+  // Hologram modes (Overlay Studio, 5.5.3). Full animates every frame.
+  // Still, for low-end PCs, animates only while a state change re-projects
+  // the hologram, then holds that state's settled still and draws nothing
+  // until the next change. Off draws no hologram at all.
+  const SCENE_MODES = new Set(['full', 'still', 'off']);
   const REPROJECT_MS = 540;
   const CROSSFADE_MS = 380;
   const FOLD = .035;
@@ -3201,6 +3206,7 @@
       this.palette = cssPalette();
       this.energy = 1;
       this.reduced = false;
+      this.mode = 'full';
       this.visible = true;
       this.textScale = 0;
       this.clock = performance.now();
@@ -3242,6 +3248,9 @@
       this.palette = {...cssPalette(), ...(input.palette || {})};
       this.energy = clamp(Number(input.energy) || 1, .55, 1.6);
       this.reduced = Boolean(input.reduced);
+      const mode = SCENE_MODES.has(input.mode) ? input.mode : 'full';
+      const modeChanged = mode !== this.mode;
+      this.mode = mode;
       this.visible = input.visible !== false;
       // The text size zooms the page without resizing the canvases' CSS
       // boxes, so ResizeObserver never hears of it; re-measure on change.
@@ -3254,7 +3263,7 @@
       const next = this.makeState(input);
       const current = this.state;
       if (current && next.d.inMainShip && current.d.inMainShip
-          && next.d.landingGear !== current.d.landingGear && !this.reduced) {
+          && next.d.landingGear !== current.d.landingGear && !this.reduced && this.mode === 'full') {
         this.gear = {down: next.d.landingGear, start: now};
       }
       if (!current) this.state = next;
@@ -3262,18 +3271,33 @@
       else this.refresh(next);
       if (input.eventSequence != null && input.eventSequence !== this.eventSequence) {
         this.eventSequence = input.eventSequence;
-        if (input.eventKind && !this.reduced) {
+        if (input.eventKind && !this.reduced && this.mode === 'full') {
           this.event = {kind: String(input.eventKind), tone: String(input.eventTone || ''), start: now};
         }
       }
-      if (this.reduced) {
+      if (this.reduced || this.mode === 'off') {
         this.previous = null;
         this.transition = null;
+      }
+      if (this.reduced || this.mode !== 'full') {
+        // Still and Off spend no frames on journal pulses or the gear.
         this.event = null;
         this.gear = null;
       }
+      if (this.mode === 'still' && !this.transition) this.settle(this.state);
       this.schedule();
-      this.repaint(rescaled);
+      this.repaint(rescaled || modeChanged);
+    }
+
+    // Still and reduced motion both show each state's settled pose.
+    settled() {
+      return this.reduced || this.mode === 'still';
+    }
+
+    settle(state) {
+      if (!state) return;
+      Object.assign(state, {p: STILL_PHASE, terrain: STILL_PHASE, age: 30});
+      Object.assign(state.d, state.target);
     }
 
     makeState(input) {
@@ -3313,11 +3337,16 @@
       if (PLANETARY.has(next.key) && PLANETARY.has(current.key)) {
         for (const field of ['altitude', 'vertical', 'gravity']) next.d[field] = current.d[field];
       }
-      if (this.reduced || !this.visible) {
+      if (this.reduced || !this.visible || this.mode === 'off') {
         this.state = next;
         this.previous = null;
         this.transition = null;
         return;
+      }
+      if (this.mode === 'still') {
+        // Still re-projects between the two settled poses.
+        this.settle(current);
+        this.settle(next);
       }
       // An interrupted change continues from exactly what is on screen.
       let from = current, fromScale = 1;
@@ -3351,7 +3380,7 @@
         if (field in state.target) state.target[field] = value;
         else state.d[field] = value;
       }
-      if (this.reduced) Object.assign(state.d, state.target);
+      if (this.settled()) Object.assign(state.d, state.target);
     }
 
     progress(now) {
@@ -3369,7 +3398,7 @@
     advance(now) {
       const dt = clamp((now - this.clock) / 1000, 0, .1);
       this.clock = now;
-      if (!dt || this.reduced || !this.visible || document.hidden) return;
+      if (!dt || this.settled() || !this.visible || document.hidden) return;
       const blend = 1 - Math.exp(-dt / .3);
       for (const state of [this.state, this.previous]) {
         if (!state) continue;
@@ -3385,7 +3414,10 @@
     }
 
     active() {
-      return Boolean(this.state) && this.surfaces.length > 0 && this.visible && !this.reduced && !document.hidden;
+      if (!this.state || !this.surfaces.length || !this.visible || this.reduced || document.hidden) return false;
+      if (this.mode === 'off') return false;
+      // Still runs only while a change re-projects the hologram.
+      return this.mode === 'full' || Boolean(this.transition);
     }
 
     schedule() {
@@ -3410,6 +3442,11 @@
         this.lastFrame += Math.floor((elapsed + .1) / FRAME_MS) * FRAME_MS;
         this.draw(now);
       }
+      if (!this.active()) {
+        // Still: the change has landed. Hold its settled pose, no more frames.
+        this.repaint(true);
+        return;
+      }
       this.frameId = requestAnimationFrame(this.frameCallback);
     }
 
@@ -3418,7 +3455,11 @@
     // and `force` covers a canvas the browser has just cleared.
     repaint(force = false) {
       if (!this.state || (this.running && !force)) return;
-      if (!this.reduced) {
+      if (this.mode === 'off') {
+        for (const surface of this.surfaces) surface.begin();
+        return;
+      }
+      if (!this.settled()) {
         this.draw(performance.now());
         return;
       }

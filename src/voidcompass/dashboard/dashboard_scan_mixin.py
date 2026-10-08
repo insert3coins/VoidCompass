@@ -701,6 +701,14 @@ class DashboardScanMixin:
             )
             if high_wake and callable(set_jump_phase) and jump_phase != "hyperspace":
                 set_jump_phase("hyperspace", refresh=False)
+        elif (not jump_phase and callable(set_jump_phase)
+                and getattr(self, "current_fsd_charging", False)
+                and getattr(self, "current_fsd_hyperdrive_charging", False)):
+            # The hyperdrive started charging (the jump was pressed). The
+            # journal's StartJump only follows when the countdown ends, so
+            # Jump Info and the HUD start here, on FSDTarget's system.
+            target = (getattr(self, "_jump_info_target", None) or {}).get("name")
+            set_jump_phase("charging", target=target or None, refresh=True)
         elif jump_phase == "charging":
             if (getattr(self, "current_fsd_charging", False)
                     and getattr(self, "current_fsd_hyperdrive_charging", False)):
@@ -950,6 +958,7 @@ class DashboardScanMixin:
             self.heartbeat_hud.pulse(
                 "status", "STATUS",
                 getattr(self, "hud_flight_state", None) or "FLIGHT",
+                {"Flags": flags if isinstance(flags, int) else 0},
             )
         refresh_planet_materials = getattr(
             self, "_refresh_planet_materials_overlay", None,

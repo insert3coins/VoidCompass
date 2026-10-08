@@ -292,6 +292,23 @@ _PREFIXES = (
 
 _DEFAULT = ("log", "muted", "pulse", .15)
 
+# Where the eye looks when an event lands (todo-watcher-life.md). The
+# direction is symbolic, never a measurement: travel looks ahead and up,
+# scans sweep, ports and surfaces look down, danger gets a side-eye.
+GAZES = ("centre", "up", "down", "left", "right", "sweep", "side")
+_FAMILY_GAZE = {
+    "travel": "up", "scan": "sweep", "danger": "side", "port": "down",
+    "trade": "left", "career": "up", "comms": "right", "carrier": "up",
+    "system": "centre", "log": "centre",
+}
+_EFFECT_GAZE = {
+    "warp": "up", "charge": "up", "cruise": "up", "plot": "up",
+    "approach": "down", "dock": "down", "undock": "down",
+    "honk": "sweep", "signal": "sweep", "sweep": "sweep",
+    "alarm": "side", "breach": "side", "strike": "side", "lock": "side",
+}
+_RARE_PLANETS = {"earthlike body", "water world", "ammonia world"}
+
 # Channels that are real people rather than NPC or station chatter.
 _PEOPLE_CHANNELS = {"player", "wing", "friend", "squadron", "squadleaders", "local", "voicechat"}
 
@@ -330,10 +347,25 @@ def classify(event, detail=None):
             tone, effect, weight = "red", "pulse", .35
         elif track == "MainMenu":
             tone, effect, weight = "muted", "sleep", .4
+    gaze = _EFFECT_GAZE.get(effect) or _FAMILY_GAZE.get(family, "centre")
+    if name in {"FuelScoop"}:
+        gaze = "down"
+    # Rare finds earn a double take: a first discovery, an Earth-like,
+    # water or ammonia world, or a Codex entry new to the commander.
+    rare = False
+    if name == "Scan" and (detail.get("PlanetClass") or detail.get("StarType")):
+        rare = (detail.get("WasDiscovered") is False
+                or str(detail.get("PlanetClass") or "").casefold() in _RARE_PLANETS)
+    elif name == "CodexEntry":
+        rare = bool(detail.get("IsNewEntry"))
+    elif name in {"Promotion", "CarrierBuy", "ShipyardNew"}:
+        rare = True
     return {
         "event": name[:40] or "Journal",
         "family": family,
         "tone": tone,
         "effect": effect,
         "weight": round(float(weight), 2),
+        "gaze": gaze,
+        "rare": rare,
     }

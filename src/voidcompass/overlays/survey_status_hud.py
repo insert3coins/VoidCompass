@@ -250,6 +250,21 @@ def _strongest(flags):
     return max(flags, key=lambda flag: _CODEX_RANK.get(flag, 0), default='')
 
 
+def _criteria_species(genus, known):
+    """``codex_species`` rows for the species the bio criteria themselves
+    predict for a genus (``bio_variants`` marks them ``predicted``)."""
+    genus = str(genus or '').strip()
+    rows = []
+    for name, options in sorted((known or {}).items()):
+        if not any(option.get('predicted') for option in options):
+            continue
+        if not name.startswith(genus.casefold() + ' '):
+            continue
+        epithet = name[len(genus):].strip().title()
+        rows.append({'epithet': epithet, 'key': '', 'name': name})
+    return rows
+
+
 def annotate_codex(model, lookup, variants=None):
     """Mark what the Codex still lacks (SrvSurvey's flags): ``codex`` is
     'new' (never logged), 'region' (not in this galactic region) or ''.
@@ -280,14 +295,18 @@ def annotate_codex(model, lookup, variants=None):
         if detail.get('variant_key'):
             detail['codex'] = lookup('variant', detail['variant_key'], body_id)
             return
+        known = colours(body_id)
+        species = detail.get('codex_species') or ()
         if detail.get('codex_genus'):
+            # A genus the game found but BioScan's rules did not predict:
+            # the species the bio criteria expect here, as SrvSurvey shows.
+            species = _criteria_species(detail.get('name'), known)
+        if not species and detail.get('codex_genus'):
             # Whole-genus answer: flagged only when every species of it is
             # unlogged (anywhere, or in this region), so never overclaims.
             flags = {lookup('species', key, body_id) for key in detail['codex_genus']}
             detail['codex'] = 'new' if flags == {'new'} else 'region' if flags <= {'new', 'region'} else ''
             return
-        species = detail.get('codex_species') or ()
-        known = colours(body_id)
         lines = []
         for row in species:
             options = known.get(str(row.get('name') or '').casefold()) or ()
@@ -318,7 +337,19 @@ def annotate_codex(model, lookup, variants=None):
     return model
 
 
-def _body_value_range(item):
+def body_codex_flag(item, lookup, variants=None):
+    """The strongest Codex flag among a body's biology ('new', 'region' or
+    ''): what Survey Operations would flag on it, for one-line summaries
+    such as the Explore survey board."""
+    if not item or not callable(lookup):
+        return ''
+    model = {'mode': 'body', 'body': {'body_id': item.get('body_id')},
+             'rows': _body_detail_rows(item)}
+    annotate_codex(model, lookup, variants)
+    return _strongest(row.get('codex') or '' for row in model['rows'])
+
+
+def _base_value_range(item):
     scans = list((item.get('organic_scans') or {}).values())
     known = sum((_safe_int(bio_values.species_value(scan.get('species')) or scan.get('species_value')) for scan in scans))
     bio_count = _safe_int(item.get('bio_count'))
@@ -339,7 +370,7 @@ def _body_value_range(item):
         return (known, known)
     return (known + unknown * min(lows), known + unknown * max(highs))
 
-def _body_detail_rows(item):
+def _base_detail_rows(item):
     rows = []
     represented = set()
     scans = list((item.get('organic_scans') or {}).values())
@@ -382,6 +413,29 @@ def _body_detail_rows(item):
             codex_genus = [] if codex_species else _genus_species_keys(name)
             rows.append({'status': status, 'name': name, 'variant': '', 'display_name': display, 'min_value': low, 'max_value': high, 'kind': row_kind, 'progress': 0, 'codex_species': codex_species, 'codex_genus': codex_genus})
     return rows
+
+def _bonus(item):
+    """A first-footfall body pays every species five times its base value."""
+    return bio_values.FIRST_LOGGED_MULTIPLIER if item.get('first_footfall') else 1
+
+
+def _body_value_range(item):
+    low, high = _base_value_range(item)
+    bonus = _bonus(item)
+    return (low * bonus, high * bonus)
+
+
+def _body_detail_rows(item):
+    rows = _base_detail_rows(item)
+    bonus = _bonus(item)
+    if bonus > 1:
+        for row in rows:
+            for key in ('value', 'min_value', 'max_value'):
+                if row.get(key):
+                    row[key] = _safe_int(row[key]) * bonus
+            row['first_logged_bonus'] = True
+    return rows
+
 
 def _joined_lines(values, max_chars=62):
     """Pack every supplied label into compact lines without a hidden +more."""
@@ -598,7 +652,7 @@ class SurveyStatusHUD:
             self._html_render_model = None
             self.hide()
             return
-        if self.config.get('survey_codex_flags', False):
+        if self.config.get('survey_codex_flags', True):
             annotate_codex(model, getattr(self, 'codex_lookup', None), getattr(self, 'codex_variants', None))
         render_key = _survey_render_key(model)
         if render_key != self._last_render_key:

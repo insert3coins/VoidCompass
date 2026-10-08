@@ -17,8 +17,10 @@ from voidcompass.overlays.overlay_layout_model import (
     OVERLAY_ENABLE_KEYS,
     OVERLAY_LABELS,
 )
-from voidcompass.overlays.heartbeat_hud import EYE_COLORS, ORB_SIZES, eye_color, orb_size
-from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, hud_typography
+from voidcompass.overlays.heartbeat_hud import (
+    EYE_COLORS, LIVELINESS, ORB_SIZES, eye_color, idle_motion, liveliness, orb_size,
+)
+from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, HUD_SCENE_MODES, hud_scene_mode, hud_typography
 
 # How lively the Navigation HUD's holographic scenes are.
 HUD_ANIMATION_LEVELS = ("Calm", "Standard", "Energetic")
@@ -323,6 +325,7 @@ class HtmlOverlayStudioMixin:
                 "hud_font_face": hud_typography(self.config)["face"],
                 "hud_label_size": hud_typography(self.config)["labels"],
                 "hud_bright_labels": hud_typography(self.config)["bright"],
+                "hud_scene_mode": hud_scene_mode(self.config),
                 "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
                 "overlay_frame_rate": overlay_frame_rate(self.config),
                 "overlay_hide_on_maps": bool(self.config.get("overlay_hide_on_maps", True)),
@@ -339,7 +342,7 @@ class HtmlOverlayStudioMixin:
                 "gravity_warning_hud_timeout_s": _integer(self.config.get("gravity_warning_hud_timeout_s"), 20),
                 "station_info_auto_hide_enabled": bool(self.config.get("station_info_auto_hide_enabled", False)),
                 "survey_status_show_all_bodies": bool(self.config.get("survey_status_show_all_bodies", False)),
-                "survey_codex_flags": bool(self.config.get("survey_codex_flags", False)),
+                "survey_codex_flags": bool(self.config.get("survey_codex_flags", True)),
                 **{
                     f"survey_{key}": value
                     for key, value in survey_overlay_options(self.config).items()
@@ -355,6 +358,8 @@ class HtmlOverlayStudioMixin:
                 **{f"galnet_ticker_{key}": value for key, value in ticker_options(self.config).items()},
                 **{f"music_player_{key}": value for key, value in music_overlay_options(self.config).items()},
                 "heartbeat_eye_color": eye_color(self.config),
+                "heartbeat_liveliness": liveliness(self.config),
+                "heartbeat_idle_motion": idle_motion(self.config),
                 "gravity_warning_threshold_g": _number(self.config.get("gravity_warning_threshold_g"), 3.0),
                 "hud_crt_enabled": bool(self.config.get("hud_crt_enabled", True)),
                 "hud_crt_motion_enabled": bool(self.config.get("hud_crt_motion_enabled", True)),
@@ -513,6 +518,7 @@ class HtmlOverlayStudioMixin:
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies", "survey_codex_flags",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
+            "heartbeat_idle_motion",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps",
@@ -534,6 +540,10 @@ class HtmlOverlayStudioMixin:
             self._apply_map_overlay_hiding()
         elif key in {"hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels"}:
             self.update_hud()
+        elif key == "heartbeat_idle_motion":
+            heartbeat = getattr(self, "heartbeat_hud", None)
+            if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
+                heartbeat.apply_settings()
         elif key == "station_info_auto_hide_enabled":
             station = getattr(self, "station_info_hud", None)
             if station is not None:
@@ -676,6 +686,12 @@ class HtmlOverlayStudioMixin:
         if "heartbeat_eye_color" in payload:
             eye = _text(payload.get("heartbeat_eye_color"), 20).casefold()
             self.config["heartbeat_eye_color"] = eye if eye in EYE_COLORS else "theme"
+        if "hud_scene_mode" in payload:
+            mode = _text(payload.get("hud_scene_mode"), 10).casefold()
+            self.config["hud_scene_mode"] = mode if mode in HUD_SCENE_MODES else "full"
+        if "heartbeat_liveliness" in payload:
+            lively = _text(payload.get("heartbeat_liveliness"), 20).casefold()
+            self.config["heartbeat_liveliness"] = lively if lively in LIVELINESS else "standard"
         self._persist_config()
         heartbeat = getattr(self, "heartbeat_hud", None)
         if heartbeat is not None and hasattr(heartbeat, "apply_settings"):

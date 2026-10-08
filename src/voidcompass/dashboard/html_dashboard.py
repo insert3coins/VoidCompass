@@ -42,6 +42,7 @@ from voidcompass.core.config import get_active_profile, get_profile_dir
 from voidcompass.core.overlay_registry import RHINO_MAP_AVAILABLE
 from voidcompass.exploration.deep_survey import recon_report
 from voidcompass.exploration.exploration_intelligence import body_completion
+from voidcompass.overlays.survey_status_hud import body_codex_flag
 from voidcompass.core.diagnostic_logs import application_base_dir
 from voidcompass.core.global_hotkeys import (
     DEFAULT_OVERLAY_HOTKEYS,
@@ -573,6 +574,12 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 "_signal_only": True,
             })
         rows.sort(key=lambda row: (_integer(row.get("body_id"), 9999), _text(row.get("name"))))
+        edsm_discovery = getattr(self, "_edsm_body_discovery", None) or {}
+        discovery = edsm_discovery.get("bodies") if edsm_discovery.get("system") == current_key else {}
+        codex_lookup = codex_variants = None
+        if (getattr(self, "config", None) or {}).get("survey_codex_flags", True):
+            codex_lookup = getattr(self, "_survey_codex_lookup", None)
+            codex_variants = getattr(self, "_survey_codex_variants", None)
         for row in rows:
             if row.get("is_star"):
                 continue
@@ -610,6 +617,19 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 "signal_only": bool(row.get("_signal_only")),
                 "archived": row.get("_orrery_source") == "edsm",
             }
+            # Who found it: the game says whether it was already discovered;
+            # EDSM says by whom. Codex: the strongest flag on its biology.
+            if row.get("was_discovered") is not None and not row.get("_orrery_source"):
+                body_payload["was_discovered"] = bool(row.get("was_discovered"))
+            found = discovery.get(str(row.get("body_id"))) if discovery else None
+            if found:
+                body_payload["discovered_by"] = _text(found.get("by"), 64)
+                body_payload["discovered_at"] = _text(found.get("at"), 32)
+            if codex_lookup and body_payload["bio_count"]:
+                try:
+                    body_payload["codex"] = body_codex_flag(row, codex_lookup, codex_variants)
+                except Exception:
+                    pass
             bodies.append(body_payload)
             if priority:
                 archived = body_payload["archived"]
@@ -2656,7 +2676,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         survey = self._html_dashboard_survey(intelligence)
         companion = getattr(self, "companion_state", None) or {}
         unsold_exploration = _integer(companion.get("unsold_exploration_cr"))
-        unsold_bio = _integer(companion.get("unsold_bio_cr"))
+        # What Vista Genomics will pay: base values plus the first-footfall
+        # bonus (4x again), which those samples always earn.
+        unsold_bio = companion_features.unsold_bio_value(companion)
         fuel_main = _number(getattr(self, "current_fuel_main", None))
         fuel_capacity = _number(getattr(self, "fuel_capacity_main", None))
         fuel_percent = (
@@ -2717,6 +2739,10 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "unsold_exploration": unsold_exploration,
             "unsold_bio": unsold_bio,
             "unsold_total": unsold_exploration + unsold_bio,
+            # Analysed samples aboard, and how much of unsold_bio is the
+            # first-footfall bonus (already included in it).
+            "unsold_bio_samples": _integer(companion.get("unsold_bio_samples")),
+            "unsold_bio_bonus": _integer(companion.get("unsold_bio_bonus_potential_cr")),
         }
         session = self._html_dashboard_session_pulse()
         intelligence_summary = self._html_dashboard_intelligence(intelligence)
@@ -2786,8 +2812,12 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "survey": survey,
             "route": route,
             "traffic": {
-                key: _integer((getattr(self, "system_traffic", None) or {}).get(key))
-                for key in ("day", "week", "total")
+                **{key: _integer((getattr(self, "system_traffic", None) or {}).get(key))
+                   for key in ("day", "week", "total")},
+                # EDSM's discoverer of the system (the Navigation HUD's line).
+                "discovered_by": _text((getattr(self, "system_traffic", None) or {}).get("discovered_by"), 64),
+                "discovered_at": _text((getattr(self, "system_traffic", None) or {}).get("discovered_at"), 32),
+                "resolved": bool(getattr(self, "_system_traffic_resolved", False)),
             },
             "session": session,
             "data": data,

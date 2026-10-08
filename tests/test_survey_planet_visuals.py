@@ -309,7 +309,7 @@ class SurveyOverlayBrowserTests(unittest.TestCase):
                               card["species"])
                 self.assertIn("BIO 0/1", card["badges"])
                 self.assertIn("DSS", card["badges"])
-        for badge in ("GEO 3", "MINING 2", "LAND", "1ST FOOTFALL"):
+        for badge in ("GEO 3", "MINING 2", "LAND", "1ST FOOTFALL ×5"):
             self.assertIn(badge, cards["A 6"]["badges"])
 
         for scale in (1.5, 2):
@@ -463,8 +463,9 @@ class SurveyOverlayBrowserTests(unittest.TestCase):
                           names: [...group.querySelectorAll('.row-name strong, .chip-name')]
                             .map(name => name.textContent)}))""")
         self.assertEqual(groups, [
-            {"key": "surface", "label": "SURFACE", "layout": "rows", "names": ["T 3"]},
+            # 5.5.3: high-value bodies come straight after biology.
             {"key": "notable", "label": "NOTABLE", "layout": "rows", "names": ["T 4"]},
+            {"key": "surface", "label": "SURFACE", "layout": "rows", "names": ["T 3"]},
             {"key": "landable", "label": "LANDABLE", "layout": "chips", "names": ["T 5"]},
             {"key": "other", "label": "OTHER", "layout": "chips", "names": ["T 6", "T 7"]},
         ])

@@ -291,5 +291,52 @@ class PageTests(unittest.TestCase):
         self.assertIn("QUERYING", page.locator(".line").inner_text())
 
 
+
+class ChargeStartTests(unittest.TestCase):
+    """5.5.3: Jump Info appears when the jump is pressed (Status' hyperdrive
+    charging flags), not when StartJump ends the countdown."""
+
+    def dashboard(self):
+        from voidcompass.dashboard.dashboard import MainDashboard
+
+        dashboard = MainDashboard.__new__(MainDashboard)
+        dashboard.config = {"ground_target_lat": 0, "ground_target_lon": 0,
+                            "ground_target_active": False, "ground_popup_enabled": False}
+        dashboard._reset_profile_runtime_state("Commander", "F1")
+        dashboard.batch_mode = True
+        dashboard.heartbeat_hud = None
+        dashboard.mining_window = None
+        dashboard.jump_info_hud = None
+        dashboard._perf_spike = lambda *_args, **_kwargs: None
+        dashboard.root = SimpleNamespace(call_later=Mock(return_value=None))
+        dashboard.update_hud = Mock()
+        return dashboard
+
+    def test_the_charge_starts_the_jump_on_the_targeted_system(self):
+        dashboard = self.dashboard()
+        dashboard._jump_info_target = {"name": "Barnard's Star"}
+        flags = dashboard._STATUS_IN_MAIN_SHIP | dashboard._STATUS_FSD_CHARGING
+        dashboard._apply_status_update({"Flags": flags, "Flags2": dashboard._STATUS2_FSD_HYPERDRIVE_CHARGING})
+        self.assertEqual((dashboard._navigation_jump_phase, dashboard._navigation_jump_target),
+                         ("charging", "Barnard's Star"))
+        # A long charge outlasts the phase timer without losing the panel.
+        dashboard._expire_navigation_jump_phase("charging")
+        self.assertEqual(dashboard._navigation_jump_phase, "charging")
+
+    def test_a_supercruise_charge_does_not(self):
+        dashboard = self.dashboard()
+        flags = dashboard._STATUS_IN_MAIN_SHIP | dashboard._STATUS_FSD_CHARGING
+        dashboard._apply_status_update({"Flags": flags, "Flags2": 0})
+        self.assertEqual(dashboard._navigation_jump_phase, "")
+
+    def test_a_cancelled_charge_clears_it(self):
+        dashboard = self.dashboard()
+        flags = dashboard._STATUS_IN_MAIN_SHIP | dashboard._STATUS_FSD_CHARGING
+        dashboard._apply_status_update({"Flags": flags, "Flags2": dashboard._STATUS2_FSD_HYPERDRIVE_CHARGING})
+        dashboard._apply_status_update({"Flags": dashboard._STATUS_IN_MAIN_SHIP, "Flags2": 0})
+        dashboard._expire_navigation_jump_phase("charging")
+        self.assertEqual(dashboard._navigation_jump_phase, "")
+
+
 if __name__ == "__main__":
     unittest.main()

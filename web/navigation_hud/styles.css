@@ -621,3 +621,18 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .hud *, .hud *::before, .hud *::after { animation: none !important; transition-duration: 0s !important; }
 }
+
+/* Hologram Still and Off (Overlay Studio, for low-end PCs): nothing loops
+   between state changes. The decorative animations stop and the filters go;
+   danger and alert flashes keep flashing, because they carry meaning.
+   Off also hides the hologram canvases. */
+.hud.scene-still .holo-bay img, .hud.scene-still .holo-bay .vehicle-outgoing,
+.hud.scene-off .holo-bay img, .hud.scene-off .holo-bay .vehicle-outgoing { filter: none; }
+.hud.scene-still .star-blackhole::before, .hud.scene-off .star-blackhole::before { filter: none; }
+.hud.scene-still :is(.star-orb, .star-orb::before, .star-orb > i, .star-orb::after,
+  .route-segment.next > b, .route-segment.next::after, .survey-progress-fill::after,
+  .fuel-cells i.lit, .rail-marker),
+.hud.scene-off :is(.star-orb, .star-orb::before, .star-orb > i, .star-orb::after,
+  .route-segment.next > b, .route-segment.next::after, .survey-progress-fill::after,
+  .fuel-cells i.lit, .rail-marker) { animation: none !important; }
+.hud.scene-off #deck-canvas, .hud.scene-off #bay-canvas { visibility: hidden; }

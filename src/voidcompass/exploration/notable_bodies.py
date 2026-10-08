@@ -55,6 +55,8 @@ def build_notable_body_rows(scan_items, min_value=DEFAULT_MIN_VALUE, palette=Non
             "terraformable": bool(item.get("terraformable")),
             "name_color": palette["accent"] if bio_count else palette["orange"],
             "value_line": value_line,
+            # What mapping it is worth: Survey lists notable bodies by it.
+            "value": max(reward, dss_reward),
             "value_color": palette["yellow"] if max(reward, dss_reward) >= min_value else palette["dim"],
         })
     return bodies

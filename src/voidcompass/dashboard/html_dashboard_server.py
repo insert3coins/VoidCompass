@@ -260,7 +260,7 @@ class HtmlDashboardServer:
         # overlay can use the same branded cursor without duplicating it, and
         # the boot screen wakes the same watcher orb the heartbeat overlay draws.
         if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png",
-                            "/assets/heartbeat-orb.js"}:
+                            "/assets/heartbeat-orb.js", "/assets/heartbeat-life.js"}:
             candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()
             try:
                 candidate.relative_to(self.static_root.parent)

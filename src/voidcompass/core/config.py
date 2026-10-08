@@ -159,6 +159,8 @@ PROFILE_TEXT_SETTINGS = (
     "hud_animation_intensity",
     "survey_spotlight_rotation",
     "heartbeat_eye_color",
+    "heartbeat_liveliness",
+    "hud_scene_mode",
     "hud_font_face",
     "hud_label_size",
     "galnet_ticker_speed",
@@ -230,6 +232,7 @@ PROFILE_BOOL_SETTINGS = (
     "overlay_hotkeys_enabled",
     "hud_compact_mode",
     "hud_bright_labels",
+    "heartbeat_idle_motion",
     "cargo_overlay_enabled",
     "carrier_overlay_enabled",
     "prospector_overlay_enabled",
@@ -317,6 +320,7 @@ PROFILE_VALUE_SETTINGS = (
     "station_info_hud_y",
     "station_info_timeout_s",
     "station_info_timeout_semantics_version",
+    "survey_codex_flags_version",
     "survey_status_hud_x",
     "survey_status_hud_y",
     "survey_spotlight_threshold",
@@ -562,6 +566,16 @@ def apply_profile_config(config, profile_key=None):
         except (TypeError, ValueError):
             pass
         profile["station_info_timeout_semantics_version"] = 1
+    # v5.5.3 made Survey Operations' Codex flags per colour and on by default.
+    # Switch them on once for profiles saved while they were off by default;
+    # a commander who turns them off afterwards keeps that choice.
+    try:
+        codex_flags_version = int(profile.get("survey_codex_flags_version") or 0)
+    except (TypeError, ValueError):
+        codex_flags_version = 0
+    if codex_flags_version < 1:
+        profile["survey_codex_flags"] = True
+        profile["survey_codex_flags_version"] = 1
     # Replace the implicit "0 means persistent" control with an explicit switch.
     # Existing positive timeouts remain enabled; persistent profiles remain
     # persistent and receive a useful delay ready for the switch to be turned on.
@@ -626,6 +640,8 @@ def apply_profile_config(config, profile_key=None):
         "hud_animation_intensity": "Standard",
         "survey_spotlight_rotation": "auto",
         "heartbeat_eye_color": "theme",
+        "heartbeat_liveliness": "standard",
+        "hud_scene_mode": "full",
         "hud_font_face": "cockpit",
         "hud_label_size": "standard",
         "galnet_ticker_speed": "standard",
@@ -705,7 +721,7 @@ def apply_profile_config(config, profile_key=None):
         "hud_compact_mode": not profile_config_exists,
         "station_info_auto_hide_enabled": False,
         "survey_status_show_all_bodies": False,
-        "survey_codex_flags": False,
+        "survey_codex_flags": True,
         "raven_sync_enabled": True,
         "bgs_online_enabled": True,
         "trading_online_enabled": True,
@@ -929,7 +945,8 @@ def load_config():
         'survey_status_hud_x': 30,
         'survey_status_hud_y': 520,
         'survey_status_show_all_bodies': False,
-        'survey_codex_flags': False,
+        'survey_codex_flags': True,
+        'survey_codex_flags_version': 1,
         'raven_sync_enabled': True,
         'bgs_online_enabled': True,
         'trading_online_enabled': True,
@@ -950,6 +967,8 @@ def load_config():
         'hud_font_face': 'cockpit',
         'hud_label_size': 'standard',
         'hud_bright_labels': False,
+        # Navigation HUD hologram: full, still (low-end PCs) or off (5.5.3).
+        'hud_scene_mode': 'full',
         'contact_scope_hud_x': 1180,
         'contact_scope_hud_y': 250,
         'contact_scope_timeout_s': 45,
@@ -962,6 +981,9 @@ def load_config():
         'trade_route_hud_y': 480,
         'heartbeat_orb_size': 54,
         'heartbeat_eye_color': 'theme',
+        # The Watcher between events (todo-watcher-life.md, 5.5.3).
+        'heartbeat_liveliness': 'standard',
+        'heartbeat_idle_motion': True,
         'galnet_ticker_hud_x': 360,
         'galnet_ticker_hud_y': 12,
         'galnet_ticker_width': 860,

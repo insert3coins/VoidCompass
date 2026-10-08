@@ -28,6 +28,14 @@ _EVENT_HISTORY = 24
 ORB_SIZES = (54, 72, 96)
 DEFAULT_ORB_SIZE = 54
 EYE_COLORS = ("theme", "hal")
+LIVELINESS = ("calm", "standard", "alive")
+
+# Status.json flags the Watcher's mood reads (todo-watcher-life.md).
+_FLAG_SCOOPING = 0x00000800
+_FLAG_LOW_FUEL = 0x00080000
+_FLAG_OVERHEATING = 0x00100000
+_FLAG_IN_DANGER = 0x00400000
+_FLAG_INTERDICTED = 0x00800000
 
 
 def orb_size(config):
@@ -37,6 +45,31 @@ def orb_size(config):
     except (TypeError, ValueError):
         size = DEFAULT_ORB_SIZE
     return size if size in ORB_SIZES else DEFAULT_ORB_SIZE
+
+
+def liveliness(config):
+    """How alive the Watcher is between events: calm, standard or alive."""
+    value = str((config or {}).get("heartbeat_liveliness") or "standard").casefold()
+    return value if value in LIVELINESS else "standard"
+
+
+def idle_motion(config):
+    """Blinks, breathing and glances between events (on unless turned off)."""
+    return bool((config or {}).get("heartbeat_idle_motion", True))
+
+
+def vitals(flags):
+    """What the Watcher feels from one Status.json write."""
+    try:
+        flags = int(flags or 0)
+    except (TypeError, ValueError):
+        flags = 0
+    return {
+        "scooping": bool(flags & _FLAG_SCOOPING),
+        "low_fuel": bool(flags & _FLAG_LOW_FUEL),
+        "overheating": bool(flags & _FLAG_OVERHEATING),
+        "danger": bool(flags & (_FLAG_IN_DANGER | _FLAG_INTERDICTED)),
+    }
 
 
 def eye_color(config):
@@ -53,6 +86,7 @@ class HeartbeatHUD:
         self._status_serial = 0
         self._event_serial = 0
         self._events = deque(maxlen=_EVENT_HISTORY)
+        self._vitals = vitals(0)
         self._last_pulse_ts = time.time()
         self._activity_kind = 'startup'
         self._activity_label = 'LINK READY'
@@ -113,6 +147,8 @@ class HeartbeatHUD:
             self._events.append({'seq': self._event_serial, **classify(activity, detail)})
         else:
             self._status_serial += 1
+            if isinstance(detail, dict) and 'Flags' in detail:
+                self._vitals = vitals(detail.get('Flags'))
         self._redraw()
 
     def _redraw(self):
@@ -127,7 +163,9 @@ class HeartbeatHUD:
             'state_changed': self._state_changed,
             'status_seq': self._status_serial,
             'events': list(self._events),
-            'orb': {'size': orb_size(self.config), 'eye': eye_color(self.config)},
+            'orb': {'size': orb_size(self.config), 'eye': eye_color(self.config),
+                    'liveliness': liveliness(self.config), 'idle': idle_motion(self.config)},
+            'vitals': dict(self._vitals),
         }
 
     def apply_settings(self):

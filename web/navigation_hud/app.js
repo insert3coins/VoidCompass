@@ -480,6 +480,11 @@ function routeStarClass(route = {}) {
     : route.active ? (route.next_star?.star_class || nextHop?.star_class || '') : '';
 }
 
+function sceneMode(data) {
+  const mode = String(data.effects?.scene || 'full');
+  return ['full', 'still', 'off'].includes(mode) ? mode : 'full';
+}
+
 function renderScene(data, theme, tone, vehicle, reducedMotion, energy) {
   if (!scene) return;
   const state = data.state || {};
@@ -494,6 +499,8 @@ function renderScene(data, theme, tone, vehicle, reducedMotion, energy) {
     dynamics: state.dynamics || {},
     energy,
     reduced: reducedMotion,
+    // Hologram (Overlay Studio): full, still or off.
+    mode: sceneMode(data),
     // A hidden overlay keeps its state but spends no frames on it.
     visible: data.window?.visible !== false,
     eventSequence: state.event_sequence,
@@ -929,6 +936,9 @@ function render(data) {
   hud.dataset.face = ['clear', 'terminal'].includes(type.face) ? type.face : 'cockpit';
   hud.dataset.labels = ['large', 'larger'].includes(type.labels) ? type.labels : 'standard';
   hud.classList.toggle('bright-labels', Boolean(type.bright));
+  const mode = sceneMode(data);
+  hud.classList.toggle('scene-still', mode === 'still');
+  hud.classList.toggle('scene-off', mode === 'off');
   // A hidden overlay keeps its state but stops spending frames on it.
   hud.classList.toggle('dormant', data.window?.visible === false);
   const reducedMotion = Boolean(data.effects?.reduced_motion || osMotionPreference.matches);

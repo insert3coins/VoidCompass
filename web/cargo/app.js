@@ -99,14 +99,12 @@
     }
   }
 
+  // Alphabetical, so a commodity is always where you expect it (5.5.3);
+  // stolen and mission cargo keep their colour and tag.
+  const nameOrder = new Intl.Collator(undefined, {numeric: true, sensitivity: "base"});
   function orderedRows(rows) {
-    return [...rows].sort((left, right) => {
-      const leftRank = number(left.stolen) ? 0 : number(left.mission) ? 1 : 2;
-      const rightRank = number(right.stolen) ? 0 : number(right.mission) ? 1 : 2;
-      return leftRank - rightRank
-        || number(right.count) - number(left.count)
-        || String(left.name || "").localeCompare(String(right.name || ""));
-    });
+    return [...rows].sort((left, right) => nameOrder.compare(String(left.name || ""), String(right.name || ""))
+      || number(right.count) - number(left.count));
   }
 
   function manifestRow(row, previousCount, total) {

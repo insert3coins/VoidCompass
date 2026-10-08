@@ -82,6 +82,11 @@ class AchievementEngine:
     matching and per-commander progress so it can share those app services.
     """
 
+    # Achievements whose trigger was wrong: progress and unlocks kept under
+    # the old trigger are cleared once (id -> revision). 5.5.3: Shock and Awe
+    # counted every limpet launched.
+    RETRIGGERED = {"seismic_charge": 1}
+
     GLOBAL_TRIGGER_TYPES = {
         "distance",
         "distance_traveled",
@@ -129,6 +134,8 @@ class AchievementEngine:
             "currentDistanceFromSol": 0,
             "maxDistanceFromSol": 0,
             "lastAchievement": None,
+            # Fresh progress is counted under today's triggers.
+            "retriggered": dict(AchievementEngine.RETRIGGERED),
         }
 
     @staticmethod
@@ -156,12 +163,17 @@ class AchievementEngine:
     def _load_state(self) -> None:
         with self.lock:
             merged = self._default_state()
+            raw = None
             try:
                 raw = json.loads(self.state_path.read_text(encoding="utf-8"))
                 if isinstance(raw, dict):
                     merged.update(raw)
             except Exception:
                 pass
+            # A saved state says which triggers it was counted under; one
+            # from before RETRIGGERED existed was counted under the old ones.
+            if isinstance(raw, dict):
+                merged["retriggered"] = dict(raw.get("retriggered") or {})
             valid_ids = set(self.by_id)
             merged["unlocked"] = {
                 key: value for key, value in (merged.get("unlocked") or {}).items()
@@ -182,8 +194,20 @@ class AchievementEngine:
             }
             if merged.get("lastAchievement") not in valid_ids:
                 merged["lastAchievement"] = None
+            retriggered = dict(merged.get("retriggered") or {})
+            dirty = False
+            for achievement_id, revision in self.RETRIGGERED.items():
+                if _number(retriggered.get(achievement_id)) >= revision:
+                    continue
+                for bucket in ("unlocked", "counters", "sumcounters", "uniquesets"):
+                    merged[bucket].pop(achievement_id, None)
+                if merged.get("lastAchievement") == achievement_id:
+                    merged["lastAchievement"] = None
+                retriggered[achievement_id] = revision
+                dirty = True
+            merged["retriggered"] = retriggered
             self.state = merged
-            self._dirty = False
+            self._dirty = dirty
 
     def _serializable_state(self) -> dict[str, Any]:
         output = dict(self.state)

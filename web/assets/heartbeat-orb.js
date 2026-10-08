@@ -633,6 +633,9 @@
       this.moon = 0;
       this.breath = 0;
       this.gaze = {x: 0, y: 0, tx: 0, ty: 0, until: 0};
+      // Blinks, glances and moods between events (heartbeat-life.js).
+      this.life = window.HeartbeatLife ? new window.HeartbeatLife() : null;
+      this.pose = null;
       this.seed = 1;
       this.size = 0;
       this.ratio = 1;
@@ -674,6 +677,10 @@
       this.crt = input.crt !== false;
       const stalled = Boolean(input.stalled);
       if (stalled || this.reduced) this.clearMotion();
+      if (this.life) {
+        this.life.configure({liveliness: input.liveliness, idle: input.idle, reduced: this.reduced});
+        if (input.vitals) this.life.vitals(input.vitals);
+      }
       this.stalled = stalled;
 
       const events = (Array.isArray(input.events) ? input.events : [])
@@ -707,7 +714,14 @@
     observe(fresh, now) {
       this.lastEventAt = now;
       this.lastEvent = String(fresh[fresh.length - 1].event || '');
-      for (const event of fresh) this.feel(event);
+      for (const event of fresh) {
+        this.feel(event);
+        // A rare find earns a double take that ends in a pulse.
+        const pulseAt = this.life?.notice(event, now);
+        if (pulseAt && !this.reduced && !this.stalled) {
+          this.play({effect: 'pulse', tone: event.tone || 'yellow', weight: .9}, pulseAt);
+        }
+      }
       const rousing = fresh.some((event) => !['sleep', 'die', 'tick'].includes(event.effect)
         && Number(event.weight) >= .2);
       const sleeping = fresh.some((event) => ['sleep', 'die'].includes(event.effect));
@@ -766,10 +780,13 @@
         size: .7 + .6 * clamp(Number(event.weight) || 0),
       });
       if (this.motes.length > MAX_MOTES) this.motes.splice(0, this.motes.length - MAX_MOTES);
-      // The eye glances toward what it just noticed.
-      this.gaze.tx = Math.cos(angle) * .05;
-      this.gaze.ty = Math.sin(angle) * .05;
-      this.gaze.until = start + 2200;
+      // The eye glances toward what it just noticed (with the life module,
+      // it looks where the event points instead).
+      if (!this.life) {
+        this.gaze.tx = Math.cos(angle) * .05;
+        this.gaze.ty = Math.sin(angle) * .05;
+        this.gaze.until = start + 2200;
+      }
     }
 
     blip(now) {
@@ -846,8 +863,9 @@
       this.lastFrame = now;
       this.decay(now);
       const drowsy = this.drowsiness(now);
+      this.life?.advance(now, {asleep: this.asleep, drowsy, stalled: this.stalled});
       if (!this.stalled) {
-        let spin = 1 + this.arousal * 1.5;
+        let spin = (1 + this.arousal * 1.5) * Math.max(.4, this.pose?.spin ?? 1);
         for (const effect of this.effects) {
           const p = (now - effect.start) / effect.ms;
           if (p > 0 && p < 1 && effect.name === 'warp') spin += 6 * bump(p);
@@ -886,7 +904,10 @@
       if (!this.pal || this.size < 8) return;
       ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
 
-      const mods = {flare: 0, pupil: 1, iris: 1, dim: 1, jx: 0, jy: 0, spikes: 0};
+      const pose = this.life ? this.life.pose(now) : null;
+      this.pose = pose;
+      const mods = {flare: 0, pupil: pose?.pupil ?? 1, iris: pose?.iris ?? 1, dim: pose?.dim ?? 1,
+        jx: 0, jy: 0, spikes: 0};
       const live = [];
       for (const effect of this.effects) {
         const p = (now - effect.start) / effect.ms;
@@ -900,7 +921,8 @@
       const cy = R + mods.jy * R;
       const pal = this.pal;
       const g = geometry(ctx, R, cx, cy, pal);
-      const tint = this.tint();
+      // Tension warms the iris toward red, as danger events do.
+      const tint = pose?.red ? mixHue(this.tint(), pal.red, pose.red * .55) : this.tint();
       const drowsy = this.drowsiness(now);
       const breath = .5 + .5 * Math.sin(this.breath * TAU);
       const level = clamp((.8 + .2 * this.arousal) * (1 - .22 * drowsy) * (this.asleep ? .32 : 1) * mods.dim, .05, 1);
@@ -923,8 +945,8 @@
       ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
 
       ctx.globalCompositeOperation = 'lighter';
-      const gx = cx + this.gaze.x * R;
-      const gy = cy + this.gaze.y * R;
+      const gx = cx + (this.gaze.x + (pose?.dx ?? 0)) * R;
+      const gy = cy + (this.gaze.y + (pose?.dy ?? 0)) * R;
       // The iris: HAL's glow, strongest at the pupil and fading into the glass.
       const irisRadius = .66 * R * mods.iris * (.96 + .06 * breath);
       const iris = ctx.createRadialGradient(gx, gy, 0, gx, gy, irisRadius);
@@ -939,13 +961,17 @@
       ctx.arc(gx, gy, irisRadius, 0, TAU);
       ctx.fill();
 
+      // Now and then the lens hunts for focus.
+      if (pose?.blur > .05) ctx.filter = `blur(${(pose.blur * .012 * R).toFixed(2)}px)`;
       this.drawGalaxy(g, gx, gy, tint, level, now);
+      ctx.filter = 'none';
       for (const [effect, p] of live) effect.spec.inner?.(g, effect, p);
       this.drawMotes(g, now);
       this.drawCore(g, gx, gy, tint, level, breath, flare, mods);
 
       ctx.globalCompositeOperation = 'source-over';
       this.drawLensFinish(g);
+      if (pose) this.drawLids(g, pose, tint);
       ctx.restore();
 
       ctx.globalCompositeOperation = 'lighter';
@@ -1072,6 +1098,44 @@
       }
     }
 
+    // The lens shutter: two lids that meet in a blink, sit low when tired,
+    // squint while scooping and tilt for a side-eye.
+    drawLids(g, pose, tint) {
+      const lid = clamp(pose.lid);
+      if (lid <= .01) return;
+      const {ctx, R, cx, cy, pal} = g;
+      const reach = .8 * R;
+      const shade = paint(mix(pal.bg, pal.border, .18), .98);
+      const edge = paint(mix(tint, pal.text, .2), .35 * g.level);
+      const tilt = (pose.tilt || 0) * reach * lid;
+      // Upper lid: its edge comes down to the centre when shut.
+      const top = cy - reach + lid * reach;
+      ctx.beginPath();
+      ctx.moveTo(cx - R, cy - R);
+      ctx.lineTo(cx + R, cy - R);
+      ctx.lineTo(cx + R, top + tilt);
+      ctx.quadraticCurveTo(cx, top + .22 * reach * lid, cx - R, top - tilt);
+      ctx.closePath();
+      ctx.fillStyle = shade;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + R, top + tilt);
+      ctx.quadraticCurveTo(cx, top + .22 * reach * lid, cx - R, top - tilt);
+      ctx.strokeStyle = edge;
+      ctx.lineWidth = g.k;
+      ctx.stroke();
+      // Lower lid: it rises to meet it.
+      const bottom = cy + reach - lid * reach;
+      ctx.beginPath();
+      ctx.moveTo(cx - R, cy + R);
+      ctx.lineTo(cx + R, cy + R);
+      ctx.lineTo(cx + R, bottom + tilt * .4);
+      ctx.quadraticCurveTo(cx, bottom - .18 * reach * lid, cx - R, bottom - tilt * .4);
+      ctx.closePath();
+      ctx.fillStyle = shade;
+      ctx.fill();
+    }
+
     drawLensFinish(g) {
       const {ctx, R, cx, cy, pal} = g;
       // The glass darkens toward its rim.
@@ -1115,6 +1179,8 @@
         lastEvent: this.lastEvent,
         frames: this.frames,
         size: this.size,
+        pose: this.pose ? {...this.pose} : null,
+        life: this.life ? this.life.state(performance.now()) : null,
       };
     }
 

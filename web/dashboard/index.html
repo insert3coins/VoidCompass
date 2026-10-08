@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="setup.css">
   <link rel="stylesheet" href="focused-log.css">
   <link rel="stylesheet" href="boot.css">
+  <script defer src="/assets/heartbeat-life.js"></script>
   <script defer src="/assets/heartbeat-orb.js"></script>
   <script type="module" src="boot-scene.js"></script>
   <link rel="stylesheet" href="/assets/cursor.css">
@@ -689,6 +690,7 @@
                     <label class="studio-field"><span>Text size<small>0 follows all overlays</small></span><div><input id="studio-hud-text-scale" type="number" min="0" max="200" step="5" data-studio-setting="hud_text_scale_percent"><b>%</b></div></label>
                     <label class="studio-field"><span>Small text<small>Labels grow; the HUD keeps its size</small></span><select id="studio-hud-labels" data-studio-setting="hud_label_size"><option value="standard">Standard</option><option value="large">Large</option><option value="larger">Larger</option></select></label>
                     <label class="studio-switch"><span><b>Brighter labels</b><small>Faded and grey labels at full strength.</small></span><input type="checkbox" data-overlay-option="hud_bright_labels"><i></i></label>
+                    <label class="studio-field"><span>Hologram<small>Still: for low-end PCs, it moves only when the state changes</small></span><select id="studio-hud-scene" data-studio-setting="hud_scene_mode"><option value="full">Full</option><option value="still">Still</option><option value="off">Off</option></select></label>
                   </section>
                   <section data-studio-settings="survey_status_hud">
                     <h4>SURVEY OPERATIONS</h4>
@@ -741,6 +743,8 @@
                     <h4>JOURNAL HEARTBEAT</h4>
                     <label class="studio-field"><span>Orb size</span><select id="studio-heartbeat-size" data-studio-setting="heartbeat_orb_size"><option value="54">54 PX</option><option value="72">72 PX</option><option value="96">96 PX</option></select></label>
                     <label class="studio-field"><span>Eye colour<small>At rest; danger still turns it red</small></span><select id="studio-heartbeat-eye" data-studio-setting="heartbeat_eye_color"><option value="theme">Theme accent</option><option value="hal">HAL red</option></select></label>
+                    <label class="studio-field"><span>Liveliness<small>How much the Watcher moves and feels between events</small></span><select id="studio-heartbeat-liveliness" data-studio-setting="heartbeat_liveliness"><option value="calm">Calm</option><option value="standard">Standard</option><option value="alive">Alive</option></select></label>
+                    <label class="studio-switch"><span><b>Idle motions</b><small>Blinks, breathing and glances between events; off, it only reacts.</small></span><input type="checkbox" data-overlay-option="heartbeat_idle_motion"><i></i></label>
                   </section>
                   <section data-studio-settings="music_player_hud">
                     <h4>MUSIC PLAYER</h4>
