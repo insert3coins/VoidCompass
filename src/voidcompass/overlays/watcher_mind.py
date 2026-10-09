@@ -26,7 +26,7 @@ from pathlib import Path
 import zlib
 
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
-from voidcompass.overlays import watcher_lines
+from voidcompass.overlays import watcher_idle, watcher_lines
 
 # How often it may speak (Overlay Studio). The gap is the least time
 # between two thoughts; `minimum` is the least importance it will voice.
@@ -34,9 +34,10 @@ FREQUENCIES = {
     "off": None,
     # gap: least time between two thoughts; minimum: least importance it
     # voices; quiet: how long without anything happening before it mutters.
-    "rare": {"gap": 300.0, "minimum": 2, "quiet": 900.0, "rest": 1200.0},
-    "occasional": {"gap": 75.0, "minimum": 1, "quiet": 300.0, "rest": 600.0},
-    "chatty": {"gap": 25.0, "minimum": 0, "quiet": 120.0, "rest": 300.0},
+    # mutter: least time between two idle thoughts (5.5.3.2).
+    "rare": {"gap": 300.0, "minimum": 2, "quiet": 900.0, "rest": 1200.0, "mutter": 1200.0},
+    "occasional": {"gap": 75.0, "minimum": 1, "quiet": 300.0, "rest": 600.0, "mutter": 600.0},
+    "chatty": {"gap": 25.0, "minimum": 0, "quiet": 120.0, "rest": 300.0, "mutter": 300.0},
 }
 DEFAULT_FREQUENCY = "rare"
 PERSONALITIES = ("stoic", "curious", "nervous", "weary")
@@ -46,6 +47,8 @@ DEFAULT_PERSONALITY = "weary"
 THOUGHT_SECONDS = 9.0
 # The same topic is not raised again for this long.
 TOPIC_REST_S = 20 * 60.0
+# The same kind of idle thought is not raised again for this long (5.5.3.2).
+IDLE_REST_S = 30 * 60.0
 # Enough to remember every line it has said for a long while.
 _MEMORY_LIMIT = 3000
 
@@ -100,6 +103,8 @@ IMPORTANCE = {
     "green_giant": 3,
     "sign_off": 3,
     "sign_off_quiet": 2,
+    # 5.5.3.2: idle thoughts about what's really around you.
+    **{topic: 1 for topic in watcher_idle.IDLE_TOPICS},
     "codex_new": 2,
     "codex_logged": 1,
     "big_sale": 1,
@@ -131,11 +136,11 @@ WEARY = watcher_lines.WEARY
 
 # How each personality weighs the topics (missing: 1).
 PERSONALITY_WEIGHTS = {
-    "stoic": {"quiet": 0, "docked_home": 0, "codex_logged": .5, "big_sale": .5, "greet_soon": .5},
-    "curious": {"codex_new": 1.5, "codex_logged": 1.5, "undiscovered_system": 1.5, "new_region": 1.3},
+    "stoic": {"quiet": 0, "docked_home": 0, "idle": .4, "codex_logged": .5, "big_sale": .5, "greet_soon": .5},
+    "curious": {"idle": 1.3, "codex_new": 1.5, "codex_logged": 1.5, "undiscovered_system": 1.5, "new_region": 1.3},
     "nervous": {"danger": 1.6, "fuel_low": 1.6, "after_death": 1.5, "quiet": 1.2, "danger_over": 1.4},
     # The weary one mutters to itself more in the quiet.
-    "weary": {"quiet": 1.6, "docked_home": 1.3, "long_session": 1.3, "big_sale": .8},
+    "weary": {"idle": 1.4, "quiet": 1.6, "docked_home": 1.3, "long_session": 1.3, "big_sale": .8},
 }
 
 
@@ -229,6 +234,8 @@ class WatcherMind:
         self._last_interesting = self.clock()
         self._pending = []           # (importance, topic, fields)
         self._dead_since = None
+        # What's around the commander, for idle thoughts (5.5.3.2).
+        self.surroundings = watcher_idle.Surroundings()
 
     # -- memory --------------------------------------------------------------
     def _load(self):
@@ -299,10 +306,11 @@ class WatcherMind:
         if setting is None:
             return None
         importance, _variants = TOPICS[topic]
-        if personality(self.config) == "weary" and topic in {"quiet", "docked_home"}:
+        if personality(self.config) == "weary" and (topic in {"quiet", "docked_home"} or topic in watcher_idle.IDLE_TOPICS):
             # A depressed robot complains about the quiet: worth saying aloud.
             importance = max(importance, 2)
-        weight = PERSONALITY_WEIGHTS.get(personality(self.config), {}).get(topic, 1)
+        weights = PERSONALITY_WEIGHTS.get(personality(self.config), {})
+        weight = weights.get(topic, weights.get("idle", 1) if topic in watcher_idle.IDLE_TOPICS else 1)
         if weight <= 0:
             return None
         now = self.clock()
@@ -311,7 +319,10 @@ class WatcherMind:
                 return None
             if importance < 3 and now - self._last_spoke < setting["gap"]:
                 return None
-            if importance < 3 and self._said_recently(topic, setting.get("rest", TOPIC_REST_S)):
+            rest = setting.get("rest", TOPIC_REST_S)
+            if topic in watcher_idle.IDLE_TOPICS:
+                rest = max(rest, IDLE_REST_S)  # each kind of idle remark, at most every half hour
+            if importance < 3 and self._said_recently(topic, rest):
                 return None
             # Even with something to say, it often keeps it to itself.
             chance = min(1.0, (.35 + .25 * importance) * weight)
@@ -355,6 +366,7 @@ class WatcherMind:
             # A reload mid-session (or a second sign of life): already greeted.
             return None
         self._session_start = now
+        self.surroundings.reset_session()
         last = self.memory.get("last_seen")
         previous_start = self.memory.get("session_started")
         with self.lock:
@@ -390,6 +402,11 @@ class WatcherMind:
         last_event, self._last_event_at = getattr(self, "_last_event_at", None), now
         if self._session_start is not None and last_event is not None and now - last_event > 900:
             self._session_start = None
+        self.surroundings.observe(
+            event, raw,
+            rarity=rarity({"planet_class": raw.get("PlanetClass")}) if event == "Scan" else None,
+            green=event == "CodexEntry" and is_green_giant_codex(raw),
+        )
         if event in {"LoadGame"}:
             return self.session_start()
         if self._session_start is None and event == "Died":
@@ -558,8 +575,22 @@ class WatcherMind:
                     return thought
         setting = FREQUENCIES.get(frequency(self.config)) or {}
         quiet = setting.get("quiet", 900.0)
-        # Muttering into the quiet: at most every 15 minutes, whatever the setting.
+        # Into the quiet: something about what's around (the star, the
+        # system, how far from home, the session so far, the hour), or a
+        # plain mutter. At most one idle thought per `mutter` (5 min on
+        # Chatty, 10 on Occasional, 20 on Rare).
         if (now - self._last_interesting > quiet and now - self._last_spoke > quiet
-                and not self._said_recently("quiet", max(900.0, setting.get("rest", 900.0)))):
-            return self.consider("quiet")
+                and not self._said_recently("idle", setting.get("mutter", 1200.0))):
+            choices = self.surroundings.choices(now, self.random)
+            # The plain mutter now and then, and whenever nothing else fits.
+            if not choices or self.random.random() < .25:
+                choices.insert(0, ("quiet", {}))
+            else:
+                choices.append(("quiet", {}))
+            for topic, fields in choices:
+                thought = self.consider(topic, fields)
+                if thought:
+                    with self.lock:
+                        self.memory["said"].append(["idle", now])
+                    return thought
         return None

@@ -26,6 +26,12 @@ class Always:
     def choice(self, options):
         return options[0]
 
+    def shuffle(self, items):
+        pass
+
+    def randrange(self, stop):
+        return 0
+
 
 class Clock:
     def __init__(self, now=1_800_000_000.0):
@@ -137,7 +143,8 @@ class MindTests(unittest.TestCase):
     def test_when_it_speaks(self):
         """It greets on the first live event (even when Void Compass started
         after the game), once; Chatty remarks on everyday play, Rare doesn't;
-        it mutters only once the session has begun, at most every 15 min."""
+        it mutters only once the session has begun; on Chatty at most one
+        idle thought every 5 minutes (5.5.3.2)."""
         clock = Clock()
         chatty = mind(clock=clock)
         self.assertIsNone(chatty.tick(), "nothing to think about before the game")
@@ -155,8 +162,8 @@ class MindTests(unittest.TestCase):
         clock.now += 300
         muttered = [chatty.tick() for _ in range(3)]
         self.assertEqual(muttered[0]["topic"], "quiet")
-        clock.now += 300
-        self.assertIsNone(chatty.tick(), "not again within 15 minutes")
+        clock.now += 240
+        self.assertIsNone(chatty.tick(), "not again within 5 minutes on Chatty")
 
     def test_its_nature_shapes_what_it_says(self):
         stoic = mind({"heartbeat_personality": "stoic"})
