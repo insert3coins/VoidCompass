@@ -80,7 +80,7 @@
 
   The metal and glass are drawn once and reused, so it costs about as much to draw as before.
 
-* **Trading searches are much faster.** They now work the way EDNexus does:
+* **Trading searches are much faster.**
   * **Where to buy or sell a commodity, and Sell My Cargo,** ask Spansh for just the nearest stations with stock or demand. That takes about half a second to a second and a half, where the old lookup took 15–30 seconds and downloaded megabytes.
   * **Large pads, carriers and planetary stations** are filtered by Spansh, so every result is one you can use.
   * **One connection to Spansh** is kept open and reused, and opening the Trading tab warms it up, so your first search doesn't wait for a handshake.
