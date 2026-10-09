@@ -164,6 +164,20 @@
   let fineGalaxy = null;
   const galaxyFor = (R) => (R > 60 ? (fineGalaxy ||= buildGalaxy(760, 150, 140, true)) : GALAXY);
 
+  // The iris's fibres (5.5.3.2): radial strands from the collarette out
+  // toward the iris's edge, in three brightnesses, more on a larger eye.
+  function buildFibres(count) {
+    const next = random(7331);
+    return Array.from({length: count}, (_, index) => ({
+      angle: (index + next() * .7) / count * TAU,
+      from: .16 + next() * .08,
+      to: .36 + next() * .4,
+      bucket: Math.min(2, Math.floor(next() * next() * 3.4)),
+    }));
+  }
+  const FIBRES = {small: buildFibres(36), medium: buildFibres(80), large: buildFibres(260)};
+  const fibresFor = (R) => (R > 60 ? FIBRES.large : R >= 30 ? FIBRES.medium : FIBRES.small);
+
   // Overlay sizes (up to 96 px) scale lines with the orb. Past that, lines
   // grow more slowly than the orb so a large eye keeps fine detail.
   const lineScale = (R) => (R <= 48 ? R / 27 : (48 / 27) * (R / 48) ** .45);
@@ -517,6 +531,11 @@
             g.arc(side - .5, side + .5, radius, 1, fx.color, voice * .7 * fx.w);
           }
         }
+        // Rings of its voice rising out of the pupil (5.5.3.2).
+        for (let ring = 0; ring < 3; ring += 1) {
+          const q = (p * 5 + ring / 3) % 1;
+          g.ring(.1 + .48 * q, .7, fx.color, voice * (1 - q) * .3 * fx.w);
+        }
       },
     },
     glint: {
@@ -636,6 +655,8 @@
       // Its aperture, glances, activity and moods between events (heartbeat-life.js).
       this.life = window.HeartbeatLife ? new window.HeartbeatLife() : null;
       this.pose = null;
+      this.layers = new Map();
+      this.palKey = '';
       this.seed = 1;
       this.size = 0;
       this.ratio = 1;
@@ -672,6 +693,7 @@
       const now = performance.now();
       this.decay(now);
       this.pal = themeColors(input.palette || {});
+      this.palKey = JSON.stringify(this.pal);
       this.eye = input.eye === 'hal' ? 'hal' : 'theme';
       this.reduced = Boolean(input.reducedMotion);
       this.crt = input.crt !== false;
@@ -754,6 +776,36 @@
       this.decayedAt = now;
       for (const tone of TONES) this.heat[tone] *= Math.exp(-elapsed / TONE_MEMORY[tone]);
       this.arousal *= Math.exp(-elapsed / 12000);
+    }
+
+    // Composing a thought: the aperture closes in while it thinks (5.5.3.2).
+    think(ms = 600) {
+      if (this.reduced || this.stalled) return;
+      this.life?.think(ms, performance.now());
+    }
+
+    // How it feels about what it's saying: the eye acts it out. (feel()
+    // is the event's colour in the iris; this is a thought's mood.)
+    showMood(mood) {
+      if (this.reduced || this.stalled) return;
+      this.life?.feel(mood, performance.now());
+    }
+
+    // The metal and glass that don't change frame to frame, painted once per
+    // size, palette and scanline setting and reused (5.5.3.2).
+    layer(name, paint) {
+      const key = `${name}|${this.size}|${this.ratio}|${this.palKey}|${this.crt}`;
+      let canvas = this.layers.get(key);
+      if (canvas) return canvas;
+      if (this.layers.size > 8) this.layers.clear();
+      canvas = document.createElement('canvas');
+      canvas.width = canvas.height = Math.max(1, Math.round(this.size * this.ratio));
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
+      const R = this.size / 2;
+      paint(geometry(ctx, R, R, R, this.pal));
+      this.layers.set(key, canvas);
+      return canvas;
     }
 
     // The eye speaks a thought: its pupil rises and falls like a voice.
@@ -991,6 +1043,7 @@
       ctx.beginPath();
       ctx.arc(gx, gy, irisRadius, 0, TAU);
       ctx.fill();
+      this.drawFibres(g, gx, gy, irisRadius, tint, level);
 
       // Now and then the lens hunts for focus.
       if (pose?.blur > .05) ctx.filter = `blur(${(pose.blur * .012 * R).toFixed(2)}px)`;
@@ -998,10 +1051,15 @@
       ctx.filter = 'none';
       for (const [effect, p] of live) effect.spec.inner?.(g, effect, p);
       this.drawMotes(g, now);
+      this.drawDiaphragm(g, gx, gy, irisRadius, tint, level, pose?.aperture || 0);
+      ctx.globalCompositeOperation = 'lighter';
       this.drawCore(g, gx, gy, tint, level, breath, flare, mods);
 
       ctx.globalCompositeOperation = 'source-over';
-      this.drawLensFinish(g);
+      ctx.drawImage(this.layer('glass', (layer) => this.paintGlass(layer)), cx - R, cy - R, 2 * R, 2 * R);
+      ctx.globalCompositeOperation = 'lighter';
+      this.drawGhosts(g, gx, gy, tint, level);
+      ctx.globalCompositeOperation = 'source-over';
       if (pose?.glint != null) this.drawGlint(g, pose.glint);
       if (pose) this.drawLids(g, pose);
       ctx.restore();
@@ -1024,39 +1082,20 @@
     }
 
     drawBezel(g, tint, level) {
-      const {ctx, R, cx, cy, pal, k} = g;
-      const outer = .97 * R;
-      const inner = .8 * R;
-      const band = () => {
-        ctx.beginPath();
-        ctx.arc(cx, cy, outer, 0, TAU);
-        ctx.arc(cx, cy, inner, 0, TAU, true);
-      };
-      // Brushed metal, lit from the upper left like HAL's faceplate.
-      const metal = ctx.createRadialGradient(cx - .3 * R, cy - .35 * R, .1 * R, cx, cy, outer);
-      metal.addColorStop(0, paint(mix(pal.text, pal.bg, .25)));
-      metal.addColorStop(.6, paint(mix(pal.text, pal.bg, .55)));
-      metal.addColorStop(.85, paint(mix(pal.border, pal.bg, .45)));
-      metal.addColorStop(1, paint(pal.bg));
-      band();
-      ctx.fillStyle = metal;
+      const {ctx, R, cx, cy, pal} = g;
+      ctx.drawImage(this.layer('bezel', (layer) => this.paintBezel(layer)), cx - R, cy - R, 2 * R, 2 * R);
+      // The iris's light spills onto the inner lip of the bezel.
+      ctx.globalCompositeOperation = 'lighter';
+      const spill = ctx.createRadialGradient(cx, cy, .79 * R, cx, cy, .9 * R);
+      spill.addColorStop(0, paint(tint, .15 * level));
+      spill.addColorStop(.45, paint(tint, .04 * level));
+      spill.addColorStop(1, paint(tint, 0));
+      ctx.fillStyle = spill;
+      ctx.beginPath();
+      ctx.arc(cx, cy, .9 * R, 0, TAU);
+      ctx.arc(cx, cy, .8 * R, 0, TAU, true);
       ctx.fill();
-      if (ctx.createConicGradient) {
-        const sheen = ctx.createConicGradient(-Math.PI * .75, cx, cy);
-        sheen.addColorStop(0, paint(pal.text, 0));
-        sheen.addColorStop(.07, paint(pal.text, .38));
-        sheen.addColorStop(.15, paint(pal.text, 0));
-        sheen.addColorStop(.5, paint(pal.text, 0));
-        sheen.addColorStop(.57, paint(pal.text, .16));
-        sheen.addColorStop(.64, paint(pal.text, 0));
-        sheen.addColorStop(1, paint(pal.text, 0));
-        band();
-        ctx.fillStyle = sheen;
-        ctx.fill();
-      }
-      g.ring(.97, .8, pal.bg, .9);
-      g.ring(.8, 1.4, pal.bg, 1);
-      g.ring(.815, .6, mix(pal.text, pal.bg, .35), .5);
+      ctx.globalCompositeOperation = 'source-over';
       // Instrument indexing round the lens, in the eye's own colour.
       const count = R >= 120 ? 96 : R >= 36 ? 48 : 24;
       for (let index = 0; index < count; index += 1) {
@@ -1070,6 +1109,195 @@
       g.dot(x, y, 2.4, tint, .18 * level);
       g.dot(x, y, 1, mix(tint, pal.text, .6), .9 * level);
       ctx.globalCompositeOperation = 'source-over';
+    }
+
+    // The bezel's metal, painted once (layer()): brushed aluminium lit from
+    // the upper left like HAL's faceplate, a bevelled outer edge and an inner
+    // lip falling away to the glass.
+    paintBezel(g) {
+      const {ctx, R, cx, cy, pal, k} = g;
+      const outer = .97 * R;
+      const inner = .8 * R;
+      const band = () => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, outer, 0, TAU);
+        ctx.arc(cx, cy, inner, 0, TAU, true);
+      };
+      const metal = ctx.createRadialGradient(cx - .3 * R, cy - .35 * R, .1 * R, cx, cy, outer);
+      metal.addColorStop(0, paint(mix(pal.text, pal.bg, .25)));
+      metal.addColorStop(.6, paint(mix(pal.text, pal.bg, .55)));
+      metal.addColorStop(.85, paint(mix(pal.border, pal.bg, .45)));
+      metal.addColorStop(1, paint(pal.bg));
+      band();
+      ctx.fillStyle = metal;
+      ctx.fill();
+      // Brushing: fine concentric grain, light and dark.
+      const grain = random(4242);
+      const lines = Math.round(clamp(R * 1.6, 24, 360));
+      const pitch = (outer - inner) / lines;
+      ctx.lineWidth = Math.max(.3, pitch * .8);
+      for (let index = 0; index < lines; index += 1) {
+        const radius = inner + pitch * (index + grain() * .8);
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, TAU);
+        ctx.strokeStyle = paint(grain() < .5 ? pal.text : pal.bg, .025 + .06 * grain());
+        ctx.stroke();
+      }
+      if (ctx.createConicGradient) {
+        // Anisotropic sheen: brushed metal throws light in long arcs.
+        const sheen = ctx.createConicGradient(-Math.PI * .75, cx, cy);
+        sheen.addColorStop(0, paint(pal.text, 0));
+        sheen.addColorStop(.06, paint(pal.text, .42));
+        sheen.addColorStop(.15, paint(pal.text, 0));
+        sheen.addColorStop(.5, paint(pal.text, 0));
+        sheen.addColorStop(.56, paint(pal.text, .18));
+        sheen.addColorStop(.64, paint(pal.text, 0));
+        sheen.addColorStop(1, paint(pal.text, 0));
+        band();
+        ctx.fillStyle = sheen;
+        ctx.fill();
+        // The bevels: the outer edge catches the light upper left; the
+        // inner lip, facing the other way, catches it lower right.
+        const bevel = (radius, width, lit) => {
+          const edge = ctx.createConicGradient(lit - Math.PI, cx, cy);
+          edge.addColorStop(0, paint(pal.bg, .6));
+          edge.addColorStop(.3, paint(pal.text, .04));
+          edge.addColorStop(.5, paint(pal.text, .5));
+          edge.addColorStop(.7, paint(pal.text, .04));
+          edge.addColorStop(1, paint(pal.bg, .6));
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius * R, 0, TAU);
+          ctx.strokeStyle = edge;
+          ctx.lineWidth = width * k;
+          ctx.stroke();
+        };
+        bevel(.955, 1.5, Math.PI * 1.25);
+        bevel(.826, 2, Math.PI * .25);
+      }
+      g.ring(.97, .8, pal.bg, .9);
+      g.ring(.8, 1.4, pal.bg, 1);
+      g.ring(.812, .5, mix(pal.text, pal.bg, .35), .45);
+    }
+
+    // The glass, painted once (layer()): darker toward the rim, the faint
+    // rings of the lens elements behind it, HAL's window reflections and the
+    // scanlines.
+    paintGlass(g) {
+      const {ctx, R, cx, cy, pal} = g;
+      const rim = ctx.createRadialGradient(cx, cy, .55 * R, cx, cy, .8 * R);
+      rim.addColorStop(0, paint(pal.bg, 0));
+      rim.addColorStop(1, paint(pal.bg, .75));
+      ctx.fillStyle = rim;
+      ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+      if (R >= 20) {
+        for (const [radius, alpha] of [[.34, .04], [.5, .035], [.66, .05], [.74, .03]]) {
+          g.ring(radius, .6, pal.text, alpha);
+        }
+      }
+      ctx.lineCap = 'round';
+      g.arc(Math.PI * 1.08, Math.PI * 1.38, .64, .07 * R / g.k, pal.text, .16);
+      g.arc(Math.PI * 1.12, Math.PI * 1.3, .52, .04 * R / g.k, pal.text, .08);
+      g.arc(Math.PI * .12, Math.PI * .3, .66, .05 * R / g.k, pal.text, .07);
+      ctx.lineCap = 'butt';
+      const spot = ctx.createRadialGradient(cx - .34 * R, cy - .46 * R, 0, cx - .34 * R, cy - .46 * R, .09 * R);
+      spot.addColorStop(0, paint(pal.text, .45));
+      spot.addColorStop(1, paint(pal.text, 0));
+      ctx.fillStyle = spot;
+      ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+      if (this.crt) {
+        const step = Math.max(2, 2 * g.k);
+        ctx.fillStyle = paint(pal.bg, .1);
+        for (let y = cy - .8 * R; y < cy + .8 * R; y += step) ctx.fillRect(cx - R, y, 2 * R, step / 2);
+      }
+    }
+
+    // The iris's texture: fine radial fibres round the pupil, turning slowly
+    // with the galaxy, and the collarette where they start.
+    drawFibres(g, gx, gy, irisRadius, tint, level) {
+      const {ctx, R, k, pal} = g;
+      const fibres = fibresFor(R);
+      const turn = this.spin * .05;
+      const color = mix(tint, pal.text, .15);
+      for (let bucket = 0; bucket < 3; bucket += 1) {
+        ctx.beginPath();
+        for (const fibre of fibres) {
+          if (fibre.bucket !== bucket) continue;
+          const angle = fibre.angle + turn;
+          const cos = Math.cos(angle);
+          const sin = Math.sin(angle) * .95;
+          ctx.moveTo(gx + cos * fibre.from * irisRadius, gy + sin * fibre.from * irisRadius);
+          ctx.lineTo(gx + cos * fibre.to * irisRadius, gy + sin * fibre.to * irisRadius);
+        }
+        ctx.strokeStyle = paint(color, [.035, .065, .11][bucket] * level);
+        ctx.lineWidth = .5 * k;
+        ctx.stroke();
+      }
+      g.circle(gx, gy, .19 * irisRadius, .6, tint, .16 * level);
+      g.circle(gx, gy, .93 * irisRadius, .5, tint, .07 * level);
+    }
+
+    // The aperture as a camera's diaphragm: seven blades closing in over the
+    // iris while it thinks, their edges catching the light.
+    drawDiaphragm(g, gx, gy, irisRadius, tint, level, closing) {
+      const {ctx, R, pal} = g;
+      if (closing < .02 || R < 20) return;
+      const blades = 7;
+      const outer = irisRadius * 1.06;
+      const inner = irisRadius * (1 - .4 * closing);
+      const turn = this.spin * .03 + closing * .7;
+      const corner = (index, radius) => {
+        const angle = turn + index / blades * TAU;
+        return [gx + Math.cos(angle) * radius, gy + Math.sin(angle) * radius];
+      };
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.beginPath();
+      ctx.arc(gx, gy, outer, 0, TAU);
+      for (let index = blades; index >= 0; index -= 1) {
+        const [x, y] = corner(index, inner);
+        if (index === blades) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = paint(pal.bg, .6 * closing);
+      ctx.fill('evenodd');
+      ctx.globalCompositeOperation = 'lighter';
+      const edge = mix(tint, pal.text, .3);
+      for (let index = 0; index < blades; index += 1) {
+        const [x1, y1] = corner(index, inner);
+        const angle = turn + index / blades * TAU + .95;
+        g.line(x1, y1, gx + Math.cos(angle) * outer * .98, gy + Math.sin(angle) * outer * .98, edge, .18 * closing * level, .5);
+      }
+      ctx.beginPath();
+      for (let index = 0; index <= blades; index += 1) {
+        const [x, y] = corner(index, inner);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = paint(tint, .32 * closing * level);
+      ctx.lineWidth = .6 * g.k;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Depth in the glass: two ghosts of the iris's light, mirrored through
+    // the lens as real optics throw them, and the glow caught along the
+    // glass's lower edge.
+    drawGhosts(g, gx, gy, tint, level) {
+      const {ctx, R, cx, cy, pal} = g;
+      if (R < 20) return;
+      const ox = cx - gx;
+      const oy = cy - gy;
+      const disc = ctx.createRadialGradient(cx + .36 * R + ox * .8, cy + .42 * R + oy * .8, 0,
+        cx + .36 * R + ox * .8, cy + .42 * R + oy * .8, .06 * R);
+      disc.addColorStop(0, paint(tint, .1 * level));
+      disc.addColorStop(1, paint(tint, 0));
+      ctx.fillStyle = disc;
+      ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+      g.circle(cx + .2 * R + ox * .4, cy + .24 * R + oy * .4, .11 * R, .6, tint, .06 * level);
+      ctx.lineCap = 'round';
+      g.arc(-Math.PI * .1, Math.PI * .55, .785, 1.3, mix(tint, pal.text, .2), .22 * level);
+      ctx.lineCap = 'butt';
     }
 
     drawGalaxy(g, gx, gy, tint, level, now) {
@@ -1116,6 +1344,29 @@
       ctx.beginPath();
       ctx.arc(gx, gy, halo, 0, TAU);
       ctx.fill();
+      // A wider bloom, and the faint horizontal streak a lens throws from a
+      // bright point (stronger as it flares or speaks).
+      const bloom = ctx.createRadialGradient(gx, gy, 0, gx, gy, halo * 2.2);
+      bloom.addColorStop(0, paint(tint, .12 * level));
+      bloom.addColorStop(1, paint(tint, 0));
+      ctx.fillStyle = bloom;
+      ctx.beginPath();
+      ctx.arc(gx, gy, halo * 2.2, 0, TAU);
+      ctx.fill();
+      if (R >= 20) {
+        const length = R * (.32 + .3 * Math.min(1, flare));
+        ctx.save();
+        ctx.translate(gx, gy);
+        ctx.scale(1, .04 + .02 * Math.min(1, flare));
+        const streak = ctx.createRadialGradient(0, 0, 0, 0, 0, length);
+        streak.addColorStop(0, paint(mix(pal.text, tint, .3), (.1 + .3 * Math.min(1, flare)) * level));
+        streak.addColorStop(1, paint(tint, 0));
+        ctx.fillStyle = streak;
+        ctx.beginPath();
+        ctx.arc(0, 0, length, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
       g.dot(gx, gy, core / g.k, mix(pal.text, tint, .15), Math.min(1, level * (1 + .5 * flare)));
       const spikes = mods.spikes;
       if (spikes > 0) {
@@ -1189,33 +1440,6 @@
       band.addColorStop(1, paint(pal.text, 0));
       ctx.fillStyle = band;
       ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
-    }
-
-    drawLensFinish(g) {
-      const {ctx, R, cx, cy, pal} = g;
-      // The glass darkens toward its rim.
-      const rim = ctx.createRadialGradient(cx, cy, .55 * R, cx, cy, .8 * R);
-      rim.addColorStop(0, paint(pal.bg, 0));
-      rim.addColorStop(1, paint(pal.bg, .75));
-      ctx.fillStyle = rim;
-      ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
-      // HAL's window reflections: a long curved band upper left, a small one
-      // lower right.
-      ctx.lineCap = 'round';
-      g.arc(Math.PI * 1.08, Math.PI * 1.38, .64, .07 * R / g.k, pal.text, .16);
-      g.arc(Math.PI * 1.12, Math.PI * 1.3, .52, .04 * R / g.k, pal.text, .08);
-      g.arc(Math.PI * .12, Math.PI * .3, .66, .05 * R / g.k, pal.text, .07);
-      ctx.lineCap = 'butt';
-      const spot = ctx.createRadialGradient(cx - .34 * R, cy - .46 * R, 0, cx - .34 * R, cy - .46 * R, .09 * R);
-      spot.addColorStop(0, paint(pal.text, .45));
-      spot.addColorStop(1, paint(pal.text, 0));
-      ctx.fillStyle = spot;
-      ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
-      if (this.crt) {
-        const step = Math.max(2, 2 * g.k);
-        ctx.fillStyle = paint(pal.bg, .1);
-        for (let y = cy - .8 * R; y < cy + .8 * R; y += step) ctx.fillRect(cx - R, y, 2 * R, step / 2);
-      }
     }
 
     // What the orb is doing, for tests and diagnostics.

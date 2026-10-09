@@ -85,7 +85,11 @@
     pleased: {ms: 3200, upper: .1, lower: .45, pupil: .18, tone: 'green', toneAmount: .35, bright: .12, flare: .35},
     focused: {ms: 3600, upper: .2, lower: .1, pupil: -.1, still: 1},
     reading: {ms: 2600, upper: .12, lower: .06, reading: 1},
+    // Saying something gloomy (5.5.3.2): the lids fall, the eye dims and drops.
+    downcast: {ms: 4200, upper: .34, lower: .04, pupil: -.12, bright: -.14, down: .04},
   };
+  // A thought's mood (watcher_mind.MOODS) and the expression it plays.
+  const MOOD_EXPRESSIONS = {pleased: 'pleased', wary: 'wary', curious: 'curious', downcast: 'downcast'};
   // Its nature (Overlay Studio): how strongly each feeling takes it.
   const NATURES = {
     stoic: {all: .6, excitement: .6},
@@ -93,7 +97,7 @@
     nervous: {startled: 1.6, wary: 1.6, curious: .8, tension: 1.8},
     // Depressed (the default): heavy lids, a low gaze, a dim slow eye,
     // frequent sighs, and very little impresses it.
-    weary: {all: .55, excitement: .3, pleased: .3, curious: .55, startled: .7, lids: .3, lower: .08,
+    weary: {all: .55, excitement: .3, pleased: .3, curious: .55, startled: .7, downcast: 1.8, lids: .3, lower: .08,
       dim: .8, spin: .55, look: .03, sighs: 3},
   };
   const GRIEF_MS = 10 * 60 * 1000;
@@ -199,6 +203,28 @@
       if (t < 0) return null;
       const envelope = t < .12 ? smooth(t / .12) : t < .7 ? 1 : 1 - smooth((t - .7) / .3);
       return {name: expression.name, t, strength: envelope * expression.strength, spec: EXPRESSIONS[expression.name]};
+    }
+
+    // Saying a thought: the eye shows how it feels about it.
+    feel(mood, now = performance.now()) {
+      const name = MOOD_EXPRESSIONS[String(mood || '')];
+      if (!name || this.reduced) return;
+      this.express(name, now, .85 * this.natureOf(name));
+      // A gloomy thought comes with a sigh.
+      if (name === 'downcast' && (!this.sighAt || now - this.sighAt > 2600)) this.sighAt = now;
+    }
+
+    // Composing a thought: the aperture tightens and holds until it speaks.
+    think(ms, now = performance.now()) {
+      if (this.reduced) return;
+      this.thinkStart = now;
+      this.thinkUntil = now + Math.max(200, Number(ms) || 600);
+    }
+
+    thinking(now) {
+      if (!this.thinkUntil || now < this.thinkStart) return 0;
+      if (now < this.thinkUntil) return .85 * smooth(clamp((now - this.thinkStart) / 260));
+      return .85 * (1 - smooth(clamp((now - this.thinkUntil) / 450)));
     }
 
     between(low, high) {
@@ -426,7 +452,8 @@
       let dx = lx + stance.x * level;
       // A depressed eye rests low.
       let dy = ly + stance.y * level - .02 * charge + (NATURES[this.nature]?.look || 0);
-      let aperture = 0;
+      // Composing a thought tightens it, idle motions or not.
+      let aperture = this.reduced ? 0 : this.thinking(now);
       let glint = null;
       let sigh = 0;
       if (this.idle && !this.reduced) {
@@ -435,10 +462,14 @@
           dx += this.saccade.x;
           dy += this.saccade.y;
         }
-        aperture = this.aperture(now);
+        aperture = Math.max(aperture, this.aperture(now));
         glint = this.glint(now);
         if (this.sighAt) sigh = Math.sin(Math.PI * clamp((now - this.sighAt) / 2600));
       }
+      // A sigh with a gloomy thought shows even with idle motions off.
+      if (!sigh && this.sighAt && !this.reduced) sigh = Math.sin(Math.PI * clamp((now - this.sighAt) / 2600));
+      // A downcast eye drops its gaze.
+      dy += (spec.down || 0) * strength;
       if (spec.reading && strength > .05) {
         // Reading a message: three lines, left to right, a quick return each.
         const line = clamp(feeling.t * 3, 0, 2.999);

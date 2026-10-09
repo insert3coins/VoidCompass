@@ -20,6 +20,39 @@
 
   The same kind of remark waits at least half an hour before it comes up again. Plain mutters about the silence still come now and then. Stoic says the least; Curious and Depressed say the most.
 
+* **The Watcher talks like it means it:**
+  * **It thinks first.** Before it speaks, its aperture closes in for a moment, then it types.
+  * **It types like it's thinking.** The pace varies, it pauses after a comma and longer after a full stop, and now and then it corrects itself ("I ~~love~~ tolerate this one.").
+  * **Its eye acts out what it says.**
+    * A happy find lifts the lower lid and tints it green.
+    * Danger narrows it.
+    * A new star or a strange one widens it.
+    * Something gloomy drops the lids and dims the eye with a sigh.
+  * **Second thoughts.** Sometimes a second beat follows: "Not that anyone asked."
+  * **It notices the rest of the app.** It comments on the music playing in the Music player, Galnet's latest headline, how many thoughts it has shared with you, how many sessions you've flown together, and how many times you've died while it watched.
+
+  There are 70 more lines in both voices.
+* **The Watcher has far more to say, so a long session doesn't repeat:**
+  * **Every topic has a deep bank,** at least 10 lines per voice. The busiest (arrivals, scooping, mapping, analysing, idle mutters, second thoughts) have 20 to 36. That's nearly 2,000 lines between its two voices, and no line belongs to two topics.
+  * **Tested over four hours on Chatty:** a simulated evening of jumping, scanning, scooping, landing and walking about gives over 75 remarks, with no line said twice.
+  * **It knows what you're doing in Elite.** It has thoughts for:
+    * **in your ship:** the ship itself (its type and the name you gave it), supercruise through a system, and a world below as you approach it;
+    * **on the surface:** driving the SRV, and a settlement nearby;
+    * **on foot:** your suit, and walking a station concourse;
+    * **travelling:** riding in an Apex taxi, or docked on a fleet carrier.
+  * **It reacts to more of what you do:** neutron jet-cone boosts, heat warnings, escaped interdictions, launching the SRV, settlements coming into view, booking a taxi, and carrier jumps.
+  * **It saves what it has said every few minutes.** A crash or a closed app no longer lets it repeat itself next time.
+
+* **The Watcher looks better:**
+  * **The bezel** is brushed metal with bevelled edges, lit from the upper left. The iris's light spills onto its inner lip.
+  * **The iris** has fine fibres round the pupil, turning slowly with the galaxy.
+  * **When it thinks,** a seven-bladed diaphragm closes in over the iris, like a camera's.
+  * **The glass has depth:** the faint rings of the lens elements, ghost reflections and the glow caught along its lower edge.
+  * **The pupil** has a wider bloom and a faint lens streak, stronger as it flares or speaks.
+  * **While it speaks,** rings of its voice rise out of the pupil.
+
+  The metal and glass are drawn once and reused, so it costs about as much to draw as before.
+
 ## Earlier releases
 
 * **v5.5.3.1** — Settlement and site signals; EDDiscovery-style body facts in Explore's orrery; rare worlds lead Survey's NOTABLE (green gas giants paired from the Codex); the Watcher's own thoughts, memory and depressed nature, with 500+ lines, rare-world remarks and a sign-off; thought backdrop, colour, size and stay; check for updates in Settings; Session Pulse with time flown, earnings, firsts and rare worlds; the Mission Directive and Focused Log know fuel, rare worlds, Codex colours, trade routes and colonisation.

@@ -1430,6 +1430,27 @@ class MainDashboard(
             return index.entry_flag(key, region)
         return index.species_flag(key, region)
 
+    def _watcher_context(self):
+        """What the rest of the app knows, for the Watcher's idle thoughts:
+        the track playing in the Music player and Galnet's latest headline."""
+        context = {}
+        status = getattr(self, "_music_status", None) or {}
+        if status.get("playing") and status.get("track_id"):
+            try:
+                track = self.music_library().track(status["track_id"]) or {}
+            except Exception:
+                track = {}
+            if track.get("title"):
+                context["music"] = {"title": str(track["title"])[:120], "artist": str(track.get("artist") or "")[:120]}
+        if self.config.get("galnet_enabled", True):
+            try:
+                articles = (self._html_dashboard_galnet() or {}).get("articles") or []
+                if articles and articles[0].get("title"):
+                    context["galnet"] = str(articles[0]["title"])[:160]
+            except Exception:
+                pass
+        return context
+
     def _watcher_sign_off(self):
         """At Shutdown the Watcher sums up the session, in the Captain's
         Log's own figures (the same as the deck's Session Pulse)."""
@@ -2555,6 +2576,7 @@ class MainDashboard(
 
         if self._overlay_enabled("heartbeat_hud"):
             self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
+            self.heartbeat_hud.context_provider = self._watcher_context
         else:
             self.heartbeat_hud = None
 
@@ -4859,6 +4881,7 @@ class MainDashboard(
         if self._overlay_enabled("heartbeat_hud"):
             if self.heartbeat_hud is None:
                 self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
+                self.heartbeat_hud.context_provider = self._watcher_context
         elif self.heartbeat_hud:
             self.heartbeat_hud.destroy()
             self.heartbeat_hud = None

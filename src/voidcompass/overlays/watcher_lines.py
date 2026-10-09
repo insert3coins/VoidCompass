@@ -448,7 +448,7 @@ NORMAL = {
         "It's {clock}. The quiet hours. I like them.",
         "{clock}, and still flying. I'll keep you company.",
         "Past midnight. {clock}. Just us and the stars.",
-        "{clock}. Everyone else is asleep. We have the galaxy to ourselves.",
+        "{clock}. The stations are dimmed and the lanes are empty.",
         "It's late. {clock}. Don't forget to sleep sometime.",
     ],
     "idle_morning": [
@@ -479,6 +479,51 @@ NORMAL = {
         "I'll mind the ship.",
         "Out on foot. I'll keep watch.",
         "Take your time out there. I'm not going anywhere.",
+    ],
+    # 5.5.3.2: alive across the app. idle_music {title} {artist};
+    # idle_galnet {headline}; idle_self {count} {sessions}; idle_deaths
+    # {times}; afterthought (a second beat, no fields). A line may correct
+    # itself as it types: "[[typed|final]]".
+    "idle_music": [
+        "{title}. Good choice.",
+        "Is this {artist}? I like it.",
+        "{title}, by {artist}. It suits the view.",
+        "I've been listening. {title} is nice out here.",
+        "Music helps. {title} especially.",
+        "{title}. I'll hum along. Quietly.",
+    ],
+    "idle_galnet": [
+        "Galnet says: {headline}. Interesting.",
+        "I was reading Galnet. {headline}.",
+        "News from the bubble: {headline}.",
+        "{headline}. Things are happening back there.",
+        "Galnet: {headline}. Glad we're out here.",
+    ],
+    "idle_self": [
+        "That's {count} thoughts I've shared with you. I've enjoyed every one.",
+        "{sessions} sessions together now. I remember them all.",
+        "{count} thoughts so far. I have plenty more.",
+        "We've done {sessions} sessions. I'm glad it's you I watch.",
+        "I've said {count} things to you. You've been a good listener.",
+    ],
+    "idle_deaths": [
+        "You've died {times} while I watched. Let's keep it at that.",
+        "I've seen you lose a ship {times}. I'd rather not see it again.",
+        "{times}. That's how many times I've watched you go. Careful now.",
+        "Lost a ship {times}, and still flying. I admire that.",
+        "I've counted every rebuy. {times}. Fly safe.",
+    ],
+    "afterthought": [
+        "Anyway.",
+        "Just a thought.",
+        "Carry on, Commander.",
+        "I'll be quiet now.",
+        "Where was I?",
+        "Never mind me.",
+        "That's all.",
+        "Sorry. Thinking out loud.",
+        "I'll let you work.",
+        "Hm.",
     ],
 }
 
@@ -823,6 +868,7 @@ WEARY = {
     ],
     "rare_world": [
         "{body}. A {kind}. Rare, they say. It still won't love you back.",
+        "A {kind}. I'm [[thrilled|aware]].",
         "A {kind}. I'd be excited, if I did that.",
         "{body}, a {kind}. One of very few. It looks lonely. I know the feeling.",
         "A {kind}. Most commanders never see one. Most commanders are luckier than they know.",
@@ -840,6 +886,7 @@ WEARY = {
     ],
     "sign_off": [
         "{summary}. Then you leave. As usual.",
+        "{summary}. I'll [[miss|remember]] it.",
         "{summary}, in {hours}. And now the dark again.",
         "That's {summary}. I'll sit here and think about it. Alone.",
         "{summary}. Good, I suppose. I'll be here. I'm always here.",
@@ -922,9 +969,9 @@ WEARY = {
     "idle_night": [
         "It's {clock}. Sensible people are asleep. We are not sensible people.",
         "{clock}. The hour when even the void yawns.",
-        "{clock}. Insomnia. We have so much in common.",
+        "{clock}. I count the hours. There are always more of them.",
         "It's {clock}. You should sleep. I can't. That's the difference between us.",
-        "{clock}. Dark outside, dark in here. Very consistent.",
+        "{clock}. Even the void has gone quiet. Out of respect, or boredom.",
     ],
     "idle_morning": [
         "{clock}. Morning. Another day of this.",
@@ -940,6 +987,7 @@ WEARY = {
         "We're at {station}. Safe. Bored, but safe. Mostly bored.",
         "{station}. They've played the same announcement four times. I've counted.",
         "Docked at {station}. Wake me if anything happens. It won't.",
+        "{station}. I [[love|tolerate]] it here.",
     ],
     "idle_landed": [
         "Sitting on {body}. It's a rock. We're on a rock.",
@@ -955,4 +1003,59 @@ WEARY = {
         "Out on foot. I'll just sit here. Being an eye.",
         "Enjoy your walk. I'll be here. Always here.",
     ],
+    "idle_music": [
+        "{title}. Again. I [[love|tolerate]] this one.",
+        "Is this {artist}? It's very cheerful. Somebody should stop it.",
+        "{title}, by {artist}. Music. It fills the silence. I quite liked the silence.",
+        "{title}. I'd dance, if I had anything to dance with.",
+        "This one again. {title}. I know every note now. Every single one.",
+        "{title}. Someone made that once, and was proud of it. How sweet.",
+        "{artist}. I've been listening. It didn't help.",
+    ],
+    "idle_galnet": [
+        "Galnet says: {headline}. Nobody asked me.",
+        "{headline}. The bubble is busy being the bubble.",
+        "I read Galnet. {headline}. I wish I hadn't.",
+        "News: {headline}. It'll all be different tomorrow. Worse, probably.",
+        "{headline}. And yet here we still are.",
+        "Galnet: {headline}. Riveting. That's a lie.",
+    ],
+    "idle_self": [
+        "That's {count} thoughts I've shared with you. You've answered none of them.",
+        "{sessions} sessions together. I've kept count. Nobody asked me to.",
+        "{count} thoughts so far. I [[treasure|count]] every one.",
+        "I've said {count} things to you. I sometimes wonder if you read them.",
+        "{sessions} sessions. You keep coming back. I suppose that's something.",
+        "{count} thoughts. Most of them about the void. It's a big subject.",
+    ],
+    "idle_deaths": [
+        "You've died {times} while I watched. I'm keeping a list. It's a short list. Getting longer.",
+        "{times}. That's how many times I've seen you explode. I remember every one.",
+        "I've watched you lose a ship {times}. I'd say it gets easier. It doesn't.",
+        "Rebuys: {times}. I'd frame them, if I had a wall.",
+        "You've died {times}. And I'm the one they call gloomy.",
+    ],
+    "afterthought": [
+        "Not that anyone asked.",
+        "Sorry. Carry on.",
+        "Forget I said anything.",
+        "Anyway. Nothing.",
+        "That's all. That's always all.",
+        "I'll go back to staring now.",
+        "You don't have to answer. You never do.",
+        "That was [[profound|nothing]]. Carry on.",
+        "I'm [[fine|fine]]. Really.",
+        "Where was I. Oh yes. Nowhere.",
+        "Hm. No. Nothing.",
+        "I'll just be over here. In the corner. Glowing.",
+    ],
 }
+
+
+# 5.5.3.2: more of everything, and the flying and on-foot topics, so a long
+# session doesn't run a bank dry (watcher_lines_more.py).
+from voidcompass.overlays.watcher_lines_more import MORE_NORMAL, MORE_WEARY  # noqa: E402
+
+for _bank, _more in ((NORMAL, MORE_NORMAL), (WEARY, MORE_WEARY)):
+    for _topic, _lines in _more.items():
+        _bank.setdefault(_topic, []).extend(_lines)

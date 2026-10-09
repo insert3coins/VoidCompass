@@ -18,6 +18,13 @@ IDLE_TOPICS = (
     "idle_star", "idle_star_odd", "idle_big_system", "idle_small_system",
     "idle_far", "idle_home", "idle_recall", "idle_session", "idle_night",
     "idle_morning", "idle_docked", "idle_landed", "idle_on_foot",
+    # Alive across the app: the music playing, Galnet's latest, and its own
+    # history with the commander (5.5.3.2).
+    "idle_music", "idle_galnet", "idle_self", "idle_deaths",
+    # Flying and walking about (5.5.3.2): the ship, supercruise, the SRV, a
+    # settlement, a taxi, a fleet carrier, a station concourse, a world below.
+    "idle_ship", "idle_supercruise", "idle_srv", "idle_settlement", "idle_taxi",
+    "idle_carrier", "idle_station_foot", "idle_near_body",
 )
 
 # Star classes in plain words (journal StarClass / StarType).
@@ -70,6 +77,16 @@ class Surroundings:
         self.docked = False
         self.landed_body = ""
         self.on_foot = False
+        self.on_station = False
+        self.supercruise = False
+        self.srv = False
+        self.settlement = ""
+        self.near_body = ""
+        self.taxi = False
+        self.carrier = False
+        self.ship = ""
+        self.ship_name = ""
+        self.suit = ""
 
     def reset_session(self):
         self.jumps = 0
@@ -77,6 +94,15 @@ class Surroundings:
         self.firsts = 0
         self.analysed = 0
         self.memories = []        # noun phrases: "the green gas giant in X"
+
+    @staticmethod
+    def _readable(raw, *keys):
+        """The first readable name among ``keys`` (skips $symbols)."""
+        for key in keys:
+            value = str(raw.get(key) or "").strip()
+            if value and not value.startswith("$"):
+                return value
+        return ""
 
     def _remember(self, phrase):
         if phrase and phrase not in self.memories:
@@ -103,6 +129,8 @@ class Surroundings:
                 except (TypeError, ValueError):
                     pass
             if event == "FSDJump":
+                self.supercruise = True
+                self.near_body = self.settlement = ""
                 self.jumps += 1
                 try:
                     self.distance_ly += float(raw.get("JumpDist") or 0)
@@ -135,32 +163,99 @@ class Surroundings:
                 self._remember(f"the {species} on {self.landed_body}" if self.landed_body else f"the {species}")
         elif event == "Docked":
             self.docked, self.station = True, str(raw.get("StationName") or "")
+            self.carrier = str(raw.get("StationType") or "").casefold() == "fleetcarrier"
+            self.supercruise = self.taxi = False
         elif event == "Undocked":
-            self.docked = False
+            self.docked = self.carrier = False
         elif event == "Touchdown" and raw.get("PlayerControlled", True):
-            self.landed_body = str(raw.get("Body") or "")
+            self.landed_body = str(raw.get("Body") or self.near_body or "")
+            self.supercruise = False
         elif event == "Liftoff":
             self.landed_body = ""
         elif event == "Disembark":
-            self.on_foot = True
+            self.on_foot, self.taxi = True, False
+            self.on_station = bool(raw.get("OnStation"))
         elif event == "Embark":
-            self.on_foot = False
+            self.on_foot = self.on_station = False
+            self.taxi = bool(raw.get("Taxi"))
+        elif event == "BookTaxi":
+            self.taxi = True
+        elif event == "SupercruiseEntry":
+            self.supercruise = True
+        elif event == "SupercruiseExit":
+            self.supercruise = False
+            self.near_body = str(raw.get("Body") or "") if raw.get("BodyType") == "Planet" else self.near_body
+        elif event == "ApproachBody":
+            self.near_body = str(raw.get("Body") or "")
+        elif event == "LeaveBody":
+            self.near_body = self.settlement = ""
+        elif event == "ApproachSettlement":
+            self.settlement = self._readable(raw, "Name_Localised", "Name")
+        elif event == "LaunchSRV":
+            self.srv = True
+        elif event == "DockSRV":
+            self.srv = False
+        elif event in {"LoadGame", "Loadout"}:
+            self.ship = self._readable(raw, "Ship_Localised") or self.ship
+            name = str(raw.get("ShipName") or "").strip()
+            self.ship_name = name or self.ship_name
+        elif event in {"SuitLoadout", "SwitchSuitLoadout"}:
+            self.suit = self._readable(raw, "SuitName_Localised") or self.suit
 
     def sol_distance(self):
         if not self.star_pos:
             return None
         return math.sqrt(sum(value * value for value in self.star_pos))
 
-    def choices(self, now, rng):
+    def choices(self, now, rng, context=None):
         """Idle topics that fit right now, as (topic, fields), most fitting
-        first, shuffled within their rank so it varies."""
-        where, here, session, time_of_day = [], [], [], []
-        if self.on_foot:
-            where.append(("idle_on_foot", {"body": self.landed_body} if self.landed_body else {}))
+        first, shuffled within their rank so it varies. ``context`` is what
+        the rest of the app and its memory know: music {title, artist},
+        galnet (a headline), thoughts, sessions and deaths (counts)."""
+        context = context or {}
+        where, here, world, session, time_of_day = [], [], [], [], []
+        suit = {"suit": self.suit} if self.suit else {}
+        music = context.get("music") or {}
+        if music.get("title"):
+            fields = {"title": str(music["title"])}
+            if music.get("artist"):
+                fields["artist"] = str(music["artist"])
+            world.append(("idle_music", fields))
+        if context.get("galnet"):
+            world.append(("idle_galnet", {"headline": str(context["galnet"]).rstrip(". ")}))
+        thoughts = int(context.get("thoughts") or 0)
+        if thoughts >= 20:
+            fields = {"count": f"{thoughts:,}"}
+            if int(context.get("sessions") or 0) >= 2:
+                fields["sessions"] = int(context["sessions"])  # lines about sessions wait for a second one
+            session.append(("idle_self", fields))
+        deaths = int(context.get("deaths") or 0)
+        if deaths:
+            times = {1: "once", 2: "twice"}.get(deaths, f"{deaths:,} times")
+            session.append(("idle_deaths", {"times": times}))
+        if self.on_foot and self.on_station and self.station:
+            where.append(("idle_station_foot", {"station": self.station, **suit}))
+        elif self.on_foot:
+            where.append(("idle_on_foot", {**({"body": self.landed_body} if self.landed_body else {}), **suit}))
+        elif self.taxi:
+            where.append(("idle_taxi", {}))
+        elif self.srv:
+            where.append(("idle_srv", {"body": self.landed_body or self.near_body} if (self.landed_body or self.near_body) else {}))
         elif self.landed_body:
             where.append(("idle_landed", {"body": self.landed_body}))
         elif self.docked and self.station:
-            where.append(("idle_docked", {"station": self.station}))
+            where.append(("idle_carrier" if self.carrier else "idle_docked", {"station": self.station}))
+        elif self.supercruise and self.system:
+            where.append(("idle_supercruise", {"system": self.system}))
+        elif self.near_body:
+            where.append(("idle_near_body", {"body": self.near_body}))
+        if self.settlement and not self.docked:
+            where.append(("idle_settlement", {"settlement": self.settlement}))
+        if self.ship and not self.on_foot and not self.taxi:
+            fields = {"ship": self.ship}
+            if self.ship_name:
+                fields["ship_name"] = self.ship_name
+            session.append(("idle_ship", fields))
         if not self.docked:
             star, odd = star_words(self.star_class)
             if star and self.system:
@@ -194,7 +289,7 @@ class Surroundings:
         elif 5 <= hour < 9:
             time_of_day.append(("idle_morning", {"clock": clock}))
         out = []
-        for group in (where, here, session, time_of_day):
+        for group in (where, here, world, session, time_of_day):
             rng.shuffle(group)
             out.extend(group)
         # Mix the ranks a little, so it doesn't always open with the same kind.

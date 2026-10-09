@@ -254,11 +254,12 @@ class ThoughtPageTests(unittest.TestCase):
         page.evaluate("s => renderHeartbeat(s)", self.snapshot())
         page.evaluate("s => renderHeartbeat(s)", self.snapshot(
             thought={"id": 7, "text": "I don't like how quiet this system is.", "side": "right"}))
-        page.wait_for_timeout(150)
+        # A moment's thought first (5.5.3.2), then it types as it speaks.
+        page.wait_for_timeout(1100)
         partial = page.locator("#thought span").inner_text()
         self.assertLess(len(partial), 38, "it types, rather than appearing whole")
         self.assertIn("speak", page.evaluate("heartbeatOrb.state().effects"))
-        page.wait_for_timeout(1400)
+        page.wait_for_timeout(2600)
         self.assertEqual(page.locator("#thought span").inner_text(), "I don't like how quiet this system is.")
         box = page.evaluate("""() => [document.getElementById('orb').getBoundingClientRect().left,
                                      document.getElementById('thought').getBoundingClientRect().left]""")

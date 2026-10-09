@@ -12,7 +12,45 @@
   let thoughtId = null;
   let typing = 0;
 
-  // A thought types out a letter at a time, as the eye speaks it.
+  // How a thought is typed (5.5.3.2): unevenly, a pause after a comma and
+  // a longer one after a full stop, and "[[typed|final]]" typed, stopped,
+  // deleted and corrected. Returns [{text, ms}] frames and the total time.
+  function typingPlan(script) {
+    const frames = [];
+    let shown = "";
+    let total = 0;
+    let seed = 0;
+    for (const ch of script) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    const next = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+    const push = (text, ms) => { frames.push({text, ms}); total += ms; };
+    const type = (text) => {
+      for (const ch of text) {
+        const last = shown.slice(-1);
+        let ms = 26 + next() * 26;
+        if (".!?".includes(last) && ch === " ") ms += 300 + next() * 220;
+        else if (",;:".includes(last) && ch === " ") ms += 130 + next() * 90;
+        else if (last === " " && next() < .04) ms += 160;  // a small hesitation
+        shown += ch;
+        push(shown, ms);
+      }
+    };
+    for (const part of String(script).split(/(\[\[[^|\]]*\|[^\]]*\]\])/)) {
+      const fix = /^\[\[([^|\]]*)\|([^\]]*)\]\]$/.exec(part);
+      if (!fix) { type(part); continue; }
+      type(fix[1]);
+      frames[frames.length - 1].ms += 380;  // it stops, and thinks better of it
+      for (let index = 0; index < fix[1].length; index += 1) {
+        shown = shown.slice(0, -1);
+        push(shown, 45);
+      }
+      frames[frames.length - 1].ms += 200;
+      type(fix[2]);
+    }
+    return {frames, total};
+  }
+
+  // A thought: a moment's thought first (the aperture tightens), then it
+  // types out as the eye speaks it, the eye showing how it feels about it.
   function showThought(thought, reduced, eye) {
     const style = (thought && thought.style) || {};
     document.body.classList.toggle("thought-backdrop", style.backdrop !== false);
@@ -20,7 +58,7 @@
     document.body.dataset.thoughtSize = ["small", "large"].includes(style.size) ? style.size : "standard";
     if (!thought || !thought.text) {
       thoughtId = null;
-      clearInterval(typing);
+      clearTimeout(typing);
       thoughtBox.hidden = true;
       document.body.classList.remove("thought-left");
       return;
@@ -28,26 +66,36 @@
     document.body.classList.toggle("thought-left", thought.side === "left");
     if (thought.id === thoughtId) return;
     thoughtId = thought.id;
-    clearInterval(typing);
+    clearTimeout(typing);
     thoughtBox.hidden = false;
     thoughtBox.classList.remove("done");
     const text = String(thought.text);
-    orb.speak?.(text.length * 32);
     if (reduced) {
       thoughtText.textContent = text;
       thoughtBox.classList.add("done");
       return;
     }
-    let shown = 0;
+    const {frames, total} = typingPlan(String(thought.script || text));
+    const pause = 420 + Math.floor(Math.random() * 480);
+    orb.showMood?.(thought.mood);
+    orb.think?.(pause);
     thoughtText.textContent = "";
-    typing = setInterval(() => {
-      shown += 1;
-      thoughtText.textContent = text.slice(0, shown);
-      if (shown >= text.length) {
-        clearInterval(typing);
+    let index = 0;
+    const step = () => {
+      const frame = frames[index];
+      if (!frame) {
+        thoughtText.textContent = text;
         thoughtBox.classList.add("done");
+        return;
       }
-    }, 32);
+      thoughtText.textContent = frame.text;
+      index += 1;
+      typing = setTimeout(step, frame.ms);
+    };
+    typing = setTimeout(() => {
+      orb.speak?.(total);
+      step();
+    }, pause);
   }
 
   function render(snapshot = {}) {

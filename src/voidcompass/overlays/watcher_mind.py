@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 import threading
 import time
 from datetime import datetime
@@ -103,6 +104,16 @@ IMPORTANCE = {
     "green_giant": 3,
     "sign_off": 3,
     "sign_off_quiet": 2,
+    # A second beat after a thought, now and then (5.5.3.2).
+    "afterthought": 0,
+    # Flying and walking about (5.5.3.2).
+    "jet_boost": 1,
+    "heat_warning": 2,
+    "interdiction_escaped": 1,
+    "srv_launch": 0,
+    "settlement_seen": 0,
+    "taxi_ride": 0,
+    "carrier_jump": 1,
     # 5.5.3.2: idle thoughts about what's really around you.
     **{topic: 1 for topic in watcher_idle.IDLE_TOPICS},
     "codex_new": 2,
@@ -142,6 +153,38 @@ PERSONALITY_WEIGHTS = {
     # The weary one mutters to itself more in the quiet.
     "weary": {"idle": 1.4, "quiet": 1.6, "docked_home": 1.3, "long_session": 1.3, "big_sale": .8},
 }
+
+
+# How the eye looks while it says each thought (heartbeat-life.js plays
+# the matching expression): pleased, wary, curious, or downcast. Topics not
+# listed are said with a neutral eye.
+MOODS = {
+    **{topic: "pleased" for topic in (
+        "rare_world", "green_giant", "valuable_world", "first_discovery_streak", "undiscovered_system",
+        "codex_logged", "codex_new", "big_sale", "achievement", "promotion", "mapped_efficient",
+        "analysed", "fss_complete", "mapped", "scooped", "mission_done", "sign_off", "idle_recall",
+        "idle_session", "new_region", "greet_away", "greet_soon", "danger_over", "idle_music")},
+    **{topic: "wary" for topic in ("danger", "fuel_low", "idle_deaths", "heat_warning")},
+    **{topic: "pleased" for topic in ("interdiction_escaped", "srv_launch", "idle_srv", "idle_ship")},
+    **{topic: "curious" for topic in ("jet_boost", "settlement_seen", "carrier_jump", "idle_settlement",
+                                       "idle_near_body", "idle_supercruise")},
+    **{topic: "downcast" for topic in ("taxi_ride", "idle_taxi", "idle_station_foot")},
+    **{topic: "curious" for topic in (
+        "idle_star_odd", "idle_big_system", "arrival", "jump_long", "jump_far", "idle_far", "idle_star",
+        "idle_galnet", "greet_new")},
+    **{topic: "downcast" for topic in (
+        "quiet", "long_session", "idle_small_system", "idle_night", "idle_morning", "docked_home",
+        "idle_docked", "idle_landed", "idle_on_foot", "idle_home", "sign_off_quiet", "after_death",
+        "died", "afterthought", "idle_self", "greet_night")},
+}
+# A line may correct itself as it is typed: "I [[love|tolerate]] it" types
+# "love", stops, deletes it and types "tolerate". The plain text keeps the
+# final word.
+_CORRECTION = re.compile(r"\[\[([^|\]]*)\|([^\]]*)\]\]")
+
+
+def plain_text(script):
+    return _CORRECTION.sub(lambda match: match.group(2), str(script or ""))
 
 
 def _credits_text(value):
@@ -221,8 +264,13 @@ class WatcherMind:
         self.random = rng or random.Random()
         self.lock = threading.Lock()
         self.memory = {"last_seen": None, "sessions": 0, "said": [], "regions": [],
-                       "deaths": 0, "last_death": None, "session_started": None}
+                       "deaths": 0, "last_death": None, "session_started": None, "thoughts": None}
         self._load()
+        if self.memory.get("thoughts") is None:
+            # Older memories: count the thoughts it remembers saying.
+            self.memory["thoughts"] = sum(1 for row in self.memory["said"]
+                                          if isinstance(row, list) and row and ":" not in str(row[0]) and row[0] != "idle")
+        self._afterthought = None
         self.thought = None          # {id, text, at, until}
         self._serial = 0
         self._last_spoke = 0.0
@@ -278,22 +326,29 @@ class WatcherMind:
             except (KeyError, IndexError, ValueError):
                 continue
             # Remembered by its wording, so the line banks can change freely.
-            options.append((f"{topic}:{zlib.crc32(template.encode('utf-8')):08x}", text))
+            options.append((f"{topic}:{zlib.crc32(template.encode('utf-8')):08x}", text, text != template))
         if not options:
             return None
         # Never the same words twice while another wording is left.
         fresh = [row for row in options if not self._said_recently(row[0], 30 * 86400)]
         if fresh:
-            return self.random.choice(fresh)
+            return self.random.choice(fresh)[:2]
         if importance < 2:
-            # A minor remark stays unsaid rather than repeat a recent line.
-            fresh = [row for row in options if not self._said_recently(row[0], 3 * 86400)]
+            # A minor remark stays unsaid rather than repeat a recent line: a
+            # fixed line for three days, one filled with what's around (a
+            # different star, a different station) for a day, and a passing
+            # afterthought for half a day.
+            def window(row):
+                if topic == "afterthought":
+                    return 12 * 3600
+                return 86400 if row[2] else 3 * 86400
+            fresh = [row for row in options if not self._said_recently(row[0], window(row))]
             if not fresh:
                 return None
-            return self.random.choice(fresh)
+            return self.random.choice(fresh)[:2]
         # Something it must say, with every line used: the ones said longest ago.
         options.sort(key=lambda row: self._last_said(row[0]))
-        return self.random.choice(options[:max(1, len(options) // 3)])
+        return self.random.choice(options[:max(1, len(options) // 3)])[:2]
 
     def _last_said(self, key):
         return max((row[1] for row in self.memory["said"] if row[0] == key), default=0.0)
@@ -331,18 +386,46 @@ class WatcherMind:
         chosen = self._variant(topic, dict(fields or {}))
         if not chosen:
             return None
-        key, text = chosen
+        key, script = chosen
+        text = plain_text(script)
         self._serial += 1
         self._last_spoke = now
-        self.thought = {"id": self._serial, "text": text, "topic": topic, "at": now,
-                        "until": now + (THOUGHT_SECONDS + len(text) * .05)
+        self.thought = {"id": self._serial, "text": text, "script": script, "topic": topic,
+                        "mood": MOODS.get(topic, ""), "at": now,
+                        "until": now + (THOUGHT_SECONDS + len(script) * .05)
                         * THOUGHT_HOLDS[thought_style(self.config)["hold"]]}
         # The latest thing it said, kept for the deck's Focused Log.
         self.last_thought = {"text": text, "at": time.time()}
         with self.lock:
             self.memory["said"].append([key, now])
             self.memory["said"].append([topic, now])
+            self.memory["thoughts"] = int(self.memory.get("thoughts") or 0) + 1
+        self._unsaved = True
+        # Now and then a second beat follows, once the first has been read.
+        if topic != "afterthought" and importance < 3:
+            chance = .3 if (topic == "quiet" or topic in watcher_idle.IDLE_TOPICS) else .12
+            if self.random.random() < chance:
+                self._afterthought = {"after": self._serial, "at": now + 3.2 + len(script) * .045}
         return self.thought
+
+    def save_if_due(self, every=300.0):
+        """Save what it has said every few minutes, so a crash or a killed
+        app doesn't let it repeat itself next time (5.5.3.2)."""
+        now = time.time()
+        if getattr(self, "_unsaved", False) and now - getattr(self, "_saved_at", 0.0) >= every:
+            self._unsaved = False
+            self._saved_at = now
+            self.save()
+
+    def follow_up(self):
+        """The second beat of a thought, when it is due (the HUD asks often)."""
+        pending = self._afterthought
+        if not pending or self.clock() < pending["at"]:
+            return None
+        self._afterthought = None
+        if not self.thought or self.thought["id"] != pending["after"] or self.clock() >= self.thought["until"]:
+            return None
+        return self.consider("afterthought", force=True)
 
     def current(self):
         """The thought on screen, if any."""
@@ -460,6 +543,24 @@ class WatcherMind:
             return self.consider("analysed", {"species": species}) if species else None
         if event == "Touchdown" and raw.get("PlayerControlled", True):
             return self.consider("touchdown")
+        # Flying and walking about (5.5.3.2).
+        if event == "JetConeBoost":
+            return self.consider("jet_boost")
+        if event == "HeatWarning":
+            return self.consider("heat_warning")
+        if event == "EscapeInterdiction":
+            return self.consider("interdiction_escaped")
+        if event == "LaunchSRV":
+            return self.consider("srv_launch")
+        if event == "ApproachSettlement":
+            name = raw.get("Name_Localised") or raw.get("Name")
+            if name and not str(name).startswith("$"):
+                return self.consider("settlement_seen", {"settlement": name})
+            return None
+        if event == "BookTaxi" or (event == "Embark" and raw.get("Taxi")):
+            return self.consider("taxi_ride")
+        if event == "CarrierJump":
+            return self.consider("carrier_jump", {"system": raw.get("StarSystem") or "a new system"})
         if event == "Undocked":
             return self.consider("undocked")
         if event == "Disembark" and not raw.get("OnStation"):
@@ -562,8 +663,9 @@ class WatcherMind:
             return self.consider("fuel_low", {"fuel": int(round(fuel_percent))})
         return None
 
-    def tick(self):
-        """Idle thinking: the time, a long session, a long quiet."""
+    def tick(self, context=None):
+        """Idle thinking: the time, a long session, a long quiet. ``context``
+        is what the rest of the app knows (the music playing, Galnet)."""
         now = self.clock()
         if self._session_start is None:
             return None  # nothing to think about until it has seen the game
@@ -581,7 +683,10 @@ class WatcherMind:
         # Chatty, 10 on Occasional, 20 on Rare).
         if (now - self._last_interesting > quiet and now - self._last_spoke > quiet
                 and not self._said_recently("idle", setting.get("mutter", 1200.0))):
-            choices = self.surroundings.choices(now, self.random)
+            known = dict(context or {})
+            known.update(thoughts=self.memory.get("thoughts") or 0, sessions=self.memory.get("sessions") or 0,
+                         deaths=self.memory.get("deaths") or 0)
+            choices = self.surroundings.choices(now, self.random, known)
             # The plain mutter now and then, and whenever nothing else fits.
             if not choices or self.random.random() < .25:
                 choices.insert(0, ("quiet", {}))

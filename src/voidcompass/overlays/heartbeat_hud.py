@@ -191,8 +191,12 @@ class HeartbeatHUD:
         now = time.time()
         if now >= self._next_idle_thought:
             self._next_idle_thought = now + 30
-            if self.mind.tick():
+            if self.mind.tick(self._context()):
                 changed = True
+        # A thought's second beat, when it is due.
+        if self.mind.follow_up():
+            changed = True
+        self.mind.save_if_due()
         # A thought arriving or dissolving redraws (and resizes) the window.
         current = self.mind.current()
         if (current or {}).get("id") != self._thought_seen:
@@ -200,6 +204,17 @@ class HeartbeatHUD:
         if changed:
             self._redraw()
         self._schedule_tick()
+
+    def _context(self):
+        """What the rest of the app knows, for its idle thoughts (the music
+        playing, Galnet's latest); the dashboard sets the provider."""
+        provider = getattr(self, 'context_provider', None)
+        if not callable(provider):
+            return {}
+        try:
+            return provider() or {}
+        except Exception:
+            return {}
 
     def _check_profile(self):
         """A commander switch gives the Watcher that commander's memory."""
@@ -280,7 +295,8 @@ class HeartbeatHUD:
         self._thought_seen = (thought or {}).get('id')
         if not thought:
             return None
-        return {'id': thought['id'], 'text': thought['text'], 'side': self.thought_side(),
+        return {'id': thought['id'], 'text': thought['text'], 'script': thought.get('script') or thought['text'],
+                'mood': thought.get('mood') or '', 'side': self.thought_side(),
                 'style': watcher_mind.thought_style(self.config)}
 
     def thought_side(self):
