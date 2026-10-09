@@ -1,5 +1,9 @@
 """Client for the Spansh carrier, neutron, ring and station services."""
 
+import hashlib
+import json
+import os
+import threading
 import time
 import re
 from urllib.parse import quote
@@ -31,12 +35,152 @@ class SpanshError(Exception):
     pass
 
 
+# -- fast lookups (5.5.3.2) -----------------------------------------------------
+# One kept-alive connection for every trading request: a new connection costs
+# a TLS handshake (about a second) before Spansh even sees the question. A
+# busy Spansh (429/503) gets one polite retry. Answers are kept on disk for a
+# while, so a repeat search, even after a restart, needs no network at all.
+# (The approach of EDNexus, github.com/Signal-Thread/EDNexus.)
+_session = None
+_session_lock = threading.Lock()
+CACHE_TTL_S = 10 * 60
+CACHE_KEEP_S = 2 * 86400
+CACHE_MAX = 600
+_cache_dir = None
+
+
+class _Session(requests.Session):
+    def request(self, method, url, **kwargs):
+        response = super().request(method, url, **kwargs)
+        if response.status_code in (429, 503):
+            try:
+                wait = float(response.headers.get("Retry-After") or 1.5)
+            except ValueError:
+                wait = 1.5
+            if wait <= 5:
+                response.close()
+                time.sleep(max(0.0, wait))
+                response = super().request(method, url, **kwargs)
+        return response
+
+
+def http():
+    """The shared Spansh session (thread-safe for concurrent requests)."""
+    global _session
+    with _session_lock:
+        if _session is None:
+            session = _Session()
+            session.headers.update(HEADERS)
+            adapter = requests.adapters.HTTPAdapter(pool_connections=2, pool_maxsize=8)
+            session.mount("https://", adapter)
+            _session = session
+        return _session
+
+
+def warm_up():
+    """Open the connection ahead of the first search (the Trading tab calls
+    this when it opens), so the first answer isn't waiting on a handshake."""
+    try:
+        http().get(f"{BASE}/search/systems", params={"q": "Sol"}, timeout=10).close()
+        return True
+    except requests.RequestException:
+        return False
+
+
+def set_cache_dir(path):
+    """Where answers are kept between runs (the app sets this at start-up)."""
+    global _cache_dir
+    _cache_dir = str(path) if path else None
+    if _cache_dir:
+        try:
+            os.makedirs(_cache_dir, exist_ok=True)
+            _trim_cache()
+        except OSError:
+            _cache_dir = None
+
+
+def _cache_path(key):
+    return os.path.join(_cache_dir, hashlib.sha256(key.encode("utf-8")).hexdigest()[:40] + ".json")
+
+
+def _cache_get(key, ttl):
+    if not _cache_dir or not ttl:
+        return None
+    try:
+        with open(_cache_path(key), "r", encoding="utf-8") as handle:
+            entry = json.load(handle)
+        if time.time() - float(entry.get("at") or 0) < ttl:
+            return entry.get("body")
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    return None
+
+
+def _cache_put(key, body):
+    if not _cache_dir:
+        return
+    path = _cache_path(key)
+    temporary = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump({"at": time.time(), "body": body}, handle, separators=(",", ":"))
+        os.replace(temporary, path)
+    except OSError:
+        try:
+            os.remove(temporary)
+        except OSError:
+            pass
+
+
+def _trim_cache():
+    """Drop answers older than a couple of days, and the oldest past the cap."""
+    try:
+        entries = []
+        for entry in os.scandir(_cache_dir):
+            if not entry.is_file():
+                continue
+            age = time.time() - entry.stat().st_mtime
+            if entry.name.endswith(".tmp") and age > 3600 or entry.name.endswith(".json") and age > CACHE_KEEP_S:
+                os.remove(entry.path)
+            elif entry.name.endswith(".json"):
+                entries.append((entry.stat().st_mtime, entry.path))
+        for _when, path in sorted(entries)[:max(0, len(entries) - CACHE_MAX)]:
+            os.remove(path)
+    except OSError:
+        pass
+
+
+def _call(method, path, *, params=None, body=None, timeout=45, ttl=CACHE_TTL_S):
+    """One Spansh request on the shared session, answered from the disk
+    cache when it was asked recently."""
+    key = json.dumps([method, path, params, body], sort_keys=True, default=str)
+    cached = _cache_get(key, ttl)
+    if cached is not None:
+        return cached
+    try:
+        if method == "GET":
+            resp = http().get(f"{BASE}/{path}", params=params, timeout=timeout)
+        else:
+            resp = http().post(f"{BASE}/{path}", json=body, timeout=timeout)
+    except requests.RequestException as exc:
+        raise SpanshError(f"Could not reach Spansh: {exc}") from exc
+    if resp.status_code >= 400:
+        raise SpanshError(_error_text(resp))
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise SpanshError("Spansh sent a reply that could not be read.") from exc
+    if ttl:
+        _cache_put(key, data)
+    return data
+
+
 def submit_and_poll(path, payload, include_job=False, max_wait=MAX_WAIT_SECONDS, on_state=None, should_stop=None):
     """Spansh's async job pattern: POST form payload, then poll results.
     ``on_state`` hears the job's state as it changes ("queued", "started");
     Spansh gives no finer progress. ``should_stop`` ends the wait early."""
     try:
-        resp = requests.post(f"{BASE}/{path}", data=payload, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
+        resp = http().post(f"{BASE}/{path}", data=payload, timeout=SUBMIT_TIMEOUT)
     except requests.RequestException as exc:
         raise SpanshError(f"Could not reach Spansh: {exc}") from exc
     if resp.status_code >= 400:
@@ -47,13 +191,14 @@ def submit_and_poll(path, payload, include_job=False, max_wait=MAX_WAIT_SECONDS,
 
     deadline = time.monotonic() + max_wait
     seen = None
+    polls = 0
     if on_state:
         on_state("queued")
     while time.monotonic() < deadline:
         if should_stop and should_stop():
             raise SpanshError("Stopped.")
         try:
-            poll = requests.get(f"{BASE}/results/{job}", headers=HEADERS, timeout=POLL_TIMEOUT)
+            poll = http().get(f"{BASE}/results/{job}", timeout=POLL_TIMEOUT)
         except requests.RequestException as exc:
             raise SpanshError(f"Lost connection to Spansh: {exc}") from exc
         if poll.status_code >= 400:
@@ -68,7 +213,10 @@ def submit_and_poll(path, payload, include_job=False, max_wait=MAX_WAIT_SECONDS,
             result = data.get("result")
             return (result, str(job)) if include_job else result
         if status in ("queued", "processing"):
-            time.sleep(1.5)
+            # Quick polls at first (most jobs finish in a few seconds), then
+            # easing off to Spansh's usual pace.
+            polls += 1
+            time.sleep(0.5 if polls <= 4 else 1.0 if polls <= 10 else 1.5)
             continue
         raise SpanshError(f"Spansh job failed: {data.get('error') or status}")
     raise SpanshError("Spansh took too long to compute a route; try again.")
@@ -552,34 +700,57 @@ def trade_route(form, on_state=None, should_stop=None):
     return submit_and_poll("trade/route", payload, include_job=True, max_wait=180, on_state=on_state, should_stop=should_stop)
 
 
-def _get_json(path):
-    try:
-        resp = requests.get(f"{BASE}/{path}", headers=HEADERS, timeout=45)
-    except requests.RequestException as exc:
-        raise SpanshError(f"Could not reach Spansh: {exc}") from exc
-    if resp.status_code >= 400:
-        raise SpanshError(_error_text(resp))
-    try:
-        return resp.json()
-    except ValueError as exc:
-        raise SpanshError("Spansh sent a reply that could not be read.") from exc
+def _get_json(path, ttl=CACHE_TTL_S):
+    return _call("GET", path, ttl=ttl)
 
 
-def commodity_stations(kind, reference_system, commodity, amount=1):
+def station_types():
+    """Every kind of station Spansh lists (kept for a day)."""
+    reply = _call("GET", "stations/field_values/type", ttl=86400)
+    return [str(value) for value in (reply or {}).get("values") or () if value]
+
+
+def commodity_stations(kind, reference_system, commodity, amount=1, size=30,
+                       large_pad=False, carriers=True, planetary=True):
     """Stations near a system that buy (``kind`` "sell": where to sell it) or
     sell (``kind`` "buy": where to buy it) a commodity, by Spansh's exact
-    English name, with each station's whole market."""
+    English name, nearest first, each with its whole market.
+
+    One ``stations/search`` that asks Spansh for just the nearest stations
+    with enough demand (or supply), about half a second, where the old
+    ``/commodity`` lookup sent megabytes and took 15 to 30 seconds. The pad,
+    carrier and planetary choices are filtered by Spansh too, so the nearest
+    ``size`` are all ones you can use."""
     if kind not in ("buy", "sell"):
         raise ValueError(kind)
     if not reference_system or not commodity:
         raise SpanshError("Give a system and a commodity to search for.")
-    return _get_json(f"commodity/{kind}/{quote(str(reference_system), safe='')}/"
-                     f"{quote(str(commodity), safe='')}/{max(1, int(amount or 1))}")
+    side = "demand" if kind == "sell" else "supply"
+    price = "sell_price" if kind == "sell" else "buy_price"
+    wanted = {"name": str(commodity),
+              side: {"value": [max(1, int(amount or 1)), 999999999], "comparison": "<=>"},
+              price: {"value": [1, 999999999], "comparison": "<=>"}}
+    filters = {"market": [wanted]}
+    if large_pad:
+        filters["has_large_pad"] = {"value": True}
+    if not planetary:
+        filters["is_planetary"] = {"value": False}
+    if not carriers:
+        try:
+            types = [name for name in station_types() if "carrier" not in name.casefold()]
+        except SpanshError:
+            types = []
+        if types:
+            filters["type"] = {"value": types}
+    body = {"filters": filters, "sort": [{"distance": {"direction": "asc"}}],
+            "size": max(1, min(100, int(size or 30))), "reference_system": str(reference_system)}
+    return _call("POST", "stations/search", body=body)
 
 
-def station_market(market_id):
-    """One station and its market (``/api/station/<market id>``)."""
-    return _get_json(f"station/{int(market_id)}")
+def station_market(market_id, fresh=False):
+    """One station and its market (``/api/station/<market id>``): kept a few
+    minutes, or asked again when ``fresh`` (checking a route's prices)."""
+    return _get_json(f"station/{int(market_id)}", ttl=0 if fresh else 180)
 
 
 def system_stations(system_name):
@@ -589,11 +760,11 @@ def system_stations(system_name):
     wanted = str(system_name or "").strip()
     if not wanted:
         raise SpanshError("Give a system name.")
-    found = _get_json(f"search/systems?q={quote(wanted)}")
+    found = _call("GET", "search/systems", params={"q": wanted}, ttl=86400)
     match = next((row for row in found.get("results") or () if str(row.get("name") or "").casefold() == wanted.casefold()), None)
     if not match:
         raise SpanshError(f"Spansh doesn't know a system called {wanted}. Check the spelling.")
-    record = _get_json(f"system/{int(match['id64'])}").get("record") or {}
+    record = _get_json(f"system/{int(match['id64'])}", ttl=3600).get("record") or {}
     stations = []
     for row in record.get("stations") or ():
         if not row.get("has_market") or not row.get("name"):
@@ -607,7 +778,7 @@ def system_stations(system_name):
 
 def market_field_values():
     """Every commodity Spansh knows, with the best buy and sell prices anywhere."""
-    return _get_json("stations/field_values/market")
+    return _get_json("stations/field_values/market", ttl=6 * 3600)
 
 
 def _error_text(resp):

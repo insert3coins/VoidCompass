@@ -25,12 +25,12 @@ class CommandDeckConsolidation548Tests(unittest.TestCase):
         labels = re.findall(r'<button class="nav-item[^>]*>.*?<span>(.*?)</span>', rail)
 
         # 5.4.9.8 added Music, under its own COCKPIT heading; 5.5.2 Colonisation;
-        # 5.5.2.4 BGS; 5.5.2.6 Trading.
-        self.assertEqual(len(labels), 17)
+        # 5.5.2.4 BGS; 5.5.2.6 Trading; 5.5.3.2 The Watcher.
+        self.assertEqual(len(labels), 18)
         self.assertEqual(labels, [
             "Dashboard", "Explore & Survey", "Planetary Operations", "Galactic Atlas",
             "Commander Record", "Exploration Archive", "Mining Command", "Ship Workshop",
-            "Carrier Command", "Colonisation", "BGS", "Trading", "Powerplay", "Music", "Overlay Studio", "Settings", "About",
+            "Carrier Command", "Colonisation", "BGS", "Trading", "Powerplay", "Music", "The Watcher", "Overlay Studio", "Settings", "About",
         ])
         self.assertNotIn("Field Tools", labels)
 

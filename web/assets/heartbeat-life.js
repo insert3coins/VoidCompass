@@ -239,6 +239,7 @@
       if (state !== null && state !== undefined) this.activity = activityFor(state);
       if (overlays && typeof overlays === 'object') this.overlays = overlays;
       if (personality && NATURES[personality]) this.nature = personality;
+      if (memory && Number.isFinite(Number(memory.bond))) this.bond = clamp(Number(memory.bond), 0, 3);
       if (memory && !this.homecoming) {
         this.homecoming = true;
         // It remembers you: a long absence, a slow look around on waking;
@@ -253,7 +254,10 @@
 
     natureOf(feeling) {
       const nature = NATURES[this.nature] || {};
-      return (nature.all ?? 1) * (nature[feeling] ?? 1);
+      // The bond (5.5.3.2): the longer you've flown together, the more it
+      // lets itself be pleased, even depressed.
+      const fondness = feeling === 'pleased' ? 1 + .25 * (this.bond || 0) : 1;
+      return (nature.all ?? 1) * (nature[feeling] ?? 1) * fondness;
     }
 
     stance() {

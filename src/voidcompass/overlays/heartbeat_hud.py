@@ -196,6 +196,12 @@ class HeartbeatHUD:
         # A thought's second beat, when it is due.
         if self.mind.follow_up():
             changed = True
+        # Moved somewhere new (Overlay Studio or a drag): it notices.
+        position = (self.config.get('heartbeat_hud_x'), self.config.get('heartbeat_hud_y'))
+        if getattr(self, '_last_position', None) not in (None, position):
+            if self.mind.note('moved'):
+                changed = True
+        self._last_position = position
         self.mind.save_if_due()
         # A thought arriving or dissolving redraws (and resizes) the window.
         current = self.mind.current()
@@ -224,6 +230,13 @@ class HeartbeatHUD:
             self.mind.save()
             self._mind_path = path
             self.mind = watcher_mind.WatcherMind(path, self.config)
+
+    def poke(self):
+        """The Watcher hotkey: it looks up and answers (5.5.3.2)."""
+        if self.mind.poke(self._context()):
+            self._redraw()
+            return True
+        return False
 
     def note(self, kind, fields=None):
         """Something Void Compass noticed that the Watcher may think about
@@ -287,6 +300,8 @@ class HeartbeatHUD:
             'away_hours': round((now - float(last)) / 3600.0, 1) if last else None,
             'sessions': int(mind.memory.get('sessions') or 0),
             'recent_death': bool(death and now - float(death) < 1800),
+            # The bond grown over sessions together (5.5.3.2): it warms the eye.
+            'bond': mind.bond(),
         }
 
     def _thought_payload(self):

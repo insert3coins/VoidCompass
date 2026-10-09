@@ -43,6 +43,28 @@ class DashboardTradingMixin:
         self._trading_cache = {}
         self._trading_busy = {}
         self._trading_generation = getattr(self, "_trading_generation", 0) + 1
+        # Spansh answers kept on disk between runs (5.5.3.2).
+        try:
+            from voidcompass.core.platform_support import application_dir
+            spansh.set_cache_dir(application_dir() / "cache" / "spansh")
+        except Exception:
+            logging.debug("Spansh cache unavailable", exc_info=True)
+        self._trading_warmed = False
+
+    def _trading_warm_up(self):
+        """The Trading tab opened: open the Spansh connection and learn its
+        commodity names in the background, so the first search is quick."""
+        if getattr(self, "_trading_warmed", False) or not self._trading_online():
+            return
+        self._trading_warmed = True
+
+        def run():
+            spansh.warm_up()
+            try:
+                self._trading_spansh_names()
+            except Exception:
+                logging.debug("Spansh names warm-up skipped", exc_info=True)
+        threading.Thread(target=run, name="trading-warm-up", daemon=True).start()
 
     def _trading_switch_profile(self, profile_key):
         old = getattr(self, "trading_store", None)
@@ -103,7 +125,7 @@ class DashboardTradingMixin:
                 trade_route.check_prices(state, station)
                 self.trading_store.set_value("route", state)
                 self._trading_update_overlay()
-        self._trading_task("recheck", lambda: trade_market.parse_station(spansh.station_market(market_id)), done,
+        self._trading_task("recheck", lambda: trade_market.parse_station(spansh.station_market(market_id, fresh=True)), done,
                            cache_key=None)
 
     def _trading_update_overlay(self):

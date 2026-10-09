@@ -1,0 +1,56 @@
+/* The Watcher's page (5.5.3.2). */
+.watcher-page {
+  display: grid; gap: 14px;
+  grid-template-columns: minmax(260px, 340px) minmax(280px, 1fr) minmax(300px, 1.2fr);
+  align-items: start;
+}
+@media (max-width: 1400px) { .watcher-page { grid-template-columns: minmax(260px, 340px) 1fr; } .watcher-log-panel { grid-column: 1 / -1; } }
+@media (max-width: 900px) { .watcher-page { grid-template-columns: 1fr; } }
+.watcher-page > section {
+  border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent);
+  padding: 14px; display: grid; gap: 12px; min-width: 0;
+}
+.watcher-page header { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.watcher-page header span { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .1em; }
+.watcher-page header b { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .08em; }
+.watcher-eye { width: min(100%, 260px); aspect-ratio: 1; justify-self: center; }
+.watcher-eye canvas { width: 100%; height: 100%; display: block; }
+.watcher-latest { margin: 0; padding: 10px 12px; border-left: 2px solid color-mix(in srgb, var(--red) 65%, var(--border));
+  background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.watcher-latest span { display: block; color: var(--text); font: italic 13px/1.45 Consolas, "Cascadia Mono", monospace; }
+.watcher-latest cite { display: block; margin-top: 6px; color: var(--dim); font: 700 9px Consolas, monospace; font-style: normal; letter-spacing: .08em; }
+.watcher-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.watcher-actions small { color: var(--dim); font: 10px Consolas, monospace; }
+.watcher-character { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0;
+  border: 1px solid var(--border); background: var(--border); }
+.watcher-character div { padding: 8px 10px; background: var(--panel); }
+.watcher-character dt { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .08em; }
+.watcher-character dd { margin: 3px 0 0; color: var(--text); font: 700 12px Consolas, monospace; }
+.watcher-bond-meter { height: 8px; border: 1px solid var(--border); background: var(--bg); position: relative; }
+.watcher-bond-meter i { position: absolute; inset: 0 auto 0 0; width: var(--bond, 0%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 60%, transparent), var(--accent)); }
+.watcher-bond-meter[data-level="3"] i { background: linear-gradient(90deg, color-mix(in srgb, var(--green) 60%, transparent), var(--green)); }
+.watcher-bond-next { margin: 0; color: var(--muted); font-size: 12px; }
+.watcher-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--border); background: var(--border); }
+.watcher-stats div { padding: 9px 10px; background: var(--panel); min-width: 0; }
+.watcher-stats span { display: block; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .08em; }
+.watcher-stats strong { display: block; margin-top: 3px; color: var(--text); font: 700 16px Consolas, monospace; font-variant-numeric: tabular-nums; }
+.watcher-stats small { color: var(--muted); font: 10px Consolas, monospace; }
+.watcher-favourites { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.watcher-favourites li { display: grid; grid-template-columns: minmax(90px, 140px) 1fr auto; gap: 8px; align-items: center;
+  color: var(--text); font: 11px Consolas, monospace; text-transform: capitalize; }
+.watcher-favourites i { height: 5px; background: var(--bg); position: relative; }
+.watcher-favourites i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--share, 0%); background: var(--accent); opacity: .75; }
+.watcher-favourites b { color: var(--muted); font-variant-numeric: tabular-nums; }
+.watcher-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; max-height: 70vh; overflow-y: auto;
+  border: 1px solid var(--border); background: var(--border); }
+.watcher-log li { display: grid; grid-template-columns: 74px 1fr auto; gap: 10px; align-items: baseline; padding: 8px 10px; background: var(--panel); }
+.watcher-log time { color: var(--dim); font: 10px Consolas, monospace; }
+.watcher-log p { margin: 0; color: var(--text); font: 12px/1.4 Consolas, "Cascadia Mono", monospace; }
+.watcher-log b { font: 700 8px Consolas, monospace; letter-spacing: .08em; color: var(--muted); }
+.watcher-log li[data-mood="pleased"] b { color: var(--green); }
+.watcher-log li[data-mood="wary"] b { color: var(--orange); }
+.watcher-log li[data-mood="curious"] b { color: var(--accent); }
+.watcher-log li[data-mood="downcast"] b { color: var(--dim); }
+.watcher-log li.empty, .watcher-favourites li.empty { display: block; color: var(--muted); grid-template-columns: none; }
+.watcher-actions button { font: 700 11px Consolas, "Cascadia Mono", monospace; letter-spacing: .1em; padding: 8px 22px; }

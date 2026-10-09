@@ -111,7 +111,7 @@ _CORE_RANKS = {
 _HTML_WORKSPACE_PAGES = {
     "planet-materials", "explore", "profile", "analytics", "chronicle", "mission", "ground", "mining",
     "engineering", "build-planner", "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
-    "colonisation", "bgs", "trading",
+    "colonisation", "bgs", "trading", "watcher",
 }
 
 
@@ -729,6 +729,68 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "regions_visited": _integer(regions.get("visited")),
             "first_discoveries": _integer(completion.get("first_discoveries")),
             "first_footfalls": _integer(completion.get("first_footfalls")),
+        }
+
+    # The Watcher's page (5.5.3.2): what it has said, what it remembers of
+    # you, and how far the two of you have come.
+    _WATCHER_BONDS = ("A stranger", "Known", "A companion", "An old friend")
+    _WATCHER_BOND_NEXT = {0: (3, 5), 1: (10, 25), 2: (30, 100)}
+
+    def _html_watcher_workspace(self):
+        from collections import Counter
+        from voidcompass.overlays.heartbeat_hud import _memory_path
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        mind = getattr(heartbeat, "mind", None)
+        if mind is None:
+            mind = watcher_mind.WatcherMind(_memory_path(self.config), self.config)
+        memory = mind.memory
+        log = [
+            {"at": float(row[0] or 0), "topic": _text(row[1], 40), "text": _text(row[2], 300),
+             "mood": watcher_mind.MOODS.get(str(row[1]), "")}
+            for row in reversed(list(memory.get("log") or [])[-150:])
+            if isinstance(row, list) and len(row) >= 3
+        ]
+        topics = Counter(
+            str(row[0]) for row in memory.get("said") or ()
+            if isinstance(row, list) and row and ":" not in str(row[0]) and row[0] not in {"idle", "afterthought"}
+        )
+        bond = mind.bond()
+        sessions = int(memory.get("sessions") or 0)
+        hours = float(memory.get("hours") or 0.0)
+        progress = 1.0
+        if bond in self._WATCHER_BOND_NEXT:
+            need_sessions, need_hours = self._WATCHER_BOND_NEXT[bond]
+            progress = min(1.0, min(sessions / need_sessions, hours / need_hours))
+        records = {}
+        history = getattr(self, "travel_history", None)
+        if history is not None:
+            try:
+                records = history.records()
+            except Exception:
+                records = {}
+        first = records.get("first")
+        return {
+            "enabled": heartbeat is not None,
+            "nature": watcher_mind.personality(self.config),
+            "frequency": watcher_mind.frequency(self.config),
+            "eye": _text(self.config.get("heartbeat_eye_color") or "theme", 10),
+            "thoughts": int(memory.get("thoughts") or 0),
+            "sessions": sessions,
+            "hours": round(hours, 1),
+            "deaths": int(memory.get("deaths") or 0),
+            "bond": {"level": bond, "name": self._WATCHER_BONDS[bond], "progress": round(progress, 3),
+                     "next": self._WATCHER_BONDS[bond + 1] if bond < 3 else ""},
+            "records": {
+                "far": round(float(records.get("far") or 0), 1),
+                "jump": round(float(records.get("jump") or 0), 2),
+                "firsts": int((memory.get("records") or {}).get("firsts") or 0),
+                "systems": int(records.get("systems") or 0),
+                "since": watcher_mind.when_text(first) if first else "",
+            },
+            "favourites": [{"topic": topic, "label": topic.replace("idle_", "").replace("_", " "), "count": count}
+                           for topic, count in topics.most_common(6)],
+            "log": log,
+            "hotkey": _text(self.config.get("overlay_hotkey_watcher_poke"), 40),
         }
 
     def _html_watcher_thought(self):
@@ -2640,6 +2702,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "colonisation": self._html_colonisation_workspace,
             "bgs": self._html_bgs_workspace,
             "trading": self._html_trading_workspace,
+            "watcher": self._html_watcher_workspace,
         }
         builder = builders.get(page)
         if builder is None:
@@ -3005,6 +3068,14 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             result = self._handle_trading_command(operation, payload)
             self._schedule_html_dashboard_publish(immediate=True)
             return result
+
+        if page == "watcher":
+            # Poke the Watcher from its page (5.5.3.2).
+            if operation != "poke":
+                return False
+            self._watcher_poke()
+            self._schedule_html_dashboard_publish(immediate=True)
+            return True
 
         if page == "planet-materials":
             if payload.get("profile_key") != get_active_profile(self.config):

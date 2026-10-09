@@ -47,15 +47,47 @@
 
 * **The Watcher's words go the right way on any monitor.** They appear on whichever side of the orb faces the middle of the screen it's on. Before, only the main monitor was checked: an orb on a second screen to the right always put its words on the left, even at that screen's left edge.
 
+* **The Watcher remembers you:**
+  * **Places:** come back to a system you've visited and it notices ("Hatchooe YF-O d6-16. We were here in February.").
+  * **Your records:** your furthest from Sol, your longest jump, and your most first discoveries in one session, once a session each. Every figure comes from your own travel history.
+  * **Your anniversary:** the day of your first jump.
+* **Poke the Watcher.** Press Ctrl+Alt+Shift+F9 in game (change it in Settings › Hotkeys), or POKE on its page. It looks up and says something about where you are or how it's going. Poke it three times in a row and it gets testy.
+* **It notices you:**
+  * when you bring it back after hiding the overlays;
+  * when you move it somewhere new.
+* **A bond that grows.** Over the sessions and hours you fly together it goes from a stranger to known, then a companion, then an old friend. With each step it has warmer things to say and greets you like an old friend. Even when Depressed, it lets itself look pleased a little more often.
+* **Each nature has its own voice.** Stoic, Curious and Nervous have their own words for the moments that come up most, as Depressed already did:
+  * **Stoic:** clipped reports;
+  * **Curious:** questions about everything;
+  * **Nervous:** frets about fuel, pirates and heat.
+* **It moves with your music.** While the Music player plays, the iris swells with the bass, the eye brightens and the galaxy turns a little faster.
+* **The Watcher's page on the deck** (under Cockpit) shows:
+  * its eye, live, and its latest thought;
+  * a log of everything it has said, marked by mood;
+  * thoughts shared, sessions and hours together, and deaths it has watched;
+  * how far your bond has grown;
+  * your records and what it talks about most;
+  * a POKE button.
+
 * **The Watcher looks better:**
   * **The bezel** is brushed metal with bevelled edges, lit from the upper left. The iris's light spills onto its inner lip.
   * **The iris** has fine fibres round the pupil, turning slowly with the galaxy.
   * **When it thinks,** a seven-bladed diaphragm closes in over the iris, like a camera's.
   * **The glass has depth:** the faint rings of the lens elements, ghost reflections and the glow caught along its lower edge.
   * **The pupil** has a wider bloom and a faint lens streak, stronger as it flares or speaks.
-  * **While it speaks,** rings of its voice rise out of the pupil.
+  * **While it speaks,** soft waves of light rise out of the pupil.
+  * **Its reactions are softer:** the hard drawn circles are now waves of light that glow in and fade out on smooth curves. That covers the discovery scan, docking and undocking, the FSD charge, all-clear and contacts. The alarm and shield breach pulse smoothly round the lip instead of strobing, and the bezel tracks glow.
 
   The metal and glass are drawn once and reused, so it costs about as much to draw as before.
+
+* **Trading searches are much faster.** They now work the way EDNexus does:
+  * **Where to buy or sell a commodity, and Sell My Cargo,** ask Spansh for just the nearest stations with stock or demand. That takes about half a second to a second and a half, where the old lookup took 15–30 seconds and downloaded megabytes.
+  * **Large pads, carriers and planetary stations** are filtered by Spansh, so every result is one you can use.
+  * **One connection to Spansh** is kept open and reused, and opening the Trading tab warms it up, so your first search doesn't wait for a handshake.
+  * **Answers are kept on disk for 10 minutes** (station markets for 3), so repeating a search is instant, even after a restart. Prices are always checked fresh when you dock on a route.
+  * **Sell My Cargo** looks up all your commodities at once.
+  * **Route searches** are checked more often at the start, so a finished route shows sooner.
+  * **When Spansh is busy,** it gets one polite retry.
 
 ## Earlier releases
 

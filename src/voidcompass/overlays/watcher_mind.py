@@ -27,7 +27,7 @@ from pathlib import Path
 import zlib
 
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
-from voidcompass.overlays import watcher_idle, watcher_lines
+from voidcompass.overlays import watcher_idle, watcher_lines, watcher_natures
 
 # How often it may speak (Overlay Studio). The gap is the least time
 # between two thoughts; `minimum` is the least importance it will voice.
@@ -114,6 +114,18 @@ IMPORTANCE = {
     "settlement_seen": 0,
     "taxi_ride": 0,
     "carrier_jump": 1,
+    # It remembers (5.5.3.2): places, your records, the day you started.
+    "revisit": 2,
+    "record_far": 2,
+    "record_jump": 2,
+    "record_firsts": 2,
+    "anniversary": 3,
+    # You and it: a poke, hiding it, moving it, and the bond over time.
+    "poked": 3,
+    "poked_again": 3,
+    "unhidden": 2,
+    "moved": 1,
+    "greet_bond": 3,
     # 5.5.3.2: idle thoughts about what's really around you.
     **{topic: 1 for topic in watcher_idle.IDLE_TOPICS},
     "codex_new": 2,
@@ -169,6 +181,10 @@ MOODS = {
     **{topic: "curious" for topic in ("jet_boost", "settlement_seen", "carrier_jump", "idle_settlement",
                                        "idle_near_body", "idle_supercruise")},
     **{topic: "downcast" for topic in ("taxi_ride", "idle_taxi", "idle_station_foot")},
+    **{topic: "pleased" for topic in ("record_far", "record_jump", "record_firsts", "anniversary", "greet_bond",
+                                       "idle_bond_1", "idle_bond_2", "idle_bond_3", "unhidden")},
+    **{topic: "curious" for topic in ("revisit", "poked", "moved")},
+    "poked_again": "wary",
     **{topic: "curious" for topic in (
         "idle_star_odd", "idle_big_system", "arrival", "jump_long", "jump_far", "idle_far", "idle_star",
         "idle_galnet", "greet_new")},
@@ -185,6 +201,31 @@ _CORRECTION = re.compile(r"\[\[([^|\]]*)\|([^\]]*)\]\]")
 
 def plain_text(script):
     return _CORRECTION.sub(lambda match: match.group(2), str(script or ""))
+
+
+def when_text(stamp, now=None):
+    """A journal timestamp as a moment it remembers: "3 days ago",
+    "in March", "in March 2025"."""
+    then = None
+    try:
+        then = datetime.fromisoformat(str(stamp).replace("Z", "+00:00")).astimezone()
+    except (TypeError, ValueError):
+        return ""
+    now = datetime.fromtimestamp(now if now is not None else time.time()).astimezone()
+    days = (now - then).days
+    if days < 1:
+        return "earlier today"
+    if days < 2:
+        return "yesterday"
+    if days < 14:
+        return f"{days} days ago"
+    month = then.strftime("%B")
+    return f"in {month}" if then.year == now.year else f"in {month} {then.year}"
+
+
+def times_text(count):
+    count = int(count or 0)
+    return {1: "once", 2: "twice"}.get(count, f"{count:,} times")
 
 
 def _credits_text(value):
@@ -264,13 +305,21 @@ class WatcherMind:
         self.random = rng or random.Random()
         self.lock = threading.Lock()
         self.memory = {"last_seen": None, "sessions": 0, "said": [], "regions": [],
-                       "deaths": 0, "last_death": None, "session_started": None, "thoughts": None}
+                       "deaths": 0, "last_death": None, "session_started": None, "thoughts": None,
+                       # 5.5.3.2: hours flown together, your records, the day
+                       # it last marked your anniversary, and what it said.
+                       "hours": 0.0, "records": {}, "anniversary_said": None, "log": []}
         self._load()
         if self.memory.get("thoughts") is None:
             # Older memories: count the thoughts it remembers saying.
             self.memory["thoughts"] = sum(1 for row in self.memory["said"]
                                           if isinstance(row, list) and row and ":" not in str(row[0]) and row[0] != "idle")
         self._afterthought = None
+        self._counted_until = None
+        self._poked_at = 0.0
+        self._pokes = 0
+        self._hidden_at = None
+        self._record_said = set()
         self.thought = None          # {id, text, at, until}
         self._serial = 0
         self._last_spoke = 0.0
@@ -296,7 +345,29 @@ class WatcherMind:
         except (OSError, ValueError):
             pass
 
+    def _account_time(self):
+        """Add the time since it last counted to the hours spent together."""
+        if self._session_start is None:
+            return
+        now = self.clock()
+        start = max(self._session_start, self._counted_until or 0.0)
+        if now > start:
+            with self.lock:
+                self.memory["hours"] = float(self.memory.get("hours") or 0.0) + (now - start) / 3600.0
+        self._counted_until = now
+
+    def bond(self):
+        """0 a stranger, 1 known, 2 a companion, 3 an old friend: from the
+        sessions and hours you've spent together."""
+        sessions = int(self.memory.get("sessions") or 0)
+        hours = float(self.memory.get("hours") or 0.0)
+        for level, (need_sessions, need_hours) in ((3, (30, 100)), (2, (10, 25)), (1, (3, 5))):
+            if sessions >= need_sessions and hours >= need_hours:
+                return level
+        return 0
+
     def save(self):
+        self._account_time()
         if not self.memory_path:
             return
         try:
@@ -317,8 +388,13 @@ class WatcherMind:
 
     def _variant(self, topic, fields):
         importance, variants = TOPICS[topic]
-        if personality(self.config) == "weary" and topic in WEARY:
+        nature = personality(self.config)
+        if nature == "weary" and topic in WEARY:
             variants = WEARY[topic]
+        # Stoic, curious and nervous each have their own words for the
+        # moments that matter most, and borrow the rest (5.5.3.2).
+        own = list(watcher_natures.BANKS.get(nature, {}).get(topic, ()))
+        variants = own + [line for line in variants if line not in own]
         options = []
         for template in variants:
             try:
@@ -332,6 +408,10 @@ class WatcherMind:
         # Never the same words twice while another wording is left.
         fresh = [row for row in options if not self._said_recently(row[0], 30 * 86400)]
         if fresh:
+            own_keys = {f"{topic}:{zlib.crc32(line.encode('utf-8')):08x}" for line in own}
+            fresh_own = [row for row in fresh if row[0] in own_keys]
+            if fresh_own and self.random.random() < .75:
+                return self.random.choice(fresh_own)[:2]
             return self.random.choice(fresh)[:2]
         if importance < 2:
             # A minor remark stays unsaid rather than repeat a recent line: a
@@ -400,6 +480,9 @@ class WatcherMind:
             self.memory["said"].append([key, now])
             self.memory["said"].append([topic, now])
             self.memory["thoughts"] = int(self.memory.get("thoughts") or 0) + 1
+            log = self.memory.setdefault("log", [])
+            log.append([round(time.time(), 1), topic, text])
+            del log[:-300]
         self._unsaved = True
         # Now and then a second beat follows, once the first has been read.
         if topic != "afterthought" and importance < 3:
@@ -407,6 +490,29 @@ class WatcherMind:
             if self.random.random() < chance:
                 self._afterthought = {"after": self._serial, "at": now + 3.2 + len(script) * .045}
         return self.thought
+
+    def poke(self, context=None):
+        """The commander poked it (a hotkey). It looks up and says something:
+        about where you are, how it's going, or just that it was poked. Poke
+        it again and again and it gets testy."""
+        now = self.clock()
+        self._pokes = self._pokes + 1 if now - self._poked_at < 20 else 1
+        self._poked_at = now
+        if self._session_start is None:
+            self._session_start = now
+            self._counted_until = now
+        if self._pokes >= 3:
+            return self.consider("poked_again", force=True)
+        if self.random.random() < .5:
+            known = dict(context or {})
+            known.update(thoughts=self.memory.get("thoughts") or 0, sessions=self.memory.get("sessions") or 0,
+                         deaths=self.memory.get("deaths") or 0, bond=self.bond(),
+                         hours=int(self.memory.get("hours") or 0))
+            for topic, fields in self.surroundings.choices(now, self.random, known):
+                thought = self.consider(topic, fields, force=True)
+                if thought:
+                    return thought
+        return self.consider("poked", force=True)
 
     def save_if_due(self, every=300.0):
         """Save what it has said every few minutes, so a crash or a killed
@@ -449,6 +555,8 @@ class WatcherMind:
             # A reload mid-session (or a second sign of life): already greeted.
             return None
         self._session_start = now
+        self._counted_until = now
+        self._record_said = set()
         self.surroundings.reset_session()
         last = self.memory.get("last_seen")
         previous_start = self.memory.get("session_started")
@@ -463,6 +571,10 @@ class WatcherMind:
             return self.consider("after_death", force=True)
         if not last:
             return self.consider("greet_new", force=True)
+        if self.bond() >= 2 and self.random.random() < .35:
+            greeting = self.consider("greet_bond", {"sessions": int(self.memory.get("sessions") or 0)}, force=True)
+            if greeting:
+                return greeting
         away = now - float(last)
         if away > 2 * 86400:
             return self.consider("greet_away", {"away": _away_text(away)}, force=True)
@@ -587,6 +699,16 @@ class WatcherMind:
                 self._last_interesting = now
                 return self.consider("rare_world", {"body": raw.get("BodyName") or "That world",
                                                     "kind": rare_label.lower()})
+            firsts = self.surroundings.firsts
+            best = int((self.memory.get("records") or {}).get("firsts") or 0)
+            if firsts > best:
+                with self.lock:
+                    self.memory.setdefault("records", {})["firsts"] = firsts
+                if best >= 5 and "firsts" not in self._record_said:
+                    thought = self.consider("record_firsts", {"count": firsts})
+                    if thought:
+                        self._record_said.add("firsts")
+                        return thought
             if raw.get("WasDiscovered") is False and (raw.get("PlanetClass") or raw.get("StarType")):
                 self._first_streak += 1
                 self._last_interesting = now
@@ -626,6 +748,33 @@ class WatcherMind:
         fields = dict(fields or {})
         if kind == "achievement":
             return self.consider("achievement", fields)
+        if kind == "revisit":
+            return self.consider("revisit", fields)
+        if kind in {"record_far", "record_jump"}:
+            # Once a session for each: a new record every jump would be noise.
+            if kind in self._record_said:
+                return None
+            thought = self.consider(kind, fields)
+            if thought:
+                self._record_said.add(kind)  # said: not again this session
+            return thought
+        if kind == "anniversary":
+            today = datetime.fromtimestamp(self.clock()).strftime("%Y-%m-%d")
+            if self.memory.get("anniversary_said") == today:
+                return None
+            with self.lock:
+                self.memory["anniversary_said"] = today
+            return self.consider("anniversary", fields, force=True)
+        if kind == "hidden":
+            self._hidden_at = self.clock()
+            return None
+        if kind == "shown":
+            hidden, self._hidden_at = self._hidden_at, None
+            if hidden is not None and self.clock() - hidden >= 10 and self._session_start is not None:
+                return self.consider("unhidden")
+            return None
+        if kind == "moved":
+            return self.consider("moved") if self._session_start is not None else None
         if kind == "sign_off":
             # The end of a session: the Captain's Log's own figures.
             summary = str(fields.get("summary") or "")
@@ -669,6 +818,7 @@ class WatcherMind:
         now = self.clock()
         if self._session_start is None:
             return None  # nothing to think about until it has seen the game
+        self._account_time()
         if self._session_start and now - self._session_start > 3 * 3600:
             hours = int((now - self._session_start) // 3600)
             if not self._said_recently("long_session", 3600):
@@ -685,7 +835,8 @@ class WatcherMind:
                 and not self._said_recently("idle", setting.get("mutter", 1200.0))):
             known = dict(context or {})
             known.update(thoughts=self.memory.get("thoughts") or 0, sessions=self.memory.get("sessions") or 0,
-                         deaths=self.memory.get("deaths") or 0)
+                         deaths=self.memory.get("deaths") or 0, bond=self.bond(),
+                         hours=int(self.memory.get("hours") or 0))
             choices = self.surroundings.choices(now, self.random, known)
             # The plain mutter now and then, and whenever nothing else fits.
             if not choices or self.random.random() < .25:

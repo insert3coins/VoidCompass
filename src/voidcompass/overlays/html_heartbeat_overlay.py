@@ -14,7 +14,18 @@ THOUGHT_WIDTH = 330
 
 class HtmlHeartbeatBridge(HtmlModelOverlayBridge):
     """The orb is a square window of the size chosen in Overlay Studio,
-    wider only while the Watcher shares a thought beside it."""
+    wider only while the Watcher shares a thought beside it. The Music
+    player's live levels reach it at /api/live, so the eye moves with the
+    music (5.5.3.2)."""
+
+    levels = None
+
+    def set_enabled(self, enabled):
+        live = super().set_enabled(enabled)
+        register = getattr(getattr(self.surface, "server", None), "set_live_provider", None)
+        if live and callable(register):
+            register(self.overlay_id, lambda: self.levels() if callable(self.levels) else {})
+        return live
 
     def _thought(self):
         if getattr(self, "overlay", None) is None:
@@ -43,9 +54,9 @@ class HtmlHeartbeatBridge(HtmlModelOverlayBridge):
         return payload
 
 
-def attach_html_heartbeat_overlay(overlay, overlay_id, title, enabled_key, x_key, y_key):
+def attach_html_heartbeat_overlay(overlay, overlay_id, title, enabled_key, x_key, y_key, levels=None):
     size = orb_size(getattr(overlay, "config", {}))
-    return attach_html_model_overlay(
+    attached = attach_html_model_overlay(
         overlay, overlay_id, title, enabled_key, x_key, y_key,
         bridge_attr="_html_heartbeat_bridge", template="heartbeat",
         snapshot_key="heartbeat", model_attr="_html_render_model",
@@ -53,3 +64,7 @@ def attach_html_heartbeat_overlay(overlay, overlay_id, title, enabled_key, x_key
         min_height=size, default_height=size, max_height=size,
         bridge_class=HtmlHeartbeatBridge,
     )
+    bridge = getattr(overlay, "_html_heartbeat_bridge", None)
+    if bridge is not None:
+        bridge.levels = levels
+    return attached

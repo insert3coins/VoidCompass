@@ -15,7 +15,7 @@ BRIDGE_PAGES = (
     "analytics", "chronicle", "mission", "ground", "mining",
     "engineering", "build-planner", "powerplay", "carrier", "recon",
     "achievements", "ledger", "settings", "overlay-studio", "about", "music",
-    "colonisation", "bgs", "trading",
+    "colonisation", "bgs", "trading", "watcher",
 )
 WORKSPACE_PAGES = (
     "planet-materials", "explore", "profile", "analytics", "chronicle",

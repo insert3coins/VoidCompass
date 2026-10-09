@@ -15,6 +15,7 @@ import {
 } from "./colonisation.js";
 import {handleBgsChange, handleBgsClick, handleBgsSubmit, renderBgs} from "./bgs.js";
 import {handleTradingClick, handleTradingInput, handleTradingSubmit, renderTrading, resetTrading} from "./trading.js";
+import {renderWatcher} from "./watcher.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
@@ -4036,6 +4037,7 @@ function renderWorkspace(state) {
     colonisation: renderColonisationWorkspace,
     bgs: renderBgsWorkspace,
     trading: renderTradingWorkspace,
+    watcher: (data) => renderWatcher(data, WORKSHOP_UI),
   };
   renderers[page]?.(workspace.data || {});
   preparePageLayout(page);

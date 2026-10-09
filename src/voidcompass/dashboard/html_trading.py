@@ -75,6 +75,7 @@ class HtmlTradingMixin:
     # -- snapshot ------------------------------------------------------------
     def _html_trading_workspace(self):
         ui = self._trading_ui()
+        self._trading_warm_up()
         store = getattr(self, "trading_store", None)
         data = {"view": ui["view"], "notice": ui["notice"], "error": ui["error"], "online": self._trading_online(),
                 "ready": store is not None, "busy": sorted(getattr(self, "_trading_busy", {}) or ())}
@@ -319,16 +320,26 @@ class HtmlTradingMixin:
         ui["cargo"] = progress
 
         def work():
+            from concurrent.futures import ThreadPoolExecutor
             self._trading_spansh_names()
-            rows = []
-            for index, item in enumerate(hold):
-                progress.update(done=index, current=self.trading_names.name(item["symbol"]))
-                self._ui_post(lambda: self._schedule_html_dashboard_publish(immediate=True), key="trading-progress")
-                name = self.trading_names.name(item["symbol"])
+            finished = []
+
+            def look_up(item):
+                # Each commodity asked side by side on the shared connection
+                # (5.5.3.2), not one after another.
+                name = self.trading_names.spansh_name(self.trading_names.name(item["symbol"]))
                 stations = trade_market.parse_commodity(
                     spansh.commodity_stations("sell", system, name, item["count"]), name, "sell")
                 stations.sort(key=lambda row: -row["price"])
-                rows.append({**item, "name": name, "stations": stations[:5]})
+                finished.append(name)
+                progress.update(done=len(finished), current=name)
+                self._ui_post(lambda: self._schedule_html_dashboard_publish(immediate=True), key="trading-progress")
+                return {**item, "name": name, "stations": stations[:5]}
+            if len(hold) == 1:
+                rows = [look_up(hold[0])]
+            else:
+                with ThreadPoolExecutor(max_workers=4, thread_name_prefix="trading-cargo") as pool:
+                    rows = list(pool.map(look_up, hold))
             return {"rows": rows, "system": system, "at": time.time()}
 
         def done(result, error):
@@ -350,13 +361,16 @@ class HtmlTradingMixin:
             find["error"] = "Give a commodity and a system."
             return True
         find.update(pending=True, error="")
-        request = (find["kind"], find["system"], find["commodity"], find["amount"])
+        request = (find["kind"], find["system"], find["commodity"], find["amount"],
+                   bool(find["large"]), bool(find["carriers"]), bool(find["planetary"]))
 
         def work():
             self._trading_spansh_names()
             name = self.trading_names.spansh_name(request[2])
-            rows = trade_market.parse_commodity(spansh.commodity_stations(request[0], request[1], name, request[3]),
-                                                name, request[0])
+            rows = trade_market.parse_commodity(
+                spansh.commodity_stations(request[0], request[1], name, request[3],
+                                          large_pad=request[4], carriers=request[5], planetary=request[6]),
+                name, request[0])
             return {"name": name, "rows": rows}
 
         def done(result, error):

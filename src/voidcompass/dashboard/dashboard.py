@@ -1430,6 +1430,47 @@ class MainDashboard(
             return index.entry_flag(key, region)
         return index.species_flag(key, region)
 
+    def _watcher_travel(self, raw):
+        """Before a live jump joins the travel history: has the Watcher been
+        here before, is it a record, and is today your anniversary?"""
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        history = getattr(self, "travel_history", None)
+        if heartbeat is None or history is None or not hasattr(heartbeat, "note"):
+            return
+        try:
+            system = str(raw.get("StarSystem") or "")
+            stamp = str(raw.get("timestamp") or "")
+            seen = history.recall(system) if system else None
+            records = history.records()
+            if seen and stamp and seen["last"] < stamp:
+                then = watcher_mind.datetime.fromisoformat(seen["last"].replace("Z", "+00:00")).timestamp()
+                now = watcher_mind.datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
+                if now - then > 6 * 3600:
+                    heartbeat.note("revisit", {"system": system, "when": watcher_mind.when_text(seen["last"]),
+                                               "times": watcher_mind.times_text(seen["count"])})
+            position = raw.get("StarPos")
+            if isinstance(position, (list, tuple)) and len(position) >= 3 and records["far"] > 100:
+                far = math.hypot(*(float(axis) for axis in position[:3]))
+                if far > records["far"] + .5:
+                    heartbeat.note("record_far", {"dist": f"{far:,.0f}"})
+            jump = float(raw.get("JumpDist") or 0)
+            if records["jump"] > 10 and jump > records["jump"] + .05:
+                heartbeat.note("record_jump", {"dist": f"{jump:,.2f}"})
+            first = records.get("first")
+            if first:
+                began = watcher_mind.datetime.fromisoformat(first.replace("Z", "+00:00")).astimezone()
+                today = watcher_mind.datetime.now().astimezone()
+                years = today.year - began.year
+                if years >= 1 and (today.month, today.day) == (began.month, began.day):
+                    heartbeat.note("anniversary", {"years": "a year" if years == 1 else f"{years} years"})
+        except Exception as exc:
+            logging.debug("Watcher travel memory skipped: %s", exc)
+
+    def _watcher_poke(self):
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        if heartbeat is not None and hasattr(heartbeat, "poke"):
+            heartbeat.poke()
+
     def _watcher_context(self):
         """What the rest of the app knows, for the Watcher's idle thoughts:
         the track playing in the Music player and Galnet's latest headline."""
@@ -3450,6 +3491,9 @@ class MainDashboard(
         if action == "field_bookmark":
             self._field_bookmark()
             return
+        if action == "watcher_poke":
+            self._watcher_poke()
+            return
         if action == "colony_refresh":
             if self._colony_refresh():
                 self.add_event_feed_entry("SYSTEM", "Construction Needs: refreshing from Raven Colonial", severity="INFO")
@@ -3483,8 +3527,12 @@ class MainDashboard(
                 self._restore_overlay_hotkey_windows(restore)
                 self._enforce_overlay_hotkey_visibility()
                 message = "Overlays restored"
+                if getattr(self, "heartbeat_hud", None) is not None:
+                    self.heartbeat_hud.note("shown")
             else:
                 self._overlay_hotkey_global_hidden = True
+                if getattr(self, "heartbeat_hud", None) is not None:
+                    self.heartbeat_hud.note("hidden")
                 for name, window in self._overlay_hotkey_window_items():
                     try:
                         if self._overlay_window_is_shown(window):
@@ -5005,7 +5053,7 @@ class MainDashboard(
                 )
             elif attr == "heartbeat_hud":
                 attach_html_heartbeat_overlay(
-                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                    overlay, overlay_id, title, enabled_key, x_key, y_key, levels=self.music_levels,
                 )
             elif attr == "galnet_ticker_hud":
                 attach_html_galnet_ticker_overlay(
@@ -7897,6 +7945,10 @@ class MainDashboard(
                 history_raw = raw if isinstance(raw, dict) else d
                 if isinstance(history_raw, dict) and not history_raw.get("event"):
                     history_raw = dict(history_raw, event=ev)
+                # The Watcher remembers places and records: look before
+                # the jump is added (5.5.3.2).
+                if ev == "FSDJump" and not startup_replay:
+                    self._watcher_travel(history_raw)
                 if self.travel_history.observe(history_raw):
                     self._refresh_exploration_window()
             except Exception as exc:

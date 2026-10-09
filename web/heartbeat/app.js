@@ -131,8 +131,26 @@
     root.title = label;
   }
 
+  // The Music player's live levels (5.5.3.2): the eye moves with the music.
+  // Asked often while something plays, once a second otherwise.
+  let livePoll = 0;
+  async function listen() {
+    let playing = false;
+    try {
+      const response = await fetch(`/api/live?token=${encodeURIComponent(params.get("token") || "")}&overlay=${encodeURIComponent(params.get("overlay") || "heartbeat")}`,
+        {cache: "no-store"});
+      const live = response.ok ? await response.json() : {};
+      playing = Boolean(live.playing) && Array.isArray(live.bands) && live.bands.length > 0;
+      orb.music?.(playing ? live.bands : null);
+    } catch (_error) {
+      orb.music?.(null);
+    }
+    livePoll = window.setTimeout(listen, playing && !document.hidden ? 120 : 1000);
+  }
+  listen();
+
   motionPreference.addEventListener("change", () => poller?.rerender());
-  window.addEventListener("pagehide", () => orb.dispose());
+  window.addEventListener("pagehide", () => { window.clearTimeout(livePoll); orb.dispose(); });
   poller = VoidCompassOverlay.startPolling({
     token: params.get("token") || "", overlay: params.get("overlay") || "heartbeat",
     render, contentHeight: () => orb.size || 54, interval: 160,

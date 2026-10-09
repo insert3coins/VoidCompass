@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="overlay-studio.css">
   <link rel="stylesheet" href="settings.css">
   <link rel="stylesheet" href="music.css">
+  <link rel="stylesheet" href="watcher.css">
   <link rel="stylesheet" href="powerplay.css">
   <link rel="stylesheet" href="workshop.css">
   <link rel="stylesheet" href="colonisation.css">
@@ -257,10 +258,11 @@
         <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>13</b></button>
         <p>COCKPIT</p>
         <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>14</b></button>
+        <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>15</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>15</b></button>
-        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>16</b></button>
-        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>17</b></button>
+        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>16</b></button>
+        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>17</b></button>
+        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>18</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -600,6 +602,11 @@
               <div id="music-tracks" class="music-track-list" role="list"></div>
             </section>
           </div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="watcher">
+          <header class="page-title"><div><p>COCKPIT COMPANION</p><h2>The Watcher</h2><span>What it has said, what it remembers of you, and how far you've come together.</span></div><div class="title-actions"><button data-page="overlay-studio">OVERLAY STUDIO</button></div></header>
+          <div id="watcher-workspace" class="workspace-shell loading-panel">Waking the Watcher…</div>
         </section>
 
         <section class="page specialist-page" data-page-name="achievements">

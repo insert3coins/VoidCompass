@@ -219,6 +219,7 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_music_previous",
     "overlay_hotkey_planet_waypoint",
     "overlay_hotkey_field_bookmark",
+    "overlay_hotkey_watcher_poke",
     "ground_target_system",
     "ground_target_body",
     "ground_target_label",
@@ -706,6 +707,7 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_music_previous": "",
         "overlay_hotkey_planet_waypoint": "",
         "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
+        "overlay_hotkey_watcher_poke": "Ctrl+Alt+Shift+F9",
     }
     bool_defaults = {
         **OVERLAY_ENABLE_DEFAULTS,
@@ -924,6 +926,7 @@ def load_config():
         'overlay_hotkey_music_previous': '',
         'overlay_hotkey_planet_waypoint': '',
         'overlay_hotkey_field_bookmark': 'Ctrl+Alt+Shift+F12',
+        'overlay_hotkey_watcher_poke': 'Ctrl+Alt+Shift+F9',
         # New installs start with Standard. An older root config that somehow
         # lacks the setting keeps the historical Expanded default.
         'hud_compact_mode': not config_existed,

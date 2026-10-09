@@ -25,6 +25,8 @@ IDLE_TOPICS = (
     # settlement, a taxi, a fleet carrier, a station concourse, a world below.
     "idle_ship", "idle_supercruise", "idle_srv", "idle_settlement", "idle_taxi",
     "idle_carrier", "idle_station_foot", "idle_near_body",
+    # The bond (5.5.3.2): known, a companion, an old friend.
+    "idle_bond_1", "idle_bond_2", "idle_bond_3",
 )
 
 # Star classes in plain words (journal StarClass / StarType).
@@ -229,6 +231,12 @@ class Surroundings:
             if int(context.get("sessions") or 0) >= 2:
                 fields["sessions"] = int(context["sessions"])  # lines about sessions wait for a second one
             session.append(("idle_self", fields))
+        bond = int(context.get("bond") or 0)
+        if bond >= 1:
+            fields = {"hours": f"{int(context.get('hours') or 0):,}"}
+            if int(context.get("sessions") or 0) >= 2:
+                fields["sessions"] = int(context["sessions"])
+            session.append((f"idle_bond_{min(3, bond)}", fields))
         deaths = int(context.get("deaths") or 0)
         if deaths:
             times = {1: "once", 2: "twice"}.get(deaths, f"{deaths:,} times")

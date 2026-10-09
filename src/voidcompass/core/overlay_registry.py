@@ -105,6 +105,8 @@ OVERLAY_HOTKEY_SPECS = (
     ("music_play_pause", "overlay_hotkey_music_play_pause", "Music: play / pause", None),
     ("music_next", "overlay_hotkey_music_next", "Music: next track", None),
     ("music_previous", "overlay_hotkey_music_previous", "Music: previous track", None),
+    # Poke the Watcher: it looks up and answers (5.5.3.2).
+    ("watcher_poke", "overlay_hotkey_watcher_poke", "The Watcher: poke", None),
     _overlay_hotkey("planet_waypoint"),
     ("field_bookmark", "overlay_hotkey_field_bookmark", "Save field bookmark", None),
 )
@@ -113,4 +115,5 @@ DEFAULT_OVERLAY_HOTKEYS = {
     "overlay_hotkey_layout_studio": "Ctrl+Alt+Shift+F10",
     "overlay_hotkey_toggle_all": "Ctrl+Alt+Shift+F11",
     "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
+    "overlay_hotkey_watcher_poke": "Ctrl+Alt+Shift+F9",
 }

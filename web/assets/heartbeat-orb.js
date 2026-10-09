@@ -47,6 +47,9 @@
   const lerp = (from, to, t) => from + (to - from) * t;
   const easeOut = (t) => 1 - (1 - clamp(t)) ** 2;
   const easeIn = (t) => clamp(t) ** 2;
+  // Smooth both ways (5.5.3.2): the waves start and settle gently.
+  const smooth = (t) => { const x = clamp(t); return x * x * (3 - 2 * x); };
+  const smoother = (t) => { const x = clamp(t); return x * x * x * (x * (x * 6 - 15) + 10); };
   // 0 at both ends of a 0..1 journey, 1 in the middle.
   const bump = (t) => Math.sin(Math.PI * clamp(t));
   const span = (p, from, to) => clamp((p - from) / (to - from));
@@ -200,8 +203,8 @@
       // The eye opens from dark, the famous HAL wake, and the bezel lights round.
       ms: 2600,
       mods: (p, m) => { const e = easeOut(p); m.dim *= .12 + .88 * e; m.pupil *= .35 + .65 * e; },
-      outer: (g, fx, p) => g.track(-Math.PI / 2, -Math.PI / 2 + TAU * easeOut(span(p, 0, .8)),
-        .885, 1.3, fx.color, .75 * (1 - span(p, .7, 1))),
+      outer: (g, fx, p) => g.glowTrack(-Math.PI / 2, -Math.PI / 2 + TAU * smoother(span(p, 0, .8)),
+        .885, 1.1, fx.color, .7 * (1 - smooth(span(p, .7, 1)))),
     },
     sleep: {
       ms: 2400,
@@ -231,10 +234,11 @@
       ms: 1700,
       mods: (p, m, fx) => { m.flare += .7 * fx.w * p * p; m.pupil *= 1 - .25 * bump(p); },
       inner: (g, fx, p) => {
+        // Light gathers inward to the pupil in soft waves.
         for (let ring = 0; ring < 3; ring += 1) {
-          const q = clamp(p * 1.4 - ring * .2);
-          if (q <= 0) continue;
-          g.ring(lerp(.74, .1, easeIn(q)), 1.4 - .6 * q, fx.color, bump(q) * .8 * fx.w);
+          const q = clamp(p * 1.35 - ring * .2);
+          if (q <= 0 || q >= 1) continue;
+          g.wave(lerp(.72, .08, smoother(q)), .05 - .03 * q, fx.color, bump(q) * .45 * fx.w);
         }
       },
     },
@@ -314,10 +318,11 @@
       ms: 1700,
       mods: (p, m, fx) => { m.flare += .6 * fx.w * bump(span(p, 0, .33)); },
       outer: (g, fx, p) => {
-        for (const delay of [0, .18]) {
+        // A wave of light out of the pupil, through the glass, past the bezel.
+        for (const delay of [0, .2]) {
           const q = span(p, delay, 1);
-          if (q <= 0) continue;
-          g.ring(lerp(.1, 1, easeOut(q)), 2.2 - 1.6 * q, fx.color, (1 - q) * .9 * fx.w);
+          if (q <= 0 || q >= 1) continue;
+          g.wave(lerp(.08, .98, smoother(q)), .04 + .07 * q, fx.color, (1 - smooth(q)) * .55 * fx.w);
         }
       },
     },
@@ -328,8 +333,9 @@
           const q = span(p, index * .12, index * .12 + .5);
           if (q <= 0) continue;
           const [x, y] = g.polar(fx.r[index] * TAU, (.2 + .45 * fx.r[index + 5]) * g.R);
-          g.circle(x, y, (.02 + .09 * q) * g.R, .8, fx.color, (1 - q) * .8 * fx.w);
-          g.dot(x, y, .9, mix(g.pal.text, fx.color, .4), (1 - q) * fx.w);
+          // Each contact blooms softly and fades.
+          g.bloom(x, y, (.03 + .1 * smooth(q)) * g.R, fx.color, bump(q) * .5 * fx.w);
+          g.dot(x, y, .8, mix(g.pal.text, fx.color, .4), bump(q) * fx.w);
         }
       },
     },
@@ -350,9 +356,9 @@
       ms: 1900,
       mods: (p, m, fx) => { m.flare += .5 * fx.w * bump(span(p, .55, 1)); },
       outer: (g, fx, p) => {
-        const fade = 1 - span(p, .7, 1);
-        g.track(-Math.PI / 2, -Math.PI / 2 + TAU * easeOut(span(p, 0, .66)), .885, 1.6, fx.color, .9 * fade);
-        if (p > .62) g.ring(.8, 1.4, fx.color, bump(span(p, .62, 1)) * .8 * fx.w);
+        const fade = 1 - smooth(span(p, .7, 1));
+        g.glowTrack(-Math.PI / 2, -Math.PI / 2 + TAU * smoother(span(p, 0, .66)), .885, 1.3, fx.color, .85 * fade);
+        if (p > .6) g.wave(.8, .05, fx.color, bump(span(p, .6, 1)) * .5 * fx.w);
       },
     },
     lock: {
@@ -380,7 +386,7 @@
       // Under threat: the iris strobes and the eye flinches.
       ms: 1500,
       mods: (p, m, fx) => {
-        const strobe = (Math.sin(p * TAU * 3) > 0 ? 1 : .25) * (1 - p);
+        const strobe = (.5 - .5 * Math.cos(p * TAU * 3)) * (1 - p);
         m.flare += .6 * strobe * fx.w;
         m.pupil *= 1 - .35 * bump(p);
         const shake = (1 - p) * .05;
@@ -388,8 +394,9 @@
         m.jy += (fx.r[(Math.floor(p * 24) + 7) % 24] - .5) * shake;
       },
       outer: (g, fx, p) => {
-        const strobe = (Math.sin(p * TAU * 3) > 0 ? 1 : .2) * (1 - p);
-        g.ring(.885, 3, fx.color, strobe * .8 * fx.w);
+        // Three smooth pulses of light round the lip, fading.
+        const pulse = (.5 - .5 * Math.cos(p * TAU * 3)) * (1 - smooth(p));
+        g.wave(.86, .06, fx.color, pulse * .6 * fx.w);
       },
     },
     breach: {
@@ -417,7 +424,7 @@
         ctx.lineWidth = .8 * g.k;
         ctx.stroke();
       },
-      outer: (g, fx, p) => g.ring(.885, 2.4, fx.color, bump(span(p, 0, .4)) * .8 * fx.w),
+      outer: (g, fx, p) => g.wave(.86, .05, fx.color, bump(span(p, 0, .5)) * .55 * fx.w),
     },
     die: {
       // A red flare, then the eye goes out until the next session wakes it.
@@ -428,13 +435,13 @@
         m.dim *= 1 - .8 * out;
         m.pupil *= 1 - .6 * out;
       },
-      outer: (g, fx, p) => g.ring(lerp(.95, .1, easeIn(p)), 2, fx.color, (1 - p) * .9),
+      outer: (g, fx, p) => g.wave(lerp(.95, .08, smoother(p)), .07 - .04 * p, fx.color, (1 - smooth(p)) * .6),
       end: (orb) => { orb.asleep = true; },
     },
     clear: {
       ms: 1500,
       mods: (p, m, fx) => { m.flare += .3 * fx.w * bump(p); },
-      inner: (g, fx, p) => g.ring(lerp(.25, .85, easeOut(p)), 1.6, fx.color, (1 - p) * .8 * fx.w),
+      inner: (g, fx, p) => g.wave(lerp(.2, .82, smoother(p)), .04 + .05 * p, fx.color, bump(p) * .5 * fx.w),
     },
     strike: {
       ms: 1100,
@@ -492,7 +499,7 @@
         for (let ring = 0; ring < 3; ring += 1) {
           const q = clamp(p * 1.3 - ring * .15);
           if (q <= 0) continue;
-          g.ring(lerp(.78, .14, easeOut(q)), 1.2, fx.color, bump(q) * .8 * fx.w);
+          g.wave(lerp(.78, .12, smoother(q)), .045, fx.color, bump(q) * .45 * fx.w);
         }
       },
     },
@@ -502,7 +509,7 @@
         for (let ring = 0; ring < 3; ring += 1) {
           const q = clamp(p * 1.3 - ring * .15);
           if (q <= 0) continue;
-          g.ring(lerp(.14, .78, easeOut(q)), 1.2, fx.color, bump(q) * .8 * fx.w);
+          g.wave(lerp(.12, .78, smoother(q)), .045, fx.color, bump(q) * .45 * fx.w);
         }
       },
     },
@@ -526,15 +533,11 @@
       },
       inner: (g, fx, p) => {
         const voice = speech(p);
-        for (const radius of [.3, .42]) {
-          for (const side of [0, Math.PI]) {
-            g.arc(side - .5, side + .5, radius, 1, fx.color, voice * .7 * fx.w);
-          }
-        }
-        // Rings of its voice rising out of the pupil (5.5.3.2).
+        // Its voice: soft waves of light rising out of the pupil and fading
+        // into the glass (5.5.3.2).
         for (let ring = 0; ring < 3; ring += 1) {
-          const q = (p * 5 + ring / 3) % 1;
-          g.ring(.1 + .48 * q, .7, fx.color, voice * (1 - q) * .3 * fx.w);
+          const q = (p * 4 + ring / 3) % 1;
+          g.wave(.1 + .5 * smoother(q), .03 + .04 * q, fx.color, voice * Math.sin(Math.PI * q) * .28 * fx.w);
         }
       },
     },
@@ -589,6 +592,44 @@
         ctx.stroke();
       },
       ring: (radius, width, color, alpha) => g.circle(cx, cy, radius * R, width, color, alpha),
+      // A soft wave of light (5.5.3.2): a glowing band that fades in and out
+      // across its width, instead of a hard drawn circle.
+      wave(radius, width, color, alpha, x = cx, y = cy) {
+        if (alpha <= .004 || radius <= 0) return;
+        const middle = radius * R;
+        const half = Math.max(1.1 * k, width * R);
+        const inner = Math.max(0, middle - half);
+        const outer = middle + half;
+        const band = ctx.createRadialGradient(x, y, inner, x, y, outer);
+        band.addColorStop(0, paint(color, 0));
+        band.addColorStop(.5, paint(color, clamp(alpha)));
+        band.addColorStop(1, paint(color, 0));
+        ctx.fillStyle = band;
+        ctx.beginPath();
+        ctx.arc(x, y, outer, 0, TAU);
+        if (inner > 0) ctx.arc(x, y, inner, 0, TAU, true);
+        ctx.fill();
+      },
+      // A soft bloom of light at a point.
+      bloom(x, y, radius, color, alpha) {
+        if (alpha <= .004 || radius <= 0) return;
+        const light = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        light.addColorStop(0, paint(color, clamp(alpha)));
+        light.addColorStop(1, paint(color, 0));
+        ctx.fillStyle = light;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, TAU);
+        ctx.fill();
+      },
+      // A bezel track with a soft glow round it.
+      glowTrack(from, to, radius, width, color, alpha) {
+        if (to <= from || alpha <= 0) return;
+        ctx.save();
+        ctx.shadowColor = paint(color, clamp(alpha));
+        ctx.shadowBlur = 5 * k;
+        g.track(from, to, radius, width, color, alpha);
+        ctx.restore();
+      },
       arc(from, to, radius, width, color, alpha) {
         if (alpha <= 0) return;
         ctx.beginPath();
@@ -655,6 +696,10 @@
       // Its aperture, glances, activity and moods between events (heartbeat-life.js).
       this.life = window.HeartbeatLife ? new window.HeartbeatLife() : null;
       this.pose = null;
+      // The music it hears (5.5.3.2): smoothed toward what the player sends.
+      this.musicTarget = {level: 0, bass: 0};
+      this.musicLevel = 0;
+      this.musicBass = 0;
       this.layers = new Map();
       this.palKey = '';
       this.seed = 1;
@@ -776,6 +821,20 @@
       this.decayedAt = now;
       for (const tone of TONES) this.heat[tone] *= Math.exp(-elapsed / TONE_MEMORY[tone]);
       this.arousal *= Math.exp(-elapsed / 12000);
+    }
+
+    // The Music player's levels (0..255 bands), or null when nothing plays.
+    music(bands) {
+      if (!Array.isArray(bands) || !bands.length || this.reduced) {
+        this.musicTarget = {level: 0, bass: 0};
+        return;
+      }
+      const values = bands.map((value) => clamp(Number(value) / 255));
+      const low = values.slice(0, Math.max(1, Math.floor(values.length / 4)));
+      this.musicTarget = {
+        level: values.reduce((sum, value) => sum + value, 0) / values.length,
+        bass: low.reduce((sum, value) => sum + value, 0) / low.length,
+      };
     }
 
     // Composing a thought: the aperture closes in while it thinks (5.5.3.2).
@@ -934,6 +993,11 @@
         this.moon += elapsed / 26000 * TAU;
       }
       this.breath += elapsed / (this.asleep || drowsy > .5 ? 8000 : 5200);
+      // Music: quick to rise with the beat, slower to fall.
+      const rise = (target, current) => current + (target - current) * Math.min(1, elapsed / (target > current ? 60 : 260));
+      this.musicLevel = rise(this.musicTarget.level, this.musicLevel);
+      this.musicBass = rise(this.musicTarget.bass, this.musicBass);
+      if (this.musicLevel > .02 && !this.stalled) this.spin += elapsed / 1000 * .12 * this.musicLevel * 1.5;
       // With the life module the eye follows the newest event as it falls
       // in, so every journal line gets a look, however small.
       if (this.life && this.motes.length && !this.reduced && !this.asleep) {
@@ -995,6 +1059,12 @@
         effect.color = this.color(effect.tone);
         effect.spec.mods?.(p, mods, effect);
         live.push([effect, p]);
+      }
+      // The music: the iris swells with the bass and the eye brightens.
+      if (this.musicBass > .01 && !this.asleep) {
+        mods.iris += .08 * this.musicBass;
+        mods.flare += .3 * this.musicBass;
+        mods.dim *= 1 + .12 * this.musicLevel;
       }
       const R = this.size / 2;
       const cx = R + mods.jx * R;
@@ -1069,7 +1139,7 @@
       for (const blip of this.blips) {
         const q = clamp((now - blip.start) / 650);
         const to = blip.angle + .5 * easeOut(q);
-        g.track(blip.angle + .5 * easeOut(Math.max(0, q - .25)), to, .885, 1, mix(tint, pal.text, .3), (1 - q) * .8);
+        g.glowTrack(blip.angle + .5 * easeOut(Math.max(0, q - .25)), to, .885, .9, mix(tint, pal.text, .3), (1 - smooth(q)) * .7);
         const [x, y] = g.polar(to, .885 * R);
         g.dot(x, y, 1, mix(tint, pal.text, .5), 1 - q);
       }
@@ -1459,6 +1529,7 @@
         frames: this.frames,
         size: this.size,
         pose: this.pose ? {...this.pose} : null,
+        music: {level: this.musicLevel, bass: this.musicBass},
         life: this.life ? this.life.state(performance.now()) : null,
       };
     }

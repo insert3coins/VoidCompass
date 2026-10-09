@@ -62,6 +62,9 @@ class TravelHistory:
         self.revision = 0
         self._keys = set()
         self._pending_star = ("", "")
+        # The Watcher's memory of places and records (5.5.3.2), built on
+        # first use and kept up to date as jumps arrive.
+        self._visits = None
         self.load()
 
     # -- storage -------------------------------------------------------------
@@ -80,6 +83,7 @@ class TravelHistory:
             self.rows = rows[-MAX_ROWS:]
             self.files = {str(key): str(value) for key, value in (data.get("files") or {}).items()}
             self._keys = {(str(row[0]), str(row[1]).casefold()) for row in self.rows}
+            self._visits = None
             self.revision += 1
 
     def _payload(self):
@@ -122,7 +126,7 @@ class TravelHistory:
         star = self._pending_star[1] if self._pending_star[0] == system.casefold() else ""
         self._pending_star = ("", "")
         row = [timestamp, system, round(position[0], 5), round(position[1], 5), round(position[2], 5),
-               star, round(float(jump or 0.0), 2)]
+               star, round(float(jump or 0.0), 2), "C" if event == "CarrierJump" else "L" if event == "Location" else ""]
         if previous is not None and timestamp < str(previous[0]):
             # An older journal read after newer ones: keep the list in time order.
             index = len(self.rows)
@@ -132,7 +136,43 @@ class TravelHistory:
         else:
             self.rows.append(row)
         self._keys.add(key)
+        if self._visits is not None:
+            self._index(row)
         return True
+
+    # -- the Watcher's memory (5.5.3.2) -------------------------------------
+    def _index(self, row):
+        key = str(row[1]).casefold()
+        count, first, last = self._visits.get(key, (0, str(row[0]), str(row[0])))
+        self._visits[key] = (count + 1, min(first, str(row[0])), max(last, str(row[0])))
+        self._far = max(self._far, math.hypot(float(row[2]), float(row[3]), float(row[4])))
+        kind = row[7] if len(row) > 7 else None
+        jump = float(row[6] or 0.0)
+        # Only the ship's own jumps count (older rows carry no kind: a carrier
+        # jump there is longer than any ship's).
+        if kind == "" or (kind is None and jump <= 300):
+            self._jump = max(self._jump, jump)
+
+    def _ensure_index(self):
+        if self._visits is None:
+            self._visits, self._far, self._jump = {}, 0.0, 0.0
+            for row in self.rows:
+                self._index(row)
+
+    def recall(self, system):
+        """{count, first, last} of earlier arrivals in ``system``, or None."""
+        with self.lock:
+            self._ensure_index()
+            seen = self._visits.get(str(system or "").casefold())
+        return {"count": seen[0], "first": seen[1], "last": seen[2]} if seen else None
+
+    def records(self):
+        """The furthest from Sol and the longest jump so far, and the first
+        arrival's timestamp."""
+        with self.lock:
+            self._ensure_index()
+            return {"far": self._far, "jump": self._jump, "first": str(self.rows[0][0]) if self.rows else None,
+                    "systems": len(self._visits)}
 
     def observe(self, raw):
         """A live journal event."""
