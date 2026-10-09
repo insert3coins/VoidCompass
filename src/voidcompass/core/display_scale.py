@@ -118,3 +118,26 @@ def room_below(x, y) -> int | None:
         return max(0, int((info.rcWork.bottom - int(y)) / monitor_handle_scale(monitor)))
     except (AttributeError, OSError):
         return None
+
+
+def monitor_bounds(x, y):
+    """(left, top, right, bottom) in screen pixels of the work area of the
+    monitor nearest to screen point (x, y), or None when unknown. With two
+    or more displays the primary screen's width says nothing about where an
+    overlay on another monitor sits within its own screen."""
+    if os.name != "nt":
+        return None
+    try:
+        user32 = _library("user32")
+        user32.MonitorFromPoint.argtypes = (_Point, ctypes.c_uint32)
+        user32.MonitorFromPoint.restype = ctypes.c_void_p
+        monitor = user32.MonitorFromPoint(_Point(int(x), int(y)), _MONITOR_DEFAULTTONEAREST)
+        info = _MonitorInfo()
+        info.cbSize = ctypes.sizeof(_MonitorInfo)
+        user32.GetMonitorInfoW.argtypes = (ctypes.c_void_p, ctypes.POINTER(_MonitorInfo))
+        if not user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+            return None
+        work = info.rcWork
+        return int(work.left), int(work.top), int(work.right), int(work.bottom)
+    except (AttributeError, OSError):
+        return None

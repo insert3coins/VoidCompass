@@ -75,7 +75,13 @@ class ToastOverlayVisualTests(unittest.TestCase):
                         };
                       });
                     }""")
-                    self.assertEqual([round(row["height"]) for row in geometry], expected_heights)
+                    # Each card is at least its design height, and grows when its
+                    # text wraps rather than cutting it off (5.5.3.2).
+                    heights = [round(row["height"]) for row in geometry]
+                    self.assertTrue(all(height >= minimum for height, minimum in zip(heights, expected_heights)),
+                                    (heights, expected_heights))
+                    self.assertTrue(all(height <= minimum * 1.6 for height, minimum in zip(heights, expected_heights)),
+                                    (heights, expected_heights))
                     self.assertTrue(all(row["width"] == 400 and row["contentFits"] for row in geometry))
                     self.assertTrue(all(
                         later["top"] - earlier["bottom"] == 8

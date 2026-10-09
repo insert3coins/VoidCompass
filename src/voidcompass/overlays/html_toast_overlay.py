@@ -37,6 +37,7 @@ class HtmlToastOverlayBridge(HtmlOverlayBridgeLifecycle):
         self._sync_job = None
         self._last_fingerprint = None
         self._last_quick_fingerprint = None
+        self._browser_content_height = 0
         try:
             self.win.on_destroy(self._on_destroy)
         except Exception:
@@ -76,7 +77,11 @@ class HtmlToastOverlayBridge(HtmlOverlayBridgeLifecycle):
             for item in notifications
         ]
         gap = _safe_int(getattr(self.overlay, "GAP", 7), 7)
-        return width, max(24, sum(heights) + max(0, len(heights) - 1) * gap)
+        estimate = sum(heights) + max(0, len(heights) - 1) * gap
+        # The page measures its cards (long messages wrap onto more lines at
+        # a large text size); the window takes whichever is taller.
+        measured = _safe_int(self._browser_content_height, 0) if notifications else 0
+        return width, max(24, estimate, measured)
 
     def _window_payload(self, notifications=None):
         notifications = notifications if notifications is not None else self._notifications()
@@ -200,6 +205,10 @@ class HtmlToastOverlayBridge(HtmlOverlayBridgeLifecycle):
                 self._ready = surface.ready
                 self.overlay._html_ready = self._ready
                 pass
+                measured = surface.server.rendered_content_height(self.overlay_id)
+                if measured != self._browser_content_height:
+                    self._browser_content_height = measured
+                    self._last_quick_fingerprint = None
                 if self._ready:
                     if not was_ready:
                         logging.info("HTML cockpit notification renderer is live")

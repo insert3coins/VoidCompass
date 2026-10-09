@@ -17,7 +17,7 @@ from collections import deque
 import time
 
 from voidcompass.core.application_runtime import OverlayWindowState
-from voidcompass.core import themes
+from voidcompass.core import display_scale, themes
 from voidcompass.overlays import overlay_chrome
 from voidcompass.core.overlay_registry import OVERLAY_SPECS
 from voidcompass.overlays.heartbeat_events import classify
@@ -300,13 +300,22 @@ class HeartbeatHUD:
                 'style': watcher_mind.thought_style(self.config)}
 
     def thought_side(self):
-        """Thoughts appear on the side of the orb with room for them."""
-        try:
-            screen = int(self.root.winfo_screenwidth())
-        except Exception:
-            screen = 1920
+        """Thoughts appear on the side of the orb with room for them: toward
+        the middle of the monitor the orb is on (any monitor, not just the
+        main one), judged from the orb's centre. Moving the orb across the
+        middle moves the next thought to the other side."""
         x = self._safe_int(self.config.get('heartbeat_hud_x'), 12)
-        return 'left' if x > screen / 2 else 'right'
+        y = self._safe_int(self.config.get('heartbeat_hud_y'), 12)
+        centre_x = x + orb_size(self.config) * display_scale.monitor_scale(x, y) / 2
+        bounds = display_scale.monitor_bounds(centre_x, y)
+        if bounds:
+            left, _top, right, _bottom = bounds
+        else:
+            try:
+                left, right = 0, int(self.root.winfo_screenwidth())
+            except Exception:
+                left, right = 0, 1920
+        return 'left' if centre_x > (left + right) / 2 else 'right'
 
     def apply_settings(self):
         """Studio changed the orb's size, eye colour, thoughts or nature."""

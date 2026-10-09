@@ -43,6 +43,10 @@
   * **It reacts to more of what you do:** neutron jet-cone boosts, heat warnings, escaped interdictions, launching the SRV, settlements coming into view, booking a taxi, and carrier jumps.
   * **It saves what it has said every few minutes.** A crash or a closed app no longer lets it repeat itself next time.
 
+* **Notifications and achievements show everything at any text size.** Each card grows with its text: a long title or message wraps onto more lines instead of being cut off with "…". The page measures its cards and the window fits them, the same as the other overlays.
+
+* **The Watcher's words go the right way on any monitor.** They appear on whichever side of the orb faces the middle of the screen it's on. Before, only the main monitor was checked: an orb on a second screen to the right always put its words on the left, even at that screen's left edge.
+
 * **The Watcher looks better:**
   * **The bezel** is brushed metal with bevelled edges, lit from the upper left. The iris's light spills onto its inner lip.
   * **The iris** has fine fibres round the pupil, turning slowly with the galaxy.

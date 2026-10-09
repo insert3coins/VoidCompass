@@ -164,3 +164,39 @@ class FlyingAndWalkingTests(unittest.TestCase):
         mind.consider("quiet", force=True)
         mind.save_if_due(every=0)
         self.assertTrue(json.loads(path.read_text(encoding="utf-8"))["said"])
+
+
+class ThoughtSideTests(unittest.TestCase):
+    """The thought goes toward the middle of the monitor the orb is on,
+    with two monitors side by side as well as one."""
+
+    def side(self, x, monitors):
+        from unittest import mock
+        from voidcompass.core import display_scale
+        from voidcompass.overlays.heartbeat_hud import HeartbeatHUD
+
+        def bounds(px, _py):
+            for left, right in monitors:
+                if left <= px < right:
+                    return left, 0, right, 1400
+            return None
+        hud = HeartbeatHUD.__new__(HeartbeatHUD)
+        hud.config = {"heartbeat_hud_x": x, "heartbeat_hud_y": 600, "heartbeat_orb_size": 54}
+        hud.root = None
+        with mock.patch.object(display_scale, "monitor_bounds", bounds), \
+                mock.patch.object(display_scale, "monitor_scale", lambda *_: 1.0):
+            return hud.thought_side()
+
+    def test_one_monitor(self):
+        self.assertEqual(self.side(20, [(0, 2560)]), "right")
+        self.assertEqual(self.side(2400, [(0, 2560)]), "left")
+
+    def test_second_monitor_to_the_right(self):
+        both = [(0, 2560), (2560, 5120)]
+        self.assertEqual(self.side(2600, both), "right", "left edge of the second screen: words go right")
+        self.assertEqual(self.side(5000, both), "left", "right edge of the second screen: words go left")
+
+    def test_second_monitor_to_the_left(self):
+        both = [(-2560, 0), (0, 2560)]
+        self.assertEqual(self.side(-2500, both), "right")
+        self.assertEqual(self.side(-200, both), "left", "right edge of the left screen: words stay on it")

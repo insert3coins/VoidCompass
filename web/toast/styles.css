@@ -52,7 +52,8 @@ body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none
 }
 
 .notice {
-  height: var(--notice-height); display: grid; grid-template-columns: 54px minmax(0, 1fr) 9px;
+  /* Grows with its text (5.5.3.2): nothing is cut off at any text size. */
+  min-height: var(--notice-height); display: grid; grid-template-columns: 54px minmax(0, 1fr) 9px;
   align-items: center; gap: 7px; padding: 8px 10px 9px 10px;
 }
 .notice.info { --tone: var(--accent); }
@@ -76,7 +77,7 @@ body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none
 .notice-rule { flex: 1 1 12px; min-width: 5px; height: 1px; background: color-mix(in srgb, var(--tone) 34%, var(--soft)); }
 .notice-source { flex: 0 0 auto; color: var(--accent); font-size: calc(7px * var(--scale)); font-weight: 700; letter-spacing: .35px; }
 .notice-title, .notice-message, .achievement-title, .achievement-message, .achievement-category {
-  display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: block; min-width: 0; white-space: normal; overflow-wrap: anywhere;
 }
 .notice-title { font: 700 calc(16px * var(--scale))/1.08 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .25px; text-transform: uppercase; }
 .notice-message { color: var(--muted); font-size: calc(10.5px * var(--scale)); line-height: 1.2; }
@@ -88,7 +89,7 @@ body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none
 
 .achievement {
   --tone: var(--accent);
-  height: var(--achievement-height); display: grid;
+  min-height: var(--achievement-height); display: grid;
   grid-template-columns: 54px minmax(0, 1fr) 76px;
   align-items: center; gap: 8px; padding: 10px 9px 11px 9px;
   background:
@@ -127,9 +128,6 @@ body { font-family: "Cascadia Mono", "Consolas", monospace; pointer-events: none
 .achievement-score small { color: var(--dim); font-size: calc(7px * var(--scale)); font-weight: 700; letter-spacing: .45px; }
 
 .large-type .notice-source { display: none; }
-.large-type .notice-message, .large-type .achievement-message {
-  display: -webkit-box; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
-}
 .reduced-motion .notification, .reduced-motion .notification::after,
 .reduced-motion .notification *, .reduced-motion .notification *::before,
 .reduced-motion .notification *::after { animation: none !important; transition: none !important; }

@@ -120,5 +120,12 @@
     }
   }
 
-  VoidCompassOverlay.startPolling({token, overlay, render, interval: 220});
+  // The cards' real height, so the window grows to show every line (5.5.3.2).
+  function contentHeight() {
+    const last = root.lastElementChild;
+    if (!last) return 0;
+    return last.offsetTop + last.offsetHeight - root.offsetTop;
+  }
+
+  VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 220});
 })();
