@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import ctypes.wintypes
 import json
 import os
 import sys
@@ -254,6 +255,39 @@ def _apply_overlay_key_background(window):
         else:
             paint()
         return True
+    except Exception:
+        return False
+
+
+def _apply_window_shape(window, shape):
+    """Clip the window to a circle (the heartbeat orb) or give it back its
+    full rectangle. A window region is never drawn outside, on any GPU, so a
+    round overlay's corners can't show even where transparent pixels don't
+    composite (5.5.3.3). A private user32/gdi32 handle, as everywhere here."""
+    hwnd = _native_handle(window)
+    if not hwnd:
+        return False
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        set_region = user32.SetWindowRgn
+        set_region.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int)
+        set_region.restype = ctypes.c_int
+        if shape != "circle":
+            return bool(set_region(ctypes.c_void_p(hwnd), None, 1))
+        rect = ctypes.wintypes.RECT()
+        user32.GetWindowRect.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.wintypes.RECT))
+        if not user32.GetWindowRect(ctypes.c_void_p(hwnd), ctypes.byref(rect)):
+            return False
+        width, height = rect.right - rect.left, rect.bottom - rect.top
+        gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+        make = gdi32.CreateEllipticRgn
+        make.argtypes = (ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int)
+        make.restype = ctypes.c_void_p
+        region = make(0, 0, width + 1, height + 1)
+        if not region:
+            return False
+        # The window owns the region from here (Windows frees it).
+        return bool(set_region(ctypes.c_void_p(hwnd), ctypes.c_void_p(region), 1))
     except Exception:
         return False
 
@@ -514,6 +548,7 @@ class _WindowController:
         self.last_geometry = None
         self.last_click_through = None
         self.last_alpha = None
+        self.last_shape = None
         self.last_visible = None
         self.reveal_waiting_since = None
         self.last_nudge = 0.0
@@ -580,10 +615,17 @@ class _WindowController:
             handle = _native_handle(self.window)
             if not handle:
                 return {"ok": False, "reason": "native handle pending"}
-            if geometry != self.last_geometry:
+            resized = geometry != self.last_geometry
+            if resized:
                 if not _apply_windows_geometry(self.window, *geometry):
                     return {"ok": False, "reason": "native geometry unavailable", "handle": handle}
                 self.last_geometry = geometry
+            # A round overlay (the heartbeat orb) is clipped to a circle; a
+            # resized circle is clipped again to its new size.
+            shape = "circle" if payload.get("shape") == "circle" else "rect"
+            if shape != self.last_shape or (resized and shape == "circle"):
+                if _apply_window_shape(self.window, shape):
+                    self.last_shape = shape
             # Overlay Studio's OPACITY. A window never faded keeps Windows'
             # default (no call at all), exactly as before.
             alpha = _opacity_alpha(payload.get("opacity", 1.0))

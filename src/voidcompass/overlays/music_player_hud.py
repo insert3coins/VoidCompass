@@ -16,6 +16,20 @@ from voidcompass.overlays import overlay_chrome
 # Card: the cover beside the track, the visualizer and progress beneath.
 # Strip: one slim line for the top or bottom edge of the screen.
 MUSIC_LAYOUTS = {"card": (460, 136), "strip": (580, 44)}
+# Skins (5.5.3.3): ten looks for the card, each its own size (design px,
+# before the up-next line). On the slim strip a skin sets its colours.
+MUSIC_SKINS = {
+    "deck": ("Command Deck", (460, 136)),
+    "glass": ("Glass", (460, 140)),
+    "vinyl": ("Vinyl", (480, 140)),
+    "cassette": ("Cassette", (400, 196)),
+    "cockpit": ("Cockpit HUD", (480, 132)),
+    "terminal": ("Terminal", (470, 150)),
+    "orb": ("Orb", (440, 156)),
+    "radio": ("Radio dial", (480, 150)),
+    "minimal": ("Minimal", (440, 84)),
+    "neon": ("Neon", (470, 148)),
+}
 MUSIC_VISUALIZERS = ("bars", "mirror", "wave", "off")
 MUSIC_COLOURS = ("theme", "warm", "spectrum")
 # Seconds paused before the overlay hides itself; 0 keeps it up.
@@ -37,9 +51,11 @@ def music_overlay_options(config):
     visualizer = str(config.get("music_player_visualizer") or "bars").casefold()
     colour = str(config.get("music_player_colour") or "theme").casefold()
     hide = _integer(config.get("music_player_auto_hide"), 0)
+    skin = str(config.get("music_player_skin") or "deck").casefold()
     text_scale = _integer(config.get("music_player_text_scale_percent"), 0)
     return {
         "layout": layout if layout in MUSIC_LAYOUTS else "card",
+        "skin": skin if skin in MUSIC_SKINS else "deck",
         "visualizer": visualizer if visualizer in MUSIC_VISUALIZERS else "bars",
         "colour": colour if colour in MUSIC_COLOURS else "theme",
         "show_art": bool(config.get("music_player_show_art", True)),
@@ -62,6 +78,8 @@ def music_overlay_size(config):
     """The window: its layout's size, the card taller for its up-next line."""
     options = music_overlay_options(config)
     width, height = MUSIC_LAYOUTS[options["layout"]]
+    if options["layout"] == "card":
+        width, height = MUSIC_SKINS[options["skin"]][1]
     if options["layout"] == "card" and options["show_next"]:
         height += NEXT_LINE
     scale = music_text_scale(config)

@@ -22,18 +22,21 @@ html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background:
 body { pointer-events: none; user-select: none; }
 
 .player {
+  /* The skin's own colour (5.5.3.3); the theme's accent unless a skin says otherwise. */
+  --mp-tone: var(--accent);
+  --progress: 0;
   position: relative; width: 100%; height: 100%; overflow: hidden;
   display: grid; grid-template-columns: calc(96px * var(--scale)) minmax(0, 1fr);
   grid-template-rows: calc(96px * var(--scale)) minmax(0, 1fr) auto auto;
   column-gap: calc(12px * var(--scale)); padding: calc(10px * var(--scale)) calc(12px * var(--scale)) calc(8px * var(--scale));
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--mp-tone) 34%, var(--border));
   background: linear-gradient(160deg, color-mix(in srgb, var(--panel) 95%, transparent), color-mix(in srgb, var(--bg) 96%, transparent));
   box-shadow: inset 0 0 calc(18px * var(--scale)) rgba(0, 0, 0, .5);
   transition: opacity .6s ease;
 }
 .player::before {
   content: ""; position: absolute; z-index: 3; inset: 0 0 auto; height: 1px;
-  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--orange) 70%, transparent) 55%, transparent);
+  background: linear-gradient(90deg, var(--mp-tone), color-mix(in srgb, var(--orange) 70%, transparent) 55%, transparent);
 }
 .player::after { content: ""; position: absolute; z-index: 4; inset: 0; pointer-events: none; opacity: .14; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .5) 2px 3px); }
 .player.no-crt::after { display: none; }
@@ -41,12 +44,12 @@ body { pointer-events: none; user-select: none; }
 
 .cover {
   position: relative; z-index: 1; grid-row: 1; margin: 0; overflow: hidden; display: grid; place-items: center;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--inset);
-  box-shadow: 0 0 calc(14px * var(--scale)) color-mix(in srgb, var(--accent) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mp-tone) 45%, var(--border)); background: var(--inset);
+  box-shadow: 0 0 calc(14px * var(--scale)) color-mix(in srgb, var(--mp-tone) 22%, transparent);
 }
 .cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: filter .6s ease; }
 .cover img[hidden] { display: none; }
-.cover span { color: color-mix(in srgb, var(--accent) 55%, var(--dim)); font: calc(44px * var(--scale))/1 "Segoe UI Symbol", "Segoe UI", sans-serif; }
+.cover span { color: color-mix(in srgb, var(--mp-tone) 55%, var(--dim)); font: calc(44px * var(--scale))/1 "Segoe UI Symbol", "Segoe UI", sans-serif; }
 .player.paused .cover img, .player.blocked .cover img { filter: grayscale(.7) brightness(.7); }
 .player.playing .cover { animation: cover-glow 2.6s ease-in-out infinite; }
 .player.no-art { grid-template-columns: minmax(0, 1fr); }
@@ -58,7 +61,7 @@ body { pointer-events: none; user-select: none; }
 .player.playing .lamp { background: var(--green); box-shadow: 0 0 calc(7px * var(--scale)) var(--green); animation: lamp 1.6s ease-in-out infinite; }
 .player.blocked .lamp { background: var(--yellow); }
 #state { flex: 0 0 auto; color: var(--muted); }
-.player.playing #state { color: var(--accent); }
+.player.playing #state { color: var(--mp-tone); }
 .player.blocked #state { color: var(--yellow); }
 #playlist { min-width: 0; overflow: hidden; color: var(--orange); text-overflow: ellipsis; white-space: nowrap; }
 #modes { flex: 0 0 auto; margin-left: auto; color: var(--dim); font-style: normal; letter-spacing: .08em; }
@@ -66,7 +69,7 @@ body { pointer-events: none; user-select: none; }
 #title {
   display: inline-block; margin: 0; padding-right: calc(24px * var(--scale)); color: var(--text); white-space: nowrap;
   font: 600 calc(19px * var(--scale))/1.15 "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif; letter-spacing: .02em;
-  text-shadow: 0 0 calc(10px * var(--scale)) color-mix(in srgb, var(--accent) 25%, transparent);
+  text-shadow: 0 0 calc(10px * var(--scale)) color-mix(in srgb, var(--mp-tone) 25%, transparent);
 }
 #title.scrolling { animation: marquee var(--marquee-time, 12s) ease-in-out infinite alternate; }
 .player.changed #title { animation: arrive .7s cubic-bezier(.2, .8, .2, 1); }
@@ -87,10 +90,10 @@ body { pointer-events: none; user-select: none; }
 }
 .progress, .next { text-shadow: 0 1px calc(3px * var(--scale)) rgba(0, 0, 0, .95), 0 0 calc(6px * var(--scale)) rgba(0, 0, 0, .8); }
 .rail { position: relative; height: calc(3px * var(--scale)); background: color-mix(in srgb, var(--border) 80%, transparent); }
-#fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); box-shadow: 0 0 calc(8px * var(--scale)) var(--accent); }
+#fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--mp-tone); box-shadow: 0 0 calc(8px * var(--scale)) var(--mp-tone); }
 #head {
   position: absolute; top: 50%; left: 0; width: calc(7px * var(--scale)); height: calc(7px * var(--scale));
-  border: 1px solid var(--text); background: var(--accent); box-shadow: 0 0 calc(8px * var(--scale)) var(--accent);
+  border: 1px solid var(--text); background: var(--mp-tone); box-shadow: 0 0 calc(8px * var(--scale)) var(--mp-tone);
   transform: translate(-50%, -50%) rotate(45deg);
 }
 .next {
@@ -126,10 +129,204 @@ body { pointer-events: none; user-select: none; }
 
 .player.blocked .details::after { content: "  ·  CLICK PLAY ON THE MUSIC PAGE ONCE"; color: var(--yellow); }
 
-@keyframes cover-glow { 50% { box-shadow: 0 0 calc(24px * var(--scale)) color-mix(in srgb, var(--accent) 42%, transparent); } }
+@keyframes cover-glow { 50% { box-shadow: 0 0 calc(24px * var(--scale)) color-mix(in srgb, var(--mp-tone) 42%, transparent); } }
 @keyframes lamp { 50% { opacity: .45; } }
 @keyframes marquee { 0%, 12% { transform: translateX(0); } 88%, 100% { transform: translateX(var(--marquee-shift, 0)); } }
 @keyframes arrive { from { opacity: 0; transform: translateX(calc(18px * var(--scale))); filter: blur(2px); } }
 @keyframes fade-in { from { opacity: 0; } }
+/* ==== Skins (5.5.3.3) ======================================================
+   Ten looks for the card, chosen in Overlay Studio. Every colour comes from
+   the theme (tokens and mixes of them), so a skin follows the theme too; on
+   the slim strip a skin only sets its tone. --progress (0..1) is the track's
+   place, set by app.js, for the skins that show it in their own way. */
+.skin-backdrop, .skin-deco { position: absolute; inset: 0; z-index: 0; display: none; pointer-events: none; }
+.skin-deco i { position: absolute; display: none; }
+
+/* -- Glass: a frosted panel over the album art, blurred ------------------- */
+.player.skin-glass { border-radius: calc(14px * var(--scale)); border-color: color-mix(in srgb, var(--text) 18%, transparent);
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 16%, transparent), 0 calc(6px * var(--scale)) calc(22px * var(--scale)) rgba(0, 0, 0, .45); }
+.player.skin-glass::before, .player.skin-glass::after { display: none; }
+.player.skin-glass .skin-backdrop { display: block; overflow: hidden; border-radius: inherit; }
+.player.skin-glass .skin-backdrop img { position: absolute; inset: -20%; width: 140%; height: 140%; object-fit: cover;
+  filter: blur(calc(18px * var(--scale))) saturate(1.3) brightness(.55); opacity: .9; }
+.player.skin-glass .skin-backdrop img[hidden] { display: none; }
+.player.skin-glass .cover { border-radius: calc(10px * var(--scale)); border-color: color-mix(in srgb, var(--text) 22%, transparent); }
+.player.skin-glass #title { text-shadow: 0 1px calc(6px * var(--scale)) rgba(0, 0, 0, .7); }
+.player.skin-glass .rail { border-radius: 99px; overflow: visible; }
+.player.skin-glass #fill { border-radius: 99px; background: var(--text); box-shadow: none; }
+.player.skin-glass #head { border-radius: 50%; transform: translate(-50%, -50%); background: var(--text); box-shadow: none; }
+.player.skin-glass.paused, .player.skin-glass.idle { opacity: .82; }
+
+/* -- Vinyl: the cover is the label of a spinning record -------------------- */
+.player.skin-vinyl:not(.strip) { grid-template-columns: calc(118px * var(--scale)) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto;
+  column-gap: calc(18px * var(--scale)); }
+.player.skin-vinyl:not(.strip) .cover { grid-row: 1 / span 3; grid-column: 1; align-self: center; width: calc(118px * var(--scale)); height: calc(118px * var(--scale));
+  border-radius: 50%; border-color: color-mix(in srgb, var(--text) 18%, var(--bg));
+  background: radial-gradient(circle, transparent 0 31%, color-mix(in srgb, var(--text) 25%, var(--bg)) 31.5% 32.5%, transparent 33%),
+    repeating-radial-gradient(circle, color-mix(in srgb, var(--bg) 86%, var(--text)) 0 1px, color-mix(in srgb, var(--bg) 95%, var(--text)) 1px 3px);
+  box-shadow: 0 0 calc(12px * var(--scale)) rgba(0, 0, 0, .7), inset 0 0 0 calc(2px * var(--scale)) color-mix(in srgb, var(--bg) 80%, var(--text)); }
+.player.skin-vinyl:not(.strip) .cover::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 30deg, transparent 0 8%, color-mix(in srgb, var(--text) 14%, transparent) 12%, transparent 18% 58%, color-mix(in srgb, var(--text) 10%, transparent) 62%, transparent 68%); }
+.player.skin-vinyl:not(.strip) .cover img { inset: 32%; width: 36%; height: 36%; border-radius: 50%; }
+.player.skin-vinyl:not(.strip) .cover span { font-size: calc(22px * var(--scale)); }
+.player.skin-vinyl.playing:not(.strip) .cover { animation: spin 1.8s linear infinite; }
+.player.skin-vinyl:not(.strip) .info { grid-column: 2; grid-row: 1; }
+.player.skin-vinyl:not(.strip) .progress { grid-column: 2; grid-row: 2; }
+.player.skin-vinyl:not(.strip) .next { grid-column: 2; grid-row: 3; }
+.player.skin-vinyl:not(.strip) .visualizer { left: calc(140px * var(--scale)); width: auto; }
+.player.skin-vinyl:not(.strip) .skin-deco { display: block; }
+.player.skin-vinyl:not(.strip) .tonearm { display: block; left: calc(112px * var(--scale)); top: calc(8px * var(--scale));
+  width: calc(4px * var(--scale)); height: calc(70px * var(--scale)); border-radius: 2px; transform-origin: 50% 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--text) 65%, var(--bg)), color-mix(in srgb, var(--text) 35%, var(--bg)));
+  box-shadow: 0 0 calc(4px * var(--scale)) rgba(0, 0, 0, .6);
+  transform: rotate(calc(18deg + var(--progress) * 16deg)); transition: transform .8s ease; }
+.player.skin-vinyl:not(.strip) .tonearm::before { content: ""; position: absolute; left: 50%; top: calc(-6px * var(--scale)); width: calc(12px * var(--scale));
+  height: calc(12px * var(--scale)); border-radius: 50%; transform: translateX(-50%); background: color-mix(in srgb, var(--text) 45%, var(--bg)); }
+.player.skin-vinyl.idle:not(.strip) .tonearm, .player.skin-vinyl.paused:not(.strip) .tonearm { transform: rotate(-4deg); }
+
+/* -- Cassette: a tape winding from one reel to the other ------------------- */
+.player.skin-cassette { --mp-tone: var(--orange); }
+.player.skin-cassette:not(.strip) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto;
+  border-radius: calc(10px * var(--scale)); padding: calc(10px * var(--scale)) calc(16px * var(--scale));
+  border: calc(2px * var(--scale)) solid color-mix(in srgb, var(--text) 22%, var(--panel));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, var(--text)), var(--panel)); }
+.player.skin-cassette:not(.strip)::before { display: none; }
+.player.skin-cassette:not(.strip) .cover { display: none; }
+.player.skin-cassette:not(.strip) .info { grid-column: 1; grid-row: 1; padding: calc(4px * var(--scale)) calc(10px * var(--scale));
+  border-radius: calc(4px * var(--scale)); background: color-mix(in srgb, var(--text) 86%, var(--panel)); }
+.player.skin-cassette:not(.strip) #title { color: var(--bg); text-shadow: none; font-family: "Ink Free", "Segoe Print", "Segoe UI", sans-serif; font-weight: 700; }
+.player.skin-cassette:not(.strip) .artist { color: color-mix(in srgb, var(--bg) 88%, var(--text)); font-weight: 600; font-family: "Ink Free", "Segoe Print", "Segoe UI", sans-serif; }
+.player.skin-cassette:not(.strip) .kicker, .player.skin-cassette:not(.strip) .details { color: color-mix(in srgb, var(--bg) 70%, var(--text)); }
+.player.skin-cassette:not(.strip) #state { color: color-mix(in srgb, var(--bg) 60%, var(--orange)); }
+.player.skin-cassette:not(.strip) .progress { grid-row: 3; }
+.player.skin-cassette:not(.strip) .next { grid-row: 4; }
+.player.skin-cassette:not(.strip) .visualizer { display: none; }
+.player.skin-cassette:not(.strip) .skin-deco { display: block; }
+.player.skin-cassette:not(.strip) .tape-window { display: block; left: 24%; right: 24%; top: 47%; height: calc(36px * var(--scale));
+  border-radius: calc(18px * var(--scale)); background: color-mix(in srgb, var(--bg) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 25%, transparent); }
+.player.skin-cassette:not(.strip) .reel { display: block; top: calc(47% + 18px * var(--scale)); border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, var(--panel) 0 22%, color-mix(in srgb, var(--text) 60%, var(--bg)) 23% 27%, transparent 28%),
+    radial-gradient(circle, transparent 0 34%, color-mix(in srgb, var(--orange) 40%, var(--bg)) 35%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent); }
+.player.skin-cassette:not(.strip) .reel::after { content: ""; position: absolute; inset: 30%; border-radius: 50%;
+  background: repeating-conic-gradient(color-mix(in srgb, var(--text) 70%, var(--bg)) 0 10deg, transparent 10deg 60deg); }
+.player.skin-cassette:not(.strip) .reel.left { left: 33%; width: calc((22px + 22px * (1 - var(--progress))) * var(--scale)); height: calc((22px + 22px * (1 - var(--progress))) * var(--scale)); }
+.player.skin-cassette:not(.strip) .reel.right { left: 67%; width: calc((22px + 22px * var(--progress)) * var(--scale)); height: calc((22px + 22px * var(--progress)) * var(--scale)); }
+.player.skin-cassette.playing:not(.strip) .reel { animation: reel 2.4s linear infinite; }
+
+/* -- Cockpit HUD: an angled Elite panel in orange --------------------------- */
+.player.skin-cockpit { --mp-tone: var(--orange); }
+.player.skin-cockpit:not(.strip) { border: none; padding-left: calc(18px * var(--scale));
+  clip-path: polygon(calc(14px * var(--scale)) 0, 100% 0, 100% calc(100% - 14px * var(--scale)), calc(100% - 14px * var(--scale)) 100%, 0 100%, 0 calc(14px * var(--scale)));
+  background: linear-gradient(115deg, color-mix(in srgb, var(--orange) 14%, var(--bg)), color-mix(in srgb, var(--bg) 94%, transparent) 60%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--orange) 55%, transparent); }
+.player.skin-cockpit:not(.strip)::before { inset: 0 auto 0 0; width: calc(4px * var(--scale)); height: auto;
+  background: repeating-linear-gradient(180deg, var(--orange) 0 calc(6px * var(--scale)), transparent calc(6px * var(--scale)) calc(10px * var(--scale))); }
+.player.skin-cockpit .cover { border-color: color-mix(in srgb, var(--orange) 60%, var(--border)); }
+.player.skin-cockpit #title { text-transform: uppercase; letter-spacing: .06em; color: var(--orange); text-shadow: 0 0 calc(10px * var(--scale)) color-mix(in srgb, var(--orange) 45%, transparent); }
+.player.skin-cockpit #state::before { content: "\25B8\25B8 "; }
+.player.skin-cockpit .artist { text-transform: uppercase; font-family: "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .05em; }
+.player.skin-cockpit #playlist, .player.skin-cockpit .next span { color: var(--accent); }
+.player.skin-cockpit .rail { height: calc(5px * var(--scale)); background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--orange) 22%, transparent) 0 calc(6px * var(--scale)), transparent calc(6px * var(--scale)) calc(8px * var(--scale))); }
+.player.skin-cockpit #fill { background: repeating-linear-gradient(90deg, var(--orange) 0 calc(6px * var(--scale)), transparent calc(6px * var(--scale)) calc(8px * var(--scale))); box-shadow: none; }
+.player.skin-cockpit #head { display: none; }
+
+/* -- Terminal: a green console ---------------------------------------------- */
+.player.skin-terminal { --mp-tone: var(--green); }
+.player.skin-terminal:not(.strip) { border-radius: calc(4px * var(--scale)); background: color-mix(in srgb, var(--bg) 97%, transparent);
+  border-color: color-mix(in srgb, var(--green) 45%, transparent); box-shadow: inset 0 0 calc(30px * var(--scale)) color-mix(in srgb, var(--green) 8%, transparent); }
+.player.skin-terminal:not(.strip)::before { display: none; }
+.player.skin-terminal::after { opacity: .3; }
+.player.skin-terminal, .player.skin-terminal * { font-family: "Cascadia Mono", Consolas, monospace !important; }
+.player.skin-terminal #title { color: var(--green); font-weight: 700; text-shadow: 0 0 calc(8px * var(--scale)) color-mix(in srgb, var(--green) 55%, transparent); }
+.player.skin-terminal #title::before { content: "> "; opacity: .7; }
+.player.skin-terminal.playing #title::after { content: "\2588"; margin-left: 2px; animation: lamp 1s steps(1) infinite; }
+.player.skin-terminal .artist, .player.skin-terminal .details, .player.skin-terminal .next b { color: color-mix(in srgb, var(--green) 70%, var(--text)); }
+.player.skin-terminal #state, .player.skin-terminal #playlist, .player.skin-terminal .next span { color: var(--green); }
+.player.skin-terminal #state::before { content: "["; } .player.skin-terminal #state::after { content: "]"; }
+.player.skin-terminal .cover { border-color: color-mix(in srgb, var(--green) 50%, transparent); }
+.player.skin-terminal .cover img { filter: grayscale(1) sepia(1) hue-rotate(60deg) saturate(2.4) brightness(.85) contrast(1.15); }
+.player.skin-terminal .rail { height: calc(8px * var(--scale)); background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--green) 18%, transparent) 0 calc(6px * var(--scale)), transparent calc(6px * var(--scale)) calc(8px * var(--scale))); }
+.player.skin-terminal #fill { background: repeating-linear-gradient(90deg, var(--green) 0 calc(6px * var(--scale)), transparent calc(6px * var(--scale)) calc(8px * var(--scale))); box-shadow: none; }
+.player.skin-terminal #head { display: none; }
+
+/* -- Orb: the round cover ringed by its progress, a radial visualizer ------ */
+.player.skin-orb:not(.strip) { grid-template-columns: calc(124px * var(--scale)) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto;
+  column-gap: calc(18px * var(--scale)); border-radius: calc(80px * var(--scale)) calc(12px * var(--scale)) calc(12px * var(--scale)) calc(80px * var(--scale)); }
+.player.skin-orb:not(.strip)::before { display: none; }
+.player.skin-orb:not(.strip) .cover { grid-row: 1 / span 3; align-self: center; justify-self: center; width: calc(96px * var(--scale)); height: calc(96px * var(--scale));
+  border-radius: 50%; border: none; overflow: visible; background: transparent;
+  box-shadow: 0 0 calc(18px * var(--scale)) color-mix(in srgb, var(--mp-tone) 30%, transparent); }
+.player.skin-orb:not(.strip) .cover img { border-radius: 50%; }
+.player.skin-orb:not(.strip) .cover::after { content: ""; position: absolute; inset: calc(-6px * var(--scale)); border-radius: 50%;
+  background: conic-gradient(var(--mp-tone) calc(var(--progress) * 1turn), color-mix(in srgb, var(--border) 70%, transparent) 0);
+  -webkit-mask: radial-gradient(circle closest-side, transparent calc(100% - 4px * var(--scale)), #000 calc(100% - 3px * var(--scale)));
+  mask: radial-gradient(circle closest-side, transparent calc(100% - 4px * var(--scale)), #000 calc(100% - 3px * var(--scale))); }
+.player.skin-orb.playing:not(.strip) .cover { animation: none; }
+.player.skin-orb:not(.strip) .info { grid-column: 2; grid-row: 1; }
+.player.skin-orb:not(.strip) .progress { grid-column: 2; grid-row: 2; }
+.player.skin-orb:not(.strip) .rail { visibility: hidden; }
+.player.skin-orb:not(.strip) .next { grid-column: 2; grid-row: 3; }
+.player.skin-orb:not(.strip) .visualizer { inset: 0; width: 100%; height: 100%; }
+
+/* -- Radio: the dial's needle is the track's place; a VU meter beside ------ */
+.player.skin-radio { --mp-tone: var(--yellow); }
+.player.skin-radio:not(.strip) { grid-template-columns: calc(80px * var(--scale)) minmax(0, 1fr) calc(104px * var(--scale));
+  grid-template-rows: calc(80px * var(--scale)) auto auto; border-radius: calc(8px * var(--scale));
+  border-color: color-mix(in srgb, var(--yellow) 30%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 90%, var(--orange)), var(--bg)); }
+.player.skin-radio:not(.strip)::before { display: none; }
+.player.skin-radio:not(.strip) .cover { border-radius: calc(6px * var(--scale)); }
+.player.skin-radio #title { color: var(--yellow); text-shadow: 0 0 calc(10px * var(--scale)) color-mix(in srgb, var(--orange) 45%, transparent); }
+.player.skin-radio:not(.strip) .visualizer { position: relative; grid-column: 3; grid-row: 1; width: 100%; height: 100%; }
+.player.skin-radio:not(.strip) .progress { grid-column: 1 / -1; grid-row: 2; }
+.player.skin-radio:not(.strip) .next { grid-row: 3; }
+.player.skin-radio:not(.strip) .rail { height: calc(16px * var(--scale)); border: 1px solid color-mix(in srgb, var(--yellow) 30%, transparent);
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--yellow) 50%, transparent) 0 1px, transparent 1px 10%),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--yellow) 25%, transparent) 0 1px, transparent 1px 2%),
+    color-mix(in srgb, var(--bg) 70%, transparent);
+  background-size: 100% 100%, 100% 45%; background-repeat: no-repeat; }
+.player.skin-radio:not(.strip) #fill { display: none; }
+.player.skin-radio:not(.strip) #head { width: calc(2px * var(--scale)); height: calc(22px * var(--scale)); border: none; transform: translate(-50%, -50%);
+  background: var(--red); box-shadow: 0 0 calc(6px * var(--scale)) var(--red); transition: left .8s ease; }
+
+/* -- Minimal: just the words, floating -------------------------------------- */
+.player.skin-minimal:not(.strip) { grid-template-columns: calc(56px * var(--scale)) minmax(0, 1fr); grid-template-rows: calc(56px * var(--scale)) auto auto;
+  border: none; background: transparent; box-shadow: none; }
+.player.skin-minimal::before, .player.skin-minimal::after { display: none; }
+.player.skin-minimal:not(.strip) .cover { border: none; border-radius: calc(6px * var(--scale)); box-shadow: 0 calc(2px * var(--scale)) calc(10px * var(--scale)) rgba(0, 0, 0, .6); }
+.player.skin-minimal.playing .cover { animation: none; }
+.player.skin-minimal .kicker { display: none; }
+.player.skin-minimal #title, .player.skin-minimal .artist, .player.skin-minimal .details, .player.skin-minimal .next {
+  text-shadow: 0 1px calc(3px * var(--scale)) #000, 0 0 calc(8px * var(--scale)) rgba(0, 0, 0, .85); }
+.player.skin-minimal .rail { height: calc(2px * var(--scale)); background: color-mix(in srgb, var(--text) 20%, transparent); }
+.player.skin-minimal #fill { background: var(--text); box-shadow: none; }
+.player.skin-minimal #head { display: none; }
+.player.skin-minimal:not(.strip) .visualizer { height: 30%; opacity: .7; }
+
+/* -- Neon: synthwave glow over a perspective grid ---------------------------- */
+.player.skin-neon { --mp-tone: color-mix(in srgb, var(--red) 55%, var(--accent)); }
+.player.skin-neon:not(.strip) { border: 1px solid color-mix(in srgb, var(--red) 55%, var(--accent));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 96%, var(--red)), color-mix(in srgb, var(--bg) 80%, var(--accent)));
+  box-shadow: 0 0 calc(14px * var(--scale)) color-mix(in srgb, var(--red) 40%, transparent), inset 0 0 calc(18px * var(--scale)) color-mix(in srgb, var(--accent) 22%, transparent); }
+.player.skin-neon:not(.strip)::before { height: 2px; background: linear-gradient(90deg, var(--accent), var(--red), var(--accent)); }
+.player.skin-neon:not(.strip)::after { opacity: .35; inset: 55% 0 0 0; transform: perspective(calc(120px * var(--scale))) rotateX(55deg); transform-origin: 50% 0;
+  background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--red) 60%, transparent) 0 1px, transparent 1px calc(10px * var(--scale))),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 60%, transparent) 0 1px, transparent 1px calc(22px * var(--scale))); }
+.player.skin-neon #title { background: linear-gradient(90deg, var(--accent), var(--red)); -webkit-background-clip: text; background-clip: text;
+  color: transparent; text-shadow: none; filter: drop-shadow(0 0 calc(6px * var(--scale)) color-mix(in srgb, var(--red) 55%, transparent)); }
+.player.skin-neon .cover { border-color: var(--red); box-shadow: 0 0 calc(12px * var(--scale)) color-mix(in srgb, var(--red) 55%, transparent); }
+.player.skin-neon #fill { background: linear-gradient(90deg, var(--accent), var(--red)); }
+
+/* On the slim strip, a skin keeps its tone; the frame stays the strip's. */
+.player.strip.skin-minimal { background: transparent; border: none; box-shadow: none; }
+.player.strip.skin-glass { border-radius: calc(10px * var(--scale)); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes reel { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
 .player.reduced-motion, .player.reduced-motion * { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .player, .player * { animation: none !important; } }

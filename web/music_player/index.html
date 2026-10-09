@@ -8,7 +8,11 @@
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
-  <main id="player" class="player card idle" aria-label="Now playing">
+  <main id="player" class="player card idle skin-deck" aria-label="Now playing">
+    <!-- What some skins draw (5.5.3.3): Glass's blurred art, Cassette's reels
+         and window, Vinyl's tonearm. Hidden unless the skin shows them. -->
+    <div class="skin-backdrop" aria-hidden="true"><img id="backdrop" alt="" hidden></div>
+    <div class="skin-deco" aria-hidden="true"><i class="tape-window"></i><i class="reel left"></i><i class="reel right"></i><i class="tonearm"></i></div>
     <figure class="cover"><img id="cover" alt="" hidden><span aria-hidden="true">♪</span></figure>
     <div class="info">
       <p class="kicker"><i class="lamp" aria-hidden="true"></i><span id="state">STANDBY</span><b id="playlist"></b><em id="modes"></em></p>

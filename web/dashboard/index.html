@@ -676,6 +676,7 @@
                   <h3 id="studio-selected-name">Select an overlay</h3>
                   <label class="studio-switch studio-enable"><span><b>Enabled</b><small id="studio-selected-visibility">—</small></span><input id="studio-selected-enabled" type="checkbox"><i></i></label>
                   <label class="studio-switch studio-enable"><span><b>Hide on maps</b><small id="studio-selected-maphide-note">—</small></span><input id="studio-selected-maphide" type="checkbox"><i></i></label>
+                  <label class="studio-field studio-own-opacity"><span>Opacity<small id="studio-selected-opacity-note">Same as all overlays</small></span><select id="studio-selected-opacity" aria-label="This overlay's opacity"><option value="0">Same as all</option><option value="100">100%</option><option value="90">90%</option><option value="80">80%</option><option value="70">70%</option><option value="60">60%</option><option value="50">50%</option><option value="40">40%</option></select></label>
                 </div>
                 <div class="studio-selection-facts">
                   <div><small>POSITION</small><b id="studio-selected-position">—</b></div>
@@ -768,6 +769,7 @@
                     <h4>MUSIC PLAYER</h4>
                     <p class="studio-option-note">Shows what the Music page is playing. Play and choose music on the Music page.</p>
                     <label class="studio-field"><span>Layout</span><select id="studio-music-layout" data-studio-setting="music_player_layout"><option value="card">Card</option><option value="strip">Slim strip</option></select></label>
+                    <label class="studio-field"><span>Skin<small>Ten looks for the card; on the slim strip, its colours</small></span><select id="studio-music-skin" data-studio-setting="music_player_skin"><option value="deck">Command Deck</option><option value="glass">Glass</option><option value="vinyl">Vinyl</option><option value="cassette">Cassette</option><option value="cockpit">Cockpit HUD</option><option value="terminal">Terminal</option><option value="orb">Orb</option><option value="radio">Radio dial</option><option value="minimal">Minimal</option><option value="neon">Neon</option></select></label>
                     <label class="studio-field"><span>Text size<small>0 follows all overlays</small></span><div><input id="studio-music-text-scale" type="number" min="0" max="200" step="5" data-studio-setting="music_player_text_scale_percent"><b>%</b></div></label>
                     <label class="studio-field"><span>Visualizer</span><select id="studio-music-visualizer" data-studio-setting="music_player_visualizer"><option value="bars">Spectrum bars</option><option value="mirror">Mirrored</option><option value="wave">Wave</option><option value="off">Off</option></select></label>
                     <label class="studio-field"><span>Visualizer colour</span><select id="studio-music-colour" data-studio-setting="music_player_colour"><option value="theme">Theme</option><option value="warm">Warm</option><option value="spectrum">Spectrum</option></select></label>

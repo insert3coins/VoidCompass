@@ -1799,6 +1799,10 @@ function selectStudioOverlay(id, follow = false) {
   if (mapHide) mapHide.disabled = !mapsOn;
   text("studio-selected-maphide-note", !mapsOn ? "Off for every overlay (All overlays)"
     : selected.hide_on_maps !== false ? "Hides on the Galaxy Map, System Map and Orrery" : "Stays on screen on the maps");
+  // Its own opacity (5.5.3.3), or the one set for all overlays.
+  const ownOpacity = byId("studio-selected-opacity");
+  if (ownOpacity && document.activeElement !== ownOpacity) ownOpacity.value = String(Number(selected.own_opacity) || 0);
+  text("studio-selected-opacity-note", Number(selected.own_opacity) ? "Its own, whatever OPACITY is set to" : "Same as all overlays (OPACITY)");
   // The inspector shows only this surface's own settings.
   let own = false;
   document.querySelectorAll("[data-studio-settings]").forEach((node) => {
@@ -5205,6 +5209,12 @@ byId("studio-overlay-cards").addEventListener("pointercancel", (event) => {
   if (card) endStudioDrag(event, card);
 });
 
+byId("studio-selected-opacity").addEventListener("change", async (event) => {
+  const wanted = event.target.value;
+  if (!studioSelectedId || !(await command("overlay_studio", {operation: "own_opacity", overlay_id: studioSelectedId, value: Number(wanted)}))) {
+    event.target.value = "0";
+  }
+});
 byId("studio-selected-maphide").addEventListener("change", async (event) => {
   const wanted = event.target.checked;
   if (!studioSelectedId || !(await command("overlay_studio", {operation: "map_hiding", overlay_id: studioSelectedId, hide: wanted}))) {

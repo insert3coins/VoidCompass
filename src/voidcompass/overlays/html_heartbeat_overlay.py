@@ -48,6 +48,10 @@ class HtmlHeartbeatBridge(HtmlModelOverlayBridge):
     def _window_payload(self):
         payload = super()._window_payload()
         thought = self._thought()
+        # The orb alone is a round window (5.5.3.3): the host clips it to a
+        # circle, so its corners never show, whatever the graphics card does
+        # with transparent pixels. A thought beside it needs the rectangle.
+        payload["shape"] = "rect" if thought else "circle"
         if thought and thought.get("side") == "left":
             # Grow to the left, keeping the orb where it is.
             payload["x"] = int(payload["x"]) - self._thought_width(thought)

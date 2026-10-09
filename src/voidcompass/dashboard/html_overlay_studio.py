@@ -31,7 +31,7 @@ from voidcompass.overlays.galnet_ticker_hud import (
     TICKER_STORIES, TICKER_WIDTH_RANGE, ticker_options,
 )
 from voidcompass.overlays.music_player_hud import (
-    MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_VISUALIZERS, music_overlay_options,
+    MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_SKINS, MUSIC_VISUALIZERS, music_overlay_options,
 )
 from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
 from voidcompass.colonisation.views import overlay_options as colony_overlay_options
@@ -232,6 +232,7 @@ class HtmlOverlayStudioMixin:
                 "x": x, "y": y, "width": width, "height": height,
                 "enabled": enabled,
                 "hide_on_maps": attr not in self._map_keep_visible(),
+                "own_opacity": self._own_opacities().get(attr, 0),
                 "shown": shown,
                 "html_ready": html_ready,
                 "state": (
@@ -472,6 +473,43 @@ class HtmlOverlayStudioMixin:
         self._schedule_html_dashboard_publish(immediate=True)
         return True
 
+    # An overlay's own opacity (5.5.3.3): 40-100%, or 0 to follow the one
+    # set for all overlays.
+    _OWN_OPACITY_CHOICES = (0, 100, 90, 80, 70, 60, 50, 40)
+
+    def _own_opacities(self):
+        """{Studio id: percent} for the overlays with their own opacity."""
+        mapping = self.config.get("overlay_opacity_by_overlay")
+        out = {}
+        for attr, percent in (mapping.items() if isinstance(mapping, dict) else ()):
+            value = _integer(percent, 0)
+            if attr in OVERLAY_SPEC_BY_ATTR and 40 <= value <= 100:
+                out[attr] = value
+        return out
+
+    def _apply_own_opacities(self):
+        return HtmlOverlayServer.set_overlay_opacities(
+            {OVERLAY_SPEC_BY_ATTR[attr].overlay_id: value / 100.0 for attr, value in self._own_opacities().items()})
+
+    def _set_overlay_own_opacity(self, overlay_id, percent):
+        """Overlay Studio inspector: this overlay's own opacity, or 0 to
+        follow the one for all overlays."""
+        if overlay_id not in OVERLAY_SPEC_BY_ATTR:
+            return False
+        value = _integer(percent, 0)
+        if value not in self._OWN_OPACITY_CHOICES:
+            return False
+        own = self._own_opacities()
+        if value:
+            own[overlay_id] = value
+        else:
+            own.pop(overlay_id, None)
+        self.config["overlay_opacity_by_overlay"] = own
+        self._persist_config()
+        self._apply_own_opacities()
+        self._schedule_html_dashboard_publish(immediate=True)
+        return True
+
     # Status.json GuiFocus: the Galaxy Map, the System Map and the Orrery.
     _MAP_GUI_FOCUS = {6, 7, 8}
 
@@ -671,6 +709,7 @@ class HtmlOverlayStudioMixin:
         # and how long a pause lasts before it hides.
         for key, choices, default in (
             ("music_player_layout", tuple(MUSIC_LAYOUTS), "card"),
+            ("music_player_skin", tuple(MUSIC_SKINS), "deck"),
             ("music_player_visualizer", MUSIC_VISUALIZERS, "bars"),
             ("music_player_colour", MUSIC_COLOURS, "theme"),
         ):
@@ -787,6 +826,8 @@ class HtmlOverlayStudioMixin:
             return True
         if operation == "map_hiding":
             return self._set_overlay_map_hiding(overlay_id, bool(payload.get("hide")))
+        if operation == "own_opacity":
+            return self._set_overlay_own_opacity(overlay_id, payload.get("value"))
         if operation == "layout_mode":
             self._set_overlay_layout_mode(bool(payload.get("enabled")))
             return True

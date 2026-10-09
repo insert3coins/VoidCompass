@@ -220,7 +220,7 @@ class CommandTests(Folder):
 class OverlayTests(Folder):
     def test_options_stay_within_their_choices(self):
         self.assertEqual(music_overlay_options({}), {
-            "layout": "card", "visualizer": "bars", "colour": "theme", "show_art": True, "show_details": True,
+            "layout": "card", "skin": "deck", "visualizer": "bars", "colour": "theme", "show_art": True, "show_details": True,
             "show_next": True, "auto_hide": 0, "text_scale_percent": 0})
         wild = music_overlay_options({"music_player_layout": "hologram", "music_player_visualizer": "lasers",
                                       "music_player_colour": "plaid", "music_player_auto_hide": 7,

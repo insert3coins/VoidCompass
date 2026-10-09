@@ -1,96 +1,28 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.3.2 // The Watcher talks in the quiet
-**Release Date:** 2026-Oct-09
+## v5.5.3.3 // Ten skins for the music player
+**Release Date:** 2026-Oct-10
 
-* **The Watcher has more to say when nothing is happening.** Its idle thoughts now come from what's really around you, not only general gloom:
-  * **The star you're at:** a red dwarf, an orange K-type, and its own remarks for neutron stars, black holes, white dwarfs, Wolf-Rayets and carbon stars.
-  * **The system:** a big one (20 bodies or more) or an almost empty one.
-  * **How far you are from home:** deep space 1,000 light years or more from Sol, or back in the bubble.
-  * **Something from earlier in the session:** a rare world, a species you analysed, your first discoveries ("I keep thinking about the green gas giant in Hatchooe.").
-  * **The session so far:** jumps, light years and first discoveries.
-  * **The hour:** late at night or early in the morning.
-  * **Where you are:** docked at a station, landed on a body, or out on foot.
+* **The music player overlay has ten skins.** Pick one in Overlay Studio › Music Player › Skin:
+  * **Command Deck:** the look it has always had.
+  * **Glass:** a frosted panel over a blurred copy of the album art.
+  * **Vinyl:** a spinning record with the cover as its label, and a tonearm that moves across as the song plays.
+  * **Cassette:** a tape with your track on its label; the reels spin and the tape winds from one to the other as the song goes on.
+  * **Cockpit HUD:** an angled Elite panel in orange, with a segmented progress bar.
+  * **Terminal:** a green console with a block progress bar and block meters.
+  * **Orb:** the round cover ringed by the song's progress, with a radial visualizer around it.
+  * **Radio dial:** a tuner whose needle marks your place in the song, and an analogue VU meter that swings with the music.
+  * **Minimal:** just the words, floating, with no panel behind them.
+  * **Neon:** synthwave glow over a perspective grid.
 
-  There are 146 new lines, in its normal voice and its depressed one. Every figure comes from your journal.
-* **How often it talks into the quiet:**
-  * **Chatty:** one idle thought at most every 5 minutes.
-  * **Occasional:** every 10 minutes. It now speaks in the quiet too, where before only Chatty did.
-  * **Rare:** every 20 minutes.
+  Each skin has its own shape and size, and grows with the text size like every overlay. Every colour comes from your theme, so the skins follow theme changes too. On the slim strip, a skin sets the strip's colours.
 
-  The same kind of remark waits at least half an hour before it comes up again. Plain mutters about the silence still come now and then. Stoic says the least; Curious and Depressed say the most.
-
-* **The Watcher talks like it means it:**
-  * **It thinks first.** Before it speaks, its aperture closes in for a moment, then it types.
-  * **It types like it's thinking.** The pace varies, it pauses after a comma and longer after a full stop, and now and then it corrects itself ("I ~~love~~ tolerate this one.").
-  * **Its eye acts out what it says.**
-    * A happy find lifts the lower lid and tints it green.
-    * Danger narrows it.
-    * A new star or a strange one widens it.
-    * Something gloomy drops the lids and dims the eye with a sigh.
-  * **Second thoughts.** Sometimes a second beat follows: "Not that anyone asked."
-  * **It notices the rest of the app.** It comments on the music playing in the Music player, Galnet's latest headline, how many thoughts it has shared with you, how many sessions you've flown together, and how many times you've died while it watched.
-
-  There are 70 more lines in both voices.
-* **The Watcher has far more to say, so a long session doesn't repeat:**
-  * **Every topic has a deep bank,** at least 10 lines per voice. The busiest (arrivals, scooping, mapping, analysing, idle mutters, second thoughts) have 20 to 36. That's nearly 2,000 lines between its two voices, and no line belongs to two topics.
-  * **Tested over four hours on Chatty:** a simulated evening of jumping, scanning, scooping, landing and walking about gives over 75 remarks, with no line said twice.
-  * **It knows what you're doing in Elite.** It has thoughts for:
-    * **in your ship:** the ship itself (its type and the name you gave it), supercruise through a system, and a world below as you approach it;
-    * **on the surface:** driving the SRV, and a settlement nearby;
-    * **on foot:** your suit, and walking a station concourse;
-    * **travelling:** riding in an Apex taxi, or docked on a fleet carrier.
-  * **It reacts to more of what you do:** neutron jet-cone boosts, heat warnings, escaped interdictions, launching the SRV, settlements coming into view, booking a taxi, and carrier jumps.
-  * **It saves what it has said every few minutes.** A crash or a closed app no longer lets it repeat itself next time.
-
-* **Notifications and achievements show everything at any text size.** Each card grows with its text: a long title or message wraps onto more lines instead of being cut off with "…". The page measures its cards and the window fits them, the same as the other overlays.
-
-* **The Watcher's words go the right way on any monitor.** They appear on whichever side of the orb faces the middle of the screen it's on. Before, only the main monitor was checked: an orb on a second screen to the right always put its words on the left, even at that screen's left edge.
-
-* **The Watcher remembers you:**
-  * **Places:** come back to a system you've visited and it notices ("Hatchooe YF-O d6-16. We were here in February.").
-  * **Your records:** your furthest from Sol, your longest jump, and your most first discoveries in one session, once a session each. Every figure comes from your own travel history.
-  * **Your anniversary:** the day of your first jump.
-* **Poke the Watcher.** Press Ctrl+Alt+Shift+F9 in game (change it in Settings › Hotkeys), or POKE on its page. It looks up and says something about where you are or how it's going. Poke it three times in a row and it gets testy.
-* **It notices you:**
-  * when you bring it back after hiding the overlays;
-  * when you move it somewhere new.
-* **A bond that grows.** Over the sessions and hours you fly together it goes from a stranger to known, then a companion, then an old friend. With each step it has warmer things to say and greets you like an old friend. Even when Depressed, it lets itself look pleased a little more often.
-* **Each nature has its own voice.** Stoic, Curious and Nervous have their own words for the moments that come up most, as Depressed already did:
-  * **Stoic:** clipped reports;
-  * **Curious:** questions about everything;
-  * **Nervous:** frets about fuel, pirates and heat.
-* **It moves with your music.** While the Music player plays, the iris swells with the bass, the eye brightens and the galaxy turns a little faster.
-* **The Watcher's page on the deck** (under Cockpit) shows:
-  * its eye, live, and its latest thought;
-  * a log of everything it has said, marked by mood;
-  * thoughts shared, sessions and hours together, and deaths it has watched;
-  * how far your bond has grown;
-  * your records and what it talks about most;
-  * a POKE button.
-
-* **The Watcher looks better:**
-  * **The bezel** is brushed metal with bevelled edges, lit from the upper left. The iris's light spills onto its inner lip.
-  * **The iris** has fine fibres round the pupil, turning slowly with the galaxy.
-  * **When it thinks,** a seven-bladed diaphragm closes in over the iris, like a camera's.
-  * **The glass has depth:** the faint rings of the lens elements, ghost reflections and the glow caught along its lower edge.
-  * **The pupil** has a wider bloom and a faint lens streak, stronger as it flares or speaks.
-  * **While it speaks,** soft waves of light rise out of the pupil.
-  * **Its reactions are softer:** the hard drawn circles are now waves of light that glow in and fade out on smooth curves. That covers the discovery scan, docking and undocking, the FSD charge, all-clear and contacts. The alarm and shield breach pulse smoothly round the lip instead of strobing, and the bezel tracks glow.
-
-  The metal and glass are drawn once and reused, so it costs about as much to draw as before.
-
-* **Trading searches are much faster.**
-  * **Where to buy or sell a commodity, and Sell My Cargo,** ask Spansh for just the nearest stations with stock or demand. That takes about half a second to a second and a half, where the old lookup took 15–30 seconds and downloaded megabytes.
-  * **Large pads, carriers and planetary stations** are filtered by Spansh, so every result is one you can use.
-  * **One connection to Spansh** is kept open and reused, and opening the Trading tab warms it up, so your first search doesn't wait for a handshake.
-  * **Answers are kept on disk for 10 minutes** (station markets for 3), so repeating a search is instant, even after a restart. Prices are always checked fresh when you dock on a route.
-  * **Sell My Cargo** looks up all your commodities at once.
-  * **Route searches** are checked more often at the start, so a finished route shows sooner.
-  * **When Spansh is busy,** it gets one polite retry.
+* **Each overlay can have its own opacity** (CMDR Nyx Evera's idea). Select an overlay in Overlay Studio and choose its **Opacity**, from 100% down to 40%. "Same as all" follows the OPACITY slider, as before. For example, the orb can be faint while everything else stays solid.
+* **The heartbeat orb never shows a black square.** On some PCs the graphics lose the window's transparency, so the round orb's square corners showed black. The orb's window is now cut to a circle, so its corners can't show on any PC. While a thought is beside it, the window goes back to a rectangle.
 
 ## Earlier releases
 
+* **v5.5.3.2** — The Watcher: its own idle chatter about what is really around you, natures with their own voices, memory of places, records and anniversaries, a poke hotkey, a bond that grows, a page on the deck, soft effects and a richer look; notifications show everything at any text size; trading searches 10–40 times faster.
 * **v5.5.3.1** — Settlement and site signals; EDDiscovery-style body facts in Explore's orrery; rare worlds lead Survey's NOTABLE (green gas giants paired from the Codex); the Watcher's own thoughts, memory and depressed nature, with 500+ lines, rare-world remarks and a sign-off; thought backdrop, colour, size and stay; check for updates in Settings; Session Pulse with time flown, earnings, firsts and rare worlds; the Mission Directive and Focused Log know fuel, rare worlds, Codex colours, trade routes and colonisation.
 * **v5.5.3** — Codex flags on by default and smarter; Galnet's real story dates; loadouts imported as they are in game; achievement trigger fixes; Jump Info on the jump press; high-value bodies after biology; exobiology value and first-footfall bonus counted; body discoverers and EDSM traffic on Explore; Navigation HUD Full/Still/Off; The Watcher's idle life; cargo in alphabetical order.
 * **v5.5.2.9** — Survey Operations' Codex flags per colour, like SrvSurvey's: each species with the colours it will show and a flag on each colour you lack.

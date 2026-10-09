@@ -4801,6 +4801,9 @@ class MainDashboard(
 
         HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
         HtmlOverlayServer.set_opacity(overlay_opacity_ratio(self.config))
+        # Overlays with their own opacity (5.5.3.3).
+        if hasattr(self, "_apply_own_opacities"):
+            self._apply_own_opacities()
 
     def _apply_runtime_feature_toggles(self):
         self._apply_overlay_server_settings()

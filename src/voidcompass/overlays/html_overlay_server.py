@@ -110,6 +110,9 @@ class HtmlOverlayServer:
     # GPU and driver (a page-level fade did not reach the screen for one
     # Radeon RX 9070 XT user, though full transparency did).
     opacity = 1.0
+    # Overlays with their own opacity (5.5.3.3), by overlay id; the rest
+    # follow ``opacity``.
+    opacity_by_overlay = {}
     _instances = weakref.WeakSet()
 
     @classmethod
@@ -122,6 +125,25 @@ class HtmlOverlayServer:
         if value == cls.opacity:
             return False
         cls.opacity = value
+        for server in list(cls._instances):
+            with server._condition:
+                server._window_revision += 1
+                server._condition.notify_all()
+        return True
+
+    @classmethod
+    def set_overlay_opacities(cls, mapping):
+        """Set the overlays that have their own opacity ({overlay id: 0.4-1});
+        True when it changed."""
+        clean = {}
+        for overlay_id, value in (mapping or {}).items():
+            try:
+                clean[str(overlay_id)] = round(max(0.4, min(1.0, float(value))), 3)
+            except (TypeError, ValueError):
+                continue
+        if clean == cls.opacity_by_overlay:
+            return False
+        cls.opacity_by_overlay = clean
         for server in list(cls._instances):
             with server._condition:
                 server._window_revision += 1
@@ -282,7 +304,7 @@ class HtmlOverlayServer:
             result = {}
             for overlay_id, state in self._overlays.items():
                 window = dict(state.window)
-                window["opacity"] = self.opacity
+                window["opacity"] = self.opacity_by_overlay.get(overlay_id, self.opacity)
                 if not state.shutdown:
                     if self.layout_mode:
                         window["visible"] = True
