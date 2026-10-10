@@ -160,6 +160,99 @@ def loop_route(station_a, station_b, cargo, capital):
     return out
 
 
+def _dump_pad(pads):
+    pads = pads if isinstance(pads, dict) else {}
+    return pad_size({"large_pads": pads.get("large"), "medium_pads": pads.get("medium"), "small_pads": pads.get("small")})
+
+
+def parse_dump(reply):
+    """A system's stations and markets (``spansh.system_dump``, 5.5.3.4) ->
+    ``{"system", "id64", "stations": [...]}``, each station shaped like
+    ``parse_station``, nearest the star first."""
+    reply = reply or {}
+    system = str(reply.get("name") or "")
+    stations = []
+    for row in reply.get("stations") or ():
+        kind = str(row.get("type") or "")
+        folded = kind.casefold()
+        market = [{
+            "name": item.get("name") or "", "category": item.get("category") or "",
+            "buy": int(_num(item.get("buyPrice"))), "sell": int(_num(item.get("sellPrice"))),
+            "supply": int(_num(item.get("supply"))), "demand": int(_num(item.get("demand"))),
+        } for item in row.get("commodities") or () if item.get("name")]
+        stations.append({
+            "station": row.get("name") or "", "system": system, "market_id": row.get("id"),
+            "distance": 0.0, "arrival_ls": _num(row.get("distanceToArrival"), None),
+            "pad": _dump_pad(row.get("landingPads")),
+            # Surface stations sit under a body in the dump.
+            "planetary": bool(row.get("body")) or "planetary" in folded or "settlement" in folded,
+            "carrier": "carrier" in folded, "type": kind, "body": row.get("body") or "",
+            "updated": _ts(row.get("updateTime")),
+            "market": sorted(market, key=lambda item: (item["category"], item["name"])),
+        })
+    stations.sort(key=lambda row: (row["arrival_ls"] is None, row["arrival_ls"] or 0.0, row["station"]))
+    return {"system": system, "id64": reply.get("id64"), "stations": stations}
+
+
+# Why a station in the system was not tried as a start, in the words shown.
+LEFT_OUT = {
+    "pad": "no large pad", "carrier": "fleet carriers", "planetary": "planetary",
+    "old": "prices too old", "far": "too far from the star", "empty": "nothing in stock",
+}
+
+
+def start_candidates(stations, form, now, limit=3):
+    """The stations in a system most worth starting a trade route from
+    (5.5.3.4), within the route form's own rules (pad, carriers, planetary,
+    price age, distance from the star), and how many each rule left out.
+
+    A guess, not a promise: the one with the most goods in stock for a full
+    hold leads, then the most goods in stock, then the freshest prices, then
+    the nearest the star. Spansh's router then says what each is worth."""
+    cargo = max(1, int(_num(form.get("max_cargo"), 1)))
+    max_age = max(1, int(_num(form.get("max_price_age_days"), 3))) * 86400
+    max_ls = _num(form.get("max_system_distance"), 0)
+    left_out = {key: 0 for key in LEFT_OUT}
+    picks = []
+    for row in stations or ():
+        if form.get("requires_large_pad") and row.get("pad") != "L":
+            left_out["pad"] += 1
+            continue
+        if row.get("carrier") and not form.get("allow_player_owned"):
+            left_out["carrier"] += 1
+            continue
+        if row.get("planetary") and not form.get("allow_planetary"):
+            left_out["planetary"] += 1
+            continue
+        updated = row.get("updated")
+        if updated is None or now - updated > max_age:
+            left_out["old"] += 1
+            continue
+        if max_ls and row.get("arrival_ls") is not None and row["arrival_ls"] > max_ls:
+            left_out["far"] += 1
+            continue
+        stocked = [item for item in row.get("market") or () if item["buy"] > 0 and item["supply"] > 0]
+        if not stocked:
+            left_out["empty"] += 1
+            continue
+        pick = {key: value for key, value in row.items() if key != "market"}
+        pick.update(in_stock=len(stocked), full_hold=sum(1 for item in stocked if item["supply"] >= cargo))
+        picks.append(pick)
+    picks.sort(key=lambda row: (-row["full_hold"], -row["in_stock"], now - row["updated"],
+                                row["arrival_ls"] if row["arrival_ls"] is not None else 1e12))
+    return picks[:max(1, int(limit))], len(picks), {key: count for key, count in left_out.items() if count}
+
+
+def in_system(rows, system, kind, limit=3):
+    """What a system's own stations pay (``kind`` "sell") or charge ("buy")
+    for a commodity, from rows of ``parse_commodity``: best price first."""
+    wanted = str(system or "").casefold()
+    here = [row for row in rows or () if str(row.get("system") or "").casefold() == wanted]
+    here.sort(key=lambda row: row["price"], reverse=(kind == "sell"))
+    return [{key: row.get(key) for key in ("station", "market_id", "price", "stock", "pad", "planetary", "updated")}
+            for row in here[:limit]]
+
+
 def price_ranges(reply):
     """``/api/stations/field_values/market`` -> {name: {"buy_max", "sell_max"}}:
     every commodity Spansh knows, and the best prices anywhere right now."""

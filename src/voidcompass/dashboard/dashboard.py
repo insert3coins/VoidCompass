@@ -39,7 +39,6 @@ from voidcompass.mining.mining_data import MINING_MATERIALS
 from voidcompass.services.carrier_tracker import CarrierTracker
 from voidcompass.overlays.prospector_hud import ProspectorHUD
 from voidcompass.overlays.planet_materials_hud import PlanetMaterialsHUD
-from voidcompass.overlays.rhino_minimap_hud import RhinoMinimapHUD
 from voidcompass.overlays.powerplay_hud import PowerplayHUD
 from voidcompass.overlays.gravity_warning_hud import GravityWarningHUD
 from voidcompass.overlays.station_info_hud import StationInfoHUD
@@ -66,7 +65,6 @@ from voidcompass.overlays.html_cargo_overlay import attach_html_cargo_overlay
 from voidcompass.overlays.html_carrier_overlay import attach_html_carrier_overlay
 from voidcompass.overlays.html_prospector_overlay import attach_html_prospector_overlay
 from voidcompass.overlays.html_planet_materials_overlay import attach_html_planet_materials_overlay
-from voidcompass.overlays.html_rhino_minimap_overlay import attach_html_rhino_minimap_overlay
 from voidcompass.overlays.html_powerplay_overlay import attach_html_powerplay_overlay
 from voidcompass.overlays.html_heartbeat_overlay import attach_html_heartbeat_overlay
 from voidcompass.overlays.html_galnet_ticker_overlay import attach_html_galnet_ticker_overlay
@@ -128,9 +126,7 @@ from voidcompass.core.overlay_registry import (
     HTML_OVERLAY_SPECS,
     OVERLAY_POSITION_SPECS,
     OVERLAY_SPEC_BY_ATTR,
-    RHINO_MAP_AVAILABLE,
 )
-from voidcompass.mining.rhino_minimap import RhinoMinimapTracker
 
 
 # How long the Navigation HUD marks a freshly entered Codex region.
@@ -937,7 +933,6 @@ class MainDashboard(
             "carrier_hud",
             "prospector_hud",
             "planet_materials_hud",
-            "rhino_minimap_hud",
             "powerplay_hud",
             "gravity_warning_hud",
             "station_info_hud",
@@ -1032,7 +1027,7 @@ class MainDashboard(
             pass
 
         for attr in (
-            "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "rhino_minimap_hud", "powerplay_hud",
+            "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "powerplay_hud",
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud",
             "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud",
@@ -1928,8 +1923,6 @@ class MainDashboard(
         # Close and persist the outgoing commander's session while every live
         # fact and UI position still belongs to that profile.
         self._save_exploration_checkpoint("profile-change", immediate=True)
-        if getattr(self, "rhino_minimap", None):
-            self.rhino_minimap.flush(force=True)
         self._capture_dashboard_window_geometry()
         outgoing_engineer_path = self.config.get("engineer_materials_file")
         self._close_profile_surfaces()
@@ -1971,7 +1964,6 @@ class MainDashboard(
                 "expeditions.json",
                 "waypoints.json",
                 "return_later.json",
-                "rhino_minimap.json.gz",
             ):
                 src = get_profile_file(old_key, filename)
                 dst = get_profile_file(new_key, filename)
@@ -1984,9 +1976,6 @@ class MainDashboard(
         self.config["active_commander_name"] = commander_name
         self.config["active_commander_fid"] = fid or profile.get("fid", "")
         apply_profile_config(self.config, new_key)
-        if getattr(self, "rhino_minimap", None):
-            self.rhino_minimap.switch(get_profile_file(new_key, "rhino_minimap.json.gz"))
-        self._rhino_minimap_sites_cache = None
         self._refresh_profile_paths()
         self._reset_profile_runtime_state(commander_name, self.config.get("active_commander_fid"))
         self._apply_active_profile_theme()
@@ -2153,9 +2142,6 @@ class MainDashboard(
         self._colony_init()
         self._bgs_init()
         self._trading_init()
-        self.rhino_minimap = RhinoMinimapTracker(
-            get_profile_file(get_active_profile(self.config), "rhino_minimap.json.gz")
-        )
         self.expedition_manager = ExpeditionManager(
             get_profile_file(get_active_profile(self.config), "expeditions.json")
         )
@@ -2579,12 +2565,6 @@ class MainDashboard(
             self._refresh_planet_materials_overlay()
         else:
             self.planet_materials_hud = None
-
-        if self._overlay_enabled("rhino_minimap_hud"):
-            self.rhino_minimap_hud = RhinoMinimapHUD(self.root, self.config)
-            self._refresh_rhino_minimap_overlay()
-        else:
-            self.rhino_minimap_hud = None
 
         if self._overlay_enabled("powerplay_hud"):
             self.powerplay_hud = PowerplayHUD(self.root, self.config)
@@ -3505,20 +3485,6 @@ class MainDashboard(
             self.music_remote({"music_play_pause": "toggle", "music_next": "next",
                                "music_previous": "previous"}[action])
             return
-        if action.startswith("rhino_minimap") and not RHINO_MAP_AVAILABLE:
-            return
-        if action == "rhino_minimap_center":
-            self._set_rhino_minimap_center()
-            return
-        if action == "rhino_minimap_border":
-            self._set_rhino_minimap_border()
-            return
-        if action == "rhino_minimap_drill":
-            self._mark_rhino_drill()
-            return
-        if action == "rhino_minimap_reset":
-            self._reset_rhino_minimap()
-            return
         if action == "toggle_all":
             if self._overlay_hotkey_global_hidden:
                 self._overlay_hotkey_global_hidden = False
@@ -4021,8 +3987,6 @@ class MainDashboard(
         # without turning live journal traffic into continuous disk writes.
         self._save_profile_cockpit_state()
         self._save_exploration_checkpoint("app-close", immediate=True)
-        if getattr(self, "rhino_minimap", None):
-            self.rhino_minimap.flush(force=True)
 
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
@@ -4868,14 +4832,6 @@ class MainDashboard(
             self.planet_materials_hud.destroy()
             self.planet_materials_hud = None
 
-        if self._overlay_enabled("rhino_minimap_hud"):
-            if self.rhino_minimap_hud is None:
-                self.rhino_minimap_hud = RhinoMinimapHUD(self.root, self.config)
-            self._refresh_rhino_minimap_overlay()
-        elif self.rhino_minimap_hud:
-            self.rhino_minimap_hud.destroy()
-            self.rhino_minimap_hud = None
-
         if self._overlay_enabled("powerplay_hud"):
             if self.powerplay_hud is None:
                 self.powerplay_hud = PowerplayHUD(self.root, self.config)
@@ -5029,10 +4985,6 @@ class MainDashboard(
                 )
             elif attr == "planet_materials_hud":
                 attach_html_planet_materials_overlay(
-                    overlay, overlay_id, title, enabled_key, x_key, y_key,
-                )
-            elif attr == "rhino_minimap_hud":
-                attach_html_rhino_minimap_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "powerplay_hud":

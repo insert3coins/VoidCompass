@@ -1,7 +1,7 @@
 """Overlay Layout Studio model and command controller."""
 
 from voidcompass.core.display_scale import monitor_handle_scale, monitor_scale
-from voidcompass.core.overlay_registry import OVERLAY_SPEC_BY_ATTR, RHINO_MAP_AVAILABLE
+from voidcompass.core.overlay_registry import OVERLAY_SPEC_BY_ATTR
 from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 from voidcompass.overlays.html_overlay_runtime import overlay_opacity_ratio
 
@@ -257,11 +257,6 @@ class HtmlOverlayStudioMixin:
             ground_solution = {}
             ground_configured = False
             ground_ready = False
-        rhino_tracker = getattr(self, "rhino_minimap", None) if RHINO_MAP_AVAILABLE else None
-        rhino_map = getattr(rhino_tracker, "active", None)
-        rhino_maps_count, rhino_maps_size = (
-            rhino_tracker.usage() if rhino_tracker is not None else (0, 0)
-        )
         monitors = self._html_overlay_monitors()
         overlays = self._html_overlay_records(
             live=getattr(self, "_html_dashboard_active_page", "") == "overlay-studio",
@@ -293,28 +288,6 @@ class HtmlOverlayStudioMixin:
                     and getattr(self, "current_longitude", None) is not None
                 ),
             },
-            "rhino_minimap": {
-                "active": bool(getattr(rhino_tracker, "in_rhino", False)),
-                "map_name": _text(getattr(rhino_map, "name", ""), 80),
-                "centered": bool(getattr(rhino_map, "centered", False)),
-                "border_m": _number(getattr(rhino_map, "border_m", None)),
-                "painted_km2": round(_number(getattr(rhino_map, "painted_km2", 0.0)) or 0.0, 2),
-                "center_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_center"), 80),
-                "border_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_border"), 80),
-                "drill_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_drill"), 80),
-                "reset_hotkey": _text(self.config.get("overlay_hotkey_rhino_minimap_reset"), 80),
-                "drill_count": sum(
-                    str(row.get("site_type") or "").casefold() == "drill"
-                    and str(row.get("system") or "").casefold() == str(getattr(rhino_tracker, "system", "")).casefold()
-                    and str(row.get("body") or "").casefold() == str(getattr(rhino_map, "body", "")).casefold()
-                    and str(row.get("map_name") or "").casefold() in {
-                        "", str(getattr(rhino_map, "name", "") or "").casefold(),
-                    }
-                    for row in self._rhino_minimap_sites()
-                ) if rhino_tracker is not None else 0,
-                "saved_maps": rhino_maps_count,
-                "saved_bytes": rhino_maps_size,
-            },
             "options": {
                 "overlay_mouse_passthrough": bool(self.config.get("overlay_mouse_passthrough", True)),
                 "hud_compact_mode": bool(self.config.get("hud_compact_mode", True)),
@@ -331,6 +304,9 @@ class HtmlOverlayStudioMixin:
                 "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
                 "overlay_frame_rate": overlay_frame_rate(self.config),
                 "overlay_hide_on_maps": bool(self.config.get("overlay_hide_on_maps", True)),
+                # The page redraws every switch from these (5.5.3.4: the Dark
+                # box fix's switch went back to off without it).
+                "overlay_transparency_fix": bool(self.config.get("overlay_transparency_fix", False)),
                 "layout_mode": HtmlOverlayServer.layout_mode,
                 # The show/hide-all curtain (the header's ALL switch and the
                 # all-overlays hotkey share it).
@@ -795,18 +771,6 @@ class HtmlOverlayStudioMixin:
                 self.update_hud()
                 self._schedule_html_dashboard_publish(immediate=True)
             return True
-        if operation.startswith("rhino_") and not RHINO_MAP_AVAILABLE:
-            return False
-        if operation == "rhino_center":
-            return self._set_rhino_minimap_center()
-        if operation == "rhino_border":
-            return self._set_rhino_minimap_border()
-        if operation == "rhino_drill":
-            return self._mark_rhino_drill()
-        if operation == "rhino_reset":
-            return bool(payload.get("confirmed") and self._reset_rhino_minimap())
-        if operation == "rhino_open_maps":
-            return self._open_rhino_minimap_folder()
         if operation == "move":
             sequence = max(0, _integer(payload.get("sequence"), 0))
             seen = getattr(self, "_html_overlay_move_sequences", None)

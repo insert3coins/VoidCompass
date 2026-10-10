@@ -1,35 +1,21 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.3.3.1 // Dark box fix
+## v5.5.3.4 // Trade routes from a whole system
 **Release Date:** 2026-Oct-10
 
-* **No more dark boxes round overlays.** On some PCs (seen with an NVIDIA GTX 1660 Super), an overlay's see-through areas come out black: dark corners round the music player's rounded skins, dark gaps between notifications, a dark box round the orb's thoughts.
-  * **Turn on Dark box fix** (Overlay Studio › All overlays) if you see them. It cuts every overlay window to exactly what it draws: rounded corners, cut corners, each notification card.
-  * **Leave it off if your overlays look right.** It also trims soft glows at their edges.
-* **For a support bundle,** the logs now say which renderer each overlay uses (your graphics card, or software) and whether each window's shape took.
-
-## v5.5.3.3 // Ten skins for the music player
-**Release Date:** 2026-Oct-10
-
-* **The music player overlay has ten skins.** Pick one in Overlay Studio › Music Player › Skin:
-  * **Command Deck:** the look it has always had.
-  * **Glass:** a frosted panel over a blurred copy of the album art.
-  * **Vinyl:** a spinning record with the cover as its label, and a tonearm that moves across as the song plays.
-  * **Cassette:** a tape with your track on its label; the reels spin and the tape winds from one to the other as the song goes on.
-  * **Cockpit HUD:** an angled Elite panel in orange, with a segmented progress bar.
-  * **Terminal:** a green console with a block progress bar and block meters.
-  * **Orb:** the round cover ringed by the song's progress, with a radial visualizer around it.
-  * **Radio dial:** a tuner whose needle marks your place in the song, and an analogue VU meter that swings with the music.
-  * **Minimal:** just the words, floating, with no panel behind them.
-  * **Neon:** synthwave glow over a perspective grid.
-
-  Each skin has its own shape and size, and grows with the text size like every overlay. Every colour comes from your theme, so the skins follow theme changes too. On the slim strip, a skin sets the strip's colours.
-
-* **Each overlay can have its own opacity** (CMDR Nyx Evera's idea). Select an overlay in Overlay Studio and choose its **Opacity**, from 100% down to 40%. "Same as all" follows the OPACITY slider, as before. For example, the orb can be faint while everything else stays solid.
-* **The heartbeat orb never shows a black square.** On some PCs the graphics lose the window's transparency, so the round orb's square corners showed black. The orb's window is now cut to a circle, so its corners can't show on any PC. While a thought is beside it, the window goes back to a rectangle.
+* **Plan a trade route from a whole system.** In Trading › Route Planner, tick **From any station in this system** and give just the system: no station needed.
+  * Void Compass reads every market in the system in one request. It sets aside the stations your settings rule out: no large pad, fleet carriers, planetary ports, prices too old, too far from the star, or nothing in stock.
+  * It tries the most promising stations on Spansh's trade router: the ones with the most goods in stock for a full hold and the freshest prices. That's 3 by default, or up to 6 with **Stations to try**. Spansh plans them one after another, so each extra station adds about one search's time. It never tries every station: Sol alone has over 60 markets.
+  * Each station has its own line in the progress panel (queued, working, done or failed), and **Stop** stops them all.
+  * The results compare them, best first ("Best start in Sol: Daedalus 11.2M · Galileo 11.2M · Columbus 11.2M"). They also say how many stations fit your settings and why the rest were left out. **Show** opens any start's route, and **Follow this route** and **Loop these two** work on it as usual. A station with no profitable route, or one Spansh couldn't plan, says so rather than vanishing.
+* **What the system itself pays.** Find commodity says what the searched system's own stations pay or charge ("In UGPS 0722-05: Cloutier's Forge pays 51,184"). Sell cargo says what your current system's stations pay for each item in your hold, beside the best nearby.
+* **Any station's market.** The Market view has **Any station in a system**: list every station with a market in a system, nearest the star first, with what's for sale and wanted and how old the prices are, and open any of them.
+* **The Dark box fix switch stays on.** In 5.5.3.3.1 it flipped back to off a moment after you turned it on. The setting was saved and the fix applied, but the switch showed it as off, so clicking it again turned the fix off.
 
 ## Earlier releases
 
+* **v5.5.3.3.1** — A Dark box fix for PCs where overlays show dark boxes or corners (seen with a GTX 1660 Super): every overlay window cut to what it draws; the logs say which renderer each overlay uses.
+* **v5.5.3.3** — Ten skins for the music player overlay; each overlay can have its own opacity; the heartbeat orb's window cut to a circle, so it never shows a black square.
 * **v5.5.3.2** — The Watcher: its own idle chatter about what is really around you, natures with their own voices, memory of places, records and anniversaries, a poke hotkey, a bond that grows, a page on the deck, soft effects and a richer look; notifications show everything at any text size; trading searches 10–40 times faster.
 * **v5.5.3.1** — Settlement and site signals; EDDiscovery-style body facts in Explore's orrery; rare worlds lead Survey's NOTABLE (green gas giants paired from the Codex); the Watcher's own thoughts, memory and depressed nature, with 500+ lines, rare-world remarks and a sign-off; thought backdrop, colour, size and stay; check for updates in Settings; Session Pulse with time flown, earnings, firsts and rare worlds; the Mission Directive and Focused Log know fuel, rare worlds, Codex colours, trade routes and colonisation.
 * **v5.5.3** — Codex flags on by default and smarter; Galnet's real story dates; loadouts imported as they are in game; achievement trigger fixes; Jump Info on the jump press; high-value bodies after biology; exobiology value and first-footfall bonus counted; body discoverers and EDSM traffic on Explore; Navigation HUD Full/Still/Off; The Watcher's idle life; cargo in alphabetical order.

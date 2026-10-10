@@ -2746,7 +2746,6 @@ function renderPlanetMaterialsWorkspace(data) {
   };
   (data.bodies || []).forEach(addBody);
   (data.sites || []).forEach(site => addBody({...site.body_details, system:site.system, body:site.body}));
-  (data.coverage_maps || []).forEach(addBody);
   const bodies = [...mergedBodies.values()].sort((a,b) => planetLabel(a).localeCompare(planetLabel(b), undefined, {numeric:true, sensitivity:"base"}));
   const liveKey = data.current_position ? planetKey(data.current_position) : "";
   let selected = bodies.find(body => planetKey(body) === root.dataset.selectedPlanet)
@@ -2775,7 +2774,7 @@ function renderPlanetMaterialsWorkspace(data) {
     <label>DEPOSIT AMOUNT<select name="amount">${["","High","Medium","Low","Depleted"].map(value=>`<option value="${value}" ${site.amount === value ? "selected" : ""}>${value || "Unrecorded"}</option>`).join("")}</select></label>
     <label>OBSERVED DEPOSIT DENSITY<select name="density">${["","Low","Medium","High"].map(value=>`<option value="${value}" ${site.density === value ? "selected" : ""}>${value || "Unrecorded"}</option>`).join("")}</select></label>
     <label>DEPOSIT RIG POSITIONS<input name="rigs" type="number" min="0" max="64" step="1" value="${numeric(site.rigs,0)}"><small>Count the rig circles drawn by this deposit—not placed drill markers.</small></label>
-    <label class="planet-depleted-toggle"><input type="checkbox" name="depleted" value="1" ${site.depleted ? "checked" : ""}><span><b>LOCATION DEPLETED</b><small>Render this bookmark red on the Rhino minimap.</small></span><i></i></label>
+    <label class="planet-depleted-toggle"><input type="checkbox" name="depleted" value="1" ${site.depleted ? "checked" : ""}><span><b>LOCATION DEPLETED</b><small>Mark this location as mined out.</small></span><i></i></label>
     <button type="button" data-current-coordinates ${data.current_position ? "" : "disabled"}>USE CURRENT PLANET & LOCATION</button>
     <button type="submit" class="primary">${site.id ? "SAVE CHANGES" : "ADD SITE"}</button>${site.id ? `<button type="button" data-site-delete="${site.id}">DELETE SITE</button>` : ""}
     <div class="planet-captured" data-captured-evidence>${site.body_details?.body ? `<small>CAPTURED PLANET SCAN · ${escapeHtml(site.body_details.body)}</small>${evidence(site.body_details)}` : '<small>Use current to capture planet conditions and known raw materials with this site.</small>'}</div>`;
@@ -2805,21 +2804,16 @@ function renderPlanetMaterialsWorkspace(data) {
     const count = (data.sites || []).filter(site => (site.body_details?.class || "Unreported") === cls && materialsFor(site).some(value => folded(value) === folded(material))).length;
     return `<td class="${count ? "planet-heat-present" : ""}">${count || "—"}</td>`;
   }).join("")}</tr>`).join("");
-  // The Rhino coverage map is switched off app-wide for now (RHINO_MAP_AVAILABLE).
-  const coverageEnabled = data.coverage_maps_enabled !== false;
-  const coverageFor = body => (data.coverage_maps || []).find(row => planetKey(row) === planetKey(body));
-  const coverageMaps = body => { const record=coverageFor(body); if(!record)return '<p class="workspace-empty">No Rhino coverage maps saved for this planet.</p>'; return `<div class="planet-map-summary"><b>${numeric(record.mapped_count)} / ${numeric(record.location_total)} LOCATIONS MAPPED</b><span>${numeric((record.maps||[]).length)} SAVED COVERAGE MAPS</span></div><div class="planet-map-grid">${(record.maps||[]).map(map=>`<article><header><b>${escapeHtml(map.name)}</b><span>${(map.locations||[]).length?`LOC ${(map.locations||[]).map(value=>numeric(value)).join(", ")}`:"LOCATION UNKNOWN"}</span></header><p>${numeric(map.painted_km2,2)} KM² PAINTED · ${numeric(map.bookmarks)} BOOKMARKS</p><small>${map.centered?"CENTRE SET":"DROP-POINT CENTRED"}${map.border_m?` · ${numeric(number(map.border_m)/1000,1)} KM BORDER`:" · OPEN BORDER"}</small><button type="button" data-map-export="${escapeHtml(map.name)}" data-map-body="${escapeHtml(record.body)}" data-map-system="${escapeHtml(record.system||"")}">${map.exported?"REFRESH & OPEN MAP":"EXPORT & OPEN MAP"}</button></article>`).join("")}</div>${(record.unknown_maps||[]).length?`<p>Location unknown: ${escapeHtml(record.unknown_maps.join(", "))}</p>`:""}`; };
   root.innerHTML = `<section class="planet-materials-shell"><article class="card planet-compass-quick${navigationTargetReady ? " active" : ""}">
       <div class="planet-compass-heading"><small>PLANET WAYPOINT OVERLAY</small><h3>Quick compass target</h3><span>Paste Elite surface coordinates here and send them straight to the cockpit compass.</span></div>
       <div class="coordinate-form planet-compass-coordinates"><label>LATITUDE<input id="planet-compass-lat" type="number" min="-90" max="90" step="0.000001" value="${navigationTargetReady ? navigationTarget.latitude : ""}" placeholder="32.328000"></label><label>LONGITUDE<input id="planet-compass-lon" type="number" min="-180" max="180" step="0.000001" value="${navigationTargetReady ? navigationTarget.longitude : ""}" placeholder="108.838000"></label></div>
       <div class="workspace-actions wrap planet-compass-controls"><button class="primary" data-ws-page="ground" data-ws-op="set" data-ground-source="planet">SEND TO COMPASS</button><button data-ws-page="ground" data-ws-op="set_current" ${data.current_position ? "" : "disabled"}>USE CURRENT</button><button data-ws-page="ground" data-ws-op="clear" ${navigationTargetReady ? "" : "disabled"}>CLEAR</button><button data-page="ground">GROUND &amp; EXOBIO</button></div>
       <div class="planet-compass-state"><i></i><span>${escapeHtml(navigationTargetDetail)}</span><b>${navigationTargetReady ? "TARGET ARMED" : "STANDBY"}</b></div>
     </article><article class="card planet-command-bar"><div><small>LIVE PLANET LINK</small><b data-planet-live-status></b></div><label>SCANNED OR SAVED PLANET<select data-select-planet>${bodies.map(body=>`<option value="${escapeHtml(planetKey(body))}" ${body === selected ? "selected" : ""}>${escapeHtml(planetLabel(body))}</option>`).join("") || '<option value="">No planets scanned or saved</option>'}</select></label><label>BOOKMARK MATERIAL<select data-select-body-material><option value="">All recorded materials</option></select></label><strong data-selected-count>0 SAVED LOCATIONS</strong></article>
-    <div class="workspace-actions planet-atlas-tabs">${[["body","PLANET SITES"],...(coverageEnabled ? [["maps","COVERAGE MAPS"]] : []),["heat","HEAT MAP"],["material","BY MATERIAL"]].map(([key,label])=>`<button type="button" data-atlas-view="${key}">${label}</button>`).join("")}</div>
+    <div class="workspace-actions planet-atlas-tabs">${[["body","PLANET SITES"],["heat","HEAT MAP"],["material","BY MATERIAL"]].map(([key,label])=>`<button type="button" data-atlas-view="${key}">${label}</button>`).join("")}</div>
     <section data-atlas-panel="body"><article class="card planet-condition-card"><header>SELECTED PLANET</header><div data-selected-facts></div></article>
       <div class="planet-atlas-columns"><article class="card planet-location-library"><header><span>SURFACE MINING LOCATIONS</span><b data-selected-count>0 SAVED</b></header><div data-selected-mining></div></article><article class="card"><header>EXPECTED RHINO VALUE · FIELD ESTIMATE</header><div data-selected-value></div><header>KNOWN RAW MATERIAL COMPOSITION</header><div data-selected-raw></div></article></div>
       <article class="card planet-materials-wide planet-new-site"><header>RECORD A NEW LOCATION</header><p>Use current to capture the live planet, X/Y coordinates and scanned raw materials. Mining materials and deposit density are your field observations.</p><form class="planet-site-form" data-new-site-form>${fields()}</form></article></section>
-    <section data-atlas-panel="maps" hidden><article class="card"><header>NUMBERED MINING-LOCATION COVERAGE</header><div data-selected-maps></div></article></section>
     <section data-atlas-panel="heat" hidden><article class="card"><header>SURFACE MINING HEAT MAP · RECORDED SITES</header><p>Counts of your saved sites by material and planet class. Blank cells mean no recorded observation.</p><div class="planet-table-scroll"><table class="planet-atlas-table"><thead><tr><th>MATERIAL</th>${classes.map(cls=>`<th>${escapeHtml(cls)}</th>`).join("")}</tr></thead><tbody>${heatRows || '<tr><td>Save mining sites to build the comparison.</td></tr>'}</tbody></table></div></article></section>
     <section data-atlas-panel="material" hidden><article class="card"><header>FIND PLANETS BY MINING MATERIAL</header><label class="planet-body-picker">MATERIAL<select data-select-material>${minerals.map(m=>`<option>${escapeHtml(m)}</option>`).join("") || '<option>No recorded materials</option>'}</select></label><div data-material-sites></div></article></section>
     </section>`;
@@ -2838,9 +2832,7 @@ function renderPlanetMaterialsWorkspace(data) {
     root.querySelector('[data-selected-value]').innerHTML = `<div class="planet-value-grid">${expectedMaterials(selected)}</div><p class="planet-evidence-note">Ranked by observed location rate × median market price. This is reconnaissance guidance, not a guarantee of deposit contents.</p>`;
     root.querySelector('[data-selected-raw]').innerHTML = rawMaterials(selected);
     root.querySelector('[data-selected-mining]').innerHTML = siteCards(visibleSites);
-    root.querySelector('[data-selected-maps]').innerHTML = coverageMaps(selected);
-    const coverage = coverageFor(selected);
-    root.querySelectorAll('[data-selected-count]').forEach(label=>{label.textContent=coverageEnabled ? `${selectedSites.length} SAVED · ${numeric(coverage?.mapped_count)} / ${numeric(coverage?.location_total || selected.mining_locations)} MAPPED` : `${selectedSites.length} SAVED`;});
+    root.querySelectorAll('[data-selected-count]').forEach(label=>{label.textContent=`${selectedSites.length} SAVED`;});
   }
   showBody();
   for (const [siteId, draft] of preservedDrafts) {
@@ -2873,17 +2865,10 @@ function renderPlanetMaterialsWorkspace(data) {
     root.querySelectorAll('[data-atlas-panel]').forEach(panel=>{panel.hidden=panel.dataset.atlasPanel!==key;});
     root.querySelectorAll('[data-atlas-view]').forEach(button=>button.classList.toggle('primary',button.dataset.atlasView===key));
   };
-  showView(!coverageEnabled && root.dataset.atlasView === 'maps' ? 'body' : (root.dataset.atlasView || 'body'));
+  showView(['body','heat','material'].includes(root.dataset.atlasView) ? root.dataset.atlasView : 'body');
   root.onclick = async event => {
     const viewButton=event.target.closest('button[data-atlas-view]');
     if(viewButton)return showView(viewButton.dataset.atlasView);
-    const mapButton=event.target.closest('[data-map-export]');
-    if(mapButton){
-      const accepted=await command('workspace',{page:'planet-materials',operation:'export_map',profile_key:root.dataset.profileKey,map_name:mapButton.dataset.mapExport,body:mapButton.dataset.mapBody,system:mapButton.dataset.mapSystem});
-      showToast(accepted?'Coverage map exported and opened.':'Coverage map could not be exported.');
-      if(accepted){delete workspaceFingerprints['planet-materials'];window.setTimeout(()=>{if(typeof syncSnapshot==='function')syncSnapshot();},120);}
-      return;
-    }
     const navigateButton=event.target.closest('[data-site-navigate]');
     if(navigateButton){
       event.preventDefault();event.stopPropagation();

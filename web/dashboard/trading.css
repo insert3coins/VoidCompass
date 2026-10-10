@@ -157,3 +157,27 @@
 .tr-steps i { width: 14px; color: var(--accent); font-style: normal; text-align: center; }
 .tr-steps li.done { color: var(--muted); }
 .tr-steps li.now { color: var(--text); }
+/* A system search's steps: a station that failed (5.5.3.4). */
+.tr-steps li b { color: inherit; font-weight: 600; }
+.tr-steps li.failed { color: var(--red); }
+.tr-steps li.failed i { color: var(--red); }
+
+/* Comparing the starts of a system search, best first (5.5.3.4). */
+.tr-starts { display: grid; gap: 0; margin: 10px 0 0; padding: 0; list-style: none; }
+.tr-starts li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 4px 14px; padding: 8px 6px; border-bottom: 1px solid var(--border-soft); }
+.tr-starts li.picked { background: color-mix(in srgb, var(--accent) 8%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+.tr-starts li > div { display: grid; gap: 2px; min-width: 0; }
+.tr-starts li b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.tr-starts li small { color: var(--dim); font: 11px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.tr-start-worth { justify-items: end; text-align: right; }
+.tr-start-worth em { color: var(--text); font: 600 14px "Segoe UI", sans-serif; font-style: normal; font-variant-numeric: tabular-nums; }
+.tr-start-worth em.none { color: var(--dim); }
+@media (max-width: 720px) {
+  .tr-starts li { grid-template-columns: minmax(0, 1fr) auto; }
+  .tr-starts li > .tr-actions { grid-column: 1 / -1; }
+}
+
+/* What a system's own stations pay, beside a nearby search (5.5.3.4). */
+.tr-result-head small.tr-here { display: block; margin-top: 3px; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.tr-form.tr-inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 0 0 10px; }
+.tr-form.tr-inline .tr-fields { flex: 1 1 240px; }

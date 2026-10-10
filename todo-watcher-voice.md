@@ -1,5 +1,7 @@
 # TODO: The Watcher speaks
 
+> **On hold (2026-10-10): no voice.** The Watcher stays text only; there's already plenty going on. Don't start this unless it's asked for again. If it is, the choices already made are: Piper as the engine, a separate engine download, Alan (`en_GB-alan-medium`) as the default voice, and a Voice level setting.
+
 Parked idea, to come back to. Give The Watcher (the heartbeat orb) a voice: a calm, weary, quietly unimpressed robot that comments on your flying now and then. It has watched every jump of your career, and none of them impressed it.
 
 The joke is in the spirit of Hitchhiker's depressed robot, but **The Watcher is our own character**. Never use the name Marvin, and never quote Douglas Adams.

@@ -11,7 +11,6 @@ from voidcompass.mining.planet_materials import PlanetMaterialsStore
 from voidcompass.mining.rhino_intelligence import (
     classify_ground, ground_intelligence, tons_left,
 )
-from voidcompass.mining.rhino_minimap import RhinoMinimapTracker
 from voidcompass.overlays.planet_materials_hud import build_planet_materials_model
 from voidcompass.dashboard.dashboard import MainDashboard
 from voidcompass.overlays.hud import TacticalHUD
@@ -170,17 +169,6 @@ class PlanetMaterialsTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 store.save({**drill, 'site_type': 'unknown'})
 
-    def test_deleting_map_drills_keeps_other_maps_and_regular_sites(self):
-        with tempfile.TemporaryDirectory() as folder:
-            store = PlanetMaterialsStore(Path(folder) / 'sites.db')
-            common = dict(system='Sol', body='Moon', materials='', latitude=0, longitude=0)
-            store.save({**common, 'name':'Drill 1', 'site_type':'drill', 'map_name':'map 1'})
-            store.save({**common, 'name':'Legacy drill', 'site_type':'drill'})
-            store.save({**common, 'name':'Drill 2', 'site_type':'drill', 'map_name':'map 2'})
-            store.save({**common, 'name':'Mining site', 'site_type':'site', 'materials':'Ruby'})
-            self.assertEqual(store.delete_drills_for_map('sol', 'moon', 'MAP 1'), 2)
-            self.assertEqual([row['name'] for row in store.rows()], ['Drill 2', 'Mining site'])
-
     def test_coordinate_validation_does_not_write_invalid_data(self):
         with tempfile.TemporaryDirectory() as folder:
             store = PlanetMaterialsStore(Path(folder) / 'sites.db')
@@ -225,34 +213,6 @@ class PlanetMaterialsTests(unittest.TestCase):
         self.assertEqual(len(intel['best_materials']), 3)
         self.assertGreater(intel['ground_sample'], 0)
         self.assertEqual(tons_left(4, 'High'), (620, 1200))
-
-    def test_rhino_launch_associates_nearest_numbered_bookmark(self):
-        with tempfile.TemporaryDirectory() as folder:
-            store = PlanetMaterialsStore(Path(folder) / 'sites.db')
-            store.save(dict(
-                system='Sol', body='Moon', name='Location seven', materials='Ruby',
-                latitude=0, longitude=.002, planet_radius=1_000_000,
-                location_index=7,
-            ))
-            dashboard = MainDashboard.__new__(MainDashboard)
-            dashboard.config = {}
-            dashboard.rhino_minimap = RhinoMinimapTracker(Path(folder) / 'maps.json.gz')
-            dashboard.rhino_minimap_hud = None
-            dashboard.current_sys = 'Sol'
-            dashboard.current_body_name = 'Sol Moon'
-            dashboard.current_latitude = 0
-            dashboard.current_longitude = 0
-            dashboard.current_planet_radius = 1_000_000
-            dashboard.current_heading = 0
-            dashboard.current_in_srv = True
-            dashboard.current_vehicle_name = 'Rhino'
-            dashboard._planet_materials_store = lambda: store
-            # The Rhino map is switched off app-wide (RHINO_MAP_AVAILABLE); its
-            # logic is kept, and tested, until the feature is removed.
-            with patch("voidcompass.dashboard.html_dashboard.RHINO_MAP_AVAILABLE", True):
-                self.assertTrue(dashboard._observe_rhino_minimap_status({}))
-            self.assertEqual(dashboard.rhino_minimap.active.location, 7)
-            self.assertIn('Location 7 from Location seven', dashboard.rhino_minimap.notice)
 
     def test_invalid_legacy_scan_snapshot_does_not_hide_saved_sites(self):
         with tempfile.TemporaryDirectory() as folder:

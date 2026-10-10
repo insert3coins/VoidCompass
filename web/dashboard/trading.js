@@ -246,6 +246,50 @@ function check(name, label, value) {
 
 // Spansh only says queued, then started, then done: the steps show which,
 // with the time so far (it ticks on its own, see tickElapsed).
+// A system search (5.5.3.4): the system's markets first, then one line per
+// station the router is trying, each with its own state, on one timer.
+const START_STATES = {queued: ["", "In Spansh's queue"], started: ["›", "Working out the cargo for each hop"],
+  done: ["✓", "Done"], failed: ["✕", "Failed"]};
+
+function systemProgress(route, esc) {
+  const starts = route.starts || [];
+  const lines = starts.map((row) => {
+    const [mark, label] = START_STATES[row.state] || START_STATES.queued;
+    return `<li class="${row.state === "done" ? "done" : row.state === "started" ? "now" : row.state === "failed" ? "failed" : ""}"><i>${mark}</i><b>${esc(row.station)}</b> · ${label}</li>`;
+  }).join("");
+  const markets = route.stage === "markets";
+  return `<section class="tr-panel wide tr-progress"><div class="tr-result-head"><div><p>PLANNING ON SPANSH · ANY STATION IN ${esc(String(route.system || "").toUpperCase())}</p>
+      <h3><span data-tr-since="${n(route.started)}">0:00</span></h3>
+      <span>${markets ? "Reading every market in the system, to pick the best stations to start from." : `${starts.length} station${starts.length === 1 ? "" : "s"}: Spansh plans them one after another, so each adds about as long as one search.`}</span></div>
+      <div class="tr-actions"><button type="button" data-trade-op="stop_plan">STOP</button></div></div>
+    <div class="tr-bar"><i></i></div><ol class="tr-steps"><li class="${markets ? "now" : "done"}"><i>${markets ? "›" : "✓"}</i>The system's markets</li>${lines}</ol></section>`;
+}
+
+// What a system search compared: each start's best route, best first.
+function startsCompared(route, esc) {
+  const starts = route.starts || [];
+  if (!starts.length) return "";
+  const good = starts.filter((row) => row.result?.hops?.length);
+  const headline = good.slice(0, 3).map((row) => `${esc(row.station)} ${credits(row.result.profit)}`).join(" · ");
+  const leftOut = Object.entries(route.left_out || {}).map(([key, value]) => `${count(value)} ${LEFT_OUT[key] || key}`).join(", ");
+  const rows = starts.map((row, index) => {
+    const plan = row.result;
+    const tags = [row.pad ? `${row.pad} PAD` : "", row.planetary ? "PLANETARY" : ""].filter(Boolean).join(" · ");
+    const worth = plan?.hops?.length ? `<em>${cr(plan.profit)}</em><small>${plan.hops.length} hop${plan.hops.length === 1 ? "" : "s"} · ${cr(plan.profit / plan.hops.length)} a hop</small>`
+      : `<em class="none">—</em><small>${row.error ? esc(row.error) : "No profitable route from here"}</small>`;
+    return `<li class="${index === route.pick ? "picked" : ""}">
+      <div><b>${esc(row.station)}</b><small>${esc(row.type || "")}${row.arrival_ls != null ? ` · ${count(row.arrival_ls)} ls` : ""}${tags ? ` · ${tags}` : ""} · ${count(row.in_stock)} goods in stock · prices ${ago(row.updated)}</small></div>
+      <div class="tr-start-worth">${worth}</div>
+      <div class="tr-actions">${plan?.hops?.length ? `<button type="button" data-trade-op="pick_start" data-index="${index}" ${index === route.pick ? "disabled" : ""}>${index === route.pick ? "SHOWN" : "SHOW"}</button>` : ""}</div></li>`;
+  }).join("");
+  return `<section class="tr-panel wide"><div class="tr-result-head"><div><p>BEST START IN ${esc(String(route.system || "").toUpperCase())}</p><h3>${headline || "No profitable route"}</h3>
+      <span>Tried the ${starts.length} most promising of ${count(route.fitting)} station${route.fitting === 1 ? "" : "s"} that fit your settings (${count(route.markets)} with a market${leftOut ? `; left out: ${esc(leftOut)}` : ""}). Picked by goods in stock and fresh prices: a guess, which Spansh then priced.</span></div></div>
+    <ol class="tr-starts">${rows}</ol></section>`;
+}
+
+const LEFT_OUT = {pad: "no large pad", carrier: "fleet carriers", planetary: "planetary", old: "prices too old",
+  far: "too far from the star", empty: "nothing in stock"};
+
 function routeProgress(route) {
   const order = ["station", "queued", "started"];
   const at = order.indexOf(route.stage || "station");
@@ -264,12 +308,16 @@ function routeView(data, ui) {
   const f = data.form || {};
   const input = (name, label, type = "number", extra = "") => `<label><span>${label}</span><input name="${name}" type="${type}" value="${esc(field("route", name, f[name] ?? ""))}" ${extra}></label>`;
   const busy = (data.busy || []).includes("route");
+  // From any station in the system (5.5.3.4): no station needed, and how
+  // many of the system's best stations to try.
+  const whole = Boolean(n(field("route", "whole_system", f.whole_system)));
   const form = `<form class="tr-form" data-trade-form="plan">
-    <div class="tr-fields">${input("system", "FROM SYSTEM", "text", 'maxlength="120" required')}${input("station", "FROM STATION", "text", 'maxlength="120" required')}
+    <div class="tr-fields">${input("system", "FROM SYSTEM", "text", 'maxlength="120" required')}${input("station", whole ? "FROM STATION (ANY)" : "FROM STATION", "text", `maxlength="120" data-tr-station ${whole ? "disabled" : "required"}`)}
+      <label data-tr-try ${whole ? "" : "hidden"}><span title="Each station adds about one search's time">STATIONS TO TRY</span><select name="try_stations">${[1, 2, 3, 4, 5, 6].map((value) => `<option value="${value}" ${n(field("route", "try_stations", f.try_stations || 3)) === value ? "selected" : ""}>${value}</option>`).join("")}</select></label>
       ${input("max_cargo", "CARGO (T)", "number", 'min="1"')}${input("starting_capital", "CREDITS", "number", 'min="0"')}
       ${input("max_hop_distance", "MAX HOP (LY)", "number", 'min="1" step="1"')}${input("max_hops", "HOPS (EACH ADDS TIME)", "number", 'min="1" max="20"')}
       ${input("max_system_distance", "MAX FROM STAR (LS)", "number", 'min="10"')}${input("max_price_age_days", "PRICES NO OLDER THAN (DAYS)", "number", 'min="1" max="365"')}</div>
-    <div class="tr-checks">${check("requires_large_pad", "Large pad", f.requires_large_pad)}${check("allow_planetary", "Planetary ports", f.allow_planetary)}
+    <div class="tr-checks">${check("whole_system", "From any station in this system", f.whole_system)}${check("requires_large_pad", "Large pad", f.requires_large_pad)}${check("allow_planetary", "Planetary ports", f.allow_planetary)}
       ${check("allow_player_owned", "Fleet carriers", f.allow_player_owned)}${check("allow_prohibited", "Illegal goods", f.allow_prohibited)}
       ${check("permit", "Permit systems", f.permit)}${check("allow_restricted_access", "Restricted stations", f.allow_restricted_access)}
       ${check("unique", "Don't revisit a station", f.unique)}</div>
@@ -299,7 +347,7 @@ function routeView(data, ui) {
         <button type="button" data-trade-op="loop" data-market-a="${esc(hop.from.market_id)}" data-market-b="${esc(hop.to.market_id)}">LOOP THESE TWO</button>
         <button type="button" data-trade-op="station" data-market-id="${esc(hop.to.market_id)}">MARKET</button>
         <button type="button" data-trade-op="open" data-kind="station" data-market-id="${esc(hop.to.market_id)}">SPANSH</button></div></section>`).join("");
-    result += `<section class="tr-panel wide"><div class="tr-result-head"><div><p>SPANSH TRADE ROUTE</p><h3>${cr(plan.profit)} over ${plan.hops.length} hop${plan.hops.length === 1 ? "" : "s"}</h3>
+    result += `<section class="tr-panel wide"><div class="tr-result-head"><div><p>SPANSH TRADE ROUTE${route.whole && route.station ? ` FROM ${esc(String(route.station).toUpperCase())}` : ""}</p><h3>${cr(plan.profit)} over ${plan.hops.length} hop${plan.hops.length === 1 ? "" : "s"}</h3>
         <span>${n(plan.distance).toFixed(1)} ly · ${cr(plan.profit / plan.hops.length)} a hop · planned ${ago(route.planned_at)}</span></div>
         <div class="tr-actions"><button type="button" class="primary" data-trade-op="follow">FOLLOW THIS ROUTE</button></div></div>${hops}</section>`;
   }
@@ -318,7 +366,7 @@ function routeView(data, ui) {
   }
   return `${followCard(data.followed, esc)}<section class="tr-panel wide"><h4>PLAN A ROUTE</h4>
     <p class="tr-dim">Spansh's trade router finds the best cargo for each hop from a station, with prices from players' game data. Your ship, credits and location are filled in from the journal.</p>${form}</section>
-    ${busy && route.pending ? routeProgress(route) : ""}${result}${loopHtml}`;
+    ${busy && route.pending ? (route.whole ? systemProgress(route, esc) : routeProgress(route)) : ""}${route.whole && !route.pending ? startsCompared(route, esc) : ""}${result}${loopHtml}`;
 }
 
 function cargoView(data, ui) {
@@ -333,7 +381,8 @@ function cargoView(data, ui) {
   for (const row of cargo.rows || []) {
     const best = row.stations[0];
     results += `<section class="tr-panel wide"><div class="tr-result-head"><div><p>${count(row.count)} T</p><h3>${esc(row.name)}</h3>
-        <span>${best ? `Best nearby: ${cr(best.price * row.count)} at ${esc(best.station)}` : "Nowhere nearby wants it in Spansh's data."}</span></div></div>
+        <span>${best ? `Best nearby: ${cr(best.price * row.count)} at ${esc(best.station)}` : "Nowhere nearby wants it in Spansh's data."}</span>
+        ${row.here ? `<small class="tr-here">In ${esc(cargo.system)}: ${esc(row.here.station)} pays ${count(row.here.price)}${best && best.market_id !== row.here.market_id ? ` (${cr(row.here.price * row.count)} for yours)` : ", the best nearby"}</small>` : ""}</div></div>
       ${row.stations.length ? `<table class="tr-table"><thead><tr><th>STATION</th><th>DISTANCE</th><th>PRICE</th><th>FOR YOUR ${count(row.count)} T</th><th>DEMAND</th><th>PRICES</th><th></th></tr></thead><tbody>
         ${row.stations.map((s) => `<tr${s.stock < row.count ? ' class="short"' : ""}><td>${stationCell(s, esc)}</td><td>${n(s.distance).toFixed(1)} ly</td><td>${count(s.price)}</td><td>${cr(s.price * Math.min(row.count, s.stock))}</td>
           <td>${count(s.stock)}${s.stock < row.count ? " (less than you have)" : ""}</td><td>${ago(s.updated)}</td><td><button type="button" data-trade-op="copy" data-text="${esc(s.system)}">COPY</button></td></tr>`).join("")}</tbody></table>` : ""}</section>`;
@@ -366,7 +415,10 @@ function findView(data, ui) {
   rows = [...rows].sort(f.sort === "distance" ? (a, b) => n(a.distance) - n(b.distance)
     : f.searched?.[0] === "buy" ? (a, b) => a.price - b.price : (a, b) => b.price - a.price);
   const buying = f.searched?.[0] === "buy";
-  const table = rows.length ? `<div class="tr-result-head"><div><p>${buying ? "WHERE TO BUY" : "WHERE TO SELL"}</p><h3>${esc(f.resolved || f.commodity)}</h3><span>near ${esc(f.searched?.[1] || "")} · ${rows.length} station${rows.length === 1 ? "" : "s"}</span></div>
+  // What the searched system's own stations pay or charge (5.5.3.4).
+  const here = (f.here || []).map((row) => `${esc(row.station)} ${buying ? "charges" : "pays"} ${count(row.price)}`).join(" · ");
+  const table = rows.length ? `<div class="tr-result-head"><div><p>${buying ? "WHERE TO BUY" : "WHERE TO SELL"}</p><h3>${esc(f.resolved || f.commodity)}</h3><span>near ${esc(f.searched?.[1] || "")} · ${rows.length} station${rows.length === 1 ? "" : "s"}</span>
+      ${here ? `<small class="tr-here">In ${esc(f.searched?.[1] || "")}: ${here}</small>` : f.searched ? `<small class="tr-here">No station in ${esc(f.searched[1])} itself ${buying ? "sells" : "buys"} it with these settings.</small>` : ""}</div>
       <div class="tr-ranges"><button type="button" class="${f.sort !== "distance" ? "active" : ""}" data-trade-op="find_sort" data-sort="price">BY PRICE</button><button type="button" class="${f.sort === "distance" ? "active" : ""}" data-trade-op="find_sort" data-sort="distance">BY DISTANCE</button></div></div>
     <table class="tr-table"><thead><tr><th>STATION</th><th>DISTANCE</th><th>${buying ? "COSTS" : "PAYS"}</th><th>${buying ? "STOCK" : "DEMAND"}</th><th>PRICES</th><th></th></tr></thead><tbody>
       ${rows.map((row) => `<tr><td>${stationCell(row, esc)}</td><td>${n(row.distance).toFixed(1)} ly</td><td>${count(row.price)}</td><td>${count(row.stock)}</td><td>${ago(row.updated)}</td>
@@ -401,13 +453,24 @@ function stationView(data, ui) {
   } else {
     html += `<section class="tr-panel wide"><p class="tr-dim">Dock and open the commodity market to see it here. Any station from a route or search can be opened with its MARKET button.</p></section>`;
   }
+  // Any station in a system, from one request (5.5.3.4).
+  const list = st.list || {};
+  const busyList = (data.busy || []).includes("markets");
+  const stations = (list.stations || []).map((row) => `<button type="button" data-trade-op="station" data-market-id="${esc(row.market_id)}">
+      <b>${esc(row.station)}</b><small>${esc(row.type || "")}${row.arrival_ls != null ? ` · ${count(row.arrival_ls)} ls` : ""}${row.pad ? ` · ${row.pad} pad` : ""} · ${count(row.in_stock)} for sale · ${count(row.wanted)} wanted · prices ${ago(row.updated)}</small></button>`).join("");
+  const listHtml = `<section class="tr-panel wide"><h4>ANY STATION IN A SYSTEM</h4>
+    <form class="tr-form tr-inline" data-trade-form="system_markets"><div class="tr-fields"><label class="grow"><span>SYSTEM</span><input name="system" maxlength="120" required value="${esc(field("system_markets", "system", list.system || data.where?.system || ""))}"></label></div>
+      <div class="tr-actions"><button type="submit" class="primary" ${busyList ? "disabled" : ""}>${busyList ? "ASKING SPANSH…" : "LIST ITS STATIONS"}</button></div></form>
+    ${list.error ? `<p class="co-error">${esc(list.error)}</p>` : ""}
+    ${list.stations ? (stations ? `<p class="tr-dim">${count(list.stations.length)} station${list.stations.length === 1 ? "" : "s"} with a market in ${esc(list.system)}, nearest the star first. Open one to see its market.</p><div class="tr-picks">${stations}</div>`
+      : `<p class="tr-dim">Spansh has no station with a market in ${esc(list.system)}.</p>`) : ""}</section>`;
   if (st.error) html += `<p class="co-error">${esc(st.error)}</p>`;
   if (remote && (!local || remote.market_id !== local.market_id)) {
     html += `<section class="tr-panel wide"><div class="tr-result-head"><div><p>FROM SPANSH</p><h3>${esc(remote.station)}</h3><span>${esc(remote.system)} · prices ${ago(remote.updated)}${remote.pad ? ` · ${remote.pad} pad` : ""}</span></div>
       <div class="tr-actions"><button type="button" data-trade-op="copy" data-text="${esc(remote.system)}">COPY SYSTEM</button><button type="button" data-trade-op="plan_from" data-system="${esc(remote.system)}" data-station="${esc(remote.station)}">PLAN FROM HERE</button></div></div>
       ${marketTable(remote, esc, false)}</section>`;
   }
-  return html;
+  return html + listHtml;
 }
 
 function historyView(data, ui) {
@@ -495,6 +558,18 @@ export function handleTradingInput(event, ui) {
   if (!form || !ui.byId("trading-workspace")?.contains(form) || !event.target.name) return false;
   const key = form.dataset.tradeForm === "plan" ? "route" : form.dataset.tradeForm;
   drafts[key] = {...(drafts[key] || {}), [event.target.name]: event.target.type === "checkbox" ? (event.target.checked ? 1 : 0) : event.target.value};
+  if (event.target.name === "whole_system") {
+    // From any station in the system: the station isn't needed (5.5.3.4).
+    const whole = event.target.checked;
+    const station = form.querySelector("[data-tr-station]");
+    if (station) {
+      station.disabled = whole;
+      station.required = !whole;
+      station.previousElementSibling.textContent = whole ? "FROM STATION (ANY)" : "FROM STATION";
+    }
+    const tries = form.querySelector("[data-tr-try]");
+    if (tries) tries.hidden = !whole;
+  }
   return true;
 }
 

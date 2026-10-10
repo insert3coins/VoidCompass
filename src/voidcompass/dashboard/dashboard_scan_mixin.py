@@ -967,9 +967,6 @@ class DashboardScanMixin:
         )
         if callable(refresh_planet_materials) and not self.batch_mode:
             refresh_planet_materials()
-        observe_rhino_minimap = getattr(self, "_observe_rhino_minimap_status", None)
-        if callable(observe_rhino_minimap) and not self.batch_mode:
-            observe_rhino_minimap(data)
         gravity_warning = getattr(self, "gravity_warning_hud", None)
         if gravity_warning is not None and not self.batch_mode:
             flying = bool(

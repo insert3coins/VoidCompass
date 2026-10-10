@@ -1,6 +1,7 @@
 """Commander-local surface mining sites, separate from journal scan evidence."""
 import math
 import json
+import re
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -8,6 +9,14 @@ from pathlib import Path
 from voidcompass.mining.rhino_intelligence import (
     AMOUNTS, DENSITIES, describe_tons, surface_distance_m,
 )
+
+
+def location_index(destination):
+    """Return Elite's numbered planetary mining location, when targeted."""
+    if isinstance(destination, dict):
+        destination = destination.get("Name")
+    match = re.search(r"#index=(\d+)", str(destination or ""))
+    return int(match.group(1)) if match else None
 
 
 class PlanetMaterialsStore:
@@ -205,15 +214,6 @@ class PlanetMaterialsStore:
         with closing(sqlite3.connect(self.path)) as db, db:
             return bool(db.execute("DELETE FROM sites WHERE id=?", (int(site_id),)).rowcount)
 
-    def delete_drills_for_map(self, system, body, map_name):
-        """Delete drill markers owned by one map, including pre-map legacy rows."""
-        with closing(sqlite3.connect(self.path)) as db, db:
-            cursor = db.execute("""DELETE FROM sites
-                WHERE site_type='drill'
-                AND system=? COLLATE NOCASE AND body=? COLLATE NOCASE
-                AND (map_name=? COLLATE NOCASE OR map_name='')""",
-                (str(system or ""), str(body or ""), str(map_name or "")))
-            return max(0, int(cursor.rowcount))
 
 
 # Frontier Rhino update 4.4.1.0 (2026-09-03):

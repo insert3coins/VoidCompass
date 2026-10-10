@@ -1,6 +1,6 @@
 # TODO: Trading
 
-## Next: trade routes from a whole system
+## Done in 5.5.3.4: trade routes from a whole system
 
 Today the route planner starts from one station. Commanders want to give just a system and find the best route from **any station in it**.
 
@@ -8,43 +8,49 @@ Spansh's trade router only starts from a station, so a system search means tryin
 
 ### How it works
 
-- [ ] **A "From any station in this system" switch** on the route planner. With it on, the station field is optional; you give a system, and the rest of the form stays the same.
-- [ ] **Fetch the system's markets once:** `spansh.system_dump(id64)` (new), with the system's id64 coming from `/api/search/systems`, as `system_stations()` already finds it. Cache it for the session, like the station lists.
+- [x] **A "From any station in this system" switch** on the route planner. With it on, the station field is optional; you give a system, and the rest of the form stays the same.
+- [x] **Fetch the system's markets once:** `spansh.system_dump(id64)` (new), with the system's id64 coming from `/api/search/systems`, as `system_stations()` already finds it. Cache it for the session, like the station lists.
   - **Check first:** the dump's top-level `stations` held the 10 orbital stations for Sol. Surface ports and settlements seem to be under `bodies`. Find where they are and include them when "Planetary ports" is ticked.
   - The dump uses different field names from the station endpoint: `landingPads`, `distanceToArrival`, and `market.commodities` with its own keys. Parse it into the same shape as `market.parse_station`, against a saved fixture.
-- [ ] **Drop the stations the settings rule out:**
+- [x] **Drop the stations the settings rule out:**
   - no large pad when "Large pad" is ticked
   - fleet carriers, unless "Fleet carriers" is ticked
   - planetary ports, unless ticked
   - no market, or nothing in stock
   - prices older than the "prices no older than" setting
-- [ ] **Pick the most promising stations to try**, by the number of commodities in stock and how fresh the market is. This is a sensible guess, not a guarantee, and the results say which stations were tried.
-- [ ] **Run the trade router from the top 3 at the same time**, as three Spansh jobs in parallel. That takes about as long as one search, not three times as long.
+- [x] **Pick the most promising stations to try**, by the number of commodities in stock and how fresh the market is. This is a sensible guess, not a guarantee, and the results say which stations were tried.
+- [x] **Run the trade router from the top 3 at the same time**, as three Spansh jobs in parallel. That takes about as long as one search, not three times as long.
   - An option goes up to 6 ("Try more stations: slower and heavier on Spansh").
   - **Never every station.** Sol has 63 stations with markets, which would be 63 jobs on a volunteer's service.
-- [ ] **Progress:** one line per station in the existing progress panel, each with its own state (queued, started, done, failed) and the shared timer. **Stop** stops all of them.
-- [ ] **Results:** a comparison at the top ("Best start in Sol: Daedalus 31M · Abraham Lincoln 28M · Mars High 22M").
+- [x] **Progress:** one line per station in the existing progress panel, each with its own state (queued, started, done, failed) and the shared timer. **Stop** stops all of them.
+- [x] **Results:** a comparison at the top ("Best start in Sol: Daedalus 31M · Abraham Lincoln 28M · Mars High 22M").
   - Each route opens to the usual hop cards.
   - **Follow this route** works on any of them.
   - **Loop these two** still works on any hop.
   - A station that found no profitable route says so rather than disappearing.
-- [ ] **Cache** the whole system search like single searches, keyed on the system and the settings.
+- [x] **Cache** the whole system search like single searches, keyed on the system and the settings.
 
 ### Also
 
-- [ ] **Find commodity and Sell cargo by system:** use the same dump to say what the system's own stations pay or charge, beside Spansh's nearby search. "In Sol: Abraham Lincoln pays 9,800" matters when you're already there.
-- [ ] The **Market** view can show any station in the system from the dump, with a station picker.
+- [x] **Find commodity and Sell cargo by system:** use the same dump to say what the system's own stations pay or charge, beside Spansh's nearby search. "In Sol: Abraham Lincoln pays 9,800" matters when you're already there.
+- [x] The **Market** view can show any station in the system from the dump, with a station picker.
 
 ### Finishing
 
-- [ ] Tests:
+- [x] Tests:
   - the dump parser, against a trimmed fixture of the real Sol dump
   - station filtering for pad, carriers, planetary and age
   - the ranking
   - the parallel searches, including stopping them and one of them failing
   - the comparison view data
-- [ ] An end-to-end run against live Spansh: Sol, then a quieter system, with screenshots of the progress and the comparison.
-- [ ] Mini-readme entry; the version is the user's call (5.5.2.6 isn't committed yet, or 5.5.2.7).
+- [x] An end-to-end run against live Spansh: Sol, then a quieter system, with screenshots of the progress and the comparison.
+- [x] Mini-readme entry; the version is the user's call (5.5.2.6 isn't committed yet, or 5.5.2.7).
+
+### What we learned building it (5.5.3.4)
+
+- **The dump:** surface ports and settlements are under `bodies[].stations`, and orbital stations are at the top. Fleet carriers parked in a system are listed (7 in LHS 3447), though Sol had none. Each station has `id` (the market id), `landingPads`, `distanceToArrival` and `market.updateTime`. Sol's dump is about 2 MB and takes 3–5 s, so `spansh.system_dump` trims it to the stations with a market and caches it for 10 minutes.
+- **Spansh runs jobs one after another, not in parallel.** All three are sent at once, but each starts only when the one before finishes: three from Sol took about 90 s, against about 30 s for one. So "Stations to try" adds about one search's time per station, and the deck says so.
+- **Stations in one system often give the same route.** Daedalus, Galileo and Columbus all came out at 11.2M over 2 hops, because the best cargo leaves the system straight away. The comparison still shows it honestly.
 
 ## Done in 5.5.2.6
 

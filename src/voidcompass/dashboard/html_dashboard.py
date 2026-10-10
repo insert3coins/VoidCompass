@@ -39,11 +39,9 @@ from voidcompass.exploration.explorer_decision_deck import (
 )
 from voidcompass.core import themes
 from voidcompass.core.version import APP_VERSION
-from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_material_catalogue, SURFACE_MINING_NEW
+from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_material_catalogue, SURFACE_MINING_NEW, location_index
 from voidcompass.mining.rhino_intelligence import ground_intelligence
-from voidcompass.mining.rhino_minimap import location_index
 from voidcompass.core.config import get_active_profile, get_profile_dir
-from voidcompass.core.overlay_registry import RHINO_MAP_AVAILABLE
 from voidcompass.exploration.deep_survey import recon_report
 from voidcompass.exploration.exploration_intelligence import body_completion
 from voidcompass.overlays.survey_status_hud import body_codex_flag
@@ -2366,7 +2364,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         return PlanetMaterialsStore(os.path.join(
             get_profile_dir(get_active_profile(self.config)), "planet_materials.db"))
 
-    def _html_planet_materials_workspace(self, include_coverage_maps=True):
+    def _html_planet_materials_workspace(self):
         lat = _number(getattr(self, "current_latitude", None))
         lon = _number(getattr(self, "current_longitude", None))
         body = str(getattr(self, "current_body_name", "") or "")
@@ -2431,18 +2429,6 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             saved_details = site.get("body_details")
             if isinstance(saved_details, dict) and saved_details:
                 site["body_details"] = {**saved_details, **ground_intelligence(saved_details)}
-        tracker = getattr(self, "rhino_minimap", None)
-        body_totals = {
-            str(row.get("body") or ""): _integer(row.get("mining_locations")) for row in bodies
-        }
-        for site in sites:
-            saved_details = site.get("body_details") or {}
-            saved_body = str(site.get("body") or saved_details.get("body") or "")
-            if saved_body and saved_body.casefold() not in {key.casefold() for key in body_totals}:
-                body_totals[saved_body] = _integer(saved_details.get("mining_locations"))
-        coverage_maps = tracker.map_catalogue(
-            sites, body_totals, getattr(self, "current_sys", ""),
-        ) if tracker is not None and include_coverage_maps and RHINO_MAP_AVAILABLE else []
         return {
             "on_planet": bool(getattr(self, "on_planet", False)),
             "bodies": bodies,
@@ -2454,8 +2440,6 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "system": getattr(self, "current_sys", ""),
             "resources": resources,
             "sites": sites,
-            "coverage_maps": coverage_maps,
-            "coverage_maps_enabled": RHINO_MAP_AVAILABLE,
             "navigation_target": {
                 "active": bool(getattr(self, "target_latlon_active", False)),
                 "system": getattr(self, "ground_target_system", ""),
@@ -2474,7 +2458,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             return False
         try:
             overlay.update(
-                self._html_planet_materials_workspace(include_coverage_maps=False),
+                self._html_planet_materials_workspace(),
                 latitude=getattr(self, "current_latitude", None),
                 longitude=getattr(self, "current_longitude", None),
                 heading=getattr(self, "current_heading", None),
@@ -2485,201 +2469,6 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         except Exception as exc:
             logging.warning("Planet Materials overlay refresh failed: %s", exc)
             return False
-
-    def _rhino_minimap_sites(self):
-        now = time.monotonic()
-        cache = getattr(self, "_rhino_minimap_sites_cache", None)
-        cache_at = float(getattr(self, "_rhino_minimap_sites_cached_at", 0.0) or 0.0)
-        if cache is None or now - cache_at >= 2.0:
-            cache = self._planet_materials_store().rows()
-            self._rhino_minimap_sites_cache = cache
-            self._rhino_minimap_sites_cached_at = now
-        return cache
-
-    def _refresh_rhino_minimap_overlay(self):
-        """Publish the active profile's persistent Rhino coverage map."""
-        overlay = getattr(self, "rhino_minimap_hud", None)
-        tracker = getattr(self, "rhino_minimap", None)
-        if overlay is None or tracker is None:
-            return False
-        try:
-            overlay.update(tracker.snapshot(
-                self._rhino_minimap_sites(),
-                center_hotkey=self.config.get("overlay_hotkey_rhino_minimap_center", ""),
-                border_hotkey=self.config.get("overlay_hotkey_rhino_minimap_border", ""),
-                drill_hotkey=self.config.get("overlay_hotkey_rhino_minimap_drill", ""),
-                reset_hotkey=self.config.get("overlay_hotkey_rhino_minimap_reset", ""),
-            ))
-            return True
-        except Exception as exc:
-            logging.warning("Rhino minimap overlay refresh failed: %s", exc)
-            return False
-
-    def _observe_rhino_minimap_status(self, status):
-        tracker = getattr(self, "rhino_minimap", None)
-        if tracker is None or not RHINO_MAP_AVAILABLE:
-            return False
-        status = status if isinstance(status, dict) else {}
-        was_active = bool(tracker.in_rhino)
-        changed = tracker.update(
-            body=getattr(self, "current_body_name", ""),
-            system=getattr(self, "current_sys", ""),
-            latitude=getattr(self, "current_latitude", None),
-            longitude=getattr(self, "current_longitude", None),
-            radius_m=getattr(self, "current_planet_radius", None),
-            heading=getattr(self, "current_heading", None),
-            in_srv=bool(getattr(self, "current_in_srv", False)),
-            vehicle=getattr(self, "current_vehicle_name", ""),
-            destination=status.get("Destination"),
-        )
-        if tracker.in_rhino and tracker.active is not None and (
-                not was_active or tracker.active.location is None):
-            nearest = self._planet_materials_store().nearest_location(
-                tracker.system, tracker.active.body,
-                tracker.here[0], tracker.here[1], tracker.active.radius_m,
-                rows=self._rhino_minimap_sites(),
-            )
-            if nearest is not None:
-                distance, site = nearest
-                location = site.get("location_index")
-                if location is not None and tracker.active.location != location:
-                    changed = tracker.associate_location(
-                        location,
-                        f"Location {location} from {site.get('name') or 'bookmark'} · {distance:.0f} m",
-                    ) or changed
-            elif tracker.active.location is None:
-                fallback = getattr(self, "_rhino_touchdown_location", None) or {}
-                if str(fallback.get("system") or "").casefold() == tracker.system.casefold() and \
-                        PlanetMaterialsStore._body_key(tracker.system, fallback.get("body")) == \
-                        PlanetMaterialsStore._body_key(tracker.system, tracker.active.body):
-                    changed = tracker.associate_location(
-                        fallback.get("location_index"), "Location restored from Touchdown",
-                    ) or changed
-        if was_active and not tracker.in_rhino:
-            tracker.export_picture(self._rhino_minimap_sites(), system=tracker.system)
-        self._refresh_rhino_minimap_overlay()
-        return changed
-
-    def _open_rhino_minimap_folder(self):
-        tracker = getattr(self, "rhino_minimap", None)
-        if tracker is None:
-            return False
-        try:
-            tracker.map_folder.mkdir(parents=True, exist_ok=True)
-            return bool(open_path(tracker.map_folder))
-        except OSError:
-            return False
-
-    def _set_rhino_minimap_center(self):
-        tracker = getattr(self, "rhino_minimap", None)
-        changed = bool(tracker and tracker.center_here())
-        self._refresh_rhino_minimap_overlay()
-        self._schedule_html_dashboard_publish(immediate=True)
-        self.add_event_feed_entry(
-            "RHINO", "Coverage center set" if changed else "Deploy the Rhino before setting a coverage center",
-            severity="INFO" if changed else "WARN",
-        )
-        return changed
-
-    def _set_rhino_minimap_border(self):
-        tracker = getattr(self, "rhino_minimap", None)
-        changed = bool(tracker and tracker.border_here())
-        self._refresh_rhino_minimap_overlay()
-        self._schedule_html_dashboard_publish(immediate=True)
-        detail = "Coverage border set"
-        if not changed:
-            detail = "Set the coverage center first, while deployed in the Rhino"
-        self.add_event_feed_entry("RHINO", detail, severity="INFO" if changed else "WARN")
-        return changed
-
-    def _mark_rhino_drill(self):
-        """Persist the Rhino's current position as a numbered drill marker.
-
-        Elite does not publish a drill-deployed journal event, so this explicit
-        field action mirrors EDRhinoSpotter's Bookmark workflow.
-        """
-        tracker = getattr(self, "rhino_minimap", None)
-        if not tracker or not tracker.in_rhino or tracker.active is None or tracker.here is None:
-            if tracker:
-                tracker.show_notice("Drill marker unavailable outside the Rhino")
-            self._refresh_rhino_minimap_overlay()
-            self._schedule_html_dashboard_publish(immediate=True)
-            self.add_event_feed_entry(
-                "RHINO", "Deploy the Rhino before marking a drill",
-                severity="WARN",
-            )
-            return False
-
-        store = self._planet_materials_store()
-        system = tracker.system or str(getattr(self, "current_sys", "") or "").strip()
-        body = tracker.active.body
-        map_name = str(tracker.active.name or "")
-        if not system:
-            tracker.show_notice("Drill marker unavailable without a system fix")
-            self._refresh_rhino_minimap_overlay()
-            self._schedule_html_dashboard_publish(immediate=True)
-            self.add_event_feed_entry("RHINO", "No system fix available for a drill marker", severity="WARN")
-            return False
-        numbers = []
-        for row in store.rows():
-            if str(row.get("site_type") or "").casefold() != "drill":
-                continue
-            if str(row.get("system") or "").casefold() != system.casefold():
-                continue
-            if str(row.get("body") or "").casefold() != body.casefold():
-                continue
-            if str(row.get("map_name") or "").casefold() not in {"", map_name.casefold()}:
-                continue
-            match = re.fullmatch(r"Drill\s+(\d+)", str(row.get("name") or ""), re.IGNORECASE)
-            if match:
-                numbers.append(int(match.group(1)))
-        label = f"Drill {max(numbers, default=0) + 1}"
-        latitude, longitude = tracker.here
-        store.save({
-            "system": system,
-            "body": body,
-            "name": label,
-            "latitude": latitude,
-            "longitude": longitude,
-            "materials": "",
-            "notes": "Marked from the Rhino Coverage Minimap. Add the drill's material and field notes here.",
-            "site_type": "drill",
-            "map_name": map_name,
-            "planet_radius": tracker.active.radius_m,
-            "location_index": tracker.active.location,
-        })
-        self._rhino_minimap_sites_cache = None
-        tracker.show_notice(f"{label} marked")
-        self._refresh_planet_materials_overlay()
-        self._refresh_rhino_minimap_overlay()
-        self._schedule_html_dashboard_publish(immediate=True)
-        self.add_event_feed_entry("RHINO", f"{label} marked at current position", severity="INFO")
-        return True
-
-    def _reset_rhino_minimap(self):
-        tracker = getattr(self, "rhino_minimap", None)
-        active = getattr(tracker, "active", None)
-        system = str(getattr(tracker, "system", "") or getattr(self, "current_sys", "") or "").strip()
-        body = str(getattr(active, "body", "") or "")
-        map_name = str(getattr(active, "name", "") or "")
-        changed = bool(tracker and tracker.reset_active())
-        cleared_drills = 0
-        if changed and system and body:
-            cleared_drills = self._planet_materials_store().delete_drills_for_map(
-                system, body, map_name,
-            )
-            self._rhino_minimap_sites_cache = None
-            self._refresh_planet_materials_overlay()
-        self._refresh_rhino_minimap_overlay()
-        self._schedule_html_dashboard_publish(immediate=True)
-        detail = (
-            f"Current coverage map reset; {cleared_drills} drill marker{'s' if cleared_drills != 1 else ''} cleared"
-            if changed else "Deploy the Rhino before resetting its active map"
-        )
-        self.add_event_feed_entry(
-            "RHINO", detail, severity="WARN" if changed else "INFO",
-        )
-        return changed
 
     def _html_workspace(self, page, intelligence=None):
         builders = {
@@ -3111,22 +2900,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                     )
                 except (TypeError, ValueError):
                     return False
-            elif operation == "export_map":
-                tracker = getattr(self, "rhino_minimap", None)
-                if tracker is None or not RHINO_MAP_AVAILABLE:
-                    return False
-                target = tracker.export_picture_for(
-                    _text(payload.get("body"), 180), _text(payload.get("map_name"), 120),
-                    store.rows(), system=_text(payload.get("system"), 140) or None,
-                )
-                if target is None:
-                    return False
-                open_path(target)
             else:
                 return False
-            self._rhino_minimap_sites_cache = None
             self._refresh_planet_materials_overlay()
-            self._refresh_rhino_minimap_overlay()
             self._schedule_html_dashboard_publish(immediate=True)
             return True
 

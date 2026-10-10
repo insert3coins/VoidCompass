@@ -1165,14 +1165,6 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .planet-value-card b { color:var(--green); font:700 12px "Bahnschrift SemiCondensed",sans-serif; text-transform:uppercase; }
 .planet-value-card em { color:var(--accent); }
 .planet-evidence-note { margin:0 0 10px; font-size:10px!important; }
-.planet-map-summary { display:flex; justify-content:space-between; gap:12px; padding:14px; border-bottom:1px solid var(--border); color:var(--muted); font:10px Consolas,monospace; }
-.planet-map-summary b { color:var(--accent); }
-.planet-map-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(245px,1fr)); gap:12px; padding:14px; }
-.planet-map-grid article { display:grid; gap:8px; padding:13px; border:1px solid var(--border-soft); background:var(--inset); }
-.planet-map-grid header { display:flex; justify-content:space-between; gap:10px; color:var(--text); }
-.planet-map-grid header span,.planet-map-grid p,.planet-map-grid small { color:var(--muted); font:10px Consolas,monospace; }
-.planet-map-grid p { margin:0; padding:0; }
-.planet-map-grid button { min-height:34px; border:1px solid var(--accent); background:var(--selection); color:var(--accent); cursor:pointer; font:700 10px Consolas,monospace; }
 .planet-captured { grid-column: 1 / -1; border: 1px solid var(--border); padding: 12px; }
 .planet-captured > small { color: var(--muted); font: 11px Consolas, monospace; }
 .planet-captured .planet-composition { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px,1fr)); }

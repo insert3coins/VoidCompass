@@ -5,12 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-# The Rhino coverage map (its minimap overlay, coverage maps, drill markers
-# and map export) is switched off across the app until it is removed. Saved
-# maps stay on disk untouched; nothing reads, paints or exports them.
-RHINO_MAP_AVAILABLE = False
-
-
 @dataclass(frozen=True)
 class OverlaySpec:
     attr: str
@@ -37,7 +31,6 @@ OVERLAY_SPECS = (
     OverlaySpec("carrier_hud", "carrier", "Void Compass Carrier", "carrier_overlay_enabled", "carrier_hud_x", "carrier_hud_y", (30, 180), (430, 270), "Fleet / Squadron Carrier HUD", "CARRIER", False, "carrier", "overlay_hotkey_carrier", "Fleet Carrier"),
     OverlaySpec("prospector_hud", "prospector", "Void Compass Prospector", "prospector_overlay_enabled", "prospector_hud_x", "prospector_hud_y", (30, 600), (400, 250), "Prospector Analysis", "PROSPECTOR", True, "prospector", "overlay_hotkey_prospector", "Prospector Results"),
     OverlaySpec("planet_materials_hud", "planet-materials", "Void Compass Planet Materials", "planet_materials_overlay_enabled", "planet_materials_hud_x", "planet_materials_hud_y", (820, 80), (440, 390), "Planet Materials", "PLANET MATS", False, "planet_materials", "overlay_hotkey_planet_materials", "Planet Materials"),
-    OverlaySpec("rhino_minimap_hud", "rhino-minimap", "Void Compass Rhino Coverage", "rhino_minimap_overlay_enabled", "rhino_minimap_hud_x", "rhino_minimap_hud_y", (30, 80), (360, 470), "Rhino Coverage Minimap", "RHINO MAP", False, "rhino_minimap", "overlay_hotkey_rhino_minimap", "Rhino Coverage Minimap", available=RHINO_MAP_AVAILABLE),
     OverlaySpec("powerplay_hud", "powerplay", "Void Compass Powerplay Operations", "powerplay_overlay_enabled", "powerplay_hud_x", "powerplay_hud_y", (820, 490), (430, 310), "Powerplay Operations", "POWERPLAY", False, "powerplay", "overlay_hotkey_powerplay", "Powerplay Operations"),
     OverlaySpec("gravity_warning_hud", "gravity", "Void Compass Gravity Warning", "gravity_warning_overlay_enabled", "gravity_warning_hud_x", "gravity_warning_hud_y", (1200, 530), (320, 106), "Gravity Warning", "GRAVITY", True, "gravity", "overlay_hotkey_gravity", "Gravity Warning"),
     OverlaySpec("station_info_hud", "station", "Void Compass Station Link", "station_info_overlay_enabled", "station_info_hud_x", "station_info_hud_y", (30, 380), (520, 442), "Station Information", "STATION", True, "station_info", "overlay_hotkey_station_info", "Station Info"),

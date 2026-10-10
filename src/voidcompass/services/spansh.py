@@ -753,18 +753,58 @@ def station_market(market_id, fresh=False):
     return _get_json(f"station/{int(market_id)}", ttl=0 if fresh else 180)
 
 
-def system_stations(system_name):
-    """A system's stations that have a market, by Spansh's exact names:
-    ``(system, [{"name", "type", "market_id", "arrival_ls", "carrier"}])``.
-    The trade router only accepts a station it knows, spelled its way."""
+def system_id64(system_name):
+    """A system's exact name and id64, from Spansh's system search (kept a
+    day). The name must match: Spansh's first guess is not good enough."""
     wanted = str(system_name or "").strip()
     if not wanted:
         raise SpanshError("Give a system name.")
     found = _call("GET", "search/systems", params={"q": wanted}, ttl=86400)
     match = next((row for row in found.get("results") or () if str(row.get("name") or "").casefold() == wanted.casefold()), None)
-    if not match:
+    if not match or match.get("id64") is None:
         raise SpanshError(f"Spansh doesn't know a system called {wanted}. Check the spelling.")
-    record = _get_json(f"system/{int(match['id64'])}", ttl=3600).get("record") or {}
+    return str(match.get("name") or wanted), int(match["id64"])
+
+
+def _dump_station(row, body=None):
+    """One station of a system dump, cut to what trading needs."""
+    market = row.get("market") if isinstance(row.get("market"), dict) else {}
+    goods = [{key: item.get(key) for key in ("name", "category", "buyPrice", "sellPrice", "supply", "demand")}
+             for item in market.get("commodities") or () if isinstance(item, dict) and item.get("name")]
+    if not goods or not row.get("name"):
+        return None
+    return {"name": row["name"], "id": row.get("id"), "type": row.get("type"),
+            "distanceToArrival": row.get("distanceToArrival"), "landingPads": row.get("landingPads") or {},
+            "body": body, "updateTime": market.get("updateTime") or row.get("updateTime"), "commodities": goods}
+
+
+def system_dump(id64):
+    """Every station in a system with its whole market, in one request
+    (``/api/dump/<id64>``): orbital stations at the top level, surface
+    ports and settlements under their bodies. The dump is big (about 2 MB
+    for Sol), so it is trimmed to the stations with a market and kept,
+    trimmed, for ten minutes. Fleet carriers parked there are listed too."""
+    key = f"dump-markets/{int(id64)}"
+    cached = _cache_get(key, CACHE_TTL_S)
+    if cached is not None:
+        return cached
+    system = (_call("GET", f"dump/{int(id64)}", ttl=0, timeout=60) or {}).get("system") or {}
+    stations = [_dump_station(row) for row in system.get("stations") or () if isinstance(row, dict)]
+    for body in system.get("bodies") or ():
+        if isinstance(body, dict):
+            stations += [_dump_station(row, body.get("name")) for row in body.get("stations") or () if isinstance(row, dict)]
+    out = {"name": system.get("name") or "", "id64": system.get("id64") or int(id64),
+           "stations": [row for row in stations if row]}
+    _cache_put(key, out)
+    return out
+
+
+def system_stations(system_name):
+    """A system's stations that have a market, by Spansh's exact names:
+    ``(system, [{"name", "type", "market_id", "arrival_ls", "carrier"}])``.
+    The trade router only accepts a station it knows, spelled its way."""
+    name, id64 = system_id64(system_name)
+    record = _get_json(f"system/{id64}", ttl=3600).get("record") or {}
     stations = []
     for row in record.get("stations") or ():
         if not row.get("has_market") or not row.get("name"):
@@ -773,7 +813,7 @@ def system_stations(system_name):
         stations.append({"name": row["name"], "type": kind, "market_id": row.get("market_id"),
                          "arrival_ls": row.get("distance_to_arrival"), "carrier": "carrier" in kind.casefold()})
     stations.sort(key=lambda row: (row["carrier"], row["arrival_ls"] if row["arrival_ls"] is not None else 1e12))
-    return record.get("name") or match.get("name") or wanted, stations
+    return record.get("name") or name, stations
 
 
 def market_field_values():

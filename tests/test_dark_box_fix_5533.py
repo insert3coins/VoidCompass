@@ -44,6 +44,25 @@ class ServerTests(unittest.TestCase):
         self.assertIn('"overlay_transparency_fix"', studio)
         self.assertIn("HtmlOverlayServer.set_shape_windows", studio)
 
+    def test_every_studio_switch_is_sent_back_to_the_page(self):
+        """The page redraws each switch from the snapshot's options: a switch
+        missing there flips back to off after saving (the Dark box fix did,
+        5.5.3.4)."""
+        import re
+        from voidcompass.dashboard import html_overlay_studio as studio_module
+
+        html = (WEB / "dashboard" / "index.html").read_text(encoding="utf-8")
+        switches = set(re.findall(r'data-overlay-option="([^"]+)"', html))
+        source = (ROOT / "src" / "voidcompass" / "dashboard" / "html_overlay_studio.py").read_text(encoding="utf-8")
+        start = source.index('"options": {')
+        block = source[start:source.index('\n            },\n', start)]
+        sent = {key for key in switches if f'"{key}"' in block}
+        sent |= set(studio_module.colony_overlay_options({}))
+        sent |= {f"galnet_ticker_{key}" for key in studio_module.ticker_options({})}
+        sent |= {f"music_player_{key}" for key in studio_module.music_overlay_options({})}
+        self.assertIn("overlay_transparency_fix", switches)
+        self.assertEqual(sorted(switches - sent), [])
+
 
 class ClientShapeTests(unittest.TestCase):
     @classmethod
