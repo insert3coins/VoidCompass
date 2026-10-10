@@ -10,6 +10,7 @@
   * The results compare them, best first ("Best start in Sol: Daedalus 11.2M · Galileo 11.2M · Columbus 11.2M"). They also say how many stations fit your settings and why the rest were left out. **Show** opens any start's route, and **Follow this route** and **Loop these two** work on it as usual. A station with no profitable route, or one Spansh couldn't plan, says so rather than vanishing.
 * **What the system itself pays.** Find commodity says what the searched system's own stations pay or charge ("In UGPS 0722-05: Cloutier's Forge pays 51,184"). Sell cargo says what your current system's stations pay for each item in your hold, beside the best nearby.
 * **Any station's market.** The Market view has **Any station in a system**: list every station with a market in a system, nearest the star first, with what's for sale and wanted and how old the prices are, and open any of them.
+* **The Navigation HUD no longer gets stuck on SURFACE DEPARTURE.** After starting Void Compass (or the game) in space near a planet, then flying off in supercruise, the HUD could say SURFACE DEPARTURE long after, even docked and undocked somewhere else. A login only counts as being at a planet when you're really on or near its surface. Dropping out of supercruise or docking also ends a departure.
 * **The Dark box fix switch stays on.** In 5.5.3.3.1 it flipped back to off a moment after you turned it on. The setting was saved and the fix applied, but the switch showed it as off, so clicking it again turned the fix off.
 
 ## Earlier releases

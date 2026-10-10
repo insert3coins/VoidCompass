@@ -249,6 +249,16 @@ def _location_surface_focus(event, raw, data):
         docked = raw.get("Docked")
     if body_id is None or body_type != "planet" or bool(docked):
         return None, ""
+    # Location names the nearest body even out in space (5.5.3.4: a login
+    # thousands of km from a planet tracked it, and the Navigation HUD later
+    # said SURFACE DEPARTURE with no surface in sight). A login on or near the
+    # surface carries coordinates; on foot it doesn't (seen in real
+    # journals), but on foot beside a planet is on its surface.
+    latitude = raw.get("Latitude", data.get("latitude"))
+    longitude = raw.get("Longitude", data.get("longitude"))
+    on_surface = bool(raw.get("OnFoot") or data.get("on_foot") or raw.get("InSRV") or data.get("in_srv"))
+    if (latitude is None or longitude is None) and not on_surface:
+        return None, ""
     return body_id, body_name
 
 
@@ -8617,6 +8627,8 @@ class MainDashboard(
             self.current_in_srv = False
             self._clear_navigation_local_space()
             self.hud_flight_state = "DOCKED"
+            # Docked: any departure from a surface is over.
+            self._surface_departure_active = False
             self.current_station_name = station
             self.current_station_type = stype or None
             self.current_station_market_id = d.get("MarketID") or d.get("market_id")
@@ -8718,6 +8730,17 @@ class MainDashboard(
             self.current_on_foot = False
             self._capture_navigation_local_space(raw, d)
             self._sync_navigation_hud_flight_state(supercruise=False)
+            # Dropping out of supercruise is an arrival, never a departure
+            # from a surface; a real climb is seen again from Status. At a
+            # star, no planet's surface is near: forget the tracked one (the
+            # game doesn't always write LeaveBody first).
+            self._surface_departure_active = False
+            self._surface_climb_samples = 0
+            self._surface_descent_samples = 0
+            source = raw if isinstance(raw, dict) else d
+            if str(source.get("BodyType") or "").casefold() == "star":
+                self.current_body_id = None
+                self.current_body_name = ""
             self.update_hud()
 
         elif ev == "ApproachSettlement":
