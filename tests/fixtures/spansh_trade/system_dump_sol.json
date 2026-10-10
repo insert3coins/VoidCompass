@@ -1,0 +1,597 @@
+{
+ "system": {
+  "name": "Sol",
+  "id64": 10477373803,
+  "stations": [
+   {
+    "id": 128016896,
+    "name": "Abraham Lincoln",
+    "type": "Orbis Starport",
+    "distanceToArrival": 504.286483,
+    "landingPads": {
+     "large": 5,
+     "medium": 9,
+     "small": 8
+    },
+    "updateTime": "2026-10-10T00:25:14Z",
+    "services": [
+     "Dock",
+     "Autodock",
+     "Market",
+     "Contacts"
+    ],
+    "market": {
+     "updateTime": "2026-10-10T00:02:04Z",
+     "commodities": [
+      {
+       "buyPrice": 54,
+       "category": "Waste",
+       "commodityId": 128049244,
+       "demand": 1,
+       "name": "Biowaste",
+       "sellPrice": 32,
+       "supply": 78658,
+       "symbol": "Biowaste"
+      },
+      {
+       "buyPrice": 85,
+       "category": "Chemicals",
+       "commodityId": 128049202,
+       "demand": 1,
+       "name": "Hydrogen Fuel",
+       "sellPrice": 80,
+       "supply": 1551454,
+       "symbol": "HydrogenFuel"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Medicines",
+       "commodityId": 128682046,
+       "demand": 197051,
+       "name": "Advanced Medicines",
+       "sellPrice": 1727,
+       "supply": 0,
+       "symbol": "AdvancedMedicines"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Chemicals",
+       "commodityId": 128924334,
+       "demand": 1842,
+       "name": "Agronomic Treatment",
+       "sellPrice": 3702,
+       "supply": 0,
+       "symbol": "AgronomicTreatment"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Foods",
+       "commodityId": 128049182,
+       "demand": 169704,
+       "name": "Animal Meat",
+       "sellPrice": 1891,
+       "supply": 0,
+       "symbol": "Animalmeat"
+      }
+     ],
+     "prohibitedCommodities": [
+      "Narcotics",
+      "Battle Weapons"
+     ]
+    },
+    "outfitting": {
+     "modules": []
+    }
+   },
+   {
+    "id": 128016384,
+    "name": "Daedalus",
+    "type": "Orbis Starport",
+    "distanceToArrival": 231.998605,
+    "landingPads": {
+     "large": 6,
+     "medium": 13,
+     "small": 10
+    },
+    "updateTime": "2026-10-10T00:27:23Z",
+    "services": [
+     "Dock",
+     "Autodock",
+     "Market",
+     "Contacts"
+    ],
+    "market": {
+     "updateTime": "2026-10-09T20:08:21Z",
+     "commodities": [
+      {
+       "buyPrice": 2142,
+       "category": "Metals",
+       "commodityId": 128049176,
+       "demand": 1,
+       "name": "Aluminium",
+       "sellPrice": 2067,
+       "supply": 266885,
+       "symbol": "Aluminium"
+      },
+      {
+       "buyPrice": 39165,
+       "category": "Metals",
+       "commodityId": 128049168,
+       "demand": 1,
+       "name": "Beryllium",
+       "sellPrice": 38360,
+       "supply": 41578,
+       "symbol": "Beryllium"
+      },
+      {
+       "buyPrice": 54,
+       "category": "Waste",
+       "commodityId": 128049244,
+       "demand": 1,
+       "name": "Biowaste",
+       "sellPrice": 32,
+       "supply": 79816,
+       "symbol": "Biowaste"
+      },
+      {
+       "buyPrice": 2777,
+       "category": "Metals",
+       "commodityId": 128049162,
+       "demand": 1,
+       "name": "Cobalt",
+       "sellPrice": 2626,
+       "supply": 809661,
+       "symbol": "Cobalt"
+      },
+      {
+       "buyPrice": 390,
+       "category": "Textiles",
+       "commodityId": 128682044,
+       "demand": 1,
+       "name": "Conductive Fabrics",
+       "sellPrice": 361,
+       "supply": 1170126,
+       "symbol": "ConductiveFabrics"
+      },
+      {
+       "buyPrice": 390,
+       "category": "Metals",
+       "commodityId": 128049175,
+       "demand": 1,
+       "name": "Copper",
+       "sellPrice": 361,
+       "supply": 5442584,
+       "symbol": "Copper"
+      },
+      {
+       "buyPrice": 240,
+       "category": "Chemicals",
+       "commodityId": 128049204,
+       "demand": 1,
+       "name": "Explosives",
+       "sellPrice": 215,
+       "supply": 1282045,
+       "symbol": "Explosives"
+      },
+      {
+       "buyPrice": 24594,
+       "category": "Metals",
+       "commodityId": 128049170,
+       "demand": 1,
+       "name": "Gallium",
+       "sellPrice": 24086,
+       "supply": 36509,
+       "symbol": "Gallium"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Technology",
+       "commodityId": 128049231,
+       "demand": 2855292,
+       "name": "Advanced Catalysers",
+       "sellPrice": 3501,
+       "supply": 0,
+       "symbol": "AdvancedCatalysers"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Medicines",
+       "commodityId": 128682046,
+       "demand": 220310,
+       "name": "Advanced Medicines",
+       "sellPrice": 1727,
+       "supply": 0,
+       "symbol": "AdvancedMedicines"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Chemicals",
+       "commodityId": 128924334,
+       "demand": 2060,
+       "name": "Agronomic Treatment",
+       "sellPrice": 3702,
+       "supply": 0,
+       "symbol": "AgronomicTreatment"
+      }
+     ],
+     "prohibitedCommodities": [
+      "Narcotics",
+      "Battle Weapons"
+     ]
+    },
+    "outfitting": {
+     "modules": []
+    }
+   },
+   {
+    "id": 128017664,
+    "name": "Mars High",
+    "type": "Orbis Starport",
+    "distanceToArrival": 817.66367,
+    "landingPads": {
+     "large": 6,
+     "medium": 12,
+     "small": 6
+    },
+    "updateTime": "2026-10-09T23:54:11Z",
+    "services": [
+     "Dock",
+     "Autodock",
+     "Market",
+     "Contacts"
+    ],
+    "market": {
+     "updateTime": "2026-10-09T21:03:13Z",
+     "commodities": [
+      {
+       "buyPrice": 54,
+       "category": "Waste",
+       "commodityId": 128049244,
+       "demand": 1,
+       "name": "Biowaste",
+       "sellPrice": 32,
+       "supply": 46063,
+       "symbol": "Biowaste"
+      },
+      {
+       "buyPrice": 93,
+       "category": "Chemicals",
+       "commodityId": 128049202,
+       "demand": 1,
+       "name": "Hydrogen Fuel",
+       "sellPrice": 88,
+       "supply": 1019291,
+       "symbol": "HydrogenFuel"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Medicines",
+       "commodityId": 128682046,
+       "demand": 326772,
+       "name": "Advanced Medicines",
+       "sellPrice": 1727,
+       "supply": 0,
+       "symbol": "AdvancedMedicines"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Chemicals",
+       "commodityId": 128924334,
+       "demand": 3054,
+       "name": "Agronomic Treatment",
+       "sellPrice": 3702,
+       "supply": 0,
+       "symbol": "AgronomicTreatment"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Foods",
+       "commodityId": 128049182,
+       "demand": 281421,
+       "name": "Animal Meat",
+       "sellPrice": 1891,
+       "supply": 0,
+       "symbol": "Animalmeat"
+      }
+     ],
+     "prohibitedCommodities": [
+      "Narcotics",
+      "Battle Weapons"
+     ]
+    },
+    "outfitting": {
+     "modules": []
+    }
+   },
+   {
+    "id": 128017408,
+    "name": "Li Qing Jao",
+    "type": "Orbis Starport",
+    "distanceToArrival": 504.140433,
+    "landingPads": {
+     "large": 6,
+     "medium": 11,
+     "small": 6
+    },
+    "updateTime": "2026-10-09T21:45:32Z",
+    "services": [
+     "Dock",
+     "Autodock",
+     "Market",
+     "Contacts"
+    ],
+    "market": {
+     "updateTime": "2026-10-09T21:45:32Z",
+     "commodities": [
+      {
+       "buyPrice": 54,
+       "category": "Waste",
+       "commodityId": 128049244,
+       "demand": 1,
+       "name": "Biowaste",
+       "sellPrice": 32,
+       "supply": 75208,
+       "symbol": "Biowaste"
+      },
+      {
+       "buyPrice": 87,
+       "category": "Chemicals",
+       "commodityId": 128049202,
+       "demand": 1,
+       "name": "Hydrogen Fuel",
+       "sellPrice": 82,
+       "supply": 1521295,
+       "symbol": "HydrogenFuel"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Medicines",
+       "commodityId": 128682046,
+       "demand": 260673,
+       "name": "Advanced Medicines",
+       "sellPrice": 1727,
+       "supply": 0,
+       "symbol": "AdvancedMedicines"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Chemicals",
+       "commodityId": 128924334,
+       "demand": 2437,
+       "name": "Agronomic Treatment",
+       "sellPrice": 3702,
+       "supply": 0,
+       "symbol": "AgronomicTreatment"
+      },
+      {
+       "buyPrice": 0,
+       "category": "Foods",
+       "commodityId": 128049182,
+       "demand": 224496,
+       "name": "Animal Meat",
+       "sellPrice": 1891,
+       "supply": 0,
+       "symbol": "Animalmeat"
+      }
+     ],
+     "prohibitedCommodities": [
+      "Narcotics",
+      "Battle Weapons"
+     ]
+    },
+    "outfitting": {
+     "modules": []
+    }
+   }
+  ],
+  "bodies": [
+   {
+    "name": "Mercury",
+    "bodyId": 1,
+    "stations": [
+     {
+      "id": 3534389760,
+      "name": "Walz Depot",
+      "type": "Planetary Outpost",
+      "distanceToArrival": 232.123035,
+      "landingPads": {
+       "large": 2,
+       "medium": 2,
+       "small": 4
+      },
+      "updateTime": "2026-10-09T13:42:58Z",
+      "services": [
+       "Dock",
+       "Autodock",
+       "Market",
+       "Contacts"
+      ],
+      "market": {
+       "updateTime": "2026-10-09T13:42:58Z",
+       "commodities": [
+        {
+         "buyPrice": 330,
+         "category": "Machinery",
+         "commodityId": 128064028,
+         "demand": 1,
+         "name": "Atmospheric Processors",
+         "sellPrice": 308,
+         "supply": 7488,
+         "symbol": "AtmosphericExtractors"
+        },
+        {
+         "buyPrice": 251,
+         "category": "Medicines",
+         "commodityId": 128049210,
+         "demand": 1,
+         "name": "Basic Medicines",
+         "sellPrice": 227,
+         "supply": 8085,
+         "symbol": "BasicMedicines"
+        },
+        {
+         "buyPrice": 53,
+         "category": "Waste",
+         "commodityId": 128049244,
+         "demand": 1,
+         "name": "Biowaste",
+         "sellPrice": 32,
+         "supply": 1213,
+         "symbol": "Biowaste"
+        },
+        {
+         "buyPrice": 1968,
+         "category": "Machinery",
+         "commodityId": 128672309,
+         "demand": 1,
+         "name": "Building Fabricators",
+         "sellPrice": 1917,
+         "supply": 18197,
+         "symbol": "BuildingFabricators"
+        },
+        {
+         "buyPrice": 369,
+         "category": "Consumer Items",
+         "commodityId": 128049241,
+         "demand": 1,
+         "name": "Clothing",
+         "sellPrice": 335,
+         "supply": 5412,
+         "symbol": "Clothing"
+        },
+        {
+         "buyPrice": 0,
+         "category": "Medicines",
+         "commodityId": 128682046,
+         "demand": 2218,
+         "name": "Advanced Medicines",
+         "sellPrice": 1727,
+         "supply": 0,
+         "symbol": "AdvancedMedicines"
+        },
+        {
+         "buyPrice": 0,
+         "category": "Chemicals",
+         "commodityId": 128924334,
+         "demand": 21,
+         "name": "Agronomic Treatment",
+         "sellPrice": 3519,
+         "supply": 0,
+         "symbol": "AgronomicTreatment"
+        },
+        {
+         "buyPrice": 0,
+         "category": "Foods",
+         "commodityId": 128049177,
+         "demand": 50069,
+         "name": "Algae",
+         "sellPrice": 633,
+         "supply": 0,
+         "symbol": "Algae"
+        }
+       ],
+       "prohibitedCommodities": [
+        "Narcotics",
+        "Battle Weapons"
+       ]
+      },
+      "outfitting": {
+       "modules": []
+      }
+     }
+    ]
+   },
+   {
+    "name": "Europa",
+    "bodyId": 10,
+    "stations": [
+     {
+      "id": 3802402816,
+      "name": "Majoro Entertainment Complex",
+      "type": "Settlement",
+      "distanceToArrival": 2624.281802,
+      "landingPads": {
+       "large": 2,
+       "medium": 0,
+       "small": 2
+      },
+      "updateTime": "2026-09-19T22:48:09Z",
+      "services": [
+       "Dock",
+       "Autodock",
+       "Market",
+       "Contacts"
+      ],
+      "market": {
+       "updateTime": "2026-09-19T22:48:09Z",
+       "commodities": [
+        {
+         "buyPrice": 70,
+         "category": "Waste",
+         "commodityId": 128049244,
+         "demand": 1,
+         "name": "Biowaste",
+         "sellPrice": 47,
+         "supply": 153,
+         "symbol": "Biowaste"
+        },
+        {
+         "buyPrice": 77,
+         "category": "Chemicals",
+         "commodityId": 128049202,
+         "demand": 1,
+         "name": "Hydrogen Fuel",
+         "sellPrice": 76,
+         "supply": 2658,
+         "symbol": "HydrogenFuel"
+        },
+        {
+         "buyPrice": 0,
+         "category": "Medicines",
+         "commodityId": 128682046,
+         "demand": 280,
+         "name": "Advanced Medicines",
+         "sellPrice": 1580,
+         "supply": 0,
+         "symbol": "AdvancedMedicines"
+        },
+        {
+         "buyPrice": 0,
+         "category": "Chemicals",
+         "commodityId": 128924334,
+         "demand": 3,
+         "name": "Agronomic Treatment",
+         "sellPrice": 3519,
+         "supply": 0,
+         "symbol": "AgronomicTreatment"
+        },
+        {
+         "buyPrice": 0,
+         "category": "Minerals",
+         "commodityId": 128924331,
+         "demand": 16,
+         "name": "Alexandrite",
+         "sellPrice": 186380,
+         "supply": 0,
+         "symbol": "Alexandrite"
+        }
+       ],
+       "prohibitedCommodities": [
+        "Narcotics",
+        "Battle Weapons"
+       ]
+      },
+      "outfitting": {
+       "modules": []
+      }
+     }
+    ]
+   },
+   {
+    "name": "Sol 1",
+    "bodyId": 1,
+    "stations": []
+   }
+  ]
+ }
+}
