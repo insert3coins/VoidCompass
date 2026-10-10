@@ -196,6 +196,9 @@ class HtmlDashboardRuntime:
 
     def begin_commissioning(self, config, callback):
         """Present first-run/setup commissioning entirely inside WebView2."""
+        # Setup (first run, or run again from Settings) shows the boot screen
+        # on purpose, so it may bring it back after startup finished.
+        self._boot_finished = False
         self._commissioning_session += 1
         self._commissioning_callback = callback
         custom = (config or {}).get("ui_custom_themes")
@@ -260,6 +263,13 @@ class HtmlDashboardRuntime:
         threading.Thread(target=work, name="setup-journal-probe", daemon=True).start()
 
     def set_runtime_status(self, status, detail="", progress=None, events=None):
+        if getattr(self, "_boot_finished", False):
+            # Startup already handed over (5.5.3.4). A late progress report
+            # (the journal replay reaching its tail after the startup timeout
+            # went live without it) must not turn the boot screen back on: the
+            # deck refuses a booting snapshot once it has gone live, so it
+            # froze on its last state for the rest of the session.
+            return
         self._boot.update({
             "active": True,
             "status": str(status or "PREPARING COMMAND DECK"),
@@ -280,6 +290,7 @@ class HtmlDashboardRuntime:
         self._publish()
 
     def stop(self):
+        self._boot_finished = True
         self._onboarding["active"] = False
         self._boot.update({
             "active": False,
