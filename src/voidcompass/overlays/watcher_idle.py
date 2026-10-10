@@ -27,6 +27,9 @@ IDLE_TOPICS = (
     "idle_carrier", "idle_station_foot", "idle_near_body",
     # The bond (5.5.3.2): known, a companion, an old friend.
     "idle_bond_1", "idle_bond_2", "idle_bond_3",
+    # Its past, in passing (5.5.3.5; watcher_lore.MUSINGS); after its story
+    # is told, its later musings; and a look back at a chapter it told you.
+    "idle_lore", "idle_after", "lore_recall",
 )
 
 # Star classes in plain words (journal StarClass / StarType).
@@ -223,6 +226,13 @@ class Surroundings:
             if music.get("artist"):
                 fields["artist"] = str(music["artist"])
             world.append(("idle_music", fields))
+        # Its past, in passing (5.5.3.5): any quiet moment will do; once its
+        # story is told, how it is since; and now and then a chapter recalled.
+        world.append(("idle_lore", {}))
+        if context.get("story_done"):
+            world.append(("idle_after", {}))
+        if context.get("recall"):
+            session.append(("lore_recall", dict(context["recall"])))
         if context.get("galnet"):
             world.append(("idle_galnet", {"headline": str(context["galnet"]).rstrip(". ")}))
         thoughts = int(context.get("thoughts") or 0)

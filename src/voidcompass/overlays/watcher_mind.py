@@ -27,7 +27,7 @@ from pathlib import Path
 import zlib
 
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
-from voidcompass.overlays import watcher_idle, watcher_lines, watcher_natures
+from voidcompass.overlays import watcher_idle, watcher_lines, watcher_lore, watcher_natures
 
 # How often it may speak (Overlay Studio). The gap is the least time
 # between two thoughts; `minimum` is the least importance it will voice.
@@ -129,6 +129,8 @@ IMPORTANCE = {
     # 5.5.3.2: idle thoughts about what's really around you.
     **{topic: 1 for topic in watcher_idle.IDLE_TOPICS},
     "codex_new": 2,
+    # Echoes (5.5.3.5): real things in the game that stir a memory of its past.
+    **{topic: 2 for topic in watcher_lore.ECHOES},
     "codex_logged": 1,
     "big_sale": 1,
     "achievement": 2,
@@ -185,6 +187,16 @@ MOODS = {
                                        "idle_bond_1", "idle_bond_2", "idle_bond_3", "unhidden")},
     **{topic: "curious" for topic in ("revisit", "poked", "moved")},
     "poked_again": "wary",
+    # Its past (5.5.3.5): told with a heavy eye.
+    "lore_fragment": "downcast",
+    "idle_lore": "downcast",
+    **{topic: "downcast" for topic in watcher_lore.ECHOES},
+    "lore_sound": "wary",
+    "lore_core": "curious",
+    # After the story: settled; looking back on what it told you.
+    "lore_afterword": "pleased",
+    "idle_after": "curious",
+    "lore_recall": "downcast",
     **{topic: "curious" for topic in (
         "idle_star_odd", "idle_big_system", "arrival", "jump_long", "jump_far", "idle_far", "idle_star",
         "idle_galnet", "greet_new")},
@@ -308,7 +320,11 @@ class WatcherMind:
                        "deaths": 0, "last_death": None, "session_started": None, "thoughts": None,
                        # 5.5.3.2: hours flown together, your records, the day
                        # it last marked your anniversary, and what it said.
-                       "hours": 0.0, "records": {}, "anniversary_said": None, "log": []}
+                       "hours": 0.0, "records": {}, "anniversary_said": None, "log": [],
+                       # 5.5.3.5: the memories of its past it has shared, [id, when];
+                       # the echoes found, {topic: [times, last]}; when it said
+                       # its afterword (Book One finished).
+                       "lore": [], "echoes": {}, "afterword": None}
         self._load()
         if self.memory.get("thoughts") is None:
             # Older memories: count the thoughts it remembers saying.
@@ -378,6 +394,9 @@ class WatcherMind:
                 payload["said"] = payload["said"][-_MEMORY_LIMIT:]
             temporary.write_text(json.dumps(payload), encoding="utf-8")
             os.replace(temporary, self.memory_path)
+            # Saved: the periodic save (save_if_due) starts counting again.
+            self._unsaved = False
+            self._saved_at = time.time()
         except OSError:
             pass
 
@@ -457,6 +476,9 @@ class WatcherMind:
             rest = setting.get("rest", TOPIC_REST_S)
             if topic in watcher_idle.IDLE_TOPICS:
                 rest = max(rest, IDLE_REST_S)  # each kind of idle remark, at most every half hour
+            # An echo of its past, or a look back at its story, rests hours or
+            # days (a neutron highway would otherwise make it a commentary).
+            rest = max(rest, watcher_lore.LORE_REST_S.get(topic, 0.0))
             if importance < 3 and self._said_recently(topic, rest):
                 return None
             # Even with something to say, it often keeps it to itself.
@@ -467,6 +489,16 @@ class WatcherMind:
         if not chosen:
             return None
         key, script = chosen
+        self._utter(topic, key, script, now)
+        # Now and then a second beat follows, once the first has been read.
+        if topic != "afterthought" and importance < 3:
+            chance = .3 if (topic == "quiet" or topic in watcher_idle.IDLE_TOPICS) else .12
+            if self.random.random() < chance:
+                self._afterthought = {"after": self._serial, "at": now + 3.2 + len(script) * .045}
+        return self.thought
+
+    def _utter(self, topic, key, script, now):
+        """Say a thought: on screen for a while, and remembered."""
         text = plain_text(script)
         self._serial += 1
         self._last_spoke = now
@@ -484,12 +516,44 @@ class WatcherMind:
             log.append([round(time.time(), 1), topic, text])
             del log[:-300]
         self._unsaved = True
-        # Now and then a second beat follows, once the first has been read.
-        if topic != "afterthought" and importance < 3:
-            chance = .3 if (topic == "quiet" or topic in watcher_idle.IDLE_TOPICS) else .12
-            if self.random.random() < chance:
-                self._afterthought = {"after": self._serial, "at": now + 3.2 + len(script) * .045}
         return self.thought
+
+    def remember(self):
+        """The next passage of its story, when one is due (5.5.3.5): in order,
+        as the sessions and hours together unlock them, at most one every hour
+        and a half of play, and never in a session's first minutes. Its
+        thoughts switched off means no story either."""
+        if FREQUENCIES.get(frequency(self.config)) is None or self._session_start is None or self._in_danger:
+            return None
+        now = self.clock()
+        if now - self._session_start < watcher_lore.SETTLE_S:
+            return None
+        shared = watcher_lore.told(self.memory)
+        if shared and now - max(shared.values()) < watcher_lore.GAP_S:
+            return None
+        self._account_time()
+        if watcher_lore.book_one_complete(self.memory) and not self.memory.get("afterword"):
+            # The story told: one closing word, once ever (then Book Two).
+            with self.lock:
+                self.memory["afterword"] = now
+            self._story_changed = True
+            return self._utter("lore_afterword", "lore:afterword", watcher_lore.AFTERWORD, now)
+        row = watcher_lore.due(self.memory, self.memory.get("sessions") or 0, self.memory.get("hours") or 0)
+        if row is None:
+            return None
+        self._story_changed = True
+        with self.lock:
+            self.memory.setdefault("lore", []).append([row[0], now])
+        return self._utter("lore_fragment", f"lore:{row[0]}", row[2], now)
+
+    def story_progress(self):
+        """The story so far (watcher_lore.progress), once each time it moves
+        on: a passage told, the afterword, a new kind of echo found. None
+        otherwise. The HUD hands it to the achievements."""
+        if not getattr(self, "_story_changed", False):
+            return None
+        self._story_changed = False
+        return watcher_lore.progress(self.memory)
 
     def poke(self, context=None):
         """The commander poked it (a hotkey). It looks up and says something:
@@ -626,6 +690,20 @@ class WatcherMind:
         if event in {"FSDJump", "SupercruiseEntry", "Docked"} and self._in_danger:
             self._in_danger = False
             return self.consider("danger_over")
+        # Something in the game that touches its past (5.5.3.5).
+        echo = watcher_lore.echo_for(event, raw)
+        if echo:
+            with self.lock:
+                found = self.memory.setdefault("echoes", {})
+                times = int((found.get(echo) or [0])[0] or 0)
+                if not times:
+                    self._story_changed = True  # a new kind found (achievements, Book Two)
+                found[echo] = [times + 1, now]
+            thought = self.consider(echo)
+            if thought:
+                if event == "FSDJump":
+                    self._last_interesting = now
+                return thought
         if event == "FSDJump":
             self._last_interesting = now
             fields = {"system": raw.get("StarSystem") or "Here"}
@@ -781,8 +859,14 @@ class WatcherMind:
             # Lines quoting {hours} are skipped when the session was too short.
             words = {"hours": fields["hours"]} if fields.get("hours") else {}
             if summary:
-                return self.consider("sign_off", {**words, "summary": summary}, force=True)
-            return self.consider("sign_off_quiet", words, force=True)
+                thought = self.consider("sign_off", {**words, "summary": summary}, force=True)
+            else:
+                thought = self.consider("sign_off_quiet", words, force=True)
+            # Saved at once: the game has closed, and Void Compass may be next
+            # (5.5.3.5; it waited for the periodic save, up to 5 minutes, so a
+            # quick close lost the sign-off from its memory).
+            self.save()
+            return thought
         if kind == "codex_new":
             body = str(fields.get("body") or "")
             if not body or body in self._codex_bodies:
@@ -825,6 +909,14 @@ class WatcherMind:
                 thought = self.consider("long_session", {"hours": hours})
                 if thought:
                     return thought
+        # Its story needs only a lull, not the long quiet of an idle thought:
+        # two minutes with nothing new and nothing said, out of danger
+        # (5.5.3.5; waiting for the full quiet kept it silent for hours of
+        # busy flying). remember() keeps its own pacing.
+        if now - self._last_spoke > watcher_lore.LULL_S and now - self._last_interesting > watcher_lore.LULL_S:
+            memory = self.remember()
+            if memory:
+                return memory
         setting = FREQUENCIES.get(frequency(self.config)) or {}
         quiet = setting.get("quiet", 900.0)
         # Into the quiet: something about what's around (the star, the
@@ -833,10 +925,19 @@ class WatcherMind:
         # Chatty, 10 on Occasional, 20 on Rare).
         if (now - self._last_interesting > quiet and now - self._last_spoke > quiet
                 and not self._said_recently("idle", setting.get("mutter", 1200.0))):
+            # A memory of its past, when one is due (5.5.3.5).
+            memory = self.remember()
+            if memory:
+                with self.lock:
+                    self.memory["said"].append(["idle", now])
+                return memory
             known = dict(context or {})
             known.update(thoughts=self.memory.get("thoughts") or 0, sessions=self.memory.get("sessions") or 0,
                          deaths=self.memory.get("deaths") or 0, bond=self.bond(),
-                         hours=int(self.memory.get("hours") or 0))
+                         hours=int(self.memory.get("hours") or 0),
+                         # 5.5.3.5: its story told, and a finished chapter to look back on.
+                         story_done=bool(self.memory.get("afterword")),
+                         recall=watcher_lore.recall_choice(self.memory, self.random, now))
             choices = self.surroundings.choices(now, self.random, known)
             # The plain mutter now and then, and whenever nothing else fits.
             if not choices or self.random.random() < .25:

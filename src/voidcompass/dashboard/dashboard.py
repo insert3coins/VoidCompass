@@ -1476,6 +1476,17 @@ class MainDashboard(
         if heartbeat is not None and hasattr(heartbeat, "poke"):
             heartbeat.poke()
 
+    def _watcher_story(self, story):
+        """The Watcher's story moved on (5.5.3.5): its achievements hear of it,
+        as the region passport's do, through a Void Compass event."""
+        engine = getattr(self, "achievement_engine", None)
+        if engine is None:
+            return
+        try:
+            engine.process_event({"type": "VoidCompassWatcherStory", "event": "VoidCompassWatcherStory", **story})
+        except Exception:
+            logging.debug("Watcher story achievements skipped", exc_info=True)
+
     def _watcher_context(self):
         """What the rest of the app knows, for the Watcher's idle thoughts:
         the track playing in the Music player and Galnet's latest headline."""
@@ -2608,6 +2619,7 @@ class MainDashboard(
         if self._overlay_enabled("heartbeat_hud"):
             self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
             self.heartbeat_hud.context_provider = self._watcher_context
+            self.heartbeat_hud.story_listener = self._watcher_story
         else:
             self.heartbeat_hud = None
 
@@ -4903,6 +4915,7 @@ class MainDashboard(
             if self.heartbeat_hud is None:
                 self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
                 self.heartbeat_hud.context_provider = self._watcher_context
+                self.heartbeat_hud.story_listener = self._watcher_story
         elif self.heartbeat_hud:
             self.heartbeat_hud.destroy()
             self.heartbeat_hud = None

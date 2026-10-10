@@ -203,6 +203,14 @@ class HeartbeatHUD:
                 changed = True
         self._last_position = position
         self.mind.save_if_due()
+        # Its story moved on (5.5.3.5): tell the achievements.
+        story = self.mind.story_progress()
+        listener = getattr(self, 'story_listener', None)
+        if story and callable(listener):
+            try:
+                listener(story)
+            except Exception:
+                pass
         # A thought arriving or dissolving redraws (and resizes) the window.
         current = self.mind.current()
         if (current or {}).get("id") != self._thought_seen:

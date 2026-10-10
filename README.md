@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.5.3.4.1**
+**Current version: 5.5.3.5**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 

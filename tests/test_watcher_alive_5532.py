@@ -34,7 +34,9 @@ class AliveTests(unittest.TestCase):
                     self.assertNotIn("[[", plain_text(line))
 
     def test_moods_name_real_topics(self):
-        self.assertTrue(set(MOODS) <= set(TOPICS))
+        # A memory of its past (5.5.3.5) is a topic of its own, spoken by
+        # WatcherMind.remember rather than from the line banks.
+        self.assertTrue(set(MOODS) <= set(TOPICS) | {"lore_fragment", "lore_afterword"})
         self.assertTrue(set(MOODS.values()) <= {"pleased", "wary", "curious", "downcast"})
 
     def test_a_thought_carries_its_mood_and_script(self):

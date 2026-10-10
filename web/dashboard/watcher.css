@@ -54,3 +54,54 @@
 .watcher-log li[data-mood="downcast"] b { color: var(--dim); }
 .watcher-log li.empty, .watcher-favourites li.empty { display: block; color: var(--muted); grid-template-columns: none; }
 .watcher-actions button { font: 700 11px Consolas, "Cascadia Mono", monospace; letter-spacing: .1em; padding: 8px 22px; }
+
+/* Its long story (5.5.3.5): chapters, their passages and accounts; echoes. */
+.watcher-lore-panel { grid-column: 1 / -1; }
+.watcher-chapters { display: grid; gap: 1px; border: 1px solid var(--border); background: var(--border); }
+.watcher-chapter { background: var(--panel); }
+.watcher-chapter > summary, .watcher-chapter.locked { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 10px 12px; }
+.watcher-chapter > summary { cursor: pointer; list-style: none; }
+.watcher-chapter > summary::-webkit-details-marker { display: none; }
+.watcher-chapter > summary:hover b { color: var(--accent); }
+.watcher-chapter-n { color: color-mix(in srgb, var(--red) 70%, var(--muted)); font: 700 12px Consolas, monospace; letter-spacing: .1em; }
+.watcher-chapter b { color: var(--text); font: 700 11px Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.watcher-chapter em { color: var(--muted); font: 700 9px Consolas, monospace; font-style: normal; letter-spacing: .08em; }
+.watcher-chapter.complete em { color: var(--accent); }
+.watcher-chapter.locked b { color: var(--dim); letter-spacing: .3em; }
+.watcher-account { margin: 0 12px 10px 66px; padding: 10px 14px; border-left: 2px solid color-mix(in srgb, var(--red) 55%, var(--border)); background: color-mix(in srgb, var(--bg) 60%, transparent); }
+.watcher-account small { display: block; margin-bottom: 6px; color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.watcher-account p { margin: 0 0 9px; max-width: 76ch; color: var(--text); font: italic 13px/1.65 "Segoe UI", sans-serif; }
+.watcher-account p:last-child { margin-bottom: 0; }
+.watcher-lore { display: grid; gap: 1px; margin: 0 12px 12px 66px; padding: 0; list-style: none; }
+.watcher-lore li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--border-soft); }
+.watcher-lore p { margin: 0; max-width: 78ch; color: var(--text); font: 13px/1.55 "Segoe UI", sans-serif; }
+.watcher-lore time { color: var(--muted); font: 10px Consolas, monospace; white-space: nowrap; }
+.watcher-lore-next { margin: 0; color: var(--muted); font: italic 12px/1.5 "Segoe UI", sans-serif; }
+.watcher-echoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px; margin: 0; padding: 0; list-style: none; }
+.watcher-echoes li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 8px 10px; border: 1px solid var(--border); background: var(--panel); color: var(--dim); }
+.watcher-echoes li b { font: 700 10px Consolas, monospace; letter-spacing: .06em; text-transform: uppercase; }
+.watcher-echoes li span { font: 10px Consolas, monospace; }
+.watcher-echoes li time { grid-column: 1 / -1; font: 9px Consolas, monospace; color: var(--muted); }
+.watcher-echoes li.heard b { color: var(--text); }
+.watcher-echoes li.heard span { color: var(--accent); }
+/* Book Two and the keepsake books (5.5.3.5). */
+.watcher-book-head { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: baseline; padding: 12px 12px 8px; background: color-mix(in srgb, var(--bg) 60%, var(--panel)); }
+.watcher-book-head span { color: color-mix(in srgb, var(--red) 70%, var(--muted)); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.watcher-book-head b { color: var(--text); font: 700 11px Consolas, monospace; letter-spacing: .14em; }
+.watcher-book-head small { grid-column: 1 / -1; color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }
+.watcher-chapter.locked.waits b { color: var(--muted); letter-spacing: .04em; text-transform: none; font: italic 12px "Segoe UI", sans-serif; }
+.watcher-books { display: grid; gap: 6px; }
+.watcher-books:empty { display: none; }
+.watcher-book { border: 1px solid color-mix(in srgb, var(--red) 40%, var(--border)); background: var(--panel); }
+.watcher-book > summary { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 10px 12px; cursor: pointer; list-style: none; }
+.watcher-book > summary::-webkit-details-marker { display: none; }
+.watcher-book > summary span { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.watcher-book > summary b { color: var(--text); font: 700 11px Consolas, monospace; letter-spacing: .1em; }
+.watcher-book article { max-width: 76ch; margin: 0 auto; padding: 4px 18px 18px; }
+.watcher-book h4 { display: flex; gap: 10px; align-items: baseline; margin: 18px 0 8px; color: var(--text); font: 700 12px Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.watcher-book h4 span { color: color-mix(in srgb, var(--red) 70%, var(--muted)); }
+.watcher-book p { margin: 0 0 10px; color: var(--text); font: italic 14px/1.7 "Segoe UI", sans-serif; }
+@media (max-width: 600px) {
+  .watcher-account, .watcher-lore { margin-left: 12px; }
+  .watcher-lore li { grid-template-columns: minmax(0, 1fr); }
+}

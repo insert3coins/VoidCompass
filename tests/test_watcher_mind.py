@@ -147,6 +147,9 @@ class MindTests(unittest.TestCase):
         idle thought every 5 minutes (5.5.3.2)."""
         clock = Clock()
         chatty = mind(clock=clock)
+        # Its whole story already told (5.5.3.5): this is about idle chatter.
+        chatty.memory["lore"] = [[row[0], 0.0] for row in watcher_mind.watcher_lore.FRAGMENTS]
+        chatty.memory["afterword"] = 1.0
         self.assertIsNone(chatty.tick(), "nothing to think about before the game")
         self.assertIn(chatty.observe("Music", {})["topic"], {"greet_new", "greet_soon", "greet_away"})
         clock.now += 60

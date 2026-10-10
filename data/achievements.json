@@ -7284,5 +7284,65 @@
       "value": 42,
       "compare": "gte"
     }
+  },
+  {
+    "id": "watcher_story_begins",
+    "title": "It Remembers",
+    "desc": "Hear the first memory the Watcher tells you",
+    "icon": "👁",
+    "category": "The Watcher",
+    "points": 25,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "Told",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "watcher_book_one",
+    "title": "Something Older",
+    "desc": "Hear the Watcher's whole story, to its last word",
+    "icon": "📖",
+    "category": "The Watcher",
+    "points": 250,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "BookOne",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "watcher_every_echo",
+    "title": "Every Echo",
+    "desc": "Find all seven things that stir the Watcher's memory",
+    "icon": "📡",
+    "category": "The Watcher",
+    "points": 150,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "Echoes",
+      "value": 7,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "watcher_book_two",
+    "title": "Someone Answered",
+    "desc": "Hear the Watcher's second story, The Answer, to its end",
+    "icon": "✨",
+    "category": "The Watcher",
+    "points": 500,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "BookTwo",
+      "value": 1,
+      "compare": "gte"
+    }
   }
 ]

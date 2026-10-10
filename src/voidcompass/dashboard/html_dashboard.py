@@ -22,6 +22,7 @@ import webbrowser
 from voidcompass.trading import route as trade_route
 from voidcompass.exploration.notable_bodies import rarity as notable_rarity
 from voidcompass.overlays import watcher_mind
+from voidcompass.overlays import watcher_lore
 from voidcompass.core import companion_features
 from voidcompass.core import odyssey_kit
 from voidcompass.core.journal_files import journal_sort_key
@@ -159,6 +160,17 @@ def _local_departure_timestamp(value):
         )
     return int(time.mktime(parsed.timetuple()))
 
+
+
+def _watcher_echoes(memory):
+    """Each echo of its past it has had (5.5.3.5): {topic: (times, last)},
+    from what it has said."""
+    heard = {}
+    for row in (memory or {}).get("said") or ():
+        if isinstance(row, list) and len(row) >= 2 and str(row[0]) in watcher_lore.ECHOES:
+            count, last = heard.get(row[0], (0, 0.0))
+            heard[row[0]] = (count + 1, max(last, float(row[1] or 0)))
+    return heard
 
 class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin):
     """Publish exploration state and accept private dashboard commands."""
@@ -789,6 +801,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                            for topic, count in topics.most_common(6)],
             "log": log,
             "hotkey": _text(self.config.get("overlay_hotkey_watcher_poke"), 40),
+            # Its long story and the echoes heard (5.5.3.5).
+            "lore": watcher_lore.page(memory, sessions, hours, _watcher_echoes(memory)),
         }
 
     def _html_watcher_thought(self):

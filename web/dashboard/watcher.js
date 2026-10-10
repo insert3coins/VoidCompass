@@ -47,6 +47,14 @@ function shell(root, ui) {
       <header><span>WHAT IT HAS SAID</span><b id="watcher-log-count"></b></header>
       <ol class="watcher-log" id="watcher-log"></ol>
     </section>
+    <section class="watcher-lore-panel" aria-label="Its long story">
+      <header><span>THE LONG STORY · WHAT IT REMEMBERS</span><b id="watcher-lore-count"></b></header>
+      <div class="watcher-chapters" id="watcher-lore"></div>
+      <p class="watcher-lore-next" id="watcher-lore-next"></p>
+      <div class="watcher-books" id="watcher-books"></div>
+      <header><span>ECHOES · THINGS THAT STIRRED A MEMORY</span><b id="watcher-echo-count"></b></header>
+      <ul class="watcher-echoes" id="watcher-echoes"></ul>
+    </section>
   </div>`;
   const canvas = root.querySelector("#watcher-orb");
   if (window.HeartbeatOrb && canvas) {
@@ -59,6 +67,80 @@ function shell(root, ui) {
     orb?.showMood?.("curious");
     orb?.think?.(500);
   });
+}
+
+// Its long story (5.5.3.5): each chapter as it begins, the passages told so
+// far, and a finished chapter's written account. Chapters ahead stay
+// unnamed. Then the echoes: real things in the game that stirred a memory.
+// Redrawn only when it changes, so an opened chapter stays open.
+let lastLoreKey = "";
+
+function renderLore(lore, ui) {
+  const chapters = Array.isArray(lore.chapters) ? lore.chapters : [];
+  const echoes = Array.isArray(lore.echoes) ? lore.echoes : [];
+  const books = Array.isArray(lore.books) ? lore.books : [];
+  const key = JSON.stringify([lore.told, lore.next, lore.afterword, echoes.map((row) => [row.topic, row.count]), books.length]);
+  if (key === lastLoreKey) return;
+  lastLoreKey = key;
+  const current = chapters.filter((chapter) => chapter.begun).pop();
+  // Book One until its end; then both books (5.5.3.5).
+  const total = lore.afterword ? lore.total : (lore.book_one_total || lore.total);
+  ui.byId("watcher-lore-count").textContent = `${ui.numeric(lore.told)} OF ${ui.numeric(total)} TOLD`;
+  let html = "";
+  chapters.forEach((chapter, index) => {
+    if (chapter.book === 2 && (index === 0 || chapters[index - 1].book !== 2)) {
+      html += `<div class="watcher-book-head"><span>BOOK TWO</span><b>THE ANSWER</b><small>Each chapter waits for something you'll have to find.</small></div>`;
+    }
+    if (!chapter.begun) {
+      html += chapter.waits_for
+        ? `<div class="watcher-chapter locked waits"><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>Waits for ${ui.escapeHtml(chapter.waits_for.toLowerCase())}</b></div>`
+        : `<div class="watcher-chapter locked"><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>· · ·</b></div>`;
+      return;
+    }
+    const passages = chapter.told.map((row) => `<li><p>${ui.escapeHtml(row.text)}</p><time>${ui.escapeHtml(ago(row.at))}</time></li>`).join("");
+    const account = chapter.complete && chapter.account
+      ? `<div class="watcher-account"><small>AS IT WOULD SET IT DOWN</small>${String(chapter.account).split("\n\n").map((para) => `<p>${ui.escapeHtml(para)}</p>`).join("")}</div>`
+      : "";
+    html += `<details class="watcher-chapter${chapter.complete ? " complete" : ""}"${chapter === current ? " open" : ""}>
+      <summary><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>${ui.escapeHtml(chapter.title)}</b>
+        <em>${chapter.complete ? "COMPLETE" : `${ui.numeric(chapter.told.length)} OF ${ui.numeric(chapter.total)}`}</em></summary>
+      ${account}<ol class="watcher-lore">${passages}</ol></details>`;
+  });
+  ui.byId("watcher-lore").innerHTML = html || `<p class="watcher-lore-next">It hasn't told you anything about itself yet.</p>`;
+  const next = lore.next;
+  const until = (row) => {
+    const parts = [];
+    if (Number(row.sessions) > 0) parts.push(`${ui.numeric(row.sessions)} more session${Number(row.sessions) === 1 ? "" : "s"}`);
+    if (Number(row.hours) > 0) parts.push(`${ui.numeric(row.hours, 1)} more hour${Number(row.hours) === 1 ? "" : "s"}`);
+    return parts.join(" and ");
+  };
+  let line = "That's the whole story, both books of it. Someone answered. So it says.";
+  if (!lore.told) {
+    line = "It hasn't told you anything about itself yet. It might, in time. Nobody knows what it is, itself included.";
+    if (next && !next.ready && until(next)) line += ` The first may surface after ${until(next)} together.`;
+  } else if (next && next.ready) {
+    line = "Something is surfacing. It will tell you in a quiet moment, when it's ready.";
+  } else if (next && next.waits_for) {
+    line = `The next chapter waits for ${next.waits_for.toLowerCase()}. It won't come to you. You'll have to go and find one.`;
+  } else if (next) {
+    line = until(next) ? `More may surface after ${until(next)} together.` : "More will surface soon.";
+  }
+  ui.byId("watcher-lore-next").textContent = line;
+  // The keepsake: each finished book, to read as a whole.
+  ui.byId("watcher-books").innerHTML = books.map((book) => `<details class="watcher-book">
+      <summary><span>READ THE WHOLE STORY</span><b>BOOK ${ui.escapeHtml(book.name.toUpperCase())} · ${ui.escapeHtml(book.title.toUpperCase())}</b></summary>
+      <article>${book.chapters.map((chapter) => `<h4><span>${ui.escapeHtml(chapter.numeral)}</span>${ui.escapeHtml(chapter.title)}</h4>
+        ${String(chapter.account).split("\n\n").map((para) => `<p>${ui.escapeHtml(para)}</p>`).join("")}`).join("")}</article>
+    </details>`).join("");
+  const heard = new Map(echoes.map((row) => [row.topic, row]));
+  const labels = lore.echo_labels || {};
+  ui.byId("watcher-echo-count").textContent = `${ui.numeric(echoes.length)} OF ${ui.numeric(lore.echo_total || 0)} FOUND`;
+  ui.byId("watcher-echoes").innerHTML = Object.entries(labels).map(([topic, label]) => {
+    const row = heard.get(topic);
+    return row
+      ? `<li class="heard"><b>${ui.escapeHtml(label)}</b><span>${ui.numeric(row.count)}×</span><time>${ui.escapeHtml(ago(row.at))}</time></li>`
+      : `<li><b>${ui.escapeHtml(label)}</b><span>not yet</span><time></time></li>`;
+  }).join("");
 }
 
 function stat(ui, label, value, detail = "") {
@@ -118,6 +200,8 @@ export function renderWatcher(data = {}, ui) {
   ui.byId("watcher-favourites").innerHTML = favourites.length
     ? favourites.map((row) => `<li><span>${ui.escapeHtml(row.label)}</span><i style="--share:${Math.round(100 * (Number(row.count) || 0) / most)}%"></i><b>${ui.numeric(row.count)}</b></li>`).join("")
     : `<li class="empty">Nothing yet. It's been quiet.</li>`;
+
+  renderLore(data.lore || {}, ui);
 
   ui.byId("watcher-log-count").textContent = `${ui.numeric(log.length)} SHOWN · ${ui.numeric(data.thoughts)} IN ALL`;
   const key = JSON.stringify(log.slice(0, 3).map((row) => [row.at, row.text]).concat([log.length]));

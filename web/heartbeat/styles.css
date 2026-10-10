@@ -18,7 +18,9 @@ body { pointer-events: none; user-select: none; }
    thought; the canvas draws the eye. */
 body { display: flex; align-items: center; }
 body.thought-left { flex-direction: row-reverse; }
-.heartbeat { flex: 0 0 auto; width: 100vh; height: 100vh; contain: strict; }
+/* The orb keeps its own size (--orb-size, from the app) when a long thought
+   makes the window taller than it (5.5.3.5). */
+.heartbeat { flex: 0 0 auto; width: var(--orb-size, 100vh); height: var(--orb-size, 100vh); contain: strict; }
 #orb { display: block; width: 100%; height: 100%; }
 .thought {
   flex: 1 1 auto; min-width: 0; margin: 0; padding: 0 8px;
@@ -38,7 +40,9 @@ body.thought-left .thought { flex-direction: row-reverse; text-align: right; }
 /* A thin line from the eye to its words. */
 .thought i { flex: 0 0 12px; height: 1px; background: linear-gradient(90deg, var(--accent), transparent); opacity: .8; }
 body.thought-left .thought i { background: linear-gradient(270deg, var(--accent), transparent); }
-.thought span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+/* As many lines as the thought takes: the window is sized for its words
+   (5.5.3.5; three lines cut the long lore passages short). */
+.thought span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 12; -webkit-box-orient: vertical; }
 /* The backdrop: a dark panel in the theme's colours. Overlay Studio's
    opacity fades the whole window, backdrop and all. */
 body.thought-backdrop .thought span {

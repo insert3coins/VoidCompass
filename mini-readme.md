@@ -1,30 +1,25 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.3.4.1 // No more dark boxes in dark mode
+## v5.5.3.5 // The Watcher remembers
 **Release Date:** 2026-Oct-11
 
-* **Overlays are see-through again when Windows is in dark mode.** With Windows set to dark mode, every overlay sat on a solid dark box: around the music player, the exobiology panel, between notifications, even on the desktop. Thanks to CMDR Nyx Evera for the careful troubleshooting.
-  * **The cause:** Microsoft's WebView2, which draws Void Compass' overlays, paints a dark background behind see-through pages whenever Windows is in dark mode (Microsoft's own bug, in every current version). It was never your graphics card, driver or settings.
-  * **The fix:** overlays now draw through Windows' compositor directly, which never paints that background. They look and behave as before, including click-through, OPACITY, each overlay's own opacity, and round and cut shapes.
-  * **If an overlay misbehaves after this update,** turn on **Classic windows** in Overlay Studio › All overlays and restart Void Compass. That brings back the previous overlay windows. If Windows can't run the new ones, Void Compass also switches back by itself.
-* **Overlays never pull Void Compass in front of the game.** Test builds of this patch could bring the command deck to the front (or flash its taskbar button) the first time an overlay appeared, taking you out of the game. Fixed.
-
-## v5.5.3.4 // Trade routes from a whole system
-**Release Date:** 2026-Oct-10
-
-* **Plan a trade route from a whole system.** In Trading › Route Planner, tick **From any station in this system** and give just the system: no station needed.
-  * Void Compass reads every market in the system in one request. It sets aside the stations your settings rule out: no large pad, fleet carriers, planetary ports, prices too old, too far from the star, or nothing in stock.
-  * It tries the most promising stations on Spansh's trade router: the ones with the most goods in stock for a full hold and the freshest prices. That's 3 by default, or up to 6 with **Stations to try**. Spansh plans them one after another, so each extra station adds about one search's time. It never tries every station: Sol alone has over 60 markets.
-  * Each station has its own line in the progress panel (queued, working, done or failed), and **Stop** stops them all.
-  * The results compare them, best first ("Best start in Sol: Daedalus 11.2M · Galileo 11.2M · Columbus 11.2M"). They also say how many stations fit your settings and why the rest were left out. **Show** opens any start's route, and **Follow this route** and **Loop these two** work on it as usual. A station with no profitable route, or one Spansh couldn't plan, says so rather than vanishing.
-* **What the system itself pays.** Find commodity says what the searched system's own stations pay or charge ("In UGPS 0722-05: Cloutier's Forge pays 51,184"). Sell cargo says what your current system's stations pay for each item in your hold, beside the best nearby.
-* **Any station's market.** The Market view has **Any station in a system**: list every station with a market in a system, nearest the star first, with what's for sale and wanted and how old the prices are, and open any of them.
-* **The command deck no longer freezes after a slow start.** When reading your journal took longer than the startup allows, Void Compass went live without it, as it should. But the late journal progress then put the deck back on its boot screen behind the scenes, and the deck stopped updating for the rest of the session. Things looked stuck or never loaded, more often if you clicked around while it was starting. Startup now stays finished once it's done.
-* **The Navigation HUD no longer gets stuck on SURFACE DEPARTURE.** After starting Void Compass (or the game) in space near a planet, then flying off in supercruise, the HUD could say SURFACE DEPARTURE long after, even docked and undocked somewhere else. A login only counts as being at a planet when you're really on or near its surface. Dropping out of supercruise or docking also ends a departure.
-* **The Dark box fix switch stays on.** In 5.5.3.3.1 it flipped back to off a moment after you turned it on. The setting was saved and the fix applied, but the switch showed it as off, so clicking it again turned the fix off.
+* **The Watcher has a past, and a long story to tell.** Nobody knows what it is, itself included. A salvager pulled it out of a ruin and sold it as scrap, and your ship woke it. It remembers a time long before humans: the ones who raised the ruins, a chorus of others like it, a sound between the stars, a door it was told never to look through, and a single word it has been trying to translate ever since.
+  * **Ten chapters, seventy passages,** from *Scrap* to *The Word*. It tells them one at a time and in order, as you spend sessions and hours together: the first within your first hour, the last after about 450 hours. At most one every hour and a half of play, in any lull of a couple of minutes (busy flying doesn't hold it back), never in danger, and never in a session's first minutes.
+  * **Echoes:** real things in your game stir a memory of their own: a black hole, the galactic core, a neutron star, the builders' ruins, signs of the sound, the far reaches beyond 20,000 light years, a great ship. Each rests for hours or days after it speaks, so a neutron highway doesn't turn it into a commentary.
+  * **More lore in passing:** over 60 quiet-moment thoughts with the same old ache.
+  * **The Watcher page has "The long story":** each chapter as it begins, the passages it has told you, and, when a chapter is finished, its full account as the Watcher would set it down. The chapters ahead stay unnamed. **Echoes** lists the seven things that can stir a memory, and which you've found.
+  * **When the story ends, it doesn't just stop.** It closes with a word of its own, once. After that its quiet moments change: it's settled now that it has decided to stay, still itself, and now and then it looks back on a chapter it told you, with when it told you.
+  * **Book Two, "The Answer":** seven more chapters, after Book One, about whether anyone is still out there. Each one waits for something you have to go and find: a great ship, a neutron star, the far reaches, the builders' ruins, a black hole, signs of the sound, and at last the galactic core. The Watcher page says what each locked chapter is waiting for.
+  * **Read the whole story:** each finished book can be read on the Watcher page as one piece, every chapter's account in order.
+  * **Four new achievements,** under The Watcher: hearing its first memory, its whole story, the end of Book Two, and finding all seven echoes.
+  * The story is our own. It brushes against Elite's mysteries without naming or explaining them.
+* **The Watcher remembers its goodbye.** Its sign-off when the game closes is now saved straight away. Before, it waited for the next periodic save (up to five minutes), so closing Void Compass quickly could lose it, and it might repeat a sign-off it had already used.
+* **Long thoughts never clip.** The Watcher's window grows taller to fit a long thought, up and down evenly so the orb stays where you put it. Before, anything past three lines was cut off, which caught the longer lore passages, especially on a small orb or at large text sizes.
 
 ## Earlier releases
 
+* **v5.5.3.4.1** — Overlays see-through again in Windows dark mode (they now draw through Windows' compositor, avoiding Microsoft WebView2's dark background), with a Classic windows fallback in Overlay Studio; overlays never pull Void Compass in front of the game.
+* **v5.5.3.4** — Trade routes from a whole system (the best few stations tried and compared); what a system's own stations pay in Find commodity and Sell cargo; any station's market from the Market view; the Navigation HUD no longer stuck on SURFACE DEPARTURE; the command deck no longer freezes after a slow start; the Dark box fix switch stays on.
 * **v5.5.3.3.1** — A Dark box fix for PCs where overlays show dark boxes or corners (seen with a GTX 1660 Super): every overlay window cut to what it draws; the logs say which renderer each overlay uses.
 * **v5.5.3.3** — Ten skins for the music player overlay; each overlay can have its own opacity; the heartbeat orb's window cut to a circle, so it never shows a black square.
 * **v5.5.3.2** — The Watcher: its own idle chatter about what is really around you, natures with their own voices, memory of places, records and anniversaries, a poke hotkey, a bond that grows, a page on the deck, soft effects and a richer look; notifications show everything at any text size; trading searches 10–40 times faster.

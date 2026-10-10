@@ -1059,3 +1059,17 @@ from voidcompass.overlays.watcher_lines_more import MORE_NORMAL, MORE_WEARY  # n
 for _bank, _more in ((NORMAL, MORE_NORMAL), (WEARY, MORE_WEARY)):
     for _topic, _lines in _more.items():
         _bank.setdefault(_topic, []).extend(_lines)
+
+# Its past, in passing (5.5.3.5): the same words in every nature.
+from voidcompass.overlays.watcher_lore import AFTER_MUSINGS, ECHOES, MUSINGS, RECALL  # noqa: E402
+
+NORMAL["idle_lore"] = list(MUSINGS)
+WEARY["idle_lore"] = list(MUSINGS)
+NORMAL["idle_after"] = list(AFTER_MUSINGS)
+WEARY["idle_after"] = list(AFTER_MUSINGS)
+NORMAL["lore_recall"] = list(RECALL)
+WEARY["lore_recall"] = list(RECALL)
+# Echoes of its past (5.5.3.5): one voice, whatever its nature.
+for _topic, _lines in ECHOES.items():
+    NORMAL[_topic] = list(_lines)
+    WEARY[_topic] = list(_lines)

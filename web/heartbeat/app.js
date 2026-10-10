@@ -103,6 +103,11 @@
     const palette = VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, effects);
     const model = snapshot.heartbeat || {};
     const stalled = Boolean(model.stalled);
+    // The orb at its own size while a thought shows, when a long one makes
+    // the window taller than the orb; otherwise it simply fills the window.
+    const orbSize = Number((model.orb || {}).size) || 0;
+    if (model.thought && orbSize > 0) document.documentElement.style.setProperty("--orb-size", `${orbSize}px`);
+    else document.documentElement.style.removeProperty("--orb-size");
     root.classList.toggle("stalled", stalled);
     orb.update({
       palette,
