@@ -35,6 +35,9 @@
 
   function frame(card, item) {
     card.dataset.notificationId = String(item.id);
+    // Each card is a shape of its own for the Dark box fix (5.5.3.3.1): the
+    // gaps between them stay see-through.
+    card.dataset.windowShape = "box";
     card.style.setProperty("--life", lifetime(item));
     card.appendChild(decorative(node("div", "notification-edge")));
     card.appendChild(decorative(node("div", "notification-texture")));

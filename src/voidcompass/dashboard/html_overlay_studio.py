@@ -566,7 +566,7 @@ class HtmlOverlayStudioMixin:
             "heartbeat_idle_motion", "heartbeat_thought_backdrop",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
-            "overlay_hide_on_maps",
+            "overlay_hide_on_maps", "overlay_transparency_fix",
             "colony_show_carriers", "colony_carrier_delta", "colony_collapse_covered",
             "colony_highlight_almost", "colony_show_on_right_panel",
             "colony_inline_carriers", "colony_hide_other_overlays",
@@ -583,6 +583,8 @@ class HtmlOverlayStudioMixin:
             self._apply_overlay_mouse_passthrough()
         elif key == "overlay_hide_on_maps":
             self._apply_map_overlay_hiding()
+        elif key == "overlay_transparency_fix":
+            HtmlOverlayServer.set_shape_windows(bool(self.config[key]))
         elif key in {"hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels"}:
             self.update_hud()
         elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop"}:

@@ -1,5 +1,13 @@
 # VoidCompass // UPDATE LOG
 
+## v5.5.3.3.1 // Dark box fix
+**Release Date:** 2026-Oct-10
+
+* **No more dark boxes round overlays.** On some PCs (seen with an NVIDIA GTX 1660 Super), an overlay's see-through areas come out black: dark corners round the music player's rounded skins, dark gaps between notifications, a dark box round the orb's thoughts.
+  * **Turn on Dark box fix** (Overlay Studio › All overlays) if you see them. It cuts every overlay window to exactly what it draws: rounded corners, cut corners, each notification card.
+  * **Leave it off if your overlays look right.** It also trims soft glows at their edges.
+* **For a support bundle,** the logs now say which renderer each overlay uses (your graphics card, or software) and whether each window's shape took.
+
 ## v5.5.3.3 // Ten skins for the music player
 **Release Date:** 2026-Oct-10
 

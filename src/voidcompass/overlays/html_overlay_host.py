@@ -234,7 +234,7 @@ def _opacity_alpha(value):
     return int(round(max(0.4, min(1.0, value)) * 255))
 
 
-def _apply_overlay_key_background(window):
+def _apply_overlay_key_background(window, rgb=OVERLAY_KEY_RGB):
     """Paint the overlay form's background in the key colour (UI thread)."""
     native = getattr(window, "native", None)
     if native is None:
@@ -246,7 +246,7 @@ def _apply_overlay_key_background(window):
         def paint():
             if bool(getattr(native, "IsDisposed", False)):
                 return None
-            native.BackColor = Color.FromArgb(255, *OVERLAY_KEY_RGB)
+            native.BackColor = Color.FromArgb(255, *rgb)
             native.Invalidate(True)
             return None
 
@@ -288,6 +288,69 @@ def _apply_window_shape(window, shape):
             return False
         # The window owns the region from here (Windows frees it).
         return bool(set_region(ctypes.c_void_p(hwnd), ctypes.c_void_p(region), 1))
+    except Exception:
+        return False
+
+
+def _apply_window_polygons(window, polygons):
+    """Cut the window to the shapes its page draws (device px polygons from
+    overlay-client), for the Dark box fix (5.5.3.3.1). Where WebView2 draws
+    without the GPU, its transparent pixels come out black and no colour key
+    reaches them (DirectComposition); a window region is the one thing that
+    cuts them, on any PC."""
+    hwnd = _native_handle(window)
+    if not hwnd:
+        return False
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+        make = gdi32.CreatePolygonRgn
+        make.argtypes = (ctypes.POINTER(ctypes.wintypes.POINT), ctypes.c_int, ctypes.c_int)
+        make.restype = ctypes.c_void_p
+        combine = gdi32.CombineRgn
+        combine.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int)
+        delete = gdi32.DeleteObject
+        delete.argtypes = (ctypes.c_void_p,)
+        whole = None
+        for polygon in polygons:
+            points = (ctypes.wintypes.POINT * len(polygon))(*(ctypes.wintypes.POINT(int(x), int(y)) for x, y in polygon))
+            part = make(points, len(polygon), 2)  # WINDING
+            if not part:
+                continue
+            if whole is None:
+                whole = part
+            else:
+                combine(ctypes.c_void_p(whole), ctypes.c_void_p(whole), ctypes.c_void_p(part), 2)  # RGN_OR
+                delete(ctypes.c_void_p(part))
+        set_region = user32.SetWindowRgn
+        set_region.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int)
+        set_region.restype = ctypes.c_int
+        if whole is None:
+            return bool(set_region(ctypes.c_void_p(hwnd), None, 1))
+        return bool(set_region(ctypes.c_void_p(hwnd), ctypes.c_void_p(whole), 1))
+    except Exception:
+        return False
+
+
+def _window_has_region(window):
+    """True when Windows reports a region on the window (the round cut)."""
+    hwnd = _native_handle(window)
+    if not hwnd:
+        return False
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+        make = gdi32.CreateRectRgn
+        make.argtypes = (ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int)
+        make.restype = ctypes.c_void_p
+        probe = make(0, 0, 0, 0)
+        get = user32.GetWindowRgn
+        get.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
+        get.restype = ctypes.c_int
+        kind = get(ctypes.c_void_p(hwnd), ctypes.c_void_p(probe))
+        gdi32.DeleteObject.argtypes = (ctypes.c_void_p,)
+        gdi32.DeleteObject(ctypes.c_void_p(probe))
+        return kind > 1  # SIMPLEREGION (2) or COMPLEXREGION (3); 0/1 none or error
     except Exception:
         return False
 
@@ -620,11 +683,34 @@ class _WindowController:
                 if not _apply_windows_geometry(self.window, *geometry):
                     return {"ok": False, "reason": "native geometry unavailable", "handle": handle}
                 self.last_geometry = geometry
+            # The Dark box fix: the window cut to the shapes its page draws.
+            polygons = payload.get("region") if isinstance(payload.get("region"), list) else None
+            if polygons:
+                key = repr(polygons)
+                if key != getattr(self, "last_region", None) or resized:
+                    shaped = _apply_window_polygons(self.window, polygons)
+                    if shaped:
+                        self.last_region = key
+                        self.last_shape = "region"
+                    if ("region", shaped) != getattr(self, "last_shape_reported", None):
+                        self.last_shape_reported = ("region", shaped)
+                        print(f"Overlay window shape: {self.overlay_id} page shapes ({len(polygons)}) {'applied' if shaped else 'FAILED'}", flush=True)
+            elif getattr(self, "last_region", None) is not None:
+                self.last_region = None
+                self.last_shape = None  # back to circle or rectangle below
             # A round overlay (the heartbeat orb) is clipped to a circle; a
             # resized circle is clipped again to its new size.
             shape = "circle" if payload.get("shape") == "circle" else "rect"
-            if shape != self.last_shape or (resized and shape == "circle"):
-                if _apply_window_shape(self.window, shape):
+            if not polygons and (shape != self.last_shape or (resized and shape == "circle")):
+                shaped = _apply_window_shape(self.window, shape)
+                if shaped and shape == "circle":
+                    shaped = _window_has_region(self.window)
+                if (shape, shaped) != getattr(self, "last_shape_reported", None):
+                    # In the logs (and a support bundle), once per change: did
+                    # the round cut take on this PC? (5.5.3.3)
+                    self.last_shape_reported = (shape, shaped)
+                    print(f"Overlay window shape: {self.overlay_id} {shape} {'applied' if shaped else 'FAILED'}", flush=True)
+                if shaped:
                     self.last_shape = shape
             # Overlay Studio's OPACITY. A window never faded keeps Windows'
             # default (no call at all), exactly as before.
@@ -653,6 +739,10 @@ class _WindowController:
                     _apply_webview_transparency(self.window)
                 if _set_windows_visibility(self.window, visible):
                     self.last_visible = visible
+                    if visible and self.last_shape == "circle":
+                        # Showing the form can bring back its full rectangle
+                        # on some PCs, as it can WebView2's opaque brush.
+                        _apply_window_shape(self.window, "circle")
                     if visible:
                         # Showing the native form is the operation that can
                         # make WebView2 restore its opaque fallback brush.
@@ -666,6 +756,11 @@ class _WindowController:
             if visible and now - self.last_topmost_refresh >= 12.0:
                 _apply_windows_style(self.window, click_through)
                 _apply_webview_transparency(self.window)
+                # Keep the round cut: if something took it away, put it back
+                # and say so in the logs.
+                if self.last_shape == "circle" and not _window_has_region(self.window):
+                    restored = _apply_window_shape(self.window, "circle")
+                    print(f"Overlay window shape: {self.overlay_id} circle lost; {'restored' if restored else 'restore FAILED'}", flush=True)
                 self.last_topmost_refresh = now
             return {
                 "ok": True,

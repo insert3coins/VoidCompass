@@ -228,6 +228,7 @@ PROFILE_TEXT_SETTINGS = (
 
 PROFILE_BOOL_SETTINGS = (
     "overlay_hide_on_maps",
+    "overlay_transparency_fix",
     "edsm_upload_enabled",
     "edsm_backfill_on_cache_rebuild",
     "eddn_market_upload_enabled",
@@ -786,6 +787,8 @@ def apply_profile_config(config, profile_key=None):
                 "ui_text_min_px": 0,
                 "overlay_text_scale_percent": 100,
                 "overlay_frame_rate": 30,
+                # Black areas see-through (WebView2 without the GPU): 5.5.3.3.1.
+                "overlay_transparency_fix": False,
                 "overlay_map_keep_visible": [],
                 # Overlays with their own opacity (Studio id: percent).
                 "overlay_opacity_by_overlay": {},
@@ -1134,6 +1137,7 @@ def load_config():
         'overlay_text_scale_percent': 100,
         'overlay_hide_on_maps': True,
         'overlay_frame_rate': 30,
+        'overlay_transparency_fix': False,
         'overlay_map_keep_visible': [],
         'overlay_opacity_by_overlay': {},
         'overlay_opacity_percent': 100,

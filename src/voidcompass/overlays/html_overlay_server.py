@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import logging
 from pathlib import Path
 import secrets
 import weakref
@@ -13,6 +14,24 @@ import time
 from urllib.parse import parse_qs, unquote, urlparse
 
 from voidcompass.core.static_assets import asset_type, read_asset
+
+
+def _clean_shapes(value):
+    """The page's shapes as at most 32 polygons of 3-64 integer points."""
+    shapes = []
+    for polygon in (value if isinstance(value, list) else [])[:32]:
+        if not isinstance(polygon, list):
+            continue
+        points = []
+        for point in polygon[:64]:
+            try:
+                x, y = int(point[0]), int(point[1])
+            except (TypeError, ValueError, IndexError):
+                continue
+            points.append([max(-100, min(20000, x)), max(-100, min(20000, y))])
+        if len(points) >= 3:
+            shapes.append(points)
+    return shapes
 
 
 def _body_read(handler):
@@ -53,6 +72,8 @@ class _OverlayState:
         self.last_client_seen = 0.0
         self.rendered_revision = -1
         self.content_height = 0
+        # The page's visible shapes (device px polygons), for the Dark box fix.
+        self.shapes = []
         self.last_rendered_at = 0.0
         self.ready = threading.Event()
         self.host_status = {}
@@ -113,6 +134,10 @@ class HtmlOverlayServer:
     # Overlays with their own opacity (5.5.3.3), by overlay id; the rest
     # follow ``opacity``.
     opacity_by_overlay = {}
+    # The Dark box fix (5.5.3.3.1): where WebView2 draws without the GPU, its
+    # transparent pixels come out black; the host then cuts every overlay
+    # window to the shapes its page reports.
+    shape_windows = False
     _instances = weakref.WeakSet()
 
     @classmethod
@@ -125,6 +150,19 @@ class HtmlOverlayServer:
         if value == cls.opacity:
             return False
         cls.opacity = value
+        for server in list(cls._instances):
+            with server._condition:
+                server._window_revision += 1
+                server._condition.notify_all()
+        return True
+
+    @classmethod
+    def set_shape_windows(cls, enabled):
+        """Turn the Dark box fix on or off; True when it changed."""
+        enabled = bool(enabled)
+        if enabled == cls.shape_windows:
+            return False
+        cls.shape_windows = enabled
         for server in list(cls._instances):
             with server._condition:
                 server._window_revision += 1
@@ -291,6 +329,7 @@ class HtmlOverlayServer:
             state.last_client_seen = 0.0
             state.rendered_revision = -1
             state.content_height = 0
+            state.shapes = []
             state.last_rendered_at = 0.0
             state.ready.clear()
             state.host_status = {}
@@ -305,6 +344,8 @@ class HtmlOverlayServer:
             for overlay_id, state in self._overlays.items():
                 window = dict(state.window)
                 window["opacity"] = self.opacity_by_overlay.get(overlay_id, self.opacity)
+                if self.shape_windows and state.shapes:
+                    window["region"] = state.shapes
                 if not state.shutdown:
                     if self.layout_mode:
                         window["visible"] = True
@@ -355,6 +396,7 @@ class HtmlOverlayServer:
                 state.last_client_seen = 0.0
                 state.rendered_revision = -1
                 state.content_height = 0
+                state.shapes = []
                 state.last_rendered_at = 0.0
                 state.ready.clear()
                 state.host_status = {}
@@ -652,11 +694,12 @@ class HtmlOverlayServer:
         if parsed.path == "/api/rendered":
             try:
                 declared = max(0, int(handler.headers.get("Content-Length", "0")))
-                payload = json.loads(handler.rfile.read(min(1024, declared)) or b"{}")
-                if declared <= 1024:
+                payload = json.loads(handler.rfile.read(min(32768, declared)) or b"{}")
+                if declared <= 32768:
                     _body_read(handler)
                 revision = int(payload.get("revision"))
                 content_height = max(0, min(4096, int(payload.get("content_height") or 0)))
+                shapes = _clean_shapes(payload.get("shapes"))
             except (TypeError, ValueError, json.JSONDecodeError, OSError):
                 self._send_json(handler, {"error": "invalid revision"}, 400)
                 return
@@ -666,6 +709,11 @@ class HtmlOverlayServer:
                 )
                 state.rendered_revision = max(state.rendered_revision, revision)
                 state.content_height = content_height
+                if shapes != state.shapes:
+                    state.shapes = shapes
+                    if self.shape_windows:
+                        self._window_revision += 1
+                        self._condition.notify_all()
                 state.last_rendered_at = time.monotonic()
                 state.last_client_seen = state.last_rendered_at
                 is_content_ready = bool(
@@ -682,12 +730,22 @@ class HtmlOverlayServer:
             length = int(handler.headers.get("Content-Length", "0"))
             if not 0 <= length <= 1024:
                 raise ValueError("invalid ready payload length")
-            handler.rfile.read(length)
+            body = handler.rfile.read(length)
             _body_read(handler)
         except (TypeError, ValueError, OSError):
             handler.close_connection = True
             self._send_json(handler, {"error": "invalid ready payload"}, 400)
             return
+        # Which renderer the page has, once per overlay, for the logs: a
+        # software renderer (SwiftShader) means transparent areas may come
+        # out black, the dark boxes the Dark box fix cures (5.5.3.3.1).
+        try:
+            renderer = str((json.loads(body or b"{}") or {}).get("renderer") or "")[:160]
+        except (TypeError, ValueError, AttributeError):
+            renderer = ""
+        if renderer and renderer != getattr(state, "renderer", ""):
+            state.renderer = renderer
+            logging.info("Overlay renderer: %s: %s", state.overlay_id, renderer)
         with self._condition:
             was_content_ready = bool(
                 state.ready.is_set() and state.rendered_revision >= 0

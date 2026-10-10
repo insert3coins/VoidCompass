@@ -4804,6 +4804,8 @@ class MainDashboard(
         # Overlays with their own opacity (5.5.3.3).
         if hasattr(self, "_apply_own_opacities"):
             self._apply_own_opacities()
+        # The transparency fix for PCs whose overlays show dark boxes.
+        HtmlOverlayServer.set_shape_windows(bool(self.config.get("overlay_transparency_fix", False)))
 
     def _apply_runtime_feature_toggles(self):
         self._apply_overlay_server_settings()
