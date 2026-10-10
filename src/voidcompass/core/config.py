@@ -224,6 +224,9 @@ PROFILE_TEXT_SETTINGS = (
 PROFILE_BOOL_SETTINGS = (
     "overlay_hide_on_maps",
     "overlay_transparency_fix",
+    # The old (windowed) overlay windows, for a PC where visual hosting
+    # fails (5.5.3.4.1). Read when the overlay host starts.
+    "overlay_classic_windows",
     "edsm_upload_enabled",
     "edsm_backfill_on_cache_rebuild",
     "eddn_market_upload_enabled",
@@ -776,6 +779,7 @@ def apply_profile_config(config, profile_key=None):
                 "overlay_frame_rate": 30,
                 # Black areas see-through (WebView2 without the GPU): 5.5.3.3.1.
                 "overlay_transparency_fix": False,
+                "overlay_classic_windows": False,
                 "overlay_map_keep_visible": [],
                 # Overlays with their own opacity (Studio id: percent).
                 "overlay_opacity_by_overlay": {},
@@ -1118,6 +1122,7 @@ def load_config():
         'overlay_hide_on_maps': True,
         'overlay_frame_rate': 30,
         'overlay_transparency_fix': False,
+        'overlay_classic_windows': False,
         'overlay_map_keep_visible': [],
         'overlay_opacity_by_overlay': {},
         'overlay_opacity_percent': 100,

@@ -1,5 +1,13 @@
 # VoidCompass // UPDATE LOG
 
+## v5.5.3.4.1 // No more dark boxes in dark mode
+**Release Date:** 2026-Oct-11
+
+* **Overlays are see-through again when Windows is in dark mode.** With Windows set to dark mode, every overlay sat on a solid dark box: around the music player, the exobiology panel, between notifications, even on the desktop. Thanks to CMDR Nyx Evera for the careful troubleshooting.
+  * **The cause:** Microsoft's WebView2, which draws Void Compass' overlays, paints a dark background behind see-through pages whenever Windows is in dark mode (Microsoft's own bug, in every current version). It was never your graphics card, driver or settings.
+  * **The fix:** overlays now draw through Windows' compositor directly, which never paints that background. They look and behave as before, including click-through, OPACITY, each overlay's own opacity, and round and cut shapes.
+  * **If an overlay misbehaves after this update,** turn on **Classic windows** in Overlay Studio › All overlays and restart Void Compass. That brings back the previous overlay windows. If Windows can't run the new ones, Void Compass also switches back by itself.
+
 ## v5.5.3.4 // Trade routes from a whole system
 **Release Date:** 2026-Oct-10
 

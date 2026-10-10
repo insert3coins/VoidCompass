@@ -371,6 +371,10 @@ def _apply_window_alpha(window, alpha):
         setter = user32.SetLayeredWindowAttributes
         setter.argtypes = (ctypes.c_void_p, ctypes.c_uint32, ctypes.c_ubyte, ctypes.c_uint32)
         setter.restype = ctypes.c_int
+        if getattr(window, "_voidcompass_composition", False):
+            # Visual hosting (5.5.3.4.1): no form background under the page,
+            # so the fade alone.
+            return bool(setter(ctypes.c_void_p(hwnd), 0, int(alpha), LWA_ALPHA))
         # The fade, and the form background keyed out so transparent page
         # pixels stay see-through under it.
         _apply_overlay_key_background(window)
@@ -789,8 +793,12 @@ class _WindowController:
 
 
 class _OverlayHost:
-    def __init__(self, base_url, webview_module):
+    def __init__(self, base_url, webview_module, runtime=None):
         parsed = urlparse(str(base_url))
+        # Visual hosting (5.5.3.4.1): composition_host's runtime makes the
+        # windows; without one, pywebview does as before.
+        self.runtime = runtime
+        self.hosting = "composition"
         self.origin = f"{parsed.scheme}://{parsed.netloc}"
         self.token = (parse_qs(parsed.query).get("token") or [""])[0]
         self.webview = webview_module
@@ -820,6 +828,7 @@ class _OverlayHost:
         except (TypeError, ValueError):
             pass
         self.presentation_held = bool(response.get("presentation_held", False))
+        self.hosting = str(response.get("hosting") or "composition")
         if response.get("closing"):
             self.close()
             return {}
@@ -877,6 +886,20 @@ class _OverlayHost:
         start_x = HIDDEN_WINDOW_X if hidden else int((window_state or {}).get("x") or 0)
         start_y = HIDDEN_WINDOW_Y if hidden else int((window_state or {}).get("y") or 0)
         restore_foreground = _foreground_window()
+        if self.runtime is not None:
+            window = self.runtime.create_window(
+                str(spec.get("title") or f"Void Compass {overlay_id}"),
+                self.page_url(overlay_id, spec.get("template")),
+                width, height, start_x, start_y,
+            )
+            controller = _WindowController(overlay_id, window, restore_foreground=restore_foreground)
+            try:
+                controller.reload_revision = int(spec.get("reload_revision") or 0)
+            except (TypeError, ValueError):
+                controller.reload_revision = 0
+            self.controllers[str(overlay_id)] = controller
+            self.last_window_created_at = time.monotonic()
+            return window
         window = self.webview.create_window(
             str(spec.get("title") or f"Void Compass {overlay_id}"),
             url=self.page_url(overlay_id, spec.get("template")),
@@ -987,10 +1010,53 @@ class _OverlayHost:
                 pass
 
 
+def _run_composition(url):
+    """Visual hosting (5.5.3.4.1): the overlays without WebView2's dark-mode
+    base. None when it can't start here, and the pywebview host runs instead."""
+    from voidcompass.overlays import composition_host
+
+    if not composition_host.available():
+        print("Overlay windows: visual hosting unavailable on this Windows; classic windows", flush=True)
+        return None
+    try:
+        import webview.platforms.edgechromium  # noqa: F401  (the WebView2 assemblies and loader)
+    except Exception as exc:
+        print(f"Overlay windows: WebView2 unavailable for visual hosting ({type(exc).__name__}); classic windows", flush=True)
+        return None
+    host = _OverlayHost(url, None)
+    manifest = host.manifest()
+    if not manifest:
+        return 5
+    if host.hosting == "classic":
+        print("Overlay windows: classic windows (Overlay Studio setting)", flush=True)
+        return None
+    runtime = composition_host.CompositionRuntime()
+    if not runtime.start():
+        print(f"Overlay windows: visual hosting failed ({runtime.error}); classic windows", flush=True)
+        runtime.stop()
+        return None
+    host.runtime = runtime
+    try:
+        first_id, first_spec = next(iter(manifest.items()))
+        host.create_window(first_id, first_spec, hidden=True)
+        host.control_loop()
+    finally:
+        host.close()
+        runtime.stop()
+    return 0
+
+
 def run(url):
     if os.name != "nt":
         return 2
     os.environ.setdefault("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "00000000")
+    try:
+        result = _run_composition(url)
+    except Exception as exc:
+        print(f"Overlay windows: visual hosting stopped ({type(exc).__name__}: {exc}); classic windows", flush=True)
+        result = None
+    if result is not None:
+        return result
     try:
         import webview
     except Exception:

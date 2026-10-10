@@ -83,6 +83,10 @@ class WatcherLifeBrowserTests(unittest.TestCase):
 
         page = self.browser.new_page(viewport={"width": 96, "height": 96})
         self.addCleanup(page.close)
+        # Midday, whenever the tests run: deep in the night the lids are
+        # meant to sit lower (HeartbeatLife.nightfall), which failed the
+        # "never blinks" check for anyone testing after midnight.
+        page.add_init_script("Date.prototype.getHours = function () { return 12; };")
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
         self.addCleanup(lambda: self.assertEqual(errors, []))

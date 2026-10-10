@@ -138,6 +138,10 @@ class HtmlOverlayServer:
     # transparent pixels come out black; the host then cuts every overlay
     # window to the shapes its page reports.
     shape_windows = False
+    # The overlay host's windows (5.5.3.4.1): visual hosting, or the classic
+    # pywebview windows (Overlay Studio, for a PC where the new ones fail).
+    # The host reads it when it starts.
+    classic_windows = False
     _instances = weakref.WeakSet()
 
     @classmethod
@@ -155,6 +159,14 @@ class HtmlOverlayServer:
                 server._window_revision += 1
                 server._condition.notify_all()
         return True
+
+    @classmethod
+    def set_classic_windows(cls, enabled):
+        """Classic overlay windows on or off; True when it changed."""
+        enabled = bool(enabled)
+        changed = enabled != cls.classic_windows
+        cls.classic_windows = enabled
+        return changed
 
     @classmethod
     def set_shape_windows(cls, enabled):
@@ -577,6 +589,7 @@ class HtmlOverlayServer:
                     "overlays": overlays,
                     "presentation_held": presentation_held,
                     "closing": closing,
+                    "hosting": "classic" if self.classic_windows else "composition",
                 })
                 return
             state = self._state(parsed)

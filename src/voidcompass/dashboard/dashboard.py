@@ -4780,6 +4780,8 @@ class MainDashboard(
             self._apply_own_opacities()
         # The transparency fix for PCs whose overlays show dark boxes.
         HtmlOverlayServer.set_shape_windows(bool(self.config.get("overlay_transparency_fix", False)))
+        # Classic overlay windows (5.5.3.4.1): the host reads it when it starts.
+        HtmlOverlayServer.set_classic_windows(bool(self.config.get("overlay_classic_windows", False)))
 
     def _apply_runtime_feature_toggles(self):
         self._apply_overlay_server_settings()
