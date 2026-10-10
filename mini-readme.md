@@ -7,6 +7,7 @@
   * **The cause:** Microsoft's WebView2, which draws Void Compass' overlays, paints a dark background behind see-through pages whenever Windows is in dark mode (Microsoft's own bug, in every current version). It was never your graphics card, driver or settings.
   * **The fix:** overlays now draw through Windows' compositor directly, which never paints that background. They look and behave as before, including click-through, OPACITY, each overlay's own opacity, and round and cut shapes.
   * **If an overlay misbehaves after this update,** turn on **Classic windows** in Overlay Studio › All overlays and restart Void Compass. That brings back the previous overlay windows. If Windows can't run the new ones, Void Compass also switches back by itself.
+* **Overlays never pull Void Compass in front of the game.** Test builds of this patch could bring the command deck to the front (or flash its taskbar button) the first time an overlay appeared, taking you out of the game. Fixed.
 
 ## v5.5.3.4 // Trade routes from a whole system
 **Release Date:** 2026-Oct-10

@@ -48,6 +48,17 @@ class HostChoiceTests(unittest.TestCase):
         with patch.object(composition_host, "available", return_value=False):
             self.assertIsNone(html_overlay_host._run_composition("http://127.0.0.1:1/?token=t"))
 
+    def test_a_new_overlay_never_hands_focus_back_on_its_first_reveal(self):
+        """5.5.3.4.1: each overlay restored whatever had focus when it was made
+        (the command deck, at startup) on its first reveal: mid-game, the deck
+        jumped in front of Elite or its taskbar button flashed. These windows
+        never take focus, so there is nothing to give back."""
+        host = html_overlay_host._OverlayHost("http://127.0.0.1:1/?token=t", None)
+        host.runtime = type("Runtime", (), {"create_window": lambda self, *args: object()})()
+        with patch.object(html_overlay_host, "_foreground_window", return_value=4242):
+            host.create_window("toast", {"template": "toast", "window": {"width": 100, "height": 50}})
+        self.assertEqual(host.controllers["toast"].restore_foreground, 0)
+
     def test_the_classic_switch_is_registered(self):
         self.assertIn("overlay_classic_windows", config_module.PROFILE_BOOL_SETTINGS)
         html = (WEB / "dashboard" / "index.html").read_text(encoding="utf-8")

@@ -892,7 +892,11 @@ class _OverlayHost:
                 self.page_url(overlay_id, spec.get("template")),
                 width, height, start_x, start_y,
             )
-            controller = _WindowController(overlay_id, window, restore_foreground=restore_foreground)
+            # These windows never take focus when made, so nothing to give
+            # back on the first reveal. Restoring what had focus at creation
+            # (usually the command deck, at startup) pulled the deck in front
+            # of the game, or flashed its taskbar button (5.5.3.4.1).
+            controller = _WindowController(overlay_id, window, restore_foreground=0)
             try:
                 controller.reload_revision = int(spec.get("reload_revision") or 0)
             except (TypeError, ValueError):
