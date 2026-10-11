@@ -23,6 +23,7 @@
 * **Its words stay on screen.** If the words won't fit on the side they're meant for, they move to the other side. A long thought near the top or bottom of the screen grows away from that edge instead of off it, and the orb stays exactly where you put it.
 * **Its own text size.** **Text size** in Overlay Studio sizes the Watcher's words on their own, from 75% to 200%, or follows all overlays.
 * **Overlay Studio shows where its words go.** The orb's card stays the orb's size, with an outline beside it where its thoughts appear. Before, while a thought was on screen the card stretched to the whole thought window and could run off the display.
+* To enable this, goto overlay studio, click the heartbeat you will see new options for the text, how long its up, size etc. hope you enjoy!
 * **The Watcher page lists the latest 100 thoughts**, newest first, each with its heading. Its total count is still kept.
 * **Sell cargo sorts by distance.** **BY PRICE** / **BY DISTANCE** on Trading › Sell cargo: each commodity's best five payers, or the five nearest stations that buy it. It switches instantly, without asking Spansh again.
 
