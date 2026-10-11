@@ -825,30 +825,50 @@ button:disabled { opacity: .38; cursor: default !important; }
 /* Shared HTML cockpit controls. Palette variables are rebound whenever the
    active commander profile/theme changes, so static and generated buttons
    always inherit the same live presentation without per-page colour code. */
+/* Corner brackets (5.5.3.5): a targeting reticle round the label, drawn on
+   ::before so a page's own button background never wipes it. The arms
+   reach further on hover; primary fills, danger is red. Each page still
+   sizes its own buttons (compact in a list row, larger in a header). */
+@property --bracket-arm { syntax: "<length>"; inherits: true; initial-value: 7px; }
 button.cockpit-button {
   --button-tone: var(--accent);
+  --bracket: color-mix(in srgb,var(--button-tone) 58%,var(--border));
+  --bracket-arm: 7px;
   position: relative; isolation: isolate; overflow: hidden;
-  border: 1px solid color-mix(in srgb,var(--button-tone) 34%,var(--border));
-  background: linear-gradient(180deg,color-mix(in srgb,var(--panel-raised) 88%,transparent),color-mix(in srgb,var(--panel-alt) 96%,transparent));
-  color: var(--muted); box-shadow: inset 0 1px color-mix(in srgb,var(--text) 7%,transparent),inset 3px 0 color-mix(in srgb,var(--button-tone) 30%,transparent);
-  text-transform: uppercase; text-shadow: 0 0 10px color-mix(in srgb,var(--button-tone) 13%,transparent);
-  transition: color .14s,border-color .14s,background .14s,box-shadow .14s,transform .08s,filter .14s;
+  border: 1px solid transparent; border-radius: 0;
+  background: color-mix(in srgb,var(--panel) 45%,transparent);
+  color: var(--muted); box-shadow: none; text-shadow: none; text-transform: uppercase;
+  transition: color .14s,background-color .14s,--bracket-arm .18s ease-out,transform .08s,filter .14s;
 }
-button.cockpit-button::before { content: ""; position: absolute; left: 0; top: 25%; bottom: 25%; width: 2px; pointer-events: none; background: var(--button-tone); box-shadow: 0 0 7px color-mix(in srgb,var(--button-tone) 58%,transparent); opacity: .72; }
-button.cockpit-button::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg,transparent 20%,color-mix(in srgb,var(--button-tone) 18%,transparent) 48%,transparent 76%); transform: translateX(-125%); opacity: 0; }
-button.cockpit-button:hover:not(:disabled) { color: var(--button-tone); border-color: color-mix(in srgb,var(--button-tone) 78%,var(--border)); background: linear-gradient(180deg,color-mix(in srgb,var(--selection) 84%,var(--panel-raised)),color-mix(in srgb,var(--panel-alt) 96%,transparent)); box-shadow: inset 3px 0 var(--button-tone),0 0 13px color-mix(in srgb,var(--button-tone) 14%,transparent); }
-button.cockpit-button:hover:not(:disabled)::after { opacity: 1; transform: translateX(125%); transition: transform .48s ease-out,opacity .16s; }
-button.cockpit-button:active:not(:disabled) { transform: translateY(1px) scale(.992); filter: brightness(.94); }
-button.cockpit-button:focus-visible { outline: 2px solid color-mix(in srgb,var(--button-tone) 82%,white); outline-offset: 2px; }
-button.cockpit-button.cockpit-primary { color: #021015; border-color: var(--button-tone); background: linear-gradient(180deg,color-mix(in srgb,var(--button-tone) 88%,white 12%),var(--button-tone)); box-shadow: inset 0 1px color-mix(in srgb,white 30%,transparent),0 0 12px color-mix(in srgb,var(--button-tone) 18%,transparent); text-shadow: none; }
-button.cockpit-button.cockpit-primary::before { background: color-mix(in srgb,var(--button-tone) 34%,black); box-shadow: none; }
-button.cockpit-button.cockpit-primary:hover:not(:disabled) { color: #000; background: color-mix(in srgb,var(--button-tone) 86%,white); filter: brightness(1.07); }
+button.cockpit-button::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    linear-gradient(var(--bracket),var(--bracket)) left top / var(--bracket-arm) 1px no-repeat,
+    linear-gradient(var(--bracket),var(--bracket)) left top / 1px var(--bracket-arm) no-repeat,
+    linear-gradient(var(--bracket),var(--bracket)) right top / var(--bracket-arm) 1px no-repeat,
+    linear-gradient(var(--bracket),var(--bracket)) right top / 1px var(--bracket-arm) no-repeat,
+    linear-gradient(var(--bracket),var(--bracket)) left bottom / var(--bracket-arm) 1px no-repeat,
+    linear-gradient(var(--bracket),var(--bracket)) left bottom / 1px var(--bracket-arm) no-repeat,
+    linear-gradient(var(--bracket),var(--bracket)) right bottom / var(--bracket-arm) 1px no-repeat,
+    linear-gradient(var(--bracket),var(--bracket)) right bottom / 1px var(--bracket-arm) no-repeat;
+}
+/* The brackets are the only outline: a page's own button border keeps its
+   width (nothing moves) but not its colour, and no page glow. */
+button.cockpit-button, button.cockpit-button:hover, button.cockpit-button:focus-visible {
+  border-color: transparent !important; box-shadow: none !important;
+}
+/* Only a busy button scans. */
+button.cockpit-button::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(105deg,transparent 20%,color-mix(in srgb,var(--button-tone) 22%,transparent) 48%,transparent 76%); transform: translateX(-125%); opacity: 0; }
+button.cockpit-button:hover:not(:disabled) { --bracket: var(--button-tone); --bracket-arm: 11px; color: var(--button-tone); background-color: color-mix(in srgb,var(--button-tone) 11%,transparent); }
+button.cockpit-button:active:not(:disabled) { transform: translateY(1px); filter: brightness(.94); }
+button.cockpit-button:focus-visible { outline: 1px solid var(--button-tone); outline-offset: 2px; --bracket: var(--button-tone); }
+button.cockpit-button.cockpit-primary { --bracket: var(--button-tone); color: var(--bg); background-color: color-mix(in srgb,var(--button-tone) 82%,transparent); }
+button.cockpit-button.cockpit-primary:hover:not(:disabled) { color: var(--bg); background-color: var(--button-tone); --bracket: color-mix(in srgb,var(--button-tone) 55%,white); }
 button.cockpit-button.cockpit-danger { --button-tone: var(--red); color: color-mix(in srgb,var(--red) 84%,var(--text)); }
-button.cockpit-button.cockpit-danger:hover:not(:disabled) { background: linear-gradient(180deg,color-mix(in srgb,var(--red) 15%,var(--panel-raised)),color-mix(in srgb,var(--red) 7%,var(--panel-alt))); }
-button.cockpit-button.cockpit-ghost { background: color-mix(in srgb,var(--panel) 38%,transparent); box-shadow: inset 2px 0 color-mix(in srgb,var(--button-tone) 27%,transparent); }
-button.cockpit-button:disabled { opacity: .38; cursor: not-allowed; filter: saturate(.4); box-shadow: none; }
+button.cockpit-button.cockpit-ghost { background-color: transparent; }
+button.cockpit-button:disabled { opacity: .38; cursor: not-allowed; filter: saturate(.4); }
 button.cockpit-button.busy { pointer-events: none; color: var(--button-tone); }
-button.cockpit-button.busy::after { opacity: .5; animation: cockpit-button-scan .8s linear infinite; }
+button.cockpit-button.busy::after { opacity: 1; animation: cockpit-button-scan .8s linear infinite; }
 @keyframes cockpit-button-scan { from { transform: translateX(-125%); } to { transform: translateX(125%); } }
 
 /* Per-profile panel arranger. It is deliberately an editing layer over the

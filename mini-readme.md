@@ -25,6 +25,9 @@
 * **Overlay Studio shows where its words go.** The orb's card stays the orb's size, with an outline beside it where its thoughts appear. Before, while a thought was on screen the card stretched to the whole thought window and could run off the display.
 * To enable this, goto overlay studio, click the heartbeat you will see new options for the text, how long its up, size etc. hope you enjoy!
 * **The Watcher page lists the latest 100 thoughts**, newest first, each with its heading. Its total count is still kept.
+* **The Watcher page, laid out again.** Its eye, its character, what it talks about and the echoes sit in a rail down the side. Your bond, its counts and your records share one strip along the top. Below them, its story and everything it has said sit side by side and fill the screen. The long story is now a chapter list beside a reader: pick a chapter to read its passages and, once it's finished, its account. Before, every chapter took a full-width row and most of the page was empty. The page also uses more of a wide screen.
+* **New buttons across the command deck.** Corner brackets like a targeting reticle, in place of the boxed buttons with a glowing bar. They reach further and light up when you point at them. Main actions are filled, and deleting is in red. Trading's buttons now match the rest of the deck.
+* **Search another system from Market at any time.** *Any station in a system* is now at the top of Trading › Market. Before, it sat below the market you'd opened, a hundred rows or more down, so after opening one it looked as if you couldn't search again. A line also shows while a station's market is opening.
 * **Sell cargo sorts by distance.** **BY PRICE** / **BY DISTANCE** on Trading › Sell cargo: each commodity's best five payers, or the five nearest stations that buy it. It switches instantly, without asking Spansh again.
 
 ## Earlier releases

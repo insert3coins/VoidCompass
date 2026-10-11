@@ -40,6 +40,24 @@ class CargoSortTests(unittest.TestCase):
         deck._handle_trading_command("cargo_sort", {"sort": "nonsense"})
         self.assertEqual(deck._trading_ui()["cargo_sort"], "price")
 
+    def test_another_system_after_opening_a_market(self):
+        """The Market view's system search sat below an opened market (a
+        hundred rows or more), so it looked as if you couldn't search
+        another system. It's first now, and a second search works."""
+        self.run_inline()
+        deck = self.deck()
+        dumps = {1: {"system": {"name": "Sol", "stations": []}}, 2: {"system": {"name": "Colonia", "stations": []}}}
+        with patch.object(spansh, "system_id64", side_effect=lambda name: (name.title(), 1 if name.lower() == "sol" else 2)), \
+                patch.object(spansh, "system_dump", side_effect=lambda id64: dumps[id64]), \
+                patch.object(spansh, "station_market", return_value=None):
+            deck._handle_trading_command("system_markets", {"system": "Sol"})
+            deck._handle_trading_command("station", {"market_id": 128016896})
+            deck._handle_trading_command("system_markets", {"system": "Colonia"})
+        deck._handle_trading_command("view", {"view": "station"})
+        self.assertEqual(deck._html_trading_workspace()["station"]["list"]["system"], "Colonia")
+        page = (WEB / "dashboard" / "trading.js").read_text(encoding="utf-8")
+        self.assertIn("return listHtml + opened + html;", page, "the search above the opened market")
+
     def test_the_page_has_the_switch(self):
         page = (WEB / "dashboard" / "trading.js").read_text(encoding="utf-8")
         self.assertIn('data-trade-op="cargo_sort" data-sort="distance"', page)

@@ -146,7 +146,7 @@ const HOTKEY_CODE_NAMES = {
 
 const STRUCTURAL_BUTTON_SELECTOR = [
   ".nav-item", "[data-feed-filter]", ".overlay-quick button", "#overlay-all-toggle", "#overlay-quick-more", ".studio-overlay-card", ".studio-monitor", "[data-setup-go]", ".studio-text-link",
-  ".studio-index-select", ".mission-row", ".workspace-tabs button",
+  ".studio-index-select", ".mission-row", ".workspace-tabs button", ".watcher-chapter",
   ".suite-tabs button", "[data-analytics-view]",
   ".galnet-headline-row", "#status-galnet",
   ".wk-tile", ".wk-hullpick", ".wk-slot", ".wk-module", ".wk-docktab", ".wk-segbtn", ".wk-pip",
@@ -157,7 +157,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".pp-tabs button", ".pp-task-main", ".pp-power", "[data-pp-filter]",
   ".co-tabs button", ".co-actions button", ".pl-mini", ".pl-chip",
   ".bgs-star", ".bgs-link", ".bgs-row-main", ".bgs-card", ".bgs-ranges button",
-  ".tr-actions button", ".tr-ranges button", ".tr-table button",
+  ".tr-ranges button",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {

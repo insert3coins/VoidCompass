@@ -458,7 +458,9 @@ function stationView(data, ui) {
   } else {
     html += `<section class="tr-panel wide"><p class="tr-dim">Dock and open the commodity market to see it here. Any station from a route or search can be opened with its MARKET button.</p></section>`;
   }
-  // Any station in a system, from one request (5.5.3.4).
+  // Any station in a system, from one request (5.5.3.4). At the top since
+  // 5.5.3.5: below an opened market (a hundred rows or more) the search was
+  // out of sight, so it looked as if you couldn't search another system.
   const list = st.list || {};
   const busyList = (data.busy || []).includes("markets");
   const stations = (list.stations || []).map((row) => `<button type="button" data-trade-op="station" data-market-id="${esc(row.market_id)}">
@@ -469,13 +471,16 @@ function stationView(data, ui) {
     ${list.error ? `<p class="co-error">${esc(list.error)}</p>` : ""}
     ${list.stations ? (stations ? `<p class="tr-dim">${count(list.stations.length)} station${list.stations.length === 1 ? "" : "s"} with a market in ${esc(list.system)}, nearest the star first. Open one to see its market.</p><div class="tr-picks">${stations}</div>`
       : `<p class="tr-dim">Spansh has no station with a market in ${esc(list.system)}.</p>`) : ""}</section>`;
-  if (st.error) html += `<p class="co-error">${esc(st.error)}</p>`;
-  if (remote && (!local || remote.market_id !== local.market_id)) {
-    html += `<section class="tr-panel wide"><div class="tr-result-head"><div><p>FROM SPANSH</p><h3>${esc(remote.station)}</h3><span>${esc(remote.system)} · prices ${ago(remote.updated)}${remote.pad ? ` · ${remote.pad} pad` : ""}</span></div>
+  let opened = "";
+  if (st.error) opened += `<p class="co-error">${esc(st.error)}</p>`;
+  if ((data.busy || []).includes("station")) opened += `<section class="tr-panel wide"><p class="tr-dim">Opening that station's market on Spansh…</p></section>`;
+  else if (remote && (!local || remote.market_id !== local.market_id)) {
+    opened += `<section class="tr-panel wide"><div class="tr-result-head"><div><p>FROM SPANSH</p><h3>${esc(remote.station)}</h3><span>${esc(remote.system)} · prices ${ago(remote.updated)}${remote.pad ? ` · ${remote.pad} pad` : ""}</span></div>
       <div class="tr-actions"><button type="button" data-trade-op="copy" data-text="${esc(remote.system)}">COPY SYSTEM</button><button type="button" data-trade-op="plan_from" data-system="${esc(remote.system)}" data-station="${esc(remote.station)}">PLAN FROM HERE</button></div></div>
       ${marketTable(remote, esc, false)}</section>`;
   }
-  return html + listHtml;
+  // The search first, then the market you opened, then your docked one.
+  return listHtml + opened + html;
 }
 
 function historyView(data, ui) {

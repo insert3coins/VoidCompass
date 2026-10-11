@@ -24,37 +24,50 @@ function ago(seconds) {
 function shell(root, ui) {
   root.classList.remove("loading-panel");
   root.innerHTML = `<div class="watcher-page">
-    <section class="watcher-eye-panel" aria-label="The Watcher">
-      <div class="watcher-eye"><canvas id="watcher-orb" aria-hidden="true"></canvas></div>
-      <blockquote class="watcher-latest" id="watcher-latest"><span></span><cite></cite></blockquote>
-      <div class="watcher-actions">
-        <button type="button" class="primary" data-ws-page="watcher" data-ws-op="poke" id="watcher-poke">POKE</button>
-        <small id="watcher-hotkey"></small>
-      </div>
-      <dl class="watcher-character" id="watcher-character"></dl>
-    </section>
-    <section class="watcher-bond-panel" aria-label="You and the Watcher">
-      <header><span>YOU AND THE WATCHER</span><b id="watcher-bond-name"></b></header>
-      <div class="watcher-bond-meter" id="watcher-bond-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i></i></div>
-      <p class="watcher-bond-next" id="watcher-bond-next"></p>
-      <div class="watcher-stats" id="watcher-stats"></div>
-      <header><span>YOUR RECORDS</span><b>FROM YOUR JOURNALS</b></header>
-      <div class="watcher-stats" id="watcher-records"></div>
-      <header><span>WHAT IT TALKS ABOUT MOST</span></header>
-      <ol class="watcher-favourites" id="watcher-favourites"></ol>
-    </section>
-    <section class="watcher-log-panel" aria-label="What it has said">
-      <header><span>WHAT IT HAS SAID</span><b id="watcher-log-count"></b></header>
-      <ol class="watcher-log" id="watcher-log"></ol>
-    </section>
-    <section class="watcher-lore-panel" aria-label="Its long story">
-      <header><span>THE LONG STORY · WHAT IT REMEMBERS</span><b id="watcher-lore-count"></b></header>
-      <div class="watcher-chapters" id="watcher-lore"></div>
-      <p class="watcher-lore-next" id="watcher-lore-next"></p>
-      <div class="watcher-books" id="watcher-books"></div>
-      <header><span>ECHOES · THINGS THAT STIRRED A MEMORY</span><b id="watcher-echo-count"></b></header>
-      <ul class="watcher-echoes" id="watcher-echoes"></ul>
-    </section>
+    <aside class="watcher-rail">
+      <section class="watcher-eye-panel" aria-label="The Watcher">
+        <div class="watcher-eye"><canvas id="watcher-orb" aria-hidden="true"></canvas></div>
+        <blockquote class="watcher-latest" id="watcher-latest"><span></span><cite></cite></blockquote>
+        <div class="watcher-actions">
+          <button type="button" class="primary" data-ws-page="watcher" data-ws-op="poke" id="watcher-poke">POKE</button>
+          <small id="watcher-hotkey"></small>
+        </div>
+        <dl class="watcher-character" id="watcher-character"></dl>
+      </section>
+      <section class="watcher-talks-panel" aria-label="What it talks about most">
+        <header><span>WHAT IT TALKS ABOUT MOST</span></header>
+        <ol class="watcher-favourites" id="watcher-favourites"></ol>
+      </section>
+      <section class="watcher-echo-panel" aria-label="Echoes">
+        <header><span>ECHOES</span><b id="watcher-echo-count"></b></header>
+        <p class="watcher-note">Things out there that stir a memory of its own.</p>
+        <ul class="watcher-echoes" id="watcher-echoes"></ul>
+      </section>
+    </aside>
+    <div class="watcher-main">
+      <section class="watcher-bond-panel" aria-label="You and the Watcher">
+        <div class="watcher-bond">
+          <header><span>YOU AND THE WATCHER</span><b id="watcher-bond-name"></b></header>
+          <div class="watcher-bond-meter" id="watcher-bond-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i></i></div>
+          <p class="watcher-bond-next" id="watcher-bond-next"></p>
+        </div>
+        <div><header><span>TOGETHER</span></header><div class="watcher-stats" id="watcher-stats"></div></div>
+        <div><header><span>YOUR RECORDS</span><b>FROM YOUR JOURNALS</b></header><div class="watcher-stats" id="watcher-records"></div></div>
+      </section>
+      <section class="watcher-lore-panel" aria-label="Its long story">
+        <header><span>THE LONG STORY · WHAT IT REMEMBERS</span><b id="watcher-lore-count"></b></header>
+        <div class="watcher-story">
+          <nav class="watcher-chapters" id="watcher-lore" aria-label="Chapters"></nav>
+          <article class="watcher-reader" id="watcher-reader" aria-live="polite"></article>
+        </div>
+        <p class="watcher-lore-next" id="watcher-lore-next"></p>
+        <div class="watcher-books" id="watcher-books"></div>
+      </section>
+      <section class="watcher-log-panel" aria-label="What it has said">
+        <header><span>WHAT IT HAS SAID</span><b id="watcher-log-count"></b></header>
+        <ol class="watcher-log" id="watcher-log"></ol>
+      </section>
+    </div>
   </div>`;
   const canvas = root.querySelector("#watcher-orb");
   if (window.HeartbeatOrb && canvas) {
@@ -62,6 +75,13 @@ function shell(root, ui) {
     orb = new window.HeartbeatOrb(canvas);
     window.watcherPageOrb = orb;
   }
+  // A chapter chosen in the index opens in the reader beside it.
+  root.querySelector("#watcher-lore").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-chapter]");
+    if (!button) return;
+    chosenChapter = Number(button.dataset.chapter);
+    renderReader(ui);
+  });
   root.querySelector("#watcher-poke").addEventListener("click", () => {
     // It looks up as you poke it; the answer arrives with the next refresh.
     orb?.showMood?.("curious");
@@ -69,11 +89,43 @@ function shell(root, ui) {
   });
 }
 
-// Its long story (5.5.3.5): each chapter as it begins, the passages told so
-// far, and a finished chapter's written account. Chapters ahead stay
-// unnamed. Then the echoes: real things in the game that stirred a memory.
-// Redrawn only when it changes, so an opened chapter stays open.
+// Its long story (5.5.3.5): an index of chapters (each as it begins; the
+// ones ahead stay unnamed) beside a reader with the chosen chapter's
+// passages and, once it's finished, its written account. Then the echoes:
+// real things in the game that stirred a memory. Redrawn only when it
+// changes; the chapter you chose stays chosen.
 let lastLoreKey = "";
+let loreChapters = [];
+let chosenChapter = null;
+
+function chapterStatus(chapter, ui) {
+  if (chapter.complete) return "COMPLETE";
+  if (chapter.begun) return `${ui.numeric(chapter.told.length)} OF ${ui.numeric(chapter.total)}`;
+  return "";
+}
+
+function renderReader(ui) {
+  const reader = ui.byId("watcher-reader");
+  if (!reader) return;
+  const begun = loreChapters.filter((chapter) => chapter.begun);
+  const chapter = loreChapters[chosenChapter]?.begun ? loreChapters[chosenChapter] : begun[begun.length - 1];
+  const shown = loreChapters.indexOf(chapter);
+  document.querySelectorAll("#watcher-lore [data-chapter]").forEach((node) => {
+    node.classList.toggle("chosen", Number(node.dataset.chapter) === shown);
+    node.setAttribute("aria-current", Number(node.dataset.chapter) === shown ? "true" : "false");
+  });
+  if (!chapter) {
+    reader.innerHTML = `<p class="watcher-reader-empty">It hasn't told you anything about itself yet. Nobody knows what it is, itself included.</p>`;
+    return;
+  }
+  const account = chapter.complete && chapter.account
+    ? `<div class="watcher-account"><small>AS IT WOULD SET IT DOWN</small>${String(chapter.account).split("\n\n").map((para) => `<p>${ui.escapeHtml(para)}</p>`).join("")}</div>`
+    : "";
+  const passages = chapter.told.map((row) => `<li><p>${ui.escapeHtml(row.text)}</p><time>${ui.escapeHtml(ago(row.at))}</time></li>`).join("");
+  reader.innerHTML = `<header><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><h3>${ui.escapeHtml(chapter.title)}</h3><em>${chapterStatus(chapter, ui)}</em></header>
+    ${account}${passages ? `<small class="watcher-reader-label">${chapter.complete ? "AS IT TOLD YOU" : "SO FAR"}</small><ol class="watcher-lore">${passages}</ol>` : ""}`;
+  reader.scrollTop = 0;
+}
 
 function renderLore(lore, ui) {
   const chapters = Array.isArray(lore.chapters) ? lore.chapters : [];
@@ -82,7 +134,7 @@ function renderLore(lore, ui) {
   const key = JSON.stringify([lore.told, lore.next, lore.afterword, echoes.map((row) => [row.topic, row.count]), books.length]);
   if (key === lastLoreKey) return;
   lastLoreKey = key;
-  const current = chapters.filter((chapter) => chapter.begun).pop();
+  loreChapters = chapters;
   // Book One until its end; then both books (5.5.3.5).
   const total = lore.afterword ? lore.total : (lore.book_one_total || lore.total);
   ui.byId("watcher-lore-count").textContent = `${ui.numeric(lore.told)} OF ${ui.numeric(total)} TOLD`;
@@ -97,16 +149,11 @@ function renderLore(lore, ui) {
         : `<div class="watcher-chapter locked"><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>· · ·</b></div>`;
       return;
     }
-    const passages = chapter.told.map((row) => `<li><p>${ui.escapeHtml(row.text)}</p><time>${ui.escapeHtml(ago(row.at))}</time></li>`).join("");
-    const account = chapter.complete && chapter.account
-      ? `<div class="watcher-account"><small>AS IT WOULD SET IT DOWN</small>${String(chapter.account).split("\n\n").map((para) => `<p>${ui.escapeHtml(para)}</p>`).join("")}</div>`
-      : "";
-    html += `<details class="watcher-chapter${chapter.complete ? " complete" : ""}"${chapter === current ? " open" : ""}>
-      <summary><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>${ui.escapeHtml(chapter.title)}</b>
-        <em>${chapter.complete ? "COMPLETE" : `${ui.numeric(chapter.told.length)} OF ${ui.numeric(chapter.total)}`}</em></summary>
-      ${account}<ol class="watcher-lore">${passages}</ol></details>`;
+    html += `<button type="button" class="watcher-chapter${chapter.complete ? " complete" : " telling"}" data-chapter="${index}">
+      <span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>${ui.escapeHtml(chapter.title)}</b><em>${chapterStatus(chapter, ui)}</em></button>`;
   });
-  ui.byId("watcher-lore").innerHTML = html || `<p class="watcher-lore-next">It hasn't told you anything about itself yet.</p>`;
+  ui.byId("watcher-lore").innerHTML = html;
+  renderReader(ui);
   const next = lore.next;
   const until = (row) => {
     const parts = [];

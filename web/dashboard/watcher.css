@@ -1,19 +1,27 @@
-/* The Watcher's page (5.5.3.2). */
+/* The Watcher's page (5.5.3.2; laid out again in 5.5.3.5). A rail with
+   its eye and what it is, beside the bond strip and, under it, its story
+   and everything it has said, side by side and as tall as the screen. */
 .watcher-page {
-  display: grid; gap: 14px;
-  grid-template-columns: minmax(260px, 340px) minmax(280px, 1fr) minmax(300px, 1.2fr);
-  align-items: start;
+  --watcher-pane: clamp(420px, calc(100vh - 330px), 900px);
+  display: grid; gap: 14px; align-items: start;
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
 }
-@media (max-width: 1400px) { .watcher-page { grid-template-columns: minmax(260px, 340px) 1fr; } .watcher-log-panel { grid-column: 1 / -1; } }
-@media (max-width: 900px) { .watcher-page { grid-template-columns: 1fr; } }
-.watcher-page > section {
+/* Wider than the deck's other pages: the reader and the log both use it. */
+.page[data-page-name="watcher"] { max-width: 2240px; }
+.watcher-rail, .watcher-main { display: grid; gap: 14px; min-width: 0; }
+.watcher-main { grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr); align-items: start; }
+.watcher-bond-panel { grid-column: 1 / -1; }
+@media (max-width: 1500px) { .watcher-main { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) { .watcher-page { grid-template-columns: minmax(0, 1fr); } }
+.watcher-rail > section, .watcher-main > section {
   border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent);
   padding: 14px; display: grid; gap: 12px; min-width: 0;
 }
+.watcher-note { margin: -4px 0 0; color: var(--muted); font: italic 11px/1.4 "Segoe UI", sans-serif; }
 .watcher-page header { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 .watcher-page header span { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .1em; }
 .watcher-page header b { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .08em; }
-.watcher-eye { width: min(100%, 260px); aspect-ratio: 1; justify-self: center; }
+.watcher-eye { width: min(100%, 220px); aspect-ratio: 1; justify-self: center; }
 .watcher-eye canvas { width: 100%; height: 100%; display: block; }
 .watcher-latest { margin: 0; padding: 10px 12px; border-left: 2px solid color-mix(in srgb, var(--red) 65%, var(--border));
   background: color-mix(in srgb, var(--bg) 70%, transparent); }
@@ -31,6 +39,10 @@
   background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 60%, transparent), var(--accent)); }
 .watcher-bond-meter[data-level="3"] i { background: linear-gradient(90deg, color-mix(in srgb, var(--green) 60%, transparent), var(--green)); }
 .watcher-bond-next { margin: 0; color: var(--muted); font-size: 12px; }
+.watcher-bond-panel { grid-template-columns: minmax(220px, .8fr) minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 12px 18px; }
+.watcher-bond-panel > div { display: grid; gap: 8px; min-width: 0; }
+@media (max-width: 1200px) { .watcher-bond-panel { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .watcher-bond { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .watcher-bond-panel { grid-template-columns: minmax(0, 1fr); } }
 .watcher-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--border); background: var(--border); }
 .watcher-stats div { padding: 9px 10px; background: var(--panel); min-width: 0; }
 .watcher-stats span { display: block; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .08em; }
@@ -42,7 +54,7 @@
 .watcher-favourites i { height: 5px; background: var(--bg); position: relative; }
 .watcher-favourites i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--share, 0%); background: var(--accent); opacity: .75; }
 .watcher-favourites b { color: var(--muted); font-variant-numeric: tabular-nums; }
-.watcher-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; max-height: 70vh; overflow-y: auto;
+.watcher-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; max-height: var(--watcher-pane); overflow-y: auto; align-content: start;
   border: 1px solid var(--border); background: var(--border); }
 .watcher-log li { display: grid; grid-template-columns: 74px 1fr auto; gap: 10px; align-items: baseline; padding: 8px 10px; background: var(--panel); }
 .watcher-log time { color: var(--dim); font: 10px Consolas, monospace; }
@@ -62,37 +74,54 @@
 .watcher-log li.empty, .watcher-favourites li.empty { display: block; color: var(--muted); grid-template-columns: none; }
 .watcher-actions button { font: 700 11px Consolas, "Cascadia Mono", monospace; letter-spacing: .1em; padding: 8px 22px; }
 
-/* Its long story (5.5.3.5): chapters, their passages and accounts; echoes. */
-.watcher-lore-panel { grid-column: 1 / -1; }
-.watcher-chapters { display: grid; gap: 1px; border: 1px solid var(--border); background: var(--border); }
-.watcher-chapter { background: var(--panel); }
-.watcher-chapter > summary, .watcher-chapter.locked { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 10px 12px; }
-.watcher-chapter > summary { cursor: pointer; list-style: none; }
-.watcher-chapter > summary::-webkit-details-marker { display: none; }
-.watcher-chapter > summary:hover b { color: var(--accent); }
-.watcher-chapter-n { color: color-mix(in srgb, var(--red) 70%, var(--muted)); font: 700 12px Consolas, monospace; letter-spacing: .1em; }
-.watcher-chapter b { color: var(--text); font: 700 11px Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; }
-.watcher-chapter em { color: var(--muted); font: 700 9px Consolas, monospace; font-style: normal; letter-spacing: .08em; }
+/* Its long story (5.5.3.5): the chapter index beside the reader. */
+.watcher-story { display: grid; grid-template-columns: minmax(200px, 250px) minmax(0, 1fr); height: var(--watcher-pane);
+  border: 1px solid var(--border); background: var(--border); gap: 1px; }
+.watcher-chapters { display: flex; flex-direction: column; gap: 1px; min-height: 0; overflow-y: auto; background: var(--panel); }
+.watcher-chapters > * { flex: 0 0 auto; box-shadow: 0 1px 0 var(--border); }
+.watcher-chapter { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 1px 8px; align-items: baseline;
+  width: 100%; margin: 0; padding: 8px 10px; border: 0; border-left: 2px solid transparent; background: var(--panel); text-align: left; }
+button.watcher-chapter { cursor: pointer; font: inherit; color: inherit; }
+button.watcher-chapter:hover b, button.watcher-chapter:focus-visible b { color: var(--accent); }
+button.watcher-chapter:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.watcher-chapter.chosen { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--panel)); }
+.watcher-chapter-n { grid-row: span 2; color: color-mix(in srgb, var(--red) 70%, var(--muted)); font: 700 12px Consolas, monospace; letter-spacing: .1em; }
+.watcher-chapter b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font: 700 11px Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.watcher-chapter em { color: var(--muted); font: 700 8px Consolas, monospace; font-style: normal; letter-spacing: .08em; }
 .watcher-chapter.complete em { color: var(--accent); }
+.watcher-chapter.telling em { color: var(--yellow); }
+.watcher-chapter.locked { grid-template-columns: 38px minmax(0, 1fr); }
+.watcher-chapter.locked .watcher-chapter-n { grid-row: auto; opacity: .55; }
 .watcher-chapter.locked b { color: var(--dim); letter-spacing: .3em; }
-.watcher-account { margin: 0 12px 10px 66px; padding: 10px 14px; border-left: 2px solid color-mix(in srgb, var(--red) 55%, var(--border)); background: color-mix(in srgb, var(--bg) 60%, transparent); }
+.watcher-reader { min-height: 0; overflow-y: auto; padding: 14px 18px 18px; background: var(--panel); display: grid; gap: 12px; align-content: start; }
+.watcher-reader > header { display: flex; align-items: baseline; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border-soft); }
+.watcher-reader h3 { flex: 1; margin: 0; color: var(--text); font: 700 15px Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.watcher-reader > header em { color: var(--accent); font: 700 9px Consolas, monospace; font-style: normal; letter-spacing: .08em; }
+.watcher-reader-label { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.watcher-reader-empty { margin: auto 0; color: var(--muted); font: italic 13px/1.6 "Segoe UI", sans-serif; }
+@media (max-width: 760px) {
+  .watcher-story { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .watcher-chapters { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); max-height: 260px; }
+  .watcher-reader { max-height: var(--watcher-pane); }
+}
+.watcher-account { margin: 0; padding: 10px 14px; border-left: 2px solid color-mix(in srgb, var(--red) 55%, var(--border)); background: color-mix(in srgb, var(--bg) 60%, transparent); }
 .watcher-account small { display: block; margin-bottom: 6px; color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
 .watcher-account p { margin: 0 0 9px; max-width: 76ch; color: var(--text); font: italic 13px/1.65 "Segoe UI", sans-serif; }
 .watcher-account p:last-child { margin-bottom: 0; }
-.watcher-lore { display: grid; gap: 1px; margin: 0 12px 12px 66px; padding: 0; list-style: none; }
+.watcher-lore { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
 .watcher-lore li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--border-soft); }
 .watcher-lore p { margin: 0; max-width: 78ch; color: var(--text); font: 13px/1.55 "Segoe UI", sans-serif; }
 .watcher-lore time { color: var(--muted); font: 10px Consolas, monospace; white-space: nowrap; }
 .watcher-lore-next { margin: 0; color: var(--muted); font: italic 12px/1.5 "Segoe UI", sans-serif; }
-.watcher-echoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px; margin: 0; padding: 0; list-style: none; }
-.watcher-echoes li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 8px 10px; border: 1px solid var(--border); background: var(--panel); color: var(--dim); }
+.watcher-echoes { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); background: var(--border); }
+.watcher-echoes li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 8px; padding: 7px 10px; background: var(--panel); color: var(--dim); }
 .watcher-echoes li b { font: 700 10px Consolas, monospace; letter-spacing: .06em; text-transform: uppercase; }
 .watcher-echoes li span { font: 10px Consolas, monospace; }
 .watcher-echoes li time { grid-column: 1 / -1; font: 9px Consolas, monospace; color: var(--muted); }
 .watcher-echoes li.heard b { color: var(--text); }
 .watcher-echoes li.heard span { color: var(--accent); }
 /* Book Two and the keepsake books (5.5.3.5). */
-.watcher-book-head { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: baseline; padding: 12px 12px 8px; background: color-mix(in srgb, var(--bg) 60%, var(--panel)); }
+.watcher-book-head { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: baseline; padding: 10px 10px 6px; background: color-mix(in srgb, var(--bg) 60%, var(--panel)); grid-column: 1 / -1; }
 .watcher-book-head span { color: color-mix(in srgb, var(--red) 70%, var(--muted)); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
 .watcher-book-head b { color: var(--text); font: 700 11px Consolas, monospace; letter-spacing: .14em; }
 .watcher-book-head small { grid-column: 1 / -1; color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }
@@ -109,6 +138,5 @@
 .watcher-book h4 span { color: color-mix(in srgb, var(--red) 70%, var(--muted)); }
 .watcher-book p { margin: 0 0 10px; color: var(--text); font: italic 14px/1.7 "Segoe UI", sans-serif; }
 @media (max-width: 600px) {
-  .watcher-account, .watcher-lore { margin-left: 12px; }
   .watcher-lore li { grid-template-columns: minmax(0, 1fr); }
 }
