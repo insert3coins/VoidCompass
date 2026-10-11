@@ -1,0 +1,17 @@
+/* The screenshot album (5.5.3.7): the postcard album's look (postcards.css),
+   with days, a filter, tags and the caption. */
+.shots-filter { min-width: 0; width: 220px; min-height: 30px; padding: 0 9px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font: 11px Consolas, monospace; }
+.album-note { margin: 0; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--yellow) 45%, var(--border));
+  background: color-mix(in srgb, var(--yellow) 6%, var(--panel)); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.shots-grid img { aspect-ratio: 16 / 9; object-fit: cover; }
+.shots-day { grid-column: 1 / -1; padding: 6px 0 0; border-bottom: 1px solid var(--border);
+  color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.shots-grid small i { font-style: normal; }
+.shots-grid small em { margin-left: 6px; padding: 0 4px; border: 1px solid var(--border); color: var(--muted);
+  font: 700 8.5px Consolas, monospace; font-style: normal; letter-spacing: .1em; }
+.shots-caption { max-width: 80ch; margin: 0 auto; color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif;
+  white-space: pre-line; text-align: center; }
+/* Room under the picture for its caption and the buttons. */
+.shots-page .album-viewer { align-content: start; overflow: auto; }
+.shots-page .album-viewer img { max-height: calc(100vh - 330px); }

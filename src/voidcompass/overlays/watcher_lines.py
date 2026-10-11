@@ -1069,6 +1069,25 @@ NORMAL["idle_after"] = list(AFTER_MUSINGS)
 WEARY["idle_after"] = list(AFTER_MUSINGS)
 NORMAL["lore_recall"] = list(RECALL)
 WEARY["lore_recall"] = list(RECALL)
+# The postcards it keeps (5.5.3.7), brought up in a quiet moment.
+from voidcompass.overlays.watcher_postcards import POSTCARD_RECALL  # noqa: E402
+
+NORMAL["idle_postcard"] = list(POSTCARD_RECALL)
+WEARY["idle_postcard"] = list(POSTCARD_RECALL)
+# Time capsules handed back, and On this day (5.5.3.7).
+from voidcompass.overlays.watcher_capsules import (  # noqa: E402
+    CAPSULE_EARLY_NORMAL, CAPSULE_EARLY_WEARY, CAPSULE_NORMAL, CAPSULE_WEARY, CONSTELLATION_NORMAL,
+    CONSTELLATION_WEARY, ON_THIS_DAY_NORMAL, ON_THIS_DAY_WEARY,
+)
+
+NORMAL["capsule"] = list(CAPSULE_NORMAL)
+WEARY["capsule"] = list(CAPSULE_WEARY)
+NORMAL["on_this_day"] = list(ON_THIS_DAY_NORMAL)
+WEARY["on_this_day"] = list(ON_THIS_DAY_WEARY)
+NORMAL["capsule_early"] = list(CAPSULE_EARLY_NORMAL)
+WEARY["capsule_early"] = list(CAPSULE_EARLY_WEARY)
+NORMAL["constellation_named"] = list(CONSTELLATION_NORMAL)
+WEARY["constellation_named"] = list(CONSTELLATION_WEARY)
 # Echoes of its past (5.5.3.5): one voice, whatever its nature.
 for _topic, _lines in ECHOES.items():
     NORMAL[_topic] = list(_lines)

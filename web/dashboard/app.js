@@ -16,6 +16,10 @@ import {
 import {handleBgsChange, handleBgsClick, handleBgsSubmit, renderBgs} from "./bgs.js";
 import {handleTradingClick, handleTradingInput, handleTradingSubmit, renderTrading, resetTrading} from "./trading.js";
 import {renderWatcher} from "./watcher.js";
+import {renderPostcards} from "./postcards.js";
+import {renderScreenshots} from "./screenshots.js";
+import {renderCapsules} from "./capsules.js";
+import {renderConstellation} from "./constellation.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
@@ -146,7 +150,7 @@ const HOTKEY_CODE_NAMES = {
 
 const STRUCTURAL_BUTTON_SELECTOR = [
   ".nav-item", "[data-feed-filter]", ".overlay-quick button", "#overlay-all-toggle", "#overlay-quick-more", ".studio-overlay-card", ".studio-monitor", "[data-setup-go]", ".studio-text-link",
-  ".studio-index-select", ".mission-row", ".workspace-tabs button", ".watcher-chapter",
+  ".studio-index-select", ".mission-row", ".workspace-tabs button", ".watcher-chapter", ".album-grid button", ".sky-gallery button",
   ".suite-tabs button", "[data-analytics-view]",
   ".galnet-headline-row", "#status-galnet",
   ".wk-tile", ".wk-hullpick", ".wk-slot", ".wk-module", ".wk-docktab", ".wk-segbtn", ".wk-pip",
@@ -229,7 +233,7 @@ const numeric = (value, digits = 0) => Number.isFinite(Number(value)) ? Number(v
 // What workshop.js draws and talks with.
 // A rounded −0 (an empty hold, a zero resistance) reads as 0.
 const WORKSHOP_UI = {
-  byId, escapeHtml, credits, showToast, command,
+  byId, escapeHtml, credits, showToast, command, apiUrl: (path) => apiUrl(path),
   numeric: (value, digits = 0) => numeric(value, digits).replace(/^-(?=0(?:[.,]0+)?$)/, ""),
   workspaceCard: (...args) => workspaceCard(...args), workspaceTable: (...args) => workspaceTable(...args),
 };
@@ -2008,7 +2012,9 @@ function renderOverlayStudio(state) {
     byId("studio-overlay-cards").replaceChildren(...cards);
 
     const several = monitors.length > 1;
-    const index = overlays.map((row) => {
+    // The list beside the stage, in alphabetical order.
+    const byName = [...overlays].sort((a, b) => String(a.label || "").localeCompare(String(b.label || ""), undefined, {sensitivity: "base"}));
+    const index = byName.map((row) => {
       const item = document.createElement("div");
       item.className = `studio-index-row${row.enabled ? " enabled" : ""}${row.shown ? " shown" : ""}`;
       item.dataset.overlayId = row.id;
@@ -3726,7 +3732,7 @@ function settingsSectionBody(id, data) {
       : {tone: "bad", text: "FOLDER NOT FOUND"};
     const shotsStatus = paths.screenshots?.exists ? {tone: "good", text: "FOLDER FOUND"} : {tone: "bad", text: "FOLDER NOT FOUND"};
     return settingGroup("JOURNAL", `${settingText({key: "journal_path", id: "setting-journal", label: "Journal folder", detail: "The folder holding Frontier's Journal.*.log files. Void Compass only ever reads it. A new folder is watched straight away, from the end of its newest journal.", value: value.journal_path, browse: true, status: journalStatus})}`)
-      + settingGroup("SCREENSHOTS", `${settingText({key: "screenshots_path", id: "setting-screenshots", label: "Screenshot folder", detail: "Where Elite saves its BMP screenshots.", value: value.screenshots_path, browse: true, status: shotsStatus})}${settingSwitch({key: "screenshots_enabled", label: "Convert screenshots to PNG", detail: "Watch the screenshot folder and convert each new BMP.", checked: value.screenshots_enabled})}${settingActions(`<button type="button" data-command="open_screenshots">OPEN SCREENSHOTS</button>`, "open screenshots")}`);
+      + settingGroup("SCREENSHOTS", `${settingText({key: "screenshots_path", id: "setting-screenshots", label: "Screenshot folder", detail: "Where Elite saves its BMP screenshots.", value: value.screenshots_path, browse: true, status: shotsStatus})}${settingSwitch({key: "screenshots_enabled", label: "Convert screenshots to PNG", detail: "Watch the screenshot folder and convert each new BMP.", checked: value.screenshots_enabled})}<p class="setting-note">How postcards look, keeping them as pictures, their folder and caption files: the Postcards page.</p>${settingActions(`<button type="button" data-command="open_screenshots">OPEN SCREENSHOTS</button><button type="button" data-command="open_postcards">OPEN POSTCARDS</button><button type="button" data-page="screenshots">SCREENSHOTS</button><button type="button" data-page="postcards">POSTCARDS</button>`, "open screenshots postcards album caption style gallery")}`);
   }
   if (id === "appearance") {
     const cards = (data.themes || []).map((theme) => {
@@ -4049,6 +4055,10 @@ function renderWorkspace(state) {
     bgs: renderBgsWorkspace,
     trading: renderTradingWorkspace,
     watcher: (data) => renderWatcher(data, WORKSHOP_UI),
+    postcards: (data) => renderPostcards(data, WORKSHOP_UI),
+    screenshots: (data) => renderScreenshots(data, WORKSHOP_UI),
+    capsules: (data) => renderCapsules(data, WORKSHOP_UI),
+    constellation: (data) => renderConstellation(data, WORKSHOP_UI),
   };
   renderers[page]?.(workspace.data || {});
   preparePageLayout(page);

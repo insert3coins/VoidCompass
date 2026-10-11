@@ -1,0 +1,63 @@
+/* Time capsules and On this day (5.5.3.7). */
+.capsules-page { display: grid; gap: 16px; }
+.capsules-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .capsules-top { grid-template-columns: minmax(0, 1fr); } }
+.capsules-page h3 { margin: 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.capsule-form, .capsule-today, .capsule-list {
+  display: grid; gap: 10px; align-content: start; padding: 14px; border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+}
+.capsule-form label { display: grid; gap: 5px; }
+.capsule-form label > span:first-child { display: flex; justify-content: space-between; color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.capsule-form label small { color: var(--muted); font: 10px Consolas, monospace; }
+.capsule-form input, .capsule-form textarea {
+  min-width: 0; padding: 7px 9px; border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  font: 12px/1.45 "Segoe UI", sans-serif; resize: vertical;
+}
+.capsule-system-row { display: flex; gap: 6px; }
+.capsule-system-row input { flex: 1; }
+.capsule-system-row button, .capsule-list button { min-height: 30px; padding: 0 12px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.capsule-form-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.capsule-form-foot p { flex: 1 1 220px; margin: 0; color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }
+.capsule-form-foot button { min-height: 32px; padding: 0 18px; font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+
+.capsule-day { display: grid; gap: 2px; padding: 8px 0 10px; border-bottom: 1px solid var(--border-soft, var(--border)); }
+.capsule-day:last-child { border-bottom: 0; }
+.capsule-day small { color: var(--orange); font: 700 9.5px Consolas, monospace; letter-spacing: .14em; }
+.capsule-day b { color: var(--text); font: 600 18px/1.2 "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; }
+.capsule-day span { color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.capsule-day-cards { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.capsule-day-cards img { width: 96px; height: 76px; object-fit: contain; border: 1px solid var(--border); background: var(--bg); }
+
+.capsule-list ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.capsule { display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto; gap: 14px; align-items: center;
+  padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent); background: var(--bg); }
+@media (max-width: 900px) { .capsule { grid-template-columns: minmax(0, 1fr); } }
+.capsule > div { display: grid; gap: 2px; min-width: 0; }
+.capsule b { overflow: hidden; color: var(--text); font: 600 14px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.capsule small { color: var(--muted); font: 10px Consolas, monospace; }
+.capsule-note { margin: 0; color: var(--text); font: 12.5px/1.5 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+/* Sealed: the note is there, blurred; hover or focus to peek. */
+.capsules-page:not(.unblurred) .capsule:not(.opened) .capsule-note { filter: blur(5px); transition: filter .25s; user-select: none; }
+.capsule:not(.opened) .capsule-note:hover, .capsule:not(.opened) .capsule-note:focus { filter: none; user-select: text; outline: none; }
+.capsule.opened { border-left-color: var(--yellow); }
+.capsule.opened .capsule-note::before { content: "\201C"; color: var(--yellow); }
+.capsule.opened .capsule-note::after { content: "\201D"; color: var(--yellow); }
+.capsule button[data-armed] { color: var(--red); border-color: var(--red); }
+.capsule-empty { color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.capsule-list.opened h3 { color: var(--yellow); }
+.capsule small em { color: var(--yellow); font-style: normal; }
+.capsule-form select { min-height: 32px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+
+/* Each keepsake page's own settings (5.5.3.7), folded away until wanted. */
+.keepsake-settings { border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.keepsake-settings > summary { padding: 12px 14px; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; cursor: pointer; }
+.keepsake-settings > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px 24px; padding: 4px 14px 14px; }
+.keepsake-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.keepsake-field select { min-height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.keepsake-switch { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; cursor: pointer; }
+.keepsake-switch input { margin: 3px 0 0; accent-color: var(--accent); }
+.keepsake-field > span, .keepsake-switch > span { display: grid; gap: 2px; min-width: 0; }
+.keepsake-field b, .keepsake-switch b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.keepsake-field small, .keepsake-switch small { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
+.keepsake-hint { grid-column: 1 / -1; margin: 0; color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }

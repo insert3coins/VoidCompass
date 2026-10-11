@@ -27,6 +27,7 @@ from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, HUD_SCENE_
 # How lively the Navigation HUD's holographic scenes are.
 HUD_ANIMATION_LEVELS = ("Calm", "Standard", "Energetic")
 from voidcompass.overlays.html_heartbeat_overlay import thought_zone
+from voidcompass.overlays import galaxy_minimap_hud, postcards
 from voidcompass.overlays.jump_info_hud import LINGER_CHOICES as JUMP_INFO_LINGER_CHOICES, linger_seconds
 from voidcompass.overlays.galnet_ticker_hud import (
     TICKER_CONTENT, TICKER_CRT, TICKER_GLITCH, TICKER_GLITCH_STRENGTH, TICKER_SPEEDS,
@@ -347,6 +348,16 @@ class HtmlOverlayStudioMixin:
                 "colony_show_on_right_panel": bool(self.config.get("colony_show_on_right_panel", True)),
                 "colony_hide_other_overlays": bool(self.config.get("colony_hide_other_overlays", False)),
                 "heartbeat_orb_size": orb_size(self.config),
+                "galaxy_minimap_size": galaxy_minimap_hud.minimap_options(self.config)["size"],
+                "galaxy_minimap_view": galaxy_minimap_hud.minimap_options(self.config)["view"],
+                "galaxy_minimap_route": galaxy_minimap_hud.minimap_options(self.config)["route"],
+                "galaxy_minimap_labels": galaxy_minimap_hud.minimap_options(self.config)["labels"],
+                "galaxy_minimap_spansh": galaxy_minimap_hud.minimap_options(self.config)["spansh"],
+                "galaxy_minimap_capsules": galaxy_minimap_hud.minimap_options(self.config)["capsules"],
+                "galaxy_minimap_text_scale_percent": heartbeat_text_size(self.config.get("galaxy_minimap_text_scale_percent")),
+                "postcard_hold_s": postcards.postcard_options(self.config)["hold"],
+                "postcard_photo": postcards.postcard_options(self.config)["photo"],
+                "postcard_size": postcards.postcard_options(self.config)["size"],
                 **{f"galnet_ticker_{key}": value for key, value in ticker_options(self.config).items()},
                 **{f"music_player_{key}": value for key, value in music_overlay_options(self.config).items()},
                 "heartbeat_eye_color": eye_color(self.config),
@@ -557,6 +568,7 @@ class HtmlOverlayStudioMixin:
             "survey_status_show_all_bodies", "survey_codex_flags",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
             "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading",
+            "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps", "overlay_transparency_fix", "overlay_classic_windows",
@@ -587,6 +599,11 @@ class HtmlOverlayStudioMixin:
             heartbeat = getattr(self, "heartbeat_hud", None)
             if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
                 heartbeat.apply_settings()
+        elif key in {"galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "postcard_photo", "postcard_facts", "postcard_note", "postcard_doing"}:
+            for attr in ("galaxy_minimap_hud", "postcard_hud"):
+                overlay = getattr(self, attr, None)
+                if overlay is not None and hasattr(overlay, "apply_settings"):
+                    overlay.apply_settings()
         elif key == "station_info_auto_hide_enabled":
             station = getattr(self, "station_info_hud", None)
             if station is not None:
@@ -748,6 +765,23 @@ class HtmlOverlayStudioMixin:
             if key in payload:
                 value = _text(payload.get(key), 20).casefold()
                 self.config[key] = value if value in choices else default
+        # The Galaxy Minimap and Postcards (5.5.3.7).
+        for key, choices, default in (
+            ("galaxy_minimap_size", galaxy_minimap_hud.SIZES, galaxy_minimap_hud.DEFAULT_SIZE),
+            ("postcard_hold_s", postcards.HOLDS, postcards.DEFAULT_HOLD),
+        ):
+            if key in payload:
+                value = _integer(payload.get(key), default)
+                self.config[key] = value if value in choices else default
+        for key, choices, default in (
+            ("galaxy_minimap_view", galaxy_minimap_hud.VIEWS, "route"),
+            ("postcard_size", tuple(postcards.SIZES), "standard"),
+        ):
+            if key in payload:
+                value = _text(payload.get(key), 20).casefold()
+                self.config[key] = value if value in choices else default
+        if "galaxy_minimap_text_scale_percent" in payload:
+            self.config["galaxy_minimap_text_scale_percent"] = heartbeat_text_size(payload.get("galaxy_minimap_text_scale_percent"))
         if "heartbeat_text_scale_percent" in payload:
             # The Watcher's own text size (5.5.3.5): one of its list's sizes,
             # 0 following all overlays.
@@ -765,6 +799,10 @@ class HtmlOverlayStudioMixin:
         music = getattr(self, "music_player_hud", None)
         if music is not None and hasattr(music, "apply_settings"):
             music.apply_settings()
+        for attr in ("galaxy_minimap_hud", "postcard_hud"):
+            overlay = getattr(self, attr, None)
+            if overlay is not None and hasattr(overlay, "apply_settings"):
+                overlay.apply_settings()
         self.update_hud()
         station = getattr(self, "station_info_hud", None)
         if station is not None and getattr(self, "current_docked", False):

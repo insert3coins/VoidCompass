@@ -598,6 +598,7 @@ class HtmlExploreWorkspaceMixin:
             tool = self._html_profile_transient("_html_explore_tool_state", {})
             tool.update({"status": "ready", "detail": "Route result cleared.", "route": None})
             changed = True
+            getattr(self, "_update_galaxy_minimap_safely", lambda: None)()
         elif operation == "neutron_import":
             tool = self._html_profile_transient("_html_explore_tool_state", {})
             rows = (tool.get("route") or {}).get("waypoints") or []
@@ -607,7 +608,10 @@ class HtmlExploreWorkspaceMixin:
                 name = _text(row.get("system") if isinstance(row, dict) else "", 140)
                 if not name or name.casefold() in existing:
                     continue
-                manager.waypoints.append({"name": name, "coords": None, "note": "Spansh neutron route"})
+                # Its coordinates and neutron stops come along (the Galaxy
+                # Minimap draws the trip, 5.5.3.7).
+                manager.waypoints.append({"name": name, "coords": row.get("coords"), "note": "Spansh neutron route",
+                                          "neutron": bool(row.get("neutron")), "jumps": row.get("jumps")})
                 existing.add(name.casefold())
                 added += 1
             changed = bool(added and manager.save())
@@ -660,6 +664,7 @@ class HtmlExploreWorkspaceMixin:
                         count = len(result.get("waypoints") or [])
                         active.update({"status": "ready", "detail": f"Route ready · {count:,} waypoints.", "route": result})
                         self.add_event_feed_entry("ROUTE", f"Neutron plot ready: {count:,} waypoints", severity="INFO")
+                        getattr(self, "_update_galaxy_minimap_safely", lambda: None)()
                     self._schedule_html_dashboard_publish(immediate=True)
 
                 self._ui_post(finish, key="html-neutron-route")
@@ -671,5 +676,6 @@ class HtmlExploreWorkspaceMixin:
             # Waypoint edits are profile-local rather than journal events, so
             # explicitly republish the cockpit route immediately.
             self.update_hud()
+            getattr(self, "_update_galaxy_minimap_safely", lambda: None)()
             self._schedule_html_dashboard_publish(immediate=True)
         return bool(changed)

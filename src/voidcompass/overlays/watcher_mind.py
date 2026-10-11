@@ -27,7 +27,7 @@ from pathlib import Path
 import zlib
 
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
-from voidcompass.overlays import watcher_idle, watcher_lines, watcher_lore, watcher_natures
+from voidcompass.overlays import watcher_idle, watcher_lines, watcher_lore, watcher_natures, watcher_postcards
 
 # How often it may speak (Overlay Studio). The gap is the least time
 # between two thoughts; `minimum` is the least importance it will voice.
@@ -88,6 +88,11 @@ HEADED_TOPICS = {
     "idle_after": ("musing", "REMEMBERING"),
     "sign_off": ("", "SIGNING OFF"),
     "sign_off_quiet": ("", "SIGNING OFF"),
+    # 5.5.3.7: a note you left, handed back; where you were on this date.
+    "capsule": ("recall", "TIME CAPSULE"),
+    "on_this_day": ("recall", "ON THIS DAY"),
+    "capsule_early": ("recall", "TIME CAPSULE · NOT YET"),
+    "constellation_named": ("recall", "A NEW CONSTELLATION"),
 }
 
 
@@ -149,6 +154,11 @@ IMPORTANCE = {
     "record_jump": 2,
     "record_firsts": 2,
     "anniversary": 3,
+    # 5.5.3.7: your time capsules, and On this day.
+    "capsule": 3,
+    "on_this_day": 2,
+    "capsule_early": 2,
+    "constellation_named": 3,
     # You and it: a poke, hiding it, moving it, and the bond over time.
     "poked": 3,
     "poked_again": 3,
@@ -226,6 +236,11 @@ MOODS = {
     "lore_afterword": "pleased",
     "idle_after": "curious",
     "lore_recall": "downcast",
+    "idle_postcard": "pleased",
+    "capsule": "pleased",
+    "on_this_day": "downcast",
+    "capsule_early": "curious",
+    "constellation_named": "pleased",
     **{topic: "curious" for topic in (
         "idle_star_odd", "idle_big_system", "arrival", "jump_long", "jump_far", "idle_far", "idle_star",
         "idle_galnet", "greet_new")},
@@ -528,6 +543,8 @@ class WatcherMind:
             # An echo of its past, or a look back at its story, rests hours or
             # days (a neutron highway would otherwise make it a commentary).
             rest = max(rest, watcher_lore.LORE_REST_S.get(topic, 0.0))
+            if topic == "idle_postcard":
+                rest = max(rest, watcher_postcards.RECALL_REST_S)
             if importance < 3 and self._said_recently(topic, rest):
                 return None
             # Even with something to say, it often keeps it to itself.
@@ -647,6 +664,13 @@ class WatcherMind:
         if not self.thought or self.thought["id"] != pending["after"] or self.clock() >= self.thought["until"]:
             return None
         return self.consider("afterthought", force=True)
+
+    def keep_postcard(self, card):
+        """A postcard taken (5.5.3.7): kept, to be brought up later."""
+        with self.lock:
+            count = watcher_postcards.keep(self.memory, card, self.clock())
+        self._unsaved = True
+        return count
 
     def current(self):
         """The thought on screen, if any."""
@@ -894,6 +918,19 @@ class WatcherMind:
             with self.lock:
                 self.memory["anniversary_said"] = today
             return self.consider("anniversary", fields, force=True)
+        if kind in {"capsule", "capsule_early", "constellation_named"}:
+            # A note you left (or not yet); a constellation finished: said
+            # whatever the hour (5.5.3.7).
+            return self.consider(kind, fields, force=True)
+        if kind == "on_this_day":
+            today = datetime.fromtimestamp(self.clock()).strftime("%Y-%m-%d")
+            if self.memory.get("on_this_day_said") == today:
+                return None
+            thought = self.consider("on_this_day", fields, force=True)
+            if thought:
+                with self.lock:
+                    self.memory["on_this_day_said"] = today
+            return thought
         if kind == "hidden":
             self._hidden_at = self.clock()
             return None
@@ -988,7 +1025,9 @@ class WatcherMind:
                          hours=int(self.memory.get("hours") or 0),
                          # 5.5.3.5: its story told, and a finished chapter to look back on.
                          story_done=bool(self.memory.get("afterword")),
-                         recall=watcher_lore.recall_choice(self.memory, self.random, now))
+                         recall=watcher_lore.recall_choice(self.memory, self.random, now),
+                         # 5.5.3.7: a postcard it kept.
+                         postcard=watcher_postcards.recall_choice(self.memory, self.random, now))
             choices = self.surroundings.choices(now, self.random, known)
             # The plain mutter now and then, and whenever nothing else fits.
             if not choices or self.random.random() < .25:

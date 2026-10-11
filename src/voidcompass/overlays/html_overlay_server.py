@@ -104,6 +104,9 @@ class HtmlOverlayServer:
         # Per-overlay sources of data that change too quickly to republish as
         # snapshots (the music visualizer's levels), served at /api/live.
         self._live_providers = {}
+        # Per-overlay files made on request (5.5.3.7): the minimap's region
+        # map, a postcard's photo. Served at /api/file?name=...
+        self._file_providers = {}
         self._server = _OverlayHTTPServer(("127.0.0.1", 0), self._handler_type())
         self.port = int(self._server.server_address[1])
         self._thread = threading.Thread(
@@ -447,6 +450,14 @@ class HtmlOverlayServer:
         else:
             self._live_providers[str(overlay_id)] = provider
 
+    def set_file_provider(self, overlay_id, provider):
+        """Serve `provider(name)` -> (bytes, content type) or None at
+        /api/file for one overlay; None removes it."""
+        if provider is None:
+            self._file_providers.pop(str(overlay_id), None)
+        else:
+            self._file_providers[str(overlay_id)] = provider
+
     def stop_async(self):
         threading.Thread(target=self.stop, name="html-overlay-stop", daemon=True).start()
 
@@ -598,6 +609,18 @@ class HtmlOverlayServer:
                 return
             if parsed.path == "/api/events":
                 self._serve_events(handler, state)
+                return
+            if parsed.path == "/api/file":
+                provider = self._file_providers.get(state.overlay_id)
+                name = str((parse_qs(parsed.query).get("name") or [""])[0])[:120]
+                try:
+                    found = provider(name) if callable(provider) and name else None
+                except Exception:
+                    found = None
+                if not (isinstance(found, tuple) and len(found) == 2 and isinstance(found[0], (bytes, bytearray))):
+                    self._send_json(handler, {"error": "not found"}, 404)
+                    return
+                self._send_bytes(handler, bytes(found[0]), str(found[1]), cache="private, max-age=600")
                 return
             if parsed.path == "/api/live":
                 provider = self._live_providers.get(state.overlay_id)

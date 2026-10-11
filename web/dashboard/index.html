@@ -16,6 +16,10 @@
   <link rel="stylesheet" href="settings.css">
   <link rel="stylesheet" href="music.css">
   <link rel="stylesheet" href="watcher.css">
+  <link rel="stylesheet" href="postcards.css">
+  <link rel="stylesheet" href="screenshots.css">
+  <link rel="stylesheet" href="capsules.css">
+  <link rel="stylesheet" href="constellation.css">
   <link rel="stylesheet" href="powerplay.css">
   <link rel="stylesheet" href="workshop.css">
   <link rel="stylesheet" href="colonisation.css">
@@ -259,15 +263,18 @@
         <p>COCKPIT</p>
         <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>14</b></button>
         <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>15</b></button>
+        <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>16</b></button>
+        <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>17</b></button>
+        <button class="nav-item" data-page="capsules" aria-label="Time Capsules" title="Time Capsules: notes left for systems, and On this day"><i>⧗</i><span>Time Capsules</span><b>18</b></button>
+        <button class="nav-item" data-page="constellation" aria-label="Constellation" title="Your constellation: your journey drawn in the stars"><i>✧</i><span>Constellation</span><b>19</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>16</b></button>
-        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>17</b></button>
-        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>18</b></button>
+        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>20</b></button>
+        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>21</b></button>
+        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>22</b></button>
       </nav>
 
       <footer class="rail-footer">
         <div class="connection"><i id="connection-light"></i><span>LOCAL LINK</span><b id="connection-state">CONNECTING</b></div>
-        <button data-command="open_screenshots">OPEN SCREENSHOTS</button>
         <small id="rail-version">v— // WEBVIEW2</small>
       </footer>
     </aside>
@@ -609,6 +616,26 @@
           <div id="watcher-workspace" class="workspace-shell loading-panel">Waking the Watcher…</div>
         </section>
 
+        <section class="page specialist-page" data-page-name="postcards">
+          <header class="page-title"><div><p>COCKPIT KEEPSAKES</p><h2>Postcards</h2><span>Every postcard you've kept as a picture, newest first: open one, copy it, find it.</span></div><div class="title-actions"><button data-page="overlay-studio">OVERLAY STUDIO</button></div></header>
+          <div id="postcards-workspace" class="workspace-shell loading-panel">Opening the album…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="screenshots">
+          <header class="page-title"><div><p>COCKPIT KEEPSAKES</p><h2>Screenshots</h2><span>Every picture in your screenshot folder, newest first: open one, copy it, find it.</span></div><div class="title-actions"><button data-page="postcards">POSTCARDS</button></div></header>
+          <div id="screenshots-workspace" class="workspace-shell loading-panel">Opening your screenshots…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="capsules">
+          <header class="page-title"><div><p>COCKPIT KEEPSAKES</p><h2>Time Capsules</h2><span>Leave a note for a system; it's handed back when you next jump in there, whenever that is.</span></div><div class="title-actions"><button data-page="watcher">THE WATCHER</button></div></header>
+          <div id="capsules-workspace" class="workspace-shell loading-panel">Opening the capsules…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="constellation">
+          <header class="page-title"><div><p>COCKPIT KEEPSAKES</p><h2>Your Constellation</h2><span>Each session, the place you stayed longest becomes a star. Nine stars make a constellation.</span></div><div class="title-actions"><button data-page="map">GALACTIC ATLAS</button></div></header>
+          <div id="constellation-workspace" class="workspace-shell loading-panel">Charting your sky…</div>
+        </section>
+
         <section class="page specialist-page" data-page-name="achievements">
           <header class="page-title"><div><p>COMMANDER RECORD</p><h2>Achievements</h2><span>A living record of discoveries, expeditions and the milestones ahead.</span></div><div class="title-actions"><button data-page="profile">COMMANDER PROFILE</button></div></header>
           <div id="achievements-workspace" class="workspace-shell loading-panel">Loading your commander record…</div>
@@ -767,6 +794,24 @@
                     <label class="studio-field"><span>Thought size</span><select id="studio-heartbeat-thought-size" data-studio-setting="heartbeat_thought_size"><option value="small">Small</option><option value="standard">Standard</option><option value="large">Large</option></select></label>
                     <label class="studio-field"><span>Thought stays<small>How long each one stays on screen</small></span><select id="studio-heartbeat-thought-hold" data-studio-setting="heartbeat_thought_hold"><option value="short">Short</option><option value="standard">Standard</option><option value="long">Long</option></select></label>
                     <label class="studio-switch"><span><b>Idle motions</b><small>Its aperture, breathing and glances between events; off, it only reacts.</small></span><input type="checkbox" data-overlay-option="heartbeat_idle_motion"><i></i></label>
+                  </section>
+                  <section data-studio-settings="galaxy_minimap_hud">
+                    <h4>GALAXY MINIMAP</h4>
+                    <p class="studio-option-note">The Milky Way from the Codex region map, with you on it: this session's jumps and the route you've plotted. Your whole journey is in the Galactic Atlas.</p>
+                    <label class="studio-field"><span>Size</span><select id="studio-minimap-size" data-studio-setting="galaxy_minimap_size"><option value="180">180 PX</option><option value="240">240 PX</option><option value="320">320 PX</option></select></label>
+                    <label class="studio-field"><span>View<small>Your route frames you, this session's trail and the route ahead</small></span><select id="studio-minimap-view" data-studio-setting="galaxy_minimap_view"><option value="route">Your route</option><option value="local">Around you</option><option value="galaxy">Whole galaxy</option></select></label>
+                    <label class="studio-switch"><span><b>Plotted route</b><small>The route ahead, waypoint by waypoint, how far and how many jumps.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_route"><i></i></label>
+                    <label class="studio-switch"><span><b>Spansh route</b><small>The whole trip beyond the leg plotted in game: your waypoint route, or your latest neutron plot, with its neutron stars.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_spansh"><i></i></label>
+                    <label class="studio-switch"><span><b>Time capsules</b><small>A small hourglass where a note you sealed on the Time Capsules page is waiting.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_capsules"><i></i></label>
+                    <label class="studio-switch"><span><b>Region names</b><small>The names of the regions on the map; the one you're in, in orange.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_labels"><i></i></label>
+                    <label class="studio-field"><span>Text size<small>The strip and the region names; the map keeps its size</small></span><select id="studio-minimap-text-scale" data-studio-setting="galaxy_minimap_text_scale_percent"><option value="0">All overlays</option><option value="75">75%</option><option value="85">85%</option><option value="100">100%</option><option value="110">110%</option><option value="125">125%</option><option value="150">150%</option><option value="175">175%</option><option value="200">200%</option></select></label>
+                  </section>
+                  <section data-studio-settings="postcard_hud">
+                    <h4>POSTCARDS</h4>
+                    <p class="studio-option-note">Take a screenshot in game (F10) and its postcard slides in. How postcards look, and keeping them, is on the Postcards page.</p>
+                    <label class="studio-field"><span>Stays<small>How long the card stays up</small></span><select id="studio-postcard-hold" data-studio-setting="postcard_hold_s"><option value="6">6 SEC</option><option value="10">10 SEC</option><option value="20">20 SEC</option><option value="30">30 SEC</option></select></label>
+                    <label class="studio-field"><span>Size</span><select id="studio-postcard-size" data-studio-setting="postcard_size"><option value="small">Small</option><option value="standard">Standard</option><option value="large">Large</option></select></label>
+                    <label class="studio-switch"><span><b>Photo</b><small>The picture you took on the card; off, just its caption.</small></span><input type="checkbox" data-overlay-option="postcard_photo"><i></i></label>
                   </section>
                   <section data-studio-settings="music_player_hud">
                     <h4>MUSIC PLAYER</h4>

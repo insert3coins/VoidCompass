@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Galaxy Minimap</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <!-- The Milky Way from the Codex region map (the Galactic Atlas's own),
+       with you on it. In the Navigation HUD's frame and type. -->
+  <main id="minimap" class="minimap" role="img" aria-label="Galaxy minimap">
+    <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="map" id="map">
+      <canvas id="galaxy" aria-hidden="true"></canvas>
+      <canvas id="marks" aria-hidden="true"></canvas>
+      <span id="here-ring" class="here-ring" hidden aria-hidden="true"></span>
+      <span id="charting" class="charting">CHARTING…</span>
+    </div>
+    <footer class="strip" id="strip">
+      <strong id="region">DEEP SPACE</strong>
+      <span id="facts"></span>
+      <em id="view-mode" class="view-mode">YOUR ROUTE</em>
+    </footer>
+    <div class="scanlines"></div><div class="vignette"></div>
+  </main>
+  <script src="/assets/frame-cap.js"></script>
+  <script src="/assets/overlay-layout.js"></script>
+  <script src="/assets/overlay-client.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

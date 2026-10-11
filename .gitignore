@@ -1,6 +1,7 @@
 # Configuration
 config.json
 profiles/
+postcards/
 
 # Application Cache
 backups/
@@ -79,3 +80,4 @@ temp/
 
 # The Watcher voice lab: local testing only, not part of the app
 Voice/
+keepsakes.json

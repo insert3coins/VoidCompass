@@ -52,6 +52,8 @@ from voidcompass.exploration.contact_scope import ContactLedger
 from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.overlays.trade_route_hud import TradeRouteHUD
+from voidcompass.overlays.galaxy_minimap_hud import GalaxyMinimapHUD
+from voidcompass.overlays.postcard_hud import PostcardHUD
 from voidcompass.exploration import bio_variants
 from voidcompass.exploration.notable_bodies import is_green_giant_codex
 from voidcompass.overlays import watcher_mind
@@ -73,12 +75,16 @@ from voidcompass.overlays.html_contact_overlay import attach_html_contact_overla
 from voidcompass.overlays.html_jump_info_overlay import attach_html_jump_info_overlay
 from voidcompass.overlays.html_colony_needs_overlay import attach_html_colony_needs_overlay
 from voidcompass.overlays.html_trade_route_overlay import attach_html_trade_route_overlay
+from voidcompass.overlays.html_galaxy_minimap_overlay import attach_html_galaxy_minimap_overlay
+from voidcompass.overlays.html_postcard_overlay import attach_html_postcard_overlay
 from voidcompass.core.runtime_trace import RuntimeTrace
 from voidcompass.dashboard.dashboard_db_mixin import DashboardDBMixin
 from voidcompass.dashboard.dashboard_core_mixin import DashboardCoreMixin
 from voidcompass.dashboard.dashboard_scan_mixin import DashboardScanMixin
 from voidcompass.dashboard.dashboard_exploration_mixin import DashboardExplorationMixin
 from voidcompass.dashboard.dashboard_jump_info_mixin import DashboardJumpInfoMixin
+from voidcompass.dashboard.dashboard_keepsakes_mixin import DashboardKeepsakesMixin
+from voidcompass.dashboard.dashboard_capsules_mixin import DashboardCapsulesMixin
 from voidcompass.dashboard.dashboard_colonisation_mixin import DashboardColonisationMixin
 from voidcompass.dashboard.dashboard_bgs_mixin import DashboardBgsMixin
 from voidcompass.dashboard.dashboard_trading_mixin import DashboardTradingMixin
@@ -267,6 +273,8 @@ class MainDashboard(
     DashboardScanMixin,
     DashboardExplorationMixin,
     DashboardJumpInfoMixin,
+    DashboardKeepsakesMixin,
+    DashboardCapsulesMixin,
     DashboardColonisationMixin,
     DashboardBgsMixin,
     DashboardTradingMixin,
@@ -955,6 +963,8 @@ class MainDashboard(
             "jump_info_hud",
             "colony_needs_hud",
             "trade_route_hud",
+            "galaxy_minimap_hud",
+            "postcard_hud",
         ):
             overlay = getattr(self, attr, None)
             apply_overlay_theme = getattr(overlay, "apply_theme", None)
@@ -1041,6 +1051,7 @@ class MainDashboard(
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud",
             "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud",
+            "galaxy_minimap_hud", "postcard_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -1408,6 +1419,7 @@ class MainDashboard(
             if added and history is getattr(self, "travel_history", None):
                 self.log(f"Galactic Atlas charted {added:,} journal jumps")
                 self._refresh_exploration_window()
+                self._ui_post(self._update_galaxy_minimap, key="galaxy-minimap")
         except Exception as exc:
             logging.warning("Travel history import skipped: %s", exc)
 
@@ -2004,6 +2016,7 @@ class MainDashboard(
         self._sync_flight_log_shell_visibility()
         # These long-lived workers retain the same config object today, but
         # rebinding them makes the profile boundary explicit and future-proof.
+        self._repair_screenshot_path()
         self.screenshots.config = self.config
         self.watcher.config = self.config
         self.captains_log = CaptainsLog(
@@ -2518,6 +2531,7 @@ class MainDashboard(
                 self.add_event_feed_entry, tag, msg, severity=sev,
             )
         )
+        self._repair_screenshot_path()
         self.screenshots = ScreenshotHandler(
             self.config,
             lambda: self.current_sys,
@@ -2658,6 +2672,17 @@ class MainDashboard(
             self.trade_route_hud = TradeRouteHUD(self.root, self.config)
         else:
             self.trade_route_hud = None
+
+        if self._overlay_enabled("galaxy_minimap_hud"):
+            self.galaxy_minimap_hud = GalaxyMinimapHUD(self.root, self.config)
+            self._update_galaxy_minimap()
+        else:
+            self.galaxy_minimap_hud = None
+
+        if self._overlay_enabled("postcard_hud"):
+            self.postcard_hud = PostcardHUD(self.root, self.config)
+        else:
+            self.postcard_hud = None
 
         # Before the overlays register, so they open faded and capped.
         self._apply_overlay_server_settings()
@@ -2896,7 +2921,8 @@ class MainDashboard(
         explicit visibility intent.  Event-driven overlays remain governed by
         their own pending/show policies and are deliberately excluded here.
         """
-        persistent = ("hud", "cargo_hud", "carrier_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud")
+        persistent = ("hud", "cargo_hud", "carrier_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
+                      "galaxy_minimap_hud")
         hidden = set(getattr(self, "_overlay_hotkey_hidden", set()))
         if bool(getattr(self, "_overlay_hotkey_global_hidden", False)):
             return set()
@@ -3503,6 +3529,9 @@ class MainDashboard(
         if action == "colony_fold":
             self._colony_toggle_fold()
             return
+        if action == "galaxy_minimap_view":
+            self._galaxy_minimap_next_view()
+            return
         if action in {"music_play_pause", "music_next", "music_previous"}:
             self.music_remote({"music_play_pause": "toggle", "music_next": "next",
                                "music_previous": "previous"}[action])
@@ -3968,7 +3997,7 @@ class MainDashboard(
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
-            "jump_info_hud", "colony_needs_hud", "trade_route_hud",
+            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "galaxy_minimap_hud", "postcard_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
             try:
@@ -4990,6 +5019,21 @@ class MainDashboard(
             self.trade_route_hud.destroy()
             self.trade_route_hud = None
 
+        if self._overlay_enabled("galaxy_minimap_hud"):
+            if getattr(self, "galaxy_minimap_hud", None) is None:
+                self.galaxy_minimap_hud = GalaxyMinimapHUD(self.root, self.config)
+                self._update_galaxy_minimap()
+        elif getattr(self, "galaxy_minimap_hud", None):
+            self.galaxy_minimap_hud.destroy()
+            self.galaxy_minimap_hud = None
+
+        if self._overlay_enabled("postcard_hud"):
+            if getattr(self, "postcard_hud", None) is None:
+                self.postcard_hud = PostcardHUD(self.root, self.config)
+        elif getattr(self, "postcard_hud", None):
+            self.postcard_hud.destroy()
+            self.postcard_hud = None
+
         self._attach_html_overlay_renderers()
         self._apply_html_overlay_renderer()
 
@@ -5074,6 +5118,14 @@ class MainDashboard(
                 )
             elif attr == "trade_route_hud":
                 attach_html_trade_route_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "galaxy_minimap_hud":
+                attach_html_galaxy_minimap_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "postcard_hud":
+                attach_html_postcard_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             else:
@@ -7775,6 +7827,7 @@ class MainDashboard(
             fid = d.get("fid")
             if commander:
                 self._switch_commander_profile(commander, fid)
+        self._postcard_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
         # Jump Info learns the target before the jump phase moves on.
         self._jump_info_observe(
             ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
@@ -7946,8 +7999,18 @@ class MainDashboard(
                 # the jump is added (5.5.3.2).
                 if ev == "FSDJump" and not startup_replay:
                     self._watcher_travel(history_raw)
+                    # Where you were on this date (5.5.3.7): once a day;
+                    # and a constellation finished since last session.
+                    self._on_this_day_watcher(startup_replay)
+                    self._constellation_watch(startup_replay)
+                # A note you left for this system, handed back (5.5.3.7).
+                self._capsule_arrival(ev, history_raw, startup_replay)
                 if self.travel_history.observe(history_raw):
                     self._refresh_exploration_window()
+                    if not startup_replay:
+                        self._update_galaxy_minimap()
+                elif ev == "LoadGame" and not startup_replay:
+                    self._update_galaxy_minimap()  # a new session: a fresh trail
             except Exception as exc:
                 logging.debug("Travel history event skipped [%s]: %s", ev, exc)
         expedition_result = None
@@ -10336,6 +10399,7 @@ class MainDashboard(
         self._refresh_planet_materials_overlay()
 
         if startup_final or self.is_first_load:
+            self._update_galaxy_minimap()
             self._startup_restore_active = False
             self._startup_restore_ui_pending = False
             self._cached_cockpit_state_loaded = False
@@ -10748,6 +10812,7 @@ class MainDashboard(
             self.update_hud()
             self._refresh_html_workspace()
             self._refresh_exploration_window()
+            self._update_galaxy_minimap()
         else:
             self.nav_route_entries = []
             self.dest_coords = None
@@ -10758,5 +10823,6 @@ class MainDashboard(
             self.update_hud()
             self._refresh_html_workspace()
             self._refresh_exploration_window()
+            self._update_galaxy_minimap()
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self._ui_post(self.route_plotter.update_navigation_state, key="route-navigation-state")

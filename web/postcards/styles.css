@@ -1,0 +1,151 @@
+/* Postcards (5.5.3.7): a Polaroid of the screenshot you just took. The
+   paper is the theme's own light ink warmed a touch; the ink is its dark
+   ground. These are only the fallbacks before the first snapshot. */
+:root {
+  color-scheme: dark;
+  --bg: #070b10; --panel: #0d141c; --inset: #0a1118; --border: #243746;
+  --accent: #00d1ff; --orange: #ff7a18; --green: #4ee59b; --yellow: #ffd166;
+  --red: #ff6075; --text: #dce8ef; --muted: #85939d; --dim: #52616c;
+  --scale: 1;
+  --card-w: 340px;
+  --paper: color-mix(in srgb, var(--text) 90%, var(--yellow));
+  --ink: var(--bg);
+  --ink-soft: color-mix(in srgb, var(--bg) 62%, var(--paper));
+  --font-hand: "Segoe Print", "Ink Free", "Bahnschrift", "Segoe UI", sans-serif;
+  --font-greet: var(--font-hud);
+  /* The "Greetings from…" colour: the HUD's orange, unless the style says. */
+  --greet: var(--orange);
+  --font-hud: "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
+body { pointer-events: none; user-select: none; }
+
+/* The stack: the newest card on top, the ones before fanned out behind. */
+.postcards { position: relative; width: var(--card-w); margin: 14px 20px 18px; zoom: var(--scale); display: grid; }
+.postcards.empty { visibility: hidden; }
+.card {
+  grid-area: 1 / 1; position: relative; width: var(--card-w);
+  padding: 10px 10px 0; background: var(--paper); color: var(--ink);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .55), 0 1px 3px rgba(0, 0, 0, .5);
+  transform: rotate(-1.6deg);
+}
+.card.behind { align-self: start; filter: brightness(.86); }
+.card.behind:nth-child(2) { transform: translate(10px, 6px) rotate(3.2deg); }
+.card.behind:nth-child(3) { transform: translate(-8px, 10px) rotate(-4.6deg); }
+.card.behind:nth-child(4) { transform: translate(14px, 14px) rotate(5.8deg); }
+.card.top { z-index: 2; animation: arrive .7s cubic-bezier(.2, .9, .25, 1.15); }
+@keyframes arrive {
+  0% { transform: translate(120%, -10px) rotate(9deg); }
+  100% { transform: rotate(-1.6deg); }
+}
+
+/* The picture, developing the way an instant photo does. */
+.photo {
+  position: relative; aspect-ratio: 16 / 9; overflow: hidden;
+  background: radial-gradient(ellipse at 40% 35%, color-mix(in srgb, var(--accent) 22%, var(--bg)), var(--bg) 75%);
+}
+.photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo img.developing { animation: develop 2.6s ease-out both; }
+@keyframes develop {
+  0% { filter: brightness(.15) sepia(.9) contrast(.7) blur(2px); opacity: .3; }
+  45% { filter: brightness(.7) sepia(.5) contrast(.9) blur(.6px); opacity: 1; }
+  100% { filter: none; opacity: 1; }
+}
+.photo .waiting {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  color: color-mix(in srgb, var(--text) 55%, transparent); font: 700 9px var(--font-hud); letter-spacing: .24em;
+}
+.photo .badge {
+  position: absolute; right: 6px; top: 6px; padding: 2px 5px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--yellow);
+  font: 700 7.5px var(--font-hud); letter-spacing: .16em;
+}
+.card.no-photo .photo { display: none; }
+
+/* "Greetings from…" (5.5.3.7): the old travel postcard's lettering, in the
+   HUD's orange. Over the photo (with a shade under it), or on the paper
+   when the card has no photo. */
+.greeting { display: grid; justify-items: start; gap: 0; min-width: 0; }
+.photo .greeting {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 10px 8px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .72));
+}
+.greeting-from { color: rgba(255, 255, 255, .9); font: 700 8.5px var(--font-hud); letter-spacing: .32em; text-shadow: 0 1px 2px #000; }
+.greeting-place {
+  max-width: 100%; overflow: hidden; white-space: nowrap; transform: skewX(-9deg); transform-origin: left bottom;
+  color: var(--greet); font: 700 30px/1.02 var(--font-greet); letter-spacing: .02em; text-transform: uppercase;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, .85), 0 0 12px color-mix(in srgb, var(--greet) 45%, transparent);
+}
+.greeting-region { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: rgba(255, 255, 255, .82); font: 700 8px var(--font-hud); letter-spacing: .2em; text-transform: uppercase; text-shadow: 0 1px 2px #000; }
+.caption > .greeting { display: none; }
+.card.no-photo .caption > .greeting { display: grid; padding: 2px 0 6px; }
+.card.no-photo .greeting-from, .card.no-photo .greeting-region { color: var(--ink-soft); text-shadow: none; }
+.card.no-photo .greeting-place { text-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 35%, transparent); }
+
+/* The paper: the Watcher's note, what the journal knows, where, when. */
+.caption { display: grid; gap: 3px; padding: 9px 4px 10px; }
+.note { margin: 0; color: var(--ink); font: 13px/1.35 var(--font-hand); }
+.note .signed { display: block; margin-top: 1px; text-align: right; color: var(--ink-soft); font: 12px var(--font-hand); }
+.note .signed::before { content: "\2014\00A0"; }
+.facts { display: flex; flex-wrap: wrap; gap: 3px 4px; margin-top: 2px; }
+.facts span {
+  padding: 1px 5px; border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 2px;
+  color: var(--ink-soft); font: 700 7.5px/1.5 var(--font-hud); letter-spacing: .1em; text-transform: uppercase;
+}
+.coords { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft);
+  font: 700 8.5px/1.6 var(--font-hud); letter-spacing: .12em; text-transform: uppercase; }
+.when { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; padding-top: 4px;
+  border-top: 1px dashed color-mix(in srgb, var(--ink) 25%, transparent);
+  color: var(--ink-soft); font: 700 8.5px var(--font-hud); letter-spacing: .16em; }
+.card.no-photo .caption { padding-top: 4px; }
+
+.postcards.reduced-motion .card.top, .postcards.reduced-motion .photo img.developing { animation: none; }
+
+/* ------------------------------------------------------------ styles -- */
+/* Four looks (5.5.3.7, Overlay Studio's Style); saved postcards match. */
+
+/* Airmail: cream paper, navy ink, the red-and-blue striped border. */
+.card[data-style="airmail"] {
+  --paper: #f6eedb; --ink: #1f2a44; --ink-soft: #5b6478; --greet: #c8323c;
+  border: 7px solid transparent; padding: 8px 8px 0;
+  border-image: repeating-linear-gradient(45deg, #c8323c 0 9px, #f6eedb 9px 14px, #2a4c9a 14px 23px, #f6eedb 23px 28px) 7;
+  background-clip: padding-box;
+}
+
+/* Holo: a cockpit display, in the theme's own colours: dark glass, accent
+   edges and corner brackets, scanlines over the picture. */
+.card[data-style="holo"] {
+  --paper: color-mix(in srgb, var(--panel) 92%, var(--accent)); --ink: var(--text);
+  --ink-soft: color-mix(in srgb, var(--accent) 55%, var(--muted)); --greet: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .55), 0 0 18px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.card[data-style="holo"]::before, .card[data-style="holo"]::after {
+  content: ""; position: absolute; width: 14px; height: 14px; z-index: 3; pointer-events: none;
+  border: 0 solid var(--accent);
+}
+.card[data-style="holo"]::before { left: -1px; top: -1px; border-left-width: 2px; border-top-width: 2px; }
+.card[data-style="holo"]::after { right: -1px; bottom: -1px; border-right-width: 2px; border-bottom-width: 2px; }
+.card[data-style="holo"] .photo::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .22) 3px);
+}
+.card[data-style="holo"] .facts span { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.card[data-style="holo"] .note { color: var(--text); }
+
+/* Vintage: aged paper, a sepia picture, serif lettering. */
+.card[data-style="vintage"] {
+  --paper: #e9dab6; --ink: #3b2a1a; --ink-soft: #7a6347; --greet: #b4532a;
+  --font-greet: Georgia, "Times New Roman", serif;
+  background: radial-gradient(ellipse at 30% 20%, #f1e4c4, var(--paper) 60%, #d9c597);
+}
+.card[data-style="vintage"] .photo img { filter: sepia(.9) contrast(1.08) brightness(.95) saturate(.8); }
+.card[data-style="vintage"] .photo img.developing { animation-name: develop-vintage; }
+@keyframes develop-vintage {
+  0% { filter: brightness(.15) sepia(1) contrast(.7) blur(2px); opacity: .3; }
+  100% { filter: sepia(.9) contrast(1.08) brightness(.95) saturate(.8); opacity: 1; }
+}
+.card[data-style="vintage"] .greeting-place { font-style: italic; letter-spacing: 0; text-transform: none; transform: none; }

@@ -1,0 +1,69 @@
+/* The postcard album (5.5.3.7). */
+.album-page { display: grid; gap: 14px; }
+.album-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.album-head > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.album-head b { color: var(--accent); font: 700 11px Consolas, monospace; letter-spacing: .12em; }
+.album-head small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font: 10px Consolas, monospace; }
+.album-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.album-actions button { min-height: 30px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.album-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.album-grid li > button {
+  display: grid; gap: 6px; width: 100%; padding: 8px; border: 1px solid var(--border); background: var(--panel);
+  color: inherit; font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, transform .15s;
+}
+.album-grid li > button:hover, .album-grid li > button:focus-visible { border-color: var(--accent); transform: translateY(-2px); outline: none; }
+.album-grid img { display: block; width: 100%; aspect-ratio: 5 / 4; object-fit: contain; background: color-mix(in srgb, var(--bg) 80%, transparent); }
+.album-grid span { display: grid; gap: 2px; min-width: 0; }
+.album-grid b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.album-grid small { color: var(--muted); font: 10px Consolas, monospace; }
+.album-empty { grid-column: 1 / -1; padding: 30px; border: 1px dashed var(--border); color: var(--muted); font: 12px "Segoe UI", sans-serif; text-align: center; }
+/* Full size, over the page. */
+.album-viewer { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; align-content: center; gap: 12px;
+  padding: 24px; background: color-mix(in srgb, var(--bg) 88%, transparent); }
+.album-viewer[hidden] { display: none; }
+.album-viewer figure { display: grid; gap: 8px; margin: 0; max-width: min(92vw, 1500px); }
+.album-viewer img { display: block; max-width: 100%; max-height: 78vh; margin: 0 auto; object-fit: contain; }
+.album-viewer figcaption { display: flex; justify-content: center; gap: 12px; align-items: baseline; }
+.album-viewer figcaption b { color: var(--text); font: 600 14px "Segoe UI", sans-serif; }
+.album-viewer figcaption small { color: var(--muted); font: 11px Consolas, monospace; }
+.album-viewer .album-actions { justify-content: center; }
+/* Everything about postcards (5.5.3.7): the design with a live preview, and
+   keeping them. */
+.album-settings { display: grid; grid-template-columns: minmax(260px, 440px) minmax(0, 1fr); gap: 20px; align-items: start;
+  padding: 14px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }
+@media (max-width: 1000px) { .album-settings { grid-template-columns: minmax(0, 1fr); } }
+.album-preview { display: grid; gap: 6px; width: 100%; max-width: 440px; margin: 0; }
+.album-preview img { display: block; width: 100%; height: auto; min-height: 120px; }
+.album-preview figcaption { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .12em; text-align: center; }
+.album-controls { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.album-controls h3 { margin: 4px 0 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.album-styles { display: flex; flex-wrap: wrap; gap: 6px; }
+.album-styles button, .album-folder-row button { min-height: 30px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.album-styles button.active { color: var(--accent); background-color: color-mix(in srgb, var(--accent) 16%, transparent); }
+.album-switch { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; cursor: pointer; }
+.album-switch input { margin: 3px 0 0; accent-color: var(--accent); }
+.album-switch > span, .album-folder > span:first-child { display: grid; gap: 2px; min-width: 0; }
+.album-switch b, .album-folder b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.album-switch small, .album-folder small { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
+.album-hint { margin: 0; color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }
+.album-folder { display: grid; gap: 6px; }
+.album-folder-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.album-folder-row input { flex: 1 1 260px; min-width: 0; min-height: 30px; padding: 0 9px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font: 11px Consolas, monospace; }
+/* Favourites (5.5.3.7): a star on each picture, in its viewer, and a filter. */
+.album-tile { position: relative; }
+.album-grid .album-star {
+  position: absolute; top: 12px; right: 12px; z-index: 2; width: 30px; height: 30px; padding: 0;
+  display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg) 78%, transparent); color: var(--muted); font: 16px/1 "Segoe UI Symbol", "Segoe UI", sans-serif;
+  cursor: pointer; opacity: 0; transition: opacity .15s, color .15s, border-color .15s;
+}
+.album-tile:hover .album-star, .album-star:focus-visible, .album-star.on { opacity: 1; }
+.album-grid .album-star:hover { color: var(--yellow); border-color: var(--yellow); }
+.album-grid .album-star.on { color: var(--yellow); border-color: color-mix(in srgb, var(--yellow) 55%, transparent); }
+.album-tile.favourite > button[data-postcard], .album-tile.favourite > button[data-shot] { border-color: color-mix(in srgb, var(--yellow) 45%, var(--border)); }
+.album-favs { min-height: 30px; padding: 0 12px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.album-favs b { color: var(--yellow); }
+.album-actions .album-favs.active, .album-actions .album-favs.active:hover { color: var(--yellow); background-color: color-mix(in srgb, var(--yellow) 12%, transparent); }
+.album-star-wide.on { color: var(--yellow); }

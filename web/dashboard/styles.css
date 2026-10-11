@@ -73,8 +73,6 @@ body.ready .app { opacity: 1; visibility: visible; }
 .statusbar i.warn { background: var(--orange); box-shadow: 0 0 9px var(--orange); }
 .connection b { color: var(--yellow); font-weight: 700; }
 .connection.online b { color: var(--green); }
-.rail-footer > button { width: 100%; border: 1px solid var(--border-soft); background: var(--panel); color: var(--muted); padding: 8px; cursor: pointer; font: 700 9px Consolas, monospace; letter-spacing: .06em; }
-.rail-footer > button:hover { color: var(--accent); border-color: var(--accent); }
 .rail-footer small { display: block; margin-top: 11px; color: var(--dim); font: 8px Consolas, monospace; }
 
 .deck { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-rows: var(--topbar) minmax(0,1fr); overflow: hidden; padding-bottom: 29px; }
@@ -542,7 +540,6 @@ body[data-activity="exploration"] .survey-card, body[data-activity="ground"] .co
 .nav > p { font-size: 10px; }
 .nav-item span { font-size: 13px; }
 .nav-item b, .connection, .rail-footer small { font-size: 9px; }
-.rail-footer > button { font-size: 10px; }
 .system-identity small, .commander small, .top-metrics small { font-size: 9px; }
 .system-identity span, .commander span { font-size: 10px; }
 .top-metrics strong { font-size: 13px; }

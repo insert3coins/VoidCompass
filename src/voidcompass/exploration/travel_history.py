@@ -62,6 +62,9 @@ class TravelHistory:
         self.revision = 0
         self._keys = set()
         self._pending_star = ("", "")
+        # When the latest game session began (its LoadGame), for the Galaxy
+        # Minimap's trail of this session's jumps (5.5.3.7).
+        self.session_start = ""
         # The Watcher's memory of places and records (5.5.3.2), built on
         # first use and kept up to date as jumps arrive.
         self._visits = None
@@ -82,13 +85,15 @@ class TravelHistory:
         with self.lock:
             self.rows = rows[-MAX_ROWS:]
             self.files = {str(key): str(value) for key, value in (data.get("files") or {}).items()}
+            self.session_start = str(data.get("session") or "")
             self._keys = {(str(row[0]), str(row[1]).casefold()) for row in self.rows}
             self._visits = None
             self.revision += 1
 
     def _payload(self):
         with self.lock:
-            return {"schema": SCHEMA, "rows": list(self.rows), "files": dict(self.files)}
+            return {"schema": SCHEMA, "rows": list(self.rows), "files": dict(self.files),
+                    "session": self.session_start}
 
     def save(self, immediate=False):
         if self.path:
@@ -101,6 +106,14 @@ class TravelHistory:
             persistence_queue().flush(self.path, timeout=1.0)
 
     # -- recording -------------------------------------------------------------
+    def _note_session(self, raw):
+        """A LoadGame: the game session it starts, if it's the latest."""
+        stamp = str(raw.get("timestamp") or "")
+        if stamp and stamp > self.session_start:
+            self.session_start = stamp
+            return True
+        return False
+
     def _record(self, raw):
         """Add one arrival; True when it was new."""
         event = raw.get("event")
@@ -179,12 +192,14 @@ class TravelHistory:
         if not isinstance(raw, dict):
             return False
         with self.lock:
+            session = raw.get("event") == "LoadGame" and self._note_session(raw)
             added = self._record(raw)
             if added:
                 if len(self.rows) > MAX_ROWS:
                     del self.rows[:len(self.rows) - MAX_ROWS]
+            if added or session:
                 self.revision += 1
-        if added:
+        if added or session:
             self.save()
         return added
 
@@ -195,6 +210,7 @@ class TravelHistory:
         names = sorted((name for name in os.listdir(journal_path)
                         if name.startswith("Journal.") and name.endswith(".log")), key=journal_sort_key)
         added = 0
+        added_session = False
         for name in names:
             path = os.path.join(journal_path, name)
             try:
@@ -218,6 +234,8 @@ class TravelHistory:
                         continue
                     if raw.get("event") in ("Commander", "LoadGame"):
                         active = commander_matches(raw, commander, fid)
+                        if active and raw.get("event") == "LoadGame" and self._note_session(raw):
+                            added_session = True
                         continue
                     if active and self._record(raw):
                         added += 1
@@ -225,12 +243,23 @@ class TravelHistory:
         with self.lock:
             if len(self.rows) > MAX_ROWS:
                 del self.rows[:len(self.rows) - MAX_ROWS]
-            if added:
+            if added or added_session:
                 self.revision += 1
-        self.save(immediate=bool(added))
+        self.save(immediate=bool(added or added_session))
         return added
 
     # -- reading ---------------------------------------------------------------------
+    def session_rows(self):
+        """This game session's arrivals, starting from where it began (the
+        last arrival before its LoadGame), oldest first (5.5.3.7)."""
+        with self.lock:
+            if not self.session_start:
+                return list(self.rows[-1:])
+            index = len(self.rows)
+            while index and str(self.rows[index - 1][0]) >= self.session_start:
+                index -= 1
+            return list(self.rows[max(0, index - 1):])
+
     def route_rows(self):
         """The journey as the atlas takes it, oldest first."""
         with self.lock:

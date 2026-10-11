@@ -74,6 +74,12 @@ class HtmlDashboardServer:
         # The music library (services.music_library.MusicLibrary). The page
         # lists it and streams tracks and covers by id, never by file path.
         self.music = None
+        # The postcard album (services.postcard_album, 5.5.3.7): pictures by
+        # id under /media/postcard/ and /media/postcard-thumb/.
+        self.postcards = None
+        # The screenshot album (services.screenshot_album): /media/shot/ and
+        # /media/shot-thumb/, by id.
+        self.screenshots = None
         # The atlas receives a random loopback port after the journal backend
         # is constructed. The parent still supplies the exact private URL and
         # the atlas independently restricts its frame ancestor to this deck.
@@ -340,6 +346,12 @@ class HtmlDashboardServer:
         )
 
     def _serve_music(self, handler, path):
+        if path.startswith("/media/postcard"):
+            self._serve_postcard(handler, path)
+            return
+        if path.startswith("/media/shot"):
+            self._serve_screenshot(handler, path)
+            return
         library = self.music
         if library is None:
             self._send_json(handler, {"error": "music unavailable"}, 404)
@@ -368,6 +380,38 @@ class HtmlDashboardServer:
             return
         from voidcompass.services.music_library import audio_type
         self._send_file_range(handler, file, audio_type(file))
+
+    def _serve_postcard(self, handler, path):
+        album = self.postcards
+        kind, _, name = path.removeprefix("/media/").partition("/")
+        identifier = name.removesuffix(".png").removesuffix(".jpg")
+        data = None
+        if album is not None and kind == "postcard-preview":
+            data, content_type = album.preview(), "image/png"
+        elif album is not None and _MEDIA_ID.fullmatch(identifier):
+            if kind == "postcard":
+                data, content_type = album.full(identifier), "image/png"
+            elif kind == "postcard-thumb":
+                data, content_type = album.thumb(identifier), "image/jpeg"
+        if not data:
+            self._send_json(handler, {"error": "not found"}, 404)
+            return
+        self._send_bytes(handler, data, content_type, cache="no-cache")
+
+    def _serve_screenshot(self, handler, path):
+        album = self.screenshots
+        kind, _, name = path.removeprefix("/media/").partition("/")
+        identifier = name.split(".", 1)[0]
+        data, content_type = None, ""
+        if album is not None and _MEDIA_ID.fullmatch(identifier):
+            if kind == "shot":
+                data, content_type = album.picture(identifier)
+            elif kind == "shot-thumb":
+                data, content_type = album.thumb(identifier), "image/jpeg"
+        if not data:
+            self._send_json(handler, {"error": "not found"}, 404)
+            return
+        self._send_bytes(handler, data, content_type, cache="no-cache")
 
     def _send_file_range(self, handler, file, content_type):
         """Send a file, or the byte range the player asks for when it seeks."""

@@ -47,6 +47,10 @@ OVERLAY_SPECS = (
     OverlaySpec("colony_needs_hud", "colony-needs", "Void Compass Construction Needs", "colony_needs_overlay_enabled", "colony_needs_hud_x", "colony_needs_hud_y", (1520, 120), (360, 320), "Construction Needs", "COLONY", True, "colony_needs", "overlay_hotkey_colony_needs", "Construction Needs"),
     # Trading (5.5.2.6): only while a trade route is being followed.
     OverlaySpec("trade_route_hud", "trade-route", "Void Compass Trade Route", "trade_route_overlay_enabled", "trade_route_hud_x", "trade_route_hud_y", (1520, 480), (360, 150), "Trade Route", "TRADE", True, "trade_route", "overlay_hotkey_trade_route", "Trade Route"),
+    # 5.5.3.7: the Milky Way in a corner, with you on it; and a Polaroid of
+    # each screenshot taken in game.
+    OverlaySpec("galaxy_minimap_hud", "galaxy-minimap", "Void Compass Galaxy Minimap", "galaxy_minimap_overlay_enabled", "galaxy_minimap_hud_x", "galaxy_minimap_hud_y", (40, 600), (240, 280), "Galaxy Minimap", "MINIMAP", False, "galaxy_minimap", "overlay_hotkey_galaxy_minimap", "Galaxy Minimap"),
+    OverlaySpec("postcard_hud", "postcards", "Void Compass Postcards", "postcard_overlay_enabled", "postcard_hud_x", "postcard_hud_y", (1700, 640), (380, 330), "Postcards", "POSTCARDS", True, "postcards", "overlay_hotkey_postcards", "Postcards"),
     OverlaySpec("ground_popup", "ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled", "ground_popup_x", "ground_popup_y", (1320, 160), (420, 208), "Planet Waypoint Navigation", "SURFACE NAV", True, "planet_waypoint", "overlay_hotkey_planet_waypoint", "Planet Waypoint Navigation"),
 )
 
@@ -93,6 +97,9 @@ OVERLAY_HOTKEY_SPECS = (
     _overlay_hotkey("notifications"),
     _overlay_hotkey("heartbeat"),
     _overlay_hotkey("galnet_ticker"),
+    _overlay_hotkey("galaxy_minimap"),
+    ("galaxy_minimap_view", "overlay_hotkey_galaxy_minimap_view", "Galaxy Minimap: change the view", None),
+    _overlay_hotkey("postcards"),
     _overlay_hotkey("music_player"),
     # The player itself, from anywhere: in game, or with the deck on another screen.
     ("music_play_pause", "overlay_hotkey_music_play_pause", "Music: play / pause", None),

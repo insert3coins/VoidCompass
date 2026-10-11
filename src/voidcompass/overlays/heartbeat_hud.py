@@ -312,9 +312,12 @@ class HeartbeatHUD:
 
     def note(self, kind, fields=None):
         """Something Void Compass noticed that the Watcher may think about
-        (an achievement, an unlogged Codex colour, a new region)."""
-        if self.mind.note(kind, fields):
+        (an achievement, an unlogged Codex colour, a new region). The
+        thought, when it had one."""
+        thought = self.mind.note(kind, fields)
+        if thought:
             self._redraw()
+        return thought
 
     def pulse(self, kind='status', activity=None, state=None, detail=None):
         """Record one journal event or Status.json write for the orb."""

@@ -160,9 +160,12 @@ button { cursor: pointer; }
 .stats div:last-child { margin-right: 0; border-right: 0; }
 .stats span { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
 .stats b { color: var(--text); font: 600 18px/1 "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.replay { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; }
+.replay { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; }
+.replay-buttons { display: flex; gap: 6px; }
 .play { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--accent); border-radius: 50%; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
-.play svg { width: 18px; height: 18px; fill: currentColor; }
+.play svg { width: 18px; height: 18px; fill: currentColor; pointer-events: none; }
+.play.stop { width: 32px; height: 32px; }
+.play.stop svg { width: 14px; height: 14px; }
 .play:hover { box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 55%, transparent); }
 .replay-track { display: grid; gap: 5px; min-width: 0; }
 .replay-track input { width: 100%; margin: 0; accent-color: var(--accent); }

@@ -240,7 +240,7 @@ function pushScene() {
 
 function replayHead() {
   if (replay.value >= 1 || route.length < 2) return null;
-  const at = replay.value * (route.length - 1);
+  const at = Math.max(0, replay.value) * (route.length - 1);
   const index = Math.floor(at), frac = at - index;
   const a = route[index], b = route[Math.min(route.length - 1, index + 1)];
   return {pos: a.pos.map((value, axis) => value + (b.pos[axis] - value) * frac), row: frac < .5 ? a : b};
@@ -369,7 +369,19 @@ function renderReplayLabels() {
   const head = replayHead();
   $('replay-now').textContent = head ? `${head.row.system || '—'} · ${day(head.row.timestamp)}` : route.length ? 'FULL HISTORY' : 'NO JOURNAL HISTORY YET';
   $('replay').value = String(Math.round(replay.value * 1000));
-  $('replay-play').innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${replay.playing ? 'M6 5h4v14H6zM14 5h4v14h-4z' : 'M8 5v14l11-7z'}"/></svg>`;
+  // The button's icon only when it changes: this runs every frame while the
+  // journey plays, and an icon swapped under the pointer swallowed the click
+  // (the replay couldn't be paused).
+  const play = $('replay-play');
+  const state = replay.playing ? 'pause' : 'play';
+  if (play.dataset.state !== state) {
+    play.dataset.state = state;
+    play.querySelector('path').setAttribute('d', replay.playing ? 'M6 5h4v14H6zM14 5h4v14h-4z' : 'M8 5v14l11-7z');
+    const label = replay.playing ? 'Pause the replay' : replay.value < 1 ? 'Carry on the replay' : 'Replay the journey';
+    play.title = `${label} (Space)`;
+    play.setAttribute('aria-label', label);
+  }
+  $('replay-stop').hidden = replay.value >= 1;
 }
 
 // --- Inspector ---------------------------------------------------------------------------------------
@@ -743,14 +755,32 @@ function updateInstruments() {
   $('scale-label').textContent = step >= 1000 ? `${number(step / 1000)} KLY` : `${number(step)} LY`;
 }
 
+// Play, pause, and play on from where it paused (from the start once it
+// has reached the end).
+function toggleReplay() {
+  if (route.length < 2) return;
+  if (replay.playing) replay.playing = false;
+  else {
+    if (replay.value >= .999) replay.value = 0;
+    replay.playing = true;
+    replay.last = performance.now();
+    replay.duration = Math.min(40000, Math.max(10000, route.length * 30));
+  }
+  pushBeacons();
+  renderReplayLabels();
+  labelsDirty = true;
+}
+
 // --- The render loop ------------------------------------------------------------------------------------------
 function loop(now) {
   window.requestAnimationFrame(loop);
   if (document.hidden) return;
   const flying = cam.step(now);
   if (replay.playing) {
-    replay.value = Math.min(1, replay.value + (now - replay.last) / replay.duration);
-    replay.last = now;
+    // A frame's time can be a touch before the press that started it: never
+    // step backwards (below the start there's no journey to show).
+    replay.value = Math.min(1, replay.value + Math.max(0, now - replay.last) / replay.duration);
+    replay.last = Math.max(replay.last, now);
     if (replay.value >= 1) replay.playing = false;
     pushBeacons();
     renderReplayLabels();
@@ -865,16 +895,15 @@ function bind() {
     labelsDirty = true;
     lastInteraction = performance.now();
   });
-  $('replay-play').addEventListener('click', () => {
-    if (route.length < 2) return;
-    if (replay.playing) replay.playing = false;
-    else {
-      if (replay.value >= .999) replay.value = 0;
-      replay.playing = true;
-      replay.last = performance.now();
-      replay.duration = Math.min(40000, Math.max(10000, route.length * 30));
-    }
+  $('replay-play').addEventListener('click', toggleReplay);
+  // Stop: the replay ends and the whole journey shows again.
+  $('replay-stop').addEventListener('click', () => {
+    replay.playing = false;
+    replay.value = 1;
+    pushBeacons();
     renderReplayLabels();
+    labelsDirty = true;
+    lastInteraction = performance.now();
   });
   $('mark-cancel').addEventListener('click', () => $('mark-dialog').close());
   $('mark-delete').addEventListener('click', (event) => {
@@ -902,6 +931,11 @@ function bind() {
   document.addEventListener('keydown', (event) => {
     if (event.target.closest?.('input, textarea, select, dialog')) return;
     if (event.key === 'Escape') { hideMenu(); if (!$('inspector').hidden) closeInspector(); return; }
+    if (event.key === ' ' && !event.target.closest?.('button')) {
+      event.preventDefault();
+      toggleReplay();
+      return;
+    }
     if (cam.key(event)) event.preventDefault();
   });
   document.addEventListener('pointerdown', (event) => { if (!event.target.closest('#menu')) hideMenu(); });

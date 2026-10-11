@@ -531,6 +531,15 @@ def exploration_body_search(
     return result
 
 
+def _xyz(row):
+    """A Spansh system's [x, y, z], or None."""
+    try:
+        coords = [float(row.get(axis)) for axis in ("x", "y", "z")]
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return coords
+
+
 def neutron_route(from_system, to_system, jump_range, efficiency=60, supercharge_multiplier=4):
     if not from_system:
         raise SpanshError("No starting system known yet.")
@@ -556,6 +565,8 @@ def neutron_route(from_system, to_system, jump_range, efficiency=60, supercharge
                 "distance_left": j.get("distance_left"),
                 "neutron": bool(j.get("neutron_star")),
                 "jumps": j.get("jumps"),
+                # Where it is (the Galaxy Minimap draws the trip, 5.5.3.7).
+                "coords": _xyz(j),
                 "supercharge_multiplier": 6 if int(supercharge_multiplier) == 6 else 4,
             }
             for j in jumps

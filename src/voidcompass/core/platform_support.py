@@ -158,6 +158,65 @@ def detect_elite_journal_path(home=None, environ=None) -> str:
     return str(existing[0])
 
 
+def windows_pictures_folder():
+    """Windows' own Pictures folder, wherever it lives: OneDrive (and other
+    folder backup) moves it to OneDrive's Pictures, and Elite saves its
+    screenshots there (5.5.3.7). None off Windows or if Windows can't say."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+        import uuid
+
+        class _Guid(ctypes.Structure):
+            _fields_ = [("data1", wintypes.DWORD), ("data2", wintypes.WORD),
+                        ("data3", wintypes.WORD), ("data4", ctypes.c_ubyte * 8)]
+
+        folder_id = _Guid.from_buffer_copy(uuid.UUID("33E28130-4E1E-4676-835A-98395C3BC3BB").bytes_le)
+        found = ctypes.c_void_p()
+        shell32 = ctypes.WinDLL("shell32")
+        shell32.SHGetKnownFolderPath.argtypes = (
+            ctypes.POINTER(_Guid), wintypes.DWORD, wintypes.HANDLE, ctypes.POINTER(ctypes.c_void_p))
+        shell32.SHGetKnownFolderPath.restype = ctypes.c_long
+        if shell32.SHGetKnownFolderPath(ctypes.byref(folder_id), 0, None, ctypes.byref(found)) != 0:
+            return None
+        try:
+            return ctypes.wstring_at(found.value) or None
+        finally:
+            ole32 = ctypes.WinDLL("ole32")
+            ole32.CoTaskMemFree.argtypes = (ctypes.c_void_p,)
+            ole32.CoTaskMemFree(found)
+    except (AttributeError, OSError, ValueError):
+        return None
+
+
+def _legacy_screenshot_path(home=None) -> str:
+    """Where Void Compass used to assume the screenshots were."""
+    home_path = Path(home).expanduser() if home is not None else Path.home()
+    return str(home_path.joinpath(*_SCREENSHOT_PARTS))
+
+
+def repaired_screenshot_path(configured, journal_path=None, home=None, pictures=None) -> str:
+    """The screenshot folder to use (5.5.3.7). The one chosen in Settings
+    stays, unless it is gone, or is only the old guess (the user folder's
+    Pictures) while Windows keeps Pictures elsewhere (OneDrive) and Elite's
+    folder is there instead."""
+    configured = str(configured or "").strip()
+    if pictures is None:
+        default = default_screenshot_path(journal_path, home=home)
+    else:
+        default = str(Path(pictures).joinpath(*_SCREENSHOT_PARTS[1:]))
+    if not configured:
+        return default
+    same = lambda a, b: os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+    if same(configured, default) or not os.path.isdir(default):
+        return configured
+    if not os.path.isdir(configured) or same(configured, _legacy_screenshot_path(home)):
+        return default
+    return configured
+
+
 def default_screenshot_path(journal_path=None, home=None, environ=None) -> str:
     """Return the Proton-linked or native screenshot directory."""
     if journal_path:
@@ -176,4 +235,9 @@ def default_screenshot_path(journal_path=None, home=None, environ=None) -> str:
                 candidate = user_dir.joinpath(*_SCREENSHOT_PARTS)
                 if candidate.is_dir():
                     return str(candidate)
+    if os.name == "nt" and home is None:
+        # Windows' Pictures, which OneDrive may have moved (5.5.3.7).
+        pictures = windows_pictures_folder()
+        if pictures:
+            return str(Path(pictures).joinpath(*_SCREENSHOT_PARTS[1:]))
     return str(home_path.joinpath(*_SCREENSHOT_PARTS))

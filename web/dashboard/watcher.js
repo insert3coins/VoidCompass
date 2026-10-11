@@ -234,6 +234,7 @@ export function renderWatcher(data = {}, ui) {
     stat(ui, "SESSIONS TOGETHER", ui.numeric(data.sessions)),
     stat(ui, "HOURS TOGETHER", ui.numeric(data.hours, 1)),
     stat(ui, "DEATHS IT WATCHED", ui.numeric(data.deaths)),
+    stat(ui, "POSTCARDS KEPT", ui.numeric(data.postcards)),
   ].join("");
   const records = data.records || {};
   ui.byId("watcher-records").innerHTML = [

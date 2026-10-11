@@ -30,6 +30,8 @@ IDLE_TOPICS = (
     # Its past, in passing (5.5.3.5; watcher_lore.MUSINGS); after its story
     # is told, its later musings; and a look back at a chapter it told you.
     "idle_lore", "idle_after", "lore_recall",
+    # A postcard it kept, brought up again (5.5.3.7).
+    "idle_postcard",
 )
 
 # Star classes in plain words (journal StarClass / StarType).
@@ -233,6 +235,8 @@ class Surroundings:
             world.append(("idle_after", {}))
         if context.get("recall"):
             session.append(("lore_recall", dict(context["recall"])))
+        if context.get("postcard"):
+            session.append(("idle_postcard", dict(context["postcard"])))
         if context.get("galnet"):
             world.append(("idle_galnet", {"headline": str(context["galnet"]).rstrip(". ")}))
         thoughts = int(context.get("thoughts") or 0)

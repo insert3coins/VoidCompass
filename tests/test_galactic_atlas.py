@@ -195,6 +195,39 @@ class AtlasBrowserTests(unittest.TestCase):
         self.assertEqual((marks[0]["annotation"]["title"], marks[0]["annotation"]["category"]), ("Nebula to survey", "Survey Target"))
         self.assertEqual(len(marks[0]["annotation"]["position"]), 3)
 
+    def test_the_replay_pauses_plays_on_and_stops(self):
+        page, _commands = self.open()
+        value = "window.voidcompassAtlas.state().replay"
+        page.locator("#replay-play").click()
+        page.wait_for_function(f"{value} > 0.02 && {value} < 1")
+        # A real press, held a moment the way a hand does: the icon used to
+        # be rebuilt every frame and the click was lost.
+        box = page.locator("#replay-play").bounding_box()
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        page.mouse.down()
+        page.wait_for_timeout(120)
+        page.mouse.up()
+        paused = page.evaluate(value)
+        page.wait_for_timeout(400)
+        self.assertEqual(page.evaluate(value), paused, "paused")
+        self.assertLess(paused, 1)
+        self.assertEqual(page.locator("#replay-play").get_attribute("aria-label"), "Carry on the replay")
+        self.assertTrue(page.locator("#replay-stop").is_visible())
+        # Space plays on from there, and pauses again.
+        page.locator("#viewport canvas").click(position={"x": 5, "y": 5})
+        page.keyboard.press("Space")
+        page.wait_for_function(f"{value} > {paused}")
+        page.keyboard.press("Space")
+        page.wait_for_timeout(100)
+        held = page.evaluate(value)
+        page.wait_for_timeout(300)
+        self.assertEqual(page.evaluate(value), held)
+        # Stop: the whole journey again.
+        page.locator("#replay-stop").click()
+        self.assertEqual(page.evaluate(value), 1)
+        self.assertFalse(page.locator("#replay-stop").is_visible())
+        self.assertEqual(page.locator("#replay-now").inner_text(), "FULL HISTORY")
+
 
 if __name__ == "__main__":
     unittest.main()

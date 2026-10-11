@@ -110,7 +110,7 @@ _CORE_RANKS = {
 _HTML_WORKSPACE_PAGES = {
     "planet-materials", "explore", "profile", "analytics", "chronicle", "mission", "ground", "mining",
     "engineering", "build-planner", "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
-    "colonisation", "bgs", "trading", "watcher",
+    "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation",
 }
 
 
@@ -183,6 +183,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         if runtime is None:
             return False
         self._attach_music_library(runtime)
+        attach_album = getattr(self, "_attach_postcard_album", None)
+        if callable(attach_album):
+            attach_album(runtime)
         runtime.attach_app(self)
         self._html_dashboard_publish_job = None
         self._html_dashboard_last_payload = None
@@ -794,6 +797,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "sessions": sessions,
             "hours": round(hours, 1),
             "deaths": int(memory.get("deaths") or 0),
+            # The postcards it has kept (5.5.3.7).
+            "postcards": len(memory.get("postcards") or ()),
             "bond": {"level": bond, "name": self._WATCHER_BONDS[bond], "progress": round(progress, 3),
                      "next": self._WATCHER_BONDS[bond + 1] if bond < 3 else ""},
             "records": {
@@ -2512,6 +2517,14 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "bgs": self._html_bgs_workspace,
             "trading": self._html_trading_workspace,
             "watcher": self._html_watcher_workspace,
+            # The postcard album (5.5.3.7, dashboard_keepsakes_mixin).
+            "postcards": getattr(self, "_html_postcards_workspace", None),
+            # The screenshot album (5.5.3.7, dashboard_keepsakes_mixin).
+            "screenshots": getattr(self, "_html_screenshots_workspace", None),
+            # Time capsules and On this day (5.5.3.7, dashboard_capsules_mixin).
+            "capsules": getattr(self, "_html_capsules_workspace", None),
+            # Your constellation (5.5.3.7, dashboard_capsules_mixin).
+            "constellation": getattr(self, "_html_constellation_workspace", None),
         }
         builder = builders.get(page)
         if builder is None:
@@ -2875,6 +2888,24 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
 
         if page == "trading":
             result = self._handle_trading_command(operation, payload)
+            self._schedule_html_dashboard_publish(immediate=True)
+            return result
+
+        if page == "constellation":
+            return self._handle_constellation_command(operation, payload)
+
+        if page == "capsules":
+            result = self._handle_capsules_command(operation, payload)
+            self._schedule_html_dashboard_publish(immediate=True)
+            return result
+
+        if page == "screenshots":
+            result = self._handle_screenshots_command(operation, payload)
+            self._schedule_html_dashboard_publish(immediate=True)
+            return result
+
+        if page == "postcards":
+            result = self._handle_postcards_command(operation, payload)
             self._schedule_html_dashboard_publish(immediate=True)
             return result
 
@@ -4426,6 +4457,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             return started is not False
         if action == "open_screenshots":
             self.open_screenshots_folder()
+            return True
+        if action == "open_postcards":
+            self.open_postcards_folder()
             return True
         if action == "open_logs":
             path = application_base_dir() / "logs"

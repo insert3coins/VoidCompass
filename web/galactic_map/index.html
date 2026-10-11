@@ -90,7 +90,10 @@
         <div><span>MARKS</span><b id="stat-marks">0</b></div>
       </div>
       <div class="replay">
-        <button type="button" id="replay-play" class="play" title="Replay the journey" aria-label="Replay the journey"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+        <div class="replay-buttons">
+          <button type="button" id="replay-play" class="play" title="Replay the journey (Space)" aria-label="Replay the journey"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+          <button type="button" id="replay-stop" class="play stop" title="Stop: the whole journey again" aria-label="Stop the replay" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z"/></svg></button>
+        </div>
         <div class="replay-track">
           <input id="replay" type="range" min="0" max="1000" value="1000" aria-label="Journey position">
           <div class="replay-labels"><span id="replay-start">—</span><strong id="replay-now">FULL HISTORY</strong><span id="replay-end">—</span></div>
