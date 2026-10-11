@@ -444,43 +444,51 @@ function marketTable(station, esc, local) {
   return `<table class="tr-table market"><thead><tr><th>COMMODITY</th><th>BUY</th><th>SELL</th><th>STOCK</th><th>DEMAND</th>${local ? `<th title="The game's own galactic average price">GALACTIC AVERAGE</th>` : ""}<th></th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
+// The Market view (5.5.3.6): the system search and its stations down the
+// left, the market you opened on the right, so both stay in sight. Before,
+// one sat under the other: a long station list hid the market, and a long
+// market hid the search.
 function stationView(data, ui) {
   const esc = ui.escapeHtml;
   const st = data.station || {};
   const local = st.local, remote = st.remote;
-  let html = "";
-  if (local) {
-    html += `<section class="tr-panel wide"><div class="tr-result-head"><div><p>DOCKED · FROM THE GAME</p><h3>${esc(local.station)}</h3><span>${esc(local.system)} · market read ${ago(local.updated)}</span></div>
-      <div class="tr-actions"><button type="button" class="primary" data-trade-op="plan_from" data-system="${esc(local.system)}" data-station="${esc(local.station)}">PLAN A ROUTE FROM HERE</button></div></div>
-      ${marketTable(local, esc, true)}</section>`;
-  } else if (data.where?.docked) {
-    html += `<section class="tr-panel wide"><p class="tr-dim">Open the commodity market in game and this station's prices show here, straight from the game.</p></section>`;
-  } else {
-    html += `<section class="tr-panel wide"><p class="tr-dim">Dock and open the commodity market to see it here. Any station from a route or search can be opened with its MARKET button.</p></section>`;
-  }
-  // Any station in a system, from one request (5.5.3.4). At the top since
-  // 5.5.3.5: below an opened market (a hundred rows or more) the search was
-  // out of sight, so it looked as if you couldn't search another system.
+  // Any station in a system, from one request (5.5.3.4).
   const list = st.list || {};
-  const busyList = (data.busy || []).includes("markets");
-  const stations = (list.stations || []).map((row) => `<button type="button" data-trade-op="station" data-market-id="${esc(row.market_id)}">
-      <b>${esc(row.station)}</b><small>${esc(row.type || "")}${row.arrival_ls != null ? ` · ${count(row.arrival_ls)} ls` : ""}${row.pad ? ` · ${row.pad} pad` : ""} · ${count(row.in_stock)} for sale · ${count(row.wanted)} wanted · prices ${ago(row.updated)}</small></button>`).join("");
-  const listHtml = `<section class="tr-panel wide"><h4>ANY STATION IN A SYSTEM</h4>
-    <form class="tr-form tr-inline" data-trade-form="system_markets"><div class="tr-fields"><label class="grow"><span>SYSTEM</span><input name="system" maxlength="120" required value="${esc(field("system_markets", "system", list.system || data.where?.system || ""))}"></label></div>
-      <div class="tr-actions"><button type="submit" class="primary" ${busyList ? "disabled" : ""}>${busyList ? "ASKING SPANSH…" : "LIST ITS STATIONS"}</button></div></form>
-    ${list.error ? `<p class="co-error">${esc(list.error)}</p>` : ""}
-    ${list.stations ? (stations ? `<p class="tr-dim">${count(list.stations.length)} station${list.stations.length === 1 ? "" : "s"} with a market in ${esc(list.system)}, nearest the star first. Open one to see its market.</p><div class="tr-picks">${stations}</div>`
-      : `<p class="tr-dim">Spansh has no station with a market in ${esc(list.system)}.</p>`) : ""}</section>`;
-  let opened = "";
-  if (st.error) opened += `<p class="co-error">${esc(st.error)}</p>`;
-  if ((data.busy || []).includes("station")) opened += `<section class="tr-panel wide"><p class="tr-dim">Opening that station's market on Spansh…</p></section>`;
+  const searching = Boolean(list.pending);
+  const openId = String(remote?.market_id ?? "");
+  const stations = (list.stations || []).map((row) => `<button type="button" class="tr-station-row${String(row.market_id) === openId ? " open" : ""}" data-trade-op="station" data-market-id="${esc(row.market_id)}">
+      <b>${esc(row.station)}</b><small>${esc(row.type || "")}${row.arrival_ls != null ? ` · ${count(row.arrival_ls)} ls` : ""}${row.pad ? ` · ${row.pad} pad` : ""}</small>
+      <small>${count(row.in_stock)} for sale · ${count(row.wanted)} wanted · prices ${ago(row.updated)}</small></button>`).join("");
+  let found = "";
+  if (list.error) found = `<p class="co-error">${esc(list.error)}</p>`;
+  else if (searching) found = `<p class="tr-dim">Asking Spansh for the stations in ${esc(list.system || "that system")}…</p>`;
+  else if (list.stations) {
+    found = stations
+      ? `<p class="tr-dim">${count(list.stations.length)} station${list.stations.length === 1 ? "" : "s"} with a market in ${esc(list.system)}, nearest the star first.</p><div class="tr-stations">${stations}</div>`
+      : `<p class="tr-dim">Spansh has no station with a market in ${esc(list.system)}.</p>`;
+  }
+  const search = `<section class="tr-panel tr-market-search"><h4>ANY STATION IN A SYSTEM</h4>
+    <form class="tr-form" data-trade-form="system_markets"><div class="tr-fields"><label class="grow"><span>SYSTEM</span><input name="system" maxlength="120" required value="${esc(field("system_markets", "system", list.system || data.where?.system || ""))}"></label></div>
+      <div class="tr-actions"><button type="submit" class="primary" ${searching ? "disabled" : ""}>${searching ? "ASKING SPANSH…" : "LIST ITS STATIONS"}</button></div></form>
+    ${found}</section>`;
+  let shown = "";
+  if (st.error) shown += `<p class="co-error">${esc(st.error)}</p>`;
+  if (st.pending) shown += `<section class="tr-panel"><p class="tr-dim">Opening that station's market on Spansh…</p></section>`;
   else if (remote && (!local || remote.market_id !== local.market_id)) {
-    opened += `<section class="tr-panel wide"><div class="tr-result-head"><div><p>FROM SPANSH</p><h3>${esc(remote.station)}</h3><span>${esc(remote.system)} · prices ${ago(remote.updated)}${remote.pad ? ` · ${remote.pad} pad` : ""}</span></div>
+    shown += `<section class="tr-panel"><div class="tr-result-head"><div><p>FROM SPANSH</p><h3>${esc(remote.station)}</h3><span>${esc(remote.system)} · prices ${ago(remote.updated)}${remote.pad ? ` · ${remote.pad} pad` : ""}</span></div>
       <div class="tr-actions"><button type="button" data-trade-op="copy" data-text="${esc(remote.system)}">COPY SYSTEM</button><button type="button" data-trade-op="plan_from" data-system="${esc(remote.system)}" data-station="${esc(remote.station)}">PLAN FROM HERE</button></div></div>
       ${marketTable(remote, esc, false)}</section>`;
   }
-  // The search first, then the market you opened, then your docked one.
-  return listHtml + opened + html;
+  if (local) {
+    shown += `<section class="tr-panel"><div class="tr-result-head"><div><p>DOCKED · FROM THE GAME</p><h3>${esc(local.station)}</h3><span>${esc(local.system)} · market read ${ago(local.updated)}</span></div>
+      <div class="tr-actions"><button type="button" class="primary" data-trade-op="plan_from" data-system="${esc(local.system)}" data-station="${esc(local.station)}">PLAN A ROUTE FROM HERE</button></div></div>
+      ${marketTable(local, esc, true)}</section>`;
+  } else if (!shown) {
+    shown = `<section class="tr-panel"><p class="tr-dim">${data.where?.docked
+      ? "Open the commodity market in game and this station's prices show here, straight from the game."
+      : "Pick a station on the left to see its market, or dock and open the commodity market in game. Any station from a route or search can be opened with its MARKET button too."}</p></section>`;
+  }
+  return `<div class="tr-market-split">${search}<div class="tr-market-shown">${shown}</div></div>`;
 }
 
 function historyView(data, ui) {

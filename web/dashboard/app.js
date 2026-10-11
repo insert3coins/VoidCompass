@@ -157,7 +157,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".pp-tabs button", ".pp-task-main", ".pp-power", "[data-pp-filter]",
   ".co-tabs button", ".co-actions button", ".pl-mini", ".pl-chip",
   ".bgs-star", ".bgs-link", ".bgs-row-main", ".bgs-card", ".bgs-ranges button",
-  ".tr-ranges button",
+  ".tr-ranges button", ".tr-station-row",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {

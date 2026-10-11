@@ -121,6 +121,7 @@ class HtmlTradingMixin:
         elif view == "station":
             local = self._trading_local_market()
             data["station"] = {"local": local, "remote": ui["station"].get("remote"),
+                               "pending": bool(ui["station"].get("pending")),
                                "error": ui["station"].get("error", ""), "list": ui.get("markets") or {}}
         elif view == "history":
             summary = views.summary(store, names, ui["days"])
@@ -514,7 +515,11 @@ class HtmlTradingMixin:
         if not market_id:
             return False
         ui["view"] = "station"
-        ui["station"] = {"pending": True}
+        # Only the station asked for last is shown (5.5.3.6): opening one,
+        # then another (or searching a new system) before Spansh answered let
+        # the first one's market land late.
+        ui["station_want"] = market_id
+        ui["station"] = {"pending": True, "market_id": market_id}
 
         def work():
             self._trading_spansh_names()
@@ -524,6 +529,8 @@ class HtmlTradingMixin:
             return station
 
         def done(result, error):
+            if ui.get("station_want") != market_id:
+                return
             ui["station"] = {"error": error} if error else {"remote": result}
         return self._trading_task("station", work, done, cache_key=("station", market_id))
 
@@ -534,6 +541,16 @@ class HtmlTradingMixin:
         if not system:
             ui["markets"] = {"error": "Give a system name."}
             return True
+        # Only the system asked for last is listed, and a market opened in
+        # another system goes (5.5.3.6): two searches in a row could list the
+        # first one's stations under the second one's name, beside a market
+        # from the system before.
+        want = system.casefold()
+        ui["markets_want"] = want
+        remote = (ui.get("station") or {}).get("remote") or {}
+        if ui.get("station", {}).get("pending") or str(remote.get("system") or "").casefold() != want:
+            ui["station"] = {}
+            ui["station_want"] = None
         ui["markets"] = {"pending": True, "system": system}
 
         def work():
@@ -546,5 +563,7 @@ class HtmlTradingMixin:
             return {"system": found["system"] or name, "stations": rows, "at": time.time()}
 
         def done(result, error):
+            if ui.get("markets_want") != want:
+                return
             ui["markets"] = {"error": error, "system": system} if error else result
-        return self._trading_task("markets", work, done, cache_key=("markets", system.casefold()))
+        return self._trading_task("markets", work, done, cache_key=("markets", want))
