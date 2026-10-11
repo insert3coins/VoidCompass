@@ -161,6 +161,9 @@ def _local_departure_timestamp(value):
     return int(time.mktime(parsed.timetuple()))
 
 
+# How many of the Watcher's thoughts its page lists, newest first.
+WATCHER_LOG_SHOWN = 100
+
 
 def _watcher_echoes(memory):
     """Each echo of its past it has had (5.5.3.5): {topic: (times, last)},
@@ -754,12 +757,15 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         if mind is None:
             mind = watcher_mind.WatcherMind(_memory_path(self.config), self.config)
         memory = mind.memory
-        log = [
-            {"at": float(row[0] or 0), "topic": _text(row[1], 40), "text": _text(row[2], 300),
-             "mood": watcher_mind.MOODS.get(str(row[1]), "")}
-            for row in reversed(list(memory.get("log") or [])[-150:])
-            if isinstance(row, list) and len(row) >= 3
-        ]
+        # The newest hundred (5.5.3.5): the page stays light however long
+        # it's been talking. Each with its heading, as the orb showed it.
+        log = []
+        for row in reversed(list(memory.get("log") or [])[-WATCHER_LOG_SHOWN:]):
+            if not (isinstance(row, list) and len(row) >= 3):
+                continue
+            kind, heading = watcher_mind.thought_heading(row[1], row[2])
+            log.append({"at": float(row[0] or 0), "topic": _text(row[1], 40), "text": _text(row[2], 600),
+                        "mood": watcher_mind.MOODS.get(str(row[1]), ""), "kind": kind, "heading": heading})
         topics = Counter(
             str(row[0]) for row in memory.get("said") or ()
             if isinstance(row, list) and row and ":" not in str(row[0]) and row[0] not in {"idle", "afterthought"}

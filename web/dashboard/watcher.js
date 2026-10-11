@@ -203,12 +203,15 @@ export function renderWatcher(data = {}, ui) {
 
   renderLore(data.lore || {}, ui);
 
-  ui.byId("watcher-log-count").textContent = `${ui.numeric(log.length)} SHOWN · ${ui.numeric(data.thoughts)} IN ALL`;
+  // The newest hundred, however many it has said (5.5.3.5).
+  ui.byId("watcher-log-count").textContent = Number(data.thoughts) > log.length
+    ? `LATEST ${ui.numeric(log.length)} · ${ui.numeric(data.thoughts)} IN ALL`
+    : `${ui.numeric(log.length)} IN ALL`;
   const key = JSON.stringify(log.slice(0, 3).map((row) => [row.at, row.text]).concat([log.length]));
   if (key !== lastLogKey) {
     lastLogKey = key;
     ui.byId("watcher-log").innerHTML = log.length
-      ? log.map((row) => `<li data-mood="${ui.escapeHtml(row.mood || "")}"><time>${ui.escapeHtml(ago(row.at))}</time><p>${ui.escapeHtml(row.text)}</p>${row.mood ? `<b>${MOOD_LABELS[row.mood] || ""}</b>` : ""}</li>`).join("")
+      ? log.map((row) => `<li data-mood="${ui.escapeHtml(row.mood || "")}" data-kind="${ui.escapeHtml(row.kind || "")}"><time>${ui.escapeHtml(ago(row.at))}</time><p>${row.heading ? `<small>${ui.escapeHtml(row.heading)}</small>` : ""}${ui.escapeHtml(row.text)}</p>${row.mood ? `<b>${MOOD_LABELS[row.mood] || ""}</b>` : ""}</li>`).join("")
       : `<li class="empty">Its thoughts will be kept here as it shares them.</li>`;
   }
 }

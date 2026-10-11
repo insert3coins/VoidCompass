@@ -62,6 +62,70 @@ def idle_motion(config):
     return bool((config or {}).get("heartbeat_idle_motion", True))
 
 
+THOUGHT_SIDES = ("auto", "left", "right")
+
+
+def thought_side_setting(config):
+    """Overlay Studio's Thought side: auto (toward the middle of the screen),
+    left or right of the orb (5.5.3.5)."""
+    value = str((config or {}).get("heartbeat_thought_side") or "auto").casefold()
+    return value if value in THOUGHT_SIDES else "auto"
+
+
+# The Watcher's text sizes in Overlay Studio, as a list rather than a number
+# field: the field saved on every arrow step (0 up to 5, kept as 75 %), so it
+# kept falling back to 75. 0 follows the text size of all overlays.
+HEARTBEAT_TEXT_SIZES = (0, 75, 85, 100, 110, 125, 150, 175, 200)
+
+
+def heartbeat_text_size(value):
+    """A Studio text size: the nearest of HEARTBEAT_TEXT_SIZES (0 stays 0)."""
+    try:
+        value = int(float(value))
+    except (TypeError, ValueError):
+        return 0
+    if value <= 0:
+        return 0
+    return min(HEARTBEAT_TEXT_SIZES[1:], key=lambda size: (abs(size - value), size))
+
+
+def heartbeat_text_scale(config):
+    """The Watcher's own text size (5.5.3.5): its Studio percentage, or the
+    text size of all overlays when that is 0."""
+    def percent(value, default):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return default
+    config = config or {}
+    own = heartbeat_text_size(config.get("heartbeat_text_scale_percent"))
+    chosen = own if own > 0 else percent(config.get("overlay_text_scale_percent"), 100)
+    return max(75, min(200, chosen)) / 100.0
+
+
+def place_thought(side, orb_x, orb_y, orb_px, width_px, height_px, bounds):
+    """Where the window goes while a thought shows, in screen px: returns
+    (side, x, y). The orb never moves. The words go on the side asked for
+    when they fit on the orb's monitor, else the other side; the window grows
+    up and down alike, unless that runs off the top or bottom of the screen,
+    when it grows away from that edge instead (5.5.3.5: near an edge the
+    words ran off the screen)."""
+    y = orb_y - (height_px - orb_px) / 2.0
+    if bounds:
+        left, top, right, bottom = bounds
+        fits = {"right": orb_x + orb_px + width_px <= right, "left": orb_x - width_px >= left}
+        other = "left" if side == "right" else "right"
+        if not fits.get(side) and fits[other]:
+            side = other
+        elif not fits.get(side):
+            side = "right" if right - (orb_x + orb_px) >= orb_x - left else "left"
+        y = max(top, min(y, bottom - height_px))
+        # Always around the orb: the window holds it, however tall.
+        y = max(orb_y + orb_px - height_px, min(y, orb_y))
+    x = orb_x - width_px if side == "left" else orb_x
+    return side, int(round(x)), int(round(y))
+
+
 def vitals(flags, flags2=0, fuel_percent=None):
     """What the Watcher feels from one Status.json write."""
     try:
@@ -320,13 +384,18 @@ class HeartbeatHUD:
             return None
         return {'id': thought['id'], 'text': thought['text'], 'script': thought.get('script') or thought['text'],
                 'mood': thought.get('mood') or '', 'side': self.thought_side(),
+                'kind': thought.get('kind') or '', 'heading': thought.get('heading') or '',
                 'style': watcher_mind.thought_style(self.config)}
 
     def thought_side(self):
-        """Thoughts appear on the side of the orb with room for them: toward
-        the middle of the monitor the orb is on (any monitor, not just the
-        main one), judged from the orb's centre. Moving the orb across the
-        middle moves the next thought to the other side."""
+        """The side asked for in Overlay Studio, or on Auto the side of the
+        orb with room for them: toward the middle of the monitor the orb is on
+        (any monitor, not just the main one), judged from the orb's centre.
+        Moving the orb across the middle moves the next thought to the other
+        side. The bridge still swaps sides if the words won't fit there."""
+        chosen = thought_side_setting(self.config)
+        if chosen != 'auto':
+            return chosen
         x = self._safe_int(self.config.get('heartbeat_hud_x'), 12)
         y = self._safe_int(self.config.get('heartbeat_hud_y'), 12)
         centre_x = x + orb_size(self.config) * display_scale.monitor_scale(x, y) / 2

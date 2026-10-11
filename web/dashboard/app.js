@@ -1745,6 +1745,24 @@ function placeStudioCard(node, row, monitor) {
   }
 }
 
+// Where the Watcher's words go beside the orb (5.5.3.5): a quiet outline on
+// the stage, from the side and room the app works out for its monitor. The
+// orb's card stays the orb's size, however long the thought on screen.
+function studioThoughtZone(row, monitor) {
+  const zone = row.thought;
+  if (!zone || !(Number(zone.width) > 0)) return null;
+  const node = document.createElement("div");
+  node.className = "studio-thought-zone";
+  node.dataset.side = zone.side === "left" ? "left" : "right";
+  node.setAttribute("aria-hidden", "true");
+  node.style.left = `${(number(zone.x) - monitor.left) * 100 / monitor.width}%`;
+  node.style.top = `${(number(zone.y) - monitor.top) * 100 / monitor.height}%`;
+  node.style.width = `${number(zone.width) * 100 / monitor.width}%`;
+  node.style.height = `${number(zone.height) * 100 / monitor.height}%`;
+  node.innerHTML = `<span>${escapeHtml(row.short_label)}</span>`;
+  return node;
+}
+
 function renderStudioMoveDisplay(row, monitor) {
   const host = byId("studio-move-display");
   if (!host) return;
@@ -1973,7 +1991,7 @@ function renderOverlayStudio(state) {
     const stage = byId("studio-desktop");
     stage.style.setProperty("--studio-aspect", `${monitor.width} / ${monitor.height}`);
     stage.style.setProperty("--studio-aspect-number", String(monitor.width / monitor.height));
-    const cards = overlays.filter((row) => studioIntersects(row, monitor)).map((row) => {
+    const cards = overlays.filter((row) => studioIntersects(row, monitor)).flatMap((row) => {
       const node = document.createElement("button");
       node.type = "button";
       node.className = `studio-overlay-card${row.enabled ? " enabled" : " disabled"}${row.shown ? " shown" : ""}`;
@@ -1981,7 +1999,11 @@ function renderOverlayStudio(state) {
       node.title = `${row.label}: drag to place`;
       placeStudioCard(node, row, monitor);
       node.innerHTML = `<span>${escapeHtml(row.short_label)}</span><small>${row.width} × ${row.height}</small>`;
-      return node;
+      // The orb's words have their outline, which carries its name too (at a
+      // screen edge a name hung beside the orb fell off the stage).
+      const zone = studioThoughtZone(row, monitor);
+      node.classList.toggle("zoned", Boolean(zone));
+      return zone ? [zone, node] : [node];
     });
     byId("studio-overlay-cards").replaceChildren(...cards);
 

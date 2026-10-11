@@ -72,10 +72,39 @@ def thought_style(config):
     hold = str(config.get("heartbeat_thought_hold") or "standard").casefold()
     return {
         "backdrop": bool(config.get("heartbeat_thought_backdrop", True)),
+        "heading": bool(config.get("heartbeat_thought_heading", True)),
         "colour": colour if colour in THOUGHT_COLOURS else "bright",
         "size": size if size in THOUGHT_SIZES else "standard",
         "hold": hold if hold in THOUGHT_HOLDS else "standard",
     }
+
+
+# The line above a thought (5.5.3.5): what kind of thought it is. A passage
+# of its story says where it sits; an echo, what stirred it.
+HEADED_TOPICS = {
+    "lore_afterword": ("afterword", "AFTERWORD"),
+    "lore_recall": ("recall", "LOOKING BACK"),
+    "idle_lore": ("musing", "REMEMBERING"),
+    "idle_after": ("musing", "REMEMBERING"),
+    "sign_off": ("", "SIGNING OFF"),
+    "sign_off_quiet": ("", "SIGNING OFF"),
+}
+
+
+def thought_heading(topic, words=""):
+    """(kind, heading) for a thought: kind styles it ("memory", "echo",
+    "afterword", "recall", "musing" or ""), heading names it ("" for an
+    everyday remark, which the page heads THE WATCHER)."""
+    topic = str(topic or "")
+    if topic == "lore_fragment":
+        place = watcher_lore.passage_place(words)
+        if place:
+            numeral, title, nth, total = place
+            return "memory", f"MEMORY · {numeral}. {title.upper()} · {nth} OF {total}"
+        return "memory", "MEMORY"
+    if topic in watcher_lore.ECHO_LABELS:
+        return "echo", f"ECHO · {watcher_lore.ECHO_LABELS[topic].upper()}"
+    return HEADED_TOPICS.get(topic, ("", ""))
 
 
 def personality(config):
@@ -211,8 +240,28 @@ MOODS = {
 _CORRECTION = re.compile(r"\[\[([^|\]]*)\|([^\]]*)\]\]")
 
 
+# The words it noticed (5.5.3.5): what a line was filled with from the
+# journal (a system, a world, a species, a distance) is marked "⟦Hatchooe⟧"
+# in its script, and the page picks it out in the theme's accent. Its own
+# words for time ({hours}, {away}, {when}) and its memories stay plain.
+NOTICED_FIELDS = frozenset((
+    "body", "system", "species", "dist", "kind", "star", "a_star", "A_star", "region", "credits",
+    "station", "material", "reward", "name", "ly", "title", "rank", "thing", "Thing", "headline",
+    "artist", "count", "firsts", "jumps", "fuel", "summary", "settlement",
+))
+NOTICE_OPEN, NOTICE_CLOSE = "⟦", "⟧"
+
+
+def noticed(fields):
+    """Fields with the journal's words marked for the page."""
+    return {key: f"{NOTICE_OPEN}{value}{NOTICE_CLOSE}"
+            if key in NOTICED_FIELDS and str(value).strip() else value
+            for key, value in fields.items()}
+
+
 def plain_text(script):
-    return _CORRECTION.sub(lambda match: match.group(2), str(script or ""))
+    text = _CORRECTION.sub(lambda match: match.group(2), str(script or ""))
+    return text.replace(NOTICE_OPEN, "").replace(NOTICE_CLOSE, "")
 
 
 def when_text(stamp, now=None):
@@ -417,7 +466,7 @@ class WatcherMind:
         options = []
         for template in variants:
             try:
-                text = template.format(**fields)
+                text = template.format(**noticed(fields))
             except (KeyError, IndexError, ValueError):
                 continue
             # Remembered by its wording, so the line banks can change freely.
@@ -502,8 +551,10 @@ class WatcherMind:
         text = plain_text(script)
         self._serial += 1
         self._last_spoke = now
+        kind, heading = thought_heading(topic, text)
         self.thought = {"id": self._serial, "text": text, "script": script, "topic": topic,
                         "mood": MOODS.get(topic, ""), "at": now,
+                        "kind": kind, "heading": heading,
                         "until": now + (THOUGHT_SECONDS + len(script) * .05)
                         * THOUGHT_HOLDS[thought_style(self.config)["hold"]]}
         # The latest thing it said, kept for the deck's Focused Log.

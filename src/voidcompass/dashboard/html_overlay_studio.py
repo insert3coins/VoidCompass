@@ -19,12 +19,14 @@ from voidcompass.overlays.overlay_layout_model import (
 )
 from voidcompass.overlays import watcher_mind
 from voidcompass.overlays.heartbeat_hud import (
-    EYE_COLORS, LIVELINESS, ORB_SIZES, eye_color, idle_motion, liveliness, orb_size,
+    EYE_COLORS, LIVELINESS, ORB_SIZES, THOUGHT_SIDES, eye_color, idle_motion, liveliness, orb_size,
+    heartbeat_text_size, thought_side_setting,
 )
 from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, HUD_SCENE_MODES, hud_scene_mode, hud_typography
 
 # How lively the Navigation HUD's holographic scenes are.
 HUD_ANIMATION_LEVELS = ("Calm", "Standard", "Energetic")
+from voidcompass.overlays.html_heartbeat_overlay import thought_zone
 from voidcompass.overlays.jump_info_hud import LINGER_CHOICES as JUMP_INFO_LINGER_CHOICES, linger_seconds
 from voidcompass.overlays.galnet_ticker_hud import (
     TICKER_CONTENT, TICKER_CRT, TICKER_GLITCH, TICKER_GLITCH_STRENGTH, TICKER_SPEEDS,
@@ -221,6 +223,16 @@ class HtmlOverlayStudioMixin:
                             height = max(20, int(window.winfo_height()), int(window.winfo_reqheight()))
                 except Exception:
                     pass
+            thought = None
+            if attr == "heartbeat_hud":
+                # The orb alone, and where its words go beside it (5.5.3.5):
+                # its window grows while a thought shows, and the card grew
+                # with it, off the display when the words went left.
+                width = height = orb_size(self.config)
+                try:
+                    thought = thought_zone(self.config, x, y)
+                except Exception:
+                    thought = None
             enabled = bool(self.config.get(OVERLAY_ENABLE_KEYS.get(attr, ""), False))
             # This flag is ordinary Python state, so it is safe to expose even
             # while avoiding higher-frequency compatibility geometry calls off-page.
@@ -230,6 +242,7 @@ class HtmlOverlayStudioMixin:
                 "label": OVERLAY_LABELS.get(attr, attr.replace("_", " ").title()),
                 "short_label": OVERLAY_CARD_LABELS.get(attr, attr.upper()),
                 "x": x, "y": y, "width": width, "height": height,
+                **({"thought": thought} if thought else {}),
                 "enabled": enabled,
                 "hide_on_maps": attr not in self._map_keep_visible(),
                 "own_opacity": self._own_opacities().get(attr, 0),
@@ -342,6 +355,9 @@ class HtmlOverlayStudioMixin:
                 "heartbeat_thoughts": watcher_mind.frequency(self.config),
                 "heartbeat_personality": watcher_mind.personality(self.config),
                 "heartbeat_thought_backdrop": watcher_mind.thought_style(self.config)["backdrop"],
+                "heartbeat_thought_heading": watcher_mind.thought_style(self.config)["heading"],
+                "heartbeat_thought_side": thought_side_setting(self.config),
+                "heartbeat_text_scale_percent": heartbeat_text_size(self.config.get("heartbeat_text_scale_percent")),
                 "heartbeat_thought_colour": watcher_mind.thought_style(self.config)["colour"],
                 "heartbeat_thought_size": watcher_mind.thought_style(self.config)["size"],
                 "heartbeat_thought_hold": watcher_mind.thought_style(self.config)["hold"],
@@ -540,7 +556,7 @@ class HtmlOverlayStudioMixin:
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies", "survey_codex_flags",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
-            "heartbeat_idle_motion", "heartbeat_thought_backdrop",
+            "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps", "overlay_transparency_fix", "overlay_classic_windows",
@@ -567,7 +583,7 @@ class HtmlOverlayStudioMixin:
             HtmlOverlayServer.set_classic_windows(bool(self.config[key]))
         elif key in {"hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels"}:
             self.update_hud()
-        elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop"}:
+        elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading"}:
             heartbeat = getattr(self, "heartbeat_hud", None)
             if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
                 heartbeat.apply_settings()
@@ -727,10 +743,15 @@ class HtmlOverlayStudioMixin:
             ("heartbeat_thought_colour", watcher_mind.THOUGHT_COLOURS, "bright"),
             ("heartbeat_thought_size", tuple(watcher_mind.THOUGHT_SIZES), "standard"),
             ("heartbeat_thought_hold", tuple(watcher_mind.THOUGHT_HOLDS), "standard"),
+            ("heartbeat_thought_side", THOUGHT_SIDES, "auto"),
         ):
             if key in payload:
                 value = _text(payload.get(key), 20).casefold()
                 self.config[key] = value if value in choices else default
+        if "heartbeat_text_scale_percent" in payload:
+            # The Watcher's own text size (5.5.3.5): one of its list's sizes,
+            # 0 following all overlays.
+            self.config["heartbeat_text_scale_percent"] = heartbeat_text_size(payload.get("heartbeat_text_scale_percent"))
         if "heartbeat_liveliness" in payload:
             lively = _text(payload.get("heartbeat_liveliness"), 20).casefold()
             self.config["heartbeat_liveliness"] = lively if lively in LIVELINESS else "standard"

@@ -374,24 +374,29 @@ function cargoView(data, ui) {
   const hold = data.hold || [];
   const cargo = data.cargo || {};
   const busy = (data.busy || []).includes("cargo");
+  // By price (the best five payers) or by distance (the five nearest), both
+  // from the same search (5.5.3.5).
+  const byDistance = data.cargo_sort === "distance";
   const holdList = hold.length ? `<ul class="tr-hold">${hold.map((row) => `<li><b>${count(row.count)} t</b><span>${esc(row.name)}</span>${row.stolen ? `<small>${count(row.stolen)} stolen</small>` : ""}</li>`).join("")}</ul>`
     : `<p class="tr-dim">Your hold is empty.</p>`;
   let results = "";
   if (cargo.error) results = `<p class="co-error">${esc(cargo.error)}</p>`;
   for (const row of cargo.rows || []) {
     const best = row.stations[0];
+    const listed = byDistance && Array.isArray(row.nearest) ? row.nearest : row.stations;
     results += `<section class="tr-panel wide"><div class="tr-result-head"><div><p>${count(row.count)} T</p><h3>${esc(row.name)}</h3>
         <span>${best ? `Best nearby: ${cr(best.price * row.count)} at ${esc(best.station)}` : "Nowhere nearby wants it in Spansh's data."}</span>
         ${row.here ? `<small class="tr-here">In ${esc(cargo.system)}: ${esc(row.here.station)} pays ${count(row.here.price)}${best && best.market_id !== row.here.market_id ? ` (${cr(row.here.price * row.count)} for yours)` : ", the best nearby"}</small>` : ""}</div></div>
-      ${row.stations.length ? `<table class="tr-table"><thead><tr><th>STATION</th><th>DISTANCE</th><th>PRICE</th><th>FOR YOUR ${count(row.count)} T</th><th>DEMAND</th><th>PRICES</th><th></th></tr></thead><tbody>
-        ${row.stations.map((s) => `<tr${s.stock < row.count ? ' class="short"' : ""}><td>${stationCell(s, esc)}</td><td>${n(s.distance).toFixed(1)} ly</td><td>${count(s.price)}</td><td>${cr(s.price * Math.min(row.count, s.stock))}</td>
+      ${listed.length ? `<table class="tr-table"><thead><tr><th>STATION</th><th>DISTANCE</th><th>PRICE</th><th>FOR YOUR ${count(row.count)} T</th><th>DEMAND</th><th>PRICES</th><th></th></tr></thead><tbody>
+        ${listed.map((s) => `<tr${s.stock < row.count ? ' class="short"' : ""}><td>${stationCell(s, esc)}</td><td>${n(s.distance).toFixed(1)} ly</td><td>${count(s.price)}</td><td>${cr(s.price * Math.min(row.count, s.stock))}</td>
           <td>${count(s.stock)}${s.stock < row.count ? " (less than you have)" : ""}</td><td>${ago(s.updated)}</td><td><button type="button" data-trade-op="copy" data-text="${esc(s.system)}">COPY</button></td></tr>`).join("")}</tbody></table>` : ""}</section>`;
   }
   return `<section class="tr-panel wide"><h4>IN YOUR HOLD</h4>${holdList}
     <div class="tr-actions"><button type="button" class="primary" data-trade-op="cargo" ${busy || !hold.length ? "disabled" : ""}>${busy ? "ASKING SPANSH…" : "FIND THE BEST PRICES NEAR ME"}</button></div>
     ${busy && cargo.pending ? `<div class="tr-bar determinate"><i style="width:${(n(cargo.done) / Math.max(1, n(cargo.total)) * 100).toFixed(0)}%"></i></div>
       <p class="tr-dim">Checking ${n(cargo.done) + 1} of ${n(cargo.total)}: ${esc(cargo.current || "")}</p>` : ""}
-    ${cargo.rows ? `<p class="tr-dim">Near ${esc(cargo.system)} · ${ago(cargo.at)} · each commodity's best five stations by price.</p>` : ""}</section>${results}`;
+    ${cargo.rows ? `<div class="tr-sort-row"><p class="tr-dim">Near ${esc(cargo.system)} · ${ago(cargo.at)} · each commodity's ${byDistance ? "five nearest stations that buy it" : "best five stations by price"}.</p>
+      <div class="tr-ranges"><button type="button" class="${byDistance ? "" : "active"}" data-trade-op="cargo_sort" data-sort="price">BY PRICE</button><button type="button" class="${byDistance ? "active" : ""}" data-trade-op="cargo_sort" data-sort="distance">BY DISTANCE</button></div></div>` : ""}</section>${results}`;
 }
 
 function findView(data, ui) {

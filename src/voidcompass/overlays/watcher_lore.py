@@ -772,6 +772,21 @@ def fragment(fragment_id):
     return next((row for row in FRAGMENTS if row[0] == fragment_id), None)
 
 
+_BY_WORDS = {row[2]: row for row in FRAGMENTS}
+
+
+def passage_place(words):
+    """Where a passage sits in the story, for the heading above it (5.5.3.5):
+    (numeral, chapter title, nth passage, passages in the chapter), or None
+    for words that aren't a passage."""
+    row = _BY_WORDS.get(str(words or ""))
+    if row is None:
+        return None
+    chapter = ALL_CHAPTERS[row[5]]
+    same = [other[0] for other in FRAGMENTS if other[5] == row[5]]
+    return chapter[0], chapter[1], same.index(row[0]) + 1, len(same)
+
+
 def told(memory):
     """The passages it has told, as {id: when}."""
     out = {}

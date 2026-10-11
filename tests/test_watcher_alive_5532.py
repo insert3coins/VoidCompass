@@ -133,8 +133,8 @@ class AliveBrowserTests(unittest.TestCase):
         page = self.open()
         page.evaluate("""() => {
           window.__typed = [];
-          new MutationObserver(() => window.__typed.push(document.querySelector('#thought span').textContent))
-            .observe(document.querySelector('#thought span'), {childList: true, characterData: true, subtree: true});
+          new MutationObserver(() => window.__typed.push(document.querySelector('#thought .thought-words').textContent))
+            .observe(document.querySelector('#thought .thought-words'), {childList: true, characterData: true, subtree: true});
         }""")
         page.evaluate("data => renderHeartbeat(data)", {
             "theme": THEME, "effects": {"crt": True, "reduced_motion": False},

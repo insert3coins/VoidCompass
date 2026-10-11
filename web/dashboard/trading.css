@@ -181,3 +181,6 @@
 .tr-result-head small.tr-here { display: block; margin-top: 3px; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
 .tr-form.tr-inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 0 0 10px; }
 .tr-form.tr-inline .tr-fields { flex: 1 1 240px; }
+/* Sell cargo's note with its BY PRICE / BY DISTANCE switch (5.5.3.5). */
+.tr-sort-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.tr-sort-row .tr-dim { margin: 0; }

@@ -16,16 +16,22 @@ html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background:
 body { pointer-events: none; user-select: none; }
 /* The window is the orb's own square, wider only while it shares a
    thought; the canvas draws the eye. */
-body { display: flex; align-items: center; }
+body { display: flex; align-items: flex-start; }
 body.thought-left { flex-direction: row-reverse; }
 /* The orb keeps its own size (--orb-size, from the app) when a long thought
-   makes the window taller than it (5.5.3.5). */
-.heartbeat { flex: 0 0 auto; width: var(--orb-size, 100vh); height: var(--orb-size, 100vh); contain: strict; }
+   makes the window taller than it (5.5.3.5), and sits where the bridge says
+   (--orb-top): in the middle, or nearer one end when the window grew away
+   from a screen edge (5.5.3.5). */
+.heartbeat {
+  flex: 0 0 auto; width: var(--orb-size, 100vh); height: var(--orb-size, 100vh); contain: strict;
+  margin-top: var(--orb-top, 0px);
+}
 #orb { display: block; width: 100%; height: 100%; }
 .thought {
-  flex: 1 1 auto; min-width: 0; margin: 0; padding: 0 8px;
+  flex: 1 1 auto; align-self: stretch; min-width: 0; margin: 0; padding: 0 8px;
   display: flex; align-items: center; gap: 6px;
-  --thought-ink: #f2f8fb;
+  --thought-bright: #f2f8fb;
+  --thought-ink: var(--thought-bright);
   color: var(--thought-ink);
   font: 600 calc(11.5px * var(--scale, 1)) / 1.3 "Cascadia Mono", Consolas, monospace;
   letter-spacing: .02em;
@@ -40,20 +46,55 @@ body.thought-left .thought { flex-direction: row-reverse; text-align: right; }
 /* A thin line from the eye to its words. */
 .thought i { flex: 0 0 12px; height: 1px; background: linear-gradient(90deg, var(--accent), transparent); opacity: .8; }
 body.thought-left .thought i { background: linear-gradient(270deg, var(--accent), transparent); }
+/* The heading, then the words. */
+.thought-box { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+body.thought-left .thought-box { align-items: flex-end; }
+/* What kind of thought it is (5.5.3.5): small, spaced and quieter than the
+   words, marked in the theme's accent; always one line. */
+.thought-head {
+  display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: .78em; font-weight: 700; letter-spacing: .14em;
+  color: color-mix(in srgb, var(--thought-ink) 62%, transparent);
+}
+.thought-head::before { content: "\25C9\00A0"; color: var(--accent); }
+.thought-head[hidden] { display: none; }
+.thought-box:is([data-kind="memory"], [data-kind="afterword"], [data-kind="recall"]) .thought-head {
+  color: color-mix(in srgb, var(--accent) 85%, var(--thought-ink));
+}
+.thought-box[data-kind="echo"] .thought-head,
+.thought-box[data-kind="echo"] .thought-head::before { color: var(--yellow); }
+/* Its story is told, not remarked on: a memory reads as a passage, set off
+   by a rule on the orb's side (the bridge counts its 8px when it sizes the
+   window); musings and echoes lean the same way, without the rule. */
+.thought-box:is([data-kind="memory"], [data-kind="afterword"], [data-kind="recall"], [data-kind="musing"], [data-kind="echo"]) .thought-words {
+  font-style: italic;
+}
+.thought-box:is([data-kind="memory"], [data-kind="afterword"], [data-kind="recall"]) .thought-words {
+  border-left: 2px solid var(--accent); padding-left: 6px;
+}
+body.thought-left .thought-box:is([data-kind="memory"], [data-kind="afterword"], [data-kind="recall"]) .thought-words {
+  border-left: 0; padding-left: 0; border-right: 2px solid var(--accent); padding-right: 6px;
+}
+/* The words it noticed (5.5.3.5): what came from the journal, in the theme's
+   accent, or the bright ink when the thought itself is in the accent (or
+   red). Same weight and width, so the bridge's wrapping still holds. */
+.thought-words em.noticed { font-style: inherit; color: var(--accent); }
+body:is([data-thought-colour="accent"], [data-thought-colour="red"]) .thought-words em.noticed { color: var(--thought-bright); }
 /* As many lines as the thought takes: the window is sized for its words
    (5.5.3.5; three lines cut the long lore passages short). */
-.thought span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 12; -webkit-box-orient: vertical; }
+.thought-words { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 12; -webkit-box-orient: vertical; }
 /* The backdrop: a dark panel in the theme's colours. Overlay Studio's
    opacity fades the whole window, backdrop and all. */
-body.thought-backdrop .thought span {
+body.thought-backdrop .thought-box {
   padding: 3px 7px; border-radius: 2px;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
   box-shadow: 0 0 8px rgba(0, 0, 0, .55);
 }
-.thought span::after { content: "\258C"; margin-left: 1px; color: var(--accent); animation: thought-caret 1s steps(1, end) infinite; }
-.thought.done span::after { content: ""; }
+.thought-words::after {
+  content: "\258C"; margin-left: 1px; color: var(--accent); font-style: normal;
+  animation: thought-caret 1s steps(1, end) infinite;
+}
+.thought.done .thought-words::after { content: ""; }
 @keyframes thought-caret { 50% { opacity: 0; } }
 .thought[hidden] { display: none; }
-@keyframes thought-caret { 50% { opacity: 0; } }
-

@@ -13,8 +13,18 @@
   * **Read the whole story:** each finished book can be read on the Watcher page as one piece, every chapter's account in order.
   * **Four new achievements,** under The Watcher: hearing its first memory, its whole story, the end of Book Two, and finding all seven echoes.
   * The story is our own. It brushes against Elite's mysteries without naming or explaining them.
-* **The Watcher remembers its goodbye.** Its sign-off when the game closes is now saved straight away. Before, it waited for the next periodic save (up to five minutes), so closing Void Compass quickly could lose it, and it might repeat a sign-off it had already used.
+* **The Watcher remembers its goodbye.** Its sign-off when the game closes is now saved straight away, and closing Void Compass saves its memory too. Before, both waited for the next periodic save (up to five minutes), so closing Void Compass could lose its last thoughts, and it might repeat a sign-off it had already used.
 * **Long thoughts never clip.** The Watcher's window grows taller to fit a long thought, up and down evenly so the orb stays where you put it. Before, anything past three lines was cut off, which caught the longer lore passages, especially on a small orb or at large text sizes.
+* **Every thought has a heading.** A small line above its words says what kind of thought it is. A passage of its story shows its chapter and place, like *MEMORY · II. THE INSTRUCTION · 3 OF 7*. An echo names what stirred it, like *ECHO · A BLACK HOLE*. Its afterword, its looking back and its sign-off are named too. Everyday remarks are headed simply *THE WATCHER*. Turn it off with **Thought heading** in Overlay Studio.
+* **It types in its own way.** Each nature has its own hand. Depressed is slow, with long pauses after a full stop. Nervous is quick, and now and then hits the key beside the one it meant and fixes it. Stoic is steady and never has second thoughts. Curious hurries through whatever caught its eye. It also takes a beat before bad news.
+* **The words it noticed stand out.** The real things it's talking about, taken from your journal (a system, a world, a species, a distance, a credit figure), are picked out in the theme's accent, so you can see what caught its eye.
+* **Its story reads as a story.** Memories are set as passages, in italics with a rule beside them, so you can tell them from a passing remark at a glance. Musings and echoes lean the same way.
+* **Choose which side it speaks on.** **Thought side** in Overlay Studio: Auto (toward the middle of the screen, as before), Left of the orb or Right of the orb.
+* **Its words stay on screen.** If the words won't fit on the side they're meant for, they move to the other side. A long thought near the top or bottom of the screen grows away from that edge instead of off it, and the orb stays exactly where you put it.
+* **Its own text size.** **Text size** in Overlay Studio sizes the Watcher's words on their own, from 75% to 200%, or follows all overlays.
+* **Overlay Studio shows where its words go.** The orb's card stays the orb's size, with an outline beside it where its thoughts appear. Before, while a thought was on screen the card stretched to the whole thought window and could run off the display.
+* **The Watcher page lists the latest 100 thoughts**, newest first, each with its heading. Its total count is still kept.
+* **Sell cargo sorts by distance.** **BY PRICE** / **BY DISTANCE** on Trading › Sell cargo: each commodity's best five payers, or the five nearest stations that buy it. It switches instantly, without asking Spansh again.
 
 ## Earlier releases
 

@@ -11,8 +11,9 @@
   <main id="heartbeat" class="heartbeat" data-window-shape="circle" role="img" aria-label="Journal watcher" title="Journal watcher">
     <canvas id="orb" aria-hidden="true"></canvas>
   </main>
-  <!-- The Watcher's thoughts (watcher_mind.py): typed out, then gone. -->
-  <p id="thought" class="thought" aria-live="polite" hidden><i aria-hidden="true"></i><span data-window-shape="box"></span></p>
+  <!-- The Watcher's thoughts (watcher_mind.py): a heading saying what kind
+       of thought it is (5.5.3.5), then its words, typed out, then gone. -->
+  <p id="thought" class="thought" aria-live="polite" hidden><i aria-hidden="true"></i><span class="thought-box" data-window-shape="box"><b class="thought-head"></b><span class="thought-words"></span></span></p>
   <script src="/assets/frame-cap.js"></script>
   <script src="/assets/overlay-layout.js"></script>
   <script src="/assets/overlay-client.js"></script>

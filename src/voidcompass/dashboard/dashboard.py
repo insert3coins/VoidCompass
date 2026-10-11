@@ -4009,6 +4009,7 @@ class MainDashboard(
         # without turning live journal traffic into continuous disk writes.
         self._save_profile_cockpit_state()
         self._save_exploration_checkpoint("app-close", immediate=True)
+        self._save_watcher_memory()
 
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
@@ -4071,6 +4072,20 @@ class MainDashboard(
         if getattr(self, "session_guard", None):
             self.session_guard.close()
         self.root.close()
+
+    def _save_watcher_memory(self):
+        """Closing only hides the orb (HeartbeatHUD.destroy never runs), so the
+        Watcher's memory is written here: whatever it thought since its last
+        periodic save, and the hours together up to the close."""
+        hud = getattr(self, "heartbeat_hud", None)
+        mind = getattr(hud, "mind", None)
+        if mind is None:
+            return
+        try:
+            mind.seen()
+            mind.save()
+        except Exception:
+            pass
 
     def _save_config_file(self):
         try:

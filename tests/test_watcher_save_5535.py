@@ -43,5 +43,34 @@ class SignOffSavedTests(unittest.TestCase):
             self.assertFalse(path.exists(), "nothing new since the save: no second write")
 
 
+class AppCloseSavesTests(unittest.TestCase):
+    """Closing Void Compass only hides the orb; HeartbeatHUD.destroy (which
+    saved) never ran, so thoughts since the last periodic save were lost."""
+
+    def test_closing_the_app_writes_the_memory(self):
+        import inspect
+        from types import SimpleNamespace
+        from voidcompass.dashboard.dashboard import MainDashboard
+
+        clock = Clock()
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "watcher_memory.json"
+            mind = WatcherMind(path, {"heartbeat_thoughts": "rare"}, clock, Always())
+            mind.observe("LoadGame")
+            clock.now += 120
+            app = MainDashboard.__new__(MainDashboard)
+            app.heartbeat_hud = SimpleNamespace(mind=mind)
+            app._save_watcher_memory()
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["last_seen"], clock.now)
+            self.assertIn("self._save_watcher_memory()", inspect.getsource(MainDashboard.on_close))
+
+    def test_no_orb_no_save(self):
+        from voidcompass.dashboard.dashboard import MainDashboard
+        app = MainDashboard.__new__(MainDashboard)
+        app.heartbeat_hud = None
+        app._save_watcher_memory()  # nothing to save, nothing raised
+
+
 if __name__ == "__main__":
     unittest.main()

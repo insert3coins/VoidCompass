@@ -48,6 +48,13 @@
 .watcher-log time { color: var(--dim); font: 10px Consolas, monospace; }
 .watcher-log p { margin: 0; color: var(--text); font: 12px/1.4 Consolas, "Cascadia Mono", monospace; }
 .watcher-log b { font: 700 8px Consolas, monospace; letter-spacing: .08em; color: var(--muted); }
+/* What kind of thought (5.5.3.5), as the orb headed it; its story set off
+   as passages. */
+.watcher-log p small { display: block; margin-bottom: 2px; color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.watcher-log li:is([data-kind="memory"], [data-kind="afterword"], [data-kind="recall"]) p small { color: var(--accent); }
+.watcher-log li[data-kind="echo"] p small { color: var(--yellow); }
+.watcher-log li:is([data-kind="memory"], [data-kind="afterword"], [data-kind="recall"]) p { padding-left: 8px; border-left: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); font-style: italic; }
+.watcher-log li:is([data-kind="musing"], [data-kind="echo"]) p { font-style: italic; }
 .watcher-log li[data-mood="pleased"] b { color: var(--green); }
 .watcher-log li[data-mood="wary"] b { color: var(--orange); }
 .watcher-log li[data-mood="curious"] b { color: var(--accent); }

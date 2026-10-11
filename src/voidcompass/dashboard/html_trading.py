@@ -56,7 +56,7 @@ class HtmlTradingMixin:
             "view": "overview", "days": 30, "form": None, "route": {}, "loop": {}, "cargo": {},
             "find": {"kind": "sell", "commodity": "", "system": "", "amount": 1, "sort": "price",
                      "large": 0, "carriers": 1, "planetary": 1},
-            "station": {}, "notice": "", "error": "", "report": "",
+            "station": {}, "notice": "", "error": "", "report": "", "cargo_sort": "price",
         })
 
     def _trading_form_defaults(self):
@@ -114,6 +114,7 @@ class HtmlTradingMixin:
         elif view == "cargo":
             data["hold"] = self._trading_cargo()
             data["cargo"] = ui["cargo"]
+            data["cargo_sort"] = ui.get("cargo_sort") or "price"
         elif view == "find":
             data["find"] = ui["find"]
             data["names"] = names.all_names()
@@ -182,6 +183,12 @@ class HtmlTradingMixin:
             return self._trading_sell_cargo(ui)
         if operation == "find":
             return self._trading_find(ui, payload)
+        if operation == "cargo_sort":
+            # Sell cargo by price or by distance (5.5.3.5): both lists are
+            # kept with each result, so it switches without a new search.
+            sort = _text(payload.get("sort"), 20)
+            ui["cargo_sort"] = sort if sort in ("price", "distance") else "price"
+            return True
         if operation == "find_sort":
             sort = _text(payload.get("sort"), 20)
             ui["find"]["sort"] = sort if sort in ("price", "distance") else "price"
@@ -451,7 +458,11 @@ class HtmlTradingMixin:
                 finished.append(name)
                 progress.update(done=len(finished), current=name)
                 self._ui_post(lambda: self._schedule_html_dashboard_publish(immediate=True), key="trading-progress")
-                return {**item, "name": name, "stations": stations[:5], "here": here[0] if here else None}
+                # The best five payers, and the five nearest (Spansh's 30
+                # nearest buyers, nearest first, for the BY DISTANCE sort).
+                nearest = sorted(stations, key=lambda row: row.get("distance") or 0.0)[:5]
+                return {**item, "name": name, "stations": stations[:5], "nearest": nearest,
+                        "here": here[0] if here else None}
             if len(hold) == 1:
                 rows = [look_up(hold[0])]
             else:

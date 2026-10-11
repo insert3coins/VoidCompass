@@ -259,11 +259,11 @@ class ThoughtPageTests(unittest.TestCase):
             thought={"id": 7, "text": "I don't like how quiet this system is.", "side": "right"}))
         # A moment's thought first (5.5.3.2), then it types as it speaks.
         page.wait_for_timeout(1100)
-        partial = page.locator("#thought span").inner_text()
+        partial = page.locator("#thought .thought-words").inner_text()
         self.assertLess(len(partial), 38, "it types, rather than appearing whole")
         self.assertIn("speak", page.evaluate("heartbeatOrb.state().effects"))
         page.wait_for_timeout(2600)
-        self.assertEqual(page.locator("#thought span").inner_text(), "I don't like how quiet this system is.")
+        self.assertEqual(page.locator("#thought .thought-words").inner_text(), "I don't like how quiet this system is.")
         box = page.evaluate("""() => [document.getElementById('orb').getBoundingClientRect().left,
                                      document.getElementById('thought').getBoundingClientRect().left]""")
         self.assertLess(box[0], box[1], "the orb on the left, its words to the right")
@@ -332,13 +332,13 @@ class ThoughtStyleTests(unittest.TestCase):
     def test_defaults_are_legible(self):
         from voidcompass.overlays import watcher_mind
         self.assertEqual(watcher_mind.thought_style({}),
-                         {"backdrop": True, "colour": "bright", "size": "standard", "hold": "standard"})
+                         {"backdrop": True, "heading": True, "colour": "bright", "size": "standard", "hold": "standard"})
 
     def test_bad_values_fall_back(self):
         from voidcompass.overlays import watcher_mind
         style = watcher_mind.thought_style({"heartbeat_thought_backdrop": False, "heartbeat_thought_colour": "pink",
                                             "heartbeat_thought_size": "LARGE", "heartbeat_thought_hold": "x"})
-        self.assertEqual(style, {"backdrop": False, "colour": "bright", "size": "large", "hold": "standard"})
+        self.assertEqual(style, {"backdrop": False, "heading": True, "colour": "bright", "size": "large", "hold": "standard"})
 
     def test_settings_are_registered_per_commander(self):
         from voidcompass.core import config

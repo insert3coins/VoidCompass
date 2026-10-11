@@ -67,8 +67,8 @@ class ThoughtFitTests(unittest.TestCase):
                                       "side": "right", "style": {**thought["style"], "backdrop": True}}}})
         page.wait_for_timeout(150)
         return page.evaluate("""() => {
-            const span = document.querySelector('#thought span').getBoundingClientRect();
-            const words = document.querySelector('#thought span');
+            const span = document.querySelector('#thought .thought-words').getBoundingClientRect();
+            const words = document.querySelector('#thought .thought-words');
             const orb = document.querySelector('.heartbeat').getBoundingClientRect();
             return {top: span.top, bottom: span.bottom, right: span.right, cut: words.scrollHeight - words.clientHeight,
                     orb: [orb.width, orb.height], text: words.textContent};
