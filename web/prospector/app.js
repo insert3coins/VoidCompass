@@ -22,6 +22,7 @@
 
   function render(snapshot = {}) {
     VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, snapshot.effects || {});
+    VoidCompassOverlay.fitToWindow(root, 400, snapshot.effects || {});
     const model = snapshot.prospector || {};
     const materials = Array.isArray(model.materials) ? model.materials.slice(0, 10) : [];
     const refined = Array.isArray(model.refined) ? model.refined : [];
@@ -46,6 +47,6 @@
     set("analysis-state", core ? "MOTHERLODE LOCK" : materials.length ? "COMPOSITION LOCK" : "PROSPECTOR LOCK");
   }
 
-  function contentHeight() { return Math.max(180, Math.ceil(root.getBoundingClientRect().height + 2)); }
+  function contentHeight() { return VoidCompassOverlay.designHeight(root, 180); }
   VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 260});
 })();

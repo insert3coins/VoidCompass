@@ -37,6 +37,10 @@ class PlanetMaterialsOverlayVisualTests(unittest.TestCase):
                                 theme.accent || '#00d1ff');
                               root.classList.toggle('reduced-motion', !!effects.reduced_motion);
                             },
+                            fitToWindow() { return 1; },
+                            designHeight(root, minimum) {
+                              return Math.max(minimum, Math.ceil(root.getBoundingClientRect().height + 2));
+                            },
                             startPolling(options) { window.__render = options.render;
                               window.__contentHeight = options.contentHeight; }
                           };

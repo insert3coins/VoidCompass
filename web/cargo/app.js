@@ -300,6 +300,7 @@
 
   function render(snapshot = {}) {
     VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, snapshot.effects || {});
+    VoidCompassOverlay.fitToWindow(root, 410, snapshot.effects || {});
     const model = snapshot.cargo || {};
     const total = Math.max(0, number(model.total));
     const capacity = Math.max(0, number(model.capacity));
@@ -351,7 +352,7 @@
   }
 
   function contentHeight() {
-    return Math.max(190, Math.ceil(root.scrollHeight + 2));
+    return VoidCompassOverlay.designHeight(root, 190);
   }
 
   VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 260});

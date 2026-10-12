@@ -270,5 +270,40 @@
     return {poll, refresh, rerender, stop: () => global.clearInterval(timer)};
   }
 
-  global.VoidCompassOverlay = Object.freeze({applyTheme, startPolling});
+  // Fit a page to the window it really got (5.5.3.9). The app sizes an
+  // overlay window as its design size x the text size x the monitor's
+  // scaling; if Windows draws the page at another scale (a scaling setting
+  // the app can't see, the window sized against another monitor), the page
+  // lays out wider than its window, its words are cut short, and the height
+  // it reports makes the window too short for its last rows. So: when the
+  // window is narrower than the design width at this text size, the page
+  // zooms itself down to fit it, and reports its height in the app's units.
+  function fitToWindow(root, designWidth, effects = {}) {
+    if (!root) return 1;
+    const wanted = Number(designWidth) * clamp(effects.text_scale, .75, 2, 1);
+    const ratio = global.innerWidth > 0 && wanted > 0 ? global.innerWidth / wanted : 1;
+    const fit = ratio < .985 ? Math.max(.4, ratio) : 1;
+    root.style.zoom = fit === 1 ? "" : fit.toFixed(4);
+    root.dataset.fit = String(fit);
+    root.dataset.fitWidth = String(designWidth);
+    return fit;
+  }
+
+  // The page's height for the app: as tall as it would be at its design
+  // width (what the window is sized from), at least ``minimum``.
+  function designHeight(root, minimum = 0) {
+    if (!root) return minimum;
+    const fit = Number(root.dataset.fit) || 1;
+    return Math.max(minimum, Math.ceil(root.getBoundingClientRect().height / fit + 2));
+  }
+
+  // The window being resized refits the pages that asked to be fitted.
+  global.addEventListener("resize", () => {
+    for (const root of global.document.querySelectorAll("[data-fit-width]")) {
+      const scale = Number(global.getComputedStyle(root).getPropertyValue("--scale")) || 1;
+      fitToWindow(root, Number(root.dataset.fitWidth), {text_scale: scale});
+    }
+  });
+
+  global.VoidCompassOverlay = Object.freeze({applyTheme, startPolling, fitToWindow, designHeight});
 })(window);

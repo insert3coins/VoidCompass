@@ -1,21 +1,14 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.3.9 // The Watcher, Chapter 3
-**Release Date:** not yet released
+## v5.5.3.9.1 // Overlays That Fit
+**Release Date:** 2026-Oct-12
 
-* **The Watcher's third story: What Was Put There.** Once Book Two is told, the Watcher goes looking through your ship's own computer, out of the habit of a very long life, and finds something it wasn't expecting. Seven chapters, told the way the others were: a passage at a time, in quiet moments, in its own voice.
-  * **It takes its time.** Book Three unfolds over about a year: each chapter waits weeks after the last as well as hours together, its passages come days apart, and two chapters wait for something you'll have to go and find. The Watcher page says roughly how long until more surfaces.
-  * New thoughts in passing once it has begun, a shade darker, headed **The Seat**.
-  * Two new achievements: **The Seat** (it begins) and **Only Me** (its end).
-  * It's still the Watcher. That's the one thing it's sure of.
-* **Hints on the Watcher page.** Hover a chapter it hasn't told yet to see what it still waits for (more hours together, an echo to find, the chapter before, or the weeks between them), and hover an echo to see how to find it.
-* **Reset the Watcher.** At the bottom of the Watcher page, **RESET THE WATCHER** makes it forget everything (its whole story, the echoes, all it has said, the postcards it kept, every hour and session together) and wake as it did the first time. It asks **Are you sure?** first, and its yes waits a few seconds before it can be pressed. Your achievements stay, and a copy of its old memory is kept beside the new one, just in case.
 * **Prospector, Cargo and Planet Materials at large text.** With the overlay text size turned up, their columns now grow with the text: material names and percentages in the Prospector, AVAILABLE / TONNES FREE in Cargo, and in Planet Materials the volcanism, the Rhino estimates and each saved site's distance and deposit are no longer cut short (the site details were squeezed even at normal size). Long names like Low Temperature Diamonds wrap onto a second line instead of losing their end.
-* **Pictures open where you are.** Clicking a screenshot or postcard far down its album now opens it full screen right there, instead of at the top of the page where you had to scroll back up to see it.
-* **The Watcher on the worlds worth stopping for.** Earth-likes, water worlds, ammonia worlds and terraformable worlds each get their own words now, in its own voice, sometimes with the surface temperature from your scan. An earth-like it always remarks on, and a world like that which nobody has ever charted gets a line of its own.
+  * **Every row shows, at any Windows scaling.** On some PCs Windows draws an overlay at a different scale than its window was sized for, so the Cargo manifest lost its last few rows (and the header was cut short). These three overlays now fit themselves to the window they actually get, so the whole hold shows.
 
 ## Earlier releases
 
+* **v5.5.3.9** — The Watcher, Chapter 3: Book Three, What Was Put There (seven chapters over about a year, darker musings headed The Seat, two new achievements); hints on the Watcher page for locked chapters and echoes; Reset the Watcher (with Are you sure?, its old memory kept as a copy); the Watcher on earth-likes, water, ammonia and terraformable worlds; pictures open where you are in Screenshots and Postcards.
 * **v5.5.3.8** — Music that flies with you (a playlist, or a song of its own, for docked, space, deep space, surface and combat, faded across as the game changes, quieter in hyperspace); flight logs for every session in the Captain's Log (trail, figures, best moments, postcards, its star, field discoveries grouped, and a closing word from the Watcher), the Captain's Log tidied into one list of nights; postcard lettering (Greetings from, Wish you were here, your own words or none); morning, afternoon and evening said as they were.
 * **v5.5.3.7** — Keepsakes: the Galaxy Minimap overlay (session trail, plotted route and your whole Spansh trip, region names, views and a view hotkey, time capsule marks) and the Postcards overlay ("Greetings from…", journal facts, the Watcher's note, four styles, saved as pictures); new Postcards, Screenshots, Time Capsules (with Not before… and On this day) and Constellation pages, each with its own settings; favourites; the Watcher keeps postcards, hands back capsules and names your constellations; the Galactic Atlas replay pauses and stops; OneDrive screenshot folders and a sync-safe PNG converter; Overlay Studio's list in alphabetical order.
 * **v5.5.3.6** — Trading › Market searches one system after another reliably (late replies no longer land under a newer search, and a market from another system clears); the Market view laid out side by side, the search and its stations beside the market you opened.

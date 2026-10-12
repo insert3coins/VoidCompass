@@ -95,6 +95,40 @@ class LargeTextFitTests(unittest.TestCase):
                     wide = page.evaluate("document.documentElement.scrollWidth")
                     self.assertLessEqual(wide, round(width * scale) + 1, "nothing past the window's edge")
 
+    def test_fits_a_window_drawn_at_another_scale(self):
+        """Windows draws the page at another scale than the window was sized
+        for: the page fits itself to the window, and every row still shows."""
+        for name, key, model, width, low, high in OVERLAYS:
+            for drawn in (1.25, 1.5):
+                with self.subTest(overlay=name, drawn=drawn):
+                    page = self.browser.new_page(viewport={"width": round(width / drawn), "height": 1600})
+                    self.addCleanup(page.close)
+
+                    def serve(route):
+                        file = WEB / urlsplit(route.request.url).path.lstrip("/")
+                        if not file.is_file():
+                            route.fulfill(status=404, body="")
+                        elif file.name == "overlay-client.js":
+                            route.fulfill(content_type="application/javascript", body=file.read_text(encoding="utf-8") + STUB)
+                        else:
+                            route.fulfill(path=str(file))
+                    page.route("http://fit.test/**", serve)
+                    page.goto(f"http://fit.test/{name}/index.html?token=t&overlay={name}")
+                    page.wait_for_function("Boolean(window.renderIt)")
+                    page.evaluate(f"([m, t]) => renderIt({{theme: t, effects: {{text_scale: 1}}, {key}: m}})", [model, THEME])
+                    measured = page.evaluate("measure()")
+                    # The app's window, in the page's own (larger) pixels.
+                    page.set_viewport_size({"width": round(width / drawn), "height": round(max(low, min(high, measured)) / drawn)})
+                    page.wait_for_timeout(50)
+                    cut = page.evaluate("""() => [...document.querySelectorAll('body strong, body span, body b, body small')]
+                      .filter(el => el.getClientRects().length && el.scrollWidth > el.clientWidth + 1)
+                      .map(el => el.textContent.trim()).filter(Boolean)""")
+                    self.assertEqual(cut, [], "no text cut short")
+                    below = page.evaluate("""() => [...document.querySelectorAll('body *')]
+                      .filter(el => el.getClientRects().length && el.getBoundingClientRect().bottom > innerHeight + 2)
+                      .map(el => el.tagName + '.' + el.className)""")
+                    self.assertEqual(below, [], "every row inside the window")
+
 
 if __name__ == "__main__":
     unittest.main()

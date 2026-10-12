@@ -74,6 +74,7 @@
   }
   function render(snapshot = {}) {
     VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, snapshot.effects || {});
+    VoidCompassOverlay.fitToWindow(root, 440, snapshot.effects || {});
     const model = snapshot.planet_materials || {}, details = model.details || {};
     const materials = Array.isArray(model.materials) ? model.materials : [];
     const bestMaterials = Array.isArray(model.best_materials) ? model.best_materials : [];
@@ -110,7 +111,7 @@
     } else set("position", "NO SURFACE FIX");
     set("target", target.active ? `COMPASS · ${target.label || "SURFACE SITE"}` : "NO COMPASS TARGET");
   }
-  function contentHeight() { return Math.max(190, Math.ceil(root.getBoundingClientRect().height + 2)); }
+  function contentHeight() { return VoidCompassOverlay.designHeight(root, 190); }
   window.VoidCompassPlanetMaterials = Object.freeze({render, nextSitePage, getState: () => ({page: siteState.page, pages: siteState.pages, total: siteState.total, pinnedId: siteState.pinned?.id ?? null})});
   VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 260});
 })();
