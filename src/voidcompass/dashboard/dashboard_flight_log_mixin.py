@@ -18,8 +18,16 @@ class DashboardFlightLogMixin:
         config = getattr(self, "config", None) or {}
         history = getattr(self, "travel_history", None)
         newest = sessions[0] if sessions else {}
+        finds = []
+        deep = getattr(self, "deep_survey", None)
+        if deep is not None and hasattr(deep, "discovery_state"):
+            try:
+                finds = deep.discovery_state(1200)
+            except Exception as exc:
+                logging.debug("Flight log field discoveries skipped: %s", exc)
         key = (len(sessions), str(newest.get("started")), str(newest.get("ended")), int(newest.get("jumps") or 0),
-               getattr(history, "revision", None), watcher_mind.personality(config), get_active_profile(config))
+               getattr(history, "revision", None), watcher_mind.personality(config), get_active_profile(config),
+               len(finds), str((finds[-1] if finds else {}).get("timestamp")))
         cached = getattr(self, "_flight_log_cache", None)
         flying = bool(newest) and not newest.get("ended")
         # Tonight's, still in flight, is brought up to date now and then.
@@ -36,7 +44,7 @@ class DashboardFlightLogMixin:
                 postcards = album().rows()
             except Exception as exc:
                 logging.debug("Flight log postcards skipped: %s", exc)
-        logs = flight_logs(sessions, rows, postcards, watcher_mind.personality(config))
+        logs = flight_logs(sessions, rows, postcards, watcher_mind.personality(config), finds=finds)
         self._flight_log_cache = (key, logs, time.monotonic())
         return logs
 

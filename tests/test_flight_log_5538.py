@@ -124,6 +124,40 @@ class DeckTests(unittest.TestCase):
         self.assertIn("self._flight_log_written()", dashboard)
 
 
+class FindsTests(unittest.TestCase):
+    """Field discoveries are each session's own, in its flight log (5.5.3.8)."""
+
+    def scans(self, start, count, system="Synuefe XX-A", body="Outpost"):
+        return [{"timestamp": f"2026-10-12T{start + i // 60:02d}:{i % 60:02d}:00Z", "event": "DataScanned", "system": system,
+                 "body": body, "title": ["Data Point", "Listening Post"][i % 2]} for i in range(count)]
+
+    def test_repeats_at_one_place_are_one_row(self):
+        from voidcompass.exploration.flight_log import grouped_finds
+        finds = self.scans(19, 6)
+        finds.insert(3, {"timestamp": "2026-10-12T19:02:30Z", "event": "MaterialDiscovered", "system": "Synuefe XX-A",
+                         "title": "Tellurium", "detail": "Raw", "value": 4})
+        finds += self.scans(20, 2, body="Another base")
+        groups = grouped_finds(finds)
+        self.assertEqual([(group["kind"], group["count"]) for group in groups],
+                         [("DATA SCAN", 3), ("NEW MATERIAL", 1), ("DATA SCAN", 3), ("DATA SCAN", 2)])
+        self.assertEqual(groups[0]["titles"], ["Data Point", "Listening Post"])
+        self.assertEqual(groups[1]["value"], 4, "the discovery number")
+        self.assertEqual(groups[3]["place"], "Synuefe XX-A · Another base", "another place: another row")
+
+    def test_each_session_has_its_own(self):
+        finds = self.scans(19, 5) + self.scans(9, 3)  # tonight's, and the morning after's
+        night, = flight_logs([NIGHT], ROWS, (), finds=finds)
+        self.assertEqual((night["finds_total"], len(night["finds"])), (5, 1))
+        quiet = flight_log(dict(NIGHT, started="2026-10-10T19:00:00Z", ended="2026-10-10T20:00:00Z"), ROWS, ())
+        self.assertEqual((quiet["finds"], quiet["finds_total"]), ([], 0))
+
+    def test_no_longer_a_page_wide_list(self):
+        app = (WEB / "dashboard" / "app.js").read_text(encoding="utf-8", errors="replace")
+        self.assertNotIn('chronicleFold("discoveries"', app)
+        page = (WEB / "dashboard" / "flightlog.js").read_text(encoding="utf-8")
+        self.assertIn('data-fold="finds"', page)
+
+
 class PartOfDayTests(unittest.TestCase):
     """Not every flight is at night (5.5.3.8)."""
 
@@ -156,7 +190,6 @@ class PageTests(unittest.TestCase):
         app = (WEB / "dashboard" / "app.js").read_text(encoding="utf-8", errors="replace")
         self.assertNotIn('<section class="chronicle-list">${cards.join', app, "no heap of session cards")
         self.assertIn('chronicleFold("photos"', app)
-        self.assertIn('chronicleFold("discoveries"', app)
         self.assertIn("renderFlightLogs(data.flight_logs || {}, WORKSHOP_UI, data.sessions || [])", app)
         page = (WEB / "dashboard" / "flightlog.js").read_text(encoding="utf-8")
         for marker in ('id="flightlog-find"', 'class="flightlog-month"', 'data-fold="full"', "FULL LOG"):

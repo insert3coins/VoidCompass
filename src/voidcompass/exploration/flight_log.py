@@ -171,12 +171,59 @@ def _lower_first(text):
     return text[:1].lower() + text[1:]
 
 
-def flight_logs(sessions, rows=(), postcards=(), nature="weary", limit=250, now=None):
+# Field discoveries (the deep survey's ledger): what each kind is called, one
+# and many.
+FIND_KINDS = {
+    "MaterialDiscovered": ("NEW MATERIAL", "new material", "new materials"),
+    "DataScanned": ("DATA SCAN", "data scan", "data scans"),
+    "DatalinkScan": ("DATALINK", "datalink scan", "datalink scans"),
+    "DatalinkVoucher": ("VOUCHER", "datalink voucher", "datalink vouchers"),
+}
+FIND_GROUPS = 60
+
+
+def _clock(stamp):
+    when = _epoch(stamp)
+    return datetime.fromtimestamp(when).strftime("%H:%M") if when is not None else ""
+
+
+def grouped_finds(finds):
+    """A session's field discoveries, oldest first, with the same kind of
+    find at the same place one after another kept as one row ("14 data scans
+    at Synuefe XX-A"): kind, label, place, count, what was found, when, and
+    credits. A new material always stands alone, with its discovery number."""
+    groups = []
+    for find in finds or ():
+        if not isinstance(find, dict):
+            continue
+        event = str(find.get("event") or "")
+        place = " · ".join(part for part in (str(find.get("system") or ""), str(find.get("body") or "")) if part)
+        last = groups[-1] if groups else None
+        if last and event != "MaterialDiscovered" and last["event"] == event and last["place"] == place:
+            last["count"] += 1
+            last["value"] += int(find.get("value") or 0)
+            last["to"] = _clock(find.get("timestamp"))
+            title = str(find.get("title") or "")
+            if title and title not in last["titles"] and len(last["titles"]) < 6:
+                last["titles"].append(title)
+            continue
+        kind = FIND_KINDS.get(event, ("FIND", "find", "finds"))
+        groups.append({"event": event, "kind": kind[0], "one": kind[1], "many": kind[2], "place": place,
+                       "count": 1, "titles": [str(find.get("title") or "")], "detail": str(find.get("detail") or ""),
+                       "value": int(find.get("value") or 0), "from": _clock(find.get("timestamp")),
+                       "to": _clock(find.get("timestamp"))})
+    return groups[-FIND_GROUPS:]
+
+
+def flight_logs(sessions, rows=(), postcards=(), nature="weary", limit=250, now=None, finds=()):
     """Flight logs for the newest ``limit`` sessions (newest first: every one
     the Captain's Log keeps, by default). The
     travel history is put in time order once; each session takes its slice."""
     timed = sorted(((_epoch(row[0]), row) for row in rows or () if row), key=lambda item: item[0] or 0)
     times = [when or 0 for when, _row in timed]
+    found = sorted(((_epoch((find or {}).get("timestamp")), find) for find in finds or () if isinstance(find, dict)),
+                   key=lambda item: item[0] or 0)
+    found_times = [when or 0 for when, _find in found]
     out = []
     for session in list(sessions or ())[:limit]:
         start = _epoch((session or {}).get("started"))
@@ -184,15 +231,18 @@ def flight_logs(sessions, rows=(), postcards=(), nature="weary", limit=250, now=
             continue
         end = _epoch(session.get("ended")) or (now if now is not None else time.time())
         low, high = bisect.bisect_left(times, start), bisect.bisect_right(times, end)
-        log = flight_log(session, [row for _when, row in timed[low:high]], postcards, nature, now)
+        first, last = bisect.bisect_left(found_times, start), bisect.bisect_right(found_times, end)
+        log = flight_log(session, [row for _when, row in timed[low:high]], postcards, nature, now,
+                         finds=[find for _when, find in found[first:last]])
         if log:
             out.append(log)
     return out
 
 
-def flight_log(session, rows=(), postcards=(), nature="weary", now=None):
+def flight_log(session, rows=(), postcards=(), nature="weary", now=None, finds=()):
     """One session's flight log page. ``rows`` are the travel history's,
-    ``postcards`` the album's rows ({id, title, at})."""
+    ``postcards`` the album's rows ({id, title, at}), ``finds`` the field
+    discoveries made in it."""
     session = session or {}
     start = _epoch(session.get("started"))
     if start is None:
@@ -261,4 +311,7 @@ def flight_log(session, rows=(), postcards=(), nature="weary", now=None):
         "postcards": [{"id": card["id"], "title": card["title"]} for card in postcards
                       if start <= float(card.get("at") or 0) <= end + 120][:8],
         "words": watcher_words(facts, nature),
+        # Field discoveries made this session (5.5.3.8), repeats grouped.
+        "finds": grouped_finds(finds),
+        "finds_total": len([find for find in finds or () if isinstance(find, dict)]),
     }

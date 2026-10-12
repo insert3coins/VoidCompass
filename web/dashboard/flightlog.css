@@ -73,3 +73,7 @@
 .chronicle-fold > summary { padding: 12px 14px; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; cursor: pointer; }
 .chronicle-fold[open] > summary { border-bottom: 1px solid var(--border); }
 .chronicle-fold > .card, .chronicle-fold > article { margin: 0; border: 0; }
+/* A session's field discoveries, repeats grouped (5.5.3.8). */
+.flightlog-finds li span em { display: block; color: var(--muted); font: normal 11px "Segoe UI", sans-serif; }
+.flightlog-finds li b { color: var(--yellow); }
+.flightlog-finds li { grid-template-columns: 92px minmax(0, 1fr) auto; }

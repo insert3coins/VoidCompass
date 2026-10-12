@@ -112,6 +112,22 @@ function fullLog(log, session, ui) {
 }
 
 let fullOpen = false;
+let findsOpen = false;
+
+// The session's field discoveries (5.5.3.8): new materials, data and
+// datalink scans, vouchers; the same kind at the same place kept as one row.
+function findsLog(log, ui) {
+  const finds = log.finds || [];
+  if (!finds.length) return "";
+  const rows = finds.map((find) => {
+    const what = find.count > 1 ? `${ui.numeric(find.count)} ${find.many}` : (find.titles[0] || find.one);
+    const items = find.count > 1 ? find.titles.filter(Boolean).join(", ") : find.detail;
+    const when = find.from === find.to ? find.from : `${find.from}–${find.to}`;
+    return `<li><b>${ui.escapeHtml(find.kind)}</b><span>${ui.escapeHtml(what)}${find.place ? ` · <small>${ui.escapeHtml(find.place)}</small>` : ""}
+      ${items ? `<em>${ui.escapeHtml(items)}</em>` : ""}${find.value && find.event === "MaterialDiscovered" ? `<em>Discovery no. ${ui.numeric(find.value)}</em>` : ""}${find.value && find.event === "DatalinkVoucher" ? `<em>${ui.numeric(find.value)} cr</em>` : ""}</span><time>${ui.escapeHtml(when)}</time></li>`;
+  }).join("");
+  return `<details class="flightlog-full flightlog-finds" data-fold="finds"${findsOpen ? " open" : ""}><summary>FIELD DISCOVERIES · ${ui.numeric(log.finds_total)}</summary><ol>${rows}</ol></details>`;
+}
 let sessions = {};
 let filter = "";
 let lastPageKey = "";
@@ -125,7 +141,7 @@ function show(ui, force = false) {
   const key = JSON.stringify([log, sessions[log.id]?.highlights?.length]);
   if (key === lastPageKey && !force) return;
   lastPageKey = key;
-  ui.byId("flightlog-view").innerHTML = page(log, ui).replace("</article>", `${fullLog(log, sessions[log.id], ui)}</article>`);
+  ui.byId("flightlog-view").innerHTML = page(log, ui).replace("</article>", `${findsLog(log, ui)}${fullLog(log, sessions[log.id], ui)}</article>`);
   drawTrail(ui.byId("flightlog-trail"), log.trail, log.part);
 }
 
@@ -184,6 +200,7 @@ export function renderFlightLogs(data = {}, ui, chronicle = []) {
     // The full log stays open or folded as you leave it.
     root.addEventListener("toggle", (event) => {
       if (event.target.matches?.('[data-fold="full"]')) fullOpen = event.target.open;
+      if (event.target.matches?.('[data-fold="finds"]')) findsOpen = event.target.open;
     }, true);
   }
   root.querySelector("[data-flightlog-notice]").checked = data.notice !== false;
