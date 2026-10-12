@@ -110,9 +110,11 @@ header > b {
 .hold-summary {
   position: relative;
   z-index: 2;
-  min-height: 67px;
+  /* Sizes beside the text grow with the text size, as the text does
+     (5.5.3.9): at 150% the free-space column cut AVAILABLE short. */
+  min-height: calc(67px * var(--scale));
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr) 84px;
+  grid-template-columns: calc(58px * var(--scale)) minmax(0, 1fr) calc(96px * var(--scale));
   align-items: center;
   gap: 10px;
   padding: 4px 6px;
@@ -137,8 +139,8 @@ header > b {
 
 .hold-glyph {
   position: relative;
-  width: 49px;
-  height: 49px;
+  width: calc(49px * var(--scale));
+  height: calc(49px * var(--scale));
   display: grid;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--soft));
@@ -360,9 +362,9 @@ header > b {
 .manifest article {
   position: relative;
   min-width: 0;
-  min-height: 39px;
+  min-height: calc(39px * var(--scale));
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px;
+  grid-template-columns: minmax(0, 1fr) calc(72px * var(--scale));
   align-items: center;
   gap: 9px;
   padding: 4px 7px 4px 9px;
@@ -425,9 +427,9 @@ header > b {
 .commodity-count small { display: block; color: var(--dim); font-size: var(--type-small); }
 
 .empty-hold {
-  min-height: 56px;
+  min-height: calc(56px * var(--scale));
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: calc(38px * var(--scale)) minmax(0, 1fr);
   align-content: center;
   column-gap: 9px;
   padding: 7px 10px;

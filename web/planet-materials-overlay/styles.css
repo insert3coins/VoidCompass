@@ -9,7 +9,7 @@ header { min-width:0; min-height:24px; display:flex; align-items:center; justify
 .title strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--title); letter-spacing:.07em; }
 header>b { max-width:48%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:2px 6px; color:var(--accent); border:1px solid color-mix(in srgb,var(--accent) 42%,var(--soft)); font-size:var(--small); letter-spacing:.04em; }
 .rhino header>b { color:var(--orange); border-color:color-mix(in srgb,var(--orange) 55%,var(--soft)); }
-.body-lock { min-width:0; min-height:47px; display:grid; grid-template-columns:minmax(0,1fr) 76px; align-items:center; gap:8px; padding:4px 7px; background:linear-gradient(90deg,color-mix(in srgb,var(--raised) 48%,transparent),color-mix(in srgb,var(--raised) 12%,transparent)); border-left:2px solid var(--accent); }
+.body-lock { min-width:0; min-height:47px; display:grid; grid-template-columns:minmax(0,1fr) calc(84px * var(--scale)); align-items:center; gap:8px; padding:4px 7px; background:linear-gradient(90deg,color-mix(in srgb,var(--raised) 48%,transparent),color-mix(in srgb,var(--raised) 12%,transparent)); border-left:2px solid var(--accent); }
 .body-lock>div:first-child { min-width:0; }
 .body-lock small,.body-lock strong,.body-lock span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .body-lock>div:first-child small { color:var(--dim); font-size:var(--small); font-weight:700; }
@@ -22,7 +22,7 @@ header>b { max-width:48%; overflow:hidden; text-overflow:ellipsis; white-space:n
 .facts div { min-width:0; display:flex; align-items:baseline; justify-content:space-between; gap:6px; padding:3px 6px; background:color-mix(in srgb,var(--raised) 28%,transparent); border-top:1px solid var(--soft); }
 .facts small,.facts strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .facts small { flex:none; max-width:50%; color:var(--dim); font-size:var(--small); }
-.facts strong { min-width:0; color:var(--muted); font-size:var(--small); text-align:right; }
+.facts strong { min-width:0; color:var(--muted); font-size:var(--small); text-align:right; white-space:normal; overflow-wrap:anywhere; line-height:1.2; }
 .composition,.sites { min-width:0; display:grid; gap:4px; padding:4px 6px; background:color-mix(in srgb,var(--raised) 22%,transparent); }
 .section-head { min-width:0; display:flex; align-items:baseline; justify-content:space-between; gap:7px; color:var(--dim); font-size:var(--small); font-weight:700; white-space:nowrap; }
 .section-head span,.section-head b { overflow:hidden; text-overflow:ellipsis; }
@@ -38,15 +38,17 @@ header>b { max-width:48%; overflow:hidden; text-overflow:ellipsis; white-space:n
 .best-materials { min-width:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:3px; }
 .best-materials .estimate { min-width:0; display:grid; align-content:center; gap:1px; padding:4px 5px; border-top:1px solid color-mix(in srgb,var(--orange) 55%,var(--soft)); background:color-mix(in srgb,var(--panel) 50%,transparent); }
 .estimate strong,.estimate span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.estimate strong { color:var(--text); font-size:var(--body); }
+.estimate strong { color:var(--text); font-size:var(--body); white-space:normal; overflow-wrap:anywhere; line-height:1.15; }
 .estimate span { color:var(--orange); font-size:var(--small); }
 .site-list { display:grid; gap:3px; }
-.site-list article { min-width:0; min-height:31px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px; align-items:center; padding:3px 5px; border-left:2px solid var(--soft); background:color-mix(in srgb,var(--panel) 48%,transparent); }
+.site-list article { min-width:0; min-height:31px; display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:7px; align-items:center; padding:3px 5px; border-left:2px solid var(--soft); background:color-mix(in srgb,var(--panel) 48%,transparent); }
 .site-list article>div:first-child { min-width:0; }
 .site-list strong,.site-list span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .site-list strong { font-size:var(--body); }
 .site-list span { margin-top:1px; color:var(--dim); font-size:var(--small); }
-.site-meta { max-width:42%; text-align:right; }
+/* The distance and the deposit beside each site, in full (a percentage cap
+   here squeezed them to a letter or two, 5.5.3.9). */
+.site-meta { max-width:calc(170px * var(--scale)); text-align:right; }
 .site-meta b,.site-meta small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--small); }
 .site-meta b { color:var(--green); }
 .site-meta small { color:var(--muted); }
@@ -57,8 +59,9 @@ header>b { max-width:48%; overflow:hidden; text-overflow:ellipsis; white-space:n
 footer { min-width:0; display:grid; grid-template-columns:1fr; gap:2px; color:var(--dim); font-size:var(--small); font-weight:700; white-space:nowrap; }
 footer span,footer b { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 footer b { color:var(--orange); }
-.large-type .body-lock { grid-template-columns:minmax(0,1fr) 90px; }
 .large-type .best-materials { grid-template-columns:repeat(3,minmax(0,1fr)); }
+/* Very large text keeps its compact one-line facts (its window is wide enough). */
+.large-type .facts strong, .large-type .estimate strong { white-space:nowrap; }
 .large-type .estimate strong { font-size:calc(8px * var(--scale)); }
 .large-type .estimate span { font-size:calc(7px * var(--scale)); }
 .large-type .materials article { min-height:32px; }

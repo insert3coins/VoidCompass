@@ -124,10 +124,12 @@ header>b {
   border-color: color-mix(in srgb, var(--orange) 50%, var(--soft)) !important;
 }
 
+/* Sizes beside the text grow with the text size, as the text does, so
+   larger text isn't cut off in columns kept at their 100% widths (5.5.3.9). */
 .asteroid {
-  min-height: 64px;
+  min-height: calc(64px * var(--scale));
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) 76px;
+  grid-template-columns: calc(54px * var(--scale)) minmax(0, 1fr) calc(84px * var(--scale));
   align-items: center;
   gap: 9px;
   padding: 5px 7px;
@@ -137,8 +139,8 @@ header>b {
 .rock-glyph {
   --remaining: 0%;
   position: relative;
-  width: 44px;
-  height: 44px;
+  width: calc(44px * var(--scale));
+  height: calc(44px * var(--scale));
   display: grid;
   place-items: center;
 }
@@ -154,23 +156,23 @@ header>b {
 
 .rock-glyph i {
   position: absolute;
-  width: 26px;
-  height: 18px;
+  width: calc(26px * var(--scale));
+  height: calc(18px * var(--scale));
   border: 1px solid color-mix(in srgb, var(--accent) 65%, transparent);
   clip-path: polygon(18% 0, 79% 8%, 100% 46%, 76% 100%, 17% 91%, 0 43%);
   animation: rock-scan 2.7s ease-in-out infinite;
 }
 
 .rock-glyph i:nth-child(2) {
-  width: 18px;
-  height: 26px;
+  width: calc(18px * var(--scale));
+  height: calc(26px * var(--scale));
   opacity: .45;
   animation-delay: -1.3s;
 }
 
 .rock-glyph b {
-  width: 5px;
-  height: 5px;
+  width: calc(5px * var(--scale));
+  height: calc(5px * var(--scale));
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent);
@@ -227,9 +229,9 @@ header>b {
 }
 
 .core {
-  min-height: 42px;
+  min-height: calc(42px * var(--scale));
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-columns: calc(28px * var(--scale)) minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   padding: 5px 8px;
@@ -293,9 +295,10 @@ header>b {
 }
 
 .materials article {
-  min-height: 25px;
+  min-height: calc(25px * var(--scale));
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr) 43px;
+  /* Names may take up to two fifths of the row (Low Temperature Diamonds). */
+  grid-template-columns: minmax(calc(112px * var(--scale)), 40%) minmax(0, 1fr) calc(50px * var(--scale));
   align-items: center;
   gap: 7px;
   padding: 3px 5px;
@@ -304,9 +307,10 @@ header>b {
 }
 
 .materials article>strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* A long name (Low Temperature Diamonds) wraps to a second line rather
+     than losing its end. */
+  overflow-wrap: anywhere;
+  line-height: 1.15;
   font-size: var(--body);
 }
 
