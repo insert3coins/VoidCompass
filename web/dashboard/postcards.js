@@ -43,6 +43,14 @@ function shell(root, ui) {
       saveText(ui, field, 0);  // Enter or leaving the box: at once
       return;
     }
+    if (field.dataset.postcardSetting === "postcard_greeting") {
+      // Your own words: the box at once, not after the save comes back.
+      const own = root.querySelector(".album-greeting-own");
+      if (own) {
+        own.hidden = field.value !== "custom";
+        if (!own.hidden) own.querySelector("input")?.focus();
+      }
+    }
     const value = field.type === "checkbox" ? field.checked : field.value;
     if (!(await setting(ui, field.dataset.postcardSetting, value))) ui.showToast("That setting wasn't saved");
   });

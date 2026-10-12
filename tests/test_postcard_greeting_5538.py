@@ -56,6 +56,7 @@ class GreetingTests(unittest.TestCase):
             self.assertIn(name, config_module.PROFILE_SETTINGS)
         page = (WEB / "dashboard" / "postcards.js").read_text(encoding="utf-8")
         self.assertIn('data-postcard-setting="postcard_greeting"', page)
+        self.assertIn('own.hidden = field.value !== "custom";', page, "the box shows at once, not after the save")
         overlay = (WEB / "postcards" / "app.js").read_text(encoding="utf-8")
         self.assertIn('String(card.greeting ?? "Greetings from")', overlay)
 
