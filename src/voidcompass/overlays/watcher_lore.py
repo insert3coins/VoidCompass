@@ -681,6 +681,18 @@ ECHO_REST_S = {
 }
 # The far reaches: this far from Sol (light years).
 FAR_LY = 20000.0
+# How to find each echo, for the Watcher page (5.5.3.9): what really stirs it
+# (echo_for), said plainly; the game's own mysteries still unnamed.
+ECHO_HOW = {
+    "lore_black_hole": "Jump to a system whose main star is a black hole, or scan one.",
+    "lore_core": "Reach the heart of the galaxy: jump to, or scan, the supermassive black hole at its centre.",
+    "lore_neutron": "Jump to a system whose main star is a neutron star.",
+    "lore_builders": "Find signs of a vanished people: their signals on a planet, or one of their sites logged in your "
+                     "Codex.",
+    "lore_sound": "Find alien signals on a planet (not the vanished people's), or log an alien contact in your Codex.",
+    "lore_far": "Travel 20,000 light years or more from Sol.",
+    "lore_great_ship": "Arrive in a system with a megaship in its signal list. Fleet carriers don't count.",
+}
 # What each echo is about, for the Watcher page.
 ECHO_LABELS = {
     "lore_black_hole": "A black hole", "lore_core": "The galactic core", "lore_neutron": "A neutron star",
@@ -917,6 +929,40 @@ def progress(memory):
             "Echoes": len(encounters(memory))}
 
 
+def _unlock_words(index, chapter, memory, sessions, hours, found, now):
+    """What a chapter not yet begun still waits for, in words, for the
+    Watcher page's hover (5.5.3.9). Only what's still to do."""
+    first = next((row for row in FRAGMENTS if row[5] == index), None)
+    if first is None:
+        return []
+    words = []
+    more_hours = first[4] - float(hours or 0)
+    more_sessions = first[3] - int(sessions or 0)
+    if more_hours > .05:
+        words.append(f"After about {math.ceil(more_hours):,} more hour{'' if math.ceil(more_hours) == 1 else 's'} together")
+    if more_sessions > 0:
+        words.append(f"After {more_sessions:,} more session{'' if more_sessions == 1 else 's'}")
+    needs = chapter_needs(chapter)
+    if needs and needs not in found:
+        words.append(f"Find: {ECHO_LABELS[needs].lower()}")
+    if index > 0:
+        previous = ALL_CHAPTERS[index - 1]
+        before = [passage_id for passage_id, _words in previous[5]]
+        told_ids = told(memory)
+        if not all(passage_id in told_ids for passage_id in before):
+            words.append(f"Once chapter {previous[0]} is told")
+        if chapter_wait_days(chapter):
+            waiting = days_to_wait(first, memory, now) if all(passage_id in told_ids for passage_id in before) else 0
+            if waiting > 0:
+                words.append(f"In about {math.ceil(waiting):,} day{'' if math.ceil(waiting) == 1 else 's'}")
+            elif not all(passage_id in told_ids for passage_id in before):
+                days = chapter_wait_days(chapter)
+                words.append(f"About {round(days / 7):,} weeks after it" if days >= 14 else f"About {days:,.0f} days after it")
+    if index == len(CHAPTERS) and not (memory or {}).get("afterword"):
+        words.append("Once Book One is told")
+    return words or ["Ready. It will tell you in a quiet moment."]
+
+
 def page(memory, sessions, hours, echoes=None, now=None):
     """The Watcher page's long story: each chapter it has begun, with the
     passages told so far and, once they all are, its written account; the
@@ -947,7 +993,9 @@ def page(memory, sessions, hours, echoes=None, now=None):
         begun = bool(rows)
         complete = len(rows) == len(passages)
         needs = chapter_needs(chapter)
+        unlock = [] if begun else _unlock_words(index, chapter, memory, sessions, hours, found, now)
         chapters.append({"numeral": numeral, "title": title if begun else "", "begun": begun, "book": book,
+                         "unlock": unlock,
                          "complete": complete, "told": rows, "total": len(passages),
                          "account": account if complete else "",
                          "waits_for": ECHO_LABELS[needs] if needs and needs not in found and not begun else ""})
@@ -981,4 +1029,4 @@ def page(memory, sessions, hours, echoes=None, now=None):
             "book_two_total": sum(1 for row in FRAGMENTS if row[5] < BOOK_TWO_END),
             "book_three": book_two_told,
             "next": upcoming, "afterword": afterword, "echoes": heard, "echo_total": len(ECHO_LABELS),
-            "echo_labels": dict(ECHO_LABELS), "books": books}
+            "echo_labels": dict(ECHO_LABELS), "echo_how": dict(ECHO_HOW), "books": books}

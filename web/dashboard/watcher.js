@@ -21,6 +21,40 @@ function ago(seconds) {
   return new Date(Number(seconds) * 1000).toLocaleDateString([], {day: "numeric", month: "short"});
 }
 
+// A floating card for anything on the page with a data-tip ("Title|line|line"):
+// how to find an echo, what a chapter still waits for (5.5.3.9).
+function tips(root) {
+  const card = document.createElement("div");
+  card.className = "watcher-tip";
+  card.hidden = true;
+  document.body.append(card);
+  const show = (target) => {
+    const [title, ...lines] = String(target.dataset.tip || "").split("|");
+    card.replaceChildren(Object.assign(document.createElement("b"), {textContent: title}),
+      ...lines.map((line) => Object.assign(document.createElement("span"), {textContent: line})));
+    card.hidden = false;
+    const box = target.getBoundingClientRect();
+    const width = Math.min(300, window.innerWidth - 16);
+    card.style.width = `${width}px`;
+    const left = Math.min(window.innerWidth - width - 8, Math.max(8, box.right + 10));
+    const fitsRight = box.right + 10 + width <= window.innerWidth - 8;
+    card.style.left = `${fitsRight ? left : Math.max(8, box.left - width - 10)}px`;
+    card.style.top = `${Math.max(8, Math.min(window.innerHeight - card.offsetHeight - 8, box.top))}px`;
+  };
+  const hide = () => { card.hidden = true; };
+  root.addEventListener("mouseover", (event) => {
+    const target = event.target.closest("[data-tip]");
+    if (target) show(target); else hide();
+  });
+  root.addEventListener("mouseleave", hide);
+  root.addEventListener("focusin", (event) => {
+    const target = event.target.closest("[data-tip]");
+    if (target) show(target);
+  });
+  root.addEventListener("focusout", hide);
+  window.addEventListener("scroll", hide, true);
+}
+
 function shell(root, ui) {
   root.classList.remove("loading-panel");
   root.innerHTML = `<div class="watcher-page">
@@ -83,6 +117,7 @@ function shell(root, ui) {
       </section>
     </div>
   </div>`;
+  tips(root);
   const canvas = root.querySelector("#watcher-orb");
   if (window.HeartbeatOrb && canvas) {
     orb?.dispose?.();
@@ -198,9 +233,11 @@ function renderLore(lore, ui) {
       html += `<div class="watcher-book-head book-three"><span>BOOK THREE</span><b>WHAT WAS PUT THERE</b><small>It unfolds slowly: weeks between chapters, days between passages.</small></div>`;
     }
     if (!chapter.begun) {
+      // What it still waits for, on hover (5.5.3.9).
+      const tip = (chapter.unlock || []).length ? ` data-tip="${ui.escapeHtml(`Chapter ${chapter.numeral}|${chapter.unlock.join("|")}`)}" tabindex="0"` : "";
       html += chapter.waits_for
-        ? `<div class="watcher-chapter locked waits"><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>Waits for ${ui.escapeHtml(chapter.waits_for.toLowerCase())}</b></div>`
-        : `<div class="watcher-chapter locked"><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>· · ·</b></div>`;
+        ? `<div class="watcher-chapter locked waits"${tip}><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>Waits for ${ui.escapeHtml(chapter.waits_for.toLowerCase())}</b></div>`
+        : `<div class="watcher-chapter locked"${tip}><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>· · ·</b></div>`;
       return;
     }
     html += `<button type="button" class="watcher-chapter${chapter.complete ? " complete" : " telling"}" data-chapter="${index}">
@@ -244,12 +281,15 @@ function renderLore(lore, ui) {
     </details>`).join("");
   const heard = new Map(echoes.map((row) => [row.topic, row]));
   const labels = lore.echo_labels || {};
+  const how = lore.echo_how || {};
   ui.byId("watcher-echo-count").textContent = `${ui.numeric(echoes.length)} OF ${ui.numeric(lore.echo_total || 0)} FOUND`;
   ui.byId("watcher-echoes").innerHTML = Object.entries(labels).map(([topic, label]) => {
     const row = heard.get(topic);
+    // How to find it, on hover (5.5.3.9).
+    const tip = how[topic] ? ` data-tip="${ui.escapeHtml(`${label}|${row ? "Found. " : ""}${how[topic]}`)}" tabindex="0"` : "";
     return row
-      ? `<li class="heard"><b>${ui.escapeHtml(label)}</b><span>${ui.numeric(row.count)}×</span><time>${ui.escapeHtml(ago(row.at))}</time></li>`
-      : `<li><b>${ui.escapeHtml(label)}</b><span>not yet</span><time></time></li>`;
+      ? `<li class="heard"${tip}><b>${ui.escapeHtml(label)}</b><span>${ui.numeric(row.count)}×</span><time>${ui.escapeHtml(ago(row.at))}</time></li>`
+      : `<li${tip}><b>${ui.escapeHtml(label)}</b><span>not yet</span><time></time></li>`;
   }).join("");
 }
 

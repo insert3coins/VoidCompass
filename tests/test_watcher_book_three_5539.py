@@ -112,6 +112,35 @@ class PageTests(unittest.TestCase):
         self.assertTrue({"BookThreeBegun", "BookThree"} <= fields)
 
 
+class HintTests(unittest.TestCase):
+    """Hover a locked chapter or an echo: what it waits for, how to find it."""
+
+    def test_what_a_chapter_still_waits_for(self):
+        page = watcher_lore.page(memory_with([]), 300, 600, now=T0 + 3 * DAY)
+        locked = {chapter["numeral"]: chapter["unlock"] for chapter in page["chapters"] if not chapter["begun"]}
+        self.assertEqual(locked["XVIII"], ["After about 10 more hours together", "In about 11 days"])
+        self.assertIn("Find: a great ship", locked["XXI"])
+        self.assertIn("Once chapter XX is told", locked["XXI"])
+        self.assertIn("About 6 weeks after it", locked["XXI"])
+        found = watcher_lore.page(memory_with([], echoes=["lore_great_ship"]), 300, 600, now=T0)
+        xxi = next(chapter for chapter in found["chapters"] if chapter["numeral"] == "XXI")
+        self.assertNotIn("Find: a great ship", xxi["unlock"], "found already: not asked again")
+        fresh = watcher_lore.page({"lore": [["salvage", 1.0]]}, 5, 20, now=T0)
+        self.assertEqual(fresh["chapters"][1]["unlock"], ["Once chapter I is told"])
+        begun = next(chapter for chapter in fresh["chapters"] if chapter["begun"])
+        self.assertEqual(begun["unlock"], [])
+
+    def test_how_to_find_every_echo(self):
+        self.assertEqual(set(watcher_lore.ECHO_HOW), set(watcher_lore.ECHO_LABELS))
+        banned = re.compile(r"thargoid|guardian", re.I)
+        for words in watcher_lore.ECHO_HOW.values():
+            self.assertNotRegex(words, banned, "the game's mysteries still unnamed")
+        self.assertIn("megaship", watcher_lore.ECHO_HOW["lore_great_ship"])
+        script = (ROOT / "web" / "dashboard" / "watcher.js").read_text(encoding="utf-8")
+        self.assertIn("data-tip=", script)
+        self.assertIn("function tips(root)", script)
+
+
 class MusingTests(unittest.TestCase):
     def test_darker_musings_once_it_has_begun(self):
         self.assertIn("idle_lens", watcher_idle.IDLE_TOPICS)

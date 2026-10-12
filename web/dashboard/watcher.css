@@ -157,3 +157,11 @@ button.watcher-chapter:focus-visible { outline: 1px solid var(--accent); outline
 .watcher-reset-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .watcher-reset-actions .danger { color: var(--red); border-color: var(--red); }
 .watcher-reset-actions .danger:disabled { opacity: .55; cursor: wait; }
+/* How to find an echo; what a chapter still waits for (5.5.3.9). */
+[data-tip] { cursor: help; }
+.watcher-tip { position: fixed; z-index: 1000; display: grid; gap: 4px; padding: 9px 11px; pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); background: color-mix(in srgb, var(--bg) 94%, transparent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
+.watcher-tip[hidden] { display: none; }
+.watcher-tip b { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.watcher-tip span { color: var(--text); font: 12px/1.45 "Segoe UI", sans-serif; }
