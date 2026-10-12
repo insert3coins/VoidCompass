@@ -3137,14 +3137,24 @@ function updateReplayCursor(globalIndex) {
   text("replay-readout", `${String(localIndex + 1).padStart(2, "0")} / ${String(geometry.projected.length).padStart(2, "0")} · ${row.system} · ${numeric(row.jump_dist, 1)} LY`);
 }
 
+// The Captain's Log's long lists, folded until wanted (5.5.3.8); each stays
+// open or shut as left, though the page is drawn again as the game goes on.
+const chronicleFolds = {photos: false, discoveries: false};
+document.addEventListener("toggle", (event) => {
+  const fold = event.target.closest?.("[data-chronicle-fold]");
+  if (fold) chronicleFolds[fold.dataset.chronicleFold] = fold.open;
+}, true);
+
+function chronicleFold(key, title, body) {
+  return `<details class="chronicle-fold" data-chronicle-fold="${key}"${chronicleFolds[key] ? " open" : ""}><summary>${escapeHtml(title)}</summary>${body}</details>`;
+}
+
 function renderChronicleWorkspace(data) {
   const root = byId("chronicle-workspace");
   const sessions = data.sessions || [];
   if (replayTimer) { clearInterval(replayTimer); replayTimer = 0; }
-  const cards = sessions.map((session) => {
-    const highlights = (session.highlights || []).map((row) => `<div class="chronicle-event"><b>${escapeHtml(row.kind)}</b><p><strong>${escapeHtml(row.title)}</strong><span>${escapeHtml(row.detail)}</span></p><time>${escapeHtml(String(row.timestamp || "").replace("T", " ").slice(0, 16))}</time></div>`);
-    return workspaceCard(`${String(session.started || "UNKNOWN SESSION").replace("T", " ").slice(0, 16)}`, `<div class="chronicle-summary"><strong>${escapeHtml(session.start_system)} → ${escapeHtml(session.end_system)}</strong><span>${numeric(session.jumps)} jumps · ${numeric(session.distance, 1)} ly · ${numeric(session.fss)} FSS · ${numeric(session.dss)} DSS · ${numeric(session.bio)} bio</span></div>${workspaceRows(highlights, "No notable highlights were retained for this flight.")}`, session.ended ? "COMPLETE" : "ACTIVE");
-  });
+  // Each session's own log is in the flight logs above (5.5.3.8): one list
+  // of nights, each opening to its full log, instead of every card at once.
   const photos = [...(data.replay?.photos || [])].reverse().slice(0, 24);
   const photoRows = photos.map((photo) => {
     const location = [photo.system, photo.body].filter(Boolean).join(" · ") || "Location unavailable";
@@ -3163,7 +3173,7 @@ function renderChronicleWorkspace(data) {
     {label: "Distance", value: `${numeric(sessions.reduce((sum, row) => sum + number(row.distance), 0), 1)} LY`, detail: "RETAINED TRAVEL"},
     {label: "FSS surveys", value: numeric(sessions.reduce((sum, row) => sum + number(row.fss), 0)), detail: "SYSTEM COMPLETIONS"},
     {label: "Bio analyses", value: numeric(sessions.reduce((sum, row) => sum + number(row.bio), 0)), detail: "GENETIC SAMPLES"},
-  ])}<section class="workspace-grid chronicle-feature-grid">${workspaceCard("EXPEDITION REPLAY", replayMarkup(data.replay || {}), `${numeric(data.replay?.points?.length)} ROUTE POINTS`, "replay-card")}${workspaceCard("SCREENSHOT CHRONICLE", `${workspaceRows(photoRows, "Screenshots will be associated with their system, body and nearby journal event.")}<div class="workspace-actions"><button data-command="open_screenshots">OPEN SCREENSHOT FOLDER</button></div>`, `${photos.length} RECENT PHOTOS`, "photo-chronicle-card")}${workspaceCard("FIELD DISCOVERIES", workspaceRows(discoveryRows, "Material and datalink discoveries will be retained here."), `${numeric((data.discoveries || []).length)} RETAINED`, "field-discovery-card")}</section><section class="chronicle-list">${cards.join("") || `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}</section>`;
+  ])}<section class="workspace-grid chronicle-feature-grid">${workspaceCard("EXPEDITION REPLAY", replayMarkup(data.replay || {}), `${numeric(data.replay?.points?.length)} ROUTE POINTS`, "replay-card")}</section>${chronicleFold("photos", `SCREENSHOT CHRONICLE · ${photos.length} RECENT`, workspaceCard("SCREENSHOT CHRONICLE", `${workspaceRows(photoRows, "Screenshots will be associated with their system, body and nearby journal event.")}<div class="workspace-actions"><button data-command="open_screenshots">OPEN SCREENSHOT FOLDER</button></div>`, `${photos.length} RECENT PHOTOS`, "photo-chronicle-card"))}${chronicleFold("discoveries", `FIELD DISCOVERIES · ${numeric((data.discoveries || []).length)} RETAINED`, workspaceCard("FIELD DISCOVERIES", workspaceRows(discoveryRows, "Material and datalink discoveries will be retained here."), `${numeric((data.discoveries || []).length)} RETAINED`, "field-discovery-card"))}${sessions.length ? "" : `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}`;
 }
 
 function renderMissionWorkspace(data) {
@@ -4048,7 +4058,7 @@ function renderWorkspace(state) {
     profile: renderProfileWorkspace, analytics: renderArchiveWorkspace,
     chronicle: (data) => {
       renderChronicleWorkspace(data);
-      renderFlightLogs(data.flight_logs || {}, WORKSHOP_UI);
+      renderFlightLogs(data.flight_logs || {}, WORKSHOP_UI, data.sessions || []);
     },
     mission: renderMissionWorkspace,
     ground: renderGroundWorkspace, mining: renderMiningWorkspace,

@@ -75,3 +75,8 @@
 .album-greeting small, .album-greeting-own small { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
 .album-greeting select, .album-greeting-own input { min-height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
 .album-greeting-own input { width: 220px; max-width: 100%; }
+/* Words typed save themselves; this says so (5.5.3.8). */
+.album-own-row { display: flex; align-items: center; gap: 8px; }
+.album-saved { min-width: 64px; color: var(--muted); font: normal 700 9.5px Consolas, monospace; letter-spacing: .08em; }
+.album-saved[data-tone="ok"] { color: var(--green); }
+.album-saved[data-tone="bad"] { color: var(--red); }

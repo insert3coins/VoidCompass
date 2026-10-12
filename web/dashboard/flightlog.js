@@ -101,43 +101,96 @@ function page(log, ui) {
   </article>`;
 }
 
-function show(ui) {
-  const root = ui.byId("flightlog-workspace");
+// The whole Captain's Log entry for a night (the old session card): every
+// highlight it kept, with its time; folded until opened.
+function fullLog(log, session, ui) {
+  if (!session) return "";
+  const rows = (session.highlights || []).map((row) => `<li><b>${ui.escapeHtml(row.kind)}</b><span>${ui.escapeHtml(row.title)}${row.detail ? ` · <small>${ui.escapeHtml(row.detail)}</small>` : ""}</span><time>${ui.escapeHtml(String(row.timestamp || "").replace("T", " ").slice(11, 16))}</time></li>`).join("");
+  return `<details class="flightlog-full" data-fold="full"${fullOpen ? " open" : ""}><summary>FULL LOG · ${ui.numeric((session.highlights || []).length)} ENTRIES · ${ui.numeric(session.fss)} FSS · ${ui.numeric(session.dss)} DSS · ${ui.numeric(session.bio)} BIO</summary>
+    ${rows ? `<ol>${rows}</ol>` : `<p>No notable moments were kept for this flight.</p>`}</details>`;
+}
+
+let fullOpen = false;
+let sessions = {};
+let filter = "";
+let lastPageKey = "";
+
+function show(ui, force = false) {
   const log = logs.find((row) => row.id === selected) || logs[0];
   if (!log) return;
   selected = log.id;
-  root.querySelectorAll("[data-flightlog]").forEach((button) => button.classList.toggle("active", button.dataset.flightlog === log.id));
-  ui.byId("flightlog-view").innerHTML = page(log, ui);
+  ui.byId("flightlog-workspace").querySelectorAll("[data-flightlog]").forEach((button) =>
+    button.classList.toggle("active", button.dataset.flightlog === log.id));
+  const key = JSON.stringify([log, sessions[log.id]?.highlights?.length]);
+  if (key === lastPageKey && !force) return;
+  lastPageKey = key;
+  ui.byId("flightlog-view").innerHTML = page(log, ui).replace("</article>", `${fullLog(log, sessions[log.id], ui)}</article>`);
   drawTrail(ui.byId("flightlog-trail"), log.trail);
 }
 
-export function renderFlightLogs(data = {}, ui) {
+function listNights(ui) {
+  const words = filter.trim().toLowerCase();
+  const shown = logs.filter((log) => !words || `${log.start_system} ${log.end_system} ${log.date} ${log.ship}`.toLowerCase().includes(words));
+  let month = "";
+  const items = [];
+  for (const log of shown) {
+    if (log.month !== month) {
+      month = log.month;
+      items.push(`<li class="flightlog-month">${ui.escapeHtml(month.toUpperCase())}</li>`);
+    }
+    const route = log.start_system === log.end_system ? log.start_system : `${log.start_system} → ${log.end_system}`;
+    items.push(`<li><button type="button" data-flightlog="${ui.escapeHtml(log.id)}" class="${log.id === selected ? "active" : ""}">
+      <b>${ui.escapeHtml(log.day)} · ${ui.escapeHtml(log.time)}${log.open ? " <em>NOW</em>" : ""}</b>
+      <span class="flightlog-route">${ui.escapeHtml(route)}</span>
+      <span>${ui.escapeHtml(log.flown)} · ${ui.numeric(log.figures?.jumps)} jumps</span></button></li>`);
+  }
+  ui.byId("flightlog-list").innerHTML = items.join("") || `<li class="flightlog-none">No night matches that.</li>`;
+}
+
+export function renderFlightLogs(data = {}, ui, chronicle = []) {
   const root = ui.byId("flightlog-workspace");
   if (!root) return;
   logs = Array.isArray(data.logs) ? data.logs : [];
-  const key = JSON.stringify([logs.map((log) => [log.id, log.flown, log.figures?.jumps]), data.notice]);
-  if (key === lastKey) return;
-  lastKey = key;
+  sessions = Object.fromEntries((chronicle || []).map((session) => [session.started, session]));
   if (!logs.length) {
     root.innerHTML = "";
+    lastKey = "";
     return;
   }
-  root.innerHTML = `<section class="flightlog" aria-label="Flight logs">
-    <aside class="flightlog-nights"><h3>FLIGHT LOGS <b>${ui.numeric(logs.length)}</b></h3>
-      <ol>${logs.map((log) => `<li><button type="button" data-flightlog="${ui.escapeHtml(log.id)}">
-        <b>${ui.escapeHtml(log.date.replace(/ \d{4}$/, ""))}</b><span>${ui.escapeHtml(log.flown)} · ${ui.numeric(log.figures?.jumps)} jumps${log.open ? " · now" : ""}</span></button></li>`).join("")}</ol>
-      <label class="flightlog-notice"><input type="checkbox" data-flightlog-notice${data.notice !== false ? " checked" : ""}><span>A notice when you log off</span></label>
-    </aside>
-    <div id="flightlog-view" class="flightlog-view"></div>
-  </section>`;
-  root.querySelector(".flightlog-nights").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-flightlog]");
-    if (!button) return;
-    selected = button.dataset.flightlog;
-    show(ui);
-  });
-  root.querySelector("[data-flightlog-notice]").addEventListener("change", (event) => {
-    ui.command("workspace", {page: "flight_log", operation: "notice", value: event.target.checked});
-  });
+  if (!root.querySelector(".flightlog")) {
+    // The frame, once: the search box keeps its words and focus.
+    root.innerHTML = `<section class="flightlog" aria-label="Flight logs">
+      <aside class="flightlog-nights"><h3>FLIGHT LOGS <b id="flightlog-count"></b></h3>
+        <input type="search" id="flightlog-find" class="flightlog-find" placeholder="Find a system or a day…" aria-label="Find a flight log">
+        <ol id="flightlog-list"></ol>
+        <label class="flightlog-notice"><input type="checkbox" data-flightlog-notice><span>A notice when you log off</span></label>
+      </aside>
+      <div id="flightlog-view" class="flightlog-view"></div>
+    </section>`;
+    root.querySelector(".flightlog-nights").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-flightlog]");
+      if (!button) return;
+      selected = button.dataset.flightlog;
+      show(ui, true);
+    });
+    ui.byId("flightlog-find").addEventListener("input", (event) => {
+      filter = event.target.value;
+      listNights(ui);
+    });
+    root.querySelector("[data-flightlog-notice]").addEventListener("change", (event) => {
+      ui.command("workspace", {page: "flight_log", operation: "notice", value: event.target.checked});
+    });
+    // The full log stays open or folded as you leave it.
+    root.addEventListener("toggle", (event) => {
+      if (event.target.matches?.('[data-fold="full"]')) fullOpen = event.target.open;
+    }, true);
+  }
+  root.querySelector("[data-flightlog-notice]").checked = data.notice !== false;
+  ui.byId("flightlog-count").textContent = ui.numeric(logs.length);
+  const key = JSON.stringify(logs.map((log) => [log.id, log.flown, log.figures?.jumps]));
+  if (key !== lastKey) {
+    lastKey = key;
+    listNights(ui);
+  }
   show(ui);
 }

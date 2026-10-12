@@ -160,8 +160,9 @@ def _lower_first(text):
     return text[:1].lower() + text[1:]
 
 
-def flight_logs(sessions, rows=(), postcards=(), nature="weary", limit=60, now=None):
-    """Flight logs for the newest ``limit`` sessions (newest first). The
+def flight_logs(sessions, rows=(), postcards=(), nature="weary", limit=250, now=None):
+    """Flight logs for the newest ``limit`` sessions (newest first: every one
+    the Captain's Log keeps, by default). The
     travel history is put in time order once; each session takes its slice."""
     timed = sorted(((_epoch(row[0]), row) for row in rows or () if row), key=lambda item: item[0] or 0)
     times = [when or 0 for when, _row in timed]
@@ -217,6 +218,9 @@ def flight_log(session, rows=(), postcards=(), nature="weary", now=None):
         "date": local.strftime("%A %d %B %Y").replace(" 0", " "),
         "elite_date": f"{local.day} {local.strftime('%b').upper()} {local.year + ELITE_YEARS}",
         "time": local.strftime("%H:%M"),
+        # For the list of nights: grouped by month, each by its day.
+        "month": f"{local.strftime('%B')} {local.year + ELITE_YEARS}",
+        "day": local.strftime("%a %d").replace(" 0", " "),
         "flown_s": round(end - start),
         "flown": facts["flown"],
         "open": not session.get("ended"),

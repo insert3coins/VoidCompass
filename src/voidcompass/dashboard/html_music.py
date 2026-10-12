@@ -118,9 +118,24 @@ class HtmlMusicMixin:
             playlist = _text(value, 40)
             if playlist and self.music_library().playlist(playlist) is None:
                 return False
-            chosen = dict(follow_settings(self.config)["playlists"])
+            settings = follow_settings(self.config)
+            chosen = dict(settings["playlists"])
             chosen[key] = playlist
             self.config["music_scene_playlists"] = chosen
+            # A song chosen from another playlist no longer belongs.
+            songs = dict(settings["tracks"])
+            if songs.get(key) and songs[key] not in ((self.music_library().playlist(playlist) or {}).get("tracks") or ()):
+                songs[key] = ""
+                self.config["music_scene_tracks"] = songs
+        elif key.startswith("track:") and key[6:] in SCENES:
+            scene, track = key[6:], _text(value, 16)
+            settings = follow_settings(self.config)
+            playlist = self.music_library().playlist(settings["playlists"][scene])
+            if track and (playlist is None or track not in (playlist.get("tracks") or ())):
+                return False
+            songs = dict(settings["tracks"])
+            songs[scene] = track
+            self.config["music_scene_tracks"] = songs
         else:
             return False
         persist = getattr(self, "_persist_config", None)

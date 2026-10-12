@@ -39,8 +39,17 @@ function shell(root, ui) {
   root.addEventListener("change", async (event) => {
     const field = event.target.closest("[data-postcard-setting]");
     if (!field) return;
+    if (field.type === "text") {
+      saveText(ui, field, 0);  // Enter or leaving the box: at once
+      return;
+    }
     const value = field.type === "checkbox" ? field.checked : field.value;
     if (!(await setting(ui, field.dataset.postcardSetting, value))) ui.showToast("That setting wasn't saved");
+  });
+  // Words typed save themselves a moment after you stop, and say so.
+  root.addEventListener("input", (event) => {
+    const field = event.target.closest('input[type="text"][data-postcard-setting]');
+    if (field) saveText(ui, field, 700);
   });
   root.addEventListener("click", async (event) => {
     const style = event.target.closest("[data-postcard-style]");
@@ -124,6 +133,30 @@ function close(ui) {
   ui.byId("album-full").removeAttribute("src");
 }
 
+const typed = {};
+
+function savedNote(ui, field, text, tone = "") {
+  const note = field.closest("label, .album-folder")?.querySelector(`[data-saved="${field.dataset.postcardSetting}"]`);
+  if (!note) return;
+  note.textContent = text;
+  note.dataset.tone = tone;
+}
+
+// A text box's words, saved once you pause (or at once, on Enter).
+function saveText(ui, field, wait) {
+  const key = field.dataset.postcardSetting;
+  const entry = typed[key] || (typed[key] = {timer: 0, saved: null});
+  window.clearTimeout(entry.timer);
+  if (field.value === entry.saved) return;
+  savedNote(ui, field, "Saving…");
+  entry.timer = window.setTimeout(async () => {
+    const value = field.value;
+    const done = await ui.command("workspace", {page: "postcards", operation: "set", key, value});
+    if (done) entry.saved = value;
+    savedNote(ui, field, done ? "Saved ✓" : "Not saved", done ? "ok" : "bad");
+  }, wait);
+}
+
 function setting(ui, key, value) {
   lastSettingsKey = "";
   return ui.command("workspace", {page: "postcards", operation: "set", key, value});
@@ -163,11 +196,11 @@ function renderSettings(data, ui) {
         <select data-postcard-setting="postcard_greeting">${[["greetings", "Greetings from…"], ["wish", "Wish you were here"], ["custom", "Your own words"], ["none", "None"]]
           .map(([value, name]) => `<option value="${value}"${value === (settings.postcard_greeting || "greetings") ? " selected" : ""}>${name}</option>`).join("")}</select></label>
       <label class="album-greeting-own"${settings.postcard_greeting === "custom" ? "" : " hidden"}><span><b>Your own words</b><small>Up to 40 letters, over the name in place of "Greetings from".</small></span>
-        <input type="text" maxlength="40" data-postcard-setting="postcard_greeting_text" value="${ui.escapeHtml(settings.postcard_greeting_text || "")}" placeholder="Postcard from"></label>
+        <span class="album-own-row"><input type="text" maxlength="40" data-postcard-setting="postcard_greeting_text" value="${ui.escapeHtml(settings.postcard_greeting_text || "")}" placeholder="Postcard from"><em class="album-saved" data-saved="postcard_greeting_text" aria-live="polite"></em></span></label>
       <h3>KEEPING</h3>
       ${toggle(ui, "screenshot_postcards", "Save postcards as pictures", "Each new screenshot's postcard as a PNG, kept in this album. Made even with the Postcards overlay off.", settings.screenshot_postcards)}
       <div class="album-folder"><span><b>Postcard folder</b><small>Empty is the postcards folder in Void Compass's own folder.</small></span>
-        <span class="album-folder-row"><input type="text" aria-label="Postcard folder" data-postcard-setting="postcards_path" value="${ui.escapeHtml(settings.postcards_path || "")}" placeholder="${ui.escapeHtml(settings.default_folder || "postcards")}">
+        <span class="album-folder-row"><input type="text" aria-label="Postcard folder" data-postcard-setting="postcards_path" value="${ui.escapeHtml(settings.postcards_path || "")}" placeholder="${ui.escapeHtml(settings.default_folder || "postcards")}"><em class="album-saved" data-saved="postcards_path" aria-live="polite"></em>
           <button type="button" data-postcard-browse>BROWSE</button><button type="button" data-postcard-default>DEFAULT</button></span></div>
       ${toggle(ui, "screenshot_captions", "Caption files", "A text file beside each new screenshot: its postcard in words.", settings.screenshot_captions)}
     </div>`;

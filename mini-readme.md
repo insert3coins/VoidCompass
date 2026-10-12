@@ -7,10 +7,12 @@
   * Five scenes: **Docked** (and on foot in a station), **Space**, **Deep space** (any system nobody lives in), **Surface** (landed, in the SRV, on foot on a planet) and **Combat** (in danger, or being interdicted). A scene left on "Keep playing" doesn't change anything.
   * Each playlist picks up where you left it, so going back to the station brings back the song you were on.
   * A calm change waits a few seconds (a station's mass lock flickers); combat switches at once. **Quieter in hyperspace** dips the music for the jump.
+  * **A song of its own:** under each scene's playlist, pick a song from it (a combat theme, say), and entering that scene starts it from the top, the playlist carrying on after. Or leave it on "Where it left off".
   * It only ever changes music that's already playing; it never starts by itself. Set it up on the Music page under **Follow the game** (fade 1 to 6 seconds).
-* **Postcard lettering.** The words over the place's name are yours to choose on the Postcards page: **Greetings from…**, **Wish you were here**, your own words (up to 40 letters), or none at all. The overlay, saved postcards and caption files all follow, and the preview shows it as you change it.
+* **Postcard lettering.** The words over the place's name are yours to choose on the Postcards page: **Greetings from…**, **Wish you were here**, your own words (up to 40 letters), or none at all. The overlay, saved postcards and caption files all follow, and the preview shows it as you change it. Your own words save themselves a moment after you stop typing (no need to press Enter), and the page says **Saved ✓**; the Postcard folder box does the same.
 * **Flight logs.** One page for every night you flew, at the top of the Captain's Log: the date in Elite's calendar, where you went and for how long, your trail on a little map, jumps, light years, first discoveries and credits, the night's best moments (rare worlds, Codex entries, species), the postcards you took, tonight's star from your constellation, and a closing paragraph from the Watcher in its own voice. Older nights have one too.
   * When you log off, a notice says tonight's flight log is written (switch it off beside the list of nights).
+* **The Captain's Log, tidied.** Instead of every session's card at once, one list of your nights (every one the log keeps), grouped by month, each with its day, time, route, length and jumps, and a box to find a system or a day. Click a night to open its flight log, with its **Full log** (every moment it kept, with times, and its FSS, DSS and bio counts) folded underneath. The Screenshot Chronicle and Field Discoveries fold away too, and stay open or shut as you leave them.
 
 ## Earlier releases
 

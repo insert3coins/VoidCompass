@@ -277,8 +277,10 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
   // The playlist for the scene the game is in, faded across, picking up
   // where that playlist was left. Only while music is playing: it never
   // starts by itself.
-  async function switchTo(target) {
-    if (switching || target === playlistId || !playable(target).length) return;
+  async function switchTo(target, song = "") {
+    const tracks = playable(target);
+    if (!tracks.includes(song)) song = "";
+    if (switching || !tracks.length || (target === playlistId && (!song || song === currentId))) return;
     switching = true;
     const fadeMs = Number(follow.fade_s || 2) * 1000;
     try {
@@ -286,8 +288,11 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
       if (playlistId && currentId) leftAt[playlistId] = {track: currentId, at: audio.currentTime};
       playlistId = target;
       const back = leftAt[target];
-      const tracks = playable(target);
-      if (back && tracks.includes(back.track)) {
+      if (song) {
+        // The scene's own song, from the top; the playlist carries on after.
+        arrange(song);
+        load(song, {play: true, at: 0});
+      } else if (back && tracks.includes(back.track)) {
         arrange(back.track);
         load(back.track, {play: true, at: back.at});
       } else {
@@ -312,15 +317,17 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
       ramp("duck", wanted, 700);
     }
     const target = follow.on && scene ? String(follow.playlists?.[scene] || "") : "";
-    const key = `${follow.on}|${scene}|${target}`;
+    const song = target ? String(follow.tracks?.[scene] || "") : "";
+    const key = `${follow.on}|${scene}|${target}|${song}`;
     if (key === followKey) return;
     followKey = key;
     window.clearTimeout(sceneTimer);
-    if (!target || !playlistOf(target) || target === playlistId || audio.paused) return;
+    if (!target || !playlistOf(target) || audio.paused) return;
+    if (target === playlistId && (!song || song === currentId)) return;
     // A calm change waits a moment (a station's mass lock flickers); combat
     // doesn't wait.
     sceneTimer = window.setTimeout(() => {
-      if (!audio.paused) switchTo(target);
+      if (!audio.paused) switchTo(target, song);
     }, scene === "combat" ? 0 : SCENE_SETTLE_MS);
   }
 
@@ -328,7 +335,15 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     const panel = byId("music-follow");
     if (!panel) return;
     const names = library.playlists.map((list) => [list.id, list.name]);
-    const key = JSON.stringify([follow, names, scene]);
+    // A scene's song choices: its playlist's tracks.
+    const songs = (id) => {
+      const list = follow.playlists?.[id] || "";
+      if (!list || !playlistOf(list)) return "";
+      const chosen = follow.tracks?.[id] || "";
+      return `<select data-follow="track:${id}" aria-label="${escapeHtml(id)} song">${option("", "Where it left off", chosen)}${playable(list)
+        .map((track) => option(track, trackOf(track)?.title || "Track", chosen)).join("")}</select>`;
+    };
+    const key = JSON.stringify([follow, names, scene, library.revision]);
     if (key === followRendered) return;
     followRendered = key;
     const option = (value, label, chosen) => `<option value="${escapeHtml(value)}"${value === chosen ? " selected" : ""}>${escapeHtml(label)}</option>`;
@@ -337,7 +352,7 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
       <label class="music-follow-switch"><input type="checkbox" data-follow="music_follow_game"${follow.on ? " checked" : ""}>
         <span><b>Change the music with the game</b><small>A playlist for each scene, faded across as you go. Only while music is playing; scenes left on "Keep playing" don't change it.</small></span></label>
       <div class="music-follow-scenes">${SCENES.map(([id, label]) => `<label class="${id === scene ? "now" : ""}"><span>${label}</span>
-        <select data-follow="${id}">${option("", "Keep playing", follow.playlists?.[id] || "")}${names.map(([value, name]) => option(value, name, follow.playlists?.[id] || "")).join("")}</select></label>`).join("")}</div>
+        <select data-follow="${id}">${option("", "Keep playing", follow.playlists?.[id] || "")}${names.map(([value, name]) => option(value, name, follow.playlists?.[id] || "")).join("")}</select>${songs(id)}</label>`).join("")}</div>
       <div class="music-follow-more">
         <label><span>Fade</span><select data-follow="music_follow_fade_s">${[1, 2, 4, 6].map((seconds) => option(String(seconds), `${seconds} s`, String(follow.fade_s))).join("")}</select></label>
         <label class="music-follow-switch"><input type="checkbox" data-follow="music_jump_duck"${follow.duck ? " checked" : ""}><span><b>Quieter in hyperspace</b></span></label>

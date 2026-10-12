@@ -49,3 +49,27 @@
   color: var(--text); font: italic 15px/1.6 Georgia, "Times New Roman", serif; max-width: 80ch; }
 .flightlog-words cite { display: block; margin-top: 6px; color: var(--muted); font: italic 13px "Segoe Print", Georgia, serif; text-align: right; }
 .flightlog-words cite::before { content: "— "; }
+/* One list of nights: found by system or day, grouped by month (5.5.3.8). */
+.flightlog-nights { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.flightlog-find { min-width: 0; min-height: 30px; padding: 0 9px; border: 1px solid var(--border); background: var(--bg);
+  color: var(--text); font: 11px "Segoe UI", sans-serif; }
+.flightlog-month { padding: 8px 2px 2px; color: var(--orange); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.flightlog-month:first-child { padding-top: 0; }
+.flightlog-nights li .flightlog-route { overflow: hidden; color: var(--text); font: 11px "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.flightlog-nights li em { margin-left: 4px; padding: 0 4px; border: 1px solid var(--green); color: var(--green); font: normal 700 8.5px Consolas, monospace; letter-spacing: .1em; }
+.flightlog-none { color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+/* The night's whole log, folded until opened. */
+.flightlog-full { border: 1px solid var(--border); background: var(--bg); }
+.flightlog-full > summary { padding: 10px 12px; color: var(--accent); font: 700 9.5px Consolas, monospace; letter-spacing: .12em; cursor: pointer; }
+.flightlog-full ol { list-style: none; margin: 0; padding: 4px 12px 12px; display: grid; gap: 5px; max-height: 360px; overflow-y: auto; }
+.flightlog-full li { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; }
+.flightlog-full li b { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.flightlog-full li span { color: var(--text); font: 12px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.flightlog-full li small { color: var(--muted); }
+.flightlog-full li time { color: var(--dim); font: 10px Consolas, monospace; }
+.flightlog-full > p { margin: 0; padding: 0 12px 12px; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+/* The Captain's Log's long lists, folded until wanted. */
+.chronicle-fold { margin-top: 12px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.chronicle-fold > summary { padding: 12px 14px; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; cursor: pointer; }
+.chronicle-fold[open] > summary { border-bottom: 1px solid var(--border); }
+.chronicle-fold > .card, .chronicle-fold > article { margin: 0; border: 0; }

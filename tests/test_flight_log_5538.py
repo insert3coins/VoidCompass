@@ -63,7 +63,8 @@ class LogTests(unittest.TestCase):
         logs = flight_logs([NIGHT, older, {"started": None}], ROWS, ())
         self.assertEqual([log["figures"]["jumps"] for log in logs], [63, 9])
         self.assertEqual(logs[1]["trail"], [], "nothing flown in the history that night")
-        self.assertEqual(len(flight_logs([NIGHT] * 80, ROWS, ())), 60)
+        self.assertEqual(len(flight_logs([NIGHT] * 80, ROWS, ())), 80, "every night the log keeps")
+        self.assertEqual(len(flight_logs([NIGHT] * 300, ROWS, ())), 250)
 
     def test_words_and_numbers(self):
         self.assertEqual([flown_text(seconds) for seconds in (60, 1500, 3600, 13260)],
@@ -118,9 +119,26 @@ class DeckTests(unittest.TestCase):
         html = (WEB / "dashboard" / "index.html").read_text(encoding="utf-8")
         self.assertLess(html.index('id="flightlog-workspace"'), html.index('id="chronicle-workspace"'), "at the top")
         app = (WEB / "dashboard" / "app.js").read_text(encoding="utf-8", errors="replace")
-        self.assertIn("renderFlightLogs(data.flight_logs || {}, WORKSHOP_UI)", app)
+        self.assertIn("renderFlightLogs(data.flight_logs || {}, WORKSHOP_UI, data.sessions || [])", app)
         dashboard = (ROOT / "src" / "voidcompass" / "dashboard" / "dashboard.py").read_text(encoding="utf-8")
         self.assertIn("self._flight_log_written()", dashboard)
+
+
+class PageTests(unittest.TestCase):
+    def test_one_list_of_logs_instead_of_a_heap(self):
+        app = (WEB / "dashboard" / "app.js").read_text(encoding="utf-8", errors="replace")
+        self.assertNotIn('<section class="chronicle-list">${cards.join', app, "no heap of session cards")
+        self.assertIn('chronicleFold("photos"', app)
+        self.assertIn('chronicleFold("discoveries"', app)
+        self.assertIn("renderFlightLogs(data.flight_logs || {}, WORKSHOP_UI, data.sessions || [])", app)
+        page = (WEB / "dashboard" / "flightlog.js").read_text(encoding="utf-8")
+        for marker in ('id="flightlog-find"', 'class="flightlog-month"', 'data-fold="full"', "FULL LOG"):
+            self.assertIn(marker, page)
+
+    def test_grouped_by_month_with_each_day(self):
+        log = flight_log(NIGHT, ROWS, ())
+        self.assertTrue(log["month"].endswith("3312"))
+        self.assertRegex(log["day"], r"^[A-Z][a-z]{2} \d{1,2}$")
 
 
 if __name__ == "__main__":

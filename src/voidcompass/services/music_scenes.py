@@ -69,9 +69,15 @@ def follow_settings(config):
         fade = int(float(config.get("music_follow_fade_s", 2)))
     except (TypeError, ValueError):
         fade = 2
+    # A song of its own for a scene (from its playlist), started from the
+    # top each time you enter the scene; "" carries on where it left off.
+    songs = config.get("music_scene_tracks")
+    tracks = {scene: str(songs.get(scene) or "")[:16] if playlists[scene] else "" for scene in SCENES} if isinstance(
+        songs, dict) else {scene: "" for scene in SCENES}
     return {
         "on": bool(config.get("music_follow_game", False)),
         "playlists": playlists,
+        "tracks": tracks,
         "fade_s": fade if fade in FADES else 2,
         "duck": bool(config.get("music_jump_duck", True)),
     }
