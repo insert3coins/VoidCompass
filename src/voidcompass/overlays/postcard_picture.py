@@ -191,11 +191,15 @@ def _greeting(card, width, k, colours, on_photo, style="polaroid"):
     name = _slanted_text(place, font, colours["greet"] + (255,), (0, 0, 0, 215) if on_photo else colours["ink"] + (90,), k,
                          lean=0 if vintage else 0.158)
     under = " · ".join(part for part in (card.get("place"), card.get("region")) if part).upper()
-    height = round(46 * k) + name.height + (round(42 * k) if under else 0)
+    # The lettering over the name (5.5.3.8): the card's own words, or none.
+    words = str(card.get("greeting", "Greetings from") or "").strip().upper()
+    top = round(44 * k) if words else 0
+    height = top + round(2 * k) + name.height + (round(42 * k) if under else 0)
     layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
-    _spaced(draw, (0, 0), "GREETINGS FROM", small, light, round(10 * k))
-    layer.alpha_composite(name, (0, round(44 * k)))
+    if words:
+        _spaced(draw, (0, 0), _fit(draw, words, small, width), small, light, round(10 * k))
+    layer.alpha_composite(name, (0, top))
     if under:
         text = _fit(draw, under, tiny, width)
         _spaced(draw, (round(4 * k), round(46 * k) + name.height - round(4 * k)), text, tiny, light, round(6 * k))

@@ -20,6 +20,7 @@ import {renderPostcards} from "./postcards.js";
 import {renderScreenshots} from "./screenshots.js";
 import {renderCapsules} from "./capsules.js";
 import {renderConstellation} from "./constellation.js";
+import {renderFlightLogs} from "./flightlog.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
@@ -150,7 +151,7 @@ const HOTKEY_CODE_NAMES = {
 
 const STRUCTURAL_BUTTON_SELECTOR = [
   ".nav-item", "[data-feed-filter]", ".overlay-quick button", "#overlay-all-toggle", "#overlay-quick-more", ".studio-overlay-card", ".studio-monitor", "[data-setup-go]", ".studio-text-link",
-  ".studio-index-select", ".mission-row", ".workspace-tabs button", ".watcher-chapter", ".album-grid button", ".sky-gallery button",
+  ".studio-index-select", ".mission-row", ".workspace-tabs button", ".watcher-chapter", ".album-grid button", ".sky-gallery button", ".flightlog-nights button",
   ".suite-tabs button", "[data-analytics-view]",
   ".galnet-headline-row", "#status-galnet",
   ".wk-tile", ".wk-hullpick", ".wk-slot", ".wk-module", ".wk-docktab", ".wk-segbtn", ".wk-pip",
@@ -4045,7 +4046,11 @@ function renderWorkspace(state) {
     "planet-materials": renderPlanetMaterialsWorkspace,
     explore: (data) => renderExploreWorkspace(data, EXPLORE_WORKSPACE_UI),
     profile: renderProfileWorkspace, analytics: renderArchiveWorkspace,
-    chronicle: renderChronicleWorkspace, mission: renderMissionWorkspace,
+    chronicle: (data) => {
+      renderChronicleWorkspace(data);
+      renderFlightLogs(data.flight_logs || {}, WORKSHOP_UI);
+    },
+    mission: renderMissionWorkspace,
     ground: renderGroundWorkspace, mining: renderMiningWorkspace,
     engineering: renderEngineeringWorkspace, "build-planner": renderBuildPlannerWorkspace, powerplay: renderPowerplayWorkspace,
     carrier: renderCarrierWorkspace,

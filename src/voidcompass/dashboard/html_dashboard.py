@@ -1436,6 +1436,16 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         except Exception:
             replay_state = {}
         analytics["replay"] = build_replay(sessions[:120], replay_state)
+        # One page for each night you flew (5.5.3.8, dashboard_flight_log_mixin).
+        logs = getattr(self, "_flight_logs", None)
+        try:
+            analytics["flight_logs"] = {
+                "logs": logs(sessions) if callable(logs) else [],
+                "notice": bool(self.config.get("flight_log_notice", True)),
+            }
+        except Exception as exc:
+            logging.debug("Flight logs skipped: %s", exc)
+            analytics["flight_logs"] = {"logs": [], "notice": True}
         try:
             discoveries = deep.discovery_state(160) if deep is not None else []
         except Exception:
@@ -2893,6 +2903,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
 
         if page == "constellation":
             return self._handle_constellation_command(operation, payload)
+
+        if page == "flight_log":
+            return self._handle_flight_log_command(operation, payload)
 
         if page == "capsules":
             result = self._handle_capsules_command(operation, payload)

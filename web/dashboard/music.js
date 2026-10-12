@@ -51,6 +51,12 @@ const REPEAT_LABEL = {off: "OFF", all: "ALL", one: "ONE"};
 // page that finds it playing moments ago carries on instead of resuming
 // paused as a fresh start does.
 const LIVE_KEY = "voidcompass.music.live";
+// Music that flies with you (5.5.3.8): the scenes the game can be in, how
+// long a calm change waits before the music follows (combat doesn't), and
+// how far hyperspace ducks it.
+const SCENES = [["docked", "Docked"], ["space", "Space"], ["deep", "Deep space"], ["surface", "Surface"], ["combat", "Combat"]];
+const SCENE_SETTLE_MS = 4000;
+const DUCK_TO = .3;
 const LIVE_RESUME_MS = 15000;
 
 export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration}) {
@@ -87,6 +93,21 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
   let levelsTimer = 0;
   let reportTimer = 0;
   let frame = 0;
+  // Following the game: its settings, the scene now, the music's two
+  // extra gains (a fade between playlists, a duck for hyperspace), and where
+  // each playlist was left so it picks up there.
+  let follow = {on: false, playlists: {}, fade_s: 2, duck: true};
+  let scene = "";
+  let jumping = false;
+  let fadeMix = 1;
+  let duckMix = 1;
+  let duckTarget = 1;
+  const ramps = {};
+  let switching = false;
+  let followKey = "";
+  let sceneTimer = 0;
+  let followRendered = "";
+  const leftAt = {};
 
   // --- The analyser, on a captured copy of the sound ------------------------
   let context = null;
@@ -227,7 +248,100 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
 
   function applyVolume() {
     const taper = -VOLUME_RANGE_DB * (1 - volume / 100);
-    audio.volume = volume > 0 ? Math.min(1, 10 ** ((taper + levelDb) / 20)) : 0;
+    const base = volume > 0 ? Math.min(1, 10 ** ((taper + levelDb) / 20)) : 0;
+    audio.volume = Math.max(0, Math.min(1, base * fadeMix * duckMix));
+  }
+
+  // --- Following the game (5.5.3.8) -----------------------------------------------
+  // Ease one of the extra gains to a level over a time; resolves when there.
+  function ramp(kind, target, ms) {
+    window.clearInterval(ramps[kind]);
+    return new Promise((resolve) => {
+      const from = kind === "fade" ? fadeMix : duckMix;
+      const started = performance.now();
+      const step = () => {
+        const done = Math.min(1, (performance.now() - started) / Math.max(1, ms));
+        const level = from + (target - from) * done;
+        if (kind === "fade") fadeMix = level; else duckMix = level;
+        applyVolume();
+        if (done >= 1) {
+          window.clearInterval(ramps[kind]);
+          resolve();
+        }
+      };
+      ramps[kind] = window.setInterval(step, 30);
+      step();
+    });
+  }
+
+  // The playlist for the scene the game is in, faded across, picking up
+  // where that playlist was left. Only while music is playing: it never
+  // starts by itself.
+  async function switchTo(target) {
+    if (switching || target === playlistId || !playable(target).length) return;
+    switching = true;
+    const fadeMs = Number(follow.fade_s || 2) * 1000;
+    try {
+      await ramp("fade", 0, fadeMs);
+      if (playlistId && currentId) leftAt[playlistId] = {track: currentId, at: audio.currentTime};
+      playlistId = target;
+      const back = leftAt[target];
+      const tracks = playable(target);
+      if (back && tracks.includes(back.track)) {
+        arrange(back.track);
+        load(back.track, {play: true, at: back.at});
+      } else {
+        arrange(shuffle ? tracks[Math.floor(Math.random() * tracks.length)] : tracks[0]);
+        load(order[index], {play: true});
+      }
+      renderLibrary();
+      await ramp("fade", 1, fadeMs);
+    } finally {
+      fadeMix = 1;
+      applyVolume();
+      switching = false;
+    }
+  }
+
+  function followGame() {
+    // Hyperspace: down while the jump lasts, back up after.
+    const wanted = follow.on && follow.duck && jumping ? DUCK_TO : 1;
+    if (wanted !== duckTarget) {
+      // A new ease replaces one still under way.
+      duckTarget = wanted;
+      ramp("duck", wanted, 700);
+    }
+    const target = follow.on && scene ? String(follow.playlists?.[scene] || "") : "";
+    const key = `${follow.on}|${scene}|${target}`;
+    if (key === followKey) return;
+    followKey = key;
+    window.clearTimeout(sceneTimer);
+    if (!target || !playlistOf(target) || target === playlistId || audio.paused) return;
+    // A calm change waits a moment (a station's mass lock flickers); combat
+    // doesn't wait.
+    sceneTimer = window.setTimeout(() => {
+      if (!audio.paused) switchTo(target);
+    }, scene === "combat" ? 0 : SCENE_SETTLE_MS);
+  }
+
+  function renderFollow() {
+    const panel = byId("music-follow");
+    if (!panel) return;
+    const names = library.playlists.map((list) => [list.id, list.name]);
+    const key = JSON.stringify([follow, names, scene]);
+    if (key === followRendered) return;
+    followRendered = key;
+    const option = (value, label, chosen) => `<option value="${escapeHtml(value)}"${value === chosen ? " selected" : ""}>${escapeHtml(label)}</option>`;
+    const now = SCENES.find(([id]) => id === scene);
+    panel.innerHTML = `<header><span>FOLLOW THE GAME</span><b class="${follow.on ? "on" : ""}">${follow.on ? (now ? `NOW: ${now[1].toUpperCase()}` : "WAITING FOR THE GAME") : "OFF"}</b></header>
+      <label class="music-follow-switch"><input type="checkbox" data-follow="music_follow_game"${follow.on ? " checked" : ""}>
+        <span><b>Change the music with the game</b><small>A playlist for each scene, faded across as you go. Only while music is playing; scenes left on "Keep playing" don't change it.</small></span></label>
+      <div class="music-follow-scenes">${SCENES.map(([id, label]) => `<label class="${id === scene ? "now" : ""}"><span>${label}</span>
+        <select data-follow="${id}">${option("", "Keep playing", follow.playlists?.[id] || "")}${names.map(([value, name]) => option(value, name, follow.playlists?.[id] || "")).join("")}</select></label>`).join("")}</div>
+      <div class="music-follow-more">
+        <label><span>Fade</span><select data-follow="music_follow_fade_s">${[1, 2, 4, 6].map((seconds) => option(String(seconds), `${seconds} s`, String(follow.fade_s))).join("")}</select></label>
+        <label class="music-follow-switch"><input type="checkbox" data-follow="music_jump_duck"${follow.duck ? " checked" : ""}><span><b>Quieter in hyperspace</b></span></label>
+      </div>`;
   }
 
   function setVolume(value) {
@@ -735,6 +849,13 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     return api[name].bind(api);
   }
 
+  byId("music-follow")?.addEventListener("change", (event) => {
+    const field = event.target.closest("[data-follow]");
+    if (!field) return;
+    const value = field.type === "checkbox" ? field.checked : field.value;
+    followRendered = "";
+    music("follow_set", {key: field.dataset.follow, value});
+  });
   page?.addEventListener("pointerdown", () => {
     if (context?.state === "suspended") context.resume().catch(() => {});
   });
@@ -884,6 +1005,11 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     seen = numbers;
     const working = byId("music-working");
     if (working) working.hidden = !state.working;
+    follow = state.follow || follow;
+    scene = String(state.scene || "");
+    jumping = Boolean(state.jumping);
+    renderFollow();
+    followGame();
   }
 
   // Until the saved settings arrive the player is already at a sane level,
@@ -894,7 +1020,7 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     state: () => ({currentId, playlistId, viewId, order: [...order], index, playing: !audio.paused, shuffle,
       repeat, volume, blocked, src: audio.getAttribute("src") || "", revision: library.revision,
       normalise, levelDb, gain: audio.volume, measured: measuredLoudness(), samples: meter.blocks.length,
-      firstListen: meter.firstListen}),
+      firstListen: meter.firstListen, scene, jumping, fadeMix, duckMix, switching}),
     audio,
   };
 

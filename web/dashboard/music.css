@@ -189,3 +189,22 @@
   50% { box-shadow: 0 0 36px color-mix(in srgb, var(--accent) 38%, transparent), inset 0 0 20px rgba(0, 0, 0, .5); }
 }
 body.reduced-motion .music-page, body.reduced-motion .music-page * { animation: none !important; }
+/* Music that flies with you (5.5.3.8). */
+.music-follow { display: grid; gap: 12px; padding: 14px; }
+.music-follow > header { display: flex; justify-content: space-between; align-items: center; }
+.music-follow > header span { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.music-follow > header b { color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.music-follow > header b.on { color: var(--green); }
+.music-follow-switch { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; cursor: pointer; }
+.music-follow-switch input { margin: 3px 0 0; accent-color: var(--accent); }
+.music-follow-switch > span { display: grid; gap: 2px; }
+.music-follow-switch b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.music-follow-switch small { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
+.music-follow-scenes { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.music-follow-scenes label, .music-follow-more label:not(.music-follow-switch) { display: grid; gap: 4px; padding: 8px; border: 1px solid var(--border); background: var(--bg); }
+.music-follow-scenes label.now { border-color: var(--green); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 30%, transparent); }
+.music-follow-scenes span, .music-follow-more label:not(.music-follow-switch) > span { color: var(--muted); font: 700 9.5px Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.music-follow-scenes label.now span { color: var(--green); }
+.music-follow select { min-width: 0; min-height: 28px; padding: 0 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.music-follow-more { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.music-follow-more label:not(.music-follow-switch) { grid-template-columns: auto auto; align-items: center; }

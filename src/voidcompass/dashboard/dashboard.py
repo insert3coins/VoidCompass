@@ -85,6 +85,7 @@ from voidcompass.dashboard.dashboard_exploration_mixin import DashboardExplorati
 from voidcompass.dashboard.dashboard_jump_info_mixin import DashboardJumpInfoMixin
 from voidcompass.dashboard.dashboard_keepsakes_mixin import DashboardKeepsakesMixin
 from voidcompass.dashboard.dashboard_capsules_mixin import DashboardCapsulesMixin
+from voidcompass.dashboard.dashboard_flight_log_mixin import DashboardFlightLogMixin
 from voidcompass.dashboard.dashboard_colonisation_mixin import DashboardColonisationMixin
 from voidcompass.dashboard.dashboard_bgs_mixin import DashboardBgsMixin
 from voidcompass.dashboard.dashboard_trading_mixin import DashboardTradingMixin
@@ -275,6 +276,7 @@ class MainDashboard(
     DashboardJumpInfoMixin,
     DashboardKeepsakesMixin,
     DashboardCapsulesMixin,
+    DashboardFlightLogMixin,
     DashboardColonisationMixin,
     DashboardBgsMixin,
     DashboardTradingMixin,
@@ -7955,6 +7957,8 @@ class MainDashboard(
                 logging.debug("Captain's Log event skipped [%s]: %s", ev, exc)
         if ev == "Shutdown" and not startup_replay:
             self._watcher_sign_off()
+            # Tonight's flight log is written (5.5.3.8).
+            self._flight_log_written()
         if getattr(self, "deep_survey", None):
             try:
                 survey_raw = raw if isinstance(raw, dict) else d
@@ -8005,6 +8009,8 @@ class MainDashboard(
                     self._constellation_watch(startup_replay)
                 # A note you left for this system, handed back (5.5.3.7).
                 self._capsule_arrival(ev, history_raw, startup_replay)
+                # Who lives here, for the music's deep space (5.5.3.8).
+                self._music_observe(ev, history_raw)
                 if self.travel_history.observe(history_raw):
                     self._refresh_exploration_window()
                     if not startup_replay:

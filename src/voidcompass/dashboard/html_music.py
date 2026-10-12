@@ -15,6 +15,7 @@ import threading
 import time
 
 from voidcompass.services.music_library import MusicLibrary
+from voidcompass.services.music_scenes import FADES, SCENES, follow_settings, scene_of
 
 MUSIC_REPEAT = ("off", "all", "one")
 MUSIC_REMOTE = ("toggle", "next", "previous")
@@ -88,7 +89,44 @@ class HtmlMusicMixin:
             "notice": dict(getattr(self, "_music_notice", None) or {"seq": 0, "text": "", "tone": ""}),
             "working": bool(getattr(self, "_music_working", False)),
             "overlay": bool(config.get("music_player_overlay_enabled", False)),
+            # Music that flies with you (5.5.3.8): the settings and what the
+            # game is doing now.
+            "follow": follow_settings(config),
+            **scene_of(getattr(self, "current_status_flags", 0), getattr(self, "current_status_flags2", 0),
+                       getattr(self, "_music_population", None)),
         }
+
+    def _music_observe(self, event, raw):
+        """A jump or login: how many live in this system (deep space is
+        where nobody does)."""
+        if event in ("FSDJump", "Location", "CarrierJump") and isinstance(raw, dict):
+            self._music_population = raw.get("Population")
+
+    def _music_follow_set(self, key, value):
+        """A Follow the game setting from the Music page."""
+        if key == "music_follow_game" or key == "music_jump_duck":
+            self.config[key] = value is True or str(value).casefold() in {"1", "true", "on"}
+        elif key == "music_follow_fade_s":
+            try:
+                fade = int(float(value))
+            except (TypeError, ValueError):
+                return False
+            if fade not in FADES:
+                return False
+            self.config[key] = fade
+        elif key in SCENES:
+            playlist = _text(value, 40)
+            if playlist and self.music_library().playlist(playlist) is None:
+                return False
+            chosen = dict(follow_settings(self.config)["playlists"])
+            chosen[key] = playlist
+            self.config["music_scene_playlists"] = chosen
+        else:
+            return False
+        persist = getattr(self, "_persist_config", None)
+        if callable(persist):
+            persist()
+        return True
 
     def _music_say(self, text, tone="ok"):
         previous = getattr(self, "_music_notice", None) or {"seq": 0}
@@ -116,6 +154,10 @@ class HtmlMusicMixin:
         if operation == "status":
             self._music_status_report(payload)
             return True
+        if operation == "follow_set":
+            done = self._music_follow_set(_text(payload.get("key"), 40), payload.get("value"))
+            self._schedule_html_dashboard_publish(immediate=True)
+            return done
         if operation == "set_duration":
             library.set_duration(_text(payload.get("track_id"), 16), payload.get("duration"))
         elif operation == "set_loudness":

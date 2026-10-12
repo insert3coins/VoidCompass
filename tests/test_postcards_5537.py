@@ -75,7 +75,7 @@ class CardTests(unittest.TestCase):
 
     def test_options_stay_within_their_choices(self):
         self.assertEqual(postcard_options({}), {"hold": 10, "photo": True, "size": "standard", "facts": True, "note": True,
-                                                "doing": True, "style": "polaroid"})
+                                                "doing": True, "style": "polaroid", "greeting": "Greetings from"})
         self.assertEqual(postcard_options({"postcard_style": "Airmail"})["style"], "airmail")
         self.assertEqual(postcard_options({"postcard_style": "neon"})["style"], "polaroid")
         self.assertEqual(postcard_options({"postcard_hold_s": 7, "postcard_size": "huge"})["hold"], 10)
@@ -232,7 +232,7 @@ class DepthTests(unittest.TestCase):
         recent = [postcard_note(bare, "stoic", rng=random.Random(0))]
         self.assertNotEqual(postcard_note(bare, "stoic", rng=random.Random(0), recent=recent), recent[0])
 
-    def test_facts_and_the_note_can_be_turned_off_the_greeting_cannot(self):
+    def test_facts_and_the_note_can_be_turned_off(self):
         class Deck(DashboardKeepsakesMixin):
             pass
         deck = Deck()
@@ -251,7 +251,7 @@ class DepthTests(unittest.TestCase):
         self.assertTrue(cards[False, True]["note"], "the note still knows the moment")
         self.assertEqual(cards[True, False]["note"], "")
         for card in cards.values():
-            self.assertEqual(card["title"], "Hatchooe AB 3", "greetings from, always")
+            self.assertEqual(card["title"], "Hatchooe AB 3", "the place's name, always")
         deck.config = {"postcard_doing": False, "screenshot_captions": True}
         with patch("voidcompass.dashboard.dashboard_keepsakes_mixin.threading.Thread"):
             quiet = deck._postcard_observe("Screenshot", LANDED)
@@ -262,7 +262,6 @@ class DepthTests(unittest.TestCase):
         for key in ("postcard_facts", "postcard_note", "postcard_doing"):
             self.assertIn(f'"{key}"', page, "on the Postcards page")
             self.assertIn(key, config_module.PROFILE_SETTINGS)
-        self.assertNotIn("postcard_greeting", page)
 
     def test_no_note_when_the_watcher_is_off(self):
         class Deck(DashboardKeepsakesMixin):

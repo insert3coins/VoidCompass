@@ -36,6 +36,38 @@ def _integer(value, default=0):
         return int(default)
 
 
+# The lettering over the place's name (5.5.3.8): the old travel postcard's
+# "Greetings from…", "Wish you were here", your own words, or none.
+GREETINGS = ("greetings", "wish", "custom", "none")
+GREETING_WORDS = {"greetings": "Greetings from", "wish": "Wish you were here"}
+GREETING_MAX = 40
+
+
+def greeting_text(config):
+    """The words the postcards carry over the place's name ("" for none);
+    your own words, when chosen but left empty, are "Greetings from"."""
+    config = config or {}
+    kind = str(config.get("postcard_greeting") or "greetings").casefold()
+    if kind == "none":
+        return ""
+    if kind == "custom":
+        own = " ".join(str(config.get("postcard_greeting_text") or "").split())[:GREETING_MAX]
+        return own or GREETING_WORDS["greetings"]
+    return GREETING_WORDS.get(kind, GREETING_WORDS["greetings"])
+
+
+def greeting_line(card):
+    """The card's first line in words: "Greetings from Hatchooe AB 3",
+    "Wish you were here · Hatchooe AB 3", or just the place."""
+    title = str(card.get("title") or "")
+    words = str(card.get("greeting", GREETING_WORDS["greetings"]) or "").strip()
+    if not words:
+        return title
+    if words.split()[-1].casefold() in {"from", "at", "in", "to", "on", "near"}:
+        return f"{words} {title}"
+    return f"{words} · {title}"
+
+
 def postcard_options(config):
     """Overlay Studio's choices for the postcards."""
     config = config or {}
@@ -45,14 +77,15 @@ def postcard_options(config):
     return {
         "hold": hold if hold in HOLDS else DEFAULT_HOLD,
         "photo": bool(config.get("postcard_photo", True)),
-        # What the journal knows of the place, and the Watcher's note; the
-        # "Greetings from…" lettering is always there.
+        # What the journal knows of the place, and the Watcher's note.
         "facts": bool(config.get("postcard_facts", True)),
         "note": bool(config.get("postcard_note", True)),
         # What you were doing (in supercruise, landed, docked at…).
         "doing": bool(config.get("postcard_doing", True)),
         "style": style if style in STYLES else "polaroid",
         "size": size if size in SIZES else "standard",
+        # The lettering over the place's name ("" for none, 5.5.3.8).
+        "greeting": greeting_text(config),
     }
 
 
@@ -185,6 +218,7 @@ def postcard_card(raw, *, state="", system="", station="", body_name="", serial=
         "photo": False,
         # For "Greetings from…": the place, and the region under it.
         "region": str(region or ""),
+        "greeting": GREETING_WORDS["greetings"],
         "kind": str(kind or ""),
         "facts": [str(fact) for fact in (facts or ()) if fact],
         "note": str(note or ""),
@@ -193,7 +227,7 @@ def postcard_card(raw, *, state="", system="", station="", body_name="", serial=
 
 def caption_text(card):
     """The card as words, for a caption file beside the picture."""
-    lines = [f"Greetings from {card.get('title') or ''}"]
+    lines = [greeting_line(card)]
     where = " · ".join(part for part in (card.get("place"), card.get("region")) if part)
     if where:
         lines.append(where)

@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="screenshots.css">
   <link rel="stylesheet" href="capsules.css">
   <link rel="stylesheet" href="constellation.css">
+  <link rel="stylesheet" href="flightlog.css">
   <link rel="stylesheet" href="powerplay.css">
   <link rel="stylesheet" href="workshop.css">
   <link rel="stylesheet" href="colonisation.css">
@@ -507,6 +508,7 @@
 
         <section class="page specialist-page" data-page-name="chronicle">
           <header class="page-title"><div><p>EXPEDITION TIME MACHINE</p><h2>Captain's Log</h2><span>Replay journeys, inspect retained highlights and export interactive chronicles</span></div><div class="title-actions"><button data-page="records">RETURN TO RECORDS</button></div></header>
+          <div id="flightlog-workspace" class="flightlog-shell"></div>
           <div id="chronicle-workspace" class="workspace-shell loading-panel">Opening the commander chronicle…</div>
         </section>
 
@@ -586,6 +588,7 @@
               <p id="music-blocked" class="music-blocked" hidden>Windows wants one click in this window before music may start by itself. Press play once; hotkeys work from then on.</p>
             </div>
           </section>
+          <section id="music-follow" class="card music-follow" aria-label="Follow the game"></section>
           <div class="music-library">
             <aside class="card music-playlists" aria-label="Playlists">
               <header><span>PLAYLISTS</span><b id="music-playlist-count">0</b></header>

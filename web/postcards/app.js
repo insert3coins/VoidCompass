@@ -25,7 +25,9 @@
   // when there's no photo.
   function greeting(card) {
     const block = node("div", "greeting");
-    block.append(node("span", "greeting-from", "GREETINGS FROM"));
+    // The lettering over the name (5.5.3.8): the card's own words, or none.
+    const words = String(card.greeting ?? "Greetings from").trim();
+    if (words) block.append(node("span", "greeting-from", words.toUpperCase()));
     block.append(node("strong", "greeting-place", card.title || ""));
     const under = [card.place, card.region].filter(Boolean).join(" · ");
     if (under) block.append(node("span", "greeting-region", under));

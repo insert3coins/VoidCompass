@@ -67,3 +67,11 @@
 .album-favs b { color: var(--yellow); }
 .album-actions .album-favs.active, .album-actions .album-favs.active:hover { color: var(--yellow); background-color: color-mix(in srgb, var(--yellow) 12%, transparent); }
 .album-star-wide.on { color: var(--yellow); }
+/* The lettering over the place's name (5.5.3.8). */
+.album-greeting, .album-greeting-own { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.album-greeting[hidden], .album-greeting-own[hidden] { display: none; }
+.album-greeting > span, .album-greeting-own > span { display: grid; gap: 2px; min-width: 0; }
+.album-greeting b, .album-greeting-own b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.album-greeting small, .album-greeting-own small { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
+.album-greeting select, .album-greeting-own input { min-height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.album-greeting-own input { width: 220px; max-width: 100%; }

@@ -159,7 +159,11 @@ function renderSettings(data, ui) {
       ${toggle(ui, "postcard_facts", "Journal facts", "What your scans say of the place: its kind, gravity, firsts, life, distance from Sol.", settings.postcard_facts)}
       ${toggle(ui, "postcard_note", "The Watcher's note", "A handwritten line from the Watcher, signed, while its thoughts are on.", settings.postcard_note)}
       ${toggle(ui, "postcard_doing", "What you were doing", "In supercruise, landed, docked, on foot…", settings.postcard_doing)}
-      <p class="album-hint">"Greetings from…" is always on the card.</p>
+      <label class="album-greeting"><span><b>Lettering</b><small>The words over the place's name.</small></span>
+        <select data-postcard-setting="postcard_greeting">${[["greetings", "Greetings from…"], ["wish", "Wish you were here"], ["custom", "Your own words"], ["none", "None"]]
+          .map(([value, name]) => `<option value="${value}"${value === (settings.postcard_greeting || "greetings") ? " selected" : ""}>${name}</option>`).join("")}</select></label>
+      <label class="album-greeting-own"${settings.postcard_greeting === "custom" ? "" : " hidden"}><span><b>Your own words</b><small>Up to 40 letters, over the name in place of "Greetings from".</small></span>
+        <input type="text" maxlength="40" data-postcard-setting="postcard_greeting_text" value="${ui.escapeHtml(settings.postcard_greeting_text || "")}" placeholder="Postcard from"></label>
       <h3>KEEPING</h3>
       ${toggle(ui, "screenshot_postcards", "Save postcards as pictures", "Each new screenshot's postcard as a PNG, kept in this album. Made even with the Postcards overlay off.", settings.screenshot_postcards)}
       <div class="album-folder"><span><b>Postcard folder</b><small>Empty is the postcards folder in Void Compass's own folder.</small></span>

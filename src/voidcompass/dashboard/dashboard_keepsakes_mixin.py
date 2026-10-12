@@ -12,6 +12,7 @@ import logging
 import os
 import threading
 import time
+import zlib
 from pathlib import Path
 
 from voidcompass.core.platform_support import (
@@ -216,6 +217,7 @@ class DashboardKeepsakesMixin:
             card["facts"] = []
         if not options["doing"]:
             card["doing"] = ""
+        card["greeting"] = options["greeting"]
         if hud is not None:
             hud.post(card)
         wants_photo = hud is not None and postcard_options(self.config)["photo"]
@@ -399,6 +401,8 @@ class DashboardKeepsakesMixin:
                 "postcard_facts": options["facts"],
                 "postcard_note": options["note"],
                 "postcard_doing": options["doing"],
+                "postcard_greeting": str(self.config.get("postcard_greeting") or "greetings"),
+                "postcard_greeting_text": str(self.config.get("postcard_greeting_text") or ""),
                 "screenshot_postcards": bool(self.config.get("screenshot_postcards", False)),
                 "screenshot_captions": bool(self.config.get("screenshot_captions", False)),
                 "postcards_path": str(self.config.get("postcards_path") or ""),
@@ -436,6 +440,7 @@ class DashboardKeepsakesMixin:
         palette = dict(themes.ACTIVE_PALETTE or {})
         return "-".join(str(part) for part in (
             options["style"], int(options["facts"]), int(options["note"]), int(options["doing"]),
+            "g" + format(zlib.crc32(options["greeting"].encode("utf-8")), "08x"),
             watcher_mind.personality(self.config), palette.get("accent", ""), palette.get("orange", ""),
             palette.get("text", ""))).replace("#", "")
 
@@ -482,6 +487,7 @@ class DashboardKeepsakesMixin:
             facts=postcard_facts(sample, 57904) if options["facts"] else [], kind=body_kind(sample))
         if not options["doing"]:
             card["doing"] = ""
+        card["greeting"] = options["greeting"]
         if options["note"]:
             import random
             card["note"] = postcard_note(card, watcher_mind.personality(self.config), 57904, "LANDED",
@@ -495,6 +501,7 @@ class DashboardKeepsakesMixin:
         return data
 
     _POSTCARD_SWITCHES = ("postcard_facts", "postcard_note", "postcard_doing", "screenshot_postcards", "screenshot_captions")
+    _POSTCARD_GREETINGS = ("greetings", "wish", "custom", "none")
 
     def _postcard_setting(self, key, value):
         """One setting from the Postcards page, checked against its choices."""
@@ -505,6 +512,13 @@ class DashboardKeepsakesMixin:
             self.config[key] = style
         elif key in self._POSTCARD_SWITCHES:
             self.config[key] = value is True or str(value).casefold() in {"1", "true", "on"}
+        elif key == "postcard_greeting":
+            greeting = str(value or "").casefold()
+            if greeting not in self._POSTCARD_GREETINGS:
+                return False
+            self.config[key] = greeting
+        elif key == "postcard_greeting_text":
+            self.config[key] = " ".join(str(value or "").split())[:40]
         elif key == "postcards_path":
             self.config[key] = str(value or "").strip()[:400]
             self._postcard_album_cache = None

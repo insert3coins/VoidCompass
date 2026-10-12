@@ -1,54 +1,20 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.3.7 // Galaxy Minimap and Postcards
-**Release Date:** 2026-Oct-11
+## v5.5.3.8 // Music That Flies With You and Flight Logs
+**Release Date:** not yet released
 
-* **New overlay: Galaxy Minimap.** The Milky Way in a corner of your screen, drawn from the same Codex region map as the Galactic Atlas: the arms glowing, the gaps dark, a warm core, and the region borders. It shows the here and now:
-  * where you are, with the region you're in outlined;
-  * the trail of this game session's jumps, from where you logged in;
-  * the route you've plotted, waypoint by waypoint, to where it ends;
-  * Sol and the galactic core for your bearings.
-  * The names of the regions on the map, small and quiet, with the one you're in in orange (Region names in Overlay Studio).
-  * Underneath: the region's name, how far you are from Sol, and either how far your route goes and how many jumps, or how many jumps you've made this session. System names are left to the Navigation HUD. Your whole journey stays in the Galactic Atlas.
-  * You, your trail and your route are drawn bold, with a dark edge and a reticle round you, so they stand out over the galaxy.
-  * **Your Spansh trip too:** the whole trip beyond the leg plotted in game, as a fainter cyan line to its end, with its neutron stars marked. It comes from your waypoint route (a neutron plot you IMPORT keeps its coordinates and neutron stops now), or from your latest neutron plot on Explore. The strip gives the trip's distance and jumps left, in cyan. A **Spansh route** switch in Overlay Studio turns it off.
-  * **Stars along the route:** scoopable stars in warm yellow, neutron stars bright with spikes, white dwarfs as rings.
-  * **A scale bar** in the corner, so you can judge distances in any view.
-  * **Smooth moves:** when you jump, the map glides to the new view and you slide along your trail (not with reduced motion).
-  * In Overlay Studio: size (180, 240 or 320 px), the view (Your route, framed on you, this session's trail and the route ahead; 16,000 ly around you; or the whole galaxy), its own text size, region names, and the route on or off. A hotkey (Settings › Hotkeys) changes the view in game, and the strip shows which view it's on (ROUTE, LOCAL or GALAXY) beside the region's name. It starts off; turn it on in Overlay Studio or with its hotkey.
-* **New overlay: Postcards.** Take a screenshot in game and a postcard from space slides in, a Polaroid of the picture you just took, developing like an instant photo:
-  * **"Greetings from…"** across the photo, like an old travel postcard: the place in big slanted letters in your HUD's orange, with its system and region under it.
-  * **A note from the Watcher**, handwritten and signed, in its own nature's voice: about a first discovery, a rare world, how far you are from home, being landed or docked, or just the place. It writes only while its thoughts are on.
-  * **What your journal knows of the place:** what it is (a water world, a class K star, a neutron star…), terraformable, gravity, first discovered or first footfall, biological signals, and how far it is from Sol.
-  * What you were doing (landed, on foot, in the SRV, docked, in supercruise…), your latitude and longitude on a surface, and the date in Elite's own calendar.
-  * Several in a row stack up, the newest on top; high-resolution shots are marked.
-  * Four styles: Polaroid, Airmail (cream paper and the red-and-blue striped border), Holo (a cockpit display in your theme's colours) and Vintage (aged paper, a sepia picture, serif lettering).
-  * In Overlay Studio: how long it stays (6 to 30 seconds), its size and the photo. How the card looks is set on the Postcards page. It's on by default and only appears when you take a screenshot.
-* **The Watcher keeps your postcards.** Every postcard you take goes into its memory, and now and then, in a quiet moment, it brings an older one up ("Remember Hatchooe AB 3? Three days ago. I still have that postcard."). Its page counts the postcards it has kept.
-* **New page: Postcards.** Everything about postcards in one place:
-  * **Design:** the style (Polaroid, Airmail, Holo or Vintage) and switches for the journal facts, the Watcher's note and what you were doing (the "Greetings from…" is always there), with a live preview of a postcard as you change them. The design applies to the overlay, saved postcards and caption files alike.
-  * **Keeping:** Save postcards as pictures, the Postcard folder (BROWSE, or DEFAULT for Void Compass's own folder) and Caption files.
-  * **The album:** every postcard you've kept as a picture, newest first. Click one to see it full size, **COPY** it (paste it straight into Discord or anywhere) or **SHOW IN FOLDER**.
-* **New page: Screenshots.** Every picture in your screenshot folder, newest first and grouped by day, with each one's system. Filter by system, click one to see it full size (the arrow keys step through them), **COPY** it or **SHOW IN FOLDER**. A screenshot's caption file is shown with it, and ones not converted yet or high-res are marked. Nothing is ever deleted from here.
-* **New page: Time Capsules.** Leave a note for a system ("Third planet has a crystalline shard field. Bring the SRV next time."). It stays sealed until you next jump in there, next week or years from now, and then the Watcher hands it back in your own words (or a notice does, if its thoughts are off). Sealed notes stay blurred on the page until you hover to peek.
-  * **Not before…:** seal a capsule for later (a week, a month, a year). Back too soon, and the Watcher tells you there's something waiting and how long until it opens.
-  * **On the Galaxy Minimap:** a small gold hourglass where each sealed capsule waits (its Time capsules switch, in Overlay Studio).
-  * **Settings** on the page: hand capsules back by the Watcher (a notice if it's quiet), a notice only, or the Watcher only; how long the notice stays; open them when you log in there too; blur sealed notes; whether the Watcher remembers this day.
-  * **On this day:** where you were on this date one, two, three years ago, where that day took you, how many jumps and light years, and the postcards you took. On your first jump of the day, the Watcher may remember it with you.
-* **New page: Your Constellation.** Each session, the place you stayed longest becomes a star; nine stars make a constellation, named by the Watcher with a short legend in its own voice. The shape is yours alone, drawn from your real bearings, with each star sized by how long you stayed and coloured by its class. Your whole sky of constellations sits underneath, and **SAVE AS PICTURE** keeps one with your postcards.
-  * **Tonight so far:** where tonight's star will be, as you fly.
-  * **The Watcher names a new one** when it's finished. Hover a star for its system, class and how long you stayed.
-  * **Settings** on the page: stars in a constellation (5 to 12), how long a stay counts (5 minutes to an hour), one star a session or every stay, a branching shape or true to the map, line colour (your theme's accent, starlight white, old gold), star names, the saved picture's size (up to 3840 × 2400) and its legend, and whether the Watcher names new ones.
-* **Favourites** on the Postcards and Screenshots pages: tap the ☆ on a picture (or ★ FAVOURITE in its full-size view) to keep it, and **★ FAVOURITES** shows just those.
-* **Overlay Studio lists the overlays in alphabetical order.**
-* **Galactic Atlas replay: pause and stop.** The play button couldn't pause the journey replay once it was playing (the click was lost). Now it pauses and plays on from where it stopped, **Space** does the same, and a new **Stop** button goes back to the whole journey.
-* **Caption files** (Postcards page): a text file beside each new screenshot with its postcard in words. With Convert screenshots to PNG on, it goes beside the PNG.
-* **Save postcards as pictures** (Postcards page): each new screenshot's postcard as a PNG, drawn at full size just as the overlay shows it, in the style you chose, in a **postcards** folder in Void Compass's own folder, or a **Postcard folder** of your choosing. **OPEN POSTCARDS** (Settings › Screenshots or the Postcards page) opens it. Postcards are made even with the Postcards overlay off.
-* **Screenshots with OneDrive.** If OneDrive (or another backup) keeps your Pictures folder in the cloud, Elite saves its screenshots there, but Void Compass looked in your user folder's Pictures and found nothing. It now asks Windows where Pictures really is, and moves an old saved guess to the right folder. A folder you chose yourself is left alone.
-* **The PNG converter works with cloud sync apps.** OneDrive, Dropbox and Google Drive briefly lock a new file while they upload it. The converter couldn't delete the BMP after making its PNG, so it converted the same screenshot again and again, leaving numbered copies. Now each screenshot is converted once and its BMP is deleted when the lock lets go. A conversion cut short no longer leaves half a PNG, and screenshots kept only in the cloud are left there instead of being downloaded.
+* **Music that flies with you.** The Music player can follow the game: choose a playlist for each scene, and as the game changes the music fades across.
+  * Five scenes: **Docked** (and on foot in a station), **Space**, **Deep space** (any system nobody lives in), **Surface** (landed, in the SRV, on foot on a planet) and **Combat** (in danger, or being interdicted). A scene left on "Keep playing" doesn't change anything.
+  * Each playlist picks up where you left it, so going back to the station brings back the song you were on.
+  * A calm change waits a few seconds (a station's mass lock flickers); combat switches at once. **Quieter in hyperspace** dips the music for the jump.
+  * It only ever changes music that's already playing; it never starts by itself. Set it up on the Music page under **Follow the game** (fade 1 to 6 seconds).
+* **Postcard lettering.** The words over the place's name are yours to choose on the Postcards page: **Greetings from…**, **Wish you were here**, your own words (up to 40 letters), or none at all. The overlay, saved postcards and caption files all follow, and the preview shows it as you change it.
+* **Flight logs.** One page for every night you flew, at the top of the Captain's Log: the date in Elite's calendar, where you went and for how long, your trail on a little map, jumps, light years, first discoveries and credits, the night's best moments (rare worlds, Codex entries, species), the postcards you took, tonight's star from your constellation, and a closing paragraph from the Watcher in its own voice. Older nights have one too.
+  * When you log off, a notice says tonight's flight log is written (switch it off beside the list of nights).
 
 ## Earlier releases
 
+* **v5.5.3.7** — Keepsakes: the Galaxy Minimap overlay (session trail, plotted route and your whole Spansh trip, region names, views and a view hotkey, time capsule marks) and the Postcards overlay ("Greetings from…", journal facts, the Watcher's note, four styles, saved as pictures); new Postcards, Screenshots, Time Capsules (with Not before… and On this day) and Constellation pages, each with its own settings; favourites; the Watcher keeps postcards, hands back capsules and names your constellations; the Galactic Atlas replay pauses and stops; OneDrive screenshot folders and a sync-safe PNG converter; Overlay Studio's list in alphabetical order.
 * **v5.5.3.6** — Trading › Market searches one system after another reliably (late replies no longer land under a newer search, and a market from another system clears); the Market view laid out side by side, the search and its stations beside the market you opened.
 * **v5.5.3.5** — The Watcher's past: a long story in two books that unfolds over your hours together, echoes stirred by real things in your game, an afterword, a chapter reader on its page and four achievements; every thought headed (a memory, an echo), typed in its nature's own way, with the journal words it noticed picked out; Thought side, its own text size and heading options in Overlay Studio, its words kept on screen and never clipped; its memory saved at the game's sign-off and when Void Compass closes; the Watcher page laid out again; corner-bracket buttons across the deck; Sell cargo by distance; Market's system search moved to the top.
 * **v5.5.3.4.1** — Overlays see-through again in Windows dark mode (they now draw through Windows' compositor, avoiding Microsoft WebView2's dark background), with a Classic windows fallback in Overlay Studio; overlays never pull Void Compass in front of the game.
