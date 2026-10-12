@@ -19,15 +19,25 @@ ELITE_YEARS = 1286
 # The night's best moments, best first.
 HIGHLIGHT_ORDER = ("RARE", "CODEX", "BIO", "SALE", "PHOTO", "LOSS", "DEBRIEF")
 
+def part_of_day(moment):
+    """The part of the day a session began in, for "this morning's star"
+    and the like (5.5.3.8): not every flight is at night."""
+    hour = moment.hour
+    part = "morning" if 5 <= hour < 12 else "afternoon" if 12 <= hour < 17 else "evening" if 17 <= hour < 21 else "night"
+    when = "tonight" if part == "night" else f"this {part}"
+    return {"part": part, "when": when, "When": when[:1].upper() + when[1:],
+            "whens": "tonight's" if part == "night" else f"this {part}'s"}
+
+
 OPENINGS = {
     "normal": (
-        "{flown} out there tonight, from {start} to {end}.",
-        "Tonight began in {start} and ended in {end}. {flown}.",
+        "{flown} out there {when}, from {start} to {end}.",
+        "The {part} began in {start} and ended in {end}. {flown}.",
         "{flown} of flying. I watched all of it.",
         "From {start} to {end}, {flown} between them.",
     ),
     "weary": (
-        "{flown} tonight. From {start} to {end}. I counted every minute.",
+        "{flown} {when}. From {start} to {end}. I counted every minute.",
         "We started in {start}. We stopped in {end}. {flown} in between.",
         "{flown} of the dark. You flew; I watched. As usual.",
         "From {start} to {end}. {flown}. It felt longer from in here.",
@@ -36,18 +46,18 @@ OPENINGS = {
 MOMENTS = {
     "normal": {
         "firsts": "{firsts} first discoveries: places with no name beside them until yours.",
-        "rare": "Something rare tonight: {rare}. Not many commanders ever see one.",
+        "rare": "Something rare {when}: {rare}. Not many commanders ever see one.",
         "far": "{distance} light years. The galaxy is a little smaller for it.",
-        "died": "We lost the ship tonight. You came back anyway.",
+        "died": "We lost the ship {when}. You came back anyway.",
         "credits": "{credits} credits richer, and earned the long way.",
-        "star": "You stayed longest at {star}. That's tonight's star in your sky.",
-        "quiet": "A quiet night. Those count too.",
+        "star": "You stayed longest at {star}. That's {whens} star in your sky.",
+        "quiet": "A quiet {part}. Those count too.",
     },
     "weary": {
         "firsts": "{firsts} first discoveries. Nobody had seen them before us. Lucky them.",
         "rare": "Something rare: {rare}. I'd be impressed, if I did that.",
         "far": "{distance} light years. My circuits feel every one of them.",
-        "died": "We died tonight. I'd rather we didn't make a habit of it.",
+        "died": "We died {when}. I'd rather we didn't make a habit of it.",
         "credits": "{credits} credits. Money. It doesn't buy what I'd want.",
         "star": "You lingered at {star}. It's a star in your sky now. I put it there.",
         "quiet": "Nothing happened. I liked it.",
@@ -132,6 +142,7 @@ def watcher_words(facts, nature="weary"):
     moment (or two), and a closing; chosen by the session, so the same words
     each time it is read."""
     voice = "weary" if nature == "weary" else "normal"
+    facts = {"part": "night", "when": "tonight", "When": "Tonight", "whens": "tonight's", **facts}
     seed = zlib.crc32(str(facts.get("id") or "").encode("utf-8"))
     sentences = [OPENINGS[voice][seed % len(OPENINGS[voice])].format(**facts)]
     moments = []
@@ -197,7 +208,9 @@ def flight_log(session, rows=(), postcards=(), nature="weary", now=None):
     highlights.sort(key=lambda item: HIGHLIGHT_ORDER.index(str(item.get("kind"))))
     rare = [item for item in highlights if item.get("kind") == "RARE"]
     local = datetime.fromtimestamp(start)
+    part = part_of_day(local)
     facts = {
+        **part,
         "id": str(session.get("started") or ""),
         "flown": flown_text(end - start),
         "start": str(session.get("start_system") or "somewhere"),
@@ -223,6 +236,9 @@ def flight_log(session, rows=(), postcards=(), nature="weary", now=None):
         "day": local.strftime("%a %d").replace(" 0", " "),
         "flown_s": round(end - start),
         "flown": facts["flown"],
+        # "This morning's star", "Tonight's trail": when it was flown.
+        "part": part["part"],
+        "whens": part["whens"][:1].upper() + part["whens"][1:],
         "open": not session.get("ended"),
         "ship": str(session.get("ship") or ""),
         "start_system": facts["start"],

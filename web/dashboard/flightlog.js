@@ -13,7 +13,7 @@ function token(name, fallback) {
 }
 
 // The night's trail, fitted to the box: where it began, where it ended.
-function drawTrail(canvas, trail) {
+function drawTrail(canvas, trail, part = "night") {
   const box = canvas.getBoundingClientRect();
   const ratio = window.devicePixelRatio || 1;
   const width = Math.max(1, Math.round(box.width)), height = Math.max(1, Math.round(box.height));
@@ -31,7 +31,8 @@ function drawTrail(canvas, trail) {
   if (!trail || trail.length < 2) {
     context.fillStyle = token("--muted", "#85939d");
     context.font = '12px "Segoe UI", sans-serif'; context.textAlign = "center";
-    context.fillText(trail && trail.length ? "One system tonight" : "No jumps tonight", width / 2, height / 2);
+    const when = part === "night" ? "tonight" : `this ${part}`;
+    context.fillText(trail && trail.length ? `One system ${when}` : `No jumps ${when}`, width / 2, height / 2);
     return;
   }
   const xs = trail.map((point) => point[0]), zs = trail.map((point) => point[1]);
@@ -88,11 +89,11 @@ function page(log, ui) {
       <h3>${ui.escapeHtml(log.date)}</h3>
       <p>${ui.escapeHtml(log.start_system)} → ${ui.escapeHtml(log.end_system)} · ${ui.escapeHtml(log.flown)}${log.ship ? ` · ${ui.escapeHtml(log.ship)}` : ""} · from ${ui.escapeHtml(log.time)}</p></div></header>
     <div class="flightlog-body">
-      <div class="flightlog-map"><canvas id="flightlog-trail" aria-label="Tonight's trail"></canvas></div>
+      <div class="flightlog-map"><canvas id="flightlog-trail" aria-label="${ui.escapeHtml(log.whens || "The")} trail"></canvas></div>
       <div class="flightlog-facts">
         <div class="flightlog-figures">${figure(ui, "jumps", ui.numeric(f.jumps))}${figure(ui, "light years", ui.numeric(f.distance))}${figure(ui, "first discoveries", ui.numeric(f.firsts))}${figure(ui, "credits", credits(f.credits))}</div>
         ${extras ? `<p class="flightlog-extras">${extras}</p>` : ""}
-        ${log.star ? `<p class="flightlog-star"><i>✧</i><span>Tonight's star: <b>${ui.escapeHtml(log.star.system)}</b>, ${stayed(log.star.minutes)}</span><button type="button" data-page="constellation">YOUR SKY</button></p>` : ""}
+        ${log.star ? `<p class="flightlog-star"><i>✧</i><span>${ui.escapeHtml(log.whens || "The session's")} star: <b>${ui.escapeHtml(log.star.system)}</b>, ${stayed(log.star.minutes)}</span><button type="button" data-page="constellation">YOUR SKY</button></p>` : ""}
         ${highlights ? `<ol class="flightlog-highlights">${highlights}</ol>` : ""}
         ${cards ? `<div class="flightlog-cards">${cards}</div>` : ""}
       </div>
@@ -125,7 +126,7 @@ function show(ui, force = false) {
   if (key === lastPageKey && !force) return;
   lastPageKey = key;
   ui.byId("flightlog-view").innerHTML = page(log, ui).replace("</article>", `${fullLog(log, sessions[log.id], ui)}</article>`);
-  drawTrail(ui.byId("flightlog-trail"), log.trail);
+  drawTrail(ui.byId("flightlog-trail"), log.trail, log.part);
 }
 
 function listNights(ui) {
@@ -144,7 +145,7 @@ function listNights(ui) {
       <span class="flightlog-route">${ui.escapeHtml(route)}</span>
       <span>${ui.escapeHtml(log.flown)} · ${ui.numeric(log.figures?.jumps)} jumps</span></button></li>`);
   }
-  ui.byId("flightlog-list").innerHTML = items.join("") || `<li class="flightlog-none">No night matches that.</li>`;
+  ui.byId("flightlog-list").innerHTML = items.join("") || `<li class="flightlog-none">No flight matches that.</li>`;
 }
 
 export function renderFlightLogs(data = {}, ui, chronicle = []) {

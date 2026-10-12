@@ -124,6 +124,33 @@ class DeckTests(unittest.TestCase):
         self.assertIn("self._flight_log_written()", dashboard)
 
 
+class PartOfDayTests(unittest.TestCase):
+    """Not every flight is at night (5.5.3.8)."""
+
+    def test_the_part_of_the_day(self):
+        from datetime import datetime
+        from voidcompass.exploration.flight_log import part_of_day
+        cases = {6: ("morning", "this morning", "this morning's"), 13: ("afternoon", "this afternoon", "this afternoon's"),
+                 18: ("evening", "this evening", "this evening's"), 23: ("night", "tonight", "tonight's"),
+                 3: ("night", "tonight", "tonight's")}
+        for hour, (part, when, whens) in cases.items():
+            found = part_of_day(datetime(2026, 10, 12, hour))
+            self.assertEqual((found["part"], found["when"], found["whens"]), (part, when, whens), hour)
+
+    def test_a_morning_flight_says_so(self):
+        morning = flight_log(dict(NIGHT, deaths=1), ROWS, (), "weary")
+        part = morning["part"]
+        words = morning["words"]
+        if part != "night":
+            self.assertNotIn("tonight", words.lower(), "said of when it was flown")
+            self.assertIn(f"this {part}", words.lower())
+        self.assertTrue(morning["whens"].endswith("'s"))
+        page = (WEB / "dashboard" / "flightlog.js").read_text(encoding="utf-8")
+        self.assertNotIn("Tonight's star", page)
+        sky = (WEB / "dashboard" / "constellation.js").read_text(encoding="utf-8")
+        self.assertNotIn("TONIGHT SO FAR", sky)
+
+
 class PageTests(unittest.TestCase):
     def test_one_list_of_logs_instead_of_a_heap(self):
         app = (WEB / "dashboard" / "app.js").read_text(encoding="utf-8", errors="replace")

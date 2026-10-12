@@ -296,7 +296,7 @@ function show(ui, data = lastData) {
   const card = ui.byId("sky-tonight");
   card.hidden = !tonight;
   if (tonight) {
-    card.innerHTML = `<small>TONIGHT SO FAR</small><b>${ui.escapeHtml(tonight.system)}</b>
+    card.innerHTML = `<small>${ui.escapeHtml(String(tonight.when || "This session").toUpperCase())} SO FAR</small><b>${ui.escapeHtml(tonight.system)}</b>
       <span>${ui.numeric(tonight.minutes)} min${tonight.here ? ", and counting" : ""} · ${tonight.lingering
         ? "your next star, unless you stay somewhere longer"
         : `stay ${ui.numeric(settings.constellation_linger_min || 10)} min somewhere and it becomes a star`}</span>`;

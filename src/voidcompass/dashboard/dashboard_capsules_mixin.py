@@ -351,7 +351,8 @@ class DashboardCapsulesMixin:
         return cached[1], options
 
     def _tonight(self, linger_s):
-        """Tonight's star so far: where you've stayed longest this session."""
+        """This session's star so far: where you've stayed longest ("this
+        morning", "tonight": as the session's start says)."""
         history = getattr(self, "travel_history", None)
         if history is None or not hasattr(history, "session_rows"):
             return None
@@ -369,7 +370,13 @@ class DashboardCapsulesMixin:
                 best = (stay, str(row[1]), index + 1 == len(rows))
         if best is None:
             return None
-        return {"system": best[1], "minutes": round(best[0] / 60), "here": best[2], "lingering": best[0] >= linger_s}
+        from voidcompass.exploration.flight_log import part_of_day
+        try:
+            began = datetime.fromisoformat(str(rows[0][0]).replace("Z", "+00:00")).astimezone()
+        except (TypeError, ValueError, IndexError):
+            began = datetime.now().astimezone()
+        return {"system": best[1], "minutes": round(best[0] / 60), "here": best[2], "lingering": best[0] >= linger_s,
+                "when": part_of_day(began)["When"]}
 
     def _html_constellation_workspace(self):
         sky, options = self._constellation_sky()
