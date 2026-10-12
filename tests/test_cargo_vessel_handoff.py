@@ -1,3 +1,4 @@
+from pathlib import Path
 import unittest
 
 from voidcompass.dashboard.dashboard import MainDashboard
@@ -61,6 +62,39 @@ class CargoVesselHandoffTests(unittest.TestCase):
         self.assertEqual(dashboard.current_cargo_vessel, "Ship")
         self.assertEqual(dashboard.current_cargo_inventory, [{"Name": "gold", "Count": 12}])
         self.assertEqual(dashboard.current_cargo_tons, 12)
+    def test_rhino_learns_the_mothership_hold_from_the_journal(self):
+        """Started out in the Rhino: Cargo.json never describes the ship, but
+        the journal's Cargo event does, so the mothership card still shows."""
+        dashboard = _dashboard()
+        dashboard._cargo_inventory_by_hold = {}
+        dashboard.current_cargo_vessel = "SRV"
+        dashboard.current_cargo_inventory = []
+        dashboard.current_in_srv = True
+        dashboard.current_vehicle_name = "RHINO"
+        self.assertEqual(dashboard._rhino_related_cargo_holds(), [])
+
+        learned = dashboard._remember_ship_hold_from_journal({
+            "event": "Cargo", "Vessel": "Ship", "Count": 40,
+            "Inventory": [{"Name": "platinum", "Count": 40}],
+        })
+        self.assertTrue(learned)
+        dashboard._apply_rhino_cargo_transfer({"event": "CargoTransfer", "Transfers": [
+            {"Type": "platinum", "Count": 51, "Direction": "toship"}]})
+        related = dashboard._rhino_related_cargo_holds()
+        self.assertEqual(related[0]["inventory"], [{"Name": "platinum", "Count": 91}])
+        self.assertEqual(related[0]["capacity"], 322)
+
+    def test_journal_never_replaces_the_active_ship_hold(self):
+        dashboard = _dashboard()
+        self.assertFalse(dashboard._remember_ship_hold_from_journal({
+            "event": "Cargo", "Vessel": "Ship", "Inventory": [{"Name": "gold", "Count": 1}]}))
+        self.assertFalse(dashboard._remember_ship_hold_from_journal({"event": "Cargo", "Vessel": "Ship", "Count": 3}))
+        self.assertEqual(dashboard.current_cargo_inventory, [{"Name": "gold", "Count": 12}])
+
+    def test_mothership_card_shows_space_left(self):
+        script = (Path(__file__).resolve().parents[1] / "web" / "cargo" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("T FREE", script)
+        self.assertIn("related-meter", script)
 
 if __name__ == "__main__":
     unittest.main()

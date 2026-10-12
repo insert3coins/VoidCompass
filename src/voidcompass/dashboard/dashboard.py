@@ -8182,6 +8182,7 @@ class MainDashboard(
         elif ev == "Cargo":
             # Journal can emit Cargo before/without immediate file polling update.
             self.watcher.force_check_cargo()
+            self._remember_ship_hold_from_journal(raw)
             # EDSM cargo is sent from the complete Cargo.json snapshot by
             # update_cargo(); the journal notification often has no Inventory.
 
@@ -10718,6 +10719,30 @@ class MainDashboard(
             vessel,
             self._cargo_vehicle_owner(vessel),
         )
+
+    def _remember_ship_hold_from_journal(self, raw):
+        """Learn the mothership's hold from a journal Cargo event.
+
+        Cargo.json only describes the vehicle being driven, so a Void Compass
+        started while out in the Rhino never read the ship's hold, and the
+        Rhino's mothership card had nothing to show. The journal's Cargo
+        event for the ship carries its full Inventory (at login, and after
+        anything changes it), so keep that while the ship isn't the active
+        hold. The active hold still comes from Cargo.json alone.
+        """
+        if not isinstance(raw, dict) or not isinstance(raw.get("Inventory"), list):
+            return False
+        if self._normalise_cargo_vessel(raw.get("Vessel")) != "Ship":
+            return False
+        if self._normalise_cargo_vessel(getattr(self, "current_cargo_vessel", "Ship")) == "Ship":
+            return False
+        cache = getattr(self, "_cargo_inventory_by_hold", None)
+        if not isinstance(cache, dict):
+            cache = {}
+            self._cargo_inventory_by_hold = cache
+        cache["Ship"] = [dict(row) for row in raw["Inventory"] if isinstance(row, dict)]
+        self._refresh_cargo_consumers()
+        return True
 
     def _rhino_related_cargo_holds(self, vessel=None, owner=None):
         """Expose the retained mothership manifest only while the Rhino is active."""

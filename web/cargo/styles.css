@@ -309,13 +309,25 @@ header > b {
 .related-hold-head small { display: block; }
 .related-hold-head strong { color: var(--accent); font-size: var(--type-body); }
 .related-hold-head small { color: var(--dim); font-size: var(--type-small); font-weight: 700; }
-.related-hold-head > b {
+.related-hold-head > b,
+.related-space b {
   padding: 0;
   color: var(--orange);
   border: 0;
   background: transparent;
   font-size: var(--type-body);
 }
+.related-space { flex: 0 0 auto; text-align: right; }
+.related-space b,
+.related-space small { display: block; white-space: nowrap; }
+.related-space small { color: var(--green); font-size: var(--type-small); font-weight: 700; }
+.related-space small.full { color: var(--red); }
+.related-meter {
+  height: calc(3px * var(--scale));
+  margin-top: 4px;
+  background: color-mix(in srgb, var(--soft) 70%, transparent);
+}
+.related-meter i { display: block; height: 100%; background: var(--orange); }
 .related-manifest {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

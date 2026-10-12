@@ -247,10 +247,24 @@
       title.appendChild(node("strong", "", `${owner} CARGO`));
       title.appendChild(node("small", "", String(hold.status || "RETAINED")));
       heading.appendChild(title);
-      heading.appendChild(node(
+      // Used and space left, so unloading the Rhino shows the ship filling.
+      const space = node("div", "related-space");
+      space.appendChild(node(
         "b", "", capacity ? `${total.toLocaleString()} / ${capacity.toLocaleString()} T` : tonnes(total),
       ));
+      if (capacity) {
+        const free = Math.max(0, capacity - total);
+        space.appendChild(node("small", free ? "" : "full", free ? `${free.toLocaleString()} T FREE` : "HOLD FULL"));
+      }
+      heading.appendChild(space);
       card.appendChild(heading);
+      if (capacity) {
+        const meter = node("div", "related-meter");
+        const fill = node("i");
+        fill.style.width = `${Math.min(100, Math.round(total / capacity * 100))}%`;
+        meter.appendChild(fill);
+        card.appendChild(meter);
+      }
 
       const list = node("div", "related-manifest");
       if (!rows.length) {

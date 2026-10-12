@@ -1,14 +1,14 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.3.9.1 // Overlays That Fit
+## v5.5.3.9.2 // The Rhino's Mothership
 **Release Date:** 2026-Oct-12
 
-* **Prospector, Cargo and Planet Materials at large text.** With the overlay text size turned up, their columns now grow with the text: material names and percentages in the Prospector, AVAILABLE / TONNES FREE in Cargo, and in Planet Materials the volcanism, the Rhino estimates and each saved site's distance and deposit are no longer cut short (the site details were squeezed even at normal size). Long names like Low Temperature Diamonds wrap onto a second line instead of losing their end.
-  * **Every row shows, at any Windows scaling.** On some PCs Windows draws an overlay at a different scale than its window was sized for, so the Cargo manifest lost its last few rows (and the header was cut short). These overlays now fit themselves to the window they actually get, so the whole hold shows.
-* **Station Link fits too.** The same fixes for the Station Link overlay: every panel shows at any Windows scaling, and long station names, the pad grid, services like Universal Cartographics and the local profile now wrap instead of being cut short, at normal size and at large text.
+* **Your ship's hold while you're in the Rhino.** The Cargo overlay's SHIP CARGO card shows your mothership's total cargo and the space left in it (tonnes free, or HOLD FULL) with a fill bar, so you can watch it fill as you unload the Rhino.
+  * **It shows after a restart too.** If Void Compass was started while you were already out in the Rhino, the card didn't appear, because the game only writes the cargo file for the vehicle you're driving. It now learns your ship's hold from the journal instead.
 
 ## Earlier releases
 
+* **v5.5.3.9.1** — Overlays That Fit: Prospector, Cargo and Planet Materials columns grow with the text size; they and Station Link fit the window they really get at any Windows scaling, so no rows go missing and long names wrap.
 * **v5.5.3.9** — The Watcher, Chapter 3: Book Three, What Was Put There (seven chapters over about a year, darker musings headed The Seat, two new achievements); hints on the Watcher page for locked chapters and echoes; Reset the Watcher (with Are you sure?, its old memory kept as a copy); the Watcher on earth-likes, water, ammonia and terraformable worlds; pictures open where you are in Screenshots and Postcards.
 * **v5.5.3.8** — Music that flies with you (a playlist, or a song of its own, for docked, space, deep space, surface and combat, faded across as the game changes, quieter in hyperspace); flight logs for every session in the Captain's Log (trail, figures, best moments, postcards, its star, field discoveries grouped, and a closing word from the Watcher), the Captain's Log tidied into one list of nights; postcard lettering (Greetings from, Wish you were here, your own words or none); morning, afternoon and evening said as they were.
 * **v5.5.3.7** — Keepsakes: the Galaxy Minimap overlay (session trail, plotted route and your whole Spansh trip, region names, views and a view hotkey, time capsule marks) and the Postcards overlay ("Greetings from…", journal facts, the Watcher's note, four styles, saved as pictures); new Postcards, Screenshots, Time Capsules (with Not before… and On this day) and Constellation pages, each with its own settings; favourites; the Watcher keeps postcards, hands back capsules and names your constellations; the Galactic Atlas replay pauses and stops; OneDrive screenshot folders and a sync-safe PNG converter; Overlay Studio's list in alphabetical order.
