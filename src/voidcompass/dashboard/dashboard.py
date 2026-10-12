@@ -400,7 +400,7 @@ class MainDashboard(
         "neutron_boost_armed", "neutron_boost_value",
         "fsd_injection_armed", "fsd_injection_percent",
         "cargo_capacity", "current_cargo_tons", "current_cargo_vessel",
-        "current_cargo_inventory", "_cargo_inventory_by_hold",
+        "current_cargo_inventory", "_cargo_inventory_by_hold", "_ship_hold_partial",
         "dest_coords", "dest_name", "nav_route_entries",
         "current_latitude", "current_longitude",
         "current_heading", "current_planet_radius", "on_planet",
@@ -1272,6 +1272,7 @@ class MainDashboard(
         self.current_cargo_inventory = []
         self.current_cargo_vessel = "Ship"
         self._cargo_inventory_by_hold = {}
+        self._ship_hold_partial = False
         self.operational_state = operational_state.fresh_runtime_state()
         self.colonisation_projects = {}
         self.engineer_materials = {}
@@ -2418,6 +2419,7 @@ class MainDashboard(
         self.current_cargo_inventory = []
         self.current_cargo_vessel = "Ship"
         self._cargo_inventory_by_hold = {}
+        self._ship_hold_partial = False
         self.operational_state = operational_state.fresh_runtime_state()
         self._hud_balance_cache = {"ts": 0.0, "balance": None}
         self.last_journal_event_ts = 0.0
@@ -2794,7 +2796,8 @@ class MainDashboard(
         # you were following (on its overlay).
         self._trading_start_import()
         self._trading_update_overlay()
-        self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
+        # Keep a restored capacity if no journal names the ship's hold.
+        self.cargo_capacity = self.watcher.get_latest_cargo_capacity() or self.cargo_capacity
         latest_fuel_capacity = self.watcher.get_latest_fuel_capacity()
         if latest_fuel_capacity > 0:
             self.fuel_capacity_main = latest_fuel_capacity
@@ -4880,7 +4883,9 @@ class MainDashboard(
         if self._overlay_enabled("cargo_hud"):
             if self.cargo_hud is None:
                 self.cargo_hud = CargoHUD(self.root, self.config)
-                self.cargo_capacity = self.watcher.get_latest_cargo_capacity()
+                self.cargo_capacity = (
+                    self.watcher.get_latest_cargo_capacity() or self.cargo_capacity
+                )
                 self.watcher.force_check_cargo()
             inventory, capacity, vessel, owner = self._cargo_hold_snapshot()
             self.cargo_hud.update(
@@ -7694,6 +7699,13 @@ class MainDashboard(
         self._surface_departure_active = False
         self.update_hud()
         self._refresh_cargo_consumers()
+        # Keep the ship's hold and capacity on disk as the Rhino leaves it,
+        # so a restart while out on the surface still knows them.
+        if vehicle_name == "RHINO" and not getattr(self, "_startup_restore_active", False):
+            try:
+                self._save_profile_cockpit_state()
+            except Exception as exc:
+                logging.debug("Cockpit state save at Rhino launch skipped: %s", exc)
 
     def _handle_live_journal_toast(self, ev, raw, d, startup_replay=False):
         """Surface selected, actionable journal events without replay noise."""
@@ -10621,6 +10633,9 @@ class MainDashboard(
             cache = {}
             self._cargo_inventory_by_hold = cache
         rhino_key = "SRV:RHINO"
+        if "Ship" not in cache:
+            # Never seen the ship's hold: what arrives is all that's known.
+            self._ship_hold_partial = True
         cache.setdefault("Ship", [])
         cache.setdefault(rhino_key, [])
         changed = False
@@ -10741,6 +10756,7 @@ class MainDashboard(
             cache = {}
             self._cargo_inventory_by_hold = cache
         cache["Ship"] = [dict(row) for row in raw["Inventory"] if isinstance(row, dict)]
+        self._ship_hold_partial = False
         self._refresh_cargo_consumers()
         return True
 
@@ -10760,7 +10776,11 @@ class MainDashboard(
             "capacity": getattr(self, "cargo_capacity", 0),
             "vessel": "Ship",
             "vehicle_name": "SHIP",
-            "status": "REMOTE / RETAINED",
+            # Only what was unloaded is known until the ship's hold is read
+            # (board it once, or keep Void Compass running when you launch).
+            "status": ("UNLOADED THIS TRIP · BOARD SHIP FOR FULL HOLD"
+                       if getattr(self, "_ship_hold_partial", False) else "REMOTE / RETAINED"),
+            "partial": bool(getattr(self, "_ship_hold_partial", False)),
         }]
 
     def _refresh_cargo_consumers(self):
@@ -10785,6 +10805,8 @@ class MainDashboard(
             cache = {}
             self._cargo_inventory_by_hold = cache
         cache[self._cargo_hold_key(incoming_vessel)] = incoming_inventory
+        if incoming_vessel == "Ship":
+            self._ship_hold_partial = False
 
         expected_vessel = self._runtime_cargo_vessel()
         if incoming_vessel != expected_vessel:

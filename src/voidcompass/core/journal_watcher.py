@@ -151,8 +151,13 @@ class JournalWatcher:
         self.last_nav_mtime = 0
         self._force_special_check = True
 
-    def get_latest_cargo_capacity(self, tail_bytes=2 * 1024 * 1024):
-        """Best-effort lookup of the most recent Loadout CargoCapacity."""
+    def get_latest_cargo_capacity(self, tail_bytes=2 * 1024 * 1024, max_files=12):
+        """Best-effort lookup of the most recent Loadout CargoCapacity.
+
+        A session that begins out in the Rhino, or on foot, has no Loadout
+        until the commander boards the ship again, so look back through the
+        previous journals too (newest first) for the ship last flown.
+        """
         if not self.journal_path or not os.path.exists(self.journal_path):
             return 0
         try:
@@ -164,26 +169,24 @@ class JournalWatcher:
                 ],
                 key=journal_sort_key,
             )
-            if not files:
-                return 0
-            latest = files[-1]
-            size = os.path.getsize(latest)
-            start = max(0, size - tail_bytes)
-            with open(latest, "rb") as f:
-                f.seek(start)
-                content = f.read().decode("utf-8", errors="ignore")
-            lines = content.splitlines()
-            for line in reversed(lines):
-                try:
-                    data = json.loads(line)
-                except Exception:
-                    continue
-                if data.get("event") == "Loadout":
-                    capacity = data.get("CargoCapacity", 0)
+            for path in reversed(files[-max_files:]):
+                size = os.path.getsize(path)
+                start = max(0, size - tail_bytes)
+                with open(path, "rb") as f:
+                    f.seek(start)
+                    content = f.read().decode("utf-8", errors="ignore")
+                for line in reversed(content.splitlines()):
+                    if '"Loadout"' not in line:
+                        continue
                     try:
-                        return max(0, int(capacity))
+                        data = json.loads(line)
                     except Exception:
-                        return 0
+                        continue
+                    if data.get("event") == "Loadout":
+                        try:
+                            return max(0, int(data.get("CargoCapacity", 0)))
+                        except Exception:
+                            return 0
         except Exception:
             return 0
         return 0

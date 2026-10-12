@@ -1,10 +1,11 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.3.9.2 // The Rhino's Mothership
+## v5.5.3.9.3 // The Rhino's Mothership
 **Release Date:** 2026-Oct-12
 
 * **Your ship's hold while you're in the Rhino.** The Cargo overlay's SHIP CARGO card shows your mothership's total cargo and the space left in it (tonnes free, or HOLD FULL) with a fill bar, so you can watch it fill as you unload the Rhino.
-  * **It shows after a restart too.** If Void Compass was started while you were already out in the Rhino, the card didn't appear, because the game only writes the cargo file for the vehicle you're driving. It now learns your ship's hold from the journal instead.
+  * **It knows your ship's capacity and hold after a restart too.** The game only writes the cargo file for the vehicle you're driving, and a session that starts out in the Rhino has no record of your ship's capacity. Void Compass now looks back through earlier journals for your ship's capacity, keeps your ship's hold as you launch the Rhino, and learns it from the journal, so the card shows the full picture even if you restarted out on the surface.
+  * **Honest when it can't know.** If Void Compass has never seen your ship's hold, the card shows only what you've unloaded this trip (+51 T) and says BOARD SHIP FOR FULL HOLD, instead of passing that off as the whole hold with a wrong amount of free space.
 
 ## Earlier releases
 

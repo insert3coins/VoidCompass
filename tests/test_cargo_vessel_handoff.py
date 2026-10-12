@@ -95,6 +95,40 @@ class CargoVesselHandoffTests(unittest.TestCase):
         script = (Path(__file__).resolve().parents[1] / "web" / "cargo" / "app.js").read_text(encoding="utf-8")
         self.assertIn("T FREE", script)
         self.assertIn("related-meter", script)
+    def test_unloaded_tonnes_are_not_passed_off_as_the_whole_hold(self):
+        dashboard = _dashboard()
+        dashboard._cargo_inventory_by_hold = {}
+        dashboard.current_cargo_vessel = "SRV"
+        dashboard.current_cargo_inventory = []
+        dashboard.current_in_srv = True
+        dashboard.current_vehicle_name = "RHINO"
+        dashboard._apply_rhino_cargo_transfer({"event": "CargoTransfer", "Transfers": [
+            {"Type": "platinum", "Count": 51, "Direction": "toship"}]})
+        self.assertIn("BOARD SHIP", dashboard._rhino_related_cargo_holds()[0]["status"])
+        self.assertTrue(dashboard._rhino_related_cargo_holds()[0]["partial"], "no free space guessed")
+        dashboard._remember_ship_hold_from_journal({
+            "event": "Cargo", "Vessel": "Ship", "Inventory": [{"Name": "platinum", "Count": 765}]})
+        self.assertEqual(dashboard._rhino_related_cargo_holds()[0]["status"], "REMOTE / RETAINED")
+
+    def test_capacity_found_in_an_earlier_journal(self):
+        import json
+        import tempfile
+        from voidcompass.core.journal_watcher import JournalWatcher
+        with tempfile.TemporaryDirectory() as folder:
+            older = Path(folder) / "Journal.2026-10-09T200900.01.log"
+            newer = Path(folder) / "Journal.2026-10-10T090500.01.log"
+            older.write_text(json.dumps({"event": "Loadout", "Ship": "panthermkii", "CargoCapacity": 832}) + "\n", encoding="utf-8")
+            newer.write_text(json.dumps({"event": "LoadGame", "Ship": "mev_rhino"}) + "\n", encoding="utf-8")
+            watcher = JournalWatcher.__new__(JournalWatcher)
+            watcher.journal_path = folder
+            self.assertEqual(watcher.get_latest_cargo_capacity(), 832)
+
+    def test_rhino_launch_keeps_the_ship_hold_on_disk(self):
+        source = (Path(__file__).resolve().parents[1] / "src" / "voidcompass" / "dashboard" / "dashboard.py").read_text(encoding="utf-8")
+        launch = source.split("def _apply_surface_vehicle_launch", 1)[1].split("\n    def ", 1)[0]
+        self.assertIn("_save_profile_cockpit_state()", launch)
+        self.assertIn('"_ship_hold_partial"', source)
+        self.assertIn("get_latest_cargo_capacity() or self.cargo_capacity", source)
 
 if __name__ == "__main__":
     unittest.main()

@@ -80,6 +80,8 @@ def build_cargo_model(inventory, capacity=0, vessel='Ship', vehicle_name='', rel
             hold.get('vessel', 'Ship'), hold.get('vehicle_name', ''),
         )
         related['status'] = str(hold.get('status') or 'RETAINED').strip().upper()
+        # Only part of the hold is known: its free space would be a guess.
+        related['partial'] = bool(hold.get('partial'))
         related_models.append(related)
     model['related_holds'] = related_models
     return model

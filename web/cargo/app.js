@@ -250,15 +250,16 @@
       // Used and space left, so unloading the Rhino shows the ship filling.
       const space = node("div", "related-space");
       space.appendChild(node(
-        "b", "", capacity ? `${total.toLocaleString()} / ${capacity.toLocaleString()} T` : tonnes(total),
+        "b", "", hold.partial ? `+${tonnes(total)}` : capacity ? `${total.toLocaleString()} / ${capacity.toLocaleString()} T` : tonnes(total),
       ));
-      if (capacity) {
+      const known = capacity && !hold.partial;
+      if (known) {
         const free = Math.max(0, capacity - total);
         space.appendChild(node("small", free ? "" : "full", free ? `${free.toLocaleString()} T FREE` : "HOLD FULL"));
       }
       heading.appendChild(space);
       card.appendChild(heading);
-      if (capacity) {
+      if (known) {
         const meter = node("div", "related-meter");
         const fill = node("i");
         fill.style.width = `${Math.min(100, Math.round(total / capacity * 100))}%`;
