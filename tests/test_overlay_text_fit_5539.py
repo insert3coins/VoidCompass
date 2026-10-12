@@ -1,14 +1,16 @@
-"""Prospector, Cargo and Planet Materials at large text (5.5.3.9): the page's columns grow with
+"""Prospector, Cargo, Planet Materials and Station Link at large text (5.5.3.9): the page's columns grow with
 the text size as the window does, so nothing is cut off at 150% or 200%."""
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from urllib.parse import urlsplit
 
 from voidcompass.overlays.cargo_hud import build_cargo_model
 from voidcompass.overlays.planet_materials_hud import build_planet_materials_model
 from voidcompass.overlays.prospector_hud import build_prospector_model
+from voidcompass.overlays.station_info_hud import build_station_model
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
@@ -36,6 +38,16 @@ WORKSPACE = {"system": "Synuefe XX-A d1-58", "body": BODY, "on_planet": True,
                         "amount": "Medium", "materials": "Painite", "latitude": 10.1, "longitude": -44.0}],
              "navigation_target": {}}
 
+DOCKED = SimpleNamespace(
+    current_station_name="Shinrarta Dezhra Jameson Memorial", current_sys="Shinrarta Dezhra", current_station_type="Orbis",
+    current_station_dist_ls=346.2, current_station_landing_pads={"Small": 17, "Medium": 18, "Large": 9},
+    current_station_services=["dock", "commodities", "exploration", "rearm", "refuel", "repair", "outfitting", "shipyard",
+                              "searchrescue", "vistagenomics", "engineer", "materialtrader", "techBroker"],
+    current_station_economies=[{"Name_Localised": "High Tech", "Proportion": 0.8}, {"Name_Localised": "Industrial", "Proportion": 0.2}],
+    current_station_economy="High Tech", current_station_faction={"Name": "The Pilots Federation", "FactionState": "Boom"},
+    current_station_government="Democracy", current_station_allegiance="Independent", current_station_state="Boom",
+    current_station_market_id=128666762, companion_state=None, carrier_tracker=None)
+
 # (page, model key, model, design width, min height, max height)
 OVERLAYS = (
     ("prospector", "prospector", build_prospector_model(PROSPECTED, {"Platinum": 12}), 400, 180, 560),
@@ -43,6 +55,7 @@ OVERLAYS = (
     ("planet-materials-overlay", "planet_materials",
      build_planet_materials_model(WORKSPACE, latitude=11.9, longitude=-45.1, heading=212, radius_m=2400000, vehicle_name="Rhino"),
      440, 190, 680),
+    ("station", "station", build_station_model(DOCKED), 520, 330, 720),
 )
 
 

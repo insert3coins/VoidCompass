@@ -85,6 +85,7 @@
 
   function render(snapshot = {}) {
     VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, snapshot.effects || {});
+    VoidCompassOverlay.fitToWindow(root, 520, snapshot.effects || {});
     const model = snapshot.station || {};
     const core = Array.isArray(model.core_services) ? model.core_services : [];
     const explorer = Array.isArray(model.exploration_services) ? model.exploration_services : [];
@@ -107,7 +108,7 @@
   }
 
   function contentHeight() {
-    return Math.max(330, Math.ceil(root.getBoundingClientRect().height + 2));
+    return VoidCompassOverlay.designHeight(root, 330);
   }
 
   VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 260});

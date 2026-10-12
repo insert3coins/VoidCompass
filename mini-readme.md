@@ -4,7 +4,8 @@
 **Release Date:** 2026-Oct-12
 
 * **Prospector, Cargo and Planet Materials at large text.** With the overlay text size turned up, their columns now grow with the text: material names and percentages in the Prospector, AVAILABLE / TONNES FREE in Cargo, and in Planet Materials the volcanism, the Rhino estimates and each saved site's distance and deposit are no longer cut short (the site details were squeezed even at normal size). Long names like Low Temperature Diamonds wrap onto a second line instead of losing their end.
-  * **Every row shows, at any Windows scaling.** On some PCs Windows draws an overlay at a different scale than its window was sized for, so the Cargo manifest lost its last few rows (and the header was cut short). These three overlays now fit themselves to the window they actually get, so the whole hold shows.
+  * **Every row shows, at any Windows scaling.** On some PCs Windows draws an overlay at a different scale than its window was sized for, so the Cargo manifest lost its last few rows (and the header was cut short). These overlays now fit themselves to the window they actually get, so the whole hold shows.
+* **Station Link fits too.** The same fixes for the Station Link overlay: every panel shows at any Windows scaling, and long station names, the pad grid, services like Universal Cartographics and the local profile now wrap instead of being cut short, at normal size and at large text.
 
 ## Earlier releases
 
