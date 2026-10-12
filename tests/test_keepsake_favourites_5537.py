@@ -91,6 +91,9 @@ class PageTests(unittest.TestCase):
                 self.assertIn("starButton(row, ui)", source)
                 self.assertIn("favouritesFilter(", source)
                 self.assertIn('="favourite">☆ FAVOURITE</button>', source)
+        for page in ("postcards.js", "screenshots.js"):
+            source = (WEB / "dashboard" / page).read_text(encoding="utf-8")
+            self.assertIn("document.body.append(viewer)", source, "the viewer opens where you are, not at the page's top")
         shared = (WEB / "dashboard" / "favourites.js").read_text(encoding="utf-8")
         self.assertIn('operation: "favourite"', shared)
 

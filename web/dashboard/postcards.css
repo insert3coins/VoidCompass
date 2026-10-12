@@ -19,7 +19,7 @@
 .album-grid small { color: var(--muted); font: 10px Consolas, monospace; }
 .album-empty { grid-column: 1 / -1; padding: 30px; border: 1px dashed var(--border); color: var(--muted); font: 12px "Segoe UI", sans-serif; text-align: center; }
 /* Full size, over the page. */
-.album-viewer { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; align-content: center; gap: 12px;
+.album-viewer { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; align-content: center; gap: 12px;
   padding: 24px; background: color-mix(in srgb, var(--bg) 88%, transparent); }
 .album-viewer[hidden] { display: none; }
 .album-viewer figure { display: grid; gap: 8px; margin: 0; max-width: min(92vw, 1500px); }

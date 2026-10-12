@@ -9,6 +9,7 @@
   * Two new achievements: **The Seat** (it begins) and **Only Me** (its end).
   * It's still the Watcher. That's the one thing it's sure of.
 * **Reset the Watcher.** At the bottom of the Watcher page, **RESET THE WATCHER** makes it forget everything (its whole story, the echoes, all it has said, the postcards it kept, every hour and session together) and wake as it did the first time. It asks **Are you sure?** first, and its yes waits a few seconds before it can be pressed. Your achievements stay, and a copy of its old memory is kept beside the new one, just in case.
+* **Pictures open where you are.** Clicking a screenshot or postcard far down its album now opens it full screen right there, instead of at the top of the page where you had to scroll back up to see it.
 * **The Watcher on the worlds worth stopping for.** Earth-likes, water worlds, ammonia worlds and terraformable worlds each get their own words now, in its own voice, sometimes with the surface temperature from your scan. An earth-like it always remarks on, and a world like that which nobody has ever charted gets a line of its own.
 
 ## Earlier releases

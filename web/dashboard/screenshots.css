@@ -13,5 +13,5 @@
 .shots-caption { max-width: 80ch; margin: 0 auto; color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif;
   white-space: pre-line; text-align: center; }
 /* Room under the picture for its caption and the buttons. */
-.shots-page .album-viewer { align-content: start; overflow: auto; }
-.shots-page .album-viewer img { max-height: calc(100vh - 330px); }
+.album-viewer.shots-viewer { overflow: auto; }
+.album-viewer.shots-viewer img { max-height: calc(100vh - 240px); }

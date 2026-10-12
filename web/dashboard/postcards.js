@@ -18,6 +18,22 @@ function ago(seconds) {
   return new Date(Number(seconds) * 1000).toLocaleDateString([], {day: "numeric", month: "short", year: "numeric"});
 }
 
+// The full-size viewer belongs to the window, not the page (5.5.3.9): inside
+// the page it opened at the page's top, out of sight when you'd scrolled
+// down the gallery. It keeps its own clicks, and shuts if you change page.
+function lift(root, id, onClick, onLeave) {
+  document.querySelectorAll(`#${id}`).forEach((stale) => {
+    if (!root.contains(stale)) stale.remove();
+  });
+  const viewer = root.querySelector(`#${id}`);
+  if (!viewer) return;
+  document.body.append(viewer);
+  viewer.addEventListener("click", onClick);
+  document.addEventListener("click", (event) => {
+    if (!viewer.hidden && event.target.closest?.(".nav-item, [data-page]") && !viewer.contains(event.target)) onLeave();
+  }, true);
+}
+
 function shell(root, ui) {
   root.classList.remove("loading-panel");
   root.innerHTML = `<div class="album-page">
@@ -59,7 +75,7 @@ function shell(root, ui) {
     const field = event.target.closest('input[type="text"][data-postcard-setting]');
     if (field) saveText(ui, field, 700);
   });
-  root.addEventListener("click", async (event) => {
+  const onClick = async (event) => {
     const style = event.target.closest("[data-postcard-style]");
     if (style) {
       await setting(ui, "postcard_style", style.dataset.postcardStyle);
@@ -116,7 +132,9 @@ function shell(root, ui) {
     } finally {
       button.disabled = false;
     }
-  });
+  };
+  root.addEventListener("click", onClick);
+  lift(root, "album-viewer", onClick, () => close(ui));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && shown) close(ui);
   });

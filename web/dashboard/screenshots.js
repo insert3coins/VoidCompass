@@ -43,6 +43,22 @@ function redraw(ui) {
   showViewerStar(ui.byId("shots-star"), rows.find((row) => row.id === shownId));
 }
 
+// The full-size viewer belongs to the window, not the page (5.5.3.9): inside
+// the page it opened at the page's top, out of sight when you'd scrolled
+// down the gallery. It keeps its own clicks, and shuts if you change page.
+function lift(root, id, onClick, onLeave) {
+  document.querySelectorAll(`#${id}`).forEach((stale) => {
+    if (!root.contains(stale)) stale.remove();
+  });
+  const viewer = root.querySelector(`#${id}`);
+  if (!viewer) return;
+  document.body.append(viewer);
+  viewer.addEventListener("click", onClick);
+  document.addEventListener("click", (event) => {
+    if (!viewer.hidden && event.target.closest?.(".nav-item, [data-page]") && !viewer.contains(event.target)) onLeave();
+  }, true);
+}
+
 function shell(root, ui) {
   root.classList.remove("loading-panel");
   root.innerHTML = `<div class="album-page shots-page">
@@ -54,7 +70,7 @@ function shell(root, ui) {
       </div></header>
     <p class="album-note" id="shots-note" hidden></p>
     <ol class="album-grid shots-grid" id="shots-grid"></ol>
-    <div class="album-viewer" id="shots-viewer" hidden role="dialog" aria-modal="true" aria-label="Screenshot">
+    <div class="album-viewer shots-viewer" id="shots-viewer" hidden role="dialog" aria-modal="true" aria-label="Screenshot">
       <figure><img id="shots-full" alt=""><figcaption><b id="shots-title"></b><small id="shots-when"></small></figcaption>
         <p class="shots-caption" id="shots-caption" hidden></p></figure>
       <div class="album-actions">
@@ -72,7 +88,7 @@ function shell(root, ui) {
     lastKey = "";
     drawGrid(ui);
   });
-  root.addEventListener("click", async (event) => {
+  const onClick = async (event) => {
     const star = event.target.closest("[data-star]");
     if (star) {
       const row = rows.find((item) => item.id === star.dataset.star);
@@ -109,7 +125,9 @@ function shell(root, ui) {
     } finally {
       button.disabled = false;
     }
-  });
+  };
+  root.addEventListener("click", onClick);
+  lift(root, "shots-viewer", onClick, () => close(ui));
   document.addEventListener("keydown", (event) => {
     if (!shownId) return;
     if (event.key === "Escape") close(ui);
