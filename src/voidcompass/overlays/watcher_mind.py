@@ -27,7 +27,7 @@ from pathlib import Path
 import zlib
 
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
-from voidcompass.overlays import watcher_idle, watcher_lines, watcher_lore, watcher_natures, watcher_postcards
+from voidcompass.overlays import watcher_idle, watcher_lines, watcher_lore, watcher_natures, watcher_postcards, watcher_worlds
 
 # How often it may speak (Overlay Studio). The gap is the least time
 # between two thoughts; `minimum` is the least importance it will voice.
@@ -86,6 +86,7 @@ HEADED_TOPICS = {
     "lore_recall": ("recall", "LOOKING BACK"),
     "idle_lore": ("musing", "REMEMBERING"),
     "idle_after": ("musing", "REMEMBERING"),
+    "idle_lens": ("musing", "THE SEAT"),
     "sign_off": ("", "SIGNING OFF"),
     "sign_off_quiet": ("", "SIGNING OFF"),
     # 5.5.3.7: a note you left, handed back; where you were on this date.
@@ -133,6 +134,13 @@ IMPORTANCE = {
     "undiscovered_system": 1,
     "new_region": 2,
     "valuable_world": 2,
+    # 5.5.3.9: each kind of world worth stopping for, in its own words. An
+    # earth-like, or any of them never charted before, it always remarks on.
+    "world_earthlike": 3,
+    "world_water": 2,
+    "world_ammonia": 2,
+    "world_terraformable": 1,
+    "world_first": 3,
     # 5.5.3.1: rare worlds, and its word at the end of a session.
     "rare_world": 2,
     "green_giant": 3,
@@ -238,6 +246,11 @@ MOODS = {
     "lore_recall": "downcast",
     "idle_postcard": "pleased",
     "capsule": "pleased",
+    "world_earthlike": "pleased",
+    "world_water": "curious",
+    "world_ammonia": "curious",
+    "world_terraformable": "curious",
+    "world_first": "pleased",
     "on_this_day": "downcast",
     "capsule_early": "curious",
     "constellation_named": "pleased",
@@ -380,7 +393,14 @@ class WatcherMind:
         self.clock = clock
         self.random = rng or random.Random()
         self.lock = threading.Lock()
-        self.memory = {"last_seen": None, "sessions": 0, "said": [], "regions": [],
+        self.memory = self._fresh_memory()
+        self._load()
+        self._fresh_state()
+
+    @staticmethod
+    def _fresh_memory():
+        """A memory with nothing in it: how it is the first time it wakes."""
+        return {"last_seen": None, "sessions": 0, "said": [], "regions": [],
                        "deaths": 0, "last_death": None, "session_started": None, "thoughts": None,
                        # 5.5.3.2: hours flown together, your records, the day
                        # it last marked your anniversary, and what it said.
@@ -389,7 +409,9 @@ class WatcherMind:
                        # the echoes found, {topic: [times, last]}; when it said
                        # its afterword (Book One finished).
                        "lore": [], "echoes": {}, "afterword": None}
-        self._load()
+
+    def _fresh_state(self):
+        """What it holds in mind only for now (not remembered)."""
         if self.memory.get("thoughts") is None:
             # Older memories: count the thoughts it remembers saying.
             self.memory["thoughts"] = sum(1 for row in self.memory["said"]
@@ -415,6 +437,28 @@ class WatcherMind:
         self.surroundings = watcher_idle.Surroundings()
 
     # -- memory --------------------------------------------------------------
+    def reset(self):
+        """Forget everything (5.5.3.9, the Watcher page's RESET): the story,
+        the echoes, what it said, the hours and sessions together, your
+        bond. It wakes again as it did the first time. The old memory is
+        kept beside it first, as watcher_memory.reset-<when>.json, so a
+        slip can be undone by hand. The backup's path, or "" for none."""
+        backup = ""
+        if self.memory_path and self.memory_path.exists():
+            stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(self.clock()))
+            target = self.memory_path.with_name(f"{self.memory_path.stem}.reset-{stamp}{self.memory_path.suffix}")
+            try:
+                target.write_bytes(self.memory_path.read_bytes())
+                backup = str(target)
+            except OSError:
+                return None  # no backup: forget nothing
+        with self.lock:
+            self.memory = self._fresh_memory()
+        self._fresh_state()
+        self._unsaved = True
+        self.save()
+        return backup
+
     def _load(self):
         if not self.memory_path:
             return
@@ -606,7 +650,7 @@ class WatcherMind:
                 self.memory["afterword"] = now
             self._story_changed = True
             return self._utter("lore_afterword", "lore:afterword", watcher_lore.AFTERWORD, now)
-        row = watcher_lore.due(self.memory, self.memory.get("sessions") or 0, self.memory.get("hours") or 0)
+        row = watcher_lore.due(self.memory, self.memory.get("sessions") or 0, self.memory.get("hours") or 0, now)
         if row is None:
             return None
         self._story_changed = True
@@ -870,9 +914,23 @@ class WatcherMind:
             elif raw.get("WasDiscovered") is True:
                 self._first_streak = 0
             planet = str(raw.get("PlanetClass") or "").casefold()
-            if planet in {"earthlike body", "water world", "ammonia world"} or raw.get("TerraformState") == "Terraformable":
+            terraformable = raw.get("TerraformState") == "Terraformable"
+            if planet in watcher_worlds.KIND_WORDS or terraformable:
+                # The worlds worth stopping for (5.5.3.9): each in its own words.
                 self._last_interesting = now
-                return self.consider("valuable_world", {"body": raw.get("BodyName") or "That world"})
+                fields = {"body": raw.get("BodyName") or "That world"}
+                try:
+                    fields["temp"] = f"{float(raw['SurfaceTemperature']) - 273.15:,.0f}°C"
+                except (KeyError, TypeError, ValueError):
+                    pass
+                kind = watcher_worlds.KIND_WORDS.get(planet) or ("A terraformable world" if terraformable else "")
+                if raw.get("WasDiscovered") is False and kind:
+                    thought = self.consider("world_first", dict(fields, kind=kind, kind_l=kind[:1].lower() + kind[1:]))
+                    if thought:
+                        return thought
+                topic = {"earthlike body": "world_earthlike", "water world": "world_water",
+                         "ammonia world": "world_ammonia"}.get(planet, "world_terraformable")
+                return self.consider(topic, fields)
             return None
         if event == "CodexEntry" and is_green_giant_codex(raw):
             self._last_interesting = now
@@ -1025,6 +1083,7 @@ class WatcherMind:
                          hours=int(self.memory.get("hours") or 0),
                          # 5.5.3.5: its story told, and a finished chapter to look back on.
                          story_done=bool(self.memory.get("afterword")),
+                         book_three=watcher_lore.book_three_begun(self.memory),
                          recall=watcher_lore.recall_choice(self.memory, self.random, now),
                          # 5.5.3.7: a postcard it kept.
                          postcard=watcher_postcards.recall_choice(self.memory, self.random, now))

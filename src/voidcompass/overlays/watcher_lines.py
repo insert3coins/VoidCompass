@@ -1067,6 +1067,22 @@ NORMAL["idle_lore"] = list(MUSINGS)
 WEARY["idle_lore"] = list(MUSINGS)
 NORMAL["idle_after"] = list(AFTER_MUSINGS)
 WEARY["idle_after"] = list(AFTER_MUSINGS)
+# The worlds worth stopping for (5.5.3.9): each kind its own words.
+from voidcompass.overlays import watcher_worlds as _worlds  # noqa: E402
+
+for _topic, _normal, _weary in (
+        ("world_earthlike", _worlds.EARTHLIKE_NORMAL, _worlds.EARTHLIKE_WEARY),
+        ("world_water", _worlds.WATER_NORMAL, _worlds.WATER_WEARY),
+        ("world_ammonia", _worlds.AMMONIA_NORMAL, _worlds.AMMONIA_WEARY),
+        ("world_terraformable", _worlds.TERRAFORM_NORMAL, _worlds.TERRAFORM_WEARY),
+        ("world_first", _worlds.WORLD_FIRST_NORMAL, _worlds.WORLD_FIRST_WEARY)):
+    NORMAL[_topic] = list(_normal)
+    WEARY[_topic] = list(_weary)
+# Book Three (5.5.3.9): the same voice, a shade darker, once it has begun.
+from voidcompass.overlays.watcher_lore_three import MUSINGS_THREE  # noqa: E402
+
+NORMAL["idle_lens"] = list(MUSINGS_THREE)
+WEARY["idle_lens"] = list(MUSINGS_THREE)
 NORMAL["lore_recall"] = list(RECALL)
 WEARY["lore_recall"] = list(RECALL)
 # The postcards it keeps (5.5.3.7), brought up in a quiet moment.

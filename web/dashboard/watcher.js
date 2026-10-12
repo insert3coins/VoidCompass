@@ -67,6 +67,20 @@ function shell(root, ui) {
         <header><span>WHAT IT HAS SAID</span><b id="watcher-log-count"></b></header>
         <ol class="watcher-log" id="watcher-log"></ol>
       </section>
+      <section class="watcher-reset-panel" aria-label="Reset the Watcher">
+        <div class="watcher-reset-intro"><b>Start again</b><span>Make it forget you, and wake as it did the first time.</span>
+          <button type="button" id="watcher-reset">RESET THE WATCHER</button></div>
+        <div class="watcher-reset-confirm" id="watcher-reset-confirm" hidden role="alertdialog" aria-labelledby="watcher-reset-title">
+          <b id="watcher-reset-title">ARE YOU SURE?</b>
+          <p>It forgets <em>everything</em>: its whole story, all three books, every echo you found, all it has said, the
+            postcards it kept, your records with it, and every hour and session you've spent together. It will meet you
+            again as a stranger. Your achievements stay. A copy of its old memory is kept beside the new one, just in case.</p>
+          <div class="watcher-reset-actions">
+            <button type="button" class="danger" id="watcher-reset-yes" disabled>YES, FORGET EVERYTHING</button>
+            <button type="button" id="watcher-reset-no">KEEP IT</button>
+          </div>
+        </div>
+      </section>
     </div>
   </div>`;
   const canvas = root.querySelector("#watcher-orb");
@@ -81,6 +95,43 @@ function shell(root, ui) {
     if (!button) return;
     chosenChapter = Number(button.dataset.chapter);
     renderReader(ui);
+  });
+  // RESET THE WATCHER (5.5.3.9): asked twice, and the yes wakes up only
+  // after a moment, so a stray click can't forget years.
+  const confirmBox = root.querySelector("#watcher-reset-confirm");
+  const yes = root.querySelector("#watcher-reset-yes");
+  let armTimer = 0;
+  const closeConfirm = () => {
+    window.clearInterval(armTimer);
+    confirmBox.hidden = true;
+    yes.disabled = true;
+    yes.textContent = "YES, FORGET EVERYTHING";
+  };
+  root.querySelector("#watcher-reset").addEventListener("click", () => {
+    confirmBox.hidden = false;
+    yes.disabled = true;
+    let wait = 3;
+    yes.textContent = `YES, FORGET EVERYTHING (${wait})`;
+    window.clearInterval(armTimer);
+    armTimer = window.setInterval(() => {
+      wait -= 1;
+      if (wait > 0) {
+        yes.textContent = `YES, FORGET EVERYTHING (${wait})`;
+        return;
+      }
+      window.clearInterval(armTimer);
+      yes.disabled = false;
+      yes.textContent = "YES, FORGET EVERYTHING";
+    }, 1000);
+    confirmBox.scrollIntoView({block: "nearest"});
+  });
+  root.querySelector("#watcher-reset-no").addEventListener("click", closeConfirm);
+  yes.addEventListener("click", async () => {
+    yes.disabled = true;
+    const done = await ui.command("workspace", {page: "watcher", operation: "reset", confirm: "FORGET"});
+    closeConfirm();
+    lastLoreKey = "";
+    ui.showToast(done ? "The Watcher has forgotten everything. It will wake again soon." : "The Watcher couldn't be reset");
   });
   root.querySelector("#watcher-poke").addEventListener("click", () => {
     // It looks up as you poke it; the answer arrives with the next refresh.
@@ -135,13 +186,16 @@ function renderLore(lore, ui) {
   if (key === lastLoreKey) return;
   lastLoreKey = key;
   loreChapters = chapters;
-  // Book One until its end; then both books (5.5.3.5).
-  const total = lore.afterword ? lore.total : (lore.book_one_total || lore.total);
+  // Book One until its end; then both books (5.5.3.5); then all three (5.5.3.9).
+  const total = lore.book_three ? lore.total : lore.afterword ? (lore.book_two_total || lore.total) : (lore.book_one_total || lore.total);
   ui.byId("watcher-lore-count").textContent = `${ui.numeric(lore.told)} OF ${ui.numeric(total)} TOLD`;
   let html = "";
   chapters.forEach((chapter, index) => {
     if (chapter.book === 2 && (index === 0 || chapters[index - 1].book !== 2)) {
       html += `<div class="watcher-book-head"><span>BOOK TWO</span><b>THE ANSWER</b><small>Each chapter waits for something you'll have to find.</small></div>`;
+    }
+    if (chapter.book === 3 && (index === 0 || chapters[index - 1].book !== 3)) {
+      html += `<div class="watcher-book-head book-three"><span>BOOK THREE</span><b>WHAT WAS PUT THERE</b><small>It unfolds slowly: weeks between chapters, days between passages.</small></div>`;
     }
     if (!chapter.begun) {
       html += chapter.waits_for
@@ -161,12 +215,21 @@ function renderLore(lore, ui) {
     if (Number(row.hours) > 0) parts.push(`${ui.numeric(row.hours, 1)} more hour${Number(row.hours) === 1 ? "" : "s"}`);
     return parts.join(" and ");
   };
-  let line = "That's the whole story, both books of it. Someone answered. So it says.";
+  // Book Three waits real days too (5.5.3.9).
+  const days = (row) => {
+    const value = Math.ceil(Number(row?.days || 0));
+    return value > 0 ? `${value} day${value === 1 ? "" : "s"}` : "";
+  };
+  let line = lore.book_three
+    ? "That's all three books. It still watches you. Only it, now. So it says."
+    : "That's the whole story, both books of it. Someone answered. So it says.";
   if (!lore.told) {
     line = "It hasn't told you anything about itself yet. It might, in time. Nobody knows what it is, itself included.";
     if (next && !next.ready && until(next)) line += ` The first may surface after ${until(next)} together.`;
   } else if (next && next.ready) {
     line = "Something is surfacing. It will tell you in a quiet moment, when it's ready.";
+  } else if (next && days(next)) {
+    line = `It's gone quiet about itself. Something more may surface in about ${days(next)}${until(next) ? `, and after ${until(next)} together` : ""}.`;
   } else if (next && next.waits_for) {
     line = `The next chapter waits for ${next.waits_for.toLowerCase()}. It won't come to you. You'll have to go and find one.`;
   } else if (next) {

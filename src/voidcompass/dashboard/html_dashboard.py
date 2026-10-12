@@ -2923,6 +2923,14 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             return result
 
         if page == "watcher":
+            if operation == "reset":
+                # RESET THE WATCHER (5.5.3.9): only with the page's own
+                # confirmation word, never by accident.
+                if payload.get("confirm") != "FORGET":
+                    return False
+                done = self._watcher_reset()
+                self._schedule_html_dashboard_publish(immediate=True)
+                return done
             # Poke the Watcher from its page (5.5.3.2).
             if operation != "poke":
                 return False

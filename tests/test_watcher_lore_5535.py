@@ -53,7 +53,9 @@ class StoryTests(unittest.TestCase):
         book_one = [row for row in watcher_lore.FRAGMENTS if row[5] < len(watcher_lore.CHAPTERS)]
         self.assertEqual((len(book_one), book_one[-1][4], book_one[-1][0]), (70, 450.0, "stay"),
                          "Book One unfolds over hundreds of hours")
-        self.assertEqual(watcher_lore.FRAGMENTS[-1][4], 600.0, "and Book Two beyond it")
+        book_two = [row for row in watcher_lore.FRAGMENTS if row[5] < watcher_lore.BOOK_TWO_END]
+        self.assertEqual(book_two[-1][4], 600.0, "and Book Two beyond it")
+        self.assertEqual(watcher_lore.FRAGMENTS[-1][4], 1000.0, "and Book Three beyond that (5.5.3.9)")
         for chapter in watcher_lore.ALL_CHAPTERS:
             self.assertGreater(len(chapter[4]), 600, f"chapter {chapter[0]} has a real account")
 
@@ -240,7 +242,8 @@ class AfterTheStoryTests(unittest.TestCase):
                                       ("watcher_every_echo", "Echoes"), ("watcher_book_two", "BookTwo")):
             trigger = catalogue[achievement_id]["trigger"]
             self.assertEqual((trigger["event"], trigger["field"]), ("VoidCompassWatcherStory", field))
-        self.assertEqual(watcher_lore.progress({}), {"Told": 0, "BookOne": 0, "BookTwo": 0, "Echoes": 0})
+        self.assertEqual(watcher_lore.progress({}), {"Told": 0, "BookOne": 0, "BookTwo": 0, "BookThree": 0,
+                                                     "BookThreeBegun": 0, "Echoes": 0})
         self.assertEqual(watcher_lore.progress({"lore": book_one_told()})["BookOne"], 1)
         clock = Clock()
         mind = watcher(clock=clock)
@@ -272,7 +275,8 @@ class PageTests(unittest.TestCase):
         self.assertEqual((page["told"], page["total"]), (0, len(watcher_lore.FRAGMENTS)))
         self.assertTrue(all(not chapter["begun"] and chapter["title"] == "" for chapter in page["chapters"]),
                         "chapters ahead stay unnamed")
-        self.assertEqual(page["next"], {"ready": False, "sessions": 1, "hours": .3, "chapter": "I", "waits_for": ""})
+        self.assertEqual(page["next"], {"ready": False, "sessions": 1, "hours": .3, "chapter": "I", "waits_for": "",
+                                        "days": 0.0, "book": 1})
         first_chapter = [row[0] for row in watcher_lore.FRAGMENTS if row[5] == 0]
         memory = {"lore": [[passage, float(i)] for i, passage in enumerate(first_chapter)] + [["instruction", 99.0]]}
         page = watcher_lore.page(memory, 5, 7.0, {"lore_neutron": (3, 50.0)})

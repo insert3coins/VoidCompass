@@ -310,6 +310,12 @@ class HeartbeatHUD:
             return True
         return False
 
+    def reset(self):
+        """The Watcher page's RESET: it forgets everything, and wakes again."""
+        backup = self.mind.reset()
+        self._redraw()
+        return backup
+
     def note(self, kind, fields=None):
         """Something Void Compass noticed that the Watcher may think about
         (an achievement, an unlogged Codex colour, a new region). The

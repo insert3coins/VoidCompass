@@ -140,3 +140,20 @@ button.watcher-chapter:focus-visible { outline: 1px solid var(--accent); outline
 @media (max-width: 600px) {
   .watcher-lore li { grid-template-columns: minmax(0, 1fr); }
 }
+/* Book Three (5.5.3.9): a shade darker. */
+.watcher-book-head.book-three span, .watcher-book-head.book-three b { color: var(--red); }
+/* RESET THE WATCHER (5.5.3.9): out of the way, and asked twice. */
+.watcher-reset-panel { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.watcher-reset-intro { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.watcher-reset-intro b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.watcher-reset-intro span { flex: 1 1 260px; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.watcher-reset-intro button, .watcher-reset-actions button { min-height: 30px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.watcher-reset-confirm { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--red) 55%, var(--border));
+  background: color-mix(in srgb, var(--red) 7%, var(--bg)); }
+.watcher-reset-confirm[hidden] { display: none; }
+.watcher-reset-confirm > b { color: var(--red); font: 700 12px Consolas, monospace; letter-spacing: .16em; }
+.watcher-reset-confirm p { margin: 0; color: var(--text); font: 12px/1.55 "Segoe UI", sans-serif; max-width: 90ch; }
+.watcher-reset-confirm em { color: var(--red); font-style: normal; font-weight: 700; }
+.watcher-reset-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.watcher-reset-actions .danger { color: var(--red); border-color: var(--red); }
+.watcher-reset-actions .danger:disabled { opacity: .55; cursor: wait; }

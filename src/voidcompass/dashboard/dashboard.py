@@ -1490,6 +1490,27 @@ class MainDashboard(
         if heartbeat is not None and hasattr(heartbeat, "poke"):
             heartbeat.poke()
 
+    def _watcher_reset(self):
+        """The Watcher forgets everything (its page's RESET, 5.5.3.9): the
+        running one if it's on, otherwise its memory file. A backup is kept."""
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        try:
+            if heartbeat is not None and hasattr(heartbeat, "reset"):
+                backup = heartbeat.reset()
+            else:
+                from voidcompass.overlays.heartbeat_hud import _memory_path
+                backup = watcher_mind.WatcherMind(_memory_path(self.config), self.config).reset()
+        except Exception as exc:
+            logging.warning("Watcher reset failed: %s", exc)
+            return False
+        if backup is None:
+            return False
+        feed = getattr(self, "add_event_feed_entry", None)
+        if callable(feed):
+            feed("SYSTEM", "The Watcher has forgotten everything" + (f" (its old memory is kept in {os.path.basename(backup)})" if backup else ""),
+                 severity="INFO")
+        return True
+
     def _watcher_story(self, story):
         """The Watcher's story moved on (5.5.3.5): its achievements hear of it,
         as the region passport's do, through a Void Compass event."""

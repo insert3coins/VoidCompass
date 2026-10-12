@@ -86,7 +86,7 @@ class MindTests(unittest.TestCase):
                           "too soon after the last thought")
         clock.now += 400
         self.assertEqual(rare.observe("Scan", {"PlanetClass": "Water world", "BodyName": "Prai 2"})["topic"],
-                         "valuable_world")
+                         "world_water", "a water world in its own words (5.5.3.9)")
         self.assertIsNone(rare.consider("quiet"), "idle remarks are below what Rare voices")
 
     def test_grounded_in_real_figures_and_worried_once(self):

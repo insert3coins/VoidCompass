@@ -7344,5 +7344,35 @@
       "value": 1,
       "compare": "gte"
     }
+  },
+  {
+    "id": "watcher_book_three_begins",
+    "title": "The Seat",
+    "desc": "Hear the Watcher begin its third story, What Was Put There",
+    "icon": "🪑",
+    "category": "The Watcher",
+    "points": 100,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "BookThreeBegun",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "watcher_book_three",
+    "title": "Only Me",
+    "desc": "Hear the Watcher's third story, What Was Put There, to its end",
+    "icon": "👁",
+    "category": "The Watcher",
+    "points": 750,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "BookThree",
+      "value": 1,
+      "compare": "gte"
+    }
   }
 ]

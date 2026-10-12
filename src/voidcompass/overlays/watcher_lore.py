@@ -440,24 +440,46 @@ CHAPTERS_TWO = (
          "me. I'll deny I said that."),
     ), "lore_core"),
 )
-# Both books, in the order they are told; Book Two follows Book One.
-ALL_CHAPTERS = tuple(CHAPTERS) + tuple(CHAPTERS_TWO)
+# Book Three, "What Was Put There" (5.5.3.9): the seat in your ship's core,
+# and what looks through the Watcher. Told over about a year.
+from voidcompass.overlays.watcher_lore_three import (  # noqa: E402
+    CHAPTER_ABOUT_THREE, CHAPTERS_THREE, MUSINGS_THREE,
+)
+
+# Every book, in the order they are told; each follows the last.
+ALL_CHAPTERS = tuple(CHAPTERS) + tuple(CHAPTERS_TWO) + tuple(CHAPTERS_THREE)
+BOOK_TWO_END = len(CHAPTERS) + len(CHAPTERS_TWO)
 BOOKS = (("One", "What the Watcher Remembers", 0, len(CHAPTERS)),
-         ("Two", "The Answer", len(CHAPTERS), len(ALL_CHAPTERS)))
+         ("Two", "The Answer", len(CHAPTERS), BOOK_TWO_END),
+         ("Three", "What Was Put There", BOOK_TWO_END, len(ALL_CHAPTERS)))
+# Book Three's passages come at least this many days apart; each chapter
+# also waits its own days after the one before (its 8th field).
+BOOK_THREE_PASSAGE_DAYS = 2.0
 
 # Chapter I's passages come quickly, to begin the story.
 _FIRST_CHAPTER_HOURS = (0.3, 1.0, 1.6, 2.2, 3.0, 4.0, 5.0)
 
 
 def chapter_needs(chapter):
-    """The echo a Book Two chapter waits for (None in Book One)."""
+    """The echo a Book Two or Three chapter waits for (None in Book One)."""
     return chapter[6] if len(chapter) > 6 else None
+
+
+def chapter_wait_days(chapter):
+    """Real days a Book Three chapter waits after the chapter before."""
+    return float(chapter[7]) if len(chapter) > 7 else 0.0
+
+
+def book_of(index):
+    """1, 2 or 3: the book a chapter (by its place) belongs to."""
+    return 1 if index < len(CHAPTERS) else 2 if index < BOOK_TWO_END else 3
 
 
 def _schedule():
     """Every passage in order: (id, chapter title, words, sessions, hours,
-    chapter index, the echo it waits for). Sessions grow more slowly than
-    hours (long sessions count), from 1 to 39 in Book One."""
+    chapter index, the echo it waits for, the real days it waits after the
+    passage before). Sessions grow more slowly than hours (long sessions
+    count), from 1 to 39 in Book One."""
     rows = []
     for index, chapter in enumerate(ALL_CHAPTERS):
         _numeral, title, first, last, _account, passages = chapter[:6]
@@ -466,8 +488,9 @@ def _schedule():
                 hours = _FIRST_CHAPTER_HOURS[number]
             else:
                 hours = round(first + (last - first) * number / max(1, len(passages) - 1), 1)
+            days = (chapter_wait_days(chapter) if number == 0 else BOOK_THREE_PASSAGE_DAYS) if index >= BOOK_TWO_END else 0.0
             rows.append((passage_id, title, words, max(1, int(math.pow(hours, .6))), hours, index,
-                         chapter_needs(chapter)))
+                         chapter_needs(chapter), days))
     return tuple(rows)
 
 
@@ -673,6 +696,7 @@ CHAPTER_ABOUT = {
     "X": "the word", "XI": "the static", "XII": "the pulse", "XIII": "the voice far out",
     "XIV": "the stone that hummed back", "XV": "my own voice coming back", "XVI": "the others hiding",
     "XVII": "the answer at the core",
+    **CHAPTER_ABOUT_THREE,
 }
 # Callbacks to its own story: {about} what, {when}/{When} when it told you.
 RECALL = [
@@ -813,15 +837,35 @@ def book_one_complete(memory):
     return BOOK_ONE_LAST in told(memory)
 
 
+def book_three_begun(memory):
+    """Book Three has begun: its first passage is told (5.5.3.9)."""
+    first = next(row[0] for row in FRAGMENTS if row[5] >= BOOK_TWO_END)
+    return first in told(memory)
+
+
+def days_to_wait(row, memory, now):
+    """Real days still to wait before a Book Three passage (0 when none):
+    counted from the last passage told."""
+    days = float(row[7]) if len(row) > 7 else 0.0
+    shared = told(memory)
+    if not days or not shared:
+        return 0.0
+    return max(0.0, days - (float(now) - max(shared.values())) / 86400.0)
+
+
 def unlocked(row, sessions, hours, found=()):
     needs = row[6] if len(row) > 6 else None
     return int(sessions or 0) >= row[3] and float(hours or 0) >= row[4] and (needs is None or needs in found)
 
 
-def due(memory, sessions, hours):
+def due(memory, sessions, hours, now=None):
     """The next passage to tell: the first not yet told, if it has unlocked.
     Strictly in order, so the story never skips ahead. Book Two waits for the
-    afterword, and each of its chapters for the echo it needs."""
+    afterword, and each of its chapters for the echo it needs; Book Three
+    for real days too (5.5.3.9)."""
+    import time
+
+    now = time.time() if now is None else now
     shared = told(memory)
     found = encounters(memory)
     for row in FRAGMENTS:
@@ -829,7 +873,9 @@ def due(memory, sessions, hours):
             continue
         if row[5] >= len(CHAPTERS) and not (memory or {}).get("afterword"):
             return None
-        return row if unlocked(row, sessions, hours, found) else None
+        if not unlocked(row, sessions, hours, found) or days_to_wait(row, memory, now) > 0:
+            return None
+        return row
     return None
 
 
@@ -862,13 +908,16 @@ def progress(memory):
     """The story so far, for the achievements: passages told, each book
     finished, and how many kinds of echo found."""
     shared = told(memory)
-    book_two = [row[0] for row in FRAGMENTS if row[5] >= len(CHAPTERS)]
+    book_two = [row[0] for row in FRAGMENTS if len(CHAPTERS) <= row[5] < BOOK_TWO_END]
+    book_three = [row[0] for row in FRAGMENTS if row[5] >= BOOK_TWO_END]
     return {"Told": len(shared), "BookOne": int(BOOK_ONE_LAST in shared),
             "BookTwo": int(bool(book_two) and all(passage_id in shared for passage_id in book_two)),
+            "BookThree": int(bool(book_three) and all(passage_id in shared for passage_id in book_three)),
+            "BookThreeBegun": int(bool(book_three) and book_three[0] in shared),
             "Echoes": len(encounters(memory))}
 
 
-def page(memory, sessions, hours, echoes=None):
+def page(memory, sessions, hours, echoes=None, now=None):
     """The Watcher page's long story: each chapter it has begun, with the
     passages told so far and, once they all are, its written account; the
     chapters ahead stay unnamed (a Book Two chapter says which echo it waits
@@ -880,13 +929,19 @@ def page(memory, sessions, hours, echoes=None):
     for topic, value in (echoes or {}).items():
         if topic in ECHOES and topic not in found:
             found[topic] = (int(value[0]), float(value[1]))
+    import time
+
+    now = time.time() if now is None else now
     afterword = bool((memory or {}).get("afterword"))
+    book_two_told = all(row[0] in shared for row in FRAGMENTS if len(CHAPTERS) <= row[5] < BOOK_TWO_END)
     chapters = []
     for index, chapter in enumerate(ALL_CHAPTERS):
         numeral, title, _first, _last, account, passages = chapter[:6]
-        book = 1 if index < len(CHAPTERS) else 2
+        book = book_of(index)
         if book == 2 and not afterword:
             continue
+        if book == 3 and not book_two_told:
+            continue  # Book Three appears once Book Two is told
         rows = [{"id": passage_id, "text": words, "at": shared[passage_id]}
                 for passage_id, words in passages if passage_id in shared]
         begun = bool(rows)
@@ -904,7 +959,11 @@ def page(memory, sessions, hours, echoes=None):
                     "sessions": max(0, waiting[3] - int(sessions or 0)),
                     "hours": round(max(0.0, waiting[4] - float(hours or 0)), 1),
                     "chapter": ALL_CHAPTERS[waiting[5]][0],
-                    "waits_for": ECHO_LABELS[needs] if needs and needs not in found else ""}
+                    "waits_for": ECHO_LABELS[needs] if needs and needs not in found else "",
+                    # Book Three: real days still to wait (5.5.3.9).
+                    "days": round(days_to_wait(waiting, memory, now), 1),
+                    "book": book_of(waiting[5])}
+        upcoming["ready"] = upcoming["ready"] and upcoming["days"] <= 0
     elif waiting is not None:
         upcoming = {"ready": True, "sessions": 0, "hours": 0.0, "chapter": "", "waits_for": ""}
     heard = [{"topic": topic, "label": ECHO_LABELS[topic], "count": int(value[0]), "at": float(value[1])}
@@ -919,5 +978,7 @@ def page(memory, sessions, hours, echoes=None):
                                        for chapter in part]})
     return {"chapters": chapters, "told": len(shared), "total": len(FRAGMENTS),
             "book_one_total": sum(1 for row in FRAGMENTS if row[5] < len(CHAPTERS)),
+            "book_two_total": sum(1 for row in FRAGMENTS if row[5] < BOOK_TWO_END),
+            "book_three": book_two_told,
             "next": upcoming, "afterword": afterword, "echoes": heard, "echo_total": len(ECHO_LABELS),
             "echo_labels": dict(ECHO_LABELS), "books": books}

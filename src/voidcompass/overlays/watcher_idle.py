@@ -29,7 +29,7 @@ IDLE_TOPICS = (
     "idle_bond_1", "idle_bond_2", "idle_bond_3",
     # Its past, in passing (5.5.3.5; watcher_lore.MUSINGS); after its story
     # is told, its later musings; and a look back at a chapter it told you.
-    "idle_lore", "idle_after", "lore_recall",
+    "idle_lore", "idle_after", "lore_recall", "idle_lens",
     # A postcard it kept, brought up again (5.5.3.7).
     "idle_postcard",
 )
@@ -233,6 +233,8 @@ class Surroundings:
         world.append(("idle_lore", {}))
         if context.get("story_done"):
             world.append(("idle_after", {}))
+        if context.get("book_three"):
+            world.append(("idle_lens", {}))
         if context.get("recall"):
             session.append(("lore_recall", dict(context["recall"])))
         if context.get("postcard"):
