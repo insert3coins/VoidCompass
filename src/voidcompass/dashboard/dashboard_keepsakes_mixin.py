@@ -26,8 +26,12 @@ from voidcompass.core.config import get_active_profile
 from voidcompass.dashboard.dashboard_postcard_studio_mixin import DashboardPostcardStudioMixin
 from voidcompass.overlays import postcard_themes
 from voidcompass.overlays.postcard_picture import (
-    is_editable, jpeg_thumbnail, keep_card, kept_card, open_picture, save_postcard_picture,
+    is_editable, jpeg_thumbnail, keep_card, kept_card, open_picture, open_picture_small, save_postcard_picture,
 )
+
+# Postcard previews render one at a time: the studio asks for one on every
+# change, and side by side they starved the app (5.5.5).
+_PREVIEW_LOCK = threading.Lock()
 from voidcompass.overlays.postcard_restore import saved_at
 from voidcompass.exploration.galactic_regions import find_region
 from voidcompass.overlays import watcher_mind
@@ -41,6 +45,14 @@ from voidcompass.overlays.postcards import (
     postcard_facts,
     postcard_options,
 )
+from voidcompass.overlays.postcards import TEXT_PARTS as POSTCARD_TEXT_PARTS, text_size as postcard_text_size
+
+
+def _whole(value):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
 from voidcompass.overlays.watcher_postcards import postcard_note
 
 # Postcards saved as pictures go in Void Compass's own folder (beside the
@@ -246,7 +258,7 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
     @staticmethod
     def _postcard_background(theme):
         path = postcard_themes.background_path(theme)
-        return open_picture(str(path)) if path else None
+        return open_picture_small(str(path), 2400) if path else None
 
     def _postcard_body(self, name):
         """This system's scan of the body in the picture, if there is one."""
@@ -309,11 +321,12 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             saved = save_postcard_picture(card, picture, postcards_folder(self.config), palette,
                                           style=options["style"], theme=options["theme"],
                                           background=self._postcard_background(options["theme"]),
-                                          postmark=options["postmark"])
+                                          postmark=options["postmark"], sizes=options["sizes"])
             if saved:
                 # Kept beside it, so it can be edited later (5.5.4).
                 keep_card(saved, card, picture, {"style": options["style"], "theme": options["theme"],
-                                                 "palette": dict(palette or {}), "postmark": options["postmark"]})
+                                                 "palette": dict(palette or {}), "postmark": options["postmark"],
+                                                 "sizes": options["sizes"]})
             if saved:
                 logging.info("Postcard saved: %s", saved)
                 # The album shows it at once.
@@ -437,6 +450,7 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
                 "postcard_note": options["note"],
                 "postcard_doing": options["doing"],
                 "postcard_postmark": options["postmark"],
+                **{f"postcard_size_{part}": round(options["sizes"][part] * 100) for part in options["sizes"]},
                 "postcard_greeting": str(self.config.get("postcard_greeting") or "greetings"),
                 "postcard_greeting_text": str(self.config.get("postcard_greeting_text") or ""),
                 "screenshot_postcards": bool(self.config.get("screenshot_postcards", False)),
@@ -568,6 +582,7 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             "base": settings.get("style") or "polaroid", "angle": theme.get("angle"),
             "doing": card.get("doing") or "",
             "postmark": bool(settings.get("postmark")),
+            "sizes": {part: round(float((settings.get("sizes") or {}).get(part) or 1.0) * 100) for part in POSTCARD_TEXT_PARTS},
             "photo": picture is not None,
         }
         self._postcard_edit_draft = None
@@ -578,13 +593,14 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
         if edited is None:
             return False
         path, card, picture, style, theme, postmark, settings = edited
+        sizes = settings.get("sizes") or {}
         saved = save_postcard_picture(card, picture, os.path.dirname(path), settings.get("palette") or None,
                                       style=style, theme=theme or None, background=self._postcard_background(theme),
-                                      path=path, postmark=postmark)
+                                      path=path, postmark=postmark, sizes=sizes)
         if not saved:
             return False
         keep_card(saved, card, picture, {"style": style, "theme": theme, "palette": settings.get("palette") or {},
-                                         "postmark": postmark})
+                                         "postmark": postmark, "sizes": sizes})
         self._postcard_editing = self._postcard_edit_draft = None
         album = self.postcard_album()
         forget = getattr(album, "forget_thumb", None)
@@ -606,7 +622,13 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             palette.get("text", ""))).replace("#", "")
 
     def _postcard_preview_picture(self):
-        """Your latest screenshot for the preview, or a ship's picture."""
+        """Your latest screenshot for the preview, or a ship's picture: found
+        at most every half minute, read once and kept small."""
+        found = getattr(self, "_postcard_preview_found", None)
+        if found and time.monotonic() - found[0] < 30:
+            picture = open_picture_small(found[1], 1280) if found[1] else None
+            if picture is not None:
+                return picture
         folder = str(self.config.get("screenshots_path") or "")
         newest = None
         try:
@@ -625,13 +647,19 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
                 candidates.append(str(ships[min(3, len(ships) - 1)]))
                 break
         for path in candidates:
-            picture = open_picture(path)
+            picture = open_picture_small(path, 1280)
             if picture is not None:
+                self._postcard_preview_found = (time.monotonic(), path)
                 return picture
         return None
 
     def _postcard_preview_png(self):
-        """A sample postcard in the current design, small, as a PNG."""
+        """A sample postcard in the current design, small, as a PNG. One
+        render at a time; one asked for meanwhile finds it ready."""
+        with _PREVIEW_LOCK:
+            return self._postcard_preview_render()
+
+    def _postcard_preview_render(self):
         import io
         # Editing a saved postcard: that card, with its changes.
         edited = self._postcard_edit_preview()
@@ -661,7 +689,8 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             card["note"], card["signed"] = options["note_text"], self._postcard_signature(options)
         image = render_postcard(card, self._postcard_preview_picture(), dict(themes.ACTIVE_PALETTE or {}),
                                 width=560, style=options["style"], theme=options["theme"],
-                                background=self._postcard_background(options["theme"]), postmark=options["postmark"])
+                                background=self._postcard_background(options["theme"]), postmark=options["postmark"],
+                                sizes=options["sizes"])
         out = io.BytesIO()
         image.save(out, "PNG", optimize=True)
         data = out.getvalue()
@@ -703,6 +732,11 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             self.config[key] = greeting
         elif key == "postcard_greeting_text":
             self.config[key] = " ".join(str(value or "").split())[:40]
+        elif key in {f"postcard_size_{part}" for part in POSTCARD_TEXT_PARTS}:
+            size = postcard_text_size(value)
+            if size != _whole(value):
+                return False
+            self.config[key] = size
         elif key == "postcards_path":
             self.config[key] = str(value or "").strip()[:400]
             self._postcard_album_cache = None

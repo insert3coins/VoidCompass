@@ -72,14 +72,14 @@ body { pointer-events: none; user-select: none; }
   position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 10px 8px;
   background: linear-gradient(transparent, rgba(0, 0, 0, .72));
 }
-.greeting-from { color: rgba(255, 255, 255, .9); font: 700 8.5px var(--font-hud); letter-spacing: .32em; text-shadow: 0 1px 2px #000; }
+.greeting-from { color: rgba(255, 255, 255, .9); font: 700 calc(8.5px * var(--pc-lettering, 1)) var(--font-hud); letter-spacing: .32em; text-shadow: 0 1px 2px #000; }
 .greeting-place {
   max-width: 100%; overflow: hidden; white-space: nowrap; transform: skewX(-9deg); transform-origin: left bottom;
-  color: var(--greet); font: 700 30px/1.02 var(--font-greet); letter-spacing: .02em; text-transform: uppercase;
+  color: var(--greet); font: 700 calc(30px * var(--pc-lettering, 1))/1.02 var(--font-greet); letter-spacing: .02em; text-transform: uppercase;
   text-shadow: 0 2px 0 rgba(0, 0, 0, .85), 0 0 12px color-mix(in srgb, var(--greet) 45%, transparent);
 }
 .greeting-region { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: rgba(255, 255, 255, .82); font: 700 8px var(--font-hud); letter-spacing: .2em; text-transform: uppercase; text-shadow: 0 1px 2px #000; }
+  color: rgba(255, 255, 255, .82); font: 700 calc(8px * var(--pc-lettering, 1)) var(--font-hud); letter-spacing: .2em; text-transform: uppercase; text-shadow: 0 1px 2px #000; }
 .caption > .greeting { display: none; }
 .card.no-photo .caption > .greeting { display: grid; padding: 2px 0 6px; }
 .card.no-photo .greeting-from, .card.no-photo .greeting-region { color: var(--ink-soft); text-shadow: none; }
@@ -87,19 +87,19 @@ body { pointer-events: none; user-select: none; }
 
 /* The paper: the Watcher's note, what the journal knows, where, when. */
 .caption { display: grid; gap: 3px; padding: 9px 4px 10px; }
-.note { margin: 0; color: var(--ink); font: 13px/1.35 var(--font-hand); }
-.note .signed { display: block; margin-top: 1px; text-align: right; color: var(--ink-soft); font: 12px var(--font-hand); }
+.note { margin: 0; color: var(--ink); font: calc(13px * var(--pc-note, 1))/1.35 var(--font-hand); }
+.note .signed { display: block; margin-top: 1px; text-align: right; color: var(--ink-soft); font: calc(12px * var(--pc-note, 1)) var(--font-hand); }
 .note .signed::before { content: "\2014\00A0"; }
 .facts { display: flex; flex-wrap: wrap; gap: 3px 4px; margin-top: 2px; }
 .facts span {
   padding: 1px 5px; border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 2px;
-  color: var(--ink-soft); font: 700 7.5px/1.5 var(--font-hud); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-soft); font: 700 calc(7.5px * var(--pc-details, 1))/1.5 var(--font-hud); letter-spacing: .1em; text-transform: uppercase;
 }
 .coords { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft);
-  font: 700 8.5px/1.6 var(--font-hud); letter-spacing: .12em; text-transform: uppercase; }
+  font: 700 calc(8.5px * var(--pc-details, 1))/1.6 var(--font-hud); letter-spacing: .12em; text-transform: uppercase; }
 .when { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; padding-top: 4px;
   border-top: 1px dashed color-mix(in srgb, var(--ink) 25%, transparent);
-  color: var(--ink-soft); font: 700 8.5px var(--font-hud); letter-spacing: .16em; }
+  color: var(--ink-soft); font: 700 calc(8.5px * var(--pc-details, 1)) var(--font-hud); letter-spacing: .16em; }
 .card.no-photo .caption { padding-top: 4px; }
 
 /* The postmark (5.5.4), stamped at the right of the paper beside the note. */

@@ -203,6 +203,14 @@
 .pc-switch input:checked + i::after { left: 17px; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
 .pc-switch input:focus-visible + i { outline: 1px solid var(--accent); outline-offset: 2px; }
 .pc-switch span { display: grid; gap: 2px; min-width: 0; }
+/* Text sizes (5.5.4): in THE WORDS, and in the editor. */
+.pc-sizes { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.pc-sizes label { display: grid; gap: 6px; padding: 9px 10px; border: 1px solid var(--border-soft); background: var(--bg); }
+.pc-sizes label > span { display: grid; gap: 2px; }
+.pc-sizes b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.pc-sizes small { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
+.pc-sizes select, .pc-editor-sizes select { min-height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.pc-editor-sizes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .pc-theme { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; }
 .pc-theme label { display: grid; gap: 4px; min-width: 0; }
 .pc-theme label > span { display: flex; justify-content: space-between; align-items: center; gap: 6px; color: var(--text); font: 600 11.5px "Segoe UI", sans-serif; }

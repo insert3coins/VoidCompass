@@ -166,6 +166,11 @@
     const options = model.options || {};
     const width = {small: 280, standard: 340, large: 420}[options.size] || 340;
     document.documentElement.style.setProperty("--card-w", `${width}px`);
+    // Your text sizes (5.5.4): the lettering, the note and the details.
+    const sizes = options.sizes || {};
+    for (const part of ["lettering", "note", "details"]) {
+      document.documentElement.style.setProperty(`--pc-${part}`, String(Number(sizes[part]) || 1));
+    }
     backdrop(options.theme);
     root.classList.toggle("empty", !cards.length);
     const ids = new Set(cards.map((card) => card.id));

@@ -92,6 +92,8 @@ def postcard_options(config):
         "doing": bool(config.get("postcard_doing", True)),
         # A postmark with the system, the date and the time (5.5.4).
         "postmark": bool(config.get("postcard_postmark", True)),
+        # Your text sizes (5.5.4): the lettering, the note, the details.
+        "sizes": {part: text_size(config.get(f"postcard_size_{part}")) / 100.0 for part in TEXT_PARTS},
         "style": style,
         "size": size if size in SIZES else "standard",
         # The lettering over the place's name ("" for none, 5.5.3.8).
@@ -100,6 +102,17 @@ def postcard_options(config):
 
 
 NOTE_TEXT_MAX = 160
+TEXT_PARTS = ("lettering", "note", "details")
+TEXT_SIZES = (85, 100, 115, 130, 150)
+
+
+def text_size(value):
+    """One of TEXT_SIZES (percent); anything else is 100."""
+    try:
+        value = int(float(value))
+    except (TypeError, ValueError):
+        return 100
+    return value if value in TEXT_SIZES else 100
 SIGNATURE_MAX = 40
 
 

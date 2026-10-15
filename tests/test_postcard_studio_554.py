@@ -89,6 +89,47 @@ class PostmarkTests(unittest.TestCase):
         self.assertFalse(postcard_picture.kept_card(path)[1]["postmark"])
 
 
+class TextSizeTests(unittest.TestCase):
+    def test_the_lettering_the_note_and_the_details(self):
+        self.assertEqual(postcard_options({})["sizes"], {"lettering": 1.0, "note": 1.0, "details": 1.0})
+        options = postcard_options({"postcard_size_note": 150, "postcard_size_details": "115", "postcard_size_lettering": 999})
+        self.assertEqual(options["sizes"], {"lettering": 1.0, "note": 1.5, "details": 1.15}, "only the list's sizes")
+        for part in ("lettering", "note", "details"):
+            self.assertIn(f"postcard_size_{part}", config_module.PROFILE_SETTINGS)
+        card = postcard_card({"timestamp": "2026-10-11T20:14:00Z", "System": "Hatchooe"}, state="LANDED")
+        card["note"] = "A long note, long enough to wrap onto a second line or a third at the larger size."
+        plain = postcard_picture.render_postcard(card, photo(), {}, width=400)
+        larger = postcard_picture.render_postcard(card, photo(), {}, width=400, sizes={"note": 1.5, "details": 1.3})
+        self.assertGreater(larger.height, plain.height, "the card grows with its words")
+
+    def test_set_in_the_studio_and_per_postcard(self):
+        folder = tempfile.mkdtemp()
+        deck, album = deck_for(folder)
+        deck._persist_config = lambda: None
+        self.assertTrue(deck._postcard_setting("postcard_size_note", "130"))
+        self.assertEqual(deck.config["postcard_size_note"], 130)
+        self.assertFalse(deck._postcard_setting("postcard_size_note", "120"), "only the list's sizes")
+        self.assertEqual(deck._html_postcards_workspace()["settings"]["postcard_size_note"], 130)
+        card = postcard_card({"timestamp": "2026-10-11T20:14:00Z", "System": "Hatchooe"}, state="LANDED")
+        path = postcard_picture.save_postcard_picture(card, photo(), folder, {}, sizes={"note": 1.3})
+        postcard_picture.keep_card(path, card, photo(), {"style": "polaroid", "theme": {}, "sizes": {"note": 1.3}})
+        card_id = album.rows()[0]["id"]
+        self.assertTrue(deck._postcard_edit_open(card_id))
+        self.assertEqual(deck._postcard_editing["sizes"], {"lettering": 100, "note": 130, "details": 100})
+        self.assertTrue(deck._postcard_edit_save(card_id, {"title": "Hatchooe", "size_lettering": "150"}))
+        self.assertEqual(postcard_picture.kept_card(path)[1]["sizes"], {"note": 1.3, "lettering": 1.5})
+
+    def test_the_overlay_and_the_page(self):
+        overlay = (WEB / "postcards" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("`--pc-${part}`", overlay)
+        css = (WEB / "postcards" / "styles.css").read_text(encoding="utf-8")
+        for part in ("lettering", "note", "details"):
+            self.assertIn(f"var(--pc-{part}, 1)", css)
+        page = (WEB / "dashboard" / "postcards.js").read_text(encoding="utf-8")
+        self.assertIn('data-postcard-setting="postcard_size_${part}"', page)
+        self.assertIn('name="size_${part}"', page)
+
+
 class StudioPreviewTests(unittest.TestCase):
     def test_a_theme_tried_out_before_it_is_saved(self):
         deck, _album = deck_for(tempfile.mkdtemp(), postcard_style="polaroid")

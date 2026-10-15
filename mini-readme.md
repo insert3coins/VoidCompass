@@ -1,70 +1,15 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.4 // Can you  hear me? (and over things)
-**Release Date:** 2026-Oct-15
+## v5.5.5 // Every Word Its Size
+**Release Date:** Not yet released
 
-* **The Watcher can speak.** Switch its voice on in **The Watcher › VOICE** and its thoughts are spoken aloud as they appear beside the orb, in the voice of HAL 9000 (a Piper text-to-speech model). The orb's eye glows with the voice, and its words type out in time with it.
-  * **Downloaded, not bundled.** The voice engine (Piper) and the HAL 9000 model download the first time you switch it on (about 86 MB) into the models folder beside Void Compass. Every file is checked against its checksum, and you can remove them again from the same page.
-  * **Your voice settings:** volume, speed, and which thoughts it speaks (only what matters, most, or every thought), plus TEST THE VOICE to hear it straight away.
-  * **Silent at once on close.** If it's mid-sentence when you close Void Compass, it stops immediately.
-* **The Switch: it finds its voice.** It doesn't speak fluently at first. Over about your first hour with the voice on, it manages a word, then a few, then a sentence, then whole thoughts, and tells you in its own words what it makes of having a voice at all. It was put in the ship when it was built. You found the switch.
-* **It learns how you play.** The Watcher now keeps track of how you fly, what you scan, carry, mine, shoot and trade, and talks about it: your longest jump, the stars you always scoop from, the commodity you haul most, the ships you keep shooting down. How it talks depends on how well it knows you, from a stranger's guesses to an old friend's truths. Round numbers get a word too (your 100th jump, your 1,000th body). **WHAT IT KNOWS OF YOU** on the Watcher page shows what it has learned.
-* **The Watcher page has sub-pages.** THE WATCHER, SETTINGS and VOICE. Its thought settings (how often it speaks, its nature, backdrop, heading, side, text size, colour, size, how long thoughts stay) moved there from Overlay Studio. The orb itself (size, eye colour, liveliness, idle motions) stays in the Studio.
-* **Every echo, every flight style.** The echoes its story waits for can now be found without exploring:
-  * **The far reaches and the core:** fly 20,000 or 50,000 light years in all.
-  * **A neutron star:** a neutron boost or a scan.
-  * **The builders:** their technology at a tech broker, or their materials.
-  * **The sound:** a combat bond against them, or their materials.
-  * **A great ship:** dock at a megaship.
-
-  And a chapter waiting for an echo you haven't found surfaces anyway after enough time together. Hover a chapter to see both.
-* **Your home system.** Settings › Flight & exploration › Home system: distances "from home" start there instead of Sol. The Watcher talks about how far you are from home, the Galaxy Minimap marks it, and its strip says how far you are from it.
-* **Achievements have their own overlay.** Notifications and achievements are now two overlays, each with its own switch and place on screen, so you can turn one off and keep the other. Both were redesigned and rebuilt: everything grows with the text size and nothing is cut off at any Windows scaling.
 * **Every overlay has its own text size.** In Overlay Studio, select an overlay and choose its **Text size** from a list (Same as all, or 75% up to 200%), just under its Opacity, the way the Watcher's words already worked. It's there for all of them now, from cargo, station and notifications to jump info, trade route and postcards, and the window grows with it. The Navigation HUD, Survey, Music Player, Galnet Ticker and Galaxy Minimap had a number box that saved on every arrow click; they use the same list now, and the sizes you'd set are kept (moved to the nearest on the list).
-* **Galaxy Minimap region names.** A size of their own in Overlay Studio, separate from the minimap's text size.
-* **Updates has its own Settings page,** instead of sitting in Diagnostics & recovery.
-* **Inara.** Void Compass is whitelisted with Inara. With your Inara API key (Settings › Integrations › INARA) it keeps your Inara profile up to date: credits, ranks, reputation, ships and loadouts, materials, cargo, missions, and your flight and combat logs. Sent in polite batches as you dock and jump, logged in the live feed as INARA, with a TEST INARA button. See inara.md.
-* **Remove a carrier.** The Carrier page can remove a fleet or squadron carrier you no longer have. A decommissioned carrier goes by itself once it's scrapped, and leaving a squadron drops its carrier.
-* **Time capsules for each other.** Share a capsule, or a whole pack of them, with another commander, with no server and nothing online:
-  * **As a code:** SHARE copies a capsule code with a line explaining it, ready to paste into Discord, in-game chat or anywhere. The other commander pastes it into **RECEIVE** on their Time Capsules page, checks what's in it, then receives it.
-  * **As a file:** save capsules as a `.vccapsule` file, then choose it or drop it on the page to receive it.
-  * **Unread until they get there.** Capsules from another commander stay sealed (not even readable on the page) until you reach where they were left. The Watcher hands them back as theirs.
-  * **Packs:** choose several capsules and share them as one code or file, for an expedition, a squadron or a friend following your route.
-  * A damaged code is refused rather than misread, and a code received twice adds nothing.
-* **The Time Capsules page is now a vault.** It shows how many capsules are out there, the oldest still waiting, and the longest any waited.
-  * **Seal options:** a note, reminder, warning, memory or greeting, each with its own seal; a station or body to open at (it opens when you dock or land there); and more waits: six months, two years, or a date you choose.
-  * **Opened capsules** read like letters, and SEAL AGAIN puts one back for your next visit.
-* **Postcards, rebuilt.** The Postcards page is now three tabs, ALBUM, STUDIO and KEEPING, and every postcard can be edited:
-  * **The album:** your postcards laid out on the table by month, with how many you have, how many places, your favourites, and the first and latest. Find a place by name, show only favourites, editable or older ones, and sort newest, oldest or A to Z.
-  * **The viewer:** a postcard large, with its details beside it. Step through them with the arrows (or ← →), and favourite, copy, show in folder or edit from there.
-  * **Edit any postcard,** with a live preview as you type: the place, the lettering, the note, the signature, what you were doing, the look, the angle and the postmark. CHANGE ITS PICTURE gives it a different picture.
-  * **Older postcards too.** Postcards saved before this update can be made editable: MAKE THEM EDITABLE finds each one's screenshot and its entry in your journals (the place, the region, how far from Sol) and keeps them beside it. One whose screenshot is gone can be given a picture by hand.
-  * **The studio:** choose a look from swatches, set the words, and make your own themes: start from Polaroid, Airmail, Holo or Vintage and change the paper, ink and lettering colours, the lettering's font (cockpit capitals, serif or handwriting), a photo filter (sepia, black & white, vivid, cool), the card's angle, and what's behind the card (a colour or a picture of your own). Every change shows in the preview before you save it.
-  * **The note:** the Watcher's line, your own words (signed as you), or none.
-  * **A postmark** on every postcard: the system round the top, the date underneath and the time in the middle, with the wavy cancellation lines, in the card's own lettering colour. On the overlay and saved postcards alike, and it can be switched off.
-* **Constellation v2.** Your sky, much deeper:
-  * **The sky chart:** every constellation on one round star chart, placed where its stars really are: its direction from Sol (the galactic core straight up) and its distance on rings from 100 to 65,000 light years, with the core's glow and the ones still growing marked. Click one to open it.
-  * **Designations:** stars are lettered by brightness as astronomers do (α is where you stayed longest, then β, γ…).
-  * **The night behind each star:** click a star to see the session it came from: the date, how long you flew and in what, jumps, distance, first discoveries, exobiology, credits, its finds, the postcards you took and any time capsule left there, with a way to its flight log.
-  * **Marks on the stars** for first discoveries ◆, rare worlds ✦, postcards ▣ and time capsules ⧗.
-  * **Each constellation has a character** (a pathfinder's, a gardener's, a scholar's, a survivor's or a wanderer's, from what its nights held), a second line from the Watcher about it, its totals, the region it lies over and how far it is from Sol.
-  * **TRACE** draws its lines again in the order you flew them, and a growing constellation shows a dashed line to its next star.
-  * **The almanac** along the top: your constellations and stars, hours lingered, your pole star (the place you keep coming back to), the brightest star in your sky and the farthest constellation.
-  * Constellations are grouped by year, no two share a name any more, and a saved picture carries its character and region.
-  * **Saved pictures live on the Constellation page now,** in their own folder (the constellations folder beside Void Compass, or one you choose in CONSTELLATION SETTINGS), not among your postcards: SAVED PICTURES shows them, full size, to copy or show in their folder. Ones you saved before move there by themselves.
-* **Explore & Survey and the Exploration Archive are one page.** The archive (your retained flights, scan science and region stamps) is Explore & Survey's fourth tab, ARCHIVE, and the Captain's Log sits with Expeditions, Scout & Recon and the Value Ledger along its top. One fewer entry in the rail.
-* **Tools.** A new page with everything you switch often on one console. A strip along the top shows where you are, how many overlays are live, the Watcher, what's playing and the compass target. Below it, every overlay is grouped (flight, exploration, industry, cockpit) with ALL / LIVE / OFF and a find box, and the everyday switches show whether EDSM and Inara are live. Beside them are the Watcher's voice and thoughts, the music, a quick compass, the folders, and a jump to every page.
-* **Save this spot.** The planet page's quick compass has SAVE THIS SPOT: where you are now goes straight into RECORD A NEW LOCATION, ready for ADD SITE.
-* **EDSM and Inara in the status bar,** beside JOURNAL, STATUS, NAV and UI: off, live, waiting, or trouble to check in the feed.
-* **The Updates page, redesigned:** your version and whether a newer one is out, with room to breathe, and how updates work.
-* **The Watcher's voice is ready sooner:** it warms up as Void Compass starts, and stays warm while you play.
-* **Fixed:** the postcards the Watcher keeps were forgotten every time Void Compass restarted.
-* **Fixed: the Settings page no longer flickers** when you change something, and the field you're typing in keeps its place. An integration test's answer now shows right beside its button.
-* **Fixed: the compass overlay fits its window** at any Windows scaling.
-* **The Time Capsules page,** laid out in two columns, with a plainer RECEIVE panel.
+* **Postcard text sizes.** The lettering (the place's name and the words over it), the note and the details (facts, where, the date and time) each from 85% to 150%, in THE WORDS: for new postcards and the overlay alike, and in the editor for any saved postcard.
+* **Fixed: a lock-up while designing postcards.** Every change in the postcard studio drew a new preview from your newest screenshot at its full size (a 4K or high-res screenshot is tens of megabytes), put its photo filter on the whole of it, and drew several at once, until the system could lock up and the studio stopped answering clicks (UNDO CHANGES among them). The preview now reads the screenshot once and keeps it small, filters the photo after it's cut to the card, draws one preview at a time with only the newest asked for, and keeps your theme's background picture small too. Saved postcards are filtered at postcard size as well, so saving one is quicker.
 
 ## Earlier releases
 
+* **v5.5.4** — Can you hear me? (and over things): the Watcher speaks in HAL 9000's voice (Piper, downloaded on first use) and finds it over its first hour (The Switch), learns how you play, and knows your home system; achievements in their own overlay; Inara sync, checked against its API docs, sending every commander event it takes; carriers you can remove; time capsules shared by code or file and a Time Capsules vault; Postcards rebuilt (album, studio with live preview, your own themes, a postmark, and every postcard editable, older ones too); Constellation v2 (a sky chart, designations, the night behind each star, an almanac, saved pictures on its own page); a Tools page; Explore & Survey and the Exploration Archive as one page; Updates on its own Settings page.
 * **v5.5.3.9.3** — The Rhino's Mothership: the Cargo overlay's SHIP CARGO card shows your mothership's total cargo and the space left as you unload the Rhino, and knows your ship's capacity and hold after a restart.
 * **v5.5.3.9.1** — Overlays That Fit: Prospector, Cargo and Planet Materials columns grow with the text size; they and Station Link fit the window they really get at any Windows scaling, so no rows go missing and long names wrap.
 * **v5.5.3.9** — The Watcher, Chapter 3: Book Three, What Was Put There (seven chapters over about a year, darker musings headed The Seat, two new achievements); hints on the Watcher page for locked chapters and echoes; Reset the Watcher (with Are you sure?, its old memory kept as a copy); the Watcher on earth-likes, water, ammonia and terraformable worlds; pictures open where you are in Screenshots and Postcards.

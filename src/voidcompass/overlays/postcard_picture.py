@@ -96,6 +96,25 @@ def open_picture(path):
         return None
 
 
+def open_picture_small(path, longest=1600, _cache={}):
+    """A picture read once and kept small, for previews and theme
+    backgrounds: (path, its time) picks the copy; a few are kept."""
+    try:
+        key = (str(path), os.path.getmtime(path))
+    except OSError:
+        return None
+    picture = _cache.get(key)
+    if picture is None:
+        picture = open_picture(path)
+        if picture is None:
+            return None
+        picture.thumbnail((longest, longest))
+        if len(_cache) >= 6:
+            _cache.pop(next(iter(_cache)))
+        _cache[key] = picture
+    return picture.copy()
+
+
 def jpeg_thumbnail(picture, width):
     """A small JPEG of the picture for the overlay's card."""
     small = picture.copy()
@@ -326,7 +345,7 @@ def _postmark(card, k, colour):
 
 
 def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="polaroid", theme=None, background=None,
-                    postmark=False):
+                    postmark=False, sizes=None):
     """The postcard as an RGBA image, as the overlay draws it: the picture
     with "Greetings from…" over it (or on the paper when there's no
     picture), the note, the journal's facts, where and when; tilted on a
@@ -337,19 +356,20 @@ def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="
     style = style if style in ("polaroid", "airmail", "holo", "vintage") else "polaroid"
     theme = theme or {}
     colours = _themed(card_colours(palette, style), theme)
-    if picture is not None:
-        picture = _filtered(picture, theme.get("filter") or "none", style)
     k = width / PHOTO_WIDTH
+    # Your text sizes (5.5.4): the lettering, the note and the details apart.
+    sizes = sizes or {}
+    kl, kn, kd = (k * max(.5, min(2.0, float(sizes.get(part) or 1.0))) for part in ("lettering", "note", "details"))
     border, pad, bottom = round(BORDER * k), round(CAPTION_PAD * k), round(BOTTOM * k)
-    hand, signed_font = _font("hand", round(50 * k)), _font("hand", round(46 * k))
-    small = _font("hud", round(32 * k))
-    chip_font = _font("hud", round(28 * k))
+    hand, signed_font = _font("hand", round(50 * kn)), _font("hand", round(46 * kn))
+    small = _font("hud", round(32 * kd))
+    chip_font = _font("hud", round(28 * kd))
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     # Airmail's stripes take a band of the border: its words keep clear.
     inset = round(22 * k) if style == "airmail" else 0
     room = width - round(12 * k) - inset * 2
     photo_height = round(width * 9 / 16) if picture is not None else 0
-    greeting = _greeting(card, room, k, colours, on_photo=picture is not None, style=style,
+    greeting = _greeting(card, room, kl, colours, on_photo=picture is not None, style=style,
                          font_kind=theme.get("font") or "")
 
     # Measure the paper's lines first, then draw them. The postmark takes
@@ -358,12 +378,12 @@ def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="
     beside = room - (stamp.width - round(70 * k) if stamp else 0)
     note = str(card.get("note") or "")
     note_lines = _wrap(probe, note or card.get("doing") or "", hand, beside)
-    line_h = round(66 * k)
+    line_h = round(66 * kn)
     chips = [str(fact).upper() for fact in card.get("facts") or ()]
-    chip_h, chip_gap, chip_pad = round(46 * k), round(12 * k), round(16 * k)
+    chip_h, chip_gap, chip_pad = round(46 * kd), round(12 * kd), round(16 * kd)
     chip_rows, row, used = [], [], 0
     for chip in chips:
-        chip_w = round(probe.textlength(chip, font=chip_font)) + chip_pad * 2 + round(len(chip) * 2.6 * k)
+        chip_w = round(probe.textlength(chip, font=chip_font)) + chip_pad * 2 + round(len(chip) * 2.6 * kd)
         if row and used + chip_w > room:
             chip_rows.append(row)
             row, used = [], 0
@@ -372,20 +392,22 @@ def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="
     if row:
         chip_rows.append(row)
     where = " · ".join(part for part in ((card.get("doing") if note else ""), card.get("coordinates")) if part).upper()
-    note_block = len(note_lines) * line_h + (round(80 * k) if note else 0)
+    note_block = len(note_lines) * line_h + (round(80 * kn) if note else 0)
     if stamp:
         note_block = max(note_block, stamp.height - round(40 * k))
     caption_height = (pad + (greeting.height + round(20 * k) if picture is None else 0)
                       + note_block
                       + len(chip_rows) * (chip_h + chip_gap) + round(10 * k)
-                      + (round(48 * k) if where else 0) + round(24 * k) + round(48 * k))
+                      + (round(48 * kd) if where else 0) + round(24 * k) + round(48 * kd))
     card_width, card_height = width + border * 2, border + photo_height + caption_height + bottom
     paper = Image.new("RGBA", (card_width, card_height), colours["paper"] + (255,))
     draw = ImageDraw.Draw(paper)
     x = border + round(6 * k) + inset
 
     if picture is not None:
-        photo = _cover(picture, width, photo_height).convert("RGBA")
+        # Note: filtered after it's cut to size. Sepia on a full 4K or
+        # high-res screenshot took seconds and locked the app up (5.5.5).
+        photo = _filtered(_cover(picture, width, photo_height), theme.get("filter") or "none", style).convert("RGBA")
         if style == "holo":
             # A display's scanlines over the picture.
             lines = Image.new("RGBA", photo.size, (0, 0, 0, 0))
@@ -420,7 +442,7 @@ def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="
         signature = "— " + str(card.get("signed") or "the Watcher")
         draw.text((x + beside - draw.textlength(signature, font=signed_font), y), signature,
                   font=signed_font, fill=colours["soft"])
-        y += round(80 * k)
+        y += round(80 * kn)
     y = max(y, block_end)
     spacing = round(3 * k)
     for chips_row in chip_rows:
@@ -428,13 +450,13 @@ def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="
         for chip, chip_w in chips_row:
             draw.rounded_rectangle([left, y, left + chip_w, y + chip_h], radius=round(6 * k),
                                    outline=_mix(colours["ink"], colours["paper"], .3), width=max(1, round(3 * k)))
-            _spaced(draw, (left + chip_pad, y + round(7 * k)), chip, chip_font, colours["soft"], spacing)
+            _spaced(draw, (left + chip_pad, y + round(7 * kd)), chip, chip_font, colours["soft"], spacing)
             left += chip_w + chip_gap
         y += chip_h + chip_gap
     y += round(10 * k)
     if where:
         _spaced(draw, (x, y), _fit(draw, where, small, room), small, colours["soft"], round(4 * k))
-        y += round(48 * k)
+        y += round(48 * kd)
     # The dashed rule, then the date and the time.
     dash = round(10 * k)
     for left in range(x, x + room, dash * 2):
@@ -489,7 +511,7 @@ def postcard_filename(card, stamp):
 
 
 def save_postcard_picture(card, picture, folder, palette=None, stamp=None, style="polaroid", theme=None,
-                          background=None, path=None, postmark=False):
+                          background=None, path=None, postmark=False, sizes=None):
     """Draw the postcard and save it in ``folder`` (made if need be), or over
     ``path`` when it's being edited; its path, or None."""
     import time
@@ -503,7 +525,7 @@ def save_postcard_picture(card, picture, folder, palette=None, stamp=None, style
                 path = f"{base} ({counter}).png"
                 counter += 1
         image = render_postcard(card, picture, palette, style=style, theme=theme, background=background,
-                                postmark=postmark)
+                                postmark=postmark, sizes=sizes)
         partial = path + ".part"
         image.save(partial, "PNG", optimize=True)
         os.replace(partial, path)

@@ -18,6 +18,7 @@ from voidcompass.overlays import postcard_themes
 from voidcompass.overlays.postcard_picture import is_editable, keep_card, kept_card, open_picture
 from voidcompass.overlays.postcard_restore import ScreenshotIndex, find_picture, saved_at
 from voidcompass.overlays.postcards import STYLES as POSTCARD_STYLES, postcard_card, postcard_facts, postcard_options
+from voidcompass.overlays.postcards import TEXT_PARTS as POSTCARD_TEXT_PARTS, text_size as postcard_text_size
 
 DRAFT_THEME = "Studio draft"
 # What the studio may try out before it's saved.
@@ -25,6 +26,7 @@ DRAFT_KEYS = {
     "postcard_style": 60, "postcard_greeting": 12, "postcard_greeting_text": 40, "postcard_note_mode": 10,
     "postcard_note_text": 160, "postcard_signature": 40, "postcard_facts": None, "postcard_doing": None,
     "postcard_postmark": None,
+    "postcard_size_lettering": 3, "postcard_size_note": 3, "postcard_size_details": 3,
 }
 
 
@@ -87,6 +89,11 @@ class DashboardPostcardStudioMixin:
         postmark = bool(settings.get("postmark"))
         if "postmark" in payload:
             postmark = payload.get("postmark") in (True, "1", "on", "true")
+        sizes = dict(settings.get("sizes") or {})
+        for part in POSTCARD_TEXT_PARTS:
+            if f"size_{part}" in payload:
+                sizes[part] = postcard_text_size(payload.get(f"size_{part}")) / 100.0
+        settings = {**settings, "sizes": sizes}
         return path, card, picture, style, theme, postmark, settings
 
     def _postcard_set_edit_draft(self, card_id, payload):
@@ -100,6 +107,10 @@ class DashboardPostcardStudioMixin:
         draft = getattr(self, "_postcard_edit_draft", None)
         if not draft:
             return None
+        key = repr(draft)
+        cached = getattr(self, "_postcard_edit_preview_cache", None)
+        if cached and cached[0] == key:
+            return cached[1]
         edited = self._postcard_edited(draft["id"], draft["values"])
         if edited is None:
             return None
@@ -108,9 +119,11 @@ class DashboardPostcardStudioMixin:
         from voidcompass.overlays.postcard_picture import render_postcard
         _path, card, picture, style, theme, postmark, settings = edited
         image = render_postcard(card, picture, settings.get("palette") or None, width=560, style=style,
-                                theme=theme or None, background=self._postcard_background(theme), postmark=postmark)
+                                theme=theme or None, background=self._postcard_background(theme), postmark=postmark,
+                                sizes=settings.get("sizes"))
         out = io.BytesIO()
         image.save(out, "PNG")
+        self._postcard_edit_preview_cache = (key, out.getvalue())
         return out.getvalue()
 
     def _postcard_swap_picture(self, card_id, chosen):

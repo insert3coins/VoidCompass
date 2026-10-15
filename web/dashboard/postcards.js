@@ -16,6 +16,11 @@ const BASE_SWATCH = {
 };
 const FONT_NAMES = {"": "As the look", hud: "Cockpit capitals", serif: "Serif", hand: "Handwriting"};
 const FILTER_NAMES = {none: "As the look", sepia: "Sepia", mono: "Black & white", vivid: "Vivid", cool: "Cool"};
+// Your text sizes (5.5.4): the lettering, the note, the details.
+const TEXT_PARTS = [["lettering", "Lettering", "The place's name and the words over it"],
+  ["note", "Note", "The handwriting and its signature"], ["details", "Details", "Facts, where, the date and the time"]];
+const TEXT_SIZES = [85, 100, 115, 130, 150];
+const sizeOptions = (chosen) => TEXT_SIZES.map((size) => `<option value="${size}"${Number(chosen || 100) === size ? " selected" : ""}>${size}%</option>`).join("");
 const MONTHS = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
 
 const view = {tab: "album", filter: "all", favourites: false, find: "", sort: "newest"};
@@ -438,6 +443,8 @@ function renderEditor() {
     <label><span>Angle <small data-angle-out>${editing.angle ?? "as the look"}${editing.angle == null ? "" : "°"}</small></span>
       <input type="range" name="angle" min="-12" max="12" step="0.5" value="${editing.angle ?? -1.2}"></label>
     <label class="pc-check"><input type="checkbox" name="postmark"${editing.postmark ? " checked" : ""}><span>Postmark</span></label>
+    <div class="pc-editor-sizes">${TEXT_PARTS.map(([part, label]) =>
+      `<label><span>${label}</span><select name="size_${part}">${sizeOptions((editing.sizes || {})[part])}</select></label>`).join("")}</div>
     <button type="button" class="pc-picture" data-editor-picture>${editing.photo ? "CHANGE ITS PICTURE" : "GIVE IT A PICTURE"}</button>
     <div class="pc-editor-actions"><button type="submit" class="primary">SAVE THE POSTCARD</button><button type="button" data-editor-cancel>CANCEL</button></div>`;
   form.hidden = false;
@@ -463,7 +470,7 @@ function onEditorInput(event) {
 async function previewEdit() {
   if (!shown || ui.byId("pc-editor").hidden) return;
   if (!(await send("edit_draft", {id: shown.id, ...editorValues()}))) return;
-  ui.byId("pc-full").src = ui.apiUrl(`/media/postcard-preview/edit-${++previewTurn}.png`);
+  loadPreview(ui.byId("pc-full"), ui.apiUrl(`/media/postcard-preview/edit-${++previewTurn}.png`));
   ui.byId("pc-stage-note").hidden = false;
 }
 
@@ -491,15 +498,34 @@ async function saveEdit(event) {
 }
 
 // -- The studio ----------------------------------------------------------------
+// One preview loading at a time (5.5.5): asked for again meanwhile, only the
+// newest is fetched once it's in. Each one is a render on the deck's side.
+function loadPreview(img, src) {
+  if (!img || img.getAttribute("src") === src) return;
+  if (img.dataset.loading === "1") {
+    img.dataset.next = src;
+    return;
+  }
+  img.dataset.loading = "1";
+  img.dataset.next = "";
+  const done = () => {
+    img.dataset.loading = "";
+    const next = img.dataset.next;
+    img.dataset.next = "";
+    if (next && next !== img.getAttribute("src")) loadPreview(img, next);
+  };
+  img.addEventListener("load", done, {once: true});
+  img.addEventListener("error", done, {once: true});
+  img.src = src;
+}
+
 function previewSrc() {
   return ui.apiUrl(drafting ? `/media/postcard-preview/draft-${previewTurn}.png`
     : `/media/postcard-preview/${encodeURIComponent(data.preview || "current")}.png`);
 }
 
 function showPreview() {
-  const img = ui.byId("pc-preview-img");
-  const src = previewSrc();
-  if (img.getAttribute("src") !== src) img.src = src;
+  loadPreview(ui.byId("pc-preview-img"), previewSrc());
   ui.byId("pc-preview-state").textContent = drafting ? "PREVIEW · THEME NOT SAVED YET" : "LIVE PREVIEW";
   ui.byId("pc-draft-reset").hidden = !drafting;
 }
@@ -615,7 +641,9 @@ function drawStudio() {
         ${switchRow("postcard_postmark", "Postmark", "The system, the date and the time, stamped on the paper.", settings.postcard_postmark !== false)}
         ${switchRow("postcard_facts", "Journal facts", "What your scans say of the place: its kind, gravity, firsts, life, distance from Sol.", settings.postcard_facts)}
         ${switchRow("postcard_doing", "What you were doing", "In supercruise, landed, docked, on foot…", settings.postcard_doing)}
-      </div></section>
+      </div>
+      <div class="pc-sizes" role="group" aria-label="Text sizes">${TEXT_PARTS.map(([part, label, detail]) =>
+        `<label><span><b>${label} size</b><small>${detail}</small></span><select data-postcard-setting="postcard_size_${part}">${sizeOptions(settings[`postcard_size_${part}`])}</select></label>`).join("")}</div></section>
     <section class="pc-block"><header><h4>${name ? `YOUR THEME · ${esc(name)}` : "YOUR OWN THEME"}</h4>
         ${name ? `<button type="button" data-theme-new>NEW THEME</button>` : ""}</header>
       <p class="pc-hint">Every change shows in the preview at once. SAVE THEME keeps it and uses it for the overlay and every postcard saved from now on.</p>

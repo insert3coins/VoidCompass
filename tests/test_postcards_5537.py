@@ -78,7 +78,7 @@ class CardTests(unittest.TestCase):
                                                 "doing": True, "style": "polaroid", "greeting": "Greetings from",
                                                 # 5.5.4: the note's words, and your own themes.
                                                 "note_mode": "watcher", "note_text": "", "signature": "", "theme": None,
-                                            "postmark": True})
+                                            "postmark": True, "sizes": {"lettering": 1.0, "note": 1.0, "details": 1.0}})
         self.assertEqual(postcard_options({"postcard_style": "Airmail"})["style"], "airmail")
         self.assertEqual(postcard_options({"postcard_style": "neon"})["style"], "polaroid")
         self.assertEqual(postcard_options({"postcard_hold_s": 7, "postcard_size": "huge"})["hold"], 10)
