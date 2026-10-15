@@ -837,6 +837,10 @@ button.cockpit-button {
   color: var(--muted); box-shadow: none; text-shadow: none; text-transform: uppercase;
   transition: color .14s,background-color .14s,--bracket-arm .18s ease-out,transform .08s,filter .14s;
 }
+/* Just drawn (5.5.5): its look at once, no fade from the plain button. */
+button.cockpit-button.cockpit-fresh, button.cockpit-button.cockpit-fresh::before, button.cockpit-button.cockpit-fresh::after {
+  transition: none !important;
+}
 button.cockpit-button::before {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background:

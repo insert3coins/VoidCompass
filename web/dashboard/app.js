@@ -169,8 +169,16 @@ function decorateCockpitButtons(root = document) {
   const buttons = [];
   if (root instanceof HTMLButtonElement) buttons.push(root);
   if (root?.querySelectorAll) buttons.push(...root.querySelectorAll("button"));
+  let fresh = false;
   for (const button of buttons) {
     if (button.matches(STRUCTURAL_BUTTON_SELECTOR)) continue;
+    // Note: a panel redrawn and then measured (its scroll kept) lays its new
+    // buttons out before this runs, so they faded from the plain look into
+    // this one on every redraw: the "blinking" (5.5.5). New ones skip it.
+    if (!button.classList.contains("cockpit-button")) {
+      button.classList.add("cockpit-fresh");
+      fresh = true;
+    }
     button.classList.add("cockpit-button");
     button.classList.toggle("cockpit-primary", button.matches(
       ".primary, .commission-action, #save-deck-layout, [data-page-layout-save]",
@@ -180,6 +188,22 @@ function decorateCockpitButtons(root = document) {
     ));
     button.classList.toggle("cockpit-ghost", button.matches(".ghost, .quiet-action"));
   }
+  if (fresh) settleFreshButtons();
+}
+
+// Two frames on, they may animate as usual (hover and the like); a timer too,
+// as a minimised window runs no frames.
+let freshButtonsPending = false;
+function settleFreshButtons() {
+  if (freshButtonsPending) return;
+  freshButtonsPending = true;
+  const settle = () => {
+    if (!freshButtonsPending) return;
+    freshButtonsPending = false;
+    document.querySelectorAll("button.cockpit-fresh").forEach((button) => button.classList.remove("cockpit-fresh"));
+  };
+  requestAnimationFrame(() => requestAnimationFrame(settle));
+  setTimeout(settle, 250);
 }
 
 const cockpitButtonObserver = new MutationObserver((records) => {
@@ -4188,6 +4212,22 @@ function updateSettingsLive(data = {}) {
   }
 }
 
+let heldControl = null;
+let deferredWorkspace = null;
+document.addEventListener("pointerdown", (event) => {
+  heldControl = event.target.closest?.("button, select, a, [role='button'], label") || null;
+}, true);
+function releaseHeldControl() {
+  heldControl = null;
+  const waiting = deferredWorkspace;
+  deferredWorkspace = null;
+  // After the click this release makes has been handled.
+  if (waiting) setTimeout(() => renderWorkspace(model.workspace?.page === waiting.workspace?.page ? model : waiting), 0);
+}
+document.addEventListener("pointerup", releaseHeldControl, true);
+document.addEventListener("pointercancel", releaseHeldControl, true);
+window.addEventListener("blur", releaseHeldControl);
+
 function renderWorkspace(state) {
   const workspace = state.workspace || {};
   const page = workspace.page || "";
@@ -4235,6 +4275,13 @@ function renderWorkspace(state) {
     || (page === "explore" && byId("analytics-workspace")?.dataset.profileKey !== profileKey);
   if (!profileChanged && root?.contains(focused) && focused?.matches("#planet-compass-lat, #planet-compass-lon")) return;
   if (page !== "planet-materials" && !profileChanged && root?.contains(focused) && focused?.matches("input, textarea, select, [contenteditable='true']") && !focused?.matches("[data-refresh-on-change]")) return;
+  // A button held down mustn't be redrawn before it's let go: the press and
+  // the release would land on two different buttons and the click is lost
+  // (5.5.5). The redraw waits for the release.
+  if (root && heldControl && root.contains(heldControl)) {
+    deferredWorkspace = state;
+    return;
+  }
   workspaceFingerprints[page] = fingerprint;
   const renderers = {
     "planet-materials": renderPlanetMaterialsWorkspace,

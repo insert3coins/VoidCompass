@@ -402,5 +402,23 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
         self.assertFalse(self.errors, self.errors)
 
 
+    def test_a_held_button_is_not_redrawn_before_its_click(self):
+        # 5.5.6: a refresh between press and release lost the click.
+        data = {"overlays": [{"id": "cargo_hud", "label": "Cargo Manifest", "group": "industry", "enabled": False}],
+                "groups": [{"id": "industry", "label": "Industry & commerce"}], "switches": [], "watcher": {}, "music": {"state": "idle"}}
+        self.page.evaluate("([n, d]) => window.__bridgeHarness.workspace(n, d)", ["tools", data])
+        self.page.evaluate("() => { window.__held = document.querySelector('[data-tool=\"copy-system\"]'); }")
+        box = self.page.locator('[data-tool="copy-system"]').bounding_box()
+        self.page.mouse.move(box["x"] + 5, box["y"] + 5)
+        self.page.mouse.down()
+        changed = {**data, "system": "Sol"}
+        self.page.evaluate("([n, d]) => window.__bridgeHarness.workspace(n, d)", ["tools", changed])
+        self.assertNotEqual(self.page.inner_text("#tools-here"), "Sol", "held back while pressed")
+        self.assertTrue(self.page.evaluate("() => window.__held.isConnected"))
+        self.page.mouse.up()
+        self.page.wait_for_timeout(100)
+        self.assertEqual(self.page.inner_text("#tools-here"), "Sol", "and drawn once it's let go")
+        self.assertFalse(self.errors, self.errors)
+
 if __name__ == "__main__":
     unittest.main()

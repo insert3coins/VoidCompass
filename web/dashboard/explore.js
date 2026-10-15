@@ -690,8 +690,13 @@ function prospectsMarkup(data, ui) {
     </section>`;
 }
 
-/** Replace a slot's markup while keeping every list at its scroll position. */
+/** Replace a slot's markup while keeping every list at its scroll position.
+ * The same markup again leaves it alone: redrawn every refresh, its buttons
+ * blinked and a button under the pointer lost its hover (5.5.5). */
+const drawnMarkup = new WeakMap();
 function replaceKeepingScroll(slot, markup) {
+  if (drawnMarkup.get(slot) === markup && slot.childElementCount) return;
+  drawnMarkup.set(slot, markup);
   const positions = new Map([...slot.querySelectorAll("[data-scroll-key]")].map((node) => [node.dataset.scrollKey, node.scrollTop]));
   slot.innerHTML = markup;
   for (const node of slot.querySelectorAll("[data-scroll-key]")) {

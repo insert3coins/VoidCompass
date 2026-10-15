@@ -368,5 +368,19 @@ class ExploreSurveyVisualTests(unittest.TestCase):
         self.assertFalse(self.errors, self.errors)
 
 
+    def test_route_buttons_stay_put_across_refreshes(self):
+        # 5.5.6: redrawn on every refresh, they blinked and lost clicks.
+        self.open_explore()
+        self.page.locator("#explore-tab-route").click()
+        self.page.evaluate("() => { window.__routeButton = document.querySelector('#explore-route button'); }")
+        data = workspace_data()
+        data["current"] = "Somewhere Else"
+        self.page.evaluate("data => window.__exploreHarness.workspace(data)", data)
+        self.assertTrue(self.page.evaluate("() => window.__routeButton.isConnected"), "the same button, not a new one")
+        self.assertFalse(self.page.evaluate("() => document.querySelector('#explore-route button').classList.contains('cockpit-fresh')"))
+        data["waypoints"] = data["waypoints"][:3]
+        self.page.evaluate("data => window.__exploreHarness.workspace(data)", data)
+        self.assertFalse(self.page.evaluate("() => window.__routeButton.isConnected"), "changed: drawn again")
+
 if __name__ == "__main__":
     unittest.main()
