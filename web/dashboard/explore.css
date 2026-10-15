@@ -9,12 +9,14 @@
 #explore-workspace { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
 #explore-workspace .explore-view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
 #explore-workspace .explore-view[hidden] { display: none; }
+#explore-workspace .explore-archive { overflow: auto; }
+#explore-workspace .explore-archive > #analytics-workspace { flex: 0 0 auto; }
 /* Button baseline, matching workspace cards; :where() keeps it overridable. */
 :where(#explore-workspace) button { min-height: 28px; padding: 0 9px; border: 1px solid var(--border); background: var(--panel-alt); color: var(--muted); cursor: pointer; font: 700 8px Consolas, monospace; letter-spacing: .04em; }
 :where(#explore-workspace) button:disabled { cursor: default; opacity: .5; }
 
 /* View tabs and journey readouts. */
-.explore-views { flex: 0 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 8px; }
+.explore-views { flex: 0 0 auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 8px; }
 .explore-views > button {
   display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 11px;
   min-width: 0; min-height: 54px; padding: 8px 14px;
@@ -303,7 +305,7 @@
    region readout (also in the status bar) and the decorative orbit strip
    give way, and the route cards regroup around the waypoint list. */
 @media (max-width: 1240px) {
-  .explore-views { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+  .explore-views { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; }
   .explore-views > button { grid-template-columns: minmax(0, 1fr); padding: 8px 12px; }
   .explore-views > button > i, .explore-readouts > .readout-region { display: none; }
   .explore-readouts > span { min-width: 0; padding: 6px 12px; }
@@ -328,7 +330,7 @@
   .explore-board-list { max-height: 470px; }
   .explore-card-body, .return-later-entries, .scout-results { max-height: 420px; }
   #explore-orrery .orrery-stage, #explore-orrery .orrery-empty { min-height: 380px; }
-  .explore-views { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .explore-views { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .explore-readouts { grid-column: 1 / -1; }
   .explore-readouts > span { flex: 1 1 0; max-width: none; }
   .explore-band { grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1.2fr); }

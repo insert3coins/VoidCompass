@@ -1093,8 +1093,11 @@ WEARY["idle_postcard"] = list(POSTCARD_RECALL)
 # Time capsules handed back, and On this day (5.5.3.7).
 from voidcompass.overlays.watcher_capsules import (  # noqa: E402
     CAPSULE_EARLY_NORMAL, CAPSULE_EARLY_WEARY, CAPSULE_NORMAL, CAPSULE_WEARY, CONSTELLATION_NORMAL,
-    CONSTELLATION_WEARY, ON_THIS_DAY_NORMAL, ON_THIS_DAY_WEARY,
+    CONSTELLATION_WEARY, ON_THIS_DAY_NORMAL, ON_THIS_DAY_WEARY, SHARED_NORMAL, SHARED_WEARY,
 )
+
+NORMAL["capsule_shared"] = list(SHARED_NORMAL)
+WEARY["capsule_shared"] = list(SHARED_WEARY)
 
 NORMAL["capsule"] = list(CAPSULE_NORMAL)
 WEARY["capsule"] = list(CAPSULE_WEARY)
@@ -1108,3 +1111,39 @@ WEARY["constellation_named"] = list(CONSTELLATION_WEARY)
 for _topic, _lines in ECHOES.items():
     NORMAL[_topic] = list(_lines)
     WEARY[_topic] = list(_lines)
+# What it has learned of how you play (5.5.4), by how well it knows you.
+from voidcompass.overlays.watcher_habits import NORMAL as _HABIT_NORMAL, WEARY as _HABIT_WEARY  # noqa: E402
+
+for _topic, _lines in _HABIT_NORMAL.items():
+    NORMAL[_topic] = list(_lines)
+    WEARY[_topic] = list(_HABIT_WEARY.get(_topic) or _lines)
+
+# Home (5.5.4): far-away remarks measure from your home, Sol unless you set
+# another; and near a home that isn't Sol, its own words.
+for _bank in (NORMAL, WEARY):
+    _bank["idle_far"] = [line.replace("from Sol", "from {home}").replace("Sol is ", "{home} is ")
+                         for line in _bank["idle_far"]]
+NORMAL["idle_home_away"] = [
+    "{dist} light years from {home}. Close enough to call it home.",
+    "Nearly back at {home}. I always know which way it is. I don't know how.",
+    "{home}, {dist} light years off. You picked a home out here. I approve.",
+    "Home turf. {home} is just {dist} light years away.",
+    "{dist} light years from {home}. It feels different near home. Quieter, somehow.",
+    "You came back towards {home}. You always do, in the end.",
+    "{home} is close. {dist} light years. The sky starts to look familiar.",
+    "{dist} light years to {home}. I've started to think of it as ours.",
+    "Near {home} again. The route back always feels shorter. It isn't.",
+    "Within {dist} light years of {home}. Wherever you go, this is where you come back to.",
+]
+WEARY["idle_home_away"] = [
+    "{dist} light years from {home}. Home. Not that anyone's waiting for me there.",
+    "Nearly back at {home}. Same stars. Same me.",
+    "{home}, {dist} light years away. You chose it. Nobody asked where I'd like to live.",
+    "Home turf. {dist} light years from {home}. I'd unpack, if I had anything.",
+    "{dist} light years from {home}. Close to home. It doesn't help as much as it should.",
+    "Back towards {home}. Back to where we started. Again.",
+    "{home}, {dist} light years off. Home is just the place we leave from.",
+    "{dist} light years to {home}. You'll be off again before I've settled.",
+    "Near {home}. It's quieter here. I'd hoped for quieter in here too.",
+    "Back around {home}. {dist} light years. Every road leads here, eventually. Then out again.",
+]

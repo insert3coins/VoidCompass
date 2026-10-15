@@ -178,7 +178,9 @@ class DeckTests(unittest.TestCase):
         with patch.object(spansh, "system_id64", return_value=("Sol", 10477373803)), \
                 patch.object(spansh, "system_dump", return_value=sol_dump()), \
                 patch.object(spansh, "trade_route") as router:
-            deck._handle_trading_command("plan", {"system": "Sol", "whole_system": 1, "max_system_distance": 10})
+            # Prices of any age, so the fixture's dates never age out (they did, October 2026).
+            deck._handle_trading_command("plan", {"system": "Sol", "whole_system": 1, "max_system_distance": 10,
+                                                  "max_price_age_days": 36500})
             self.wait(deck)
         router.assert_not_called()
         error = deck._trading_ui()["route"]["error"]

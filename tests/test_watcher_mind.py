@@ -346,12 +346,13 @@ class ThoughtStyleTests(unittest.TestCase):
             self.assertIn(key, config.PROFILE_TEXT_SETTINGS)
         self.assertIn("heartbeat_thought_backdrop", config.PROFILE_BOOL_SETTINGS)
 
-    def test_studio_has_the_controls(self):
+    def test_the_watcher_page_has_the_controls(self):
+        """On the Watcher page's SETTINGS since 5.5.4, not in Overlay Studio."""
         from pathlib import Path
-        html = (Path(__file__).resolve().parents[1] / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")
+        page = (Path(__file__).resolve().parents[1] / "web" / "dashboard" / "watcher.js").read_text(encoding="utf-8")
         for key in ("heartbeat_thought_backdrop", "heartbeat_thought_colour", "heartbeat_thought_size",
-                    "heartbeat_thought_hold", "heartbeat_thoughts"):
-            self.assertIn(key, html)
+                    "heartbeat_thought_hold", "heartbeat_thoughts", "heartbeat_personality"):
+            self.assertIn(key, page)
 
 
 class LineBankTests(unittest.TestCase):

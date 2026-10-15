@@ -29,7 +29,7 @@ body { pointer-events: none; user-select: none; }
   grid-area: 1 / 1; position: relative; width: var(--card-w);
   padding: 10px 10px 0; background: var(--paper); color: var(--ink);
   box-shadow: 0 10px 24px rgba(0, 0, 0, .55), 0 1px 3px rgba(0, 0, 0, .5);
-  transform: rotate(-1.6deg);
+  transform: rotate(var(--tilt, -1.6deg));
 }
 .card.behind { align-self: start; filter: brightness(.86); }
 .card.behind:nth-child(2) { transform: translate(10px, 6px) rotate(3.2deg); }
@@ -38,7 +38,7 @@ body { pointer-events: none; user-select: none; }
 .card.top { z-index: 2; animation: arrive .7s cubic-bezier(.2, .9, .25, 1.15); }
 @keyframes arrive {
   0% { transform: translate(120%, -10px) rotate(9deg); }
-  100% { transform: rotate(-1.6deg); }
+  100% { transform: rotate(var(--tilt, -1.6deg)); }
 }
 
 /* The picture, developing the way an instant photo does. */
@@ -102,6 +102,15 @@ body { pointer-events: none; user-select: none; }
   color: var(--ink-soft); font: 700 8.5px var(--font-hud); letter-spacing: .16em; }
 .card.no-photo .caption { padding-top: 4px; }
 
+/* The postmark (5.5.4), stamped at the right of the paper beside the note. */
+.caption { position: relative; }
+.postmark { display: none; position: absolute; right: -2px; top: 2px; width: 74px; transform: rotate(-14deg);
+  color: color-mix(in srgb, var(--greet) 78%, var(--ink)); opacity: .82; pointer-events: none; }
+.card.postmarked .postmark { display: block; }
+.card.postmarked .note { min-height: 50px; padding-right: 64px; }
+.postmark-arc { fill: currentColor; font: 700 9px var(--font-hud); letter-spacing: .12em; }
+.postmark-time { fill: currentColor; font: 700 13px var(--font-hud); }
+
 .postcards.reduced-motion .card.top, .postcards.reduced-motion .photo img.developing { animation: none; }
 
 /* ------------------------------------------------------------ styles -- */
@@ -149,3 +158,13 @@ body { pointer-events: none; user-select: none; }
   100% { filter: sepia(.9) contrast(1.08) brightness(.95) saturate(.8); opacity: 1; }
 }
 .card[data-style="vintage"] .greeting-place { font-style: italic; letter-spacing: 0; text-transform: none; transform: none; }
+
+/* -------------------------------------------------------- your themes -- */
+/* 5.5.4: a theme's photo filter, lettering and the background behind it. */
+.card[data-filter="sepia"] .photo img { filter: sepia(.9) contrast(1.08) brightness(.95) saturate(.8); }
+.card[data-filter="mono"] .photo img { filter: grayscale(1) contrast(1.05); }
+.card[data-filter="vivid"] .photo img { filter: saturate(1.45) contrast(1.08); }
+.card[data-filter="cool"] .photo img { filter: saturate(.9) hue-rotate(-12deg) brightness(.98); }
+.card[data-font="serif"] .greeting-place, .card[data-font="hand"] .greeting-place { transform: none; text-transform: none; letter-spacing: 0; }
+.card[data-font="hand"] .greeting-place { font-weight: 400; }
+.postcards.backdrop { padding: 22px; margin: 0; background: var(--backdrop); box-shadow: 0 8px 22px rgba(0, 0, 0, .5); }

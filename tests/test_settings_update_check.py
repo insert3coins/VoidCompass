@@ -27,7 +27,7 @@ class _Deck(DashboardCoreMixin):
 class SettingsUpdateCheckTests(unittest.TestCase):
     def test_settings_page_has_the_button(self):
         app = (ROOT / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
-        self.assertIn('settingGroup("UPDATES"', app)
+        self.assertIn('if (id === "updates")', app)  # its own Settings page since 5.5.4
         self.assertIn('data-command="check_updates" data-update-check', app)
         self.assertIn("function renderSettingsUpdate", app)
 

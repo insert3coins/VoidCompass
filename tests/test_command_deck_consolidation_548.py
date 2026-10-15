@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class CommandDeckConsolidation548Tests(unittest.TestCase):
     def test_release_version_comparison_handles_elite_style_patch_versions(self):
-        self.assertEqual(APP_VERSION, "5.5.3.9.3")
+        self.assertEqual(APP_VERSION, "5.5.4")
         self.assertTrue(release_is_newer("v5.4.8.2", "5.4.8.1"))
         self.assertTrue(release_is_newer("5.4.7.1", "5.4.7"))
         self.assertTrue(release_is_newer("5.4.10", "5.4.9.9"))
@@ -25,12 +25,13 @@ class CommandDeckConsolidation548Tests(unittest.TestCase):
         labels = re.findall(r'<button class="nav-item[^>]*>.*?<span>(.*?)</span>', rail)
 
         # 5.4.9.8 added Music, under its own COCKPIT heading; 5.5.2 Colonisation;
-        # 5.5.2.4 BGS; 5.5.2.6 Trading; 5.5.3.2 The Watcher; 5.5.3.7 Postcards, Screenshots, Time Capsules, Constellation.
+        # 5.5.2.4 BGS; 5.5.2.6 Trading; 5.5.3.2 The Watcher; 5.5.3.7 Postcards, Screenshots, Time Capsules, Constellation;
+        # 5.5.4 Tools, and the Exploration Archive became Explore & Survey's Archive tab.
         self.assertEqual(len(labels), 22)
         self.assertEqual(labels, [
             "Dashboard", "Explore & Survey", "Planetary Operations", "Galactic Atlas",
-            "Commander Record", "Exploration Archive", "Mining Command", "Ship Workshop",
-            "Carrier Command", "Colonisation", "BGS", "Trading", "Powerplay", "Music", "The Watcher", "Postcards", "Screenshots", "Time Capsules", "Constellation", "Overlay Studio", "Settings", "About",
+            "Commander Record", "Mining Command", "Ship Workshop",
+            "Carrier Command", "Colonisation", "BGS", "Trading", "Powerplay", "Music", "The Watcher", "Postcards", "Screenshots", "Time Capsules", "Constellation", "Tools", "Overlay Studio", "Settings", "About",
         ])
         self.assertNotIn("Field Tools", labels)
 
@@ -48,7 +49,7 @@ class CommandDeckConsolidation548Tests(unittest.TestCase):
         self.assertIn('node.dataset.page === navPage', script)
         for suite in (
             "EXPLORATION COMMAND", "PLANETARY OPERATIONS", "COMMANDER RECORD",
-            "EXPLORATION ARCHIVE", "SHIP WORKSHOP",
+            "SHIP WORKSHOP",
         ):
             self.assertIn(suite, script)
         self.assertNotIn('{parent: "settings"', script)

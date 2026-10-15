@@ -700,6 +700,9 @@
       this.musicTarget = {level: 0, bass: 0};
       this.musicLevel = 0;
       this.musicBass = 0;
+      // Its own voice (5.5.4): the pupil glows with how loud it speaks.
+      this.voiceTarget = 0;
+      this.voiceLevel = 0;
       this.layers = new Map();
       this.palKey = '';
       this.seed = 1;
@@ -835,6 +838,11 @@
         level: values.reduce((sum, value) => sum + value, 0) / values.length,
         bass: low.reduce((sum, value) => sum + value, 0) / low.length,
       };
+    }
+
+    // Its voice's loudness now (0..1), or null when it's quiet (5.5.4).
+    voice(level) {
+      this.voiceTarget = this.reduced || level === null || level === undefined ? 0 : clamp(Number(level) || 0);
     }
 
     // Composing a thought: the aperture closes in while it thinks (5.5.3.2).
@@ -997,6 +1005,7 @@
       const rise = (target, current) => current + (target - current) * Math.min(1, elapsed / (target > current ? 60 : 260));
       this.musicLevel = rise(this.musicTarget.level, this.musicLevel);
       this.musicBass = rise(this.musicTarget.bass, this.musicBass);
+      this.voiceLevel = rise(this.voiceTarget, this.voiceLevel);
       if (this.musicLevel > .02 && !this.stalled) this.spin += elapsed / 1000 * .12 * this.musicLevel * 1.5;
       // With the life module the eye follows the newest event as it falls
       // in, so every journal line gets a look, however small.
@@ -1059,6 +1068,11 @@
         effect.color = this.color(effect.tone);
         effect.spec.mods?.(p, mods, effect);
         live.push([effect, p]);
+      }
+      // Speaking: the pupil rises and falls with its own voice, as HAL's did.
+      if (this.voiceLevel > .01 && !this.asleep) {
+        mods.flare += .9 * this.voiceLevel;
+        mods.iris += .1 * this.voiceLevel;
       }
       // The music: the iris swells with the bass and the eye brightens.
       if (this.musicBass > .01 && !this.asleep) {

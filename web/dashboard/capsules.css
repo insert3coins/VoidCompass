@@ -1,25 +1,119 @@
-/* Time capsules and On this day (5.5.3.7). */
-.capsules-page { display: grid; gap: 16px; }
-.capsules-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-@media (max-width: 1100px) { .capsules-top { grid-template-columns: minmax(0, 1fr); } }
+/* Time capsules and On this day (5.5.3.7); the vault and sharing (5.5.4).
+   A vault of sealed canisters: brass and wax for yours, a different seal for
+   what other commanders send you, and the opened ones read like letters. */
+.capsules-page { --brass: color-mix(in srgb, var(--yellow) 78%, var(--orange)); display: grid; gap: 16px; }
 .capsules-page h3 { margin: 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
-.capsule-form, .capsule-today, .capsule-list {
+.capsule-form, .capsule-receive, .capsule-today, .capsule-list, .capsule-share {
   display: grid; gap: 10px; align-content: start; padding: 14px; border: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 92%, transparent);
 }
-.capsule-form label { display: grid; gap: 5px; }
+
+/* The vault: a strip across the top with what's out there. */
+.capsule-vault { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 18px; align-items: center;
+  padding: 14px 18px; border: 1px solid color-mix(in srgb, var(--brass) 45%, var(--border));
+  background: radial-gradient(ellipse at 0 50%, color-mix(in srgb, var(--brass) 14%, transparent), transparent 55%),
+    color-mix(in srgb, var(--panel) 94%, transparent); }
+@media (max-width: 1100px) { .capsule-vault { grid-template-columns: auto minmax(0, 1fr); } .capsule-vault-figures { grid-column: 1 / -1; } }
+.capsule-vault h3 { color: var(--brass); }
+.capsule-vault p { margin: 4px 0 0; color: var(--text); font: italic 13px "Segoe UI", sans-serif; }
+.capsule-vault-mark { position: relative; width: 46px; height: 46px; border: 2px solid var(--brass); border-radius: 50%;
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--brass) 35%, transparent), 0 0 14px color-mix(in srgb, var(--brass) 20%, transparent); }
+.capsule-vault-mark i { position: absolute; left: 50%; top: 50%; width: 4px; height: 20px; margin: -10px 0 0 -2px;
+  background: var(--brass); border-radius: 2px; transform-origin: 50% 50%; }
+.capsule-vault-mark i:nth-child(2) { transform: rotate(60deg); }
+.capsule-vault-mark i:nth-child(3) { transform: rotate(-60deg); }
+.capsule-vault-figures { display: flex; flex-wrap: wrap; gap: 1px; margin: 0; border: 1px solid var(--border); background: var(--border); }
+.capsule-vault-figures div { min-width: 104px; padding: 7px 12px; background: var(--panel); }
+.capsule-vault-figures dt { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .1em; }
+.capsule-vault-figures dd { margin: 2px 0 0; color: var(--text); font: 700 14px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; }
+
+/* Two columns: sealing and receiving on the left, the vault's contents on the right. */
+.capsules-page { grid-template-columns: minmax(360px, 480px) minmax(0, 1fr); align-items: start; }
+.capsule-vault { grid-column: 1 / -1; }
+.capsule-side, .capsule-main { display: grid; gap: 16px; align-content: start; min-width: 0; }
+@media (max-width: 1200px) { .capsules-page { grid-template-columns: minmax(0, 1fr); } }
+.capsule-list ol:empty { display: none; }
+.capsule-form label, .capsule-opens label { display: grid; gap: 5px; }
 .capsule-form label > span:first-child { display: flex; justify-content: space-between; color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
 .capsule-form label small { color: var(--muted); font: 10px Consolas, monospace; }
-.capsule-form input, .capsule-form textarea {
+.capsule-form input, .capsule-form textarea, .capsule-receive textarea, .capsule-share textarea {
   min-width: 0; padding: 7px 9px; border: 1px solid var(--border); background: var(--bg); color: var(--text);
   font: 12px/1.45 "Segoe UI", sans-serif; resize: vertical;
 }
+.capsule-share textarea { width: 100%; box-sizing: border-box; font: 11px/1.4 Consolas, monospace; color: var(--muted); }
+.capsule-form select, .capsule-reseal select { min-height: 32px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.capsule-opens { display: flex; flex-wrap: wrap; gap: 12px; }
+.capsule-opens label { flex: 1 1 180px; }
+.capsule-opens label[hidden] { display: none; }
 .capsule-system-row { display: flex; gap: 6px; }
 .capsule-system-row input { flex: 1; }
-.capsule-system-row button, .capsule-list button { min-height: 30px; padding: 0 12px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.capsule-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.capsule-kind input { position: absolute; opacity: 0; pointer-events: none; }
+.capsule-kind span { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--border);
+  color: var(--muted); font: 600 11px "Segoe UI", sans-serif; cursor: pointer; }
+.capsule-kind i { color: var(--brass); font-style: normal; }
+.capsule-kind input:checked + span { border-color: var(--brass); color: var(--text); background: color-mix(in srgb, var(--brass) 10%, var(--bg)); }
+.capsule-kind input:focus-visible + span { outline: 1px solid var(--accent); }
+.capsule-system-row button, .capsule-list button, .capsule-receive button, .capsule-share button, .capsule-file {
+  min-height: 30px; padding: 0 12px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
 .capsule-form-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
-.capsule-form-foot p { flex: 1 1 220px; margin: 0; color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }
+.capsule-form-foot p, .capsule-hint { flex: 1 1 220px; margin: 0; color: var(--muted); font: italic 11px/1.45 "Segoe UI", sans-serif; }
 .capsule-form-foot button { min-height: 32px; padding: 0 18px; font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+
+/* Receiving: paste a code, choose or drop a file. */
+.capsule-drop { display: grid; gap: 8px; padding: 10px; border: 1px dashed var(--border); transition: border-color .15s, background .15s; }
+.capsule-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.capsule-receive-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.capsule-receive-actions small { color: var(--dim); font: 10px Consolas, monospace; }
+.capsule-file { display: inline-flex; align-items: center; border: 1px solid var(--border); color: var(--text); cursor: pointer; }
+.capsule-file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.capsule-preview, .capsule-share { border-left: 3px solid var(--accent); }
+.capsule-preview { display: grid; gap: 8px; padding: 10px 12px; background: var(--bg); }
+.capsule-preview[hidden], .capsule-share[hidden] { display: none; }
+.capsule-preview p, .capsule-share p { margin: 0; color: var(--text); font: 12px/1.5 "Segoe UI", sans-serif; }
+.capsule-share { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+.capsule-share-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.capsule-error { color: var(--red) !important; }
+
+/* The canisters. */
+.capsule-list > header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.capsule-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.capsule-list ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.capsule { position: relative; display: grid; grid-template-columns: auto minmax(180px, 280px) minmax(0, 1fr) auto; gap: 14px; align-items: center;
+  padding: 10px 12px 10px 14px; border: 1px solid var(--border); background:
+    linear-gradient(90deg, color-mix(in srgb, var(--brass) 9%, transparent), transparent 30%), var(--bg); }
+.capsule.sealed { grid-template-columns: auto auto minmax(180px, 280px) minmax(0, 1fr) auto; }
+@media (max-width: 1000px) { .capsule, .capsule.sealed { grid-template-columns: auto minmax(0, 1fr); } .capsule-note, .capsule-actions { grid-column: 1 / -1; } }
+.capsule::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: var(--brass); border-radius: 0 2px 2px 0; }
+.capsule-seal { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: var(--bg);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--red) 70%, white), var(--red) 55%, color-mix(in srgb, var(--red) 60%, black));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 35%, transparent); font: 700 15px "Segoe UI Symbol", "Segoe UI", sans-serif; }
+.capsule.received .capsule-seal { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 70%, white), var(--accent) 55%, color-mix(in srgb, var(--accent) 55%, black));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.capsule.received::before { background: var(--accent); }
+.capsule.opened .capsule-seal { color: var(--brass); background: transparent; box-shadow: inset 0 0 0 1px var(--brass); }
+.capsule.kind-warning .capsule-seal { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--orange) 70%, white), var(--orange) 60%); }
+.capsule-choose input { accent-color: var(--brass); width: 15px; height: 15px; }
+.capsule-head { display: grid; gap: 2px; min-width: 0; }
+.capsule b { overflow: hidden; color: var(--text); font: 600 14px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.capsule small { color: var(--muted); font: 10px Consolas, monospace; overflow-wrap: anywhere; }
+.capsule-place { color: var(--brass); font: italic 11px "Segoe UI", sans-serif; }
+.capsule-countdown { justify-self: start; margin-top: 3px; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--yellow) 50%, var(--border));
+  color: var(--yellow); font: 700 8.5px Consolas, monospace; letter-spacing: .1em; }
+.capsule-note { margin: 0; color: var(--text); font: 12.5px/1.5 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.capsule-note.hidden-note { color: var(--muted); font-style: italic; }
+/* Sealed: the note is there, blurred; hover or focus to peek. */
+.capsules-page:not(.unblurred) .capsule.sealed .capsule-note { filter: blur(5px); transition: filter .25s; user-select: none; }
+.capsule.sealed .capsule-note:hover, .capsule.sealed .capsule-note:focus { filter: none; user-select: text; outline: none; }
+.capsule.opened .capsule-note { font: italic 13px/1.55 Georgia, "Times New Roman", serif; }
+.capsule.opened .capsule-note::before { content: "\201C"; color: var(--brass); }
+.capsule.opened .capsule-note::after { content: "\201D"; color: var(--brass); }
+.capsule-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.capsule-reseal { display: inline-flex; gap: 6px; }
+.capsule button[data-armed] { color: var(--red); border-color: var(--red); }
+.capsule-empty { color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.capsule-list.opened h3 { color: var(--brass); }
+.capsule-list.received h3 { color: var(--accent); }
 
 .capsule-day { display: grid; gap: 2px; padding: 8px 0 10px; border-bottom: 1px solid var(--border-soft, var(--border)); }
 .capsule-day:last-child { border-bottom: 0; }
@@ -28,26 +122,6 @@
 .capsule-day span { color: var(--muted); font: 11px "Segoe UI", sans-serif; }
 .capsule-day-cards { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .capsule-day-cards img { width: 96px; height: 76px; object-fit: contain; border: 1px solid var(--border); background: var(--bg); }
-
-.capsule-list ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.capsule { display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto; gap: 14px; align-items: center;
-  padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent); background: var(--bg); }
-@media (max-width: 900px) { .capsule { grid-template-columns: minmax(0, 1fr); } }
-.capsule > div { display: grid; gap: 2px; min-width: 0; }
-.capsule b { overflow: hidden; color: var(--text); font: 600 14px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
-.capsule small { color: var(--muted); font: 10px Consolas, monospace; }
-.capsule-note { margin: 0; color: var(--text); font: 12.5px/1.5 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
-/* Sealed: the note is there, blurred; hover or focus to peek. */
-.capsules-page:not(.unblurred) .capsule:not(.opened) .capsule-note { filter: blur(5px); transition: filter .25s; user-select: none; }
-.capsule:not(.opened) .capsule-note:hover, .capsule:not(.opened) .capsule-note:focus { filter: none; user-select: text; outline: none; }
-.capsule.opened { border-left-color: var(--yellow); }
-.capsule.opened .capsule-note::before { content: "\201C"; color: var(--yellow); }
-.capsule.opened .capsule-note::after { content: "\201D"; color: var(--yellow); }
-.capsule button[data-armed] { color: var(--red); border-color: var(--red); }
-.capsule-empty { color: var(--muted); font: 12px "Segoe UI", sans-serif; }
-.capsule-list.opened h3 { color: var(--yellow); }
-.capsule small em { color: var(--yellow); font-style: normal; }
-.capsule-form select { min-height: 32px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
 
 /* Each keepsake page's own settings (5.5.3.7), folded away until wanted. */
 .keepsake-settings { border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }

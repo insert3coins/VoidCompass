@@ -1,0 +1,118 @@
+/* Tools (5.5.4): a status strip, the switch console, a side column of
+   instruments, and the page jumps along the bottom. */
+.tools-page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 370px); grid-template-areas: "strip strip" "main side" "jump jump"; gap: 16px; align-items: start; }
+.tools-main { grid-area: main; display: grid; gap: 16px; min-width: 0; }
+.tools-side { grid-area: side; display: grid; align-items: start; gap: 16px; min-width: 0; }
+@media (max-width: 1100px) {
+  .tools-page { grid-template-columns: minmax(0, 1fr); grid-template-areas: "strip" "main" "side" "jump"; }
+  .tools-side { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+}
+
+/* Right now: where you are and what's running. */
+.tools-strip { grid-area: strip; display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(4, minmax(0, 1fr)); border: 1px solid var(--border);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, var(--panel)), var(--panel) 45%); }
+@media (max-width: 1100px) {
+  .tools-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tools-strip > .tools-here { grid-column: 1 / -1; border-bottom: 1px solid var(--border-soft); }
+  .tools-strip > .tools-here + .tools-readout { border-left: 0; }
+}
+@media (max-width: 760px) { .tools-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tools-readout { position: relative; display: grid; gap: 4px; align-content: center; min-width: 0; padding: 12px 16px; }
+.tools-readout + .tools-readout { border-left: 1px solid var(--border-soft); }
+.tools-readout small { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.tools-readout b { overflow: hidden; color: var(--text); font: 600 14px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
+.tools-here { grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; }
+.tools-here small { grid-column: 1 / -1; }
+.tools-here b { color: var(--accent); font-size: 17px; }
+.tools-here button { min-height: 26px; padding: 0 10px; font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+
+.tools-card { display: grid; align-content: start; gap: 14px; padding: 14px 16px 16px; border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 92%, transparent); min-width: 0; }
+.tools-card > header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.tools-card > header > button:last-child { margin-left: auto; }
+.tools-card h3, .tools-jump h3 { margin: 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.tools-card > header button { min-height: 26px; padding: 0 10px; font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+
+/* The overlay console: filter, find, then the groups. */
+.tools-filter { display: flex; margin-left: 8px; border: 1px solid var(--border); }
+.tools-card > header .tools-filter button { min-height: 24px; padding: 0 10px; border: 0; background: transparent; color: var(--dim); }
+.tools-card > header .tools-filter button + button { border-left: 1px solid var(--border); }
+.tools-card > header .tools-filter button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+#tools-find { flex: 0 1 200px; min-width: 120px; min-height: 26px; padding: 0 8px; border: 1px solid var(--border); background: var(--input, var(--bg)); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+#tools-find:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.tools-groups { display: grid; gap: 14px; }
+.tools-group { display: grid; gap: 8px; }
+.tools-group[hidden], .tools-switch[hidden] { display: none; }
+.tools-group h4 { display: flex; align-items: center; gap: 10px; margin: 0; color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .14em; text-transform: uppercase; }
+.tools-group h4::after { content: ""; flex: 1; height: 1px; background: var(--border-soft); }
+.tools-group h4 span { order: 2; color: var(--dim); font-weight: 400; }
+.tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 6px; }
+
+.tools-switch { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 40px;
+  padding: 7px 10px; border: 1px solid var(--border-soft); background: var(--bg); cursor: pointer; transition: border-color .15s, background .15s; }
+.tools-switch:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.tools-switch.on { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: color-mix(in srgb, var(--accent) 5%, var(--bg)); }
+.tools-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.tools-switch > i { position: relative; width: 30px; height: 15px; border: 1px solid var(--border); background: var(--inset, var(--bg)); }
+.tools-switch > i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 9px; height: 9px; background: var(--dim); transition: .15s; }
+.tools-switch input:checked + i { border-color: var(--accent); }
+.tools-switch input:checked + i::after { left: 17px; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.tools-switch input:focus-visible + i { outline: 1px solid var(--accent); outline-offset: 2px; }
+.tools-switch span { display: grid; gap: 2px; min-width: 0; }
+.tools-switch b, .tools-field b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.tools-switch:not(.on) b { color: var(--muted); }
+.tools-switch small, .tools-field small { color: var(--muted); font: 10.5px/1.35 "Segoe UI", sans-serif; }
+.tools-chip { padding: 2px 6px; border: 1px solid currentColor; color: var(--dim); font: normal 700 8px Consolas, monospace; letter-spacing: .1em; white-space: nowrap; }
+.tools-chip.live { color: var(--green); }
+.tools-chip.recent { color: var(--yellow); }
+.tools-chip.warn { color: var(--red); }
+
+/* The Watcher: a small eye, its voice, how talkative it is. */
+#tools-watcher { display: grid; gap: 12px; }
+.tools-orb-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
+.tools-orb-row p { margin: 0; color: var(--muted); font: italic 12px/1.4 "Segoe UI", sans-serif; }
+.tools-orb { display: grid; place-items: center; width: 46px; aspect-ratio: 1; border: 1px solid color-mix(in srgb, var(--red) 45%, var(--border)); border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--red) 18%, transparent), transparent 70%); }
+.tools-orb i { width: 14px; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 40% 40%, #fff6, var(--red) 45%, color-mix(in srgb, var(--red) 40%, #000)); box-shadow: 0 0 10px var(--red); }
+.tools-orb.speaking i { animation: tools-orb-speak 2.4s ease-in-out infinite; }
+.tools-orb.asleep { border-color: var(--border); background: none; }
+.tools-orb.asleep i { background: var(--dim); box-shadow: none; opacity: .5; }
+@keyframes tools-orb-speak { 50% { box-shadow: 0 0 20px 3px var(--red); transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .tools-orb.speaking i { animation: none; } }
+.tools-field { display: grid; gap: 8px; }
+.tools-field span { display: grid; gap: 2px; }
+.tools-segments { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--border); }
+.tools-segments button { min-height: 30px; padding: 0 4px; border: 0; background: transparent; color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.tools-segments button + button { border-left: 1px solid var(--border); }
+.tools-segments button[aria-checked="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.tools-poke { justify-self: start; min-height: 30px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .1em; }
+
+/* Music: what's playing, and the transport. */
+.tools-now { display: grid; gap: 3px; min-width: 0; padding: 10px 12px; border-left: 2px solid var(--border); background: var(--bg); }
+.tools-now.playing { border-left-color: var(--accent); }
+.tools-now small { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.tools-now.playing small { color: var(--accent); }
+.tools-now b { overflow: hidden; color: var(--text); font: 600 14px "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.tools-now span { overflow: hidden; color: var(--muted); font: 12px "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.tools-transport { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; gap: 8px; }
+.tools-transport button { min-height: 34px; font: 700 11px Consolas, monospace; letter-spacing: .1em; }
+
+.tools-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.tools-buttons button { min-height: 32px; padding: 0 12px; font: 700 10px Consolas, monospace; letter-spacing: .1em; }
+.tools-compass { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tools-compass label { display: grid; gap: 4px; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.tools-compass input { min-width: 0; min-height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px Consolas, monospace; }
+.tools-note { margin: 0; color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }
+.tools-none { padding: 10px 0; text-align: center; }
+
+.tools-action-list { display: grid; gap: 6px; }
+.tools-action-list button { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 34px; padding: 0 12px;
+  text-align: left; font: 600 12px "Segoe UI", sans-serif; letter-spacing: 0; }
+.tools-action-list i, .tools-jump i { color: var(--accent); font-style: normal; text-align: center; }
+
+/* Every page, a click away. */
+.tools-jump { grid-area: jump; display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--border-soft); }
+.tools-jump > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 6px; }
+.tools-jump button { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 34px; padding: 0 12px;
+  text-align: left; font: 600 12px "Segoe UI", sans-serif; letter-spacing: 0; }
+.tools-jump span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

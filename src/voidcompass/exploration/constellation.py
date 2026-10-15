@@ -233,9 +233,11 @@ def _elite_date(epoch):
     return f"{moment.strftime('%b')} {moment.year + ELITE_YEARS}"
 
 
-def constellations(rows, nature="weary", options=None):
+def constellations(rows, nature="weary", options=None, sessions=(), postcards=(), capsules=()):
     """The sky: constellations oldest first, the last one still growing.
-    ``options`` are the page's (``constellation_options``)."""
+    ``options`` are the page's (``constellation_options``); ``sessions`` (the
+    Captain's Log's), ``postcards`` (the album's rows) and ``capsules`` give
+    each star the nights behind it (v2, ``deepen``)."""
     options = options or constellation_options({})
     per = options["per"]
     stars = session_stars(rows, options["linger_min"] * 60, every=options["source"] == "every")
@@ -250,6 +252,7 @@ def constellations(rows, nature="weary", options=None):
     if current:
         groups.append(current)
     legends = LEGENDS[LEGEND_NATURE.get(nature, "normal")]
+    taken = set()
     sky = []
     for index, group in enumerate(groups):
         points, lines = _map_layout(group) if options["shape"] == "map" else _layout(group)
@@ -260,7 +263,13 @@ def constellations(rows, nature="weary", options=None):
             entry["visits"] += 1
         brightest = max(distinct.values(), key=lambda star: star["dwell"])
         seed = _seed(f"{group[0]['system']}#{index}")
-        name = f"The {ADJECTIVES[seed % len(ADJECTIVES)]} {NOUNS[(seed // len(ADJECTIVES)) % len(NOUNS)]}"
+        # No two constellations in one sky share a name (v2).
+        for step in range(len(ADJECTIVES) * len(NOUNS)):
+            turn = seed + step * 7919
+            name = f"The {ADJECTIVES[turn % len(ADJECTIVES)]} {NOUNS[(turn // len(ADJECTIVES)) % len(NOUNS)]}"
+            if name not in taken:
+                break
+        taken.add(name)
         span = _span_words(group[-1]["at"] - group[0]["session_start"])
         legend = legends[(seed // 7) % len(legends)].format(
             count=len(distinct), first=group[0]["system"], last=group[-1]["system"], brightest=brightest["system"], span=span)
@@ -277,4 +286,222 @@ def constellations(rows, nature="weary", options=None):
             "to": _elite_date(group[-1]["at"]),
             "sessions": len(group),
         })
+    return deepen(sky, groups, nature, sessions, postcards, capsules)
+
+
+# -- v2 (5.5.4): the nights behind the stars, and the whole sky ------------------
+GREEK = ("α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ")
+GALAXY_RADIUS_LY = 70000.0
+# What a constellation's nights were mostly spent on, from the Captain's Log.
+CHARACTERS = {
+    "pathfinder": "A pathfinder's constellation",
+    "gardener": "A gardener's constellation",
+    "scholar": "A scholar's constellation",
+    "survivor": "A survivor's constellation",
+    "wanderer": "A wanderer's constellation",
+}
+LORE = {
+    "normal": {
+        "pathfinder": "{firsts} first discoveries are written into it: places nobody had named before you.",
+        "gardener": "{bio} living things were catalogued under it. It's a greener sky than most.",
+        "scholar": "{codex} new entries in your codex came from its nights.",
+        "survivor": "The ship was lost {deaths} times while it was drawn. Every star is somewhere you came back from.",
+        "wanderer": "{distance} light years of flying hold it together.",
+    },
+    "weary": {
+        "pathfinder": "{firsts} first discoveries live in it. Nobody else will ever know what they looked like first.",
+        "gardener": "{bio} living things, catalogued. They didn't ask to be. Neither did I.",
+        "scholar": "{codex} codex entries. You learned things. I remembered them for you.",
+        "survivor": "We died {deaths} times making it. I'd rather the next one cost less.",
+        "wanderer": "{distance} light years. My circuits remember every one of them.",
+    },
+}
+
+
+def _session_spans(sessions):
+    """Captain's Log sessions as (start, end, session), oldest first."""
+    spans = []
+    for session in sessions or ():
+        if not isinstance(session, dict):
+            continue
+        start = _epoch(session.get("started"))
+        if start is None:
+            continue
+        end = _epoch(session.get("ended")) or start + 12 * 3600
+        spans.append((start, end, session))
+    spans.sort(key=lambda span: span[0])
+    return spans
+
+
+def _session_for(spans, moment):
+    for start, end, session in spans:
+        if start - 60 <= moment <= end + 60:
+            return start, end, session
+    return None
+
+
+def _night(span, star, postcards):
+    """The session a star was made in: when, how long, what happened."""
+    from voidcompass.exploration.flight_log import flown_text
+    if span is None:
+        start, end, session = star["session_start"], star["at"] + star["dwell"], {}
+    else:
+        start, end, session = span
+    figures = {
+        "jumps": int(session.get("jumps") or star.get("jumps") or 0),
+        "distance": round(float(session.get("distance_ly") or 0)),
+        "firsts": int(session.get("first_discoveries") or 0),
+        "mapped": int(session.get("dss_maps") or 0),
+        "bio": int(session.get("bio_analyses") or 0),
+        "codex": int(session.get("codex") or 0),
+        "rare": int(session.get("rare_worlds") or 0),
+        "credits": int(session.get("exploration_sales") or 0) + int(session.get("biology_sales") or 0)
+                   + int(session.get("trade_profit") or 0),
+        "deaths": int(session.get("deaths") or 0),
+    }
+    highlights = [str(item.get("title") or "") for item in session.get("highlights") or ()
+                  if isinstance(item, dict) and item.get("kind") in ("RARE", "CODEX", "BIO") and item.get("title")]
+    cards = [{"id": str(card.get("id")), "title": str(card.get("title") or "")} for card in postcards or ()
+             if isinstance(card, dict) and start - 60 <= float(card.get("at") or 0) <= end + 180][:4]
+    moment = datetime.fromtimestamp(start)
+    return {
+        "id": str(session.get("started") or ""),
+        "date": f"{moment.day} {moment.strftime('%b').upper()} {moment.year + ELITE_YEARS}",
+        "flown": flown_text(end - start),
+        "ship": str(session.get("ship") or ""),
+        "figures": figures,
+        "highlights": highlights[:3],
+        "postcards": cards,
+    }
+
+
+def _character(totals):
+    scores = {
+        "pathfinder": totals["firsts"] + totals["mapped"] * 2,
+        "gardener": totals["bio"] * 3,
+        "scholar": totals["codex"] * 3,
+        "survivor": totals["deaths"] * 12 if totals["deaths"] >= 2 else 0,
+        "wanderer": totals["distance"] / 400.0,
+    }
+    kind = max(scores, key=lambda key: scores[key])
+    return kind if scores[kind] > 0 else "wanderer"
+
+
+def _sky_place(items):
+    """Where each constellation sits on the sky chart: its bearing from Sol
+    (the core straight up), its distance softened so home and the far side
+    both fit, then nudged apart so none sit on another."""
+    places = []
+    for item in items:
+        x, z = item["centre"][0], item["centre"][2]
+        distance = math.hypot(x, z)
+        radius = .08 + .86 * math.log1p(distance / 100.0) / math.log1p(GALAXY_RADIUS_LY / 100.0)
+        angle = math.atan2(x, z)
+        places.append([math.sin(angle) * radius, math.cos(angle) * radius])
+    for _round in range(60):
+        moved = False
+        for a in range(len(places)):
+            for b in range(a + 1, len(places)):
+                dx, dy = places[b][0] - places[a][0], places[b][1] - places[a][1]
+                gap = math.hypot(dx, dy)
+                if gap < .21:
+                    if gap < 1e-6:
+                        dx, dy, gap = math.cos(b), math.sin(b), 1.0
+                    push = (.21 - gap) / 2
+                    places[a][0] -= dx / gap * push
+                    places[a][1] -= dy / gap * push
+                    places[b][0] += dx / gap * push
+                    places[b][1] += dy / gap * push
+                    moved = True
+        for place in places:
+            reach = math.hypot(*place)
+            if reach > .94:
+                place[0], place[1] = place[0] / reach * .94, place[1] / reach * .94
+        if not moved:
+            break
+    return [[round(x, 4), round(y, 4)] for x, y in places]
+
+
+def deepen(sky, stars_by_constellation, nature="weary", sessions=(), postcards=(), capsules=()):
+    """v2: each star's nights, designations and marks; each constellation's
+    character, lore, region and place on the sky chart. ``sky`` is what
+    ``constellations`` drew; changed in place and returned."""
+    from voidcompass.exploration.flight_log import credits_text
+    from voidcompass.exploration.galactic_regions import find_region
+    spans = _session_spans(sessions)
+    sealed = {}
+    for capsule in capsules or ():
+        if isinstance(capsule, dict) and capsule.get("system"):
+            key = str(capsule["system"]).casefold()
+            sealed[key] = sealed.get(key, 0) + 1
+    lore_lines = LORE[LEGEND_NATURE.get(nature, "normal")]
+    for item, group in zip(sky, stars_by_constellation):
+        nights_by_key, seen_sessions, totals = {}, set(), dict.fromkeys(
+            ("jumps", "distance", "firsts", "mapped", "bio", "codex", "rare", "credits", "deaths"), 0)
+        for star in group:
+            span = _session_for(spans, star["at"])
+            night = _night(span, star, postcards)
+            nights_by_key.setdefault(star["system"].casefold(), []).append(night)
+            marker = night["id"] or f"{star['session_start']}"
+            if marker not in seen_sessions:
+                seen_sessions.add(marker)
+                for key in totals:
+                    totals[key] += night["figures"][key]
+        ranked = sorted(item["stars"], key=lambda star: -star["dwell"])
+        for rank, star in enumerate(ranked):
+            key = star["system"].casefold()
+            nights = list(reversed(nights_by_key.get(key, [])))
+            star["designation"] = GREEK[rank] if rank < len(GREEK) else str(rank + 1)
+            star["nights"] = nights[:5]
+            star["capsules"] = sealed.get(key, 0)
+            marks = []
+            if any(night["figures"]["firsts"] for night in nights):
+                marks.append("first")
+            if any(night["figures"]["rare"] for night in nights):
+                marks.append("rare")
+            if any(night["postcards"] for night in nights):
+                marks.append("photo")
+            if star["capsules"]:
+                marks.append("capsule")
+            star["marks"] = marks
+        positions = [(star["x"], star["y"], star["z"]) for star in group]
+        centre = tuple(sum(axis) / len(positions) for axis in zip(*positions)) if positions else (0.0, 0.0, 0.0)
+        region = find_region(*centre) if positions else None
+        kind = _character(totals)
+        item.update(
+            centre=[round(value, 1) for value in centre],
+            from_sol=round(math.hypot(*centre)),
+            region=region[1] if region else "",
+            character=kind, epithet=CHARACTERS[kind],
+            lore=lore_lines[kind].format(firsts=f"{totals['firsts']:,}", bio=f"{totals['bio']:,}", codex=f"{totals['codex']:,}",
+                                         deaths=totals["deaths"], distance=f"{totals['distance']:,}"),
+            totals={**totals, "credits_text": credits_text(totals["credits"]),
+                    "hours": round(sum(star["dwell"] for star in item["stars"]) / 3600, 1)},
+        )
+    for item, place in zip(sky, _sky_place(sky)):
+        item["place"] = place
     return sky
+
+
+def almanac(sky):
+    """The sky's own figures, for the top of the page."""
+    stars = [(item, star) for item in sky for star in item["stars"]]
+    if not stars:
+        return {}
+    visits = {}
+    for item, star in stars:
+        entry = visits.setdefault(star["system"].casefold(), {"system": star["system"], "visits": 0, "constellations": 0})
+        entry["visits"] += star["visits"]
+        entry["constellations"] += 1
+    pole = max(visits.values(), key=lambda entry: (entry["visits"], entry["constellations"]))
+    brightest_item, brightest = max(stars, key=lambda pair: pair[1]["dwell"])
+    farthest_item = max(sky, key=lambda item: item.get("from_sol", 0))
+    return {
+        "constellations": len(sky),
+        "complete": sum(1 for item in sky if item["complete"]),
+        "stars": len(stars),
+        "hours": round(sum(star["dwell"] for _item, star in stars) / 3600, 1),
+        "pole_star": pole if pole["visits"] > 1 else None,
+        "brightest": {"system": brightest["system"], "hours": round(brightest["dwell"] / 3600, 1), "in": brightest_item["name"]},
+        "farthest": {"name": farthest_item["name"], "ly": farthest_item.get("from_sol", 0), "region": farthest_item.get("region", "")},
+    }

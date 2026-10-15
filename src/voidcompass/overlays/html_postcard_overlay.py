@@ -1,6 +1,7 @@
 """Semantic HTML renderer attachment for Postcards (5.5.3.7)."""
 
 from voidcompass.overlays.html_model_overlay import HtmlModelOverlayBridge, attach_html_model_overlay
+from voidcompass.overlays import postcard_themes
 from voidcompass.overlays.postcards import SIZES, postcard_options
 
 
@@ -17,6 +18,13 @@ class HtmlPostcardBridge(HtmlModelOverlayBridge):
         return live
 
     def _file(self, name):
+        if str(name) == "theme-bg":
+            # Your theme's own background picture (5.5.4).
+            path = postcard_themes.background_path(postcard_options(self.config)["theme"])
+            try:
+                return (path.read_bytes(), "image/jpeg") if path else None
+            except OSError:
+                return None
         if not str(name).startswith("photo-"):
             return None
         photo = getattr(self.overlay, "photo", None)
@@ -24,7 +32,11 @@ class HtmlPostcardBridge(HtmlModelOverlayBridge):
         return (found, "image/jpeg") if found else None
 
     def _dimensions(self):
-        self.width = SIZES[postcard_options(self.config)["size"]] + 40  # room for the tilt and the stack
+        options = postcard_options(self.config)
+        theme = options["theme"] or {}
+        # Room for the tilt and the stack; a steeper angle or a background needs more.
+        extra = int(abs(theme.get("angle") or 0) * 7) + (48 if theme.get("background") in ("colour", "image") else 0)
+        self.width = SIZES[options["size"]] + 40 + extra
         return super()._dimensions()
 
 

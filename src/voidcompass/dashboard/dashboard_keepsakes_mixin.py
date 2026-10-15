@@ -23,7 +23,12 @@ from voidcompass.core.platform_support import (
 )
 from voidcompass.core import themes
 from voidcompass.core.config import get_active_profile
-from voidcompass.overlays.postcard_picture import jpeg_thumbnail, open_picture, save_postcard_picture
+from voidcompass.dashboard.dashboard_postcard_studio_mixin import DashboardPostcardStudioMixin
+from voidcompass.overlays import postcard_themes
+from voidcompass.overlays.postcard_picture import (
+    is_editable, jpeg_thumbnail, keep_card, kept_card, open_picture, save_postcard_picture,
+)
+from voidcompass.overlays.postcard_restore import saved_at
 from voidcompass.exploration.galactic_regions import find_region
 from voidcompass.overlays import watcher_mind
 from voidcompass.overlays.postcards import (
@@ -55,7 +60,7 @@ def postcards_folder(config=None):
 _PHOTO_TRIES_S = (0.3, 0.7, 1.5, 3.0, 5.0)
 
 
-class DashboardKeepsakesMixin:
+class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
 
     # -- The screenshot folder (5.5.3.7) -------------------------------------
     def _repair_screenshot_path(self):
@@ -206,6 +211,8 @@ class DashboardKeepsakesMixin:
         # The note reads the facts (a first discovery, a rare world), so it is
         # written before the facts come off the card.
         card["note"] = self._postcard_watcher_note(card, from_sol, state) if options["note"] else ""
+        if options["note_mode"] == "own" and options["note_text"]:
+            card["note"], card["signed"] = options["note_text"], self._postcard_signature(options)
         # The Watcher keeps every postcard (5.5.3.7).
         mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
         if mind is not None and hasattr(mind, "keep_postcard"):
@@ -228,6 +235,18 @@ class DashboardKeepsakesMixin:
             name="postcard-photo", daemon=True,
         ).start()
         return card
+
+    def _postcard_signature(self, options):
+        """How your own words are signed: your choice, or CMDR and your name."""
+        if options.get("signature"):
+            return options["signature"]
+        name = str(getattr(self, "cmdr_name", "") or (self.config or {}).get("active_commander_name") or "").strip()
+        return f"CMDR {name}" if name else "me"
+
+    @staticmethod
+    def _postcard_background(theme):
+        path = postcard_themes.background_path(theme)
+        return open_picture(str(path)) if path else None
 
     def _postcard_body(self, name):
         """This system's scan of the body in the picture, if there is one."""
@@ -286,8 +305,15 @@ class DashboardKeepsakesMixin:
         if captions and path:
             self._postcard_caption(path, card)
         if keep and picture is not None:
+            options = postcard_options(self.config)
             saved = save_postcard_picture(card, picture, postcards_folder(self.config), palette,
-                                          style=postcard_options(self.config)["style"])
+                                          style=options["style"], theme=options["theme"],
+                                          background=self._postcard_background(options["theme"]),
+                                          postmark=options["postmark"])
+            if saved:
+                # Kept beside it, so it can be edited later (5.5.4).
+                keep_card(saved, card, picture, {"style": options["style"], "theme": options["theme"],
+                                                 "palette": dict(palette or {}), "postmark": options["postmark"]})
             if saved:
                 logging.info("Postcard saved: %s", saved)
                 # The album shows it at once.
@@ -324,6 +350,7 @@ class DashboardKeepsakesMixin:
         if server is not None:
             server.postcards = self.postcard_album()
             server.screenshots = self.screenshot_album()
+            server.constellations = self.constellation_album()
 
     # -- The Screenshots page (5.5.3.7) ----------------------------------------
     def _screenshot_folder(self):
@@ -387,7 +414,12 @@ class DashboardKeepsakesMixin:
         now = time.monotonic()
         folder = postcards_folder(self.config)
         if not cache or cache[0] != folder or now - cache[1] > 4.0:
-            cache = (folder, now, self.postcard_album().rows())
+            rows = self.postcard_album().rows()
+            for row in rows:
+                # Saved from 5.5.4 on (or restored): it can be drawn again.
+                row["editable"] = is_editable(os.path.join(folder, row["file"]))
+                row["taken"] = saved_at(row["file"]) or row["at"]
+            cache = (folder, now, rows)
             self._postcard_album_cache = cache
         options = postcard_options(self.config)
         return {
@@ -397,10 +429,14 @@ class DashboardKeepsakesMixin:
             # Everything about postcards, in one place (the overlay's own
             # options stay in Overlay Studio).
             "settings": {
-                "postcard_style": options["style"],
+                "postcard_style": str(self.config.get("postcard_style") or options["style"]),
+                "postcard_note_mode": options["note_mode"],
+                "postcard_note_text": options["note_text"],
+                "postcard_signature": options["signature"],
                 "postcard_facts": options["facts"],
                 "postcard_note": options["note"],
                 "postcard_doing": options["doing"],
+                "postcard_postmark": options["postmark"],
                 "postcard_greeting": str(self.config.get("postcard_greeting") or "greetings"),
                 "postcard_greeting_text": str(self.config.get("postcard_greeting_text") or ""),
                 "screenshot_postcards": bool(self.config.get("screenshot_postcards", False)),
@@ -410,6 +446,13 @@ class DashboardKeepsakesMixin:
             },
             "styles": list(POSTCARD_STYLES),
             "preview": self._postcard_preview_key(),
+            # Your own themes (5.5.4), and the postcard being edited.
+            "themes": postcard_themes.themes(self.config),
+            "theme_choices": {"bases": list(postcard_themes.BASES), "fonts": list(postcard_themes.FONTS),
+                              "filters": list(postcard_themes.FILTERS)},
+            "editing": dict(getattr(self, "_postcard_editing", None) or {}),
+            # Older postcards being given their card back.
+            "restore": dict(getattr(self, "_postcard_restore_state", None) or {}),
         }
 
     def _handle_postcards_command(self, operation, payload):
@@ -431,16 +474,134 @@ class DashboardKeepsakesMixin:
             return done
         if operation == "set":
             return self._postcard_setting(str(payload.get("key") or ""), payload.get("value"))
+        if operation == "save_theme":
+            return self._postcard_save_theme(payload)
+        if operation == "delete_theme":
+            return self._postcard_delete_theme(str(payload.get("name") or ""))
+        if operation == "edit":
+            return self._postcard_edit_open(card_id)
+        if operation == "edit_close":
+            self._postcard_editing = self._postcard_edit_draft = None
+            return True
+        if operation == "edit_save":
+            return self._postcard_edit_save(card_id, payload)
+        # The studio (5.5.4): previews tried out, pictures swapped, older
+        # postcards made editable.
+        if operation == "draft":
+            return self._postcard_set_draft(payload)
+        if operation == "draft_clear":
+            self._postcard_draft = None
+            return True
+        if operation == "edit_draft":
+            return self._postcard_set_edit_draft(card_id, payload)
+        if operation == "edit_picture":
+            return self._postcard_swap_picture(card_id, payload.get("path"))
+        if operation == "restore":
+            return self._postcard_restore_start([card_id] if card_id else None)
         return False
+
+    # -- Your own themes (5.5.4) ----------------------------------------------
+    def _postcard_save_theme(self, payload):
+        name = postcard_themes.clean_name(payload.get("name"))
+        if not name:
+            return False
+        saved = dict(self.config.get("postcard_themes") or {})
+        if name not in saved and len(saved) >= postcard_themes.THEMES_MAX:
+            return False
+        params = postcard_themes.normalize(payload.get("params"))
+        picture = str(payload.get("background_data") or "")
+        if picture.startswith("data:image/"):
+            import base64
+            try:
+                data = base64.b64decode(picture.split(",", 1)[1], validate=False)
+            except (ValueError, IndexError):
+                return False
+            filename = postcard_themes.save_background(name, data)
+            if not filename:
+                return False
+            params.update(background="image", bg_image=filename)
+        elif params["background"] == "image" and not params["bg_image"]:
+            params["bg_image"] = (saved.get(name) or {}).get("bg_image", "")
+        saved[name] = params
+        self.config["postcard_themes"] = saved
+        self.config["postcard_style"] = f"theme:{name}"
+        return self._postcard_settings_saved()
+
+    def _postcard_delete_theme(self, name):
+        name = postcard_themes.clean_name(name)
+        saved = dict(self.config.get("postcard_themes") or {})
+        if name not in saved:
+            return False
+        image = postcard_themes.background_path(postcard_themes.normalize(saved.pop(name)))
+        if image:
+            try:
+                image.unlink()
+            except OSError:
+                pass
+        self.config["postcard_themes"] = saved
+        if str(self.config.get("postcard_style") or "") == f"theme:{name}":
+            self.config["postcard_style"] = postcard_themes.normalize(saved.get(name) or {})["base"]
+        return self._postcard_settings_saved()
+
+    def _postcard_settings_saved(self):
+        persist = getattr(self, "_persist_config", None)
+        if callable(persist):
+            persist()
+        hud = getattr(self, "postcard_hud", None)
+        if hud is not None and hasattr(hud, "apply_settings"):
+            hud.apply_settings()
+        self._postcard_preview_cache = None
+        return True
+
+    # -- Editing a saved postcard (5.5.4) ---------------------------------------
+    def _postcard_edit_open(self, card_id):
+        path = self.postcard_album().path(card_id)
+        kept = kept_card(path) if path else None
+        if kept is None:
+            return False
+        card, settings, picture = kept
+        theme = settings.get("theme") or {}
+        self._postcard_editing = {
+            "id": card_id, "title": card.get("title") or "", "greeting": card.get("greeting", "Greetings from"),
+            "note": card.get("note") or "", "signed": card.get("signed") or "",
+            "style": f"theme:{theme['name']}" if theme.get("name") else settings.get("style") or "polaroid",
+            "base": settings.get("style") or "polaroid", "angle": theme.get("angle"),
+            "doing": card.get("doing") or "",
+            "postmark": bool(settings.get("postmark")),
+            "photo": picture is not None,
+        }
+        self._postcard_edit_draft = None
+        return True
+
+    def _postcard_edit_save(self, card_id, payload):
+        edited = self._postcard_edited(card_id, payload)
+        if edited is None:
+            return False
+        path, card, picture, style, theme, postmark, settings = edited
+        saved = save_postcard_picture(card, picture, os.path.dirname(path), settings.get("palette") or None,
+                                      style=style, theme=theme or None, background=self._postcard_background(theme),
+                                      path=path, postmark=postmark)
+        if not saved:
+            return False
+        keep_card(saved, card, picture, {"style": style, "theme": theme, "palette": settings.get("palette") or {},
+                                         "postmark": postmark})
+        self._postcard_editing = self._postcard_edit_draft = None
+        album = self.postcard_album()
+        forget = getattr(album, "forget_thumb", None)
+        if callable(forget):
+            forget(card_id)
+        return True
 
     # -- The Postcards page's preview ----------------------------------------
     def _postcard_preview_key(self):
         """Changes whenever the preview would look different."""
-        options = postcard_options(self.config)
+        options = postcard_options(self._postcard_preview_config())
         palette = dict(themes.ACTIVE_PALETTE or {})
         return "-".join(str(part) for part in (
             options["style"], int(options["facts"]), int(options["note"]), int(options["doing"]),
-            "g" + format(zlib.crc32(options["greeting"].encode("utf-8")), "08x"),
+            "t" + format(zlib.crc32(repr((options["theme"], options["note_mode"], options["note_text"],
+                                          options["signature"])).encode("utf-8")), "08x"),
+            "g" + format(zlib.crc32(options["greeting"].encode("utf-8")), "08x"), int(options["postmark"]),
             watcher_mind.personality(self.config), palette.get("accent", ""), palette.get("orange", ""),
             palette.get("text", ""))).replace("#", "")
 
@@ -472,12 +633,16 @@ class DashboardKeepsakesMixin:
     def _postcard_preview_png(self):
         """A sample postcard in the current design, small, as a PNG."""
         import io
+        # Editing a saved postcard: that card, with its changes.
+        edited = self._postcard_edit_preview()
+        if edited:
+            return edited
         key = self._postcard_preview_key()
         cached = getattr(self, "_postcard_preview_cache", None)
         if cached and cached[0] == key:
             return cached[1]
         from voidcompass.overlays.postcard_picture import render_postcard
-        options = postcard_options(self.config)
+        options = postcard_options(self._postcard_preview_config())
         sample = {"planet_class": "Water world", "terraformable": True, "landable": True, "gravity_g": 1.02,
                   "was_discovered": False}
         card = postcard_card(
@@ -492,24 +657,43 @@ class DashboardKeepsakesMixin:
             import random
             card["note"] = postcard_note(card, watcher_mind.personality(self.config), 57904, "LANDED",
                                          rng=random.Random(7))
+        if options["note_mode"] == "own" and options["note_text"]:
+            card["note"], card["signed"] = options["note_text"], self._postcard_signature(options)
         image = render_postcard(card, self._postcard_preview_picture(), dict(themes.ACTIVE_PALETTE or {}),
-                                width=560, style=options["style"])
+                                width=560, style=options["style"], theme=options["theme"],
+                                background=self._postcard_background(options["theme"]), postmark=options["postmark"])
         out = io.BytesIO()
         image.save(out, "PNG", optimize=True)
         data = out.getvalue()
         self._postcard_preview_cache = (key, data)
         return data
 
-    _POSTCARD_SWITCHES = ("postcard_facts", "postcard_note", "postcard_doing", "screenshot_postcards", "screenshot_captions")
+    _POSTCARD_SWITCHES = ("postcard_facts", "postcard_note", "postcard_doing", "postcard_postmark",
+                          "screenshot_postcards", "screenshot_captions")
     _POSTCARD_GREETINGS = ("greetings", "wish", "custom", "none")
 
     def _postcard_setting(self, key, value):
         """One setting from the Postcards page, checked against its choices."""
         if key == "postcard_style":
-            style = str(value or "").casefold()
-            if style not in POSTCARD_STYLES:
+            style = str(value or "")
+            if style.casefold().startswith("theme:"):
+                if postcard_themes.clean_name(style[6:]) not in postcard_themes.themes(self.config):
+                    return False
+                self.config[key] = f"theme:{postcard_themes.clean_name(style[6:])}"
+            elif style.casefold() in POSTCARD_STYLES:
+                self.config[key] = style.casefold()
+            else:
                 return False
-            self.config[key] = style
+        elif key == "postcard_note_mode":
+            mode = str(value or "").casefold()
+            if mode not in postcard_themes.NOTE_MODES:
+                return False
+            self.config[key] = mode
+            self.config["postcard_note"] = mode == "watcher"
+        elif key == "postcard_note_text":
+            self.config[key] = " ".join(str(value or "").split())[:160]
+        elif key == "postcard_signature":
+            self.config[key] = " ".join(str(value or "").split())[:40]
         elif key in self._POSTCARD_SWITCHES:
             self.config[key] = value is True or str(value).casefold() in {"1", "true", "on"}
         elif key == "postcard_greeting":

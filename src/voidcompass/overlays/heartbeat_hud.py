@@ -203,6 +203,10 @@ class HeartbeatHUD:
         self._mind_path = _memory_path(config)
         self.mind = watcher_mind.WatcherMind(self._mind_path, config)
         self._thought_seen = None
+        # 5.5.4: its voice. The dashboard sets the listener (it speaks the
+        # words) and says whether the voice is on.
+        self.voice_listener = None
+        self._spoken_id = None
         self._next_idle_thought = time.time() + 45
         self._last_pulse_ts = time.time()
         self._activity_kind = 'startup'
@@ -301,7 +305,9 @@ class HeartbeatHUD:
             self.mind.seen()
             self.mind.save()
             self._mind_path = path
+            active = self.mind.voice_active
             self.mind = watcher_mind.WatcherMind(path, self.config)
+            self.mind.voice_active = active
 
     def poke(self):
         """The Watcher hotkey: it looks up and answers (5.5.3.2)."""
@@ -315,6 +321,26 @@ class HeartbeatHUD:
         backup = self.mind.reset()
         self._redraw()
         return backup
+
+    def set_voice_active(self, active):
+        """Its voice switched on or off (5.5.4). Switched on, it may say its
+        first word at once."""
+        active = bool(active)
+        if active == self.mind.voice_active:
+            return
+        self.mind.voice_active = active
+        if active and self.mind.find_voice():
+            self._redraw()
+
+    def _speaks(self, thought):
+        """Whether this thought is said aloud, by the Voice level setting."""
+        if not self.mind.voice_active or not callable(self.voice_listener):
+            return False
+        level = str(self.config.get('watcher_voice_level') or 'every').casefold()
+        if thought.get('topic') == 'voice_found':
+            return True
+        need = {'important': 2, 'sometimes': 1}.get(level, 0)
+        return int(thought.get('importance') or 0) >= need
 
     def note(self, kind, fields=None):
         """Something Void Compass noticed that the Watcher may think about
@@ -391,7 +417,21 @@ class HeartbeatHUD:
         self._thought_seen = (thought or {}).get('id')
         if not thought:
             return None
+        if thought['id'] != self._spoken_id:
+            self._spoken_id = thought['id']
+            if self._speaks(thought):
+                words = self.mind.spoken_words(thought)
+                try:
+                    spoken = bool(words) and bool(self.voice_listener(words, thought['id']))
+                except Exception:
+                    spoken = False
+                self._voiced = (thought['id'], words == thought['text']) if spoken else None
+        voiced = getattr(self, '_voiced', None) or (None, False)
         return {'id': thought['id'], 'text': thought['text'], 'script': thought.get('script') or thought['text'],
+                # Said aloud (5.5.4): the page types it in time with the voice
+                # once it says whole thoughts.
+                'voice': voiced[0] == thought['id'],
+                'voice_full': voiced[0] == thought['id'] and voiced[1],
                 'mood': thought.get('mood') or '', 'side': self.thought_side(),
                 'kind': thought.get('kind') or '', 'heading': thought.get('heading') or '',
                 'style': watcher_mind.thought_style(self.config)}

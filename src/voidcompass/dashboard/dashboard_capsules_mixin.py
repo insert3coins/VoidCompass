@@ -21,14 +21,19 @@ import time
 
 from voidcompass.core.config import get_active_profile, get_profile_dir
 from voidcompass.exploration.constellation import (
-    DWELL_CAP_S, SHAPES, SOURCES, constellation_options, constellations,
+    DWELL_CAP_S, SHAPES, SOURCES, almanac, constellation_options, constellations,
 )
-from voidcompass.exploration.time_capsules import WAITS, CapsuleStore, on_this_day, span_text, years_text
+from voidcompass.core.platform_support import application_dir, open_path
+from voidcompass.exploration.time_capsules import (
+    KINDS, WAITS, CapsuleStore, decode, encode, export_file, on_this_day, span_text, years_text,
+)
 from voidcompass.overlays import watcher_mind
 
 # A constellation saved as a picture: the page's drawing (a JPEG or PNG, at
 # most this big on the way), kept as a PNG.
 CONSTELLATION_PICTURE_MAX = 1536 * 1024
+# Where they're kept (5.5.4): beside Void Compass, not with the postcards.
+CONSTELLATION_FOLDER = "constellations"
 
 # Arrivals by travel: a capsule waits for you to come back. Logging in where
 # it was left opens it only with "Open when I log in there" on.
@@ -40,6 +45,9 @@ CAPSULE_SETTINGS = {
     "capsule_open_on_login": ("bool", None, False),
     "capsule_notice_s": ("choice", (10, 25, 45, 60), 25),
     "capsule_blur_sealed": ("bool", None, True),
+    # Sharing (5.5.4): sign what you share; keep what others send unread.
+    "capsule_sign_shares": ("bool", None, True),
+    "capsule_hide_received": ("bool", None, True),
     "on_this_day_watcher": ("bool", None, True),
 }
 CONSTELLATION_SETTINGS = {
@@ -48,6 +56,7 @@ CONSTELLATION_SETTINGS = {
     "constellation_source": ("choice", SOURCES, "session"),
     "constellation_shape": ("choice", SHAPES, "branching"),
     "constellation_names": ("bool", None, True),
+    "constellation_designations": ("bool", None, True),
     "constellation_lines": ("choice", ("accent", "white", "gold"), "accent"),
     "constellation_picture": ("choice", (1600, 2560, 3840), 1600),
     "constellation_picture_legend": ("bool", None, True),
@@ -94,6 +103,14 @@ def wait_text(seconds):
     return "1 year" if years <= 1.05 else f"{years:g} years"
 
 
+def _date_stamp(value):
+    """A page's "YYYY-MM-DD" as a unix time at the start of that local day, or None."""
+    try:
+        return datetime.strptime(str(value or "")[:10], "%Y-%m-%d").timestamp()
+    except ValueError:
+        return None
+
+
 class DashboardCapsulesMixin:
     def capsule_store(self):
         store = getattr(self, "_capsule_store", None)
@@ -137,9 +154,19 @@ class DashboardCapsulesMixin:
         """A live arrival: open the capsules left for this system, or say
         "not yet" for the ones sealed for later."""
         arrivals = CAPSULE_ARRIVALS + (("Location",) if self._keepsake_setting("capsule_open_on_login") else ())
-        if startup_replay or event not in arrivals or not isinstance(raw, dict):
+        if startup_replay or not isinstance(raw, dict):
             return []
-        system = str(raw.get("StarSystem") or "")
+        # 5.5.4: a capsule for a station or a body opens when you dock or land there.
+        place = None
+        if event == "Docked":
+            place = str(raw.get("StationName") or "")
+        elif event in ("Touchdown", "ApproachBody") and raw.get("Body"):
+            place = str(raw.get("Body") or "")
+        elif event not in arrivals:
+            return []
+        system = str(raw.get("StarSystem") or getattr(self, "current_sys", "") or "")
+        if place is not None:
+            return self._capsule_at_place(system, place, raw)
         try:
             arrived = datetime.fromisoformat(str(raw.get("timestamp")).replace("Z", "+00:00")).timestamp()
         except (TypeError, ValueError):
@@ -151,6 +178,7 @@ class DashboardCapsulesMixin:
                 store.set_coords(system, position)  # for the minimap's marks
             opened = store.deliver(system, arrived)
             early = store.early(system, arrived) if not opened else []
+            waiting = store.waiting_here(system)
         except Exception as exc:
             logging.debug("Time capsules skipped: %s", exc)
             return []
@@ -159,6 +187,10 @@ class DashboardCapsulesMixin:
         if early:
             soonest = min(float(capsule["not_before"]) for capsule in early)
             self._capsule_not_yet(system, soonest - arrived)
+        if waiting and not opened:
+            places = sorted({capsule["target"] for capsule in waiting})
+            self._notice(f"TIME CAPSULE · {system.upper()}",
+                         f"One waits for you at {', '.join(places[:3])}: dock or land there to open it.")
         if opened:
             publish = getattr(self, "_schedule_html_dashboard_publish", None)
             if callable(publish):
@@ -166,6 +198,25 @@ class DashboardCapsulesMixin:
             update_minimap = getattr(self, "_update_galaxy_minimap_safely", None)
             if callable(update_minimap):
                 update_minimap()
+        return opened
+
+    def _capsule_at_place(self, system, place, raw):
+        """Docked or landed: open any capsule waiting for this place."""
+        try:
+            arrived = datetime.fromisoformat(str(raw.get("timestamp")).replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError):
+            arrived = time.time()
+        try:
+            opened = self.capsule_store().deliver(system, arrived, place=place)
+        except Exception as exc:
+            logging.debug("Time capsules at %s skipped: %s", place, exc)
+            return []
+        for index, capsule in enumerate(opened):
+            self._hand_back_capsule(capsule, watcher=index == 0)
+        if opened:
+            publish = getattr(self, "_schedule_html_dashboard_publish", None)
+            if callable(publish):
+                publish(immediate=True)
         return opened
 
     def _watcher_says(self, kind, fields):
@@ -191,13 +242,20 @@ class DashboardCapsulesMixin:
         event feed."""
         span = span_text(time.time() - float(capsule.get("left_at") or 0))
         fields = {"note": capsule["note"], "span": span, "system": capsule["system"]}
+        # Shared by another commander (5.5.4): said as theirs.
+        shared = bool(capsule.get("share_id") and capsule.get("received_at"))
+        sender = capsule.get("sender") or "another commander"
+        if shared:
+            fields["sender"] = sender if not capsule.get("sender") or sender.upper().startswith("CMDR") else f"CMDR {sender}"
         delivery = self._keepsake_setting("capsule_delivery")
-        said = self._watcher_says("capsule", fields) if watcher and delivery != "notice" else None
+        said = self._watcher_says("capsule_shared" if shared else "capsule", fields)             if watcher and delivery != "notice" else None
         if not said and delivery != "watcher":
-            self._notice(f"TIME CAPSULE · {capsule['system'].upper()}", f"Left {span} ago: {capsule['note']}")
+            title = f"TIME CAPSULE · FROM {fields['sender'].upper()}" if shared else f"TIME CAPSULE · {capsule['system'].upper()}"
+            self._notice(title, f"Left {span} ago: {capsule['note']}")
         feed = getattr(self, "add_event_feed_entry", None)
         if callable(feed):
-            feed("CAPSULE", f"{capsule['system']}, left {span} ago: {capsule['note']}", severity="INFO")
+            who = f" by {fields['sender']}" if shared else ""
+            feed("CAPSULE", f"{capsule['system']}, left {span} ago{who}: {capsule['note']}", severity="INFO")
 
     def _capsule_not_yet(self, system, seconds):
         """Back before a capsule's "Not before…": it's there, not yet."""
@@ -269,17 +327,28 @@ class DashboardCapsulesMixin:
     def _html_capsules_workspace(self):
         now = time.time()
         rows = self.capsule_store().rows()
-        sealed, opened = [], []
+        sealed, opened, received = [], [], []
+        hide_received = self._keepsake_setting("capsule_hide_received")
         for row in rows:
             entry = {"id": row["id"], "system": row["system"], "note": row["note"], "left_from": row.get("left_from") or "",
-                     "left_at": row.get("left_at"), "left_ago": span_text(now - float(row.get("left_at") or now))}
+                     "left_at": row.get("left_at"), "left_ago": span_text(now - float(row.get("left_at") or now)),
+                     # 5.5.4: its kind, the station or body it waits for, and who shared it.
+                     "kind": row.get("kind") or "note", "target": row.get("target") or "",
+                     "sender": row.get("sender") or "", "shared": bool(row.get("received_at"))}
             if row.get("opened_at"):
                 entry.update(opened_at=row["opened_at"], waited=span_text(float(row["opened_at"]) - float(row.get("left_at") or 0)))
                 opened.append(entry)
+                continue
+            if row.get("not_before") and float(row["not_before"]) > now:
+                entry["opens_in"] = wait_text(float(row["not_before"]) - now)
+                entry["opens_on"] = datetime.fromtimestamp(float(row["not_before"])).strftime("%d %b %Y").lstrip("0")
+            if entry["shared"]:
+                if hide_received:
+                    entry["note"], entry["hidden"] = "", True  # unread until you get there
+                received.append(entry)
             else:
-                if row.get("not_before") and float(row["not_before"]) > now:
-                    entry["opens_in"] = wait_text(float(row["not_before"]) - now)
                 sealed.append(entry)
+        oldest = min((float(row.get("left_at") or now) for row in sealed + received), default=None)
         days = [dict(day, ago=years_text(day["years"])) for day in self._on_this_day()]
         # The postcards you took on this date, by year.
         cards = {}
@@ -300,12 +369,62 @@ class DashboardCapsulesMixin:
             "here": str(getattr(self, "current_sys", "") or ""),
             "sealed": sealed,
             "opened": opened,
+            "received": received,
             "on_this_day": days,
             "today": datetime.now().strftime("%d %B").lstrip("0"),
             "waits": list(WAITS),
+            "kinds": list(KINDS),
             "settings": {key: self._keepsake_setting(key) for key in CAPSULE_SETTINGS},
             "minimap": bool(setting_value(self.config, "galaxy_minimap_capsules", ("bool", None, True))),
+            # The vault (5.5.4): its figures, and sharing in progress.
+            "vault": {"sealed": len(sealed), "received": len(received), "opened": len(opened),
+                      "oldest": span_text(now - oldest) if oldest else "",
+                      "longest_wait": max((row["waited"] for row in opened), key=len, default="")},
+            "share": dict(getattr(self, "_capsule_shared_out", None) or {}),
+            "preview": dict(getattr(self, "_capsule_preview", None) or {}),
+            "sender": self._capsule_sender(),
         }
+
+    def _capsule_sender(self):
+        """Who signs the capsules you share: your name, unless you'd rather not."""
+        if not self._keepsake_setting("capsule_sign_shares"):
+            return ""
+        return str(getattr(self, "cmdr_name", "") or (self.config or {}).get("active_commander_name") or "")[:60]
+
+    @staticmethod
+    def capsule_folder():
+        return application_dir() / "capsules"
+
+    def _capsule_share(self, ids, as_file=False):
+        """A code (copied for you) or a .vccapsule file for these capsules."""
+        rows = [row for row in self.capsule_store().find(ids) if not row.get("received_at")]
+        if not rows:
+            self._capsule_shared_out = {"error": "Choose capsules of your own to share."}
+            return False
+        sender = self._capsule_sender()
+        systems = sorted({row["system"] for row in rows})
+        if as_file:
+            folder = self.capsule_folder()
+            stamp = datetime.now().strftime("%Y-%m-%d")
+            name = re.sub(r"[^A-Za-z0-9 _-]", "", systems[0] if len(systems) == 1 else "capsule pack").strip() or "capsule"
+            path = folder / f"{name} {stamp}.vccapsule"
+            try:
+                folder.mkdir(parents=True, exist_ok=True)
+                path.write_text(export_file(rows, sender), encoding="utf-8")
+            except OSError as exc:
+                self._capsule_shared_out = {"error": f"The file couldn't be saved: {exc}"}
+                return False
+            self._capsule_shared_out = {"file": str(path), "name": path.name, "count": len(rows)}
+            return True
+        code = encode(rows, sender)
+        where = systems[0] if len(systems) == 1 else f"{len(systems)} systems"
+        who = f" from CMDR {sender}" if sender else ""
+        message = (f"📦 {'A time capsule' if len(rows) == 1 else f'{len(rows)} time capsules'} for {where}{who}. "
+                   f"Paste this into Void Compass › Time Capsules › RECEIVE, then go and find it: {code}")
+        copy = getattr(self, "_html_copy_text", None)
+        copied = bool(callable(copy) and copy(message))
+        self._capsule_shared_out = {"code": code, "message": message, "count": len(rows), "copied": copied}
+        return True
 
     def _handle_capsules_command(self, operation, payload):
         payload = payload or {}
@@ -316,7 +435,8 @@ class DashboardCapsulesMixin:
             coords = getattr(self, "current_coords", None) if system.casefold() == here.casefold() else None
             wait = str(payload.get("wait") or "none")
             capsule = store.leave(system, payload.get("note"), here=here, wait=wait if wait in WAITS else "none",
-                                  coords=coords)
+                                  coords=coords, kind=str(payload.get("kind") or "note"),
+                                  target=str(payload.get("target") or ""), opens_on=_date_stamp(payload.get("opens_on")))
             if capsule:
                 feed = getattr(self, "add_event_feed_entry", None)
                 if callable(feed):
@@ -333,6 +453,51 @@ class DashboardCapsulesMixin:
             return done
         if operation == "set":
             return self._set_keepsake_setting(CAPSULE_SETTINGS, payload.get("key"), payload.get("value"))
+        # 5.5.4: open again later, share, export, receive.
+        if operation == "reseal":
+            wait = str(payload.get("wait") or "month")
+            return bool(store.reseal(str(payload.get("id") or ""), wait=wait if wait in WAITS else "month",
+                                     opens_on=_date_stamp(payload.get("opens_on"))))
+        ids = [str(value) for value in (payload.get("ids") or [payload.get("id")]) if value][:50]
+        if operation == "share":
+            return self._capsule_share(ids)
+        if operation == "export":
+            return self._capsule_share(ids, as_file=True)
+        if operation == "open_folder":
+            folder = self.capsule_folder()
+            folder.mkdir(parents=True, exist_ok=True)
+            return open_path(folder)
+        if operation == "copy_share":
+            message = (getattr(self, "_capsule_shared_out", None) or {}).get("message")
+            copy = getattr(self, "_html_copy_text", None)
+            return bool(message and callable(copy) and copy(message))
+        if operation == "clear_share":
+            self._capsule_shared_out = None
+            return True
+        if operation in ("preview", "receive"):
+            capsules, problem = decode(str(payload.get("text") or "")[:200_000])
+            if operation == "preview" or problem:
+                self._capsule_preview = {
+                    "problem": problem, "count": len(capsules),
+                    "senders": sorted({capsule["sender"] for capsule in capsules if capsule["sender"]}),
+                    "systems": sorted({capsule["system"] for capsule in capsules})[:12],
+                    "targets": sum(1 for capsule in capsules if capsule["target"]),
+                    "waiting": sum(1 for capsule in capsules if capsule["not_before"] and capsule["not_before"] > time.time()),
+                }
+                return not problem
+            added = store.receive(capsules)
+            self._capsule_preview = {"received": added, "skipped": len(capsules) - added}
+            feed = getattr(self, "add_event_feed_entry", None)
+            if added and callable(feed):
+                feed("CAPSULE", f"Received {added} time capsule{'' if added == 1 else 's'} from another commander",
+                     severity="INFO")
+            update_minimap = getattr(self, "_update_galaxy_minimap_safely", None)
+            if added and callable(update_minimap):
+                update_minimap()
+            return added > 0
+        if operation == "clear_preview":
+            self._capsule_preview = None
+            return True
         return False
 
     # -- The deck's Constellation page -----------------------------------------
@@ -343,12 +508,36 @@ class DashboardCapsulesMixin:
         config = getattr(self, "config", None) or {}
         nature = watcher_mind.personality(config)
         options = constellation_options(config)
-        key = (getattr(history, "revision", None), nature, get_active_profile(config), tuple(sorted(options.items())))
+        sessions, postcards, capsules = self._constellation_nights()
+        newest = sessions[0] if sessions else {}
+        key = (getattr(history, "revision", None), nature, get_active_profile(config), tuple(sorted(options.items())),
+               len(sessions), str(newest.get("ended")), int(newest.get("first_discoveries") or 0), len(postcards), len(capsules))
         cached = getattr(self, "_constellation_cache", None)
         if not cached or cached[0] != key:
-            cached = (key, constellations(self._history_rows(), nature, options))
+            cached = (key, constellations(self._history_rows(), nature, options, sessions, postcards, capsules))
             self._constellation_cache = cached
         return cached[1], options
+
+    def _constellation_nights(self):
+        """What v2 hangs on each star: the Captain's Log sessions, the
+        postcards and the time capsules (5.5.4)."""
+        sessions, postcards, capsules = [], [], []
+        log = getattr(self, "captains_log", None)
+        try:
+            sessions = list(log.sessions()) if log is not None else []
+        except Exception as exc:
+            logging.debug("Constellation sessions skipped: %s", exc)
+        album = getattr(self, "postcard_album", None)
+        try:
+            postcards = album().rows() if callable(album) else []
+        except Exception as exc:
+            logging.debug("Constellation postcards skipped: %s", exc)
+        store = getattr(self, "capsule_store", None)
+        try:
+            capsules = store().rows() if callable(store) else []
+        except Exception as exc:
+            logging.debug("Constellation capsules skipped: %s", exc)
+        return sessions, postcards, capsules
 
     def _tonight(self, linger_s):
         """This session's star so far: where you've stayed longest ("this
@@ -383,6 +572,10 @@ class DashboardCapsulesMixin:
         latest = sky[-1] if sky else None
         return {
             "sky": sky,
+            "almanac": almanac(sky),
+            "saved": self._saved_constellations(),
+            "folder": {"path": str((getattr(self, "config", None) or {}).get("constellations_path") or ""),
+                       "now": self.constellations_folder(), "default": str(application_dir() / CONSTELLATION_FOLDER)},
             "per": options["per"],
             "to_go": 0 if not latest or latest["complete"] else options["per"] - len(latest["stars"]),
             "tonight": self._tonight(options["linger_min"] * 60),
@@ -419,8 +612,7 @@ class DashboardCapsulesMixin:
         return self._watcher_says("constellation_named", {"name": newest["name"], "count": len(newest["stars"])})
 
     def _save_constellation(self, payload):
-        """SAVE AS PICTURE: the page's drawing, kept with your postcards."""
-        from voidcompass.dashboard.dashboard_keepsakes_mixin import postcards_folder
+        """SAVE AS PICTURE: the page's drawing, kept in the constellations folder."""
         try:
             data = base64.b64decode(str(payload.get("picture") or "").split(",", 1)[-1], validate=True)
         except (ValueError, TypeError):
@@ -438,7 +630,7 @@ class DashboardCapsulesMixin:
         except (ImportError, OSError, ValueError):
             return False
         name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", str(payload.get("name") or "Constellation")).strip()[:60] or "Constellation"
-        folder = postcards_folder(getattr(self, "config", None))
+        folder = self.constellations_folder()
         stamp = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
         path = os.path.join(folder, f"Constellation - {name} - {stamp}.png")
         try:
@@ -449,16 +641,84 @@ class DashboardCapsulesMixin:
         except OSError as exc:
             logging.warning("Constellation not saved: %s", exc)
             return False
-        self._postcard_album_cache = None
         feed = getattr(self, "add_event_feed_entry", None)
         if callable(feed):
-            feed("SYSTEM", f"{name} saved with your postcards", severity="INFO")
+            feed("SYSTEM", f"{name} saved on the Constellation page", severity="INFO")
         return True
+
+    # -- Saved pictures (5.5.4): their own folder and the Constellation page --
+    def constellations_folder(self):
+        """Your chosen folder, or the constellations folder beside Void Compass."""
+        chosen = str((getattr(self, "config", None) or {}).get("constellations_path") or "").strip()
+        return chosen or str(application_dir() / CONSTELLATION_FOLDER)
+
+    def constellation_album(self):
+        album = getattr(self, "_constellation_album_instance", None)
+        if album is None:
+            from voidcompass.services.postcard_album import ConstellationAlbum
+            album = ConstellationAlbum(self.constellations_folder)
+            favourites = getattr(self, "keepsake_favourites", None)
+            if callable(favourites):
+                album.favourites = favourites()
+                album.favourites_kind = "constellations"
+            self._constellation_album_instance = album
+            self._move_saved_constellations()
+        return album
+
+    def _move_saved_constellations(self):
+        """Pictures saved before 5.5.4 went in the postcard folder: they move
+        to the constellations folder once, the first time it's looked at."""
+        from voidcompass.dashboard.dashboard_keepsakes_mixin import postcards_folder
+        source = postcards_folder(getattr(self, "config", None))
+        target = self.constellations_folder()
+        try:
+            names = [name for name in os.listdir(source)
+                     if name.casefold().startswith("constellation - ") and name.lower().endswith(".png")]
+        except OSError:
+            return 0
+        moved = 0
+        for name in names:
+            try:
+                os.makedirs(target, exist_ok=True)
+                if not os.path.exists(os.path.join(target, name)):
+                    os.replace(os.path.join(source, name), os.path.join(target, name))
+                    moved += 1
+            except OSError as exc:
+                logging.debug("Constellation picture not moved: %s", exc)
+        if moved:
+            logging.info("Moved %d saved constellation picture(s) to %s", moved, target)
+        return moved
+
+    def _saved_constellations(self):
+        try:
+            return [{"id": row["id"], "title": row["title"], "at": row["at"]} for row in self.constellation_album().rows()]
+        except Exception as exc:
+            logging.debug("Saved constellations skipped: %s", exc)
+            return []
 
     def _handle_constellation_command(self, operation, payload):
         payload = payload or {}
         if operation == "save":
             return self._save_constellation(payload)
+        album_id = str(payload.get("id") or "")[:16]
+        if operation == "folder":
+            # A path, kept as typed (the page's other settings are choices).
+            self.config["constellations_path"] = str(payload.get("value") or "").strip()[:400]
+            persist = getattr(self, "_persist_config", None)
+            if callable(persist):
+                persist()
+            return True
+        if operation == "open_folder":
+            folder = self.constellations_folder()
+            try:
+                os.makedirs(folder, exist_ok=True)
+            except OSError:
+                return False
+            return bool(open_path(folder))
+        if operation == "show":
+            return self.constellation_album().show_in_folder(album_id)
+        if operation == "copy":
+            return self.constellation_album().copy(album_id)
         if operation == "set":
             return self._set_keepsake_setting(CONSTELLATION_SETTINGS, payload.get("key"), payload.get("value"))
         return False

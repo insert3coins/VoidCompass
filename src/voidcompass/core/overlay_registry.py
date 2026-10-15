@@ -36,6 +36,8 @@ OVERLAY_SPECS = (
     OverlaySpec("station_info_hud", "station", "Void Compass Station Link", "station_info_overlay_enabled", "station_info_hud_x", "station_info_hud_y", (30, 380), (520, 442), "Station Information", "STATION", True, "station_info", "overlay_hotkey_station_info", "Station Info"),
     OverlaySpec("survey_status_hud", "survey", "Void Compass Survey Operations", "survey_status_overlay_enabled", "survey_status_hud_x", "survey_status_hud_y", (30, 520), (420, 340), "Survey Operations", "SURVEY", True, "survey", "overlay_hotkey_survey", "Survey Operations"),
     OverlaySpec("toast_hud", "toast", "Void Compass Cockpit Notifications", "toast_overlay_enabled", "toast_hud_x", "toast_hud_y", (1200, 80), (400, 94), "Cockpit Notifications", "NOTIFY", True, "notifications", "overlay_hotkey_notifications", "Cockpit Notifications"),
+    # 5.5.4: achievements in their own window, on or off apart from notifications.
+    OverlaySpec("achievement_hud", "achievements", "Void Compass Achievements", "achievement_overlay_enabled", "achievement_hud_x", "achievement_hud_y", (1200, 230), (420, 120), "Achievements", "ACHIEVE", True, "achievements", "overlay_hotkey_achievements", "Achievements"),
     OverlaySpec("galnet_ticker_hud", "galnet-ticker", "Void Compass Galnet Ticker", "galnet_ticker_overlay_enabled", "galnet_ticker_hud_x", "galnet_ticker_hud_y", (360, 12), (860, 34), "Galnet Ticker", "GALNET", False, "galnet_ticker", "overlay_hotkey_galnet_ticker", "Galnet Ticker"),
     OverlaySpec("music_player_hud", "music-player", "Void Compass Music Player", "music_player_overlay_enabled", "music_player_hud_x", "music_player_hud_y", (40, 880), (460, 154), "Music Player", "MUSIC", False, "music_player", "overlay_hotkey_music_player", "Music Player"),
     OverlaySpec("heartbeat_hud", "heartbeat", "Void Compass Journal Heartbeat", "heartbeat_overlay_enabled", "heartbeat_hud_x", "heartbeat_hud_y", (24, 24), (54, 54), "Journal Heartbeat", "HEARTBEAT", True, "heartbeat", "overlay_hotkey_heartbeat", "Journal Heartbeat"),
@@ -95,6 +97,7 @@ OVERLAY_HOTKEY_SPECS = (
     _overlay_hotkey("powerplay"),
     _overlay_hotkey("gravity"),
     _overlay_hotkey("notifications"),
+    _overlay_hotkey("achievements"),
     _overlay_hotkey("heartbeat"),
     _overlay_hotkey("galnet_ticker"),
     _overlay_hotkey("galaxy_minimap"),

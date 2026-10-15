@@ -21,7 +21,7 @@ from voidcompass.core.config import (
     rename_commander_profile, resolve_commander_profile,
     get_profile_dir, get_profile_file, save_config, save_active_profile_config,
 )
-from voidcompass.core import themes
+from voidcompass.core import home_anchor, themes
 from voidcompass.overlays import overlay_chrome
 from voidcompass.core.theme_state import apply_theme_live
 from voidcompass.core.version import APP_VERSION
@@ -30,6 +30,7 @@ from voidcompass.overlays.hud import TacticalHUD
 from voidcompass.overlays.cargo_hud import CargoHUD, cargo_capacity_for
 from voidcompass.overlays.carrier_hud import CarrierHUD
 from voidcompass.services.edsm_handler import EDSMHandler
+from voidcompass.services.inara import InaraUploader
 from voidcompass.core.screenshot_handler import ScreenshotHandler
 from voidcompass.exploration.waypoint_manager import WaypointManager
 from voidcompass.exploration import route_strip
@@ -43,7 +44,7 @@ from voidcompass.overlays.powerplay_hud import PowerplayHUD
 from voidcompass.overlays.gravity_warning_hud import GravityWarningHUD
 from voidcompass.overlays.station_info_hud import StationInfoHUD
 from voidcompass.overlays.survey_status_hud import SurveyStatusHUD
-from voidcompass.overlays.toast_hud import ToastHUD
+from voidcompass.overlays.toast_hud import AchievementHUD, ToastHUD
 from voidcompass.overlays.heartbeat_hud import HeartbeatHUD
 from voidcompass.overlays.galnet_ticker_hud import GalnetTickerHUD
 from voidcompass.overlays.music_player_hud import MusicPlayerHUD
@@ -86,6 +87,9 @@ from voidcompass.dashboard.dashboard_jump_info_mixin import DashboardJumpInfoMix
 from voidcompass.dashboard.dashboard_keepsakes_mixin import DashboardKeepsakesMixin
 from voidcompass.dashboard.dashboard_capsules_mixin import DashboardCapsulesMixin
 from voidcompass.dashboard.dashboard_flight_log_mixin import DashboardFlightLogMixin
+from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
+from voidcompass.dashboard.dashboard_home_mixin import DashboardHomeMixin
+from voidcompass.dashboard.dashboard_tools_mixin import DashboardToolsMixin
 from voidcompass.dashboard.dashboard_colonisation_mixin import DashboardColonisationMixin
 from voidcompass.dashboard.dashboard_bgs_mixin import DashboardBgsMixin
 from voidcompass.dashboard.dashboard_trading_mixin import DashboardTradingMixin
@@ -277,6 +281,9 @@ class MainDashboard(
     DashboardKeepsakesMixin,
     DashboardCapsulesMixin,
     DashboardFlightLogMixin,
+    DashboardWatcherVoiceMixin,
+    DashboardHomeMixin,
+    DashboardToolsMixin,
     DashboardColonisationMixin,
     DashboardBgsMixin,
     DashboardTradingMixin,
@@ -958,6 +965,7 @@ class MainDashboard(
             "station_info_hud",
             "survey_status_hud",
             "toast_hud",
+            "achievement_hud",
             "heartbeat_hud",
             "galnet_ticker_hud",
             "music_player_hud",
@@ -1051,7 +1059,7 @@ class MainDashboard(
         for attr in (
             "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "powerplay_hud",
             "gravity_warning_hud", "station_info_hud",
-            "survey_status_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud",
+            "survey_status_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud",
             "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud",
             "galaxy_minimap_hud", "postcard_hud",
         ):
@@ -1542,6 +1550,8 @@ class MainDashboard(
                     context["galnet"] = str(articles[0]["title"])[:160]
             except Exception:
                 pass
+        # Where home is (5.5.4), for "light years from home".
+        context["home"] = home_anchor.home(self.config)
         return context
 
     def _watcher_sign_off(self):
@@ -2546,16 +2556,19 @@ class MainDashboard(
 
         # Initialize Handlers
         self.edsm = EDSMHandler(self.config)
-        self.edsm.set_log_callback(
-            lambda tag, msg, sev: self._ui_post(
-                self.add_event_feed_entry, tag, msg, severity=sev,
-            )
-        )
+        self.edsm.set_log_callback(self._service_log)
         eddn_market_uploader.set_log_callback(
             lambda tag, msg, sev: self._ui_post(
                 self.add_event_feed_entry, tag, msg, severity=sev,
             )
         )
+        # Inara (5.5.4): logs to the feed like EDSM and EDDN.
+        self.inara = InaraUploader(
+            self.config, APP_VERSION,
+            queue_path=lambda: os.path.join(get_profile_dir(get_active_profile(self.config)), "inara_queue.json"),
+        )
+        self.inara.start()
+        self.inara.set_log_callback(self._service_log)
         self._repair_screenshot_path()
         self.screenshots = ScreenshotHandler(
             self.config,
@@ -2654,13 +2667,26 @@ class MainDashboard(
             self.toast_hud = ToastHUD(self.root, self.config)
         else:
             self.toast_hud = None
+        # Note: before 5.5.4 achievements shared the notifications window and
+        # Settings had a switch for them; that choice carries over once.
+        if not self.config.get("achievement_overlay_split_554"):
+            self.config["achievement_overlay_split_554"] = True
+            if self.config.get("achievement_notifications_enabled") is False:
+                self.config["achievement_overlay_enabled"] = False
+        if self._overlay_enabled("achievement_hud"):
+            self.achievement_hud = AchievementHUD(self.root, self.config)
+        else:
+            self.achievement_hud = None
 
         if self._overlay_enabled("heartbeat_hud"):
             self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
             self.heartbeat_hud.context_provider = self._watcher_context
             self.heartbeat_hud.story_listener = self._watcher_story
+            self._watcher_voice_attach(self.heartbeat_hud)
         else:
             self.heartbeat_hud = None
+        # The voice warms up as the app loads, orb or not, so it's ready when needed.
+        self._watcher_voice_sync()
 
         if self._overlay_enabled("galnet_ticker_hud"):
             self.galnet_ticker_hud = GalnetTickerHUD(self.root, self.config)
@@ -3990,6 +4016,14 @@ class MainDashboard(
             return
         self._closing = True
         self.is_running = False
+        # Note: the Watcher stops mid-word, before anything else closes.
+        self._watcher_voice_close()
+        inara = getattr(self, "inara", None)
+        if inara is not None:
+            try:
+                inara.stop()
+            except Exception:
+                logging.debug("Inara stop skipped", exc_info=True)
         html_dashboard_job = getattr(self, "_html_dashboard_publish_job", None)
         if html_dashboard_job is not None:
             try:
@@ -4022,7 +4056,7 @@ class MainDashboard(
         self._trading_close()
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
-            "gravity_warning_hud", "toast_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
+            "gravity_warning_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
             "jump_info_hud", "colony_needs_hud", "trade_route_hud", "galaxy_minimap_hud", "postcard_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
@@ -4392,7 +4426,8 @@ class MainDashboard(
         self.open_field_tools_workspace(section="mining")
 
     def open_analytics_workspace(self):
-        self._route_to_html_workspace("analytics")
+        # The archive is Explore & Survey's Archive tab since 5.5.4.
+        self._route_to_html_workspace("explore")
 
     def open_carrier_workspace(self):
         self._route_to_html_workspace("carrier")
@@ -4447,8 +4482,10 @@ class MainDashboard(
                 f"Unlocked: {title} (+{points:,} pts)",
                 severity="INFO",
             )
-            if self.config.get("achievement_notifications_enabled", True) and self.toast_hud:
-                self.toast_hud.push(
+            # Their own overlay since 5.5.4, on or off apart from notifications.
+            achievements = getattr(self, "achievement_hud", None)
+            if achievements is not None:
+                achievements.push(
                     title,
                     description,
                     severity="success",
@@ -4983,11 +5020,22 @@ class MainDashboard(
                 pass
             self.toast_hud = None
 
+        if self._overlay_enabled("achievement_hud"):
+            if getattr(self, "achievement_hud", None) is None:
+                self.achievement_hud = AchievementHUD(self.root, self.config)
+        elif getattr(self, "achievement_hud", None):
+            try:
+                self.achievement_hud.win.destroy()
+            except Exception:
+                pass
+            self.achievement_hud = None
+
         if self._overlay_enabled("heartbeat_hud"):
             if self.heartbeat_hud is None:
                 self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
                 self.heartbeat_hud.context_provider = self._watcher_context
                 self.heartbeat_hud.story_listener = self._watcher_story
+                self._watcher_voice_attach(self.heartbeat_hud)
         elif self.heartbeat_hud:
             self.heartbeat_hud.destroy()
             self.heartbeat_hud = None
@@ -5107,7 +5155,7 @@ class MainDashboard(
                 attach_html_survey_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
-            elif attr == "toast_hud":
+            elif attr in {"toast_hud", "achievement_hud"}:
                 attach_html_toast_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
@@ -5122,7 +5170,7 @@ class MainDashboard(
                 )
             elif attr == "heartbeat_hud":
                 attach_html_heartbeat_overlay(
-                    overlay, overlay_id, title, enabled_key, x_key, y_key, levels=self.music_levels,
+                    overlay, overlay_id, title, enabled_key, x_key, y_key, levels=self._watcher_live_levels,
                 )
             elif attr == "galnet_ticker_hud":
                 attach_html_galnet_ticker_overlay(
@@ -5130,7 +5178,7 @@ class MainDashboard(
                 )
             elif attr == "music_player_hud":
                 attach_html_music_overlay(
-                    overlay, overlay_id, title, enabled_key, x_key, y_key, levels=self.music_levels,
+                    overlay, overlay_id, title, enabled_key, x_key, y_key, levels=self._watcher_live_levels,
                 )
             elif attr == "contact_scope_hud":
                 attach_html_contact_overlay(
@@ -7167,6 +7215,27 @@ class MainDashboard(
             self.set_event_feed_filter("ALL")
         self._request_html_dashboard_page("overview")
 
+    def _service_log(self, tag, message, severity):
+        """EDSM and Inara report here: into the feed, and remembered for the status bar."""
+        notes = getattr(self, "_service_notes", None)
+        if notes is None:
+            notes = self._service_notes = {}
+        notes[str(tag)] = (str(severity), time.time())
+        self._ui_post(self.add_event_feed_entry, tag, message, severity=severity)
+
+    def _inara_observe(self, ev, raw, startup_replay=False):
+        """Inara (5.5.4): each journal event, and the balance as you dock."""
+        inara = getattr(self, "inara", None)
+        if inara is None or not isinstance(raw, dict):
+            return
+        try:
+            # Note: credits go only with LoadGame; Inara asks for exact values,
+            # and a balance tracked between loads misses crew wages.
+            inara.observe(ev, raw, startup=bool(startup_replay or getattr(self, "is_first_load", False)))
+            inara.tick()
+        except Exception as exc:
+            logging.debug("Inara skipped %s: %s", ev, exc)
+
     def _queue_edsm_upload(self, raw_event, allow_startup=False, flush=False, startup_replay=False):
         """Queue accepted live journal events for EDSM without replaying startup history."""
         if ((self.is_first_load or startup_replay) and not allow_startup) or not isinstance(raw_event, dict):
@@ -7863,6 +7932,7 @@ class MainDashboard(
             if commander:
                 self._switch_commander_profile(commander, fid)
         self._postcard_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
+        self._inara_observe(ev, raw, startup_replay)
         # Jump Info learns the target before the jump phase moves on.
         self._jump_info_observe(
             ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
@@ -8142,6 +8212,9 @@ class MainDashboard(
             self.game_build = game_build if game_build is not None else self.game_build
             if game_version and game_build:
                 self.edsm.set_game_version(game_version, game_build)
+            inara = getattr(self, "inara", None)
+            if inara is not None and game_version:
+                inara.note_game_version(game_version)
             self.log(f"Game version detected: {game_version} ({game_build})")
 
         elif ev == "Loadout":
@@ -10222,8 +10295,20 @@ class MainDashboard(
         self._save_engineer_materials(self.engineer_materials)
         self._refresh_html_workspace()
 
+    def _inara_snapshot(self, event, data):
+        inara = getattr(self, "inara", None)
+        if inara is None:
+            return
+        try:
+            stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            inara.observe(event, {"timestamp": stamp, "event": event, **data})
+        except Exception as exc:
+            logging.debug("Inara skipped the %s snapshot: %s", event, exc)
+
     def update_ship_locker(self, data):
         """Marshal ShipLocker.json updates from the watcher onto the application thread."""
+        self._inara_snapshot("ShipLocker", {key: value for key, value in dict(data or {}).items()
+                                            if key in ("Items", "Components", "Consumables", "Data")})
         try:
             self._ui_post(
                 self._apply_ship_locker, dict(data or {}), key="ship-locker",
@@ -10800,6 +10885,10 @@ class MainDashboard(
     def update_cargo(self, inventory, vessel="Ship"):
         incoming_vessel = self._normalise_cargo_vessel(vessel)
         incoming_inventory = list(inventory or [])
+        # Inara (5.5.4): the journal's Cargo event lists nothing after startup,
+        # so the ship's hold goes from Cargo.json.
+        if incoming_vessel == "Ship":
+            self._inara_snapshot("Cargo", {"Vessel": "Ship", "Inventory": incoming_inventory})
         cache = getattr(self, "_cargo_inventory_by_hold", None)
         if not isinstance(cache, dict):
             cache = {}

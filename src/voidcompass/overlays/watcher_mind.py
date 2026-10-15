@@ -27,7 +27,10 @@ from pathlib import Path
 import zlib
 
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
-from voidcompass.overlays import watcher_idle, watcher_lines, watcher_lore, watcher_natures, watcher_postcards, watcher_worlds
+from voidcompass.overlays import (
+    watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures, watcher_postcards,
+    watcher_voice_lore, watcher_worlds,
+)
 
 # How often it may speak (Overlay Studio). The gap is the least time
 # between two thoughts; `minimum` is the least importance it will voice.
@@ -91,9 +94,15 @@ HEADED_TOPICS = {
     "sign_off_quiet": ("", "SIGNING OFF"),
     # 5.5.3.7: a note you left, handed back; where you were on this date.
     "capsule": ("recall", "TIME CAPSULE"),
+    # 5.5.4: one another commander shared with you.
+    "capsule_shared": ("recall", "TIME CAPSULE · FROM ANOTHER COMMANDER"),
     "on_this_day": ("recall", "ON THIS DAY"),
     "capsule_early": ("recall", "TIME CAPSULE · NOT YET"),
     "constellation_named": ("recall", "A NEW CONSTELLATION"),
+    # 5.5.4: finding its voice, and what it has learned about you.
+    "voice_found": ("memory", watcher_voice_lore.TITLE),
+    "habit_milestone": ("", "A MILESTONE"),
+    **{topic: ("musing", "WHAT IT KNOWS OF YOU") for topic in watcher_habits.HABIT_TOPICS if topic != "habit_milestone"},
 }
 
 
@@ -108,6 +117,8 @@ def thought_heading(topic, words=""):
             numeral, title, nth, total = place
             return "memory", f"MEMORY · {numeral}. {title.upper()} · {nth} OF {total}"
         return "memory", "MEMORY"
+    if topic == "voice_found":
+        return "memory", watcher_voice_lore.heading(words)
     if topic in watcher_lore.ECHO_LABELS:
         return "echo", f"ECHO · {watcher_lore.ECHO_LABELS[topic].upper()}"
     return HEADED_TOPICS.get(topic, ("", ""))
@@ -164,6 +175,7 @@ IMPORTANCE = {
     "anniversary": 3,
     # 5.5.3.7: your time capsules, and On this day.
     "capsule": 3,
+    "capsule_shared": 3,
     "on_this_day": 2,
     "capsule_early": 2,
     "constellation_named": 3,
@@ -199,6 +211,9 @@ IMPORTANCE = {
     "mission_done": 1,
     "bounty": 0,
     "mined": 0,
+    # 5.5.4: how you play, as it has come to know it; a milestone as it happens.
+    **{topic: 1 for topic in watcher_habits.HABIT_TOPICS},
+    "habit_milestone": 2,
 }
 # Each topic: (importance, [lines]). A line takes {fields} from the context
 # that raised it; a line whose fields are missing is skipped.
@@ -246,6 +261,7 @@ MOODS = {
     "lore_recall": "downcast",
     "idle_postcard": "pleased",
     "capsule": "pleased",
+    "capsule_shared": "curious",
     "world_earthlike": "pleased",
     "world_water": "curious",
     "world_ammonia": "curious",
@@ -254,6 +270,10 @@ MOODS = {
     "on_this_day": "downcast",
     "capsule_early": "curious",
     "constellation_named": "pleased",
+    **{topic: "curious" for topic in watcher_habits.HABIT_TOPICS},
+    "habit_milestone": "pleased",
+    "voice_found": "curious",
+    "idle_home_away": "pleased",
     **{topic: "curious" for topic in (
         "idle_star_odd", "idle_big_system", "arrival", "jump_long", "jump_far", "idle_far", "idle_star",
         "idle_galnet", "greet_new")},
@@ -276,6 +296,10 @@ NOTICED_FIELDS = frozenset((
     "body", "system", "species", "dist", "kind", "star", "a_star", "A_star", "region", "credits",
     "station", "material", "reward", "name", "ly", "title", "rank", "thing", "Thing", "headline",
     "artist", "count", "firsts", "jumps", "fuel", "summary", "settlement",
+    # 5.5.4: what it knows of how you play.
+    "commodity", "mined", "target", "sold", "best", "style", "longest", "bodies", "mapped", "bio", "tonnes",
+    "profit", "bounties", "scoops", "scooped_t", "landings", "best_cr", "bounty_cr", "sold_t", "mined_n",
+    "home", "sender",
 ))
 NOTICE_OPEN, NOTICE_CLOSE = "⟦", "⟧"
 
@@ -433,6 +457,10 @@ class WatcherMind:
         self._last_interesting = self.clock()
         self._pending = []           # (importance, topic, fields)
         self._dead_since = None
+        # 5.5.4: whether its voice is on (the HUD says), and when it last
+        # counted the minutes it has had one.
+        self.voice_active = False
+        self._voice_counted = None
         # What's around the commander, for idle thoughts (5.5.3.2).
         self.surroundings = watcher_idle.Surroundings()
 
@@ -465,7 +493,10 @@ class WatcherMind:
         try:
             data = json.loads(self.memory_path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
-                self.memory.update({key: data[key] for key in self.memory if key in data})
+                # Note: everything saved comes back, not just the keys a fresh
+                # memory starts with (the postcards it kept, its habits and its
+                # voice were lost on every restart before 5.5.4).
+                self.memory.update(data)
         except (OSError, ValueError):
             pass
 
@@ -589,6 +620,8 @@ class WatcherMind:
             rest = max(rest, watcher_lore.LORE_REST_S.get(topic, 0.0))
             if topic == "idle_postcard":
                 rest = max(rest, watcher_postcards.RECALL_REST_S)
+            if topic.startswith("habit_") and topic != "habit_milestone":
+                rest = max(rest, watcher_habits.HABIT_REST_S)
             if importance < 3 and self._said_recently(topic, rest):
                 return None
             # Even with something to say, it often keeps it to itself.
@@ -615,6 +648,8 @@ class WatcherMind:
         kind, heading = thought_heading(topic, text)
         self.thought = {"id": self._serial, "text": text, "script": script, "topic": topic,
                         "mood": MOODS.get(topic, ""), "at": now,
+                        # How much it matters, for how much of it is spoken (5.5.4).
+                        "importance": 3 if topic.startswith(("lore", "voice")) else IMPORTANCE.get(topic, 2),
                         "kind": kind, "heading": heading,
                         "until": now + (THOUGHT_SECONDS + len(script) * .05)
                         * THOUGHT_HOLDS[thought_style(self.config)["hold"]]}
@@ -772,7 +807,18 @@ class WatcherMind:
             self.memory["last_seen"] = self.clock()
 
     def observe(self, event, raw=None):
-        """One journal event. Returns a new thought, or None."""
+        """One journal event. Returns a new thought, or None. Every event
+        also teaches it a little about how you play (5.5.4)."""
+        raw = raw if isinstance(raw, dict) else {}
+        with self.lock:
+            milestone = watcher_habits.observe(self.memory, event, raw)
+        thought = self._observe(event, raw)
+        # A milestone is rare (10, 50, 100 …): it outranks a passing remark.
+        if milestone and self._session_start is not None and int((thought or {}).get("importance") or 0) < 2:
+            thought = self.consider("habit_milestone", watcher_habits.milestone_fields(*milestone), force=True) or thought
+        return thought
+
+    def _observe(self, event, raw):
         raw = raw if isinstance(raw, dict) else {}
         now = self.clock()
         # A break of a quarter of an hour or more ends the session: the
@@ -809,8 +855,14 @@ class WatcherMind:
         if event in {"FSDJump", "SupercruiseEntry", "Docked"} and self._in_danger:
             self._in_danger = False
             return self.consider("danger_over")
-        # Something in the game that touches its past (5.5.3.5).
+        # Something in the game that touches its past (5.5.3.5). Since 5.5.4
+        # the distance you've flown in all counts for the far ones too.
         echo = watcher_lore.echo_for(event, raw)
+        if not echo and event == "FSDJump":
+            known = self.memory.get("echoes") or {}
+            reached = [topic for topic in watcher_lore.distance_echoes(watcher_habits.habits(self.memory)["ly"])
+                       if topic not in known]
+            echo = reached[0] if reached else None
         if echo:
             with self.lock:
                 found = self.memory.setdefault("echoes", {})
@@ -976,7 +1028,7 @@ class WatcherMind:
             with self.lock:
                 self.memory["anniversary_said"] = today
             return self.consider("anniversary", fields, force=True)
-        if kind in {"capsule", "capsule_early", "constellation_named"}:
+        if kind in {"capsule", "capsule_early", "capsule_shared", "constellation_named"}:
             # A note you left (or not yet); a constellation finished: said
             # whatever the hour (5.5.3.7).
             return self.consider(kind, fields, force=True)
@@ -1030,6 +1082,42 @@ class WatcherMind:
             return None if known else self.consider("new_region", fields)
         return None
 
+    # -- its voice (5.5.4) ------------------------------------------------------
+    def find_voice(self):
+        """While its voice is on, count the minutes, and say the next thing
+        about finding it when one is due (whatever its Thoughts setting: the
+        commander switched the voice on to hear it)."""
+        now = self.clock()
+        if not self.voice_active or self._session_start is None:
+            self._voice_counted = None
+            return None
+        if self._voice_counted is not None:
+            # A long gap (the app asleep, the game paused) counts as a minute at most.
+            with self.lock:
+                watcher_voice_lore.add_minutes(self.memory, min(60.0, now - self._voice_counted) / 60.0)
+        self._voice_counted = now
+        if self._in_danger or now - self._last_spoke < 20:
+            return None
+        with self.lock:
+            due = watcher_voice_lore.due(self.memory)
+            if due:
+                watcher_voice_lore.mark_told(self.memory, due[0], now)
+        if not due:
+            return None
+        self._unsaved = True
+        return self._utter("voice_found", f"voice:{due[0]}", due[1], now)
+
+    def voice_stage(self):
+        return watcher_voice_lore.stage(self.memory)
+
+    def spoken_words(self, thought):
+        """What of a thought its voice says out loud, as far as it has found it."""
+        if not thought:
+            return ""
+        if thought.get("topic") == "voice_found":
+            return thought.get("text") or ""
+        return watcher_voice_lore.spoken_part(thought.get("text"), self.voice_stage())
+
     def vitals(self, fuel_percent=None, scooping=False):
         """Status: worry about fuel once, until it is topped up."""
         if fuel_percent is None:
@@ -1039,6 +1127,8 @@ class WatcherMind:
             return None
         if fuel_percent <= 25 and not scooping and not self._fuel_warned:
             self._fuel_warned = True
+            with self.lock:
+                watcher_habits.low_fuel(self.memory)
             return self.consider("fuel_low", {"fuel": int(round(fuel_percent))})
         return None
 
@@ -1049,6 +1139,9 @@ class WatcherMind:
         if self._session_start is None:
             return None  # nothing to think about until it has seen the game
         self._account_time()
+        voice = self.find_voice()
+        if voice:
+            return voice
         if self._session_start and now - self._session_start > 3 * 3600:
             hours = int((now - self._session_start) // 3600)
             if not self._said_recently("long_session", 3600):
@@ -1088,6 +1181,9 @@ class WatcherMind:
                          # 5.5.3.7: a postcard it kept.
                          postcard=watcher_postcards.recall_choice(self.memory, self.random, now))
             choices = self.surroundings.choices(now, self.random, known)
+            # How you play, as it has come to know you (5.5.4): now and then.
+            if self.random.random() < .35:
+                choices[:0] = watcher_habits.choices(self.memory, self.bond(), self.random)[:1]
             # The plain mutter now and then, and whenever nothing else fits.
             if not choices or self.random.random() < .25:
                 choices.insert(0, ("quiet", {}))

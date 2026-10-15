@@ -170,7 +170,7 @@ def _slanted_text(text, font, fill, shadow, k, lean=0.158):
     return layer.transform(layer.size, Image.AFFINE, (1, lean, -lean * height, 0, 1, 0), resample=Image.BICUBIC)
 
 
-def _greeting(card, width, k, colours, on_photo, style="polaroid"):
+def _greeting(card, width, k, colours, on_photo, style="polaroid", font_kind=""):
     """'Greetings from…': the place in big slanted HUD-orange capitals with
     the system and region under it (5.5.3.7). An RGBA layer ``width`` wide."""
     from PIL import Image, ImageDraw
@@ -180,8 +180,8 @@ def _greeting(card, width, k, colours, on_photo, style="polaroid"):
     probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     # Vintage writes it in an italic serif, as it is; the rest in slanted
     # HUD capitals.
-    vintage = style == "vintage"
-    kind = "serif" if vintage else "hud"
+    vintage = style == "vintage" if not font_kind else font_kind in ("serif", "hand")
+    kind = font_kind or ("serif" if vintage else "hud")
     place = str(card.get("title") or "") if vintage else str(card.get("title") or "").upper()
     size = round((104 if vintage else 120) * k)
     font = _font(kind, size)
@@ -194,7 +194,9 @@ def _greeting(card, width, k, colours, on_photo, style="polaroid"):
     # The lettering over the name (5.5.3.8): the card's own words, or none.
     words = str(card.get("greeting", "Greetings from") or "").strip().upper()
     top = round(44 * k) if words else 0
-    height = top + round(2 * k) + name.height + (round(42 * k) if under else 0)
+    # Handwriting's tails reach lower: the line under it sits further down.
+    drop = round(16 * k) if kind == "hand" else 0
+    height = top + round(2 * k) + name.height + drop + (round(42 * k) if under else 0)
     layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
     if words:
@@ -202,7 +204,7 @@ def _greeting(card, width, k, colours, on_photo, style="polaroid"):
     layer.alpha_composite(name, (0, top))
     if under:
         text = _fit(draw, under, tiny, width)
-        _spaced(draw, (round(4 * k), round(46 * k) + name.height - round(4 * k)), text, tiny, light, round(6 * k))
+        _spaced(draw, (round(4 * k), round(46 * k) + name.height - round(4 * k) + drop), text, tiny, light, round(6 * k))
     return layer
 
 
@@ -235,16 +237,108 @@ def _sepia(picture):
     return Image.blend(picture.convert("RGB"), toned, .6)
 
 
-def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="polaroid"):
+def _themed(colours, theme):
+    """A theme's own colours over the base's (5.5.4)."""
+    if not theme:
+        return colours
+    colours = dict(colours)
+    for key in ("paper", "ink", "greet"):
+        if theme.get(key):
+            colours[key] = _hex(theme[key], "")
+    if theme.get("paper") or theme.get("ink"):
+        colours["soft"] = _mix(colours["ink"], colours["paper"], .62)
+    return colours
+
+
+def _filtered(picture, photo_filter, style):
+    """The photo through the theme's filter; "none" keeps the base's own."""
+    from PIL import Image, ImageEnhance, ImageOps
+    if photo_filter == "sepia" or (photo_filter == "none" and style == "vintage"):
+        return _sepia(picture)
+    if photo_filter == "mono":
+        return ImageOps.grayscale(picture).convert("RGB")
+    if photo_filter == "vivid":
+        return ImageEnhance.Contrast(ImageEnhance.Color(picture.convert("RGB")).enhance(1.45)).enhance(1.08)
+    if photo_filter == "cool":
+        return Image.blend(picture.convert("RGB"), Image.new("RGB", picture.size, (40, 90, 160)), .18)
+    return picture
+
+
+def _arc_text(layer, text, font, fill, centre, radius, middle_deg, downward=False, spacing=0):
+    """Letters round a circle, centred on ``middle_deg`` (0 is right, 90 is
+    down): over the top reading clockwise, or under the bottom reading the
+    other way."""
+    import math
+
+    from PIL import Image, ImageDraw
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    widths = [probe.textlength(char, font=font) + spacing for char in text]
+    angle = math.radians(middle_deg) + (sum(widths) / radius / 2) * (1 if downward else -1)
+    top, bottom = font.getbbox("HQ")[1], font.getbbox("HQg")[3]
+    for char, width in zip(text, widths):
+        step = width / radius
+        angle += (step / 2) * (-1 if downward else 1)
+        glyph = Image.new("RGBA", (round(width + 8), bottom + 8), (0, 0, 0, 0))
+        ImageDraw.Draw(glyph).text((4, 4 - top / 2), char, font=font, fill=fill)
+        turn = math.degrees(angle) + (-90 if downward else 90)
+        glyph = glyph.rotate(-turn, resample=Image.BICUBIC, expand=True)
+        x = centre[0] + radius * math.cos(angle) - glyph.width / 2
+        y = centre[1] + radius * math.sin(angle) - glyph.height / 2
+        layer.alpha_composite(glyph, (round(x), round(y)))
+        angle += (step / 2) * (-1 if downward else 1)
+
+
+def _postmark(card, k, colour):
+    """A rubber-stamp postmark (5.5.4): the system round the top, the date
+    round the bottom, the time in the middle, and the wavy cancellation
+    lines; an RGBA layer, tilted."""
+    import math
+
+    from PIL import Image, ImageDraw
+    size = round(236 * k)
+    lines = round(150 * k)
+    layer = Image.new("RGBA", (size + lines, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    ink = colour + (205,)
+    centre, outer = (lines + size / 2, size / 2), size / 2 - round(6 * k)
+    inner = outer * .58
+    draw.ellipse([centre[0] - outer, centre[1] - outer, centre[0] + outer, centre[1] + outer], outline=ink, width=max(2, round(5 * k)))
+    draw.ellipse([centre[0] - inner, centre[1] - inner, centre[0] + inner, centre[1] + inner], outline=ink, width=max(1, round(3 * k)))
+    ring = (outer + inner) / 2
+    words = str(card.get("place") or card.get("title") or "").upper()
+    font = _font("hud", round(27 * k))
+    while len(words) > 4 and draw.textlength(words, font=font) + len(words) * 3 * k > math.pi * ring * .92:
+        words = words[:-2].rstrip() + "…"
+    _arc_text(layer, words, font, ink, centre, ring, -90, spacing=round(3 * k))
+    _arc_text(layer, str(card.get("date") or "").upper(), _font("hud", round(25 * k)), ink, centre, ring, 90,
+              downward=True, spacing=round(3 * k))
+    middle = str(card.get("time") or "")
+    if middle:
+        clock = _font("hud", round(40 * k))
+        box = draw.textbbox((0, 0), middle, font=clock)
+        draw.text((centre[0] - (box[2] + box[0]) / 2, centre[1] - (box[3] + box[1]) / 2), middle, font=clock, fill=ink)
+    # The cancellation: wavy lines running off to the left.
+    for row in range(4):
+        y0 = centre[1] - round(48 * k) + row * round(32 * k)
+        points = [(x, y0 + math.sin(x / (18 * k)) * 6 * k) for x in range(0, lines + round(10 * k), max(2, round(4 * k)))]
+        draw.line(points, fill=ink, width=max(2, round(4 * k)))
+    return layer.rotate(14, resample=Image.BICUBIC, expand=True)
+
+
+def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="polaroid", theme=None, background=None,
+                    postmark=False):
     """The postcard as an RGBA image, as the overlay draws it: the picture
     with "Greetings from…" over it (or on the paper when there's no
-    picture), the Watcher's note, the journal's facts, where and when; tilted
-    on a transparent ground with a shadow."""
+    picture), the note, the journal's facts, where and when; tilted on a
+    transparent ground with a shadow. A theme (5.5.4) changes the colours,
+    lettering, filter and angle; ``background`` (an image) or the theme's
+    colour goes behind the card."""
     from PIL import Image, ImageDraw, ImageFilter
     style = style if style in ("polaroid", "airmail", "holo", "vintage") else "polaroid"
-    colours = card_colours(palette, style)
-    if style == "vintage" and picture is not None:
-        picture = _sepia(picture)
+    theme = theme or {}
+    colours = _themed(card_colours(palette, style), theme)
+    if picture is not None:
+        picture = _filtered(picture, theme.get("filter") or "none", style)
     k = width / PHOTO_WIDTH
     border, pad, bottom = round(BORDER * k), round(CAPTION_PAD * k), round(BOTTOM * k)
     hand, signed_font = _font("hand", round(50 * k)), _font("hand", round(46 * k))
@@ -255,11 +349,15 @@ def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="
     inset = round(22 * k) if style == "airmail" else 0
     room = width - round(12 * k) - inset * 2
     photo_height = round(width * 9 / 16) if picture is not None else 0
-    greeting = _greeting(card, room, k, colours, on_photo=picture is not None, style=style)
+    greeting = _greeting(card, room, k, colours, on_photo=picture is not None, style=style,
+                         font_kind=theme.get("font") or "")
 
-    # Measure the paper's lines first, then draw them.
+    # Measure the paper's lines first, then draw them. The postmark takes
+    # the right of the paper beside the note.
+    stamp = _postmark(card, k, _mix(colours["greet"], colours["ink"], .78)) if postmark else None
+    beside = room - (stamp.width - round(70 * k) if stamp else 0)
     note = str(card.get("note") or "")
-    note_lines = _wrap(probe, note or card.get("doing") or "", hand, room)
+    note_lines = _wrap(probe, note or card.get("doing") or "", hand, beside)
     line_h = round(66 * k)
     chips = [str(fact).upper() for fact in card.get("facts") or ()]
     chip_h, chip_gap, chip_pad = round(46 * k), round(12 * k), round(16 * k)
@@ -274,8 +372,11 @@ def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="
     if row:
         chip_rows.append(row)
     where = " · ".join(part for part in ((card.get("doing") if note else ""), card.get("coordinates")) if part).upper()
+    note_block = len(note_lines) * line_h + (round(80 * k) if note else 0)
+    if stamp:
+        note_block = max(note_block, stamp.height - round(40 * k))
     caption_height = (pad + (greeting.height + round(20 * k) if picture is None else 0)
-                      + len(note_lines) * line_h + (round(80 * k) if note else 0)
+                      + note_block
                       + len(chip_rows) * (chip_h + chip_gap) + round(10 * k)
                       + (round(48 * k) if where else 0) + round(24 * k) + round(48 * k))
     card_width, card_height = width + border * 2, border + photo_height + caption_height + bottom
@@ -308,14 +409,19 @@ def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="
         paper.alpha_composite(greeting, (x, y))
         y += greeting.height + round(20 * k)
 
+    if stamp:
+        paper.alpha_composite(stamp, (x + room - stamp.width + round(30 * k), y - round(30 * k)))
+    block_end = y + note_block
     for line in note_lines:
         draw.text((x, y), line, font=hand, fill=colours["ink"])
         y += line_h
     if note:
-        signature = "— the Watcher"
-        draw.text((x + room - draw.textlength(signature, font=signed_font), y), signature,
+        # Note: your own words sign with your own name (5.5.4).
+        signature = "— " + str(card.get("signed") or "the Watcher")
+        draw.text((x + beside - draw.textlength(signature, font=signed_font), y), signature,
                   font=signed_font, fill=colours["soft"])
         y += round(80 * k)
+    y = max(y, block_end)
     spacing = round(3 * k)
     for chips_row in chip_rows:
         left = x
@@ -361,7 +467,19 @@ def render_postcard(card, picture=None, palette=None, width=PHOTO_WIDTH, style="
         [margin, margin + round(14 * k), margin + card_width, margin + card_height + round(14 * k)], fill=(0, 0, 0, 140))
     ground = Image.alpha_composite(ground, shadow.filter(ImageFilter.GaussianBlur(round(18 * k))))
     ground.alpha_composite(paper, (margin, margin))
-    return ground.rotate(TILT_DEGREES, resample=Image.BICUBIC, expand=True)
+    angle = theme.get("angle")
+    tilted = ground.rotate(TILT_DEGREES if angle is None else -float(angle), resample=Image.BICUBIC, expand=True)
+    if background is None and not (theme.get("background") == "colour" and theme.get("bg_colour")):
+        return tilted
+    # Behind the card: your picture, or the theme's colour.
+    pad = round(110 * k)
+    size = (tilted.width + pad * 2, tilted.height + pad * 2)
+    if background is not None:
+        backdrop = _cover(background.convert("RGB"), *size).convert("RGBA")
+    else:
+        backdrop = Image.new("RGBA", size, _hex(theme["bg_colour"], "#202020") + (255,))
+    backdrop.alpha_composite(tilted, (pad, pad))
+    return backdrop
 
 
 def postcard_filename(card, stamp):
@@ -370,22 +488,75 @@ def postcard_filename(card, stamp):
     return f"Postcard - {title[:80]} - {stamp}.png"
 
 
-def save_postcard_picture(card, picture, folder, palette=None, stamp=None, style="polaroid"):
-    """Draw the postcard and save it in ``folder`` (made if need be); its
-    path, or None."""
+def save_postcard_picture(card, picture, folder, palette=None, stamp=None, style="polaroid", theme=None,
+                          background=None, path=None, postmark=False):
+    """Draw the postcard and save it in ``folder`` (made if need be), or over
+    ``path`` when it's being edited; its path, or None."""
     import time
     stamp = stamp or time.strftime("%Y-%m-%d %H-%M-%S")
     try:
         os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, postcard_filename(card, stamp))
-        base, counter = os.path.splitext(path)[0], 1
-        while os.path.exists(path):
-            path = f"{base} ({counter}).png"
-            counter += 1
-        image = render_postcard(card, picture, palette, style=style)
+        if path is None:
+            path = os.path.join(folder, postcard_filename(card, stamp))
+            base, counter = os.path.splitext(path)[0], 1
+            while os.path.exists(path):
+                path = f"{base} ({counter}).png"
+                counter += 1
+        image = render_postcard(card, picture, palette, style=style, theme=theme, background=background,
+                                postmark=postmark)
         partial = path + ".part"
         image.save(partial, "PNG", optimize=True)
         os.replace(partial, path)
         return path
     except OSError:
         return None
+
+
+# -- Editing a saved postcard (5.5.4) ---------------------------------------------
+# Beside each postcard saved from 5.5.4 on, in a hidden ".cards" folder: the
+# card in words (JSON) and its photo (a JPEG), so it can be drawn again with
+# new words, a new look or a new angle.
+CARDS_FOLDER = ".cards"
+
+
+def _sidecar(png_path):
+    folder, name = os.path.split(str(png_path))
+    stem = os.path.splitext(name)[0]
+    return os.path.join(folder, CARDS_FOLDER, stem + ".json"), os.path.join(folder, CARDS_FOLDER, stem + ".jpg")
+
+
+def keep_card(png_path, card, picture, settings):
+    """Keep what's needed to draw this postcard again."""
+    import json
+    data_path, photo_path = _sidecar(png_path)
+    try:
+        os.makedirs(os.path.dirname(data_path), exist_ok=True)
+        if picture is not None:
+            copy = picture.convert("RGB")
+            copy.thumbnail((PHOTO_WIDTH, PHOTO_WIDTH))
+            copy.save(photo_path, "JPEG", quality=88)
+        with open(data_path, "w", encoding="utf-8") as handle:
+            json.dump({"card": card, "settings": settings, "photo": picture is not None}, handle, ensure_ascii=False)
+        return True
+    except OSError:
+        return False
+
+
+def kept_card(png_path):
+    """(card, settings, picture) kept for a saved postcard, or None when it was
+    saved before postcards could be edited."""
+    import json
+    data_path, photo_path = _sidecar(png_path)
+    try:
+        with open(data_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("card"), dict):
+        return None
+    picture = open_picture(photo_path) if data.get("photo") else None
+    return data["card"], dict(data.get("settings") or {}), picture
+
+
+def is_editable(png_path):
+    return os.path.isfile(_sidecar(png_path)[0])

@@ -28,6 +28,9 @@ _NOT_A_SYSTEM = {"unknown", "highresscreenshot", "screenshot"}
 class ScreenshotAlbum(PostcardAlbum):
     EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp")
 
+    def _wanted(self, name):
+        return True
+
     def rows(self):
         """Newest first: {id, title, system, at, file, kind, caption, favourite}."""
         out = []

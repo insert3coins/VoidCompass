@@ -12,13 +12,13 @@ WEB = Path(__file__).resolve().parents[1] / "web"
 IMAGE_ASSETS = Path(__file__).resolve().parents[1] / "assets" / "images"
 BRIDGE_PAGES = (
     "planet-materials", "explore", "records", "operations", "profile",
-    "analytics", "chronicle", "mission", "ground", "mining",
+    "chronicle", "mission", "ground", "mining",
     "engineering", "build-planner", "powerplay", "carrier", "recon",
     "achievements", "ledger", "settings", "overlay-studio", "about", "music",
-    "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation",
+    "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation", "tools",
 )
 WORKSPACE_PAGES = (
-    "planet-materials", "explore", "profile", "analytics", "chronicle",
+    "planet-materials", "explore", "profile", "chronicle",
     "mission", "ground", "mining", "engineering", "build-planner",
     "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
     "colonisation", "bgs", "trading",

@@ -1259,3 +1259,4 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 /* Mission Directive: a warning tone when the cue is pressing (low fuel). */
 .decision-card.warn { border-color: color-mix(in srgb, var(--orange) 60%, var(--border)); }
 .decision-card.warn #decision-title { color: var(--orange); }
+.statusbar i.off { background: var(--dim); box-shadow: none; }

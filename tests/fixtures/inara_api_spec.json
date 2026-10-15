@@ -1,0 +1,327 @@
+{
+ "source": "https://inara.cz/elite/inara-api-docs/",
+ "read": "2026-10-16",
+ "note": "Property names and types from each event's table; missionGameID is a number in every example.",
+ "events": {
+  "addCommanderFriend": {
+   "commanderName": "string",
+   "gamePlatform": "string"
+  },
+  "delCommanderFriend": {
+   "commanderName": "string",
+   "gamePlatform": "string"
+  },
+  "getCommanderProfile": {
+   "searchName": "string"
+  },
+  "addCommanderPermit": {
+   "starsystemName": "string"
+  },
+  "setCommanderCredits": {
+   "commanderCredits": "integer",
+   "commanderAssets": "integer",
+   "commanderLoan": "integer"
+  },
+  "setCommanderGameStatistics": {},
+  "setCommanderRankEngineer": {
+   "engineerName": "string",
+   "rankStage": "string",
+   "rankValue": "integer"
+  },
+  "setCommanderRankPilot": {
+   "rankName": "string",
+   "rankValue": "integer",
+   "rankProgress": "float"
+  },
+  "setCommanderRankPower": {
+   "powerName": "string",
+   "rankValue": "integer",
+   "meritsValue": "integer"
+  },
+  "setCommanderReputationMajorFaction": {
+   "majorfactionName": "string",
+   "majorfactionReputation": "float"
+  },
+  "setCommanderReputationMinorFaction": {
+   "minorfactionName": "string",
+   "minorfactionReputation": "float"
+  },
+  "addCommanderInventoryItem": {
+   "itemName": "string",
+   "itemCount": "integer",
+   "itemType": "string",
+   "itemLocation": "string",
+   "isStolen": "boolean",
+   "missionGameID": "integer"
+  },
+  "delCommanderInventoryItem": {
+   "itemName": "string",
+   "itemCount": "integer",
+   "itemType": "string",
+   "itemLocation": "string",
+   "isStolen": "boolean",
+   "missionGameID": "integer"
+  },
+  "resetCommanderInventory": {
+   "itemType": "string",
+   "itemLocation": "string"
+  },
+  "setCommanderInventory": {
+   "itemName": "string",
+   "itemCount": "integer",
+   "itemType": "string",
+   "itemLocation": "string",
+   "isStolen": "boolean",
+   "missionGameID": "integer"
+  },
+  "setCommanderInventoryItem": {
+   "itemName": "string",
+   "itemCount": "integer",
+   "itemType": "string",
+   "itemLocation": "string",
+   "isStolen": "boolean",
+   "missionGameID": "integer"
+  },
+  "addCommanderInventoryCargoItem": {
+   "itemName": "string",
+   "itemCount": "integer",
+   "isStolen": "boolean",
+   "missionGameID": "integer"
+  },
+  "addCommanderInventoryMaterialsItem": {
+   "itemName": "string",
+   "itemCount": "integer"
+  },
+  "delCommanderInventoryCargoItem": {
+   "itemName": "string",
+   "itemCount": "integer",
+   "isStolen": "boolean",
+   "missionGameID": "integer"
+  },
+  "delCommanderInventoryMaterialsItem": {
+   "itemName": "string",
+   "itemCount": "integer"
+  },
+  "setCommanderInventoryCargo": {
+   "itemName": "string",
+   "itemCount": "integer",
+   "isStolen": "boolean",
+   "missionGameID": "integer"
+  },
+  "setCommanderInventoryCargoItem": {
+   "itemName": "string",
+   "itemCount": "integer",
+   "isStolen": "boolean",
+   "missionGameID": "integer"
+  },
+  "setCommanderInventoryMaterials": {
+   "itemName": "string",
+   "itemCount": "integer"
+  },
+  "setCommanderInventoryMaterialsItem": {
+   "itemName": "string",
+   "itemCount": "integer"
+  },
+  "setCommanderStorageModules": {
+   "itemName": "string",
+   "itemValue": "integer",
+   "isHot": "boolean",
+   "starsystemName": "string",
+   "stationName": "string",
+   "marketID": "integer",
+   "engineering": "mixed"
+  },
+  "addCommanderShip": {
+   "shipType": "string",
+   "shipGameID": "integer"
+  },
+  "delCommanderShip": {
+   "shipType": "string",
+   "shipGameID": "integer"
+  },
+  "setCommanderShip": {
+   "shipType": "string",
+   "shipGameID": "integer",
+   "shipName": "string",
+   "shipIdent": "string",
+   "shipRole": "string",
+   "isCurrentShip": "boolean",
+   "isMainShip": "boolean",
+   "isHot": "boolean",
+   "shipHullValue": "integer",
+   "shipMaxJumpRange": "float",
+   "shipCargoCapacity": "integer",
+   "shipModulesValue": "integer",
+   "shipRebuyCost": "integer",
+   "starsystemName": "string",
+   "stationName": "string",
+   "marketID": "integer"
+  },
+  "setCommanderShipLoadout": {
+   "shipType": "string",
+   "shipGameID": "integer",
+   "shipLoadout": "mixed"
+  },
+  "setCommanderShipTransfer": {
+   "shipType": "string",
+   "shipGameID": "integer",
+   "starsystemName": "string",
+   "stationName": "string",
+   "marketID": "integer",
+   "transferTime": "integer"
+  },
+  "delCommanderSuitLoadout": {
+   "loadoutGameID": "integer"
+  },
+  "setCommanderSuitLoadout": {
+   "loadoutGameID": "integer",
+   "loadoutName": "string",
+   "suitGameID": "integer",
+   "suitType": "string",
+   "suitMods": "mixed",
+   "suitLoadout": "mixed"
+  },
+  "updateCommanderSuitLoadout": {
+   "loadoutGameID": "integer",
+   "loadoutName": "string",
+   "suitGameID": "integer",
+   "suitType": "string",
+   "suitMods": "mixed",
+   "suitLoadout": "mixed"
+  },
+  "addCommanderTravelCarrierJump": {
+   "starsystemName": "string",
+   "starsystemCoords": "array",
+   "stationName": "string",
+   "marketID": "integer",
+   "jumpDistance": "float",
+   "shipType": "string",
+   "shipGameID": "integer"
+  },
+  "addCommanderTravelDock": {
+   "starsystemName": "string",
+   "starsystemCoords": "array",
+   "stationName": "string",
+   "marketID": "integer",
+   "starsystemBodyName": "string",
+   "starsystemBodyCoords": "array",
+   "shipType": "string",
+   "shipGameID": "integer",
+   "isTaxiShuttle": "boolean",
+   "isTaxiDropship": "boolean"
+  },
+  "addCommanderTravelFSDJump": {
+   "starsystemName": "string",
+   "starsystemCoords": "array",
+   "jumpDistance": "float",
+   "shipType": "string",
+   "shipGameID": "integer",
+   "isTaxiShuttle": "boolean",
+   "isTaxiDropship": "boolean"
+  },
+  "addCommanderTravelLand": {
+   "starsystemName": "string",
+   "starsystemCoords": "array",
+   "starsystemBodyName": "string",
+   "starsystemBodyCoords": "array",
+   "shipType": "string",
+   "shipGameID": "integer",
+   "isTaxiShuttle": "boolean",
+   "isTaxiDropship": "boolean"
+  },
+  "setCommanderTravelLocation": {
+   "starsystemName": "string",
+   "starsystemCoords": "array",
+   "stationName": "string",
+   "marketID": "integer",
+   "starsystemBodyName": "string",
+   "starsystemBodyCoords": "array"
+  },
+  "addCommanderMission": {
+   "missionName": "string",
+   "missionGameID": "integer",
+   "missionExpiry": "timestamp",
+   "influenceGain": "string",
+   "reputationGain": "string",
+   "starsystemNameOrigin": "string",
+   "stationNameOrigin": "string",
+   "minorfactionNameOrigin": "string",
+   "starsystemNameTarget": "string",
+   "stationNameTarget": "string",
+   "minorfactionNameTarget": "string",
+   "commodityName": "string",
+   "commodityCount": "integer",
+   "targetName": "string",
+   "targetType": "string",
+   "killCount": "integer",
+   "passengerType": "string",
+   "passengerCount": "integer",
+   "passengerIsVIP": "boolean",
+   "passengerIsWanted": "boolean"
+  },
+  "setCommanderMissionAbandoned": {
+   "missionGameID": "integer"
+  },
+  "setCommanderMissionCompleted": {
+   "missionGameID": "integer",
+   "donationCredits": "integer",
+   "rewardCredits": "integer",
+   "rewardPermits": "array",
+   "rewardCommodities": "array",
+   "rewardMaterials": "array",
+   "minorfactionEffects": "array"
+  },
+  "setCommanderMissionFailed": {
+   "missionGameID": "integer"
+  },
+  "addCommanderCombatDeath": {
+   "starsystemName": "string",
+   "opponentName": "string",
+   "wingOpponentNames": "array",
+   "isPlayer": "boolean"
+  },
+  "addCommanderCombatInterdicted": {
+   "starsystemName": "string",
+   "opponentName": "string",
+   "isPlayer": "boolean",
+   "isSubmit": "boolean"
+  },
+  "addCommanderCombatInterdiction": {
+   "starsystemName": "string",
+   "opponentName": "string",
+   "isPlayer": "boolean",
+   "isSuccess": "boolean"
+  },
+  "addCommanderCombatInterdictionEscape": {
+   "starsystemName": "string",
+   "opponentName": "string",
+   "isPlayer": "boolean"
+  },
+  "addCommanderCombatKill": {
+   "starsystemName": "string",
+   "opponentName": "string"
+  },
+  "getCommunityGoalsRecent": {},
+  "setCommanderCommunityGoalProgress": {
+   "communitygoalGameID": "integer",
+   "contribution": "integer",
+   "percentileBand": "integer",
+   "percentileBandReward": "integer",
+   "isTopRank": "boolean"
+  },
+  "setCommunityGoal": {
+   "communitygoalGameID": "integer",
+   "communitygoalName": "string",
+   "starsystemName": "string",
+   "stationName": "string",
+   "goalExpiry": "timestamp",
+   "tierReached": "integer",
+   "tierMax": "integer",
+   "topRankSize": "integer",
+   "isCompleted": "boolean",
+   "contributorsNum": "integer",
+   "contributionsTotal": "integer",
+   "completionBonus": "string"
+  }
+ }
+}

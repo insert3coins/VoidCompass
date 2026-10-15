@@ -1,7 +1,7 @@
-"""Real browser checks for the transient notification and milestone cards."""
+"""Real browser checks for the notification and achievement cards (rebuilt in
+5.5.4: one page for both overlays, every size growing with the text size)."""
 
 from pathlib import Path
-import os
 import time
 import unittest
 from urllib.parse import urlsplit
@@ -23,7 +23,7 @@ class ToastOverlayVisualTests(unittest.TestCase):
             except Exception as exc:
                 self.skipTest(f"Playwright Chromium is unavailable: {exc}")
             try:
-                page = browser.new_page(viewport={"width": 400, "height": 700})
+                page = browser.new_page(viewport={"width": 400, "height": 900})
                 errors = []
                 page.on("pageerror", lambda error: errors.append(str(error)))
 
@@ -34,7 +34,8 @@ class ToastOverlayVisualTests(unittest.TestCase):
                             content_type="application/javascript",
                             body=path.read_text(encoding="utf-8")
                             + "\nwindow.VoidCompassOverlay = {...VoidCompassOverlay, "
-                            "startPolling: options => { window.__renderToast = options.render; }};",
+                            "startPolling: options => { window.__renderToast = options.render; "
+                            "window.__measure = options.contentHeight; }};",
                         )
                     elif path.is_file():
                         route.fulfill(path=str(path))
@@ -54,44 +55,27 @@ class ToastOverlayVisualTests(unittest.TestCase):
                      "message": "Complete one hundred hyperspace jumps", "expire_at": expires,
                      "meta": {"points": 2000, "category": "Exploration", "tier": "Gold"}},
                 ]
-                for scale, expected_heights in (
-                    (1, [80, 80, 112]), (1.5, [100, 100, 140]), (2, [120, 120, 168])
-                ):
+                for scale in (1, 1.5, 2):
+                    page.set_viewport_size({"width": round(400 * scale), "height": 900})
                     page.evaluate("payload => __renderToast(payload)", {
-                        "effects": {"text_scale": scale, "crt": True},
-                        "notifications": items,
+                        "effects": {"text_scale": scale, "crt": True}, "notifications": items, "design_width": 400,
                     })
-                    geometry = page.evaluate("""() => {
-                      const cards = [...document.querySelectorAll('.notification')];
-                      return cards.map(card => {
+                    geometry = page.evaluate("""() => [...document.querySelectorAll('.card')].map(card => {
                         const box = card.getBoundingClientRect();
-                        const content = card.querySelector('.notice-copy, .achievement-copy');
-                        const inner = content.getBoundingClientRect();
-                        return {
-                          width: box.width, height: box.height,
-                          top: box.top, bottom: box.bottom,
-                          contentFits: inner.top >= box.top && inner.bottom <= box.bottom
-                            && content.scrollHeight <= content.clientHeight + 1,
-                        };
-                      });
-                    }""")
-                    # Each card is at least its design height, and grows when its
-                    # text wraps rather than cutting it off (5.5.3.2).
-                    heights = [round(row["height"]) for row in geometry]
-                    self.assertTrue(all(height >= minimum for height, minimum in zip(heights, expected_heights)),
-                                    (heights, expected_heights))
-                    self.assertTrue(all(height <= minimum * 1.6 for height, minimum in zip(heights, expected_heights)),
-                                    (heights, expected_heights))
-                    self.assertTrue(all(row["width"] == 400 and row["contentFits"] for row in geometry))
-                    self.assertTrue(all(
-                        later["top"] - earlier["bottom"] == 8
-                        for earlier, later in zip(geometry, geometry[1:])
-                    ))
-                    self.assertEqual(page.locator(".achievement-category").inner_text(), "EXPLORATION · GOLD")
-                    self.assertEqual(page.locator(".achievement-score b").inner_text(), "+2,000")
-                    self.assertEqual(page.locator(".notice.fail .notice-severity").inner_text(), "CRITICAL")
-                    if os.environ.get("VC_TOAST_PREVIEW"):
-                        page.screenshot(path=f"{os.environ['VC_TOAST_PREVIEW']}-{int(scale * 100)}.png")
+                        const copy = card.querySelector('.card-copy').getBoundingClientRect();
+                        const cut = [...card.querySelectorAll('strong, p, b, small, span')]
+                          .some(el => el.getClientRects().length && el.scrollWidth > el.clientWidth + 1);
+                        return {width: box.width, top: box.top, bottom: box.bottom,
+                                fits: copy.top >= box.top - .5 && copy.bottom <= box.bottom + .5 && !cut};
+                    })""")
+                    self.assertTrue(all(row["fits"] for row in geometry), (scale, geometry))
+                    self.assertTrue(all(abs(row["width"] - 400 * scale) < 1 for row in geometry), (scale, geometry))
+                    gaps = [round(later["top"] - earlier["bottom"], 1) for earlier, later in zip(geometry, geometry[1:])]
+                    self.assertTrue(all(abs(gap - 8 * scale) < 1 for gap in gaps), (scale, gaps))
+                    self.assertGreaterEqual(page.evaluate("__measure()"), geometry[-1]["bottom"] - 1)
+                    self.assertEqual(page.locator(".achievement-head small").inner_text(), "EXPLORATION · GOLD")
+                    self.assertEqual(page.locator(".achievement-points").inner_text(), "+2,000 POINTS")
+                    self.assertEqual(page.locator(".notice.fail .card-head b").inner_text(), "CRITICAL")
 
                 page.evaluate("""items => {
                   const first = document.querySelector('[data-notification-id="1"]');
@@ -109,73 +93,45 @@ class ToastOverlayVisualTests(unittest.TestCase):
                     throw Error('Dismissal did not preserve the remaining cards');
                 }""", items)
 
-                themed_items = [
-                    items[0],
-                    {"id": 4, "kind": "notice", "severity": "warn", "title": "LOW FUEL",
-                     "expire_at": expires},
-                    items[1],
-                    {"id": 5, "kind": "notice", "severity": "success", "title": "SCAN COMPLETE",
-                     "expire_at": expires},
+                themed = items[:2] + [
+                    {"id": 4, "kind": "notice", "severity": "warn", "title": "LOW FUEL", "expire_at": expires},
+                    {"id": 5, "kind": "notice", "severity": "success", "title": "SCAN COMPLETE", "expire_at": expires},
                     items[2],
                 ]
-                achievement_frame_colors = []
+                page.set_viewport_size({"width": 400, "height": 900})
                 for theme, expected in (
-                    ({"accent": "#ff4fd8", "orange": "#00e5ff", "red": "#ff5c7a",
-                      "green": "#54e39a", "yellow": "#f5c76d"},
-                     {"accent": "rgb(255, 79, 216)", "orange": "rgb(0, 229, 255)",
-                      "red": "rgb(255, 92, 122)", "green": "rgb(84, 227, 154)",
-                      "yellow": "rgb(245, 199, 109)"}),
-                    ({"accent": "#00e88a", "orange": "#b8e04d", "red": "#ff6b70",
-                      "green": "#7ddb6f", "yellow": "#e0d84d"},
-                     {"accent": "rgb(0, 232, 138)", "orange": "rgb(184, 224, 77)",
-                      "red": "rgb(255, 107, 112)", "green": "rgb(125, 219, 111)",
-                      "yellow": "rgb(224, 216, 77)"}),
+                    ({"accent": "#ff4fd8", "orange": "#00e5ff", "red": "#ff5c7a", "green": "#54e39a", "yellow": "#f5c76d"},
+                     {"accent": "rgb(255, 79, 216)", "orange": "rgb(0, 229, 255)", "red": "rgb(255, 92, 122)",
+                      "green": "rgb(84, 227, 154)", "yellow": "rgb(245, 199, 109)"}),
+                    ({"accent": "#00e88a", "orange": "#b8e04d", "red": "#ff6b70", "green": "#7ddb6f", "yellow": "#e0d84d"},
+                     {"accent": "rgb(0, 232, 138)", "orange": "rgb(184, 224, 77)", "red": "rgb(255, 107, 112)",
+                      "green": "rgb(125, 219, 111)", "yellow": "rgb(224, 216, 77)"}),
                 ):
                     page.evaluate("payload => __renderToast(payload)", {
-                        "theme": theme, "effects": {"text_scale": 1, "crt": True},
-                        "notifications": themed_items,
+                        "theme": theme, "effects": {"text_scale": 1, "crt": True}, "notifications": themed,
                     })
                     colors = page.evaluate("""() => {
                       const color = selector => getComputedStyle(document.querySelector(selector)).color;
-                      return {
-                        info: color('.notice.info .notice-mark'),
-                        source: color('.notice.fail .notice-source'),
-                        warn: color('.notice.warn .notice-mark'),
-                        fail: color('.notice.fail .notice-mark'),
-                        success: color('.notice.success .notice-mark'),
-                        milestone: color('.achievement-mark'),
-                        kicker: color('.achievement-kicker'),
-                        points: color('.achievement-score'),
-                      };
+                      return {info: color('.notice.info .notice-mark'), warn: color('.notice.warn .notice-mark'),
+                              fail: color('.notice.fail .notice-mark'), success: color('.notice.success .notice-mark'),
+                              badge: color('.achievement-badge'),
+                              points: getComputedStyle(document.querySelector('.achievement-points')).backgroundColor};
                     }""")
-                    self.assertEqual(colors, {
-                        "info": expected["accent"], "source": expected["accent"],
-                        "warn": expected["orange"], "fail": expected["red"],
-                        "success": expected["green"],
-                        "milestone": expected["accent"], "kicker": expected["accent"],
-                        "points": expected["yellow"],
-                    })
-                    achievement_frame_colors.append(page.locator(".achievement").evaluate(
-                        "element => getComputedStyle(element).borderTopColor"))
-                self.assertNotEqual(*achievement_frame_colors)
+                    self.assertEqual(colors, {"info": expected["accent"], "warn": expected["orange"],
+                                              "fail": expected["red"], "success": expected["green"],
+                                              "badge": expected["yellow"], "points": expected["yellow"]})
 
                 page.evaluate("payload => __renderToast(payload)", {
-                    "effects": {"text_scale": 2, "reduced_motion": True, "crt": False},
-                    "notifications": items,
+                    "effects": {"text_scale": 2, "reduced_motion": True, "crt": False}, "notifications": items,
                 })
-                self.assertEqual(page.locator(".life-track").first.evaluate(
-                    "element => getComputedStyle(element).display"), "none")
-                self.assertEqual(page.locator(".notification-texture").first.evaluate(
-                    "element => getComputedStyle(element).display"), "none")
+                self.assertEqual(page.locator(".card-life").first.evaluate("element => getComputedStyle(element).display"), "none")
+                self.assertEqual(page.locator(".card-scan").first.evaluate("element => getComputedStyle(element).display"), "none")
                 self.assertEqual(page.evaluate("document.getAnimations().length"), 0)
                 page.emulate_media(reduced_motion="reduce")
                 page.evaluate("payload => __renderToast(payload)", {
-                    "effects": {"text_scale": 1, "reduced_motion": False, "crt": True},
-                    "notifications": items,
+                    "effects": {"text_scale": 1, "reduced_motion": False, "crt": True}, "notifications": items,
                 })
                 self.assertEqual(page.evaluate("document.getAnimations().length"), 0)
-                self.assertEqual(page.locator(".life-track").first.evaluate(
-                    "element => getComputedStyle(element).display"), "none")
                 self.assertEqual(errors, [])
             finally:
                 browser.close()

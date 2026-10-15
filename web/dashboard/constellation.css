@@ -1,41 +1,159 @@
-/* Your constellation (5.5.3.7). */
-.sky-page { display: grid; gap: 16px; }
-.sky-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); border: 1px solid var(--border); background: var(--bg); }
+/* Your constellation (5.5.3.7, v2 in 5.5.4): the almanac, the sky chart,
+   one constellation with the night behind each star, and the gallery. */
+.sky-page { display: grid; gap: 14px; }
+
+/* The almanac: the sky's own figures. */
+.sky-almanac { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; border: 1px solid var(--border);
+  background: linear-gradient(90deg, color-mix(in srgb, #8fa8ff 9%, var(--panel)), var(--panel) 60%); }
+.sky-almanac:empty { display: none; }
+.sky-almanac > div { display: grid; gap: 3px; align-content: center; min-width: 0; padding: 10px 14px; }
+.sky-almanac > div + div { border-left: 1px solid var(--border-soft); }
+.sky-almanac dt { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.sky-almanac dd { margin: 0; overflow: hidden; color: var(--text); font: italic 600 17px Georgia, "Times New Roman", serif; text-overflow: ellipsis; white-space: nowrap; }
+.sky-almanac > div:first-child dd { font: 600 20px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; color: var(--accent); }
+.sky-almanac span { overflow: hidden; color: var(--muted); font: 10.5px "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1000px) {
+  .sky-almanac { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sky-almanac > div:nth-child(4) { border-left: 0; }
+}
+
+.sky-views { display: flex; justify-self: start; border: 1px solid var(--border); }
+.sky-views[hidden] { display: none; }
+.sky-views button { min-height: 34px; padding: 0 18px; border: 0; background: transparent; color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .14em; cursor: pointer; }
+.sky-views button + button { border-left: 1px solid var(--border); }
+.sky-views button:hover { color: var(--text); }
+.sky-views button.active { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.sky-views button:focus-visible { outline: 1px solid var(--accent); outline-offset: -3px; }
+
+/* The sky chart. */
+.sky-chart-view { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); border: 1px solid var(--border); background: var(--bg); }
+.sky-chart-view[hidden] { display: none; }
+@media (max-width: 1100px) { .sky-chart-view { grid-template-columns: minmax(0, 1fr); } }
+.sky-chart { position: relative; min-width: 0; aspect-ratio: 1 / .78; max-height: 78vh; }
+.sky-chart canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sky-chart-key { display: grid; gap: 10px; align-content: start; padding: 18px; border-left: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.sky-chart-key > small { color: var(--accent); font: 700 9.5px Consolas, monospace; letter-spacing: .14em; }
+.sky-chart-key h3 { margin: 0; color: var(--text); font: italic 600 24px/1.15 Georgia, "Times New Roman", serif; }
+.sky-chart-key p { margin: 0; color: var(--muted); font: 13px/1.5 Georgia, "Times New Roman", serif; }
+.sky-chart-key .sky-hint { color: var(--dim); font: italic 12px "Segoe UI", sans-serif; }
+.sky-key { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.sky-key li { display: flex; align-items: center; gap: 10px; }
+.sky-key i { width: 22px; height: 12px; }
+.sky-key i.ring { border-top: 1px dashed var(--muted); height: 0; }
+.sky-key i.grow { width: 12px; border: 1px dashed var(--yellow); border-radius: 50%; }
+.sky-key i.core { border-radius: 50%; background: radial-gradient(circle, rgba(255, 214, 160, .7), transparent 70%); }
+
+/* One constellation. */
+.sky-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); border: 1px solid var(--border); background: var(--bg); }
 .sky-main[hidden], .sky-gallery[hidden] { display: none; }
 @media (max-width: 1100px) { .sky-main { grid-template-columns: minmax(0, 1fr); } }
-.sky-canvas { position: relative; min-width: 0; aspect-ratio: 16 / 10; }
+.sky-canvas { position: relative; min-width: 0; min-height: max(420px, 56vh); }
 .sky-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.sky-about { display: grid; gap: 8px; align-content: start; padding: 18px; border-left: 1px solid var(--border);
+.sky-canvas-tools { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 6px; }
+.sky-canvas-tools button { min-height: 28px; padding: 0 12px; font: 700 9.5px Consolas, monospace; letter-spacing: .12em;
+  background-color: color-mix(in srgb, var(--bg) 70%, transparent) !important; }
+.sky-canvas-tools button.active { color: var(--accent); }
+.sky-canvas-tools button[data-sky="designations"] { text-transform: none; font: italic 13px Georgia, serif; letter-spacing: .1em; }
+.sky-about { display: grid; gap: 8px; align-content: start; max-height: 82vh; overflow-y: auto; padding: 18px; border-left: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 92%, transparent); }
+@media (max-width: 1100px) { .sky-about { max-height: none; border-left: 0; border-top: 1px solid var(--border); } }
 .sky-about > small { color: var(--accent); font: 700 9.5px Consolas, monospace; letter-spacing: .14em; }
 .sky-about h3 { margin: 0; color: var(--text); font: italic 600 28px/1.15 Georgia, "Times New Roman", serif; text-wrap: balance; }
 .sky-about p { margin: 0; color: var(--muted); font: 13px/1.5 Georgia, "Times New Roman", serif; }
-.sky-about .sky-meta { color: var(--dim); font: 10px Consolas, monospace; letter-spacing: .06em; }
+.sky-about .sky-epithet { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.sky-about .sky-lore { padding-left: 10px; border-left: 2px solid color-mix(in srgb, var(--red) 55%, var(--border)); color: var(--text); font-style: italic; }
+.sky-about .sky-lore:empty { display: none; }
+.sky-about .sky-meta { color: var(--dim); font: 10px/1.5 Consolas, monospace; letter-spacing: .06em; }
+.sky-figures, .sky-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sky-figures > span, .sky-chips > span { display: grid; gap: 1px; min-width: 56px; padding: 5px 8px; border: 1px solid var(--border-soft); background: var(--bg); }
+.sky-figures b, .sky-chips b { color: var(--text); font: 600 13px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; }
+.sky-figures small, .sky-chips small { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; }
 .sky-growing { color: var(--yellow) !important; font: italic 12px "Segoe UI", sans-serif !important; }
-.sky-stars { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
-.sky-stars li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; font: 12px "Segoe UI", sans-serif; }
+.sky-stars { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.sky-stars button { display: grid; grid-template-columns: 16px 10px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; width: 100%; min-height: 28px;
+  padding: 3px 6px; border: 1px solid transparent; background: none; color: inherit; font: 12px "Segoe UI", sans-serif; text-align: left; cursor: pointer; }
+.sky-stars button:hover { border-color: var(--border-soft); background: var(--bg); }
+.sky-stars button.active { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); background: color-mix(in srgb, var(--accent) 7%, var(--bg)); }
+.sky-stars em { color: var(--accent); font: italic 13px Georgia, serif; text-align: center; }
 .sky-stars i { width: 8px; height: 8px; border-radius: 50%; background: var(--star); box-shadow: 0 0 6px var(--star); }
 .sky-stars b { overflow: hidden; color: var(--text); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .sky-stars span { color: var(--muted); font: 10px Consolas, monospace; }
-.sky-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.sky-actions button { min-height: 30px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
-.sky-actions button.active { color: var(--accent); }
-.sky-gallery { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.sky-marks { display: flex; gap: 3px; }
+.sky-marks i { width: auto; height: auto; border-radius: 0; background: none; box-shadow: none; font: normal 10px "Segoe UI Symbol", sans-serif; }
+
+/* The night behind a star. */
+.sky-night { display: grid; gap: 8px; padding: 12px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); background: var(--bg); }
+.sky-night[hidden] { display: none; }
+.sky-night > small { color: var(--accent); font: 700 9.5px Consolas, monospace; letter-spacing: .12em; }
+.sky-night p { font-size: 12.5px; }
+.sky-night article { display: grid; gap: 6px; padding-top: 8px; border-top: 1px dashed var(--border-soft); }
+.sky-night article header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; }
+.sky-night article header b { color: var(--text); font: 600 13px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; }
+.sky-night article header span { color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.sky-night ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; color: var(--yellow); font: 12px "Segoe UI", sans-serif; }
+.sky-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.sky-cards img { width: 72px; aspect-ratio: 5 / 4; object-fit: contain; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .5)); }
+.sky-night-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.sky-night-actions button, .sky-actions button { min-height: 30px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.sky-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+/* The gallery, by year. */
+.sky-gallery { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }
 .sky-gallery h3 { margin: 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+#sky-gallery { display: grid; gap: 16px; }
+#sky-gallery section { display: grid; gap: 8px; }
+#sky-gallery h4 { display: flex; align-items: center; gap: 10px; margin: 0; color: var(--muted); font: italic 600 15px Georgia, serif; }
+#sky-gallery h4::after { content: ""; flex: 1; order: 1; height: 1px; background: var(--border-soft); }
+#sky-gallery h4 span { order: 2; color: var(--dim); font: 10px Consolas, monospace; }
 .sky-gallery ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 .sky-gallery li > button { display: grid; gap: 4px; width: 100%; padding: 6px; border: 1px solid var(--border); background: var(--bg);
   color: inherit; text-align: left; cursor: pointer; }
 .sky-gallery li > button.active, .sky-gallery li > button:hover { border-color: var(--accent); }
 .sky-gallery canvas { display: block; width: 100%; aspect-ratio: 16 / 10; }
 .sky-gallery b { overflow: hidden; color: var(--text); font: italic 600 13px Georgia, serif; text-overflow: ellipsis; white-space: nowrap; }
-.sky-gallery small { color: var(--muted); font: 9.5px Consolas, monospace; letter-spacing: .06em; }
+.sky-gallery small { overflow: hidden; color: var(--muted); font: 9.5px Consolas, monospace; letter-spacing: .06em; text-overflow: ellipsis; white-space: nowrap; }
+/* Saved pictures (5.5.4), their folder, and one full size. */
+.sky-folder { display: grid; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--border-soft); }
+.sky-folder > span:first-child { display: grid; gap: 2px; }
+.sky-folder b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.sky-folder small { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
+.sky-folder-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sky-folder-row input { flex: 1 1 280px; min-width: 0; min-height: 30px; padding: 0 9px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font: 11px Consolas, monospace; }
+.sky-folder-row button { min-height: 30px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.sky-saved-note { min-width: 58px; color: var(--muted); font: normal 700 9.5px Consolas, monospace; letter-spacing: .08em; }
+.sky-saved-note[data-tone="ok"] { color: var(--green); }
+.sky-saved-note[data-tone="bad"] { color: var(--red); }
+.sky-saved { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.sky-saved[hidden] { display: none; }
+.sky-saved > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.sky-saved h3 { margin: 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.sky-saved header button, .sky-viewer-actions button { min-height: 30px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.sky-saved ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.sky-saved li > button { display: grid; gap: 4px; width: 100%; padding: 6px; border: 1px solid var(--border); background: var(--bg);
+  color: inherit; text-align: left; cursor: pointer; }
+.sky-saved li > button:hover, .sky-saved li > button:focus-visible { border-color: var(--accent); outline: none; }
+.sky-saved img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.sky-saved b { overflow: hidden; color: var(--text); font: italic 600 13px Georgia, serif; text-overflow: ellipsis; white-space: nowrap; }
+.sky-saved small { color: var(--muted); font: 9.5px Consolas, monospace; letter-spacing: .06em; }
+.sky-viewer { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; align-content: center; gap: 12px; padding: 24px;
+  background: color-mix(in srgb, var(--bg) 94%, transparent); }
+.sky-viewer[hidden] { display: none; }
+.sky-viewer figure { display: grid; gap: 8px; margin: 0; max-width: min(94vw, 1600px); }
+.sky-viewer img { display: block; max-width: 100%; max-height: 80vh; margin: 0 auto; object-fit: contain; }
+.sky-viewer figcaption { color: var(--text); font: italic 600 16px Georgia, serif; text-align: center; }
+.sky-viewer-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
 .sky-empty { margin: 0; padding: 30px; border: 1px dashed var(--border); color: var(--muted); font: 13px Georgia, serif; text-align: center; }
-/* Tonight's star so far, and a star's card on hover (5.5.3.7). */
-.sky-tonight { display: grid; gap: 2px; margin-top: 6px; padding: 9px 10px; border: 1px dashed color-mix(in srgb, var(--yellow) 45%, var(--border)); }
+
+/* Tonight's star so far, and the cards on hover. */
+.sky-tonight { display: grid; gap: 2px; margin-top: 2px; padding: 9px 10px; border: 1px dashed color-mix(in srgb, var(--yellow) 45%, var(--border)); }
+.sky-tonight[hidden] { display: none; }
 .sky-tonight small { color: var(--yellow); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
 .sky-tonight b { color: var(--text); font: 600 14px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; }
 .sky-tonight span { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
-.sky-tip { position: absolute; z-index: 3; display: grid; gap: 2px; max-width: 220px; padding: 7px 9px; pointer-events: none;
+.sky-tip { position: absolute; z-index: 3; display: grid; gap: 2px; max-width: 240px; padding: 7px 9px; pointer-events: none;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--bg) 92%, transparent); }
 .sky-tip b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
 .sky-tip span { color: var(--muted); font: 10.5px "Segoe UI", sans-serif; }
+.sky-tip em { color: var(--accent); font: italic 10px "Segoe UI", sans-serif; }

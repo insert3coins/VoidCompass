@@ -509,6 +509,21 @@ class DashboardApi:
             return []
         return [str(path) for path in (selected or []) if path]
 
+    def choose_picture_file(self):
+        """Pick a picture: a postcard's own, when its screenshot is gone (5.5.4)."""
+        window = self._host.window
+        if window is None:
+            return ""
+        try:
+            import webview
+
+            selected = window.create_file_dialog(
+                webview.FileDialog.OPEN, file_types=("Pictures (*.png;*.jpg;*.jpeg;*.bmp;*.webp)", "All files (*.*)"),
+            )
+        except Exception:
+            return ""
+        return str(selected[0]) if selected else ""
+
     def choose_playlist_file(self):
         """Pick an M3U/M3U8 playlist to import."""
         window = self._host.window

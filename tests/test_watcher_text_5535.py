@@ -172,10 +172,15 @@ class StudioTests(unittest.TestCase):
             self.assertEqual(thought_zone({"heartbeat_thought_side": "right"}, 1200, 600)["side"], "right")
             self.assertEqual(thought_zone({"heartbeat_thought_side": "left"}, 20, 600)["side"], "right",
                              "no room on the left of an orb at the edge")
+        # On the Watcher page's SETTINGS since 5.5.4, and no longer in Overlay Studio.
+        page = (Path(WEB) / "dashboard" / "watcher.js").read_text(encoding="utf-8")
         html = (Path(WEB) / "dashboard" / "index.html").read_text(encoding="utf-8")
+        for setting in ('field("heartbeat_thought_side"', 'toggle("heartbeat_thought_heading"',
+                        'field("heartbeat_text_scale_percent"'):
+            self.assertIn(setting, page)
         for setting in ('data-studio-setting="heartbeat_thought_side"', 'data-overlay-option="heartbeat_thought_heading"',
                         'data-studio-setting="heartbeat_text_scale_percent"'):
-            self.assertIn(setting, html)
+            self.assertNotIn(setting, html)
 
     def test_the_text_size_sticks(self):
         """It kept falling back to 75%: the number field saved on every arrow
@@ -190,9 +195,9 @@ class StudioTests(unittest.TestCase):
                 self.assertEqual(heartbeat_text_scale(studio.config), (size or 100) / 100)
         HtmlOverlayStudioMixin._html_overlay_settings_save(studio, {"heartbeat_text_scale_percent": "120"})
         self.assertEqual(studio.config["heartbeat_text_scale_percent"], 125, "the nearest size on the list")
-        html = (Path(WEB) / "dashboard" / "index.html").read_text(encoding="utf-8")
-        field = re.search(r'<select id="studio-heartbeat-text-scale"[^>]*>(.*?)</select>', html).group(1)
-        self.assertEqual(tuple(int(value) for value in re.findall(r'value="(\d+)"', field)), HEARTBEAT_TEXT_SIZES)
+        page = (Path(WEB) / "dashboard" / "watcher.js").read_text(encoding="utf-8")
+        listed = re.search(r'\[\["0", "All overlays"\], \.\.\.\[([\d, ]+)\]', page).group(1)
+        self.assertEqual((0, *(int(value) for value in listed.split(","))), HEARTBEAT_TEXT_SIZES)
 
     def studio_for_settings(self):
         studio = _LiveSizeStudio([])

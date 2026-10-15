@@ -164,3 +164,7 @@
   [data-page-name="mining"] .mining-current,
   [data-page-name="carrier"] .carrier-switcher { min-width: 0; }
 }
+
+/* 5.5.4: removing a carrier you no longer have. */
+.carrier-remove { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: -4px 0 12px; }
+.carrier-remove small { color: var(--dim); font: 10px Consolas, monospace; }

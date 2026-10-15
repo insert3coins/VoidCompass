@@ -60,7 +60,7 @@ BEAGLE = ("Beagle Point", (-1111.56, -134.22, 65269.75))
 class ModelTests(unittest.TestCase):
     def test_options_stay_within_their_choices(self):
         self.assertEqual(minimap_options({}), {"size": 240, "view": "route", "route": True, "labels": True, "spansh": True,
-                                                "capsules": True},
+                                                "capsules": True, "region_text": 0},
                          "Your route by default: the whole galaxy made you and the route hard to see")
         self.assertEqual(minimap_options({"galaxy_minimap_size": 999, "galaxy_minimap_view": "zoom"})["size"], 240)
         self.assertEqual(minimap_options({"galaxy_minimap_view": "LOCAL"})["view"], "local")

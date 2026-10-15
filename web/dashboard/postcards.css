@@ -28,29 +28,6 @@
 .album-viewer figcaption b { color: var(--text); font: 600 14px "Segoe UI", sans-serif; }
 .album-viewer figcaption small { color: var(--muted); font: 11px Consolas, monospace; }
 .album-viewer .album-actions { justify-content: center; }
-/* Everything about postcards (5.5.3.7): the design with a live preview, and
-   keeping them. */
-.album-settings { display: grid; grid-template-columns: minmax(260px, 440px) minmax(0, 1fr); gap: 20px; align-items: start;
-  padding: 14px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }
-@media (max-width: 1000px) { .album-settings { grid-template-columns: minmax(0, 1fr); } }
-.album-preview { display: grid; gap: 6px; width: 100%; max-width: 440px; margin: 0; }
-.album-preview img { display: block; width: 100%; height: auto; min-height: 120px; }
-.album-preview figcaption { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .12em; text-align: center; }
-.album-controls { display: grid; gap: 10px; align-content: start; min-width: 0; }
-.album-controls h3 { margin: 4px 0 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
-.album-styles { display: flex; flex-wrap: wrap; gap: 6px; }
-.album-styles button, .album-folder-row button { min-height: 30px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
-.album-styles button.active { color: var(--accent); background-color: color-mix(in srgb, var(--accent) 16%, transparent); }
-.album-switch { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; cursor: pointer; }
-.album-switch input { margin: 3px 0 0; accent-color: var(--accent); }
-.album-switch > span, .album-folder > span:first-child { display: grid; gap: 2px; min-width: 0; }
-.album-switch b, .album-folder b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
-.album-switch small, .album-folder small { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
-.album-hint { margin: 0; color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }
-.album-folder { display: grid; gap: 6px; }
-.album-folder-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.album-folder-row input { flex: 1 1 260px; min-width: 0; min-height: 30px; padding: 0 9px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--text); font: 11px Consolas, monospace; }
 /* Favourites (5.5.3.7): a star on each picture, in its viewer, and a filter. */
 .album-tile { position: relative; }
 .album-grid .album-star {
@@ -67,16 +44,187 @@
 .album-favs b { color: var(--yellow); }
 .album-actions .album-favs.active, .album-actions .album-favs.active:hover { color: var(--yellow); background-color: color-mix(in srgb, var(--yellow) 12%, transparent); }
 .album-star-wide.on { color: var(--yellow); }
-/* The lettering over the place's name (5.5.3.8). */
-.album-greeting, .album-greeting-own { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
-.album-greeting[hidden], .album-greeting-own[hidden] { display: none; }
-.album-greeting > span, .album-greeting-own > span { display: grid; gap: 2px; min-width: 0; }
-.album-greeting b, .album-greeting-own b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
-.album-greeting small, .album-greeting-own small { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
-.album-greeting select, .album-greeting-own input { min-height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
-.album-greeting-own input { width: 220px; max-width: 100%; }
-/* Words typed save themselves; this says so (5.5.3.8). */
-.album-own-row { display: flex; align-items: center; gap: 8px; }
-.album-saved { min-width: 64px; color: var(--muted); font: normal 700 9.5px Consolas, monospace; letter-spacing: .08em; }
-.album-saved[data-tone="ok"] { color: var(--green); }
-.album-saved[data-tone="bad"] { color: var(--red); }
+
+/* ------------------------------------------------------------------------
+   The Postcards page, rebuilt (5.5.4): album, studio, keeping.
+   ------------------------------------------------------------------------ */
+.pc-page { display: grid; gap: 14px; }
+.pc-head { display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px; }
+.pc-stats { flex: 1 1 520px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; border: 1px solid var(--border);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--orange) 8%, var(--panel)), var(--panel) 55%); }
+.pc-stats > div { display: grid; gap: 4px; align-content: center; min-width: 0; padding: 10px 14px; }
+.pc-stats > div + div { border-left: 1px solid var(--border-soft); }
+.pc-stats dt { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.pc-stats dd { margin: 0; overflow: hidden; color: var(--text); font: 600 16px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.pc-stats > div:first-child dd { color: var(--orange); font-size: 20px; }
+.pc-tabs { display: flex; align-self: center; border: 1px solid var(--border); }
+.pc-tabs button { min-height: 38px; padding: 0 18px; border: 0; background: transparent; color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .14em; cursor: pointer; }
+.pc-tabs button + button { border-left: 1px solid var(--border); }
+.pc-tabs button:hover { color: var(--text); }
+.pc-tabs button.active { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.pc-tabs button:focus-visible, .pc-filter button:focus-visible { outline: 1px solid var(--accent); outline-offset: -3px; }
+.pc-panel { display: grid; gap: 14px; min-width: 0; }
+.pc-panel[hidden] { display: none; }
+.pc-block { display: grid; gap: 10px; padding: 14px 16px 16px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.pc-block > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.pc-block h4, .pc-editor h4 { margin: 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.pc-block button, .pc-toolbar > button, .pc-restore button { min-height: 30px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.pc-hint { margin: 0; color: var(--muted); font: italic 11.5px/1.45 "Segoe UI", sans-serif; }
+
+/* The album: a toolbar, older postcards to restore, then the months. */
+.pc-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#pc-find { flex: 1 1 220px; max-width: 320px; min-height: 30px; padding: 0 10px; border: 1px solid var(--border); background: var(--input, var(--bg)); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+#pc-find:focus-visible, #pc-sort:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.pc-filter { display: flex; border: 1px solid var(--border); }
+.pc-filter button { min-height: 28px; padding: 0 12px; border: 0; background: transparent; color: var(--dim); font: 700 9.5px Consolas, monospace; letter-spacing: .12em; cursor: pointer; }
+.pc-filter button + button { border-left: 1px solid var(--border); }
+.pc-filter button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.pc-toolbar .album-favs.active { color: var(--yellow); background-color: color-mix(in srgb, var(--yellow) 12%, transparent); }
+#pc-sort { min-height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.pc-toolbar > button:last-child { margin-left: auto; }
+.pc-restore { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--yellow) 40%, var(--border)); border-left: 3px solid var(--yellow); background: color-mix(in srgb, var(--yellow) 6%, var(--panel)); }
+.pc-restore[hidden] { display: none; }
+.pc-restore > div { display: grid; gap: 3px; flex: 1 1 360px; }
+.pc-restore b { color: var(--yellow); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.pc-restore span { color: var(--text); font: 12px/1.45 "Segoe UI", sans-serif; }
+.pc-restore small { color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.pc-progress { flex: 1 1 100%; display: block; height: 4px; background: var(--border-soft); }
+.pc-progress > i { display: block; height: 100%; background: var(--yellow); transition: width .3s; }
+.pc-album { display: grid; gap: 22px; }
+.pc-month { display: grid; gap: 12px; }
+.pc-month h4 { display: flex; align-items: center; gap: 10px; margin: 0; color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .16em; }
+.pc-month h4::after { content: ""; flex: 1; order: 1; height: 1px; background: var(--border-soft); }
+.pc-month h4 span { order: 2; color: var(--dim); font-weight: 400; }
+.pc-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px 18px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.pc-tile { position: relative; }
+.pc-tile > button[data-postcard] { display: grid; gap: 8px; width: 100%; padding: 6px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pc-tile img { display: block; width: 100%; aspect-ratio: 5 / 4; object-fit: contain; filter: drop-shadow(0 8px 12px rgba(0, 0, 0, .45)); transition: transform .18s ease-out; }
+.pc-tilt-0 img { transform: rotate(-2deg); }
+.pc-tilt-1 img { transform: rotate(-1deg); }
+.pc-tilt-2 img { transform: rotate(.6deg); }
+.pc-tilt-3 img { transform: rotate(1.4deg); }
+.pc-tilt-4 img { transform: rotate(2.2deg); }
+.pc-tile > button:hover img, .pc-tile > button:focus-visible img { transform: translateY(-4px) rotate(0) scale(1.03); }
+.pc-tile > button:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+.pc-tile span { display: grid; gap: 2px; min-width: 0; padding: 0 4px; }
+.pc-tile b { overflow: hidden; color: var(--text); font: 600 12.5px "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.pc-tile small { color: var(--muted); font: 10px Consolas, monospace; letter-spacing: .06em; }
+.pc-tile .album-star { position: absolute; top: 8px; right: 8px; z-index: 2; width: 30px; height: 30px; padding: 0; display: grid; place-items: center;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); background: color-mix(in srgb, var(--bg) 78%, transparent);
+  color: var(--muted); font: 16px/1 "Segoe UI Symbol", "Segoe UI", sans-serif; cursor: pointer; opacity: 0; transition: opacity .15s, color .15s; }
+.pc-tile:hover .album-star, .pc-tile .album-star:focus-visible, .pc-tile .album-star.on { opacity: 1; }
+.pc-tile .album-star:hover, .pc-tile .album-star.on { color: var(--yellow); border-color: color-mix(in srgb, var(--yellow) 55%, transparent); }
+@media (prefers-reduced-motion: reduce) { .pc-tile img { transition: none; } }
+
+/* The viewer: the postcard large, its details and the editor beside it. */
+.pc-viewer { position: fixed; inset: 0; z-index: 1000; display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  background: color-mix(in srgb, var(--bg) 97%, transparent); backdrop-filter: blur(6px); }
+.pc-viewer[hidden] { display: none; }
+.pc-stage { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; align-items: center; min-width: 0; padding: 24px 8px; }
+.pc-stage figure { position: relative; display: grid; place-items: center; margin: 0; min-width: 0; height: 100%; }
+.pc-stage img { display: block; max-width: 100%; max-height: calc(100vh - 60px); object-fit: contain; }
+.pc-stage-note { position: absolute; top: 0; left: 50%; transform: translateX(-50%); padding: 4px 10px; border: 1px solid var(--yellow);
+  background: color-mix(in srgb, var(--bg) 85%, transparent); color: var(--yellow); font: 700 9.5px Consolas, monospace; letter-spacing: .14em; }
+.pc-stage-note[hidden] { display: none; }
+.pc-step { width: 44px; height: 64px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 80%, transparent);
+  color: var(--text); font: 28px/1 "Segoe UI", sans-serif; cursor: pointer; }
+.pc-step:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pc-step:disabled { opacity: .25; cursor: default; }
+.pc-side { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; padding: 22px 20px; border-left: 1px solid var(--border); background: var(--panel); }
+.pc-side header { display: grid; gap: 4px; }
+.pc-side header small { color: var(--muted); font: 10px Consolas, monospace; letter-spacing: .08em; }
+.pc-side h3 { margin: 0; color: var(--orange); font: 700 22px/1.15 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.pc-badges em { display: inline-block; padding: 2px 7px; border: 1px solid currentColor; color: var(--green); font: normal 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.pc-badges em.older { color: var(--yellow); }
+.pc-side-actions { display: grid; gap: 6px; }
+.pc-side-actions[hidden] { display: none; }
+.pc-side-actions button { min-height: 34px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.pc-side-note { margin: 0; color: var(--muted); font: italic 11.5px/1.45 "Segoe UI", sans-serif; }
+.pc-side-note:empty { display: none; }
+.pc-editor { display: grid; gap: 10px; }
+.pc-editor[hidden] { display: none; }
+.pc-editor label { display: grid; gap: 4px; min-width: 0; }
+.pc-editor label > span { display: flex; justify-content: space-between; gap: 6px; color: var(--text); font: 600 11.5px "Segoe UI", sans-serif; }
+.pc-editor small { color: var(--muted); font: 10px Consolas, monospace; }
+.pc-editor input:not([type]), .pc-editor select, .pc-editor textarea { min-width: 0; min-height: 30px; padding: 4px 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; resize: vertical; }
+.pc-editor input[type="range"] { accent-color: var(--accent); }
+.pc-editor .pc-check { display: flex; align-items: center; gap: 8px; }
+.pc-editor .pc-check input { accent-color: var(--accent); margin: 0; }
+.pc-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pc-editor button { min-height: 32px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+@media (max-width: 900px) {
+  .pc-viewer { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; overflow-y: auto; }
+  .pc-side { border-left: 0; border-top: 1px solid var(--border); overflow: visible; }
+}
+
+/* The studio: the live preview on its table, the controls beside it. */
+.pc-studio { grid-template-columns: minmax(300px, 540px) minmax(0, 1fr); align-items: start; }
+@media (max-width: 1100px) { .pc-studio { grid-template-columns: minmax(0, 1fr); } }
+.pc-preview { position: sticky; top: 0; display: grid; gap: 8px; margin: 0; }
+.pc-table { display: grid; place-items: center; min-height: 260px; padding: 18px; border: 1px solid var(--border);
+  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--accent) 10%, var(--panel)), var(--bg) 80%); }
+.pc-table img { display: block; max-width: 100%; height: auto; }
+.pc-preview figcaption { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.pc-preview figcaption b { color: var(--accent); font: 700 9.5px Consolas, monospace; letter-spacing: .14em; }
+.pc-preview figcaption span { flex: 1; color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }
+.pc-preview figcaption button { min-height: 26px; padding: 0 10px; font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.pc-controls { display: grid; gap: 14px; min-width: 0; }
+.pc-looks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.pc-look { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; min-height: 52px; padding: 8px 10px;
+  border: 1px solid var(--border-soft); background: var(--bg); color: var(--text); text-align: left; cursor: pointer; }
+.pc-look:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.pc-look.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--bg)); box-shadow: inset 3px 0 0 var(--accent); }
+.pc-look span { display: grid; gap: 2px; min-width: 0; }
+.pc-look b { overflow: hidden; font: 600 12.5px "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.pc-look small { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .1em; }
+.pc-swatch { display: grid; grid-template-rows: 1fr 6px; grid-template-columns: 1fr 1fr; width: 30px; height: 36px; border: 1px solid var(--border); transform: rotate(-4deg); }
+.pc-swatch > i:first-child { grid-column: 1 / -1; }
+.pc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: center; }
+.pc-row[hidden] { display: none; }
+.pc-row > span:first-child { display: grid; gap: 2px; min-width: 0; }
+.pc-row b, .pc-switch b, .pc-folder b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.pc-row small, .pc-switch small, .pc-folder small { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
+.pc-row select { min-width: 190px; min-height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.pc-own { display: flex; align-items: center; gap: 8px; }
+.pc-own input { width: 260px; max-width: 100%; min-height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.pc-saved { min-width: 58px; color: var(--muted); font: normal 700 9.5px Consolas, monospace; letter-spacing: .08em; }
+.pc-saved[data-tone="ok"] { color: var(--green); }
+.pc-saved[data-tone="bad"] { color: var(--red); }
+.pc-switches { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; }
+.pc-switch { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start;
+  padding: 9px 10px; border: 1px solid var(--border-soft); background: var(--bg); cursor: pointer; }
+.pc-switch:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.pc-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.pc-switch > i { position: relative; width: 30px; height: 15px; margin-top: 1px; border: 1px solid var(--border); background: var(--inset, var(--bg)); }
+.pc-switch > i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 9px; height: 9px; background: var(--dim); transition: .15s; }
+.pc-switch input:checked + i { border-color: var(--accent); }
+.pc-switch input:checked + i::after { left: 17px; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.pc-switch input:focus-visible + i { outline: 1px solid var(--accent); outline-offset: 2px; }
+.pc-switch span { display: grid; gap: 2px; min-width: 0; }
+.pc-theme { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; }
+.pc-theme label { display: grid; gap: 4px; min-width: 0; }
+.pc-theme label > span { display: flex; justify-content: space-between; align-items: center; gap: 6px; color: var(--text); font: 600 11.5px "Segoe UI", sans-serif; }
+.pc-theme small { color: var(--muted); font: 10px Consolas, monospace; }
+.pc-theme input:not([type]), .pc-theme select, .pc-theme input[type="file"] { min-width: 0; min-height: 30px; padding: 4px 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.pc-theme input[type="file"] { padding: 4px; font-size: 11px; }
+.pc-colour > span { justify-content: flex-start !important; }
+.pc-colour input[type="checkbox"] { margin: 0; accent-color: var(--accent); }
+.pc-colour input[type="color"] { width: 100%; height: 30px; padding: 0 2px; border: 1px solid var(--border); background: var(--bg); }
+.pc-theme input[type="range"] { accent-color: var(--accent); }
+.pc-theme-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.pc-theme [data-armed] { color: var(--red); }
+
+/* Keeping. */
+.pc-keeping { display: grid; gap: 14px; max-width: 980px; }
+.pc-folder { display: grid; gap: 6px; }
+.pc-folder > span:first-child { display: grid; gap: 2px; }
+.pc-folder-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pc-folder-row input { flex: 1 1 280px; min-width: 0; min-height: 30px; padding: 0 9px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 11px Consolas, monospace; }
+
+@media (max-width: 760px) {
+  .pc-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pc-stats > div:nth-child(4) { border-left: 0; }
+}

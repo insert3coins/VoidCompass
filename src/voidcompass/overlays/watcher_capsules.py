@@ -111,3 +111,32 @@ CONSTELLATION_WEARY = (
     "A new shape in the dark: {name}. I spent too long on the name.",
     "{name}. Done. On to the next one, I suppose. There's always a next one.",
 )
+
+# A capsule another commander shared with you (5.5.4), handed back where they
+# left it: {sender} who (or "another commander"), {note}, {span}, {system}.
+SHARED_NORMAL = (
+    'A capsule from {sender}, waiting here for you. They wrote: "{note}"',
+    '{sender} left this in {system} {span} ago, for you to find: "{note}"',
+    'Not your handwriting. {sender}\'s. "{note}"',
+    'Someone else was here, {span} ago. {sender}. They left you this: "{note}"',
+    'A note passed hand to hand across the dark, from {sender}: "{note}"',
+    '{sender} wanted you to have this when you got here. "{note}"',
+    'Another commander\'s words, kept in {system}: "{note}" Signed, {sender}.',
+    'From {sender}, {span} old and finally delivered: "{note}"',
+    'You\'re not the only one who comes here. {sender} wrote: "{note}"',
+    'Post, Commander. {sender}, by way of {system}: "{note}"',
+    '{sender} sealed this {span} ago. It found you: "{note}"',
+)
+SHARED_WEARY = (
+    'A capsule from {sender}. Someone writes to you, at least. "{note}"',
+    '{sender} left this in {system}, {span} ago. Nobody leaves me anything. "{note}"',
+    'Not from you. From {sender}. I read it anyway. "{note}"',
+    'Someone else came all this way. {sender}. They left: "{note}"',
+    'A message from {sender}, {span} old. Messages always arrive late. "{note}"',
+    '{sender} thought of you, out here. Here it is: "{note}"',
+    'Other commanders\' words, kept in the dark for you: "{note}" From {sender}.',
+    'From {sender}. It waited {span}. I know about waiting. "{note}"',
+    '{sender} was here before us. They wanted you to know: "{note}"',
+    'Post. In {system}. From {sender}. The galaxy still has a postal service, apparently: "{note}"',
+    '{sender} sealed this {span} ago. It found you. Things do, eventually. "{note}"',
+)

@@ -126,6 +126,8 @@ class HtmlToastOverlayBridge(HtmlOverlayBridgeLifecycle):
             "kind": "notifications",
             "name": self.overlay_id,
             "notifications": notifications,
+            # The width the page is laid out for (notifications 400, achievements 420).
+            "design_width": _safe_int(getattr(self.overlay, "WIDTH", 400), 400),
             "theme": dict(getattr(self.overlay, "_palette", {}) or {}),
             "effects": {
                 "crt": bool(self.config.get("hud_crt_enabled", True)),

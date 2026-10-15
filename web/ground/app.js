@@ -113,6 +113,9 @@
   function render(snapshot = {}) {
     const effects = snapshot.effects || {};
     VoidCompassOverlay.applyTheme(root, snapshot.theme, effects);
+    // Note: the panel zooms itself by the text size, so the fit goes on the
+    // body and the two multiply (overlayfix.md: a window drawn at another scale).
+    VoidCompassOverlay.fitToWindow(document.body, 420, effects);
     const data = snapshot.navigation || {};
     const live = data.state === "OK" && data.active !== false;
     const distance = live && finite(data.distance_m) && Number(data.distance_m) >= 0
@@ -231,7 +234,8 @@
   function contentHeight() {
     // The panel has intrinsic height, not 100% viewport height: reporting it
     // cannot feed a previous host resize back as a new content measurement.
-    return Math.max(1, Math.ceil(root.getBoundingClientRect().height));
+    const fit = Number(document.body.dataset.fit) || 1;
+    return Math.max(1, Math.ceil(root.getBoundingClientRect().height / fit));
   }
 
   buildTape();

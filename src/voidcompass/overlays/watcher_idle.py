@@ -16,7 +16,7 @@ from datetime import datetime
 # Idle topics, besides the plain "quiet" mutter. watcher_lines has the words.
 IDLE_TOPICS = (
     "idle_star", "idle_star_odd", "idle_big_system", "idle_small_system",
-    "idle_far", "idle_home", "idle_recall", "idle_session", "idle_night",
+    "idle_far", "idle_home", "idle_home_away", "idle_recall", "idle_session", "idle_night",
     "idle_morning", "idle_docked", "idle_landed", "idle_on_foot",
     # Alive across the app: the music playing, Galnet's latest, and its own
     # history with the commander (5.5.3.2).
@@ -214,6 +214,13 @@ class Surroundings:
             return None
         return math.sqrt(sum(value * value for value in self.star_pos))
 
+    def home_distance(self, home_pos=None):
+        """Light years from home ([x, y, z]; Sol when not given)."""
+        if not self.star_pos:
+            return None
+        anchor = home_pos if isinstance(home_pos, (list, tuple)) and len(home_pos) >= 3 else (0.0, 0.0, 0.0)
+        return math.sqrt(sum((a - float(b)) ** 2 for a, b in zip(self.star_pos, anchor)))
+
     def choices(self, now, rng, context=None):
         """Idle topics that fit right now, as (topic, fields), most fitting
         first, shuffled within their rank so it varies. ``context`` is what
@@ -292,12 +299,16 @@ class Surroundings:
                     here.append(("idle_big_system", {"count": self.bodies, "system": self.system}))
                 elif self.bodies <= 2:
                     here.append(("idle_small_system", {"count": self.bodies, "system": self.system}))
-            distance = self.sol_distance()
+            # From home (5.5.4): Sol, or the home set in Settings.
+            home = context.get("home") or {}
+            distance = self.home_distance(home.get("pos"))
+            name = str(home.get("name") or "Sol")
             if distance is not None:
                 if distance >= 1000:
-                    here.append(("idle_far", {"dist": f"{distance:,.0f}"}))
-                elif distance <= 250:
-                    here.append(("idle_home", {"dist": f"{distance:,.0f}"}))
+                    here.append(("idle_far", {"dist": f"{distance:,.0f}", "home": name}))
+                elif distance <= 250 and (distance >= 5 or not home.get("custom")):
+                    here.append(("idle_home_away" if home.get("custom") else "idle_home",
+                                 {"dist": f"{distance:,.0f}", "home": name}))
         if self.memories:
             thing = rng.choice(self.memories)
             session.append(("idle_recall", {"thing": thing, "Thing": _capital(thing)}))

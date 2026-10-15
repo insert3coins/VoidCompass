@@ -152,7 +152,9 @@ class FlyingAndWalkingTests(unittest.TestCase):
                 if thought:
                     heard.add(thought["topic"])
                     break
-        self.assertTrue({"jet_boost", "heat_warning", "interdiction_escaped", "srv_launch", "settlement_seen",
+        # A neutron boost may stir the neutron star echo first (5.5.4).
+        self.assertTrue(heard & {"jet_boost", "lore_neutron"}, heard)
+        self.assertTrue({"heat_warning", "interdiction_escaped", "srv_launch", "settlement_seen",
                          "taxi_ride", "carrier_jump"} <= heard, heard)
 
     def test_it_saves_what_it_said_every_few_minutes(self):

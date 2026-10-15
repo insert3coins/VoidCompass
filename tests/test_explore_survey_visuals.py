@@ -228,7 +228,9 @@ class ExploreSurveyVisualTests(unittest.TestCase):
         self.assertTrue(tabs["prospects"].evaluate("node => node === document.activeElement"))
         tabs["prospects"].press("Home")
         self.assertTrue(panels["system"].is_visible())
-        tabs["system"].press("ArrowLeft")
+        tabs["system"].press("End")
+        self.assertTrue(self.page.locator("#explore-view-archive").is_visible())
+        self.page.locator("#explore-tab-archive").press("ArrowLeft")
         self.assertTrue(panels["prospects"].is_visible())
         # A live refresh keeps the pilot's view; so does reopening the page.
         self.page.evaluate("data => window.__exploreHarness.workspace(data)", workspace_data())

@@ -15,6 +15,7 @@ import datetime as _datetime
 import os
 import time
 
+from voidcompass.overlays import postcard_themes
 from voidcompass.overlays.jump_info_hud import elite_date
 
 HOLDS = (6, 10, 20, 30)
@@ -73,20 +74,43 @@ def postcard_options(config):
     config = config or {}
     hold = _integer(config.get("postcard_hold_s"), DEFAULT_HOLD)
     size = str(config.get("postcard_size") or "standard").casefold()
-    style = str(config.get("postcard_style") or "polaroid").casefold()
+    # 5.5.4: a style may be one of your own themes, built on one of the four.
+    style, theme = postcard_themes.chosen(config)
+    note_mode = note_setting(config)
     return {
         "hold": hold if hold in HOLDS else DEFAULT_HOLD,
         "photo": bool(config.get("postcard_photo", True)),
         # What the journal knows of the place, and the Watcher's note.
         "facts": bool(config.get("postcard_facts", True)),
-        "note": bool(config.get("postcard_note", True)),
+        "note": note_mode == "watcher",
+        # Your own words in its place, signed as you choose (5.5.4).
+        "note_mode": note_mode,
+        "note_text": " ".join(str(config.get("postcard_note_text") or "").split())[:NOTE_TEXT_MAX],
+        "signature": " ".join(str(config.get("postcard_signature") or "").split())[:SIGNATURE_MAX],
+        "theme": theme,
         # What you were doing (in supercruise, landed, docked at…).
         "doing": bool(config.get("postcard_doing", True)),
-        "style": style if style in STYLES else "polaroid",
+        # A postmark with the system, the date and the time (5.5.4).
+        "postmark": bool(config.get("postcard_postmark", True)),
+        "style": style,
         "size": size if size in SIZES else "standard",
         # The lettering over the place's name ("" for none, 5.5.3.8).
         "greeting": greeting_text(config),
     }
+
+
+NOTE_TEXT_MAX = 160
+SIGNATURE_MAX = 40
+
+
+def note_setting(config):
+    """The note on the paper: the Watcher's, your own words, or none (5.5.4).
+    Before 5.5.4 a switch said only whether the Watcher wrote one."""
+    config = config or {}
+    mode = str(config.get("postcard_note_mode") or "").casefold()
+    if mode in postcard_themes.NOTE_MODES:
+        return mode
+    return "watcher" if config.get("postcard_note", True) else "none"
 
 
 # What you were doing, from the Navigation HUD's flight state.

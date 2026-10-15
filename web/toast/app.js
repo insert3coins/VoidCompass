@@ -1,3 +1,8 @@
+// Cockpit notifications and achievements (rewritten for 5.5.4). One page,
+// two overlays: the notifications window shows notices, the achievements
+// window (its own switch and place on screen) shows unlocks. Every size grows
+// with the overlay text size and every line wraps, so nothing is cut off;
+// the page fits itself to the window it really gets (overlayfix.md).
 (() => {
   "use strict";
 
@@ -5,7 +10,7 @@
   const token = params.get("token") || "";
   const overlay = params.get("overlay") || "toast";
   const root = document.getElementById("notifications");
-  const severities = {
+  const SEVERITIES = {
     info: {label: "INFORMATION", symbol: "◇"},
     warn: {label: "CAUTION", symbol: "!"},
     fail: {label: "CRITICAL", symbol: "×"},
@@ -24,111 +29,90 @@
     return element;
   }
 
-  function decorative(element) {
+  const decorative = (element) => {
     element.setAttribute("aria-hidden", "true");
     return element;
-  }
+  };
 
-  function lifetime(item) {
-    return `${Math.max(.2, number(item.expire_at) - Date.now() / 1000).toFixed(2)}s`;
-  }
-
-  function frame(card, item) {
+  function finish(card, item) {
     card.dataset.notificationId = String(item.id);
-    // Each card is a shape of its own for the Dark box fix (5.5.3.3.1): the
-    // gaps between them stay see-through.
+    // Each card is its own shape for the Dark box fix (5.5.3.3.1).
     card.dataset.windowShape = "box";
-    card.style.setProperty("--life", lifetime(item));
-    card.appendChild(decorative(node("div", "notification-edge")));
-    card.appendChild(decorative(node("div", "notification-texture")));
-    card.appendChild(decorative(node("div", "life-track")));
+    const left = Math.max(.2, number(item.expire_at) - Date.now() / 1000);
+    card.style.setProperty("--life", `${left.toFixed(2)}s`);
+    card.appendChild(decorative(node("i", "card-scan")));
+    card.appendChild(decorative(node("i", "card-life")));
     return card;
   }
 
   function noticeCard(item) {
-    const severity = severities[item.severity] ? item.severity : "info";
-    const card = node("article", `notification notice ${severity}`);
+    const severity = SEVERITIES[item.severity] ? item.severity : "info";
+    const card = node("article", `card notice ${severity}`);
     const mark = decorative(node("div", "notice-mark"));
-    mark.appendChild(node("span", "", item.icon || severities[severity].symbol));
+    mark.appendChild(node("span", "", item.icon || SEVERITIES[severity].symbol));
     card.appendChild(mark);
-
-    const copy = node("div", "notice-copy");
-    const header = node("div", "notice-header");
-    header.appendChild(node("span", "notice-severity", severities[severity].label));
-    header.appendChild(decorative(node("i", "notice-rule")));
-    header.appendChild(node("span", "notice-source", "VOID COMPASS"));
-    copy.appendChild(header);
-    copy.appendChild(node("strong", "notice-title", item.title || "Notification"));
-    if (item.message) copy.appendChild(node("span", "notice-message", item.message));
+    const copy = node("div", "card-copy");
+    const head = node("div", "card-head");
+    head.appendChild(node("b", "", SEVERITIES[severity].label));
+    head.appendChild(decorative(node("i", "card-rule")));
+    head.appendChild(node("small", "", "VOID COMPASS"));
+    copy.appendChild(head);
+    copy.appendChild(node("strong", "card-title", item.title || "Notification"));
+    if (item.message) copy.appendChild(node("p", "card-message", item.message));
     card.appendChild(copy);
-    card.appendChild(decorative(node("div", "notice-signal")));
-    return frame(card, item);
+    return finish(card, item);
   }
 
   function achievementCard(item) {
     const meta = item.meta || {};
-    const card = node("article", "notification achievement");
-    const mark = decorative(node("div", "achievement-mark"));
-    mark.appendChild(node("span", "", item.icon || "★"));
-    card.appendChild(mark);
-
-    const copy = node("div", "achievement-copy");
-    copy.appendChild(node("small", "achievement-kicker", "MILESTONE UNLOCKED"));
-    copy.appendChild(node("strong", "achievement-title", item.title || "Achievement"));
-    const supporting = item.message || meta.description || "Journal milestone verified";
-    copy.appendChild(node("span", "achievement-message", supporting));
+    const card = node("article", "card achievement");
+    const head = node("div", "card-head achievement-head");
+    head.appendChild(node("b", "", "ACHIEVEMENT UNLOCKED"));
+    head.appendChild(decorative(node("i", "card-rule")));
     const tier = meta.tier == null ? "" : String(meta.tier).trim();
     const tierLabel = tier ? ` · ${/^\d+$/.test(tier) ? `TIER ${tier}` : tier.toUpperCase()}` : "";
-    copy.appendChild(node("span", "achievement-category",
-      `${String(meta.category || "Exploration").toUpperCase()}${tierLabel}`));
-    card.appendChild(copy);
-
-    const score = node("div", "achievement-score");
+    head.appendChild(node("small", "", `${String(meta.category || "Exploration").toUpperCase()}${tierLabel}`));
+    card.appendChild(head);
+    const badge = decorative(node("div", "achievement-badge"));
+    badge.appendChild(node("span", "", item.icon || "★"));
+    card.appendChild(badge);
+    const copy = node("div", "card-copy");
+    copy.appendChild(node("strong", "card-title", item.title || "Achievement"));
+    copy.appendChild(node("p", "card-message", item.message || meta.description || "Journal milestone verified"));
     const points = Math.max(0, Math.round(number(meta.points)));
-    score.appendChild(node("b", "", `+${points.toLocaleString()}`));
-    score.appendChild(node("small", "", "POINTS"));
-    card.appendChild(score);
-    return frame(card, item);
+    if (points) copy.appendChild(node("span", "achievement-points", `+${points.toLocaleString()} POINTS`));
+    card.appendChild(copy);
+    return finish(card, item);
   }
 
-  function signature(item) {
-    return JSON.stringify([
-      item.kind, item.title, item.message, item.icon, item.severity,
-      item.created_at, item.expire_at, item.meta,
-    ]);
-  }
+  const signature = (item) => JSON.stringify([item.kind, item.title, item.message, item.icon, item.severity,
+    item.created_at, item.expire_at, item.meta]);
 
   function render(snapshot = {}) {
     const effects = snapshot.effects || {};
     VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, effects);
+    VoidCompassOverlay.fitToWindow(root, number(snapshot.design_width, overlay === "achievements" ? 420 : 400), effects);
     root.classList.toggle("reduced-motion", Boolean(effects.reduced_motion)
       || window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    root.classList.toggle("large-type", number(effects.text_scale, 1) >= 1.5);
-
     const existing = new Map([...root.children].map((card) => [card.dataset.notificationId, card]));
-    const retained = new Set();
+    const kept = new Set();
     for (const [index, item] of (snapshot.notifications || []).entries()) {
-      const id = String(item.id);
-      const nextSignature = signature(item);
-      let card = existing.get(id);
-      if (!card || card.dataset.signature !== nextSignature) {
+      const next = signature(item);
+      let card = existing.get(String(item.id));
+      if (!card || card.dataset.signature !== next) {
         card = item.kind === "achievement" ? achievementCard(item) : noticeCard(item);
-        card.dataset.signature = nextSignature;
+        card.dataset.signature = next;
       }
       if (root.children[index] !== card) root.insertBefore(card, root.children[index] || null);
-      retained.add(card);
+      kept.add(card);
     }
     for (const card of [...root.children]) {
-      if (!retained.has(card)) card.remove();
+      if (!kept.has(card)) card.remove();
     }
   }
 
-  // The cards' real height, so the window grows to show every line (5.5.3.2).
-  function contentHeight() {
-    const last = root.lastElementChild;
-    if (!last) return 0;
-    return last.offsetTop + last.offsetHeight - root.offsetTop;
-  }
+  // Every card's real height, in the app's units, so the window shows them all.
+  const contentHeight = () => (root.children.length ? VoidCompassOverlay.designHeight(root, 0) : 0);
 
   VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 220});
 })();

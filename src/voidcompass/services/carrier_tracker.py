@@ -38,6 +38,8 @@ _PERSIST_KEYS = {
     "space_reserved", "space_ship_packs", "space_module_packs",
     "crew", "trade_orders", "jump_history", "stats_updated_at",
     "cargo_updated_at", "cargo_total_source",
+    # 5.5.4: when a decommissioned carrier is scrapped (unix time).
+    "decommission_at",
     "expedition_name", "expedition_route", "expedition_reserve_fuel",
     "expedition_requested_destinations",
     "expedition_route_source", "expedition_spansh_job", "expedition_spansh_url",
@@ -263,6 +265,9 @@ class CarrierTracker:
         self._carriers = {}
         self._active_carrier_key = None
         self._squadron_context = {}
+        # Carriers removed (5.5.4): {key: unix time}, so older journal events
+        # don't bring them back.
+        self._removed = {}
         self._replaying_history = False
         self._profile_generation = 0
         self._profile_lock = threading.RLock()
@@ -283,6 +288,7 @@ class CarrierTracker:
             self._carriers = {}
             self._active_carrier_key = None
             self._squadron_context = {}
+            self._removed = {}
             self._config = config
             self.load_state()
 
@@ -353,6 +359,47 @@ class CarrierTracker:
             self._active_carrier_key, record = choice
         self.carrier_data = record if record is not None else self._empty_carrier_data()
         return self.carrier_data
+
+    @staticmethod
+    def _scrapped(row, now=None):
+        """A decommissioned carrier whose scrap time has come."""
+        try:
+            when = float(row.get("decommission_at") or 0)
+        except (TypeError, ValueError):
+            return False
+        return when > 0 and (now or time.time()) >= when
+
+    def _remove_record(self, row, stamp=None, save=True):
+        key = next((key for key, value in self._carriers.items() if value is row), None)
+        if key is None:
+            return False
+        self._carriers.pop(key)
+        moment = _parse_dt(stamp)
+        self._removed[key] = moment.timestamp() if moment else time.time()
+        if self._active_carrier_key == key:
+            self._active_carrier_key = None
+        self._restore_active_carrier()
+        logging.info("CarrierTracker: removed %s (%s)", row.get("name") or row.get("callsign") or key, key)
+        if save:
+            self.save_state()
+        return True
+
+    def remove_carrier(self, carrier_id=None, carrier_type=None):
+        """Forget a carrier you no longer have (the Carrier page's REMOVE)."""
+        with self._profile_lock:
+            key = self._carrier_key(carrier_id, carrier_type)
+            row = self._carriers.get(key) if key else None
+            if row is None and carrier_id is not None:
+                row = next((value for value in self._carriers.values()
+                            if str(value.get("carrier_id")) == str(carrier_id)), None)
+            if row is None or not self._remove_record(row):
+                return False
+            snapshot = self.carrier_data
+        if callable(self.on_updated):
+            self.on_updated(snapshot)
+        if callable(self.on_panel_updated):
+            self.on_panel_updated(snapshot)
+        return True
 
     def carriers(self):
         """Return independent managed-carrier snapshots in stable UI order."""
@@ -558,6 +605,7 @@ class CarrierTracker:
                 "schema_version": 2,
                 "active_carrier_key": self._active_carrier_key,
                 "carriers": carriers,
+                "removed": dict(self._removed),
             }
             persistence_queue().submit_json(
                 self._state_path(), data, indent=2,
@@ -595,6 +643,11 @@ class CarrierTracker:
                 )) or route_repaired
                 self._update_status()
                 row["_runtime_prev_status"] = row["status"]
+            if isinstance(saved, dict) and isinstance(saved.get("removed"), dict):
+                self._removed = {str(key): float(value) for key, value in saved["removed"].items()
+                                 if isinstance(value, (int, float))}
+            for row in [row for row in self._carriers.values() if self._scrapped(row)]:
+                self._remove_record(row, save=False)
             requested_active = saved.get("active_carrier_key") if isinstance(saved, dict) else None
             if requested_active in self._carriers:
                 self._active_carrier_key = requested_active
@@ -626,6 +679,10 @@ class CarrierTracker:
             "KickedFromSquadron", "DisbandedSquadron",
         }
         if ev in squadron_events:
+            if ev in {"LeftSquadron", "KickedFromSquadron", "DisbandedSquadron"}:
+                # Out of the squadron: its carrier isn't yours to manage any more.
+                for row in [row for row in self._carriers.values() if row.get("carrier_type") == "SquadronCarrier"]:
+                    self._remove_record(row, raw.get("timestamp"))
             changed = self._apply_squadron_event(raw)
             if changed:
                 self.save_state()
@@ -640,8 +697,25 @@ class CarrierTracker:
         # and CarrierDepositFuel can be a donation to somebody else's carrier.
         # Only identity-bearing owner events may create a managed record.
         create = ev in {"CarrierStats", "CarrierBuy", "CarrierLocation"}
+        removed_at = self._removed.get(self._carrier_key(raw.get("CarrierID"), raw.get("CarrierType")))
+        if removed_at is not None:
+            stamp = _parse_dt(raw.get("timestamp"))
+            if ev == "CarrierBuy" and stamp and stamp.timestamp() > removed_at:
+                self._removed.pop(self._carrier_key(raw.get("CarrierID"), raw.get("CarrierType")), None)
+            elif not stamp or stamp.timestamp() <= removed_at:
+                return  # removed since: an older event doesn't bring it back
         record = self._event_carrier(raw, create=create)
         if record is None:
+            return
+        if ev == "CarrierDecommission":
+            record["decommission_at"] = raw.get("ScrapTime")
+            self.save_state()
+            if self._scrapped(record):
+                self._remove_record(record, raw.get("timestamp"))
+            return
+        if ev == "CarrierCancelDecommission":
+            record["decommission_at"] = None
+            self.save_state()
             return
 
         event_ts = _parse_dt(raw.get("timestamp"))
@@ -1383,6 +1457,8 @@ class CarrierTracker:
         self._status_ticker = t
 
     def _status_check_tick(self):
+        for row in [row for row in self._carriers.values() if self._scrapped(row)]:
+            self._remove_record(row)
         changed = []
         selected_key = self._active_carrier_key
         for row in list(self._carriers.values()):

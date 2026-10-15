@@ -99,6 +99,11 @@ class DeckTests(unittest.TestCase):
         folder = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, folder, True)
         deck.config = {"postcards_path": folder}
+        # Saved pictures (5.5.4) go in their own folder: a temporary one here.
+        saved_folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, saved_folder, True)
+        deck.constellations_folder = lambda: saved_folder
+        deck.saved_folder = saved_folder
         deck.travel_history = type("History", (), {"lock": threading.Lock(), "rows": rows, "revision": 1})()
         deck.feed = []
         deck.add_event_feed_entry = lambda *args, **kwargs: deck.feed.append(args)
@@ -113,19 +118,52 @@ class DeckTests(unittest.TestCase):
         deck.travel_history.revision = 2
         self.assertEqual(deck._html_constellation_workspace()["sky"], [])
 
-    def test_saved_as_a_picture_with_the_postcards(self):
+    def test_saved_as_a_picture_on_the_constellation_page(self):
         from PIL import Image
         deck, folder = self.deck([])
         out = io.BytesIO()
         Image.new("RGB", (160, 100), (10, 20, 40)).save(out, "JPEG", quality=90)
         picture = "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode("ascii")
         self.assertTrue(deck._handle_constellation_command("save", {"name": 'The Restless/Crown?', "picture": picture}))
-        saved = os.listdir(folder)
+        self.assertEqual(os.listdir(folder), [], "not with the postcards (5.5.4)")
+        saved = os.listdir(deck.saved_folder)
         self.assertEqual(len(saved), 1)
         self.assertTrue(saved[0].startswith("Constellation - The RestlessCrown - "), saved[0])
-        with Image.open(os.path.join(folder, saved[0])) as image:
+        with Image.open(os.path.join(deck.saved_folder, saved[0])) as image:
             self.assertEqual((image.format, image.size), ("PNG", (160, 100)), "kept as a PNG")
-        self.assertEqual(PostcardAlbum(lambda: folder).rows()[0]["title"], "The RestlessCrown", "in the postcard album")
+        rows = deck._html_constellation_workspace()["saved"]
+        self.assertEqual([row["title"] for row in rows], ["The RestlessCrown"], "on the Constellation page")
+
+    def test_saved_pictures_go_to_your_chosen_folder(self):
+        from PIL import Image
+        deck, _folder = self.deck([])
+        del deck.constellations_folder  # the real one, following the setting
+        chosen = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, chosen, True)
+        self.assertTrue(deck._handle_constellation_command("folder", {"value": f"  {chosen}  "}))
+        self.assertEqual(deck.config["constellations_path"], chosen, "kept as typed, trimmed")
+        self.assertEqual(deck.constellations_folder(), chosen)
+        out = io.BytesIO()
+        Image.new("RGB", (16, 10)).save(out, "PNG")
+        picture = "data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii")
+        self.assertTrue(deck._handle_constellation_command("save", {"name": "The Bright Key", "picture": picture}))
+        self.assertEqual(len(os.listdir(chosen)), 1)
+        self.assertEqual(deck._html_constellation_workspace()["folder"]["now"], chosen)
+        deck._handle_constellation_command("folder", {"value": ""})
+        self.assertTrue(deck.constellations_folder().endswith("constellations"), "empty: beside Void Compass")
+        from voidcompass.core import config as config_module
+        self.assertIn("constellations_path", config_module.PROFILE_SETTINGS)
+        page = (WEB / "dashboard" / "constellation.js").read_text(encoding="utf-8")
+        self.assertIn('data-sky-folder="browse"', page)
+
+    def test_pictures_saved_before_move_to_their_own_folder(self):
+        from PIL import Image
+        deck, folder = self.deck([])
+        Image.new("RGB", (16, 10)).save(os.path.join(folder, "Constellation - The Old Kite - 2026-10-01 20-00-00.png"))
+        Image.new("RGB", (16, 10)).save(os.path.join(folder, "Postcard - Sol - 2026-10-01 20-00-00.png"))
+        self.assertEqual([row["title"] for row in PostcardAlbum(lambda: folder).rows()], ["Sol"], "the album shows postcards only")
+        self.assertEqual([row["title"] for row in deck.constellation_album().rows()], ["The Old Kite"])
+        self.assertEqual(sorted(os.listdir(folder)), ["Postcard - Sol - 2026-10-01 20-00-00.png"], "moved, postcards left alone")
 
     def test_only_a_picture_is_saved(self):
         deck, folder = self.deck([])

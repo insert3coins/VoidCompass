@@ -13,6 +13,8 @@
   const thoughtText = thoughtBox.querySelector(".thought-words");
   let thoughtId = null;
   let typing = 0;
+  // Its voice (5.5.4): what it's saying now, from /api/live.
+  let speech = null;
 
   // How each nature types (5.5.3.5): ms per character (base plus a random
   // spread), the pause after a full stop and after a comma, how often it
@@ -178,6 +180,7 @@
     orb.think?.(pause);
     thoughtText.textContent = "";
     let index = 0;
+    let pace = 1;
     const step = () => {
       const frame = frames[index];
       if (!frame) {
@@ -187,12 +190,32 @@
       }
       paint(frame.parts);
       index += 1;
-      typing = setTimeout(step, frame.ms);
+      typing = setTimeout(step, frame.ms * pace);
     };
-    typing = setTimeout(() => {
-      orb.speak?.(total);
+    if (!thought.voice) {
+      typing = setTimeout(() => {
+        orb.speak?.(total);
+        step();
+      }, pause);
+      return;
+    }
+    // Spoken (5.5.4): wait for the voice to start (a few seconds at most),
+    // then type along with it, finishing as it does. Part of a thought,
+    // while it's still finding its voice, types at its own pace.
+    const asked = performance.now();
+    const waitForVoice = () => {
+      const live = speech && speech.key === thought.id ? speech : null;
+      if (!live && performance.now() - asked < 3500) {
+        typing = setTimeout(waitForVoice, 60);
+        return;
+      }
+      if (live && thought.voice_full) {
+        const left = Math.max(400, (live.duration - live.elapsed) * 1000 * .94);
+        pace = Math.max(.35, Math.min(3, left / Math.max(1, total)));
+      }
       step();
-    }, pause);
+    };
+    typing = setTimeout(waitForVoice, Math.min(pause, 300));
   }
 
   function render(snapshot = {}) {
@@ -245,10 +268,16 @@
       const live = response.ok ? await response.json() : {};
       playing = Boolean(live.playing) && Array.isArray(live.bands) && live.bands.length > 0;
       orb.music?.(playing ? live.bands : null);
+      speech = live.speech && typeof live.speech === "object" ? live.speech : null;
+      orb.voice?.(speech ? Number(speech.level) || 0 : null);
     } catch (_error) {
       orb.music?.(null);
+      speech = null;
+      orb.voice?.(null);
     }
-    livePoll = window.setTimeout(listen, playing && !document.hidden ? 120 : 1000);
+    // Quick while music plays, it speaks, or a spoken thought waits for its voice.
+    const busy = playing || speech || (thoughtId !== null && !thoughtBox.classList.contains("done"));
+    livePoll = window.setTimeout(listen, busy && !document.hidden ? 100 : 1000);
   }
   listen();
 

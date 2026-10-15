@@ -25,6 +25,8 @@ _MESSAGE_CHARS = 50
 class ToastHUD:
     WIDTH = WIDTH
     GAP = _GAP
+    X_KEY, Y_KEY = 'toast_hud_x', 'toast_hud_y'
+    DEFAULT_Y = 60
 
     def __init__(self, root, config):
         self.root = root
@@ -37,12 +39,12 @@ class ToastHUD:
         self._visible = False
         self._palette = themes.normalize_theme(themes.ACTIVE_PALETTE)
         self.win = OverlayWindowState(root)
-        x = self._safe_int(config.get('toast_hud_x'), None)
-        y = self._safe_int(config.get('toast_hud_y'), None)
+        x = self._safe_int(config.get(self.X_KEY), None)
+        y = self._safe_int(config.get(self.Y_KEY), None)
         if x is None or y is None:
             screen_w = root.winfo_screenwidth()
-            x = screen_w - WIDTH - 40
-            y = 60
+            x = screen_w - self.WIDTH - 40
+            y = self.DEFAULT_Y
         self.win.geometry(overlay_chrome.position_geometry(x, y))
         self.win.withdraw()
 
@@ -73,8 +75,8 @@ class ToastHUD:
                 pass
             return False
         try:
-            x = self._safe_int(self.config.get('toast_hud_x'), self.win.winfo_x())
-            y = self._safe_int(self.config.get('toast_hud_y'), self.win.winfo_y())
+            x = self._safe_int(self.config.get(self.X_KEY), self.win.winfo_x())
+            y = self._safe_int(self.config.get(self.Y_KEY), self.win.winfo_y())
             self.win.geometry(overlay_chrome.position_geometry(x, y))
             self.win.deiconify()
             self._startup_pending_visible = False
@@ -173,3 +175,11 @@ class ToastHUD:
         self._html_revision += 1
         if self._toasts:
             self._redraw()
+
+
+class AchievementHUD(ToastHUD):
+    """Achievements in their own window (5.5.4): the same queue, its own place
+    on screen, on or off apart from the cockpit notifications."""
+    WIDTH = 420
+    X_KEY, Y_KEY = 'achievement_hud_x', 'achievement_hud_y'
+    DEFAULT_Y = 230

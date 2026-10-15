@@ -205,7 +205,7 @@ class HtmlOverlayStudioMixin:
             html_size = getattr(overlay, "_html_window_size", None)
             if html_ready := bool(getattr(overlay, "_html_ready", False)):
                 if isinstance(html_size, (tuple, list)) and len(html_size) == 2:
-                    if attr == "toast_hud" and not getattr(overlay, "_toasts", None):
+                    if attr in {"toast_hud", "achievement_hud"} and not getattr(overlay, "_toasts", None):
                         # The host shrinks to 24 px when the queue is empty,
                         # but keep a useful placement card in the Studio.
                         width, height = default_width, default_height
@@ -215,7 +215,7 @@ class HtmlOverlayStudioMixin:
             elif live and window is not None:
                 try:
                     if window.winfo_exists():
-                        if attr == "toast_hud" and not getattr(overlay, "_toasts", None):
+                        if attr in {"toast_hud", "achievement_hud"} and not getattr(overlay, "_toasts", None):
                             # Keep a useful draggable footprint in Studio even
                             # while the transient notification queue is empty.
                             width, height = default_width, default_height
@@ -355,6 +355,7 @@ class HtmlOverlayStudioMixin:
                 "galaxy_minimap_spansh": galaxy_minimap_hud.minimap_options(self.config)["spansh"],
                 "galaxy_minimap_capsules": galaxy_minimap_hud.minimap_options(self.config)["capsules"],
                 "galaxy_minimap_text_scale_percent": heartbeat_text_size(self.config.get("galaxy_minimap_text_scale_percent")),
+                "galaxy_minimap_region_text_percent": heartbeat_text_size(self.config.get("galaxy_minimap_region_text_percent")),
                 "postcard_hold_s": postcards.postcard_options(self.config)["hold"],
                 "postcard_photo": postcards.postcard_options(self.config)["photo"],
                 "postcard_size": postcards.postcard_options(self.config)["size"],
@@ -557,7 +558,7 @@ class HtmlOverlayStudioMixin:
         if HtmlOverlayServer.set_overrides(layout=bool(enabled)):
             self._schedule_html_dashboard_publish(immediate=True)
 
-    _COLONY_FOCUS_KEEP = frozenset({"colony_needs_hud", "hud", "toast_hud", "gravity_warning_hud", "heartbeat_hud"})
+    _COLONY_FOCUS_KEEP = frozenset({"colony_needs_hud", "hud", "toast_hud", "achievement_hud", "gravity_warning_hud", "heartbeat_hud"})
 
     def _html_overlay_option_toggle(self, key, requested_value=None):
         allowed = {
@@ -782,6 +783,8 @@ class HtmlOverlayStudioMixin:
                 self.config[key] = value if value in choices else default
         if "galaxy_minimap_text_scale_percent" in payload:
             self.config["galaxy_minimap_text_scale_percent"] = heartbeat_text_size(payload.get("galaxy_minimap_text_scale_percent"))
+        if "galaxy_minimap_region_text_percent" in payload:
+            self.config["galaxy_minimap_region_text_percent"] = heartbeat_text_size(payload.get("galaxy_minimap_region_text_percent"))
         if "heartbeat_text_scale_percent" in payload:
             # The Watcher's own text size (5.5.3.5): one of its list's sizes,
             # 0 following all overlays.

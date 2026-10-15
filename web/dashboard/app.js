@@ -19,6 +19,7 @@ import {renderWatcher} from "./watcher.js";
 import {renderPostcards} from "./postcards.js";
 import {renderScreenshots} from "./screenshots.js";
 import {renderCapsules} from "./capsules.js";
+import {renderTools} from "./tools.js";
 import {renderConstellation} from "./constellation.js";
 import {renderFlightLogs} from "./flightlog.js";
 
@@ -111,7 +112,7 @@ const pageLayoutDefaults = {};
 const PAGE_SUITES = [
   {parent: "explore", label: "EXPLORATION COMMAND", pages: [
     ["explore", "SYSTEM SURVEY"], ["mission", "EXPEDITIONS"],
-    ["recon", "SCOUT & RECON"], ["ledger", "VALUE LEDGER"],
+    ["recon", "SCOUT & RECON"], ["ledger", "VALUE LEDGER"], ["chronicle", "CAPTAIN'S LOG"],
   ]},
   {parent: "planet-materials", label: "PLANETARY OPERATIONS", pages: [
     ["planet-materials", "MATERIALS & SITES"], ["ground", "GROUND & EXOBIO"],
@@ -119,9 +120,6 @@ const PAGE_SUITES = [
   {parent: "profile", label: "COMMANDER RECORD", pages: [
     ["profile", "COMMANDER"], ["records", "FLIGHT RECORD"],
     ["achievements", "ACHIEVEMENTS"],
-  ]},
-  {parent: "analytics", label: "EXPLORATION ARCHIVE", pages: [
-    ["analytics", "ARCHIVE"], ["chronicle", "CAPTAIN'S LOG"],
   ]},
   {parent: "build-planner", label: "SHIP WORKSHOP", pages: [
     ["build-planner", "BUILD PLANNER"], ["engineering", "ENGINEERING"],
@@ -162,7 +160,9 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".pp-tabs button", ".pp-task-main", ".pp-power", "[data-pp-filter]",
   ".co-tabs button", ".co-actions button", ".pl-mini", ".pl-chip",
   ".bgs-star", ".bgs-link", ".bgs-row-main", ".bgs-card", ".bgs-ranges button",
-  ".tr-ranges button", ".tr-station-row",
+  ".tr-ranges button", ".tr-station-row", ".tools-filter button", ".tools-segments button",
+  ".pc-tabs button", ".pc-filter button", ".pc-look", ".pc-grid button", ".pc-step",
+  ".sky-views button", ".sky-stars button", ".sky-saved ol button",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -1624,6 +1624,16 @@ function renderSources(state) {
     byId(`${key}-light`)?.classList.toggle("live", sources[sourceKey] === "live");
   }
   text("ui-state", sources.ui === "warn" ? "RECOVERED" : "LIVE");
+  // EDSM and Inara (5.5.4).
+  for (const key of ["edsm", "inara"]) {
+    const row = (sources.services || {})[key] || {};
+    text(`${key}-state`, row.label || "OFF");
+    const light = byId(`${key}-light`);
+    light?.classList.toggle("live", row.state === "live");
+    light?.classList.toggle("warn", row.state === "warn");
+    light?.classList.toggle("recent", row.state === "recent");
+    light?.classList.toggle("off", !row.state || row.state === "off");
+  }
   byId("ui-light")?.classList.toggle("live", sources.ui !== "warn");
   byId("ui-light")?.classList.toggle("warn", sources.ui === "warn");
   const heartbeat = sources.heartbeat || {};
@@ -2836,7 +2846,7 @@ function renderPlanetMaterialsWorkspace(data) {
   root.innerHTML = `<section class="planet-materials-shell"><article class="card planet-compass-quick${navigationTargetReady ? " active" : ""}">
       <div class="planet-compass-heading"><small>PLANET WAYPOINT OVERLAY</small><h3>Quick compass target</h3><span>Paste Elite surface coordinates here and send them straight to the cockpit compass.</span></div>
       <div class="coordinate-form planet-compass-coordinates"><label>LATITUDE<input id="planet-compass-lat" type="number" min="-90" max="90" step="0.000001" value="${navigationTargetReady ? navigationTarget.latitude : ""}" placeholder="32.328000"></label><label>LONGITUDE<input id="planet-compass-lon" type="number" min="-180" max="180" step="0.000001" value="${navigationTargetReady ? navigationTarget.longitude : ""}" placeholder="108.838000"></label></div>
-      <div class="workspace-actions wrap planet-compass-controls"><button class="primary" data-ws-page="ground" data-ws-op="set" data-ground-source="planet">SEND TO COMPASS</button><button data-ws-page="ground" data-ws-op="set_current" ${data.current_position ? "" : "disabled"}>USE CURRENT</button><button data-ws-page="ground" data-ws-op="clear" ${navigationTargetReady ? "" : "disabled"}>CLEAR</button><button data-page="ground">GROUND &amp; EXOBIO</button></div>
+      <div class="workspace-actions wrap planet-compass-controls"><button class="primary" data-ws-page="ground" data-ws-op="set" data-ground-source="planet">SEND TO COMPASS</button><button data-ws-page="ground" data-ws-op="set_current" ${data.current_position ? "" : "disabled"}>USE CURRENT</button><button type="button" data-compass-record ${data.current_position ? "" : "disabled"} title="Fill RECORD A NEW LOCATION with where you are now">SAVE THIS SPOT</button><button data-ws-page="ground" data-ws-op="clear" ${navigationTargetReady ? "" : "disabled"}>CLEAR</button><button data-page="ground">GROUND &amp; EXOBIO</button></div>
       <div class="planet-compass-state"><i></i><span>${escapeHtml(navigationTargetDetail)}</span><b>${navigationTargetReady ? "TARGET ARMED" : "STANDBY"}</b></div>
     </article><article class="card planet-command-bar"><div><small>LIVE PLANET LINK</small><b data-planet-live-status></b></div><label>SCANNED OR SAVED PLANET<select data-select-planet>${bodies.map(body=>`<option value="${escapeHtml(planetKey(body))}" ${body === selected ? "selected" : ""}>${escapeHtml(planetLabel(body))}</option>`).join("") || '<option value="">No planets scanned or saved</option>'}</select></label><label>BOOKMARK MATERIAL<select data-select-body-material><option value="">All recorded materials</option></select></label><strong data-selected-count>0 SAVED LOCATIONS</strong></article>
     <div class="workspace-actions planet-atlas-tabs">${[["body","PLANET SITES"],["heat","HEAT MAP"],["material","BY MATERIAL"]].map(([key,label])=>`<button type="button" data-atlas-view="${key}">${label}</button>`).join("")}</div>
@@ -2898,6 +2908,17 @@ function renderPlanetMaterialsWorkspace(data) {
   root.onclick = async event => {
     const viewButton=event.target.closest('button[data-atlas-view]');
     if(viewButton)return showView(viewButton.dataset.atlasView);
+    // Quick save (5.5.4): where you are, into RECORD A NEW LOCATION, ready for ADD SITE.
+    if(event.target.closest('[data-compass-record]')){
+      if(!root.currentPosition)return showToast('Current planetary coordinates are unavailable.');
+      showView('body');
+      const form=root.querySelector('[data-new-site-form]');
+      form?.querySelector('[data-current-coordinates]')?.click();
+      form?.closest('.planet-new-site')?.scrollIntoView({behavior:'smooth',block:'start'});
+      form?.elements.name?.focus();
+      form?.elements.name?.select();
+      return showToast('Spot captured: name it if you like, then ADD SITE.');
+    }
     const navigateButton=event.target.closest('[data-site-navigate]');
     if(navigateButton){
       event.preventDefault();event.stopPropagation();
@@ -2993,7 +3014,7 @@ function renderPlanetMaterialsWorkspace(data) {
 function updatePlanetMaterialsLive(root, data) {
   root.currentPosition=data?.current_position;
   const position=root.currentPosition;
-  root.querySelectorAll('[data-current-coordinates]').forEach(button=>{button.disabled=!position;});
+  root.querySelectorAll('[data-current-coordinates], [data-compass-record]').forEach(button=>{button.disabled=!position;});
   const status=root.querySelector('[data-planet-live-status]');
   if(status)status.textContent=position
     ? `${position.system} / ${position.body} · X ${numeric(position.longitude,5)} · Y ${numeric(position.latitude,5)}${position.location_index?` · LOC ${numeric(position.location_index)} FROM ${position.location_source}${position.location_distance_m==null?"":` (${numeric(position.location_distance_m)} M)`}`:""} · LIVE SURFACE POSITION`
@@ -3089,6 +3110,15 @@ function renderProfileWorkspace(data) {
 
 function renderArchiveWorkspace(data) {
   renderExplorationArchive(data, {byId, credits, escapeHtml, number, numeric, workspaceTable, analyticsView, profileKey});
+}
+
+// The archive inside Explore & Survey (5.5.4): drawn again only when it changed.
+let lastArchiveKey = "";
+function renderExploreArchive(archive) {
+  const key = JSON.stringify({...archive, current: {...(archive.current || {}), elapsed: ""}, profileKey});
+  if (key === lastArchiveKey && byId("analytics-workspace")?.childElementCount) return;
+  lastArchiveKey = key;
+  renderArchiveWorkspace(archive);
 }
 
 function replayGeometry(replay = {}, sessionIndex = 0) {
@@ -3512,7 +3542,7 @@ function renderCarrierWorkspace(data) {
       <span>${escapeHtml(row.kind || row.type || "CARRIER")}</span>
       <b>${escapeHtml(row.name || row.callsign || "UNKNOWN CARRIER")}</b>
       <small>${escapeHtml(row.callsign || "—")} · ${escapeHtml(row.system || "LOCATION UNKNOWN")} · ${escapeHtml(String(row.status || "idle").toUpperCase())}</small>
-    </button>`).join("")}</section>` : `<p class="workspace-empty carrier-empty">No personal or Squadron Carrier record has reached this profile yet.</p>`;
+    </button>`).join("")}</section>${carrierRemoveRow(carriers.find((row) => row.active), data.remove_armed)}` : `<p class="workspace-empty carrier-empty">No personal or Squadron Carrier record has reached this profile yet.</p>`;
   root.classList.remove("loading-panel");
   root.innerHTML = `${carrierSwitcher}${workspaceMetrics([
     {label: "Carrier", value: carrier.name || "NO CARRIER DATA", detail: carrier.callsign || carrier.type || "JOURNAL AWAITING"},
@@ -3669,8 +3699,10 @@ const SETTINGS_SECTIONS = [
   {id: "flight", title: "Flight & exploration", heading: "Warnings and helpers in flight"},
   {id: "hotkeys", title: "Hotkeys", heading: "Shortcuts that work while Elite has focus"},
   {id: "galnet", title: "Galnet", heading: "News from the Galnet relay"},
-  {id: "integrations", title: "Integrations", heading: "EDSM, EDDN and Discord"},
+  {id: "integrations", title: "Integrations", heading: "EDSM, Inara, EDDN and Discord"},
   {id: "diagnostics", title: "Diagnostics & recovery", heading: "Logs, safety nets and the journal cache"},
+  // Its own page since 5.5.4 (it was part of Diagnostics & recovery).
+  {id: "updates", title: "Updates", heading: "New versions of Void Compass"},
 ];
 let settingsSection = "journal";
 let settingsSaveSequence = 0;
@@ -3725,8 +3757,9 @@ function settingsSummaries(data) {
     flight: `LOW FUEL AT ${Math.round(number(value.low_fuel_threshold_pct, .25) * 100)}%`,
     hotkeys: value.overlay_hotkeys_enabled ? `${numeric(bound)} BOUND` : "HOTKEYS OFF",
     galnet: value.galnet_enabled ? `${String(galnet.status || "standby").toUpperCase()} · ${numeric((galnet.articles || []).length)} DISPATCHES` : "RELAY OFF",
-    integrations: [value.edsm_upload_enabled ? "EDSM ON" : "EDSM OFF", value.eddn_market_upload_enabled ? "EDDN ON" : "EDDN OFF"].join(" · "),
+    integrations: [value.edsm_upload_enabled ? "EDSM ON" : "EDSM OFF", value.inara_upload_enabled ? "INARA ON" : "INARA OFF", value.eddn_market_upload_enabled ? "EDDN ON" : "EDDN OFF"].join(" · "),
     diagnostics: String(data.health?.level || "NOMINAL").toUpperCase(),
+    updates: "NEW RELEASES FROM GITHUB",
   };
 }
 
@@ -3760,8 +3793,9 @@ function settingsSectionBody(id, data) {
   }
   if (id === "flight") {
     return settingGroup("FLIGHT", `${settingSelect({key: "low_fuel_threshold_pct", label: "Low fuel warning", detail: "Warn when the main tank falls below this.", value: String(number(value.low_fuel_threshold_pct, .25)), options: [.1, .15, .2, .25, .3, .4, .5].map((item) => [String(item), `${Math.round(item * 100)}%`]), type: "number"})}${settingSwitch({key: "auto_copy_waypoint", label: "Copy the next route system", detail: "Put the next system on the clipboard as you arrive, ready to paste into the galaxy map.", checked: value.auto_copy_waypoint})}`)
+      + settingGroup("HOME", `${settingText({key: "home_system", id: "setting-home", label: "Home system", detail: "Distances \"from home\" start here: the Watcher's remarks and the Galaxy Minimap. Leave it empty for Sol.", value: value.home_system, placeholder: "Sol", status: homeStatus(data.home)})}`)
       + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
-      + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingSwitch({key: "achievement_notifications_enabled", label: "Announce unlocks", detail: "Show a cockpit notification when one unlocks.", checked: value.achievement_notifications_enabled})}`);
+      + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingNote("Unlocks pop up in the cockpit's Achievements overlay: switch it on or off, and place it, in Overlay Studio.")}`);
   }
   if (id === "hotkeys") {
     const rows = (data.hotkeys || []).map((row) => `<div class="setting-row hotkey-row" data-search="${settingSearchText(row.label, row.action, row.value, "hotkey shortcut")}"><span class="setting-copy"><b>${escapeHtml(row.label)}</b><small>${escapeHtml(row.default ? `Default ${row.default}` : "No default")}</small></span><span class="setting-control"><input data-hotkey-action="${escapeHtml(row.action)}" data-saved="${escapeHtml(row.value || "")}" value="${escapeHtml(row.value || "")}" placeholder="UNBOUND" readonly aria-label="${escapeHtml(row.label)} shortcut"><button type="button" data-hotkey-record="${escapeHtml(row.action)}">RECORD</button><button type="button" data-hotkey-clear="${escapeHtml(row.action)}">CLEAR</button></span>${settingFlag()}</div>`).join("");
@@ -3775,19 +3809,74 @@ function settingsSectionBody(id, data) {
   }
   if (id === "integrations") {
     return settingGroup("EDSM", `${settingText({key: "edsm_cmdr_name", id: "setting-edsm-name", label: "Commander name on EDSM", value: value.edsm_cmdr_name})}${settingText({key: "edsm_api_key", id: "setting-edsm-key", label: "EDSM API key", detail: "From your EDSM account settings.", value: value.edsm_api_key, secret: true})}${settingSwitch({key: "edsm_upload_enabled", label: "Send exploration to EDSM", detail: "Upload journal events with this commander's key.", checked: value.edsm_upload_enabled})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_edsm">TEST EDSM</button>`, "test edsm credentials")}`)
+      + settingGroup("INARA", `${settingText({key: "inara_cmdr_name", id: "setting-inara-name", label: "Commander name on Inara", detail: "Only used until the journal names your commander: Inara asks for the in-game name.", value: value.inara_cmdr_name, placeholder: data.profile?.name || ""})}${settingText({key: "inara_api_key", id: "setting-inara-key", label: "Inara API key", detail: "Your personal key, from inara.cz › Settings › API key.", value: value.inara_api_key, secret: true, status: inaraStatus(data.inara)})}${settingSwitch({key: "inara_upload_enabled", label: "Sync with Inara", detail: "Keep your Inara profile up to date as you play: credits, ranks, reputation, ships and loadouts, materials, cargo, missions, and your flight and combat logs. Sent in batches as you dock and jump, never more than once a minute.", checked: value.inara_upload_enabled})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_inara">TEST INARA</button><button type="button" data-command="open" data-target="inara">INARA</button>`, "test inara key profile sync")}`)
       + settingGroup("RAVEN COLONIAL", `${settingText({key: "raven_api_key", id: "setting-raven-key", label: "Raven Colonial API key", detail: "From your account at ravencolonial.com/user. Colonisation shares your projects with it.", value: value.raven_api_key, secret: true})}${settingSwitch({key: "raven_sync_enabled", label: "Sync colonisation", detail: "Send deliveries, depot updates and fleet carrier cargo to Raven Colonial as they happen, under this commander.", checked: value.raven_sync_enabled})}${settingSwitch({key: "raven_share_ship_cargo", label: "Share your ship's cargo", detail: "Let your project's team see what you are carrying.", checked: value.raven_share_ship_cargo})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_raven">CHECK KEY</button><button type="button" data-page="colonisation">COLONISATION</button>`, "test raven colonial key colonisation")}`)
       + settingGroup("BGS", `${settingSwitch({key: "bgs_online_enabled", label: "BGS online", detail: "Ask the EDCD tick service when the galaxy tick happened, and let the BGS tab look systems up on EDSM. Your own journal record works without it.", checked: value.bgs_online_enabled})}${settingActions(`<button type="button" data-page="bgs">BGS</button>`, "bgs tick edsm factions background simulation")}`)
       + settingGroup("Trading", `${settingSwitch({key: "trading_online_enabled", label: "Trading searches (Spansh)", detail: "Let the Trading tab ask Spansh for trade routes, prices and station markets, only when you search. Your own trading record works without it.", checked: value.trading_online_enabled})}${settingActions(`<button type="button" data-page="trading">TRADING</button>`, "trading trade routes spansh market prices commodities profit")}`)
       + settingGroup("EDDN", `${settingSwitch({key: "eddn_market_upload_enabled", label: "Share markets on EDDN", detail: "Publish the markets you visit to the community network.", checked: value.eddn_market_upload_enabled})}${settingNote(`${numeric(data.eddn?.uploads)} uploads this session${data.eddn?.last_error ? ` · last error: ${data.eddn.last_error}` : ""}`)}`)
-      + settingGroup("DISCORD", `${settingText({key: "carrier_discord_webhook_url", id: "setting-discord", label: "Carrier webhook", detail: "One webhook for your personal and Squadron Carrier: status, jumps and expedition updates.", value: value.carrier_discord_webhook_url, secret: true})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_discord">SEND TEST</button><button type="button" data-page="carrier">CARRIER COMMAND</button>`, "test discord carrier")}`)
-      + `<p id="settings-test-status" class="workspace-status ${escapeHtml(data.tools?.status || "ready")}">${escapeHtml(data.tools?.detail || "Integration tests have not run this session.")}</p>`;
+      + settingGroup("DISCORD", `${settingText({key: "carrier_discord_webhook_url", id: "setting-discord", label: "Carrier webhook", detail: "One webhook for your personal and Squadron Carrier: status, jumps and expedition updates.", value: value.carrier_discord_webhook_url, secret: true})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_discord">SEND TEST</button><button type="button" data-page="carrier">CARRIER COMMAND</button>`, "test discord carrier")}`);
+  }
+  if (id === "updates") {
+    const version = escapeHtml(model.app?.version || "");
+    return `<div class="update-page" data-search="${settingSearchText("check for updates update version new release download install github")}">
+      <section class="update-card settings-update" id="settings-update" aria-live="polite">
+        <div class="update-mark" aria-hidden="true"><i></i></div>
+        <div class="update-words">
+          <small>VOID COMPASS</small>
+          <h4>You have <span id="update-current">v${version}</span></h4>
+          <b id="settings-update-state">NOT CHECKED</b>
+          <p id="settings-update-detail">Void Compass checks GitHub once when it starts.</p>
+        </div>
+        <div class="update-actions">
+          <button type="button" class="primary" data-command="check_updates" data-update-check>CHECK FOR UPDATES</button>
+          <button type="button" id="settings-update-view" data-update-view hidden>SEE THE UPDATE</button>
+          <button type="button" data-command="open" data-target="releases">ALL RELEASES</button>
+        </div>
+      </section>
+      <section class="update-how">
+        <h4>HOW UPDATES WORK</h4>
+        <ol>
+          <li><b>It asks GitHub</b><span>once as Void Compass starts, or whenever you press CHECK FOR UPDATES.</span></li>
+          <li><b>You choose</b><span>nothing downloads until you say so.</span></li>
+          <li><b>It checks every byte</b><span>the download must match the checksum published with the release, or it's thrown away.</span></li>
+          <li><b>It only replaces its own files</b><span>your settings, profiles, music, postcards, capsules and the Watcher's voice are never touched.</span></li>
+        </ol>
+      </section>
+    </div>`;
   }
   const rebuildPanel = `<div id="settings-cache-rebuild" class="cache-rebuild-state ready" role="status" aria-live="polite"><header><span><b id="settings-cache-phase">READY</b><small id="settings-cache-detail">No cache rebuild has run for this profile this session.</small></span><strong id="settings-cache-percent">0%</strong></header><div id="settings-cache-meter" class="cache-rebuild-meter" role="progressbar" aria-label="Cache rebuild progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="settings-cache-bar"></i></div><footer><span id="settings-cache-meta">WAITING TO START</span><span id="settings-cache-elapsed"></span></footer></div>`;
   return `<div class="settings-health" id="settings-health"><b id="settings-health-level">${escapeHtml(health.level || "NOMINAL")}</b><span id="settings-health-detail">${escapeHtml(settingsHealthDetail(health))}</span></div>`
-    + settingGroup("UPDATES", `<div class="settings-update" id="settings-update"><b id="settings-update-state">NOT CHECKED</b><span id="settings-update-detail">Void Compass checks GitHub once when it starts.</span></div>${settingActions(`<button type="button" data-command="check_updates" data-update-check>CHECK FOR UPDATES</button><button type="button" id="settings-update-view" data-update-view hidden>SEE THE UPDATE</button><button type="button" data-command="open" data-target="releases">RELEASES</button>`, "check for updates update version new release download install")}`)
     + settingGroup("DIAGNOSTICS", `${settingSwitch({key: "runtime_trace_enabled", label: "Performance trace", detail: "Keep startup and UI timing in the logs folder.", checked: value.runtime_trace_enabled})}${settingSwitch({key: "crash_reporting_enabled", label: "Crash and freeze reports", detail: "Keep the current and previous reports in the logs folder.", checked: value.crash_reporting_enabled})}${settingActions(`<button type="button" data-command="open_logs">OPEN LOGS</button><button type="button" data-ws-page="settings" data-ws-op="support_bundle">CREATE SUPPORT BUNDLE</button>`, "open logs support bundle")}`)
     + settingGroup("RECOVERY", `${settingSwitch({key: "recovery_safe_mode_enabled", label: "Safe recovery after a crash", detail: "Start from the last clean profile checkpoint after an unclean shutdown.", checked: value.recovery_safe_mode_enabled})}${settingSwitch({key: "automatic_profile_backups_enabled", label: "Automatic profile snapshots", detail: "Keep up to five, taken before upgrades and cache rebuilds.", checked: value.automatic_profile_backups_enabled})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="run_setup">RUN FIRST-TIME SETUP</button>`, "run setup onboarding")}`)
     + settingGroup("JOURNAL CACHE", `${settingNote("Rebuilds this profile's exploration history from every journal. Progress shows here and in the live feed.")}${rebuildPanel}${settingSwitch({key: "edsm_backfill_on_cache_rebuild", id: "setting-cache-edsm", label: "Send history to EDSM while rebuilding", detail: "Backfill EDSM from the journals being read.", checked: value.edsm_backfill_on_cache_rebuild})}${settingActions(`<button type="button" id="settings-cache-rebuild-button" data-ws-page="settings" data-ws-op="rebuild_cache">REBUILD CACHE</button>`, "rebuild journal cache")}`);
+}
+
+// Removing a carrier you no longer have (5.5.4): asked twice. Decommissioned
+// ones go by themselves once scrapped; leaving a squadron drops its carrier.
+function carrierRemoveRow(row, armed) {
+  if (!row || row.id === null || row.id === undefined) return "";
+  const pressed = armed !== null && armed !== undefined && String(armed) === String(row.id);
+  const scrap = Number(row.decommission_at) > 0
+    ? ` Decommissioning: it goes from this list once it's scrapped, ${new Date(Number(row.decommission_at) * 1000).toLocaleDateString([], {day: "numeric", month: "short"})}.` : "";
+  return `<div class="carrier-remove"><small>${escapeHtml(`No longer yours? Remove ${row.name || row.callsign || "this carrier"} from Void Compass.${scrap}`)}</small>
+    <button type="button" class="danger-action" data-ws-page="carrier" data-ws-op="remove_carrier" data-carrier-id="${escapeHtml(row.id)}">${pressed ? "PRESS AGAIN TO REMOVE" : "REMOVE CARRIER"}</button></div>`;
+}
+
+// Inara (5.5.4): how this session's sync is going.
+function inaraStatus(inara = {}) {
+  if (inara.status === "rejected") return {tone: "bad", text: "KEY REJECTED"};
+  if (inara.status === "error") return {tone: "bad", text: "UNREACHABLE · RETRYING"};
+  if (inara.status === "paused") return {tone: "", text: "NOT THE LIVE GAME"};
+  if (Number(inara.sent) > 0) return {tone: "good", text: `${numeric(inara.sent)} SENT${Number(inara.pending) ? ` · ${numeric(inara.pending)} WAITING` : ""}`};
+  return null;
+}
+
+// Your home system (5.5.4): the one in use, or how its lookup went.
+function homeStatus(home = {}) {
+  if (home.status === "looking") return {tone: "", text: "LOOKING UP…"};
+  if (home.status === "unknown") return {tone: "bad", text: "NOT FOUND · USING SOL"};
+  if (home.custom) return {tone: "good", text: `HOME · ${String(home.name || "").toUpperCase()}`};
+  return {tone: "good", text: "HOME · SOL"};
 }
 
 function settingsHealthDetail(health = {}) {
@@ -3802,7 +3891,7 @@ function renderSettingsWorkspace(data) {
   const profile = data.profile || {};
   if (!SETTINGS_SECTIONS.some((section) => section.id === settingsSection)) settingsSection = "journal";
   root.classList.remove("loading-panel");
-  root.innerHTML = `<div class="settings-shell">
+  const html = `<div class="settings-shell">
     <nav class="settings-rail" aria-label="Settings sections">
       <header class="settings-commander"><small>ACTIVE PROFILE</small><b>CMDR ${escapeHtml(String(profile.name || "Unknown Commander").toUpperCase())}</b><span>${escapeHtml(profile.fid ? `FID ${profile.fid}` : "No Frontier ID yet")}</span></header>
       ${SETTINGS_SECTIONS.map((section, index) => `<button type="button" class="settings-tab" data-settings-section="${section.id}"><i>${String(index + 1).padStart(2, "0")}</i><span><b>${escapeHtml(section.title)}</b><small>${escapeHtml(summaries[section.id] || "")}</small></span><em class="settings-tab-count"></em></button>`).join("")}
@@ -3812,10 +3901,103 @@ function renderSettingsWorkspace(data) {
       <p class="settings-no-match" hidden>No setting matches that. Try a shorter word.</p>
     </div>
   </div>`;
+  // Note: patched in place after the first draw, so a save doesn't flash the
+  // whole page or take the caret out of the field you're typing in.
+  const shell = root.querySelector(".settings-shell");
+  if (shell) {
+    const fresh = document.createElement("template");
+    fresh.innerHTML = html;
+    morphNode(shell, fresh.content.firstElementChild);
+  } else {
+    root.innerHTML = html;
+  }
   applySettingsView();
   renderSettingsUpdate(model.update || {});
   updateSettingsLive(data);
+  showSettingsTestResult(data.tools || {});
   if (scroller) scroller.scrollTop = scrollTop;
+}
+
+// Brings an element in line with a freshly built copy, touching only what
+// differs. Inputs being typed in keep their value; a row's save flash keeps
+// its class.
+const MORPH_KEEP_CLASSES = ["saving", "saved", "rejected"];
+function morphNode(current, next) {
+  if (current.nodeType !== next.nodeType || current.nodeName !== next.nodeName) {
+    current.replaceWith(next.cloneNode(true));
+    return;
+  }
+  if (current.nodeType === Node.TEXT_NODE || current.nodeType === Node.COMMENT_NODE) {
+    if (current.nodeValue !== next.nodeValue) current.nodeValue = next.nodeValue;
+    return;
+  }
+  if (current.nodeType !== Node.ELEMENT_NODE) return;
+  for (const {name} of [...current.attributes]) {
+    if (!next.hasAttribute(name) && name !== "class") current.removeAttribute(name);
+  }
+  for (const {name, value} of [...next.attributes]) {
+    if (name === "class") {
+      const keep = MORPH_KEEP_CLASSES.filter((cls) => current.classList.contains(cls));
+      const wanted = [value, ...keep].join(" ").trim();
+      if (current.getAttribute("class") !== wanted) current.setAttribute("class", wanted);
+    } else if (current.getAttribute(name) !== value) {
+      current.setAttribute(name, value);
+    }
+  }
+  if (!next.hasAttribute("class") && current.hasAttribute("class")) {
+    const keep = MORPH_KEEP_CLASSES.filter((cls) => current.classList.contains(cls));
+    if (keep.length) current.setAttribute("class", keep.join(" ")); else current.removeAttribute("class");
+  }
+  const editing = current === document.activeElement;
+  if (current instanceof HTMLInputElement) {
+    if (current.type === "checkbox" || current.type === "radio") current.checked = next.hasAttribute("checked");
+    else if (!editing && current.value !== (next.getAttribute("value") ?? "")) current.value = next.getAttribute("value") ?? "";
+  }
+  if (current instanceof HTMLTextAreaElement) {
+    if (!editing && current.value !== next.value) current.value = next.value;
+    return;
+  }
+  if (current instanceof HTMLSelectElement) {
+    morphChildren(current, next);
+    const chosen = [...next.options].find((option) => option.hasAttribute("selected"));
+    if (!editing && chosen && current.value !== chosen.value) current.value = chosen.value;
+    return;
+  }
+  morphChildren(current, next);
+}
+
+function morphChildren(current, next) {
+  const fresh = [...next.childNodes];
+  let index = 0;
+  for (; index < fresh.length; index += 1) {
+    const existing = current.childNodes[index];
+    if (!existing) current.appendChild(fresh[index].cloneNode(true));
+    else morphNode(existing, fresh[index]);
+  }
+  while (current.childNodes.length > fresh.length) current.lastChild.remove();
+}
+
+// An integration test's answer, right beside the button that ran it.
+function showSettingsTestResult(tool = {}) {
+  const op = String(tool.op || "");
+  document.querySelectorAll(".setting-test-result").forEach((chip) => {
+    if (chip.dataset.op !== op) chip.remove();
+  });
+  if (!op || !tool.status) return;
+  const button = document.querySelector(`#settings-workspace [data-ws-op="${CSS.escape(op)}"]`);
+  const row = button?.closest(".setting-row");
+  if (!row) return;
+  let chip = row.querySelector(".setting-test-result");
+  if (!chip) {
+    chip = document.createElement("span");
+    chip.className = "setting-test-result";
+    chip.setAttribute("role", "status");
+    row.appendChild(chip);
+  }
+  const state = tool.status === "working" ? "working" : tool.status === "failed" ? "failed" : "ready";
+  chip.dataset.op = op;
+  chip.className = `setting-test-result ${state}`;
+  chip.textContent = `${state === "working" ? "…" : state === "failed" ? "✗" : "✓"} ${tool.detail || ""}`;
 }
 
 // Shows the chosen section, or every row that matches the find box.
@@ -3841,8 +4023,6 @@ function applySettingsView() {
     }
     const health = panel.querySelector(".settings-health");
     if (health) health.hidden = words.length > 0;
-    const status = panel.querySelector("#settings-test-status");
-    if (status) status.hidden = words.length > 0 && !panelMatches;
     panel.hidden = words.length ? !panelMatches : id !== settingsSection;
     matches += panelMatches;
     const tab = shell.querySelector(`[data-settings-section="${id}"]`);
@@ -4018,26 +4198,23 @@ function renderWorkspace(state) {
   if (workspaceSyncTimer) window.clearTimeout(workspaceSyncTimer);
   workspaceSyncTimer = 0;
   if (pageLayoutEditing === page) return;
-  const fingerprintData = page === "analytics"
-    ? {...(workspace.data || {}), current: {...(workspace.data?.current || {}), elapsed: ""}}
+  // The archive's session clock ticks every second; it alone mustn't redraw Explore.
+  const fingerprintData = page === "explore" && workspace.data?.archive
+    ? {...workspace.data, archive: {...workspace.data.archive, current: {...(workspace.data.archive.current || {}), elapsed: ""}}}
     : (workspace.data || {});
   const fingerprint = page === "settings" ? settingsFingerprint(workspace.data) : JSON.stringify(fingerprintData);
   if (page === "settings" && workspaceFingerprints[page]) {
     updateSettingsLive(workspace.data || {});
     settleSettingsSaves(workspace.data || {});
-    const status = byId("settings-test-status");
-    if (status) {
-      status.className = `workspace-status ${workspace.data?.tools?.status || "ready"}`;
-      status.textContent = workspace.data?.tools?.detail || "Integration tests have not run this session.";
-    }
+    showSettingsTestResult(workspace.data?.tools || {});
     if (fingerprint === workspaceFingerprints[page] || !settingsCanRerender()) return;
     workspaceFingerprints[page] = fingerprint;
     renderSettingsWorkspace(workspace.data || {});
     return;
   }
-  if (page === "analytics") {
+  if (page === "explore" && workspace.data?.archive) {
     const elapsed = byId("analytics-workspace")?.querySelector(".archive-current > strong");
-    if (elapsed) elapsed.textContent = String(workspace.data?.current?.elapsed || "00:00:00");
+    if (elapsed) elapsed.textContent = String(workspace.data.archive.current?.elapsed || "00:00:00");
   }
   if (workspaceFingerprints[page] === fingerprint) return;
   const root = byId(`${page}-workspace`);
@@ -4048,14 +4225,17 @@ function renderWorkspace(state) {
   if (page === "planet-materials" && root?.dataset.profileKey === workspace.data?.profile_key && root.querySelector("form[data-dirty]")
       && root.planetSitesFingerprint === JSON.stringify(workspace.data?.sites || [])) return;
   const profileChanged = (page === "planet-materials" && root?.dataset.profileKey !== workspace.data?.profile_key)
-    || (page === "analytics" && root?.dataset.profileKey !== profileKey);
+    || (page === "explore" && byId("analytics-workspace")?.dataset.profileKey !== profileKey);
   if (!profileChanged && root?.contains(focused) && focused?.matches("#planet-compass-lat, #planet-compass-lon")) return;
   if (page !== "planet-materials" && !profileChanged && root?.contains(focused) && focused?.matches("input, textarea, select, [contenteditable='true']") && !focused?.matches("[data-refresh-on-change]")) return;
   workspaceFingerprints[page] = fingerprint;
   const renderers = {
     "planet-materials": renderPlanetMaterialsWorkspace,
-    explore: (data) => renderExploreWorkspace(data, EXPLORE_WORKSPACE_UI),
-    profile: renderProfileWorkspace, analytics: renderArchiveWorkspace,
+    explore: (data) => {
+      renderExploreWorkspace(data, EXPLORE_WORKSPACE_UI);
+      if (data.archive) renderExploreArchive(data.archive);
+    },
+    profile: renderProfileWorkspace,
     chronicle: (data) => {
       renderChronicleWorkspace(data);
       renderFlightLogs(data.flight_logs || {}, WORKSHOP_UI, data.sessions || []);
@@ -4073,6 +4253,7 @@ function renderWorkspace(state) {
     postcards: (data) => renderPostcards(data, WORKSHOP_UI),
     screenshots: (data) => renderScreenshots(data, WORKSHOP_UI),
     capsules: (data) => renderCapsules(data, WORKSHOP_UI),
+    tools: (data) => renderTools(data, WORKSHOP_UI),
     constellation: (data) => renderConstellation(data, WORKSHOP_UI),
   };
   renderers[page]?.(workspace.data || {});

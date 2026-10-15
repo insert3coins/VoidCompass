@@ -95,10 +95,14 @@ class PostcardAlbum:
     def folder(self):
         return str(self._folder() or "")
 
+    def _wanted(self, name):
+        # Constellations have their own page and folder since 5.5.4.
+        return not name.casefold().startswith("constellation - ")
+
     def _files(self):
         folder = self.folder()
         try:
-            names = [name for name in os.listdir(folder) if name.lower().endswith(self.EXTENSIONS)]
+            names = [name for name in os.listdir(folder) if name.lower().endswith(self.EXTENSIONS) and self._wanted(name)]
         except OSError:
             self.total = 0
             return []
@@ -210,6 +214,14 @@ class PostcardAlbum:
         except (ImportError, OSError, ValueError):
             return False
         return copy_dib(out.getvalue()[14:])  # a BMP without its file header is a DIB
+
+
+class ConstellationAlbum(PostcardAlbum):
+    """Constellations saved as pictures (5.5.4), in their own folder, for
+    the Constellation page: ``Constellation - <name> - <stamp>.png``."""
+
+    def _wanted(self, name):
+        return name.casefold().startswith("constellation - ")
 
 
 def copy_dib(dib):

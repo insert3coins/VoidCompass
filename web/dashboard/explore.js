@@ -3,6 +3,7 @@
  *   01 SYSTEM     survey board, next target and the live orrery
  *   02 ROUTE      Elite NavRoute, saved waypoints and Spansh neutron plots
  *   03 PROSPECTS  Return Later, Exploration Scout and personal Codex gaps
+ *   04 ARCHIVE    the Exploration Archive: flights, scan science, regions (5.5.4)
  *
  * Each view fills the window and scrolls its own lists, so no control sits
  * below the fold. The survey board is fed by the live snapshot, so every
@@ -15,6 +16,8 @@ const VIEWS = [
   {id: "system", index: "01", label: "System survey", idle: "AWAITING SYSTEM"},
   {id: "route", index: "02", label: "Route & waypoints", idle: "NO ROUTE"},
   {id: "prospects", index: "03", label: "Prospects", idle: "NOTHING PENDING"},
+  // 5.5.4: the Exploration Archive, merged in.
+  {id: "archive", index: "04", label: "Archive", idle: "FLIGHTS & SCIENCE"},
 ];
 const VIEW_IDS = VIEWS.map((view) => view.id);
 const FILTERS = [["all", "ALL"], ["todo", "TO DO"], ["bio", "BIOLOGY"], ["done", "DONE"]];
@@ -113,6 +116,9 @@ function skeletonMarkup() {
     </section>
     <section class="explore-view" role="tabpanel" id="explore-view-prospects" data-explore-panel="prospects" aria-labelledby="explore-tab-prospects" hidden>
       <div id="explore-prospects" class="explore-columns explore-prospect-grid">${pending("LINKING PROSPECT RECORDS", "Return Later, Exploration Scout and Codex gaps load with the survey workspace.")}</div>
+    </section>
+    <section class="explore-view explore-archive" role="tabpanel" id="explore-view-archive" data-explore-panel="archive" aria-labelledby="explore-tab-archive" hidden>
+      <div id="analytics-workspace" class="workspace-shell">${pending("OPENING THE ARCHIVE", "Retained flight sessions, scan evidence and region stamps load with the survey workspace.")}</div>
     </section>`;
 }
 

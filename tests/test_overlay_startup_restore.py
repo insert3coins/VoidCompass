@@ -113,6 +113,7 @@ class OverlayStartupRestoreTests(unittest.TestCase):
                 "music_player_hud": "music_player",
                 "cargo_hud": "cargo",
                 "toast_hud": "toast",
+        "achievement_hud": "toast",
             }[spec.attr]
             html = (root / "web" / folder / "index.html").read_text(encoding="utf-8")
             self.assertIn('/assets/overlay-client.js', html, spec.attr)

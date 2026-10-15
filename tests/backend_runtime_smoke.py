@@ -81,7 +81,7 @@ with tempfile.TemporaryDirectory() as folder:
                 if event: app.process_event(event)
             app._apply_status_update({'Flags':1,'Flags2':0})
             print('JOURNAL REPLAY',app.current_sys,app._navigation_jump_phase,flush=True)
-            for page in ['explore','planet-materials','profile','analytics','chronicle','mission','ground','mining','engineering','carrier','recon','achievements','ledger','settings']:
+            for page in ['explore','planet-materials','profile','chronicle','mission','ground','mining','engineering','carrier','recon','achievements','ledger','settings']:
                 result=app._html_workspace(page)
                 assert result.get('ready'), (page,result.get('error'))
             app._finish_startup_presentation()

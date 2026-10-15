@@ -194,7 +194,9 @@ class AfterTheStoryTests(unittest.TestCase):
     def test_the_afterword_once_then_book_two_waits_for_its_echo(self):
         clock = Clock()
         mind = watcher(clock=clock)
-        mind.memory.update(sessions=60, hours=700.0, lore=book_one_told())
+        # Just past Book Two's first hours, inside its echo's grace (5.5.4).
+        hours = watcher_lore.FRAGMENTS[len(book_one_told())][4] + 1
+        mind.memory.update(sessions=60, hours=hours, lore=book_one_told())
         mind.session_start()
         clock.now += watcher_lore.SETTLE_S + 1
         thought = mind.remember()
@@ -202,7 +204,7 @@ class AfterTheStoryTests(unittest.TestCase):
         self.assertTrue(mind.memory["afterword"])
         clock.now += watcher_lore.GAP_S + 1
         self.assertIsNone(mind.remember(), "Book Two's first chapter waits for a great ship")
-        page = watcher_lore.page(mind.memory, 60, 700.0)
+        page = watcher_lore.page(mind.memory, 60, hours)
         self.assertEqual(page["next"]["waits_for"], "A great ship")
         self.assertEqual(page["chapters"][len(watcher_lore.CHAPTERS)]["waits_for"], "A great ship")
         mind.observe("FSSSignalDiscovered", {"SignalName": "CAM-526 Sagan-class Traveller", "SignalType": "Megaship"})

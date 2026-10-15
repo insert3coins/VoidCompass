@@ -165,3 +165,42 @@ button.watcher-chapter:focus-visible { outline: 1px solid var(--accent); outline
 .watcher-tip[hidden] { display: none; }
 .watcher-tip b { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
 .watcher-tip span { color: var(--text); font: 12px/1.45 "Segoe UI", sans-serif; }
+
+/* 5.5.4: the Watcher's sub-pages (its settings and its voice), and what it
+   has learned of how you play. */
+.watcher-tabs { display: flex; gap: 2px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+.watcher-tabs button { padding: 9px 16px; border: 1px solid transparent; border-bottom: 0; background: transparent;
+  color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .1em; cursor: pointer; }
+.watcher-tabs button[aria-selected="true"] { color: var(--accent); border-color: var(--border);
+  background: color-mix(in srgb, var(--panel) 92%, transparent); margin-bottom: -1px; }
+.watcher-tabs button b { color: var(--green); }
+.watcher-subpage { display: grid; gap: 14px; grid-template-columns: minmax(0, 720px) minmax(0, 520px); align-items: start; }
+@media (max-width: 1300px) { .watcher-subpage { grid-template-columns: minmax(0, 1fr); } }
+.watcher-subpage > section { border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent);
+  padding: 14px 0; display: grid; gap: 8px; min-width: 0; }
+.watcher-subpage > section > header, .watcher-subpage > section > p, .watcher-subpage > section > div,
+.watcher-subpage > section > ol { margin-left: 14px; margin-right: 14px; }
+.watcher-subpage .studio-field, .watcher-subpage .studio-switch { margin: 0 14px; }
+.watcher-subpage .watcher-voice-get, .watcher-subpage .watcher-voice-ready { display: grid; gap: 8px; margin: 0; }
+.watcher-subpage .watcher-voice-get[hidden], .watcher-subpage .watcher-voice-ready[hidden] { display: none; }
+.watcher-voice-get > p, .watcher-voice-get > div { margin: 0 14px; color: var(--muted); font: 11px/1.5 "Segoe UI", sans-serif; }
+.watcher-voice-ready > div { margin: 0 14px; }
+.watcher-voice-rights { padding: 8px 10px; border-left: 2px solid var(--yellow);
+  background: color-mix(in srgb, var(--yellow) 6%, var(--inset)); color: var(--text) !important; font-size: 10px !important; }
+.watcher-voice-progress { position: relative; height: 22px; border: 1px solid var(--border); background: var(--inset); }
+.watcher-voice-progress[hidden] { display: none; }
+.watcher-voice-progress i { position: absolute; inset: 0 auto 0 0; width: var(--done, 0%); background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.watcher-voice-progress span { position: relative; display: block; padding: 4px 8px; color: var(--text); font: 700 9px Consolas, monospace; letter-spacing: .06em; }
+.watcher-voice-error { color: var(--red) !important; }
+.watcher-voice-error[hidden] { display: none; }
+.watcher-voice-ready input[type="range"] { width: 160px; }
+.watcher-voice-remove { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-top: 6px; }
+.watcher-voice-remove small { color: var(--dim); font: 10px Consolas, monospace; }
+.watcher-saved { color: var(--green) !important; }
+.watcher-saved[data-ok="false"] { color: var(--red) !important; }
+.watcher-subpage header { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.watcher-subpage header span { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .1em; }
+.watcher-subpage header b { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .08em; }
+.watcher-finding .watcher-lore { margin-top: 4px; }
+.watcher-knows-panel { grid-column: 1 / -1; }
+.watcher-subpage .studio-field select { width: auto; min-width: 170px; }

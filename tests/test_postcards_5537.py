@@ -75,7 +75,10 @@ class CardTests(unittest.TestCase):
 
     def test_options_stay_within_their_choices(self):
         self.assertEqual(postcard_options({}), {"hold": 10, "photo": True, "size": "standard", "facts": True, "note": True,
-                                                "doing": True, "style": "polaroid", "greeting": "Greetings from"})
+                                                "doing": True, "style": "polaroid", "greeting": "Greetings from",
+                                                # 5.5.4: the note's words, and your own themes.
+                                                "note_mode": "watcher", "note_text": "", "signature": "", "theme": None,
+                                            "postmark": True})
         self.assertEqual(postcard_options({"postcard_style": "Airmail"})["style"], "airmail")
         self.assertEqual(postcard_options({"postcard_style": "neon"})["style"], "polaroid")
         self.assertEqual(postcard_options({"postcard_hold_s": 7, "postcard_size": "huge"})["hold"], 10)
@@ -259,7 +262,8 @@ class DepthTests(unittest.TestCase):
         self.assertEqual(quiet["coordinates"], "12.3457° N · 45.6780° W", "where the picture is stays")
         self.assertNotIn("Landed", caption_text(quiet))
         page = (WEB / "dashboard" / "postcards.js").read_text(encoding="utf-8")
-        for key in ("postcard_facts", "postcard_note", "postcard_doing"):
+        # 5.5.4: the Watcher's note became a choice (the Watcher's, your own words, none).
+        for key in ("postcard_facts", "postcard_note_mode", "postcard_doing"):
             self.assertIn(f'"{key}"', page, "on the Postcards page")
             self.assertIn(key, config_module.PROFILE_SETTINGS)
 
@@ -345,7 +349,9 @@ class FolderTests(unittest.TestCase):
             bitmap(os.path.join(folder, "Screenshot_0003.bmp"))
             card = postcard_card(LANDED, state="LANDED")
             deck._postcard_develop(card, folder, False, False, time.time(), sleep=lambda s: None, keep=True)
-            self.assertEqual(len(os.listdir(chosen)), 1)
+            # The picture, and (5.5.4) the hidden .cards folder that lets it be edited.
+            self.assertEqual([name for name in os.listdir(chosen) if name.endswith(".png")].__len__(), 1)
+            self.assertTrue(os.path.isdir(os.path.join(chosen, ".cards")))
         self.assertIn("postcards_path", config_module.PROFILE_SETTINGS)
         page = (WEB / "dashboard" / "postcards.js").read_text(encoding="utf-8")
         self.assertIn('data-postcard-setting="postcards_path"', page)
@@ -381,7 +387,7 @@ class PictureTests(unittest.TestCase):
             with patch("voidcompass.dashboard.dashboard_keepsakes_mixin.application_dir", return_value=Path(app)):
                 deck._postcard_develop(card, folder, False, False, time.time(), sleep=lambda s: None, keep=True)
             self.assertFalse(os.path.exists(os.path.join(folder, "Postcards")), "not among the game's screenshots")
-            saved = os.listdir(os.path.join(app, "postcards"))
+            saved = [name for name in os.listdir(os.path.join(app, "postcards")) if name != ".cards"]
             self.assertEqual(len(saved), 1)
             self.assertTrue(saved[0].startswith("Postcard - Hatchooe AB 3 ab - "), saved[0])
             self.assertTrue(saved[0].endswith(".png"))
@@ -476,12 +482,13 @@ class PageTests(unittest.TestCase):
         second = {**postcard_card(LANDED, state="ONFOOT", serial=2, now=2), "photo": False}
         page.evaluate(render, {"cards": [second, first], "options": {"photo": True, "size": "standard"}})
         self.assertEqual(page.eval_on_selector_all(".card", "cards => cards.map(c => c.className)"),
-                         ["card top", "card behind"])
+                         ["card top postmarked", "card postmarked behind"])
         self.assertEqual(page.inner_text(".card.top .note"), "On foot")
         self.assertGreater(page.evaluate("window.cardsHeight()"), 250)
         page.evaluate(render, {"cards": [second], "options": {"photo": False, "size": "small"}})
         self.assertIn("no-photo", page.get_attribute(".card.top", "class"))
-        self.assertLess(page.evaluate("window.cardsHeight()"), 200, "a caption-only card is short")
+        # 5.5.4: the postmark beside the note takes a little room.
+        self.assertLess(page.evaluate("window.cardsHeight()"), 215, "a caption-only card is short")
         page.evaluate(render, {"cards": [], "options": {}})
         self.assertIn("empty", page.get_attribute("#postcards", "class"))
 

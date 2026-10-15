@@ -77,10 +77,15 @@ class PacingTests(unittest.TestCase):
         index = next(i for i, chapter in enumerate(watcher_lore.ALL_CHAPTERS) if chapter[0] == "XXI")
         before = [row for row in watcher_lore.FRAGMENTS if watcher_lore.BOOK_TWO_END <= row[5] < index]
         done = T0 + 300 * DAY
+        first = next(row for row in watcher_lore.FRAGMENTS if row[5] == index)
+        hours = first[4] + 1
         memory = memory_with([(row[0], done) for row in before])
-        self.assertIsNone(watcher_lore.due(memory, 999, 5000, now=done + 60 * DAY), "a great ship first")
-        memory = memory_with([(row[0], done) for row in before], echoes=["lore_great_ship"])
-        self.assertEqual(watcher_lore.due(memory, 999, 5000, now=done + 60 * DAY)[5], index)
+        self.assertIsNone(watcher_lore.due(memory, 999, hours, now=done + 60 * DAY), "a great ship first")
+        found = memory_with([(row[0], done) for row in before], echoes=["lore_great_ship"])
+        self.assertEqual(watcher_lore.due(found, 999, hours, now=done + 60 * DAY)[5], index)
+        # Never found (5.5.4): it surfaces anyway after the grace hours together.
+        later = first[4] + watcher_lore.ECHO_GRACE_HOURS
+        self.assertEqual(watcher_lore.due(memory, 999, later, now=done + 60 * DAY)[5], index)
 
     def test_about_a_year_at_the_least(self):
         days = sum(row[7] for row in BOOK_THREE)

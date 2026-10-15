@@ -204,7 +204,6 @@
 .settings-health b { color: var(--green); font: 700 13px "Bahnschrift SemiCondensed", sans-serif; letter-spacing: .08em; }
 .settings-health span { color: var(--muted); font: 10px Consolas, monospace; }
 .settings-section .cache-rebuild-state { margin: 8px 0; }
-.settings-section #settings-test-status { margin: 0 24px 18px; }
 .settings-no-match { padding: 40px 24px; border: 1px dashed var(--border); color: var(--muted); font: 12px "Segoe UI", sans-serif; text-align: center; }
 .settings-no-match[hidden] { display: none; }
 
@@ -228,3 +227,42 @@
 }
 body.reduced-motion .settings-page *, body.reduced-motion .settings-page *::before { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .settings-page *, .settings-page *::before { animation: none !important; transition: none !important; } }
+
+/* An integration test's answer beside its button (5.5.4). */
+.setting-test-result { flex: 1 1 260px; align-self: center; display: block; padding: 6px 10px; border-left: 3px solid var(--dim);
+  background: color-mix(in srgb, var(--panel) 80%, var(--bg)); color: var(--text); font: 600 11px/1.4 "Segoe UI", sans-serif; }
+.setting-test-result.working { border-left-color: var(--accent); color: var(--muted); }
+.setting-test-result.ready { border-left-color: var(--green); color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--bg)); }
+.setting-test-result.failed { border-left-color: var(--red); color: var(--red); background: color-mix(in srgb, var(--red) 8%, var(--bg)); }
+
+/* Updates, its own page (5.5.4): the release card and how updates work. */
+.update-page { display: grid; gap: 16px; }
+.update-card { display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px 22px;
+  padding: 22px 24px !important; border: 1px solid var(--border); border-left: 4px solid var(--muted, var(--border)); }
+@media (max-width: 1100px) { .update-card { grid-template-columns: auto minmax(0, 1fr); } .update-actions { grid-column: 1 / -1; } }
+.update-mark { position: relative; width: 52px; height: 52px; border: 2px solid currentColor; border-radius: 50%; color: var(--muted); }
+.update-mark i { position: absolute; left: 50%; top: 22%; width: 2px; height: 46%; margin-left: -1px; background: currentColor; }
+.update-mark i::after { content: ""; position: absolute; left: -5px; bottom: -2px; width: 8px; height: 8px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }
+.update-words { display: grid; gap: 5px; min-width: 0; }
+.update-words small { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.update-words h4 { margin: 0; color: var(--text); font: 600 22px/1.15 "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; }
+.update-words h4 span { color: var(--accent); }
+.update-words b { font: 700 11px Consolas, monospace; letter-spacing: .1em; }
+.update-words p { margin: 0; color: var(--muted); font: 12.5px/1.5 "Segoe UI", sans-serif; }
+.update-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.update-actions button { min-height: 36px; padding: 0 16px; }
+.update-card[data-tone="good"] { border-left-color: var(--green); }
+.update-card[data-tone="good"] .update-mark { color: var(--green); }
+.update-card[data-tone="new"] { border-left-color: var(--accent); }
+.update-card[data-tone="new"] .update-mark { color: var(--accent); }
+.update-card[data-tone="busy"] .update-mark { color: var(--yellow); }
+.update-card[data-tone="bad"] .update-mark { color: var(--red); }
+.update-how { padding: 18px 22px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 80%, transparent); }
+.update-how h4 { margin: 0 0 12px; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.update-how ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 22px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.update-how li { display: grid; gap: 4px; padding-left: 34px; position: relative; counter-increment: step; }
+.update-how li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 22px; height: 22px; display: grid; place-items: center;
+  border: 1px solid var(--accent); color: var(--accent); font: 700 10px Consolas, monospace; }
+.update-how b { color: var(--text); font: 600 12.5px "Segoe UI", sans-serif; }
+.update-how span { color: var(--muted); font: 12px/1.45 "Segoe UI", sans-serif; }

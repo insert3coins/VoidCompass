@@ -681,17 +681,26 @@ ECHO_REST_S = {
 }
 # The far reaches: this far from Sol (light years).
 FAR_LY = 20000.0
+# 5.5.4: every flight style can find every echo. The far reaches and the core
+# can also be reached by distance flown in all (a trader's thousands of short
+# jumps count), and a chapter that waits for an echo surfaces anyway after
+# this many more hours together.
+FAR_TOTAL_LY = 20000.0
+CORE_TOTAL_LY = 50000.0
+ECHO_GRACE_HOURS = 25.0
 # How to find each echo, for the Watcher page (5.5.3.9): what really stirs it
 # (echo_for), said plainly; the game's own mysteries still unnamed.
 ECHO_HOW = {
     "lore_black_hole": "Jump to a system whose main star is a black hole, or scan one.",
-    "lore_core": "Reach the heart of the galaxy: jump to, or scan, the supermassive black hole at its centre.",
-    "lore_neutron": "Jump to a system whose main star is a neutron star.",
-    "lore_builders": "Find signs of a vanished people: their signals on a planet, or one of their sites logged in your "
-                     "Codex.",
-    "lore_sound": "Find alien signals on a planet (not the vanished people's), or log an alien contact in your Codex.",
-    "lore_far": "Travel 20,000 light years or more from Sol.",
-    "lore_great_ship": "Arrive in a system with a megaship in its signal list. Fleet carriers don't count.",
+    "lore_core": "Reach the heart of the galaxy (jump to, or scan, the supermassive black hole at its centre), "
+                 "or fly 50,000 light years in all, however short the jumps.",
+    "lore_neutron": "Jump to a neutron star, scan one, or boost your drive in a neutron star's jet cone.",
+    "lore_builders": "Find signs of a vanished people: their signals on a planet, one of their sites in your Codex, "
+                     "their materials, or their technology at a tech broker.",
+    "lore_sound": "Find alien signals on a planet (not the vanished people's), log an alien contact in your Codex, "
+                  "collect their materials, or earn a bond fighting them.",
+    "lore_far": "Travel 20,000 light years from Sol, or fly 20,000 light years in all.",
+    "lore_great_ship": "Arrive in a system with a megaship in its signal list, or dock at one. Fleet carriers don't count.",
 }
 # What each echo is about, for the Watcher page.
 ECHO_LABELS = {
@@ -776,7 +785,7 @@ def echo_for(event, raw):
         return {"H": "lore_black_hole", "SupermassiveBlackHole": "lore_core", "N": "lore_neutron"}.get(star)
     if event == "Scan":
         star = str(raw.get("StarType") or "")
-        return {"H": "lore_black_hole", "SupermassiveBlackHole": "lore_core"}.get(star)
+        return {"H": "lore_black_hole", "SupermassiveBlackHole": "lore_core", "N": "lore_neutron"}.get(star)
     if event in ("FSSBodySignals", "SAASignalsFound"):
         kinds = {str((row or {}).get("Type") or "") for row in raw.get("Signals") or () if isinstance(row, dict)}
         if "$SAA_SignalType_Thargoid;" in kinds:
@@ -793,6 +802,22 @@ def echo_for(event, raw):
         return None
     if event == "FSSSignalDiscovered":
         return "lore_great_ship" if str(raw.get("SignalType") or "") in ("Megaship", "StationMegaShip") else None
+    # 5.5.4: ways for every flight style, not only explorers.
+    if event == "Docked" and str(raw.get("StationType") or "").casefold() in ("megaship", "megashipsrv"):
+        return "lore_great_ship"
+    if event == "JetConeBoost":
+        return "lore_neutron"
+    if event == "TechnologyBroker" and "guardian" in str(raw.get("BrokerType") or "").casefold():
+        return "lore_builders"
+    if event == "MaterialCollected":
+        name = str(raw.get("Name") or "").casefold()
+        if name.startswith("guardian"):
+            return "lore_builders"
+        if name.startswith(("tg_", "unknown")):
+            return "lore_sound"
+        return None
+    if event == "FactionKillBond" and "thargoid" in str(raw.get("VictimFaction") or "").casefold():
+        return "lore_sound"
     if event == "FSDJump":
         position = raw.get("StarPos")
         try:
@@ -867,7 +892,18 @@ def days_to_wait(row, memory, now):
 
 def unlocked(row, sessions, hours, found=()):
     needs = row[6] if len(row) > 6 else None
-    return int(sessions or 0) >= row[3] and float(hours or 0) >= row[4] and (needs is None or needs in found)
+    # An echo not found yet only delays it (5.5.4): ECHO_GRACE_HOURS more together and it surfaces anyway.
+    echo_ok = needs is None or needs in found or float(hours or 0) >= row[4] + ECHO_GRACE_HOURS
+    return int(sessions or 0) >= row[3] and float(hours or 0) >= row[4] and echo_ok
+
+
+def distance_echoes(total_ly):
+    """Echoes reached by distance flown in all (5.5.4)."""
+    try:
+        total = float(total_ly or 0)
+    except (TypeError, ValueError):
+        return []
+    return [topic for topic, need in (("lore_far", FAR_TOTAL_LY), ("lore_core", CORE_TOTAL_LY)) if total >= need]
 
 
 def due(memory, sessions, hours, now=None):
@@ -945,6 +981,9 @@ def _unlock_words(index, chapter, memory, sessions, hours, found, now):
     needs = chapter_needs(chapter)
     if needs and needs not in found:
         words.append(f"Find: {ECHO_LABELS[needs].lower()}")
+        anyway = first[4] + ECHO_GRACE_HOURS - float(hours or 0)
+        if anyway > .05:
+            words.append(f"Or it surfaces anyway after about {math.ceil(anyway):,} more hours together")
     if index > 0:
         previous = ALL_CHAPTERS[index - 1]
         before = [passage_id for passage_id, _words in previous[5]]

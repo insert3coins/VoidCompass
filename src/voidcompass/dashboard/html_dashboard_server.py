@@ -80,6 +80,9 @@ class HtmlDashboardServer:
         # The screenshot album (services.screenshot_album): /media/shot/ and
         # /media/shot-thumb/, by id.
         self.screenshots = None
+        # Constellations saved as pictures (5.5.4): /media/constellation/ and
+        # /media/constellation-thumb/, by id.
+        self.constellations = None
         # The atlas receives a random loopback port after the journal backend
         # is constructed. The parent still supplies the exact private URL and
         # the atlas independently restricts its frame ancestor to this deck.
@@ -349,6 +352,9 @@ class HtmlDashboardServer:
         if path.startswith("/media/postcard"):
             self._serve_postcard(handler, path)
             return
+        if path.startswith("/media/constellation"):
+            self._serve_constellation(handler, path)
+            return
         if path.startswith("/media/shot"):
             self._serve_screenshot(handler, path)
             return
@@ -392,6 +398,21 @@ class HtmlDashboardServer:
             if kind == "postcard":
                 data, content_type = album.full(identifier), "image/png"
             elif kind == "postcard-thumb":
+                data, content_type = album.thumb(identifier), "image/jpeg"
+        if not data:
+            self._send_json(handler, {"error": "not found"}, 404)
+            return
+        self._send_bytes(handler, data, content_type, cache="no-cache")
+
+    def _serve_constellation(self, handler, path):
+        album = self.constellations
+        kind, _, name = path.removeprefix("/media/").partition("/")
+        identifier = name.split(".", 1)[0]
+        data, content_type = None, ""
+        if album is not None and _MEDIA_ID.fullmatch(identifier):
+            if kind == "constellation":
+                data, content_type = album.full(identifier), "image/png"
+            elif kind == "constellation-thumb":
                 data, content_type = album.thumb(identifier), "image/jpeg"
         if not data:
             self._send_json(handler, {"error": "not found"}, 404)

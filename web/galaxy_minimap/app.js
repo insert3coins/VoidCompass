@@ -222,7 +222,9 @@ function drawMarks(view = bounds(), hereWorld = null, gliding = false) {
   // you're in, in the HUD's colour. Names that would overlap are left out.
   if (model.options?.labels !== false && regions && !gliding) {
     const scale = Number(getComputedStyle(document.documentElement).getPropertyValue("--scale")) || 1;
-    const fontSize = 6.6 * scale;
+    // Their own size from Overlay Studio (5.5.4), or the minimap's text size.
+    const own = number(model.options?.region_text);
+    const fontSize = 6.6 * (own > 0 ? own / 100 : scale);
     context.font = `700 ${fontSize}px Bahnschrift, "Segoe UI", sans-serif`;
     context.textAlign = "center"; context.textBaseline = "middle";
     const hereId = model.here ? regions.idAt(number(model.here.x), number(model.here.z)) : 0;
@@ -264,6 +266,19 @@ function drawMarks(view = bounds(), hereWorld = null, gliding = false) {
     context.fillStyle = css(yellow, .9);
     context.beginPath(); context.arc(sol[0], sol[1], 1.8, 0, Math.PI * 2); context.fill();
     label("SOL", sol, yellow);
+  }
+  // Your home, when it isn't Sol (5.5.4): a small house-shaped diamond.
+  const home = model.home;
+  if (home && home.custom) {
+    const spot = at(number(home.x), number(home.z));
+    if (inside(spot)) {
+      context.strokeStyle = css(yellow, .95); context.lineWidth = 1.2;
+      context.beginPath();
+      context.moveTo(spot[0], spot[1] - 3.5); context.lineTo(spot[0] + 3, spot[1]);
+      context.lineTo(spot[0], spot[1] + 3.5); context.lineTo(spot[0] - 3, spot[1]); context.closePath();
+      context.stroke();
+      label(String(home.name || "HOME").toUpperCase(), spot, yellow);
+    }
   }
   if (!view.local) {
     const core = at(CORE.x, CORE.z);
@@ -482,7 +497,8 @@ function drawStrip() {
   regionLabel.textContent = here?.region || (here ? "Deep space" : "Awaiting position");
   viewMode.textContent = VIEW_NAMES[model.options?.view] || VIEW_NAMES.route;
   const parts = [];
-  if (here) parts.push(`<b>${ly(here.from_sol)}</b> LY FROM SOL`);
+  const homeName = model.home && model.home.custom ? String(model.home.name || "HOME").toUpperCase() : "SOL";
+  if (here) parts.push(`<b>${ly(here.from_home ?? here.from_sol)}</b> LY FROM ${escape(homeName)}`);
   if (model.trip && model.trip.distance != null) {
     const jumps = number(model.trip.jumps);
     // No system names in the strip (the Nav HUD has them): the trip's

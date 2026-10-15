@@ -108,9 +108,10 @@ _CORE_RANKS = {
 }
 
 _HTML_WORKSPACE_PAGES = {
-    "planet-materials", "explore", "profile", "analytics", "chronicle", "mission", "ground", "mining",
+    "planet-materials", "explore", "profile", "chronicle", "mission", "ground", "mining",
     "engineering", "build-planner", "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
     "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation",
+    "tools",
 }
 
 
@@ -271,7 +272,34 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         sources["ui"] = "warn" if stall_age is not None and stall_age < 30 else "live"
         heartbeat = getattr(getattr(self, "heartbeat_hud", None), "_html_render_model", None)
         sources["heartbeat"] = dict(heartbeat or {})
+        sources["services"] = self._html_service_states(now)
         return sources
+
+    def _html_service_states(self, now):
+        """EDSM and Inara for the status bar (5.5.4): off, live, waiting, or trouble."""
+        noted = getattr(self, "_service_notes", None) or {}
+
+        def trouble(tag):
+            severity, at = noted.get(tag, ("", 0.0))
+            return severity in ("WARN", "ERROR") and now - at < 600
+        edsm_on = bool(self.config.get("edsm_upload_enabled")) and bool(self.config.get("edsm_api_key"))
+        edsm = {"state": "off", "label": "OFF"}
+        if edsm_on:
+            edsm = {"state": "warn", "label": "CHECK FEED"} if trouble("EDSM") else {"state": "live", "label": "LIVE"}
+        inara = getattr(self, "inara", None)
+        row = {"state": "off", "label": "OFF"}
+        if inara is not None and inara.enabled():
+            stats = inara.stats or {}
+            waiting = inara.pending()
+            if stats.get("status") == "error" or trouble("INARA"):
+                row = {"state": "warn", "label": f"RETRYING · {waiting} WAITING" if waiting else "CHECK FEED"}
+            elif waiting:
+                row = {"state": "recent", "label": f"{waiting} WAITING"}
+            else:
+                row = {"state": "live", "label": "LIVE"}
+        elif inara is not None and (inara.stats or {}).get("status") == "rejected":
+            row = {"state": "warn", "label": "KEY REJECTED"}
+        return {"edsm": edsm, "inara": row}
 
     def _html_exploration_preflight(self, route, flight, sources):
         """Return compact departure readiness without repeating survey data."""
@@ -814,6 +842,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "hotkey": _text(self.config.get("overlay_hotkey_watcher_poke"), 40),
             # Its long story and the echoes heard (5.5.3.5).
             "lore": watcher_lore.page(memory, sessions, hours, _watcher_echoes(memory)),
+            # 5.5.4: its settings, its voice, and what it has learned of you.
+            **(self._html_watcher_extras(mind) if hasattr(self, "_html_watcher_extras") else {}),
         }
 
     def _html_watcher_thought(self):
@@ -2004,9 +2034,14 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                     "destination": _text(row.get("jump_destination"), 140),
                     "fuel": _number(row.get("fuel_level")),
                     "active": str(row.get("carrier_id")) == str(carrier.get("carrier_id")),
+                    # 5.5.4: scrapped on this date (unix), when decommissioned.
+                    "decommission_at": row.get("decommission_at"),
                 }
                 for row in managed_carriers
             ],
+            # REMOVE asks twice (5.5.4): the carrier armed by the first press.
+            "remove_armed": (getattr(self, "_carrier_remove_armed", None) or (None, 0))[0]
+            if time.time() - (getattr(self, "_carrier_remove_armed", None) or (None, 0))[1] < 6 else None,
             "carrier": {
                 "id": carrier.get("carrier_id"),
                 "type": carrier_type,
@@ -2224,6 +2259,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "reduced_motion_enabled",
             "overlay_hotkeys_enabled",
             "edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled",
+            "inara_cmdr_name", "inara_api_key", "inara_upload_enabled",
             "raven_api_key", "raven_sync_enabled", "raven_share_ship_cargo",
             "bgs_online_enabled", "trading_online_enabled",
             "eddn_market_upload_enabled", "carrier_discord_webhook_url",
@@ -2234,6 +2270,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "galnet_rotation_seconds", "galnet_refresh_minutes",
             "low_fuel_threshold_pct", "auto_copy_waypoint",
             "achievement_notifications_enabled", "adaptive_command_enabled",
+            "home_system",
         ):
             value = self.config.get(key)
             values[key] = value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
@@ -2292,6 +2329,11 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             })
         return {
             "values": values, "hotkeys": hotkeys, "health": health, "eddn": eddn,
+            # Your home system (5.5.4): the one in use and how its lookup went.
+            "home": self._home_settings(),
+            # Inara (5.5.4): what it has sent this session.
+            "inara": dict(getattr(getattr(self, "inara", None), "stats", {}) or {},
+                          pending=getattr(self, "inara", None).pending() if getattr(self, "inara", None) else 0),
             "galnet": self._html_dashboard_galnet(),
             "profile": {
                 "key": profile,
@@ -2371,6 +2413,12 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 pass
         if "ui_scale_percent" in changed:
             apply_ui_scale(self.root, self.config.get("ui_scale_percent", 100))
+        if "home_system" in changed:
+            self._home_resolve()
+        if changed & {"inara_api_key", "inara_cmdr_name", "inara_upload_enabled"}:
+            inara = getattr(self, "inara", None)
+            if inara is not None:
+                inara.reset_block()
         if "overlay_text_scale_percent" in changed:
             # The same refresh Overlay Studio runs after its own settings.
             self._html_overlay_settings_save({})
@@ -2508,9 +2556,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
     def _html_workspace(self, page, intelligence=None):
         builders = {
             "planet-materials": self._html_planet_materials_workspace,
-            "explore": lambda: self._html_explore_workspace(intelligence),
+            # 5.5.4: the Exploration Archive is Explore & Survey's Archive tab.
+            "explore": lambda: {**self._html_explore_workspace(intelligence), "archive": self._html_analytics_workspace()},
             "profile": self._html_profile_workspace,
-            "analytics": self._html_analytics_workspace,
             "chronicle": self._html_chronicle_workspace,
             "mission": self._html_mission_workspace,
             "ground": self._html_ground_workspace,
@@ -2533,6 +2581,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "screenshots": getattr(self, "_html_screenshots_workspace", None),
             # Time capsules and On this day (5.5.3.7, dashboard_capsules_mixin).
             "capsules": getattr(self, "_html_capsules_workspace", None),
+            "tools": getattr(self, "_html_tools_workspace", None),
             # Your constellation (5.5.3.7, dashboard_capsules_mixin).
             "constellation": getattr(self, "_html_constellation_workspace", None),
         }
@@ -2907,6 +2956,11 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         if page == "flight_log":
             return self._handle_flight_log_command(operation, payload)
 
+        if page == "tools":
+            result = self._handle_tools_command(operation, payload)
+            self._schedule_html_dashboard_publish(immediate=True)
+            return result
+
         if page == "capsules":
             result = self._handle_capsules_command(operation, payload)
             self._schedule_html_dashboard_publish(immediate=True)
@@ -2923,6 +2977,10 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             return result
 
         if page == "watcher":
+            handled = self._handle_watcher_settings_command(operation, payload)
+            if handled is not None:
+                self._schedule_html_dashboard_publish(immediate=True)
+                return bool(handled)
             if operation == "reset":
                 # RESET THE WATCHER (5.5.3.9): only with the page's own
                 # confirmation word, never by accident.
@@ -3795,6 +3853,20 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             if tracker is None:
                 return False
             requested_carrier_id = payload.get("carrier_id")
+            if operation == "remove_carrier":
+                # Asked twice: the first press arms it for a few seconds.
+                armed = getattr(self, "_carrier_remove_armed", None)
+                now = time.time()
+                if not armed or str(armed[0]) != str(requested_carrier_id) or now - armed[1] > 6:
+                    self._carrier_remove_armed = (requested_carrier_id, now)
+                    self._schedule_html_dashboard_publish(immediate=True)
+                    return True
+                self._carrier_remove_armed = None
+                done = tracker.remove_carrier(requested_carrier_id)
+                if done:
+                    self.add_event_feed_entry("CARRIER", "Carrier removed from Void Compass", severity="INFO")
+                self._schedule_html_dashboard_publish(immediate=True)
+                return done
             if operation == "select_carrier":
                 changed = tracker.set_active_carrier(requested_carrier_id)
                 if changed:
@@ -4124,7 +4196,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 # Raven Colonial: whose key is this, and is it this commander's?
                 api_key = _text(payload.get("api_key"), 300)
                 tool = self._html_profile_transient("_html_settings_tool_state", {})
-                tool.update({"status": "working", "detail": "Checking the Raven Colonial key…"})
+                tool.update({"op": "test_raven", "status": "working", "detail": "Checking the Raven Colonial key…"})
                 self._schedule_html_dashboard_publish(immediate=True)
                 cmdr = str(getattr(self, "cmdr_name", "") or "")
 
@@ -4144,12 +4216,31 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
 
                 threading.Thread(target=worker, name="RavenKeyTest", daemon=True).start()
                 return True
+            elif operation == "test_inara":
+                # Inara: does it accept this key for this commander?
+                tool = self._html_profile_transient("_html_settings_tool_state", {})
+                tool.update({"op": "test_inara", "status": "working", "detail": "Checking the Inara key…"})
+                self._schedule_html_dashboard_publish(immediate=True)
+                inara = getattr(self, "inara", None)
+
+                def inara_checked(result):
+                    ok, words = result
+                    tool.update({"status": "ready" if ok else "failed", "detail": words})
+                    self.add_event_feed_entry("INARA", words, severity="INFO" if ok else "WARN")
+                    self._schedule_html_dashboard_publish(immediate=True)
+
+                def inara_worker():
+                    result = inara.test() if inara is not None else (False, "Inara isn't available.")
+                    self._ui_post(inara_checked, result, key="inara-key-test")
+
+                threading.Thread(target=inara_worker, name="InaraKeyTest", daemon=True).start()
+                return True
             elif operation in {"test_edsm", "test_discord"}:
                 profile = get_active_profile(self.config)
                 generation = time.time_ns()
                 tool = self._html_profile_transient("_html_settings_tool_state", {})
                 label = "EDSM credentials" if operation == "test_edsm" else "Discord webhook"
-                tool.update({"generation": generation, "status": "working", "detail": f"Testing {label}…"})
+                tool.update({"op": operation, "generation": generation, "status": "working", "detail": f"Testing {label}…"})
                 self._schedule_html_dashboard_publish(immediate=True)
 
                 def worker():
@@ -4222,13 +4313,14 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 # learns whether its save was kept from the next snapshot.
                 save_id = _integer(payload.get("save_id"), 0)
                 allowed = {
-                    "journal_path": str, "screenshots_path": str,
+                    "journal_path": str, "screenshots_path": str, "home_system": str,
                     "screenshots_enabled": bool, "ui_scale_percent": int,
                     "ui_text_scale_percent": int, "ui_text_min_px": int, "overlay_text_scale_percent": int,
                     "reduced_motion_enabled": bool,
                     "overlay_hotkeys_enabled": bool,
                     "edsm_cmdr_name": str,
                     "edsm_api_key": str, "edsm_upload_enabled": bool,
+                    "inara_cmdr_name": str, "inara_api_key": str, "inara_upload_enabled": bool,
                     "raven_api_key": str, "raven_sync_enabled": bool,
                     "raven_share_ship_cargo": bool, "bgs_online_enabled": bool, "trading_online_enabled": bool,
                     "eddn_market_upload_enabled": bool,
@@ -4398,7 +4490,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             page = _text(payload.get("page"), 40).casefold()
             allowed_pages = {
                 "overview", "explore", "records", "operations", "profile",
-                "analytics", "chronicle", "mission", "ground", "mining",
+                "chronicle", "mission", "ground", "mining",
                 "engineering", "build-planner", "powerplay", "carrier", "recon", "achievements", "ledger",
                 "settings", "about",
             }
@@ -4513,6 +4605,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "documentation": DOCUMENTATION_URL,
             "license": LICENSE_URL,
             "notices": THIRD_PARTY_NOTICES_URL,
+            "inara": "https://inara.cz/elite/settings-api/",
         }
         if target in urls:
             webbrowser.open_new_tab(urls[target])

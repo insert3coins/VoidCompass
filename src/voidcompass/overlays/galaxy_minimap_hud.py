@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 
-from voidcompass.core import themes
+from voidcompass.core import home_anchor, themes
 from voidcompass.core.application_runtime import OverlayWindowState
 from voidcompass.exploration.galactic_regions import find_region, region_names
 from voidcompass.overlays import overlay_chrome
@@ -50,7 +50,16 @@ def minimap_options(config):
         "spansh": bool(config.get("galaxy_minimap_spansh", True)),
         # Where your sealed time capsules wait (5.5.3.7).
         "capsules": bool(config.get("galaxy_minimap_capsules", True)),
+        # The region names' size (5.5.4): 0 follows the minimap's text size.
+        "region_text": region_text_size(config.get("galaxy_minimap_region_text_percent")),
     }
+
+
+def region_text_size(value):
+    """A region-name size from Overlay Studio: 0 (the minimap's text size)
+    or one of the Watcher's text sizes."""
+    from voidcompass.overlays.heartbeat_hud import heartbeat_text_size
+    return heartbeat_text_size(value)
 
 
 def next_view(view):
@@ -218,7 +227,7 @@ def spansh_trip(waypoints=None, plot=None, position=None, system=""):
 
 
 def build_minimap_model(rows, position=None, system="", route_entries=None, options=None, regions_visited=0, trip=None,
-                        capsules=None):
+                        capsules=None, home=None):
     """The page's model. ``rows`` are this session's travel-history rows
     (oldest first, starting where the session began), ``position`` the ship's
     [x, y, z] when known, ``route_entries`` NavRoute.json's route."""
@@ -231,8 +240,15 @@ def build_minimap_model(rows, position=None, system="", route_entries=None, opti
         x, y, z = (float(value) for value in position)
         here = {"x": round(x, 1), "z": round(z, 1), "system": str(system or ""),
                 "region": _region_name(x, z), "from_sol": round(math.sqrt(x * x + y * y + z * z), 1)}
+    # Your home (5.5.4): Sol unless you set another; the strip measures from it.
+    home = dict(home or home_anchor.home({}))
+    marker = {"name": str(home["name"]), "x": round(home["pos"][0], 1), "z": round(home["pos"][2], 1),
+              "custom": bool(home.get("custom"))}
+    if here is not None:
+        here["from_home"] = round(math.dist((x, y, z), home["pos"]), 1)
     return {
         "here": here,
+        "home": marker,
         "trail": session_trail(rows),
         "session_jumps": max(0, len(rows) - 1),
         "route": plotted_route(route_entries, position, system) if options["route"] else None,
@@ -285,12 +301,13 @@ class GalaxyMinimapHUD:
         session_rows = list(session_rows or [])
         all_rows = list(all_rows or session_rows)
         options = minimap_options(self.config)
+        home = home_anchor.home(self.config)
         route_key = tuple(str((entry or {}).get("StarSystem") or "") for entry in (route_entries or ()))
         signature = (revision if revision is not None else len(all_rows), len(session_rows),
                      tuple(round(float(v), 1) for v in position) if position else None, str(system or ""),
                      route_key, tuple(sorted(options.items())),
                      (trip["source"], trip["name"], trip["stops"], len(trip["points"])) if trip else None,
-                     tuple(tuple(point) for point in (capsules or ())))
+                     tuple(tuple(point) for point in (capsules or ())), home["name"], tuple(home["pos"]))
         self._last = (session_rows, all_rows, revision, position, system, route_entries, trip, capsules)
         if signature == self._signature:
             return False
@@ -298,7 +315,7 @@ class GalaxyMinimapHUD:
         visited = self._regions_visited(all_rows, signature[0])
         self._html_render_model = build_minimap_model(
             session_rows, position=position, system=system, route_entries=route_entries,
-            options=options, regions_visited=visited, trip=trip, capsules=capsules)
+            options=options, regions_visited=visited, trip=trip, capsules=capsules, home=home)
         return True
 
     def apply_settings(self):
