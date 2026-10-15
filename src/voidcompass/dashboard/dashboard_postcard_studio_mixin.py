@@ -79,9 +79,10 @@ class DashboardPostcardStudioMixin:
         style, theme = settings.get("style") or "polaroid", dict(settings.get("theme") or {})
         chosen_style = str(payload.get("style") or "")
         if chosen_style.casefold().startswith("theme:"):
-            found = postcard_themes.themes(self.config).get(postcard_themes.clean_name(chosen_style[6:]))
+            name = postcard_themes.clean_name(chosen_style[6:])
+            found = postcard_themes.themes(self.config).get(name)
             if found:
-                style, theme = found["base"], dict(found)
+                style, theme = found["base"], {**found, "name": name}
         elif chosen_style.casefold() in POSTCARD_STYLES:
             style, theme = chosen_style.casefold(), {}
         if payload.get("angle") not in (None, ""):
@@ -107,7 +108,7 @@ class DashboardPostcardStudioMixin:
         draft = getattr(self, "_postcard_edit_draft", None)
         if not draft:
             return None
-        key = repr(draft)
+        key = repr((draft, postcard_themes.themes(self.config)))
         cached = getattr(self, "_postcard_edit_preview_cache", None)
         if cached and cached[0] == key:
             return cached[1]

@@ -77,9 +77,10 @@ def chosen(config):
     """(base style, theme params or None) for the style setting."""
     style = str((config or {}).get("postcard_style") or "polaroid")
     if style.casefold().startswith("theme:"):
-        theme = themes(config).get(clean_name(style[6:]))
+        name = clean_name(style[6:])
+        theme = themes(config).get(name)
         if theme:
-            return theme["base"], theme
+            return theme["base"], {**theme, "name": name}
     style = style.casefold()
     return (style if style in BASES else "polaroid"), None
 

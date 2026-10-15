@@ -486,6 +486,13 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
                 feed("SYSTEM", "Postcard copied: paste it anywhere" if done else "The postcard couldn't be copied",
                      severity="INFO" if done else "WARN")
             return done
+        if operation == "delete":
+            done = album.delete(card_id)
+            feed = getattr(self, "add_event_feed_entry", None)
+            if callable(feed):
+                feed("SYSTEM", "Postcard moved to the Recycle Bin" if done else "The postcard couldn't be deleted",
+                     severity="INFO" if done else "WARN")
+            return done
         if operation == "set":
             return self._postcard_setting(str(payload.get("key") or ""), payload.get("value"))
         if operation == "save_theme":

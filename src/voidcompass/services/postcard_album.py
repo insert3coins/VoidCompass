@@ -188,6 +188,22 @@ class PostcardAlbum:
         except Exception:
             return None
 
+    def delete(self, card_id):
+        """The picture to the Recycle Bin (5.5.5), with the card kept beside
+        it for editing, and its star. True when it's gone."""
+        path = self.path(card_id)
+        if path is None:
+            return False
+        stem = os.path.splitext(os.path.basename(path))[0]
+        sidecars = [os.path.join(os.path.dirname(path), ".cards", stem + suffix) for suffix in (".json", ".jpg")]
+        if not recycle([path] + [item for item in sidecars if os.path.isfile(item)]):
+            return False
+        if self.favourites is not None:
+            self.favourites.set(self.favourites_kind, os.path.basename(path), False)
+        with self._lock:
+            self._thumbs = {key: value for key, value in self._thumbs.items() if key[0] != card_id}
+        return True
+
     def show_in_folder(self, card_id):
         path = self.path(card_id)
         if path is None or os.name != "nt":
@@ -222,6 +238,35 @@ class ConstellationAlbum(PostcardAlbum):
 
     def _wanted(self, name):
         return name.casefold().startswith("constellation - ")
+
+
+def recycle(paths):
+    """Files to the Recycle Bin on Windows (they can be put back); deleted
+    elsewhere. True when none are left."""
+    paths = [os.path.abspath(path) for path in paths if os.path.exists(path)]
+    if not paths:
+        return True
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        class SHFILEOPSTRUCTW(ctypes.Structure):
+            _fields_ = [("hwnd", wintypes.HWND), ("wFunc", wintypes.UINT), ("pFrom", wintypes.LPCWSTR),
+                        ("pTo", wintypes.LPCWSTR), ("fFlags", ctypes.c_ushort), ("fAnyOperationsAborted", wintypes.BOOL),
+                        ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", wintypes.LPCWSTR)]
+        # FO_DELETE with undo, no prompt, no progress, no error box.
+        operation = SHFILEOPSTRUCTW(None, 3, "\0".join(paths) + "\0\0", None, 0x40 | 0x10 | 0x04 | 0x400, False, None, None)
+        try:
+            ctypes.windll.shell32.SHFileOperationW(ctypes.byref(operation))
+        except (OSError, AttributeError):
+            pass
+    else:
+        for path in paths:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+    return not any(os.path.exists(path) for path in paths)
 
 
 def copy_dib(dib):

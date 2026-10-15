@@ -136,6 +136,7 @@ function shell(root) {
           <button type="button" data-album="show">SHOW IN FOLDER</button>
           <button type="button" id="pc-edit" data-pc-edit>EDIT</button>
           <button type="button" id="pc-restore-one" data-pc-restore-one hidden>MAKE EDITABLE</button>
+          <button type="button" class="danger-action" id="pc-delete" data-pc-delete>DELETE</button>
           <button type="button" data-album="close">CLOSE</button>
         </div>
         <p class="pc-side-note" id="pc-side-note"></p>
@@ -178,6 +179,23 @@ function shell(root) {
       return undefined;
     }
     if (event.target.closest("[data-editor-cancel]")) return closeEditor(true);
+    const remove = event.target.closest("[data-pc-delete]");
+    if (remove && shown) {
+      if (!remove.dataset.armed) {
+        remove.dataset.armed = "1";
+        remove.textContent = "SURE? TO THE RECYCLE BIN";
+        return setTimeout(() => { if (remove.isConnected) { delete remove.dataset.armed; remove.textContent = "DELETE"; } }, 4000);
+      }
+      delete remove.dataset.armed;
+      remove.textContent = "DELETE";
+      const gone = shown;
+      if (!(await send("delete", {id: gone.id}))) return ui.showToast("The postcard couldn't be deleted");
+      rows = rows.filter((row) => row.id !== gone.id);
+      close();
+      drawStats();
+      drawAlbum(true);
+      return ui.showToast(`${gone.title} moved to the Recycle Bin`);
+    }
     if (event.target.closest("[data-editor-picture]")) return choosePicture();
     if (event.target.closest("[data-pc-reset]")) return resetDraft();
     if (event.target.closest("[data-theme-save]")) return saveTheme();
@@ -432,8 +450,12 @@ function renderEditor() {
   const form = ui.byId("pc-editor");
   if (!form || !editing.id || editing.id !== editorWanted || !form.hidden) return;
   const esc = ui.escapeHtml;
-  const looks = [...Object.entries(BASE_NAMES), ...Object.keys(data.themes || {}).map((name) => [`theme:${name}`, `★ ${name}`])]
-    .map(([value, name]) => `<option value="${esc(value)}"${value === editing.style ? " selected" : ""}>${esc(name)}</option>`).join("");
+  const choices = [...Object.entries(BASE_NAMES), ...Object.keys(data.themes || {}).map((name) => [`theme:${name}`, `★ ${name}`])];
+  // A theme deleted since: the postcard keeps its look unless another is picked.
+  if (editing.style && !choices.some(([value]) => value === editing.style)) {
+    choices.unshift([editing.style, `★ ${editing.style.replace(/^theme:/, "")} (as saved)`]);
+  }
+  const looks = choices.map(([value, name]) => `<option value="${esc(value)}"${value === editing.style ? " selected" : ""}>${esc(name)}</option>`).join("");
   const field = (name, label, value, limit) => `<label><span>${label}</span><input name="${name}" maxlength="${limit}" value="${esc(value || "")}"></label>`;
   form.innerHTML = `<h4>EDIT THIS POSTCARD</h4>
     ${field("title", "Place", editing.title, 80)}${field("greeting", "Lettering", editing.greeting, 40)}
@@ -447,6 +469,7 @@ function renderEditor() {
       `<label><span>${label}</span><select name="size_${part}">${sizeOptions((editing.sizes || {})[part])}</select></label>`).join("")}</div>
     <button type="button" class="pc-picture" data-editor-picture>${editing.photo ? "CHANGE ITS PICTURE" : "GIVE IT A PICTURE"}</button>
     <div class="pc-editor-actions"><button type="submit" class="primary">SAVE THE POSTCARD</button><button type="button" data-editor-cancel>CANCEL</button></div>`;
+  form.dataset.angleMoved = "";
   form.hidden = false;
   ui.byId("pc-actions").hidden = true;
   form.onsubmit = saveEdit;
@@ -457,12 +480,18 @@ function editorValues() {
   const form = ui.byId("pc-editor");
   const values = Object.fromEntries(new FormData(form).entries());
   values.postmark = form.querySelector('[name="postmark"]').checked;
+  // Note: the slider always has a value; sent only once moved, so a theme's
+  // own angle isn't replaced by the default (5.5.5).
+  if (form.dataset.angleMoved !== "1") delete values.angle;
   return values;
 }
 
 function onEditorInput(event) {
   if (!event.target.closest("#pc-editor")) return;
-  if (event.target.name === "angle") event.target.closest("label").querySelector("[data-angle-out]").textContent = `${event.target.value}°`;
+  if (event.target.name === "angle") {
+    event.target.closest("label").querySelector("[data-angle-out]").textContent = `${event.target.value}°`;
+    event.target.form.dataset.angleMoved = "1";
+  }
   later("edit", event.type === "change" ? 0 : 320, previewEdit);
 }
 

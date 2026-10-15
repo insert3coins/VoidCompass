@@ -233,7 +233,7 @@ class PostcardThemeTests(unittest.TestCase):
         theme = postcard_themes.normalize(self.THEME)
         self.assertEqual((theme["ink"], theme["greet"], theme["angle"]), ("#e8f0ff", "", 12.0))
         config = {"postcard_themes": {"Neon": theme}, "postcard_style": "theme:Neon"}
-        self.assertEqual(postcard_themes.chosen(config), ("airmail", theme))
+        self.assertEqual(postcard_themes.chosen(config), ("airmail", {**theme, "name": "Neon"}), "it knows its name (5.5.5)")
         self.assertEqual(postcard_options(config)["style"], "airmail")
         self.assertEqual(postcard_themes.chosen({"postcard_style": "theme:Gone"}), ("polaroid", None))
 
