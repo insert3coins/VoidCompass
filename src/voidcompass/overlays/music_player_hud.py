@@ -10,6 +10,7 @@ its visualizer fed live levels from the playing page.
 import time
 
 from voidcompass.core.application_runtime import OverlayWindowState
+from voidcompass.core.overlay_registry import overlay_text_scale, text_size_choice
 from voidcompass.core import themes
 from voidcompass.overlays import overlay_chrome
 
@@ -63,15 +64,13 @@ def music_overlay_options(config):
         "show_next": bool(config.get("music_player_show_next", True)),
         "auto_hide": hide if hide in MUSIC_AUTO_HIDE else 0,
         # The overlay's own text size; 0 follows the size set for all overlays.
-        "text_scale_percent": 0 if text_scale <= 0 else max(75, min(200, text_scale)),
+        "text_scale_percent": text_size_choice(text_scale),
     }
 
 
 def music_text_scale(config):
     """The overlay's text size as a factor: its own, else all overlays' size."""
-    own = music_overlay_options(config)["text_scale_percent"]
-    chosen = own if own > 0 else _integer((config or {}).get("overlay_text_scale_percent"), 100)
-    return max(75, min(200, chosen)) / 100.0
+    return overlay_text_scale(config, "music_player_hud")
 
 
 def music_overlay_size(config):

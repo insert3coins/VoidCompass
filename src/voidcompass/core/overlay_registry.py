@@ -120,3 +120,61 @@ DEFAULT_OVERLAY_HOTKEYS = {
     "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
     "overlay_hotkey_watcher_poke": "Ctrl+Alt+Shift+F9",
 }
+
+# Each overlay's own text size (5.5.4), chosen from a list in Overlay Studio:
+# 0 follows the text size for all overlays. The first six had keys before.
+TEXT_SIZES = (0, 75, 85, 100, 110, 125, 150, 175, 200)
+TEXT_SIZE_KEYS = {
+    "hud": "hud_text_scale_percent",
+    "survey_status_hud": "survey_text_scale_percent",
+    "music_player_hud": "music_player_text_scale_percent",
+    "galnet_ticker_hud": "galnet_ticker_text_scale_percent",
+    "galaxy_minimap_hud": "galaxy_minimap_text_scale_percent",
+    "heartbeat_hud": "heartbeat_text_scale_percent",
+    "cargo_hud": "cargo_text_scale_percent",
+    "carrier_hud": "carrier_text_scale_percent",
+    "prospector_hud": "prospector_text_scale_percent",
+    "planet_materials_hud": "planet_materials_text_scale_percent",
+    "powerplay_hud": "powerplay_text_scale_percent",
+    "gravity_warning_hud": "gravity_text_scale_percent",
+    "station_info_hud": "station_text_scale_percent",
+    "toast_hud": "toast_text_scale_percent",
+    "achievement_hud": "achievement_text_scale_percent",
+    "contact_scope_hud": "contact_scope_text_scale_percent",
+    "jump_info_hud": "jump_info_text_scale_percent",
+    "colony_needs_hud": "colony_needs_text_scale_percent",
+    "trade_route_hud": "trade_route_text_scale_percent",
+    "postcard_hud": "postcard_text_scale_percent",
+    "ground_popup": "ground_text_scale_percent",
+}
+OVERLAY_ATTR_BY_ENABLED = {spec.enabled_key: spec.attr for spec in OVERLAY_SPECS}
+
+
+def text_size_choice(value):
+    """The nearest of TEXT_SIZES (0, or anything below 75, stays 0). A number
+    field saved on every arrow step, so it settled on odd values; this list
+    is what Overlay Studio offers now."""
+    try:
+        value = int(float(value))
+    except (TypeError, ValueError):
+        return 0
+    if value <= 0:
+        return 0
+    return min(TEXT_SIZES[1:], key=lambda size: (abs(size - value), size))
+
+
+def overlay_text_percent(config, attr):
+    """An overlay's text size, 75-200: its own, or the one for all overlays."""
+    config = config or {}
+    own = text_size_choice(config.get(TEXT_SIZE_KEYS.get(attr, "")))
+    if own:
+        return own
+    try:
+        every = int(float(config.get("overlay_text_scale_percent", 100)))
+    except (TypeError, ValueError):
+        every = 100
+    return max(75, min(200, every))
+
+
+def overlay_text_scale(config, attr):
+    return overlay_text_percent(config, attr) / 100.0

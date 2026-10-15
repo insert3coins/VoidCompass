@@ -9,6 +9,7 @@ from voidcompass.core.application_runtime import OverlayWindowState
 import time
 from voidcompass.core.config import save_config
 from voidcompass.overlays import overlay_chrome
+from voidcompass.core.overlay_registry import overlay_text_scale
 from voidcompass.core import themes
 _CHROMA = '#ff00ff'
 _SEVERITIES = frozenset(('info', 'warn', 'fail', 'success'))
@@ -23,6 +24,7 @@ _TITLE_CHARS = 43
 _MESSAGE_CHARS = 50
 
 class ToastHUD:
+    STUDIO_ID = "toast_hud"
     WIDTH = WIDTH
     GAP = _GAP
     X_KEY, Y_KEY = 'toast_hud_x', 'toast_hud_y'
@@ -57,9 +59,7 @@ class ToastHUD:
 
     def toast_height(self, toast):
         """Keep the native host height aligned with scaled HTML toast rows."""
-        scale = max(75, min(200, self._safe_int(
-            self.config.get('overlay_text_scale_percent'), 100,
-        ))) / 100.0
+        scale = overlay_text_scale(self.config, self.STUDIO_ID)
         base = (_ACHIEVEMENT_BASE_H if str((toast or {}).get('kind')) == 'achievement'
                 else _NOTICE_BASE_H)
         return round(base * (1 + scale))
@@ -180,6 +180,7 @@ class ToastHUD:
 class AchievementHUD(ToastHUD):
     """Achievements in their own window (5.5.4): the same queue, its own place
     on screen, on or off apart from the cockpit notifications."""
+    STUDIO_ID = "achievement_hud"
     WIDTH = 420
     X_KEY, Y_KEY = 'achievement_hud_x', 'achievement_hud_y'
     DEFAULT_Y = 230

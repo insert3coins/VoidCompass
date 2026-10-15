@@ -6,6 +6,7 @@ import json
 import logging
 import os
 
+from voidcompass.core.overlay_registry import OVERLAY_ATTR_BY_ENABLED, overlay_text_percent, overlay_text_scale
 from voidcompass.overlays.html_overlay_runtime import (
     HtmlOverlayBridgeLifecycle,
     HtmlOverlaySurface,
@@ -60,7 +61,7 @@ class HtmlStationOverlayBridge(HtmlOverlayBridgeLifecycle):
 
     def _dimensions(self):
         # Design size times the text size the page zooms by (see html_model_overlay).
-        scale = max(75, min(200, _integer(self.config.get("overlay_text_scale_percent"), 100))) / 100.0
+        scale = overlay_text_scale(self.config, "station_info_hud")
         measured = _integer(self._browser_content_height, 0) or int(round(420 * scale))
         height = max(int(round(330 * scale)), min(int(round(720 * scale)), measured))
         return int(round(520 * scale)), height
@@ -96,9 +97,7 @@ class HtmlStationOverlayBridge(HtmlOverlayBridgeLifecycle):
         }
 
     def _snapshot(self):
-        text_scale = max(75, min(200, _integer(
-            self.config.get("overlay_text_scale_percent"), 100,
-        ))) / 100.0
+        text_scale = overlay_text_scale(self.config, "station_info_hud")
         return {
             "schema": 1,
             "kind": "station",
@@ -119,7 +118,7 @@ class HtmlStationOverlayBridge(HtmlOverlayBridgeLifecycle):
         palette = tuple(sorted((getattr(self.overlay, "_palette", {}) or {}).items()))
         return (
             model, palette, tuple(sorted(self._window_payload().items())),
-            self.config.get("overlay_text_scale_percent"),
+            overlay_text_percent(self.config, "station_info_hud"),
             self.config.get("overlay_opacity_percent", 100),
             bool(self.config.get("hud_crt_enabled", True)),
             bool(self.config.get("reduced_motion_enabled", False)),

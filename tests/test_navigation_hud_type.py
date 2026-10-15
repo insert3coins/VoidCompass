@@ -141,7 +141,7 @@ class NavigationTypeSettingsTests(unittest.TestCase):
         studio._html_overlay_settings_save({"hud_label_size": "larger"})
         studio._html_overlay_settings_save({"hud_text_scale_percent": "130"})
         self.assertEqual((studio.config["hud_font_face"], studio.config["hud_label_size"],
-                          studio.config["hud_text_scale_percent"]), ("terminal", "larger", 130))
+                          studio.config["hud_text_scale_percent"]), ("terminal", "larger", 125), "the nearest on the list")
         studio._html_overlay_settings_save({"hud_font_face": "comic", "hud_label_size": "huge",
                                             "hud_text_scale_percent": "0"})
         self.assertEqual((studio.config["hud_font_face"], studio.config["hud_label_size"],
@@ -169,7 +169,7 @@ class NavigationTypeSettingsTests(unittest.TestCase):
         labels = re.search(r'data-studio-setting="hud_label_size">(.*?)</select>', section, re.S).group(1)
         self.assertEqual(tuple(re.findall(r'value="([a-z]+)"', face)), HUD_FONT_FACES)
         self.assertEqual(tuple(re.findall(r'value="([a-z]+)"', labels)), HUD_LABEL_SIZES)
-        self.assertIn('data-studio-setting="hud_text_scale_percent"', section)
+        self.assertNotIn('data-studio-setting="hud_text_scale_percent"', section, "the Studio's one list (5.5.4)")
         self.assertIn('data-overlay-option="hud_bright_labels"', section)
         animation = re.search(r'data-studio-setting="hud_animation_intensity">(.*?)</select>', section, re.S).group(1)
         self.assertEqual(tuple(re.findall(r'value="([A-Za-z]+)"', animation)), ("Calm", "Standard", "Energetic"))

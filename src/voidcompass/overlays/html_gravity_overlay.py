@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
+from voidcompass.core.overlay_registry import OVERLAY_ATTR_BY_ENABLED, overlay_text_percent, overlay_text_scale
 from voidcompass.overlays.html_overlay_runtime import (
     HtmlOverlayBridgeLifecycle,
     HtmlOverlaySurface,
@@ -53,9 +54,7 @@ class HtmlGravityOverlayBridge(HtmlOverlayBridgeLifecycle):
         return self._ready
 
     def _text_scale(self):
-        return max(75, min(200, _integer(
-            self.config.get("overlay_text_scale_percent"), 100,
-        ))) / 100.0
+        return overlay_text_scale(self.config, "gravity_warning_hud")
 
     def _dimensions(self):
         scale = self._text_scale()

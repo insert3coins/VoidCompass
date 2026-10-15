@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
+from voidcompass.core.overlay_registry import OVERLAY_ATTR_BY_ENABLED, overlay_text_percent, overlay_text_scale
 from voidcompass.overlays.html_overlay_runtime import (
     HtmlOverlayBridgeLifecycle,
     HtmlOverlaySurface,
@@ -69,7 +70,7 @@ class HtmlToastOverlayBridge(HtmlOverlayBridgeLifecycle):
         notifications = notifications if notifications is not None else self._notifications()
         # The notification page zooms by the text size, so it widens with it
         # (toast_height already grows each notification's height).
-        scale = max(75, min(200, _safe_int(self.config.get("overlay_text_scale_percent"), 100))) / 100.0
+        scale = overlay_text_scale(self.config, getattr(self.overlay, "STUDIO_ID", "toast_hud"))
         width = int(round(_safe_int(getattr(self.overlay, "WIDTH", 400), 400) * scale))
         height_for = getattr(self.overlay, "toast_height", None)
         heights = [
@@ -116,9 +117,7 @@ class HtmlToastOverlayBridge(HtmlOverlayBridgeLifecycle):
     def _snapshot(self):
         notifications = self._notifications()
         try:
-            text_scale = max(75, min(200, _safe_int(
-                self.config.get("overlay_text_scale_percent"), 100,
-            ))) / 100.0
+            text_scale = overlay_text_scale(self.config, getattr(self.overlay, "STUDIO_ID", "toast_hud"))
         except Exception:
             text_scale = 1.0
         return {
@@ -151,7 +150,7 @@ class HtmlToastOverlayBridge(HtmlOverlayBridgeLifecycle):
             bool(self.config.get(self.enabled_key, False)),
             bool(getattr(self.win.master, "_voidcompass_startup_presentation_held", False)),
             tuple(sorted((getattr(self.overlay, "_palette", {}) or {}).items())),
-            self.config.get("overlay_text_scale_percent"),
+            overlay_text_percent(self.config, getattr(self.overlay, "STUDIO_ID", "toast_hud")),
             self.config.get("overlay_opacity_percent", 100),
             bool(self.config.get("hud_crt_enabled", True)),
             bool(self.config.get("reduced_motion_enabled", False)),

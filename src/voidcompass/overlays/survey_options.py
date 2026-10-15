@@ -32,6 +32,5 @@ def survey_overlay_options(config):
 
 def survey_text_scale(config):
     """Survey's own text size when set (percent), else the overlay-wide scale."""
-    own = _integer(config.get("survey_text_scale_percent"), 0)
-    chosen = own if own > 0 else _integer(config.get("overlay_text_scale_percent"), 100)
-    return max(75, min(200, chosen)) / 100.0
+    from voidcompass.core.overlay_registry import overlay_text_scale
+    return overlay_text_scale(config, "survey_status_hud")

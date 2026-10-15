@@ -7,6 +7,7 @@ import os
 import time
 
 from voidcompass.core import themes
+from voidcompass.core.overlay_registry import OVERLAY_ATTR_BY_ENABLED, overlay_text_percent, overlay_text_scale
 from voidcompass.overlays.html_overlay_runtime import (
     HtmlOverlayBridgeLifecycle,
     HtmlOverlaySurface,
@@ -101,9 +102,7 @@ class HtmlGroundOverlayBridge(HtmlOverlayBridgeLifecycle):
         }
 
     def _text_scale(self):
-        return max(75, min(200, _integer(
-            self.config.get("overlay_text_scale_percent"), 100,
-        ))) / 100.0
+        return overlay_text_scale(self.config, "ground_popup")
 
     def _dimensions(self):
         # The compass is a fixed instrument that the page zooms by the overlay

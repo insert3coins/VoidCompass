@@ -148,7 +148,8 @@ class ControlTests(unittest.TestCase):
         self.assertIn("galaxy_minimap_text_scale_percent", config_module.PROFILE_SETTINGS)
         self.assertIn("galaxy_minimap_labels", config_module.PROFILE_SETTINGS)
         html = (WEB / "dashboard" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('data-studio-setting="galaxy_minimap_text_scale_percent"', html)
+        # 5.5.4: every overlay's text size is the Studio's one list.
+        self.assertIn('id="studio-selected-text"', html)
         self.assertIn('data-overlay-option="galaxy_minimap_labels"', html)
 
 

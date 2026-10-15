@@ -19,7 +19,7 @@ import time
 from voidcompass.core.application_runtime import OverlayWindowState
 from voidcompass.core import display_scale, themes
 from voidcompass.overlays import overlay_chrome
-from voidcompass.core.overlay_registry import OVERLAY_SPECS
+from voidcompass.core.overlay_registry import OVERLAY_SPECS, TEXT_SIZES, overlay_text_scale, text_size_choice
 from voidcompass.overlays.heartbeat_events import classify
 from voidcompass.overlays import watcher_mind
 
@@ -72,35 +72,16 @@ def thought_side_setting(config):
     return value if value in THOUGHT_SIDES else "auto"
 
 
-# The Watcher's text sizes in Overlay Studio, as a list rather than a number
-# field: the field saved on every arrow step (0 up to 5, kept as 75 %), so it
-# kept falling back to 75. 0 follows the text size of all overlays.
-HEARTBEAT_TEXT_SIZES = (0, 75, 85, 100, 110, 125, 150, 175, 200)
-
-
-def heartbeat_text_size(value):
-    """A Studio text size: the nearest of HEARTBEAT_TEXT_SIZES (0 stays 0)."""
-    try:
-        value = int(float(value))
-    except (TypeError, ValueError):
-        return 0
-    if value <= 0:
-        return 0
-    return min(HEARTBEAT_TEXT_SIZES[1:], key=lambda size: (abs(size - value), size))
+# The Watcher's text sizes, as a list rather than a number field (the field
+# saved on every arrow step); since 5.5.4 every overlay's are the same list.
+HEARTBEAT_TEXT_SIZES = TEXT_SIZES
+heartbeat_text_size = text_size_choice
 
 
 def heartbeat_text_scale(config):
     """The Watcher's own text size (5.5.3.5): its Studio percentage, or the
     text size of all overlays when that is 0."""
-    def percent(value, default):
-        try:
-            return int(float(value))
-        except (TypeError, ValueError):
-            return default
-    config = config or {}
-    own = heartbeat_text_size(config.get("heartbeat_text_scale_percent"))
-    chosen = own if own > 0 else percent(config.get("overlay_text_scale_percent"), 100)
-    return max(75, min(200, chosen)) / 100.0
+    return overlay_text_scale(config, "heartbeat_hud")
 
 
 def place_thought(side, orb_x, orb_y, orb_px, width_px, height_px, bounds):

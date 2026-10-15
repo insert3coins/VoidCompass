@@ -71,11 +71,8 @@ def next_view(view):
 def minimap_text_scale(config):
     """The minimap's own text size (Overlay Studio), or all overlays' when 0:
     the same choices as the Watcher's (5.5.3.7)."""
-    from voidcompass.overlays.heartbeat_hud import heartbeat_text_size
-    own = heartbeat_text_size((config or {}).get("galaxy_minimap_text_scale_percent"))
-    if own <= 0:
-        own = _integer((config or {}).get("overlay_text_scale_percent"), 100)
-    return max(75, min(200, own)) / 100.0
+    from voidcompass.core.overlay_registry import overlay_text_scale
+    return overlay_text_scale(config, "galaxy_minimap_hud")
 
 
 def _point(x, z):

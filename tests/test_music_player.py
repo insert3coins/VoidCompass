@@ -336,7 +336,7 @@ class RegistrationTests(unittest.TestCase):
                                             "music_player_text_scale_percent": "140"})
         self.assertEqual({key: studio.config[key] for key in studio.config}, {
             "music_player_layout": "strip", "music_player_visualizer": "wave", "music_player_colour": "spectrum",
-            "music_player_auto_hide": 30, "music_player_text_scale_percent": 140})
+            "music_player_auto_hide": 30, "music_player_text_scale_percent": 150})
         studio._html_overlay_settings_save({"music_player_layout": "cube", "music_player_auto_hide": "45",
                                             "music_player_text_scale_percent": "0"})
         self.assertEqual((studio.config["music_player_layout"], studio.config["music_player_auto_hide"],
@@ -357,7 +357,7 @@ class RegistrationTests(unittest.TestCase):
         self.assertEqual(tuple(int(value) for value in choices("music_player_auto_hide")), MUSIC_AUTO_HIDE)
         for option in ("music_player_show_art", "music_player_show_details", "music_player_show_next"):
             self.assertIn(f'data-overlay-option="{option}"', section)
-        self.assertIn('data-studio-setting="music_player_text_scale_percent"', section)
+        self.assertNotIn('data-studio-setting="music_player_text_scale_percent"', section, "the Studio's one list (5.5.4)")
 
 
 class BrowserTests(Folder):

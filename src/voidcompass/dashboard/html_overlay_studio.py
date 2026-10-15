@@ -1,7 +1,7 @@
 """Overlay Layout Studio model and command controller."""
 
 from voidcompass.core.display_scale import monitor_handle_scale, monitor_scale
-from voidcompass.core.overlay_registry import OVERLAY_SPEC_BY_ATTR
+from voidcompass.core.overlay_registry import OVERLAY_SPEC_BY_ATTR, TEXT_SIZE_KEYS, TEXT_SIZES, text_size_choice
 from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 from voidcompass.overlays.html_overlay_runtime import overlay_opacity_ratio
 
@@ -247,6 +247,7 @@ class HtmlOverlayStudioMixin:
                 "enabled": enabled,
                 "hide_on_maps": attr not in self._map_keep_visible(),
                 "own_opacity": self._own_opacities().get(attr, 0),
+                "own_text": text_size_choice(self.config.get(TEXT_SIZE_KEYS.get(attr, ""))),
                 "shown": shown,
                 "html_ready": html_ready,
                 "state": (
@@ -515,6 +516,21 @@ class HtmlOverlayStudioMixin:
         self._schedule_html_dashboard_publish(immediate=True)
         return True
 
+    def _set_overlay_own_text(self, overlay_id, size):
+        """Overlay Studio inspector: this overlay's own text size, or 0 to
+        follow the one for all overlays (5.5.4). The Watcher's words keep
+        theirs on the Watcher page."""
+        key = TEXT_SIZE_KEYS.get(overlay_id)
+        if key is None or overlay_id == "heartbeat_hud":
+            return False
+        value = _integer(size, -1)
+        if value not in TEXT_SIZES:
+            return False
+        self.config[key] = value
+        # The same refresh the Studio's other settings run: windows resize.
+        self._html_overlay_settings_save({})
+        return True
+
     # Status.json GuiFocus: the Galaxy Map, the System Map and the Orrery.
     _MAP_GUI_FOCUS = {6, 7, 8}
 
@@ -678,13 +694,11 @@ class HtmlOverlayStudioMixin:
             self.config["survey_spotlight_threshold"] = int(round(max(2, min(40, threshold if threshold is not None else 8))))
         if "survey_text_scale_percent" in payload:
             # 0 follows the overlay-wide text scale; otherwise 75-200 %.
-            scale = _number(payload.get("survey_text_scale_percent"), 0) or 0
-            self.config["survey_text_scale_percent"] = 0 if scale <= 0 else int(round(max(75, min(200, scale))))
+            self.config["survey_text_scale_percent"] = text_size_choice(payload.get("survey_text_scale_percent"))
         # Navigation HUD type: its own text size (0 follows all overlays; the
         # window grows with it), typeface and small-text size.
         if "hud_text_scale_percent" in payload:
-            scale = _number(payload.get("hud_text_scale_percent"), 0) or 0
-            self.config["hud_text_scale_percent"] = 0 if scale <= 0 else int(round(max(75, min(200, scale))))
+            self.config["hud_text_scale_percent"] = text_size_choice(payload.get("hud_text_scale_percent"))
         if "hud_animation_intensity" in payload:
             intensity = _text(payload.get("hud_animation_intensity"), 20).title()
             self.config["hud_animation_intensity"] = intensity if intensity in HUD_ANIMATION_LEVELS else "Standard"
@@ -710,8 +724,7 @@ class HtmlOverlayStudioMixin:
             self.config["galnet_ticker_stories"] = stories if stories in TICKER_STORIES else 5
         if "galnet_ticker_text_scale_percent" in payload:
             # 0 follows the overlay-wide text size; otherwise 75-200 %.
-            scale = _number(payload.get("galnet_ticker_text_scale_percent"), 0) or 0
-            self.config["galnet_ticker_text_scale_percent"] = 0 if scale <= 0 else int(round(max(75, min(200, scale))))
+            self.config["galnet_ticker_text_scale_percent"] = text_size_choice(payload.get("galnet_ticker_text_scale_percent"))
         # Its CRT screen and signal glitches.
         for key, choices, default in (
             ("galnet_ticker_crt", TICKER_CRT, "follow"),
@@ -733,8 +746,7 @@ class HtmlOverlayStudioMixin:
                 choice = _text(payload.get(key), 20).casefold()
                 self.config[key] = choice if choice in choices else default
         if "music_player_text_scale_percent" in payload:
-            scale = _number(payload.get("music_player_text_scale_percent"), 0) or 0
-            self.config["music_player_text_scale_percent"] = 0 if scale <= 0 else int(round(max(75, min(200, scale))))
+            self.config["music_player_text_scale_percent"] = text_size_choice(payload.get("music_player_text_scale_percent"))
         if "music_player_auto_hide" in payload:
             wait = _integer(payload.get("music_player_auto_hide"), 0)
             self.config["music_player_auto_hide"] = wait if wait in MUSIC_AUTO_HIDE else 0
@@ -860,6 +872,8 @@ class HtmlOverlayStudioMixin:
             return self._set_overlay_map_hiding(overlay_id, bool(payload.get("hide")))
         if operation == "own_opacity":
             return self._set_overlay_own_opacity(overlay_id, payload.get("value"))
+        if operation == "own_text":
+            return self._set_overlay_own_text(overlay_id, payload.get("value"))
         if operation == "layout_mode":
             self._set_overlay_layout_mode(bool(payload.get("enabled")))
             return True

@@ -1836,6 +1836,13 @@ function selectStudioOverlay(id, follow = false) {
   const ownOpacity = byId("studio-selected-opacity");
   if (ownOpacity && document.activeElement !== ownOpacity) ownOpacity.value = String(Number(selected.own_opacity) || 0);
   text("studio-selected-opacity-note", Number(selected.own_opacity) ? "Its own, whatever OPACITY is set to" : "Same as all overlays (OPACITY)");
+  // Its own text size (5.5.4), or the one set for all overlays. The Watcher's
+  // words have theirs on the Watcher page.
+  const ownText = byId("studio-selected-text");
+  const watcher = id === "heartbeat_hud";
+  byId("studio-own-text").hidden = watcher;
+  if (ownText && document.activeElement !== ownText) ownText.value = String(Number(selected.own_text) || 0);
+  text("studio-selected-text-note", Number(selected.own_text) ? "Its own, whatever TEXT SIZE is set to" : "Same as all overlays (Settings › Appearance)");
   // The inspector shows only this surface's own settings.
   let own = false;
   document.querySelectorAll("[data-studio-settings]").forEach((node) => {
@@ -5425,6 +5432,12 @@ byId("studio-overlay-cards").addEventListener("pointercancel", (event) => {
 byId("studio-selected-opacity").addEventListener("change", async (event) => {
   const wanted = event.target.value;
   if (!studioSelectedId || !(await command("overlay_studio", {operation: "own_opacity", overlay_id: studioSelectedId, value: Number(wanted)}))) {
+    event.target.value = "0";
+  }
+});
+byId("studio-selected-text").addEventListener("change", async (event) => {
+  const wanted = event.target.value;
+  if (!studioSelectedId || !(await command("overlay_studio", {operation: "own_text", overlay_id: studioSelectedId, value: Number(wanted)}))) {
     event.target.value = "0";
   }
 });

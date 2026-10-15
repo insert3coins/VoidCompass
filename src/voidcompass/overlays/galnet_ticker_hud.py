@@ -10,6 +10,7 @@ import re
 import time
 
 from voidcompass.core.application_runtime import OverlayWindowState
+from voidcompass.core.overlay_registry import overlay_text_scale, text_size_choice
 from voidcompass.core import themes
 from voidcompass.overlays import overlay_chrome
 
@@ -54,7 +55,7 @@ def ticker_options(config):
         "content": content if content in TICKER_CONTENT else "summary",
         "stories": stories if stories in TICKER_STORIES else 5,
         "show_date": bool(config.get("galnet_ticker_show_date", True)),
-        "text_scale_percent": 0 if text_scale <= 0 else max(75, min(200, text_scale)),
+        "text_scale_percent": text_size_choice(text_scale),
         "crt": crt if crt in TICKER_CRT else "follow",
         # The roll bar, flicker and power-on; static CRT stays when it is off.
         "crt_motion": bool(config.get("galnet_ticker_crt_motion", True)),
@@ -68,9 +69,7 @@ def ticker_options(config):
 
 def ticker_text_scale(config):
     """The ticker's text size as a factor: its own, else all overlays' size."""
-    own = ticker_options(config)["text_scale_percent"]
-    chosen = own if own > 0 else _integer((config or {}).get("overlay_text_scale_percent"), 100)
-    return max(75, min(200, chosen)) / 100.0
+    return overlay_text_scale(config, "galnet_ticker_hud")
 
 
 def ticker_crt_level(config):

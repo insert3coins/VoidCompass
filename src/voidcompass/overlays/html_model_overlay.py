@@ -6,6 +6,7 @@ import json
 import logging
 import os
 
+from voidcompass.core.overlay_registry import OVERLAY_ATTR_BY_ENABLED, overlay_text_percent, overlay_text_scale
 from voidcompass.overlays.html_overlay_runtime import (
     HtmlOverlayBridgeLifecycle,
     HtmlOverlaySurface,
@@ -71,8 +72,9 @@ class HtmlModelOverlayBridge(HtmlOverlayBridgeLifecycle):
         return model if isinstance(model, dict) else {}
 
     def _text_scale(self):
-        """The overlay text size (75-200%) the page zooms its content by."""
-        return max(75, min(200, _integer(self.config.get("overlay_text_scale_percent"), 100))) / 100.0
+        """This overlay's text size (75-200%) the page zooms its content by:
+        its own from Overlay Studio, or the one for all overlays."""
+        return overlay_text_scale(self.config, OVERLAY_ATTR_BY_ENABLED.get(getattr(self, "enabled_key", ""), ""))
 
     def _dimensions(self):
         # The page zooms its content by the text size, so the window's design
@@ -144,7 +146,7 @@ class HtmlModelOverlayBridge(HtmlOverlayBridgeLifecycle):
         ))
         return (
             model, palette, tuple(sorted(self._window_payload().items())),
-            self.config.get("overlay_text_scale_percent"),
+            self._text_scale(),
             self.config.get("overlay_opacity_percent", 100),
             bool(self.config.get("hud_crt_enabled", True)),
             bool(self.config.get("reduced_motion_enabled", False)),

@@ -41,14 +41,8 @@ def hud_typography(config):
 
 def hud_text_scale_percent(config):
     """The HUD's own text size when set, else the overlay-wide one (75-200)."""
-    def percent(key, default):
-        try:
-            return int(float((config or {}).get(key, default)))
-        except (TypeError, ValueError):
-            return default
-    own = percent("hud_text_scale_percent", 0)
-    chosen = own if own > 0 else percent("overlay_text_scale_percent", 100)
-    return max(75, min(200, chosen))
+    from voidcompass.core.overlay_registry import overlay_text_percent
+    return overlay_text_percent(config, "hud")
 
 class TacticalHUD:
     def __init__(self, root, config, on_widget_click=None):
