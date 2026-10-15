@@ -580,5 +580,23 @@ def kept_card(png_path):
     return data["card"], dict(data.get("settings") or {}), picture
 
 
+def kept_info(png_path):
+    """What's kept beside a saved postcard, without its photo: the card,
+    its settings and whether there is a photo. None when nothing is."""
+    import json
+    try:
+        with open(_sidecar(png_path)[0], encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def needs_picture(png_path):
+    """Made editable from an older postcard, but its screenshot wasn't found."""
+    info = kept_info(png_path)
+    return bool(info and not info.get("photo") and (info.get("settings") or {}).get("restored"))
+
+
 def is_editable(png_path):
     return os.path.isfile(_sidecar(png_path)[0])

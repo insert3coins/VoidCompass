@@ -26,7 +26,8 @@ from voidcompass.core.config import get_active_profile
 from voidcompass.dashboard.dashboard_postcard_studio_mixin import DashboardPostcardStudioMixin
 from voidcompass.overlays import postcard_themes
 from voidcompass.overlays.postcard_picture import (
-    is_editable, jpeg_thumbnail, keep_card, kept_card, open_picture, open_picture_small, save_postcard_picture,
+    is_editable, jpeg_thumbnail, keep_card, kept_card, needs_picture, open_picture, open_picture_small,
+    save_postcard_picture,
 )
 
 # Postcard previews render one at a time: the studio asks for one on every
@@ -431,6 +432,7 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             for row in rows:
                 # Saved from 5.5.4 on (or restored): it can be drawn again.
                 row["editable"] = is_editable(os.path.join(folder, row["file"]))
+                row["needs_picture"] = row["editable"] and needs_picture(os.path.join(folder, row["file"]))
                 row["taken"] = saved_at(row["file"]) or row["at"]
             cache = (folder, now, rows)
             self._postcard_album_cache = cache

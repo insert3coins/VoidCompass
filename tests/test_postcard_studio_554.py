@@ -203,7 +203,9 @@ class RestoreTests(unittest.TestCase):
         alone, _settings, no_picture = postcard_picture.kept_card(lonely)
         self.assertEqual(alone["title"], "Beagle Point", "from the file name")
         self.assertIsNone(no_picture)
-        self.assertFalse(deck._postcard_restore_start(), "nothing left to restore")
+        # 5.5.5: the one restored without its screenshot is offered again.
+        self.assertFalse(postcard_picture.needs_picture(found))
+        self.assertTrue(postcard_picture.needs_picture(lonely))
 
 
 class PageTests(unittest.TestCase):

@@ -371,6 +371,7 @@ function drawStats() {
 function drawRestore() {
   const panel = ui.byId("pc-restore");
   const older = rows.filter((row) => !row.editable && /^postcard - /i.test(row.file || "")).length;
+  const missing = rows.filter((row) => row.needs_picture).length;
   const state = data.restore || {};
   if (state.running) {
     panel.hidden = false;
@@ -378,12 +379,15 @@ function drawRestore() {
       <i class="pc-progress"><i style="width:${Math.round(100 * (state.done || 0) / Math.max(1, state.total || 1))}%"></i></i>`;
     return;
   }
-  panel.hidden = !older;
-  if (!older) return;
+  panel.hidden = !older && !missing;
+  if (!older && !missing) return;
   const last = state.total ? `<small>Last time: ${ui.numeric(state.done)} done, ${ui.numeric(state.pictures)} with their screenshot.</small>` : "";
-  panel.innerHTML = `<div><b>${ui.numeric(older)} OLDER POSTCARD${older === 1 ? "" : "S"}</b>
+  panel.innerHTML = older ? `<div><b>${ui.numeric(older)} OLDER POSTCARD${older === 1 ? "" : "S"}</b>
       <span>Saved before postcards could be edited. Void Compass can find each one's screenshot and journal entry so you can give it new words, a new look or its postmark.</span>${last}</div>
-    <button type="button" class="primary" data-pc-restore-all>MAKE THEM EDITABLE</button>`;
+    <button type="button" class="primary" data-pc-restore-all>MAKE THEM EDITABLE</button>`
+    : `<div><b>${ui.numeric(missing)} POSTCARD${missing === 1 ? "" : "S"} WITHOUT THEIR SCREENSHOT</b>
+      <span>Made editable, but their screenshot wasn't found then. Void Compass can look again; your words and look stay as they are.</span>${last}</div>
+    <button type="button" class="primary" data-pc-restore-all>FIND THEIR SCREENSHOTS</button>`;
 }
 
 // -- The viewer and the editor --------------------------------------------------
@@ -407,9 +411,11 @@ function drawSide() {
   ui.byId("pc-when").textContent = recent ? `${eliteDate(when)} · ${ago(when)}` : eliteDate(when);
   ui.byId("pc-badges").innerHTML = row.editable ? "<em>EDITABLE</em>" : "<em class=\"older\">OLDER</em>";
   ui.byId("pc-edit").hidden = !row.editable;
-  ui.byId("pc-restore-one").hidden = row.editable;
-  ui.byId("pc-side-note").textContent = row.editable ? ""
-    : "Saved before postcards could be edited. MAKE EDITABLE finds its screenshot and journal entry.";
+  ui.byId("pc-restore-one").hidden = row.editable && !row.needs_picture;
+  ui.byId("pc-restore-one").textContent = row.needs_picture ? "FIND ITS SCREENSHOT" : "MAKE EDITABLE";
+  ui.byId("pc-side-note").textContent = row.needs_picture
+    ? "Its screenshot wasn't found when it was made editable. FIND ITS SCREENSHOT looks again, or GIVE IT A PICTURE in EDIT."
+    : row.editable ? "" : "Saved before postcards could be edited. MAKE EDITABLE finds its screenshot and journal entry.";
   showViewerStar(ui.byId("album-star"), row);
   const list = listed();
   const index = list.findIndex((item) => item.id === row.id);

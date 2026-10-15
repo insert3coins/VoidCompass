@@ -56,7 +56,9 @@ class ScreenshotIndex:
         # Only journals begun up to a few days before the earliest postcard
         # (a long session) and before the latest need reading.
         moments = [moment for moment in moments if moment]
-        self._bounds = (min(moments) - 3 * 86400, max(moments) + 3600) if moments else None
+        # Note: a journal's name is your local time, read as UTC; a day's
+        # slack either way keeps time zones far from UTC in (NZ is +12/+13).
+        self._bounds = (min(moments) - 4 * 86400, max(moments) + 86400) if moments else None
         self._events = None
 
     def _wanted(self, path):

@@ -15,7 +15,7 @@ from voidcompass.core import themes
 from voidcompass.core.platform_support import default_screenshot_path
 from voidcompass.exploration.galactic_regions import find_region
 from voidcompass.overlays import postcard_themes
-from voidcompass.overlays.postcard_picture import is_editable, keep_card, kept_card, open_picture
+from voidcompass.overlays.postcard_picture import is_editable, keep_card, kept_card, needs_picture, open_picture
 from voidcompass.overlays.postcard_restore import ScreenshotIndex, find_picture, saved_at
 from voidcompass.overlays.postcards import STYLES as POSTCARD_STYLES, postcard_card, postcard_facts, postcard_options
 from voidcompass.overlays.postcards import TEXT_PARTS as POSTCARD_TEXT_PARTS, text_size as postcard_text_size
@@ -143,8 +143,9 @@ class DashboardPostcardStudioMixin:
         if state.get("running"):
             return False
         folder = self.postcard_album().folder()
-        rows = [row for row in self.postcard_album().rows()
-                if not is_editable(os.path.join(folder, row["file"])) and row["file"].lower().startswith("postcard - ")]
+        # Older ones, and ones made editable whose screenshot wasn't found then.
+        rows = [row for row in self.postcard_album().rows() if row["file"].lower().startswith("postcard - ")
+                and (not is_editable(os.path.join(folder, row["file"])) or needs_picture(os.path.join(folder, row["file"])))]
         if card_ids:
             rows = [row for row in rows if row["id"] in set(card_ids)]
         if not rows:
@@ -165,6 +166,32 @@ class DashboardPostcardStudioMixin:
             for row in rows:
                 moment = moments[row["id"]] or row.get("at") or time.time()
                 found = index.near(moment, row["title"])
+                kept = kept_card(os.path.join(folder, row["file"]))
+                if kept is not None:
+                    # Already editable: its picture, and what the journal says
+                    # of the place where the card has nothing yet. Your words
+                    # and its look stay as they are.
+                    card, picture = dict(kept[0]), None
+                    if found:
+                        picture = open_picture(find_picture(shots, found[1], found[0]) or "")
+                        at, raw, position = found
+                        region, from_sol = "", None
+                        if position is not None:
+                            from_sol = sum(value * value for value in position) ** .5
+                            named = find_region(*position)
+                            region = named[1] if named else ""
+                        known = postcard_card(raw, region=region, now=at * 1000,
+                                              facts=postcard_facts(None, from_sol) if options["facts"] else [])
+                        for field in ("place", "region", "coordinates", "facts", "file"):
+                            if not card.get(field) and known.get(field):
+                                card[field] = known[field]
+                    if picture is not None or card != kept[0]:
+                        keep_card(os.path.join(folder, row["file"]), card, picture if picture is not None else kept[2], kept[1])
+                    if picture is not None:
+                        state["pictures"] += 1
+                    state["found"] += 1 if found else 0
+                    state["done"] += 1
+                    continue
                 picture = None
                 if found:
                     at, raw, position = found
