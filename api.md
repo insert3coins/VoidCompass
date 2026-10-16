@@ -312,6 +312,7 @@ Bring your game into your Discord server, or let your server talk to the Watcher
 |---|---|---|
 | Webhook | A channel that posts as things happen: jumps, first discoveries, docking, deaths, the Watcher's thoughts | A webhook link from the channel's settings, and Python |
 | Bot | Slash commands in your server (`/where`, `/ship`, `/status`, `/watcher`, and `/say` to give the Watcher a thought, spoken if its voice is on), plus a live feed to a channel | A bot from the Discord Developer Portal, and Python |
+| Squadron BGS | A report of your work each tick, danger alerts for your tracked factions, and a `/bgs` command | The webhook or the bot, and factions tracked on the BGS page |
 
 > Whatever you post, everyone who can read that channel sees: where you are, where you're going. Keep the feed in a channel for people you trust.
 
@@ -495,6 +496,157 @@ bot.run(TOKEN)
 ```
 
 Add your own commands the same way: `/music` from `GET /api/v1/music`, `/hide` with `POST /api/v1/overlays/hide-all`, a cockpit pop-up with `POST /api/v1/overlays/notify`. Keep anything that changes things to `OWNER`, like `/say`.
+
+### BGS for your squadron
+
+Your BGS record can feed a squadron's Discord: a report of your work every tick, a warning when one of your factions is in trouble, and a `/bgs` command anyone can use to check on them. Set it up once; after that it runs while you play.
+
+There are two ways, and you can use both:
+
+| | Tick reports and danger alerts | The `/bgs` command |
+|---|---|---|
+| What the channel gets | Posts by themselves: your work as each tick ends, and each new danger | An answer whenever someone types `/bgs` |
+| What you need | A webhook (two clicks in the channel's settings) | The bot above, already running |
+| Script | `bgs-reports.py` (below) | A few lines added to `discord-bot.py` |
+
+**Before either: get your BGS record ready**
+
+1. Switch on the Local API: **Settings › Integrations › Local API**.
+2. Open the **BGS** page in Void Compass and let it read your journals (the first time takes a moment).
+3. Track the factions your squadron supports: on the BGS page, press the star beside each one so it fills in. Reports cover everything you did; the alerts and `/bgs` follow the factions you track.
+4. Check it from a browser: `http://127.0.0.1:7380/api/v1/bgs` should list your tracked factions under `tracked_factions`.
+
+#### Way 1: tick reports and danger alerts
+
+1. In Discord, pick the squadron's BGS channel. **Edit Channel › Integrations › Webhooks › New Webhook**, give it a name (say "BGS"), and **Copy Webhook URL**.
+2. Save the script below as `bgs-reports.py`, and paste the webhook link in as `WEBHOOK`.
+3. Install its one library: `pip install requests`.
+4. Run it: `python bgs-reports.py`. Leave the window open while you play (minimise it).
+
+**Example: bgs-reports.py** (Python)
+
+```python
+import time
+
+import requests
+
+API = "http://127.0.0.1:7380/api/v1"
+WEBHOOK = "https://discord.com/api/webhooks/..."
+
+
+def post(text):
+    requests.post(WEBHOOK, timeout=10, json={"content": text[:1900], "allowed_mentions": {"parse": []}})
+
+
+tick, warned = None, set()
+while True:
+    try:
+        bgs = requests.get(f"{API}/bgs", timeout=20).json()
+    except requests.RequestException:
+        time.sleep(60)  # Void Compass isn't running yet
+        continue
+    if "error" in bgs:
+        time.sleep(300)  # the BGS record isn't open yet
+        continue
+    current = bgs["tick"]["current"]
+    if tick is not None and current != tick:
+        # A new tick: post what you did in the one that just ended.
+        detail = requests.get(f"{API}/bgs/activity", params={"tick": tick}, timeout=20).json().get("detail")
+        if detail and detail["systems"]:
+            post(detail["report"])
+    tick = current
+    for alert in bgs["alerts"]:
+        key = (alert["system"], alert["faction"], alert["text"])
+        if alert["level"] == "danger" and key not in warned:
+            warned.add(key)
+            post(f'**{alert["faction"]}** in {alert["system"]}: {alert["text"]}')
+            time.sleep(1)
+    time.sleep(300)  # the BGS moves once a day; every five minutes is plenty
+```
+
+What the channel sees when a tick ends: your work during it.
+
+```text
+BGS Report - Tick: 16 Oct 09:00
+
+Shinrarta Dezhra
+- Jameson Holdings: +6 INF, Bounty vouchers 1.2M, Space CZ 2M
+- Pilots' Federation Local Branch: Trade profit 850K
+
+Hatchooe
+- Jameson Holdings: +3 INF, Cartographic data 4.1M
+```
+
+And when one of your factions is in trouble:
+
+```text
+Jameson Holdings in Hatchooe: War pending
+Jameson Holdings in Ross 128: Control at risk: Ross 128 Gold Mafia is 1.2 points behind
+```
+
+When it starts, it posts the danger alerts already standing, then only new ones. Run it on the PC you play on: the record fills as you fly, so the reports are your own work. If several of you run it into one channel, each posts their own report.
+
+#### Way 2: the /bgs command
+
+This adds to the bot from [Bot: commands for your server](#bot-commands-for-your-server); set that up first.
+
+1. Open `discord-bot.py`. At the top, under the other `import` lines, add `from urllib.parse import quote`.
+2. Paste the command below into the file, just above the last line (`bot.run(TOKEN)`).
+3. Stop the bot (Ctrl+C in its window) and start it again: `python discord-bot.py`. Discord can take a few minutes to show a new command.
+4. In your server, type `/bgs`. Leave `faction` empty for all your tracked factions, or fill it in for one.
+
+**Example: the /bgs command, added to discord-bot.py** (Python)
+
+```python
+@bot.tree.command(description="How our factions stand")
+@app_commands.describe(faction="A faction's name (leave empty for all tracked)")
+async def bgs(interaction: discord.Interaction, faction: str = ""):
+    if faction:
+        found = await get(f"/bgs/factions/{quote(faction, safe='')}")
+        if "error" in found:
+            await interaction.response.send_message(found["error"]["message"], ephemeral=True)
+            return
+        lines = [f'**{found["name"]}**: controls {found["controlled"]} of {len(found["systems"])} systems']
+        for system in found["systems"][:10]:
+            lines.append(f'- {system["system"]}: {system["influence"] * 100:.1f}%{" (controls)" if system["controlling"] else ""}')
+        lines += [f'- {alert["system"]}: {alert["text"]}' for alert in found["alerts"][:5]]
+    else:
+        overview = await get("/bgs")
+        if "error" in overview:
+            await interaction.response.send_message(overview["error"]["message"], ephemeral=True)
+            return
+        lines = [f'**BGS**, tick {overview["tick"]["current_label"]}']
+        lines += [f'- **{row["name"]}**: controls {row["controlled"]} of {row["systems"]}, '
+                  f'{row["danger"]} danger, {row["warn"]} warnings' for row in overview["tracked_factions"]]
+        lines += [f'- {alert["system"]} / {alert["faction"]}: {alert["text"]}'
+                  for alert in overview["alerts"] if alert["level"] == "danger"][:5]
+    await interaction.response.send_message("\n".join(lines)[:1900])
+```
+
+What someone sees after typing `/bgs`:
+
+```text
+BGS, tick 16 Oct 09:00
+- Jameson Holdings: controls 4 of 6, 1 danger, 2 warnings
+- Hatchooe / Jameson Holdings: War pending
+```
+
+And after `/bgs faction: Jameson Holdings`:
+
+```text
+Jameson Holdings: controls 4 of 6 systems
+- Shinrarta Dezhra: 42.3% (controls)
+- Hatchooe: 38.0% (controls)
+- Ross 128: 21.5%
+- Hatchooe: War pending
+```
+
+**If something's not right**
+
+- **No reports appear:** a report only comes when a tick ends with work in it. `http://127.0.0.1:7380/api/v1/bgs/activity` shows the ticks it knows about.
+- **`/bgs` says the BGS record isn't open yet:** open the BGS page in Void Compass once.
+- **`/bgs` lists nothing:** no factions are tracked yet. Press the star beside them on the BGS page.
+- **`/bgs faction:` finds no faction by that name:** use the name exactly as the BGS page shows it; `/api/v1/bgs/factions?query=part` finds it.
 
 <!-- group: Reference -->
 
@@ -797,35 +949,136 @@ foreach ($faction in $bgs.tracked_factions) {
 $bgs.alerts | Where-Object level -eq "danger" | ForEach-Object { "!! $($_.system): $($_.faction), $($_.text)" }
 ```
 
-**Example: a `/bgs` command for the Discord bot** (Python; add it to the bot in [Discord](#discord))
+**Example: copy this tick's report, ready to paste anywhere** (PowerShell)
+
+```powershell
+(Invoke-RestMethod http://127.0.0.1:7380/api/v1/bgs).this_tick.report | Set-Clipboard
+```
+
+Paste it into a squadron forum, Inara, a spreadsheet or a message. On a Stream Deck key: **System › Open** with `powershell -WindowStyle Hidden -Command "(Invoke-RestMethod http://127.0.0.1:7380/api/v1/bgs).this_tick.report | Set-Clipboard"`. Nothing is copied if you've done no BGS work this tick yet.
+
+**Example: where to help today** (Python, `pip install requests`)
 
 ```python
 from urllib.parse import quote
 
+import requests
 
-@bot.tree.command(description="How our factions stand")
-@app_commands.describe(faction="A faction's name (leave empty for all tracked)")
-async def bgs(interaction: discord.Interaction, faction: str = ""):
-    if faction:
-        found = await get(f"/bgs/factions/{quote(faction, safe='')}")
-        if "error" in found:
-            await interaction.response.send_message(found["error"]["message"], ephemeral=True)
-            return
-        lines = [f'**{found["name"]}**: controls {found["controlled"]} of {len(found["systems"])} systems']
-        for system in found["systems"][:10]:
-            lines.append(f'- {system["system"]}: {system["influence"] * 100:.1f}%{" (controls)" if system["controlling"] else ""}')
-        lines += [f'- {alert["system"]}: {alert["text"]}' for alert in found["alerts"][:5]]
-    else:
-        overview = await get("/bgs")
-        lines = [f'**BGS**, tick {overview["tick"]["current_label"]}']
-        lines += [f'- **{row["name"]}**: controls {row["controlled"]} of {row["systems"]}, '
-                  f'{row["danger"]} danger, {row["warn"]} warnings' for row in overview["tracked_factions"]]
-        lines += [f'- {alert["system"]} / {alert["faction"]}: {alert["text"]}'
-                  for alert in overview["alerts"] if alert["level"] == "danger"][:5]
-    await interaction.response.send_message("\n".join(lines)[:1900])
+API = "http://127.0.0.1:7380/api/v1"
+
+overview = requests.get(f"{API}/bgs").json()
+for brief in overview["tracked_factions"]:
+    faction = requests.get(f"{API}/bgs/factions/{quote(brief['name'], safe='')}").json()
+    print(f'\n{faction["name"]}: controls {faction["controlled"]} of {len(faction["systems"])}')
+    # Falling influence first, then the weakest: where your work counts most.
+    for system in sorted(faction["systems"], key=lambda row: (row["delta"] or 0, row["influence"])):
+        change = f'{system["delta"] * 100:+.1f}' if system["delta"] is not None else "new"
+        states = ", ".join(state["label"] for state in system["pending"] + system["active"])
+        mark = "*" if system["controlling"] else " "
+        print(f'  {mark} {system["system"]:<26} {system["influence"] * 100:5.1f}%  {change:>6}  {states}')
 ```
 
-For the whole tick's report in your squadron's channel, post `this_tick.report` as it is.
+```text
+Jameson Holdings: controls 4 of 6
+  * Hatchooe                    38.0%    -2.1  War
+    Ross 128                    21.5%    -0.8
+  * Shinrarta Dezhra            42.3%    +1.4  Boom
+```
+
+`*` marks the systems the faction controls; the change is in points since the update before.
+
+**Example: BGS danger in your cockpit** (Python, `pip install requests`)
+
+```python
+import time
+
+import requests
+
+API = "http://127.0.0.1:7380/api/v1"
+seen = set()
+while True:
+    try:
+        alerts = requests.get(f"{API}/bgs", timeout=20).json().get("alerts", [])
+    except requests.RequestException:
+        alerts = []
+    for alert in alerts:
+        key = (alert["system"], alert["faction"], alert["text"])
+        if alert["level"] == "danger" and key not in seen:
+            seen.add(key)
+            requests.post(f"{API}/overlays/notify", timeout=10, json={
+                "title": "BGS", "severity": "warn", "seconds": 12,
+                "message": f'{alert["faction"]} in {alert["system"]}: {alert["text"]}'})
+            time.sleep(13)  # one at a time
+    time.sleep(300)
+```
+
+A war or retreat coming for one of your factions pops up in the cockpit, over the game. It needs **Allow control** and the Cockpit Notifications overlay on.
+
+**Example: a system's influence history, into a spreadsheet** (Python, `pip install requests`)
+
+```python
+import csv
+from datetime import datetime, timezone
+
+import requests
+
+API = "http://127.0.0.1:7380/api/v1"
+SYSTEM = "Shinrarta Dezhra"
+
+found = requests.get(f"{API}/bgs/systems", params={"query": SYSTEM}).json()["systems"]
+address = next((row["system_address"] for row in found if row["system"].casefold() == SYSTEM.casefold()), None)
+if address is None:
+    raise SystemExit(f"{SYSTEM} isn't in your BGS record yet")
+system = requests.get(f"{API}/bgs/systems/{address}", params={"days": 365}).json()
+with open(f"{SYSTEM} influence.csv", "w", newline="", encoding="utf-8") as out:
+    sheet = csv.writer(out)
+    sheet.writerow(["date", "faction", "influence %", "state", "source"])
+    for series in system["history"]:
+        for point in series["points"]:
+            if point["influence"] is None:
+                continue  # the faction wasn't in the system that day
+            when = datetime.fromtimestamp(point["ts"], timezone.utc).strftime("%Y-%m-%d %H:%M")
+            sheet.writerow([when, series["faction"], round(point["influence"] * 100, 2), point["state"], point["source"]])
+print(f"Saved {out.name}")
+```
+
+Open the file in Excel or Google Sheets and insert a line chart: each faction's influence over the year, from your own visits and EDSM's history.
+
+**Example: your factions on stream** (an OBS browser source)
+
+```html
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; font: 600 20px "Segoe UI", sans-serif; color: #fff; text-shadow: 0 0 4px #000; }
+  .row { display: flex; gap: 12px; align-items: baseline; }
+  .row b { color: #00d1ff; }
+  .danger { color: #ff6b70; }
+  small { color: #91a8b7; font-size: 14px; }
+</style>
+<div id="list"></div>
+<script>
+  const API = "http://127.0.0.1:7380/api/v1";
+  const esc = (text) => String(text).replace(/[&<>]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"})[c]);
+  async function draw() {
+    try {
+      const bgs = await (await fetch(`${API}/bgs`)).json();
+      document.getElementById("list").innerHTML = (bgs.tracked_factions || []).map((f) =>
+        `<div class="row"><b>${esc(f.name)}</b><span>controls ${f.controlled} of ${f.systems}</span>` +
+        (f.danger ? `<span class="danger">${f.danger} in danger</span>` : "") + `</div>`).join("") +
+        `<small>Tick ${esc(bgs.tick?.current_label || "")}</small>`;
+    } catch {
+      // Void Compass is closed: the next try puts it back.
+    }
+  }
+  draw();
+  setInterval(draw, 5 * 60 * 1000);
+</script>
+```
+
+Save it as `bgs.html` and add it to OBS like the widgets in [OBS Studio](#obs-studio).
+
+To use the BGS in Discord (a report every tick, danger alerts, and a `/bgs` command), follow [BGS for your squadron](#bgs-for-your-squadron).
 
 ## Overlays
 

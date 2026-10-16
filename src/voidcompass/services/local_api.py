@@ -937,6 +937,12 @@ def _render(blocks, ids, section):
                    and blocks[index + 1][0] == "code"):
                 run.append((blocks[index][1], blocks[index + 1]))
                 index += 2
+                # An "Example:" is its own card: only variants of one thing share tabs.
+                if run[-1][0].casefold().startswith("**example:"):
+                    break
+            if len(run) > 1 and run[-1][0].casefold().startswith("**example:"):
+                run.pop()
+                index -= 2
             out.append(_examples(run))
             continue
         if (kind == "code" and block[1] == "http" and re.match(r"(GET|POST)\s", block[2].lstrip())
