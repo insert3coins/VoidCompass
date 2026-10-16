@@ -1147,3 +1147,14 @@ WEARY["idle_home_away"] = [
     "Near {home}. It's quieter here. I'd hoped for quieter in here too.",
     "Back around {home}. {dist} light years. Every road leads here, eventually. Then out again.",
 ]
+
+# 5.5.7: ten more lines for every topic, twenty for the busiest, so a long
+# run of the same moment finds new words (watcher_lines_deep*.py). Merged
+# last, after every bank above is in place.
+from voidcompass.overlays.watcher_lines_deep import DEEP_NORMAL  # noqa: E402
+from voidcompass.overlays.watcher_lines_deep_weary import DEEP_WEARY  # noqa: E402
+
+for _bank, _deep in ((NORMAL, DEEP_NORMAL), (WEARY, DEEP_WEARY)):
+    for _topic, _lines in _deep.items():
+        _have = _bank.setdefault(_topic, [])
+        _have.extend(line for line in _lines if line not in _have)

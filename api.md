@@ -643,14 +643,14 @@ Read the Watcher's mind, give it a thought of your own, or poke it.
 
 ```http
 POST /api/v1/watcher/thought
-{"text": "Follower count holding steady. Unlike the hull.", "heading": "From chat", "speak": true}
+{"text": "Follower count holding steady. Unlike the hull.", "heading": "From chat"}
 ```
 
 ```json
 {"id": 412, "text": "Follower count holding steady. Unlike the hull.", "heading": "FROM CHAT", "spoken": true}
 ```
 
-`text` is up to 400 characters. `heading` is the small line above it (it reads `RELAYED` if you leave it out). With `"speak": true` it's said aloud too, if the voice is on. The thought shows on the orb, joins the Watcher page's log, and goes out on the event stream like any other. The Watcher must be on (Journal Heartbeat in Overlay Studio), otherwise `409`.
+`text` is up to 400 characters. `heading` is the small line above it (it reads `RELAYED` if you leave it out). When the voice is on it's said aloud too, whatever the voice's level is set to; send `"speak": false` to keep it silent. The thought shows on the orb, joins the Watcher page's log, and goes out on the event stream like any other. The Watcher must be on (Journal Heartbeat in Overlay Studio), otherwise `409`.
 
 ## Voice
 

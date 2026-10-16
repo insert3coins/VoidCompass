@@ -667,7 +667,7 @@ class WatcherMind:
 
     def relay(self, text, heading="", speak=False):
         """Words from outside (the local API, 5.5.7): shown as given, under
-        the heading asked for, and spoken only when asked."""
+        the heading asked for, and spoken (when the voice is on) if ``speak``."""
         # Note: their markup characters go, or a caller could fake self-corrections.
         words = " ".join(str(text or "").replace("[[", "[").replace("]]", "]")
                          .replace("⟦", "").replace("⟧", "").split())[:400]

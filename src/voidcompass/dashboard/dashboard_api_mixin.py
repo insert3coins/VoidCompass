@@ -225,7 +225,12 @@ class DashboardApiMixin:
         server = getattr(runtime, "server", None)
         if server is None:
             raise ApiError(503, "The command deck isn't running")
-        return json.loads(getattr(server, "_snapshot_json", "{}") or "{}")
+        snapshot = json.loads(getattr(server, "_snapshot_json", "{}") or "{}")
+        # The snapshot carries whatever page the deck has open; Settings and Tools stay home.
+        workspace = snapshot.get("workspace") if isinstance(snapshot, dict) else None
+        if isinstance(workspace, dict) and workspace.get("page") in API_HIDDEN_PAGES:
+            snapshot["workspace"] = {"page": workspace["page"], "ready": False, "shared": False}
+        return snapshot
 
     def api_pages(self):
         from voidcompass.dashboard.html_dashboard import _HTML_WORKSPACE_PAGES

@@ -486,7 +486,8 @@ class LocalApi:
         if not text:
             raise ApiError(400, "Give it something to think: {\"text\": \"...\"}")
         return self._call("api_watcher_thought", text[:400], str(req.body.get("heading") or "")[:40],
-                          bool(req.body.get("speak", False)))
+                          # Said aloud whenever the voice is on, unless asked not to.
+                          req.body.get("speak", True) is not False)
 
     def _say(self, req):
         text = " ".join(str(req.body.get("text") or "").split())

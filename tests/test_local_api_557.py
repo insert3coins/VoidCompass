@@ -339,6 +339,17 @@ class DashboardApiTests(unittest.TestCase):
             app.api_page("nowhere")
         self.assertEqual(caught.exception.status, 404)
 
+    def test_the_whole_deck_never_carries_settings_or_tools(self):
+        app = Dashboard()
+        server = SimpleNamespace(_snapshot_json="")
+        app.root._voidcompass_html_dashboard_runtime = SimpleNamespace(server=server)
+        for page in API_HIDDEN_PAGES:
+            server._snapshot_json = json.dumps({"page": page, "workspace": {"page": page, "ready": True,
+                                                                            "data": {"journal_path": "C:\\x"}}})
+            self.assertEqual(app.api_dashboard()["workspace"], {"page": page, "ready": False, "shared": False})
+        server._snapshot_json = json.dumps({"workspace": {"page": "explore", "ready": True, "data": {"a": 1}}})
+        self.assertEqual(app.api_dashboard()["workspace"]["data"], {"a": 1})
+
     def test_overlays_switch_move_and_fade_by_either_id(self):
         app = Dashboard()
         row = app.api_set_overlay("survey", {"enabled": False, "x": 100, "y": 200, "opacity": 73})
@@ -393,6 +404,13 @@ class DashboardApiTests(unittest.TestCase):
         hud.voice_listener = lambda words, key: True
         self.assertTrue(hud._speaks({"topic": "relay", "speak": True, "importance": 3}))
         self.assertFalse(hud._speaks({"topic": "relay", "speak": False, "importance": 3}))
+
+    def test_a_relayed_thought_speaks_unless_told_not_to(self):
+        api = LocalApi(SimpleNamespace(api_watcher_thought=lambda text, heading, speak: {"speak": speak}))
+        ask = lambda body: api._thought(SimpleNamespace(body=body))
+        self.assertTrue(ask({"text": "Hello"})["speak"], "the voice follows when it's on")
+        self.assertTrue(ask({"text": "Hello", "speak": True})["speak"])
+        self.assertFalse(ask({"text": "Hello", "speak": False})["speak"])
 
 
 class DocsPageTests(unittest.TestCase):
