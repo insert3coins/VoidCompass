@@ -105,7 +105,7 @@ Answers are JSON. When something goes wrong you get an HTTP status and a message
 | 403 | Not allowed: control is off, the call came from another device, a website tried to call it, or that page isn't shared |
 | 404 | No such endpoint, page or overlay |
 | 405 | Wrong method (a `GET` where a `POST` is needed, or the other way round) |
-| 409 | Can't do it right now: the feature is switched off (the message says where to switch it on) |
+| 409 | Can't do it right now: the feature is switched off (the message says where to switch it on), or the BGS record isn't open yet |
 | 413 | The request body is too big (64 KB at most) |
 | 429 | Too many open event streams (16 at most) |
 | 503 | Void Compass is closing, or the command deck isn't running |
@@ -750,6 +750,82 @@ curl -X POST -H "Content-Type: application/json" ^
 ```
 
 `severity` is `info`, `warn`, `fail` or `success`. (The `^` carries a command on to the next line in Command Prompt; in PowerShell use a backtick.)
+
+## BGS
+
+The background simulation as Void Compass has recorded it: every faction and system you've seen, your tracked factions and their alerts, conflicts, and the work you've done each tick. It reads the same record as the BGS page, whatever tab the deck has open, and only reads, so it works with Allow control off.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/bgs` | The overview: the tick, your tracked factions, their alerts, the system you're in, and this tick's work |
+| GET | `/api/v1/bgs/factions` | Every faction you've seen, tracked ones first (`query` to search by name) |
+| GET | `/api/v1/bgs/factions/{name}` | One faction: each system it's in, its influence, states and conflicts, your work for it, its alerts |
+| GET | `/api/v1/bgs/systems` | Every system you've recorded (`query` to search, `only=tracked` or `only=conflicts`) |
+| GET | `/api/v1/bgs/systems/{address}` | One system by its SystemAddress: its factions, influence history (`days`, default 90) and your work there |
+| GET | `/api/v1/bgs/conflicts` | Wars, civil wars and elections in progress or pending, tracked factions first |
+| GET | `/api/v1/bgs/activity` | Your work per tick: the ticks with work, and one tick's detail (`tick`, default the newest) |
+
+Influence is a fraction: `0.423` is 42.3%. Times (`ts`, a tick's `start`) are Unix seconds. An alert's `level` is `danger`, `warn`, `good` or `info`, worst first, with its words in `text`.
+
+```http
+GET /api/v1/bgs
+```
+
+```json
+{
+  "tick": {"last": 1760605200, "last_label": "16 Oct 09:00", "current": 1760605200, "current_label": "16 Oct 09:00", "estimated": false},
+  "tracked_factions": [{"name": "Jameson Holdings", "systems": 6, "controlled": 4, "average": 0.38, "danger": 1, "warn": 2}],
+  "alerts": [{"system": "Shinrarta Dezhra", "system_address": 3932277478106, "faction": "Jameson Holdings",
+              "level": "danger", "text": "War pending", "ts": 1760610000}],
+  "current_system": {"system": "Shinrarta Dezhra", "controlling": "Jameson Holdings", "factions": ["..."]},
+  "this_tick": {"label": "16 Oct 09:00", "systems": ["..."], "report": "**BGS Report - Tick: 16 Oct 09:00** ..."}
+}
+```
+
+`this_tick.report` (and `detail.report` from `/bgs/activity`) is the same Discord-ready report as the BGS page's copy button.
+
+A faction's name goes in the address as it is, with spaces and all encoded: `/api/v1/bgs/factions/Jameson%20Holdings` (PowerShell, Python and JavaScript do this for you, as below). If the BGS record isn't open yet, every call answers `409`.
+
+**Example: your tracked factions at a glance** (PowerShell)
+
+```powershell
+$bgs = Invoke-RestMethod http://127.0.0.1:7380/api/v1/bgs
+"Tick: $($bgs.tick.current_label)"
+foreach ($faction in $bgs.tracked_factions) {
+  "{0}: {1} systems, controls {2}, {3} danger, {4} warnings" -f $faction.name, $faction.systems, $faction.controlled, $faction.danger, $faction.warn
+}
+$bgs.alerts | Where-Object level -eq "danger" | ForEach-Object { "!! $($_.system): $($_.faction), $($_.text)" }
+```
+
+**Example: a `/bgs` command for the Discord bot** (Python; add it to the bot in [Discord](#discord))
+
+```python
+from urllib.parse import quote
+
+
+@bot.tree.command(description="How our factions stand")
+@app_commands.describe(faction="A faction's name (leave empty for all tracked)")
+async def bgs(interaction: discord.Interaction, faction: str = ""):
+    if faction:
+        found = await get(f"/bgs/factions/{quote(faction, safe='')}")
+        if "error" in found:
+            await interaction.response.send_message(found["error"]["message"], ephemeral=True)
+            return
+        lines = [f'**{found["name"]}**: controls {found["controlled"]} of {len(found["systems"])} systems']
+        for system in found["systems"][:10]:
+            lines.append(f'- {system["system"]}: {system["influence"] * 100:.1f}%{" (controls)" if system["controlling"] else ""}')
+        lines += [f'- {alert["system"]}: {alert["text"]}' for alert in found["alerts"][:5]]
+    else:
+        overview = await get("/bgs")
+        lines = [f'**BGS**, tick {overview["tick"]["current_label"]}']
+        lines += [f'- **{row["name"]}**: controls {row["controlled"]} of {row["systems"]}, '
+                  f'{row["danger"]} danger, {row["warn"]} warnings' for row in overview["tracked_factions"]]
+        lines += [f'- {alert["system"]} / {alert["faction"]}: {alert["text"]}'
+                  for alert in overview["alerts"] if alert["level"] == "danger"][:5]
+    await interaction.response.send_message("\n".join(lines)[:1900])
+```
+
+For the whole tick's report in your squadron's channel, post `this_tick.report` as it is.
 
 ## Overlays
 

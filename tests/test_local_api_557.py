@@ -533,6 +533,81 @@ class DocsPageBrowserTests(ServerCase):
         self.assertEqual(self.errors, [])
 
 
+class BgsRouteTests(ServerCase):
+    def setUp(self):
+        super().setUp()
+        self.asked = []
+        self.provider.api_bgs_faction = lambda name: self.asked.append(("faction", name)) or {"name": name}
+        self.provider.api_bgs_system = lambda address, days: self.asked.append(("system", address, days)) or {}
+        self.provider.api_bgs_systems = lambda query, only: self.asked.append(("systems", query, only)) or {}
+        self.provider.api_bgs_activity = lambda tick: self.asked.append(("activity", tick)) or {}
+
+    def test_names_addresses_and_parameters(self):
+        self.assertEqual(self.call("/bgs/factions/Jameson%20Holdings%20%26%20Co")[0], 200)
+        self.assertEqual(self.call("/bgs/systems/3932277478106?days=99999")[0], 200)
+        self.assertEqual(self.call("/bgs/systems?query=sol&only=conflicts")[0], 200)
+        self.assertEqual(self.call("/bgs/activity?tick=1760605200")[0], 200)
+        self.assertEqual(self.asked, [("faction", "Jameson Holdings & Co"), ("system", 3932277478106, 3650),
+                                      ("systems", "sol", "conflicts"), ("activity", 1760605200.0)])
+        self.assertEqual(self.call("/bgs/systems?only=everything")[0], 400)
+        self.assertEqual(self.call("/bgs/activity?tick=yesterday")[0], 400)
+        self.assertEqual(self.call("/bgs/systems/Sol")[0], 404, "a system is asked for by its address")
+
+    def test_the_index_names_their_parts(self):
+        paths = {row["path"] for row in self.call("")[1]["endpoints"]}
+        self.assertIn("/api/v1/bgs/factions/{name}", paths)
+        self.assertIn("/api/v1/bgs/systems/{address}", paths)
+
+
+class BgsApiTests(unittest.TestCase):
+    def setUp(self):
+        from voidcompass.bgs.store import BgsStore
+        from tests.test_bgs import LOS, arrival, play
+
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.store = BgsStore(str(Path(folder.name) / "bgs.db"))
+        self.addCleanup(self.store.close)
+        self.store.apply(play(arrival())[0])
+        self.store.set_tracked("faction", "Los Services Ltd", True)
+        self.los = LOS
+        self.app = Dashboard()
+        self.app.bgs_store = self.store
+        self.app.current_system_address = LOS
+
+    def test_the_overview_whatever_the_deck_shows(self):
+        overview = self.app.api_bgs()
+        self.assertEqual([row["name"] for row in overview["tracked_factions"]], ["Los Services Ltd"])
+        self.assertEqual(overview["current_system"]["system"], "Los")
+        self.assertIn("current_label", overview["tick"])
+        self.assertIn("alerts", overview)
+
+    def test_factions_systems_conflicts_and_activity(self):
+        found = self.app.api_bgs_factions("los")
+        self.assertEqual(([row["name"] for row in found["factions"]], found["total"]), (["Los Services Ltd"], 1))
+        faction = self.app.api_bgs_faction("Los Services Ltd")
+        self.assertEqual(faction["systems"][0]["system"], "Los")
+        self.assertIn("alerts", faction)
+        with self.assertRaises(ApiError) as caught:
+            self.app.api_bgs_faction("Nobody At All")
+        self.assertEqual(caught.exception.status, 404)
+        self.assertEqual(self.app.api_bgs_systems("", "conflicts")["systems"][0]["system"], "Los")
+        system = self.app.api_bgs_system(self.los, 30)
+        self.assertEqual((system["system"], system["days"]), ("Los", 30))
+        self.assertIn("history", system)
+        with self.assertRaises(ApiError) as caught:
+            self.app.api_bgs_system(1)
+        self.assertEqual(caught.exception.status, 404)
+        self.assertEqual(self.app.api_bgs_conflicts()["conflicts"][0]["type"], "election")
+        self.assertIn("periods", self.app.api_bgs_activity())
+
+    def test_no_record_yet_says_so(self):
+        app = Dashboard()
+        with self.assertRaises(ApiError) as caught:
+            app.api_bgs()
+        self.assertEqual(caught.exception.status, 409)
+
+
 class SettingsTests(unittest.TestCase):
     def test_one_server_for_the_pc(self):
         self.assertNotIn("api_key", config_module.GLOBAL_ONLY_KEYS, "no key any more")

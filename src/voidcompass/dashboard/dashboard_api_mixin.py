@@ -13,6 +13,8 @@ import logging
 import os
 import time
 
+from voidcompass.bgs import ticks as bgs_ticks
+from voidcompass.bgs import views as bgs_views
 from voidcompass.core import themes
 from voidcompass.core.config import get_active_profile
 from voidcompass.core.overlay_registry import OVERLAY_SPECS, OVERLAY_SPEC_BY_ATTR
@@ -427,3 +429,73 @@ class DashboardApiMixin:
 
     def api_galnet(self):
         return _plain(self._html_dashboard_galnet())
+
+    # -- the BGS (5.5.7): straight from bgs.db, whichever tab the deck has open ----
+    def _api_bgs_store(self):
+        store = getattr(self, "bgs_store", None)
+        if store is None:
+            raise ApiError(409, "The BGS record isn't open yet (the BGS page)")
+        return store
+
+    @staticmethod
+    def _api_bgs_tick(store):
+        known = store.ticks()
+        start, estimated = bgs_ticks.tick_for(time.time(), known)
+        last = known[-1] if known else None
+        return known, start, {"last": last, "last_label": bgs_ticks.label(last) if last else "",
+                              "current": start, "current_label": bgs_ticks.label(start) if start else "",
+                              "estimated": estimated}
+
+    def api_bgs(self):
+        from voidcompass.dashboard.html_bgs import HtmlBgsMixin
+
+        store = self._api_bgs_store()
+        known, start, tick = self._api_bgs_tick(store)
+        tracked = store.tracked("faction")
+        alerts = bgs_views.alerts(store)
+        address = getattr(self, "current_system_address", None)
+        return _plain({
+            "tick": tick,
+            "tracked_factions": [HtmlBgsMixin._bgs_faction_brief(store, name, alerts) for name in tracked],
+            "tracked_systems": [str(item) for item in store.tracked("system")],
+            "alerts": alerts,
+            "current_system": bgs_views.system_picture(store, address, tracked) if address is not None else None,
+            "this_tick": bgs_views.activity(store, start, known)["detail"],
+        })
+
+    def api_bgs_factions(self, query=""):
+        rows, total = bgs_views.factions_list(self._api_bgs_store(), query)
+        return _plain({"factions": rows, "total": total, "query": query})
+
+    def api_bgs_faction(self, name):
+        store = self._api_bgs_store()
+        _known, start, _tick = self._api_bgs_tick(store)
+        detail = bgs_views.faction_detail(store, name, start)
+        if not detail:
+            raise ApiError(404, f"No faction called {name} in your BGS record (see /api/v1/bgs/factions)")
+        detail["alerts"] = [row for row in bgs_views.alerts(store) if row.get("faction") == name]
+        return _plain(detail)
+
+    def api_bgs_systems(self, query="", only=""):
+        rows, total = bgs_views.systems_list(self._api_bgs_store(), query, only)
+        return _plain({"systems": rows, "total": total, "query": query, "only": only})
+
+    def api_bgs_system(self, address, days=90):
+        store = self._api_bgs_store()
+        picture = bgs_views.system_picture(store, address, store.tracked("faction"))
+        if not picture:
+            raise ApiError(404, f"No system {address} in your BGS record (see /api/v1/bgs/systems)")
+        picture["history"] = bgs_views.history(store, address, days=days)
+        picture["days"] = days
+        picture["activity"] = bgs_views._kind_rows(store.query(
+            "SELECT kind, SUM(amount) amount, SUM(count) count FROM activity WHERE system_address = ? GROUP BY kind",
+            (address,)))
+        picture["visits"] = (store.query("SELECT visits FROM systems WHERE system_address = ?", (address,)) or [{}])[0].get("visits")
+        return _plain(picture)
+
+    def api_bgs_conflicts(self):
+        return _plain({"conflicts": bgs_views.conflicts(self._api_bgs_store())})
+
+    def api_bgs_activity(self, tick=None):
+        store = self._api_bgs_store()
+        return _plain(bgs_views.activity(store, tick, store.ticks()))

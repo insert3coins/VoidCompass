@@ -138,7 +138,7 @@
   }
 
   // -- endpoints: copy and TRY -------------------------------------------------
-  const DEFAULTS = {page: "explore", id: "survey", overlay: "survey"};
+  const DEFAULTS = {page: "explore", id: "survey", overlay: "survey", name: "", address: ""};
   let control = true;
   function exampleQuery(card) {
     // A GET line in the same section ("GET /api/v1/events?types=...") gives the query to start from.
@@ -191,7 +191,7 @@
       const param = part.match(/^\{([a-z_|-]+)\}$/);
       if (!param) return `<b>${esc(part)}</b>`;
       const value = DEFAULTS[param[1]] || "";
-      return `<input data-param="${esc(param[1])}" value="${esc(value)}" size="${Math.max(4, value.length)}" aria-label="${esc(param[1])}">`;
+      return `<input data-param="${esc(param[1])}" value="${esc(value)}" size="${Math.max(4, value.length)}" placeholder="${esc(param[1])}" aria-label="${esc(param[1])}">`;
     }).join("");
     const query = exampleQuery(card);
     const body = method === "POST" ? exampleBody(card) : "";

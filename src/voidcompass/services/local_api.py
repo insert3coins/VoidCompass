@@ -27,7 +27,7 @@ import re
 import sys
 import threading
 import time
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from voidcompass.core import journal_files
 from voidcompass.core.paths import resource_path
@@ -53,6 +53,8 @@ PROVIDER_CALLS = (
     "api_toggle_overlay", "api_hide_overlays", "api_notify", "api_watcher", "api_watcher_thought",
     "api_watcher_poke", "api_voice", "api_voice_say", "api_voice_stop", "api_music",
     "api_music_library", "api_music_control", "api_galnet",
+    "api_bgs", "api_bgs_factions", "api_bgs_faction", "api_bgs_systems", "api_bgs_system", "api_bgs_conflicts",
+    "api_bgs_activity",
 )
 
 
@@ -315,6 +317,13 @@ class LocalApi:
             ("POST", r"/music/(play-pause|next|previous)",
              lambda req, op: self._call("api_music_control", op), True),
             ("GET", r"/galnet", lambda req: self._call("api_galnet"), False),
+            ("GET", r"/bgs", lambda req: self._call("api_bgs"), False),
+            ("GET", r"/bgs/factions", lambda req: self._call("api_bgs_factions", str(req.query.get("query") or "")[:80]), False),
+            ("GET", r"/bgs/factions/([^/]{1,240})", lambda req, name: self._call("api_bgs_faction", unquote(name)[:160]), False),
+            ("GET", r"/bgs/systems", self._bgs_systems, False),
+            ("GET", r"/bgs/systems/([0-9]{1,20})", self._bgs_system, False),
+            ("GET", r"/bgs/conflicts", lambda req: self._call("api_bgs_conflicts"), False),
+            ("GET", r"/bgs/activity", self._bgs_activity, False),
         ]
         return [(method, re.compile(f"^{re.escape(PREFIX)}{pattern}/?$"), handler, control)
                 for method, pattern, handler, control in rows]
@@ -325,6 +334,7 @@ class LocalApi:
         for method, pattern, _handler, control in self._routes:
             path = pattern.pattern[1:-3].replace("\\", "")
             path = path.replace("([a-z0-9-]{1,40})", "{page}").replace("([a-z0-9_-]{1,40})", "{overlay}")
+            path = path.replace("([^/]{1,240})", "{name}").replace("([0-9]{1,20})", "{address}")
             path = re.sub(r"\(([a-z|-]+)\)", r"{\1}", path)
             out.append({"method": method, "path": path or PREFIX, "control": control})
         return out
@@ -413,6 +423,24 @@ class LocalApi:
                 if len(found) >= limit:
                     break
         return {"events": redact(found), "files_scanned": scanned}
+
+    def _bgs_systems(self, req):
+        only = str(req.query.get("only") or "").casefold()
+        if only not in ("", "tracked", "conflicts"):
+            raise ApiError(400, "only is tracked or conflicts")
+        return self._call("api_bgs_systems", str(req.query.get("query") or "")[:80], only)
+
+    def _bgs_system(self, req, address):
+        return self._call("api_bgs_system", int(address), _int(req.query.get("days"), 90, 1, 3650))
+
+    def _bgs_activity(self, req):
+        tick = req.query.get("tick")
+        if tick in (None, ""):
+            return self._call("api_bgs_activity", None)
+        try:
+            return self._call("api_bgs_activity", float(tick))
+        except ValueError:
+            raise ApiError(400, "tick is a tick's start, in Unix seconds (from periods[].start)")
 
     def _companion(self, req, name):
         data = self._call("api_companion", name)
