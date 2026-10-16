@@ -335,43 +335,60 @@ API = "http://127.0.0.1:7380/api/v1"
 WEBHOOK = "https://discord.com/api/webhooks/..."
 
 
-def words(item):
+def commander():
+    """The commander flying now, as Void Compass knows them."""
+    try:
+        return requests.get(f"{API}/commander", timeout=10).json().get("name") or "Unknown"
+    except requests.RequestException:
+        return "Unknown"
+
+
+def words(item, cmdr):
     """What to post for one event, or None to post nothing."""
     data = item["data"]
     if item["type"] == "thought":
-        return f'*{data["text"]}*'
+        return f'The Watcher, to CMDR {cmdr}: *{data["text"]}*'
     event = data.get("event")
     if event == "FSDJump":
-        return f'Jumped {data.get("JumpDist", 0):.1f} ly to **{data["StarSystem"]}**'
+        return f'**CMDR {cmdr}** jumped {data.get("JumpDist", 0):.1f} ly to **{data["StarSystem"]}**'
     if event == "Scan" and data.get("WasDiscovered") is False and data.get("PlanetClass"):
-        return f'First discovery: **{data["BodyName"]}**, {data["PlanetClass"]}'
+        return f'**CMDR {cmdr}** made a first discovery: **{data["BodyName"]}**, {data["PlanetClass"]}'
     if event == "Docked":
-        return f'Docked at **{data["StationName"]}**'
+        return f'**CMDR {cmdr}** docked at **{data["StationName"]}** in {data.get("StarSystem", "")}'
     if event == "Died":
-        return "Ship lost. Rebuy time."
+        return f"**CMDR {cmdr}** lost their ship. Rebuy time."
     return None
 
 
+cmdr = commander()
 seq = 0
 while True:
     try:
         answer = requests.get(f"{API}/events", timeout=40, params={
-            "since": seq, "types": "journal,thought", "event": "FSDJump,Scan,Docked,Died", "wait": 25}).json()
+            "since": seq, "types": "journal,thought", "wait": 25,
+            "event": "FSDJump,Scan,Docked,Died,LoadGame,Commander"}).json()
     except requests.RequestException:
         time.sleep(5)  # Void Compass isn't running yet
         continue
     first = seq == 0
     seq = answer["seq"]
     if first:
+        cmdr = commander()
         continue  # start from now, not from what happened before
     for item in answer["events"]:
-        text = words(item)
+        data = item["data"]
+        if data.get("event") in ("LoadGame", "Commander"):
+            # Logged in, or switched to another commander: post under their name.
+            cmdr = data.get("Commander") or data.get("Name") or cmdr
+            continue
+        text = words(item, cmdr)
         if text:
-            requests.post(WEBHOOK, timeout=10, json={"content": text, "allowed_mentions": {"parse": []}})
+            requests.post(WEBHOOK, timeout=10, json={
+                "content": text, "username": f"CMDR {cmdr}", "allowed_mentions": {"parse": []}})
             time.sleep(1)  # Discord lets a webhook post a few times a second at most
 ```
 
-Change `words` to post what you like: any journal event works (add its name to `event`), and `item["type"]` can be `music` or `feed` too (add them to `types`).
+Every post names the commander flying (it follows you if you switch commanders), and posts as **CMDR Name** in the channel. Change `words` to post what you like: any journal event works (add its name to `event`), and `item["type"]` can be `music` or `feed` too (add them to `types`).
 
 ### Bot: commands for your server
 
