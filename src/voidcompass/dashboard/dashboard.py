@@ -2568,6 +2568,7 @@ class MainDashboard(
         self.inara = InaraUploader(
             self.config, APP_VERSION,
             queue_path=lambda: os.path.join(get_profile_dir(get_active_profile(self.config)), "inara_queue.json"),
+            sent_path=lambda: os.path.join(get_profile_dir(get_active_profile(self.config)), "inara_sent.json"),
         )
         self.inara.start()
         self.inara.set_log_callback(self._service_log)

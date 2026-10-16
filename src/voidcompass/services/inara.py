@@ -13,6 +13,11 @@ than constantly, never resend the same data, only live game data (no
 Legacy, no beta), and nothing older than 30 days. This follows them: events
 queue up, a batch goes at most once a minute, unchanged state is never sent
 twice, and a rejected key stops the uploads until the settings change.
+
+What Inara has taken is remembered across restarts (5.5.7): restarting Void
+Compass mid-session re-reads the journal, and the unchanged credits, ranks,
+ship and materials used to go again each time. A new game session (LoadGame
+while running) still sends the whole state once, as Inara asks.
 """
 from __future__ import annotations
 
@@ -505,7 +510,7 @@ def map_event(event, raw, context=None):
 class InaraUploader:
     """Queues Inara events and sends them in polite batches on its own thread."""
 
-    def __init__(self, config, version="", session=None, clock=time.time, queue_path=None):
+    def __init__(self, config, version="", session=None, clock=time.time, queue_path=None, sent_path=None):
         self.config = config
         self.version = app_version(version)
         self._session = session or requests.Session()
@@ -522,6 +527,9 @@ class InaraUploader:
         self.game_version = ""
         # Where the waiting events are kept over a restart (a callable: it follows the commander).
         self._queue_path = queue_path
+        # What Inara has accepted, kept over a restart: {state key: signature}.
+        self._sent_path = sent_path
+        self._delivered = {}
         self._timer = None
         # Where the commander is and in what, from the journal itself.
         self.context = {}
@@ -574,6 +582,7 @@ class InaraUploader:
         elif event in ("Commander", "LoadGame") and raw.get("Commander") and                 str(raw.get("Commander")) != str(self.context.get("commander") or raw.get("Commander")):
             # Another commander: their own state starts afresh.
             self._sent_state.clear()
+            self._delivered.clear()
             self._ranks.clear()
         if event in ("Commander", "LoadGame") and raw.get("Commander"):
             self.context["commander"] = str(raw["Commander"])
@@ -608,6 +617,11 @@ class InaraUploader:
         if not isinstance(raw, dict):
             return 0
         self._follow(event, raw)
+        if event == "LoadGame" and not startup:
+            # A new game session: Inara gets the whole state once, as it asks.
+            self._sent_state.clear()
+            with self._lock:
+                self._delivered.clear()
         if not self.enabled():
             return 0
         context = {**self.context, **(context or {})}
@@ -631,15 +645,7 @@ class InaraUploader:
             data = [dict(row) for row in self._ranks.values()]
         if name.startswith(("set", "reset")):
             # State goes once: unchanged since it was last sent, it waits.
-            key = name
-            if name in ("setCommanderShip", "setCommanderShipLoadout"):
-                key = f"{name}:{(data or {}).get('shipGameID')}"
-            elif name in ("setCommunityGoal", "setCommanderCommunityGoalProgress"):
-                key = f"{name}:{(data or {}).get('communitygoalGameID')}"
-            elif name == "setCommanderSuitLoadout":
-                key = f"{name}:{(data or {}).get('loadoutGameID')}"
-            elif name == "setCommanderReputationMinorFaction":
-                key = f"{name}:{','.join(sorted(row['minorfactionName'] for row in data))}"
+            key = self._state_key(name, data)
             signature = json.dumps(data, sort_keys=True, default=str)
             if self._sent_state.get(key) == signature:
                 return False
@@ -651,6 +657,19 @@ class InaraUploader:
             self._queue.append({"eventName": name, "eventTimestamp": stamp, "eventData": data})
             self._last_queued = self._clock()
         return True
+
+    @staticmethod
+    def _state_key(name, data):
+        """Which piece of state an event is: one per ship, goal, suit loadout…"""
+        if name in ("setCommanderShip", "setCommanderShipLoadout"):
+            return f"{name}:{(data or {}).get('shipGameID')}"
+        if name in ("setCommunityGoal", "setCommanderCommunityGoalProgress"):
+            return f"{name}:{(data or {}).get('communitygoalGameID')}"
+        if name == "setCommanderSuitLoadout":
+            return f"{name}:{(data or {}).get('loadoutGameID')}"
+        if name == "setCommanderReputationMinorFaction":
+            return f"{name}:{','.join(sorted(row['minorfactionName'] for row in data))}"
+        return name
 
     def pending(self):
         with self._lock:
@@ -667,6 +686,7 @@ class InaraUploader:
         if self._timer is not None and self._timer.is_alive():
             return
         self._load_queue()
+        self._load_sent()
 
         def run():
             while not self._stopped:
@@ -702,6 +722,43 @@ class InaraUploader:
             os.remove(path)
         except OSError:
             pass
+
+    def _sent_file(self):
+        try:
+            return self._sent_path() if callable(self._sent_path) else self._sent_path
+        except Exception:
+            return None
+
+    def _load_sent(self):
+        path = self._sent_file()
+        if not path:
+            return
+        try:
+            with open(path, encoding="utf-8") as handle:
+                saved = json.load(handle)
+        except (OSError, ValueError):
+            return
+        state = saved.get("state") if isinstance(saved, dict) else None
+        if isinstance(state, dict):
+            with self._lock:
+                self._delivered = {str(key): str(value) for key, value in state.items()}
+            # Unchanged since Inara took it: it doesn't go again after a restart.
+            self._sent_state.update(self._delivered)
+
+    def _save_sent(self):
+        path = self._sent_file()
+        if not path:
+            return
+        with self._lock:
+            payload = {"state": dict(self._delivered)}
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            temporary = f"{path}.tmp"
+            with open(temporary, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle)
+            os.replace(temporary, path)
+        except OSError:
+            logging.debug("Inara: couldn't save what was sent", exc_info=True)
 
     # -- sending -------------------------------------------------------------
     def flush(self, force=False):
@@ -751,6 +808,13 @@ class InaraUploader:
             answers = list(zip(batch, reply.get("events") or []))
             failed = [(sent, row) for sent, row in answers if int((row or {}).get("eventStatus") or 0) == 400]
             soft = [(sent, row) for sent, row in answers if int((row or {}).get("eventStatus") or 0) == 204]
+            refused = {id(sent) for sent, _row in failed}
+            with self._lock:
+                for sent in batch:
+                    if sent["eventName"].startswith(("set", "reset")) and id(sent) not in refused:
+                        self._delivered[self._state_key(sent["eventName"], sent["eventData"])] = json.dumps(
+                            sent["eventData"], sort_keys=True, default=str)
+            self._save_sent()
             self.stats["sent"] += len(batch) - len(failed)
             self.stats["failed"] += len(failed)
             self.stats.update(last=time.time(), status="ok", detail="")
