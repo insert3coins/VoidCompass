@@ -37,6 +37,8 @@ LIVELINESS = ("calm", "standard", "alive")
 _FLAG_SCOOPING = 0x00000800
 _FLAG_FSD_CHARGING = 0x00020000
 _FLAG2_GLIDE = 0x00001000
+_FLAG2_ON_FOOT = 0x00000001
+_FLAG2_LOW_HEALTH = 0x00000080
 _FLAG_LOW_FUEL = 0x00080000
 _FLAG_OVERHEATING = 0x00100000
 _FLAG_IN_DANGER = 0x00400000
@@ -373,7 +375,14 @@ class HeartbeatHUD:
             self._status_serial += 1
             if isinstance(detail, dict) and 'Flags' in detail:
                 self._vitals = vitals(detail.get('Flags'), detail.get('Flags2'), detail.get('fuel_percent'))
-                self.mind.vitals(self._vitals.get('fuel_percent'), self._vitals.get('scooping'))
+                try:
+                    flags2 = int(detail.get('Flags2') or 0)
+                except (TypeError, ValueError):
+                    flags2 = 0
+                # 5.5.7: on foot, the health bar is how it knows you're in a fight.
+                self.mind.vitals(self._vitals.get('fuel_percent'), self._vitals.get('scooping'),
+                                 health=detail.get('Health'), low_health=bool(flags2 & _FLAG2_LOW_HEALTH),
+                                 on_foot=bool(flags2 & _FLAG2_ON_FOOT), in_danger=self._vitals.get('danger'))
         self._redraw()
 
     def _redraw(self):

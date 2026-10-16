@@ -86,6 +86,13 @@ class LongSessionTests(unittest.TestCase):
             for bank in (watcher_lines.NORMAL, watcher_lines.WEARY):
                 self.assertGreaterEqual(len(bank[topic]), 10, topic)
 
+    def test_everyday_topics_have_twenty_lines_or_more(self):
+        # 5.5.7: the deeper banks; its story keeps its own pacing and isn't counted.
+        from voidcompass.overlays.watcher_lines_deep import DEEP_NORMAL
+        for topic in DEEP_NORMAL:
+            for bank in (watcher_lines.NORMAL, watcher_lines.WEARY):
+                self.assertGreaterEqual(len(bank[topic]), 20, topic)
+
     def test_no_line_is_said_by_two_topics(self):
         from voidcompass.overlays.watcher_mind import plain_text
         for bank in (watcher_lines.NORMAL, watcher_lines.WEARY):

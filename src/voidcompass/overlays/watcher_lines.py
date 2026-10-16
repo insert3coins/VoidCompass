@@ -1148,6 +1148,13 @@ WEARY["idle_home_away"] = [
     "Back around {home}. {dist} light years. Every road leads here, eventually. Then out again.",
 ]
 
+# 5.5.7: in a fight, in the ship and on foot (watcher_combat.py).
+from voidcompass.overlays.watcher_combat import COMBAT_NORMAL, COMBAT_WEARY  # noqa: E402
+
+for _bank, _combat in ((NORMAL, COMBAT_NORMAL), (WEARY, COMBAT_WEARY)):
+    for _topic, _lines in _combat.items():
+        _bank[_topic] = list(_lines)
+
 # 5.5.7: ten more lines for every topic, twenty for the busiest, so a long
 # run of the same moment finds new words (watcher_lines_deep*.py). Merged
 # last, after every bank above is in place.

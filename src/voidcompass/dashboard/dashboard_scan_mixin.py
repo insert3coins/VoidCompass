@@ -960,7 +960,8 @@ class DashboardScanMixin:
                 getattr(self, "hud_flight_state", None) or "FLIGHT",
                 {"Flags": flags if isinstance(flags, int) else 0,
                  "Flags2": flags2 if isinstance(flags2, int) else 0,
-                 "fuel_percent": self._watcher_fuel_percent()},
+                 "fuel_percent": self._watcher_fuel_percent(),
+                 "Health": data.get("Health") if isinstance(data, dict) else None},
             )
         refresh_planet_materials = getattr(
             self, "_refresh_planet_materials_overlay", None,

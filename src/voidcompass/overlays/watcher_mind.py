@@ -53,6 +53,13 @@ THOUGHT_SECONDS = 9.0
 TOPIC_REST_S = 20 * 60.0
 # The same kind of idle thought is not raised again for this long (5.5.3.2).
 IDLE_REST_S = 30 * 60.0
+# A fight is over after this long with no attack, shields up and the game's
+# danger flag clear (5.5.7); before, only a jump, supercruise or docking ended it.
+CALM_S = 90.0
+COMBAT_TOPICS = (
+    "foot_danger", "foot_danger_over", "died_foot", "foot_win", "dropship", "hull_damage", "hull_critical",
+    "shields_back", "combat_win", "interdiction_submitted", "combat_zone",
+)
 # Enough to remember every line it has said for a long while.
 _MEMORY_LIMIT = 3000
 
@@ -140,6 +147,19 @@ IMPORTANCE = {
     "died": 3,
     "danger": 2,
     "danger_over": 1,
+    # 5.5.7: fights in more detail, and on foot (the game logs no attack there;
+    # Status.json's health says it instead).
+    "foot_danger": 2,
+    "foot_danger_over": 1,
+    "died_foot": 3,
+    "foot_win": 1,
+    "dropship": 2,
+    "hull_damage": 2,
+    "hull_critical": 3,
+    "shields_back": 1,
+    "combat_win": 1,
+    "interdiction_submitted": 1,
+    "combat_zone": 2,
     "fuel_low": 2,
     "first_discovery_streak": 2,
     "undiscovered_system": 1,
@@ -225,7 +245,8 @@ WEARY = watcher_lines.WEARY
 PERSONALITY_WEIGHTS = {
     "stoic": {"quiet": 0, "docked_home": 0, "idle": .4, "codex_logged": .5, "big_sale": .5, "greet_soon": .5},
     "curious": {"idle": 1.3, "codex_new": 1.5, "codex_logged": 1.5, "undiscovered_system": 1.5, "new_region": 1.3},
-    "nervous": {"danger": 1.6, "fuel_low": 1.6, "after_death": 1.5, "quiet": 1.2, "danger_over": 1.4},
+    "nervous": {"danger": 1.6, "fuel_low": 1.6, "after_death": 1.5, "quiet": 1.2, "danger_over": 1.4,
+                "foot_danger": 1.6, "hull_damage": 1.6, "foot_danger_over": 1.4, "combat_zone": 1.4},
     # The weary one mutters to itself more in the quiet.
     "weary": {"idle": 1.4, "quiet": 1.6, "docked_home": 1.3, "long_session": 1.3, "big_sale": .8},
 }
@@ -240,7 +261,11 @@ MOODS = {
         "codex_logged", "codex_new", "big_sale", "achievement", "promotion", "mapped_efficient",
         "analysed", "fss_complete", "mapped", "scooped", "mission_done", "sign_off", "idle_recall",
         "idle_session", "new_region", "greet_away", "greet_soon", "danger_over", "idle_music")},
-    **{topic: "wary" for topic in ("danger", "fuel_low", "idle_deaths", "heat_warning")},
+    **{topic: "wary" for topic in ("danger", "fuel_low", "idle_deaths", "heat_warning", "foot_danger",
+                                    "hull_damage", "hull_critical", "interdiction_submitted", "combat_zone",
+                                    "dropship")},
+    **{topic: "pleased" for topic in ("foot_danger_over", "shields_back", "combat_win", "foot_win")},
+    "died_foot": "downcast",
     **{topic: "pleased" for topic in ("interdiction_escaped", "srv_launch", "idle_srv", "idle_ship")},
     **{topic: "curious" for topic in ("jet_boost", "settlement_seen", "carrier_jump", "idle_settlement",
                                        "idle_near_body", "idle_supercruise")},
@@ -452,6 +477,17 @@ class WatcherMind:
         self._session_start = None
         self._first_streak = 0
         self._in_danger = False
+        # 5.5.7: when the last threat was, shields down, the hull warning
+        # given (0 none, 1 damaged, 2 critical), and the fight on foot.
+        self._danger_at = 0.0
+        self._shields_down = False
+        self._status_danger = False
+        self._hull_warned = 0
+        self._on_foot = False
+        self._foot_danger = False
+        self._foot_health = None
+        self._foot_hurt_at = 0.0
+        self._low_health = False
         self._fuel_warned = False
         self._codex_bodies = set()
         self._last_interesting = self.clock()
@@ -844,6 +880,17 @@ class WatcherMind:
             rarity=rarity({"planet_class": raw.get("PlanetClass")}) if event == "Scan" else None,
             green=event == "CodexEntry" and is_green_giant_codex(raw),
         )
+        if event == "Disembark":
+            self._on_foot = True
+        elif event in {"Embark", "LoadGame", "Resurrect"}:
+            self._on_foot = False
+            self._foot_health = None
+            if self._foot_danger:
+                self._foot_danger = False
+                if event == "Embark":
+                    return self.consider("foot_danger_over")
+        if event in {"LoadGame", "Resurrect", "RepairAll", "Docked"}:
+            self._hull_warned = 0
         if event in {"LoadGame"}:
             return self.session_start()
         if self._session_start is None and event == "Died":
@@ -861,12 +908,14 @@ class WatcherMind:
                 self.memory["deaths"] = int(self.memory.get("deaths") or 0) + 1
                 self.memory["last_death"] = now
             self.save()
-            return self.consider("died", force=True)
-        if event in {"Interdicted", "UnderAttack"} or (event == "ShieldState" and raw.get("ShieldsUp") is False):
-            self._in_danger = True
-            return self.consider("danger")
+            on_foot = self._on_foot
+            self._in_danger = self._foot_danger = self._shields_down = False
+            return self.consider("died_foot" if on_foot else "died", force=True)
+        handled, thought = self._combat(event, raw, now)
+        if handled:
+            return thought
         if event in {"FSDJump", "SupercruiseEntry", "Docked"} and self._in_danger:
-            self._in_danger = False
+            self._in_danger = self._shields_down = False
             return self.consider("danger_over")
         # Something in the game that touches its past (5.5.3.5). Since 5.5.4
         # the distance you've flown in all counts for the far ones too.
@@ -1131,8 +1180,108 @@ class WatcherMind:
             return thought.get("text") or ""
         return watcher_voice_lore.spoken_part(thought.get("text"), self.voice_stage())
 
-    def vitals(self, fuel_percent=None, scooping=False):
-        """Status: worry about fuel once, until it is topped up."""
+    def _combat(self, event, raw, now):
+        """(handled, thought) for a moment in a fight (5.5.7): attacks,
+        shields, the hull, kills, an interdiction given in to, combat zones."""
+        if event == "Interdicted" or event == "UnderAttack" or (event == "ShieldState" and raw.get("ShieldsUp") is False):
+            self._in_danger, self._danger_at, self._last_interesting = True, now, now
+            if event == "ShieldState":
+                self._shields_down = True
+            if event == "Interdicted" and raw.get("Submitted"):
+                return True, self.consider("interdiction_submitted")
+            return True, self.consider("danger")
+        if event == "ShieldState" and raw.get("ShieldsUp"):
+            was_down, self._shields_down = self._shields_down, False
+            return True, (self.consider("shields_back") if was_down else None)
+        if event == "HullDamage":
+            if raw.get("Fighter") or raw.get("PlayerPilot") is False:
+                return True, None
+            try:
+                hull = max(0.0, min(1.0, float(raw.get("Health"))))
+            except (TypeError, ValueError):
+                return True, None
+            self._in_danger, self._danger_at, self._last_interesting = True, now, now
+            level = 2 if hull <= .25 else 1 if hull <= .6 else 0
+            if level <= self._hull_warned:
+                return True, None
+            self._hull_warned = level
+            return True, self.consider("hull_critical" if level == 2 else "hull_damage", {"hull": int(round(hull * 100))})
+        if event in {"FactionKillBond", "PVPKill", "CapShipBond"} or (event == "Bounty" and self._on_foot):
+            fields = {}
+            try:
+                reward = int(raw.get("Reward") or raw.get("TotalReward") or 0)
+            except (TypeError, ValueError):
+                reward = 0
+            if reward:
+                fields["reward"] = f"{reward:,}"
+            faction = raw.get("AwardingFaction_Localised") or raw.get("AwardingFaction")
+            if faction and not str(faction).startswith("$"):
+                fields["faction"] = str(faction)
+            if raw.get("Victim"):
+                fields["victim"] = str(raw["Victim"])
+            if self._in_danger:
+                self._danger_at = now  # still fighting
+            if self._foot_danger:
+                self._foot_hurt_at = now
+            return True, self.consider("foot_win" if self._on_foot else "combat_win", fields)
+        if event == "SupercruiseDestinationDrop" and "warzone" in str(raw.get("Type") or "").casefold():
+            self._in_danger, self._danger_at, self._last_interesting = True, now, now
+            return True, self.consider("combat_zone")
+        if event == "BookDropship":
+            self._last_interesting = now
+            return True, self.consider("dropship")
+        return False, None
+
+    def _calm(self, now):
+        """The fight is over (5.5.7): no attack for a while, shields up and
+        the game's danger flag clear; on foot, no new hurt for a while."""
+        if self._in_danger and now - self._danger_at >= CALM_S and not self._status_danger and (
+                not self._shields_down or now - self._danger_at >= 5 * CALM_S):
+            self._in_danger = self._shields_down = False
+            return self.consider("danger_over")
+        if self._foot_danger and now - self._foot_hurt_at >= CALM_S and not self._low_health:
+            self._foot_danger = False
+            return self.consider("foot_danger_over")
+        return None
+
+    def _foot_vitals(self, health, low_health, now):
+        """On foot the game logs no attack: a falling health bar is the fight."""
+        try:
+            health = None if health is None else max(0.0, min(1.0, float(health)))
+        except (TypeError, ValueError):
+            health = None
+        last = self._foot_health
+        if health is not None:
+            self._foot_health = health
+        self._low_health = bool(low_health)
+        hurt = self._low_health or (health is not None and last is not None and last - health >= .1)
+        if not hurt:
+            return None
+        self._foot_hurt_at = self._last_interesting = now
+        if self._foot_danger:
+            return None
+        self._foot_danger = True
+        return self.consider("foot_danger", {"health": int(round(health * 100))} if health is not None else {})
+
+    def vitals(self, fuel_percent=None, scooping=False, health=None, low_health=False, on_foot=None, in_danger=False):
+        """Status: worry about fuel once, until it is topped up; feel a fight
+        on foot by the health bar (5.5.7); and the game's own danger flag
+        keeps a ship fight going."""
+        now = self.clock()
+        if on_foot is not None:
+            self._on_foot = bool(on_foot)
+            if not on_foot:
+                self._foot_health = None
+        self._status_danger = bool(in_danger)
+        if in_danger and self._in_danger:
+            self._danger_at = now
+        if self._on_foot:
+            thought = self._foot_vitals(health, low_health, now)
+            if thought:
+                return thought
+        calm = self._calm(now)
+        if calm:
+            return calm
         if fuel_percent is None:
             return None
         if fuel_percent >= 40:
@@ -1152,6 +1301,9 @@ class WatcherMind:
         if self._session_start is None:
             return None  # nothing to think about until it has seen the game
         self._account_time()
+        calm = self._calm(now)
+        if calm:
+            return calm
         voice = self.find_voice()
         if voice:
             return voice
