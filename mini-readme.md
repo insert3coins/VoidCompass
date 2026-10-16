@@ -1,7 +1,7 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.5.7 // The Watcher, Refined
-**Release Date:** Not yet released
+**Release Date:** **Release Date:** 2026-Oct-17
 
 * **The Watcher looks better.** Same eye, same colours, drawn with more care.
   * **A star for a pupil:** white-hot at its heart and melting into its glow, where it used to be a flat disc.
