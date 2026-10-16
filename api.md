@@ -304,6 +304,198 @@ while True:
 
 Run it with `python obs-pilot.py` while you stream. If a scene or the text source doesn't exist, it says so and carries on.
 
+## Discord
+
+Bring your game into your Discord server, or let your server talk to the Watcher. Both run on your own PC beside Void Compass. The API never talks to Discord itself; your script does.
+
+| Way | What you get | What you need |
+|---|---|---|
+| Webhook | A channel that posts as things happen: jumps, first discoveries, docking, deaths, the Watcher's thoughts | A webhook link from the channel's settings, and Python |
+| Bot | Slash commands in your server (`/where`, `/ship`, `/status`, `/watcher`, and `/say` to give the Watcher a thought, spoken if its voice is on), plus a live feed to a channel | A bot from the Discord Developer Portal, and Python |
+
+> Whatever you post, everyone who can read that channel sees: where you are, where you're going. Keep the feed in a channel for people you trust.
+
+### Webhook: your game, posted
+
+A webhook only posts, so there's nothing to log in to.
+
+1. In Discord, open the channel's settings: **Edit Channel › Integrations › Webhooks › New Webhook**, then **Copy Webhook URL**.
+2. Paste it into the script below as `WEBHOOK`, and save it as `discord-feed.py`.
+3. Run `python discord-feed.py` and leave it running while you play.
+
+**Example: a live feed for your channel** (Python, `pip install requests`)
+
+```python
+import time
+
+import requests
+
+API = "http://127.0.0.1:7380/api/v1"
+WEBHOOK = "https://discord.com/api/webhooks/..."
+
+
+def words(item):
+    """What to post for one event, or None to post nothing."""
+    data = item["data"]
+    if item["type"] == "thought":
+        return f'*{data["text"]}*'
+    event = data.get("event")
+    if event == "FSDJump":
+        return f'Jumped {data.get("JumpDist", 0):.1f} ly to **{data["StarSystem"]}**'
+    if event == "Scan" and data.get("WasDiscovered") is False and data.get("PlanetClass"):
+        return f'First discovery: **{data["BodyName"]}**, {data["PlanetClass"]}'
+    if event == "Docked":
+        return f'Docked at **{data["StationName"]}**'
+    if event == "Died":
+        return "Ship lost. Rebuy time."
+    return None
+
+
+seq = 0
+while True:
+    try:
+        answer = requests.get(f"{API}/events", timeout=40, params={
+            "since": seq, "types": "journal,thought", "event": "FSDJump,Scan,Docked,Died", "wait": 25}).json()
+    except requests.RequestException:
+        time.sleep(5)  # Void Compass isn't running yet
+        continue
+    first = seq == 0
+    seq = answer["seq"]
+    if first:
+        continue  # start from now, not from what happened before
+    for item in answer["events"]:
+        text = words(item)
+        if text:
+            requests.post(WEBHOOK, timeout=10, json={"content": text, "allowed_mentions": {"parse": []}})
+            time.sleep(1)  # Discord lets a webhook post a few times a second at most
+```
+
+Change `words` to post what you like: any journal event works (add its name to `event`), and `item["type"]` can be `music` or `feed` too (add them to `types`).
+
+### Bot: commands for your server
+
+A bot can answer. Anyone in your server can ask where you are; only you can make the Watcher speak.
+
+1. Go to **discord.com/developers/applications › New Application**. Under **Bot**, press **Reset Token** and copy the token. It's the bot's password: keep it to yourself.
+2. Under **Installation** (or **OAuth2 › URL Generator**), tick the scopes `bot` and `applications.commands` and the permission **Send Messages**. Open the link it gives you and add the bot to your server.
+3. In Discord, switch on **Settings › Advanced › Developer Mode**. Right-click the channel for the feed and **Copy Channel ID**; right-click your own name and **Copy User ID**.
+4. Put the token and both IDs into the script below, save it as `discord-bot.py`, and run `python discord-bot.py`.
+
+The first time, the slash commands can take a few minutes to show up in your server. `/say` needs **Allow control** on; everything else only reads.
+
+**Example: the Void Compass bot** (Python, `pip install discord.py`)
+
+```python
+import asyncio
+
+import aiohttp
+import discord
+from discord import app_commands
+
+API = "http://127.0.0.1:7380/api/v1"
+TOKEN = "YOUR_BOT_TOKEN"
+FEED_CHANNEL = 123456789012345678  # where jumps, deaths and thoughts are posted (0 for none)
+OWNER = 123456789012345678  # your own user ID: only you can make the Watcher speak
+
+
+class Bot(discord.Client):
+    def __init__(self):
+        super().__init__(intents=discord.Intents.default(), allowed_mentions=discord.AllowedMentions.none())
+        self.tree = app_commands.CommandTree(self)
+        self.http_api = None
+
+    async def setup_hook(self):
+        self.http_api = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=40))
+        await self.tree.sync()
+        self.loop.create_task(feed())
+
+
+bot = Bot()
+
+
+async def get(path, **params):
+    async with bot.http_api.get(f"{API}{path}", params=params) as reply:
+        return await reply.json()
+
+
+async def post(path, body):
+    async with bot.http_api.post(f"{API}{path}", json=body) as reply:
+        return reply.status, await reply.json()
+
+
+@bot.tree.command(description="Where the commander is right now")
+async def where(interaction: discord.Interaction):
+    here = await get("/commander/location")
+    at = here["station"]["name"] if here["station"] else here["body"] or "open space"
+    await interaction.response.send_message(f'**{here["system"] or "Somewhere"}**, {at}')
+
+
+@bot.tree.command(description="The commander's ship")
+async def ship(interaction: discord.Interaction):
+    now = await get("/commander/ship")
+    name = now["ship"].get("ship_name") or now["ship"].get("ship") or "A ship"
+    hull = f'{now["hull_percent"]:.0f}%' if now["hull_percent"] is not None else "unknown"
+    cargo = now["cargo"]
+    await interaction.response.send_message(
+        f'**{name}**, hull {hull}, cargo {cargo["tons"] or 0} of {cargo["capacity"] or 0} t')
+
+
+@bot.tree.command(description="Is the commander in the game?")
+async def status(interaction: discord.Interaction):
+    app = await get("/status")
+    playing = "flying right now" if app["journal"]["live"] else "not in the game right now"
+    await interaction.response.send_message(f'CMDR {app["commander"]} is {playing}.')
+
+
+@bot.tree.command(description="What the Watcher is thinking")
+async def watcher(interaction: discord.Interaction):
+    mind = await get("/watcher")
+    thought = (mind.get("current") or {}).get("text") or "It's quiet. The eye is watching."
+    await interaction.response.send_message(f"*{thought}*")
+
+
+@bot.tree.command(description="Give the Watcher a thought (spoken, if its voice is on)")
+@app_commands.describe(text="What it should think")
+async def say(interaction: discord.Interaction, text: str):
+    if interaction.user.id != OWNER:
+        await interaction.response.send_message("Only the commander can do that.", ephemeral=True)
+        return
+    code, answer = await post("/watcher/thought", {"text": text, "heading": f"From {interaction.user.display_name}"})
+    reply = "Done." if code == 200 else answer["error"]["message"]
+    await interaction.response.send_message(reply, ephemeral=True)
+
+
+async def feed():
+    """Jumps, deaths and the Watcher's thoughts, posted as they happen."""
+    await bot.wait_until_ready()
+    channel = bot.get_channel(FEED_CHANNEL) if FEED_CHANNEL else None
+    if channel is None:
+        return
+    seq = None
+    while not bot.is_closed():
+        try:
+            answer = await get("/events", since=seq or 0, types="journal,thought", event="FSDJump,Died", wait=25)
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            await asyncio.sleep(5)  # Void Compass isn't running yet
+            continue
+        first, seq = seq is None, answer["seq"]
+        if first:
+            continue  # start from now
+        for item in answer["events"]:
+            data = item["data"]
+            if item["type"] == "thought":
+                await channel.send(f'*{data["text"]}*')
+            elif data.get("event") == "FSDJump":
+                await channel.send(f'Jumped to **{data["StarSystem"]}** ({data.get("JumpDist", 0):.1f} ly)')
+            elif data.get("event") == "Died":
+                await channel.send("Ship lost. Back soon.")
+
+
+bot.run(TOKEN)
+```
+
+Add your own commands the same way: `/music` from `GET /api/v1/music`, `/hide` with `POST /api/v1/overlays/hide-all`, a cockpit pop-up with `POST /api/v1/overlays/notify`. Keep anything that changes things to `OWNER`, like `/say`.
+
 <!-- group: Reference -->
 
 ## App and status
@@ -493,7 +685,7 @@ GET /api/v1/events?types=journal,thought&wait=10
 
 Keep asking with `since` set to the `seq` from the last answer and `wait=25`: you'll hear each event within moments, with almost no traffic in between.
 
-**Example: tell Discord about every jump** (Python)
+**Example: tell Discord about every jump** (Python; a fuller feed and a bot are in [Discord](#discord))
 
 ```python
 import requests

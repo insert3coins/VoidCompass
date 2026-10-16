@@ -450,6 +450,16 @@ class DocsPageTests(unittest.TestCase):
             self.assertIn(piece, obs, piece)
 
 
+    def test_discord_has_its_own_section(self):
+        docs = (ROOT / "api.md").read_text(encoding="utf-8")
+        discord = docs.split("## Discord", 1)[1].split("\n## ", 1)[0]
+        for piece in ("### Webhook: your game, posted", "### Bot: commands for your server", "WEBHOOK = ",
+                      "app_commands", "@bot.tree.command", "/watcher/thought", "OWNER", "allowed_mentions"):
+            self.assertIn(piece, discord, piece)
+        for block in re.findall(r"```python\n(.*?)```", docs.replace("\r\n", "\n"), re.S):
+            compile(block, "api.md example", "exec")
+
+
 class DocsPageBrowserTests(ServerCase):
     @classmethod
     def setUpClass(cls):
