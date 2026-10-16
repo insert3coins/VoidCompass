@@ -19,6 +19,9 @@ from voidcompass.core import themes
 from voidcompass.core.config import get_active_profile
 from voidcompass.core.overlay_registry import OVERLAY_SPECS, OVERLAY_SPEC_BY_ATTR
 from voidcompass.core.version import APP_VERSION
+from voidcompass.exploration import bio_values
+from voidcompass.exploration.stellar_types import star_type_label
+from voidcompass.dashboard.dashboard_api_records_mixin import ApiRecordsMixin
 from voidcompass.services.local_api import ApiError, LocalApi, DEFAULT_PORT
 
 # Deck pages whose data the API never hands out: Settings holds the
@@ -40,7 +43,7 @@ def _plain(value):
         return None
 
 
-class DashboardApiMixin:
+class DashboardApiMixin(ApiRecordsMixin):
     # -- lifecycle -------------------------------------------------------------
     def _api_server(self):
         api = getattr(self, "_local_api", None)
@@ -97,6 +100,62 @@ class DashboardApiMixin:
         raw = data.get("raw") if isinstance(data.get("raw"), dict) else data
         self._api_last_journal_at = time.time()
         self._api_publish("journal", raw)
+        try:
+            found = self._api_exploration(raw)
+        except Exception:
+            logging.exception("Local API: exploration event not worked out")
+            found = None
+        if found:
+            self._api_publish("exploration", found)
+
+    def _api_exploration(self, raw):
+        """Moments the journal only hints at (5.5.7): a first discovery with
+        what it's worth, an organic analysed with what Vista Genomics pays,
+        and a first footfall. Each once per body (or species) per run."""
+        event = raw.get("event")
+        announced = self.__dict__.setdefault("_api_announced", set())
+        base = {"commander": getattr(self, "cmdr_name", "") or "",
+                "system": raw.get("StarSystem") or getattr(self, "current_sys", "") or ""}
+        if event == "Scan" and raw.get("WasDiscovered") is False and (raw.get("PlanetClass") or raw.get("StarType")):
+            key = ("discovery", raw.get("SystemAddress"), raw.get("BodyID"))
+            if key in announced:
+                return None
+            announced.add(key)
+            planet, star = raw.get("PlanetClass") or "", raw.get("StarType") or ""
+            terraformable = raw.get("TerraformState") == "Terraformable"
+            mass = raw.get("MassEM") or raw.get("StellarMass") or 0
+            first_mapped = raw.get("WasMapped") is False
+            value = self._get_body_value(planet, star, terraformable, mass, True, False, first_mapped, True)
+            mapped = None if star else self._get_body_value(planet, star, terraformable, mass, True, True, first_mapped, True)
+            return {**base, "kind": "first_discovery", "body": raw.get("BodyName") or "", "body_id": raw.get("BodyID"),
+                    "class": star_type_label(star, include_star=True) if star else planet, "star": bool(star),
+                    "terraformable": terraformable, "landable": bool(raw.get("Landable")),
+                    "first_footfall_available": bool(raw.get("Landable") and raw.get("WasFootfalled") is False),
+                    "value": value, "mapped_value": mapped}
+        items = getattr(self, "scan_items_by_id", None) or {}
+        if event == "ScanOrganic" and str(raw.get("ScanType") or "").casefold() == "analyse":
+            species = raw.get("Species_Localised") or raw.get("Species") or ""
+            key = ("bio", raw.get("SystemAddress"), raw.get("Body"), species)
+            if not species or key in announced:
+                return None
+            announced.add(key)
+            body = items.get(raw.get("Body")) or {}
+            value = bio_values.species_value(species)
+            # A first-footfall body always pays the first-logged bonus.
+            bonus = bool(body.get("first_footfall"))
+            return {**base, "kind": "bio_analysed", "body": body.get("name") or "", "body_id": raw.get("Body"),
+                    "species": species, "genus": raw.get("Genus_Localised") or "",
+                    "variant": raw.get("Variant_Localised") or "", "value": value, "first_logged_bonus": bonus,
+                    "estimated_value": None if value is None else value * (bio_values.FIRST_LOGGED_MULTIPLIER if bonus else 1)}
+        if event == "Disembark" and raw.get("OnPlanet") and not raw.get("OnStation"):
+            body = items.get(raw.get("BodyID")) or {}
+            key = ("footfall", raw.get("SystemAddress"), raw.get("BodyID"))
+            if not body.get("first_footfall") or key in announced:
+                return None
+            announced.add(key)
+            return {**base, "kind": "first_footfall", "body": raw.get("Body") or body.get("name") or "",
+                    "body_id": raw.get("BodyID")}
+        return None
 
     def _api_journal_batch(self, events):
         for data in events or ():

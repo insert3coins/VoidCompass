@@ -533,6 +533,196 @@ class DocsPageBrowserTests(ServerCase):
         self.assertEqual(self.errors, [])
 
 
+class ExplorationEventTests(unittest.TestCase):
+    """5.5.7: first discoveries with their value, organics with Vista
+    Genomics' price, and first footfalls, worked out for the event stream."""
+
+    def setUp(self):
+        self.app = Dashboard()
+        self.app.cmdr_name = "Jameson"
+        self.app.current_sys = "Colonia"
+        self.app._get_body_value = lambda *args: 52340
+        self.app.scan_items_by_id = {7: {"name": "Colonia 4 a", "first_footfall": True},
+                                     8: {"name": "Colonia 5", "first_footfall": False}}
+        self.published = []
+        self.app._api_publish = lambda kind, data: self.published.append((kind, data))
+
+    def hear(self, raw):
+        self.published.clear()
+        self.app._api_journal_event({"raw": {"SystemAddress": 1, "StarSystem": "Colonia", **raw}})
+        return [data for kind, data in self.published if kind == "exploration"]
+
+    def test_a_first_discovery_with_its_value_once(self):
+        found = self.hear({"event": "Scan", "BodyName": "Colonia 4 a", "BodyID": 7, "PlanetClass": "Rocky body",
+                           "WasDiscovered": False, "WasMapped": False, "Landable": True, "WasFootfalled": False})
+        self.assertEqual(len(found), 1)
+        self.assertEqual({key: found[0][key] for key in ("kind", "commander", "system", "body", "class", "value")},
+                         {"kind": "first_discovery", "commander": "Jameson", "system": "Colonia",
+                          "body": "Colonia 4 a", "class": "Rocky body", "value": 52340})
+        self.assertTrue(found[0]["first_footfall_available"])
+        self.assertEqual(self.hear({"event": "Scan", "BodyName": "Colonia 4 a", "BodyID": 7, "PlanetClass": "Rocky body",
+                                    "WasDiscovered": False}), [], "said once per body")
+        self.assertEqual(self.hear({"event": "Scan", "BodyID": 9, "PlanetClass": "Icy body", "WasDiscovered": True}), [])
+
+    def test_organics_carry_what_vista_genomics_pays(self):
+        from voidcompass.exploration import bio_values
+
+        species = "Bacterium Aurasus"
+        base = bio_values.species_value(species)
+        found = self.hear({"event": "ScanOrganic", "ScanType": "Analyse", "Body": 7, "Species_Localised": species,
+                           "Genus_Localised": "Bacterium"})[0]
+        self.assertEqual((found["kind"], found["body"], found["value"]), ("bio_analysed", "Colonia 4 a", base))
+        self.assertEqual((found["first_logged_bonus"], found["estimated_value"]), (True, base * 5),
+                         "a first-footfall body pays the first-logged bonus")
+        other = self.hear({"event": "ScanOrganic", "ScanType": "Analyse", "Body": 8, "Species_Localised": species})[0]
+        self.assertEqual((other["first_logged_bonus"], other["estimated_value"]), (False, base))
+        self.assertEqual(self.hear({"event": "ScanOrganic", "ScanType": "Log", "Body": 7, "Species_Localised": species}), [])
+
+    def test_a_first_footfall_on_a_body_nobody_walked(self):
+        found = self.hear({"event": "Disembark", "OnPlanet": True, "OnStation": False, "Body": "Colonia 4 a", "BodyID": 7})
+        self.assertEqual([(row["kind"], row["body"]) for row in found], [("first_footfall", "Colonia 4 a")])
+        self.assertEqual(self.hear({"event": "Disembark", "OnPlanet": True, "BodyID": 7}), [], "once")
+        self.assertEqual(self.hear({"event": "Disembark", "OnPlanet": True, "BodyID": 8}), [], "walked before")
+        self.assertEqual(self.hear({"event": "Disembark", "OnStation": True, "BodyID": 7}), [])
+
+    def test_the_stream_carries_them(self):
+        bus = EventBus()
+        bus.publish("exploration", {"kind": "first_footfall"})
+        self.assertEqual([row["type"] for row in bus.since(0)], ["exploration"])
+
+    def test_docs_have_powershell_for_it(self):
+        docs = (ROOT / "api.md").read_text(encoding="utf-8")
+        self.assertIn("## Windows PowerShell", docs)
+        self.assertIn("| `exploration` |", docs)
+        discord = docs.split("## Discord", 1)[1].split("\n## ", 1)[0]
+        for piece in ("**Windows PowerShell** (built into Windows)", "first_footfall", "estimated_value", '"The Watcher"'):
+            self.assertIn(piece, discord, piece)
+
+
+class RecordsRouteTests(ServerCase):
+    """5.5.7: every record Void Compass keeps, each with its own route."""
+
+    def setUp(self):
+        super().setUp()
+        self.asked = []
+        for name in ("api_exploration_bodies", "api_add_log", "api_mining_run", "api_leave_capsule", "api_bgs_track",
+                     "api_trading", "api_exploration_systems"):
+            setattr(self.provider, name, lambda *args, _name=name: self.asked.append((_name, *args)) or {})
+
+    def test_bodies_take_their_filters(self):
+        self.assertEqual(self.call("/exploration/bodies?system=Sol&first=true&bio=1&landable=no&min_value=5000&limit=5000")[0], 200)
+        # (system, first, landable, bio, footfall, min_value, limit): limit capped at 1000.
+        self.assertEqual(self.asked, [("api_exploration_bodies", "Sol", True, False, True, None, 5000, 1000)])
+
+    def test_writes_check_what_they_are_given(self):
+        self.assertEqual(self.call("/log", "POST", {"detail": "no title"})[0], 400)
+        self.assertEqual(self.call("/log", "POST", {"title": "  Found  it ", "detail": "here"})[0], 200)
+        self.assertEqual(self.call("/mining/run", "POST", {"action": "dance"})[0], 400)
+        self.assertEqual(self.call("/mining/run", "POST", {"action": "Start"})[0], 200)
+        self.assertEqual(self.call("/capsules", "POST", {"note": "hi", "wait": "forever"})[0], 400)
+        self.assertEqual(self.call("/capsules", "POST", {"note": "hi", "wait": "year"})[0], 200)
+        self.assertEqual(self.call("/bgs/track", "POST", {})[0], 400)
+        self.assertEqual(self.call("/bgs/track", "POST", {"faction": "Jameson Holdings", "tracked": False})[0], 200)
+        self.assertEqual(self.asked, [("api_add_log", "Found it", "here"), ("api_mining_run", "start"),
+                                      ("api_leave_capsule", "hi", "", "year"), ("api_bgs_track", "Jameson Holdings", False)])
+
+    def test_read_only_keeps_them_out(self):
+        self.api.configure(enabled=True, port=self.port, allow_control=False)
+        for path, body in (("/log", {"title": "x"}), ("/mining/run", {"action": "start"}), ("/capsules", {"note": "x"}),
+                           ("/bgs/track", {"faction": "x"}), ("/route/copy-next", None)):
+            self.assertEqual(self.call(path, "POST", body)[0], 403, path)
+        self.assertEqual(self.asked, [])
+
+    def test_every_record_is_on_the_index(self):
+        paths = {(row["method"], row["path"]) for row in self.call("")[1]["endpoints"]}
+        for method, path in (("GET", "exploration"), ("GET", "exploration/bodies"), ("GET", "exploration/systems"),
+                             ("GET", "exploration/route"), ("GET", "exploration/regions"), ("GET", "codex"),
+                             ("GET", "log"), ("POST", "log"), ("GET", "statistics"), ("GET", "contacts"),
+                             ("GET", "missions"), ("GET", "commander/fleet"), ("GET", "achievements"), ("GET", "trading"),
+                             ("GET", "colonisation"), ("GET", "carrier"), ("GET", "mining"), ("POST", "mining/run"),
+                             ("GET", "combat"), ("GET", "engineering"), ("GET", "powerplay"), ("GET", "route"),
+                             ("POST", "route/copy-next"), ("GET", "capsules"), ("POST", "capsules"), ("POST", "bgs/track")):
+            self.assertIn((method, f"/api/v1/{path}"), paths)
+
+
+class RecordsProviderTests(unittest.TestCase):
+    """The provider answers from Void Compass's own stores, whatever the deck shows."""
+
+    def setUp(self):
+        import sqlite3
+        import threading as _threading
+        from voidcompass.exploration.captains_log import CaptainsLog
+        from voidcompass.exploration.codex_index import CodexIndex
+        from voidcompass.exploration.travel_history import TravelHistory
+
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.app = Dashboard()
+        self.app.db_lock = _threading.Lock()
+        self.app.conn = sqlite3.connect(":memory:", check_same_thread=False)
+        self.addCleanup(self.app.conn.close)
+        self.app.conn.execute("CREATE TABLE scan_hud_items (system_name TEXT, body_id INTEGER, data_json TEXT, ts INTEGER)")
+        self.app.conn.execute("CREATE TABLE systems (name TEXT PRIMARY KEY, total INTEGER, scanned_count INTEGER)")
+        for ts, system, body in ((1, "Sol", {"name": "Earth", "body_id": 3, "class": "Earthlike body", "was_discovered": True,
+                                             "reward": 270000, "dss_reward": 1100000, "landable": False}),
+                                 (2, "Colonia", {"name": "Colonia 4 a", "body_id": 7, "class": "Rocky body", "was_discovered": False,
+                                                 "first_footfall": True, "landable": True, "bio_count": 2, "reward": 1500,
+                                                 "dss_reward": 16000, "genuses": ["Bacterium"]})):
+            self.app.conn.execute("INSERT INTO scan_hud_items VALUES (?,?,?,?)", (system, body["body_id"], json.dumps(body), ts))
+        self.app.conn.execute("INSERT INTO systems VALUES ('Colonia', 12, 9)")
+        self.app.travel_history = TravelHistory(str(Path(folder.name) / "travel_history.json"))
+        for stamp, system, pos in (("2026-10-01T10:00:00Z", "Sol", [0, 0, 0]), ("2026-10-02T10:00:00Z", "Colonia", [-9530.5, -910.28, 19808.13]),
+                                   ("2026-10-03T10:00:00Z", "Sol", [0, 0, 0])):
+            self.app.travel_history.observe({"event": "FSDJump", "timestamp": stamp, "StarSystem": system, "StarPos": pos, "JumpDist": 40})
+        self.app.codex_index = CodexIndex(str(Path(folder.name) / "codex_index.json"))
+        self.app.codex_index.observe({"event": "CodexEntry", "Category": "$Codex_Category_Biology;", "timestamp": "2026-10-02T11:00:00Z",
+                                      "Name": "$Codex_Ent_Bacterial_01_A_Name;", "Region": "$Codex_RegionName_18;",
+                                      "SystemAddress": 1, "BodyID": 7})
+        self.app.captains_log = CaptainsLog(str(Path(folder.name) / "captains_log.json"))
+        self.app.companion_state = {"unsold_exploration_cr": 1200000, "unsold_bio_cr": 1000000,
+                                    "unsold_bio_bonus_potential_cr": 4000000, "missions": {"1": {"name": "Courier"}},
+                                    "powerplay": {"power": "Aisling Duval", "selected_dossier": "x"}}
+
+    def test_exploration_and_its_history(self):
+        held = self.app.api_exploration()
+        self.assertEqual((held["unsold"]["cartographic_cr"], held["unsold"]["bio_total_cr"]), (1200000, 5000000))
+        self.assertEqual(held["records"]["systems_visited"], 2)
+        bodies = self.app.api_exploration_bodies(first=True)["bodies"]
+        self.assertEqual([(row["system"], row["body"], row["first_footfall"]) for row in bodies], [("Colonia", "Colonia 4 a", True)])
+        self.assertEqual([row["body"] for row in self.app.api_exploration_bodies(min_value=1000000)["bodies"]], ["Earth"])
+        self.assertEqual(self.app.api_exploration_bodies(system="sol", bio=True)["bodies"], [])
+        systems = self.app.api_exploration_systems()["systems"]
+        self.assertEqual([(row["system"], row["visits"]) for row in systems], [("Sol", 2), ("Colonia", 1)])
+        self.assertEqual((systems[1]["bodies"], systems[1]["bodies_scanned"]), (12, 9))
+        route = self.app.api_exploration_route(2)
+        self.assertEqual(([row["system"] for row in route["arrivals"]], route["total"]), (["Sol", "Colonia"], 3))
+        from voidcompass.exploration.galactic_regions import find_region
+
+        expected = {find_region(0, 0, 0)[1], find_region(-9530.5, -910.28, 19808.13)[1]}
+        regions = self.app.api_exploration_regions()
+        self.assertEqual({row["region"] for row in regions["regions"]}, expected)
+        self.assertEqual(regions["of"], 42)
+
+    def test_codex_log_and_records(self):
+        codex = self.app.api_codex()
+        self.assertEqual((codex["total"], codex["entries"][0]["logged"]), (1, 1))
+        self.app.api_add_log("Found it", "under the ice")
+        highlights = self.app.api_log()["sessions"][0]["highlights"]
+        self.assertEqual((highlights[-1]["title"], highlights[-1]["detail"]), ("Found it", "under the ice"))
+        self.assertEqual(self.app.api_missions()["missions"], [{"name": "Courier"}])
+        self.assertEqual(self.app.api_powerplay(), {"power": "Aisling Duval"}, "the deck's own selection stays home")
+        with self.assertRaises(ApiError) as caught:
+            self.app.api_statistics()
+        self.assertEqual(caught.exception.status, 404)
+
+    def test_missing_stores_say_so(self):
+        app = Dashboard()
+        for call in (app.api_carriers, app.api_mining, app.api_trading, app.api_colonisation, app.api_achievements):
+            with self.assertRaises(ApiError) as caught:
+                call()
+            self.assertEqual(caught.exception.status, 409, call.__name__)
+
+
 class BgsRouteTests(ServerCase):
     def setUp(self):
         super().setUp()

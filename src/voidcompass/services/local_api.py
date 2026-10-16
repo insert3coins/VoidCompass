@@ -39,7 +39,7 @@ MAX_BODY_BYTES = 64 * 1024
 MAX_STREAMS = 16
 MAIN_THREAD_TIMEOUT_S = 8.0
 EVENT_TYPES = ("journal", "status", "cargo", "navroute", "market", "shiplocker",
-               "feed", "thought", "overlay", "voice", "music")
+               "feed", "thought", "overlay", "voice", "music", "exploration")
 # Anything named like these is blanked before it leaves the app: the deck's
 # snapshot can carry the commander's EDSM, Inara and Raven keys and webhooks.
 _SECRET_NAME = re.compile(r"api_?key|apikey|webhook|token|secret|password", re.IGNORECASE)
@@ -54,7 +54,12 @@ PROVIDER_CALLS = (
     "api_watcher_poke", "api_voice", "api_voice_say", "api_voice_stop", "api_music",
     "api_music_library", "api_music_control", "api_galnet",
     "api_bgs", "api_bgs_factions", "api_bgs_faction", "api_bgs_systems", "api_bgs_system", "api_bgs_conflicts",
-    "api_bgs_activity",
+    "api_bgs_activity", "api_bgs_track",
+    "api_exploration", "api_exploration_bodies", "api_exploration_systems", "api_exploration_route",
+    "api_exploration_regions", "api_codex", "api_log", "api_add_log", "api_statistics", "api_contacts",
+    "api_missions", "api_fleet", "api_achievements", "api_trading", "api_colonisation", "api_carriers",
+    "api_mining", "api_mining_run", "api_combat", "api_engineering", "api_powerplay", "api_route",
+    "api_copy_next", "api_capsules", "api_leave_capsule",
 )
 
 
@@ -324,6 +329,34 @@ class LocalApi:
             ("GET", r"/bgs/systems/([0-9]{1,20})", self._bgs_system, False),
             ("GET", r"/bgs/conflicts", lambda req: self._call("api_bgs_conflicts"), False),
             ("GET", r"/bgs/activity", self._bgs_activity, False),
+            ("POST", r"/bgs/track", self._bgs_track, True),
+            ("GET", r"/exploration", lambda req: self._call("api_exploration"), False),
+            ("GET", r"/exploration/bodies", self._exploration_bodies, False),
+            ("GET", r"/exploration/systems", lambda req: self._call(
+                "api_exploration_systems", str(req.query.get("query") or "")[:80], _int(req.query.get("limit"), 100, 1, 1000)), False),
+            ("GET", r"/exploration/route", lambda req: self._call(
+                "api_exploration_route", _int(req.query.get("limit"), 100, 1, 5000)), False),
+            ("GET", r"/exploration/regions", lambda req: self._call("api_exploration_regions"), False),
+            ("GET", r"/codex", lambda req: self._call("api_codex", str(req.query.get("region") or "")[:60]), False),
+            ("GET", r"/log", lambda req: self._call("api_log", _int(req.query.get("limit"), 20, 1, 200)), False),
+            ("POST", r"/log", self._add_log, True),
+            ("GET", r"/statistics", lambda req: self._call("api_statistics"), False),
+            ("GET", r"/contacts", lambda req: self._call("api_contacts"), False),
+            ("GET", r"/missions", lambda req: self._call("api_missions"), False),
+            ("GET", r"/commander/fleet", lambda req: self._call("api_fleet"), False),
+            ("GET", r"/achievements", lambda req: self._call("api_achievements"), False),
+            ("GET", r"/trading", lambda req: self._call("api_trading", _int(req.query.get("days"), 30, 1, 3650)), False),
+            ("GET", r"/colonisation", lambda req: self._call("api_colonisation"), False),
+            ("GET", r"/carrier", lambda req: self._call("api_carriers"), False),
+            ("GET", r"/mining", lambda req: self._call("api_mining"), False),
+            ("POST", r"/mining/run", self._mining_run, True),
+            ("GET", r"/combat", lambda req: self._call("api_combat"), False),
+            ("GET", r"/engineering", lambda req: self._call("api_engineering"), False),
+            ("GET", r"/powerplay", lambda req: self._call("api_powerplay"), False),
+            ("GET", r"/route", lambda req: self._call("api_route"), False),
+            ("POST", r"/route/copy-next", lambda req: self._call("api_copy_next"), True),
+            ("GET", r"/capsules", lambda req: self._call("api_capsules"), False),
+            ("POST", r"/capsules", self._leave_capsule, True),
         ]
         return [(method, re.compile(f"^{re.escape(PREFIX)}{pattern}/?$"), handler, control)
                 for method, pattern, handler, control in rows]
@@ -441,6 +474,39 @@ class LocalApi:
             return self._call("api_bgs_activity", float(tick))
         except ValueError:
             raise ApiError(400, "tick is a tick's start, in Unix seconds (from periods[].start)")
+
+    def _bgs_track(self, req):
+        name = " ".join(str(req.body.get("faction") or "").split())[:160]
+        if not name:
+            raise ApiError(400, 'Name the faction: {"faction": "...", "tracked": true}')
+        return self._call("api_bgs_track", name, req.body.get("tracked", True) is not False)
+
+    def _exploration_bodies(self, req):
+        query = req.query
+        return self._call("api_exploration_bodies", str(query.get("system") or "")[:160], _flag(query.get("first")),
+                          _flag(query.get("landable")), _flag(query.get("bio")), _flag(query.get("footfall")),
+                          _int(query.get("min_value"), 0, 0, 10 ** 12), _int(query.get("limit"), 100, 1, 1000))
+
+    def _add_log(self, req):
+        title = " ".join(str(req.body.get("title") or "").split())[:120]
+        if not title:
+            raise ApiError(400, 'Give the entry a title: {"title": "...", "detail": "..."}')
+        return self._call("api_add_log", title, " ".join(str(req.body.get("detail") or "").split())[:1000])
+
+    def _mining_run(self, req):
+        action = str(req.body.get("action") or "").casefold()
+        if action not in ("start", "end"):
+            raise ApiError(400, 'action is "start" or "end"')
+        return self._call("api_mining_run", action)
+
+    def _leave_capsule(self, req):
+        note = " ".join(str(req.body.get("note") or "").split())
+        if not note:
+            raise ApiError(400, 'Write the note: {"note": "..."}')
+        wait = str(req.body.get("wait") or "none")
+        if wait not in CAPSULE_WAITS:
+            raise ApiError(400, f"wait is one of {', '.join(CAPSULE_WAITS)}")
+        return self._call("api_leave_capsule", note[:280], " ".join(str(req.body.get("system") or "").split())[:100], wait)
 
     def _companion(self, req, name):
         data = self._call("api_companion", name)
@@ -722,6 +788,18 @@ def _loopback(address):
         return ipaddress.ip_address(str(address).split("%", 1)[0]).is_loopback
     except ValueError:
         return False
+
+
+def _flag(value):
+    """A yes/no query parameter: None when it isn't given."""
+    if value in (None, ""):
+        return None
+    return str(value).casefold() in ("1", "true", "yes", "on")
+
+
+# The waits a time capsule can be left with (exploration.time_capsules.WAITS,
+# less "date", which needs a date picked on the deck).
+CAPSULE_WAITS = ("none", "week", "month", "six_months", "year", "two_years")
 
 
 def _hostname(value):

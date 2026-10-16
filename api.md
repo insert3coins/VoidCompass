@@ -115,6 +115,128 @@ Answers are JSON. When something goes wrong you get an HTTP status and a message
 
 Your EDSM, Inara and Raven Colonial keys, Discord webhooks and other secrets are never sent. Anything named like a key, token, webhook, secret or password reads `<hidden>`, and the Settings page isn't shared at all.
 
+## Windows PowerShell
+
+Every Windows PC has PowerShell, so these scripts need nothing installed: no Python, no libraries. They work in Windows PowerShell (built in) and PowerShell 7 alike.
+
+**Running a script**
+
+1. Paste the script into Notepad and save it with a `.ps1` ending, for example `Documents\VoidCompass\explore-popups.ps1`.
+2. Right-click the file and choose **Run with PowerShell**. A window opens and the script runs until you close it.
+3. If Windows says running scripts is disabled, run it this way instead (from **Start › Windows PowerShell**): `powershell -ExecutionPolicy Bypass -File "$HOME\Documents\VoidCompass\explore-popups.ps1"`. That allows this one script, this once.
+
+To start one with Windows, put a shortcut to that command in `shell:startup` (type it in the Run box, Win+R). On a Stream Deck, use **System › Open** with the same command.
+
+**Example: watch everything happen** (PowerShell)
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+$seq = 0
+while ($true) {
+  try {
+    $answer = Invoke-RestMethod "$api/events?since=$seq&wait=25&types=journal,exploration,thought" -TimeoutSec 40
+  } catch {
+    Start-Sleep -Seconds 5   # Void Compass isn't running yet
+    continue
+  }
+  $seq = $answer.seq
+  foreach ($item in $answer.events) {
+    $what = switch ($item.type) {
+      "journal"     { $item.data.event }
+      "exploration" { "$($item.data.kind): $($item.data.body)" }
+      default       { $item.data.text }
+    }
+    "{0:HH:mm:ss}  {1,-12} {2}" -f (Get-Date), $item.type, $what
+  }
+}
+```
+
+A live log of the journal, the Watcher's thoughts and Void Compass's own `exploration` events, one line each. Handy for finding the event names to use in your own scripts.
+
+**Example: exploration pop-ups in your cockpit** (PowerShell)
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+
+function Show-Popup($title, $message) {
+  $json = @{ title = $title; message = $message; severity = "success"; seconds = 10 } | ConvertTo-Json
+  Invoke-RestMethod -Method Post "$api/overlays/notify" -ContentType "application/json; charset=utf-8" `
+    -Body ([Text.Encoding]::UTF8.GetBytes($json)) | Out-Null
+}
+
+$seq = 0
+while ($true) {
+  try {
+    $answer = Invoke-RestMethod "$api/events?since=$seq&wait=25&types=exploration" -TimeoutSec 40
+  } catch {
+    Start-Sleep -Seconds 5
+    continue
+  }
+  $first = $seq -eq 0
+  $seq = $answer.seq
+  if ($first) { continue }   # start from now
+  foreach ($item in $answer.events) {
+    $d = $item.data
+    if ($d.kind -eq "first_discovery") {
+      $value = "{0:N0}" -f $d.value
+      Show-Popup "FIRST DISCOVERY" "$($d.body), $($d.class): $value cr"
+    } elseif ($d.kind -eq "bio_analysed" -and $null -ne $d.estimated_value) {
+      $value = "{0:N0}" -f $d.estimated_value
+      Show-Popup "SPECIES ANALYSED" "$($d.species): $value cr"
+    } elseif ($d.kind -eq "first_footfall") {
+      Show-Popup "FIRST FOOTFALL" "Nobody has walked $($d.body) before you."
+    }
+  }
+}
+```
+
+Each first discovery, organic and first footfall pops up over the game with its value. It needs **Allow control** on and the Cockpit Notifications overlay switched on.
+
+**Example: tonight's exploration earnings** (PowerShell)
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+$total = 0
+$seq = 0
+while ($true) {
+  try {
+    $answer = Invoke-RestMethod "$api/events?since=$seq&wait=25&types=exploration" -TimeoutSec 40
+  } catch {
+    Start-Sleep -Seconds 5
+    continue
+  }
+  $first = $seq -eq 0
+  $seq = $answer.seq
+  if ($first) { continue }
+  foreach ($item in $answer.events) {
+    $d = $item.data
+    $value = if ($d.kind -eq "bio_analysed") { $d.estimated_value } else { $d.value }
+    if ($value) {
+      $total += $value
+      $line = "{0:N0} cr held: {1}" -f $total, $d.body
+      Set-Content "$HOME\Documents\earnings.txt" $line
+      $line
+    }
+  }
+}
+```
+
+A running total of what tonight's first discoveries and organics are worth, written to `earnings.txt` for an OBS **Text (GDI+)** source (tick **Read from file**). The total is unsold data: what you'll collect at Universal Cartographics and Vista Genomics.
+
+**More PowerShell in these docs**
+
+- Your system and music as text files for OBS: [OBS Studio](#obs-studio)
+- A Discord feed of jumps, discoveries, organics and footfalls: [Discord](#discord)
+- BGS tick reports and danger alerts for a squadron: [BGS for your squadron](#bgs-for-your-squadron)
+- Your tracked factions, and this tick's report to the clipboard: [BGS](#bgs)
+- Hide every overlay from a Stream Deck key: [Overlays](#overlays)
+- Talking reminders through the Watcher's voice: [Voice](#voice)
+- A warning when you're carrying too much unsold data: [Exploration](#exploration)
+- "Next system" to the clipboard from a Stream Deck key: [Route and waypoints](#route-and-waypoints)
+- A Captain's log note, and a time capsule, from a key: [Captain's log](#captain-s-log), [Time capsules](#time-capsules)
+- One key to start and end a mining run: [Mining, combat and engineering](#mining-combat-and-engineering)
+- Today's trading profit: [Trading and colonisation](#trading-and-colonisation)
+
 ## OBS Studio
 
 Put your game on your stream, live, or let the game run OBS for you. Three ways, from the simplest to the most powerful. All of them work with OBS Studio 28 and later.
@@ -318,13 +440,23 @@ Bring your game into your Discord server, or let your server talk to the Watcher
 
 ### Webhook: your game, posted
 
-A webhook only posts, so there's nothing to log in to.
+A webhook only posts, so there's nothing to log in to. The feed below posts, under your commander's name:
+
+- your jumps;
+- first discoveries, with what the body is worth to Universal Cartographics;
+- organics you've analysed, with what Vista Genomics will pay (five times over on a first-footfall body);
+- first footfalls;
+- docking and the odd lost ship.
+
+The Watcher's thoughts go out under its own name, **The Watcher**.
 
 1. In Discord, open the channel's settings: **Edit Channel › Integrations › Webhooks › New Webhook**, then **Copy Webhook URL**.
-2. Paste it into the script below as `WEBHOOK`, and save it as `discord-feed.py`.
-3. Run `python discord-feed.py` and leave it running while you play.
+2. Pick Python or Windows PowerShell below (PowerShell is built into Windows: nothing to install). Paste your webhook link into the script.
+3. Save and run it, and leave it running while you play:
+   - Python: save as `discord-feed.py`, then `pip install requests` and `python discord-feed.py`.
+   - PowerShell: save as `discord-feed.ps1`, then right-click it and **Run with PowerShell** (or `powershell -ExecutionPolicy Bypass -File discord-feed.ps1`).
 
-**Example: a live feed for your channel** (Python, `pip install requests`)
+**Python** (`pip install requests`)
 
 ```python
 import time
@@ -343,20 +475,33 @@ def commander():
         return "Unknown"
 
 
+def credits(value):
+    return f"{value:,} cr" if value is not None else "value unknown"
+
+
 def words(item, cmdr):
-    """What to post for one event, or None to post nothing."""
+    """(who posts it, what it says) for one event, or None to post nothing."""
     data = item["data"]
+    who = f"CMDR {cmdr}"
     if item["type"] == "thought":
-        return f'The Watcher, to CMDR {cmdr}: *{data["text"]}*'
+        return "The Watcher", f'*{data["text"]}*'
+    if item["type"] == "exploration":
+        who = f'CMDR {data["commander"] or cmdr}'
+        if data["kind"] == "first_discovery":
+            return who, f'**{who}** made a first discovery: **{data["body"]}**, {data["class"]} ({credits(data["value"])})'
+        if data["kind"] == "bio_analysed":
+            bonus = ", first logged" if data["first_logged_bonus"] else ""
+            return who, f'**{who}** analysed **{data["species"]}** on {data["body"]} ({credits(data["estimated_value"])}{bonus})'
+        if data["kind"] == "first_footfall":
+            return who, f'**{who}** took the first footfall on **{data["body"]}**'
+        return None
     event = data.get("event")
     if event == "FSDJump":
-        return f'**CMDR {cmdr}** jumped {data.get("JumpDist", 0):.1f} ly to **{data["StarSystem"]}**'
-    if event == "Scan" and data.get("WasDiscovered") is False and data.get("PlanetClass"):
-        return f'**CMDR {cmdr}** made a first discovery: **{data["BodyName"]}**, {data["PlanetClass"]}'
+        return who, f'**{who}** jumped {data.get("JumpDist", 0):.1f} ly to **{data["StarSystem"]}**'
     if event == "Docked":
-        return f'**CMDR {cmdr}** docked at **{data["StationName"]}** in {data.get("StarSystem", "")}'
+        return who, f'**{who}** docked at **{data["StationName"]}** in {data.get("StarSystem", "")}'
     if event == "Died":
-        return f"**CMDR {cmdr}** lost their ship. Rebuy time."
+        return who, f"**{who}** lost their ship. Rebuy time."
     return None
 
 
@@ -365,8 +510,8 @@ seq = 0
 while True:
     try:
         answer = requests.get(f"{API}/events", timeout=40, params={
-            "since": seq, "types": "journal,thought", "wait": 25,
-            "event": "FSDJump,Scan,Docked,Died,LoadGame,Commander"}).json()
+            "since": seq, "types": "journal,exploration,thought", "wait": 25,
+            "event": "FSDJump,Docked,Died,LoadGame,Commander"}).json()
     except requests.RequestException:
         time.sleep(5)  # Void Compass isn't running yet
         continue
@@ -381,14 +526,92 @@ while True:
             # Logged in, or switched to another commander: post under their name.
             cmdr = data.get("Commander") or data.get("Name") or cmdr
             continue
-        text = words(item, cmdr)
-        if text:
+        post = words(item, cmdr)
+        if post:
+            author, text = post
             requests.post(WEBHOOK, timeout=10, json={
-                "content": text, "username": f"CMDR {cmdr}", "allowed_mentions": {"parse": []}})
+                "content": text, "username": author, "allowed_mentions": {"parse": []}})
             time.sleep(1)  # Discord lets a webhook post a few times a second at most
 ```
 
-Every post names the commander flying (it follows you if you switch commanders), and posts as **CMDR Name** in the channel. Change `words` to post what you like: any journal event works (add its name to `event`), and `item["type"]` can be `music` or `feed` too (add them to `types`).
+**Windows PowerShell** (built into Windows)
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+$webhook = "https://discord.com/api/webhooks/..."
+
+function Send-Discord($author, $text) {
+  $json = @{ content = $text; username = $author; allowed_mentions = @{ parse = @() } } | ConvertTo-Json -Compress
+  # Sent as UTF-8 bytes, so names with accents arrive intact.
+  Invoke-RestMethod -Method Post -Uri $webhook -ContentType "application/json; charset=utf-8" `
+    -Body ([Text.Encoding]::UTF8.GetBytes($json)) | Out-Null
+  Start-Sleep -Seconds 1   # Discord lets a webhook post a few times a second at most
+}
+
+function Get-Commander {
+  try { (Invoke-RestMethod "$api/commander" -TimeoutSec 10).name } catch { "Unknown" }
+}
+
+function Format-Credits($value) {
+  if ($null -eq $value) { "value unknown" } else { "{0:N0} cr" -f $value }
+}
+
+$cmdr = Get-Commander
+$seq = 0
+while ($true) {
+  try {
+    $answer = Invoke-RestMethod -TimeoutSec 40 -Uri ("$api/events?since=$seq&wait=25" +
+      "&types=journal,exploration,thought&event=FSDJump,Docked,Died,LoadGame,Commander")
+  } catch {
+    Start-Sleep -Seconds 5   # Void Compass isn't running yet
+    continue
+  }
+  $first = $seq -eq 0
+  $seq = $answer.seq
+  if ($first) { $cmdr = Get-Commander; continue }   # start from now, not from what happened before
+
+  foreach ($item in $answer.events) {
+    $d = $item.data
+    $who = "CMDR $cmdr"
+    if ($item.type -eq "thought") {
+      Send-Discord "The Watcher" "*$($d.text)*"
+    } elseif ($item.type -eq "exploration") {
+      if ($d.commander) { $who = "CMDR $($d.commander)" }
+      if ($d.kind -eq "first_discovery") {
+        Send-Discord $who "**$who** made a first discovery: **$($d.body)**, $($d.class) ($(Format-Credits $d.value))"
+      } elseif ($d.kind -eq "bio_analysed") {
+        $bonus = if ($d.first_logged_bonus) { ", first logged" } else { "" }
+        Send-Discord $who "**$who** analysed **$($d.species)** on $($d.body) ($(Format-Credits $d.estimated_value)$bonus)"
+      } elseif ($d.kind -eq "first_footfall") {
+        Send-Discord $who "**$who** took the first footfall on **$($d.body)**"
+      }
+    } elseif ($d.event -eq "LoadGame" -or $d.event -eq "Commander") {
+      # Logged in, or switched to another commander: post under their name.
+      $cmdr = if ($d.Commander) { $d.Commander } else { $d.Name }
+    } elseif ($d.event -eq "FSDJump") {
+      $jump = "{0:N1}" -f $d.JumpDist
+      Send-Discord $who "**$who** jumped $jump ly to **$($d.StarSystem)**"
+    } elseif ($d.event -eq "Docked") {
+      Send-Discord $who "**$who** docked at **$($d.StationName)** in $($d.StarSystem)"
+    } elseif ($d.event -eq "Died") {
+      Send-Discord $who "**$who** lost their ship. Rebuy time."
+    }
+  }
+}
+```
+
+What the channel shows (each post under **CMDR Jameson**, the thought under **The Watcher**):
+
+```text
+CMDR Jameson jumped 39.1 ly to Colonia
+CMDR Jameson made a first discovery: Colonia 4 a, Rocky body (52,340 cr)
+CMDR Jameson took the first footfall on Colonia 4 a
+CMDR Jameson analysed Bacterium Aurasus on Colonia 4 a (5,000,000 cr, first logged)
+CMDR Jameson docked at Jaques Station in Colonia
+The Watcher: Another star. It's doing its best.
+```
+
+The first-discovery and organic lines come from the `exploration` events (see [Live events](#live-events)): Void Compass works out the values and footfalls, so a script only has to post them. To post something else, add any journal event to `event` and a line for it; `music` and `feed` work as `types` too.
 
 ### Bot: commands for your server
 
@@ -536,11 +759,12 @@ There are two ways, and you can use both:
 #### Way 1: tick reports and danger alerts
 
 1. In Discord, pick the squadron's BGS channel. **Edit Channel › Integrations › Webhooks › New Webhook**, give it a name (say "BGS"), and **Copy Webhook URL**.
-2. Save the script below as `bgs-reports.py`, and paste the webhook link in as `WEBHOOK`.
-3. Install its one library: `pip install requests`.
-4. Run it: `python bgs-reports.py`. Leave the window open while you play (minimise it).
+2. Pick Python or Windows PowerShell below and paste the webhook link into the script.
+3. Save and run it, and leave the window open while you play (minimise it):
+   - Python: save as `bgs-reports.py`, then `pip install requests` and `python bgs-reports.py`.
+   - PowerShell: save as `bgs-reports.ps1`, then right-click it and **Run with PowerShell**.
 
-**Example: bgs-reports.py** (Python)
+**Python** (`pip install requests`)
 
 ```python
 import time
@@ -579,6 +803,47 @@ while True:
             post(f'**{alert["faction"]}** in {alert["system"]}: {alert["text"]}')
             time.sleep(1)
     time.sleep(300)  # the BGS moves once a day; every five minutes is plenty
+```
+
+**Windows PowerShell** (built into Windows)
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+$webhook = "https://discord.com/api/webhooks/..."
+
+function Send-Discord($text) {
+  if ($text.Length -gt 1900) { $text = $text.Substring(0, 1900) }
+  $json = @{ content = $text; username = "BGS"; allowed_mentions = @{ parse = @() } } | ConvertTo-Json -Compress
+  Invoke-RestMethod -Method Post -Uri $webhook -ContentType "application/json; charset=utf-8" `
+    -Body ([Text.Encoding]::UTF8.GetBytes($json)) | Out-Null
+  Start-Sleep -Seconds 1
+}
+
+$tick = $null
+$warned = @{}
+while ($true) {
+  try {
+    $bgs = Invoke-RestMethod "$api/bgs" -TimeoutSec 20
+  } catch {
+    Start-Sleep -Seconds 60   # Void Compass isn't running, or the BGS record isn't open yet
+    continue
+  }
+  $current = $bgs.tick.current
+  if ($null -ne $tick -and $current -ne $tick) {
+    # A new tick: post what you did in the one that just ended.
+    $detail = (Invoke-RestMethod "$api/bgs/activity?tick=$tick" -TimeoutSec 20).detail
+    if ($detail -and $detail.systems.Count -gt 0) { Send-Discord $detail.report }
+  }
+  $tick = $current
+  foreach ($alert in $bgs.alerts) {
+    $key = "$($alert.system)|$($alert.faction)|$($alert.text)"
+    if ($alert.level -eq "danger" -and -not $warned.ContainsKey($key)) {
+      $warned[$key] = $true
+      Send-Discord "**$($alert.faction)** in $($alert.system): $($alert.text)"
+    }
+  }
+  Start-Sleep -Seconds 300   # the BGS moves once a day; every five minutes is plenty
+}
 ```
 
 What the channel sees when a tick ends: your work during it.
@@ -707,6 +972,11 @@ Who you are, where you are, and the ship you're in, as the game last told Void C
 | GET | `/api/v1/commander` | Name, FID, credits, ranks, reputation, ship, home system and where you are |
 | GET | `/api/v1/commander/location` | Where you are: system, body, station, docked or landed, on foot, surface position |
 | GET | `/api/v1/commander/ship` | Your ship now: fuel, hull, cargo, frame shift drive, heat |
+| GET | `/api/v1/commander/fleet` | Your stored ships, and the loadout of each ship you've flown |
+| GET | `/api/v1/statistics` | The game's own statistics for you (the Statistics journal event), and when they last came in |
+| GET | `/api/v1/missions` | Your active missions |
+| GET | `/api/v1/achievements` | Your Void Compass achievements: unlocked, in progress, and when |
+| GET | `/api/v1/contacts` | Deep space contacts in this system: ships, carriers, signals, as the Contact Scope shows them |
 
 ```http
 GET /api/v1/commander/location
@@ -810,6 +1080,124 @@ for jump in sorted(jumps, key=lambda j: j["JumpDist"], reverse=True)[:10]:
 
 `/journal/status`, `/journal/cargo`, `/journal/navroute`, `/journal/market` and `/journal/shiplocker` give the newest copy of each file exactly as the game wrote it. If the game hasn't written one yet, you get `404`.
 
+## Exploration
+
+Everything you've found, kept by Void Compass across every session: the value you're carrying, every body you've scanned, every system you've been to, the regions you've crossed, and your Codex.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/exploration` | Unsold data you're carrying (cartographic and organic, in credits), your last sales, your records, and organic sampling in progress |
+| GET | `/api/v1/exploration/bodies` | Bodies you've scanned, newest first, filtered as you like (below) |
+| GET | `/api/v1/exploration/systems` | Systems you've been to: visits, first and last arrival, position, star class, bodies found (`query`, `limit`) |
+| GET | `/api/v1/exploration/route` | Your arrivals, newest first: jumps, carrier jumps and logins (`limit`, default 100) |
+| GET | `/api/v1/exploration/regions` | The galaxy's regions you've been to, with your first and last arrival in each |
+| GET | `/api/v1/codex` | Your Codex: each organic logged, how often, when, and in which regions (`region` to narrow) |
+
+`/api/v1/exploration/bodies` takes:
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `system` | all | Only this system |
+| `first` | either | `true`: only first discoveries; `false`: only ones charted before you |
+| `landable` | either | `true` or `false` |
+| `bio` | either | `true`: only bodies with biological signals |
+| `footfall` | either | `true`: only bodies nobody had set foot on when you scanned them |
+| `min_value` | `0` | Only bodies worth at least this many credits (mapped value where there is one) |
+| `limit` | `100` | At most this many (1 to 1000) |
+
+Each body has `system`, `body`, `class`, `distance_ls`, `landable`, `terraformable`, `first_discovery`, `first_footfall`, `mapped`, `value`, `mapped_value`, `bio_signals`, `geo_signals`, `genera`, `gravity_g`, `temperature_k`, `atmosphere` and `scanned_at`. A search reads your most recent 25,000 bodies; `more` says whether there could be more to find.
+
+```http
+GET /api/v1/exploration/bodies?first=true&bio=true&limit=1
+```
+
+```json
+{"bodies": [{"system": "Myliengai YG-Z b41-0", "body": "B 4", "class": "Icy body", "distance_ls": 457429.97,
+             "landable": true, "first_discovery": true, "first_footfall": true, "mapped": true,
+             "value": 1803, "mapped_value": 16952, "bio_signals": 2, "genera": ["Bacterium", "Fonticulua"]}],
+ "searched": 61, "more": true}
+```
+
+For the moment something is found, listen for the `exploration` events in [Live events](#live-events): a first discovery with its value, an organic with its price, a first footfall.
+
+**Example: your best unsold finds** (Python, `pip install requests`)
+
+```python
+import requests
+
+API = "http://127.0.0.1:7380/api/v1"
+
+held = requests.get(f"{API}/exploration").json()["unsold"]
+print(f'Carrying {held["cartographic_cr"]:,} cr of cartographic data and {held["bio_total_cr"]:,} cr of organics')
+
+best = requests.get(f"{API}/exploration/bodies", params={"first": "true", "min_value": 500000, "limit": 10}).json()
+for body in best["bodies"]:
+    print(f'{body["mapped_value"] or body["value"]:>12,} cr  {body["system"]} {body["body"]}  {body["class"]}')
+```
+
+**Example: don't lose it: a warning before you take risks** (PowerShell)
+
+```powershell
+$held = (Invoke-RestMethod http://127.0.0.1:7380/api/v1/exploration).unsold
+$total = $held.cartographic_cr + $held.bio_total_cr
+if ($total -gt 50000000) {
+  $value = "{0:N0}" -f $total
+  $note = @{ title = "DATA AT RISK"; message = "$value cr unsold. Sell before you do anything brave."; severity = "warn" } | ConvertTo-Json
+  Invoke-RestMethod -Method Post http://127.0.0.1:7380/api/v1/overlays/notify -ContentType "application/json" -Body $note
+}
+```
+
+Run it from a Stream Deck key before a risky landing, or every half hour from Task Scheduler.
+
+## Captain's log
+
+The Captain's log keeps each session: where it started and ended, jumps and distance, discoveries, Codex entries, trade, sales, deaths, and the session's highlights.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/log` | Your sessions, newest first, each with its numbers and highlights (`limit`, default 20) |
+| POST | `/api/v1/log` | Add a note to this session's log: `{"title": "Found a crashed ship", "detail": "Under the ice"}` |
+
+**Example: a log note from a Stream Deck key** (PowerShell)
+
+```powershell
+$note = @{ title = "Stream highlight"; detail = "Chat called this one" } | ConvertTo-Json
+Invoke-RestMethod -Method Post http://127.0.0.1:7380/api/v1/log -ContentType "application/json" -Body $note
+```
+
+## Route and waypoints
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/route` | Your next destination, your waypoints, and the expedition you're on |
+| POST | `/api/v1/route/copy-next` | Copy the next system to the clipboard, ready to paste into the galaxy map |
+
+The plotted route itself, jump by jump, is `/api/v1/journal/navroute`.
+
+**Example: "next system" on a Stream Deck key** (PowerShell)
+
+```powershell
+(Invoke-RestMethod -Method Post http://127.0.0.1:7380/api/v1/route/copy-next).system
+```
+
+Press it, open the galaxy map, paste. It answers `409` when there's nothing plotted.
+
+## Time capsules
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/capsules` | Your time capsules, newest first: where, when, and whether they've opened |
+| POST | `/api/v1/capsules` | Leave one: `{"note": "Remember the view from here", "system": "Colonia", "wait": "year"}` |
+
+A sealed capsule's note stays sealed: `/capsules` shows its note only once it has opened. `system` is where it waits (here, if you leave it out). `wait` is how long before it can open: `none`, `week`, `month`, `six_months`, `year` or `two_years`. A note is up to 280 characters.
+
+**Example: a capsule from your stream chat** (PowerShell)
+
+```powershell
+$capsule = @{ note = "Chat says hi from a year ago"; wait = "year" } | ConvertTo-Json
+Invoke-RestMethod -Method Post http://127.0.0.1:7380/api/v1/capsules -ContentType "application/json" -Body $capsule
+```
+
 ## Live events
 
 Two ways to hear things the moment they happen: ask and wait (simple, works everywhere), or open a stream (instant, best for web pages and OBS).
@@ -835,6 +1223,7 @@ Every event looks like this:
 | `overlay` | An overlay was switched, moved or faded, or all were hidden or shown |
 | `voice` | The voice said something: `text`, and `from` (`watcher` or `api`) |
 | `music` | The music started, stopped or changed track: `playing`, `track_id`, `title`, `artist` |
+| `exploration` | Worked out by Void Compass from the journal, with `commander` and `system`. `kind` is `first_discovery` (`body`, `class`, `value` in credits, `mapped_value` once mapped, `first_footfall_available`), `bio_analysed` (`species`, `genus`, `variant`, `body`, `value`, `estimated_value` that Vista Genomics pays, `first_logged_bonus`) or `first_footfall` (`body`) |
 
 ### Ask and wait
 
@@ -920,9 +1309,66 @@ curl -X POST -H "Content-Type: application/json" ^
 
 `severity` is `info`, `warn`, `fail` or `success`. (The `^` carries a command on to the next line in Command Prompt; in PowerShell use a backtick.)
 
+## Trading and colonisation
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/trading` | Your trading: profit totals (the range, today, all time), per day, by commodity, best routes and stations, sessions, profit per hour, your best trade, recent trades (`days`: 1, 7, 30, 90, 365 or 3650) |
+| GET | `/api/v1/colonisation` | Your construction projects: progress, what's still needed, trips left, and what your carriers hold for them |
+
+`/trading` also carries `route`: the next step of the trade route you're following, if any.
+
+**Example: today's trading profit** (PowerShell)
+
+```powershell
+$trading = Invoke-RestMethod "http://127.0.0.1:7380/api/v1/trading?days=1"
+"Today: {0:N0} cr trading profit, {1:N0} t traded" -f $trading.summary.totals.today.trade_profit, $trading.summary.totals.today.traded_t
+```
+
+## Carrier
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/carrier` | Every carrier you run (fleet and squadron): where it is, its status, fuel, jump plans, departure time and services |
+
+**Example: carrier status for your squadron** (Python, `pip install requests`)
+
+```python
+import requests
+
+for carrier in requests.get("http://127.0.0.1:7380/api/v1/carrier").json()["carriers"]:
+    where = carrier["system"] or "somewhere"
+    going = f', jumping to {carrier["jump_destination"]}' if carrier.get("jump_destination") else ""
+    print(f'{carrier["name"] or carrier["callsign"]}: {where}, tritium {carrier["fuel_level"]}t{going}')
+```
+
+## Mining, combat and engineering
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/mining` | The mining run in progress (or none), your plan, the hopper, ring and surface scans, and past runs |
+| POST | `/api/v1/mining/run` | Start or end a mining run: `{"action": "start"}` or `{"action": "end"}` |
+| GET | `/api/v1/combat` | The combat session in progress, its target, and past sessions |
+| GET | `/api/v1/engineering` | Your materials (raw, manufactured, encoded), engineers, pinned blueprints, on-foot goals, ship locker, and your Build Planner plans |
+
+**Example: one key to start and end a mining run** (PowerShell)
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+$action = if ((Invoke-RestMethod "$api/mining").active) { "end" } else { "start" }
+$body = @{ action = $action } | ConvertTo-Json
+Invoke-RestMethod -Method Post "$api/mining/run" -ContentType "application/json" -Body $body
+```
+
+## Powerplay
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/powerplay` | Your power, rank, merits, salary, cycles, objectives, cargo and merit history, and the system intel you've gathered |
+
 ## BGS
 
-The background simulation as Void Compass has recorded it: every faction and system you've seen, your tracked factions and their alerts, conflicts, and the work you've done each tick. It reads the same record as the BGS page, whatever tab the deck has open, and only reads, so it works with Allow control off.
+The background simulation as Void Compass has recorded it: every faction and system you've seen, your tracked factions and their alerts, conflicts, and the work you've done each tick. It reads the same record as the BGS page, whatever tab the deck has open, and only reads (all but tracking a faction), so it works with Allow control off.
 
 | Method | Path | What it does |
 |---|---|---|
@@ -933,6 +1379,7 @@ The background simulation as Void Compass has recorded it: every faction and sys
 | GET | `/api/v1/bgs/systems/{address}` | One system by its SystemAddress: its factions, influence history (`days`, default 90) and your work there |
 | GET | `/api/v1/bgs/conflicts` | Wars, civil wars and elections in progress or pending, tracked factions first |
 | GET | `/api/v1/bgs/activity` | Your work per tick: the ticks with work, and one tick's detail (`tick`, default the newest) |
+| POST | `/api/v1/bgs/track` | Track a faction, or stop: `{"faction": "Jameson Holdings", "tracked": true}` |
 
 Influence is a fraction: `0.423` is 42.3%. Times (`ts`, a tick's `start`) are Unix seconds. An alert's `level` is `danger`, `warn`, `good` or `info`, worst first, with its words in `text`.
 
