@@ -26,7 +26,9 @@ class Inline:
         self.target(*self.args)
 
 
-class RestartTests(unittest.TestCase):
+class InaraHarness(unittest.TestCase):
+    """An uploader on temp files, its sends answered as Inara would."""
+
     def setUp(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
@@ -68,6 +70,8 @@ class RestartTests(unittest.TestCase):
         up.observe("Rank", {"timestamp": stamp(), "Combat": 3, "Trade": 5, "Explore": 8}, startup=startup)
         up.flush(force=True)
 
+
+class RestartTests(InaraHarness):
     def test_a_restart_sends_only_what_changed(self):
         first, session = self.uploader()
         self.play(first, startup=False)

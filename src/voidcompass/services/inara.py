@@ -18,6 +18,12 @@ What Inara has taken is remembered across restarts (5.5.7): restarting Void
 Compass mid-session re-reads the journal, and the unchanged credits, ranks,
 ship and materials used to go again each time. A new game session (LoadGame
 while running) still sends the whole state once, as Inara asks.
+
+Each piece of state has a slot of its own (5.5.9): a ship, a suit loadout, a
+mission, each inventory category (its set and its reset share one). The
+locker's categories once shared a slot, so the game's frequent ShipLocker
+rewrites sent Items and Data resets over and over, and one category could
+replace another still waiting.
 """
 from __future__ import annotations
 
@@ -38,12 +44,8 @@ MAX_BATCH = 100
 MIN_GAP_S = 60.0
 TIMER_S = 15.0
 MAX_AGE = timedelta(days=30)
-# State events where each copy is about something different, so a newer one
-# doesn't replace an older one still waiting.
-KEEP_EVERY = frozenset({"setCommanderShip", "setCommanderShipLoadout", "setCommanderShipTransfer", "setCommanderSuitLoadout",
-                        "setCommanderReputationMinorFaction", "setCommunityGoal",
-                        "setCommanderCommunityGoalProgress", "setCommanderMissionCompleted",
-                        "setCommanderMissionFailed", "setCommanderMissionAbandoned"})
+# The remembered-state file's layout; an older one is ignored (5.5.9).
+SENT_VERSION = 2
 # Journal events after which a batch should go (Inara asks for these).
 FLUSH_AFTER = frozenset({"LoadGame", "Docked", "FSDJump", "CarrierJump", "Shutdown"})
 
@@ -643,25 +645,50 @@ class InaraUploader:
             for row in data:
                 self._ranks.setdefault(row["rankName"], {}).update(row)
             data = [dict(row) for row in self._ranks.values()]
+        key = None
         if name.startswith(("set", "reset")):
-            # State goes once: unchanged since it was last sent, it waits.
             key = self._state_key(name, data)
-            signature = json.dumps(data, sort_keys=True, default=str)
-            if self._sent_state.get(key) == signature:
+            signature = self._signature(name, data)
+            with self._lock:
+                delivered = self._delivered.get(key)
+            if signature == delivered:
+                # Inara has this already: an older copy still waiting is out of date.
+                self._sent_state[key] = signature
+                with self._lock:
+                    self._queue = [row for row in self._queue if self._row_key(row) != key]
                 return False
+            if self._sent_state.get(key) == signature:
+                return False  # unchanged since it was queued
             self._sent_state[key] = signature
         with self._lock:
-            # A newer copy of the same state replaces one still waiting.
-            if name.startswith("set") and name not in KEEP_EVERY:
-                self._queue = [row for row in self._queue if row["eventName"] != name]
+            if key is not None:
+                # A newer copy of the same state replaces one still waiting.
+                self._queue = [row for row in self._queue if self._row_key(row) != key]
             self._queue.append({"eventName": name, "eventTimestamp": stamp, "eventData": data})
             self._last_queued = self._clock()
         return True
 
     @staticmethod
+    def _signature(name, data):
+        return f"{name} {json.dumps(data, sort_keys=True, default=str)}"
+
+    @classmethod
+    def _row_key(cls, row):
+        name = row.get("eventName") or ""
+        return cls._state_key(name, row.get("eventData")) if name.startswith(("set", "reset")) else None
+
+    @staticmethod
     def _state_key(name, data):
-        """Which piece of state an event is: one per ship, goal, suit loadout…"""
-        if name in ("setCommanderShip", "setCommanderShipLoadout"):
+        """Which piece of state an event is: one per ship, goal, suit loadout,
+        mission, inventory category…"""
+        if name in ("setCommanderInventory", "setCommanderInventoryCargo", "resetCommanderInventory"):
+            # A category's list and its reset share a slot: the later one stands.
+            first = data[0] if isinstance(data, list) and data else data if isinstance(data, dict) else {}
+            kind = first.get("itemType") or ("Commodity" if name == "setCommanderInventoryCargo" else "")
+            return f"inventory:{kind}:{first.get('itemLocation') or ''}"
+        if name in ("setCommanderMissionCompleted", "setCommanderMissionFailed", "setCommanderMissionAbandoned"):
+            return f"{name}:{(data or {}).get('missionGameID')}"
+        if name in ("setCommanderShip", "setCommanderShipLoadout", "setCommanderShipTransfer"):
             return f"{name}:{(data or {}).get('shipGameID')}"
         if name in ("setCommunityGoal", "setCommanderCommunityGoalProgress"):
             return f"{name}:{(data or {}).get('communitygoalGameID')}"
@@ -738,7 +765,7 @@ class InaraUploader:
                 saved = json.load(handle)
         except (OSError, ValueError):
             return
-        state = saved.get("state") if isinstance(saved, dict) else None
+        state = saved.get("state") if isinstance(saved, dict) and saved.get("version") == SENT_VERSION else None
         if isinstance(state, dict):
             with self._lock:
                 self._delivered = {str(key): str(value) for key, value in state.items()}
@@ -750,7 +777,7 @@ class InaraUploader:
         if not path:
             return
         with self._lock:
-            payload = {"state": dict(self._delivered)}
+            payload = {"version": SENT_VERSION, "state": dict(self._delivered)}
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             temporary = f"{path}.tmp"
@@ -812,8 +839,7 @@ class InaraUploader:
             with self._lock:
                 for sent in batch:
                     if sent["eventName"].startswith(("set", "reset")) and id(sent) not in refused:
-                        self._delivered[self._state_key(sent["eventName"], sent["eventData"])] = json.dumps(
-                            sent["eventData"], sort_keys=True, default=str)
+                        self._delivered[self._row_key(sent)] = self._signature(sent["eventName"], sent["eventData"])
             self._save_sent()
             self.stats["sent"] += len(batch) - len(failed)
             self.stats["failed"] += len(failed)

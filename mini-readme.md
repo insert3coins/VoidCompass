@@ -1,17 +1,16 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.8 // Waypoints by Wire
-**Release Date:** 2026-Oct-17
+## v5.5.9 // Quieter Inara
+**Release Date:** Not yet released
 
-* **New: Explore & Survey's ROUTE tab in the Local API.** Your own tools can now work your route, not just read it.
-  * **Waypoints:** add one (the system you're in takes its position from the game), rename it or change its note, mark it visited, move it up or down, remove it, or clear the list.
-  * **Return later:** the places worth coming back to (unfinished organics, worlds to map, systems not fully scanned), added to your waypoints or put aside, one at a time.
-  * **The neutron route:** read the route last plotted on the ROUTE tab, and add it to your waypoints. Plotting a new one still happens on the deck, since it asks Spansh.
-  * **The deck follows at once:** changes go through the ROUTE tab's own buttons, so the tab and the HUD update as you make them.
-  * **For your Stream Deck:** the API docs have keys for "remember this place" and "tick off the next waypoint", and a script that turns every return-later place into a waypoint.
+* **Fixed: Inara got far too much.** The game rewrites your ship locker every time you board, disembark or use the locker, and each time Void Compass sent Inara your empty locker categories again: about 200 of a session's 263 events. A restart in the middle of a session also sent most of your state again, and one locker category could replace another before it went.
+  * **Each piece of state is kept on its own:** every ship, suit loadout, mission and locker category. Only what has really changed goes.
+  * **A session played start to finish now sends about 60 events,** most of them your jumps. A restart in the middle sends nothing new.
+  * **After this update,** Inara gets your full state once more (the old memory of what was sent is set aside), then stays quiet.
 
 ## Earlier releases
 
+* **v5.5.8** — Waypoints by Wire: Explore & Survey's ROUTE tab in the Local API (add, mark visited, rename, move and remove waypoints; return-later places to waypoints or put aside; import the last plotted neutron route), with the deck following at once, and Stream Deck keys in the API docs.
 * **v5.5.7** — The Watcher, Refined: a sharper, smoother Watcher (a star for a pupil, a galaxy of light, glass with depth, springier glances, its own frame rate), about 2,500 new lines, and words for fights in the ship and on foot; the Local API (no key, local pages only, a proper docs page with OBS, Discord, BGS and Windows PowerShell guides; every record on its own endpoint; exploration events with values; read-only BGS); API thoughts spoken when the voice is on; and Inara no longer resent the same data after a restart.
 * **v5.5.6** — Steady Buttons: buttons no longer blink or lose clicks when a page refreshes (no fade-in on newly drawn buttons, Explore & Survey's unchanged panels kept, and no redraw while a button is held).
 * **v5.5.5** — Every Word Its Size: each overlay's own text size in Overlay Studio; postcard text sizes (lettering, note, details); delete postcards to the Recycle Bin; editing a postcard into your theme keeps its angle and name; MAKE EDITABLE finds screenshots for commanders far from UTC, and postcards restored without their picture get it back; and a fix for the postcard studio's previews locking the system up.
