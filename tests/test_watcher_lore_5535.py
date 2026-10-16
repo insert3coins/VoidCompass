@@ -139,6 +139,7 @@ class TellingTests(unittest.TestCase):
         self.assertIsNotNone(heard, "a lull came, and with it the story")
         self.assertGreaterEqual(heard - mind._session_start, watcher_lore.SETTLE_S)
         mind._in_danger = True
+        mind._status_danger = True  # the game still warns of danger: the fight goes on (5.5.7)
         mind._last_interesting = clock.now - 3600
         mind._last_spoke = clock.now - 3600
         clock.now += watcher_lore.GAP_S + 1
