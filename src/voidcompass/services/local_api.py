@@ -60,6 +60,8 @@ PROVIDER_CALLS = (
     "api_missions", "api_fleet", "api_achievements", "api_trading", "api_colonisation", "api_carriers",
     "api_mining", "api_mining_run", "api_combat", "api_engineering", "api_powerplay", "api_route",
     "api_copy_next", "api_capsules", "api_leave_capsule",
+    "api_add_waypoint", "api_change_waypoint", "api_delete_waypoint", "api_clear_waypoints", "api_return_later",
+    "api_return_later_action", "api_neutron_route", "api_import_neutron_route",
 )
 
 
@@ -355,6 +357,15 @@ class LocalApi:
             ("GET", r"/powerplay", lambda req: self._call("api_powerplay"), False),
             ("GET", r"/route", lambda req: self._call("api_route"), False),
             ("POST", r"/route/copy-next", lambda req: self._call("api_copy_next"), True),
+            ("POST", r"/route/waypoints", self._add_waypoint, True),
+            ("POST", r"/route/waypoints/clear", self._clear_waypoints, True),
+            ("POST", r"/route/waypoints/([0-9]{1,4})", self._change_waypoint, True),
+            ("POST", r"/route/waypoints/([0-9]{1,4})/delete",
+             lambda req, index: self._call("api_delete_waypoint", int(index)), True),
+            ("GET", r"/route/return-later", lambda req: self._call("api_return_later"), False),
+            ("POST", r"/route/return-later/(waypoint|dismiss)", self._return_later, True),
+            ("GET", r"/route/neutron", lambda req: self._call("api_neutron_route"), False),
+            ("POST", r"/route/neutron/import", lambda req: self._call("api_import_neutron_route"), True),
             ("GET", r"/capsules", lambda req: self._call("api_capsules"), False),
             ("POST", r"/capsules", self._leave_capsule, True),
         ]
@@ -368,6 +379,7 @@ class LocalApi:
             path = pattern.pattern[1:-3].replace("\\", "")
             path = path.replace("([a-z0-9-]{1,40})", "{page}").replace("([a-z0-9_-]{1,40})", "{overlay}")
             path = path.replace("([^/]{1,240})", "{name}").replace("([0-9]{1,20})", "{address}")
+            path = path.replace("([0-9]{1,4})", "{n}")
             path = re.sub(r"\(([a-z|-]+)\)", r"{\1}", path)
             out.append({"method": method, "path": path or PREFIX, "control": control})
         return out
@@ -498,6 +510,41 @@ class LocalApi:
         if action not in ("start", "end"):
             raise ApiError(400, 'action is "start" or "end"')
         return self._call("api_mining_run", action)
+
+    def _add_waypoint(self, req):
+        name = " ".join(str(req.body.get("name") or "").split())[:140]
+        if not name:
+            raise ApiError(400, 'Name the system: {"name": "Colonia", "note": "..."}')
+        return self._call("api_add_waypoint", name, " ".join(str(req.body.get("note") or "").split())[:1000])
+
+    def _change_waypoint(self, req, index):
+        changes = {}
+        if "name" in req.body:
+            changes["name"] = " ".join(str(req.body.get("name") or "").split())[:140]
+            if not changes["name"]:
+                raise ApiError(400, "A waypoint needs a name")
+        if "note" in req.body:
+            changes["note"] = " ".join(str(req.body.get("note") or "").split())[:1000]
+        if "visited" in req.body:
+            changes["visited"] = req.body.get("visited") is True
+        if "move" in req.body:
+            if req.body.get("move") not in ("up", "down"):
+                raise ApiError(400, 'move is "up" or "down"')
+            changes["move"] = req.body["move"]
+        if not changes:
+            raise ApiError(400, 'Say what to change: name, note, visited or move')
+        return self._call("api_change_waypoint", int(index), changes)
+
+    def _clear_waypoints(self, req):
+        if req.body.get("confirmed") is not True:
+            raise ApiError(400, 'Clearing every waypoint needs {"confirmed": true}')
+        return self._call("api_clear_waypoints")
+
+    def _return_later(self, req, action):
+        entry_id = str(req.body.get("id") or "")[:300]
+        if not entry_id:
+            raise ApiError(400, 'Which place? {"id": "..."} from /api/v1/route/return-later')
+        return self._call("api_return_later_action", action, entry_id)
 
     def _leave_capsule(self, req):
         note = " ".join(str(req.body.get("note") or "").split())

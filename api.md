@@ -232,7 +232,7 @@ A running total of what tonight's first discoveries and organics are worth, writ
 - Hide every overlay from a Stream Deck key: [Overlays](#overlays)
 - Talking reminders through the Watcher's voice: [Voice](#voice)
 - A warning when you're carrying too much unsold data: [Exploration](#exploration)
-- "Next system" to the clipboard from a Stream Deck key: [Route and waypoints](#route-and-waypoints)
+- "Next system", "remember this place" and "tick off the next waypoint" on Stream Deck keys: [Route and waypoints](#route-and-waypoints)
 - A Captain's log note, and a time capsule, from a key: [Captain's log](#captain-s-log), [Time capsules](#time-capsules)
 - One key to start and end a mining run: [Mining, combat and engineering](#mining-combat-and-engineering)
 - Today's trading profit: [Trading and colonisation](#trading-and-colonisation)
@@ -1167,12 +1167,75 @@ Invoke-RestMethod -Method Post http://127.0.0.1:7380/api/v1/log -ContentType "ap
 
 ## Route and waypoints
 
+Everything on Explore & Survey's ROUTE tab: your waypoints, the places worth coming back to, and a neutron route plotted there. Changes go through the tab's own buttons, so the deck and the HUD follow at once.
+
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/v1/route` | Your next destination, your waypoints, and the expedition you're on |
+| GET | `/api/v1/route` | Your next destination, your waypoints (each with its `index`), and the expedition you're on |
 | POST | `/api/v1/route/copy-next` | Copy the next system to the clipboard, ready to paste into the galaxy map |
+| POST | `/api/v1/route/waypoints` | Add a waypoint at the end: `{"name": "Colonia", "note": "Jaques Station"}` |
+| POST | `/api/v1/route/waypoints/{n}` | Change waypoint `n`: any of `{"visited": true, "name": "...", "note": "...", "move": "up"}` |
+| POST | `/api/v1/route/waypoints/{n}/delete` | Remove waypoint `n` |
+| POST | `/api/v1/route/waypoints/clear` | Remove every waypoint: `{"confirmed": true}` |
+| GET | `/api/v1/route/return-later` | The places worth coming back to: unfinished organics, worlds to map, systems not fully scanned |
+| POST | `/api/v1/route/return-later/waypoint` | Add one of them to your waypoints: `{"id": "..."}` |
+| POST | `/api/v1/route/return-later/dismiss` | Put one aside for good: `{"id": "..."}` |
+| GET | `/api/v1/route/neutron` | The neutron route last plotted on the ROUTE tab, jump by jump |
+| POST | `/api/v1/route/neutron/import` | Add that neutron route to your waypoints (systems already there are skipped) |
 
-The plotted route itself, jump by jump, is `/api/v1/journal/navroute`.
+Waypoints count from `0`, in the order the ROUTE tab shows them; `index` in `/route` gives each one's number. Moving one changes the numbers, so read `/route` again before the next change. A waypoint added for the system you're in takes its position from the game. The plotted route itself, jump by jump, is `/api/v1/journal/navroute`; plotting a new neutron route asks Spansh, so it's done on the deck.
+
+```http
+POST /api/v1/route/waypoints/2
+{"visited": true}
+```
+
+```json
+{"waypoints": [{"index": 0, "name": "Sol", "note": "", "visited": true, "coords": [0, 0, 0]},
+               {"index": 1, "name": "Colonia", "note": "Jaques Station", "visited": false, "coords": [-9530.5, -910.28, 19808.13]},
+               {"index": 2, "name": "Sagittarius A*", "note": "", "visited": true, "coords": [25.22, -20.91, 25899.97]}]}
+```
+
+### Reading your route
+
+`GET /api/v1/route` gives your saved waypoints and the next system in one call. To look at it, open `http://127.0.0.1:7380/api/v1/route` in a browser, or press **TRY** on it above.
+
+```json
+{
+  "next": "Colonia",
+  "waypoints": [
+    {"index": 0, "name": "Sol", "note": "home", "visited": true, "coords": [0, 0, 0]},
+    {"index": 1, "name": "Colonia", "note": "Jaques Station", "visited": false, "coords": [-9530.5, -910.28, 19808.13]}
+  ],
+  "expedition": null
+}
+```
+
+`next` is worked out like the deck's COPY NEXT button, from the first of these there is:
+
+1. A route plotted in the game's galaxy map: its next jump.
+2. Your waypoints: the one after the system you're in, or else the first not yet visited.
+3. The destination you've set in the game.
+
+So with a route plotted in the galaxy map, `next` is your next jump rather than your next waypoint. For the next waypoint whatever's plotted, take the first one not yet visited, as below.
+
+**Example: your waypoints at a glance** (PowerShell)
+
+```powershell
+$route = Invoke-RestMethod http://127.0.0.1:7380/api/v1/route
+"Next: $($route.next)"
+$route.waypoints | Format-Table index, name, visited, note
+```
+
+**Example: the next waypoint, whatever's plotted** (PowerShell)
+
+```powershell
+$next = (Invoke-RestMethod http://127.0.0.1:7380/api/v1/route).waypoints |
+  Where-Object { -not $_.visited } | Select-Object -First 1
+"Next waypoint: $($next.name)"
+```
+
+### Keys and scripts
 
 **Example: "next system" on a Stream Deck key** (PowerShell)
 
@@ -1181,6 +1244,41 @@ The plotted route itself, jump by jump, is `/api/v1/journal/navroute`.
 ```
 
 Press it, open the galaxy map, paste. It answers `409` when there's nothing plotted.
+
+**Example: "remember this place" on a Stream Deck key** (PowerShell)
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+$here = (Invoke-RestMethod "$api/commander/location").system
+$body = @{ name = $here; note = "Come back here" } | ConvertTo-Json
+Invoke-RestMethod -Method Post "$api/route/waypoints" -ContentType "application/json" -Body $body | Out-Null
+"Added $here"
+```
+
+**Example: tick off the next waypoint** (PowerShell)
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+$next = (Invoke-RestMethod "$api/route").waypoints | Where-Object { -not $_.visited } | Select-Object -First 1
+if ($next) {
+  $body = @{ visited = $true } | ConvertTo-Json
+  Invoke-RestMethod -Method Post "$api/route/waypoints/$($next.index)" -ContentType "application/json" -Body $body | Out-Null
+  "Visited: $($next.name)"
+}
+```
+
+**Example: every place worth coming back to, as waypoints** (Python, `pip install requests`)
+
+```python
+import requests
+
+API = "http://127.0.0.1:7380/api/v1"
+
+for place in requests.get(f"{API}/route/return-later").json()["places"]:
+    reasons = "; ".join(place.get("reasons") or [])
+    requests.post(f"{API}/route/return-later/waypoint", json={"id": place["id"]})
+    print(f'{place["system"]} {place.get("body") or ""}: {reasons}')
+```
 
 ## Time capsules
 

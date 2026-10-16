@@ -312,12 +312,92 @@ class ApiRecordsMixin:
 
     # -- route and waypoints -------------------------------------------------
     def api_route(self):
-        manager = getattr(self, "waypoint_manager", None)
         expeditions = getattr(self, "expedition_manager", None)
         next_of = getattr(self, "_dashboard_next_destination", None)
+        manager = getattr(self, "waypoint_manager", None)
         return _plain({"next": (next_of() if callable(next_of) else None) or None,
-                       "waypoints": list(getattr(manager, "waypoints", None) or []),
+                       "waypoints": self._api_waypoints() if manager is not None else [],
                        "expedition": expeditions.active() if expeditions is not None else None})
+
+    # The ROUTE tab's own buttons do the work, so the deck and the HUD follow at once.
+    def _api_explore(self, operation, **payload):
+        handle = getattr(self, "_handle_html_explore_command", None)
+        if not callable(handle):
+            raise ApiError(409, "Explore & Survey isn't ready yet")
+        return bool(handle({"operation": operation, **payload}))
+
+    def _api_waypoints(self):
+        manager = self._api_need("waypoint_manager", "Waypoints")
+        return [{"index": index, "name": row.get("name") or "", "note": row.get("note") or "",
+                 "visited": bool(row.get("visited")), "coords": row.get("coords"),
+                 **{key: row[key] for key in ("neutron", "jumps") if key in row}}
+                for index, row in enumerate(manager.waypoints) if isinstance(row, dict)]
+
+    def _api_waypoint(self, index):
+        manager = self._api_need("waypoint_manager", "Waypoints")
+        if not 0 <= index < len(manager.waypoints):
+            raise ApiError(404, f"There's no waypoint {index} (you have {len(manager.waypoints)}, from 0)")
+        return manager.waypoints[index]
+
+    def api_add_waypoint(self, name, note=""):
+        if not self._api_explore("add_waypoint", name=name, note=note):
+            raise ApiError(409, "The waypoint couldn't be added")
+        return {"added": name, "waypoints": self._api_waypoints()}
+
+    def api_change_waypoint(self, index, changes):
+        row = self._api_waypoint(index)
+        if "name" in changes or "note" in changes:
+            # Editing replaces the note, so an unchanged one is passed on as it was.
+            self._api_explore("edit_waypoint", index=index, name=changes.get("name") or row.get("name"),
+                              note=changes["note"] if "note" in changes else row.get("note") or "")
+        if "visited" in changes:
+            self._api_explore("mark_waypoint", index=index, visited=bool(changes["visited"]))
+        if changes.get("move") in ("up", "down"):
+            self._api_explore("move_waypoint", index=index, offset=-1 if changes["move"] == "up" else 1)
+        return {"waypoints": self._api_waypoints()}
+
+    def api_delete_waypoint(self, index):
+        removed = self._api_waypoint(index).get("name") or ""
+        if not self._api_explore("delete_waypoint", index=index, confirmed=True):
+            raise ApiError(409, "The waypoint couldn't be removed")
+        return {"removed": removed, "waypoints": self._api_waypoints()}
+
+    def api_clear_waypoints(self):
+        self._api_need("waypoint_manager", "Waypoints")
+        self._api_explore("clear_waypoints", confirmed=True)
+        return {"waypoints": self._api_waypoints()}
+
+    def api_return_later(self):
+        state_of = getattr(self, "_return_later_state", None)
+        if not callable(state_of):
+            raise ApiError(409, "Return later isn't ready yet")
+        state = state_of() or {}
+        dismissed = set(state.get("dismissed") or ())
+        return _plain({"places": [row for row in state.get("entries") or ()
+                                  if isinstance(row, dict) and row.get("id") not in dismissed]})
+
+    def api_return_later_action(self, action, entry_id):
+        known = {row["id"] for row in self.api_return_later()["places"]}
+        if entry_id not in known:
+            raise ApiError(404, f"Nothing called {entry_id} to return to (see /api/v1/route/return-later)")
+        operation = "return_later_waypoint" if action == "waypoint" else "return_later_dismiss"
+        if not self._api_explore(operation, id=entry_id):
+            raise ApiError(409, "That couldn't be done")
+        return {"done": action, "id": entry_id, "waypoints": self._api_waypoints()}
+
+    def api_neutron_route(self):
+        transient = getattr(self, "_html_profile_transient", None)
+        tool = transient("_html_explore_tool_state", {}) if callable(transient) else {}
+        route = tool.get("route") or None
+        return _plain({"status": tool.get("status") or "ready", "detail": tool.get("detail") or "", "route": route})
+
+    def api_import_neutron_route(self):
+        if not (self.api_neutron_route()["route"] or {}).get("waypoints"):
+            raise ApiError(409, "No neutron route has been plotted: plot one on Explore & Survey › ROUTE")
+        before = len(self._api_waypoints())
+        self._api_explore("neutron_import")
+        after = self._api_waypoints()
+        return {"imported": len(after) - before, "waypoints": after}
 
     def api_copy_next(self):
         next_of = getattr(self, "_dashboard_next_destination", None)
