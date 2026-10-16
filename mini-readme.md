@@ -1,7 +1,7 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.5.8 // Waypoints by Wire
-**Release Date:** Not yet released
+**Release Date:** 2026-Oct-17
 
 * **New: Explore & Survey's ROUTE tab in the Local API.** Your own tools can now work your route, not just read it.
   * **Waypoints:** add one (the system you're in takes its position from the game), rename it or change its note, mark it visited, move it up or down, remove it, or clear the list.
