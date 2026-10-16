@@ -178,6 +178,10 @@ class DashboardCoreMixin:
             return
         self.event_feed_entries.insert(0, entry)
         del self.event_feed_entries[self.event_feed_max_entries:]
+        publish = getattr(self, '_api_publish', None)
+        if publish is not None:
+            publish('feed', {'at': entry['ts'], 'tag': entry['tag'], 'severity': entry['severity'],
+                             'message': entry['message'], 'url': entry['url']})
         self._schedule_html_dashboard_publish()
 
     def add_journal_history_entry(self, event_name, payload=None):

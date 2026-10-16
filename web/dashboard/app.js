@@ -3788,7 +3788,7 @@ function settingsSummaries(data) {
     flight: `LOW FUEL AT ${Math.round(number(value.low_fuel_threshold_pct, .25) * 100)}%`,
     hotkeys: value.overlay_hotkeys_enabled ? `${numeric(bound)} BOUND` : "HOTKEYS OFF",
     galnet: value.galnet_enabled ? `${String(galnet.status || "standby").toUpperCase()} · ${numeric((galnet.articles || []).length)} DISPATCHES` : "RELAY OFF",
-    integrations: [value.edsm_upload_enabled ? "EDSM ON" : "EDSM OFF", value.inara_upload_enabled ? "INARA ON" : "INARA OFF", value.eddn_market_upload_enabled ? "EDDN ON" : "EDDN OFF"].join(" · "),
+    integrations: [value.edsm_upload_enabled ? "EDSM ON" : "EDSM OFF", value.inara_upload_enabled ? "INARA ON" : "INARA OFF", value.eddn_market_upload_enabled ? "EDDN ON" : "EDDN OFF", value.api_enabled ? "API ON" : "API OFF"].join(" · "),
     diagnostics: String(data.health?.level || "NOMINAL").toUpperCase(),
     updates: "NEW RELEASES FROM GITHUB",
   };
@@ -3845,6 +3845,7 @@ function settingsSectionBody(id, data) {
       + settingGroup("BGS", `${settingSwitch({key: "bgs_online_enabled", label: "BGS online", detail: "Ask the EDCD tick service when the galaxy tick happened, and let the BGS tab look systems up on EDSM. Your own journal record works without it.", checked: value.bgs_online_enabled})}${settingActions(`<button type="button" data-page="bgs">BGS</button>`, "bgs tick edsm factions background simulation")}`)
       + settingGroup("Trading", `${settingSwitch({key: "trading_online_enabled", label: "Trading searches (Spansh)", detail: "Let the Trading tab ask Spansh for trade routes, prices and station markets, only when you search. Your own trading record works without it.", checked: value.trading_online_enabled})}${settingActions(`<button type="button" data-page="trading">TRADING</button>`, "trading trade routes spansh market prices commodities profit")}`)
       + settingGroup("EDDN", `${settingSwitch({key: "eddn_market_upload_enabled", label: "Share markets on EDDN", detail: "Publish the markets you visit to the community network.", checked: value.eddn_market_upload_enabled})}${settingNote(`${numeric(data.eddn?.uploads)} uploads this session${data.eddn?.last_error ? ` · last error: ${data.eddn.last_error}` : ""}`)}`)
+      + settingGroup("LOCAL API", `${settingSwitch({key: "api_enabled", label: "Local API", detail: "Let your own tools read Void Compass and drive it: scripts, Stream Deck buttons, OBS scenes and widgets, Discord bots. No key needed: it answers this PC only, and web pages only when they're files on this PC (OBS browser sources too).", checked: value.api_enabled})}${settingText({key: "api_port", id: "setting-api-port", label: "Port", detail: "Where it listens, 1024 to 65535. Keep 7380 unless another program uses it.", value: String(value.api_port ?? 7380), status: apiStatus(data.api, value)})}${settingSwitch({key: "api_allow_control", label: "Allow control", detail: "Let tools change things: overlays, deck pages, the theme, the Watcher's thoughts and voice, music. Off, the API only reads.", checked: value.api_allow_control !== false})}${settingSwitch({key: "api_allow_lan", label: "Allow other devices", detail: "Answer other computers, tablets and phones on your network, not only this PC. There's no key, so anyone on the network can use it: only on a network you trust.", checked: value.api_allow_lan})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="api_open_docs">API DOCS</button>`, "local api port docs stream deck obs scripts bot")}`)
       + settingGroup("DISCORD", `${settingText({key: "carrier_discord_webhook_url", id: "setting-discord", label: "Carrier webhook", detail: "One webhook for your personal and Squadron Carrier: status, jumps and expedition updates.", value: value.carrier_discord_webhook_url, secret: true})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_discord">SEND TEST</button><button type="button" data-page="carrier">CARRIER COMMAND</button>`, "test discord carrier")}`);
   }
   if (id === "updates") {
@@ -3894,6 +3895,13 @@ function carrierRemoveRow(row, armed) {
 }
 
 // Inara (5.5.4): how this session's sync is going.
+// The local API (5.5.7): where it listens, or why it doesn't.
+function apiStatus(api = {}, value = {}) {
+  if (api.running) return {tone: "good", text: `LISTENING · ${String(api.url || "").replace("http://", "").toUpperCase()}${api.lan ? " · NETWORK" : ""}`};
+  if (api.error && value.api_enabled) return {tone: "bad", text: String(api.error).toUpperCase()};
+  return {tone: "", text: "OFF"};
+}
+
 function inaraStatus(inara = {}) {
   if (inara.status === "rejected") return {tone: "bad", text: "KEY REJECTED"};
   if (inara.status === "error") return {tone: "bad", text: "UNREACHABLE · RETRYING"};

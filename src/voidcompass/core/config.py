@@ -426,6 +426,7 @@ PROFILE_VALUE_SETTINGS = (
     "heartbeat_hud_x",
     "heartbeat_hud_y",
     "heartbeat_orb_size",
+    "heartbeat_frame_rate",
     "heartbeat_text_scale_percent",
     "watcher_voice_volume",
     "home_system_pos",
@@ -520,6 +521,12 @@ GLOBAL_ONLY_KEYS = (
     "onboarding_complete",
     "recovery_safe_mode_enabled",
     "last_app_version",
+    # The local API (5.5.7) is one server on this PC, whichever commander is
+    # flying: tools shouldn't lose it on a profile switch.
+    "api_enabled",
+    "api_port",
+    "api_allow_lan",
+    "api_allow_control",
 )
 
 
@@ -952,6 +959,7 @@ def apply_profile_config(config, profile_key=None):
                 "contact_scope_timeout_s": 45,
                 "jump_info_linger_s": 0,
                 "heartbeat_orb_size": 54,
+                "heartbeat_frame_rate": 0,
                 "heartbeat_text_scale_percent": 0,
                 "watcher_voice_volume": 80,
                 "home_system_pos": None,
@@ -1069,6 +1077,10 @@ def load_config():
     defaults = {
         **OVERLAY_ENABLE_DEFAULTS,
         'journal_path': '',
+        'api_enabled': False,
+        'api_port': 7380,
+        'api_allow_lan': False,
+        'api_allow_control': True,
         'nav_collapsed_groups': [],
         'overlay_mouse_passthrough': os.name == 'nt',
         'overlay_hotkeys_enabled': os.name == 'nt',
@@ -1232,6 +1244,8 @@ def load_config():
         'postcards_path': '',
         'constellations_path': '',
         'heartbeat_orb_size': 54,
+        # The Watcher's own Frame rate (5.5.7); 0 follows every overlay's.
+        'heartbeat_frame_rate': 0,
         'heartbeat_eye_color': 'theme',
         # The Watcher between events (todo-watcher-life.md, 5.5.3).
         'heartbeat_liveliness': 'standard',

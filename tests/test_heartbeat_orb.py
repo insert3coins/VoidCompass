@@ -21,6 +21,7 @@ from voidcompass.overlays import heartbeat_events
 from voidcompass.overlays.heartbeat_events import EFFECTS, TONES, classify
 from voidcompass.overlays.heartbeat_hud import EYE_COLORS, ORB_SIZES, HeartbeatHUD
 from voidcompass.overlays.html_heartbeat_overlay import HtmlHeartbeatBridge
+from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -104,14 +105,18 @@ class HeartbeatModelTests(unittest.TestCase):
         # The dashboard's own heartbeat lamp still reads these.
         self.assertEqual((model["pulse_id"], model["activity"], model["state"]), (33, "STATUS", "SUPERCRUISE"))
         self.assertFalse(model["stalled"])
-        self.assertEqual(model["orb"], {"size": 54, "eye": "theme", "liveliness": "standard", "idle": True})
+        self.assertEqual(model["orb"], {"size": 54, "eye": "theme", "liveliness": "standard", "idle": True,
+                                        "frame_rate": HtmlOverlayServer.frame_rate})
 
     def test_orb_settings_are_sanitised(self):
-        self.assertEqual(self.hud(heartbeat_orb_size=96, heartbeat_eye_color="HAL")._html_render_model["orb"],
-                         {"size": 96, "eye": "hal", "liveliness": "standard", "idle": True})
-        self.assertEqual(self.hud(heartbeat_orb_size="60", heartbeat_eye_color="blue",
+        # 5.5.7: its own Frame rate, or every overlay's when it has none.
+        everyone = HtmlOverlayServer.frame_rate
+        self.assertEqual(self.hud(heartbeat_orb_size=96, heartbeat_eye_color="HAL",
+                                  heartbeat_frame_rate=24)._html_render_model["orb"],
+                         {"size": 96, "eye": "hal", "liveliness": "standard", "idle": True, "frame_rate": 24})
+        self.assertEqual(self.hud(heartbeat_orb_size="60", heartbeat_eye_color="blue", heartbeat_frame_rate="45",
                                   heartbeat_liveliness="frantic", heartbeat_idle_motion=False)._html_render_model["orb"],
-                         {"size": 54, "eye": "theme", "liveliness": "standard", "idle": False})
+                         {"size": 54, "eye": "theme", "liveliness": "standard", "idle": False, "frame_rate": everyone})
 
     def test_window_is_the_orb_square(self):
         bridge = HtmlHeartbeatBridge.__new__(HtmlHeartbeatBridge)

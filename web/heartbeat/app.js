@@ -143,6 +143,7 @@
   // types out as the eye speaks it, the eye showing how it feels about it.
   function showThought(thought, reduced, eye, nature) {
     const style = (thought && thought.style) || {};
+    document.body.classList.toggle("still", Boolean(reduced));
     document.body.classList.toggle("thought-backdrop", style.backdrop !== false);
     document.body.dataset.thoughtColour = style.colour === "accent" ? "accent" : style.colour === "eye" ? (eye === "hal" ? "red" : "accent") : "bright";
     document.body.dataset.thoughtSize = ["small", "large"].includes(style.size) ? style.size : "standard";
@@ -241,6 +242,8 @@
       // danger, heat, fuel and scooping for the Watcher's mood.
       liveliness: (model.orb || {}).liveliness,
       idle: (model.orb || {}).idle !== false,
+      // Its own Frame rate (5.5.7); the page's frame cap already follows it.
+      frameRate: (model.orb || {}).frame_rate,
       vitals: model.vitals,
       // What the commander is doing (the HUD's state), for how it watches.
       state: model.state,

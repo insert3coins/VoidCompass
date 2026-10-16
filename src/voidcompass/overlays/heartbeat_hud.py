@@ -21,6 +21,7 @@ from voidcompass.core import display_scale, themes
 from voidcompass.overlays import overlay_chrome
 from voidcompass.core.overlay_registry import OVERLAY_SPECS, TEXT_SIZES, overlay_text_scale, text_size_choice
 from voidcompass.overlays.heartbeat_events import classify
+from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 from voidcompass.overlays import watcher_mind
 
 _STALL_AFTER_S = 15
@@ -60,6 +61,25 @@ def liveliness(config):
 def idle_motion(config):
     """Blinks, breathing and glances between events (on unless turned off)."""
     return bool((config or {}).get("heartbeat_idle_motion", True))
+
+
+# The Watcher's own Frame rate in Overlay Studio (5.5.7); 0 is "same as all
+# overlays". Lower is kinder to older PCs.
+FRAME_RATES = (0, 60, 30, 24, 15)
+
+
+def frame_rate_setting(config):
+    """The Watcher's Frame rate as chosen: one of FRAME_RATES."""
+    try:
+        rate = int(float((config or {}).get("heartbeat_frame_rate", 0)))
+    except (TypeError, ValueError):
+        rate = 0
+    return rate if rate in FRAME_RATES else 0
+
+
+def frame_rate(config):
+    """What the Watcher animates at: its own rate, or every overlay's."""
+    return frame_rate_setting(config) or int(HtmlOverlayServer.frame_rate or 30)
 
 
 THOUGHT_SIDES = ("auto", "left", "right")
@@ -320,6 +340,8 @@ class HeartbeatHUD:
         level = str(self.config.get('watcher_voice_level') or 'every').casefold()
         if thought.get('topic') == 'voice_found':
             return True
+        if thought.get('topic') == 'relay':
+            return bool(thought.get('speak'))
         need = {'important': 2, 'sometimes': 1}.get(level, 0)
         return int(thought.get('importance') or 0) >= need
 
@@ -367,7 +389,8 @@ class HeartbeatHUD:
             'status_seq': self._status_serial,
             'events': list(self._events),
             'orb': {'size': orb_size(self.config), 'eye': eye_color(self.config),
-                    'liveliness': liveliness(self.config), 'idle': idle_motion(self.config)},
+                    'liveliness': liveliness(self.config), 'idle': idle_motion(self.config),
+                    'frame_rate': frame_rate(self.config)},
             'vitals': dict(self._vitals),
             'personality': watcher_mind.personality(self.config),
             'overlays': overlay_directions(
@@ -400,6 +423,13 @@ class HeartbeatHUD:
             return None
         if thought['id'] != self._spoken_id:
             self._spoken_id = thought['id']
+            # A new thought: the local API's event stream hears it (5.5.7).
+            listener = getattr(self, 'thought_listener', None)
+            if callable(listener):
+                try:
+                    listener(thought)
+                except Exception:
+                    pass
             if self._speaks(thought):
                 words = self.mind.spoken_words(thought)
                 try:

@@ -1,15 +1,39 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.6 // Steady Buttons
-**Release Date:** 2026-Oct-16
+## v5.5.7 // The Watcher, Refined
+**Release Date:** Not yet released
 
-* **Fixed: buttons that blinked and ignored clicks.** On Explore & Survey's ROUTE (and wherever a page refreshes while you use it), every refresh drew the buttons anew. They faded into their look each time, so they seemed to flash, and a refresh between pressing a button and letting go put a new button under the pointer, so the click was lost.
-  * **Never fade in:** a button that's just been drawn takes its look at once, on every page.
-  * **Unchanged panels stay put:** Explore & Survey's panels (route, waypoints, prospects) are only drawn again when what's in them changes.
-  * **Clicks always land:** while you hold a button down, no page is redrawn under it; the refresh waits until you let go, then follows straight after.
+* **The Watcher looks better.** Same eye, same colours, drawn with more care.
+  * **A star for a pupil:** white-hot at its heart and melting into its glow, where it used to be a flat disc.
+  * **A galaxy of light:** its stars glow softly instead of sitting as dots, with a faint haze along each arm.
+  * **Glass with depth:** HAL's window reflection is a curved pane with a sharp glint in it, and the reflections drift a little against the eye as it looks about, as a dome's would. The light on the metal shifts with it.
+  * **Effects as light:** a jump streams fine streaks of light rather than bars, a scan sweeps a radar's afterglow, landings bring a planet's limb up with a breath of atmosphere, and each journal event falls in as a small comet that dissolves into the pupil.
+  * **Finer fibres** in the iris, and calmer metal on the small orb (its brushing shimmered at 54 px).
+  * **No stripes through the star:** the scanlines thin where its light burns through them, instead of banding the pupil.
+  * **Bright moments keep their detail:** a flare spreads its glow wider instead of piling on brightness, so a rare find or a payout no longer washes the iris out into one flat disc.
+  * **A deeper iris:** pale and hot at the pupil, deepening to a rich, dark shade of the eye's own colour toward its edge, HAL's way.
+  * **Danger recedes to the rim:** after a fight its red fills the eye, then draws back to the edge as it fades. It used to tint the whole eye pink or magenta on its way back to cyan.
+  * **Lids you can see:** the eyelids' shading stopped short of their curve, so only a faint band at the very top ever showed. Now a squint, a wary look, a smile and the depressed Watcher's heavy lids read even on the small orb, still soft-edged with no line across the lens.
+  * **A dark edge** round the orb, so it sits apart from a bright scene instead of looking pasted on.
+* **The Watcher moves more smoothly.**
+  * **Glances settle** with a hint of overshoot instead of jumping, and its lids, pupil and brightness glide rather than snap: a squint into a star, a wary look, a smile.
+  * **Colour eases** between moods, and the galaxy speeds up and slows down with some weight to it.
+  * **Effects hand over:** a new effect fades the last one out instead of cutting it off.
+  * **Up to 60 frames a second**, when its Frame rate allows (below).
+  * **Smaller things:** the lock-on pulses instead of strobing, the typing caret breathes instead of blinking, and a thought fades in with its line reaching out from the eye.
+* **New: the Watcher's own Frame rate** (Overlay Studio › Journal Heartbeat). Same as all overlays (the default), or 60, 30, 24 or 15 for an older PC. The orb on The Watcher page follows it too.
+* **New: the Local API.** Your own tools can now read Void Compass and drive it: scripts, Stream Deck buttons, OBS scenes and widgets, Discord bots. Switch it on in **Settings › Integrations › Local API**; the reference, with examples, is **API DOCS** there (also API.md beside the app).
+  * **Read:** your commander, location and ship; the journal live, its history on disk, and Status, Cargo, NavRoute, Market and ShipLocker; every command deck page's data; every overlay and what it shows; the Watcher; the music; Galnet.
+  * **Drive:** switch, move and fade overlays, hide them all, pop up a cockpit notification, open a deck page, change theme, add a line to the event feed, give the Watcher a thought, have its voice say anything, and play, pause and skip music.
+  * **Hear it happen:** journal events, Status changes, the deck's feed, the Watcher's thoughts, overlay changes, the voice and the music, as a stream (Server-Sent Events) or by polling.
+  * **No key to look after:** it never talks to the internet itself, so there's nothing to copy into your tools. It's off until you switch it on, answers this PC only unless you allow other devices, can be read-only, and never sends your EDSM, Inara and Raven keys or webhooks.
+  * **Websites can't touch it:** from a web browser it only answers pages on this PC (files you open, OBS browser sources, `localhost`), so a site you visit can't read your game or press its buttons.
+  * **OBS Studio, three ways:** ready-made browser source widgets (your system and the Watcher's thoughts, now playing, a session tally), text files for OBS's text source, and a script that lets the game run OBS itself through obs-websocket: scenes change as you dock, land and jump, and a replay saves itself when you die or find something new for the Codex.
+  * **Docs worth reading:** API DOCS opens a proper reference in your browser, in your deck's theme. One section at a time with a sidebar and a find box (press `/`), every endpoint on its own card with **TRY** to call it right there (and **LISTEN** to watch the event stream live), examples in tabs (PowerShell, curl, Python, JavaScript) with copy buttons, and a light showing whether Void Compass and the game are live.
 
 ## Earlier releases
 
+* **v5.5.6** — Steady Buttons: buttons no longer blink or lose clicks when a page refreshes (no fade-in on newly drawn buttons, Explore & Survey's unchanged panels kept, and no redraw while a button is held).
 * **v5.5.5** — Every Word Its Size: each overlay's own text size in Overlay Studio; postcard text sizes (lettering, note, details); delete postcards to the Recycle Bin; editing a postcard into your theme keeps its angle and name; MAKE EDITABLE finds screenshots for commanders far from UTC, and postcards restored without their picture get it back; and a fix for the postcard studio's previews locking the system up.
 * **v5.5.4** — Can you hear me? (and over things): the Watcher speaks in HAL 9000's voice (Piper, downloaded on first use) and finds it over its first hour (The Switch), learns how you play, and knows your home system; achievements in their own overlay; Inara sync, checked against its API docs, sending every commander event it takes; carriers you can remove; time capsules shared by code or file and a Time Capsules vault; Postcards rebuilt (album, studio with live preview, your own themes, a postmark, and every postcard editable, older ones too); Constellation v2 (a sky chart, designations, the night behind each star, an almanac, saved pictures on its own page); a Tools page; Explore & Survey and the Exploration Archive as one page; Updates on its own Settings page.
 * **v5.5.3.9.3** — The Rhino's Mothership: the Cargo overlay's SHIP CARGO card shows your mothership's total cargo and the space left as you unload the Rhino, and knows your ship's capacity and hold after a restart.

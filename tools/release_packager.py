@@ -35,6 +35,7 @@ PRODUCT_NAME = "VoidCompass"
 PUBLIC_FILENAMES = {
     "README.md",
     "UPDATE_LOG.md",
+    "API.md",
     "START_HERE.txt",
     "THIRD_PARTY_NOTICES.md",
     "RELEASE_MANIFEST.json",
@@ -249,6 +250,7 @@ def create_release(
     _copy_required(dist_dir / target["executable"], executable)
     _copy_required(project / "README.md", package_dir / "README.md")
     _copy_required(project / "mini-readme.md", package_dir / "UPDATE_LOG.md")
+    _copy_required(project / "api.md", package_dir / "API.md")
     _copy_required(
         project / "THIRD_PARTY_NOTICES.md",
         package_dir / "THIRD_PARTY_NOTICES.md",

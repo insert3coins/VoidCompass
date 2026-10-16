@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.5.6**
+**Current version: 5.5.7**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
@@ -52,6 +52,8 @@ Some features talk to community services, and you can switch any of them off in 
 - **EDCD tick service**: when the BGS tick happened.
 - **Spansh**: only when you ask for a search, including trade routes and prices.
 - **Discord**: carrier announcements, if you add a webhook.
+
+Your own tools can work with Void Compass too. Its **Local API** (off until you switch it on in Settings › Integrations) lets scripts, Stream Deck buttons, stream widgets and bots read your commander, journal, overlays and command deck, and drive them: overlays, the Watcher's thoughts and voice, the theme and the music. It's plain HTTP and JSON on your own PC; see [api.md](api.md).
 
 ## Installing
 

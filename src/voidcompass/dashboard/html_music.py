@@ -270,9 +270,15 @@ class HtmlMusicMixin:
             "normalise": bool(payload.get("normalise", True)),
             "reported_at": _number(payload.get("reported_at")),
         }
+        previous = getattr(self, "_music_status", None) or {}
         self._music_status = status
         self._music_remember(status)
         self._music_update_overlay()
+        if (previous.get("track_id"), previous.get("playing")) != (status["track_id"], status["playing"]) \
+                and hasattr(self, "_api_publish"):
+            track = self.music_library().track(status["track_id"]) or {} if status["track_id"] else {}
+            self._api_publish("music", {"playing": status["playing"], "track_id": status["track_id"],
+                                        "title": track.get("title") or "", "artist": track.get("artist") or ""})
 
     def _music_remember(self, status):
         """Keep the player's state for the commander, to resume from next time."""

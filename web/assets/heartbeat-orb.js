@@ -19,9 +19,12 @@
    * spell lets it drowse, and the game's shutdown or main menu puts it to
    * sleep until the next session wakes it.
    *
-   * One 30 fps clock draws it, slowed to 15 fps while the feed is quiet or
-   * the eye sleeps. It stops while the page is hidden, and under reduced
-   * motion each update paints one still frame with the current mood.
+   * One clock draws it at up to 60 fps (an overlay's Frame rate in Overlay
+   * Studio holds it lower), slowed to 20 fps while the feed is quiet or the
+   * eye sleeps. Between the life module's pose and the paint sit springs
+   * (5.5.7), so glances settle and lids glide rather than jump. It stops
+   * while the page is hidden, and under reduced motion each update paints
+   * one still frame with the current mood.
    *
    * The same orb wakes on the dashboard's boot screen, several times larger.
    * There its lines thicken more slowly than the orb grows and the iris gets
@@ -29,8 +32,18 @@
    */
 
   const TAU = Math.PI * 2;
-  const FRAME_MS = 1000 / 30;
-  const QUIET_FRAME_MS = 1000 / 15;
+  const FRAME_MS = 1000 / 60;
+  const QUIET_FRAME_MS = 1000 / 20;
+  // An effect pushed aside by a newer one fades out over this long.
+  const EFFECT_FADE_MS = 240;
+  // [stiffness, damping ratio] per pose channel. Glances are quick and settle
+  // with a hint of overshoot; lids and dimming glide; the galaxy's spin has
+  // weight to it.
+  const SPRINGS = {
+    dx: [38, .72], dy: [38, .72], lid: [11, 1], lidLower: [11, 1], tilt: [11, 1],
+    pupil: [18, .8], iris: [12, .9], dim: [9, 1], spin: [3, 1],
+  };
+  const SPRING_KEYS = Object.keys(SPRINGS);
   const MAX_MOTES = 40;
   // A burst (a jump writes a dozen events) still shows as a stream of motes,
   // but only the strongest events play full effects.
@@ -112,9 +125,47 @@
     const hue = s1 < .05 ? h2 : h1 + turn * t;
     return fromHsl([hue, lerp(s1, s2, t), lerp(l1, l2, t)]);
   }
+  // A darker, richer shade of a colour, for the iris's outer reaches.
+  function deepen(color) {
+    const [hue, saturation, light] = toHsl(color);
+    return fromHsl([hue, Math.min(1, saturation * 1.1 + .08), light * .5]);
+  }
+
+  // The iris from the pupil out: [radius fraction, shade, alpha]. A shade
+  // below 0 pales toward the theme's text colour, above 0 deepens.
+  const IRIS_STOPS = [
+    [0, -.55, .95], [.1, 0, .9], [.22, .15, .72], [.34, .4, .6], [.48, .75, .5],
+    [.62, 1, .36], [.78, 1, .17], [.9, 1, .06], [1, 1, 0],
+  ];
+
   const paint = (color, alpha = 1) =>
     `rgba(${Math.round(color[0])},${Math.round(color[1])},${Math.round(color[2])},${clamp(alpha)})`;
   const hex = (color) => '#' + color.map((part) => Math.round(part).toString(16).padStart(2, '0')).join('');
+
+  // Soft points of light (5.5.7): a glow painted once per colour and size
+  // and stamped, so stars and motes read as light rather than discs.
+  const SPRITE_SIZES = [8, 16, 32, 64];
+  const sprites = new Map();
+  function sprite(color, pixels) {
+    const size = SPRITE_SIZES.find((option) => option >= pixels) || 64;
+    const key = `${size}|${color.map((part) => Math.round(part / 6)).join(',')}`;
+    let image = sprites.get(key);
+    if (image) return image;
+    if (sprites.size > 160) sprites.delete(sprites.keys().next().value);
+    image = document.createElement('canvas');
+    image.width = image.height = size;
+    const ctx = image.getContext('2d');
+    const half = size / 2;
+    const light = ctx.createRadialGradient(half, half, 0, half, half, half);
+    light.addColorStop(0, paint(color, 1));
+    light.addColorStop(.22, paint(color, .78));
+    light.addColorStop(.5, paint(color, .2));
+    light.addColorStop(1, paint(color, 0));
+    ctx.fillStyle = light;
+    ctx.fillRect(0, 0, size, size);
+    sprites.set(key, image);
+    return image;
+  }
 
   // The theme's own colours. Anything the snapshot leaves out comes from the
   // page's CSS tokens, so nothing here is a colour of its own.
@@ -161,6 +212,9 @@
         bright: .45 + next() * .5, twinkle: next() * TAU, along: .1,
       });
     }
+    // About forty arm stars also carry the arms' unresolved haze.
+    const every = Math.max(1, Math.round(arms / 40));
+    stars.haze = stars.slice(0, arms).filter((_, index) => index % every === 0);
     return stars;
   }
   const GALAXY = buildGalaxy(112, 22, 0, false);
@@ -221,11 +275,16 @@
       },
       inner: (g, fx, p) => {
         const alpha = bump(p) * .85 * fx.w;
+        const color = mix(g.pal.text, fx.color, .4);
         for (let index = 0; index < 22; index += 1) {
           const angle = fx.r[index] * TAU;
           const start = (.06 + .7 * easeIn(p) * (.6 + .4 * fx.r[index + 22])) * g.R;
           const length = (.05 + .3 * p) * g.R;
-          g.ray(angle, start, start + length, mix(g.pal.text, fx.color, .4), alpha, .6 + .5 * fx.r[index + 44]);
+          g.beam(angle, start, start + length, color, alpha, .3 + .35 * fx.r[(index + 44) % 64]);
+          if (index % 3 === 0) {
+            const [x, y] = g.polar(angle, start + length);
+            g.glow(x, y, 1.6 * g.k, color, alpha * .7);
+          }
         }
       },
     },
@@ -250,7 +309,7 @@
           const y = g.cy + (fx.r[index] - .5) * 1.4 * g.R;
           const travel = easeIn(clamp(p * 1.3 - fx.r[index + 8] * .3));
           const head = g.cx + g.R - 2.4 * g.R * travel;
-          g.line(head, y, head + .35 * g.R, y, mix(g.pal.text, fx.color, .5), alpha, .7);
+          g.streak(head + .35 * g.R, y, head, y, mix(g.pal.text, fx.color, .5), alpha, .7);
         }
       },
     },
@@ -282,7 +341,8 @@
         for (const t of [0, 1 / 3, 2 / 3, 1]) {
           if (drawn + .001 < t) continue;
           const [x, y] = point(t);
-          g.dot(x, y, 1.1, mix(g.pal.text, fx.color, .3), alpha);
+          g.glow(x, y, 2.6 * g.k, fx.color, .6 * alpha);
+          g.dot(x, y, .9, mix(g.pal.text, fx.color, .3), alpha);
         }
       },
     },
@@ -302,14 +362,30 @@
         const alpha = (1 - p * p) * fx.w;
         const start = fx.r[0] * TAU;
         const angle = start + p * TAU;
-        for (let trail = 0; trail < 12; trail += 1) {
-          g.ray(angle - trail * .05, .08 * g.R, .74 * g.R, fx.color, alpha * .8 * (1 - trail / 12), trail ? .6 : 1);
+        // A radar's afterglow: a wedge of light fading behind the arm.
+        const ctx = g.ctx;
+        const trail = .9;
+        if (ctx.createConicGradient) {
+          const wedge = ctx.createConicGradient(angle - trail, g.cx, g.cy);
+          wedge.addColorStop(0, paint(fx.color, 0));
+          wedge.addColorStop(trail / TAU, paint(fx.color, .3 * alpha));
+          wedge.addColorStop(Math.min(1, trail / TAU + .002), paint(fx.color, 0));
+          wedge.addColorStop(1, paint(fx.color, 0));
+          ctx.fillStyle = wedge;
+          ctx.beginPath();
+          ctx.moveTo(g.cx, g.cy);
+          ctx.arc(g.cx, g.cy, .74 * g.R, angle - trail, angle);
+          ctx.closePath();
+          ctx.fill();
         }
+        g.beam(angle, .08 * g.R, .74 * g.R, mix(g.pal.text, fx.color, .3), alpha * .9, .8);
         // The contact lights as the arm passes it, then fades behind it.
         const found = (.15 + .7 * fx.r[1]) * TAU;
         if (p * TAU >= found) {
           const [x, y] = g.polar(start + found, (.25 + .4 * fx.r[2]) * g.R);
-          g.dot(x, y, 1.3, mix(g.pal.text, fx.color, .3), alpha * (1 - (p * TAU - found) / TAU));
+          const left = alpha * (1 - (p * TAU - found) / TAU);
+          g.glow(x, y, 3.4 * g.k, fx.color, left);
+          g.dot(x, y, 1, mix(g.pal.text, fx.color, .3), left);
         }
       },
     },
@@ -367,7 +443,8 @@
       inner: (g, fx, p) => {
         const size = lerp(.5, .2, easeOut(clamp(p * 1.6))) * g.R;
         const arm = .08 * g.R;
-        const blink = p < .8 ? (Math.floor(p * 10) % 2 ? .6 : 1) : (1 - p) / .2;
+        // A smooth pulse as it locks, not a hard strobe.
+        const blink = p < .8 ? .8 + .2 * Math.cos(p * TAU * 5) : (1 - p) / .2;
         const ctx = g.ctx;
         ctx.beginPath();
         for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
@@ -449,7 +526,7 @@
       inner: (g, fx, p) => {
         const from = (.12 + .3 * easeOut(p)) * g.R;
         for (let index = 0; index < 8; index += 1) {
-          g.ray(index / 8 * TAU + fx.r[0], from, from + .18 * g.R, fx.color, (1 - p) * fx.w, 1);
+          g.beam(index / 8 * TAU + fx.r[0], from, from + .18 * g.R, fx.color, (1 - p) * fx.w, .9);
         }
       },
     },
@@ -462,7 +539,7 @@
           const q = span(p, fx.r[index] * .35, fx.r[index] * .35 + .65);
           if (q <= 0 || q >= 1) continue;
           const [x, y] = g.polar(fx.r[index + 12] * TAU + q * 2.2, .76 * g.R * (1 - easeIn(q)));
-          g.dot(x, y, 1 - .5 * q, fx.color, bump(q) * .9);
+          g.glow(x, y, (1 - .5 * q) * 2.4 * g.k, fx.color, bump(q) * .9);
         }
       },
     },
@@ -475,7 +552,7 @@
           const q = span(p, fx.r[index] * .2, fx.r[index] * .2 + .8);
           if (q <= 0 || q >= 1) continue;
           const [x, y] = g.polar(fx.r[index + 14] * TAU, (.08 + .7 * easeOut(q)) * g.R);
-          g.dot(x, y, 1.1 - .5 * q, mix(fx.color, g.pal.text, .2), (1 - q) * .9);
+          g.glow(x, y, (1.1 - .5 * q) * 2.4 * g.k, mix(fx.color, g.pal.text, .2), (1 - q) * .9);
         }
       },
     },
@@ -487,8 +564,10 @@
         const r = (.1 + .75 * easeOut(p)) * g.R;
         for (let index = 0; index < 9; index += 1) {
           const angle = fx.r[index] * TAU;
-          g.ray(angle, r * (.8 + .2 * fx.r[index + 9]), r * (.8 + .2 * fx.r[index + 9]) + .06 * g.R,
-            fx.color, (1 - p) * fx.w, 1.4);
+          const from = r * (.8 + .2 * fx.r[index + 9]);
+          g.beam(angle, from, from + .08 * g.R, fx.color, (1 - p) * fx.w, 1.2);
+          const [x, y] = g.polar(angle, from + .08 * g.R);
+          g.glow(x, y, 2 * g.k, fx.color, (1 - p) * fx.w * .7);
         }
       },
     },
@@ -557,10 +636,10 @@
 
   // Drawing helpers bound to one frame's geometry. R is the orb's radius;
   // sizes in R units scale with the orb, line widths in k units with its size.
-  function geometry(ctx, R, cx, cy, pal) {
+  function geometry(ctx, R, cx, cy, pal, ratio = 1) {
     const k = lineScale(R);
     const g = {
-      ctx, R, k, cx, cy, pal,
+      ctx, R, k, cx, cy, pal, ratio,
       polar: (angle, radius) => [cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius],
       line(x1, y1, x2, y2, color, alpha, width = 1) {
         if (alpha <= 0) return;
@@ -575,6 +654,37 @@
         const [x1, y1] = g.polar(angle, from);
         const [x2, y2] = g.polar(angle, to);
         g.line(x1, y1, x2, y2, color, alpha, width);
+      },
+      // A streak of light (5.5.7): bright at its head (x2, y2), fading back
+      // along its tail, round-ended, instead of a flat bar.
+      streak(x1, y1, x2, y2, color, alpha, width = 1) {
+        if (alpha <= .004) return;
+        const light = ctx.createLinearGradient(x1, y1, x2, y2);
+        light.addColorStop(0, paint(color, 0));
+        light.addColorStop(1, paint(color, alpha));
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = light;
+        ctx.lineWidth = width * k;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+      },
+      beam(angle, from, to, color, alpha, width = 1) {
+        const [x1, y1] = g.polar(angle, from);
+        const [x2, y2] = g.polar(angle, to);
+        g.streak(x1, y1, x2, y2, color, alpha, width);
+      },
+      // A soft point of light, stamped from a cached sprite. Multiplies any
+      // alpha already set (a fading effect).
+      glow(x, y, radius, color, alpha) {
+        if (alpha <= .004 || radius <= 0) return;
+        const image = sprite(color, radius * 2 * ratio);
+        const base = ctx.globalAlpha;
+        ctx.globalAlpha = base * clamp(alpha);
+        ctx.drawImage(image, x - radius, y - radius, radius * 2, radius * 2);
+        ctx.globalAlpha = base;
       },
       dot(x, y, size, color, alpha) {
         if (alpha <= 0) return;
@@ -655,13 +765,23 @@
       horizon(offset, color, alpha) {
         if (alpha <= 0) return;
         const radius = 1.15 * R;
+        const top = cy + offset * R - radius;
+        // The night side darkens away from a lit limb with a breath of
+        // atmosphere along it.
+        const body = ctx.createLinearGradient(0, top, 0, top + .55 * R);
+        body.addColorStop(0, paint(color, .2 * alpha));
+        body.addColorStop(1, paint(color, .03 * alpha));
         ctx.beginPath();
         ctx.arc(cx, cy + offset * R, radius, 0, TAU);
-        ctx.fillStyle = paint(color, .14 * alpha);
+        ctx.fillStyle = body;
         ctx.fill();
+        ctx.save();
+        ctx.shadowColor = paint(color, alpha);
+        ctx.shadowBlur = 4 * k;
         ctx.strokeStyle = paint(mix(color, pal.text, .3), .7 * alpha);
-        ctx.lineWidth = 1.2 * k;
+        ctx.lineWidth = 1.1 * k;
         ctx.stroke();
+        ctx.restore();
       },
     };
     return g;
@@ -696,6 +816,13 @@
       // Its aperture, glances, activity and moods between events (heartbeat-life.js).
       this.life = window.HeartbeatLife ? new window.HeartbeatLife() : null;
       this.pose = null;
+      // What's on screen: the pose after its springs, and the eased colour
+      // and brightness (5.5.7).
+      this.shown = null;
+      this.velocity = {};
+      this.drawnAt = 0;
+      this.tintShown = null;
+      this.levelShown = null;
       // The music it hears (5.5.3.2): smoothed toward what the player sends.
       this.musicTarget = {level: 0, bass: 0};
       this.musicLevel = 0;
@@ -704,6 +831,7 @@
       this.voiceTarget = 0;
       this.voiceLevel = 0;
       this.layers = new Map();
+      this.frameMs = FRAME_MS;
       this.palKey = '';
       this.seed = 1;
       this.size = 0;
@@ -745,6 +873,9 @@
       this.eye = input.eye === 'hal' ? 'hal' : 'theme';
       this.reduced = Boolean(input.reducedMotion);
       this.crt = input.crt !== false;
+      // The Watcher's own Frame rate (5.5.7): 0 leaves it at its best, 60.
+      const rate = Number(input.frameRate);
+      this.frameMs = rate > 0 ? 1000 / clamp(rate, 5, 60) : FRAME_MS;
       const stalled = Boolean(input.stalled);
       if (stalled || this.reduced) this.clearMotion();
       if (this.life) {
@@ -870,7 +1001,7 @@
       const ctx = canvas.getContext('2d');
       ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
       const R = this.size / 2;
-      paint(geometry(ctx, R, R, R, this.pal));
+      paint(geometry(ctx, R, R, R, this.pal, this.ratio));
       this.layers.set(key, canvas);
       return canvas;
     }
@@ -886,14 +1017,24 @@
       if (!spec) return;
       if (event.effect === 'wake') this.asleep = false;
       const next = random((this.seed += 7919));
-      this.effects = this.effects.filter((effect) => effect.name !== event.effect);
+      // What it replaces fades out as it begins, rather than vanishing.
+      for (const effect of this.effects) {
+        if (effect.name === event.effect && effect.cut == null) effect.cut = start;
+      }
       this.effects.push({
         name: event.effect, spec, start, ms: ms || spec.ms,
         tone: TONES.includes(event.tone) ? event.tone : 'accent',
         w: .55 + .45 * clamp(Number(event.weight) || 0),
         r: Array.from({length: 64}, next),
+        cut: null,
       });
-      while (this.effects.length > MAX_EFFECTS) this.effects.shift();
+      const playing = this.effects.filter((effect) => effect.cut == null);
+      while (playing.length > MAX_EFFECTS) playing.shift().cut = start;
+    }
+
+    // 1 while an effect plays, falling to 0 once a newer one has pushed it aside.
+    fadeOf(effect, now) {
+      return effect.cut == null || now < effect.cut ? 1 : 1 - smooth((now - effect.cut) / EFFECT_FADE_MS);
     }
 
     spawnMote(event, start) {
@@ -926,7 +1067,7 @@
     }
 
     clearMotion() {
-      for (const effect of this.effects) effect.spec.end?.(this);
+      for (const effect of this.effects) if (effect.cut == null) effect.spec.end?.(this);
       this.effects = [];
       this.motes = [];
       this.blips = [];
@@ -945,14 +1086,22 @@
     // The iris colour: the resting eye, pulled toward the strongest tone the
     // recent events left behind. Averaging every tone turned a busy journal
     // grey, so only the leading one colours it, and danger leads early.
-    tint() {
+    // calm leaves danger out: the painter shows that as a red of its own
+    // (danger(), 5.5.7), so the eye never mixes the two into pink.
+    tint(calm = false) {
       let lead = null;
       for (const tone of TONES) {
+        if (calm && tone === 'red') continue;
         const weight = this.heat[tone] * (tone === 'red' ? 1.5 : 1);
         if (weight > .01 && (!lead || weight > lead.weight)) lead = {tone, weight};
       }
       if (!lead) return this.base();
       return mixHue(this.base(), this.color(lead.tone), clamp(this.heat[lead.tone] * 1.3));
+    }
+
+    // How much danger the eye still holds, 0..1.
+    danger() {
+      return clamp(this.heat.red * 1.3);
     }
 
     // A host page that hides the orb (the boot screen once the deck is up)
@@ -978,7 +1127,7 @@
     loop(now) {
       if (!this.running) return;
       this.raf = requestAnimationFrame(this.loop);
-      const interval = this.stalled || this.asleep ? QUIET_FRAME_MS : FRAME_MS;
+      const interval = Math.max(this.frameMs, this.stalled || this.asleep ? QUIET_FRAME_MS : 0);
       if (now - this.lastPaint < interval - 2) return;
       this.lastPaint = now;
       this.advance(now);
@@ -992,10 +1141,10 @@
       const drowsy = this.drowsiness(now);
       this.life?.advance(now, {asleep: this.asleep, drowsy, stalled: this.stalled});
       if (!this.stalled) {
-        let spin = (1 + this.arousal * 1.5) * Math.max(.4, this.pose?.spin ?? 1);
+        let spin = (1 + this.arousal * 1.5) * Math.max(.4, this.shown?.spin ?? this.pose?.spin ?? 1);
         for (const effect of this.effects) {
           const p = (now - effect.start) / effect.ms;
-          if (p > 0 && p < 1 && effect.name === 'warp') spin += 6 * bump(p);
+          if (p > 0 && p < 1 && effect.name === 'warp') spin += 6 * bump(p) * this.fadeOf(effect, now);
         }
         this.spin += elapsed / 1000 * .12 * spin * (1 - .5 * drowsy) * (this.asleep ? .2 : 1);
         this.moon += elapsed / 26000 * TAU;
@@ -1020,12 +1169,13 @@
         }
       }
       const looking = now < this.gaze.until;
-      const ease = Math.min(1, elapsed / 260);
+      const ease = 1 - Math.exp(-elapsed / 200);
       this.gaze.x += ((looking ? this.gaze.tx : 0) - this.gaze.x) * ease;
       this.gaze.y += ((looking ? this.gaze.ty : 0) - this.gaze.y) * ease;
       this.effects = this.effects.filter((effect) => {
+        if (effect.cut != null && now >= effect.cut + EFFECT_FADE_MS) return false;
         if (now < effect.start + effect.ms) return true;
-        effect.spec.end?.(this);
+        if (effect.cut == null) effect.spec.end?.(this);
         return false;
       });
       this.motes = this.motes.filter((mote) => {
@@ -1057,17 +1207,31 @@
       if (!this.pal || this.size < 8) return;
       ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
 
-      const pose = this.life ? this.life.pose(now) : null;
-      this.pose = pose;
+      const step = this.stepFor(now);
+      this.pose = this.life ? this.life.pose(now) : null;
+      const pose = this.settle(this.pose, step);
       const mods = {flare: 0, pupil: pose?.pupil ?? 1, iris: pose?.iris ?? 1, dim: pose?.dim ?? 1,
         jx: 0, jy: 0, spikes: 0};
       const live = [];
       for (const effect of this.effects) {
         const p = (now - effect.start) / effect.ms;
         if (p < 0 || p > 1) continue;
+        const fade = this.fadeOf(effect, now);
+        if (fade <= 0) continue;
         effect.color = this.color(effect.tone);
-        effect.spec.mods?.(p, mods, effect);
-        live.push([effect, p]);
+        if (effect.spec.mods) {
+          // Each effect bends the eye in proportion to how present it still is.
+          const bend = {flare: 0, pupil: 1, iris: 1, dim: 1, jx: 0, jy: 0, spikes: 0};
+          effect.spec.mods(p, bend, effect);
+          mods.flare += bend.flare * fade;
+          mods.pupil *= 1 + (bend.pupil - 1) * fade;
+          mods.iris *= 1 + (bend.iris - 1) * fade;
+          mods.dim *= 1 + (bend.dim - 1) * fade;
+          mods.jx += bend.jx * fade;
+          mods.jy += bend.jy * fade;
+          mods.spikes = Math.max(mods.spikes, bend.spikes * fade);
+        }
+        live.push([effect, p, fade]);
       }
       // Speaking: the pupil rises and falls with its own voice, as HAL's did.
       if (this.voiceLevel > .01 && !this.asleep) {
@@ -1084,20 +1248,40 @@
       const cx = R + mods.jx * R;
       const cy = R + mods.jy * R;
       const pal = this.pal;
-      const g = geometry(ctx, R, cx, cy, pal);
-      // Tension warms the iris toward red, as danger events do.
-      let tint = pose?.red ? mixHue(this.tint(), pal.red, pose.red * .55) : this.tint();
+      const g = geometry(ctx, R, cx, cy, pal, this.ratio);
+      let tint = this.tint(true);
       // An expression's own colour: pleased warms toward green, wary orange.
       if (pose?.tone && pose.toneAmount > .01 && pal[pose.tone]) tint = mixHue(tint, pal[pose.tone], pose.toneAmount);
+      // The colour and brightness ease over a few frames instead of jumping.
+      const ease = (seconds) => 1 - Math.exp(-step / seconds);
+      tint = this.tintShown = step && this.tintShown ? mixHue(this.tintShown, tint, ease(.14)) : tint;
+      // Danger, and the tension of the danger flags, in red: it fills the iris
+      // while it's strong and recedes to the rim as it fades (5.5.7). Mixed
+      // into the eye's own colour, cyan went pink on its way back.
+      let danger = Math.max(this.danger(), (pose?.red || 0) * .55);
+      danger = this.dangerShown = step && this.dangerShown != null ? lerp(this.dangerShown, danger, ease(.14)) : danger;
+      const edge = 1.15 * (1 - danger) - .1;
+      const calm = tint;
+      // The eye's colour at a fraction of the iris's radius out from the pupil.
+      const tintAt = (s) => (danger < .004 ? calm
+        : mix(calm, pal.red, smooth((s - edge) / .24 + .5) * clamp(danger * 4)));
+      tint = tintAt(0);
+      const rim = tintAt(1);
       const drowsy = this.drowsiness(now);
       const breath = .5 + .5 * Math.sin(this.breath * TAU);
-      const level = clamp((.8 + .2 * this.arousal) * (1 - .22 * drowsy) * (this.asleep ? .32 : 1) * mods.dim, .05, 1);
+      let level = clamp((.8 + .2 * this.arousal) * (1 - .22 * drowsy) * (this.asleep ? .32 : 1) * mods.dim, .05, 1);
+      level = this.levelShown = step && this.levelShown != null
+        ? lerp(this.levelShown, level, 1 - Math.exp(-step / .08)) : level;
       const sip = Math.exp(-(now - this.lastSip) / 300) * .15;
       const flare = clamp(mods.flare + sip + (pose?.flare || 0) + .35 * (pose?.aperture || 0), 0, 1.6);
       g.tint = tint;
       g.level = level;
+      // Where the eye looks, as a fraction of the orb (the springs already
+      // carry the glance toward the newest mote).
+      const lookX = pose ? pose.dx : this.gaze.x;
+      const lookY = pose ? pose.dy : this.gaze.y;
 
-      this.drawBezel(g, tint, level);
+      this.drawBezel(g, rim, level, this.reduced ? 0 : .05 * Math.sin(now / 11000) + 1.4 * (lookX - .5 * lookY));
 
       // Everything inside the lens.
       ctx.save();
@@ -1105,69 +1289,140 @@
       ctx.arc(cx, cy, .8 * R, 0, TAU);
       ctx.clip();
       const glass = ctx.createRadialGradient(cx, cy, 0, cx, cy, .8 * R);
-      glass.addColorStop(0, paint(mix(pal.bg, tint, .12)));
+      glass.addColorStop(0, paint(mix(pal.bg, tintAt(.5), .12)));
       glass.addColorStop(1, paint(pal.bg));
       ctx.fillStyle = glass;
       ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
 
       ctx.globalCompositeOperation = 'lighter';
-      const gx = cx + (this.gaze.x + (pose?.dx ?? 0)) * R;
-      const gy = cy + (this.gaze.y + (pose?.dy ?? 0)) * R;
-      // The iris: HAL's glow, strongest at the pupil and fading into the glass.
-      // The aperture tightens the iris as it thinks.
+      const gx = cx + lookX * R;
+      const gy = cy + lookY * R;
+      // The iris: HAL's glow, pale and hot at the pupil, deepening to a dark,
+      // saturated shade of the same colour toward its edge (5.5.7), and fading
+      // into the glass. The aperture tightens the iris as it thinks.
       const irisRadius = .66 * R * mods.iris * (.96 + .06 * breath) * (1 - .1 * (pose?.aperture || 0));
       const iris = ctx.createRadialGradient(gx, gy, 0, gx, gy, irisRadius);
-      iris.addColorStop(0, paint(mix(tint, pal.text, .55), .95 * level));
-      iris.addColorStop(.1, paint(tint, .9 * level));
-      iris.addColorStop(.3, paint(tint, .5 * level));
-      iris.addColorStop(.55, paint(mix(tint, pal.bg, .3), .18 * level));
-      iris.addColorStop(.8, paint(tint, .05 * level));
-      iris.addColorStop(1, paint(tint, 0));
+      for (const [s, depth, alpha] of IRIS_STOPS) {
+        const color = tintAt(s);
+        const shade = depth < 0 ? mix(color, pal.text, -depth) : mix(color, deepen(color), depth);
+        iris.addColorStop(s, paint(shade, alpha * level));
+      }
       ctx.fillStyle = iris;
       ctx.beginPath();
       ctx.arc(gx, gy, irisRadius, 0, TAU);
       ctx.fill();
-      this.drawFibres(g, gx, gy, irisRadius, tint, level);
+      this.drawFibres(g, gx, gy, irisRadius, tintAt(.3), level);
 
       // Now and then the lens hunts for focus.
       if (pose?.blur > .05) ctx.filter = `blur(${(pose.blur * .012 * R).toFixed(2)}px)`;
-      this.drawGalaxy(g, gx, gy, tint, level, now);
+      this.drawGalaxy(g, gx, gy, tintAt, level, now);
       ctx.filter = 'none';
-      for (const [effect, p] of live) effect.spec.inner?.(g, effect, p);
+      for (const [effect, p, fade] of live) {
+        if (!effect.spec.inner) continue;
+        ctx.globalAlpha = fade;
+        effect.spec.inner(g, effect, p);
+      }
+      ctx.globalAlpha = 1;
       this.drawMotes(g, now);
-      this.drawDiaphragm(g, gx, gy, irisRadius, tint, level, pose?.aperture || 0);
+      this.drawDiaphragm(g, gx, gy, irisRadius, tintAt(.9), level, pose?.aperture || 0);
       ctx.globalCompositeOperation = 'lighter';
-      this.drawCore(g, gx, gy, tint, level, breath, flare, mods);
+      const core = this.drawCore(g, gx, gy, tint, level, breath, flare, mods);
 
       ctx.globalCompositeOperation = 'source-over';
       ctx.drawImage(this.layer('glass', (layer) => this.paintGlass(layer)), cx - R, cy - R, 2 * R, 2 * R);
+      // The star burns through the scanlines rather than sitting behind them.
       ctx.globalCompositeOperation = 'lighter';
-      this.drawGhosts(g, gx, gy, tint, level);
+      this.drawHeart(g, gx, gy, tint, level, flare, mods.spikes, core);
+      ctx.globalCompositeOperation = 'source-over';
+      // The reflections sit on the dome's surface, so they drift a little
+      // against the eye as it looks about.
+      ctx.drawImage(this.layer('reflections', (layer) => this.paintReflections(layer)),
+        cx - R - .35 * lookX * R, cy - R - .35 * lookY * R, 2 * R, 2 * R);
+      ctx.globalCompositeOperation = 'lighter';
+      this.drawGhosts(g, gx, gy, tintAt(.6), level);
       ctx.globalCompositeOperation = 'source-over';
       if (pose?.glint != null) this.drawGlint(g, pose.glint);
       if (pose) this.drawLids(g, pose);
       ctx.restore();
 
       ctx.globalCompositeOperation = 'lighter';
-      for (const [effect, p] of live) effect.spec.outer?.(g, effect, p);
+      for (const [effect, p, fade] of live) {
+        if (!effect.spec.outer) continue;
+        ctx.globalAlpha = fade;
+        effect.spec.outer(g, effect, p);
+      }
+      ctx.globalAlpha = 1;
       for (const blip of this.blips) {
         const q = clamp((now - blip.start) / 650);
         const to = blip.angle + .5 * easeOut(q);
-        g.glowTrack(blip.angle + .5 * easeOut(Math.max(0, q - .25)), to, .885, .9, mix(tint, pal.text, .3), (1 - smooth(q)) * .7);
+        g.glowTrack(blip.angle + .5 * easeOut(Math.max(0, q - .25)), to, .885, .9, mix(rim, pal.text, .3), (1 - smooth(q)) * .7);
         const [x, y] = g.polar(to, .885 * R);
-        g.dot(x, y, 1, mix(tint, pal.text, .5), 1 - q);
+        g.glow(x, y, 2.6 * g.k, mix(rim, pal.text, .5), (1 - q) * .8);
       }
       ctx.globalCompositeOperation = 'source-over';
       if (this.stalled) {
         // A quiet feed lights one small lamp; it never puts the eye out.
         const [x, y] = g.polar(Math.PI / 4, .885 * R);
         g.dot(x, y, 1.9, pal.red, .45 + .45 * breath);
+        ctx.globalCompositeOperation = 'lighter';
+        g.glow(x, y, 4 * g.k, pal.red, .25 + .25 * breath);
+        ctx.globalCompositeOperation = 'source-over';
       }
     }
 
-    drawBezel(g, tint, level) {
+    // Seconds since the last frame drawn, or 0 when this frame should land
+    // exactly on the pose (a still frame, the first, or after a pause).
+    stepFor(now) {
+      const elapsed = (now - this.drawnAt) / 1000;
+      this.drawnAt = now;
+      return this.running && !this.reduced && elapsed > 0 && elapsed < .25 ? elapsed : 0;
+    }
+
+    // The pose as it shows (5.5.7): each channel follows the life module's
+    // pose on a damped spring, stepped finely enough to stay stable at any
+    // frame rate.
+    settle(pose, step) {
+      if (!pose) {
+        this.shown = null;
+        return null;
+      }
+      const target = {...pose, dx: pose.dx + this.gaze.x, dy: pose.dy + this.gaze.y};
+      if (!step || !this.shown) {
+        this.shown = target;
+        this.velocity = {};
+        return target;
+      }
+      const steps = Math.ceil(step / .004);
+      const h = step / steps;
+      for (const key of SPRING_KEYS) {
+        const [stiffness, damping] = SPRINGS[key];
+        const goal = Number(target[key]) || 0;
+        let x = Number(this.shown[key]);
+        if (!Number.isFinite(x)) x = goal;
+        let v = this.velocity[key] || 0;
+        for (let index = 0; index < steps; index += 1) {
+          v += (stiffness * stiffness * (goal - x) - 2 * damping * stiffness * v) * h;
+          x += v * h;
+        }
+        target[key] = x;
+        this.velocity[key] = v;
+      }
+      target.lid = clamp(target.lid);
+      target.lidLower = clamp(target.lidLower);
+      this.shown = target;
+      return target;
+    }
+
+    drawBezel(g, tint, level, turn = 0) {
       const {ctx, R, cx, cy, pal} = g;
       ctx.drawImage(this.layer('bezel', (layer) => this.paintBezel(layer)), cx - R, cy - R, 2 * R, 2 * R);
+      // The light on the metal shifts a little as the eye looks about, as if
+      // the housing turned with it.
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(turn);
+      ctx.drawImage(this.layer('sheen', (layer) => this.paintSheen(layer)), -R, -R, 2 * R, 2 * R);
+      ctx.restore();
       // The iris's light spills onto the inner lip of the bezel.
       ctx.globalCompositeOperation = 'lighter';
       const spill = ctx.createRadialGradient(cx, cy, .79 * R, cx, cy, .9 * R);
@@ -1190,8 +1445,8 @@
       // A small moon keeps its orbit round the bezel.
       const [x, y] = g.polar(this.moon - Math.PI / 2, .885 * R);
       ctx.globalCompositeOperation = 'lighter';
-      g.dot(x, y, 2.4, tint, .18 * level);
-      g.dot(x, y, 1, mix(tint, pal.text, .6), .9 * level);
+      g.glow(x, y, 4.2 * g.k, tint, .45 * level);
+      g.dot(x, y, .9, mix(tint, pal.text, .6), .9 * level);
       ctx.globalCompositeOperation = 'source-over';
     }
 
@@ -1207,6 +1462,17 @@
         ctx.arc(cx, cy, outer, 0, TAU);
         ctx.arc(cx, cy, inner, 0, TAU, true);
       };
+      // A soft dark edge just outside the metal, so the orb sits apart from a
+      // bright scene instead of looking pasted on (5.5.7).
+      const shadow = ctx.createRadialGradient(cx, cy, .95 * R, cx, cy, R);
+      shadow.addColorStop(0, paint(pal.bg, .85));
+      shadow.addColorStop(.6, paint(pal.bg, .45));
+      shadow.addColorStop(1, paint(pal.bg, 0));
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, TAU);
+      ctx.arc(cx, cy, .95 * R, 0, TAU, true);
+      ctx.fillStyle = shadow;
+      ctx.fill();
       const metal = ctx.createRadialGradient(cx - .3 * R, cy - .35 * R, .1 * R, cx, cy, outer);
       metal.addColorStop(0, paint(mix(pal.text, pal.bg, .25)));
       metal.addColorStop(.6, paint(mix(pal.text, pal.bg, .55)));
@@ -1215,18 +1481,31 @@
       band();
       ctx.fillStyle = metal;
       ctx.fill();
-      // Brushing: fine concentric grain, light and dark.
+      // Brushing: fine concentric grain, light and dark. Fainter on a small
+      // orb, where a few pixels of grain only shimmer.
       const grain = random(4242);
       const lines = Math.round(clamp(R * 1.6, 24, 360));
       const pitch = (outer - inner) / lines;
+      const fine = clamp((outer - inner) * g.ratio / 30, .35, 1);
       ctx.lineWidth = Math.max(.3, pitch * .8);
       for (let index = 0; index < lines; index += 1) {
         const radius = inner + pitch * (index + grain() * .8);
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, TAU);
-        ctx.strokeStyle = paint(grain() < .5 ? pal.text : pal.bg, .025 + .06 * grain());
+        ctx.strokeStyle = paint(grain() < .5 ? pal.text : pal.bg, (.025 + .06 * grain()) * fine);
         ctx.stroke();
       }
+    }
+
+    // The light on the bezel, painted once and turned a little as the eye
+    // looks about (drawBezel): the brushed sheen, the bevels and the edges.
+    paintSheen(g) {
+      const {ctx, R, cx, cy, pal, k} = g;
+      const band = () => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, .97 * R, 0, TAU);
+        ctx.arc(cx, cy, .8 * R, 0, TAU, true);
+      };
       if (ctx.createConicGradient) {
         // Anisotropic sheen: brushed metal throws light in long arcs.
         const sheen = ctx.createConicGradient(-Math.PI * .75, cx, cy);
@@ -1264,8 +1543,8 @@
     }
 
     // The glass, painted once (layer()): darker toward the rim, the faint
-    // rings of the lens elements behind it, HAL's window reflections and the
-    // scanlines.
+    // rings of the lens elements behind it, and the scanlines. Its
+    // reflections are a layer of their own (paintReflections).
     paintGlass(g) {
       const {ctx, R, cx, cy, pal} = g;
       const rim = ctx.createRadialGradient(cx, cy, .55 * R, cx, cy, .8 * R);
@@ -1278,30 +1557,88 @@
           g.ring(radius, .6, pal.text, alpha);
         }
       }
-      ctx.lineCap = 'round';
-      g.arc(Math.PI * 1.08, Math.PI * 1.38, .64, .07 * R / g.k, pal.text, .16);
-      g.arc(Math.PI * 1.12, Math.PI * 1.3, .52, .04 * R / g.k, pal.text, .08);
-      g.arc(Math.PI * .12, Math.PI * .3, .66, .05 * R / g.k, pal.text, .07);
-      ctx.lineCap = 'butt';
-      const spot = ctx.createRadialGradient(cx - .34 * R, cy - .46 * R, 0, cx - .34 * R, cy - .46 * R, .09 * R);
-      spot.addColorStop(0, paint(pal.text, .45));
-      spot.addColorStop(1, paint(pal.text, 0));
-      ctx.fillStyle = spot;
-      ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
       if (this.crt) {
         const step = Math.max(2, 2 * g.k);
         ctx.fillStyle = paint(pal.bg, .1);
         for (let y = cy - .8 * R; y < cy + .8 * R; y += step) ctx.fillRect(cx - R, y, 2 * R, step / 2);
+        // Thinner over the bright centre, where the light burns through them
+        // (the rings start further out, so only the scanlines thin).
+        ctx.globalCompositeOperation = 'destination-out';
+        const through = ctx.createRadialGradient(cx, cy, 0, cx, cy, .32 * R);
+        through.addColorStop(0, paint(pal.bg, .75));
+        through.addColorStop(.45, paint(pal.bg, .5));
+        through.addColorStop(1, paint(pal.bg, 0));
+        ctx.fillStyle = through;
+        ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+        ctx.globalCompositeOperation = 'source-over';
       }
     }
 
+    // HAL's window reflections on the dome, painted once and softened while
+    // painting, so the blur costs nothing per frame: a curved pane upper
+    // left with a narrower one beside it, an inner element's echo, a faint
+    // bounce lower right, a soft spot with a sharp glint in it, and the
+    // glass's edge catching the light.
+    paintReflections(g) {
+      const {ctx, R, cx, cy, pal} = g;
+      const conic = Boolean(ctx.createConicGradient);
+      const pane = (from, to, inner, outer, alpha) => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, outer * R, from, to);
+        ctx.arc(cx, cy, inner * R, to, from, true);
+        ctx.closePath();
+        if (conic) {
+          // Brightest a third of the way along, fading toward both ends.
+          const reach = (to - from) / TAU;
+          const light = ctx.createConicGradient(from, cx, cy);
+          light.addColorStop(0, paint(pal.text, .25 * alpha));
+          light.addColorStop(reach * .3, paint(pal.text, alpha));
+          light.addColorStop(reach, paint(pal.text, .15 * alpha));
+          light.addColorStop(Math.min(1, reach + .001), paint(pal.text, 0));
+          light.addColorStop(1, paint(pal.text, 0));
+          ctx.fillStyle = light;
+        } else {
+          ctx.fillStyle = paint(pal.text, .6 * alpha);
+        }
+        ctx.fill();
+      };
+      ctx.filter = `blur(${Math.max(.35, .012 * R).toFixed(2)}px)`;
+      pane(Math.PI * 1.06, Math.PI * 1.35, .575, .7, .34);
+      pane(Math.PI * 1.38, Math.PI * 1.47, .575, .7, .18);
+      pane(Math.PI * 1.1, Math.PI * 1.3, .49, .545, .13);
+      pane(Math.PI * .1, Math.PI * .32, .63, .69, .11);
+      const spot = ctx.createRadialGradient(cx - .34 * R, cy - .46 * R, 0, cx - .34 * R, cy - .46 * R, .075 * R);
+      spot.addColorStop(0, paint(pal.text, .3));
+      spot.addColorStop(1, paint(pal.text, 0));
+      ctx.fillStyle = spot;
+      ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+      ctx.filter = 'none';
+      const glint = ctx.createRadialGradient(cx - .36 * R, cy - .48 * R, 0, cx - .36 * R, cy - .48 * R, .028 * R + .6);
+      glint.addColorStop(0, paint(pal.text, .75));
+      glint.addColorStop(1, paint(pal.text, 0));
+      ctx.fillStyle = glint;
+      ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+      ctx.lineCap = 'round';
+      g.arc(Math.PI * 1.02, Math.PI * 1.48, .788, .7, pal.text, .12);
+      ctx.lineCap = 'butt';
+    }
+
     // The iris's texture: fine radial fibres round the pupil, turning slowly
-    // with the galaxy, and the collarette where they start.
+    // with the galaxy, and the collarette where they start. Each strand
+    // fades in from the collarette and out toward the iris's edge.
     drawFibres(g, gx, gy, irisRadius, tint, level) {
       const {ctx, R, k, pal} = g;
       const fibres = fibresFor(R);
       const turn = this.spin * .05;
       const color = mix(tint, pal.text, .15);
+      const strand = (alpha) => {
+        const light = ctx.createRadialGradient(gx, gy, .14 * irisRadius, gx, gy, .78 * irisRadius);
+        light.addColorStop(0, paint(color, 0));
+        light.addColorStop(.15, paint(color, alpha));
+        light.addColorStop(.55, paint(color, alpha * .7));
+        light.addColorStop(1, paint(color, 0));
+        return light;
+      };
       for (let bucket = 0; bucket < 3; bucket += 1) {
         ctx.beginPath();
         for (const fibre of fibres) {
@@ -1312,7 +1649,7 @@
           ctx.moveTo(gx + cos * fibre.from * irisRadius, gy + sin * fibre.from * irisRadius);
           ctx.lineTo(gx + cos * fibre.to * irisRadius, gy + sin * fibre.to * irisRadius);
         }
-        ctx.strokeStyle = paint(color, [.035, .065, .11][bucket] * level);
+        ctx.strokeStyle = strand([.05, .09, .15][bucket] * level);
         ctx.lineWidth = .5 * k;
         ctx.stroke();
       }
@@ -1384,34 +1721,47 @@
       ctx.lineCap = 'butt';
     }
 
-    drawGalaxy(g, gx, gy, tint, level, now) {
-      const {ctx, R, k, pal} = g;
+    // tintAt(s) is the eye's colour at a fraction of the iris out.
+    drawGalaxy(g, gx, gy, tintAt, level, now) {
+      const {R, k, pal} = g;
       const twinkle = now / 900;
-      for (const star of galaxyFor(R)) {
-        // Inner stars turn faster, so the arms wind like a real spiral.
+      const galaxy = galaxyFor(R);
+      // Four shades from the white core out to the arms' own colour.
+      const shades = [0, 1, 2, 3].map((band) => {
+        const along = (band + .5) / 4;
+        return mix(pal.text, tintAt((.1 + .52 * along) / .66), .35 + .5 * along);
+      });
+      // Inner stars turn faster, so the arms wind like a real spiral.
+      const place = (star) => {
         const angle = star.angle + this.spin * (1.2 / (.35 + star.radius));
-        const x = gx + Math.cos(angle) * star.radius * R;
-        const y = gy + Math.sin(angle) * star.radius * R * .9;
-        const alpha = star.bright * level * .75 * (.7 + .3 * Math.sin(twinkle + star.twinkle));
-        ctx.fillStyle = paint(mix(pal.text, tint, .35 + .5 * star.along), alpha);
-        ctx.beginPath();
-        ctx.arc(x, y, Math.max(.25, star.size * k * .55), 0, TAU);
-        ctx.fill();
+        return [gx + Math.cos(angle) * star.radius * R, gy + Math.sin(angle) * star.radius * R * .9];
+      };
+      // The arms' unresolved stars: a faint haze along each one.
+      for (const star of galaxy.haze) {
+        const [x, y] = place(star);
+        g.glow(x, y, (.06 + .05 * star.along) * R, shades[2], .09 * level);
+      }
+      for (const star of galaxy) {
+        const [x, y] = place(star);
+        const alpha = star.bright * level * .8 * (.7 + .3 * Math.sin(twinkle + star.twinkle));
+        g.glow(x, y, Math.max(.6, star.size * k * 1.3), shades[Math.min(3, Math.floor(star.along * 4))], alpha);
       }
     }
 
+    // Each event falls in as a small comet: a soft head with a tail fading
+    // behind it, dissolving into the pupil at the end.
     drawMotes(g, now) {
-      const {R, pal} = g;
+      const {R, k, pal} = g;
       for (const mote of this.motes) {
         const q = (now - mote.start) / mote.ms;
         if (q <= 0 || q >= 1) continue;
         const color = mix(this.color(mote.tone), pal.text, .25);
-        const alpha = Math.min(1, q * 4) * (1 - q * .3) * (mote.dream ? .35 : 1);
-        for (let trail = 2; trail >= 0; trail -= 1) {
-          const t = Math.max(0, q - trail * .04);
-          const [x, y] = g.polar(mote.angle + mote.twist * t, .76 * R * (1 - easeIn(t)));
-          g.dot(x, y, mote.size * (1 - .5 * t) * (trail ? .7 : 1), color, alpha * (trail ? .35 / trail : 1));
-        }
+        const alpha = smooth(q * 5) * (1 - smooth(span(q, .8, 1))) * (mote.dream ? .35 : 1);
+        const at = (t) => g.polar(mote.angle + mote.twist * t, .76 * R * (1 - easeIn(t)));
+        const [x, y] = at(q);
+        const [tx, ty] = at(Math.max(0, q - .1));
+        g.streak(tx, ty, x, y, color, .5 * alpha, mote.size * (1 - .4 * q));
+        g.glow(x, y, mote.size * (1 - .4 * q) * 2.3 * k, color, alpha);
       }
     }
 
@@ -1419,10 +1769,12 @@
       const {ctx, R, pal} = g;
       const pupil = mods.pupil * (this.asleep ? .6 : 1);
       const core = (.075 + .025 * this.arousal + .02 * breath) * R * pupil;
-      const halo = core * (3.2 + 2 * flare);
+      // A flare spreads the glow wider rather than piling on brightness, so a
+      // bright moment doesn't blow the iris out into one flat disc (5.5.7).
+      const halo = core * (3.2 + 2.4 * flare);
       const glow = ctx.createRadialGradient(gx, gy, 0, gx, gy, halo);
-      glow.addColorStop(0, paint(mix(pal.text, tint, .25), .9 * level));
-      glow.addColorStop(.35, paint(tint, .45 * level * (1 + flare)));
+      glow.addColorStop(0, paint(mix(pal.text, tint, .25), .85 * level));
+      glow.addColorStop(.35, paint(tint, .45 * level * (1 + .3 * Math.min(flare, 1.2))));
       glow.addColorStop(1, paint(tint, 0));
       ctx.fillStyle = glow;
       ctx.beginPath();
@@ -1431,7 +1783,7 @@
       // A wider bloom, and the faint horizontal streak a lens throws from a
       // bright point (stronger as it flares or speaks).
       const bloom = ctx.createRadialGradient(gx, gy, 0, gx, gy, halo * 2.2);
-      bloom.addColorStop(0, paint(tint, .12 * level));
+      bloom.addColorStop(0, paint(tint, (.08 + .04 * Math.min(flare, 1)) * level));
       bloom.addColorStop(1, paint(tint, 0));
       ctx.fillStyle = bloom;
       ctx.beginPath();
@@ -1451,67 +1803,77 @@
         ctx.fill();
         ctx.restore();
       }
-      g.dot(gx, gy, core / g.k, mix(pal.text, tint, .15), Math.min(1, level * (1 + .5 * flare)));
-      const spikes = mods.spikes;
+      return core;
+    }
+
+    // The star itself (5.5.7): white-hot at its heart, its edge melting into
+    // the glow rather than a hard disc. Drawn over the glass, so the
+    // scanlines don't stripe it.
+    drawHeart(g, gx, gy, tint, level, flare, spikes, core) {
+      const {ctx, R, pal} = g;
+      const hot = Math.min(1, level * (1 + .5 * flare));
+      const heart = ctx.createRadialGradient(gx, gy, 0, gx, gy, core * 1.6);
+      heart.addColorStop(0, paint(pal.text, hot));
+      heart.addColorStop(.3, paint(mix(pal.text, tint, .12), hot));
+      heart.addColorStop(.6, paint(mix(pal.text, tint, .45), .65 * hot));
+      heart.addColorStop(1, paint(tint, 0));
+      ctx.fillStyle = heart;
+      ctx.beginPath();
+      ctx.arc(gx, gy, core * 1.6, 0, TAU);
+      ctx.fill();
       if (spikes > 0) {
+        // Diffraction spikes, brightest at the star and fading to their tips.
         const length = R * (.12 + .45 * spikes);
         const turn = this.spin * .2;
         for (let arm = 0; arm < 4; arm += 1) {
           const angle = turn + arm * Math.PI / 2;
-          g.line(gx - Math.cos(angle) * length, gy - Math.sin(angle) * length,
-            gx + Math.cos(angle) * length, gy + Math.sin(angle) * length,
-            mix(pal.text, tint, .3), .6 * spikes * level, .7);
+          g.streak(gx + Math.cos(angle) * length, gy + Math.sin(angle) * length, gx, gy,
+            mix(pal.text, tint, .3), .75 * spikes * level, .8);
         }
       }
     }
 
     // The lids: shadow falling over the lens, not a plate across it. They
     // hood the eye when it's tired or depressed, squint while scooping,
-    // tilt for a side-eye, and lift from below in a smile.
+    // tilt for a side-eye, and lift from below in a smile. Each edge is the
+    // rim of a large circle beyond the lens, so it curves with the eye, and
+    // it's feathered, never outlined (a flat or drawn edge read as a line
+    // cut across the lens).
+    // Note: until 5.5.7 the shading stopped short of the curve, so only a
+    // flat band at the very top ever showed and a squint barely read.
     drawLids(g, pose) {
       const lid = clamp(pose.lid);
       const lowerLid = clamp(pose.lidLower ?? pose.lid);
       if (lid <= .01 && lowerLid <= .01) return;
       const {ctx, R, cx, cy, pal} = g;
       const reach = .8 * R;
-      const feather = .1 * R;
-      const tilt = (pose.tilt || 0) * reach * lid;
-      // The edge curves with the eye, as an eyelid's does (a flat edge read
-      // as a line drawn across the lens).
-      const sag = (lid) => reach * (.2 + .45 * lid);
-      if (lid > .01) {
-        // Upper lid: dark at the top, softening toward its edge, which
-        // comes down to the centre when shut.
-        const top = cy - reach + lid * reach - sag(lid) * .5;
-        const shade = ctx.createLinearGradient(0, cy - R, 0, top + feather);
-        shade.addColorStop(0, paint(pal.bg, .97));
-        shade.addColorStop(Math.max(0, Math.min(1, (top - (cy - R)) / (top + feather - (cy - R)))), paint(pal.bg, .88));
-        shade.addColorStop(1, paint(pal.bg, 0));
+      const feather = .12 * R;
+      const tilt = Math.atan2((pose.tilt || 0) * reach * lid, reach);
+      // side -1 is the upper lid, closing down to the centre; 1 the lower.
+      const shade = (amount, side, turn) => {
+        if (amount <= .01) return;
+        // How much higher the edge sits at the lens's sides than in the middle.
+        const sag = reach * (.2 + .45 * amount);
+        const radius = (reach * reach + sag * sag) / (2 * sag);
+        // Quicker over the first part of its travel, so a squint reaches
+        // the lit iris instead of shading only the dark glass above it.
+        const middle = cy + side * (reach * (1 - amount) ** 1.5 - feather * .5);
+        const oy = middle + side * radius;
+        const light = ctx.createRadialGradient(cx, oy, Math.max(0, radius - feather), cx, oy, radius + feather);
+        light.addColorStop(0, paint(pal.bg, .93));
+        light.addColorStop(1, paint(pal.bg, 0));
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(turn);
+        ctx.translate(-cx, -cy);
+        ctx.fillStyle = light;
         ctx.beginPath();
-        ctx.moveTo(cx - R, cy - R);
-        ctx.lineTo(cx + R, cy - R);
-        ctx.lineTo(cx + R, top + tilt + feather);
-        ctx.quadraticCurveTo(cx, top + sag(lid) + feather, cx - R, top - tilt + feather);
-        ctx.closePath();
-        ctx.fillStyle = shade;
+        ctx.arc(cx, oy, radius + feather, 0, TAU);
         ctx.fill();
-      }
-      if (lowerLid > .01) {
-        // Lower lid: it rises to meet it (more than the upper one in a smile).
-        const bottom = cy + reach - lowerLid * reach + sag(lowerLid) * .5;
-        const shade = ctx.createLinearGradient(0, cy + R, 0, bottom - feather);
-        shade.addColorStop(0, paint(pal.bg, .97));
-        shade.addColorStop(Math.max(0, Math.min(1, ((cy + R) - bottom) / ((cy + R) - (bottom - feather)))), paint(pal.bg, .88));
-        shade.addColorStop(1, paint(pal.bg, 0));
-        ctx.beginPath();
-        ctx.moveTo(cx - R, cy + R);
-        ctx.lineTo(cx + R, cy + R);
-        ctx.lineTo(cx + R, bottom + tilt * .4 - feather);
-        ctx.quadraticCurveTo(cx, bottom - sag(lowerLid) - feather, cx - R, bottom - tilt * .4 - feather);
-        ctx.closePath();
-        ctx.fillStyle = shade;
-        ctx.fill();
-      }
+        ctx.restore();
+      };
+      shade(lid, -1, tilt);
+      shade(lowerLid, 1, tilt * .4);
     }
 
     // Light sweeping across the glass, upper left to lower right.
@@ -1530,7 +1892,9 @@
     state() {
       return {
         running: this.running,
-        effects: this.effects.map((effect) => effect.name),
+        // Only what's playing; one fading out under a newer one has gone.
+        effects: this.effects.filter((effect) => effect.cut == null).map((effect) => effect.name),
+        frameRate: Math.round(1000 / this.frameMs),
         motes: this.motes.length,
         blips: this.blips.length,
         tint: this.pal ? hex(this.tint()) : '',
@@ -1543,6 +1907,7 @@
         frames: this.frames,
         size: this.size,
         pose: this.pose ? {...this.pose} : null,
+        shown: this.shown ? {...this.shown} : null,
         music: {level: this.musicLevel, bass: this.musicBass},
         life: this.life ? this.life.state(performance.now()) : null,
       };

@@ -90,6 +90,7 @@ from voidcompass.dashboard.dashboard_flight_log_mixin import DashboardFlightLogM
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
 from voidcompass.dashboard.dashboard_home_mixin import DashboardHomeMixin
 from voidcompass.dashboard.dashboard_tools_mixin import DashboardToolsMixin
+from voidcompass.dashboard.dashboard_api_mixin import DashboardApiMixin
 from voidcompass.dashboard.dashboard_colonisation_mixin import DashboardColonisationMixin
 from voidcompass.dashboard.dashboard_bgs_mixin import DashboardBgsMixin
 from voidcompass.dashboard.dashboard_trading_mixin import DashboardTradingMixin
@@ -284,6 +285,7 @@ class MainDashboard(
     DashboardWatcherVoiceMixin,
     DashboardHomeMixin,
     DashboardToolsMixin,
+    DashboardApiMixin,
     DashboardColonisationMixin,
     DashboardBgsMixin,
     DashboardTradingMixin,
@@ -2682,6 +2684,7 @@ class MainDashboard(
             self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
             self.heartbeat_hud.context_provider = self._watcher_context
             self.heartbeat_hud.story_listener = self._watcher_story
+            self.heartbeat_hud.thought_listener = self._api_thought
             self._watcher_voice_attach(self.heartbeat_hud)
         else:
             self.heartbeat_hud = None
@@ -2809,6 +2812,8 @@ class MainDashboard(
             dispatch_key="journal:ship-locker",
         )
         self.watcher.prime_market_file()
+        # The local API (5.5.7) hears the journal too, and starts if it's on.
+        self._api_attach()
         # Let the HTML cockpit publish its cached state before journal startup
         # replay begins reducing the recent live tail.
         self.root.call_later(75, self.watcher.start)
@@ -4018,6 +4023,7 @@ class MainDashboard(
         self.is_running = False
         # Note: the Watcher stops mid-word, before anything else closes.
         self._watcher_voice_close()
+        self._api_close()
         inara = getattr(self, "inara", None)
         if inara is not None:
             try:
@@ -4894,6 +4900,9 @@ class MainDashboard(
 
         HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
         HtmlOverlayServer.set_opacity(overlay_opacity_ratio(self.config))
+        # The Watcher's own frame rate (5.5.7).
+        from voidcompass.overlays.heartbeat_hud import frame_rate_setting
+        HtmlOverlayServer.set_overlay_frame_rates({"heartbeat": frame_rate_setting(self.config)})
         # Overlays with their own opacity (5.5.3.3).
         if hasattr(self, "_apply_own_opacities"):
             self._apply_own_opacities()
@@ -5035,6 +5044,7 @@ class MainDashboard(
                 self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
                 self.heartbeat_hud.context_provider = self._watcher_context
                 self.heartbeat_hud.story_listener = self._watcher_story
+                self.heartbeat_hud.thought_listener = self._api_thought
                 self._watcher_voice_attach(self.heartbeat_hud)
         elif self.heartbeat_hud:
             self.heartbeat_hud.destroy()

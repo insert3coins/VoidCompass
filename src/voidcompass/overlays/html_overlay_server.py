@@ -122,6 +122,9 @@ class HtmlOverlayServer:
 
     # Animation frames per second for every overlay page; 0 is uncapped.
     frame_rate = 30
+    # Overlays with a frame rate of their own (5.5.7, the Watcher), by
+    # overlay id; the rest follow ``frame_rate``.
+    frame_rate_by_overlay = {}
     # Every overlay at once (5.5.1.5): hidden while the Galaxy or System Map
     # is open, or all shown with an outline while Overlay Studio's layout
     # mode is on, so empty ones can be placed too. Layout mode wins.
@@ -183,6 +186,21 @@ class HtmlOverlayServer:
                 server._window_revision += 1
                 server._condition.notify_all()
         return True
+
+    @classmethod
+    def set_overlay_frame_rates(cls, mapping):
+        """Set the overlays that animate at their own rate ({overlay id:
+        frames per second}); 0 or a missing id follows ``frame_rate``. The
+        pages pick it up on their next health poll."""
+        clean = {}
+        for overlay_id, value in (mapping or {}).items():
+            try:
+                rate = int(value)
+            except (TypeError, ValueError):
+                continue
+            if rate > 0:
+                clean[str(overlay_id)] = max(5, min(240, rate))
+        cls.frame_rate_by_overlay = clean
 
     @classmethod
     def set_overlay_opacities(cls, mapping):
@@ -282,6 +300,19 @@ class HtmlOverlayServer:
             state.revision += 1
             self._condition.notify_all()
             return state.revision
+
+    def snapshot(self, overlay_id):
+        """What an overlay page is showing now, as data (the local API), or
+        None for an overlay that hasn't published yet."""
+        with self._condition:
+            state = self._overlays.get(str(overlay_id))
+            encoded = state.snapshot_json if state is not None else None
+        if not encoded:
+            return None
+        try:
+            return json.loads(encoded)
+        except ValueError:
+            return None
 
     def update_window(self, overlay_id, window):
         """Publish geometry/visibility without rebuilding the visual model."""
@@ -641,8 +672,9 @@ class HtmlOverlayServer:
                     "rendered_revision": state.rendered_revision,
                     "ready": state.ready.is_set(),
                     # Overlay Studio > All overlays > Frame rate: every page's
-                    # animation loops follow it (web/assets/frame-cap.js).
-                    "frame_rate": self.frame_rate,
+                    # animation loops follow it (web/assets/frame-cap.js),
+                    # unless the overlay has a rate of its own.
+                    "frame_rate": self.frame_rate_by_overlay.get(state.overlay_id, self.frame_rate),
                     # Overlay Studio's layout mode: pages draw a labelled
                     # outline of their window (web/assets/overlay-layout.js).
                     "layout": self.layout_mode,

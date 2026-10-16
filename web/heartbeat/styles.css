@@ -43,11 +43,19 @@ body[data-thought-colour="red"] .thought { --thought-ink: var(--red); }
 body[data-thought-size="small"] .thought { font-size: calc(10px * var(--scale, 1)); }
 body[data-thought-size="large"] .thought { font-size: calc(13.5px * var(--scale, 1)); }
 body.thought-left .thought { flex-direction: row-reverse; text-align: right; }
-/* A thin line from the eye to its words. */
-.thought i { flex: 0 0 12px; height: 1px; background: linear-gradient(90deg, var(--accent), transparent); opacity: .8; }
-body.thought-left .thought i { background: linear-gradient(270deg, var(--accent), transparent); }
+/* A thin line from the eye to its words, reaching out as a thought
+   begins (5.5.7). */
+.thought i {
+  flex: 0 0 12px; height: 1px; background: linear-gradient(90deg, var(--accent), transparent); opacity: .8;
+  transform-origin: left center; animation: thought-reach .3s ease-out both;
+}
+body.thought-left .thought i { background: linear-gradient(270deg, var(--accent), transparent); transform-origin: right center; }
+@keyframes thought-reach { from { transform: scaleX(0); } }
 /* The heading, then the words. */
-.thought-box { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+/* It fades in rather than appearing at once (5.5.7); opacity only, so the
+   Dark box fix measures the box where it really is. */
+.thought-box { display: flex; flex-direction: column; gap: 3px; min-width: 0; animation: thought-in .35s ease-out .08s both; }
+@keyframes thought-in { from { opacity: 0; } }
 body.thought-left .thought-box { align-items: flex-end; }
 /* What kind of thought it is (5.5.3.5): small, spaced and quieter than the
    words, marked in the theme's accent; always one line. */
@@ -93,8 +101,12 @@ body.thought-backdrop .thought-box {
 }
 .thought-words::after {
   content: "\258C"; margin-left: 1px; color: var(--accent); font-style: normal;
-  animation: thought-caret 1s steps(1, end) infinite;
+  animation: thought-caret 1.1s ease-in-out infinite;
 }
-.thought.done .thought-words::after { content: ""; }
-@keyframes thought-caret { 50% { opacity: 0; } }
+.thought.done .thought-words::after { content: ""; animation: none; }
+@keyframes thought-caret { 50% { opacity: .15; } }
+body.still .thought i, body.still .thought-box, body.still .thought-words::after { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .thought i, .thought-box, .thought-words::after { animation: none; }
+}
 .thought[hidden] { display: none; }

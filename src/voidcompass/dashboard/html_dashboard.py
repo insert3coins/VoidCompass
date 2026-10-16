@@ -782,7 +782,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
 
     def _html_watcher_workspace(self):
         from collections import Counter
-        from voidcompass.overlays.heartbeat_hud import _memory_path
+        from voidcompass.overlays.heartbeat_hud import _memory_path, frame_rate as heartbeat_frame_rate
         heartbeat = getattr(self, "heartbeat_hud", None)
         mind = getattr(heartbeat, "mind", None)
         if mind is None:
@@ -821,6 +821,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "nature": watcher_mind.personality(self.config),
             "frequency": watcher_mind.frequency(self.config),
             "eye": _text(self.config.get("heartbeat_eye_color") or "theme", 10),
+            # The orb here keeps to the Watcher's Frame rate too (5.5.7).
+            "frame_rate": heartbeat_frame_rate(self.config),
             "thoughts": int(memory.get("thoughts") or 0),
             "sessions": sessions,
             "hours": round(hours, 1),
@@ -2271,6 +2273,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "low_fuel_threshold_pct", "auto_copy_waypoint",
             "achievement_notifications_enabled", "adaptive_command_enabled",
             "home_system",
+            "api_enabled", "api_port", "api_allow_lan", "api_allow_control",
         ):
             value = self.config.get(key)
             values[key] = value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
@@ -2335,6 +2338,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "inara": dict(getattr(getattr(self, "inara", None), "stats", {}) or {},
                           pending=getattr(self, "inara", None).pending() if getattr(self, "inara", None) else 0),
             "galnet": self._html_dashboard_galnet(),
+            # The local API (5.5.7): listening where, or why not.
+            "api": self._api_state(),
             "profile": {
                 "key": profile,
                 "name": _text(self.config.get("active_commander_name") or "Unknown Commander", 120),
@@ -2352,6 +2357,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 "keys": list(themes.THEME_KEYS),
             },
             "tools": {
+                # Note: the page puts the result beside the button that ran
+                # the test, so it needs to know which one; without it, no result showed.
+                "op": _text(tools.get("op"), 40),
                 "status": _text(tools.get("status"), 30),
                 "detail": _text(tools.get("detail"), 500),
             },
@@ -2441,6 +2449,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 self.watcher.switch_folder(path)
         if "low_fuel_threshold_pct" in changed:
             self.update_hud()
+        if changed & {"api_enabled", "api_port", "api_allow_lan", "api_allow_control"}:
+            self._api_sync()
         self._html_settings_paths_cache = None
 
     def _planet_materials_store(self):
@@ -4299,6 +4309,17 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             if operation == "capture_end":
                 self._resume_overlay_hotkeys_after_capture()
                 return True
+            if operation == "api_open_docs":
+                import webbrowser
+
+                api = self._api_state()
+                if api.get("running"):
+                    webbrowser.open_new_tab(f"{api['url']}/docs")
+                else:
+                    from voidcompass.core.paths import resource_path
+                    from voidcompass.core.platform_support import open_path
+                    open_path(resource_path("api.md"))
+                return True
             if operation == "support_bundle":
                 self._create_support_bundle()
                 return True
@@ -4338,6 +4359,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                     "achievements_enabled": bool,
                     "achievement_notifications_enabled": bool,
                     "adaptive_command_enabled": bool,
+                    "api_enabled": bool, "api_port": int,
+                    "api_allow_lan": bool, "api_allow_control": bool,
                 }
                 updates = {}
                 for key, cast in allowed.items():
@@ -4359,6 +4382,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                     elif key == "ui_text_min_px":
                         # 0 keeps the designed sizes; otherwise no deck text is smaller.
                         updates[key] = 0 if _integer(value, 0) <= 0 else max(8, min(18, _integer(value, 0)))
+                    elif key == "api_port":
+                        updates[key] = max(1024, min(65535, _integer(value, 7380)))
                     elif key == "low_fuel_threshold_pct":
                         updates[key] = round(max(0.05, min(0.6, _number(value, 0.25))), 2)
                     else:

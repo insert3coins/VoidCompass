@@ -19,7 +19,8 @@ from voidcompass.overlays.overlay_layout_model import (
 )
 from voidcompass.overlays import watcher_mind
 from voidcompass.overlays.heartbeat_hud import (
-    EYE_COLORS, LIVELINESS, ORB_SIZES, THOUGHT_SIDES, eye_color, idle_motion, liveliness, orb_size,
+    EYE_COLORS, FRAME_RATES as HEARTBEAT_FRAME_RATES, LIVELINESS, ORB_SIZES, THOUGHT_SIDES, eye_color,
+    frame_rate_setting as heartbeat_frame_rate, idle_motion, liveliness, orb_size,
     heartbeat_text_size, thought_side_setting,
 )
 from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, HUD_SCENE_MODES, hud_scene_mode, hud_typography
@@ -365,6 +366,7 @@ class HtmlOverlayStudioMixin:
                 "heartbeat_eye_color": eye_color(self.config),
                 "heartbeat_liveliness": liveliness(self.config),
                 "heartbeat_idle_motion": idle_motion(self.config),
+                "heartbeat_frame_rate": heartbeat_frame_rate(self.config),
                 "heartbeat_thoughts": watcher_mind.frequency(self.config),
                 "heartbeat_personality": watcher_mind.personality(self.config),
                 "heartbeat_thought_backdrop": watcher_mind.thought_style(self.config)["backdrop"],
@@ -476,6 +478,9 @@ class HtmlOverlayStudioMixin:
             )
         except Exception:
             pass
+        spec = OVERLAY_SPEC_BY_ATTR.get(overlay_id)
+        if spec is not None and hasattr(self, "_api_publish"):
+            self._api_publish("overlay", {"id": spec.overlay_id, "studio_id": overlay_id, "enabled": not previous})
         self._schedule_html_dashboard_publish(immediate=True)
         return True
 
@@ -675,8 +680,13 @@ class HtmlOverlayStudioMixin:
         if "overlay_frame_rate" in payload:
             rate = _integer(payload.get("overlay_frame_rate"), 30)
             self.config["overlay_frame_rate"] = rate if rate in OVERLAY_FRAME_RATES else 30
+        if "heartbeat_frame_rate" in payload:
+            # The Watcher's own Frame rate (5.5.7), for older PCs; 0 follows all overlays.
+            rate = _integer(payload.get("heartbeat_frame_rate"), 0)
+            self.config["heartbeat_frame_rate"] = rate if rate in HEARTBEAT_FRAME_RATES else 0
         # Applied every save (and at start), so new overlay windows follow it.
         HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
+        HtmlOverlayServer.set_overlay_frame_rates({"heartbeat": heartbeat_frame_rate(self.config)})
         HtmlOverlayServer.set_opacity(overlay_opacity_ratio(self.config))
         if "hud_crt_intensity" in payload:
             intensity = _text(payload.get("hud_crt_intensity") or "Subtle", 20).title()

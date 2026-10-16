@@ -162,6 +162,8 @@ VSVersionInfo(
         f'--add-data={project_dir / "assets" / "icons"}{data_sep}assets/icons',
         f'--add-data={project_dir / "assets" / "images"}{data_sep}assets/images',
         f'--add-data={project_dir / "web"}{data_sep}web',
+        # The local API's reference, served at /api/v1/docs (5.5.7).
+        f'--add-data={project_dir / "api.md"}{data_sep}.',
         f'--add-data={project_dir / "data" / "mining_data.db"}{data_sep}data',
         f'--add-data={project_dir / "data" / "codexRef.json"}{data_sep}data',
         f'--add-data={project_dir / "data" / "achievements.json"}{data_sep}data',
@@ -190,6 +192,9 @@ VSVersionInfo(
     if os.path.exists('mini-readme.md'):
         shutil.copy(project_dir / 'mini-readme.md', dist_dir / 'UPDATE_LOG.md')
         print("Copied mini-readme.md to dist/UPDATE_LOG.md")
+    if os.path.exists('api.md'):
+        shutil.copy(project_dir / 'api.md', dist_dir / 'API.md')
+        print("Copied api.md to dist/API.md")
     if os.path.exists('THIRD_PARTY_NOTICES.md'):
         shutil.copy(
             'THIRD_PARTY_NOTICES.md',

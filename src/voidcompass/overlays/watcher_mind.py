@@ -665,6 +665,19 @@ class WatcherMind:
         self._unsaved = True
         return self.thought
 
+    def relay(self, text, heading="", speak=False):
+        """Words from outside (the local API, 5.5.7): shown as given, under
+        the heading asked for, and spoken only when asked."""
+        # Note: their markup characters go, or a caller could fake self-corrections.
+        words = " ".join(str(text or "").replace("[[", "[").replace("]]", "]")
+                         .replace("⟦", "").replace("⟧", "").split())[:400]
+        thought = self._utter("relay", "relay", words, self.clock())
+        thought["heading"] = " ".join(str(heading or "").split()).upper()[:40] or "RELAYED"
+        thought["kind"] = "relay"
+        thought["importance"] = 3 if speak else 0
+        thought["speak"] = bool(speak)
+        return dict(thought)
+
     def remember(self):
         """The next passage of its story, when one is due (5.5.3.5): in order,
         as the sessions and hours together unlock them, at most one every hour
@@ -1114,7 +1127,7 @@ class WatcherMind:
         """What of a thought its voice says out loud, as far as it has found it."""
         if not thought:
             return ""
-        if thought.get("topic") == "voice_found":
+        if thought.get("topic") in ("voice_found", "relay"):
             return thought.get("text") or ""
         return watcher_voice_lore.spoken_part(thought.get("text"), self.voice_stage())
 

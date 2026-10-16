@@ -318,7 +318,7 @@ export function renderWatcher(data = {}, ui) {
   if (!root.querySelector(".watcher-page")) shell(root, ui);
   const reduced = document.body.classList.contains("reduced-motion");
   orb?.update({
-    palette: {}, eye: data.eye, reducedMotion: reduced, events: [],
+    palette: {}, eye: data.eye, reducedMotion: reduced, events: [], frameRate: data.frame_rate,
     liveliness: "standard", idle: true, personality: data.nature,
     memory: {sessions: data.sessions, bond: data.bond?.level},
   });
