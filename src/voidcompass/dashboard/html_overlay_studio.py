@@ -358,6 +358,7 @@ class HtmlOverlayStudioMixin:
                 "galaxy_minimap_capsules": galaxy_minimap_hud.minimap_options(self.config)["capsules"],
                 "galaxy_minimap_text_scale_percent": heartbeat_text_size(self.config.get("galaxy_minimap_text_scale_percent")),
                 "galaxy_minimap_region_text_percent": heartbeat_text_size(self.config.get("galaxy_minimap_region_text_percent")),
+                "rig_tracker_show_holds": bool(self.config.get("rig_tracker_show_holds", True)),
                 "postcard_hold_s": postcards.postcard_options(self.config)["hold"],
                 "postcard_photo": postcards.postcard_options(self.config)["photo"],
                 "postcard_size": postcards.postcard_options(self.config)["size"],
@@ -592,6 +593,7 @@ class HtmlOverlayStudioMixin:
             "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading",
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
+            "rig_tracker_show_holds",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps", "overlay_transparency_fix", "overlay_classic_windows",
             "colony_show_carriers", "colony_carrier_delta", "colony_collapse_covered",
@@ -640,6 +642,10 @@ class HtmlOverlayStudioMixin:
             music = getattr(self, "music_player_hud", None)
             if music is not None:
                 music.apply_settings()
+        elif key == "rig_tracker_show_holds":
+            update_rigs = getattr(self, "_rig_update_overlay", None)
+            if callable(update_rigs):
+                update_rigs()
         elif key in {"galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news"}:
             ticker = getattr(self, "galnet_ticker_hud", None)
             if ticker is not None:

@@ -1,28 +1,18 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.10 // Your Journey, Told Back
+## v5.5.11 // Holds in Sight
 **Release Date:** 2026-Oct-18
 
-* **New: Void Wrapped.** Your year in Elite, told as a story you click through, one animated card at a time: how far you flew (and what that's like: twice Sol to Sagittarius A*, say), your jumps and the systems you saw for the first time, the hours you flew and when (a night owl?), your busiest session, your longest jump, the furthest you went from Sol, the region you lived in, the system you kept coming back to, your first discoveries and the rarest thing you found, your Codex personality, organics, credits (trading and mining told apart) and your best trade, the factions you carried, your fights (kills, bounties and combat bonds, Thargoids, interdictions, your nemesis), the everyday (missions, dockings, landings, fuel scooped, engineering, new ships), your soundtrack, your postcards and constellations, achievements, rebuys, and at the end the Watcher's verdict on your year, in its own voice, with a title for it.
-  * **Every card saves or copies as a picture** (1080 × 1350), ready to paste into Discord; SAVE EVERY CARD keeps the whole year in the wrapped folder beside Void Compass.
-  * Click or use the arrow keys to move through it, hold to pause, Space to pause, F for full screen. Any year you've flown can be told, not just this one.
-  * **↻ REFRESH MY YEAR** tells it again with everything that's happened since (new journals, trades and the rest).
-  * In December (and January) a notice tells you your year is wrapped.
-* **New: the Flight Recorder.** Any past session played again on the Galactic Atlas: the trail drawn jump by jump, first discoveries, rare worlds, Codex entries, organics, footfalls, sales, losses and postcards popping up where and when they happened, and the Watcher's words at the end.
-  * A timeline with every moment marked, scrubbing, speeds from a minute to an hour a second, the moment before and after, quiet stretches skipped, and the map following your ship.
-  * **♪ MUSIC plays the music you were listening to that session,** in the order it played, on the Music page's player.
-  * Open it from the Atlas's new REC tab, or with **WATCH AGAIN** on any flight log in the Captain's Log.
-* **New: the Rig Tracker overlay** for Rhino mining, after SrvSurvey's. The game writes nothing when a mining rig goes down, so press **Ctrl+Alt+1** as you deploy rig 1 (**Ctrl+Alt+2** for rig 2, up to 6), and the same key again as you collect it. It comes up as soon as you're out in the Rhino, with the key to press; then each rig gets a dial pointing the way it lies from where you're facing, with how far it is and how long it has been down; the nearest is lit, you're told when you're at one, and the order to collect them in is shown (the Rhino's hold stays on the Cargo overlay).
-  * Rigs are kept per planet and outlast a restart (forgotten after a week). The keys can be changed in Settings › Hotkeys, with one more to forget the rigs on the planet you're on. Place it and set its text size in Overlay Studio.
-* **New: the music diary.** Void Compass now remembers what played and when, for the Flight Recorder and Void Wrapped's soundtrack card. It starts with this version.
-* **Trading › Sell cargo: you choose what "near me" means.** It used to look at Spansh's 30 nearest buyers, which in the bubble are all within about 20 ly. Now a slider (or type it in) sets how far to look, from 5 to 1,000 ly, and BY PRICE shows the best payers anywhere inside it (BY DISTANCE, the nearest). Large pad only, fleet carriers and planetary ports can be chosen as in Find; fleet carriers are off at first, as their joke buy orders would top every list. Kept for each commander.
-* **Fixed: flight logs said a session began nowhere.** The game's login doesn't name the system you're in, so many flight logs read "From  to …": they now start where your last jump left you, and the Flight Recorder does the same.
-* The Watcher page's "What it knows of you" is now **What it has watched of you**, and the same heading on its thoughts.
-* The deck's left-hand pages are in alphabetical order under each heading.
-* **New in the Local API:** `/rigs` (read your rigs; `/rigs/{n}` and `/rigs/clear` do what the rig keys do, for a Stream Deck), `/wrapped`, `/wrapped/{year}`, `/recorder` and `/recorder/tape`, with an example that posts your year's headline to Discord.
+* **Rig Tracker: how full your holds are.** Under the rig dials, a bar for the Rhino's hold while you're driving it (23 / 72 t, 49 FREE), and one for your ship's, so you know when to head back. It turns amber near full and red when full. Only how full, not what's in it (that stays on the Cargo overlay). If Void Compass hasn't seen the ship's whole hold this trip, it counts what you've unloaded into it.
+  * Turn the bars off in Overlay Studio (Rig Tracker › Cargo holds) if you'd rather not have them.
+* **The Watcher knows Rhino mining from asteroid mining.** Refining in the Rhino used to get lines about limpets and cracked asteroids; out on a planet's surface it now talks about the ground, the rigs and the Rhino instead.
+* **The Watcher stops repeating the news.** It kept bringing up Galnet's top headline; now it mentions Galnet at most once a day, and each headline only once.
+* **Your ship's hold is remembered for its ship.** Restarting Void Compass (say, for an update) while you're out in the Rhino still knows your ship's hold and its size, as before; now, if you've changed ship since, the old ship's cargo isn't shown as the new one's (its size comes from the new ship).
+* `/rigs` in the Local API now includes the holds too.
 
 ## Earlier releases
 
+* **v5.5.10** — Your Journey, Told Back: Void Wrapped (your year as animated cards, combat and the everyday included, saved as pictures, refreshable), the Flight Recorder (replay any session on the Atlas, with the music you played), the Rig Tracker overlay for Rhino mining (Ctrl+Alt+1–6), the music diary, a radius for Sell cargo, flight logs that know where a session began, and `/rigs`, `/wrapped` and `/recorder` in the Local API.
 * **v5.5.9** — Quieter Inara: each piece of state (every ship, suit loadout, mission and ship locker category) is sent to Inara once and only again when it changes, so a whole session sends about 60 events instead of 263, and a restart mid-session sends nothing new.
 * **v5.5.8** — Waypoints by Wire: Explore & Survey's ROUTE tab in the Local API (add, mark visited, rename, move and remove waypoints; return-later places to waypoints or put aside; import the last plotted neutron route), with the deck following at once, and Stream Deck keys in the API docs.
 * **v5.5.7** — The Watcher, Refined: a sharper, smoother Watcher (a star for a pupil, a galaxy of light, glass with depth, springier glances, its own frame rate), about 2,500 new lines, and words for fights in the ship and on foot; the Local API (no key, local pages only, a proper docs page with OBS, Discord, BGS and Windows PowerShell guides; every record on its own endpoint; exploration events with values; read-only BGS); API thoughts spoken when the voice is on; and Inara no longer resent the same data after a restart.

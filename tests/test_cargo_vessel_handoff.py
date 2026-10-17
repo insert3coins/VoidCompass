@@ -123,6 +123,31 @@ class CargoVesselHandoffTests(unittest.TestCase):
             watcher.journal_path = folder
             self.assertEqual(watcher.get_latest_cargo_capacity(), 832)
 
+    def test_another_ship_forgets_the_kept_hold(self):
+        dashboard = _dashboard()
+        dashboard._cargo_inventory_by_hold = {"Ship": [{"Name": "platinum", "Count": 200}], "SRV:RHINO": [{"Count": 9}]}
+        self.assertFalse(dashboard._note_cargo_ship(None))
+        self.assertFalse(dashboard._note_cargo_ship(14), "first sight of a ship only learns it")
+        self.assertFalse(dashboard._note_cargo_ship("14"))
+        self.assertIn("Ship", dashboard._cargo_inventory_by_hold)
+        self.assertTrue(dashboard._note_cargo_ship(22))
+        self.assertNotIn("Ship", dashboard._cargo_inventory_by_hold)
+        self.assertIn("SRV:RHINO", dashboard._cargo_inventory_by_hold, "the Rhino's own hold stays")
+
+    def test_restart_checks_the_ship_in_the_journal(self):
+        import json
+        import tempfile
+        from voidcompass.core.journal_watcher import JournalWatcher
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / "Journal.2026-10-18T090500.01.log").write_text(
+                json.dumps({"event": "Loadout", "ShipID": 22, "CargoCapacity": 256}) + "\n", encoding="utf-8")
+            watcher = JournalWatcher.__new__(JournalWatcher)
+            watcher.journal_path = folder
+            self.assertEqual(watcher.get_latest_loadout()["ShipID"], 22)
+        source = (Path(__file__).resolve().parents[1] / "src" / "voidcompass" / "dashboard" / "dashboard.py").read_text(encoding="utf-8")
+        self.assertIn('self._note_cargo_ship(latest_loadout.get("ShipID"))', source)
+        self.assertIn('"_cargo_ship_id"', source, "the ship is kept with the snapshot")
+
     def test_rhino_launch_keeps_the_ship_hold_on_disk(self):
         source = (Path(__file__).resolve().parents[1] / "src" / "voidcompass" / "dashboard" / "dashboard.py").read_text(encoding="utf-8")
         launch = source.split("def _apply_surface_vehicle_launch", 1)[1].split("\n    def ", 1)[0]

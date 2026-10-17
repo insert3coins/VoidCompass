@@ -415,7 +415,7 @@ class MainDashboard(
         "neutron_boost_armed", "neutron_boost_value",
         "fsd_injection_armed", "fsd_injection_percent",
         "cargo_capacity", "current_cargo_tons", "current_cargo_vessel",
-        "current_cargo_inventory", "_cargo_inventory_by_hold", "_ship_hold_partial",
+        "current_cargo_inventory", "_cargo_inventory_by_hold", "_ship_hold_partial", "_cargo_ship_id",
         "dest_coords", "dest_name", "nav_route_entries",
         "current_latitude", "current_longitude",
         "current_heading", "current_planet_radius", "on_planet",
@@ -2840,8 +2840,11 @@ class MainDashboard(
         # you were following (on its overlay).
         self._trading_start_import()
         self._trading_update_overlay()
-        # Keep a restored capacity if no journal names the ship's hold.
+        # Keep a restored capacity if no journal names the ship's hold; a
+        # different ship since the snapshot doesn't keep the old one's hold.
+        latest_loadout = self.watcher.get_latest_loadout()
         self.cargo_capacity = self.watcher.get_latest_cargo_capacity() or self.cargo_capacity
+        self._note_cargo_ship(latest_loadout.get("ShipID"))
         latest_fuel_capacity = self.watcher.get_latest_fuel_capacity()
         if latest_fuel_capacity > 0:
             self.fuel_capacity_main = latest_fuel_capacity
@@ -8262,6 +8265,7 @@ class MainDashboard(
 
         elif ev == "Loadout":
             self.cargo_capacity = d.get("cargo_capacity", 0)
+            self._note_cargo_ship(raw.get("ShipID") if isinstance(raw, dict) else None)
             fuel_cap = d.get("fuel_capacity")
             if fuel_cap is None and isinstance(raw, dict):
                 fuel_cap = raw.get("FuelCapacity")
@@ -10863,6 +10867,22 @@ class MainDashboard(
             self._cargo_vehicle_owner(vessel),
         )
 
+    def _note_cargo_ship(self, ship_id):
+        """The kept ship hold is one ship's (5.5.11): another ship forgets it,
+        live or found in the journal after a restart."""
+        if ship_id in (None, ""):
+            return False
+        ship_id = str(ship_id)
+        known = getattr(self, "_cargo_ship_id", None)
+        self._cargo_ship_id = ship_id
+        if known in (None, "") or str(known) == ship_id:
+            return False
+        cache = getattr(self, "_cargo_inventory_by_hold", None)
+        if isinstance(cache, dict):
+            cache.pop("Ship", None)
+        self._ship_hold_partial = False
+        return True
+
     def _remember_ship_hold_from_journal(self, raw):
         """Learn the mothership's hold from a journal Cargo event.
 
@@ -10924,6 +10944,8 @@ class MainDashboard(
                        hud.update(inv, cap, ves, own, related),
                 key="cargo-hud",
             )
+        if getattr(self, "rig_tracker_hud", None) is not None:
+            self._rig_update_overlay()
 
     def update_cargo(self, inventory, vessel="Ship"):
         incoming_vessel = self._normalise_cargo_vessel(vessel)

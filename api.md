@@ -1332,7 +1332,7 @@ The mining rigs you've set down for Rhino mining, as the Rig Tracker overlay sho
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/v1/rigs` | The rigs on the planet you're on (`slot`, `distance_m`, `bearing`, `relative` to where you face, `here`, `at`), the order to collect them in, and any rigs left on other planets |
+| GET | `/api/v1/rigs` | The rigs on the planet you're on (`slot`, `distance_m`, `bearing`, `relative` to where you face, `here`, `at`), the order to collect them in, any rigs left on other planets, and `holds`: how full the Rhino's hold and the ship's are (`used`, `capacity`, `free`) |
 | POST | `/api/v1/rigs/{n}` | Rig `n` (1 to 6) where you stand: deployed, or collected if it was already down (`"done": "placed"` or `"collected"`) |
 | POST | `/api/v1/rigs/clear` | Forget the rigs on this planet: `{"confirmed": true}` |
 

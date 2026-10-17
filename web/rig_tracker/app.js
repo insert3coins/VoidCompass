@@ -55,6 +55,22 @@
     return svg;
   }
 
+  // A hold: how full it is, never what's in it (that's the Cargo overlay).
+  function hold(row) {
+    const used = number(row.used), capacity = Math.max(0, number(row.capacity));
+    const share = capacity ? Math.min(1, used / capacity) : 0;
+    const full = !row.partial && share >= 1, nearly = !row.partial && share >= 0.9;
+    const item = node("li", `hold${full ? " full" : nearly ? " nearly" : ""}${row.partial ? " partial" : ""}`);
+    const bar = node("span", "bar");
+    const fill = node("i");
+    fill.style.setProperty("--fill", share.toFixed(3));
+    bar.appendChild(fill);
+    item.append(node("span", "hold-name", String(row.name || "")), bar,
+      node("b", "hold-used", `${row.partial ? "+" : ""}${used} / ${capacity} t`),
+      node("small", "hold-free", row.partial ? "THIS TRIP" : full ? "FULL" : `${number(row.free)} FREE`));
+    return item;
+  }
+
   function render(snapshot = {}) {
     VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, snapshot.effects || {});
     VoidCompassOverlay.fitToWindow(root, 420, snapshot.effects || {});
@@ -73,6 +89,9 @@
     const order = (model.order || []).map((slot) => `#${slot}`);
     byId("rigs-order").textContent = order.length > 1 ? `COLLECT ▸ ${order.join(" → ")}` : "";
     byId("rigs-order").hidden = order.length < 2;
+    const holds = (model.holds || []).filter((row) => number(row.capacity) > 0);
+    byId("rigs-holds").replaceChildren(...holds.map(hold));
+    byId("rigs-holds").hidden = !holds.length;
     byId("rigs-hint").textContent = String(model.hint || "");
     byId("rigs-hint").hidden = !model.hint;
   }

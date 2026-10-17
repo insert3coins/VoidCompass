@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 from voidcompass.overlays.cargo_hud import build_cargo_model
 from voidcompass.overlays.planet_materials_hud import build_planet_materials_model
 from voidcompass.overlays.prospector_hud import build_prospector_model
-from voidcompass.overlays.rig_tracker import build_rig_model
+from voidcompass.overlays.rig_tracker import build_rig_model, hold_row
 from voidcompass.overlays.station_info_hud import build_station_model
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,7 +52,8 @@ DOCKED = SimpleNamespace(
 # Five rigs out on a long-named body (5.5.10).
 RIGS = {slot: {"lat": 11.9 + slot * .01, "lon": -45.1 - (slot % 2) * .02, "at": 1_700_000_000 + slot * 600}
         for slot in (1, 2, 3, 4, 5)}
-RIG_MODEL = build_rig_model(RIGS, 11.9, -45.1, 212, 2400000, BODY, now=1_700_100_000)
+RIG_MODEL = build_rig_model(RIGS, 11.9, -45.1, 212, 2400000, BODY, now=1_700_100_000,
+                            holds=[hold_row("RHINO", 23, 72), hold_row("SHIP", 238, 256)])
 
 # (page, model key, model, design width, min height, max height)
 OVERLAYS = (

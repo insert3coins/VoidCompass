@@ -82,7 +82,7 @@ class ModelTests(unittest.TestCase):
         self.assertNotIn("nearest", slots[4])
         self.assertEqual(slots[1]["age_s"], 600)
         self.assertEqual(model["order"], [1, 4])
-        self.assertNotIn("hold", model, "the Cargo overlay shows the hold")
+        self.assertEqual(model["holds"], [], "how full the holds are only (5.5.11): the Cargo overlay lists them")
 
     def test_at_a_rig(self):
         model = build_rig_model({2: {"lat": 0, "lon": 0, "at": 0}}, 0.0001, 0, 0, RADIUS)

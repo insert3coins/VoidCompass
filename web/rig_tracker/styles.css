@@ -68,4 +68,20 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 
 .hint { margin: 0; color: var(--muted); font: 700 calc(9px * var(--scale)) var(--font-wide); letter-spacing: .08em; overflow-wrap: anywhere; }
 .order { margin: 0; color: var(--accent); font: 700 calc(9.5px * var(--scale)) var(--font-wide); letter-spacing: .1em; overflow-wrap: anywhere; }
+.holds { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; column-gap: calc(8px * var(--scale)); row-gap: calc(4px * var(--scale)); margin: 0; padding: calc(6px * var(--scale)) 0 0; list-style: none; border-top: 1px solid var(--hud-faint); }
+/* one grid for every hold, so the bars line up */
+.hold { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; }
+.hold-used { text-align: right; }
+.hold-name { color: var(--hud); font: 700 calc(9px * var(--scale)) var(--font-wide); letter-spacing: .14em; }
+.hold .bar { position: relative; height: calc(8px * var(--scale)); border: 1px solid var(--hud-soft); background: color-mix(in srgb, var(--hud) 8%, transparent); overflow: hidden; }
+.hold .bar i { position: absolute; inset: 1px auto 1px 1px; width: calc((100% - 2px) * var(--fill, 0)); background: var(--hud); }
+.hold-used { color: var(--text); font: 700 calc(10.5px * var(--scale)) var(--font-wide); white-space: nowrap; }
+.hold-free { color: var(--muted); font: 700 calc(8.5px * var(--scale)) var(--font-wide); letter-spacing: .08em; text-align: right; white-space: nowrap; }
+.hold.nearly .bar i { background: var(--yellow); }
+.hold.nearly .hold-free { color: var(--yellow); }
+.hold.full .bar { border-color: var(--red); }
+.hold.full .bar i { background: var(--red); }
+.hold.full .hold-free { color: var(--red); }
+.hold.partial .bar { border-style: dashed; }
+.hold.partial .bar i { opacity: .55; }
 .rigs.reduced-motion * { animation: none !important; transition: none !important; }

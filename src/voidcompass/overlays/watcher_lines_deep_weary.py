@@ -1406,7 +1406,7 @@ DEEP_WEARY = {
         "{t1}{mined_n} pieces of {mined}. You keep going back. So do I, to my gloom.",
         "{t1}{limpets} limpets. Some came back. I mourn the rest.",
         "{t2}{tonnes} tonnes of {commodity}. I could pick it out by smell. If I could smell.",
-        "{t2}{mined_n} of {mined}, old friend. The asteroids fear you.",
+        "{t2}{mined_n} of {mined}, old friend. The rocks fear you.",
         "{t2}{limpets} limpets. A small army, sent out and mostly lost.",
         "{t2}All that {commodity}. {tonnes} tonnes. A life measured in cargo.",
     ],

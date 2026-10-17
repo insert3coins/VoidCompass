@@ -200,8 +200,11 @@ class Surroundings:
             self.settlement = self._readable(raw, "Name_Localised", "Name")
         elif event == "LaunchSRV":
             self.srv = True
-        elif event == "DockSRV":
+        elif event in {"DockSRV", "SRVDestroyed"}:
             self.srv = False
+        elif event == "Cargo" and str(raw.get("Vessel") or "").casefold() == "srv":
+            # Started while already out in the SRV: its hold says so.
+            self.srv = True
         elif event in {"LoadGame", "Loadout"}:
             self.ship = self._readable(raw, "Ship_Localised") or self.ship
             name = str(raw.get("ShipName") or "").strip()

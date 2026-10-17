@@ -53,6 +53,9 @@ THOUGHT_SECONDS = 9.0
 TOPIC_REST_S = 20 * 60.0
 # The same kind of idle thought is not raised again for this long (5.5.3.2).
 IDLE_REST_S = 30 * 60.0
+# Galnet at most once a day, and each headline only once (5.5.11).
+GALNET_REST_S = 86400.0
+GALNET_HEADLINE_REST_S = 30 * 86400.0
 # A fight is over after this long with no attack, shields up and the game's
 # danger flag clear (5.5.7); before, only a jump, supercruise or docking ended it.
 CALM_S = 90.0
@@ -231,6 +234,8 @@ IMPORTANCE = {
     "mission_done": 1,
     "bounty": 0,
     "mined": 0,
+    # 5.5.11: refined in the Rhino, from rigs on a planet (no asteroids, no limpets).
+    "mined_surface": 0,
     # 5.5.4: how you play, as it has come to know it; a milestone as it happens.
     **{topic: 1 for topic in watcher_habits.HABIT_TOPICS},
     "habit_milestone": 2,
@@ -656,6 +661,8 @@ class WatcherMind:
             rest = max(rest, watcher_lore.LORE_REST_S.get(topic, 0.0))
             if topic == "idle_postcard":
                 rest = max(rest, watcher_postcards.RECALL_REST_S)
+            if topic == "idle_galnet":
+                rest = max(rest, GALNET_REST_S)
             if topic.startswith("habit_") and topic != "habit_milestone":
                 rest = max(rest, watcher_habits.HABIT_REST_S)
             if importance < 3 and self._said_recently(topic, rest):
@@ -664,11 +671,20 @@ class WatcherMind:
             chance = min(1.0, (.35 + .25 * importance) * weight)
             if importance < 3 and self.random.random() > chance:
                 return None
+        headline_key = None
+        if topic == "idle_galnet":
+            headline = str((fields or {}).get("headline") or "").strip().casefold()
+            headline_key = f"galnet:{zlib.crc32(headline.encode('utf-8')):08x}"
+            if self._said_recently(headline_key, GALNET_HEADLINE_REST_S):
+                return None
         chosen = self._variant(topic, dict(fields or {}))
         if not chosen:
             return None
         key, script = chosen
         self._utter(topic, key, script, now)
+        if headline_key:
+            with self.lock:
+                self.memory["said"].append([headline_key, now])
         # Now and then a second beat follows, once the first has been read.
         if topic != "afterthought" and importance < 3:
             chance = .3 if (topic == "quiet" or topic in watcher_idle.IDLE_TOPICS) else .12
@@ -998,7 +1014,8 @@ class WatcherMind:
                 return None
         if event == "MiningRefined":
             material = raw.get("Type_Localised") or raw.get("Type")
-            return self.consider("mined", {"material": material}) if material else None
+            topic = "mined_surface" if self.surroundings.srv else "mined"
+            return self.consider(topic, {"material": material}) if material else None
         if event == "Scan":
             # The arrival star's scan says whether anyone charted the system.
             if raw.get("StarType") and raw.get("WasDiscovered") is False and not raw.get("DistanceFromArrivalLS"):

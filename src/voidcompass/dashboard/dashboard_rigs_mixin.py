@@ -5,7 +5,19 @@ from __future__ import annotations
 import logging
 
 from voidcompass.core.config import get_active_profile, get_profile_file
-from voidcompass.overlays.rig_tracker import RigStore, build_rig_model, surface_distance_m
+from voidcompass.overlays.cargo_hud import VEHICLE_CARGO_CAPACITIES
+from voidcompass.overlays.rig_tracker import RigStore, build_rig_model, hold_row, surface_distance_m
+
+
+def _tons(inventory):
+    total = 0
+    for item in inventory or ():
+        if isinstance(item, dict):
+            try:
+                total += int(item.get("Count", item.get("count", 0)) or 0)
+            except (TypeError, ValueError):
+                pass
+    return total
 
 
 def _distance_text(metres):
@@ -73,6 +85,29 @@ class DashboardRigsMixin:
         self._rig_update_overlay()
         return cleared
 
+    def _rig_in_rhino(self):
+        return bool(getattr(self, "current_in_srv", False)) and \
+            str(getattr(self, "current_vehicle_name", "") or "").upper() == "RHINO"
+
+    def _rig_holds(self):
+        """The Rhino's hold while you drive it, and the mothership's (5.5.11).
+        Cargo.json only describes what you're in, so out in the Rhino the
+        ship's hold is the one kept from its last Cargo."""
+        vessel = str(getattr(self, "current_cargo_vessel", "Ship") or "Ship").strip().casefold()
+        inventory = getattr(self, "current_cargo_inventory", None) or []
+        ship_capacity = getattr(self, "cargo_capacity", 0) or 0
+        holds = []
+        if vessel == "srv":
+            if self._rig_in_rhino():
+                holds.append(hold_row("RHINO", _tons(inventory), VEHICLE_CARGO_CAPACITIES["RHINO"]))
+            kept = (getattr(self, "_cargo_inventory_by_hold", None) or {}).get("Ship")
+            if kept is not None:
+                holds.append(hold_row("SHIP", _tons(kept), ship_capacity,
+                                      partial=bool(getattr(self, "_ship_hold_partial", False))))
+        else:
+            holds.append(hold_row("SHIP", _tons(inventory), ship_capacity))
+        return [row for row in holds if row["capacity"]]
+
     def _rig_model(self):
         place = self._rig_place()
         if place is None:
@@ -80,17 +115,16 @@ class DashboardRigsMixin:
         system, body, lat, lon, radius = place
         rigs = self.rig_store().rigs(system, body)
         heading = getattr(self, "current_heading", None)
-        in_rhino = bool(getattr(self, "current_in_srv", False)) and \
-            str(getattr(self, "current_vehicle_name", "") or "").upper() == "RHINO"
         key = str((getattr(self, "config", None) or {}).get("overlay_hotkey_rig_1") or "").upper()
         hint = f"{key} AS YOU DEPLOY RIG 1 · AGAIN AS YOU COLLECT IT" if key else "SET THE RIG KEYS IN SETTINGS › HOTKEYS"
-        return build_rig_model(rigs, lat, lon, heading, radius, body, in_rhino=in_rhino, hint=hint)
+        show_holds = bool((getattr(self, "config", None) or {}).get("rig_tracker_show_holds", True))
+        return build_rig_model(rigs, lat, lon, heading, radius, body, in_rhino=self._rig_in_rhino(), hint=hint,
+                               holds=self._rig_holds() if show_holds else ())
 
     # -- the Local API (5.5.10) ------------------------------------------------
     def api_rigs(self):
         place = self._rig_place()
-        in_rhino = bool(getattr(self, "current_in_srv", False)) and \
-            str(getattr(self, "current_vehicle_name", "") or "").upper() == "RHINO"
+        in_rhino = self._rig_in_rhino()
         here = (place[0], place[1]) if place else None
         elsewhere = [{"system": row["system"], "body": row["body"], "rigs": sorted(row["rigs"])}
                      for row in self.rig_store().everywhere()
@@ -100,7 +134,8 @@ class DashboardRigsMixin:
                 for row in (model or {}).get("slots") or () if row.get("tracked")]
         return {"on_surface": place is not None, "in_rhino": in_rhino,
                 "system": place[0] if place else None, "body": place[1] if place else None,
-                "rigs": rigs, "collect_order": (model or {}).get("order") or [], "elsewhere": elsewhere}
+                "rigs": rigs, "collect_order": (model or {}).get("order") or [], "elsewhere": elsewhere,
+                "holds": self._rig_holds()}
 
     def api_rig_mark(self, slot):
         from voidcompass.services.local_api import ApiError

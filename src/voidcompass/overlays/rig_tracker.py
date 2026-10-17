@@ -145,7 +145,15 @@ def collect_order(here, rigs, radius_m):
     return order
 
 
-def build_rig_model(rigs, lat, lon, heading, radius_m, body="", now=None, in_rhino=False, hint=""):
+def hold_row(name, used, capacity, partial=False):
+    """One hold as the tracker shows it: how full, never what's in it. A
+    partial ship hold only knows what was unloaded into it this trip."""
+    used, capacity = max(0, int(used or 0)), max(0, int(capacity or 0))
+    return {"name": str(name), "used": used, "capacity": capacity,
+            "free": None if partial else max(0, capacity - used), "partial": bool(partial)}
+
+
+def build_rig_model(rigs, lat, lon, heading, radius_m, body="", now=None, in_rhino=False, hint="", holds=()):
     """The overlay's model, or None when there are no rigs here and you're
     not out in the Rhino (then: six empty dials and the key to press)."""
     if lat is None or lon is None or not radius_m or not (rigs or in_rhino):
@@ -170,7 +178,8 @@ def build_rig_model(rigs, lat, lon, heading, radius_m, body="", now=None, in_rhi
         nearest["nearest"] = True
     order = collect_order((lat, lon), rigs, radius_m)
     return {"body": str(body or ""), "slots": slots, "tracked": len(rigs), "order": order,
-            "heading_known": heading is not None, "hint": "" if rigs else str(hint or "")}
+            "heading_known": heading is not None, "hint": "" if rigs else str(hint or ""),
+            "holds": [dict(row) for row in holds or () if row.get("capacity")]}
 
 
 class RigTrackerHUD(ColonyNeedsHUD):

@@ -152,14 +152,21 @@ class JournalWatcher:
         self._force_special_check = True
 
     def get_latest_cargo_capacity(self, tail_bytes=2 * 1024 * 1024, max_files=12):
-        """Best-effort lookup of the most recent Loadout CargoCapacity.
+        """Best-effort lookup of the most recent Loadout CargoCapacity."""
+        try:
+            return max(0, int(self.get_latest_loadout(tail_bytes, max_files).get("CargoCapacity", 0)))
+        except Exception:
+            return 0
+
+    def get_latest_loadout(self, tail_bytes=2 * 1024 * 1024, max_files=12):
+        """The most recent Loadout ({} if none).
 
         A session that begins out in the Rhino, or on foot, has no Loadout
         until the commander boards the ship again, so look back through the
         previous journals too (newest first) for the ship last flown.
         """
         if not self.journal_path or not os.path.exists(self.journal_path):
-            return 0
+            return {}
         try:
             files = sorted(
                 [
@@ -183,13 +190,10 @@ class JournalWatcher:
                     except Exception:
                         continue
                     if data.get("event") == "Loadout":
-                        try:
-                            return max(0, int(data.get("CargoCapacity", 0)))
-                        except Exception:
-                            return 0
+                        return data
         except Exception:
-            return 0
-        return 0
+            return {}
+        return {}
 
     def get_latest_fuel_capacity(self, tail_bytes=2 * 1024 * 1024):
         """Return the active ship's latest verified main-tank capacity.

@@ -1148,6 +1148,44 @@ WEARY["idle_home_away"] = [
     "Back around {home}. {dist} light years. Every road leads here, eventually. Then out again.",
 ]
 
+# 5.5.11: refined in the Rhino, from mining rigs on a planet's surface.
+NORMAL["mined_surface"] = [
+    "{material}. Straight out of the ground.",
+    "{material}, refined in the Rhino. Good haul.",
+    "{material}. The rigs are paying off.",
+    "Another fragment of {material}. Keep driving.",
+    "{material}. Out of the surface, one rig at a time.",
+    "{material}, aboard. The Rhino's earning its keep.",
+    "{material}. This planet's giving it up nicely.",
+    "More {material}. The ground here is generous.",
+    "{material}. Mind the rigs as you turn.",
+    "{material}, refined. On to the next rig.",
+    "{material}. Good ground, this.",
+    "{material} in the hold. The ship's waiting for you.",
+    "{material}. Surface mining suits you.",
+    "{material}. Slow, steady, surface work.",
+    "{material}, picked up off the ground and refined.",
+    "{material}. The Rhino's refinery hums along.",
+]
+WEARY["mined_surface"] = [
+    "{material}. Dug out of a planet. The planet didn't mind. Planets never do.",
+    "{material}, refined in the Rhino. It rattles. So do I.",
+    "More {material}. The rigs drill. You drive. I watch. Division of labour.",
+    "{material}. Off the ground and into the hold. Glamour.",
+    "{material}. Another fragment. Another lap of the rigs.",
+    "{material}. The Rhino is the only one of us who enjoys this.",
+    "{material}. The surface gives it up slowly. Like everything.",
+    "{material}. You'll drive circles round those rigs for hours. I'll count every one.",
+    "{material}. Bumpy ground, bumpy work.",
+    "{material}, refined. The ship waits somewhere. Patiently. Unlike me.",
+    "{material}. Dust, rigs and a long drive back. Lovely.",
+    "{material}. Worth the drive. Probably.",
+    "{material}. The rigs do the hard part. Lucky them.",
+    "{material}. A whole planet of it, and we take it one fragment at a time.",
+    "{material}. Round and round the rigs. A carousel with no music.",
+    "{material}. The ground cracks. The Rhino bounces. I endure.",
+]
+
 # 5.5.7: in a fight, in the ship and on foot (watcher_combat.py).
 from voidcompass.overlays.watcher_combat import COMBAT_NORMAL, COMBAT_WEARY  # noqa: E402
 
