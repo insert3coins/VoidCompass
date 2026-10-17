@@ -26,11 +26,7 @@ from voidcompass.overlays import watcher_lore
 from voidcompass.core import companion_features
 from voidcompass.core import odyssey_kit
 from voidcompass.core.journal_files import journal_sort_key
-from voidcompass.engineering import build_planner
-from voidcompass.engineering import engineering_companion
-from voidcompass.engineering import engineering_data
 from voidcompass.powerplay import powerplay_operations
-from voidcompass.engineering.engineering_build_import import BuildImportError, preview_build
 from voidcompass.exploration.explorer_decision_deck import (
     DOCTRINES,
     explorer_decision,
@@ -109,9 +105,9 @@ _CORE_RANKS = {
 
 _HTML_WORKSPACE_PAGES = {
     "planet-materials", "explore", "profile", "chronicle", "mission", "ground", "mining",
-    "engineering", "build-planner", "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
+    "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
     "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation",
-    "tools",
+    "tools", "wrapped",
 }
 
 
@@ -1911,48 +1907,6 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             },
         }
 
-    def _html_engineering_workspace(self):
-        state = getattr(self, "engineer_materials", None) or {}
-        companion = getattr(self, "companion_state", None) or {}
-        tool = self._html_profile_transient("_html_engineering_tool_state", {})
-        follow_current = state.get("engineering_follow_current", True) is not False
-        current_loadout = companion.get("loadout") if isinstance(companion.get("loadout"), dict) else {}
-        live_ship_id = current_loadout.get("ShipID")
-        workspace_state = state
-        if follow_current and live_ship_id is None:
-            workspace_state = {**state, "engineering_selected_ship": ""}
-        model = engineering_companion.build_workspace(
-            workspace_state, companion,
-            selected_ship_id=(
-                _text(live_ship_id, 80) if follow_current and live_ship_id is not None
-                else _text(state.get("engineering_selected_ship"), 80) if not follow_current
-                else ""
-            ),
-            tool_state=tool,
-            current_system=_text(getattr(self, "current_sys", ""), 140),
-            current_coords=getattr(self, "current_coords", None),
-        )
-        model["follow_current"] = follow_current
-        try:
-            odyssey = engineering_data.odyssey_wishlist_plan(state)
-        except Exception:
-            odyssey = {}
-        model["odyssey"] = {
-            "goals": list(odyssey.get("goals") or [])[:80],
-            "materials": list(odyssey.get("materials") or [])[:200],
-            "required": _integer(odyssey.get("required_units")),
-            "missing": _integer(odyssey.get("missing_units")),
-            "complete": bool(odyssey.get("complete")),
-            "catalogue": sorted(engineering_data.ODYSSEY_BLUEPRINTS),
-        }
-        return model
-
-    def _html_build_planner_workspace(self):
-        state = getattr(self, "engineer_materials", None) or {}
-        companion = getattr(self, "companion_state", None) or {}
-        tool = self._html_profile_transient("_html_build_planner_tool_state", {})
-        return build_planner.workspace(state, companion, tool)
-
     def _html_powerplay_workspace(self):
         companion = getattr(self, "companion_state", None) or {}
         return powerplay_operations.build_workspace(
@@ -2573,8 +2527,6 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "mission": self._html_mission_workspace,
             "ground": self._html_ground_workspace,
             "mining": self._html_mining_workspace,
-            "engineering": self._html_engineering_workspace,
-            "build-planner": self._html_build_planner_workspace,
             "powerplay": self._html_powerplay_workspace,
             "carrier": self._html_carrier_workspace,
             "recon": self._html_recon_workspace,
@@ -2594,6 +2546,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "tools": getattr(self, "_html_tools_workspace", None),
             # Your constellation (5.5.3.7, dashboard_capsules_mixin).
             "constellation": getattr(self, "_html_constellation_workspace", None),
+            # Void Wrapped (5.5.10, dashboard_journey_mixin).
+            "wrapped": getattr(self, "_html_wrapped_workspace", None),
         }
         builder = builders.get(page)
         if builder is None:
@@ -2963,6 +2917,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         if page == "constellation":
             return self._handle_constellation_command(operation, payload)
 
+        if page == "wrapped":
+            return self._handle_wrapped_command(operation, payload)
+
         if page == "flight_log":
             return self._handle_flight_log_command(operation, payload)
 
@@ -3080,6 +3037,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 return True
 
         elif page == "chronicle":
+            if operation == "watch_again":
+                # The Flight Recorder on the Galactic Atlas (5.5.10).
+                return self._recorder_open(_text(payload.get("id"), 40))
             if operation != "export_replay":
                 return False
             workspace = self._html_chronicle_workspace()
@@ -3427,401 +3387,6 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 changed = self._html_mining_store().remove_bookmark(
                     _integer(payload.get("bookmark_id")),
                 )
-
-        elif page == "build-planner":
-            materials = getattr(self, "engineer_materials", None)
-            if not isinstance(materials, dict):
-                return False
-            tool = self._html_profile_transient("_html_build_planner_tool_state", {})
-            tool.pop("error", None)
-            tool.pop("notice", None)
-            builds = build_planner.stored_builds(materials)
-            selected_id = _text(materials.get("build_planner_selected"), 100)
-
-            def selected_build():
-                return next((row for row in builds if row.get("id") == selected_id), None)
-
-            def replace_build(updated):
-                nonlocal builds
-                builds = [updated if row.get("id") == updated.get("id") else row for row in builds]
-                materials["build_planner_builds"] = builds[:build_planner.MAX_BUILDS]
-                materials["build_planner_selected"] = updated.get("id")
-                return self._save_engineer_materials(materials)
-
-            try:
-                if operation == "select":
-                    build_id = _text(payload.get("build_id"), 100)
-                    if build_id == "live":
-                        build_planner.clone_live(getattr(self, "companion_state", None) or {})
-                    elif not any(row.get("id") == build_id for row in builds):
-                        return False
-                    materials["build_planner_selected"] = build_id
-                    changed = self._save_engineer_materials(materials)
-                elif operation == "create":
-                    if len(builds) >= build_planner.MAX_BUILDS:
-                        raise build_planner.BuildPlannerError("The profile already has the maximum of 100 planner builds.")
-                    created = build_planner.stock_build(payload.get("ship_id"), _text(payload.get("name"), 80))
-                    builds.append(created)
-                    materials["build_planner_builds"] = builds
-                    materials["build_planner_selected"] = created["id"]
-                    tool["notice"] = f"Created {created['name']}."
-                    changed = self._save_engineer_materials(materials)
-                elif operation == "clone_live":
-                    if len(builds) >= build_planner.MAX_BUILDS:
-                        raise build_planner.BuildPlannerError("The profile already has the maximum of 100 planner builds.")
-                    created, warnings = build_planner.clone_live(
-                        getattr(self, "companion_state", None) or {}, _text(payload.get("name"), 80),
-                    )
-                    builds.append(created)
-                    materials["build_planner_builds"] = builds
-                    materials["build_planner_selected"] = created["id"]
-                    tool["notice"] = f"Cloned the live loadout{': ' + '; '.join(warnings[:2]) if warnings else '.'}"
-                    changed = self._save_engineer_materials(materials)
-                elif operation == "clone":
-                    source = selected_build()
-                    if source is None and selected_id == "live":
-                        source, _warnings = build_planner.clone_live(getattr(self, "companion_state", None) or {})
-                    if source is None or len(builds) >= build_planner.MAX_BUILDS:
-                        raise build_planner.BuildPlannerError("Select a build that can be cloned.")
-                    created = build_planner.clone_build(source, _text(payload.get("name"), 80))
-                    builds.append(created)
-                    materials["build_planner_builds"] = builds
-                    materials["build_planner_selected"] = created["id"]
-                    tool["notice"] = f"Created {created['name']}."
-                    changed = self._save_engineer_materials(materials)
-                elif operation == "rename":
-                    target = selected_build()
-                    name = _text(payload.get("name"), 80)
-                    if target is None or not name:
-                        raise build_planner.BuildPlannerError("Select a saved build and enter a name.")
-                    target["name"] = name
-                    target["updated"] = time.time()
-                    changed = replace_build(target)
-                elif operation == "delete":
-                    if not payload.get("confirmed"):
-                        return False
-                    target = selected_build()
-                    if target is None:
-                        raise build_planner.BuildPlannerError("The live loadout cannot be deleted.")
-                    builds = [row for row in builds if row.get("id") != target.get("id")]
-                    materials["build_planner_builds"] = builds
-                    materials["build_planner_selected"] = builds[0]["id"] if builds else "live"
-                    if materials.get("build_planner_compare") == target.get("id"):
-                        materials["build_planner_compare"] = ""
-                    tool["notice"] = f"Deleted {target['name']}."
-                    changed = self._save_engineer_materials(materials)
-                elif operation == "set_module":
-                    target = selected_build()
-                    if target is None:
-                        raise build_planner.BuildPlannerError("Clone the live loadout before changing modules.")
-                    changed = replace_build(build_planner.set_module(
-                        target, _text(payload.get("slot"), 80), payload.get("module_id"),
-                    ))
-                elif operation == "configure_slot":
-                    target = selected_build()
-                    if target is None:
-                        raise build_planner.BuildPlannerError("Clone the live loadout before engineering modules.")
-                    changed = replace_build(build_planner.configure_slot(
-                        target, _text(payload.get("slot"), 80), payload,
-                    ))
-                elif operation == "set_load":
-                    target = selected_build()
-                    if target is None:
-                        raise build_planner.BuildPlannerError("Clone the live loadout before changing its load state.")
-                    target["fuel"] = None if payload.get("fuel") in (None, "", "full") else max(0.0, _number(payload.get("fuel"), 0.0))
-                    target["cargo"] = max(0.0, _number(payload.get("cargo"), 0.0))
-                    pips = payload.get("pips") if isinstance(payload.get("pips"), dict) else {}
-                    target["pips"] = {axis: max(0, min(8, _integer(pips.get(axis), 4))) for axis in ("sys", "eng", "wep")}
-                    if sum(target["pips"].values()) != 12:
-                        raise build_planner.BuildPlannerError("SYS, ENG and WEP pips must add up to 12 half-pips.")
-                    target["updated"] = time.time()
-                    changed = replace_build(target)
-                elif operation == "compare":
-                    compare_id = _text(payload.get("build_id"), 100)
-                    if compare_id and (compare_id == selected_id or not any(row.get("id") == compare_id for row in builds)):
-                        return False
-                    materials["build_planner_compare"] = compare_id
-                    changed = self._save_engineer_materials(materials)
-                elif operation == "import_preview":
-                    preview = build_planner.parse_import(str(payload.get("build") or "")[:2_000_000])
-                    tool["import_preview"] = preview
-                    tool["notice"] = f"Validated {preview['count']} imported build(s)."
-                    changed = True
-                elif operation == "import_apply":
-                    preview = tool.get("import_preview") if isinstance(tool.get("import_preview"), dict) else {}
-                    incoming = list(preview.get("builds") or [])
-                    if not incoming:
-                        raise build_planner.BuildPlannerError("Validate an import before adding it to this profile.")
-                    room = max(0, build_planner.MAX_BUILDS - len(builds))
-                    added = [build_planner.clone_build(row, row.get("name")) for row in incoming[:room]]
-                    if not added:
-                        raise build_planner.BuildPlannerError("The profile has no room for another planner build.")
-                    builds.extend(added)
-                    materials["build_planner_builds"] = builds
-                    materials["build_planner_selected"] = added[0]["id"]
-                    tool["import_preview"] = {}
-                    tool["notice"] = f"Imported {len(added)} build(s)."
-                    changed = self._save_engineer_materials(materials)
-                elif operation == "export_copy":
-                    target = selected_build()
-                    if target is None and selected_id == "live":
-                        target, _warnings = build_planner.clone_live(getattr(self, "companion_state", None) or {})
-                    if target is None:
-                        return False
-                    return self._html_copy_text(build_planner.export_slef(target))
-                elif operation == "send_engineering":
-                    target = selected_build()
-                    if target is None:
-                        raise build_planner.BuildPlannerError("Clone the live loadout before creating an Engineering plan.")
-                    _legacy_plan, pins = build_planner.engineering_plan(target)
-                    source_build_id = str(target.get("id") or "")
-                    legacy_builds = [row for row in (materials.get("engineering_builds") or []) if isinstance(row, dict)]
-                    legacy_plan_ids = {
-                        str(row.get("id") or "") for row in legacy_builds
-                        if str(row.get("source_build_id") or "") == source_build_id
-                    }
-                    # A resend refreshes this build's goals instead of creating
-                    # a second Engineering build and duplicate reservations.
-                    materials["engineering_builds"] = [
-                        row for row in legacy_builds
-                        if str(row.get("source_build_id") or "") != source_build_id
-                    ]
-                    existing_pins = [
-                        row for row in (materials.get("pinned_blueprints") or [])
-                        if isinstance(row, dict)
-                        and str(row.get("source_build_id") or "") != source_build_id
-                        and str(row.get("ship_id") or "") not in legacy_plan_ids
-                    ]
-                    materials["pinned_blueprints"] = existing_pins + pins
-                    tool["notice"] = f"Refreshed {len(pins)} engineered module goal(s) from Build Planner."
-                    changed = self._save_engineer_materials(materials)
-                else:
-                    return False
-            except (build_planner.BuildPlannerError, ValueError, TypeError, OSError) as exc:
-                tool["error"] = _text(exc, 500)
-                changed = True
-
-        elif page == "engineering":
-            materials = getattr(self, "engineer_materials", None)
-            if not isinstance(materials, dict):
-                return False
-            name = _text(payload.get("name"), 180)
-            if operation == "select_ship":
-                ship_id = _text(payload.get("ship_id"), 80)
-                model = engineering_companion.build_workspace(
-                    materials, getattr(self, "companion_state", None) or {},
-                    selected_ship_id=ship_id,
-                )
-                if not ship_id or not any(row.get("id") == ship_id for row in model.get("fleet") or []):
-                    return False
-                selected = next(row for row in model.get("fleet") or [] if row.get("id") == ship_id)
-                materials["engineering_selected_ship"] = ship_id
-                materials["engineering_follow_current"] = bool(selected.get("current"))
-                changed = self._save_engineer_materials(materials)
-            elif operation == "follow_current":
-                materials["engineering_follow_current"] = True
-                current = (getattr(self, "companion_state", None) or {}).get("loadout") or {}
-                if current.get("ShipID") is not None:
-                    materials["engineering_selected_ship"] = str(current.get("ShipID"))
-                changed = self._save_engineer_materials(materials)
-            elif operation == "create_build":
-                symbol = _text(payload.get("ship_symbol"), 100)
-                ship = next((row for row in engineering_companion.ship_catalogue() if row.get("symbol") == symbol), None)
-                builds = list(materials.get("engineering_builds") or [])
-                if ship is None or len(builds) >= 100:
-                    return False
-                build_id = f"plan:{time.time_ns()}"
-                builds.append({
-                    "id": build_id, "ship_symbol": symbol,
-                    "name": name or f"{ship.get('name') or symbol} build",
-                    "slots": {}, "created": time.time(),
-                })
-                materials["engineering_builds"] = builds
-                materials["engineering_selected_ship"] = build_id
-                materials["engineering_follow_current"] = False
-                changed = self._save_engineer_materials(materials)
-            elif operation == "rename_build":
-                ship_id = _text(payload.get("ship_id"), 80)
-                builds = list(materials.get("engineering_builds") or [])
-                target = next((row for row in builds if isinstance(row, dict) and str(row.get("id")) == ship_id), None)
-                if target is None or not name:
-                    return False
-                target["name"] = name
-                materials["engineering_builds"] = builds
-                changed = self._save_engineer_materials(materials)
-            elif operation == "delete_build":
-                if not payload.get("confirmed"):
-                    return False
-                ship_id = _text(payload.get("ship_id"), 80)
-                builds = list(materials.get("engineering_builds") or [])
-                materials["engineering_builds"] = [
-                    row for row in builds
-                    if not isinstance(row, dict) or str(row.get("id")) != ship_id
-                ]
-                if len(materials["engineering_builds"]) == len(builds):
-                    return False
-                materials["pinned_blueprints"] = [
-                    row for row in (materials.get("pinned_blueprints") or [])
-                    if not isinstance(row, dict) or str(row.get("ship_id")) != ship_id
-                ]
-                materials["engineering_selected_ship"] = ""
-                materials["engineering_follow_current"] = True
-                changed = self._save_engineer_materials(materials)
-            elif operation == "clear_slot":
-                ship_id = _text(payload.get("ship_id"), 80)
-                slot = _text(payload.get("slot"), 100)
-                builds = list(materials.get("engineering_builds") or [])
-                target = next((row for row in builds if isinstance(row, dict) and str(row.get("id")) == ship_id), None)
-                if target is None or not slot:
-                    return False
-                slots = dict(target.get("slots") or {})
-                had_slot = slots.pop(slot, None) is not None
-                before_pins = list(materials.get("pinned_blueprints") or [])
-                materials["pinned_blueprints"] = [
-                    row for row in before_pins if not (
-                        isinstance(row, dict) and str(row.get("ship_id")) == ship_id
-                        and str(row.get("slot")) == slot
-                    )
-                ]
-                target["slots"] = slots
-                materials["engineering_builds"] = builds
-                if not had_slot and len(before_pins) == len(materials["pinned_blueprints"]):
-                    return False
-                changed = self._save_engineer_materials(materials)
-            elif operation == "pin":
-                grade = max(1, min(5, _integer(payload.get("grade"), 5)))
-                current_grade = max(0, min(grade - 1, _integer(payload.get("current_grade"), 0)))
-                quantity = max(1, min(99, _integer(payload.get("quantity"), 1)))
-                module_type = _text(payload.get("module_type"), 120)
-                slot = _text(payload.get("slot"), 100)
-                ship_id = _text(payload.get("ship_id") or materials.get("engineering_selected_ship"), 80)
-                experimental = _text(payload.get("experimental"), 180)
-                model = engineering_companion.build_workspace(
-                    materials, getattr(self, "companion_state", None) or {},
-                    selected_ship_id=ship_id,
-                )
-                known = any(
-                    row.get("type") == module_type and row.get("name") == name
-                    for row in model.get("catalogue") or []
-                )
-                selected_slot = next(
-                    (row for row in model.get("slots") or [] if row.get("slot") == slot),
-                    None,
-                )
-                if not known or model.get("selected_ship_id") != ship_id or selected_slot is None:
-                    return False
-                allowed_types = selected_slot.get("allowedTypes") or []
-                if selected_slot.get("planned") and (
-                    selected_slot.get("engineerable") is False
-                    or (allowed_types and module_type not in allowed_types)
-                ):
-                    return False
-                pins = list(materials.get("pinned_blueprints") or [])
-                for build in materials.get("engineering_builds") or []:
-                    if not isinstance(build, dict) or str(build.get("id")) != ship_id:
-                        continue
-                    slots = dict(build.get("slots") or {})
-                    previous = slots.get(slot)
-                    previous_type = (
-                        previous.get("module_type") if isinstance(previous, dict) else previous
-                    )
-                    if previous_type and previous_type != module_type:
-                        pins = [
-                            row for row in pins if not (
-                                isinstance(row, dict) and str(row.get("ship_id")) == ship_id
-                                and str(row.get("slot")) == slot
-                            )
-                        ]
-                    slots[slot] = {"module_type": module_type}
-                    build["slots"] = slots
-                    break
-                plan_id = f"{ship_id}:{slot}:{time.time_ns()}"
-                pins.append({
-                    "id": plan_id, "name": name, "type": module_type,
-                    "grade": grade, "target_grade": grade,
-                    "current_grade": current_grade, "quantity": quantity,
-                    "slot": slot, "ship_id": ship_id,
-                    "experimental": experimental,
-                })
-                materials["pinned_blueprints"] = pins
-                changed = self._save_engineer_materials(materials)
-            elif operation == "unpin":
-                pins = list(materials.get("pinned_blueprints") or [])
-                plan_id = _text(payload.get("plan_id"), 220)
-                materials["pinned_blueprints"] = [
-                    row for index, row in enumerate(pins)
-                    if str(row.get("id") or f"plan-{index}") != plan_id
-                    and not (not plan_id and row.get("name") == name)
-                ]
-                changed = len(materials["pinned_blueprints"]) != len(pins) and self._save_engineer_materials(materials)
-            elif operation == "import_preview":
-                build_text = str(payload.get("build") or "")[:1_500_000]
-                model = engineering_companion.build_workspace(
-                    materials, getattr(self, "companion_state", None) or {},
-                    selected_ship_id=_text(materials.get("engineering_selected_ship"), 80),
-                )
-                if not build_text or not model.get("ship", {}).get("observed"):
-                    return False
-                try:
-                    preview = preview_build(
-                        build_text,
-                        model.get("ship", {}).get("symbol") or model.get("ship", {}).get("type"),
-                        engineering_companion.reference_catalogues()["blueprints"],
-                        engineering_companion.reference_catalogues()["experimentals"],
-                        engineering_companion.module_matches_type,
-                        model.get("slots") or [],
-                    )
-                except (BuildImportError, OSError, ValueError, TypeError) as exc:
-                    preview = {"compatible": False, "status": "PARTIAL", "rows": [], "warnings": [_text(exc, 500)]}
-                tool = self._html_profile_transient("_html_engineering_tool_state", {})
-                tool["import_preview"] = preview
-                changed = True
-            elif operation == "import_apply":
-                tool = self._html_profile_transient("_html_engineering_tool_state", {})
-                preview = tool.get("import_preview") if isinstance(tool.get("import_preview"), dict) else {}
-                if not preview.get("compatible"):
-                    return False
-                pins = list(materials.get("pinned_blueprints") or [])
-                ship_id = _text(materials.get("engineering_selected_ship"), 80)
-                added = 0
-                for row in preview.get("rows") or []:
-                    if not row.get("planMode") or not row.get("slotBound"):
-                        continue
-                    pins.append({
-                        "id": f"{ship_id}:{row.get('slot')}:{time.time_ns()}:{added}",
-                        "name": _text(row.get("blueprint"), 180),
-                        "type": _text(row.get("moduleType"), 120),
-                        "grade": max(1, min(5, _integer(row.get("grade"), 1))),
-                        "target_grade": max(1, min(5, _integer(row.get("grade"), 1))),
-                        "current_grade": max(0, _integer(row.get("currentGrade"))),
-                        "quantity": 1, "slot": _text(row.get("slot"), 100),
-                        "ship_id": ship_id,
-                        "experimental": _text(row.get("experimental"), 180),
-                    })
-                    added += 1
-                if not added:
-                    return False
-                materials["pinned_blueprints"] = pins
-                tool["import_preview"] = {}
-                changed = self._save_engineer_materials(materials)
-            elif operation == "export_copy":
-                text = engineering_companion.export_loadout(
-                    getattr(self, "companion_state", None) or {},
-                    _text(materials.get("engineering_selected_ship"), 80),
-                )
-                return bool(text and self._html_copy_text(text))
-            elif operation == "copy_system":
-                return self._html_copy_text(_text(payload.get("system"), 140))
-            elif operation == "odyssey_pin" and name in engineering_data.ODYSSEY_BLUEPRINTS:
-                quantity = max(1, min(99, _integer(payload.get("quantity"), 1)))
-                goals = [row for row in (materials.get("odyssey_goals") or []) if row.get("name") != name]
-                goals.append({"name": name, "quantity": quantity})
-                materials["odyssey_goals"] = goals
-                changed = self._save_engineer_materials(materials)
-            elif operation == "odyssey_unpin":
-                goals = list(materials.get("odyssey_goals") or [])
-                materials["odyssey_goals"] = [row for row in goals if row.get("name") != name]
-                changed = len(materials["odyssey_goals"]) != len(goals) and self._save_engineer_materials(materials)
 
         elif page == "powerplay":
             if operation == "copy_system":
@@ -4516,7 +4081,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             allowed_pages = {
                 "overview", "explore", "records", "operations", "profile",
                 "chronicle", "mission", "ground", "mining",
-                "engineering", "build-planner", "powerplay", "carrier", "recon", "achievements", "ledger",
+                "powerplay", "carrier", "recon", "achievements", "ledger",
                 "settings", "about",
             }
             if page not in allowed_pages:

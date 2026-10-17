@@ -232,6 +232,9 @@ def flight_logs(sessions, rows=(), postcards=(), nature="weary", limit=250, now=
         end = _epoch(session.get("ended")) or (now if now is not None else time.time())
         low, high = bisect.bisect_left(times, start), bisect.bisect_right(times, end)
         first, last = bisect.bisect_left(found_times, start), bisect.bisect_right(found_times, end)
+        if not session.get("start_system") and low > 0:
+            # The game's login doesn't say where you are: where the last jump left you (5.5.10).
+            session = {**session, "start_system": str(timed[low - 1][1][1])}
         log = flight_log(session, [row for _when, row in timed[low:high]], postcards, nature, now,
                          finds=[find for _when, find in found[first:last]])
         if log:

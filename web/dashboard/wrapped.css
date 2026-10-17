@@ -1,0 +1,67 @@
+/* Void Wrapped (5.5.10): the year as a story. The years and the story's
+   cards down the side; the stage, a 4:5 card, in the middle. */
+.wrapped-page { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 1100px) { .wrapped-page { grid-template-columns: minmax(0, 1fr); } }
+
+.wrapped-side { display: grid; gap: 14px; align-content: start; overflow-y: auto; scrollbar-width: thin; }
+.wrapped-brand { padding: 18px; border: 1px solid var(--border);
+  background: radial-gradient(circle at 0 0, color-mix(in srgb, #ff5ce1 16%, transparent), transparent 60%),
+    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%), var(--panel); }
+.wrapped-brand small { color: var(--accent); font: 700 9.5px Consolas, monospace; letter-spacing: .16em; }
+.wrapped-brand h3 { margin: 6px 0 8px; color: var(--text); font: 600 30px/1 "Bahnschrift SemiBold", "Bahnschrift", "Segoe UI", sans-serif; letter-spacing: .02em; }
+.wrapped-brand p { margin: 0; color: var(--muted); font: 12.5px/1.55 "Segoe UI", sans-serif; }
+
+.wrapped-side h4 { margin: 0 0 8px; color: var(--dim); font: 700 9.5px Consolas, monospace; letter-spacing: .16em; }
+.wrapped-years > div { display: grid; gap: 6px; }
+.wrapped-years button { display: grid; gap: 2px; padding: 10px 14px; border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+  text-align: left; cursor: pointer; }
+.wrapped-years button b { color: var(--text); font: 600 22px "Bahnschrift SemiBold", "Bahnschrift", sans-serif; }
+.wrapped-years button small { font: 10.5px Consolas, monospace; letter-spacing: .04em; }
+.wrapped-years button:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); }
+.wrapped-years button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
+.wrapped-years button.active b { color: var(--accent); }
+.wrapped-empty { margin: 0; color: var(--muted); font: italic 12.5px "Segoe UI", sans-serif; }
+
+.wrapped-index ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.wrapped-index button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 10px; border: 0; background: transparent;
+  color: var(--muted); font: 12.5px "Segoe UI", sans-serif; text-align: left; cursor: pointer; }
+.wrapped-index button i { width: 8px; height: 8px; border-radius: 50%; background: var(--dot, var(--accent)); box-shadow: 0 0 8px var(--dot, var(--accent)); flex: none; }
+.wrapped-index button:hover { color: var(--text); background: var(--panel-alt); }
+.wrapped-index button.active { color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
+.wrapped-actions { display: grid; gap: 8px; }
+.wrapped-actions button { min-height: 36px; border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  font: 700 10px Consolas, monospace; letter-spacing: .14em; cursor: pointer; }
+.wrapped-actions button.primary { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--panel)); color: var(--accent); }
+.wrapped-actions button:disabled { opacity: .6; cursor: progress; }
+.wrapped-actions small { color: var(--dim); font: 10.5px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+
+.wrapped-stage-wrap { display: grid; gap: 12px; justify-items: center; min-width: 0; }
+.wrapped-stage { position: relative; width: min(100%, calc((100vh - 360px) * .8)); min-width: 200px; max-width: 100%; aspect-ratio: 4 / 5;
+  border-radius: 18px; overflow: hidden; background: #020306;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .55), 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 0 90px color-mix(in srgb, var(--accent) 12%, transparent); }
+.wrapped-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; touch-action: none; }
+.wrapped-progress { position: absolute; z-index: 2; top: 12px; left: 14px; right: 14px; display: flex; gap: 5px; pointer-events: none; }
+.wrapped-progress i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .22); overflow: hidden; }
+.wrapped-progress b { display: block; height: 100%; width: 0; background: rgba(255, 255, 255, .92); }
+.wrapped-loading { position: absolute; inset: 0; z-index: 3; display: grid; place-content: center; justify-items: center; gap: 14px;
+  background: rgba(2, 3, 6, .82); color: var(--muted); font: 13px "Segoe UI", sans-serif; }
+.wrapped-loading i { width: 46px; height: 46px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-top-color: var(--accent); animation: wrapped-spin 1s linear infinite; }
+@keyframes wrapped-spin { to { transform: rotate(360deg); } }
+.wrapped-start { position: absolute; z-index: 3; left: 50%; bottom: 13%; transform: translateX(-50%); padding: 14px 26px; border: 1px solid var(--accent);
+  border-radius: 999px; background: color-mix(in srgb, var(--accent) 22%, rgba(2, 3, 6, .7)); color: #fff;
+  font: 700 12px Consolas, monospace; letter-spacing: .2em; cursor: pointer; box-shadow: 0 0 30px color-mix(in srgb, var(--accent) 40%, transparent); }
+.wrapped-start:hover { background: color-mix(in srgb, var(--accent) 38%, rgba(2, 3, 6, .7)); }
+
+.wrapped-controls { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; }
+.wrapped-controls button { min-width: 38px; min-height: 34px; padding: 0 12px; border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  font: 700 10px Consolas, monospace; letter-spacing: .12em; cursor: pointer; }
+.wrapped-controls button:hover { border-color: var(--accent); color: var(--accent); }
+.wrapped-controls button:disabled { opacity: .6; }
+.wrapped-controls span { min-width: 190px; padding: 0 8px; color: var(--muted); font: 11px Consolas, monospace; letter-spacing: .06em; text-align: center; }
+
+.wrapped-stage-wrap:fullscreen { place-content: center; background: #000; }
+.wrapped-stage-wrap:fullscreen .wrapped-stage { width: min(96vw, calc((100vh - 70px) * .8)); }
+
+@media (prefers-reduced-motion: reduce) { .wrapped-loading i { animation: none; } }

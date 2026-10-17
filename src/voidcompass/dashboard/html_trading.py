@@ -112,6 +112,7 @@ class HtmlTradingMixin:
             data["route"] = ui["route"]
             data["loop"] = ui["loop"]
         elif view == "cargo":
+            data["cargo_options"] = self._trading_cargo_options()
             data["hold"] = self._trading_cargo()
             data["cargo"] = ui["cargo"]
             data["cargo_sort"] = ui.get("cargo_sort") or "price"
@@ -181,7 +182,7 @@ class HtmlTradingMixin:
             self._trading_update_overlay()
             return True
         if operation == "cargo":
-            return self._trading_sell_cargo(ui)
+            return self._trading_sell_cargo(ui, payload)
         if operation == "find":
             return self._trading_find(ui, payload)
         if operation == "cargo_sort":
@@ -434,7 +435,24 @@ class HtmlTradingMixin:
         ui["notice"] = "Following this loop: it ticks along as you buy and sell."
         return True
 
-    def _trading_sell_cargo(self, ui):
+    def _trading_cargo_options(self, payload=None):
+        """How far "near me" reaches, and which markets count: kept for the
+        commander, changed from the Sell cargo view."""
+        config = self.config
+        if payload:
+            config["trading_sell_radius"] = _int(payload.get("radius"), 50, 5, 1000)
+            for key in ("large", "carriers", "planetary"):
+                config[f"trading_sell_{key}"] = _flag(payload.get(key))
+            persist = getattr(self, "_persist_config", None)
+            if callable(persist):
+                persist()
+        return {"radius": _int(config.get("trading_sell_radius"), 50, 5, 1000),
+                "large": bool(config.get("trading_sell_large", False)),
+                "carriers": bool(config.get("trading_sell_carriers", False)),
+                "planetary": bool(config.get("trading_sell_planetary", True))}
+
+    def _trading_sell_cargo(self, ui, payload=None):
+        options = self._trading_cargo_options(payload)
         hold = [row for row in self._trading_cargo() if row["count"] > 0][:12]
         system = getattr(self, "current_sys", "") or ""
         if not hold or not system:
@@ -452,16 +470,19 @@ class HtmlTradingMixin:
                 # Each commodity asked side by side on the shared connection
                 # (5.5.3.2), not one after another.
                 name = self.trading_names.spansh_name(self.trading_names.name(item["symbol"]))
+                choice = {"large_pad": options["large"], "carriers": options["carriers"],
+                          "planetary": options["planetary"], "radius": options["radius"]}
+                # The best payers within your radius, and the nearest ones.
                 stations = trade_market.parse_commodity(
-                    spansh.commodity_stations("sell", system, name, item["count"]), name, "sell")
+                    spansh.commodity_stations("sell", system, name, item["count"], size=10, sort="price", **choice), name, "sell")
+                close = trade_market.parse_commodity(
+                    spansh.commodity_stations("sell", system, name, item["count"], size=10, **choice), name, "sell")
                 stations.sort(key=lambda row: -row["price"])
-                here = trade_market.in_system(stations, system, "sell", 1)
+                here = trade_market.in_system(stations + close, system, "sell", 1)
                 finished.append(name)
                 progress.update(done=len(finished), current=name)
                 self._ui_post(lambda: self._schedule_html_dashboard_publish(immediate=True), key="trading-progress")
-                # The best five payers, and the five nearest (Spansh's 30
-                # nearest buyers, nearest first, for the BY DISTANCE sort).
-                nearest = sorted(stations, key=lambda row: row.get("distance") or 0.0)[:5]
+                nearest = sorted(close, key=lambda row: row.get("distance") or 0.0)[:5]
                 return {**item, "name": name, "stations": stations[:5], "nearest": nearest,
                         "here": here[0] if here else None}
             if len(hold) == 1:
@@ -469,11 +490,11 @@ class HtmlTradingMixin:
             else:
                 with ThreadPoolExecutor(max_workers=4, thread_name_prefix="trading-cargo") as pool:
                     rows = list(pool.map(look_up, hold))
-            return {"rows": rows, "system": system, "at": time.time()}
+            return {"rows": rows, "system": system, "at": time.time(), "radius": options["radius"]}
 
         def done(result, error):
             ui["cargo"] = {"error": error} if error else result
-        key = ("cargo", system, tuple((row["symbol"], row["count"]) for row in hold))
+        key = ("cargo", system, tuple((row["symbol"], row["count"]) for row in hold), tuple(sorted(options.items())))
         return self._trading_task("cargo", work, done, cache_key=key)
 
     def _trading_find(self, ui, payload):

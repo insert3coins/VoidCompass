@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Rig Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <!-- Rig Tracker (5.5.10): the mining rigs set down on this planet, each a
+       dial pointing the way it lies from where you face. -->
+  <main id="rigs" class="rigs empty">
+    <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <header class="notice">
+      <span class="notice-tag">RIGS</span>
+      <strong id="rigs-body">—</strong>
+      <b id="rigs-count"></b>
+    </header>
+    <ol id="rigs-dials" class="dials"></ol>
+    <p id="rigs-order" class="order"></p>
+    <p id="rigs-hint" class="hint"></p>
+    <div class="scanlines"></div><div class="vignette"></div>
+  </main>
+  <script src="/assets/frame-cap.js"></script>
+  <script src="/assets/overlay-layout.js"></script>
+  <script src="/assets/overlay-client.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

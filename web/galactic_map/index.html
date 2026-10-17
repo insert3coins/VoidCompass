@@ -29,6 +29,7 @@
         <button type="button" role="tab" data-tab="find" class="active">FIND</button>
         <button type="button" role="tab" data-tab="regions">REGIONS <b id="tab-regions-count">0</b></button>
         <button type="button" role="tab" data-tab="layers">LAYERS</button>
+        <button type="button" role="tab" data-tab="recorder" title="The Flight Recorder: any session, played again">REC</button>
         <button type="button" id="side-collapse" class="collapse" title="Hide panel" aria-label="Hide panel">‹</button>
       </nav>
       <div class="side-body">
@@ -55,6 +56,13 @@
           </div>
           <label class="field depth">HEIGHT ABOVE THE PLANE <output id="depth-value">4×</output><input id="depth" type="range" min="1" max="20" step="1" value="4"></label>
           <p class="hint">The galaxy is thin: heights are exaggerated so they show when the map is tilted.</p>
+        </div>
+        <div data-panel="recorder" hidden>
+          <div class="recorder-intro"><p class="section-title">FLIGHT RECORDER</p>
+            <p class="hint">Choose a session and watch it again: the trail drawn jump by jump, every find where it happened, at any speed.</p>
+            <button type="button" id="recorder-refresh" class="link-button">REFRESH</button></div>
+          <p id="recorder-status" class="hint"></p>
+          <div id="recorder-sessions" class="places recorder-sessions"></div>
         </div>
       </div>
     </section>
@@ -100,6 +108,39 @@
         </div>
       </div>
       <div class="route-state"><span id="route-state">NO ROUTE PLOTTED</span><small id="route-detail"></small></div>
+    </footer>
+
+    <aside id="recorder-feed-card" class="recorder-feed card" aria-live="polite">
+      <p class="eyebrow">FLIGHT RECORDER</p>
+      <strong id="recorder-here">—</strong>
+      <div id="recorder-tally" class="recorder-tally"></div>
+      <p id="recorder-tune" class="recorder-tune" hidden></p>
+      <ol id="recorder-feed" class="recorder-moments"></ol>
+    </aside>
+
+    <footer id="recorder" class="recorder card" hidden>
+      <div class="recorder-top">
+        <div class="replay-buttons">
+          <button type="button" id="recorder-step-back" class="play stop" title="The moment before" aria-label="The moment before"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg></button>
+          <button type="button" id="recorder-play" class="play" title="Play (Space)" aria-label="Play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+          <button type="button" id="recorder-step-on" class="play stop" title="The next moment" aria-label="The next moment"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM4 5l10.5 7L4 19z"/></svg></button>
+        </div>
+        <div class="recorder-name"><strong id="recorder-title">—</strong><small id="recorder-sub"></small></div>
+        <b id="recorder-clock" class="recorder-clock">—</b>
+        <div class="recorder-options">
+          <select id="recorder-speed" aria-label="Playback speed"></select>
+          <button type="button" id="recorder-quiet" class="toggle" aria-pressed="true" title="Skip the long quiet stretches">SKIP QUIET</button>
+          <button type="button" id="recorder-follow" class="toggle" aria-pressed="true" title="Keep the ship in view">FOLLOW</button>
+          <button type="button" id="recorder-music" class="toggle" aria-pressed="false">♪ MUSIC</button>
+          <button type="button" id="recorder-close" class="close-recorder" title="Back to your whole journey" aria-label="Close the recorder">×</button>
+        </div>
+      </div>
+      <div class="recorder-timeline">
+        <span id="recorder-start">—</span>
+        <div class="recorder-rail"><div id="recorder-track" class="recorder-track"></div>
+          <input id="recorder-scrub" type="range" min="0" max="1000" value="0" aria-label="Position in the session"></div>
+        <span id="recorder-end">—</span>
+      </div>
     </footer>
 
     <div id="tooltip" class="tooltip" hidden></div>

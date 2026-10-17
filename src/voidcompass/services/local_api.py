@@ -62,6 +62,8 @@ PROVIDER_CALLS = (
     "api_copy_next", "api_capsules", "api_leave_capsule",
     "api_add_waypoint", "api_change_waypoint", "api_delete_waypoint", "api_clear_waypoints", "api_return_later",
     "api_return_later_action", "api_neutron_route", "api_import_neutron_route",
+    "api_wrapped_years", "api_wrapped", "api_recorder_sessions", "api_recorder_tape",
+    "api_rigs", "api_rig_mark", "api_rigs_clear",
 )
 
 
@@ -368,6 +370,15 @@ class LocalApi:
             ("POST", r"/route/neutron/import", lambda req: self._call("api_import_neutron_route"), True),
             ("GET", r"/capsules", lambda req: self._call("api_capsules"), False),
             ("POST", r"/capsules", self._leave_capsule, True),
+            # Your journey, told back (5.5.10).
+            ("GET", r"/wrapped", lambda req: self._call("api_wrapped_years"), False),
+            ("GET", r"/wrapped/([0-9]{4})", lambda req, year: self._call("api_wrapped", int(year)), False),
+            ("GET", r"/recorder", lambda req: self._call("api_recorder_sessions"), False),
+            ("GET", r"/recorder/tape", lambda req: self._call("api_recorder_tape", str(req.query.get("session") or "")[:40]), False),
+            # The Rig Tracker (5.5.10): the rig keys, from a Stream Deck or a script.
+            ("GET", r"/rigs", lambda req: self._call("api_rigs"), False),
+            ("POST", r"/rigs/clear", self._clear_rigs, True),
+            ("POST", r"/rigs/([1-6])", lambda req, slot: self._call("api_rig_mark", int(slot)), True),
         ]
         return [(method, re.compile(f"^{re.escape(PREFIX)}{pattern}/?$"), handler, control)
                 for method, pattern, handler, control in rows]
@@ -379,7 +390,7 @@ class LocalApi:
             path = pattern.pattern[1:-3].replace("\\", "")
             path = path.replace("([a-z0-9-]{1,40})", "{page}").replace("([a-z0-9_-]{1,40})", "{overlay}")
             path = path.replace("([^/]{1,240})", "{name}").replace("([0-9]{1,20})", "{address}")
-            path = path.replace("([0-9]{1,4})", "{n}")
+            path = path.replace("([0-9]{1,4})", "{n}").replace("([0-9]{4})", "{year}").replace("([1-6])", "{n}")
             path = re.sub(r"\(([a-z|-]+)\)", r"{\1}", path)
             out.append({"method": method, "path": path or PREFIX, "control": control})
         return out
@@ -534,6 +545,11 @@ class LocalApi:
         if not changes:
             raise ApiError(400, 'Say what to change: name, note, visited or move')
         return self._call("api_change_waypoint", int(index), changes)
+
+    def _clear_rigs(self, req):
+        if req.body.get("confirmed") is not True:
+            raise ApiError(400, 'Forgetting the rigs on this planet needs {"confirmed": true}')
+        return self._call("api_rigs_clear")
 
     def _clear_waypoints(self, req):
         if req.body.get("confirmed") is not True:

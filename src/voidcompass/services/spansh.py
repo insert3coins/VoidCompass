@@ -722,7 +722,7 @@ def station_types():
 
 
 def commodity_stations(kind, reference_system, commodity, amount=1, size=30,
-                       large_pad=False, carriers=True, planetary=True):
+                       large_pad=False, carriers=True, planetary=True, radius=None, sort="distance"):
     """Stations near a system that buy (``kind`` "sell": where to sell it) or
     sell (``kind`` "buy": where to buy it) a commodity, by Spansh's exact
     English name, nearest first, each with its whole market.
@@ -731,7 +731,9 @@ def commodity_stations(kind, reference_system, commodity, amount=1, size=30,
     with enough demand (or supply), about half a second, where the old
     ``/commodity`` lookup sent megabytes and took 15 to 30 seconds. The pad,
     carrier and planetary choices are filtered by Spansh too, so the nearest
-    ``size`` are all ones you can use."""
+    ``size`` are all ones you can use. ``radius`` (light years) keeps the
+    search within that distance; ``sort`` "price" asks for the best payers
+    (or the cheapest sellers) first instead of the nearest."""
     if kind not in ("buy", "sell"):
         raise ValueError(kind)
     if not reference_system or not commodity:
@@ -753,7 +755,12 @@ def commodity_stations(kind, reference_system, commodity, amount=1, size=30,
             types = []
         if types:
             filters["type"] = {"value": types}
-    body = {"filters": filters, "sort": [{"distance": {"direction": "asc"}}],
+    if radius:
+        filters["distance"] = {"min": 0, "max": max(1, min(20_000, int(float(radius))))}
+    order = [{"distance": {"direction": "asc"}}]
+    if sort == "price":
+        order = [{f"market_{price}": [{"name": str(commodity), "direction": "desc" if kind == "sell" else "asc"}]}]
+    body = {"filters": filters, "sort": order,
             "size": max(1, min(100, int(size or 30))), "reference_system": str(reference_system)}
     return _call("POST", "stations/search", body=body)
 

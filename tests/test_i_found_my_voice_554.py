@@ -275,7 +275,7 @@ class HabitTests(unittest.TestCase):
         summary = watcher_habits.summary(memory, 1)
         self.assertEqual(summary["facts"][0], {"label": "JUMPS", "value": "25 · 500 LY"})
         page = (WEB / "dashboard" / "watcher.js").read_text(encoding="utf-8")
-        for needed in ("WHAT IT KNOWS OF YOU", 'data-watcher-tab="settings"', 'data-watcher-tab="voice"',
+        for needed in ("WHAT IT HAS WATCHED OF YOU", 'data-watcher-tab="settings"', 'data-watcher-tab="voice"',
                        "TEST THE VOICE", "watcher-voice-rights"):
             self.assertIn(needed, page)
 

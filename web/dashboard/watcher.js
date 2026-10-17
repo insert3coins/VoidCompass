@@ -93,8 +93,8 @@ function shell(root, ui) {
         <div><header><span>TOGETHER</span></header><div class="watcher-stats" id="watcher-stats"></div></div>
         <div><header><span>YOUR RECORDS</span><b>FROM YOUR JOURNALS</b></header><div class="watcher-stats" id="watcher-records"></div></div>
       </section>
-      <section class="watcher-knows-panel" aria-label="What it knows of you">
-        <header><span>WHAT IT KNOWS OF YOU</span><b id="watcher-knows-style"></b></header>
+      <section class="watcher-knows-panel" aria-label="What it has watched of you">
+        <header><span>WHAT IT HAS WATCHED OF YOU</span><b id="watcher-knows-style"></b></header>
         <p class="watcher-note" id="watcher-knows-note"></p>
         <div class="watcher-stats" id="watcher-knows"></div>
       </section>

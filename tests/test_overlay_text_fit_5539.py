@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 from voidcompass.overlays.cargo_hud import build_cargo_model
 from voidcompass.overlays.planet_materials_hud import build_planet_materials_model
 from voidcompass.overlays.prospector_hud import build_prospector_model
+from voidcompass.overlays.rig_tracker import build_rig_model
 from voidcompass.overlays.station_info_hud import build_station_model
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +49,11 @@ DOCKED = SimpleNamespace(
     current_station_government="Democracy", current_station_allegiance="Independent", current_station_state="Boom",
     current_station_market_id=128666762, companion_state=None, carrier_tracker=None)
 
+# Five rigs out on a long-named body (5.5.10).
+RIGS = {slot: {"lat": 11.9 + slot * .01, "lon": -45.1 - (slot % 2) * .02, "at": 1_700_000_000 + slot * 600}
+        for slot in (1, 2, 3, 4, 5)}
+RIG_MODEL = build_rig_model(RIGS, 11.9, -45.1, 212, 2400000, BODY, now=1_700_100_000)
+
 # (page, model key, model, design width, min height, max height)
 OVERLAYS = (
     ("prospector", "prospector", build_prospector_model(PROSPECTED, {"Platinum": 12}), 400, 180, 560),
@@ -56,6 +62,7 @@ OVERLAYS = (
      build_planet_materials_model(WORKSPACE, latitude=11.9, longitude=-45.1, heading=212, radius_m=2400000, vehicle_name="Rhino"),
      440, 190, 680),
     ("station", "station", build_station_model(DOCKED), 520, 330, 720),
+    ("rig_tracker", "rigs", RIG_MODEL, 420, 130, 420),
 )
 
 

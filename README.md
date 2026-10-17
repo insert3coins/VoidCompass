@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.5.9**
+**Current version: 5.5.10**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
@@ -15,7 +15,6 @@ The command deck has a tab for each part of the game:
 - **Galactic Atlas**: an offline map of the galaxy's regions and everywhere you've been, with a replay of the whole journey.
 - **Commander Record and Exploration Archive**: your ranks, history, achievements and a log of every trip.
 - **Mining Command**: ring evidence, prospector results, refinery and cargo.
-- **Ship Workshop**: an offline Build Planner for every hull and module, plus Engineering. Engineering covers your fleet's blueprints, your material locker, the engineers and how to unlock them.
 - **Carrier Command**: your own carrier and your squadron's, with fuel, cargo, routes and jump countdowns.
 - **Colonisation**: your construction projects, shared with your team through [Raven Colonial](https://ravencolonial.com).
   - Track what each site still needs and what your ship and carriers hold, and find where to buy it.

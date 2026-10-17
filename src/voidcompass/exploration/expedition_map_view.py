@@ -104,7 +104,7 @@ class ExpeditionMapView:
         self._region_by_system = {}
         self._server_status_hint = (0, 0.0)
         pass
-        self.server = GalacticMapServer(_resource_path(STATIC_ROOT), _resource_path(ATLAS_ASSET), command_callback=self._queue_browser_command, regions_provider=galactic_region_payload, status_callback=self._server_status_changed)
+        self.server = GalacticMapServer(_resource_path(STATIC_ROOT), _resource_path(ATLAS_ASSET), command_callback=self._queue_browser_command, regions_provider=galactic_region_payload, status_callback=self._server_status_changed, recorder_provider=self._recorder_data)
         self.refresh()
         self._schedule_status_tick()
 
@@ -271,7 +271,7 @@ class ExpeditionMapView:
         commander = _bounded_text(self.config.get('active_commander_name') or getattr(self.app, 'cmdr_name', ''), 120)
         ship = getattr(self.app, 'cmdr_ship', None)
         ship = ship if isinstance(ship, dict) else {}
-        return {'schema': 1, 'generated_at': datetime.now().astimezone().isoformat(timespec='seconds'), 'profile': {'id': profile, 'commander': commander}, 'theme': _theme_payload(), 'reduced_motion': bool(self.config.get('reduced_motion_enabled', False)), 'view_state': self._view_state, 'current': {'system': current_system, 'position': list(current_position) if current_position else None, 'region': {'id': int(region[0]), 'name': str(region[1])} if region else None, 'ship': _bounded_text(ship.get('ship_name') or ship.get('ship_localised') or ship.get('ship'), 100)}, 'summary': {'systems': unique_systems, 'distance_ly': round(total_ly, 1), 'markers': len(markers), 'annotations': len(self._annotations), 'regions': 42, 'journey': journey}, 'session': {'started_epoch': float(getattr(self.app, 'session_start_ts', 0.0) or 0.0)}, 'expedition': {'id': (active or {}).get('id'), 'name': (active or {}).get('name'), 'started': (active or {}).get('started'), 'start_system': (active or {}).get('start_system'), 'systems': active_systems} if active else None, 'route': route, 'planned': planned, 'route_context': {key: planned_context.get(key) for key in ('on_route', 'off_route', 'nearest_system', 'nearest_distance_ly', 'next_system', 'remaining')}, 'markers': markers, 'annotations': self._annotations, 'focus_request': self._focus_request}
+        return {'schema': 1, 'generated_at': datetime.now().astimezone().isoformat(timespec='seconds'), 'profile': {'id': profile, 'commander': commander}, 'theme': _theme_payload(), 'reduced_motion': bool(self.config.get('reduced_motion_enabled', False)), 'view_state': self._view_state, 'current': {'system': current_system, 'position': list(current_position) if current_position else None, 'region': {'id': int(region[0]), 'name': str(region[1])} if region else None, 'ship': _bounded_text(ship.get('ship_name') or ship.get('ship_localised') or ship.get('ship'), 100)}, 'summary': {'systems': unique_systems, 'distance_ly': round(total_ly, 1), 'markers': len(markers), 'annotations': len(self._annotations), 'regions': 42, 'journey': journey}, 'session': {'started_epoch': float(getattr(self.app, 'session_start_ts', 0.0) or 0.0)}, 'expedition': {'id': (active or {}).get('id'), 'name': (active or {}).get('name'), 'started': (active or {}).get('started'), 'start_system': (active or {}).get('start_system'), 'systems': active_systems} if active else None, 'route': route, 'planned': planned, 'route_context': {key: planned_context.get(key) for key in ('on_route', 'off_route', 'nearest_system', 'nearest_distance_ly', 'next_system', 'remaining')}, 'markers': markers, 'annotations': self._annotations, 'focus_request': self._focus_request, 'recorder_request': getattr(self.app, '_recorder_request', None)}
 
     def _journey(self, survey_route):
         """The whole journey from the travel history, as the atlas draws it.
@@ -429,6 +429,10 @@ class ExpeditionMapView:
             return True
         return bool(seen and time.monotonic() - float(seen) <= max(0.0, float(grace_seconds)))
 
+    def _recorder_data(self, query):
+        provider = getattr(self.app, '_recorder_data', None)
+        return provider(query) if callable(provider) else None
+
     def _queue_browser_command(self, payload):
         if self._disposed or not isinstance(payload, dict):
             return False
@@ -487,6 +491,12 @@ class ExpeditionMapView:
             if callable(feed):
                 feed('MAP', f"Annotation deleted: {existing.get('title') or 'Map mark'}", severity='INFO')
             self.refresh()
+            return
+        if action == 'recorder_music':
+            # The Flight Recorder plays the session's music again (5.5.10).
+            music = getattr(self.app, '_recorder_music', None)
+            if callable(music):
+                music(payload)
             return
         if action == 'open_record':
             record = payload.get('record')

@@ -241,3 +241,68 @@ button { cursor: pointer; }
   .inspector { top: 76px; width: calc(100% - 2 * var(--gap)); max-height: calc(100% - 200px); }
   .stats div:nth-child(n + 3) { display: none; }
 }
+
+/* The Flight Recorder (5.5.10) ----------------------------------------------------------- */
+body.recording .journey { display: none; }
+body.recording .instruments { bottom: 138px; }
+.recorder { left: var(--gap); right: var(--gap); bottom: var(--gap); display: grid; gap: 10px; padding: 12px 18px 14px; }
+.recorder-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 18px; align-items: center; }
+.recorder-name { display: grid; gap: 3px; min-width: 0; }
+.recorder-name strong { overflow: hidden; color: var(--text); font: 600 16px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.recorder-name small { overflow: hidden; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .1em; text-overflow: ellipsis; white-space: nowrap; }
+.recorder-clock { color: var(--accent); font: 700 13px Consolas, monospace; letter-spacing: .06em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.recorder-options { display: flex; gap: 6px; align-items: center; }
+.recorder-options select { min-height: 30px; padding: 0 6px; border: 1px solid var(--border); background: var(--input); font: 700 9.5px Consolas, monospace; letter-spacing: .08em; }
+.recorder-options .toggle { min-height: 30px; padding: 0 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: 700 9.5px Consolas, monospace; letter-spacing: .1em; }
+.recorder-options .toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.recorder-options .toggle:disabled { opacity: .4; cursor: default; }
+.close-recorder { width: 30px; height: 30px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: 18px/1 "Segoe UI", sans-serif; }
+.close-recorder:hover { color: var(--red); border-color: var(--red); }
+.recorder-timeline { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; color: var(--dim); font: 700 9.5px Consolas, monospace; }
+.recorder-rail { position: relative; height: 34px; }
+.recorder-track { position: absolute; inset: 6px 0; border: 1px solid var(--border-soft); background: color-mix(in srgb, var(--inset) 80%, transparent); overflow: hidden; }
+.recorder-track i { position: absolute; top: 0; bottom: 0; }
+.recorder-track .quiet { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--dim) 18%, transparent) 0 4px, transparent 4px 8px); }
+.recorder-track .jump { width: 1px; background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.recorder-track .tune { top: auto; height: 4px; width: 4px; border-radius: 50%; background: var(--muted); transform: translate(-2px, -3px); }
+.recorder-track .mark { width: 3px; top: 3px; bottom: 3px; border-radius: 2px; background: var(--text); transform: translateX(-1px); }
+.recorder-track .mark.first, .recorder-track .mark.valuable { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+.recorder-track .mark.rare { background: #8cff72; box-shadow: 0 0 8px #8cff72; }
+.recorder-track .mark.codex, .recorder-track .mark.survey { background: var(--accent); }
+.recorder-track .mark.bio, .recorder-track .mark.footfall { background: var(--green); }
+.recorder-track .mark.sale { background: var(--orange); }
+.recorder-track .mark.loss { background: var(--red); box-shadow: 0 0 8px var(--red); }
+.recorder-track .mark.postcard, .recorder-track .mark.photo { background: #f2e6c9; }
+.recorder-track b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: #fff; box-shadow: 0 0 10px var(--accent); transform: translateX(-1px); pointer-events: none; }
+.recorder-rail input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+.recorder-feed { display: none; top: var(--gap); right: calc(var(--gap) + 52px); width: 330px; max-height: calc(100% - 180px); overflow: auto; padding: 14px 16px; }
+body.recording .recorder-feed { display: grid; gap: 8px; align-content: start; }
+.recorder-feed strong { overflow: hidden; color: var(--text); font: 600 18px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.recorder-tally { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.recorder-tally b { display: block; color: var(--text); font: 600 16px "Bahnschrift SemiCondensed", "Bahnschrift", sans-serif; letter-spacing: 0; }
+.recorder-tune { margin: 0; overflow: hidden; color: var(--muted); font: italic 12px "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.recorder-moments { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.recorder-moments li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; padding: 8px 10px; border: 1px solid var(--border-soft); background: color-mix(in srgb, var(--panel) 80%, transparent); animation: moment-in .35s ease; }
+.recorder-moments li:first-child { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.recorder-moments i { color: var(--accent); font: 16px/1.2 "Segoe UI Symbol", "Segoe UI", sans-serif; font-style: normal; text-align: center; }
+.recorder-moments li.first i, .recorder-moments li.valuable i { color: var(--yellow); }
+.recorder-moments li.rare i { color: #8cff72; }
+.recorder-moments li.bio i, .recorder-moments li.footfall i { color: var(--green); }
+.recorder-moments li.loss i { color: var(--red); }
+.recorder-moments span { display: grid; gap: 2px; min-width: 0; }
+.recorder-moments small { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .1em; }
+.recorder-moments b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.recorder-moments em { color: var(--muted); font: 11px "Segoe UI", sans-serif; font-style: normal; overflow-wrap: anywhere; }
+.recorder-moments li.words b { font: italic 13px/1.5 Georgia, "Times New Roman", serif; }
+@keyframes moment-in { from { opacity: 0; transform: translateY(-6px); } }
+.recorder-intro { display: grid; gap: 6px; margin-bottom: 8px; }
+.link-button { justify-self: start; padding: 4px 10px; border: 1px solid var(--border); background: transparent; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.recorder-sessions .row-button small + small { margin-top: 1px; }
+.recorder-sessions .row-button.active { border-color: var(--accent); }
+.label.moment { padding: 3px 8px; border: 1px solid var(--yellow); background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--text); font: 600 11px "Segoe UI", sans-serif; box-shadow: 0 0 12px color-mix(in srgb, var(--yellow) 30%, transparent); }
+.label.moment.bio, .label.moment.footfall { border-color: var(--green); }
+.label.moment.codex, .label.moment.survey { border-color: var(--accent); }
+.label.moment.loss { border-color: var(--red); }
+.label.moment.rare { border-color: #8cff72; }
+@media (max-width: 900px) { .recorder-top { grid-template-columns: auto minmax(0, 1fr); } .recorder-options, .recorder-clock { grid-column: 1 / -1; } .recorder-feed { width: 260px; } }
+@media (prefers-reduced-motion: reduce) { .recorder-moments li { animation: none; } }

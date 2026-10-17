@@ -624,6 +624,16 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     return load(order[index]);
   }
 
+  // The Flight Recorder (5.5.10): a past session's music, in the order it played.
+  function playQueue(ids) {
+    const tracks = (Array.isArray(ids) ? ids : []).filter((id) => trackOf(id));
+    if (!tracks.length) return;
+    order = tracks;
+    index = 0;
+    failures = 0;
+    load(order[0]);
+  }
+
   function playFromList(id, position) {
     playlistId = viewId;
     const tracks = playable(playlistId);
@@ -1010,7 +1020,7 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
       notice: Number(state.notice?.seq) || 0};
     if (!seen) seen = numbers;
     if (numbers.remote > seen.remote) {
-      ({toggle, next: () => skip(true), previous: () => skip(false)})[state.remote.op]?.();
+      ({toggle, next: () => skip(true), previous: () => skip(false), pause, queue: () => playQueue(state.remote.tracks)})[state.remote.op]?.();
     }
     if (numbers.focus > seen.focus && state.focus.playlist_id) {
       viewId = state.focus.playlist_id;

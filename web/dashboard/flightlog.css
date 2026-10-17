@@ -77,3 +77,6 @@
 .flightlog-finds li span em { display: block; color: var(--muted); font: normal 11px "Segoe UI", sans-serif; }
 .flightlog-finds li b { color: var(--yellow); }
 .flightlog-finds li { grid-template-columns: 92px minmax(0, 1fr) auto; }
+/* The Flight Recorder (5.5.10): this session, played again on the Atlas. */
+.flightlog-page > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.flightlog-watch { flex: none; min-height: 32px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .14em; }

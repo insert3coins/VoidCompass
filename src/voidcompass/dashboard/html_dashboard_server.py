@@ -83,6 +83,9 @@ class HtmlDashboardServer:
         # Constellations saved as pictures (5.5.4): /media/constellation/ and
         # /media/constellation-thumb/, by id.
         self.constellations = None
+        # Answers the deck asks for by name (5.5.10): /api/data/<name>, given
+        # to data_provider(name, query) -> (content type, bytes) or None.
+        self.data_provider = None
         # The atlas receives a random loopback port after the journal backend
         # is constructed. The parent still supplies the exact private URL and
         # the atlas independently restricts its frame ancestor to this deck.
@@ -322,6 +325,13 @@ class HtmlDashboardServer:
                 })
             return
 
+        if path.startswith("/api/data/"):
+            if not self._authorised(handler, parsed):
+                self._send_json(handler, {"error": "unauthorised"}, 403)
+                return
+            self._serve_data(handler, parsed)
+            return
+
         if path == "/api/music/library" or path.startswith("/media/"):
             if not self._authorised(handler, parsed):
                 self._send_json(handler, {"error": "unauthorised"}, 403)
@@ -347,6 +357,21 @@ class HtmlDashboardServer:
             content_type,
             cache="no-store" if candidate.name == "index.html" else "no-cache",
         )
+
+    def _serve_data(self, handler, parsed):
+        name = parsed.path.removeprefix("/api/data/").strip("/")
+        query = {key: values[0] for key, values in parse_qs(parsed.query).items() if values}
+        provider = self.data_provider
+        try:
+            answer = provider(name, query) if callable(provider) else None
+        except Exception as exc:
+            self._send_json(handler, {"error": str(exc)[:200]}, 500)
+            return
+        if not answer:
+            self._send_json(handler, {"error": "not found"}, 404)
+            return
+        content_type, payload = answer
+        self._send_bytes(handler, payload, content_type)
 
     def _serve_music(self, handler, path):
         if path.startswith("/media/postcard"):

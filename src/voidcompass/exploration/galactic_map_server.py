@@ -38,12 +38,14 @@ class GalacticMapServer:
     """Serve bundled atlas assets and live data on a private random port."""
 
     def __init__(self, static_root, atlas_asset, *, command_callback=None,
-                 regions_provider=None, status_callback=None):
+                 regions_provider=None, status_callback=None, recorder_provider=None):
         self.static_root = Path(static_root).resolve()
         self.atlas_asset = Path(atlas_asset).resolve()
         self.command_callback = command_callback
         self.regions_provider = regions_provider
         self.status_callback = status_callback
+        # The Flight Recorder (5.5.10): its sessions, or one session's tape.
+        self.recorder_provider = recorder_provider
         self.token = secrets.token_urlsafe(32)
         self._condition = threading.Condition()
         self._snapshot_json = "{}"
@@ -209,6 +211,7 @@ class GalacticMapServer:
             "/regions.js": "regions.js",
             "/camera.js": "camera.js",
             "/scene.js": "scene.js",
+            "/recorder.js": "recorder.js",
             "/styles.css": "styles.css",
             "/vendor/three.module.min.js": "vendor/three.module.min.js",
             "/vendor/three.core.min.js": "vendor/three.core.min.js",
@@ -231,6 +234,22 @@ class GalacticMapServer:
                 self._send_json(handler, {"error": "unauthorised"}, 403)
                 return
             self._serve_events(handler)
+            return
+        if path == "/api/recorder":
+            if not self._authorised(handler, parsed):
+                self._send_json(handler, {"error": "unauthorised"}, 403)
+                return
+            self._touch_client()
+            query = {key: values[0] for key, values in parse_qs(parsed.query).items() if values and key != "token"}
+            try:
+                answer = self.recorder_provider(query) if callable(self.recorder_provider) else None
+            except Exception as exc:
+                self._send_json(handler, {"error": str(exc)[:200]}, 500)
+                return
+            if answer is None:
+                self._send_json(handler, {"error": "not found"}, 404)
+            else:
+                self._send_json(handler, answer)
             return
         if path in {"/api/snapshot", "/api/regions", "/api/health"}:
             if not self._authorised(handler, parsed):

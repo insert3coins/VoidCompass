@@ -301,8 +301,7 @@ class ApiRecordsMixin:
         materials = getattr(self, "engineer_materials", None) or {}
         keys = ("raw", "manufactured", "encoded", "engineers", "pinned_blueprints", "odyssey_goals", "ship_locker",
                 "last_updated")
-        return _plain({**{key: materials.get(key) for key in keys},
-                       "plans": materials.get("build_planner_builds") or []})
+        return _plain({key: materials.get(key) for key in keys})
 
     def api_powerplay(self):
         state = dict(self._api_companion().get("powerplay") or {})

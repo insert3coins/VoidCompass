@@ -2,7 +2,6 @@ from pathlib import Path
 import re
 import unittest
 
-from voidcompass.engineering.engineering_companion import _portrait, reference_catalogues
 from voidcompass.dashboard.html_dashboard_server import HtmlDashboardServer
 from voidcompass.powerplay.powerplay_operations import POWER_DOSSIERS
 from tools.release_packager import PUBLIC_RUNTIME_IMAGE_DOCUMENTS, validate_runtime_images
@@ -35,13 +34,6 @@ class AuthenticPeopleAssetTests(unittest.TestCase):
         validated = validate_runtime_images(ROOT)
         self.assertIn("assets/images/people/README.md", validated)
 
-    def test_every_catalogued_engineer_has_a_local_portrait(self):
-        for name in reference_catalogues()["unlocks"]:
-            url = _portrait(name)
-            self.assertTrue(url.startswith("images/people/engineers/"), name)
-            relative = Path(url).relative_to("images")
-            self.assertTrue((ROOT / "assets" / "images" / relative).is_file(), (name, url))
-
     def test_current_powerplay_roster_has_local_portraits(self):
         catalogue = {row["slug"]: row["portrait"] for row in POWER_DOSSIERS}
         for slug, filename in POWERPLAY_PORTRAITS.items():
@@ -57,12 +49,12 @@ class AuthenticPeopleAssetTests(unittest.TestCase):
         )
         try:
             portrait = server._static_path(
-                "/images/people/engineers/felicity_farseer.jpg"
+                "/images/people/powerplay/aisling_duval.jpg"
             )
             self.assertEqual(
                 portrait,
-                (ROOT / "assets" / "images" / "people" / "engineers" /
-                 "felicity_farseer.jpg").resolve(),
+                (ROOT / "assets" / "images" / "people" / "powerplay" /
+                 "aisling_duval.jpg").resolve(),
             )
             self.assertIsNone(server._static_path("/images/../version.py"))
         finally:

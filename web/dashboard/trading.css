@@ -95,6 +95,13 @@
 @container (max-width: 520px) { .tr-fields label.grow { grid-column: auto; } }
 .tr-fields span { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
 .tr-checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+/* Sell cargo's "near me" (5.5.10): a radius, slider and box. */
+.tr-near { display: grid; gap: 10px; margin-top: 12px; }
+.tr-radius { display: grid; grid-template-columns: auto minmax(120px, 1fr) 84px auto; gap: 12px; align-items: center; }
+.tr-radius span { color: var(--dim); font: 700 9.5px Consolas, monospace; letter-spacing: .12em; }
+.tr-radius b { color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .1em; }
+#trading-workspace .tr-radius input[type="range"] { height: auto; padding: 0; border: 0; background: none; accent-color: var(--accent); }
+@media (max-width: 760px) { .tr-radius { grid-template-columns: minmax(0, 1fr) 84px auto; } .tr-radius span { grid-column: 1 / -1; } }
 .tr-check { display: flex; align-items: center; gap: 6px; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
 #trading-workspace .tr-check input { height: auto; accent-color: var(--accent); }
 

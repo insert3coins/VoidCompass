@@ -53,6 +53,8 @@ OVERLAY_SPECS = (
     # each screenshot taken in game.
     OverlaySpec("galaxy_minimap_hud", "galaxy-minimap", "Void Compass Galaxy Minimap", "galaxy_minimap_overlay_enabled", "galaxy_minimap_hud_x", "galaxy_minimap_hud_y", (40, 600), (240, 280), "Galaxy Minimap", "MINIMAP", False, "galaxy_minimap", "overlay_hotkey_galaxy_minimap", "Galaxy Minimap"),
     OverlaySpec("postcard_hud", "postcards", "Void Compass Postcards", "postcard_overlay_enabled", "postcard_hud_x", "postcard_hud_y", (1700, 640), (380, 330), "Postcards", "POSTCARDS", True, "postcards", "overlay_hotkey_postcards", "Postcards"),
+    # Rhino mining (5.5.10): the rigs you've set down, after SrvSurvey's rig tracker.
+    OverlaySpec("rig_tracker_hud", "rig-tracker", "Void Compass Rig Tracker", "rig_tracker_overlay_enabled", "rig_tracker_hud_x", "rig_tracker_hud_y", (1320, 400), (420, 155), "Rig Tracker", "RIGS", True, "rig_tracker", "overlay_hotkey_rig_tracker", "Rig Tracker"),
     OverlaySpec("ground_popup", "ground-target", "Void Compass Planet Waypoint Navigation", "ground_popup_enabled", "ground_popup_x", "ground_popup_y", (1320, 160), (420, 208), "Planet Waypoint Navigation", "SURFACE NAV", True, "planet_waypoint", "overlay_hotkey_planet_waypoint", "Planet Waypoint Navigation"),
 )
 
@@ -93,6 +95,10 @@ OVERLAY_HOTKEY_SPECS = (
     _overlay_hotkey("cargo"),
     _overlay_hotkey("carrier"),
     _overlay_hotkey("prospector"),
+    _overlay_hotkey("rig_tracker"),
+    # The game logs nothing when a rig goes down: its key marks it where you stand.
+    *((f"rig_{n}", f"overlay_hotkey_rig_{n}", f"Rig Tracker: rig {n} deployed / collected", None) for n in range(1, 7)),
+    ("rig_clear", "overlay_hotkey_rig_clear", "Rig Tracker: forget the rigs on this planet", None),
     _overlay_hotkey("planet_materials"),
     _overlay_hotkey("powerplay"),
     _overlay_hotkey("gravity"),
@@ -119,6 +125,7 @@ DEFAULT_OVERLAY_HOTKEYS = {
     "overlay_hotkey_toggle_all": "Ctrl+Alt+Shift+F11",
     "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
     "overlay_hotkey_watcher_poke": "Ctrl+Alt+Shift+F9",
+    **{f"overlay_hotkey_rig_{n}": f"Ctrl+Alt+{n}" for n in range(1, 7)},
 }
 
 # Each overlay's own text size (5.5.4), chosen from a list in Overlay Studio:
@@ -144,6 +151,7 @@ TEXT_SIZE_KEYS = {
     "jump_info_hud": "jump_info_text_scale_percent",
     "colony_needs_hud": "colony_needs_text_scale_percent",
     "trade_route_hud": "trade_route_text_scale_percent",
+    "rig_tracker_hud": "rig_tracker_text_scale_percent",
     "postcard_hud": "postcard_text_scale_percent",
     "ground_popup": "ground_text_scale_percent",
 }

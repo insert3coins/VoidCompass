@@ -260,7 +260,8 @@ class DepthTests(unittest.TestCase):
             quiet = deck._postcard_observe("Screenshot", LANDED)
         self.assertEqual(quiet["doing"], "", "no 'Landed', no 'In supercruise'")
         self.assertEqual(quiet["coordinates"], "12.3457° N · 45.6780° W", "where the picture is stays")
-        self.assertNotIn("Landed", caption_text(quiet))
+        # The Watcher's note is its own (and may say "Landed." itself).
+        self.assertNotIn("Landed", caption_text({**quiet, "note": ""}))
         page = (WEB / "dashboard" / "postcards.js").read_text(encoding="utf-8")
         # 5.5.4: the Watcher's note became a choice (the Watcher's, your own words, none).
         for key in ("postcard_facts", "postcard_note_mode", "postcard_doing"):

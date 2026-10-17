@@ -1296,6 +1296,56 @@ $capsule = @{ note = "Chat says hi from a year ago"; wait = "year" } | ConvertTo
 Invoke-RestMethod -Method Post http://127.0.0.1:7380/api/v1/capsules -ContentType "application/json" -Body $capsule
 ```
 
+## Your journey
+
+Void Wrapped and the Flight Recorder, from outside the deck.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/wrapped` | The years Void Wrapped can tell, newest first, with their jumps and sessions |
+| GET | `/api/v1/wrapped/{year}` | That year's story, card by card, with a `summary` (light years, jumps, systems, hours, first discoveries, credits, the year's title) |
+| GET | `/api/v1/recorder` | The sessions the Flight Recorder can play, newest first |
+| GET | `/api/v1/recorder/tape` | One session's tape (`session` = its `id` from `/recorder`): every arrival, every moment and every track, in seconds from its start |
+
+A year takes a moment to gather the first time: until it's ready, `/wrapped/{year}` answers `{"working": true, "retry_after_s": 2}`. Ask again and the story is there. Years are calendar years on your PC's clock (`2026` is 3312 in the game).
+
+The tape's `moments` have a `kind`: `first`, `footfall`, `rare`, `valuable`, `codex`, `bio`, `survey`, `sale`, `loss`, `photo`, `postcard`, `material`, `data`, `note` or `debrief`. Its `music` comes from the music diary, which began in 5.5.10.
+
+**Example: your year's headline, posted to Discord** (PowerShell)
+
+```powershell
+$webhook = "https://discord.com/api/webhooks/..."
+$year = (Get-Date).Year
+do {
+  $story = Invoke-RestMethod "http://127.0.0.1:7380/api/v1/wrapped/$year"
+  if ($story.working) { Start-Sleep -Seconds 2 }
+} while ($story.working)
+$s = $story.summary
+$text = "**$($s.title)**`n{0:N0} light years, {1:N0} jumps, {2:N0} first discoveries, {3:N0} hours in the cockpit." -f $s.ly, $s.jumps, $s.firsts, $s.hours
+$json = @{ username = "Void Wrapped $($story.elite_year)"; content = $text } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri $webhook -ContentType "application/json; charset=utf-8" -Body ([Text.Encoding]::UTF8.GetBytes($json)) | Out-Null
+```
+
+## Rig Tracker
+
+The mining rigs you've set down for Rhino mining, as the Rig Tracker overlay shows them. The game writes nothing when a rig goes down, so these do what the rig keys (Ctrl+Alt+1 to 6) do: handy on a Stream Deck.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/rigs` | The rigs on the planet you're on (`slot`, `distance_m`, `bearing`, `relative` to where you face, `here`, `at`), the order to collect them in, and any rigs left on other planets |
+| POST | `/api/v1/rigs/{n}` | Rig `n` (1 to 6) where you stand: deployed, or collected if it was already down (`"done": "placed"` or `"collected"`) |
+| POST | `/api/v1/rigs/clear` | Forget the rigs on this planet: `{"confirmed": true}` |
+
+Marking a rig needs you on a planet's surface; anywhere else it answers 409.
+
+**Example: rig keys on a Stream Deck** (PowerShell, one per key)
+
+```powershell
+$rig = 1   # this key's rig
+$answer = Invoke-RestMethod -Method Post "http://127.0.0.1:7380/api/v1/rigs/$rig"
+"Rig $rig $($answer.done); $(@($answer.rigs).Count) out"
+```
+
 ## Live events
 
 Two ways to hear things the moment they happen: ask and wait (simple, works everywhere), or open a stream (instant, best for web pages and OBS).
@@ -1392,7 +1442,7 @@ Everything the command deck shows is yours to read: one page at a time, or the w
 | GET | `/api/v1/themes` | The active theme, its colours, and every theme you can use |
 | POST | `/api/v1/dashboard/theme` | Switch theme: `{"name": "Void Cyan"}` |
 
-The pages you can read are: `achievements`, `bgs`, `build-planner`, `capsules`, `carrier`, `chronicle`, `colonisation`, `constellation`, `engineering`, `explore`, `ground`, `ledger`, `mining`, `mission`, `planet-materials`, `postcards`, `powerplay`, `profile`, `recon`, `screenshots`, `trading` and `watcher`. Their data has the same shape the deck uses, so the easiest way to find a value is to look at the page first: press **TRY** on `/api/v1/dashboard/pages/{page}` above, or open `http://127.0.0.1:7380/api/v1/dashboard/pages/explore` in your browser.
+The pages you can read are: `achievements`, `bgs`, `capsules`, `carrier`, `chronicle`, `colonisation`, `constellation`, `explore`, `ground`, `ledger`, `mining`, `mission`, `planet-materials`, `postcards`, `powerplay`, `profile`, `recon`, `screenshots`, `trading`, `watcher` and `wrapped`. Their data has the same shape the deck uses, so the easiest way to find a value is to look at the page first: press **TRY** on `/api/v1/dashboard/pages/{page}` above, or open `http://127.0.0.1:7380/api/v1/dashboard/pages/explore` in your browser.
 
 **Example: a feed line and a page switch from a script** (curl, Windows Command Prompt)
 
@@ -1447,7 +1497,7 @@ for carrier in requests.get("http://127.0.0.1:7380/api/v1/carrier").json()["carr
 | GET | `/api/v1/mining` | The mining run in progress (or none), your plan, the hopper, ring and surface scans, and past runs |
 | POST | `/api/v1/mining/run` | Start or end a mining run: `{"action": "start"}` or `{"action": "end"}` |
 | GET | `/api/v1/combat` | The combat session in progress, its target, and past sessions |
-| GET | `/api/v1/engineering` | Your materials (raw, manufactured, encoded), engineers, pinned blueprints, on-foot goals, ship locker, and your Build Planner plans |
+| GET | `/api/v1/engineering` | Your materials (raw, manufactured, encoded), engineers, pinned blueprints, on-foot goals and ship locker |
 
 **Example: one key to start and end a mining run** (PowerShell)
 

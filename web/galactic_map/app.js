@@ -6,6 +6,7 @@ import * as THREE from './vendor/three.module.min.js';
 import {createCamera} from './camera.js';
 import {createScene, MARKER_SHAPES} from './scene.js';
 import {decodeRegions, regionVisits} from './regions.js';
+import {createRecorder} from './recorder.js';
 
 const params = new URLSearchParams(window.location.search);
 const token = params.get('token') || '';
@@ -72,6 +73,9 @@ let pickables = [];
 let pickDirty = true;
 let labelsDirty = true;
 let replay = {value: 1, playing: false, last: 0, duration: 16000};
+// The Flight Recorder (5.5.10): while a session plays, its trail is the route.
+let recorder = null;
+let tapeRoute = null;
 let reducedMotion = false;
 let lastInteraction = 0;
 let lastRender = 0;
@@ -144,6 +148,7 @@ function setLink(stateName, text) {
 
 // --- Deriving what to draw from the snapshot ---------------------------------------------------
 function scopedRoute(data) {
+  if (tapeRoute) return tapeRoute;
   const rows = (data.route || []).filter((row) => validPos(row.pos));
   if (viewState.scope === 'Current Session') {
     const since = Number(data.session?.started_epoch || 0) * 1000;
@@ -188,7 +193,7 @@ function derive() {
   // a very long history is thinned for drawing; narrower scopes are recent
   // and drawn in full, so they are counted here.
   const journey = data.summary?.journey;
-  if (viewState.scope === 'All History' && journey?.regions) {
+  if (viewState.scope === 'All History' && journey?.regions && !tapeRoute) {
     visits = new Map(Object.entries(journey.regions).map(([id, entry]) => [Number(id), {id: Number(id), ...entry}]));
   } else {
     visits = regions ? regionVisits(regions, route) : new Map();
@@ -198,7 +203,7 @@ function derive() {
 // Totals for the stats bar: the whole journey's in All History.
 function journeyTotals() {
   const journey = snapshot.summary?.journey;
-  if (viewState.scope === 'All History' && journey?.systems) {
+  if (viewState.scope === 'All History' && journey?.systems && !tapeRoute) {
     return {systems: journey.systems, distance: journey.distance_ly};
   }
   return {systems: systems.size, distance: route.reduce((sum, row) => sum + Number(row.jump_dist || 0), 0)};
@@ -279,6 +284,7 @@ function applySnapshot(data, first = false) {
   renderReplayLabels();
   if (selection) showInspector(selection, false);
   if (first) initialView();
+  if (!first) recorder?.request(data.recorder_request);
   const focus = data.focus_request;
   if (focus && focus.id !== lastFocus) {
     lastFocus = focus.id;
@@ -478,7 +484,8 @@ function clearArea() {
   const side = document.querySelector('.side');
   const left = side && !side.classList.contains('collapsed') && width > 820 ? side.getBoundingClientRect().right + 12 : 12;
   const right = !$('inspector').hidden && width > 820 ? $('inspector').getBoundingClientRect().left - 12 : width - 12;
-  const bottom = document.querySelector('.journey').getBoundingClientRect().top - 12;
+  const bar = document.querySelector(recorder?.active ? '.recorder' : '.journey');
+  const bottom = bar.getBoundingClientRect().top - 12;
   return {left, right: Math.max(left + 100, right), top: 12, bottom: Math.max(120, bottom)};
 }
 
@@ -700,7 +707,7 @@ function labelElement(key, className, html) {
 
 function updateLabels() {
   labelsDirty = false;
-  const candidates = [];
+  const candidates = recorder ? recorder.labels(performance.now()) : [];
   const head = replayHead();
   if (head) candidates.push({key: 'head', cls: 'head', pos: head.pos, dy: -30, html: `${escape(head.row.system || '')}<small>${day(head.row.timestamp)}</small>`, rank: 120});
   if (current && !head) candidates.push({key: 'here', cls: 'here', pos: current, dy: -34, html: `${escape(snapshot.current?.system || 'You')}<small>YOU ARE HERE</small>`, rank: 110});
@@ -776,6 +783,8 @@ function loop(now) {
   window.requestAnimationFrame(loop);
   if (document.hidden) return;
   const flying = cam.step(now);
+  if (recorder?.tick(now)) labelsDirty = true;
+  if (recorder?.active && recorder.labels(now).length) labelsDirty = true;
   if (replay.playing) {
     // A frame's time can be a touch before the press that started it: never
     // step backwards (below the start there's no journey to show).
@@ -786,7 +795,7 @@ function loop(now) {
     renderReplayLabels();
     labelsDirty = true;
   }
-  const busy = flying || cam.dragging || replay.playing || now - lastInteraction < 800;
+  const busy = flying || cam.dragging || replay.playing || recorder?.playing || now - lastInteraction < 800;
   if (!busy && !labelsDirty && (reducedMotion || now - lastRender < 40)) return;
   lastRender = now;
   if (labelsDirty) updateLabels();
@@ -816,6 +825,7 @@ function bind() {
       document.querySelectorAll('[data-panel]').forEach((panel) => { panel.hidden = panel.dataset.panel !== tab.dataset.tab; });
     }
     if (event.target.closest('#side-collapse')) document.querySelector('.side').classList.toggle('collapsed');
+    if (tab?.dataset.tab === 'recorder') recorder?.listSessions();
   });
   $('places').addEventListener('click', (event) => {
     const button = event.target.closest('[data-place]');
@@ -933,7 +943,8 @@ function bind() {
     if (event.key === 'Escape') { hideMenu(); if (!$('inspector').hidden) closeInspector(); return; }
     if (event.key === ' ' && !event.target.closest?.('button')) {
       event.preventDefault();
-      toggleReplay();
+      if (recorder?.active) recorder.toggle();
+      else toggleReplay();
       return;
     }
     if (cam.key(event)) event.preventDefault();
@@ -1029,6 +1040,35 @@ async function start() {
     });
     scene.useCamera(cam.camera);
     bind();
+    recorder = createRecorder({
+      $, escape, number, api, command,
+      onTape(rows) {
+        tapeRoute = rows;
+        replay.playing = false;
+        replay.value = rows ? 0 : 1;
+        if (rows) closeInspector();
+        if (snapshot) applySnapshot(snapshot);
+        pickDirty = labelsDirty = true;
+        lastInteraction = performance.now();
+      },
+      setProgress(value) {
+        replay.value = value;
+        pushBeacons();
+        renderReplayLabels();
+        labelsDirty = true;
+      },
+      frame: (points) => frame(points, 900, 60),
+      follow(pos) {
+        // Only when the ship nears the edge of the clear part of the map.
+        const at = scene.project(pos, width, height);
+        const area = clearArea();
+        const marginX = (area.right - area.left) * .2, marginY = (area.bottom - area.top) * .2;
+        if (at && at.x > area.left + marginX && at.x < area.right - marginX && at.y > area.top + marginY && at.y < area.bottom - marginY) return;
+        cam.flyTo({...aim(pos[0], pos[2], cam.state.distance)}, reducedMotion ? 0 : 900);
+      },
+      redraw() { lastInteraction = performance.now(); labelsDirty = true; },
+      showTab(name) { document.querySelector(`[data-tab="${name}"]`)?.click(); },
+    });
     resize();
     $('loading-status').textContent = 'Charting the 42 Codex regions…';
     const [regionPayload, data] = await Promise.all([
@@ -1038,6 +1078,7 @@ async function start() {
     regions = decodeRegions(regionPayload);
     scene.setRegions(regions);
     applySnapshot(data, true);
+    recorder.request(data.recorder_request);
     connect();
     command({action: 'ready'});
     window.setInterval(() => command({action: 'heartbeat'}), 5000);
@@ -1047,7 +1088,8 @@ async function start() {
     window.voidcompassAtlas = {
       state: () => ({camera: {...cam.state}, selection: selection && {kind: selection.kind, name: selection.name || selection.subject, id: selection.id},
         systems: systems.size, regionsVisited: visits.size, currentRegion, layers: {...viewState.layers}, replay: replay.value,
-        labels: [...labelPool.entries()].filter(([, el]) => el.style.opacity === '1').map(([key]) => key)}),
+        labels: [...labelPool.entries()].filter(([, el]) => el.style.opacity === '1').map(([key]) => key),
+        recorder: recorder?.state()}),
       project: (pos) => scene.project(pos, width, height),
       regionAt: (x, z) => regions.idAt(x, z),
     };

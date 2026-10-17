@@ -377,6 +377,8 @@ function cargoView(data, ui) {
   // By price (the best five payers) or by distance (the five nearest), both
   // from the same search (5.5.3.5).
   const byDistance = data.cargo_sort === "distance";
+  const o = data.cargo_options || {};
+  const radius = Number(field("cargo", "radius", o.radius ?? 50)) || 50;
   const holdList = hold.length ? `<ul class="tr-hold">${hold.map((row) => `<li><b>${count(row.count)} t</b><span>${esc(row.name)}</span>${row.stolen ? `<small>${count(row.stolen)} stolen</small>` : ""}</li>`).join("")}</ul>`
     : `<p class="tr-dim">Your hold is empty.</p>`;
   let results = "";
@@ -385,17 +387,24 @@ function cargoView(data, ui) {
     const best = row.stations[0];
     const listed = byDistance && Array.isArray(row.nearest) ? row.nearest : row.stations;
     results += `<section class="tr-panel wide"><div class="tr-result-head"><div><p>${count(row.count)} T</p><h3>${esc(row.name)}</h3>
-        <span>${best ? `Best nearby: ${cr(best.price * row.count)} at ${esc(best.station)}` : "Nowhere nearby wants it in Spansh's data."}</span>
+        <span>${best ? `Best within ${count(cargo.radius || radius)} ly: ${cr(best.price * row.count)} at ${esc(best.station)}` : `Nowhere within ${count(cargo.radius || radius)} ly wants it in Spansh's data.`}</span>
         ${row.here ? `<small class="tr-here">In ${esc(cargo.system)}: ${esc(row.here.station)} pays ${count(row.here.price)}${best && best.market_id !== row.here.market_id ? ` (${cr(row.here.price * row.count)} for yours)` : ", the best nearby"}</small>` : ""}</div></div>
       ${listed.length ? `<table class="tr-table"><thead><tr><th>STATION</th><th>DISTANCE</th><th>PRICE</th><th>FOR YOUR ${count(row.count)} T</th><th>DEMAND</th><th>PRICES</th><th></th></tr></thead><tbody>
         ${listed.map((s) => `<tr${s.stock < row.count ? ' class="short"' : ""}><td>${stationCell(s, esc)}</td><td>${n(s.distance).toFixed(1)} ly</td><td>${count(s.price)}</td><td>${cr(s.price * Math.min(row.count, s.stock))}</td>
           <td>${count(s.stock)}${s.stock < row.count ? " (less than you have)" : ""}</td><td>${ago(s.updated)}</td><td><button type="button" data-trade-op="copy" data-text="${esc(s.system)}">COPY</button></td></tr>`).join("")}</tbody></table>` : ""}</section>`;
   }
   return `<section class="tr-panel wide"><h4>IN YOUR HOLD</h4>${holdList}
-    <div class="tr-actions"><button type="button" class="primary" data-trade-op="cargo" ${busy || !hold.length ? "disabled" : ""}>${busy ? "ASKING SPANSH…" : "FIND THE BEST PRICES NEAR ME"}</button></div>
+    <form class="tr-form tr-near" data-trade-form="cargo">
+      <label class="tr-radius"><span>NEAR ME MEANS WITHIN</span>
+        <input type="range" name="radius_slider" min="5" max="1000" step="5" value="${Math.min(1000, radius)}" aria-label="Search radius in light years">
+        <input type="number" name="radius" min="5" max="1000" step="1" value="${radius}" aria-label="Search radius in light years"><b>LY</b></label>
+      <div class="tr-checks"><label class="tr-check"><input type="checkbox" name="large" ${n(field("cargo", "large", o.large ? 1 : 0)) ? "checked" : ""}><span>Large pad only</span></label>
+        <label class="tr-check"><input type="checkbox" name="carriers" ${n(field("cargo", "carriers", o.carriers ? 1 : 0)) ? "checked" : ""}><span>Fleet carriers</span></label>
+        <label class="tr-check"><input type="checkbox" name="planetary" ${n(field("cargo", "planetary", o.planetary === false ? 0 : 1)) ? "checked" : ""}><span>Planetary ports</span></label></div>
+      <div class="tr-actions"><button type="submit" class="primary" ${busy || !hold.length ? "disabled" : ""}>${busy ? "ASKING SPANSH…" : `FIND THE BEST PRICES WITHIN ${count(radius)} LY`}</button></div></form>
     ${busy && cargo.pending ? `<div class="tr-bar determinate"><i style="width:${(n(cargo.done) / Math.max(1, n(cargo.total)) * 100).toFixed(0)}%"></i></div>
       <p class="tr-dim">Checking ${n(cargo.done) + 1} of ${n(cargo.total)}: ${esc(cargo.current || "")}</p>` : ""}
-    ${cargo.rows ? `<div class="tr-sort-row"><p class="tr-dim">Near ${esc(cargo.system)} · ${ago(cargo.at)} · each commodity's ${byDistance ? "five nearest stations that buy it" : "best five stations by price"}.</p>
+    ${cargo.rows ? `<div class="tr-sort-row"><p class="tr-dim">Within ${count(cargo.radius || radius)} ly of ${esc(cargo.system)} · ${ago(cargo.at)} · each commodity's ${byDistance ? "five nearest stations that buy it" : "best five stations by price"}.</p>
       <div class="tr-ranges"><button type="button" class="${byDistance ? "" : "active"}" data-trade-op="cargo_sort" data-sort="price">BY PRICE</button><button type="button" class="${byDistance ? "active" : ""}" data-trade-op="cargo_sort" data-sort="distance">BY DISTANCE</button></div></div>` : ""}</section>${results}`;
 }
 
@@ -576,6 +585,16 @@ export function handleTradingInput(event, ui) {
   if (!form || !ui.byId("trading-workspace")?.contains(form) || !event.target.name) return false;
   const key = form.dataset.tradeForm === "plan" ? "route" : form.dataset.tradeForm;
   drafts[key] = {...(drafts[key] || {}), [event.target.name]: event.target.type === "checkbox" ? (event.target.checked ? 1 : 0) : event.target.value};
+  if (key === "cargo" && ["radius", "radius_slider"].includes(event.target.name)) {
+    // The slider and the box are one setting.
+    const value = Math.max(5, Math.min(1000, Math.round(Number(event.target.value) || 50)));
+    const other = form.elements[event.target.name === "radius" ? "radius_slider" : "radius"];
+    if (other && event.target.name === "radius_slider") other.value = String(value);
+    if (other && event.target.name === "radius") other.value = String(Math.min(1000, value));
+    drafts.cargo = {...drafts.cargo, radius: value};
+    const go = form.querySelector('button[type="submit"]');
+    if (go && !go.disabled) go.textContent = `FIND THE BEST PRICES WITHIN ${value.toLocaleString()} LY`;
+  }
   if (event.target.name === "whole_system") {
     // From any station in the system: the station isn't needed (5.5.3.4).
     const whole = event.target.checked;

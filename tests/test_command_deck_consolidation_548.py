@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class CommandDeckConsolidation548Tests(unittest.TestCase):
     def test_release_version_comparison_handles_elite_style_patch_versions(self):
-        self.assertEqual(APP_VERSION, "5.5.9")
+        self.assertEqual(APP_VERSION, "5.5.10")
         self.assertTrue(release_is_newer("v5.4.8.2", "5.4.8.1"))
         self.assertTrue(release_is_newer("5.4.7.1", "5.4.7"))
         self.assertTrue(release_is_newer("5.4.10", "5.4.9.9"))
@@ -26,20 +26,25 @@ class CommandDeckConsolidation548Tests(unittest.TestCase):
 
         # 5.4.9.8 added Music, under its own COCKPIT heading; 5.5.2 Colonisation;
         # 5.5.2.4 BGS; 5.5.2.6 Trading; 5.5.3.2 The Watcher; 5.5.3.7 Postcards, Screenshots, Time Capsules, Constellation;
-        # 5.5.4 Tools, and the Exploration Archive became Explore & Survey's Archive tab.
+        # 5.5.4 Tools, and the Exploration Archive became Explore & Survey's Archive tab;
+        # 5.5.10 Void Wrapped, the Ship Workshop gone, and each heading's pages
+        # in alphabetical order ("The" aside).
         self.assertEqual(len(labels), 22)
         self.assertEqual(labels, [
-            "Dashboard", "Explore & Survey", "Planetary Operations", "Galactic Atlas",
-            "Commander Record", "Mining Command", "Ship Workshop",
-            "Carrier Command", "Colonisation", "BGS", "Trading", "Powerplay", "Music", "The Watcher", "Postcards", "Screenshots", "Time Capsules", "Constellation", "Tools", "Overlay Studio", "Settings", "About",
+            "Dashboard", "Explore & Survey", "Galactic Atlas", "Planetary Operations",
+            "Commander Record",
+            "BGS", "Carrier Command", "Colonisation", "Mining Command", "Powerplay", "Trading",
+            "Constellation", "Music", "Postcards", "Screenshots", "Time Capsules", "Void Wrapped", "The Watcher",
+            "About", "Overlay Studio", "Settings", "Tools",
         ])
+        self.assertEqual([int(number) for number in re.findall(r"<b>(\d+)</b></button>", rail)], list(range(1, 23)))
         self.assertNotIn("Field Tools", labels)
 
     def test_merged_pages_remain_available_as_compatibility_routes(self):
         document = (ROOT / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")
         for page in (
             "mission", "recon", "ledger", "ground", "records", "achievements",
-            "chronicle", "engineering", "overlay-studio",
+            "chronicle", "overlay-studio",
         ):
             self.assertIn(f'data-page-name="{page}"', document)
 
@@ -47,11 +52,9 @@ class CommandDeckConsolidation548Tests(unittest.TestCase):
         self.assertIn("const PAGE_SUITES", script)
         self.assertIn("function navigationPage(pageName)", script)
         self.assertIn('node.dataset.page === navPage', script)
-        for suite in (
-            "EXPLORATION COMMAND", "PLANETARY OPERATIONS", "COMMANDER RECORD",
-            "SHIP WORKSHOP",
-        ):
+        for suite in ("EXPLORATION COMMAND", "PLANETARY OPERATIONS", "COMMANDER RECORD"):
             self.assertIn(suite, script)
+        self.assertNotIn("SHIP WORKSHOP", script, "the Ship Workshop is gone (5.5.10)")
         self.assertNotIn('{parent: "settings"', script)
 
     def test_release_notice_is_in_app_and_opens_the_matching_github_release(self):

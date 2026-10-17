@@ -7,10 +7,6 @@ import {createMusicDeck} from "./music.js";
 import {installSetup, renderSetup} from "./setup.js";
 import {applyTextSize} from "./text-size.js";
 import {
-  engineeringPayload, handleWorkshopChange, handleWorkshopClick, handleWorkshopInput,
-  renderBuildPlanner, renderEngineering, resetWorkshop,
-} from "./workshop.js";
-import {
   handleColonisationChange, handleColonisationClick, handleColonisationSubmit, renderColonisation, resetColonisation,
 } from "./colonisation.js";
 import {handleBgsChange, handleBgsClick, handleBgsSubmit, renderBgs} from "./bgs.js";
@@ -22,6 +18,7 @@ import {renderCapsules} from "./capsules.js";
 import {renderTools} from "./tools.js";
 import {renderConstellation} from "./constellation.js";
 import {renderFlightLogs} from "./flightlog.js";
+import {renderWrapped} from "./wrapped.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
@@ -121,9 +118,6 @@ const PAGE_SUITES = [
     ["profile", "COMMANDER"], ["records", "FLIGHT RECORD"],
     ["achievements", "ACHIEVEMENTS"],
   ]},
-  {parent: "build-planner", label: "SHIP WORKSHOP", pages: [
-    ["build-planner", "BUILD PLANNER"], ["engineering", "ENGINEERING"],
-  ]},
 ];
 const PAGE_SUITE_BY_PAGE = new Map();
 for (const suite of PAGE_SUITES) {
@@ -152,8 +146,6 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".studio-index-select", ".mission-row", ".workspace-tabs button", ".watcher-chapter", ".album-grid button", ".sky-gallery button", ".flightlog-nights button",
   ".suite-tabs button", "[data-analytics-view]",
   ".galnet-headline-row", "#status-galnet",
-  ".wk-tile", ".wk-hullpick", ".wk-slot", ".wk-module", ".wk-docktab", ".wk-segbtn", ".wk-pip",
-  ".wk-mini", ".wk-tab", ".wk-chip", ".wk-engineer", ".wk-type", ".wk-follow",
   ".survey-body-row", ".explore-views button", "[data-explore-filter]", ".body-select",
   ".settings-tab", ".theme-option",
   ".music-button", ".music-mode", ".music-playlist", ".music-row-actions button",
@@ -163,6 +155,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".tr-ranges button", ".tr-station-row", ".tools-filter button", ".tools-segments button",
   ".pc-tabs button", ".pc-filter button", ".pc-look", ".pc-grid button", ".pc-step",
   ".sky-views button", ".sky-stars button", ".sky-saved ol button",
+  ".wrapped-years button", ".wrapped-index button", ".wrapped-start",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -255,7 +248,7 @@ const apiUrl = (path) => `${path}${path.includes("?") ? "&" : "?"}token=${encode
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[char]));
 const credits = (value) => Number.isFinite(Number(value)) ? `${Math.round(Number(value)).toLocaleString()} CR` : "—";
 const numeric = (value, digits = 0) => Number.isFinite(Number(value)) ? Number(value).toLocaleString(undefined, {minimumFractionDigits: digits, maximumFractionDigits: digits}) : "—";
-// What workshop.js draws and talks with.
+// What the page modules draw and talk with.
 // A rounded −0 (an empty hold, a zero resistance) reads as 0.
 const WORKSHOP_UI = {
   byId, escapeHtml, credits, showToast, command, apiUrl: (path) => apiUrl(path),
@@ -3398,11 +3391,6 @@ function renderMiningWorkspace(data) {
   </section>`;
 }
 
-// The Ship Workshop pages live in workshop.js.
-function renderEngineeringWorkspace(data) {
-  renderEngineering(data, WORKSHOP_UI);
-}
-
 function installPageSuites() {
   for (const suite of PAGE_SUITES) {
     for (const [pageName, pageLabel] of suite.pages) {
@@ -3535,10 +3523,6 @@ function renderTradingWorkspace(data) {
 // The Colonisation tab lives in colonisation.js.
 function renderColonisationWorkspace(data) {
   renderColonisation(data, WORKSHOP_UI);
-}
-
-function renderBuildPlannerWorkspace(data) {
-  renderBuildPlanner(data, WORKSHOP_UI);
 }
 
 function renderPowerplayWorkspace(data) {
@@ -4304,7 +4288,7 @@ function renderWorkspace(state) {
     },
     mission: renderMissionWorkspace,
     ground: renderGroundWorkspace, mining: renderMiningWorkspace,
-    engineering: renderEngineeringWorkspace, "build-planner": renderBuildPlannerWorkspace, powerplay: renderPowerplayWorkspace,
+    powerplay: renderPowerplayWorkspace,
     carrier: renderCarrierWorkspace,
     recon: renderReconWorkspace, achievements: renderAchievementsWorkspace,
     ledger: renderLedgerWorkspace, settings: renderSettingsWorkspace,
@@ -4317,6 +4301,7 @@ function renderWorkspace(state) {
     capsules: (data) => renderCapsules(data, WORKSHOP_UI),
     tools: (data) => renderTools(data, WORKSHOP_UI),
     constellation: (data) => renderConstellation(data, WORKSHOP_UI),
+    wrapped: (data) => renderWrapped(data, WORKSHOP_UI),
   };
   renderers[page]?.(workspace.data || {});
   preparePageLayout(page);
@@ -4332,7 +4317,6 @@ function renderDashboard(state) {
     Object.keys(pageLayoutDefaults).forEach((page) => delete pageLayoutDefaults[page]);
     workspaceFingerprints = {};
     missionSelectedId = "";
-    resetWorkshop();
     resetColonisation();
     resetTrading();
     orrerySelectedBodyId = "";
@@ -4863,7 +4847,6 @@ document.addEventListener("click", async (event) => {
     if (await moveStudioToDisplay(studioMoveDisplay.dataset.studioMoveDisplay)) showToast(`Moved to ${target?.label || "the other display"}`);
     return;
   }
-  if (handleWorkshopClick(event, WORKSHOP_UI)) return;
   if (handleColonisationClick(event, WORKSHOP_UI, () => renderColonisationWorkspace(model.workspace?.data || {}))) return;
   if (handleBgsClick(event, WORKSHOP_UI)) return;
   if (handleTradingClick(event, WORKSHOP_UI)) return;
@@ -5154,29 +5137,6 @@ document.addEventListener("click", async (event) => {
         exclude_carriers: Boolean(byId("mining-buyer-no-carriers")?.checked),
       });
       if (!payload.reference || !payload.commodity || number(payload.quantity) <= 0) return;
-    } else if (page === "build-planner" && operation === "create") {
-      payload.ship_id = byId("bp-new-ship")?.value || "";
-      payload.name = byId("bp-new-name")?.value.trim() || "";
-      if (!payload.ship_id) return;
-    } else if (page === "build-planner" && operation === "rename") {
-      payload.name = byId("bp-name")?.value.trim() || "";
-      if (!payload.name) return;
-    } else if (page === "build-planner" && operation === "set_load") {
-      payload.fuel = byId("bp-fuel")?.value ?? "";
-      payload.cargo = byId("bp-cargo")?.value || 0;
-      payload.pips = {sys:byId("bp-pip-sys")?.value, eng:byId("bp-pip-eng")?.value, wep:byId("bp-pip-wep")?.value};
-      if (number(payload.pips.sys)+number(payload.pips.eng)+number(payload.pips.wep)!==12) {
-        showToast("SYS, ENG and WEP must add up to 12 half-pips"); return;
-      }
-    } else if (page === "build-planner" && operation === "configure_slot") {
-      Object.assign(payload, engineeringPayload(WORKSHOP_UI));
-      if (!payload.slot) return;
-    } else if (page === "build-planner" && operation === "import_preview") {
-      payload.build = byId("bp-import")?.value || "";
-      if (!payload.build.trim()) return;
-    } else if (page === "engineering" && operation === "odyssey_pin") {
-      payload.name = byId("odyssey-blueprint")?.value || "";
-      payload.quantity = byId("odyssey-quantity")?.value;
     } else if (page === "powerplay" && operation === "add_objective") {
       Object.assign(payload, {
         title: byId("powerplay-objective-title")?.value.trim() || "",
@@ -5295,8 +5255,6 @@ document.addEventListener("input", (event) => {
       {label: "Mapped", render: (row) => row.mapped ? "YES" : "NO"},
       {label: "Flags", render: (row) => escapeHtml((row.flags || []).join(" · "))},
     ], filtered, "No valuable bodies match that filter.");
-  } else {
-    handleWorkshopInput(event, WORKSHOP_UI);
   }
 });
 
@@ -5351,8 +5309,8 @@ document.addEventListener("change", async (event) => {
   } else if (event.target.id === "replay-session") {
     replaySelectedSessionIndex = Math.max(0, number(event.target.value));
     renderChronicleWorkspace(model.workspace?.data || {});
-  } else if (!handleColonisationChange(event, WORKSHOP_UI, model.workspace?.data) && !handleBgsChange(event, WORKSHOP_UI)) {
-    handleWorkshopChange(event, WORKSHOP_UI);
+  } else if (!handleColonisationChange(event, WORKSHOP_UI, model.workspace?.data)) {
+    handleBgsChange(event, WORKSHOP_UI);
   }
 });
 

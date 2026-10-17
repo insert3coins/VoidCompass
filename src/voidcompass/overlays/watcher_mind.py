@@ -109,7 +109,7 @@ HEADED_TOPICS = {
     # 5.5.4: finding its voice, and what it has learned about you.
     "voice_found": ("memory", watcher_voice_lore.TITLE),
     "habit_milestone": ("", "A MILESTONE"),
-    **{topic: ("musing", "WHAT IT KNOWS OF YOU") for topic in watcher_habits.HABIT_TOPICS if topic != "habit_milestone"},
+    **{topic: ("musing", "WHAT IT HAS WATCHED OF YOU") for topic in watcher_habits.HABIT_TOPICS if topic != "habit_milestone"},
 }
 
 

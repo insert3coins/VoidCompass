@@ -868,6 +868,8 @@ class _OverlayHost:
             path = "/colony_needs/index.html"
         elif template == "trade_route":
             path = "/trade_route/index.html"
+        elif template == "rig_tracker":
+            path = "/rig_tracker/index.html"
         elif template == "galaxy_minimap":
             path = "/galaxy_minimap/index.html"
         elif template == "postcards":

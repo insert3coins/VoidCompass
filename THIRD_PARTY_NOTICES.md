@@ -1,23 +1,6 @@
 # Third-Party Notices
 
 
-## EDSY ship and module data
-
-The v5.4.6 Build Planner bundles a normalized snapshot of the Elite Dangerous
-ship, module, Engineering blueprint, experimental-effect and material database
-maintained by [EDSY](https://github.com/taleden/EDSY), pinned at commit
-`9cd829062217036184ea9ec79ee30934d235aca8`.
-
-VoidCompass contains its own offline calculation, storage and interface code;
-it does not include EDSY's application source. EDSY is distributed under the
-Creative Commons Attribution-NonCommercial 4.0 International licence. The database
-is separately attributed and is used by this unofficial, non-commercial fan
-project. Elite Dangerous names and game data remain the property of Frontier
-Developments plc.
-
-Copyright © 2015-2025 taleden. Licence:
-<https://creativecommons.org/licenses/by-nc/4.0/>
-
 ## Elite Dangerous Character Portraits
 
 `assets/images/people/powerplay` includes official, non-fanmade Elite Dangerous
@@ -27,11 +10,7 @@ Powerplay character artwork. Nine portraits were sourced from
 portraits missing from that collection (Jerome Archer, Nakato Kaine and Yuri
 Grom) were sourced from the Elite Dangerous Wiki's Frontier artwork archive.
 
-`assets/images/people/engineers` includes the in-game Engineer portraits maintained
-by [EDDiscovery](https://github.com/EDDiscovery/EDDiscovery), pinned at commit
-`758d69d4ecee70974c24f5e69c142994b565cfd9`.
-
-The EDAssets repository is MIT-licensed and EDDiscovery is Apache-2.0-licensed.
+The EDAssets repository is MIT-licensed.
 The character designs and original game artwork remain the property of
 Frontier Developments plc and are used here by an unofficial fan project.
 

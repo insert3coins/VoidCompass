@@ -877,6 +877,9 @@ class DashboardScanMixin:
         )
         if on_planet_changed or needs_live_ground_update:
             self._ground_ui_needs_update = True
+        if (moved or on_planet_changed) and getattr(self, "rig_tracker_hud", None) is not None:
+            # The rig dials turn and count down as you drive (5.5.10).
+            self._rig_update_overlay()
         vehicle_state_changed = (
             was_landed != bool(getattr(self, "current_landed", False))
             or was_docked != bool(getattr(self, "current_docked", False))
@@ -887,6 +890,8 @@ class DashboardScanMixin:
             or was_in_multicrew != bool(getattr(self, "current_in_multicrew", False))
             or was_on_carrier_deck != self._navigation_on_carrier_deck()
         )
+        if vehicle_state_changed and getattr(self, "rig_tracker_hud", None) is not None:
+            self._rig_update_overlay()  # into the Rhino, or out of it
         if vehicle_state_changed:
             # Cargo.json can remain on its final SRV snapshot after DockSRV.
             # Select the hold from verified Status state immediately, then ask

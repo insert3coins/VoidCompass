@@ -1,11 +1,9 @@
 /* Expedition Bridge: field systems and application consoles.
-   This layer is intentionally scoped to its eight named workspaces. The
+   This layer is intentionally scoped to its six named workspaces. The
    existing grids, scroll containers and command hooks remain authoritative. */
 
 :is(
   [data-page-name="mining"],
-  [data-page-name="engineering"],
-  [data-page-name="build-planner"],
   [data-page-name="powerplay"],
   [data-page-name="carrier"],
   [data-page-name="settings"],
@@ -19,7 +17,6 @@
 
 :is(
   [data-page-name="mining"],
-  [data-page-name="engineering"],
   [data-page-name="powerplay"],
   [data-page-name="carrier"],
   [data-page-name="settings"]
@@ -33,7 +30,6 @@
 
 :is(
   [data-page-name="mining"],
-  [data-page-name="engineering"],
   [data-page-name="powerplay"],
   [data-page-name="carrier"],
   [data-page-name="settings"]
@@ -43,7 +39,6 @@
 
 :is(
   [data-page-name="mining"],
-  [data-page-name="engineering"],
   [data-page-name="powerplay"],
   [data-page-name="carrier"],
   [data-page-name="settings"]
@@ -57,7 +52,6 @@
 
 :is(
   [data-page-name="mining"],
-  [data-page-name="engineering"],
   [data-page-name="powerplay"],
   [data-page-name="carrier"],
   [data-page-name="settings"]

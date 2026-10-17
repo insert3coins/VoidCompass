@@ -13,13 +13,14 @@ IMAGE_ASSETS = Path(__file__).resolve().parents[1] / "assets" / "images"
 BRIDGE_PAGES = (
     "planet-materials", "explore", "records", "operations", "profile",
     "chronicle", "mission", "ground", "mining",
-    "engineering", "build-planner", "powerplay", "carrier", "recon",
+    "powerplay", "carrier", "recon",
     "achievements", "ledger", "settings", "overlay-studio", "about", "music",
     "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation", "tools",
+    "wrapped",
 )
 WORKSPACE_PAGES = (
     "planet-materials", "explore", "profile", "chronicle",
-    "mission", "ground", "mining", "engineering", "build-planner",
+    "mission", "ground", "mining",
     "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
     "colonisation", "bgs", "trading",
 )

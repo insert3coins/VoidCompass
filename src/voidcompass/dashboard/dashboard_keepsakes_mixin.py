@@ -365,6 +365,10 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             server.postcards = self.postcard_album()
             server.screenshots = self.screenshot_album()
             server.constellations = self.constellation_album()
+            # Void Wrapped, the book, the recorder and system tunes (5.5.10).
+            data = getattr(self, "_html_data", None)
+            if callable(data):
+                server.data_provider = data
 
     # -- The Screenshots page (5.5.3.7) ----------------------------------------
     def _screenshot_folder(self):

@@ -87,7 +87,8 @@ function page(log, ui) {
   return `<article class="flightlog-page">
     <header><div><small>FLIGHT LOG · ${ui.escapeHtml(log.elite_date)}${log.open ? " · IN FLIGHT" : ""}</small>
       <h3>${ui.escapeHtml(log.date)}</h3>
-      <p>${ui.escapeHtml(log.start_system)} → ${ui.escapeHtml(log.end_system)} · ${ui.escapeHtml(log.flown)}${log.ship ? ` · ${ui.escapeHtml(log.ship)}` : ""} · from ${ui.escapeHtml(log.time)}</p></div></header>
+      <p>${ui.escapeHtml(log.start_system)} → ${ui.escapeHtml(log.end_system)} · ${ui.escapeHtml(log.flown)}${log.ship ? ` · ${ui.escapeHtml(log.ship)}` : ""} · from ${ui.escapeHtml(log.time)}</p></div>
+      <button type="button" class="primary flightlog-watch" data-flightlog-watch="${ui.escapeHtml(log.id)}" title="The Flight Recorder: this session played again on the Galactic Atlas">▶ WATCH AGAIN</button></header>
     <div class="flightlog-body">
       <div class="flightlog-map"><canvas id="flightlog-trail" aria-label="${ui.escapeHtml(log.whens || "The")} trail"></canvas></div>
       <div class="flightlog-facts">
@@ -184,6 +185,10 @@ export function renderFlightLogs(data = {}, ui, chronicle = []) {
       </aside>
       <div id="flightlog-view" class="flightlog-view"></div>
     </section>`;
+    root.addEventListener("click", (event) => {
+      const watch = event.target.closest("[data-flightlog-watch]");
+      if (watch) ui.command("workspace", {page: "chronicle", operation: "watch_again", id: watch.dataset.flightlogWatch});
+    });
     root.querySelector(".flightlog-nights").addEventListener("click", (event) => {
       const button = event.target.closest("[data-flightlog]");
       if (!button) return;

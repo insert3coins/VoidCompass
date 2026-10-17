@@ -274,9 +274,13 @@ class HtmlMusicMixin:
         self._music_status = status
         self._music_remember(status)
         self._music_update_overlay()
-        if (previous.get("track_id"), previous.get("playing")) != (status["track_id"], status["playing"]) \
-                and hasattr(self, "_api_publish"):
-            track = self.music_library().track(status["track_id"]) or {} if status["track_id"] else {}
+        if (previous.get("track_id"), previous.get("playing")) == (status["track_id"], status["playing"]):
+            return
+        track = self.music_library().track(status["track_id"]) or {} if status["track_id"] else {}
+        # The music diary (5.5.10): each track as it starts.
+        if status["playing"] and status["track_id"] and hasattr(self, "_music_diary_note"):
+            self._music_diary_note(status["track_id"], track)
+        if hasattr(self, "_api_publish"):
             self._api_publish("music", {"playing": status["playing"], "track_id": status["track_id"],
                                         "title": track.get("title") or "", "artist": track.get("artist") or ""})
 

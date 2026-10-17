@@ -22,8 +22,8 @@
   <link rel="stylesheet" href="tools.css">
   <link rel="stylesheet" href="constellation.css">
   <link rel="stylesheet" href="flightlog.css">
+  <link rel="stylesheet" href="wrapped.css">
   <link rel="stylesheet" href="powerplay.css">
-  <link rel="stylesheet" href="workshop.css">
   <link rel="stylesheet" href="colonisation.css">
   <link rel="stylesheet" href="bgs.css">
   <link rel="stylesheet" href="trading.css">
@@ -125,7 +125,6 @@
               <li><b>Survey</b><span>Every body in the system, what it is worth, and the biology still to sample.</span></li>
               <li><b>Galactic Atlas</b><span>Every system you have visited, across Elite's 42 regions.</span></li>
               <li><b>Expeditions</b><span>Routes, waypoints, fuel stops and your carrier.</span></li>
-              <li><b>Ship Workshop</b><span>Plan builds offline and track engineering materials.</span></li>
               <li><b>Cockpit overlays</b><span>Navigation, survey and field HUDs over the game.</span></li>
               <li><b>Your record</b><span>Captain's log, achievements, Powerplay and music.</span></li>
             </ul>
@@ -249,30 +248,30 @@
         <p>EXPLORATION</p>
         <button class="nav-item active" data-page="overview" aria-label="Dashboard" aria-current="page" title="Dashboard"><i>⌖</i><span>Dashboard</span><b>01</b></button>
         <button class="nav-item" data-page="explore" aria-label="Explore &amp; Survey" title="Explore &amp; Survey"><i>✦</i><span>Explore & Survey</span><b>02</b></button>
-        <button class="nav-item" data-page="planet-materials" aria-label="Planetary Operations" title="Planetary Operations"><i>◇</i><span>Planetary Operations</span><b>03</b></button>
-        <button class="nav-item" data-page="map" aria-label="Galactic Atlas" title="Galactic Atlas"><i>◉</i><span>Galactic Atlas</span><b>04</b></button>
+        <button class="nav-item" data-page="map" aria-label="Galactic Atlas" title="Galactic Atlas"><i>◉</i><span>Galactic Atlas</span><b>03</b></button>
+        <button class="nav-item" data-page="planet-materials" aria-label="Planetary Operations" title="Planetary Operations"><i>◇</i><span>Planetary Operations</span><b>04</b></button>
         <p>RECORDS</p>
         <button class="nav-item" data-page="profile" aria-label="Commander Record" title="Commander Record"><i>◎</i><span>Commander Record</span><b>05</b></button>
         <p>FIELD SYSTEMS</p>
-        <button class="nav-item" data-page="mining" aria-label="Mining Command" title="Mining Command"><i>◆</i><span>Mining Command</span><b>06</b></button>
-        <button class="nav-item" data-page="build-planner" aria-label="Ship Workshop" title="Ship Workshop"><i>▤</i><span>Ship Workshop</span><b>07</b></button>
-        <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>08</b></button>
-        <button class="nav-item" data-page="colonisation" aria-label="Colonisation" title="Colonisation"><i>⬢</i><span>Colonisation</span><b>09</b></button>
-        <button class="nav-item" data-page="bgs" aria-label="BGS" title="Background Simulation: factions, influence, states and conflicts"><i>◈</i><span>BGS</span><b>10</b></button>
+        <button class="nav-item" data-page="bgs" aria-label="BGS" title="Background Simulation: factions, influence, states and conflicts"><i>◈</i><span>BGS</span><b>06</b></button>
+        <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>07</b></button>
+        <button class="nav-item" data-page="colonisation" aria-label="Colonisation" title="Colonisation"><i>⬢</i><span>Colonisation</span><b>08</b></button>
+        <button class="nav-item" data-page="mining" aria-label="Mining Command" title="Mining Command"><i>◆</i><span>Mining Command</span><b>09</b></button>
+        <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>10</b></button>
         <button class="nav-item" data-page="trading" aria-label="Trading" title="Trading: routes, markets and your profits"><i>⇄</i><span>Trading</span><b>11</b></button>
-        <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>12</b></button>
         <p>COCKPIT</p>
+        <button class="nav-item" data-page="constellation" aria-label="Constellation" title="Your constellation: your journey drawn in the stars"><i>✧</i><span>Constellation</span><b>12</b></button>
         <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>13</b></button>
-        <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>14</b></button>
-        <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>15</b></button>
-        <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>16</b></button>
-        <button class="nav-item" data-page="capsules" aria-label="Time Capsules" title="Time Capsules: notes left for systems, and On this day"><i>⧗</i><span>Time Capsules</span><b>17</b></button>
-        <button class="nav-item" data-page="constellation" aria-label="Constellation" title="Your constellation: your journey drawn in the stars"><i>✧</i><span>Constellation</span><b>18</b></button>
+        <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>14</b></button>
+        <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>15</b></button>
+        <button class="nav-item" data-page="capsules" aria-label="Time Capsules" title="Time Capsules: notes left for systems, and On this day"><i>⧗</i><span>Time Capsules</span><b>16</b></button>
+        <button class="nav-item" data-page="wrapped" aria-label="Void Wrapped" title="Void Wrapped: your year in Elite, told as a story"><i>✺</i><span>Void Wrapped</span><b>17</b></button>
+        <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>18</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="tools" aria-label="Tools" title="Tools: everything you switch often, in one place"><i>⚙</i><span>Tools</span><b>19</b></button>
+        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>19</b></button>
         <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>20</b></button>
         <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>21</b></button>
-        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>22</b></button>
+        <button class="nav-item" data-page="tools" aria-label="Tools" title="Tools: everything you switch often, in one place"><i>⚙</i><span>Tools</span><b>22</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -488,8 +487,6 @@
           <section class="tool-grid">
             <article class="tool-card"><i>⌖</i><div><small>SURFACE OPERATIONS</small><h3>Ground & Exobiology</h3><p>Coordinate targets, bearing, distance guidance and biological field work.</p></div><button data-command="open" data-target="ground">OPEN GROUND TOOL</button></article>
             <article class="tool-card"><i>◆</i><div><small>RESOURCE OPERATIONS</small><h3>Mining</h3><p>Prospector analysis, refinery yield, cargo economics and session history.</p></div><button data-command="open" data-target="mining">OPEN MINING</button></article>
-            <article class="tool-card"><i>⚙</i><div><small>SHIP READINESS</small><h3>Engineering & Synthesis</h3><p>FSD injections, synthesis inventory and pinned exploration upgrades.</p></div><button data-command="open" data-target="engineering">OPEN ENGINEERING</button></article>
-            <article class="tool-card"><i>▤</i><div><small>SHIPYARD & OUTFITTING</small><h3>Build Planner</h3><p>Design complete loadouts, apply Engineering, compare performance and import EDSY or SLEF builds.</p></div><button data-command="open" data-target="build-planner">OPEN BUILD PLANNER</button></article>
             <article class="tool-card"><i>⚑</i><div><small>GALACTIC POWERS</small><h3>Powerplay Operations</h3><p>Leader dossiers, merit and cycle history, system state, cargo ledgers and commander assignments.</p></div><button data-command="open" data-target="powerplay">OPEN POWERPLAY</button></article>
             <article class="tool-card"><i>◈</i><div><small>LONG-RANGE SUPPORT</small><h3>Carrier Command</h3><p>Personal and Squadron Carrier inventory, expedition routes, Tritium planning and jump operations.</p></div><button data-command="open" data-target="carrier">OPEN CARRIERS</button></article>
             <article class="tool-card"><i>✦</i><div><small>FIELD RECON</small><h3>Colonisation Recon</h3><p>Assess surveyed systems as possible expansion candidates.</p></div><button data-command="open" data-target="recon">OPEN RECON</button></article>
@@ -523,15 +520,7 @@
           <div id="mining-workspace" class="workspace-shell loading-panel">Loading mining telemetry…</div>
         </section>
 
-        <section class="page specialist-page" data-page-name="engineering">
-          <header class="page-title"><div><p>SHIP WORKSHOP</p><h2>Engineering</h2><span>What is engineered on each ship, your plans, the material locker, the engineers and where to find what is short</span></div><div class="title-actions"><button class="primary" data-page="build-planner">BUILD PLANNER</button></div></header>
-          <div id="engineering-workspace" class="workspace-shell loading-panel">Calculating engineering readiness…</div>
-        </section>
 
-        <section class="page specialist-page" data-page-name="build-planner">
-          <header class="page-title"><div><p>SHIP WORKSHOP</p><h2>Build Planner</h2><span>Outfit and engineer any ship offline, see what it does, compare builds, and trade them with EDSY</span></div><div class="title-actions"><button class="primary" data-bp-focus="new">＋ NEW BUILD</button><button data-page="engineering">ENGINEERING</button></div></header>
-          <div id="build-planner-workspace" class="workspace-shell loading-panel">Loading the shipyard catalogue…</div>
-        </section>
 
         <section class="page specialist-page trading-page" data-page-name="trading">
           <header class="page-title"><div><p>TRADING</p><h2>Trade routes and profits</h2><span>Routes, markets and prices from Spansh when you ask, and every trade you have made from your journal</span></div><div class="title-actions"><button type="button" data-trade-op="view" data-view="route">PLAN A ROUTE</button><button type="button" data-trade-op="view" data-view="cargo">SELL MY CARGO</button></div></header>
@@ -639,6 +628,12 @@
           <header class="page-title"><div><p>COCKPIT KEEPSAKES</p><h2>Your Constellation</h2><span>Each session, the place you stayed longest becomes a star. Nine stars make a constellation.</span></div><div class="title-actions"><button data-page="map">GALACTIC ATLAS</button></div></header>
           <div id="constellation-workspace" class="workspace-shell loading-panel">Charting your sky…</div>
         </section>
+
+        <section class="page specialist-page wrapped-page-shell" data-page-name="wrapped">
+          <header class="page-title"><div><p>COCKPIT KEEPSAKES</p><h2>Void Wrapped</h2><span>Your year in the black, told as a story: how far, how long, where you lived, what you found, and what the Watcher made of it all.</span></div><div class="title-actions"><button data-page="constellation">CONSTELLATION</button></div></header>
+          <div id="wrapped-workspace" class="workspace-shell loading-panel">Gathering your year…</div>
+        </section>
+
 
         <section class="page specialist-page" data-page-name="achievements">
           <header class="page-title"><div><p>COMMANDER RECORD</p><h2>Achievements</h2><span>A living record of discoveries, expeditions and the milestones ahead.</span></div><div class="title-actions"><button data-page="profile">COMMANDER PROFILE</button></div></header>

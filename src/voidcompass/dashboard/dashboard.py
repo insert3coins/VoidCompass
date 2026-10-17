@@ -53,6 +53,7 @@ from voidcompass.exploration.contact_scope import ContactLedger
 from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.overlays.trade_route_hud import TradeRouteHUD
+from voidcompass.overlays.rig_tracker import RigTrackerHUD
 from voidcompass.overlays.galaxy_minimap_hud import GalaxyMinimapHUD
 from voidcompass.overlays.postcard_hud import PostcardHUD
 from voidcompass.exploration import bio_variants
@@ -76,6 +77,7 @@ from voidcompass.overlays.html_contact_overlay import attach_html_contact_overla
 from voidcompass.overlays.html_jump_info_overlay import attach_html_jump_info_overlay
 from voidcompass.overlays.html_colony_needs_overlay import attach_html_colony_needs_overlay
 from voidcompass.overlays.html_trade_route_overlay import attach_html_trade_route_overlay
+from voidcompass.overlays.html_rig_tracker_overlay import attach_html_rig_tracker_overlay
 from voidcompass.overlays.html_galaxy_minimap_overlay import attach_html_galaxy_minimap_overlay
 from voidcompass.overlays.html_postcard_overlay import attach_html_postcard_overlay
 from voidcompass.core.runtime_trace import RuntimeTrace
@@ -87,6 +89,8 @@ from voidcompass.dashboard.dashboard_jump_info_mixin import DashboardJumpInfoMix
 from voidcompass.dashboard.dashboard_keepsakes_mixin import DashboardKeepsakesMixin
 from voidcompass.dashboard.dashboard_capsules_mixin import DashboardCapsulesMixin
 from voidcompass.dashboard.dashboard_flight_log_mixin import DashboardFlightLogMixin
+from voidcompass.dashboard.dashboard_journey_mixin import DashboardJourneyMixin
+from voidcompass.dashboard.dashboard_rigs_mixin import DashboardRigsMixin
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
 from voidcompass.dashboard.dashboard_home_mixin import DashboardHomeMixin
 from voidcompass.dashboard.dashboard_tools_mixin import DashboardToolsMixin
@@ -282,6 +286,8 @@ class MainDashboard(
     DashboardKeepsakesMixin,
     DashboardCapsulesMixin,
     DashboardFlightLogMixin,
+    DashboardJourneyMixin,
+    DashboardRigsMixin,
     DashboardWatcherVoiceMixin,
     DashboardHomeMixin,
     DashboardToolsMixin,
@@ -975,6 +981,7 @@ class MainDashboard(
             "jump_info_hud",
             "colony_needs_hud",
             "trade_route_hud",
+            "rig_tracker_hud",
             "galaxy_minimap_hud",
             "postcard_hud",
         ):
@@ -1063,7 +1070,7 @@ class MainDashboard(
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud",
             "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud",
-            "galaxy_minimap_hud", "postcard_hud",
+            "rig_tracker_hud", "galaxy_minimap_hud", "postcard_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -2728,6 +2735,11 @@ class MainDashboard(
         else:
             self.trade_route_hud = None
 
+        if self._overlay_enabled("rig_tracker_hud"):
+            self.rig_tracker_hud = RigTrackerHUD(self.root, self.config)
+        else:
+            self.rig_tracker_hud = None
+
         if self._overlay_enabled("galaxy_minimap_hud"):
             self.galaxy_minimap_hud = GalaxyMinimapHUD(self.root, self.config)
             self._update_galaxy_minimap()
@@ -3577,6 +3589,12 @@ class MainDashboard(
         if action == "field_bookmark":
             self._field_bookmark()
             return
+        if action.startswith("rig_") and action[4:].isdigit():
+            self._rig_mark(int(action[4:]))
+            return
+        if action == "rig_clear":
+            self._rig_clear_here()
+            return
         if action == "watcher_poke":
             self._watcher_poke()
             return
@@ -4064,7 +4082,7 @@ class MainDashboard(
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
-            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "galaxy_minimap_hud", "postcard_hud",
+            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "rig_tracker_hud", "galaxy_minimap_hud", "postcard_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
             try:
@@ -4442,12 +4460,9 @@ class MainDashboard(
     def open_field_tools_workspace(self, section=None):
         html_page = {
             "mining": "mining", "biology": "explore", "carrier": "carrier",
-            "ground": "ground", "engineering": "engineering",
+            "ground": "ground",
         }.get(str(section or "").casefold(), "operations")
         self._route_to_html_workspace(html_page)
-
-    def open_engineering_workspace(self):
-        self._route_to_html_workspace("engineering")
 
     def open_profile_workspace(self):
         self._route_to_html_workspace("profile")
@@ -5106,6 +5121,14 @@ class MainDashboard(
             self.trade_route_hud.destroy()
             self.trade_route_hud = None
 
+        if self._overlay_enabled("rig_tracker_hud"):
+            if getattr(self, "rig_tracker_hud", None) is None:
+                self.rig_tracker_hud = RigTrackerHUD(self.root, self.config)
+                self._rig_update_overlay()
+        elif getattr(self, "rig_tracker_hud", None):
+            self.rig_tracker_hud.destroy()
+            self.rig_tracker_hud = None
+
         if self._overlay_enabled("galaxy_minimap_hud"):
             if getattr(self, "galaxy_minimap_hud", None) is None:
                 self.galaxy_minimap_hud = GalaxyMinimapHUD(self.root, self.config)
@@ -5205,6 +5228,10 @@ class MainDashboard(
                 )
             elif attr == "trade_route_hud":
                 attach_html_trade_route_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "rig_tracker_hud":
+                attach_html_rig_tracker_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "galaxy_minimap_hud":
@@ -7779,6 +7806,9 @@ class MainDashboard(
         self._surface_departure_active = False
         self.update_hud()
         self._refresh_cargo_consumers()
+        # The Rig Tracker is up as soon as the Rhino is out (5.5.10).
+        if getattr(self, "rig_tracker_hud", None) is not None:
+            self._rig_update_overlay()
         # Keep the ship's hold and capacity on disk as the Rhino leaves it,
         # so a restart while out on the surface still knows them.
         if vehicle_name == "RHINO" and not getattr(self, "_startup_restore_active", False):
@@ -8121,6 +8151,8 @@ class MainDashboard(
                     # and a constellation finished since last session.
                     self._on_this_day_watcher(startup_replay)
                     self._constellation_watch(startup_replay)
+                    # December: your year, wrapped (5.5.10).
+                    self._wrapped_watch(startup_replay)
                 # A note you left for this system, handed back (5.5.3.7).
                 self._capsule_arrival(ev, history_raw, startup_replay)
                 # Who lives here, for the music's deep space (5.5.3.8).
