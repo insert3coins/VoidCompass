@@ -1,12 +1,13 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.13 // Smooth Ground
+## v5.5.14 // Every Site in Sight
 **Release Date:** TBA
 
-* **Fixed: the deck lagged on the Planetary page**, most of all while driving or walking on a planet. Every refresh read your entire exobiology history (thousands of surveyed planets) three times over, about half a second of work several times a second. It now reads only the planet you're on and reuses the answer until something changes: a refresh went from about 560 ms to well under 20 ms. The Local API's exobiology and the cockpit compass's trail are quicker too.
+* **Planetary Operations › Sites: ALL SITES.** Every surface site you've saved, grouped by planet, whether you're on a planet or not: your current system's planets first, then A to Z, each with its sites and materials. Type in FIND to narrow it to a planet, system, site or material; SEND TO COMPASS works on any of them, and THIS PLANET opens that planet's own view. It's what SITES shows when you're not on a planet with saved sites (it used to show an empty planet from the system you were in).
 
 ## Earlier releases
 
+* **v5.5.13** — Smooth Ground: the Planetary page no longer lags the deck while you're on a planet (each refresh read your whole exobiology history three times; now it reads only the planet you're on, and a refresh went from about 560 ms to under 20 ms).
 * **v5.5.12** — Mining & Planetary, Rebuilt: a new Mining page for asteroids and the Rhino (live run, ring and Rhino-ground search, selling, your whole mining record), Planetary Operations as one page (compass, a new surface map, exobiology with sample distances and values, saved sites), the Watcher knowing your vehicles by name and talking mining, SRV fuel tracked properly everywhere, COPY NEXT that survives a busy clipboard, and an auto-copy switch on the Command Deck.
 * **v5.5.11** — Holds in Sight: the Rig Tracker shows how full the Rhino's hold and your ship's are (with a Studio switch), the Watcher knows Rhino mining from asteroid mining and stops repeating Galnet's top story, your ship's kept hold belongs to its ship across restarts, and `/rigs` includes the holds.
 * **v5.5.10** — Your Journey, Told Back: Void Wrapped (your year as animated cards, combat and the everyday included, saved as pictures, refreshable), the Flight Recorder (replay any session on the Atlas, with the music you played), the Rig Tracker overlay for Rhino mining (Ctrl+Alt+1–6), the music diary, a radius for Sell cargo, flight logs that know where a session began, and `/rigs`, `/wrapped` and `/recorder` in the Local API.

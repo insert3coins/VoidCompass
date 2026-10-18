@@ -278,6 +278,7 @@ class PageTests(unittest.TestCase):
 
     def test_an_unsaved_site_edit_survives_a_redraw(self):
         self.page.click('[data-po-op="view"][data-view="sites"]')
+        self.page.click('[data-po-op="sites_view"][data-view="body"]')
         self.page.select_option("[data-po-planet]", index=0)
         self.page.click("details[data-site-id='1'] summary span b")
         self.page.fill("details[data-site-id='1'] [name=notes]", "half typed")

@@ -14,7 +14,9 @@ const CODEX = {new: "NEW TO THE CODEX", region: "NEW IN THIS REGION"};
 const KINDS = {complete: "done", sample: "working", detected: "found", predicted: "likely", possible: "maybe"};
 
 let view = "";
-let sitesView = "body";
+// "" picks for you: this planet when you're on one with sites, else all of them.
+let sitesView = "";
+let siteSearch = "";
 let selectedPlanet = "";
 let bodyMaterial = "";
 let material = "";
@@ -370,21 +372,48 @@ function sitesView_(data, esc) {
   const activeSite = (site) => Boolean(navigation.active && (navigation.site_id != null ? String(navigation.site_id) === String(site.id)
     : planetKey(site) === planetKey(navigation) && Math.abs(n(site.latitude) - n(navigation.latitude)) < 1e-6 && Math.abs(n(site.longitude) - n(navigation.longitude)) < 1e-6));
   const onPlanet = (data.sites || []).filter((site) => planetKey(site) === planetKey(selected));
+  const live = data.current_position ? planetKey(data.current_position) : "";
+  const shown = sitesView || ((data.sites || []).some((site) => planetKey(site) === live) ? "body" : "all");
   const choices = [...new Set(onPlanet.flatMap(materialsFor))].sort((a, b) => a.localeCompare(b, undefined, {sensitivity: "base"}));
   if (!choices.some((value) => folded(value) === folded(bodyMaterial))) bodyMaterial = "";
   const visible = bodyMaterial ? onPlanet.filter((site) => materialsFor(site).some((value) => folded(value) === folded(bodyMaterial))) : onPlanet;
-  const cards = visible.map((site) => `<details class="po-site${site.depleted ? " depleted" : ""}${site.site_type === "drill" ? " drill" : ""}" data-site-id="${esc(site.id)}">
+  const card = (site) => `<details class="po-site${site.depleted ? " depleted" : ""}${site.site_type === "drill" ? " drill" : ""}" data-site-id="${esc(site.id)}">
       <summary><span><b>${esc(site.name)}</b><small>${site.location_index ? `Location ${whole(site.location_index)} · ` : ""}${n(site.latitude).toFixed(4)}, ${n(site.longitude).toFixed(4)}</small></span>
         <span class="po-tags">${materialsFor(site).map((name) => `<i>${esc(name)}</i>`).join("")}</span>
         <em>${site.depleted ? "MINED OUT" : esc(site.tons_left || [site.amount, site.density].filter(Boolean).join(" · ") || "")}</em>
         <button type="button" class="${activeSite(site) ? "active" : ""}" data-site-navigate="${esc(site.id)}">${activeSite(site) ? "COMPASS ON IT" : "SEND TO COMPASS"}</button></summary>
-      ${site.notes ? `<p class="po-dim">${esc(site.notes)}</p>` : ""}<form class="po-form" data-site-form>${siteFields(data, site, esc)}</form></details>`).join("");
+      ${site.notes ? `<p class="po-dim">${esc(site.notes)}</p>` : ""}<form class="po-form" data-site-form>${siteFields(data, site, esc)}</form></details>`;
+  const cards = visible.map(card).join("");
   const toolbar = `<div class="po-toolbar">
-    <nav class="po-subtabs">${[["body", "THIS PLANET"], ["heat", "HEAT MAP"], ["material", "BY MATERIAL"]].map(([key, label]) => `<button type="button" class="${sitesView === key ? "active" : ""}" data-po-op="sites_view" data-view="${key}">${label}</button>`).join("")}</nav>
+    <nav class="po-subtabs">${[["all", `ALL SITES (${whole((data.sites || []).length)})`], ["body", "THIS PLANET"], ["heat", "HEAT MAP"], ["material", "BY MATERIAL"]].map(([key, label]) => `<button type="button" class="${shown === key ? "active" : ""}" data-po-op="sites_view" data-view="${key}">${label}</button>`).join("")}</nav>
     <button type="button" class="primary" data-po-op="new_site" aria-expanded="${newSiteOpen}">${newSiteOpen ? "CLOSE THE NEW SITE" : "ADD A SITE"}</button></div>`;
   const newSite = newSiteOpen ? panel("NEW SITE", `<form class="po-form" data-site-form data-new-site>${siteFields(data, {}, esc)}</form>`, {wide: true, cls: "po-new-site"}) : "";
   let body;
-  if (sitesView === "heat") {
+  if (shown === "all") {
+    // Every saved site, by planet: this system first, then A to Z.
+    const groups = new Map();
+    for (const site of data.sites || []) {
+      const key = planetKey(site);
+      if (!groups.has(key)) groups.set(key, {key, label: planetLabel(site), system: clean(site.system), sites: []});
+      groups.get(key).sites.push(site);
+    }
+    const here = folded(data.system);
+    const ordered = [...groups.values()].sort((a, b) => (folded(a.system) !== here) - (folded(b.system) !== here)
+      || a.label.localeCompare(b.label, undefined, {numeric: true, sensitivity: "base"}));
+    const list = ordered.map((group) => {
+      const materials = [...new Set(group.sites.flatMap(materialsFor))];
+      const words = folded([group.label, ...materials, ...group.sites.map((site) => site.name)].join(" "));
+      return `<section class="po-group${group.key === live ? " here" : ""}" data-search="${esc(words)}">
+        <header><div><b>${esc(group.label)}</b><small>${whole(group.sites.length)} site${group.sites.length === 1 ? "" : "s"}${materials.length ? ` · ${esc(materials.join(", "))}` : ""}${group.key === live ? " · you're here" : folded(group.system) === here ? " · in this system" : ""}</small></div>
+          <button type="button" data-po-op="open_planet" data-planet="${esc(group.key)}">THIS PLANET</button></header>
+        ${group.sites.map(card).join("")}</section>`;
+    }).join("");
+    body = panel("ALL SAVED SITES", list ? `<label class="po-pick po-search">FIND<input data-po-site-search value="${esc(siteSearch)}" placeholder="A planet, system, site or material" autocomplete="off"></label>
+      <div class="po-groups">${list}</div><p class="po-dim" data-po-no-match hidden>Nothing matches.</p>
+      <p class="po-dim">SEND TO COMPASS on any site: the cockpit compass picks it up when you land on its planet.</p>`
+      : empty("No sites saved yet. ADD A SITE, or SAVE THIS SPOT from ON THE GROUND."),
+      {wide: true, note: `${whole((data.sites || []).length)} sites on ${whole(groups.size)} planet${groups.size === 1 ? "" : "s"}`});
+  } else if (shown === "heat") {
     const minerals = [...new Map((data.sites || []).flatMap(materialsFor).map((name) => [folded(name), name])).values()].sort((a, b) => a.localeCompare(b, undefined, {sensitivity: "base"}));
     const classes = [...new Set((data.sites || []).map((site) => site.body_details?.class || "Unreported"))].sort();
     const rows = minerals.map((name) => `<tr><th>${esc(name)}</th>${classes.map((cls) => {
@@ -392,7 +421,7 @@ function sitesView_(data, esc) {
       return `<td class="${count ? "on" : ""}">${count || "—"}</td>`;
     }).join("")}</tr>`).join("");
     body = panel("WHERE YOU'VE FOUND WHAT", rows ? `<div class="po-scroll"><table class="po-table po-heat"><thead><tr><th>MATERIAL</th>${classes.map((cls) => `<th>${esc(cls)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>` : empty("Save some sites and they're compared here by material and planet class."), {wide: true, note: "your saved sites, by planet class"});
-  } else if (sitesView === "material") {
+  } else if (shown === "material") {
     const minerals = [...new Map((data.sites || []).flatMap(materialsFor).map((name) => [folded(name), name])).values()].sort((a, b) => a.localeCompare(b, undefined, {sensitivity: "base"}));
     if (!minerals.some((name) => folded(name) === folded(material))) material = minerals[0] || "";
     const matches = (data.sites || []).filter((site) => materialsFor(site).some((value) => folded(value) === folded(material)));
@@ -481,6 +510,7 @@ export function renderPlanetary(data, ui) {
   drawn = markup;
   root.innerHTML = markup;
   restoreDrafts(root, kept);
+  filterSites(root);
   bindSurfaceMaps(root, ui);
   ui.decorate?.(root);
 }
@@ -537,6 +567,11 @@ export function handlePlanetaryClick(event, ui) {
     rerender(ui);
   } else if (button.dataset.poOp === "view") {
     view = button.dataset.view;
+    rerender(ui);
+  } else if (button.dataset.poOp === "open_planet") {
+    selectedPlanet = button.dataset.planet;
+    bodyMaterial = "";
+    sitesView = "body";
     rerender(ui);
   } else if (button.dataset.poOp === "sites_view") {
     sitesView = button.dataset.view;
@@ -598,7 +633,22 @@ export function handlePlanetaryChange(event, ui) {
   return true;
 }
 
+// The site search hides what doesn't match in place: redrawing would take
+// the box's focus mid-word.
+function filterSites(root) {
+  const words = folded(siteSearch).split(" ").filter(Boolean);
+  const groups = [...root.querySelectorAll(".po-group[data-search]")];
+  groups.forEach((group) => { group.hidden = !words.every((word) => group.dataset.search.includes(word)); });
+  const none = root.querySelector("[data-po-no-match]");
+  if (none) none.hidden = !groups.length || groups.some((group) => !group.hidden);
+}
+
 export function handlePlanetaryInput(event, ui) {
+  if (event.target.matches?.("[data-po-site-search]")) {
+    siteSearch = event.target.value;
+    filterSites(ui.byId("planet-materials-workspace"));
+    return true;
+  }
   const form = event.target.closest?.("form[data-site-form]");
   if (!form || !ui.byId("planet-materials-workspace")?.contains(form)) return false;
   form.dataset.dirty = "true";
@@ -634,7 +684,8 @@ export function handlePlanetarySubmit(event, ui) {
 
 export function resetPlanetary() {
   view = "";
-  sitesView = "body";
+  sitesView = "";
+  siteSearch = "";
   selectedPlanet = bodyMaterial = material = "";
   newSiteOpen = false;
   drawn = "";

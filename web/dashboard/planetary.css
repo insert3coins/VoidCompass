@@ -194,6 +194,16 @@
 .po-check { display: flex !important; align-items: center; gap: 8px; height: 32px; color: var(--muted) !important; font: 12px "Segoe UI", sans-serif !important; letter-spacing: 0 !important; }
 #planet-materials-workspace .po-check input { height: auto; accent-color: var(--accent); }
 .po-new-site .po-form { padding: 0; }
+/* ALL SITES: a planet per group. */
+.po-search { max-width: 420px; }
+.po-groups { display: grid; gap: 10px; }
+.po-group { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--border-soft); border-left: 3px solid var(--border); background: color-mix(in srgb, var(--inset) 60%, transparent); }
+.po-group.here { border-left-color: var(--accent); }
+.po-group > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.po-group > header b { display: block; color: var(--text); font: 600 14px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.po-group > header small { color: var(--dim); font: 11px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+#planet-materials-workspace .po-group > header button.cockpit-button { min-height: 26px; padding: 0 10px; font: 700 8.5px Consolas, monospace; letter-spacing: .08em; }
+.po-group .po-site + .po-site { margin-top: 0; }
 
 @container (max-width: 640px) {
   .po-site summary { grid-template-columns: minmax(0, 1fr) auto; }
