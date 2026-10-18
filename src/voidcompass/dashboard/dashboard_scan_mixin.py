@@ -230,6 +230,35 @@ class DashboardScanMixin:
             pass
         return None
 
+    def _surface_vehicle_kind(self):
+        name = str(getattr(self, "current_vehicle_name", "") or "").upper()
+        return name if name in {"RHINO", "SCARAB", "SCORPION", "NOMAD"} else ""
+
+    def _learn_surface_tank(self, reservoir):
+        """The fullest reading seen of this vehicle is its tank (5.5.12):
+        it launches full, and Elite never reports the size."""
+        kind = self._surface_vehicle_kind()
+        state = getattr(self, "companion_state", None)
+        if not kind or not isinstance(state, dict) or reservoir <= 0:
+            return
+        tanks = state.setdefault("surface_tanks", {})
+        if reservoir > float(tanks.get(kind) or 0) + 0.0005:
+            tanks[kind] = round(reservoir, 4)
+            save = getattr(self, "_save_companion_state", None)
+            if callable(save):
+                save()
+
+    def _surface_fuel_percent(self):
+        """The surface vehicle's fuel as a percentage, once its tank is known."""
+        reservoir = getattr(self, "current_surface_fuel_reservoir", None)
+        tank = ((getattr(self, "companion_state", None) or {}).get("surface_tanks") or {}).get(self._surface_vehicle_kind())
+        try:
+            if reservoir is None or not tank or float(tank) <= 0:
+                return None
+            return round(min(100.0, float(reservoir) * 100.0 / float(tank)), 1)
+        except (TypeError, ValueError):
+            return None
+
     def _surface_vehicle_fuel_active(self):
         """Whether the commander is in a surface vehicle with its own reservoir."""
         return bool(
@@ -662,6 +691,7 @@ class DashboardScanMixin:
                     reservoir = float(fuel["FuelReservoir"])
                     if math.isfinite(reservoir) and reservoir >= 0:
                         self.current_surface_fuel_reservoir = reservoir
+                        self._learn_surface_tank(reservoir)
                 except (TypeError, ValueError):
                     pass
         elif not self._surface_vehicle_fuel_active():
@@ -966,6 +996,7 @@ class DashboardScanMixin:
                 {"Flags": flags if isinstance(flags, int) else 0,
                  "Flags2": flags2 if isinstance(flags2, int) else 0,
                  "fuel_percent": self._watcher_fuel_percent(),
+                 "fuel_vehicle": self._surface_vehicle_kind().lower() if self._surface_vehicle_fuel_active() else "",
                  "Health": data.get("Health") if isinstance(data, dict) else None},
             )
         refresh_planet_materials = getattr(
@@ -1552,7 +1583,10 @@ class DashboardScanMixin:
             item["_ts"] = int(time.time())
 
     def _watcher_fuel_percent(self):
-        """The main tank, in percent, for the Watcher's fuel worries."""
+        """The tank you're running on, in percent, for the Watcher's fuel
+        worries: in an SRV its own, never the ship's (which reads 0 there)."""
+        if self._surface_vehicle_fuel_active():
+            return self._surface_fuel_percent()
         try:
             fuel = float(getattr(self, "current_fuel_main", None))
             capacity = float(getattr(self, "fuel_capacity_main", None))

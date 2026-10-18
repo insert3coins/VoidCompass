@@ -27,6 +27,7 @@ from pathlib import Path
 import zlib
 
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
+from voidcompass.mining.mining_record import material_name
 from voidcompass.overlays import (
     watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures, watcher_postcards,
     watcher_voice_lore, watcher_worlds,
@@ -56,6 +57,13 @@ IDLE_REST_S = 30 * 60.0
 # Galnet at most once a day, and each headline only once (5.5.11).
 GALNET_REST_S = 86400.0
 GALNET_HEADLINE_REST_S = 30 * 86400.0
+# A prospected rock this rich in one material is worth a word (5.5.12).
+RICH_ROCK_PCT = 30.0
+RHINO_HOLD_T = 72
+# Each SRV's hold, for "it's full" (the deck's VEHICLE_CARGO_CAPACITIES).
+SRV_HOLD_T = {"rhino": RHINO_HOLD_T, "scarab": 4, "scorpion": 2}
+# Cargo that fills the ship's hold; a full hold is only news soon after one.
+LOADING_EVENTS = {"MarketBuy", "CollectCargo", "MiningRefined", "CargoTransfer", "CargoDepot", "BuyDrones"}
 # A fight is over after this long with no attack, shields up and the game's
 # danger flag clear (5.5.7); before, only a jump, supercruise or docking ended it.
 CALM_S = 90.0
@@ -236,6 +244,10 @@ IMPORTANCE = {
     "mined": 0,
     # 5.5.11: refined in the Rhino, from rigs on a planet (no asteroids, no limpets).
     "mined_surface": 0,
+    # 5.5.12: each vehicle by name, and the moments of a mining run.
+    "launch_scarab": 0, "launch_scorpion": 0, "launch_rhino": 0, "launch_nomad": 0, "launch_fighter": 0,
+    "prospected_rich": 0, "motherlode": 2, "cracked": 1, "rhino_full": 1, "hold_full_mining": 1,
+    "hold_full": 1, "srv_full": 1, "srv_fuel_low": 2,
     # 5.5.4: how you play, as it has come to know it; a milestone as it happens.
     **{topic: 1 for topic in watcher_habits.HABIT_TOPICS},
     "habit_milestone": 2,
@@ -272,6 +284,12 @@ MOODS = {
     **{topic: "pleased" for topic in ("foot_danger_over", "shields_back", "combat_win", "foot_win")},
     "died_foot": "downcast",
     **{topic: "pleased" for topic in ("interdiction_escaped", "srv_launch", "idle_srv", "idle_ship")},
+    **{topic: "pleased" for topic in ("launch_scarab", "launch_rhino", "launch_nomad", "idle_scarab", "idle_rhino", "idle_nomad",
+                                       "prospected_rich", "motherlode", "cracked", "rhino_full", "hold_full_mining",
+                                       "hold_full", "srv_full")},
+    "srv_fuel_low": "wary",
+    **{topic: "wary" for topic in ("launch_scorpion", "launch_fighter", "idle_scorpion", "idle_fighter")},
+    "idle_ring": "curious",
     **{topic: "curious" for topic in ("jet_boost", "settlement_seen", "carrier_jump", "idle_settlement",
                                        "idle_near_body", "idle_supercruise")},
     **{topic: "downcast" for topic in ("taxi_ride", "idle_taxi", "idle_station_foot")},
@@ -989,8 +1007,25 @@ class WatcherMind:
             return self.consider("heat_warning")
         if event == "EscapeInterdiction":
             return self.consider("interdiction_escaped")
+        if event in LOADING_EVENTS:
+            self._loaded_at = now
         if event == "LaunchSRV":
-            return self.consider("srv_launch")
+            self._srv_full_said = False
+            kind = watcher_idle.vehicle_kind(raw)
+            return self.consider(f"launch_{kind}" if kind in watcher_idle.SRV_KINDS else "srv_launch")
+        if event in ("LaunchFighter", "LaunchVessel") and raw.get("PlayerControlled", True):
+            return self.consider(f"launch_{watcher_idle.vehicle_kind(raw)}")
+        if event == "Loadout":
+            try:
+                self._cargo_capacity = int(raw.get("CargoCapacity") or 0)
+            except (TypeError, ValueError):
+                pass
+        if event == "Cargo":
+            return self._cargo_moment(raw, now)
+        if event == "ProspectedAsteroid":
+            return self._prospect_moment(raw)
+        if event == "AsteroidCracked":
+            return self.consider("cracked")
         if event == "ApproachSettlement":
             name = raw.get("Name_Localised") or raw.get("Name")
             if name and not str(name).startswith("$"):
@@ -1015,6 +1050,7 @@ class WatcherMind:
         if event == "MiningRefined":
             material = raw.get("Type_Localised") or raw.get("Type")
             topic = "mined_surface" if self.surroundings.srv else "mined"
+            self._mined_at = now
             return self.consider(topic, {"material": material}) if material else None
         if event == "Scan":
             # The arrival star's scan says whether anyone charted the system.
@@ -1197,6 +1233,63 @@ class WatcherMind:
             return thought.get("text") or ""
         return watcher_voice_lore.spoken_part(thought.get("text"), self.voice_stage())
 
+    # -- mining (5.5.12) -------------------------------------------------------
+    def _prospect_moment(self, raw):
+        motherlode = raw.get("MotherlodeMaterial_Localised") or raw.get("MotherlodeMaterial")
+        if motherlode:
+            return self.consider("motherlode", {"material": material_name(motherlode)})
+        materials = [row for row in raw.get("Materials") or () if isinstance(row, dict)]
+        best = max(materials, key=lambda row: float(row.get("Proportion") or 0), default=None)
+        share = float((best or {}).get("Proportion") or 0)
+        if best and share >= RICH_ROCK_PCT:
+            return self.consider("prospected_rich", {"material": material_name(best.get("Name"), best.get("Name_Localised")),
+                                                     "percent": f"{share:.0f}%"})
+        return None
+
+    def _cargo_moment(self, raw, now):
+        """A full hold, said once a load: an SRV's as you fill it, the ship's
+        soon after you loaded something (mining has its own words)."""
+        try:
+            count = int(raw.get("Count") or 0)
+        except (TypeError, ValueError):
+            return None
+        vessel = str(raw.get("Vessel") or "").casefold()
+        if vessel == "srv":
+            kind = self.surroundings.vehicle
+            capacity = SRV_HOLD_T.get(kind)
+            if not capacity:
+                return None
+            full = count >= capacity
+            said, self._srv_full_said = getattr(self, "_srv_full_said", False), full
+            if not full or said:
+                return None
+            return self.consider("rhino_full") if kind == "rhino" else self.consider("srv_full", {"srv": kind.capitalize()})
+        capacity = getattr(self, "_cargo_capacity", 0)
+        if vessel != "ship" or not capacity:
+            return None
+        full = count >= capacity
+        said, self._hold_full_said = getattr(self, "_hold_full_said", False), full
+        if not full or said or now - getattr(self, "_loaded_at", 0.0) > 600:
+            return None
+        mining = now - getattr(self, "_mined_at", 0.0) < 600
+        return self.consider("hold_full_mining" if mining else "hold_full")
+
+    def learn(self, context):
+        """What the deck knows that a restart hid from the journal: the
+        vehicle you're in and your ship's hold (5.5.12)."""
+        context = context or {}
+        kind = str(context.get("vehicle") or "").casefold()
+        if kind in SRV_HOLD_T or kind in ("nomad", "fighter"):
+            if not self.surroundings.vehicle:
+                self.surroundings.vehicle = kind
+                self.surroundings.srv = self.surroundings.srv or kind in SRV_HOLD_T
+        try:
+            capacity = int(context.get("cargo_capacity") or 0)
+        except (TypeError, ValueError):
+            capacity = 0
+        if capacity > 0:
+            self._cargo_capacity = capacity
+
     def _combat(self, event, raw, now):
         """(handled, thought) for a moment in a fight (5.5.7): attacks,
         shields, the hull, kills, an interdiction given in to, combat zones."""
@@ -1280,7 +1373,8 @@ class WatcherMind:
         self._foot_danger = True
         return self.consider("foot_danger", {"health": int(round(health * 100))} if health is not None else {})
 
-    def vitals(self, fuel_percent=None, scooping=False, health=None, low_health=False, on_foot=None, in_danger=False):
+    def vitals(self, fuel_percent=None, scooping=False, health=None, low_health=False, on_foot=None, in_danger=False,
+               vehicle=""):
         """Status: worry about fuel once, until it is topped up; feel a fight
         on foot by the health bar (5.5.7); and the game's own danger flag
         keeps a ship fight going."""
@@ -1301,6 +1395,14 @@ class WatcherMind:
             return calm
         if fuel_percent is None:
             return None
+        if vehicle:
+            # An SRV's own tank (5.5.12): its own worry, and no talk of stars.
+            if fuel_percent >= 40:
+                self._srv_fuel_warned = False
+            elif fuel_percent <= 25 and not getattr(self, "_srv_fuel_warned", False):
+                self._srv_fuel_warned = True
+                return self.consider("srv_fuel_low", {"fuel": int(round(fuel_percent)), "srv": str(vehicle).capitalize()})
+            return None
         if fuel_percent >= 40:
             self._fuel_warned = False
             return None
@@ -1315,6 +1417,7 @@ class WatcherMind:
         """Idle thinking: the time, a long session, a long quiet. ``context``
         is what the rest of the app knows (the music playing, Galnet)."""
         now = self.clock()
+        self.learn(context)
         if self._session_start is None:
             return None  # nothing to think about until it has seen the game
         self._account_time()

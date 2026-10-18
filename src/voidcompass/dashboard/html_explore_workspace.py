@@ -541,11 +541,15 @@ class HtmlExploreWorkspaceMixin:
             return False
         index = _integer(payload.get("index"), -1)
         if operation == "copy_next":
-            return self._html_copy_text(manager.get_next_waypoint(getattr(self, "current_sys", "")))
+            next_name = manager.get_next_waypoint(getattr(self, "current_sys", ""))
+            if not next_name:
+                self.add_event_feed_entry("ROUTE", "No next waypoint to copy: every one is visited", severity="WARN")
+                return False
+            return self._html_copy_text(next_name, "next waypoint")
         if operation == "copy_waypoint":
             if not 0 <= index < len(manager.waypoints):
                 return False
-            return self._html_copy_text(manager.waypoints[index].get("name"))
+            return self._html_copy_text(manager.waypoints[index].get("name"), "waypoint")
         if operation == "add_waypoint":
             name = _text(payload.get("name"), 140)
             if not name:

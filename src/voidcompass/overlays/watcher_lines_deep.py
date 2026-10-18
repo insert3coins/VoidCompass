@@ -367,7 +367,7 @@ DEEP_NORMAL = {
     "srv_launch": [
         "SRV out. Enjoy the drive.",
         "On wheels. Mind the craters.",
-        "Scarab deployed. Off you go.",
+        "Deployed. Off you go.",
         "Surface rover away.",
         "Ground time. Take it easy on the hills.",
         "SRV launched. Watch the fuel.",

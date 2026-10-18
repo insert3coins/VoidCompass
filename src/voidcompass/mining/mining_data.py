@@ -653,3 +653,52 @@ def search_spansh_buyers(commodity, reference_system=None, max_distance=500,
         )
     rows.sort(key=lambda r: (-r["price"], r["distance_ly"] is None, r["distance_ly"] or 0))
     return rows[: int(max_results or 100)]
+
+
+# The Rhino mining sheet's grounds as Spansh names them (5.5.12): a planet
+# type, and for rocky worlds the volcanism that makes the difference.
+GROUND_SPANSH = {
+    "metal-rich": ("Metal-rich body", None),
+    "high-metal-content": ("High metal content world", None),
+    "rocky-ice": ("Rocky Ice world", None),
+    "icy": ("Icy body", None),
+    "rock 80%+ [metallic magma]": ("Rocky body", ("Metallic Magma", "Major Metallic Magma", "Minor Metallic Magma")),
+    "rock 80%+ [rocky magma]": ("Rocky body", ("Rocky Magma", "Major Rocky Magma", "Minor Rocky Magma")),
+    "rock 80%+ [silicate vapour geysers]": ("Rocky body", ("Silicate Vapour Geysers", "Major Silicate Vapour Geysers",
+                                                           "Minor Silicate Vapour Geysers")),
+    "rock 80%+ [silicate magma]": ("Rocky body", ("Silicate Magma", "Major Silicate Magma", "Minor Silicate Magma")),
+    "rock 80%+ [none]": ("Rocky body", ("No volcanism",)),
+}
+
+
+def search_spansh_grounds(system_name, ground, max_distance=200, max_gravity=None, max_ls=None, max_results=50):
+    """Landable planets of one Rhino ground near ``system_name``, nearest first."""
+    if ground not in GROUND_SPANSH:
+        raise ValueError(f"Unknown ground {ground!r}")
+    subtype, volcanism = GROUND_SPANSH[ground]
+    filters = {"subtype": {"value": [subtype]}, "is_landable": {"value": True},
+               "distance": {"min": 0, "max": max(1.0, min(5000.0, float(max_distance or 200)))}}
+    if volcanism:
+        filters["volcanism_type"] = {"value": list(volcanism)}
+    if max_gravity:
+        filters["gravity"] = {"min": 0, "max": float(max_gravity)}
+    if max_ls:
+        filters["distance_to_arrival"] = {"min": 0, "max": float(max_ls)}
+    payload = {"filters": filters, "sort": [{"distance": {"direction": "asc"}}],
+               "size": max(1, min(int(max_results or 50), 100)), "page": 0,
+               "reference_system": str(system_name or "Sol").strip() or "Sol"}
+    response = requests.post(SPANSH_BODIES_SEARCH_URL, json=payload, timeout=25)
+    response.raise_for_status()
+    rows = []
+    for item in response.json().get("results") or ():
+        rows.append({
+            "system_name": item.get("system_name") or "",
+            "body_name": item.get("name") or "",
+            "subtype": item.get("subtype") or subtype,
+            "volcanism": item.get("volcanism_type") or "",
+            "gravity": item.get("gravity"),
+            "distance_ly": item.get("distance"),
+            "ls_distance": item.get("distance_to_arrival"),
+            "body_id64": item.get("id64"),
+        })
+    return rows

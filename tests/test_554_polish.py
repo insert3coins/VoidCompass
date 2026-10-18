@@ -161,8 +161,11 @@ class InaraTests(unittest.TestCase):
 
 class CompassTests(unittest.TestCase):
     def test_save_this_spot(self):
-        self.assertIn("data-compass-record", APP)
-        self.assertIn("RECORD A NEW LOCATION", APP)
+        # 5.5.12: from ON THE GROUND into the Planetary page's new-site form.
+        page = (WEB / "dashboard" / "planetary.js").read_text(encoding="utf-8")
+        self.assertIn('data-po-op="save_spot"', page)
+        self.assertIn("SAVE THIS SPOT AS A SITE", page)
+        self.assertIn("form[data-new-site]", page)
 
     def test_the_compass_overlay_fits_its_window(self):
         page = (WEB / "ground" / "app.js").read_text(encoding="utf-8")

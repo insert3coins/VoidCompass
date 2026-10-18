@@ -287,6 +287,8 @@ body.atlas-focus .atlas-frame { pointer-events: auto; }
 .route-horizon > div.crossing { border-left: 2px solid var(--orange); padding-left: 5px; }
 .route-horizon > p { margin: 9px 0; color: var(--dim); font: 9px Consolas, monospace; }
 .wide-button { display: block; width: calc(100% - 34px); margin: 0 17px 15px; }
+/* Auto-copy sits under COPY NEXT (5.5.12): lit when it's on. */
+.route-auto-copy.on { color: var(--accent); }
 
 .telemetry-strip { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; border: 1px solid var(--border-soft); background: var(--border-soft); margin: 0; }
 .telemetry-strip article { min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 10px 15px; background: var(--panel); }
@@ -673,9 +675,7 @@ button:disabled { opacity: .38; cursor: default !important; }
 .mission-row i { width: 5px; height: 5px; background: var(--dim); transform: rotate(45deg); }.mission-row span { min-width: 0; }.mission-row b,.mission-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.mission-row b { color: var(--text); font: 700 11px "Segoe UI",sans-serif; }.mission-row small { margin-top: 3px; color: var(--dim); font: 9px Consolas,monospace; }.mission-row em { color: var(--dim); font: normal 8px Consolas,monospace; text-transform: uppercase; }.mission-row:hover,.mission-row.active { background: var(--selection); }.mission-row.active { border-left: 2px solid var(--accent); }.mission-row.active i { background: var(--accent); box-shadow: 0 0 7px var(--accent); }.mission-row.active em { color: var(--accent); }
 .objective-row { display: grid; grid-template-columns: 34px 1fr 30px; gap: 9px; align-items: center; padding: 10px 1px; border-bottom: 1px solid var(--border-soft); }.objective-row > button:first-child { width: 31px; padding: 0; color: var(--accent); }.objective-row p { margin: 0; }.objective-row p strong,.objective-row p span { display: block; }.objective-row p strong { color: var(--text); font: 700 11px "Segoe UI",sans-serif; }.objective-row p span { margin-top: 3px; color: var(--muted); font: 9px Consolas,monospace; }.objective-row.complete p { opacity: .58; }.objective-row.complete p strong { text-decoration: line-through; }.row-delete { min-width: 28px!important; width: 28px; padding: 0!important; color: var(--red)!important; }
 
-.ground-grid { grid-template-columns: minmax(360px,.72fr) minmax(440px,1.28fr); }
 .coordinate-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px; }.coordinate-form label,.settings-input { color: var(--dim); font: 700 9px Consolas,monospace; }.coordinate-form input,.settings-input input,.settings-input select,.carrier-route-edit input,.ledger-card header input,.hotkey-row input { width: 100%; min-width: 0; height: 37px; margin-top: 6px; padding: 0 10px; outline: 0; border: 1px solid var(--border); background: var(--input); color: var(--text); font: 10px Consolas,monospace; }.coordinate-form input:focus,.settings-input input:focus,.hotkey-row input:focus { border-color: var(--accent); }
-.trail-chart { display: block; width: 100%; height: 360px; background: radial-gradient(circle at center,color-mix(in srgb,var(--accent) 7%,transparent),transparent 52%),var(--inset); }.trail-chart .trail-grid { fill: none; stroke: var(--border-soft); stroke-width: 1; stroke-dasharray: 2 7; }.trail-chart polyline { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }.trail-chart circle { fill: var(--green); }.trail-chart circle.ship { fill: var(--orange); }.trail-chart circle.current { fill: var(--accent); stroke: var(--text); stroke-width: 1; }.trail-empty { height: 360px; display: grid; place-items: center; color: var(--dim); background: var(--inset); font: 10px Consolas,monospace; }.trail-readout { display: flex; align-items: center; gap: 18px; padding: 10px 14px; border-top: 1px solid var(--border-soft); color: var(--muted); font: 9px Consolas,monospace; }.trail-readout b { color: var(--text); }.trail-readout button { margin-left: auto; }
 
 .ok-text { color: var(--green)!important; }.warn-text { color: var(--yellow)!important; }
 
@@ -780,7 +780,6 @@ button:disabled { opacity: .38; cursor: default !important; }
 .replay-card { margin-bottom: 14px; }.replay-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border-soft); }.replay-toolbar label { flex: 1; display: grid; gap: 5px; color: var(--dim); font: 8px Consolas,monospace; }.replay-toolbar select { width: 100%; min-height: 36px; padding: 0 9px; border: 1px solid var(--border); background: var(--input); color: var(--text); font: 9px Consolas,monospace; }.replay-toolbar > div { display: flex; gap: 6px; }.replay-chart { display: block; width: 100%; height: min(52vh,520px); min-height: 390px; background: radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 56%),var(--inset); }.replay-chart > text { fill: var(--dim); font: 8px Consolas,monospace; letter-spacing: .12em; }.replay-grid { fill: none; stroke: var(--border-soft); stroke-width: 1; stroke-dasharray: 2 10; }.replay-route { fill: none; stroke: var(--accent); stroke-width: 1.5; filter: drop-shadow(0 0 3px color-mix(in srgb,var(--accent) 50%,transparent)); }.replay-discovery { fill: var(--green); }.replay-photo { fill: var(--orange); stroke: var(--text); stroke-width: 1; }#replay-ship path { fill: var(--text); stroke: var(--accent); stroke-width: 2; filter: drop-shadow(0 0 6px var(--accent)); }.replay-controls { display: grid; grid-template-columns: 1fr minmax(240px,auto) auto; align-items: center; gap: 13px; padding: 11px 14px; border-top: 1px solid var(--border-soft); color: var(--muted); font: 8px Consolas,monospace; }.replay-controls input { accent-color: var(--accent); }.replay-controls i { display: inline-block; width: 7px; height: 7px; margin: 0 4px 0 9px; border-radius: 50%; background: var(--green); }.replay-controls i.photo { background: var(--orange); }
 .chronicle-feature-grid > .replay-card { margin-bottom: 0; }
 
-.field-map-chart .field-range { fill: none; stroke: color-mix(in srgb,var(--accent) 18%,transparent); stroke-width: 1; stroke-dasharray: 4 8; }.field-map-chart .sample-clearance { fill: color-mix(in srgb,var(--green) 4%,transparent); stroke: color-mix(in srgb,var(--green) 42%,transparent); stroke-width: 1; stroke-dasharray: 3 4; }.field-pin circle { fill: var(--muted); stroke: var(--panel); stroke-width: 2; }.field-pin.sample circle { fill: var(--green); }.field-pin.ship circle { fill: var(--orange); }.field-pin.codex circle { fill: var(--accent); }.field-pin.waypoint circle { fill: var(--yellow); }.field-pin.manual circle { stroke: var(--text); }.field-current path { fill: var(--text); stroke: var(--accent); stroke-width: 1.5; }.field-map-chart text { fill: var(--dim); font: 8px Consolas,monospace; }.field-map-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--border-soft); background: var(--panel-alt); }.field-map-summary small,.field-map-summary b,.field-map-summary span { display: block; }.field-map-summary small { color: var(--accent); font: 8px Consolas,monospace; }.field-map-summary b { margin-top: 3px; color: var(--text); font: 700 11px "Segoe UI",sans-serif; }.field-map-summary span { margin-top: 2px; color: var(--muted); font: 8px Consolas,monospace; }.field-completed { display: flex; align-content: start; justify-content: flex-end; flex-wrap: wrap; gap: 4px; }.field-completed em { padding: 4px 6px; border: 1px solid var(--border-soft); color: var(--green); font: normal 7px Consolas,monospace; }.field-marker-form { display: grid; grid-template-columns: 1fr auto; gap: 7px; padding: 10px 14px; border-top: 1px solid var(--border-soft); }.field-marker-form input { min-width: 0; padding: 0 10px; border: 1px solid var(--border); background: var(--input); color: var(--text); font: 9px Consolas,monospace; }.field-pin-row { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 8px; padding: 8px 2px; border-bottom: 1px solid var(--border-soft); }.field-pin-row > i { width: 8px; height: 8px; border: 1px solid var(--accent); transform: rotate(45deg); }.field-pin-row > i.organic_sample { background: var(--green); border-color: var(--green); }.field-pin-row > i.landing { background: var(--orange); border-color: var(--orange); }.field-pin-row span b,.field-pin-row span small { display: block; }.field-pin-row span b { color: var(--text); font: 700 10px "Segoe UI",sans-serif; }.field-pin-row span small { color: var(--dim); font: 8px Consolas,monospace; }.field-pin-row > button { width: 28px; min-width: 28px; padding: 0; color: var(--red); }
 
 .toast { position: fixed; right: 22px; bottom: 42px; z-index: 80; max-width: 420px; padding: 11px 15px; border: 1px solid var(--accent); border-left-width: 3px; background: var(--panel-raised); color: var(--text); font: 10px Consolas, monospace; transform: translateY(20px); opacity: 0; pointer-events: none; transition: .2s; }
 .toast.show { opacity: 1; transform: none; }
@@ -952,34 +951,6 @@ input,select,textarea,button { max-width: 100%; }
 .workspace-hero > div:last-child { min-width: 0; flex-wrap: wrap; }
 .workspace-table-wrap { width: 100%; }
 
-/* Mining Operations ------------------------------------------------------ */
-.mining-command-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-flow:row dense; gap:13px; align-items:stretch; }
-.mining-command-grid > * { min-width:0; }
-.mining-current-card,.mining-ring-card,.mining-records-card,.mining-buyer-card,.mining-history-card { grid-column:1/-1; }
-.mining-plan-form,.mining-search-form,.mining-buyer-form { display:grid; grid-template-columns:repeat(4,minmax(105px,1fr)); gap:8px; padding:12px 14px; }
-.mining-plan-form label,.mining-search-form label,.mining-buyer-form label { display:grid; gap:5px; color:var(--dim); font:700 8px Consolas,monospace; letter-spacing:.08em; }
-.mining-plan-form input,.mining-plan-form select,.mining-search-form input,.mining-search-form select,.mining-buyer-form input,.mining-buyer-form select { min-width:0; height:34px; margin:0; }
-.mining-plan-form .workspace-actions,.mining-search-form .workspace-actions,.mining-buyer-form .workspace-actions { grid-column:1/-1; }
-.mining-readiness { margin:12px 14px; padding:12px; border:1px solid var(--border-soft); border-left:3px solid var(--yellow); background:linear-gradient(100deg,color-mix(in srgb,var(--yellow) 7%,var(--inset)),var(--inset)); }
-.mining-readiness.ready { border-left-color:var(--green); background:linear-gradient(100deg,color-mix(in srgb,var(--green) 8%,var(--inset)),var(--inset)); }
-.mining-readiness strong,.mining-readiness small { display:block; }.mining-readiness strong { color:var(--text); font:700 14px "Bahnschrift SemiCondensed",sans-serif; }.mining-readiness small { margin-top:4px; color:var(--muted); font:9px/1.45 Consolas,monospace; }
-.mining-equipment-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; padding:0 14px 12px; }
-.mining-equipment { min-height:29px; display:flex; align-items:center; gap:7px; padding:0 8px; border:1px solid var(--border-soft); background:var(--inset); color:var(--dim); font:700 8px Consolas,monospace; }
-.mining-equipment i { color:var(--red); font-style:normal; }.mining-equipment.ready { color:var(--text); border-color:color-mix(in srgb,var(--green) 35%,var(--border-soft)); }.mining-equipment.ready i { color:var(--green); }
-.mining-missing { margin:0 14px 12px; padding:8px 8px 8px 25px; color:var(--yellow); background:color-mix(in srgb,var(--yellow) 6%,transparent); font:9px/1.55 Consolas,monospace; }
-.mining-current { position:relative; display:grid; grid-template-columns:minmax(190px,.65fr) minmax(250px,1.35fr); gap:16px; margin:13px; padding:16px; overflow:hidden; border:1px solid var(--border-soft); border-left:4px solid var(--accent); background:radial-gradient(circle at 12% 50%,color-mix(in srgb,var(--accent) 13%,transparent),transparent 42%),var(--inset); }
-.mining-current::after { content:""; position:absolute; inset:0; pointer-events:none; opacity:.17; background:linear-gradient(90deg,transparent 0 48%,var(--accent) 49% 50%,transparent 51%) 0 0/22px 100%; animation:mining-scan 3.2s linear infinite; }
-.mining-current.mine { border-left-color:var(--green); }.mining-current.optional,.mining-current.assess { border-left-color:var(--yellow); }.mining-current.skip { border-left-color:var(--red); }.mining-current.core { border-left-color:var(--orange); }
-.mining-current > div { position:relative; z-index:1; min-width:0; }.mining-current small,.mining-current b,.mining-current strong,.mining-current em { display:block; }
-.mining-current small { color:var(--dim); font:700 8px Consolas,monospace; letter-spacing:.12em; }.mining-current b { margin:5px 0; color:var(--accent); font:700 28px "Bahnschrift SemiCondensed",sans-serif; text-transform:uppercase; }.mining-current.mine b { color:var(--green); }.mining-current.skip b { color:var(--red); }.mining-current.core b { color:var(--orange); }.mining-current em { color:var(--muted); font:9px/1.5 Consolas,monospace; font-style:normal; }
-.mining-current-material { display:grid; grid-template-columns:minmax(90px,145px) minmax(80px,1fr) 48px; align-items:center; gap:8px; min-height:26px; color:var(--text); font:9px Consolas,monospace; }
-.mining-current-material > i { height:7px; position:relative; overflow:hidden; border:1px solid var(--border); background:var(--alt); }.mining-current-material > i b { width:var(--fill); height:100%; margin:0; background:linear-gradient(90deg,var(--accent),var(--green)); box-shadow:0 0 7px color-mix(in srgb,var(--accent) 55%,transparent); }.mining-current-material > strong { color:var(--accent); text-align:right; font:700 9px Consolas,monospace; }
-.mining-grade-strip { height:34px; display:flex; align-items:end; gap:3px; padding:5px 14px 10px; border-bottom:1px solid var(--border-soft); }.mining-grade-strip i { flex:1; min-width:4px; height:var(--grade); max-height:24px; opacity:.72; background:var(--yellow); box-shadow:0 0 4px color-mix(in srgb,var(--yellow) 35%,transparent); }.mining-grade-strip i.mine { background:var(--green); }.mining-grade-strip i.skip { background:var(--red); }.mining-grade-strip i.core { background:var(--orange); }
-.mining-prospect-row { min-height:44px; display:grid; grid-template-columns:70px minmax(0,1fr) auto; align-items:center; gap:10px; padding:6px 14px; border-bottom:1px solid var(--border-soft); box-shadow:inset 2px 0 var(--yellow); }.mining-prospect-row b { color:var(--yellow); }.mining-prospect-row span { color:var(--text); }.mining-prospect-row em { color:var(--dim); font-style:normal; font-size:8px; }.mining-prospect-row.mine { box-shadow:inset 2px 0 var(--green); }.mining-prospect-row.mine b { color:var(--green); }.mining-prospect-row.skip { box-shadow:inset 2px 0 var(--red); }.mining-prospect-row.skip b { color:var(--red); }.mining-prospect-row.core { box-shadow:inset 2px 0 var(--orange); }.mining-prospect-row.core b { color:var(--orange); }
-.mining-live-facts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; margin:12px 14px; background:var(--border-soft); }.mining-live-facts > div { min-height:54px; padding:9px; background:var(--inset); }.mining-live-facts span,.mining-live-facts b { display:block; }.mining-live-facts span { color:var(--dim); font:8px Consolas,monospace; }.mining-live-facts b { margin-top:5px; color:var(--accent); font:700 15px "Bahnschrift SemiCondensed",sans-serif; }
-.mining-bookmark,.mining-ring-scan { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; min-height:45px; padding:7px 14px; border-bottom:1px solid var(--border-soft); }.mining-bookmark b,.mining-bookmark small,.mining-ring-scan b,.mining-ring-scan small { display:block; }.mining-bookmark b,.mining-ring-scan b { color:var(--text); }.mining-bookmark small,.mining-ring-scan small { margin-top:3px; color:var(--dim); font:8px Consolas,monospace; }
-.mining-history-chart { min-height:82px; display:flex; align-items:end; gap:6px; padding:12px 14px; border-bottom:1px solid var(--border-soft); }.mining-history-chart i { flex:1; min-width:8px; height:var(--yield); min-height:3px; max-height:58px; background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 30%,var(--panel))); box-shadow:0 0 6px color-mix(in srgb,var(--accent) 32%,transparent); }
-@keyframes mining-scan { from { transform:translateX(-22px); } to { transform:translateX(22px); } }
 
 /* Cards can be rearranged into narrower columns even on a wide monitor.
    Container rules make their internal controls respond to the panel's real
@@ -1114,103 +1085,18 @@ input,select,textarea,button { max-width: 100%; }
 }
 body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 
-.planet-materials-wide { grid-column: 1 / -1; }
 .planet-materials-wide > form, .planet-materials-wide > p, .planet-materials-wide > label, #planet-site-list { margin-left: 16px; margin-right: 16px; }
-.planet-materials-wide input, .planet-materials-wide select { min-height: 36px; padding: 8px 10px; border: 1px solid var(--border); background: var(--input); color: var(--text); font: 12px Consolas, monospace; }
-.planet-materials-wide input:focus-visible, .planet-materials-wide select:focus-visible { outline: 1px solid var(--accent); }
-.planet-site-form button { align-self: end; min-height: 36px; padding: 8px 14px; border: 1px solid var(--border); background: var(--panel-alt); color: var(--accent); cursor: pointer; font: 700 11px Consolas, monospace; }
-.planet-site-form button:hover { background: var(--selection); border-color: var(--accent); }
-.planet-site-form [data-site-delete] { color: var(--red); }
-.planet-site-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; padding: 16px 0; }
-.planet-site-form label, .planet-materials-wide > label { display: flex; flex-direction: column; gap: 7px; font-size: 11px; }
-.planet-site-form input { width: 100%; min-width: 0; }
 #planet-site-list { display: grid; gap: 10px; margin-top: 16px; }
 #planet-site-list summary { cursor: pointer; padding: 12px; line-height: 1.7; overflow-wrap: anywhere; }
-.planet-materials-wide > p { padding: 10px 0; line-height: 1.6; }
 
-.planet-site-form button:disabled { opacity: .45; cursor: default; }
-.planet-depleted-toggle { position:relative; display:grid!important; grid-template-columns:minmax(0,1fr) 36px; align-items:center; gap:12px!important; min-height:52px; padding:7px 10px; border:1px solid var(--border-soft); background:var(--inset); cursor:pointer; }
-.planet-depleted-toggle span b,.planet-depleted-toggle span small { display:block; }.planet-depleted-toggle span b { color:var(--text); font:700 10px "Segoe UI",sans-serif; }.planet-depleted-toggle span small { margin-top:3px; color:var(--muted); font:9px Consolas,monospace; }
-.planet-depleted-toggle input { position:absolute; opacity:0; pointer-events:none; }.planet-depleted-toggle > i { position:relative; width:34px; height:18px; border:1px solid var(--border); background:var(--panel-alt); }.planet-depleted-toggle > i::after { content:""; position:absolute; left:2px; top:2px; width:12px; height:12px; background:var(--dim); transition:.17s; }.planet-depleted-toggle input:checked + span + i { border-color:var(--red); }.planet-depleted-toggle input:checked + span + i::after { left:18px; background:var(--red); box-shadow:0 0 8px var(--red); }
 
 .planet-live { margin-bottom: 14px; }
 [data-planet-live-status] { padding: 16px; color: var(--accent); font: 13px Consolas, monospace; }
-.planet-materials-shell { display: grid; gap: 14px; }
-.planet-compass-quick { position: relative; display: grid; grid-template-columns: minmax(245px,.9fr) minmax(310px,1fr) minmax(300px,auto); gap: 14px 18px; align-items: end; overflow: hidden; padding: 18px; border-left: 3px solid var(--orange); background: radial-gradient(circle at 0 0,color-mix(in srgb,var(--orange) 12%,transparent),transparent 44%),linear-gradient(135deg,var(--panel),color-mix(in srgb,var(--accent) 3%,var(--panel))); }
-.planet-compass-quick::after { content:""; position:absolute; top:0; right:0; width:72px; height:2px; background:var(--orange); box-shadow:0 0 12px color-mix(in srgb,var(--orange) 70%,transparent); }
-.planet-compass-heading small,.planet-compass-heading h3,.planet-compass-heading span { display:block; }.planet-compass-heading small { color:var(--orange); font:700 8px Consolas,monospace; letter-spacing:.14em; }.planet-compass-heading h3 { margin:4px 0 3px; color:var(--text); font:500 20px "Bahnschrift SemiCondensed",sans-serif; text-transform:uppercase; }.planet-compass-heading span { max-width:410px; color:var(--muted); font:9px/1.45 Consolas,monospace; }
-.planet-compass-coordinates { gap:9px; padding:0; }.planet-compass-coordinates input { height:39px; color:var(--accent); font-size:12px; }.planet-compass-controls { align-self:center; padding:0; }.planet-compass-controls button { min-height:39px; }.planet-compass-controls button.primary { border-color:var(--accent); background:var(--accent); color:#021015; }
-.planet-compass-state { grid-column:1/-1; display:grid; grid-template-columns:8px minmax(0,1fr) auto; align-items:center; gap:9px; min-height:31px; padding:7px 10px; border:1px solid var(--border-soft); background:var(--inset); color:var(--muted); font:700 9px Consolas,monospace; }.planet-compass-state i { width:6px; height:6px; border:1px solid var(--dim); transform:rotate(45deg); }.planet-compass-state span { overflow-wrap:anywhere; }.planet-compass-state b { color:var(--dim); white-space:nowrap; }.planet-compass-quick.active { border-left-color:var(--accent); }.planet-compass-quick.active::after { background:var(--accent); }.planet-compass-quick.active .planet-compass-heading small,.planet-compass-quick.active .planet-compass-state b { color:var(--green); }.planet-compass-quick.active .planet-compass-state i { border-color:var(--green); background:var(--green); box-shadow:0 0 8px var(--green); }
-.planet-command-bar { display: grid; grid-template-columns: minmax(280px,1.25fr) minmax(230px,1fr) minmax(190px,.7fr) auto; gap: 18px; align-items: end; padding: 18px; border-left: 3px solid var(--accent); background: radial-gradient(circle at 0 50%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 42%),var(--panel); }
-.planet-command-bar > div, .planet-command-bar > label { min-width: 0; display: grid; gap: 7px; }
-.planet-command-bar small, .planet-command-bar label { color: var(--muted); font: 10px Consolas,monospace; }
-.planet-command-bar [data-planet-live-status] { min-width: 0; padding: 0; overflow-wrap: anywhere; color: var(--text); font: 12px Consolas,monospace; }
-.planet-command-bar select { min-height: 38px; width: 100%; padding: 8px 12px; border: 1px solid var(--border); background: var(--input); color: var(--accent); font: 12px Consolas,monospace; }
-.planet-command-bar > strong { padding: 11px 13px; border: 1px solid var(--accent); color: var(--accent); background: var(--selection); white-space: nowrap; font: 700 10px Consolas,monospace; }
-.planet-atlas-tabs { margin: 14px 0; gap: 10px; }
-.planet-atlas-tabs button, .planet-body-picker select { min-height: 36px; padding: 8px 14px; color: var(--accent); background: var(--panel-alt); border: 1px solid var(--border); }
-.planet-atlas-tabs button.primary { border-color: var(--accent); background: var(--selection); }
-.planet-body-picker { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 14px; color: var(--muted); font: 11px Consolas, monospace; }
-.planet-body-picker select { max-width: 100%; }
-.planet-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; padding: 14px; }
-.planet-facts small, .planet-atlas-table small { display: block; color: var(--muted); font: 10px Consolas, monospace; margin-bottom: 7px; }
-.planet-facts b { font: 12px Consolas, monospace; }
-.planet-condition-card .planet-facts { grid-template-columns: repeat(7,minmax(105px,1fr)); }
-.planet-atlas-columns { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; margin: 14px 0; }
 .planet-atlas-columns > *, [data-atlas-panel] > * { min-width: 0; }
-.planet-location-library > header b { color: var(--accent); }
-.planet-site-grid { display: grid; gap: 8px; padding: 12px; }
-.planet-site-card { border: 1px solid var(--border-soft); background: var(--inset); }
-.planet-site-card[open] { border-color: var(--border); box-shadow: inset 3px 0 color-mix(in srgb,var(--accent) 70%,transparent); }
-.planet-site-card.depleted { border-color:color-mix(in srgb,var(--red) 35%,var(--border-soft)); }.planet-site-card.depleted[open] { box-shadow:inset 3px 0 color-mix(in srgb,var(--red) 76%,transparent); }.planet-site-card.depleted summary em { color:var(--red); font-weight:700; }
-.planet-site-card summary { display: grid; grid-template-columns: minmax(175px,1fr) minmax(160px,1fr) auto auto; gap: 12px; align-items: center; padding: 13px 14px; cursor: pointer; list-style-position: inside; }
-.planet-site-card summary span { min-width: 0; }
-.planet-site-card summary span b, .planet-site-card summary span small { display: block; overflow-wrap: anywhere; }
-.planet-site-card summary span b { margin-bottom: 5px; color: var(--text); font: 700 13px "Bahnschrift SemiCondensed",sans-serif; text-transform: uppercase; }
-.planet-site-card summary span small { color: var(--accent); font: 10px Consolas,monospace; }
-.planet-site-card summary strong { display: flex; flex-wrap: wrap; gap: 5px; }
-.planet-site-card summary strong i { padding: 4px 7px; border: 1px solid var(--border); color: var(--text); background: var(--panel-alt); font: normal 9px Consolas,monospace; }
-.planet-site-card summary em { color: var(--muted); white-space: nowrap; font: normal 9px Consolas,monospace; }
-.planet-compass-action { min-height: 31px; padding: 6px 9px; border: 1px solid var(--border); background: var(--panel-alt); color: var(--accent); cursor: pointer; white-space: nowrap; font: 700 9px Consolas,monospace; }
-.planet-compass-action:hover, .planet-compass-action.active { border-color: var(--accent); background: var(--selection); box-shadow: inset 0 0 12px color-mix(in srgb,var(--accent) 8%,transparent); }
-.planet-compass-action.active { color: var(--green); border-color: var(--green); }
-.planet-site-meta { margin: 0 14px; padding: 10px 0; border-top: 1px solid var(--border-soft); color: var(--muted); font: 10px Consolas,monospace; }
-.planet-site-card .planet-site-form { padding: 14px; border-top: 1px solid var(--border-soft); }
-.planet-new-site { margin-top: 14px; }
-.planet-composition-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(40px, 1fr) 65px; gap: 12px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); font: 12px Consolas, monospace; }
-.planet-composition-row i { height: 6px; background: linear-gradient(to right, var(--accent) var(--share), var(--panel-alt) var(--share)); }
-.planet-composition-row b { text-align: right; color: var(--accent); }
-.planet-value-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(165px,1fr)); gap:8px; padding:12px; }
-.planet-value-card { display:grid; gap:5px; min-width:0; padding:11px; border:1px solid var(--border-soft); background:var(--inset); }
-.planet-value-card small,.planet-value-card span,.planet-value-card em { color:var(--muted); font:normal 9px Consolas,monospace; }
-.planet-value-card b { color:var(--green); font:700 12px "Bahnschrift SemiCondensed",sans-serif; text-transform:uppercase; }
-.planet-value-card em { color:var(--accent); }
-.planet-evidence-note { margin:0 0 10px; font-size:10px!important; }
-.planet-captured { grid-column: 1 / -1; border: 1px solid var(--border); padding: 12px; }
-.planet-captured > small { color: var(--muted); font: 11px Consolas, monospace; }
-.planet-captured .planet-composition { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px,1fr)); }
-.planet-table-scroll { max-width: 100%; overflow: auto; }
-.planet-atlas-table { width: 100%; border-collapse: collapse; font: 12px Consolas, monospace; }
-.planet-atlas-table th, .planet-atlas-table td { padding: 12px; border-bottom: 1px solid var(--border); text-align: left; }
-.planet-atlas-table thead th { color: var(--muted); font-size: 10px; }
-.planet-atlas-table small { margin: 7px 0 0; }
-.planet-heat-present { color: var(--accent); background: var(--selection); font-weight: bold; }
 [data-atlas-panel] p { padding: 0 14px; color: var(--muted); font-size: 12px; }
 @media (max-width: 1100px) {
-  .planet-compass-quick { grid-template-columns:minmax(230px,.8fr) minmax(310px,1.2fr); }
-  .planet-compass-controls { grid-column:1/-1; }
-  .planet-command-bar { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
-  .planet-command-bar > strong { grid-column: 1 / -1; justify-self: start; }
-  .planet-condition-card .planet-facts { grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); }
-  .planet-atlas-columns { grid-template-columns: minmax(0,1fr); }
 }
 @media (max-width: 760px) {
-  .planet-compass-quick { grid-template-columns:minmax(0,1fr); }
-  .planet-compass-controls,.planet-compass-state { grid-column:auto; }
-  .planet-compass-state { grid-template-columns:8px minmax(0,1fr); }.planet-compass-state b { grid-column:2; }
-  .planet-command-bar { grid-template-columns: minmax(0,1fr); }
-  .planet-command-bar > strong { grid-column: auto; }
-  .planet-site-card summary { grid-template-columns: minmax(0,1fr); }
 }
 
 /* Commander Record: Odyssey on foot (5.5.2.8). */

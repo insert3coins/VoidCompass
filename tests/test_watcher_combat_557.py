@@ -123,7 +123,8 @@ class CombatTests(unittest.TestCase):
         hud.mind = SimpleNamespace(vitals=lambda *args, **kwargs: heard.update(kwargs))
         hud._redraw = lambda: None
         hud.pulse("status", "STATUS", "ON FOOT", {"Flags": 0, "Flags2": 0x01 | 0x80, "Health": .4})
-        self.assertEqual(heard, {"health": .4, "low_health": True, "on_foot": True, "in_danger": False})
+        # 5.5.12: and whose fuel it is (an SRV's own tank, or "" for the ship).
+        self.assertEqual(heard, {"health": .4, "low_health": True, "on_foot": True, "in_danger": False, "vehicle": ""})
 
 
 if __name__ == "__main__":

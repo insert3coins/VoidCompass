@@ -18,17 +18,17 @@ from voidcompass.overlays.hud import TacticalHUD
 
 class PlanetMaterialsTests(unittest.TestCase):
     def test_planetary_operations_has_quick_compass_coordinate_entry(self):
+        # 5.5.12: the Planetary page's ON THE GROUND tab, sending through the
+        # deck's own ground command (which reads #ground-lat / #ground-lon).
         root = Path(__file__).resolve().parents[1]
+        page = (root / 'web' / 'dashboard' / 'planetary.js').read_text(encoding='utf-8')
         dashboard = (root / 'web' / 'dashboard' / 'app.js').read_text(encoding='utf-8')
         document = (root / 'web' / 'dashboard' / 'index.html').read_text(encoding='utf-8')
-        stylesheet = (root / 'web' / 'dashboard' / 'styles.css').read_text(encoding='utf-8')
-        self.assertIn('id="planet-compass-lat"', dashboard)
-        self.assertIn('id="planet-compass-lon"', dashboard)
-        self.assertIn('data-ground-source="planet"', dashboard)
-        self.assertIn('planet: "planet-compass"', dashboard)
-        self.assertIn('#planet-compass-lat, #planet-compass-lon', dashboard)
-        self.assertIn('Compass waypoints', document)
-        self.assertIn('.planet-compass-quick', stylesheet)
+        self.assertIn('id="ground-lat"', page)
+        self.assertIn('id="ground-lon"', page)
+        self.assertIn('data-ws-page="ground" data-ws-op="set"', page)
+        self.assertIn('}[workspaceButton.dataset.groundSource] || "ground";', dashboard)
+        self.assertIn('Find your way on a planet', document)
 
     def test_overlay_combines_body_scan_saved_sites_and_rhino_state(self):
         workspace = {

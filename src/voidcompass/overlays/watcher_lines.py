@@ -1186,6 +1186,16 @@ WEARY["mined_surface"] = [
     "{material}. The ground cracks. The Rhino bounces. I endure.",
 ]
 
+# 5.5.12: each vehicle by name, and mining's moments (watcher_vehicles.py).
+from voidcompass.overlays.watcher_vehicles import (  # noqa: E402
+    MINING_NORMAL, MINING_WEARY, VEHICLE_IDLE_NORMAL, VEHICLE_IDLE_WEARY, VEHICLE_NORMAL, VEHICLE_WEARY)
+
+for _bank, _extra in ((NORMAL, {**VEHICLE_NORMAL, **VEHICLE_IDLE_NORMAL, **MINING_NORMAL}),
+                      (WEARY, {**VEHICLE_WEARY, **VEHICLE_IDLE_WEARY, **MINING_WEARY})):
+    for _topic, _lines in _extra.items():
+        _have = _bank.setdefault(_topic, [])
+        _have.extend(line for line in _lines if line not in _have)
+
 # 5.5.7: in a fight, in the ship and on foot (watcher_combat.py).
 from voidcompass.overlays.watcher_combat import COMBAT_NORMAL, COMBAT_WEARY  # noqa: E402
 

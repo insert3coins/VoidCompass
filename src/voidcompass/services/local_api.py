@@ -63,7 +63,7 @@ PROVIDER_CALLS = (
     "api_add_waypoint", "api_change_waypoint", "api_delete_waypoint", "api_clear_waypoints", "api_return_later",
     "api_return_later_action", "api_neutron_route", "api_import_neutron_route",
     "api_wrapped_years", "api_wrapped", "api_recorder_sessions", "api_recorder_tape",
-    "api_rigs", "api_rig_mark", "api_rigs_clear",
+    "api_rigs", "api_rig_mark", "api_rigs_clear", "api_mining_record",
 )
 
 
@@ -354,6 +354,7 @@ class LocalApi:
             ("GET", r"/carrier", lambda req: self._call("api_carriers"), False),
             ("GET", r"/mining", lambda req: self._call("api_mining"), False),
             ("POST", r"/mining/run", self._mining_run, True),
+            ("GET", r"/mining/record", lambda req: self._call("api_mining_record"), False),
             ("GET", r"/combat", lambda req: self._call("api_combat"), False),
             ("GET", r"/engineering", lambda req: self._call("api_engineering"), False),
             ("GET", r"/powerplay", lambda req: self._call("api_powerplay"), False),

@@ -32,7 +32,32 @@ IDLE_TOPICS = (
     "idle_lore", "idle_after", "lore_recall", "idle_lens",
     # A postcard it kept, brought up again (5.5.3.7).
     "idle_postcard",
+    # 5.5.12: out in a vehicle it knows by name, and drifting in a ring.
+    "idle_scarab", "idle_scorpion", "idle_rhino", "idle_nomad", "idle_fighter", "idle_ring",
 )
+SRV_KINDS = ("scarab", "scorpion", "rhino")
+FIELD_TYPES = {"planetaryring", "stellarring", "asteroidcluster"}
+
+
+def vehicle_kind(raw):
+    """Which vehicle a launch (or a LoadGame) is: scarab, scorpion, rhino,
+    nomad or fighter; "" for a ship, or one it can't tell."""
+    raw = raw if isinstance(raw, dict) else {}
+    # The vehicle's own type decides: the Rhino launches with Loadout
+    # "galactic" too, which only means the Nomad on a ship-launched vessel.
+    for key in ("SRVType", "SRVType_Localised", "VesselType", "VehicleType", "Ship", "Ship_Localised"):
+        value = str(raw.get(key) or "").casefold()
+        if "nomad" in value or value == "lander01":
+            return "nomad"
+        if "scorpion" in value or "combat_multicrew_srv" in value:
+            return "scorpion"
+        if "scarab" in value or value == "testbuggy":
+            return "scarab"
+        if "rhino" in value:
+            return "rhino"
+    if raw.get("event") in ("LaunchFighter", "LaunchVessel"):
+        return "nomad" if str(raw.get("Loadout") or "").casefold() == "galactic" else "fighter"
+    return ""
 
 # Star classes in plain words (journal StarClass / StarType).
 _STARS = {
@@ -87,6 +112,8 @@ class Surroundings:
         self.on_station = False
         self.supercruise = False
         self.srv = False
+        self.vehicle = ""
+        self.field = ""
         self.settlement = ""
         self.near_body = ""
         self.taxi = False
@@ -144,7 +171,7 @@ class Surroundings:
                 except (TypeError, ValueError):
                     pass
             self.docked = bool(raw.get("Docked")) if event == "Location" else False
-            self.landed_body = ""
+            self.landed_body = self.field = ""
         elif event == "Scan":
             if raw.get("StarType") and not raw.get("DistanceFromArrivalLS"):
                 self.star_class = str(raw.get("StarType"))
@@ -189,9 +216,12 @@ class Surroundings:
             self.taxi = True
         elif event == "SupercruiseEntry":
             self.supercruise = True
+            self.field = ""
         elif event == "SupercruiseExit":
             self.supercruise = False
             self.near_body = str(raw.get("Body") or "") if raw.get("BodyType") == "Planet" else self.near_body
+            body_type = "".join(char for char in str(raw.get("BodyType") or "").casefold() if char.isalnum())
+            self.field = str(raw.get("Body") or "") if body_type in FIELD_TYPES else ""
         elif event == "ApproachBody":
             self.near_body = str(raw.get("Body") or "")
         elif event == "LeaveBody":
@@ -200,12 +230,25 @@ class Surroundings:
             self.settlement = self._readable(raw, "Name_Localised", "Name")
         elif event == "LaunchSRV":
             self.srv = True
+            self.vehicle = vehicle_kind(raw)
         elif event in {"DockSRV", "SRVDestroyed"}:
             self.srv = False
+            self.vehicle = ""
+        elif event in {"LaunchFighter", "LaunchVessel"} and raw.get("PlayerControlled", True):
+            self.vehicle = vehicle_kind(raw)
+        elif event in {"DockFighter", "DockVessel", "FighterDestroyed"} or (
+                event == "VehicleSwitch" and str(raw.get("To") or "").casefold() == "mothership"):
+            if self.vehicle in ("nomad", "fighter"):
+                self.vehicle = ""
         elif event == "Cargo" and str(raw.get("Vessel") or "").casefold() == "srv":
             # Started while already out in the SRV: its hold says so.
             self.srv = True
+        elif event == "LoadGame" and vehicle_kind(raw) in SRV_KINDS:
+            # Loaded in while out in an SRV: that's the vehicle, not the ship.
+            self.srv, self.vehicle = True, vehicle_kind(raw)
         elif event in {"LoadGame", "Loadout"}:
+            if event == "LoadGame":
+                self.srv, self.vehicle = False, ""
             self.ship = self._readable(raw, "Ship_Localised") or self.ship
             name = str(raw.get("ShipName") or "").strip()
             self.ship_name = name or self.ship_name
@@ -273,8 +316,15 @@ class Surroundings:
             where.append(("idle_on_foot", {**({"body": self.landed_body} if self.landed_body else {}), **suit}))
         elif self.taxi:
             where.append(("idle_taxi", {}))
-        elif self.srv:
-            where.append(("idle_srv", {"body": self.landed_body or self.near_body} if (self.landed_body or self.near_body) else {}))
+        elif self.srv or self.vehicle:
+            body = self.landed_body or self.near_body
+            fields = {"body": body} if body else {}
+            if self.vehicle in ("nomad", "fighter") and self.system:
+                fields["system"] = self.system
+            topic = f"idle_{self.vehicle}" if self.vehicle in SRV_KINDS + ("nomad", "fighter") else "idle_srv"
+            where.append((topic, fields))
+        elif self.field and not self.docked:
+            where.append(("idle_ring", {"ring": self.field}))
         elif self.landed_body:
             where.append(("idle_landed", {"body": self.landed_body}))
         elif self.docked and self.station:

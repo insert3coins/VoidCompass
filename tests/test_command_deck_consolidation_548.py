@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class CommandDeckConsolidation548Tests(unittest.TestCase):
     def test_release_version_comparison_handles_elite_style_patch_versions(self):
-        self.assertEqual(APP_VERSION, "5.5.11")
+        self.assertEqual(APP_VERSION, "5.5.12")
         self.assertTrue(release_is_newer("v5.4.8.2", "5.4.8.1"))
         self.assertTrue(release_is_newer("5.4.7.1", "5.4.7"))
         self.assertTrue(release_is_newer("5.4.10", "5.4.9.9"))
@@ -43,17 +43,21 @@ class CommandDeckConsolidation548Tests(unittest.TestCase):
     def test_merged_pages_remain_available_as_compatibility_routes(self):
         document = (ROOT / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")
         for page in (
-            "mission", "recon", "ledger", "ground", "records", "achievements",
+            "mission", "recon", "ledger", "records", "achievements",
             "chronicle", "overlay-studio",
         ):
             self.assertIn(f'data-page-name="{page}"', document)
+        # Ground & Exobio is the Planetary page's ON THE GROUND tab (5.5.12).
+        self.assertNotIn('data-page-name="ground"', document)
 
         script = (ROOT / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
         self.assertIn("const PAGE_SUITES", script)
         self.assertIn("function navigationPage(pageName)", script)
         self.assertIn('node.dataset.page === navPage', script)
-        for suite in ("EXPLORATION COMMAND", "PLANETARY OPERATIONS", "COMMANDER RECORD"):
+        for suite in ("EXPLORATION COMMAND", "COMMANDER RECORD"):
             self.assertIn(suite, script)
+        self.assertIn('ground: "planet-materials"', script)
+        self.assertIn('if (name === "ground") setPlanetaryView("ground");', script)
         self.assertNotIn("SHIP WORKSHOP", script, "the Ship Workshop is gone (5.5.10)")
         self.assertNotIn('{parent: "settings"', script)
 

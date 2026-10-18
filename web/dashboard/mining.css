@@ -1,0 +1,176 @@
+/* Mining (mining.js, 5.5.12). Interface colours are theme tokens. The two
+   chart colours, ship and Rhino, are the deck's validated categorical pair
+   (as trading.css), checked on the dark panels; they mark chart series
+   only, never text. */
+
+#mining-workspace {
+  --mn-s1: #3987e5; --mn-s2: #d95926;
+  container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0;
+}
+#mining-workspace button { cursor: pointer; }
+#mining-workspace button:disabled { cursor: default; opacity: .55; }
+#mining-workspace input, #mining-workspace select {
+  min-width: 0; height: 32px; padding: 0 9px; border: 1px solid var(--border); background: var(--input); color: var(--text);
+  font: 12px "Segoe UI", sans-serif; outline: none;
+}
+#mining-workspace input:focus, #mining-workspace select:focus { border-color: var(--accent); }
+#mining-workspace h4 { margin: 0; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+#mining-workspace h5 { margin: 6px 0 0; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+
+/* Status strip. */
+.mn-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 10px 14px; border: 1px solid var(--border-soft); border-left: 3px solid var(--accent); background: var(--panel); }
+.mn-status > div { display: grid; gap: 2px; min-width: 0; }
+.mn-status b { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.mn-status span { color: var(--text); font: 11px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.mn-mini { margin-right: 12px; }
+.mn-mini em { margin-right: 5px; color: var(--muted); font: 700 8.5px Consolas, monospace; font-style: normal; letter-spacing: .1em; }
+.mn-link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; }
+#mining-workspace button.mn-link.cockpit-button { min-height: 0; padding: 0; background: none; color: var(--accent); text-transform: none; }
+#mining-workspace button.mn-link.cockpit-button::before, #mining-workspace button.mn-link.cockpit-button::after { display: none; }
+
+/* Panels. */
+.mn-body { display: grid; gap: 12px; min-width: 0; }
+.mn-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+@container (max-width: 900px) { .mn-grid { grid-template-columns: minmax(0, 1fr); } }
+.mn-panel { display: grid; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border-soft); background: var(--panel); overflow-x: auto; }
+.mn-panel > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.mn-panel > header span { color: var(--dim); font: 10.5px "Segoe UI", sans-serif; }
+.mn-dim { margin: 0; color: var(--dim); font: 11px/1.5 "Segoe UI", sans-serif; }
+.mn-error { color: var(--red); }
+.mn-warn { margin: 0; color: var(--yellow); font: 11.5px "Segoe UI", sans-serif; }
+.mn-sub { margin: 0; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.mn-sub b { color: var(--text); font-weight: 600; }
+.mn-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.mn-head > span { color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.mn-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#mining-workspace :is(.mn-actions, .mn-head) button.cockpit-button { min-height: 28px; padding: 0 12px; font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+#mining-workspace :is(.mn-row-actions, .mn-ground) button.cockpit-button { min-height: 24px; padding: 0 8px; margin-right: 4px; font: 700 8.5px Consolas, monospace; letter-spacing: .08em; }
+.mn-danger.armed { color: var(--red); }
+
+/* Figures. */
+.mn-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.mn-tiles.big { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@container (max-width: 760px) { .mn-tiles.big { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mn-tile { display: grid; gap: 3px; min-width: 0; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--inset); }
+.mn-tile > span { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.mn-tile b { color: var(--text); font: 600 20px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.mn-tiles.big .mn-tile { background: var(--panel); }
+.mn-tiles.big .mn-tile b { font-size: 24px; }
+.mn-tile small { color: var(--dim); font: 10.5px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+
+/* Holds: like the Rig Tracker's bars. */
+.mn-hold { display: grid; grid-template-columns: 54px minmax(60px, 1fr) auto 76px; align-items: center; gap: 10px; padding: 3px 0; }
+.mn-hold > span { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.mn-hold > i { position: relative; height: 10px; border: 1px solid var(--border); background: var(--inset); overflow: hidden; }
+.mn-hold > i b { position: absolute; inset: 1px auto 1px 1px; max-width: calc(100% - 2px); background: var(--accent); }
+.mn-hold em { color: var(--text); font: 600 12px "Segoe UI", sans-serif; font-style: normal; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.mn-hold small { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .06em; text-align: right; white-space: nowrap; }
+.mn-hold.nearly > i b { background: var(--yellow); }
+.mn-hold.nearly small { color: var(--yellow); }
+.mn-hold.full > i { border-color: var(--red); }
+.mn-hold.full > i b { background: var(--red); }
+.mn-hold.full small { color: var(--red); }
+.mn-hold.partial > i { border-style: dashed; }
+.mn-hold.partial > i b { opacity: .55; }
+
+/* This rock. */
+.mn-verdict { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 10px 12px; border-left: 3px solid var(--muted); background: var(--inset); }
+.mn-verdict b { font: 700 20px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .06em; }
+.mn-verdict span { color: var(--text); font: 13px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.mn-verdict.go { border-left-color: var(--green); }
+.mn-verdict.go b { color: var(--green); }
+.mn-verdict.maybe { border-left-color: var(--yellow); }
+.mn-verdict.maybe b { color: var(--yellow); }
+.mn-verdict.stop { border-left-color: var(--red); }
+.mn-verdict.stop b { color: var(--red); }
+.mn-verdict.wait b { color: var(--muted); }
+.mn-facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.mn-facts b { margin-left: 5px; color: var(--text); font: 600 12px "Segoe UI", sans-serif; letter-spacing: 0; }
+
+/* Ranked bars: a rock's materials, a ground's, your best rocks. */
+.mn-grades, .mn-ground, .mn-ranks { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.mn-grades li, .mn-ground li { display: grid; grid-template-columns: minmax(90px, 170px) minmax(60px, 1fr) 54px auto auto; align-items: center; gap: 10px; }
+.mn-grades li > span, .mn-ground li > span, .mn-ranks li > span { color: var(--text); font: 12px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.mn-grades em { margin-left: 4px; color: var(--accent); font: 700 8px Consolas, monospace; font-style: normal; letter-spacing: .12em; }
+.mn-grades li > i, .mn-ground li > i, .mn-ranks li > i { position: relative; display: flex; gap: 2px; height: 9px; background: var(--inset); }
+.mn-grades li > i b, .mn-ground li > i b { display: block; height: 100%; border-radius: 0 4px 4px 0; background: color-mix(in srgb, var(--muted) 70%, transparent); }
+.mn-grades li.target > i b { background: var(--accent); }
+.mn-grades u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); }
+.mn-grades strong, .mn-ground strong, .mn-ranks strong { color: var(--text); font: 600 12px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.mn-ground small, .mn-ranks small { color: var(--dim); font: 10.5px "Segoe UI", sans-serif; white-space: nowrap; }
+.mn-ground li > i b { background: var(--accent); }
+.mn-ranks li { display: grid; grid-template-columns: minmax(90px, 170px) minmax(60px, 1fr) 70px minmax(0, auto); align-items: center; gap: 10px; }
+.mn-ranks li > i b { display: block; height: 100%; }
+.mn-ranks li > i b:last-child { border-radius: 0 4px 4px 0; }
+
+/* Kit. */
+.mn-kit { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.mn-kit li { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border: 1px solid var(--border-soft); background: var(--inset); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.mn-kit i { font-style: normal; font-weight: 700; }
+.mn-kit li.yes i { color: var(--green); }
+.mn-kit li.no { color: var(--muted); }
+.mn-kit li.no i { color: var(--red); }
+
+/* Rigs. */
+.mn-rigs { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.mn-rigs li { display: grid; grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "slot arrow far" "age age age"; align-items: center; gap: 4px 10px; padding: 9px 11px; border: 1px solid var(--border-soft); background: var(--inset); }
+.mn-rigs b { grid-area: slot; color: var(--muted); font: 700 11px Consolas, monospace; }
+.mn-rigs .mn-arrow { grid-area: arrow; display: inline-block; color: var(--accent); font-style: normal; font-size: 15px; line-height: 1; }
+.mn-rigs .mn-arrow svg { display: block; width: 16px; height: 16px; fill: currentColor; }
+.mn-rigs span { grid-area: far; color: var(--text); font: 600 14px "Segoe UI", sans-serif; text-align: right; font-variant-numeric: tabular-nums; }
+.mn-rigs small { grid-area: age; color: var(--dim); font: 10.5px "Segoe UI", sans-serif; }
+.mn-rigs li.nearest { border-color: var(--accent); }
+.mn-rigs li.nearest b { color: var(--accent); }
+.mn-rigs li.here { border-color: var(--green); }
+.mn-rigs li.here span, .mn-rigs li.here b { color: var(--green); }
+.mn-order { margin: 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .1em; }
+
+/* Lists. */
+.mn-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.mn-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 12px; padding: 7px 0; border-bottom: 1px solid var(--border-soft); }
+.mn-list li > b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.mn-list li > span { grid-column: 1; color: var(--dim); font: 11px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.mn-list li > em { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--text); font: 600 12px "Segoe UI", sans-serif; font-style: normal; font-variant-numeric: tabular-nums; text-align: right; }
+.mn-how { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.mn-how div { display: grid; gap: 4px; padding: 10px 12px; border-left: 2px solid var(--accent); background: var(--inset); }
+.mn-how b { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.mn-how span { color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif; }
+
+/* Forms. */
+.mn-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 10px; align-items: end; }
+.mn-form label { display: grid; gap: 4px; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
+.mn-form .mn-actions { grid-column: 1 / -1; }
+
+/* Tables. */
+.mn-table { width: 100%; min-width: 560px; border-collapse: collapse; font: 12px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.mn-table th { padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; text-align: left; white-space: nowrap; }
+.mn-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-soft); color: var(--text); vertical-align: middle; }
+.mn-table td b { font-weight: 600; }
+.mn-table small { display: block; margin-top: 2px; color: var(--dim); font: 10px "Segoe UI", sans-serif; }
+.mn-table tr.dim td { color: var(--muted); }
+.mn-row-actions { white-space: nowrap; text-align: right; }
+
+/* Charts. */
+.mn-chart-box { position: relative; max-width: 1100px; }
+.mn-chart { display: block; width: 100%; height: auto; }
+.mn-chart .grid { stroke: var(--border-soft); stroke-width: 1; }
+.mn-chart .axis { fill: var(--dim); font: 10px Consolas, monospace; }
+.mn-chart rect.low { opacity: .35; }
+.mn-chart .threshold { stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mn-chart .hit { fill: transparent; }
+.mn-chart .hit.on { fill: color-mix(in srgb, var(--text) 6%, transparent); }
+.mn-tooltip { position: absolute; top: 8px; z-index: 3; display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); background: var(--panel); box-shadow: 0 6px 18px rgba(0, 0, 0, .45); pointer-events: none; }
+.mn-tooltip b { color: var(--text); font: 700 10px Consolas, monospace; }
+.mn-tooltip span { display: flex; align-items: center; gap: 6px; color: var(--text); font: 11px "Segoe UI", sans-serif; white-space: nowrap; }
+.mn-tooltip i, .mn-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.mn-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.mn-legend li { display: flex; align-items: center; gap: 6px; }
+
+@container (max-width: 560px) {
+  .mn-grades li, .mn-ground li { grid-template-columns: minmax(80px, 1fr) minmax(50px, 1fr) auto; }
+  .mn-grades li > small, .mn-ground li > small { display: none; }
+  .mn-ranks li { grid-template-columns: minmax(80px, 1fr) minmax(50px, 1fr) auto; }
+  .mn-ranks li > small { display: none; }
+  .mn-hold { grid-template-columns: 48px minmax(40px, 1fr) auto; }
+  .mn-hold small { display: none; }
+}

@@ -1561,6 +1561,12 @@ class MainDashboard(
                 pass
         # Where home is (5.5.4), for "light years from home".
         context["home"] = home_anchor.home(self.config)
+        # 5.5.12: the vehicle you're in and your ship's hold, which a restart
+        # mid-session hides from its journal events.
+        vehicle = str(getattr(self, "current_vehicle_name", "") or "").casefold()
+        if (getattr(self, "current_in_srv", False) or getattr(self, "current_in_fighter", False)) and vehicle:
+            context["vehicle"] = vehicle
+        context["cargo_capacity"] = int(getattr(self, "cargo_capacity", 0) or 0)
         return context
 
     def _watcher_sign_off(self):
@@ -4463,7 +4469,7 @@ class MainDashboard(
     def open_field_tools_workspace(self, section=None):
         html_page = {
             "mining": "mining", "biology": "explore", "carrier": "carrier",
-            "ground": "ground",
+            "ground": "planet-materials",
         }.get(str(section or "").casefold(), "operations")
         self._route_to_html_workspace(html_page)
 
@@ -5501,13 +5507,13 @@ class MainDashboard(
             )
             return True
         try:
-
             self.root.copy_text(waypoint_name)
             self.log(f"📋 COPIED {log_label}: {waypoint_name}")
             self.add_event_feed_entry("ROUTE", f"Copied {log_label}: {waypoint_name}", severity="INFO", copy_text=waypoint_name)
             return True
         except Exception as e:
             self.log(f"❌ CLIPBOARD COPY FAILED: {e}")
+            self.add_event_feed_entry("CLIPBOARD", f"Couldn't copy {waypoint_name}: {e}", severity="FAIL", copy_text=waypoint_name)
             return False
 
     def _run_scheduled_hud_refresh(self):
@@ -5827,7 +5833,7 @@ class MainDashboard(
             next_name, hops, route_safety,
         )
         surface_vehicle_fuel = self._surface_vehicle_fuel_active()
-        fuel_percent = None if surface_vehicle_fuel else self._current_fuel_percent()
+        fuel_percent = self._surface_fuel_percent() if surface_vehicle_fuel else self._current_fuel_percent()
         fuel_reservoir_t = (
             getattr(self, "current_surface_fuel_reservoir", None)
             if surface_vehicle_fuel else None
@@ -8402,14 +8408,16 @@ class MainDashboard(
             self.cmdr_ship, _ = companion_features.update_active_ship(
                 self.cmdr_ship, ev, raw
             )
-            try:
-                if d.get("fuel_level") is not None:
-                    self.current_fuel_main = float(d.get("fuel_level"))
-            except (TypeError, ValueError):
-                pass
             fuel_capacity = d.get("fuel_capacity")
             if isinstance(fuel_capacity, dict):
                 fuel_capacity = fuel_capacity.get("Main")
+            try:
+                # Logged in out in an SRV, LoadGame describes the SRV (no
+                # tank, 0 fuel): that isn't the ship's fuel (5.5.12).
+                if d.get("fuel_level") is not None and float(fuel_capacity or 0) > 0:
+                    self.current_fuel_main = float(d.get("fuel_level"))
+            except (TypeError, ValueError):
+                pass
             try:
                 if fuel_capacity is not None and float(fuel_capacity) > 0:
                     self.fuel_capacity_main = float(fuel_capacity)

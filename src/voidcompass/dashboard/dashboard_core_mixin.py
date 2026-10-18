@@ -112,7 +112,11 @@ class DashboardCoreMixin:
         self._schedule_html_dashboard_publish()
 
     def _dashboard_copy_next(self):
-        return self._html_copy_text(self._dashboard_next_destination())
+        system = self._dashboard_next_destination()
+        if not system:
+            self.add_event_feed_entry("ROUTE", "No next system to copy: plot a route or add a waypoint", severity="WARN")
+            return False
+        return self._html_copy_text(system, "next system")
 
     def _run_nav_command(self, label, command):
         return command()
@@ -121,7 +125,7 @@ class DashboardCoreMixin:
         return self._request_html_dashboard_page('overview')
 
     def open_ground_target_window(self):
-        return self._request_html_dashboard_page('ground')
+        return self._request_html_dashboard_page('planet-materials')
 
     def _capture_dashboard_window_geometry(self):
         runtime = getattr(self.root, '_voidcompass_html_dashboard_runtime', None)

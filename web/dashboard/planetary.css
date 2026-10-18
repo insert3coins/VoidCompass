@@ -1,0 +1,205 @@
+/* Planetary (planetary.js, 5.5.12), the Mining page's language. Interface
+   colours are theme tokens: green for go (far enough, done), yellow for
+   wait, the accent for what's live. */
+
+#planet-materials-workspace { container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0; }
+#planet-materials-workspace button { cursor: pointer; }
+#planet-materials-workspace button:disabled { cursor: default; opacity: .55; }
+#planet-materials-workspace input, #planet-materials-workspace select {
+  min-width: 0; height: 32px; padding: 0 9px; border: 1px solid var(--border); background: var(--input); color: var(--text);
+  font: 12px "Segoe UI", sans-serif; outline: none;
+}
+#planet-materials-workspace input:focus, #planet-materials-workspace select:focus { border-color: var(--accent); }
+#planet-materials-workspace h4 { margin: 0; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+#planet-materials-workspace h5 { margin: 4px 0 0; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+
+/* Status strip. */
+.po-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 10px 14px; border: 1px solid var(--border-soft); border-left: 3px solid var(--accent); background: var(--panel); }
+.po-status > div { display: grid; gap: 2px; min-width: 0; }
+.po-status b { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.po-status span { color: var(--text); font: 11px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+/* Panels. */
+.po-body { display: grid; gap: 12px; min-width: 0; }
+.po-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 12px; align-items: start; }
+/* On the ground the map is the main thing. */
+.po-grid.po-ground { grid-template-columns: minmax(0, .8fr) minmax(0, 1.6fr); }
+@container (max-width: 900px) { .po-grid, .po-grid.po-ground { grid-template-columns: minmax(0, 1fr); } }
+.po-panel { display: grid; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border-soft); background: var(--panel); overflow-x: auto; }
+.po-panel > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.po-panel > header span { color: var(--dim); font: 10.5px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.po-dim { margin: 0; color: var(--dim); font: 11px/1.5 "Segoe UI", sans-serif; }
+.po-link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; }
+#planet-materials-workspace button.po-link.cockpit-button { min-height: 0; padding: 0; background: none; color: var(--accent); text-transform: none; }
+#planet-materials-workspace button.po-link.cockpit-button::before, #planet-materials-workspace button.po-link.cockpit-button::after { display: none; }
+.po-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#planet-materials-workspace :is(.po-actions, .po-marker, .po-toolbar, .po-subtabs) button.cockpit-button { min-height: 28px; padding: 0 12px; font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+#planet-materials-workspace .po-site summary button.cockpit-button { min-height: 26px; padding: 0 10px; font: 700 8.5px Consolas, monospace; letter-spacing: .08em; }
+#planet-materials-workspace .po-site summary button.active { color: var(--green); }
+
+/* The planet. */
+.po-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.po-facts > div { display: grid; gap: 3px; padding: 8px 10px; border: 1px solid var(--border-soft); background: var(--inset); }
+.po-facts small { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.po-facts b { color: var(--text); font: 600 13px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.po-bars { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.po-bars li { display: grid; grid-template-columns: minmax(80px, 150px) minmax(60px, 1fr) 60px; align-items: center; gap: 10px; }
+.po-bars span { color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.po-bars i { height: 8px; background: var(--inset); }
+.po-bars i b { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--accent); }
+.po-bars strong { color: var(--text); font: 600 12px "Segoe UI", sans-serif; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Compass. */
+.po-readout { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 14px; padding: 12px; border-left: 3px solid var(--accent); background: var(--inset); }
+.po-readout.off { border-left-color: var(--border); }
+.po-needle { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--accent); border-radius: 50%; color: var(--accent); font-style: normal; font-size: 18px; transition: transform .25s ease; }
+.po-needle svg { width: 22px; height: 22px; fill: currentColor; }
+.po-readout.off .po-needle { border-color: var(--border); color: var(--dim); }
+.po-readout b { display: block; color: var(--text); font: 600 24px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.po-readout span { color: var(--muted); font: 11.5px "Segoe UI", sans-serif; }
+.po-coords { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.po-coords label, .po-form label, .po-pick { display: grid; gap: 4px; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
+.po-elite { margin: 0; padding: 7px 10px; border: 1px solid var(--border-soft); color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.po-elite b { color: var(--text); font-weight: 600; }
+.po-elite.here { border-color: var(--green); }
+
+/* The surface map (surfaceMap in planetary.js): north up, metres. */
+.po-map-tools { display: flex; flex-wrap: wrap; gap: 4px; }
+#planet-materials-workspace .po-map-tools button.cockpit-button { min-width: 34px; min-height: 26px; padding: 0 10px; font: 700 8.5px Consolas, monospace; letter-spacing: .1em; }
+#planet-materials-workspace .po-map-tools button.active { color: var(--accent); }
+.po-surface { position: relative; border: 1px solid var(--border-soft);
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 62%), var(--inset); }
+.po-surface svg { display: block; width: 100%; height: auto; max-height: 560px; }
+.po-surface .grid { fill: none; stroke: color-mix(in srgb, var(--accent) 9%, transparent); stroke-width: 1; }
+.po-surface .ring { fill: none; stroke: color-mix(in srgb, var(--accent) 22%, transparent); stroke-width: 1; stroke-dasharray: 3 7; }
+.po-surface .ring-label { fill: var(--dim); font: 16px Consolas, monospace; }
+.po-surface .colony { fill: color-mix(in srgb, var(--green) 8%, transparent); stroke: color-mix(in srgb, var(--green) 70%, transparent); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.po-surface .trail { fill: none; stroke: color-mix(in srgb, var(--accent) 55%, transparent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.po-surface .to-target { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 8 6; }
+.po-surface .feat { cursor: pointer; }
+.po-surface .feat .hit { fill: transparent; }
+.po-surface .feat:hover .hit { fill: color-mix(in srgb, var(--text) 8%, transparent); }
+.po-surface .feat text { fill: var(--text); font: 600 15px "Segoe UI", sans-serif; paint-order: stroke; stroke: var(--inset); stroke-width: 4px; }
+.po-surface .sample circle:not(.hit) { fill: color-mix(in srgb, var(--green) 45%, var(--inset)); stroke: var(--green); stroke-width: 1.5; }
+.po-surface .sample.active circle:not(.hit) { fill: var(--green); }
+.po-surface .sample text { fill: var(--inset); stroke: none; font: 700 12px Consolas, monospace; }
+.po-surface .codex path { fill: var(--yellow); }
+.po-surface .marker path { fill: var(--accent); }
+.po-surface .site rect { fill: none; stroke: var(--orange); stroke-width: 2.5; }
+.po-surface .landing rect { fill: var(--orange); }
+.po-surface .ship path { fill: var(--orange); }
+.po-surface .target circle:not(.hit) { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+.po-surface .target path { stroke: var(--accent); stroke-width: 2.5; }
+.po-surface .you path { fill: var(--text); stroke: var(--inset); stroke-width: 2; }
+.po-surface .you .halo { fill: color-mix(in srgb, var(--accent) 22%, transparent); stroke: var(--accent); stroke-width: 1.5; }
+.po-surface .north path { fill: var(--muted); }
+.po-surface .north text, .po-surface .scale text { fill: var(--muted); font: 700 15px Consolas, monospace; }
+.po-surface .scale path { fill: none; stroke: var(--muted); stroke-width: 2; }
+.po-map-tip { position: absolute; z-index: 3; max-width: 280px; padding: 6px 9px; border: 1px solid var(--border); background: var(--panel);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45); color: var(--text); font: 11.5px "Segoe UI", sans-serif; pointer-events: none; }
+.po-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.po-legend li { display: flex; align-items: center; gap: 6px; }
+.po-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.po-legend .you i { background: var(--text); }
+.po-legend .ship i, .po-legend .site i { border-radius: 2px; background: var(--orange); }
+.po-legend .trail i { height: 3px; border-radius: 0; background: var(--accent); }
+.po-legend .target i { border: 2px solid var(--accent); }
+.po-legend .sample i { background: var(--green); }
+.po-legend .codex i { background: var(--yellow); }
+.po-legend .marker i { background: var(--accent); }
+.po-trail { display: flex; flex-wrap: wrap; gap: 6px 20px; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.po-trail b { margin-left: 5px; color: var(--text); font: 600 12px "Segoe UI", sans-serif; letter-spacing: 0; }
+.po-marker { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; }
+.po-pins { display: grid; max-height: 240px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.po-pins li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 2px; border-bottom: 1px solid var(--border-soft); }
+.po-pins li > i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.po-pins li.organic_sample > i { background: var(--green); }
+.po-pins li.landing > i { background: var(--orange); }
+.po-pins li.codex > i { background: var(--yellow); }
+.po-pins b { display: block; color: var(--text); font: 600 12px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.po-pins small { color: var(--dim); font: 10.5px "Segoe UI", sans-serif; }
+
+/* Sampling. */
+.po-sample { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.po-sample b { display: block; color: var(--text); font: 600 18px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; }
+.po-sample small { color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.po-dots { display: flex; gap: 6px; }
+.po-dots i { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 50%; color: var(--dim); font: 700 11px Consolas, monospace; font-style: normal; }
+.po-dots i.done { border-color: var(--green); background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
+.po-dots i.next { border-color: var(--accent); color: var(--accent); }
+.po-distance { display: grid; gap: 6px; }
+.po-distance > i { height: 10px; border: 1px solid var(--border); background: var(--inset); }
+.po-distance > i b { display: block; height: 100%; background: var(--yellow); }
+.po-distance.ok > i b { background: var(--green); }
+.po-distance p, .po-clear { margin: 0; color: var(--text); font: 12.5px/1.45 "Segoe UI", sans-serif; }
+.po-distance.wait p b { color: var(--yellow); }
+.po-distance.ok p b, .po-clear.ok { color: var(--green); }
+
+/* Biology. */
+.po-here { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border-soft); }
+.po-here b { display: block; color: var(--text); font: 600 18px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; }
+.po-here small { color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.po-figures { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.po-figures b { margin-left: 5px; color: var(--text); font: 600 13px "Segoe UI", sans-serif; letter-spacing: 0; }
+.po-footfall b { color: var(--green); }
+.po-species-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.po-species { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto auto; align-items: start; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--border-soft); }
+.po-state { padding-top: 2px; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.po-species.done .po-state { color: var(--green); }
+.po-species.working .po-state { color: var(--accent); }
+.po-species.found .po-state { color: var(--text); }
+.po-species b { color: var(--text); font: 600 13px "Segoe UI", sans-serif; }
+.po-species.likely b, .po-species.maybe b { color: var(--muted); font-weight: 500; }
+.po-species small { display: block; color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.po-species > strong { color: var(--text); font: 600 12.5px "Segoe UI", sans-serif; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.po-lines { display: grid; gap: 3px; margin: 5px 0 0; padding: 0; list-style: none; }
+.po-lines li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--muted); font: 11.5px "Segoe UI", sans-serif; }
+.po-codex, .po-colour { padding: 1px 6px; border: 1px solid var(--border); color: var(--dim); font: 700 8px Consolas, monospace; font-style: normal; letter-spacing: .1em; white-space: nowrap; }
+.po-codex.new, .po-colour.new { border-color: var(--green); color: var(--green); }
+.po-codex.region, .po-colour.region { border-color: var(--yellow); color: var(--yellow); }
+.po-unsold { margin: 0; padding: 9px 12px; border-left: 3px solid var(--green); background: color-mix(in srgb, var(--green) 7%, var(--panel)); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.po-unsold b { color: var(--green); }
+
+/* Tables. */
+.po-scroll { overflow-x: auto; }
+.po-table { width: 100%; min-width: 520px; border-collapse: collapse; font: 12px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.po-table th { padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; text-align: left; white-space: nowrap; }
+.po-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-soft); color: var(--text); vertical-align: middle; }
+.po-table td b { font-weight: 600; }
+.po-table small { display: block; margin-top: 2px; color: var(--dim); font: 10px "Segoe UI", sans-serif; }
+.po-table tr.here td:first-child { box-shadow: inset 2px 0 var(--accent); }
+.po-table tr.done td { color: var(--muted); }
+.po-heat td { text-align: center; color: var(--dim); }
+.po-heat td.on { color: var(--accent); font-weight: 700; }
+.po-heat tbody th { color: var(--text); font: 12px "Segoe UI", sans-serif; letter-spacing: 0; }
+
+/* Sites. */
+.po-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.po-subtabs { display: flex; flex-wrap: wrap; gap: 4px; }
+#planet-materials-workspace .po-subtabs button.active { color: var(--accent); }
+.po-pickers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 12px; }
+.po-site { border: 1px solid var(--border-soft); background: var(--inset); }
+.po-site + .po-site { margin-top: 6px; }
+.po-site summary { display: grid; grid-template-columns: minmax(140px, 1.2fr) minmax(0, 1fr) auto auto; align-items: center; gap: 8px 14px; padding: 9px 12px; cursor: pointer; list-style: none; }
+.po-site summary::-webkit-details-marker { display: none; }
+.po-site summary b { display: block; color: var(--text); font: 600 13px "Segoe UI", sans-serif; }
+.po-site summary small { color: var(--dim); font: 10.5px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.po-site summary em { color: var(--muted); font: 11px "Segoe UI", sans-serif; font-style: normal; }
+.po-site.depleted summary b { color: var(--muted); text-decoration: line-through; }
+.po-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.po-tags i { padding: 1px 6px; border: 1px solid var(--border); color: var(--text); font: 10.5px "Segoe UI", sans-serif; font-style: normal; }
+.po-site > .po-dim { padding: 0 12px; }
+.po-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 10px; align-items: end; padding: 10px 12px 12px; }
+.po-form .po-actions, .po-form [data-captured] { grid-column: 1 / -1; }
+.po-check { display: flex !important; align-items: center; gap: 8px; height: 32px; color: var(--muted) !important; font: 12px "Segoe UI", sans-serif !important; letter-spacing: 0 !important; }
+#planet-materials-workspace .po-check input { height: auto; accent-color: var(--accent); }
+.po-new-site .po-form { padding: 0; }
+
+@container (max-width: 640px) {
+  .po-site summary { grid-template-columns: minmax(0, 1fr) auto; }
+  .po-site summary .po-tags, .po-site summary em { grid-column: 1 / -1; }
+  .po-species { grid-template-columns: minmax(0, 1fr) auto; }
+  .po-species .po-state { grid-column: 1 / -1; }
+  .po-marker { grid-template-columns: minmax(0, 1fr); }
+  .po-coords { grid-template-columns: minmax(0, 1fr); }
+}

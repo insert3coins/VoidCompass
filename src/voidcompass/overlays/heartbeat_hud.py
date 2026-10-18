@@ -382,7 +382,8 @@ class HeartbeatHUD:
                 # 5.5.7: on foot, the health bar is how it knows you're in a fight.
                 self.mind.vitals(self._vitals.get('fuel_percent'), self._vitals.get('scooping'),
                                  health=detail.get('Health'), low_health=bool(flags2 & _FLAG2_LOW_HEALTH),
-                                 on_foot=bool(flags2 & _FLAG2_ON_FOOT), in_danger=self._vitals.get('danger'))
+                                 on_foot=bool(flags2 & _FLAG2_ON_FOOT), in_danger=self._vitals.get('danger'),
+                                 vehicle=detail.get('fuel_vehicle') or '')
         self._redraw()
 
     def _redraw(self):

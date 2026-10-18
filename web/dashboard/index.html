@@ -27,6 +27,8 @@
   <link rel="stylesheet" href="colonisation.css">
   <link rel="stylesheet" href="bgs.css">
   <link rel="stylesheet" href="trading.css">
+  <link rel="stylesheet" href="mining.css">
+  <link rel="stylesheet" href="planetary.css">
   <link rel="stylesheet" href="setup.css">
   <link rel="stylesheet" href="focused-log.css">
   <link rel="stylesheet" href="boot.css">
@@ -380,6 +382,7 @@
               <div class="route-meta"><span id="route-distance">— LY</span><span id="route-remaining">0 JUMPS LEFT</span></div>
               <div id="route-horizon" class="route-horizon"><p>No plotted jump horizon.</p></div>
               <button id="copy-next" class="wide-button" data-command="copy_next">COPY NEXT DESTINATION</button>
+              <button id="auto-copy" class="wide-button route-auto-copy" data-command="set_auto_copy" data-enabled="true" aria-pressed="false" title="As you arrive in a system, your next saved waypoint goes on the clipboard, ready to paste into the galaxy map">AUTO-COPY NEXT WAYPOINT ON ARRIVAL · OFF</button>
             </article>
 
             <section class="telemetry-strip core-module">
@@ -431,8 +434,8 @@
         </section>
 
         <section class="page" data-page-name="planet-materials">
-          <header class="page-title"><div><p>SURFACE MINING ATLAS</p><h2>Planetary operations</h2><span>Compass waypoints, commander mining sites and journal-reported planetary composition</span></div></header>
-          <div id="planet-materials-workspace"></div>
+          <header class="page-title"><div><p>ON THE SURFACE</p><h2>Planetary operations</h2><span>Find your way on a planet, sample its biology, and keep your surface sites</span></div></header>
+          <div id="planet-materials-workspace" class="workspace-shell loading-panel">Opening the planet…</div>
         </section>
         <section class="page" data-page-name="explore">
           <header class="page-title">
@@ -510,14 +513,10 @@
           <div id="mission-workspace" class="workspace-shell loading-panel">Loading expedition command…</div>
         </section>
 
-        <section class="page specialist-page" data-page-name="ground">
-          <header class="page-title"><div><p>PLANETARY FIELD SCIENCE</p><h2>Ground & exobiology</h2><span>Surface mapping, sampling distance, field markers and return guidance</span></div><div class="title-actions"><button data-page="planet-materials">PLANETARY OPERATIONS</button></div></header>
-          <div id="ground-workspace" class="workspace-shell loading-panel">Waiting for surface telemetry…</div>
-        </section>
 
         <section class="page specialist-page" data-page-name="mining">
-          <header class="page-title"><div><p>RESOURCE OPERATIONS</p><h2>Mining command</h2><span>Prospector quality, refinery yield and retained run history</span></div><div class="title-actions"><button data-page="overview">COMMAND DECK</button></div></header>
-          <div id="mining-workspace" class="workspace-shell loading-panel">Loading mining telemetry…</div>
+          <header class="page-title"><div><p>RESOURCE OPERATIONS</p><h2>Mining</h2><span>Asteroids and the Rhino: the live run, finding rings and ground, selling the haul, and your record</span></div><div class="title-actions"><button data-page="overview">COMMAND DECK</button></div></header>
+          <div id="mining-workspace" class="workspace-shell loading-panel">Opening your mining…</div>
         </section>
 
 

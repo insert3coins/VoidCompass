@@ -1496,6 +1496,7 @@ for carrier in requests.get("http://127.0.0.1:7380/api/v1/carrier").json()["carr
 |---|---|---|
 | GET | `/api/v1/mining` | The mining run in progress (or none), your plan, the hopper, ring and surface scans, and past runs |
 | POST | `/api/v1/mining/run` | Start or end a mining run: `{"action": "start"}` or `{"action": "end"}` |
+| GET | `/api/v1/mining/record` | All your mining from the journals: tonnes refined in the ship and hauled in the Rhino, by material, month and place; rocks prospected, your best of each, motherlodes, limpets; and what your mined cargo has sold for. `status` is `reading` the first time, while the journals are read |
 | GET | `/api/v1/combat` | The combat session in progress, its target, and past sessions |
 | GET | `/api/v1/engineering` | Your materials (raw, manufactured, encoded), engineers, pinned blueprints, on-foot goals and ship locker |
 
@@ -1507,6 +1508,58 @@ $action = if ((Invoke-RestMethod "$api/mining").active) { "end" } else { "start"
 $body = @{ action = $action } | ConvertTo-Json
 Invoke-RestMethod -Method Post "$api/mining/run" -ContentType "application/json" -Body $body
 ```
+
+**Example: what's in the rock you just prospected** (PowerShell, for a Stream Deck key or a voice macro)
+
+The verdict is the Mining page's: `MINE`, `OPTIONAL`, `SKIP` or `CORE` (a motherlode), against the target and minimum in your plan.
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+$rock = (Invoke-RestMethod "$api/mining").session.current_prospect
+if ($rock) { "$($rock.decision): $($rock.target) $([math]::Round($rock.target_pct, 1))%" } else { "No rock prospected yet" }
+```
+
+**Example: the run so far, on stream** (PowerShell; point an OBS Text source at the file, with "Read from file")
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+$file = "$env:USERPROFILE\Documents\mining.txt"
+while ($true) {
+    $run = (Invoke-RestMethod "$api/mining").session
+    $text = if ($run -and $run.active) { "$($run.refined_t) t mined · $([math]::Round($run.tons_per_hour, 1)) t an hour" } else { "Not mining" }
+    Set-Content $file $text
+    Start-Sleep -Seconds 5
+}
+```
+
+**Example: your mining record** (PowerShell)
+
+The first call after Void Compass starts reads every journal, so it may answer `"status": "reading"` for a few seconds; ask again.
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+$mined = Invoke-RestMethod "$api/mining/record"
+if ($mined.status -eq "reading") { "Still reading your journals; try again in a moment" }
+else {
+    "Ship: $($mined.record.ship_t) t · Rhino: $($mined.record.rhino_t) t · Sold for $([math]::Round($mined.income.total / 1e6)) M CR"
+    $mined.record.materials | Select-Object -First 5 name, ship, rhino | Format-Table
+}
+```
+
+**Example: post this month's mining to Discord** (PowerShell; put your own webhook in)
+
+```powershell
+$api = "http://127.0.0.1:7380/api/v1"
+$webhook = "https://discord.com/api/webhooks/..."
+$mined = Invoke-RestMethod "$api/mining/record"
+$month = (Get-Date).ToUniversalTime().ToString("yyyy-MM")
+$tonnes = $mined.record.months | Where-Object month -eq $month
+$sold = $mined.income.months | Where-Object month -eq $month
+$text = "This month: $([int]$tonnes.ship) t from asteroids, $([int]$tonnes.rhino) t in the Rhino, $([math]::Round([double]$sold.credits / 1e6)) M CR sold."
+Invoke-RestMethod -Method Post $webhook -ContentType "application/json" -Body (@{ content = $text } | ConvertTo-Json)
+```
+
+Your rigs on the planet you're on, and keys to mark them, are under [Rig Tracker](#rig-tracker).
 
 ## Powerplay
 

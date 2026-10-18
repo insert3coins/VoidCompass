@@ -11,6 +11,8 @@ import {
 } from "./colonisation.js";
 import {handleBgsChange, handleBgsClick, handleBgsSubmit, renderBgs} from "./bgs.js";
 import {handleTradingClick, handleTradingInput, handleTradingSubmit, renderTrading, resetTrading} from "./trading.js";
+import {handleMiningClick, handleMiningInput, handleMiningSubmit, renderMining, resetMining} from "./mining.js";
+import {handlePlanetaryChange, handlePlanetaryClick, handlePlanetaryInput, handlePlanetarySubmit, renderPlanetary, resetPlanetary, setPlanetaryView} from "./planetary.js";
 import {renderWatcher} from "./watcher.js";
 import {renderPostcards} from "./postcards.js";
 import {renderScreenshots} from "./screenshots.js";
@@ -111,9 +113,6 @@ const PAGE_SUITES = [
     ["explore", "SYSTEM SURVEY"], ["mission", "EXPEDITIONS"],
     ["recon", "SCOUT & RECON"], ["ledger", "VALUE LEDGER"], ["chronicle", "CAPTAIN'S LOG"],
   ]},
-  {parent: "planet-materials", label: "PLANETARY OPERATIONS", pages: [
-    ["planet-materials", "MATERIALS & SITES"], ["ground", "GROUND & EXOBIO"],
-  ]},
   {parent: "profile", label: "COMMANDER RECORD", pages: [
     ["profile", "COMMANDER"], ["records", "FLIGHT RECORD"],
     ["achievements", "ACHIEVEMENTS"],
@@ -123,7 +122,8 @@ const PAGE_SUITE_BY_PAGE = new Map();
 for (const suite of PAGE_SUITES) {
   for (const [page] of suite.pages) PAGE_SUITE_BY_PAGE.set(page, suite);
 }
-const LEGACY_PAGE_REDIRECTS = {operations: "overview"};
+// Ground & Exobio is the Planetary page's ON THE GROUND tab since 5.5.12.
+const LEGACY_PAGE_REDIRECTS = {operations: "overview", ground: "planet-materials"};
 
 const HOTKEY_MODIFIER_KEYS = new Set([
   "Alt", "AltGraph", "Control", "Meta", "OS", "Shift",
@@ -1214,6 +1214,13 @@ function renderRoute(state) {
   text("route-remaining", `${number(route.remaining)} ${number(route.remaining) === 1 ? "JUMP" : "JUMPS"} LEFT`);
   percentWidth("route-progress", route.percent);
   byId("copy-next").disabled = !route.next;
+  const autoCopy = byId("auto-copy");
+  if (autoCopy) {
+    autoCopy.textContent = `AUTO-COPY NEXT WAYPOINT ON ARRIVAL · ${route.auto_copy ? "ON" : "OFF"}`;
+    autoCopy.setAttribute("aria-pressed", String(Boolean(route.auto_copy)));
+    autoCopy.dataset.enabled = String(!route.auto_copy);
+    autoCopy.classList.toggle("on", Boolean(route.auto_copy));
+  }
   const horizon = route.horizon || {};
   const rows = Array.isArray(horizon.jumps) ? horizon.jumps : [];
   const parent = byId("route-horizon");
@@ -1257,8 +1264,17 @@ function renderMetrics(state) {
   const survey = state.survey || {};
   const data = state.data || {};
   const sources = state.sources || {};
-  text("metric-fuel", flight.fuel_percent === null || flight.fuel_percent === undefined ? "—" : `${Math.round(number(flight.fuel_percent))}%`);
-  text("metric-fuel-detail", flight.fuel_detail, "AWAITING LOADOUT");
+  // Out in an SRV, its own tank (5.5.12): the ship's reads as empty there.
+  const vehicleFuel = flight.vehicle_fuel;
+  if (vehicleFuel) {
+    const known = vehicleFuel.percent !== null && vehicleFuel.percent !== undefined;
+    text("metric-fuel", known ? `${Math.round(number(vehicleFuel.percent))}%`
+      : vehicleFuel.tonnes === null || vehicleFuel.tonnes === undefined ? "—" : `${number(vehicleFuel.tonnes).toFixed(2)} T`);
+    text("metric-fuel-detail", `${vehicleFuel.name || "SRV"} TANK${known ? "" : " · SIZE BEING LEARNT"}`);
+  } else {
+    text("metric-fuel", flight.fuel_percent === null || flight.fuel_percent === undefined ? "—" : `${Math.round(number(flight.fuel_percent))}%`);
+    text("metric-fuel-detail", flight.fuel_detail, "AWAITING LOADOUT");
+  }
   text("metric-data", formatCredits(data.unsold_total));
   text("metric-data-detail", data.unsold_bio ? `${formatCredits(data.unsold_bio)} BIOLOGICAL` : "EXPLORATION LEDGER");
   const completion = survey.completion || {};
@@ -2767,284 +2783,12 @@ function setOrrerySelection(id) {
   orrerySelectedBodyId = String(id || "");
 }
 
-function renderPlanetMaterialsWorkspace(data) {
-  const root = byId("planet-materials-workspace");
-  const sameProfile = root.dataset.profileKey === data.profile_key;
-  const preservedDrafts = new Map();
-  const openSites = new Set();
-  let preservedFocus = null;
-  if (sameProfile) {
-    root.querySelectorAll('form[data-dirty]').forEach(form => {
-      const siteId = form.elements.id?.value || "__new__";
-      const draft = Object.fromEntries(new FormData(form));
-      if (form.elements.depleted) draft.depleted = form.elements.depleted.checked ? "1" : "0";
-      preservedDrafts.set(siteId, draft);
-      if (form.closest('[data-site-id]')?.open) openSites.add(siteId);
-      if (form.contains(document.activeElement)) preservedFocus = {
-        siteId, name: document.activeElement.name,
-        start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd,
-      };
-    });
-  }
-  root.dataset.profileKey = data.profile_key;
-  root.currentPosition = data.current_position;
-  root.planetData = data;
-  if (!sameProfile) { root.dataset.atlasView = "body"; delete root.dataset.selectedPlanet; }
-  const clean = value => String(value || "").normalize("NFKC").trim().replace(/\s+/g, " ");
-  const folded = value => clean(value).toLocaleLowerCase();
-  const localBody = body => {
-    const system = clean(body?.system || data.system);
-    const name = clean(body?.body || body?.short_name);
-    const prefix = `${folded(system)} `;
-    return system && folded(name).startsWith(prefix) ? name.slice(system.length).trim() : name;
-  };
-  const planetKey = body => JSON.stringify([folded(body?.system || data.system), folded(localBody(body))]);
-  const planetLabel = body => `${clean(body?.system || data.system) || "Unknown system"} / ${localBody(body) || "Unknown planet"}`;
-  const mergedBodies = new Map();
-  const addBody = body => {
-    if (!body || !clean(body.body || body.short_name)) return;
-    const key = planetKey(body);
-    const prior = mergedBodies.get(key) || {};
-    mergedBodies.set(key, {...body, ...prior, system:clean(prior.system || body.system || data.system), body:clean(prior.body || body.body || body.short_name)});
-  };
-  (data.bodies || []).forEach(addBody);
-  (data.sites || []).forEach(site => addBody({...site.body_details, system:site.system, body:site.body}));
-  const bodies = [...mergedBodies.values()].sort((a,b) => planetLabel(a).localeCompare(planetLabel(b), undefined, {numeric:true, sensitivity:"base"}));
-  const liveKey = data.current_position ? planetKey(data.current_position) : "";
-  let selected = bodies.find(body => planetKey(body) === root.dataset.selectedPlanet)
-    || bodies.find(body => planetKey(body) === liveKey)
-    || bodies[0] || {};
-  const rawMaterials = body => (body.materials || []).map(mat => `<div class="planet-composition-row"><span>${escapeHtml(mat.name)}</span><i style="--share:${Math.min(100, Math.max(0, number(mat.percent)))}%"></i><b>${numeric(mat.percent, 2)}%</b></div>`).join("") || '<p class="workspace-empty">Raw-material composition not yet scanned.</p>';
-  const expectedMaterials = body => (body.best_materials || []).map((row,index) => `<article class="planet-value-card"><small>#${index+1} EXPECTED VALUE</small><b>${escapeHtml(row.material)}</b><span>${numeric(row.pct,1)}% OF SURVEYED LOCATIONS</span><em>${credits(row.median)} MEDIAN · ${credits(row.best)} BEST</em></article>`).join("") || '<p class="workspace-empty">This planet has no matching ground row in the bundled Rhino mining sheet.</p>';
-  const bodyFacts = body => `<div class="planet-facts">${[
-    ["PLANET CLASS", body.class], ["VOLCANISM", body.volcanism === "" ? "No volcanism" : body.volcanism],
-    ["RHINO GROUND", body.ground_label], ["GROUND SAMPLE", body.ground_sample ? `${numeric(body.ground_sample)} LOCATIONS` : "UNMEASURED"],
-    ["ATMOSPHERE", body.atmosphere === "" ? "No atmosphere" : body.atmosphere],
-    ["SURFACE TEMPERATURE", body.temperature == null ? null : `${numeric(body.temperature, 1)} K`],
-    ["GRAVITY", body.gravity == null ? null : `${numeric(body.gravity, 2)} g`],
-    ["STARS IN SYSTEM", (body.stars || []).join(" · ")],
-    ["DSS MINING LOCATIONS", body.mining_locations ?? null]
-  ].map(([label,value]) => `<div><small>${label}</small><b>${escapeHtml(value ?? "UNREPORTED")}</b></div>`).join("")}</div>`;
-  const evidence = body => `${bodyFacts(body)}<div class="planet-value-grid">${expectedMaterials(body)}</div><div class="planet-composition">${rawMaterials(body)}</div>`;
-  const fields = (site = {}) => `<input type="hidden" name="id" value="${escapeHtml(site.id || "")}"><input type="hidden" name="site_type" value="${escapeHtml(site.site_type || "site")}"><input type="hidden" name="map_name" value="${escapeHtml(site.map_name || "")}"><input type="hidden" name="planet_radius" value="${escapeHtml(site.planet_radius || data.current_position?.planet_radius || "")}"><input type="hidden" name="body_details" value="${escapeHtml(JSON.stringify(site.body_details || {}))}">${[
-    ["system", "SYSTEM", site.system || data.current_position?.system || data.system || ""],
-    ["body", "PLANET", site.body || data.current_position?.body || ""], ["name", "SITE NAME", site.name || ""],
-    ["latitude", "LATITUDE (Y) · −90 TO 90", site.latitude ?? ""], ["longitude", "LONGITUDE (X) · −180 TO 180", site.longitude ?? ""],
-    ["materials", "MINING MATERIALS · MANUAL OBSERVATIONS", site.materials || ""], ["notes", "NOTES / CONDITIONS", site.notes || ""]
-  ].map(([key,label,value]) => `<label>${label}<input name="${key}" value="${escapeHtml(value)}" ${["latitude","longitude"].includes(key) ? `type="number" step="any" min="-${key === "latitude" ? 90 : 180}" max="${key === "latitude" ? 90 : 180}"` : `maxlength="${key === "notes" ? 4000 : key === "materials" ? 2000 : key === "body" ? 160 : key === "system" ? 140 : 120}"`} ${key === "notes" || (key === "materials" && site.site_type === "drill") ? "" : "required"}></label>`).join("")}
-    <label>ADD MINING MATERIAL<select data-material-choice><option value="">Choose a material…</option>${(data.mining_catalogue || []).map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}${(data.new_mining_materials || []).includes(name) ? " · NEW" : ""}</option>`).join("")}</select></label>
-    <label>MINING LOCATION NUMBER<input name="location_index" type="number" min="1" max="9999" step="1" value="${escapeHtml(site.location_index ?? data.current_position?.location_index ?? "")}" placeholder="Optional"></label>
-    <label>DEPOSIT AMOUNT<select name="amount">${["","High","Medium","Low","Depleted"].map(value=>`<option value="${value}" ${site.amount === value ? "selected" : ""}>${value || "Unrecorded"}</option>`).join("")}</select></label>
-    <label>OBSERVED DEPOSIT DENSITY<select name="density">${["","Low","Medium","High"].map(value=>`<option value="${value}" ${site.density === value ? "selected" : ""}>${value || "Unrecorded"}</option>`).join("")}</select></label>
-    <label>DEPOSIT RIG POSITIONS<input name="rigs" type="number" min="0" max="64" step="1" value="${numeric(site.rigs,0)}"><small>Count the rig circles drawn by this deposit—not placed drill markers.</small></label>
-    <label class="planet-depleted-toggle"><input type="checkbox" name="depleted" value="1" ${site.depleted ? "checked" : ""}><span><b>LOCATION DEPLETED</b><small>Mark this location as mined out.</small></span><i></i></label>
-    <button type="button" data-current-coordinates ${data.current_position ? "" : "disabled"}>USE CURRENT PLANET & LOCATION</button>
-    <button type="submit" class="primary">${site.id ? "SAVE CHANGES" : "ADD SITE"}</button>${site.id ? `<button type="button" data-site-delete="${site.id}">DELETE SITE</button>` : ""}
-    <div class="planet-captured" data-captured-evidence>${site.body_details?.body ? `<small>CAPTURED PLANET SCAN · ${escapeHtml(site.body_details.body)}</small>${evidence(site.body_details)}` : '<small>Use current to capture planet conditions and known raw materials with this site.</small>'}</div>`;
-  const materialsFor = site => clean(site.materials).split(",").map(clean).filter(Boolean);
-  const navigationTarget = data.navigation_target || {};
-  const navigationTargetReady = Boolean(
-    navigationTarget.active
-    && navigationTarget.latitude !== null && navigationTarget.latitude !== undefined && navigationTarget.latitude !== ""
-    && navigationTarget.longitude !== null && navigationTarget.longitude !== undefined && navigationTarget.longitude !== ""
-    && Number.isFinite(Number(navigationTarget.latitude))
-    && Number.isFinite(Number(navigationTarget.longitude))
-  );
-  const navigationTargetDetail = navigationTargetReady
-    ? `${navigationTarget.label || "MANUAL WAYPOINT"} · LAT ${numeric(navigationTarget.latitude, 6)} · LON ${numeric(navigationTarget.longitude, 6)}`
-    : "NO COMPASS TARGET SET";
-  const siteIsActive = site => Boolean(navigationTarget.active && (
-    navigationTarget.site_id != null ? String(navigationTarget.site_id) === String(site.id) :
-    planetKey(site) === planetKey(navigationTarget)
-      && Math.abs(number(site.latitude) - number(navigationTarget.latitude)) < 0.000001
-      && Math.abs(number(site.longitude) - number(navigationTarget.longitude)) < 0.000001));
-  const siteCards = rows => `<div class="planet-site-grid">${rows.map(site => `<details class="planet-site-card${site.depleted ? " depleted" : ""}${site.site_type === "drill" ? " drill" : ""}" data-site-id="${site.id}"><summary><span><b>${escapeHtml(site.name)}</b><small>${site.location_index ? `LOC ${numeric(site.location_index)} · ` : ""}X ${numeric(site.longitude,5)} · Y ${numeric(site.latitude,5)}</small></span><strong>${site.site_type === "drill" ? "<i>DRILL MARKER</i>" : ""}${materialsFor(site).map(material=>`<i>${escapeHtml(material)}</i>`).join("")}</strong><em>${site.tons_left ? escapeHtml(site.tons_left) : site.depleted ? "DEPLETED" : `${escapeHtml(site.amount || "Amount unrecorded")} · ${escapeHtml(site.density || "Density unrecorded")}`}</em><button type="button" class="planet-compass-action${siteIsActive(site) ? " active" : ""}" data-site-navigate="${site.id}">${siteIsActive(site) ? "COMPASS TARGET ACTIVE" : "SEND TO COMPASS"}</button></summary><div class="planet-site-meta">${escapeHtml(site.notes || "No field notes")} ${site.rigs ? `· ${numeric(site.rigs)} RIG POSITION${number(site.rigs)===1?"":"S"}` : ""}</div><form class="planet-site-form">${fields(site)}</form></details>`).join("") || '<p class="workspace-empty">No mining locations match this planet and material filter.</p>'}</div>`;
-  const materialNames = new Map();
-  (data.sites || []).flatMap(materialsFor).forEach(name => materialNames.set(folded(name), materialNames.get(folded(name)) || name));
-  const minerals = [...materialNames.values()].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
-  const classes = [...new Set((data.sites || []).map(site => site.body_details?.class || "Unreported"))].sort();
-  const heatRows = minerals.map(material => `<tr><th>${escapeHtml(material)}</th>${classes.map(cls => {
-    const count = (data.sites || []).filter(site => (site.body_details?.class || "Unreported") === cls && materialsFor(site).some(value => folded(value) === folded(material))).length;
-    return `<td class="${count ? "planet-heat-present" : ""}">${count || "—"}</td>`;
-  }).join("")}</tr>`).join("");
-  root.innerHTML = `<section class="planet-materials-shell"><article class="card planet-compass-quick${navigationTargetReady ? " active" : ""}">
-      <div class="planet-compass-heading"><small>PLANET WAYPOINT OVERLAY</small><h3>Quick compass target</h3><span>Paste Elite surface coordinates here and send them straight to the cockpit compass.</span></div>
-      <div class="coordinate-form planet-compass-coordinates"><label>LATITUDE<input id="planet-compass-lat" type="number" min="-90" max="90" step="0.000001" value="${navigationTargetReady ? navigationTarget.latitude : ""}" placeholder="32.328000"></label><label>LONGITUDE<input id="planet-compass-lon" type="number" min="-180" max="180" step="0.000001" value="${navigationTargetReady ? navigationTarget.longitude : ""}" placeholder="108.838000"></label></div>
-      <div class="workspace-actions wrap planet-compass-controls"><button class="primary" data-ws-page="ground" data-ws-op="set" data-ground-source="planet">SEND TO COMPASS</button><button data-ws-page="ground" data-ws-op="set_current" ${data.current_position ? "" : "disabled"}>USE CURRENT</button><button type="button" data-compass-record ${data.current_position ? "" : "disabled"} title="Fill RECORD A NEW LOCATION with where you are now">SAVE THIS SPOT</button><button data-ws-page="ground" data-ws-op="clear" ${navigationTargetReady ? "" : "disabled"}>CLEAR</button><button data-page="ground">GROUND &amp; EXOBIO</button></div>
-      <div class="planet-compass-state"><i></i><span>${escapeHtml(navigationTargetDetail)}</span><b>${navigationTargetReady ? "TARGET ARMED" : "STANDBY"}</b></div>
-    </article><article class="card planet-command-bar"><div><small>LIVE PLANET LINK</small><b data-planet-live-status></b></div><label>SCANNED OR SAVED PLANET<select data-select-planet>${bodies.map(body=>`<option value="${escapeHtml(planetKey(body))}" ${body === selected ? "selected" : ""}>${escapeHtml(planetLabel(body))}</option>`).join("") || '<option value="">No planets scanned or saved</option>'}</select></label><label>BOOKMARK MATERIAL<select data-select-body-material><option value="">All recorded materials</option></select></label><strong data-selected-count>0 SAVED LOCATIONS</strong></article>
-    <div class="workspace-actions planet-atlas-tabs">${[["body","PLANET SITES"],["heat","HEAT MAP"],["material","BY MATERIAL"]].map(([key,label])=>`<button type="button" data-atlas-view="${key}">${label}</button>`).join("")}</div>
-    <section data-atlas-panel="body"><article class="card planet-condition-card"><header>SELECTED PLANET</header><div data-selected-facts></div></article>
-      <div class="planet-atlas-columns"><article class="card planet-location-library"><header><span>SURFACE MINING LOCATIONS</span><b data-selected-count>0 SAVED</b></header><div data-selected-mining></div></article><article class="card"><header>EXPECTED RHINO VALUE · FIELD ESTIMATE</header><div data-selected-value></div><header>KNOWN RAW MATERIAL COMPOSITION</header><div data-selected-raw></div></article></div>
-      <article class="card planet-materials-wide planet-new-site"><header>RECORD A NEW LOCATION</header><p>Use current to capture the live planet, X/Y coordinates and scanned raw materials. Mining materials and deposit density are your field observations.</p><form class="planet-site-form" data-new-site-form>${fields()}</form></article></section>
-    <section data-atlas-panel="heat" hidden><article class="card"><header>SURFACE MINING HEAT MAP · RECORDED SITES</header><p>Counts of your saved sites by material and planet class. Blank cells mean no recorded observation.</p><div class="planet-table-scroll"><table class="planet-atlas-table"><thead><tr><th>MATERIAL</th>${classes.map(cls=>`<th>${escapeHtml(cls)}</th>`).join("")}</tr></thead><tbody>${heatRows || '<tr><td>Save mining sites to build the comparison.</td></tr>'}</tbody></table></div></article></section>
-    <section data-atlas-panel="material" hidden><article class="card"><header>FIND PLANETS BY MINING MATERIAL</header><label class="planet-body-picker">MATERIAL<select data-select-material>${minerals.map(m=>`<option>${escapeHtml(m)}</option>`).join("") || '<option>No recorded materials</option>'}</select></label><div data-material-sites></div></article></section>
-    </section>`;
-  const siteRows = rows => `<div class="planet-table-scroll"><table class="planet-atlas-table"><thead><tr><th>SITE / PLANET</th><th>X · LONGITUDE</th><th>Y · LATITUDE</th><th>MINING MATERIALS</th><th>DENSITY</th></tr></thead><tbody>${rows.map(site=>`<tr><th>${escapeHtml(site.name)}<small>${escapeHtml(site.system)} / ${escapeHtml(site.body)}</small></th><td>${numeric(site.longitude,4)}</td><td>${numeric(site.latitude,4)}</td><td>${escapeHtml(site.materials)}</td><td>${escapeHtml(site.density || "Unrecorded")}</td></tr>`).join("") || '<tr><td colspan="5">No mining observations recorded.</td></tr>'}</tbody></table></div>`;
-  function showBody() {
-    root.dataset.selectedPlanet = planetKey(selected);
-    const selectedSites = (data.sites || []).filter(site=>planetKey(site) === planetKey(selected));
-    const picker = root.querySelector('[data-select-body-material]');
-    const choices = [...new Set(selectedSites.flatMap(materialsFor))].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
-    const previous = root.dataset.bodyMaterial || "";
-    picker.innerHTML = `<option value="">All recorded materials</option>${choices.map(value=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")}`;
-    picker.value = choices.some(value=>folded(value)===folded(previous)) ? previous : "";
-    root.dataset.bodyMaterial = picker.value;
-    const visibleSites = picker.value ? selectedSites.filter(site=>materialsFor(site).some(value=>folded(value)===folded(picker.value))) : selectedSites;
-    root.querySelector('[data-selected-facts]').innerHTML = bodyFacts(selected);
-    root.querySelector('[data-selected-value]').innerHTML = `<div class="planet-value-grid">${expectedMaterials(selected)}</div><p class="planet-evidence-note">Ranked by observed location rate × median market price. This is reconnaissance guidance, not a guarantee of deposit contents.</p>`;
-    root.querySelector('[data-selected-raw]').innerHTML = rawMaterials(selected);
-    root.querySelector('[data-selected-mining]').innerHTML = siteCards(visibleSites);
-    root.querySelectorAll('[data-selected-count]').forEach(label=>{label.textContent=`${selectedSites.length} SAVED`;});
-  }
-  showBody();
-  for (const [siteId, draft] of preservedDrafts) {
-    const form = [...root.querySelectorAll('form')].find(candidate =>
-      String(candidate.elements.id?.value || "__new__") === siteId);
-    if (!form) continue;
-    for (const [name, value] of Object.entries(draft)) if (form.elements[name]) {
-      if (form.elements[name].type === "checkbox") form.elements[name].checked = value === "1";
-      else form.elements[name].value = value;
-    }
-    form.dataset.dirty = "true";
-    try {
-      const captured = JSON.parse(form.elements.body_details?.value || "{}");
-      if (captured.body) form.querySelector('[data-captured-evidence]').innerHTML = `<small>CAPTURED PLANET SCAN · ${escapeHtml(captured.body)}</small>${evidence(captured)}`;
-    } catch (_error) {}
-    if (openSites.has(siteId) && form.closest('details')) form.closest('details').open = true;
-    if (preservedFocus?.siteId === siteId && form.elements[preservedFocus.name]) {
-      const focused = form.elements[preservedFocus.name];
-      focused.focus({preventScroll:true});
-      if (typeof focused.setSelectionRange === "function" && preservedFocus.start != null) focused.setSelectionRange(preservedFocus.start, preservedFocus.end);
-    }
-  }
-  const showMaterial = () => {
-    const material = root.querySelector('[data-select-material]').value;
-    root.querySelector('[data-material-sites]').innerHTML=siteRows((data.sites||[]).filter(site=>materialsFor(site).some(value=>folded(value)===folded(material))));
-  };
-  showMaterial();
-  const showView = key => {
-    root.dataset.atlasView=key;
-    root.querySelectorAll('[data-atlas-panel]').forEach(panel=>{panel.hidden=panel.dataset.atlasPanel!==key;});
-    root.querySelectorAll('[data-atlas-view]').forEach(button=>button.classList.toggle('primary',button.dataset.atlasView===key));
-  };
-  showView(['body','heat','material'].includes(root.dataset.atlasView) ? root.dataset.atlasView : 'body');
-  root.onclick = async event => {
-    const viewButton=event.target.closest('button[data-atlas-view]');
-    if(viewButton)return showView(viewButton.dataset.atlasView);
-    // Quick save (5.5.4): where you are, into RECORD A NEW LOCATION, ready for ADD SITE.
-    if(event.target.closest('[data-compass-record]')){
-      if(!root.currentPosition)return showToast('Current planetary coordinates are unavailable.');
-      showView('body');
-      const form=root.querySelector('[data-new-site-form]');
-      form?.querySelector('[data-current-coordinates]')?.click();
-      form?.closest('.planet-new-site')?.scrollIntoView({behavior:'smooth',block:'start'});
-      form?.elements.name?.focus();
-      form?.elements.name?.select();
-      return showToast('Spot captured: name it if you like, then ADD SITE.');
-    }
-    const navigateButton=event.target.closest('[data-site-navigate]');
-    if(navigateButton){
-      event.preventDefault();event.stopPropagation();
-      const site=(data.sites||[]).find(row=>String(row.id)===String(navigateButton.dataset.siteNavigate));
-      if(!site)return;
-      const accepted=await command('workspace',{page:'planet-materials',operation:'navigate_site',id:site.id,profile_key:root.dataset.profileKey});
-      if(accepted){
-        root.querySelectorAll('[data-site-navigate]').forEach(button=>{button.classList.remove('active');button.textContent='SEND TO COMPASS';});
-        navigateButton.classList.add('active');navigateButton.textContent='COMPASS TARGET ACTIVE';
-        showToast(`Compass armed for ${site.name}. It will open on ${site.body}.`);
-      } else showToast('This saved location could not be sent to the compass.');
-      return;
-    }
-    const button=event.target.closest('[data-current-coordinates]');
-    if(button){
-    const position=root.currentPosition;
-    if (!position) return showToast('Current planetary coordinates are unavailable.');
-    const form=button.closest('form');
-    for (const key of ['system','body','latitude','longitude']) form.elements[key].value=position[key];
-    form.elements.planet_radius.value=position.planet_radius || '';
-    form.elements.location_index.value=position.location_index || '';
-    if (!form.elements.name.value) form.elements.name.value=`Site ${numeric(position.latitude,4)}, ${numeric(position.longitude,4)}`;
-    form.elements.body_details.value=JSON.stringify(position.body_details || {});
-    form.querySelector('[data-captured-evidence]').innerHTML=`<small>CAPTURED PLANET SCAN · ${escapeHtml(position.body)}</small>${evidence(position.body_details || {})}`;
-    form.dataset.dirty='true';
-      return;
-    }
-    const deleteButton=event.target.closest('[data-site-delete]');
-    if(deleteButton){
-      if(!window.confirm('Delete this mining site from the active commander profile?'))return;
-      if(await command('workspace',{page:'planet-materials',operation:'delete_site',id:deleteButton.dataset.siteDelete,profile_key:root.dataset.profileKey})){
-        delete workspaceFingerprints['planet-materials'];
-        window.setTimeout(()=>{if(typeof syncSnapshot==='function')syncSnapshot();},120);
-      }
-    }
-  };
-  root.oninput = event => {
-    const form=event.target.closest('form');
-    if(!form)return;
-    form.dataset.dirty='true';
-    if (['system','body'].includes(event.target.name)) {
-      form.elements.body_details.value='{}';
-      form.elements.planet_radius.value='';
-      form.elements.location_index.value='';
-      form.querySelector('[data-captured-evidence]').textContent='Planet changed. Use current again to capture matching scan evidence.';
-    }
-  };
-  root.onchange = event => {
-    if(event.target.matches('[data-select-planet]')){
-      selected=bodies.find(body=>planetKey(body)===event.target.value)||{};
-      showBody();
-      return;
-    }
-    if(event.target.matches('[data-select-material]'))return showMaterial();
-    if(event.target.matches('[data-select-body-material]')){root.dataset.bodyMaterial=event.target.value;return showBody();}
-    if(event.target.name==='amount'){
-      const form=event.target.closest('form');
-      form.elements.depleted.checked=event.target.value==='Depleted';
-      form.dataset.dirty='true';return;
-    }
-    if(event.target.name==='depleted'){
-      const form=event.target.closest('form');
-      if(event.target.checked)form.elements.amount.value='Depleted';
-      else if(form.elements.amount.value==='Depleted')form.elements.amount.value='';
-      form.dataset.dirty='true';return;
-    }
-    if(event.target.matches('[data-material-choice]')){
-      const select=event.target;
-      if (!select.value) return;
-      const form=select.closest('form');
-      const values=materialsFor({materials:form.elements.materials.value});
-      if (!values.some(value=>folded(value)===folded(select.value))) values.push(select.value);
-      form.elements.materials.value=values.join(', ');form.dataset.dirty='true';select.value='';
-      return;
-    }
-    event.target.closest('form')?.setAttribute('data-dirty','true');
-  };
-  root.onsubmit = async event => {
-      const form=event.target.closest('form');
-      if(!form)return;
-      event.preventDefault();if(form.dataset.saving)return;form.dataset.saving='true';
-      try {
-        const payload=Object.fromEntries(new FormData(form));
-        const accepted=await command('workspace',{...payload,page:'planet-materials',operation:'save',profile_key:root.dataset.profileKey});
-        if(accepted){delete form.dataset.dirty;delete workspaceFingerprints['planet-materials'];document.activeElement?.blur();showToast('Mining site saved');window.setTimeout(()=>{if(typeof syncSnapshot==='function')syncSnapshot();},120);}
-        else showToast('Site could not be saved. Check the fields and active commander.');
-      } finally {delete form.dataset.saving;}
-  };
-  root.planetSitesFingerprint = JSON.stringify(data.sites || []);
-  updatePlanetMaterialsLive(root, data);
-}
-
-function updatePlanetMaterialsLive(root, data) {
-  root.currentPosition=data?.current_position;
-  const position=root.currentPosition;
-  root.querySelectorAll('[data-current-coordinates], [data-compass-record]').forEach(button=>{button.disabled=!position;});
-  const status=root.querySelector('[data-planet-live-status]');
-  if(status)status.textContent=position
-    ? `${position.system} / ${position.body} · X ${numeric(position.longitude,5)} · Y ${numeric(position.latitude,5)}${position.location_index?` · LOC ${numeric(position.location_index)} FROM ${position.location_source}${position.location_distance_m==null?"":` (${numeric(position.location_distance_m)} M)`}`:""} · LIVE SURFACE POSITION`
-    : 'No current planetary coordinates. Approach or land on a planet to use current location.';
-}
-
+// The Planetary page lives in planetary.js (5.5.12).
+const PLANETARY_UI = {
+  byId, escapeHtml, showToast, command,
+  syncSnapshot: () => syncSnapshot(),
+  forgetFingerprint: (page) => { delete workspaceFingerprints[page]; },
+};
 
 const EXPLORE_WORKSPACE_UI = Object.freeze({
   byId, credits, escapeHtml, formatCredits, mountSystemOrrery, number, numeric,
@@ -3250,145 +2994,10 @@ function renderMissionWorkspace(data) {
   root.innerHTML = `<section class="mission-layout"><aside class="card mission-list"><header><span>EXPEDITIONS</span><b>${expeditions.length}</b></header><div>${list || `<p class="workspace-empty">NO EXPEDITIONS</p>`}</div></aside><div class="mission-detail">${detail}</div></section>`;
 }
 
-function trailSvg(points = []) {
-  if (!points.length) return `<div class="trail-empty">TRAIL BEGINS AFTER TOUCHDOWN</div>`;
-  const extent = Math.max(75, ...points.flatMap((row) => [Math.abs(number(row.east)), Math.abs(number(row.north))])) * 1.15;
-  const project = (row) => `${150 + number(row.east) * 130 / extent},${150 - number(row.north) * 130 / extent}`;
-  const circles = points.filter((row) => row.kind === "sample" || row.kind === "ship").map((row) => `<circle cx="${project(row).split(",")[0]}" cy="${project(row).split(",")[1]}" r="${row.kind === "ship" ? 5 : 3}" class="${escapeHtml(row.kind)}"><title>${escapeHtml(row.label || row.kind)}</title></circle>`).join("");
-  return `<svg class="trail-chart" viewBox="0 0 300 300" role="img"><path class="trail-grid" d="M150 5V295M5 150H295M75 5V295M225 5V295M5 75H295M5 225H295"/><polyline points="${points.map(project).join(" ")}"/>${circles}<circle cx="${project(points.at(-1)).split(",")[0]}" cy="${project(points.at(-1)).split(",")[1]}" r="4" class="current"/></svg>`;
-}
 
-function fieldMapSvg(field = {}, trail = {}) {
-  const pins = field.pins || [];
-  if (!pins.length) return trailSvg(trail.points || []);
-  const colony = Math.max(0, number(field.sampling?.colony_m));
-  const extent = Math.max(100, colony * 1.1, ...pins.flatMap((row) => [Math.abs(number(row.east)), Math.abs(number(row.north))])) * 1.15;
-  const project = (row) => ({x: 180 + number(row.east) * 158 / extent, y: 180 - number(row.north) * 158 / extent});
-  const activeGroup = field.sampling?.sample_group || "";
-  const rings = colony ? pins.filter((row) => row.kind === "organic_sample" && (!activeGroup || row.metadata?.sample_group === activeGroup)).map((row) => {
-    const point = project(row);
-    return `<circle class="sample-clearance" cx="${point.x}" cy="${point.y}" r="${colony * 158 / extent}"><title>${numeric(colony)} m colony distance</title></circle>`;
-  }).join("") : "";
-  const markers = pins.map((row) => {
-    const point = project(row);
-    const kind = row.kind === "organic_sample" ? "sample" : row.kind === "landing" ? "ship" : row.kind === "codex" ? "codex" : "waypoint";
-    return `<g class="field-pin ${kind}${row.manual ? " manual" : ""}" transform="translate(${point.x} ${point.y})"><circle r="${kind === "ship" ? 6 : kind === "waypoint" ? 5 : 4}"/><title>${escapeHtml(row.label || kind)}${row.distance === null ? "" : ` · ${numeric(row.distance)} m @ ${numeric(row.bearing)}°`}</title></g>`;
-  }).join("");
-  return `<svg class="trail-chart field-map-chart" viewBox="0 0 360 360" role="img" aria-label="Planetary field map"><path class="trail-grid" d="M180 5V355M5 180H355M90 5V355M270 5V355M5 90H355M5 270H355"/><circle class="field-range" cx="180" cy="180" r="158"/>${rings}${markers}<g class="field-current" transform="translate(180 180) rotate(${number(field.heading)})"><path d="M0 -9L6 7L0 4L-6 7Z"/></g><text x="12" y="20">LOCAL TANGENT PLANE · ±${numeric(extent)} M</text></svg>`;
-}
-
-function renderGroundWorkspace(data) {
-  const root = byId("ground-workspace");
-  const target = data.target || {};
-  const trail = data.trail || {};
-  const field = data.field_map || {};
-  const eliteTarget = data.elite_target || {};
-  const pins = (field.pins || []).map((row) => `<div class="field-pin-row"><i class="${escapeHtml(row.kind)}"></i><span><b>${escapeHtml(row.label || row.kind)}</b><small>${row.distance === null ? escapeHtml(row.source || "FIELD RECORD") : `${numeric(row.distance)} M · ${numeric(row.bearing)}°`}</small></span>${row.manual ? `<button data-ws-page="ground" data-ws-op="remove_pin" data-pin-id="${escapeHtml(row.id)}">×</button>` : ""}</div>`);
-  const completed = (field.completed || []).map((row) => `<em>${escapeHtml(row.variant || row.species || row.genus)}${row.count > 1 ? ` ×${numeric(row.count)}` : ""}</em>`).join("");
-  root.classList.remove("loading-panel");
-  const eliteTargetStrip = eliteTarget.name ? `<div class="ground-elite-target${eliteTarget.is_current_body ? " current" : ""}"><i>⌖</i><span><small>ELITE NAVIGATION TARGET</small><b>${escapeHtml(eliteTarget.name)}</b></span><em>${eliteTarget.is_current_body ? "TARGET BODY REACHED · FIELD TELEMETRY LINKED" : "BODY SELECTED · APPROACH OR LAND FOR SURFACE TELEMETRY"}</em></div>` : "";
-  root.innerHTML = `${workspaceMetrics([
-    {label: "Surface state", value: data.on_planet ? "ON SURFACE" : "ORBITAL", detail: data.body || data.system || "NO BODY"},
-    {label: "Current position", value: data.position?.lat === null ? "AWAITING STATUS" : `${numeric(data.position.lat, 5)}, ${numeric(data.position.lon, 5)}`, detail: data.position?.heading === null ? "HEADING UNKNOWN" : `HEADING ${numeric(data.position.heading)}°`},
-    {label: "Target bearing", value: target.bearing === null ? "—" : `${numeric(target.bearing)}°`, detail: target.direction || target.state || "TARGET OFF"},
-    {label: "Target distance", value: target.distance === null ? "—" : `${numeric(target.distance)} M`, detail: target.active ? "LIVE GUIDANCE" : "NO ACTIVE TARGET"},
-  ])}${eliteTargetStrip}<section class="workspace-grid ground-grid">
-    ${workspaceCard("SURFACE TARGET", `<div class="coordinate-form"><label>LATITUDE<input id="ground-lat" type="number" min="-90" max="90" step="0.000001" value="${target.lat ?? ""}"></label><label>LONGITUDE<input id="ground-lon" type="number" min="-180" max="180" step="0.000001" value="${target.lon ?? ""}"></label></div><div class="workspace-actions wrap"><button data-ws-page="ground" data-ws-op="set">SET TARGET</button><button data-ws-page="ground" data-ws-op="set_current">USE CURRENT</button><button data-ws-page="ground" data-ws-op="return_ship">RETURN TO SHIP</button><button data-ws-page="ground" data-ws-op="clear">CLEAR</button><button data-ws-page="ground" data-ws-op="toggle_popup">POPUP ${target.popup ? "ON" : "OFF"}</button></div>`)}
-    ${workspaceCard("PLANETARY FIELD MAP", `${fieldMapSvg(field, trail)}<div class="field-map-summary"><div><small>${escapeHtml(field.body || data.body || "NO ACTIVE BODY")}</small><b>${numeric(field.signals)} BIO SIGNALS</b><span>${escapeHtml((field.genuses || []).join(" · ") || "GENUS IDENTIFICATION AWAITING DSS")}</span></div><div class="field-completed">${completed || "<em>NO COMPLETED ANALYSES ON THIS MAP</em>"}</div></div><div class="field-marker-form"><input id="field-marker-label" placeholder="FIELD MARKER NOTE"><button data-ws-page="ground" data-ws-op="add_pin">ADD AT CURRENT POSITION</button></div>${workspaceRows(pins, "Landings, samples, Codex entries and field markers will appear here.")}<div class="trail-readout"><span>TRAVELLED <b>${numeric(trail.travelled)} M</b></span><span>SHIP <b>${trail.return_distance === null ? "—" : `${numeric(trail.return_distance)} M @ ${numeric(trail.return_bearing)}°`}</b></span><span>SAMPLE <b>${field.sampling?.progress ? `${numeric(field.sampling.progress)} / 3 · ${numeric(field.sampling.colony_m)} M` : "INACTIVE"}</b></span><button data-ws-page="ground" data-ws-op="clear_trail">CLEAR TRAIL</button></div>`, `${(field.pins || []).length} FIELD RECORDS`)}
-  </section>`;
-}
-
+// The Mining page lives in mining.js (5.5.12).
 function renderMiningWorkspace(data) {
-  const root = byId("mining-workspace");
-  const session = data.session || {};
-  const plan = data.plan || {};
-  const readiness = data.readiness || {};
-  const current = session.current || {};
-  const surfaceMode = session.mode === "surface" || Boolean(readiness.surface_vehicle);
-  const tools = data.tools || {};
-  const selectedTarget = plan.target || "";
-  const materialOptions = [`<option value="">ANY MINERAL / MANUAL ASSESSMENT</option>`, ...(data.materials || []).map((name) => `<option value="${escapeHtml(name)}" ${name === selectedTarget ? "selected" : ""}>${escapeHtml(name)}</option>`)].join("");
-  const methodOptions = [["auto", "AUTO / JOURNAL EVIDENCE"], ["laser", "LASER MINING"], ["core", "CORE MINING"], ["subsurface", "SUB-SURFACE"], ["surface", "SURFACE DEPOSITS"]].map(([value, label]) => `<option value="${value}" ${plan.method === value ? "selected" : ""}>${label}</option>`).join("");
-  const materials = workspaceTable([
-    {label: "Material", key: "name"}, {label: "Sightings", key: "sightings"},
-    {label: "Best", render: (row) => `${numeric(row.best, 2)}%`}, {label: "Average", render: (row) => `${numeric(row.average, 2)}%`},
-  ], session.materials || [], "Prospector results will appear here during a mining run.");
-  const yields = workspaceTable([
-    {label: "Commodity", key: "name"}, {label: "Refined", render: (row) => `${numeric(row.count)} T`},
-    {label: "Cargo delta", render: (row) => `${numeric(row.cargo_delta)} T`}, {label: "Sold", render: (row) => `${numeric(row.sold)} T`},
-  ], session.yield || [], "No refined commodities in this run.");
-  const equipment = Object.entries(readiness.equipment || {}).map(([key, present]) => `<span class="mining-equipment ${present ? "ready" : "missing"}"><i>${present ? "◆" : "◇"}</i>${escapeHtml(key.replaceAll("_", " ").toUpperCase())}</span>`).join("");
-  const missing = (readiness.missing || []).map((label) => `<li>${escapeHtml(label)}</li>`).join("");
-  const prospectMaterials = (current.materials || []).map((row) => `<div class="mining-current-material"><span>${escapeHtml(row.name)}</span><i><b style="--fill:${Math.min(100, number(row.percent))}%"></b></i><strong>${numeric(row.percent, 1)}%</strong></div>`).join("");
-  const prospectRows = (session.prospects || []).map((row) => `<div class="mining-prospect-row ${escapeHtml(String(row.decision || "assess").toLowerCase())}"><b>${escapeHtml(row.decision || "ASSESS")}</b><span>${escapeHtml(row.target || row.motherlode || "Unplanned mineral")}</span><em>${row.motherlode ? "CORE" : `${numeric(row.target_percent, 1)}%`} · ${numeric(row.refined)} T SINCE</em></div>`);
-  const gradeBars = (session.prospects || []).slice(0, 12).reverse().map((row) => `<i class="${escapeHtml(String(row.decision || "assess").toLowerCase())}" style="--grade:${Math.max(4, Math.min(100, number(row.target_percent)))}%" title="${escapeHtml(row.decision)} · ${numeric(row.target_percent, 1)}%"></i>`).join("");
-  const ringRows = workspaceTable([
-    {label: "System / ring", render: (row) => `<b>${escapeHtml(row.system)}</b><small>${escapeHtml(row.body)}</small>`},
-    {label: "Mineral", render: (row) => `<b>${escapeHtml(row.material || "Multiple")}</b><small>${escapeHtml(row.ring_type || "TYPE UNKNOWN")} · ${escapeHtml(row.reserve || "RESERVE UNKNOWN")}</small>`},
-    {label: "Range", render: (row) => `${row.distance === null || row.distance === undefined ? "—" : `${numeric(row.distance, 1)} LY`}<small>${row.arrival === null || row.arrival === undefined ? "" : `${numeric(row.arrival)} LS`}</small>`},
-    {label: "Signals", render: (row) => numeric(row.hotspots)},
-    {label: "Source", key: "source"},
-    {label: "", render: (row) => `<div class="table-actions"><button data-ws-page="mining" data-ws-op="ring_copy" data-result-index="${row.index}">COPY</button><button data-ws-page="mining" data-ws-op="ring_bookmark" data-result-index="${row.index}">SAVE</button><button data-ws-page="mining" data-ws-op="ring_open" data-result-index="${row.index}">VIEW</button></div>`},
-  ], (tools.ring_results || []).map((row, index) => ({...row, index})), "Search commander DSS records and Spansh for known rings.");
-  const buyerRows = workspaceTable([
-    {label: "Market", render: (row) => `<b>${escapeHtml(row.station)}</b><small>${escapeHtml(row.system)} · ${escapeHtml(row.station_type)}</small>`},
-    {label: "Price", render: (row) => `<b>${credits(row.price)}</b>`},
-    {label: "Demand", render: (row) => numeric(row.demand)},
-    {label: "Range", render: (row) => `${numeric(row.distance, 1)} LY<small>${numeric(row.arrival)} LS</small>`},
-    {label: "Pad", render: (row) => row.large_pad ? "LARGE" : "M / S"},
-    {label: "", render: (row) => `<div class="table-actions"><button data-ws-page="mining" data-ws-op="buyer_copy" data-result-index="${row.index}">COPY</button><button data-ws-page="mining" data-ws-op="buyer_open" data-result-index="${row.index}">VIEW</button></div>`},
-  ], (tools.buyer_results || []).map((row, index) => ({...row, index})), "Search for current community-reported demand when the haul is ready.");
-  const bookmarkRows = (data.bookmarks || []).map((row) => `<div class="mining-bookmark"><span><b>${escapeHtml(row.system)}</b><small>${escapeHtml(row.body)} · ${escapeHtml(row.material || "ANY MINERAL")}</small></span><em>${escapeHtml(row.notes || "COMMANDER RING RECORD")}</em><button class="row-delete" data-ws-page="mining" data-ws-op="delete_bookmark" data-bookmark-id="${numeric(row.id)}">×</button></div>`);
-  const scanRows = (data.ring_scans || []).flatMap((row) => (row.signals || []).map((signal) => `<div class="mining-ring-scan"><span><b>${escapeHtml(signal.name)}</b><small>${escapeHtml(row.system)} · ${escapeHtml(row.body)}</small></span><em>${numeric(signal.count)} SIGNAL${number(signal.count) === 1 ? "" : "S"}</em></div>`));
-  const surfaceRows = (data.surface_scans || []).map((row) => `<div class="mining-ring-scan surface"><span><b>${escapeHtml(row.body || "PLANETARY BODY")}</b><small>${escapeHtml(row.system || data.system || "UNKNOWN SYSTEM")} · BODY ${escapeHtml(row.body_id ?? "—")}</small></span><em>${numeric(row.mining_locations)} MINING SITE${number(row.mining_locations) === 1 ? "" : "S"}</em></div>`);
-  const missionRows = workspaceTable([
-    {label: "Commodity", key: "commodity"}, {label: "Delivered", render: (row) => `${numeric(row.delivered)} / ${numeric(row.required)} T`},
-    {label: "Remaining", render: (row) => `${numeric(row.remaining)} T`}, {label: "Destination", key: "destination"},
-  ], data.missions || [], "No active mining contracts detected.");
-  const history = data.history || [];
-  const trend = history.slice(0, 12).reverse();
-  const maxTph = Math.max(1, ...trend.map((row) => number(row.tons_per_hour)));
-  const historyBars = trend.map((row) => `<i style="--yield:${Math.max(3, number(row.tons_per_hour) * 100 / maxTph)}%" title="${escapeHtml(row.system || "Unknown system")} · ${numeric(row.tons_per_hour, 1)} T/H"></i>`).join("");
-  const historyTable = workspaceTable([
-    {label: "System", render: (row) => `<b>${escapeHtml(row.system || "Unknown")}</b><small>${escapeHtml(row.target || "UNPLANNED")}</small>`},
-    {label: "Prospected", key: "prospected"}, {label: "Refined", render: (row) => `${numeric(row.refined)} T`},
-    {label: "Yield", render: (row) => `${numeric(row.tons_per_hour, 1)} T/H`}, {label: "Hit rate", render: (row) => row.hit_rate === null || row.hit_rate === undefined ? "—" : `${numeric(row.hit_rate, 1)}%`},
-    {label: "Revenue", render: (row) => credits(row.revenue)},
-  ], history, "No completed mining runs retained yet.");
-  const haulTons = Math.max(1, (session.yield || []).reduce((total, row) => total + Math.max(0, number(row.cargo_delta)), 0) || number(session.refined_t));
-  const surfaceCapacity = Math.max(number(session.cargo_capacity), number(readiness.cargo_capacity));
-  const surfaceCurrent = Math.max(0, number(session.cargo_current_t));
-  const surfaceFree = Math.max(0, surfaceCapacity - surfaceCurrent);
-  const surfaceCargoNames = (session.yield || []).map((row) => row.name).filter(Boolean).slice(0, 3).join(" · ");
-  const currentCardBody = surfaceMode
-    ? `<div class="mining-current mine"><div><small>LIVE SRV CARGO</small><strong>${escapeHtml(surfaceCargoNames || "AWAITING RECOVERED CARGO")}</strong><span>${numeric(session.refined_t)} T recovered this run · ${numeric(session.processing_events)} processing pulses</span></div><b>${numeric(surfaceCurrent)} / ${numeric(surfaceCapacity)} T</b></div><div class="mining-grade-strip surface-hold"><i class="mine" style="--grade:${surfaceCapacity ? Math.max(2, Math.min(100, surfaceCurrent * 100 / surfaceCapacity)) : 2}%" title="${numeric(surfaceCurrent)} of ${numeric(surfaceCapacity)} tonnes occupied"></i></div>`
-    : `<div class="mining-current ${escapeHtml(String(current.decision || "awaiting").toLowerCase())}"><div><small>FLIGHT DECISION</small><strong>${escapeHtml(current.decision || "AWAITING PROSPECTOR")}</strong><span>${escapeHtml(current.motherlode ? `${current.motherlode} MOTHERLODE` : current.target || selectedTarget || "No target mineral selected")}</span></div><b>${current.motherlode ? "CORE" : `${numeric(current.target_percent, 1)}%`}</b></div>${prospectMaterials || `<p class="workspace-empty">Fire a prospector limpet to evaluate the next asteroid.</p>`}<div class="mining-grade-strip">${gradeBars || ""}</div>`;
-  const liveExtractionBody = surfaceMode
-    ? `<div class="fact-list spacious mining-live-facts"><div><span>RECOVERED THIS RUN</span><b>${numeric(session.refined_t)} T</b></div><div><span>CURRENT SRV CARGO</span><b>${numeric(surfaceCurrent)} T</b></div><div><span>HOLD FREE</span><b>${numeric(surfaceFree)} T</b></div><div><span>TRANSFERRED / REMOVED</span><b>${numeric(session.cargo_removed_t)} T</b></div><div><span>PROCESSING PULSES</span><b>${numeric(session.processing_events)}</b></div><div><span>HAUL RATE</span><b>${session.tons_per_hour === null || session.tons_per_hour === undefined ? "—" : `${numeric(session.tons_per_hour, 1)} T/H`}</b></div></div>`
-    : `<div class="fact-list spacious mining-live-facts"><div><span>TONNES / ROCK</span><b>${session.tons_per_asteroid === null || session.tons_per_asteroid === undefined ? "—" : numeric(session.tons_per_asteroid, 2)}</b></div><div><span>ROCKS / HOUR</span><b>${session.asteroids_per_hour === null || session.asteroids_per_hour === undefined ? "—" : numeric(session.asteroids_per_hour, 1)}</b></div><div><span>QUALIFIED ROCKS</span><b>${session.qualified_rate === null || session.qualified_rate === undefined ? "—" : `${numeric(session.qualified_rate, 1)}%`}</b></div><div><span>TARGET AVERAGE</span><b>${session.target_average === null || session.target_average === undefined ? "—" : `${numeric(session.target_average, 1)}%`}</b></div><div><span>BEST TARGET</span><b>${numeric(session.target_best, 1)}%</b></div><div><span>GOAL ETA</span><b>${session.goal_minutes ? `${numeric(session.goal_minutes)} MIN` : "—"}</b></div></div>${workspaceRows(prospectRows, "Prospector decisions will build a compact run timeline.")}`;
-  root.classList.remove("loading-panel");
-  root.innerHTML = `${workspaceMetrics([
-    {label: "Run state", value: data.active ? "ACTIVE" : "STANDBY", detail: `${surfaceMode ? "SURFACE" : "ASTEROID"} · ${duration(session.duration)}`},
-    surfaceMode
-      ? {label: "Processing activity", value: numeric(session.processing_events), detail: "MININGREFINED JOURNAL PULSES"}
-      : {label: "Target hit rate", value: session.hit_rate === null || session.hit_rate === undefined ? "—" : `${numeric(session.hit_rate, 1)}%`, detail: `${numeric(session.prospected)} ROCKS PROSPECTED`},
-    {label: surfaceMode ? "Recovered cargo" : "Refined yield", value: `${numeric(session.refined_t)} T`, detail: session.tons_per_hour === null ? "RATE AWAITING DATA" : `${numeric(session.tons_per_hour, 1)} T / HR`},
-    {label: "Cargo objective", value: session.cargo_goal ? `${numeric(session.cargo_goal_percent, 1)}%` : "OPEN", detail: session.cargo_goal ? `${numeric(session.cargo_goal_remaining)} T REMAINING` : "NO TONNAGE LIMIT"},
-  ])}<section class="mining-command-grid">
-    ${workspaceCard("RUN DIRECTIVE", `<div class="mining-plan-form"><label>TARGET MINERAL<select id="mining-target">${materialOptions}</select></label><label>MINIMUM GRADE %<input id="mining-minimum" type="number" min="0" max="100" step="0.1" value="${number(plan.minimum, 20)}"></label><label>CARGO GOAL T<input id="mining-cargo-goal" type="number" min="0" max="100000" value="${number(plan.cargo_goal)}"></label><label>METHOD<select id="mining-method">${methodOptions}</select></label></div><div class="workspace-actions wrap"><button class="primary" data-ws-page="mining" data-ws-op="save_plan">SAVE DIRECTIVE</button><button data-ws-page="mining" data-ws-op="start_run" ${data.active ? "disabled" : ""}>START RUN</button><button class="danger-action" data-ws-page="mining" data-ws-op="end_run" ${data.active ? "" : "disabled"}>END & RETAIN RUN</button></div>`, selectedTarget ? `${escapeHtml(selectedTarget)} · ${numeric(plan.minimum, 1)}%+` : "MANUAL ASSESSMENT", "mining-plan-card")}
-    ${workspaceCard(surfaceMode ? "SURFACE VEHICLE READINESS" : "SHIP READINESS", `<div class="mining-readiness ${readiness.ready ? "ready" : "incomplete"}"><strong>${readiness.ready ? surfaceMode ? "SURFACE EXTRACTION READY" : "MINING FIT READY" : "LOADOUT INCOMPLETE"}</strong><span>${escapeHtml(readiness.ship || "Awaiting Loadout journal")} · ${numeric(readiness.cargo_capacity)} T HOLD${surfaceMode ? "" : ` · ${numeric(readiness.limpets)} LIMPETS`}</span></div><div class="mining-equipment-grid">${equipment || "<span>LOADOUT AWAITING JOURNAL</span>"}</div>${missing ? `<ul class="mining-missing">${missing}</ul>` : ""}${readiness.dss_recommended ? `<p class="workspace-note">DSS not detected · hotspot navigation will rely on retained/community records.</p>` : ""}`, readiness.ready ? "GO" : `${(readiness.missing || []).length} GAPS`, "mining-readiness-card")}
-    ${workspaceCard(surfaceMode ? "ACTIVE RHINO HOLD" : "CURRENT PROSPECT", currentCardBody, surfaceMode ? `${numeric(surfaceFree)} T FREE` : current.remaining === null || current.remaining === undefined ? "NO ACTIVE ROCK" : `${numeric(current.remaining, 1)}% REMAINING`, "mining-current-card")}
-    ${workspaceCard(surfaceMode ? "LIVE SURFACE EXTRACTION" : "LIVE EXTRACTION", liveExtractionBody, surfaceMode ? `${numeric(session.refined_t)} T RECOVERED` : `${numeric(current.refined_since_prospect)} T SINCE PROSPECT`, "mining-live-card")}
-    ${workspaceCard("PROSPECTOR QUALITY", materials)}
-    ${workspaceCard(surfaceMode ? "SURFACE CARGO YIELD" : "REFINERY & CARGO YIELD", yields)}
-    ${workspaceCard("LIMPET ECONOMY", `<div class="fact-list spacious"><div><span>PROSPECTORS</span><b>${numeric(session.limpets?.prospectors_used)}</b></div><div><span>COLLECTORS</span><b>${numeric(session.limpets?.collectors_launched)}</b></div><div><span>ESTIMATED USED</span><b>${numeric(session.limpets?.estimated_used)}</b></div><div><span>REMAINING</span><b>${numeric(session.limpets?.remaining)}</b></div><div><span>LIMPETS / TONNE</span><b>${session.limpets?.limpets_per_tonne === null || session.limpets?.limpets_per_tonne === undefined ? "—" : numeric(session.limpets.limpets_per_tonne, 2)}</b></div><div><span>CASH COST</span><b>${credits(session.limpets?.cash_net_cost_cr)}</b></div></div>`)}
-    ${workspaceCard("MINING CONTRACTS", missionRows, `${(data.missions || []).length} ACTIVE`)}
-    ${workspaceCard("RING INTELLIGENCE", `<div class="mining-search-form"><label>SEARCH FROM<input id="mining-ring-reference" value="${escapeHtml(data.system || "")}"></label><label>MINERAL<select id="mining-ring-material">${materialOptions}</select></label><label>RING TYPE<select id="mining-ring-type"><option value="">ANY RING</option><option>Metallic</option><option>Metal Rich</option><option>Rocky</option><option>Icy</option></select></label><label>RANGE LY<input id="mining-ring-range" type="number" min="1" max="5000" value="300"></label><button data-ws-page="mining" data-ws-op="ring_search" ${tools.ring_status === "working" ? "disabled" : ""}>${tools.ring_status === "working" ? "SEARCHING…" : "SEARCH RINGS"}</button></div><p class="workspace-status ${escapeHtml(tools.ring_status || "ready")}">${escapeHtml(tools.ring_detail || "Ring intelligence ready.")}</p>${ringRows}`, `${numeric((tools.ring_results || []).length)} RESULTS`, "mining-ring-card")}
-    ${workspaceCard("COMMANDER RING RECORDS", `${workspaceRows(scanRows, "DSS ring signals discovered by this commander will appear here.")}${workspaceRows(bookmarkRows, "Save useful ring results for later expeditions.")}`, `${numeric((data.ring_scans || []).length)} SCANNED · ${numeric((data.bookmarks || []).length)} SAVED`, "mining-records-card")}
-    ${workspaceCard("RHINO SURFACE MINING", `<div class="mining-readiness ${surfaceMode ? "ready" : "incomplete"}"><strong>${surfaceMode ? escapeHtml(session.vehicle || readiness.ship || "SURFACE VEHICLE ACTIVE") : "SURFACE VEHICLE STANDBY"}</strong><span>${surfaceMode ? `${numeric(session.cargo_capacity || readiness.cargo_capacity)} T VEHICLE HOLD · CARGO-GAIN TRACKING ACTIVE` : "Launch a Rhino to switch this command deck to surface extraction."}</span></div>${workspaceRows(surfaceRows, "DSS planetary mining locations will appear here; drill deployment itself is not journaled by Elite.")}`, `${numeric((data.surface_scans || []).reduce((sum, row) => sum + number(row.mining_locations), 0))} KNOWN SITES`, "mining-surface-card")}
-    ${workspaceCard("SELL MINING HAUL", `<div class="mining-buyer-form"><label>SEARCH FROM<input id="mining-buyer-reference" value="${escapeHtml(data.system || "")}"></label><label>COMMODITY<select id="mining-buyer-commodity">${materialOptions}</select></label><label>QUANTITY T<input id="mining-buyer-quantity" type="number" min="1" value="${numeric(haulTons)}"></label><label>RANGE LY<input id="mining-buyer-range" type="number" min="1" max="5000" value="500"></label><label>MAX ARRIVAL LS<input id="mining-buyer-ls" type="number" min="1" value="10000"></label><label class="check"><input id="mining-buyer-large" type="checkbox">LARGE PAD</label><label class="check"><input id="mining-buyer-no-carriers" type="checkbox" checked>EXCLUDE CARRIERS</label><button data-ws-page="mining" data-ws-op="buyer_search" ${tools.buyer_status === "working" ? "disabled" : ""}>${tools.buyer_status === "working" ? "SEARCHING…" : "FIND BUYERS"}</button></div><p class="workspace-status ${escapeHtml(tools.buyer_status || "ready")}">${escapeHtml(tools.buyer_detail || "Mining market lookup ready.")}</p>${buyerRows}`, `${numeric((tools.buyer_results || []).length)} MARKETS`, "mining-buyer-card")}
-    ${workspaceCard("RUN ANALYTICS", `<div class="mining-history-chart">${historyBars || `<span>COMPLETE A RUN TO BEGIN THE YIELD TREND</span>`}</div>${historyTable}`, `${history.length} RETAINED`, "mining-history-card")}
-  </section>`;
+  renderMining(data, WORKSHOP_UI);
 }
 
 function installPageSuites() {
@@ -3807,7 +3416,7 @@ function settingsSectionBody(id, data) {
       + `<details class="settings-group theme-workshop"${settingsWorkshopOpen ? " open" : ""} data-search="${settingSearchText("theme workshop custom palette colours colors")}"><summary><h4>THEME WORKSHOP</h4><span>${numeric((editor.custom || []).length)} CUSTOM</span></summary><div class="theme-workshop-body"><div class="theme-workshop-head"><label>NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>DELETE A CUSTOM THEME<select id="custom-theme-existing"><option value="">CHOOSE ONE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><p class="setting-note">Starts from the active theme. Change any colour, then save it as your own.</p><div class="theme-colour-grid">${colors}</div><div class="setting-row actions"><button type="button" data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY</button><button type="button" class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED</button></div></div></details>`;
   }
   if (id === "flight") {
-    return settingGroup("FLIGHT", `${settingSelect({key: "low_fuel_threshold_pct", label: "Low fuel warning", detail: "Warn when the main tank falls below this.", value: String(number(value.low_fuel_threshold_pct, .25)), options: [.1, .15, .2, .25, .3, .4, .5].map((item) => [String(item), `${Math.round(item * 100)}%`]), type: "number"})}${settingSwitch({key: "auto_copy_waypoint", label: "Copy the next route system", detail: "Put the next system on the clipboard as you arrive, ready to paste into the galaxy map.", checked: value.auto_copy_waypoint})}`)
+    return settingGroup("FLIGHT", `${settingSelect({key: "low_fuel_threshold_pct", label: "Low fuel warning", detail: "Warn when the main tank falls below this.", value: String(number(value.low_fuel_threshold_pct, .25)), options: [.1, .15, .2, .25, .3, .4, .5].map((item) => [String(item), `${Math.round(item * 100)}%`]), type: "number"})}${settingSwitch({key: "auto_copy_waypoint", label: "Auto-copy the next waypoint", detail: "As you arrive in a system, your next saved waypoint goes on the clipboard, ready to paste into the galaxy map. Also on the Command Deck, under COPY NEXT DESTINATION.", checked: value.auto_copy_waypoint})}`)
       + settingGroup("HOME", `${settingText({key: "home_system", id: "setting-home", label: "Home system", detail: "Distances \"from home\" start here: the Watcher's remarks and the Galaxy Minimap. Leave it empty for Sol.", value: value.home_system, placeholder: "Sol", status: homeStatus(data.home)})}`)
       + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
       + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingNote("Unlocks pop up in the cockpit's Achievements overlay: switch it on or off, and place it, in Overlay Studio.")}`);
@@ -4258,15 +3867,9 @@ function renderWorkspace(state) {
   if (workspaceFingerprints[page] === fingerprint) return;
   const root = byId(`${page}-workspace`);
   const focused = document.activeElement;
-  if (page === "planet-materials" && root) {
-    updatePlanetMaterialsLive(root, workspace.data);
-  }
-  if (page === "planet-materials" && root?.dataset.profileKey === workspace.data?.profile_key && root.querySelector("form[data-dirty]")
-      && root.planetSitesFingerprint === JSON.stringify(workspace.data?.sites || [])) return;
   const profileChanged = (page === "planet-materials" && root?.dataset.profileKey !== workspace.data?.profile_key)
     || (page === "explore" && byId("analytics-workspace")?.dataset.profileKey !== profileKey);
-  if (!profileChanged && root?.contains(focused) && focused?.matches("#planet-compass-lat, #planet-compass-lon")) return;
-  if (page !== "planet-materials" && !profileChanged && root?.contains(focused) && focused?.matches("input, textarea, select, [contenteditable='true']") && !focused?.matches("[data-refresh-on-change]")) return;
+  if (!profileChanged && root?.contains(focused) && focused?.matches("input, textarea, select, [contenteditable='true']") && !focused?.matches("[data-refresh-on-change]")) return;
   // A button held down mustn't be redrawn before it's let go: the press and
   // the release would land on two different buttons and the click is lost
   // (5.5.5). The redraw waits for the release.
@@ -4276,7 +3879,7 @@ function renderWorkspace(state) {
   }
   workspaceFingerprints[page] = fingerprint;
   const renderers = {
-    "planet-materials": renderPlanetMaterialsWorkspace,
+    "planet-materials": (data) => renderPlanetary(data, PLANETARY_UI),
     explore: (data) => {
       renderExploreWorkspace(data, EXPLORE_WORKSPACE_UI);
       if (data.archive) renderExploreArchive(data.archive);
@@ -4287,7 +3890,7 @@ function renderWorkspace(state) {
       renderFlightLogs(data.flight_logs || {}, WORKSHOP_UI, data.sessions || []);
     },
     mission: renderMissionWorkspace,
-    ground: renderGroundWorkspace, mining: renderMiningWorkspace,
+    mining: renderMiningWorkspace,
     powerplay: renderPowerplayWorkspace,
     carrier: renderCarrierWorkspace,
     recon: renderReconWorkspace, achievements: renderAchievementsWorkspace,
@@ -4319,6 +3922,8 @@ function renderDashboard(state) {
     missionSelectedId = "";
     resetColonisation();
     resetTrading();
+    resetMining();
+    resetPlanetary();
     orrerySelectedBodyId = "";
     analyticsView = "trends";
     replaySelectedSessionIndex = 0;
@@ -4605,6 +4210,7 @@ async function eventLoop() {
 }
 
 function showPage(name) {
+  if (name === "ground") setPlanetaryView("ground");
   name = LEGACY_PAGE_REDIRECTS[name] || name;
   const page = document.querySelector(`[data-page-name="${CSS.escape(name)}"]`);
   if (!page) return;
@@ -4850,6 +4456,8 @@ document.addEventListener("click", async (event) => {
   if (handleColonisationClick(event, WORKSHOP_UI, () => renderColonisationWorkspace(model.workspace?.data || {}))) return;
   if (handleBgsClick(event, WORKSHOP_UI)) return;
   if (handleTradingClick(event, WORKSHOP_UI)) return;
+  if (handleMiningClick(event, WORKSHOP_UI)) return;
+  if (handlePlanetaryClick(event, PLANETARY_UI)) return;
   const studioCard = event.target.closest(".studio-overlay-card");
   if (studioCard) {
     selectStudioOverlay(studioCard.dataset.overlayId);
@@ -5096,7 +4704,6 @@ document.addEventListener("click", async (event) => {
     } else if (page === "ground" && operation === "set") {
       const prefix = {
         studio: "studio-ground",
-        planet: "planet-compass",
       }[workspaceButton.dataset.groundSource] || "ground";
       payload.lat = byId(`${prefix}-lat`)?.value?.trim() || "";
       payload.lon = byId(`${prefix}-lon`)?.value?.trim() || "";
@@ -5111,32 +4718,6 @@ document.addEventListener("click", async (event) => {
       }
     } else if (page === "ground" && operation === "add_pin") {
       payload.label = byId("field-marker-label")?.value.trim() || "Field marker";
-    } else if (page === "mining" && operation === "save_plan") {
-      Object.assign(payload, {
-        target: byId("mining-target")?.value || "",
-        minimum: byId("mining-minimum")?.value,
-        cargo_goal: byId("mining-cargo-goal")?.value,
-        method: byId("mining-method")?.value || "auto",
-      });
-    } else if (page === "mining" && operation === "ring_search") {
-      Object.assign(payload, {
-        reference: byId("mining-ring-reference")?.value.trim() || "",
-        material: byId("mining-ring-material")?.value || "",
-        ring_type: byId("mining-ring-type")?.value || "",
-        range: byId("mining-ring-range")?.value,
-      });
-      if (!payload.reference || number(payload.range) <= 0) return;
-    } else if (page === "mining" && operation === "buyer_search") {
-      Object.assign(payload, {
-        reference: byId("mining-buyer-reference")?.value.trim() || "",
-        commodity: byId("mining-buyer-commodity")?.value || "",
-        quantity: byId("mining-buyer-quantity")?.value,
-        range: byId("mining-buyer-range")?.value,
-        max_ls: byId("mining-buyer-ls")?.value,
-        large_pad: Boolean(byId("mining-buyer-large")?.checked),
-        exclude_carriers: Boolean(byId("mining-buyer-no-carriers")?.checked),
-      });
-      if (!payload.reference || !payload.commodity || number(payload.quantity) <= 0) return;
     } else if (page === "powerplay" && operation === "add_objective") {
       Object.assign(payload, {
         title: byId("powerplay-objective-title")?.value.trim() || "",
@@ -5207,6 +4788,7 @@ document.addEventListener("click", async (event) => {
         : "That action is not available from current journal state");
       if (accepted && groundTargetCommand) {
         workspaceFingerprints.ground = "";
+        workspaceFingerprints["planet-materials"] = "";
         queueGroundTargetRefresh();
       }
     }
@@ -5231,7 +4813,8 @@ document.addEventListener("click", async (event) => {
   const accepted = await command(action, payload);
   button.classList.remove("busy");
   button.removeAttribute("aria-busy");
-  if (accepted && action !== "copy_next") showToast("Command handed to the flight computer");
+  // A copy reports in the Event Feed: whether it reached the clipboard.
+  if (accepted && !["copy_next", "set_auto_copy"].includes(action)) showToast("Command handed to the flight computer");
 });
 
 document.addEventListener("input", (event) => {
@@ -5259,6 +4842,10 @@ document.addEventListener("input", (event) => {
 });
 
 // Settings save as they change. Overlays are Overlay Studio's alone.
+document.addEventListener("change", (event) => {
+  handlePlanetaryChange(event, PLANETARY_UI);
+});
+
 document.addEventListener("change", async (event) => {
   const target = event.target;
   if (!target.closest?.("#settings-workspace")) return;
@@ -5282,7 +4869,7 @@ document.addEventListener("change", async (event) => {
 
 document.addEventListener("input", (event) => {
   if (event.target.id === "settings-search") applySettingsView();
-  else handleTradingInput(event, WORKSHOP_UI);
+  else if (!handleMiningInput(event, WORKSHOP_UI) && !handlePlanetaryInput(event, PLANETARY_UI)) handleTradingInput(event, WORKSHOP_UI);
 });
 
 document.addEventListener("toggle", (event) => {
@@ -5317,6 +4904,8 @@ document.addEventListener("change", async (event) => {
 document.addEventListener("submit", (event) => {
   if (handleColonisationSubmit(event, WORKSHOP_UI)) return;
   if (handleTradingSubmit(event, WORKSHOP_UI)) return;
+  if (handleMiningSubmit(event, WORKSHOP_UI)) return;
+  if (handlePlanetarySubmit(event, PLANETARY_UI)) return;
   handleBgsSubmit(event, WORKSHOP_UI);
 });
 

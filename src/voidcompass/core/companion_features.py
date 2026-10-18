@@ -35,6 +35,9 @@ DEFAULT_STATE = {
     "last_exploration_sale": None,
     "last_bio_sale": None,
     "exploration_data_lost_at": None,
+    # 5.5.12: each surface vehicle's tank, learnt from the fullest reading
+    # seen (the game never says), so its fuel can be a percentage.
+    "surface_tanks": {},
 }
 
 def unsold_bio_value(state):

@@ -3,7 +3,6 @@
    controls, data hierarchy and profile palette. Load after styles.css. */
 
 /* Planetary operations: keep the target lock, selected planet and sites distinct. */
-.page[data-page-name="planet-materials"] .planet-materials-shell { gap: 12px; }
 .page[data-page-name="planet-materials"] .planet-compass-quick {
   border: 1px solid color-mix(in srgb, var(--orange) 43%, var(--border));
   border-left: 3px solid var(--orange);
@@ -15,7 +14,6 @@
   border-color: color-mix(in srgb, var(--green) 49%, var(--border));
   border-left-color: var(--green);
 }
-.page[data-page-name="planet-materials"] .planet-compass-heading h3 { font-size: clamp(21px, 2.4vw, 30px); }
 .page[data-page-name="planet-materials"] .planet-compass-state {
   border-left: 2px solid var(--orange);
   background: color-mix(in srgb, var(--orange) 6%, var(--inset));
@@ -35,7 +33,6 @@
   border: 1px solid var(--border);
   background: var(--header);
 }
-.page[data-page-name="planet-materials"] .planet-atlas-tabs button { min-width: 0; }
 .page[data-page-name="planet-materials"] .planet-condition-card {
   border-color: color-mix(in srgb, var(--accent) 37%, var(--border));
 }
@@ -54,7 +51,6 @@
 .page[data-page-name="planet-materials"] .planet-site-card summary:hover {
   background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
-.page[data-page-name="planet-materials"] .planet-composition-row i { box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 16%, transparent); }
 
 /* Field systems and mission planning: clear launch choices and route sequence. */
 .page[data-page-name="operations"] .tool-grid { gap: 13px; }
@@ -98,31 +94,6 @@
 }
 .page[data-page-name="mission"] .mission-detail .workspace-hero h3 { color: var(--text); }
 .page[data-page-name="mission"] .objective-row:not(.complete) { box-shadow: inset 2px 0 color-mix(in srgb, var(--orange) 52%, transparent); padding-left: 8px; }
-
-/* Surface navigation: map is primary, command entry and readout are adjacent. */
-.page[data-page-name="ground"] .workspace-metrics article:nth-child(3),
-.page[data-page-name="ground"] .workspace-metrics article:nth-child(4) {
-  border-top-color: var(--green);
-  background: linear-gradient(145deg, color-mix(in srgb, var(--green) 7%, var(--panel)), var(--panel-alt));
-}
-.page[data-page-name="ground"] .ground-grid > .workspace-card:last-child {
-  border-color: color-mix(in srgb, var(--green) 37%, var(--border));
-}
-.page[data-page-name="ground"] .trail-chart,
-.page[data-page-name="ground"] .trail-empty {
-  height: clamp(300px, 40vw, 410px);
-  background:
-    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--green) 8%, transparent), transparent 55%),
-    repeating-linear-gradient(90deg, transparent 0 47px, color-mix(in srgb, var(--accent) 5%, transparent) 47px 48px),
-    var(--inset);
-}
-.page[data-page-name="ground"] .field-map-summary { border-top-color: color-mix(in srgb, var(--green) 30%, var(--border)); }
-.page[data-page-name="ground"] .trail-readout {
-  flex-wrap: wrap;
-  background: color-mix(in srgb, var(--green) 4%, var(--panel-alt));
-}
-.page[data-page-name="ground"] .trail-readout b { color: var(--green); }
-.page[data-page-name="ground"] .field-pin-row:hover { background: color-mix(in srgb, var(--green) 5%, transparent); }
 
 /* Record pages: archive counters, trends and a readable flight chronology. */
 :is(.page[data-page-name="records"], .page[data-page-name="profile"], .page[data-page-name="analytics"], .page[data-page-name="chronicle"], .page[data-page-name="ledger"]) .workspace-metrics article,
@@ -203,12 +174,10 @@
 
 /* At a compact desktop window, stack dense instruments instead of clipping. */
 @media (max-width: 1220px) {
-  .page[data-page-name="ground"] .ground-grid { grid-template-columns: minmax(0, 1fr); }
   .page[data-page-name="planet-materials"] .planet-site-card summary {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
   .page[data-page-name="planet-materials"] .planet-site-card summary > em,
-  .page[data-page-name="planet-materials"] .planet-site-card summary > button { justify-self: start; }
   .page[data-page-name="analytics"] .region-passport-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -219,15 +188,12 @@
   .page[data-page-name="mission"] .mission-list > div { max-height: 210px; }
   .page[data-page-name="records"] .record-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .page[data-page-name="profile"] .profile-workspace-grid { column-count: 1; }
-  .page[data-page-name="planet-materials"] .planet-atlas-tabs { flex-wrap: wrap; }
-  .page[data-page-name="planet-materials"] .planet-atlas-tabs button { flex: 1 1 150px; }
 }
 
 @media (max-width: 680px) {
   .page[data-page-name="operations"] .tool-grid,
   .page[data-page-name="records"] .record-metrics,
   .page[data-page-name="analytics"] .region-passport-grid { grid-template-columns: minmax(0, 1fr); }
-  .page[data-page-name="planet-materials"] .planet-site-card summary { grid-template-columns: minmax(0, 1fr); }
 }
 
 body.reduced-motion .page[data-page-name="operations"] .tool-card { transition: none; }

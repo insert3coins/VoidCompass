@@ -368,7 +368,7 @@ class HtmlDashboardRuntime:
             receive = getattr(self.app, "receive_music_levels", None)
             return bool(callable(receive) and receive(payload))
         if action not in {
-            "open", "copy_next", "set_theme", "rebuild_cache",
+            "open", "copy_next", "set_auto_copy", "set_theme", "rebuild_cache",
             "open_screenshots", "open_postcards", "open_logs", "quit",
             "page_changed", "overlay_studio", "workspace", "music",
             "set_flight_log_mode",

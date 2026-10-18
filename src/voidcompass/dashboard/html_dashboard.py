@@ -82,6 +82,8 @@ from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
 from voidcompass.dashboard.html_colonisation import HtmlColonisationMixin
 from voidcompass.dashboard.html_bgs import HtmlBgsMixin
 from voidcompass.dashboard.html_trading import HtmlTradingMixin
+from voidcompass.dashboard.html_mining import HtmlMiningMixin
+from voidcompass.dashboard.html_planetary import HtmlPlanetaryMixin
 
 
 PROJECT_URL = "https://github.com/insert3coins/VoidCompass"
@@ -172,7 +174,7 @@ def _watcher_echoes(memory):
             heard[row[0]] = (count + 1, max(last, float(row[1] or 0)))
     return heard
 
-class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin):
+class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin, HtmlMiningMixin, HtmlPlanetaryMixin):
     """Publish exploration state and accept private dashboard commands."""
 
     def start_html_dashboard_bridge(self):
@@ -297,6 +299,16 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             row = {"state": "warn", "label": "KEY REJECTED"}
         return {"edsm": edsm, "inara": row}
 
+    def _html_vehicle_fuel(self):
+        active = getattr(self, "_surface_vehicle_fuel_active", None)
+        if not callable(active) or not active():
+            return None
+        kind = getattr(self, "_surface_vehicle_kind", None)
+        percent = getattr(self, "_surface_fuel_percent", None)
+        return {"name": (kind() if callable(kind) else "") or "SRV",
+                "percent": percent() if callable(percent) else None,
+                "tonnes": _number(getattr(self, "current_surface_fuel_reservoir", None))}
+
     def _html_exploration_preflight(self, route, flight, sources):
         """Return compact departure readiness without repeating survey data."""
         checks = []
@@ -379,6 +391,20 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             add("fuel", "Fuel reserve", "warn", f"{fuel:.0f}%", "Low reserve for an unplanned diversion")
         else:
             add("fuel", "Fuel reserve", "ready", f"{fuel:.0f}%", "Departure reserve is available")
+        vehicle = (flight or {}).get("vehicle_fuel")
+        if vehicle:
+            label = f"{str(vehicle.get('name') or 'SRV').title()} fuel"
+            share = vehicle.get("percent")
+            if share is None:
+                tonnes = vehicle.get("tonnes")
+                add("vehicle_fuel", label, "optional", f"{tonnes:.2f} T" if tonnes is not None else "UNKNOWN",
+                    "Learning this vehicle's tank: a full one shows its size")
+            elif share < 15:
+                add("vehicle_fuel", label, "fail", f"{share:.0f}%", "Head back to the ship now")
+            elif share < 30:
+                add("vehicle_fuel", label, "warn", f"{share:.0f}%", "Keep the ship within reach")
+            else:
+                add("vehicle_fuel", label, "ready", f"{share:.0f}%", "Plenty for the drive")
 
         now = time.monotonic()
         disk_cache = getattr(self, "_html_preflight_disk_cache", None)
@@ -472,6 +498,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             **progress,
             "source": source,
             "next": destination,
+            "auto_copy": bool(self.config.get("auto_copy_waypoint", False)),
             "final": final,
             "percent": round(max(0.0, min(100.0, percent)), 1),
             "distance_text": distance_text,
@@ -1897,6 +1924,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 for row in bookmarks[:100] if isinstance(row, dict)
             ],
             "missions": self._html_mining_missions(companion),
+            # 5.5.12: everything the rebuilt page shows around the run.
+            **self._mining_extras(),
             "tools": {
                 "ring_status": _text(tool.get("ring_status") or "ready", 30),
                 "ring_detail": _text(tool.get("ring_detail"), 500),
@@ -2519,7 +2548,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
 
     def _html_workspace(self, page, intelligence=None):
         builders = {
-            "planet-materials": self._html_planet_materials_workspace,
+            # 5.5.12: one Planetary page; the overlay keeps the lighter sites builder.
+            "planet-materials": lambda: {**self._html_planet_materials_workspace(), **self._planetary_extras()},
             # 5.5.4: the Exploration Archive is Explore & Survey's Archive tab.
             "explore": lambda: {**self._html_explore_workspace(intelligence), "archive": self._html_analytics_workspace()},
             "profile": self._html_profile_workspace,
@@ -2707,6 +2737,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 f"{fuel_main:.1f} / {fuel_capacity:.1f} T"
                 if fuel_main is not None and fuel_capacity else "AWAITING LOADOUT"
             ),
+            # Out in an SRV, its own tank (5.5.12); the ship's stays the ship's.
+            "vehicle_fuel": self._html_vehicle_fuel(),
             "docked": bool(getattr(self, "current_docked", False)),
             "landed": bool(getattr(self, "current_landed", False)),
             "on_foot": bool(getattr(self, "current_on_foot", False)),
@@ -2876,17 +2908,25 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             return False
         return True
 
-    def _html_copy_text(self, value):
+    def _html_copy_text(self, value, label=""):
+        """Copy to the clipboard; a failure (or, with a ``label``, a success)
+        goes in the Event Feed, since the deck can't tell from here."""
         value = str(value or "")
         if not value:
             return False
         try:
-
             self.root.copy_text(value)
-
-            return True
-        except Exception:
+        except Exception as exc:
+            logging.warning("Clipboard copy failed: %s", exc)
+            feed = getattr(self, "add_event_feed_entry", None)
+            if callable(feed):
+                feed("CLIPBOARD", f"Couldn't copy {value}: {exc}. Try again.", severity="FAIL", copy_text=value)
             return False
+        if label:
+            feed = getattr(self, "add_event_feed_entry", None)
+            if callable(feed):
+                feed("ROUTE", f"Copied {label}: {value}", severity="INFO", copy_text=value)
+        return True
 
     def _handle_html_workspace_command(self, payload):
         """Validate and apply commands from fully HTML specialist pages."""
@@ -3174,6 +3214,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 self.update_ground_target_ui()
 
         elif page == "mining":
+            handled = self._html_mining_operation(operation, payload)
+            if handled is not None:
+                return handled
             engine = getattr(self, "specialist_engine", None)
             if engine is None:
                 return False
@@ -4036,6 +4079,14 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             return True
         if action == "copy_next":
             self._dashboard_copy_next()
+            return True
+        if action == "set_auto_copy":
+            self.config["auto_copy_waypoint"] = bool(payload.get("enabled"))
+            self._persist_config()
+            self.add_event_feed_entry(
+                "ROUTE", "Auto-copy on: your next waypoint goes on the clipboard as you arrive" if self.config["auto_copy_waypoint"]
+                else "Auto-copy off", severity="INFO")
+            self._schedule_html_dashboard_publish(immediate=True)
             return True
         if action == "refresh_galnet":
             self.refresh_galnet(force=True)
