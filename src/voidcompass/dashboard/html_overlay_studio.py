@@ -37,6 +37,7 @@ from voidcompass.overlays.galnet_ticker_hud import (
 from voidcompass.overlays.music_player_hud import (
     MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_SKINS, MUSIC_VISUALIZERS, music_overlay_options,
 )
+from voidcompass.overlays.rig_tracker import HERE_M, HERE_RANGE_M, rig_here_m
 from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
 from voidcompass.colonisation.views import overlay_options as colony_overlay_options
 
@@ -359,6 +360,7 @@ class HtmlOverlayStudioMixin:
                 "galaxy_minimap_text_scale_percent": heartbeat_text_size(self.config.get("galaxy_minimap_text_scale_percent")),
                 "galaxy_minimap_region_text_percent": heartbeat_text_size(self.config.get("galaxy_minimap_region_text_percent")),
                 "rig_tracker_show_holds": bool(self.config.get("rig_tracker_show_holds", True)),
+                "rig_tracker_here_m": rig_here_m(self.config),
                 "postcard_hold_s": postcards.postcard_options(self.config)["hold"],
                 "postcard_photo": postcards.postcard_options(self.config)["photo"],
                 "postcard_size": postcards.postcard_options(self.config)["size"],
@@ -674,6 +676,7 @@ class HtmlOverlayStudioMixin:
             "station_info_timeout_s": (5.0, 3600.0, 30.0, True),
             "contact_scope_timeout_s": (0.0, 3600.0, 45.0, True),
             "gravity_warning_threshold_g": (0.5, 20.0, 3.0, False),
+            "rig_tracker_here_m": (*HERE_RANGE_M, HERE_M, True),
         }
         # Studio saves one field as it changes, so a key missing from the
         # payload keeps the commander's current value rather than resetting.
@@ -683,6 +686,10 @@ class HtmlOverlayStudioMixin:
             value = _number(payload.get(key), default)
             value = max(low, min(high, value if value is not None else default))
             self.config[key] = int(round(value)) if integer else round(value, 2)
+        if "rig_tracker_here_m" in payload:
+            update_rigs = getattr(self, "_rig_update_overlay", None)
+            if callable(update_rigs):
+                update_rigs()
         if "overlay_frame_rate" in payload:
             rate = _integer(payload.get("overlay_frame_rate"), 30)
             self.config["overlay_frame_rate"] = rate if rate in OVERLAY_FRAME_RATES else 30

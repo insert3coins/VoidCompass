@@ -6,7 +6,7 @@ import logging
 
 from voidcompass.core.config import get_active_profile, get_profile_file
 from voidcompass.overlays.cargo_hud import VEHICLE_CARGO_CAPACITIES
-from voidcompass.overlays.rig_tracker import RigStore, build_rig_model, hold_row, surface_distance_m
+from voidcompass.overlays.rig_tracker import RigStore, build_rig_model, hold_row, rig_here_m, surface_distance_m
 
 
 def _tons(inventory):
@@ -117,9 +117,10 @@ class DashboardRigsMixin:
         heading = getattr(self, "current_heading", None)
         key = str((getattr(self, "config", None) or {}).get("overlay_hotkey_rig_1") or "").upper()
         hint = f"{key} AS YOU DEPLOY RIG 1 · AGAIN AS YOU COLLECT IT" if key else "SET THE RIG KEYS IN SETTINGS › HOTKEYS"
-        show_holds = bool((getattr(self, "config", None) or {}).get("rig_tracker_show_holds", True))
+        config = getattr(self, "config", None) or {}
+        show_holds = bool(config.get("rig_tracker_show_holds", True))
         return build_rig_model(rigs, lat, lon, heading, radius, body, in_rhino=self._rig_in_rhino(), hint=hint,
-                               holds=self._rig_holds() if show_holds else ())
+                               holds=self._rig_holds() if show_holds else (), here_m=rig_here_m(config))
 
     # -- the Local API (5.5.10) ------------------------------------------------
     def api_rigs(self):

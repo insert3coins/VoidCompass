@@ -4,6 +4,7 @@
 **Release Date:** 2026-Oct-18
 
 * **Planetary Operations › Sites: ALL SITES.** Every surface site you've saved, grouped by planet, whether you're on a planet or not: your current system's planets first, then A to Z, each with its sites and materials. Type in FIND to narrow it to a planet, system, site or material; SEND TO COMPASS works on any of them, and THIS PLANET opens that planet's own view. It's what SITES shows when you're not on a planet with saved sites (it used to show an empty planet from the system you were in).
+* **Rig Tracker: you choose how close counts as HERE.** Overlay Studio › Rig Tracker › *Counts as HERE within*, from 10 to 200 m (40 by default, as before). Saved per commander; the overlay and the Mining page's rig list follow it straight away.
 
 ## Earlier releases
 

@@ -25,10 +25,21 @@ from voidcompass.core.persistence_queue import persistence_queue
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD, _integer
 
 SLOTS = 6
-# Closer than this, you're at the rig.
+# Closer than this, you're at the rig (Studio can change it, 10 to 200 m).
 HERE_M = 40.0
+HERE_RANGE_M = (10, 200)
 # Rigs left untouched this long are forgotten.
 FORGET_S = 7 * 86400
+
+
+def rig_here_m(config):
+    """How close counts as HERE, from the commander's Studio setting."""
+    low, high = HERE_RANGE_M
+    try:
+        value = float((config or {}).get("rig_tracker_here_m", HERE_M))
+    except (TypeError, ValueError):
+        value = HERE_M
+    return int(round(max(low, min(high, value))))
 
 
 def _key(system, body):
@@ -153,7 +164,8 @@ def hold_row(name, used, capacity, partial=False):
             "free": None if partial else max(0, capacity - used), "partial": bool(partial)}
 
 
-def build_rig_model(rigs, lat, lon, heading, radius_m, body="", now=None, in_rhino=False, hint="", holds=()):
+def build_rig_model(rigs, lat, lon, heading, radius_m, body="", now=None, in_rhino=False, hint="", holds=(),
+                    here_m=HERE_M):
     """The overlay's model, or None when there are no rigs here and you're
     not out in the Rhino (then: six empty dials and the key to press)."""
     if lat is None or lon is None or not radius_m or not (rigs or in_rhino):
@@ -169,7 +181,7 @@ def build_rig_model(rigs, lat, lon, heading, radius_m, body="", now=None, in_rhi
         bearing = bearing_deg(lat, lon, rig["lat"], rig["lon"])
         relative = (bearing - heading) % 360.0 if heading is not None else bearing
         row = {"slot": slot, "tracked": True, "distance_m": round(distance, 1), "bearing": round(bearing, 1),
-               "relative": round(relative, 1), "here": distance <= HERE_M, "at": float(rig["at"]),
+               "relative": round(relative, 1), "here": distance <= here_m, "at": float(rig["at"]),
                "age_s": round(max(0.0, now - float(rig["at"])))}
         slots.append(row)
         if nearest is None or distance < nearest["distance_m"]:
