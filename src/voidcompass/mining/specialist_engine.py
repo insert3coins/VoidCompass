@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import heapq
 import json
 import math
 import os
@@ -232,6 +233,7 @@ class SpecialistEngine:
             self.state = _defaults()
 
     def _save(self, immediate=False):
+        self._revision = getattr(self, "_revision", 0) + 1
         persistence_queue().submit_json(
             self.path, indent=None, source=self._persistence_snapshot,
             delay_s=0.75, immediate=immediate,
@@ -1406,36 +1408,42 @@ class SpecialistEngine:
         return {"carrier": cd, "upkeep": {"weekly_cr": weekly, "reserve_weeks": runway, "target_weeks": target, "target_shortfall_cr": shortfall}, "inventory": plan["inventory"], "inventory_source": plan["inventory_source"], "route": {"legs": rendered, "leg_count": len(rendered), "total_distance_ly": round(total_distance, 2), "tritium_required_t": required, "tritium_per_jump_t": plan.get("tritium_per_jump_t"), "tritium_source": ", ".join(sorted(fuel_sources)) if fuel_sources else "unknown; supply per-leg or per-jump input", "tank_t": tank, "cargo_tritium_t": cargo_tritium, "available_t": available, "reserve_t": route_reserve, "deficit_t": deficit, "valid": not issues and (required is not None or not rendered), "issues": issues}, "orders": {"items": orders, "buy_order_exposure_cr": exposure}}
 
     def _exobio_snapshot(self):
-        state = copy.deepcopy(self.state["exobiology"])
+        # Read in place and copy only what goes out (5.5.13): a long career
+        # holds thousands of surveys, and copying and sorting them all on
+        # every call cost ~190 ms, several times a second while driving.
+        state = self.state["exobiology"]
         surveys = state.get("surveys") or {}
+        stamp = lambda row: row.get("updated_ts") or 0
         chosen = None
         body = (self.position or {}).get("body")
         if body:
-            matches = [row for row in surveys.values() if row.get("body") == body]
-            chosen = max(matches, key=lambda row: row.get("updated_ts") or 0, default=None)
+            chosen = max((row for row in surveys.values() if row.get("body") == body), key=stamp, default=None)
         if chosen is None and state.get("sampling"):
             chosen = surveys.get(state["sampling"].get("survey_key"))
         if chosen is None and surveys:
-            chosen = max(surveys.values(), key=lambda row: row.get("updated_ts") or 0)
+            chosen = max(surveys.values(), key=stamp)
         rendered = None
         if chosen:
             rendered = copy.deepcopy(chosen)
-            radius = (self.position or {}).get("radius_m") or chosen.get("radius_m")
-            center = self.position if self.position and (not self.position.get("body") or self.position.get("body") == chosen.get("body")) else None
-            if center is None and chosen.get("pins"):
-                first = chosen["pins"][0]
+            radius = (self.position or {}).get("radius_m") or rendered.get("radius_m")
+            center = self.position if self.position and (not self.position.get("body") or self.position.get("body") == rendered.get("body")) else None
+            if center is None and rendered.get("pins"):
+                first = rendered["pins"][0]
                 center = {"lat": first["lat"], "lon": first["lon"], "radius_m": radius}
             pins = []
-            for pin in chosen.get("pins") or []:
+            for pin in rendered.get("pins") or []:
                 vector = self._surface_vector(center, pin, radius)
                 relative = None
                 if center and center.get("heading") is not None and vector["bearing_deg"] is not None:
                     relative = round((vector["bearing_deg"] - center["heading"] + 540) % 360 - 180, 1)
                 pins.append({**pin, **vector, "relative_bearing_deg": relative})
-            rendered.update(radius_m=radius, center=center, pins=pins, pins_total=len(pins))
-        index = [{"key": row["key"], "system": row.get("system"), "body": row.get("body"), "pins": len(row.get("pins") or []), "completed": len(row.get("completed") or {}), "updated_ts": row.get("updated_ts")} for row in surveys.values()]
-        index.sort(key=lambda row: row.get("updated_ts") or 0, reverse=True)
-        return {"system": state.get("system"), "system_address": state.get("system_address"), "position": copy.deepcopy(self.position), "sampling": state.get("sampling"), "current_map": rendered, "surveys": index[:50], "last_sale_ts": state.get("last_sale_ts")}
+            rendered.update(radius_m=radius, center=copy.deepcopy(center), pins=pins, pins_total=len(pins))
+        index = [{"key": row["key"], "system": row.get("system"), "body": row.get("body"), "pins": len(row.get("pins") or []),
+                  "completed": len(row.get("completed") or {}), "updated_ts": row.get("updated_ts")}
+                 for row in heapq.nlargest(50, surveys.values(), key=stamp)]
+        return {"system": state.get("system"), "system_address": state.get("system_address"), "position": copy.deepcopy(self.position),
+                "sampling": copy.deepcopy(state.get("sampling")), "current_map": rendered, "surveys": index,
+                "last_sale_ts": state.get("last_sale_ts")}
 
     def snapshot(self, carrier_data=None):
         with self._lock:
@@ -1473,8 +1481,14 @@ class SpecialistEngine:
             return self._carrier_snapshot(carrier_data)
 
     def exobiology_snapshot(self):
+        # One page refresh asks several times; the answer only changes with
+        # the state (every change saves) or where you are.
         with self._lock:
-            return self._exobio_snapshot()
+            key = (getattr(self, "_revision", 0), json.dumps(self.position, sort_keys=True, default=str))
+            held = getattr(self, "_exobio_held", None)
+            if held is None or held[0] != key:
+                held = self._exobio_held = (key, self._exobio_snapshot())
+            return copy.deepcopy(held[1])
 
     def geojson(self):
         current = self.exobiology_snapshot().get("current_map") or {}
