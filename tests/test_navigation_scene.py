@@ -200,7 +200,7 @@ class NavigationSceneBrowserTests(unittest.TestCase):
             targets[star] = self.controlled_frame(page, 1.37)["deck"]
         self.assertNotEqual(targets["H"], targets["N"])
 
-    def test_every_state_projects_into_the_deck_and_round_the_ship(self):
+    def test_every_state_projects_into_the_deck_and_nothing_behind_the_ship(self):
         page = self.open()
         for label in LABELS:
             with self.subTest(label=label):
@@ -208,7 +208,8 @@ class NavigationSceneBrowserTests(unittest.TestCase):
                 page.evaluate("navigationScene.transition = null; navigationScene.previous = null;"
                               "navigationScene.draw(performance.now())")
                 self.assertGreater(page.evaluate(LIT_PIXELS, "deck-canvas"), .01, "an empty deck")
-                self.assertGreater(page.evaluate(LIT_PIXELS, "bay-canvas"), .01, "no aura round the ship")
+                # 5.5.15: no rings or frames behind the ship, only its systems when they're on.
+                self.assertEqual(page.evaluate(LIT_PIXELS, "bay-canvas"), 0, "something behind the ship")
 
     def test_fsd_charge_scenes_remain_distinct_and_alive(self):
         page = self.open()

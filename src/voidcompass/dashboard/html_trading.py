@@ -17,7 +17,7 @@ from voidcompass.trading import views
 
 _VIEWS = ("overview", "route", "cargo", "find", "station", "history")
 # Ships that need a large landing pad (journal Ship symbols, folded).
-LARGE_SHIPS = {"anaconda", "cutter", "federation_corvette", "belugaliner", "type7", "type9", "type9_military",
+LARGE_SHIPS = {"anaconda", "anacondamkii", "cutter", "federation_corvette", "belugaliner", "type7", "type9", "type9_military",
                "panthermkii"}
 
 

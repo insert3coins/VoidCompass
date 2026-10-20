@@ -13,6 +13,7 @@
     ['Alliance Chieftain', 'Alliance Chieftain.png', ['typex']],
     ['Alliance Crusader', 'Alliance Crusader.png', ['typex2']],
     ['Anaconda', 'Anaconda.png', ['anaconda']],
+    ['Anaconda MkII', 'Anaconda MkII.png', ['anacondamkii']],
     ['Asp Explorer', 'Asp Explorer.png', ['asp']],
     ['Asp Scout', 'Asp Scout.png', ['aspscout']],
     ['Beluga Liner', 'Beluga Liner.png', ['belugaliner']],

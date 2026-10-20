@@ -4,8 +4,8 @@
   /*
    * Navigation scene
    * ----------------
-   * Every navigation state projects its own animated hologram: a scene in the
-   * deck beside the ship, and an aura in the ship's hologram bay. The geometry
+   * Every navigation state projects its own animated hologram in the deck
+   * beside the ship; the ship's bay keeps only its systems round it. The geometry
    * evokes the cockpit instrument for that state and never invents telemetry.
    * Anything that reads as a quantity (altitude, scan progress, probes used,
    * threat level, boost tier, shields) is drawn from the journal or
@@ -156,8 +156,8 @@
     return motion;
   }
 
-  // The bay aura groups related states. Moving between states that share an
-  // aura cross-fades; anything else re-projects the whole hologram.
+  // Related states share a group. Moving between states in one group
+  // cross-fades; anything else re-projects the whole hologram.
   const AURA_GROUPS = {
     cruise: ['supercruise', 'supercruise_overcharge', 'supercruise_assist', 'taxi',
       'local_arrival', 'interdiction_evaded'],
@@ -2671,271 +2671,6 @@
     deckScene(st.key)(s, st, pal);
   }
 
-  // ---------------------------------------------------------------------
-  // Bay aura: what the ship's hologram stands in. The portrait covers most
-  // of the bay, so these read round its silhouette. The ship art faces its
-  // nose down and to the right, so the world streams up and to the left.
-  // ---------------------------------------------------------------------
-
-  const NOSE = [.86, .5];
-
-  const AURAS = {
-    idle(b, st, pal, cx, cy) {
-      const y = b.H * .74, rx = b.W * .42, ry = b.H * .12, angle = st.p * TAU * .12;
-      b.arc(cx, y, rx, ry, 0, TAU, st.c, .22);
-      b.arc(cx, y, rx, ry, angle - .7, angle, st.c, .5, 1.2);
-    },
-    cruise(b, st, pal, cx, cy) {
-      const fast = st.key === 'supercruise_overcharge' ? 1.8 : 1;
-      for (let index = 0; index < 12; index += 1) {
-        const t = fract(st.p * .55 * fast * (.7 + hash(index + 3) * .6) + hash(index + 5));
-        const offset = (hash(index + 9) - .5) * b.H * 1.3, along = lerp(-b.W * .75, b.W * .75, t);
-        const x = cx - NOSE[0] * along + NOSE[1] * offset;
-        const y = cy - NOSE[1] * along - NOSE[0] * offset;
-        const length = 6 + hash(index + 11) * 10;
-        b.line(x, y, x + NOSE[0] * length, y + NOSE[1] * length, st.c, Math.sin(t * Math.PI) * .42, 1);
-      }
-    },
-    charge(b, st, pal, cx, cy) {
-      const hyper = st.key === 'hyper_charge', pace = hyper ? .72 : .52;
-      const spool = .52 + .48 * smooth(st.age / 2.3);
-      for (let index = 0; index < 4; index += 1) {
-        const t = fract(st.p * pace + index / 4), travel = smooth(t);
-        const rx = lerp(b.W * .59, b.W * .24, travel);
-        const ry = lerp(b.H * .5, b.H * .22, travel);
-        const light = ends(t, .15) * spool * (hyper ? .52 : .36);
-        b.arc(cx, cy, rx, ry, Math.PI * .18, Math.PI * .82, st.c, light, 1.1);
-        b.arc(cx, cy, rx, ry, Math.PI * 1.18, Math.PI * 1.82, st.c, light, 1.1);
-      }
-      if (hyper) {
-        b.bloom(cx, cy, b.W * .36, pal.accent, .16 * spool);
-        b.arc(cx, cy, b.W * .25, b.H * .28, 0, TAU, pal.accent, .27 * spool, 1.1);
-      }
-    },
-    tunnel(b, st, pal, cx, cy) {
-      if (st.key === 'carrier_transit') {
-        // A slow, squared wake surrounds the carrier projection, separate
-        // from the commander's concentric ship-jump tunnel.
-        for (let index = 0; index < 4; index += 1) {
-          const t = fract(st.p * .19 + index / 4);
-          const rx = b.W * lerp(.2, .72, smooth(t));
-          const ry = b.H * lerp(.19, .64, smooth(t));
-          const light = Math.sin(t * Math.PI) * .42;
-          for (const side of [-1, 1]) {
-            b.poly([[cx + side * rx, cy - ry * .5],
-              [cx + side * rx * .7, cy - ry], [cx - side * rx * .25, cy - ry]],
-              st.c, light, 1.15);
-            b.poly([[cx + side * rx, cy + ry * .5],
-              [cx + side * rx * .7, cy + ry], [cx - side * rx * .25, cy + ry]],
-              st.c, light * .72, 1.1);
-          }
-        }
-        return;
-      }
-      for (let index = 0; index < 6; index += 1) {
-        const t = fract(st.p * .32 + index / 6), k = t * t;
-        b.ring(cx, cy, 4 + k * b.W * .7, 3 + k * b.H * .7, 10, st.c, Math.sin(t * Math.PI) * .45, 1, st.p * .1 + index);
-      }
-    },
-    flare(b, st, pal, cx, cy) {
-      if (st.key === 'carrier_arrival') {
-        const settle = smooth(st.age / 2.8);
-        const spread = lerp(b.W * .56, b.W * .43, settle);
-        b.brackets(cx, cy, spread, b.H * .44, st.c, .32 + .19 * settle, 9, 1.3);
-        for (const side of [-1, 1]) {
-          b.line(cx + side * b.W * .34, cy - b.H * .27,
-            cx + side * b.W * .34, cy + b.H * .27, st.c, .28, 1.2);
-          b.dot(cx + side * b.W * .4, cy + b.H * .28, 1.3,
-            st.c, .3 + .48 * wave(st.p * .22 + (side + 1) / 4));
-        }
-        return;
-      }
-      const star = st.starTone || st.c;
-      if (st.starFamily === 'blackhole') {
-        // A black hole sheds no light: its disc rings the ship instead.
-        for (let band = 0; band < 3; band += 1) {
-          const rx = b.W * (.4 + band * .06);
-          b.arc(cx, cy + b.H * .08, rx, rx * .2, 0, TAU, band ? star : pal.text, .5 - band * .12, 1.3 - band * .2);
-        }
-        return;
-      }
-      if (st.starFamily === 'neutron') {
-        // A neutron star's jets sweep past behind the ship.
-        const axis = -1.15 + Math.sin(st.p * .6) * .35;
-        for (const side of [-1, 1]) {
-          b.line(cx + b.W * .12, cy, cx + b.W * .12 + Math.cos(axis) * side * b.W * .6,
-            cy + Math.sin(axis) * side * b.W * .6, star, .45, 1.4);
-        }
-      }
-      b.bloom(cx + b.W * .12, cy - b.H * .05, b.W * .5, star, .32);
-      for (let index = 0; index < 10; index += 1) {
-        const angle = index * TAU / 10 + st.p * .03, r = b.W * (.34 + wave(st.p * .2 + index / 10) * .1);
-        b.line(cx + Math.cos(angle) * b.W * .26, cy + Math.sin(angle) * b.H * .3, cx + Math.cos(angle) * r,
-          cy + Math.sin(angle) * r * .6, star, .28);
-      }
-    },
-    cool(b, st, pal, cx, cy) {
-      const cooling = .35 + .65 * (1 - smooth(st.age / 3));
-      for (let index = 0; index < 7; index += 1) {
-        const t = fract(st.p * .25 + index / 7), x = b.W * (.12 + hash(index + 4) * .76);
-        b.line(x, b.H - 6 - t * b.H * .8, x + Math.sin(t * 5 + index) * 2, b.H - 10 - t * b.H * .8, st.c, Math.sin(t * Math.PI) * cooling * .5);
-      }
-    },
-    descent(b, st, pal, cx, cy) {
-      // The ground plane under the hologram, closer as altitude falls.
-      const alt = st.d.altitude;
-      const near = alt < 0 ? .5 : 1 - clamp(Math.log10(1 + alt) / 5);
-      const horizon = lerp(b.H * .92, b.H * .62, near);
-      const depart = st.key.includes('departure');
-      for (let index = -5; index <= 5; index += 1) b.line(cx + index * 4, horizon, cx + index * b.W * .14, b.H + 1, st.c, .18);
-      for (let index = 0; index < 4; index += 1) {
-        const t = fract(st.terrain * .2 + index / 4), depth = (depart ? 1 - t : t) ** 2;
-        b.line(0, lerp(horizon, b.H, depth), b.W, lerp(horizon, b.H, depth), st.c, Math.sin(t * Math.PI) * .3);
-      }
-    },
-    pad(b, st, pal, cx, cy) {
-      const y = b.H * .8;
-      const pad = [[cx - b.W * .4, y], [cx - b.W * .24, y - 5], [cx + b.W * .24, y - 5], [cx + b.W * .4, y],
-        [cx + b.W * .24, y + 5], [cx - b.W * .24, y + 5]];
-      b.poly(pad, st.c, .45, 1, true, .05);
-      b.traceEdges(pad, st.p * .5, st.c, .7);
-    },
-    dock(b, st, pal, cx, cy) {
-      if (st.key.startsWith('carrier_')) {
-        // Broad deck rails and paired mooring beacons read as a capital
-        // ship, rather than the station's revolving letterbox.
-        const close = st.key === 'carrier_lockdown' ? smooth(st.age / 2.5) : 0;
-        const railY = b.H * .69;
-        b.poly([[cx - b.W * .48, railY], [cx - b.W * .3, railY - 6],
-          [cx + b.W * .3, railY - 6], [cx + b.W * .48, railY]], st.c, .42, 1.2);
-        for (const side of [-1, 1]) {
-          const x = cx + side * lerp(b.W * .49, b.W * .38, close);
-          b.poly([[x, cy - b.H * .38], [x - side * b.W * .12, cy - b.H * .24],
-            [x - side * b.W * .12, cy + b.H * .25], [x, cy + b.H * .38]],
-            st.c, .38 + close * .2, 1.15);
-          const pulse = st.key === 'carrier_lockdown' ? .66
-            : .2 + .5 * wave(st.p * .2 + (side + 1) / 4);
-          b.dot(x, railY, 1.4, st.c, pulse);
-        }
-        if (st.key === 'carrier_preparing') {
-          for (let index = 0; index < 4; index += 1) {
-            const x = cx - b.W * .24 + index * b.W * .16;
-            b.line(x, b.H * .82, x + b.W * .07, b.H * .82,
-              st.c, .15 + .52 * Math.pow(wave(st.p * .28 - index / 4), 3), 1.4);
-          }
-        }
-        return;
-      }
-      // The station has a smaller rotating octagonal aperture.
-      b.ring(cx, cy, b.W * .46, b.H * .44, 8, st.c, .28, 1.1, Math.PI / 8 + st.p * .02);
-      const facets = Array.from({length: 8}, (_, index) => {
-        const angle = Math.PI / 8 + index * TAU / 8 + st.p * .02;
-        return [cx + Math.cos(angle) * b.W * .46, cy + Math.sin(angle) * b.H * .44];
-      });
-      b.traceEdges(facets, st.p * .4, st.c, .6);
-      if (st.key === 'station' || st.key === 'docked') {
-        b.line(cx - b.W * .22, b.H * .78, cx + b.W * .22, b.H * .78, st.c, .48, 1.3);
-        for (const side of [-1, 1]) {
-          b.poly([[cx + side * b.W * .2, b.H * .69],
-            [cx + side * b.W * .25, b.H * .77],
-            [cx + side * b.W * .2, b.H * .84]], st.c, .5, 1.1);
-        }
-      }
-    },
-    ground(b, st, pal, cx, cy) {
-      const type = groundVehicleType(st), hover = type === 'nomad';
-      const brake = st.key === 'srv_handbrake', shift = brake ? 0 : st.p * (type === 'rhino' ? 8 : 12);
-      if (hover) {
-        b.arc(cx, b.H * .88, b.W * .43, b.H * .09, 0, TAU, st.c, .28, 1.1);
-        for (let index = 0; index < 3; index += 1) {
-          const t = brake ? index / 3 : fract(st.p * .28 + index / 3);
-          b.arc(cx, b.H * .86, lerp(b.W * .18, b.W * .55, t),
-            lerp(2, b.H * .13, t), 0, TAU, st.c, brake ? .12 : (1 - t) * .35, 1);
-        }
-        b.bloom(cx, b.H * .82, b.W * .3, pal.accent, .12);
-        return;
-      }
-      const points = [];
-      for (let x = -4; x <= b.W + 4; x += 6) {
-        points.push([x, b.H * .86 - Math.sin((x + shift) * .07) * (type === 'rhino' ? 1.2 : 2.2)]);
-      }
-      b.poly(points, st.c, .45, 1);
-      if (!brake) {
-        const count = type === 'rhino' ? 3 : 5;
-        for (let index = 0; index < count; index += 1) {
-          const t = fract(st.p * (type === 'rhino' ? .3 : .5) + index / count);
-          b.bloom(b.W * (.3 - t * .25), b.H * .84 - t * 5,
-            3 + t * (type === 'rhino' ? 4 : 6), st.c, (1 - t) * .25);
-        }
-      }
-      if (type === 'scorpion') {
-        b.arc(cx, cy, b.W * .38, b.H * .3, Math.PI * 1.18 + st.p * .08,
-          Math.PI * 1.82 + st.p * .08, st.c, .25, 1);
-      }
-    },
-    foot(b, st, pal, cx, cy) {
-      if (st.key === 'carrier_deck') {
-        const y = b.H * .87;
-        b.poly([[3, y + 4], [b.W * .25, y - 3], [b.W * .75, y - 3],
-          [b.W - 3, y + 4]], st.c, .48, 1.1);
-        for (let index = 0; index < 5; index += 1) {
-          const x = lerp(b.W * .17, b.W * .83, index / 4);
-          b.line(x, y - 3, x, y + 3, st.c,
-            .2 + .38 * wave(st.p * .13 - index / 5), 1.1);
-        }
-        return;
-      }
-      for (let index = 0; index < 3; index += 1) {
-        const t = fract(st.p * .3 + index / 3);
-        b.arc(cx, b.H * .9, 6 + t * b.W * .4, 1.5 + t * 5, 0, TAU, st.c, (1 - t) * .45);
-      }
-    },
-    sensor(b, st, pal, cx, cy) {
-      for (let index = 0; index < 4; index += 1) {
-        const t = fract(st.p * .3 + index / 4);
-        b.arc(cx, cy, 6 + t * b.W * .55, 4 + t * b.H * .5, 0, TAU, st.c, Math.sin(t * Math.PI) * .35);
-      }
-    },
-    rocks(b, st, pal, cx, cy) {
-      for (let index = 0; index < 5; index += 1) {
-        const t = fract(index / 5 + st.p * .035 + hash(index + 90) * .1);
-        const x = (b.W + 20) * (1 - t) - 10, y = b.H * (.15 + hash(index + 91) * .7);
-        rockAt(b, pal, x, y, 2.4 + hash(index + 92) * 2.2, st.c, st.p, ends(t) * .6, index + 3);
-      }
-    },
-    lock(b, st, pal, cx, cy) {
-      // A lattice bubble: the ship's frame shift held by a nearby mass.
-      for (let index = 0; index < 10; index += 1) {
-        const angle = index * TAU / 10 + st.p * .04;
-        const x = cx + Math.cos(angle) * b.W * .42, y = cy + Math.sin(angle) * b.H * .42;
-        b.ring(x, y, 4, 3.5, 6, st.c, .25 + .3 * wave(st.p * .3 + index / 10), .9, Math.PI / 6);
-      }
-    },
-    alarm(b, st, pal, cx, cy) {
-      const flash = .3 + .55 * wave(st.p * .5);
-      b.brackets(cx, cy, b.W * .46, b.H * .44, st.c, flash, 9, 1.4);
-      b.arc(cx, cy, b.W * .38, b.H * .34, 0, TAU, st.c, flash * .4);
-    },
-    handoff(b, st, pal, cx, cy) {
-      const t = fract(st.p * .5);
-      b.line(cx, b.H - 4, cx, 4, st.c, .18);
-      b.spark(cx, lerp(b.H - 4, 4, t), 1.2, st.c, pal.text, Math.sin(t * Math.PI) * .8);
-    },
-    panel(b, st, pal, cx, cy) {
-      const x = lerp(4, b.W - 4, wave(st.p * .15));
-      b.line(x, 4, x, b.H - 6, st.c, .25);
-    },
-  };
-
-  function paintBay(b, st, pal) {
-    const cx = b.W / 2, cy = b.H * .46, baseY = b.H - 4;
-    // The projection plinth the hologram stands on.
-    b.bloom(cx, baseY, b.W * .42, st.c, .2);
-    b.arc(cx, baseY, b.W * .36, 3, 0, TAU, st.c, .45, 1);
-    b.arc(cx, baseY, b.W * .2, 1.6, 0, TAU, st.c, .3, 1);
-    (AURAS[st.aura] || AURAS.idle)(b, st, pal, cx, cy);
-  }
-
   // Ship systems read round the portrait, from Status.json flags only.
   function bayOverlays(b, st, pal, clockSeconds) {
     const d = st.d, cx = b.W / 2, cy = b.H * .46;
@@ -3503,21 +3238,21 @@
       for (const surface of this.surfaces) {
         if (!surface.begin()) continue;
         const painter = surface.painter;
-        const paint = surface.role === 'deck' ? paintDeck : paintBay;
         const transition = this.transition;
-        if (transition && this.previous) {
+        // Only the deck plays a scene: nothing is projected behind the ship.
+        if (surface.role === 'deck' && transition && this.previous) {
           if (transition.crossfade) {
             const mix = smooth(k);
-            this.layer(surface, paint, this.previous, 1, 1 - mix);
-            this.layer(surface, paint, state, 1, mix);
+            this.layer(surface, paintDeck, this.previous, 1, 1 - mix);
+            this.layer(surface, paintDeck, state, 1, mix);
           } else if (k < .5) {
-            this.layer(surface, paint, this.previous, this.foldScale(k), 1 - smooth(k * 2) * .35);
+            this.layer(surface, paintDeck, this.previous, this.foldScale(k), 1 - smooth(k * 2) * .35);
           } else {
-            this.layer(surface, paint, state, this.openScale(k), .65 + .35 * smooth((k - .5) * 2));
+            this.layer(surface, paintDeck, state, this.openScale(k), .65 + .35 * smooth((k - .5) * 2));
           }
           if (!transition.crossfade) seam(painter, state, this.palette, 1 - Math.abs(k - .5) * 2);
-        } else {
-          this.layer(surface, paint, state, 1, 1);
+        } else if (surface.role === 'deck') {
+          this.layer(surface, paintDeck, state, 1, 1);
         }
         painter.alpha = 1;
         painter.halo = state.halo;

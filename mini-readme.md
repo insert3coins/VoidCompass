@@ -1,13 +1,13 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.14 // Every Site in Sight
-**Release Date:** 2026-Oct-18
+## v5.5.15 // The Anaconda Mk II
+**Release Date:** 2026-Oct-20
 
-* **Planetary Operations › Sites: ALL SITES.** Every surface site you've saved, grouped by planet, whether you're on a planet or not: your current system's planets first, then A to Z, each with its sites and materials. Type in FIND to narrow it to a planet, system, site or material; SEND TO COMPASS works on any of them, and THIS PLANET opens that planet's own view. It's what SITES shows when you're not on a planet with saved sites (it used to show an empty planet from the system you were in).
-* **Rig Tracker: you choose how close counts as HERE.** Overlay Studio › Rig Tracker › *Counts as HERE within*, from 10 to 200 m (40 by default, as before). Saved per commander; the overlay and the Mining page's rig list follow it straight away.
+* **The Anaconda Mk II.** The new ship has its picture on the Navigation HUD, and Trading knows it needs a large landing pad.* **Navigation HUD: nothing behind your ship.** The rings, octagon and plinth glow drawn behind the ship's picture are gone, in every state. Shields, fuel scooping, heat and hardpoints still show round it when they're on.
 
 ## Earlier releases
 
+* **v5.5.14** — Every Site in Sight: Planetary Operations' ALL SITES (every saved site, grouped by planet, with FIND, from anywhere) and a Studio setting for how close counts as HERE on the Rig Tracker.
 * **v5.5.13** — Smooth Ground: the Planetary page no longer lags the deck while you're on a planet (each refresh read your whole exobiology history three times; now it reads only the planet you're on, and a refresh went from about 560 ms to under 20 ms).
 * **v5.5.12** — Mining & Planetary, Rebuilt: a new Mining page for asteroids and the Rhino (live run, ring and Rhino-ground search, selling, your whole mining record), Planetary Operations as one page (compass, a new surface map, exobiology with sample distances and values, saved sites), the Watcher knowing your vehicles by name and talking mining, SRV fuel tracked properly everywhere, COPY NEXT that survives a busy clipboard, and an auto-copy switch on the Command Deck.
 * **v5.5.11** — Holds in Sight: the Rig Tracker shows how full the Rhino's hold and your ship's are (with a Studio switch), the Watcher knows Rhino mining from asteroid mining and stops repeating Galnet's top story, your ship's kept hold belongs to its ship across restarts, and `/rigs` includes the holds.

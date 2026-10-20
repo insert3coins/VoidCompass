@@ -163,14 +163,11 @@ body {
   position: relative;
   min-height: 0;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse 60% 26% at 50% 96%, color-mix(in srgb, var(--hud) 30%, transparent), transparent 70%),
-    linear-gradient(0deg, color-mix(in srgb, var(--hud) 10%, transparent), transparent 70%);
 }
 .holo-bay::before, .holo-bay::after { content: ""; position: absolute; z-index: 3; width: 9px; height: 9px; border: 0 solid var(--hud-soft); pointer-events: none; }
 .holo-bay::before { left: 0; top: 0; border-left-width: 1px; border-top-width: 1px; }
 .holo-bay::after { right: 0; top: 0; border-right-width: 1px; border-top-width: 1px; }
-/* The ship's aura is projected behind the portrait. */
+/* The ship's systems (shields, scoop, heat, hardpoints) read round the portrait. */
 .bay-canvas { position: absolute; inset: 0; z-index: 0; display: block; width: 100%; height: 100%; }
 .holo-bay img, .holo-bay .vehicle-outgoing {
   position: absolute;
@@ -182,13 +179,11 @@ body {
   filter: drop-shadow(0 0 5px color-mix(in srgb, var(--hud) 34%, transparent)) saturate(.92) brightness(1.06);
 }
 .holo-bay img:not([src]) { visibility: hidden; }
-/* Projection lines keep the portrait inside the HUD's holographic layer; the
-   emitter plinth itself is drawn with the aura. */
+/* Projection lines keep the portrait inside the HUD's holographic layer. */
 .holo-emitter {
   position: absolute; inset: 0; z-index: 2; pointer-events: none;
   background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(0, 0, 0, .2) 2px 3px);
 }
-.holo.empty .holo-bay { background: radial-gradient(ellipse 60% 26% at 50% 96%, var(--hud-faint), transparent 70%); }
 .holo figcaption { min-width: 0; display: grid; line-height: 1.15; }
 .holo figcaption b, .holo figcaption small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .holo figcaption b { color: var(--label-muted); font: var(--type-weight) var(--size-9) var(--font-hud); letter-spacing: calc(.05em * var(--track)); }
