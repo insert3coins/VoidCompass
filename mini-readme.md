@@ -1,9 +1,40 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.5.16 // Systems at a Glance
-**Release Date:** TBA
+**Release Date:** 2026-Oct-21
 
-* **Navigation HUD: ship systems as an icon strip.** The lamps beside the fuel bar are now a row of cockpit-style icons, one per system and always in the same place (analysis/combat, hardpoints, gear, cargo scoop, fuel scooping, silent running, FA off, SC assist, night vision; handbrake, turret, drive assist and night vision in the SRV), dim when off and lit when on. Warnings (no shields, heat, low fuel) flash red in front as words, or as icons when there isn't room. Nothing gets cut off any more.
+* **Navigation HUD: ship systems as an icon strip.** The lamps beside the fuel bar are now a row of cockpit-style icons, one per system and always in the same place, dim when off and lit in their colour when on. Warnings flash red in front of the strip as words, or as just their icons when there isn't room. Nothing gets cut off any more.
+
+  **In your ship, left to right:**
+  | Icon | Means | Lit |
+  |---|---|---|
+  | Magnifying glass, dashed box | Analysis mode | Blue, always (it's your HUD mode) |
+  | Crosshair, dashed box | Combat mode | Orange, always (it's your HUD mode) |
+  | Two barrels on a mount | Hardpoints deployed | Orange |
+  | Strut with two wheels | Landing gear down | Orange |
+  | Box with an arrow going in | Cargo scoop open | Orange |
+  | Drop | Fuel scooping | Green |
+  | Wavy lines, crossed out | Silent running | Yellow |
+  | **FA** | Flight assist off | Yellow |
+  | **SC** | Supercruise assist on | Blue |
+  | Eye | Night vision on | Blue |
+
+  **In the SRV:**
+  | Icon | Means | Lit |
+  |---|---|---|
+  | **P** in a circle with brackets | Handbrake on | Yellow |
+  | Turret with a barrel | Turret view | Blue |
+  | Steering wheel | Drive assist on | Blue |
+  | Eye | Night vision on | Blue |
+
+  **Warnings** (red, flashing, in front of the strip):
+  | Word | Icon when short of room | Means |
+  |---|---|---|
+  | NO SHIELDS | Shield, crossed out | Your shields are down |
+  | HEAT | Thermometer | Overheating (left out when the HUD already says HEAT CRITICAL) |
+  | LOW FUEL | Fuel gauge, needle low | Low fuel |
+
+  Orange and blue here are the default theme's colours; they follow your theme.
 
 ## Earlier releases
 
