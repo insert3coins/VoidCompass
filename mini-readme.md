@@ -1,12 +1,13 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.15 // The Anaconda Mk II
-**Release Date:** 2026-Oct-20
+## v5.5.16 // Systems at a Glance
+**Release Date:** TBA
 
-* **The Anaconda Mk II.** The new ship has its picture on the Navigation HUD, and Trading knows it needs a large landing pad.* **Navigation HUD: nothing behind your ship.** The rings, octagon and plinth glow drawn behind the ship's picture are gone, in every state. Shields, fuel scooping, heat and hardpoints still show round it when they're on.
+* **Navigation HUD: ship systems as an icon strip.** The lamps beside the fuel bar are now a row of cockpit-style icons, one per system and always in the same place (analysis/combat, hardpoints, gear, cargo scoop, fuel scooping, silent running, FA off, SC assist, night vision; handbrake, turret, drive assist and night vision in the SRV), dim when off and lit when on. Warnings (no shields, heat, low fuel) flash red in front as words, or as icons when there isn't room. Nothing gets cut off any more.
 
 ## Earlier releases
 
+* **v5.5.15** — The Anaconda Mk II: the new ship on the Navigation HUD (and a large pad for Trading), and nothing drawn behind your ship's picture on the HUD any more.
 * **v5.5.14** — Every Site in Sight: Planetary Operations' ALL SITES (every saved site, grouped by planet, with FIND, from anywhere) and a Studio setting for how close counts as HERE on the Rig Tracker.
 * **v5.5.13** — Smooth Ground: the Planetary page no longer lags the deck while you're on a planet (each refresh read your whole exobiology history three times; now it reads only the planet you're on, and a refresh went from about 560 ms to under 20 ms).
 * **v5.5.12** — Mining & Planetary, Rebuilt: a new Mining page for asteroids and the Rhino (live run, ring and Rhino-ground search, selling, your whole mining record), Planetary Operations as one page (compass, a new surface map, exobiology with sample distances and values, saved sites), the Watcher knowing your vehicles by name and talking mining, SRV fuel tracked properly everywhere, COPY NEXT that survives a busy clipboard, and an auto-copy switch on the Command Deck.

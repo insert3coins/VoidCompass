@@ -341,11 +341,13 @@ body {
 
 /* ----------------------------------------------------- lamps and fuel -- */
 .systems-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
-.lamps { min-width: 0; display: flex; gap: 4px; overflow: hidden; white-space: nowrap; }
+.lamps { min-width: 0; display: flex; align-items: center; gap: 3px; overflow: hidden; white-space: nowrap; }
+.lamps svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .lamp {
   --lamp: var(--hud);
   flex: 0 0 auto;
-  padding: 2px 5px 1px;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 4px 1px;
   border: 1px solid color-mix(in srgb, var(--lamp) 58%, transparent);
   background: color-mix(in srgb, var(--lamp) 13%, transparent);
   color: var(--lamp);
@@ -353,10 +355,32 @@ body {
   letter-spacing: calc(.1em * var(--track));
   text-shadow: 0 0 6px color-mix(in srgb, var(--lamp) 45%, transparent);
 }
-.lamp.mode { background: none; border-color: color-mix(in srgb, var(--lamp) 40%, transparent); border-style: dashed; }
-.lamp.tone-info { --lamp: var(--accent); }
-.lamp.tone-caution { --lamp: var(--yellow); }
-.lamp.tone-good { --lamp: var(--green); }
+.lamp b { font: inherit; }
+.lamp svg { width: var(--size-10); height: var(--size-10); }
+/* Short of room: a warning keeps its icon and drops its word, at the strip's size. */
+.lamp.warn svg, .lamp.warn.compact b { display: none; }
+.lamp.warn.compact { justify-content: center; width: calc(var(--size-11) + 4px); height: calc(var(--size-11) + 4px); padding: 0; }
+.lamp.warn.compact svg { display: block; width: var(--size-11); height: var(--size-11); }
+/* The annunciator strip: every system in its own place, dim until engaged. */
+.lamp-strip { flex: 0 0 auto; display: flex; align-items: center; gap: 1px; }
+.lamp-icon {
+  --lamp: var(--hud);
+  display: grid; place-items: center;
+  width: calc(var(--size-11) + 4px); height: calc(var(--size-11) + 4px);
+  border: 1px solid transparent;
+  color: var(--label-dim); opacity: .4;
+}
+.lamp-icon svg { width: var(--size-11); height: var(--size-11); }
+.lamp-icon.on {
+  opacity: 1; color: var(--lamp);
+  border-color: color-mix(in srgb, var(--lamp) 50%, transparent);
+  background: color-mix(in srgb, var(--lamp) 13%, transparent);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--lamp) 45%, transparent));
+}
+.lamp-icon.mode { margin-right: 2px; border-style: dashed; background: none; }
+:is(.lamp, .lamp-icon).tone-info { --lamp: var(--accent); }
+:is(.lamp, .lamp-icon).tone-caution { --lamp: var(--yellow); }
+:is(.lamp, .lamp-icon).tone-good { --lamp: var(--green); }
 .lamp.tone-danger { --lamp: var(--red); animation: warning-flash calc(1.2s * var(--motion-scale)) steps(1, end) infinite; }
 
 .fuel-gauge { --fuel-tone: var(--green); display: flex; align-items: center; gap: 5px; color: var(--label-muted); }

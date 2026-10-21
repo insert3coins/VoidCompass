@@ -268,8 +268,8 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
           tag: dom['state-tag'].textContent,
           label: dom['state-label'].textContent,
           category: dom.hud.dataset.category,
-          lamps: [...dom.lamps.children].map((lamp) => lamp.textContent),
-          lampTones: [...dom.lamps.children].map((lamp) => lamp.className),
+          lamps: [...dom.lamps.querySelectorAll('.warn, .lamp-icon.on')].map((lamp) => lamp.dataset.lamp),
+          lampTones: [...dom.lamps.querySelectorAll('.warn, .lamp-icon.on')].map((lamp) => lamp.className),
         })""")
 
     def test_each_family_gets_one_instrument_fed_only_by_journal_values(self):
@@ -314,26 +314,49 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
           getComputedStyle(document.documentElement).getPropertyValue('--red').trim()]""")
         self.assertEqual(tones[0], tones[1])
 
-    def test_lamps_light_only_engaged_systems_and_never_repeat_the_notice(self):
+    def test_lamps_light_only_engaged_systems_and_warnings_never_repeat_the_notice(self):
         page = self.open()
         self.render(page, hud_snapshot(hud_state(
             "SUPERCRUISE", landing_gear=True, hardpoints_deployed=True, fuel_scooping=True,
             shields_known=True, shields_up=False,
         )))
         plate = self.plate(page)
-        self.assertEqual(plate["lamps"], ["ANALYSIS", "SHIELDS DOWN", "HARDPOINTS", "GEAR", "FUEL SCOOPING"])
-        self.assertIn("tone-danger", plate["lampTones"][1])
+        self.assertEqual(plate["lamps"], ["NO SHIELDS", "ANALYSIS", "HARDPOINTS", "LANDING GEAR", "FUEL SCOOPING"])
+        self.assertIn("tone-danger", plate["lampTones"][0])
         self.render(page, hud_snapshot(hud_state("SILENT RUNNING", silent_running=True, analysis_mode=False)))
-        self.assertEqual(self.plate(page)["lamps"], ["COMBAT"])
+        self.assertEqual(self.plate(page)["lamps"], ["COMBAT", "SILENT RUNNING"])
+        # The notice already says HEAT CRITICAL: no HEAT warning beside it.
+        self.render(page, hud_snapshot(hud_state("HEAT CRITICAL", overheating=True)))
+        self.assertNotIn("HEAT", self.plate(page)["lamps"])
         # Without Status.json flags there is no ship state to guess at.
         self.render(page, hud_snapshot(hud_state("SUPERCRUISE", in_main_ship=False)))
         self.assertEqual(self.plate(page)["lamps"], [])
         self.render(page, hud_snapshot(hud_state("SRV", srv_handbrake=True, night_vision=True)))
         self.assertEqual(self.plate(page)["lamps"], ["HANDBRAKE", "NIGHT VISION"])
-        self.render(page, hud_snapshot(hud_state("HANDBRAKE", srv_handbrake=True)))
-        self.assertEqual(self.plate(page)["lamps"], [])
         self.render(page, hud_snapshot(hud_state("ONFOOT", night_vision=True)))
         self.assertEqual(self.plate(page)["lamps"], [])
+
+    def test_lamps_are_a_fixed_strip_that_never_overflows(self):
+        page = self.open()
+        row = """() => {
+          const box = dom.lamps.getBoundingClientRect();
+          const all = [...dom.lamps.querySelectorAll('.warn, .lamp-icon')];
+          return {slots: [...dom.lamps.querySelectorAll('.lamp-icon')].map((n) => n.dataset.lamp),
+                  words: [...dom.lamps.querySelectorAll('.warn:not(.compact)')].map((n) => n.dataset.lamp),
+                  clipped: all.some((n) => n.getBoundingClientRect().right > box.right + .5)};
+        }"""
+        self.render(page, hud_snapshot(hud_state("FLIGHT", landing_gear=True)))
+        quiet = page.evaluate(row)
+        self.render(page, hud_snapshot(hud_state(
+            "FLIGHT", landing_gear=True, hardpoints_deployed=True, cargo_scoop=True, low_fuel=True,
+            flight_assist_off=True, night_vision=True, shields_known=True, shields_up=False, overheating=True)))
+        busy = page.evaluate(row)
+        self.assertEqual(quiet["slots"], busy["slots"], "every system keeps its place, on or off")
+        self.assertEqual(len(busy["slots"]), 9)
+        self.assertFalse(busy["clipped"], busy)
+        self.assertEqual(busy["words"], [], "short of room, warnings show as icons")
+        self.render(page, hud_snapshot(hud_state("FLIGHT", shields_known=True, shields_up=False)))
+        self.assertEqual(page.evaluate(row)["words"], ["NO SHIELDS"], "with room, a warning keeps its word")
 
     def test_fuel_gauge_and_event_notices(self):
         page = self.open()

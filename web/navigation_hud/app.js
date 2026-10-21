@@ -282,43 +282,70 @@ function renderInstrument(state) {
   return instrument;
 }
 
-// The ship's own indicator lamps, lit only while engaged. A lamp that merely
-// repeats the state notice (SILENT RUNNING shown as SILENT RUNNING) is omitted.
+// The ship's systems as an annunciator strip: one icon per system, always in
+// the same place, lit only while engaged. Warnings lead the row as words,
+// unless the state notice already says it (HEAT CRITICAL shown as HEAT).
+const LAMP_ICONS = {
+  analysis: 'M2.5 7a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0-9 0M10.3 10.3L14 14',
+  combat: 'M8 1v4M8 11v4M1 8h4M11 8h4M5 8a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+  hardpoints: 'M2.5 13h11M4.5 13V9h7v4M6.5 9V2.5M9.5 9V2.5',
+  gear: 'M8 2v6M4 8h8M5 8v3M11 8v3M3.4 12.5a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0-3.2 0M9.4 12.5a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0-3.2 0',
+  cargo_scoop: 'M2.5 8h11v6h-11zM8 1.5V6M5.5 4L8 6.5L10.5 4',
+  fuel_scooping: 'M8 2C6 5 3.5 7.6 3.5 10.2a4.5 4.5 0 0 0 9 0C12.5 7.6 10 5 8 2z',
+  silent_running: 'M2.5 5q2.75-2 5.5 0t5.5 0M2.5 9q2.75-2 5.5 0t5.5 0M2.5 13q2.75-2 5.5 0t5.5 0M2 14.5L14 1.5',
+  flight_assist_off: 'M2 13V3h4.5M2 8h3.5M8.5 13l3-10 3 10M9.6 9.5h3.8',
+  supercruise_assist: 'M6.6 4.4C6.2 3.4 5.4 3 4.5 3 3.4 3 2.4 3.7 2.4 4.8c0 2.6 4.6 1.8 4.6 4.8 0 1.4-1.1 2.4-2.6 2.4-1 0-1.9-.5-2.3-1.4M14 4.3A3.6 3.6 0 0 0 11.8 3.2C9.9 3.2 8.6 5 8.6 7.6S9.9 12 11.8 12c.9 0 1.7-.4 2.2-1.1',
+  night_vision: 'M1.5 8C3.5 4.8 5.6 3.5 8 3.5s4.5 1.3 6.5 4.5c-2 3.2-4.1 4.5-6.5 4.5S3.5 11.2 1.5 8zM6 8a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
+  srv_handbrake: 'M4 8a4 4 0 1 0 8 0a4 4 0 1 0-8 0M2 4.5a6.5 6.5 0 0 0 0 7M14 4.5a6.5 6.5 0 0 1 0 7M7 10.5V5.5h1.6a1.4 1.4 0 0 1 0 2.8H7',
+  srv_turret: 'M2.5 13.5h7v-3a3.5 3.5 0 0 0-7 0zM7.5 8.5L14 4',
+  srv_drive_assist: 'M2.5 8a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0-11 0M2.6 7h10.8M8 9.5v4',
+  shields_down: 'M8 1.5l5.5 2v4c0 3.5-2.5 6-5.5 7c-3-1-5.5-3.5-5.5-7v-4zM2.5 13.5L13.5 2.5',
+  heat: 'M7 2.8a1 1 0 0 1 2 0v6.6a2.6 2.6 0 1 1-2 0zM8 6v5.5',
+  low_fuel: 'M2.5 11.5a5.5 5.5 0 0 1 11 0M8 11.5L4.6 8M2.5 14h11',
+};
+
 function lampsFor(state = {}) {
   const dynamics = state.dynamics || {};
   const label = String(state.label || '').toUpperCase();
   const motion = String(state.motion || '');
+  const slot = (key, text, tone, on, mode = false) => ({key, text, tone, on: Boolean(on), mode});
   if (SURFACE_MOTIONS.has(motion)) {
-    return [
-      ['HANDBRAKE', dynamics.srv_handbrake, 'caution', 'HANDBRAKE'],
-      ['TURRET', dynamics.srv_turret, 'info', 'TURRET VIEW'],
-      ['DRIVE ASSIST', dynamics.srv_drive_assist, 'info', 'DRIVE ASSIST'],
-      ['NIGHT VISION', dynamics.night_vision, 'info', ''],
-    ].filter(([, on, , owner]) => on && owner !== label)
-      .map(([text, , tone]) => ({text, tone}));
+    return {warnings: [], strip: [
+      slot('srv_handbrake', 'HANDBRAKE', 'caution', dynamics.srv_handbrake),
+      slot('srv_turret', 'TURRET', 'info', dynamics.srv_turret),
+      slot('srv_drive_assist', 'DRIVE ASSIST', 'info', dynamics.srv_drive_assist),
+      slot('night_vision', 'NIGHT VISION', 'info', dynamics.night_vision),
+    ]};
   }
-  if (state.category === 'vehicle' || !dynamics.in_main_ship) return [];
-  const lamps = [{
-    text: dynamics.analysis_mode ? 'ANALYSIS' : 'COMBAT',
-    tone: dynamics.analysis_mode ? 'info' : 'hud',
-    mode: true,
-  }];
-  for (const [text, on, tone, owner] of [
-    ['SHIELDS DOWN', dynamics.shields_known && !dynamics.shields_up, 'danger', ''],
-    ['HEAT', dynamics.overheating, 'danger', 'HEAT CRITICAL'],
-    ['LOW FUEL', dynamics.low_fuel, 'danger', ''],
-    ['HARDPOINTS', dynamics.hardpoints_deployed, 'hud', ''],
-    ['GEAR', dynamics.landing_gear, 'hud', ''],
-    ['CARGO SCOOP', dynamics.cargo_scoop, 'hud', ''],
-    ['FUEL SCOOPING', dynamics.fuel_scooping, 'good', ''],
-    ['SILENT RUNNING', dynamics.silent_running, 'caution', 'SILENT RUNNING'],
-    ['FA OFF', dynamics.flight_assist_off, 'caution', 'FLIGHT ASSIST OFF'],
-    ['SC ASSIST', dynamics.supercruise_assist, 'info', 'SC ASSIST'],
-    ['NIGHT VISION', dynamics.night_vision, 'info', ''],
-  ]) {
-    if (on && owner !== label) lamps.push({text, tone});
-  }
-  return lamps;
+  if (state.category === 'vehicle' || !dynamics.in_main_ship) return {warnings: [], strip: []};
+  const warnings = [
+    ['shields_down', 'NO SHIELDS', dynamics.shields_known && !dynamics.shields_up, ''],
+    ['heat', 'HEAT', dynamics.overheating, 'HEAT CRITICAL'],
+    ['low_fuel', 'LOW FUEL', dynamics.low_fuel, ''],
+  ].filter(([, , on, owner]) => on && owner !== label)
+    .map(([key, text]) => slot(key, text, 'danger', true));
+  const analysis = Boolean(dynamics.analysis_mode);
+  return {warnings, strip: [
+    slot(analysis ? 'analysis' : 'combat', analysis ? 'ANALYSIS' : 'COMBAT', analysis ? 'info' : 'hud', true, true),
+    slot('hardpoints', 'HARDPOINTS', 'hud', dynamics.hardpoints_deployed),
+    slot('gear', 'LANDING GEAR', 'hud', dynamics.landing_gear),
+    slot('cargo_scoop', 'CARGO SCOOP', 'hud', dynamics.cargo_scoop),
+    slot('fuel_scooping', 'FUEL SCOOPING', 'good', dynamics.fuel_scooping),
+    slot('silent_running', 'SILENT RUNNING', 'caution', dynamics.silent_running),
+    slot('flight_assist_off', 'FLIGHT ASSIST OFF', 'caution', dynamics.flight_assist_off),
+    slot('supercruise_assist', 'SC ASSIST', 'info', dynamics.supercruise_assist),
+    slot('night_vision', 'NIGHT VISION', 'info', dynamics.night_vision),
+  ]};
+}
+
+function lampIcon(key) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', LAMP_ICONS[key] || '');
+  svg.append(path);
+  return svg;
 }
 
 function renderLamps(state) {
@@ -326,14 +353,44 @@ function renderLamps(state) {
   const signature = JSON.stringify(lamps);
   if (signature === lastLampSignature) return lamps;
   lastLampSignature = signature;
-  const host = dom.lamps;
-  host.replaceChildren(...lamps.map((lamp) => {
+  const nodes = lamps.warnings.map((lamp) => {
     const node = document.createElement('span');
-    node.className = `lamp tone-${lamp.tone}${lamp.mode ? ' mode' : ''}`;
-    node.textContent = lamp.text;
+    node.className = 'lamp warn tone-danger';
+    node.dataset.lamp = lamp.text;
+    const word = document.createElement('b');
+    word.textContent = lamp.text;
+    node.append(lampIcon(lamp.key), word);
     return node;
-  }));
+  });
+  if (lamps.strip.length) {
+    const strip = document.createElement('span');
+    strip.className = 'lamp-strip';
+    strip.append(...lamps.strip.map((lamp) => {
+      const node = document.createElement('i');
+      node.className = `lamp-icon tone-${lamp.tone}${lamp.on ? ' on' : ''}${lamp.mode ? ' mode' : ''}`;
+      node.dataset.lamp = lamp.text;
+      node.setAttribute('role', 'img');
+      node.setAttribute('aria-label', `${lamp.text}${lamp.mode ? '' : lamp.on ? ' on' : ' off'}`);
+      node.append(lampIcon(lamp.key));
+      return node;
+    }));
+    nodes.push(strip);
+  }
+  dom.lamps.replaceChildren(...nodes);
+  fitLamps();
   return lamps;
+}
+
+// Short of room, warnings drop their words from the last one back and keep
+// their icons, so the most urgent keeps its word longest. Nothing is hidden.
+function fitLamps() {
+  const host = dom.lamps;
+  const warnings = [...host.querySelectorAll('.lamp.warn')];
+  warnings.forEach((node) => node.classList.remove('compact'));
+  for (const node of warnings.reverse()) {
+    if (host.scrollWidth <= host.clientWidth + 1) return;
+    node.classList.add('compact');
+  }
 }
 
 const FUEL_CELLS = 10;
@@ -1089,3 +1146,9 @@ start();
 window.addEventListener('resize', () => {
   if (dom.hud) fitToWindow();
 });
+// The lamps' row changes width with the fuel gauge and the window; the
+// typeface can also arrive after the first fit.
+if (dom.lamps) {
+  new ResizeObserver(() => fitLamps()).observe(dom.lamps);
+  document.fonts?.ready.then(fitLamps);
+}
