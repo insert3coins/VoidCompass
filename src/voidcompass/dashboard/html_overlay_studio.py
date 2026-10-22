@@ -28,16 +28,18 @@ from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, HUD_SCENE_
 # How lively the Navigation HUD's holographic scenes are.
 HUD_ANIMATION_LEVELS = ("Calm", "Standard", "Energetic")
 from voidcompass.overlays.html_heartbeat_overlay import thought_zone
-from voidcompass.overlays import galaxy_minimap_hud, postcards
+from voidcompass.overlays import galaxy_minimap_hud, hud_pages, postcards, surface_map
 from voidcompass.overlays.jump_info_hud import LINGER_CHOICES as JUMP_INFO_LINGER_CHOICES, linger_seconds
 from voidcompass.overlays.galnet_ticker_hud import (
     TICKER_CONTENT, TICKER_CRT, TICKER_GLITCH, TICKER_GLITCH_STRENGTH, TICKER_SPEEDS,
     TICKER_STORIES, TICKER_WIDTH_RANGE, ticker_options,
 )
 from voidcompass.overlays.music_player_hud import (
-    MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_SKINS, MUSIC_VISUALIZERS, music_overlay_options,
+    MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_NEXT_COUNTS, MUSIC_SKINS, MUSIC_VISUALIZERS, music_overlay_options,
 )
-from voidcompass.overlays.rig_tracker import HERE_M, HERE_RANGE_M, rig_here_m
+from voidcompass.overlays.rig_tracker import (
+    HERE_M, HERE_RANGE_M, SPACING_M, SPACING_RANGE_M, WARN_M, WARN_RANGE_M, rig_here_m, rig_spacing_m, rig_warn_m,
+)
 from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
 from voidcompass.colonisation.views import overlay_options as colony_overlay_options
 
@@ -237,6 +239,7 @@ class HtmlOverlayStudioMixin:
                 except Exception:
                     thought = None
             enabled = bool(self.config.get(OVERLAY_ENABLE_KEYS.get(attr, ""), False))
+            covered = self._hud_pages_covered() if hasattr(self, "_hud_pages_covered") else set()
             # This flag is ordinary Python state, so it is safe to expose even
             # while avoiding higher-frequency compatibility geometry calls off-page.
             html_ready = bool(getattr(overlay, "_html_ready", False))
@@ -252,6 +255,8 @@ class HtmlOverlayStudioMixin:
                 "own_text": text_size_choice(self.config.get(TEXT_SIZE_KEYS.get(attr, ""))),
                 "shown": shown,
                 "html_ready": html_ready,
+                # Shown in the Navigation HUD's pages instead (5.5.17).
+                "in_hud": attr in covered,
                 "state": (
                     "OFF" if not enabled else
                     "HTML" if html_ready else
@@ -318,6 +323,10 @@ class HtmlOverlayStudioMixin:
                 "hud_label_size": hud_typography(self.config)["labels"],
                 "hud_bright_labels": hud_typography(self.config)["bright"],
                 "hud_scene_mode": hud_scene_mode(self.config),
+                # The pages (5.5.17): the one overlay for everything.
+                "hud_pages": hud_pages.pages_options(self.config)["mode"],
+                "hud_pages_takeover": hud_pages.pages_options(self.config)["takeover"],
+                **{f"hud_page_{page}": page in hud_pages.pages_options(self.config)["enabled"] for page in hud_pages.PAGES[1:]},
                 "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
                 "overlay_frame_rate": overlay_frame_rate(self.config),
                 "overlay_hide_on_maps": bool(self.config.get("overlay_hide_on_maps", True)),
@@ -353,6 +362,8 @@ class HtmlOverlayStudioMixin:
                 "heartbeat_orb_size": orb_size(self.config),
                 "galaxy_minimap_size": galaxy_minimap_hud.minimap_options(self.config)["size"],
                 "galaxy_minimap_view": galaxy_minimap_hud.minimap_options(self.config)["view"],
+                "galaxy_minimap_surface": surface_map.surface_options(self.config)["mode"],
+                "galaxy_minimap_surface_up": surface_map.surface_options(self.config)["up"],
                 "galaxy_minimap_route": galaxy_minimap_hud.minimap_options(self.config)["route"],
                 "galaxy_minimap_labels": galaxy_minimap_hud.minimap_options(self.config)["labels"],
                 "galaxy_minimap_spansh": galaxy_minimap_hud.minimap_options(self.config)["spansh"],
@@ -361,6 +372,8 @@ class HtmlOverlayStudioMixin:
                 "galaxy_minimap_region_text_percent": heartbeat_text_size(self.config.get("galaxy_minimap_region_text_percent")),
                 "rig_tracker_show_holds": bool(self.config.get("rig_tracker_show_holds", True)),
                 "rig_tracker_here_m": rig_here_m(self.config),
+                "rig_tracker_spacing_m": rig_spacing_m(self.config),
+                "rig_tracker_warn_m": rig_warn_m(self.config),
                 "postcard_hold_s": postcards.postcard_options(self.config)["hold"],
                 "postcard_photo": postcards.postcard_options(self.config)["photo"],
                 "postcard_size": postcards.postcard_options(self.config)["size"],
@@ -596,6 +609,7 @@ class HtmlOverlayStudioMixin:
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "rig_tracker_show_holds",
+            "hud_pages_takeover", "hud_page_jump", "hud_page_survey", "hud_page_planet", "hud_page_rhino", "hud_page_mining", "hud_page_combat", "hud_page_station", "hud_page_colony", "hud_page_carrier", "hud_page_trade", "hud_page_powerplay",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps", "overlay_transparency_fix", "overlay_classic_windows",
             "colony_show_carriers", "colony_carrier_delta", "colony_collapse_covered",
@@ -621,6 +635,8 @@ class HtmlOverlayStudioMixin:
             HtmlOverlayServer.set_classic_windows(bool(self.config[key]))
         elif key in {"hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels"}:
             self.update_hud()
+        elif key == "hud_pages_takeover" or key.startswith("hud_page_"):
+            self._hud_pages_apply_settings()
         elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading"}:
             heartbeat = getattr(self, "heartbeat_hud", None)
             if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
@@ -677,6 +693,8 @@ class HtmlOverlayStudioMixin:
             "contact_scope_timeout_s": (0.0, 3600.0, 45.0, True),
             "gravity_warning_threshold_g": (0.5, 20.0, 3.0, False),
             "rig_tracker_here_m": (*HERE_RANGE_M, HERE_M, True),
+            "rig_tracker_spacing_m": (*SPACING_RANGE_M, SPACING_M, True),
+            "rig_tracker_warn_m": (*WARN_RANGE_M, WARN_M, True),
         }
         # Studio saves one field as it changes, so a key missing from the
         # payload keeps the commander's current value rather than resetting.
@@ -686,10 +704,11 @@ class HtmlOverlayStudioMixin:
             value = _number(payload.get(key), default)
             value = max(low, min(high, value if value is not None else default))
             self.config[key] = int(round(value)) if integer else round(value, 2)
-        if "rig_tracker_here_m" in payload:
-            update_rigs = getattr(self, "_rig_update_overlay", None)
-            if callable(update_rigs):
-                update_rigs()
+        if {"rig_tracker_here_m", "rig_tracker_spacing_m", "rig_tracker_warn_m"} & set(payload):
+            for refresh in ("_rig_update_overlay", "_update_surface_minimap"):
+                update = getattr(self, refresh, None)
+                if callable(update):
+                    update()
         if "overlay_frame_rate" in payload:
             rate = _integer(payload.get("overlay_frame_rate"), 30)
             self.config["overlay_frame_rate"] = rate if rate in OVERLAY_FRAME_RATES else 30
@@ -773,6 +792,9 @@ class HtmlOverlayStudioMixin:
         if "music_player_auto_hide" in payload:
             wait = _integer(payload.get("music_player_auto_hide"), 0)
             self.config["music_player_auto_hide"] = wait if wait in MUSIC_AUTO_HIDE else 0
+        if "music_player_next_count" in payload:
+            count = _integer(payload.get("music_player_next_count"), 1)
+            self.config["music_player_next_count"] = count if count in MUSIC_NEXT_COUNTS else 1
         # Journal heartbeat orb: its window size and resting eye colour.
         if "jump_info_linger_s" in payload:
             linger = _integer(payload.get("jump_info_linger_s"), 0)
@@ -811,6 +833,10 @@ class HtmlOverlayStudioMixin:
                 self.config[key] = value if value in choices else default
         for key, choices, default in (
             ("galaxy_minimap_view", galaxy_minimap_hud.VIEWS, "route"),
+            ("hud_pages", hud_pages.MODES, "off"),
+            # The Rhino map (5.5.17): when the minimap turns to the ground, and which way is up.
+            ("galaxy_minimap_surface", surface_map.MODES, surface_map.DEFAULT_MODE),
+            ("galaxy_minimap_surface_up", surface_map.ORIENTATIONS, "heading"),
             ("postcard_size", tuple(postcards.SIZES), "standard"),
         ):
             if key in payload:
@@ -841,6 +867,12 @@ class HtmlOverlayStudioMixin:
             overlay = getattr(self, attr, None)
             if overlay is not None and hasattr(overlay, "apply_settings"):
                 overlay.apply_settings()
+        if "hud_pages" in payload:
+            self._hud_pages_apply_settings()
+        if {"galaxy_minimap_surface", "galaxy_minimap_surface_up"} & set(payload):
+            surface = getattr(self, "_update_surface_minimap", None)
+            if callable(surface):
+                surface()
         self.update_hud()
         station = getattr(self, "station_info_hud", None)
         if station is not None and getattr(self, "current_docked", False):

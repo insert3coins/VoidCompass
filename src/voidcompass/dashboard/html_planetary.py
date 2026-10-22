@@ -96,8 +96,10 @@ class HtmlPlanetaryMixin:
         anchor = ship or (trail[0] if trail else None) or here or next(
             (point for point in (_point(row) for row in survey.get("pins") or ()) if point), None)
         if not radius or not anchor:
+            self._planetary_plane = None
             return None
         plane = _Plane(anchor, radius)
+        self._planetary_plane = plane
         step = max(1, len(trail) // 400)
         pins = []
         for row in survey.get("pins") or ():

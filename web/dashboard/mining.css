@@ -131,6 +131,10 @@
 .mn-list li > b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
 .mn-list li > span { grid-column: 1; color: var(--dim); font: 11px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
 .mn-list li > em { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--text); font: 600 12px "Segoe UI", sans-serif; font-style: normal; font-variant-numeric: tabular-nums; text-align: right; }
+/* Rhino prospects: the ground, the likely materials, what the best is worth. */
+.mn-prospects li > small { grid-column: 1; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.mn-prospects li > strong { grid-column: 2; grid-row: 1 / span 3; align-self: center; color: var(--yellow); font: 600 12px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.mn-prospects li > span em { color: var(--green); font-style: normal; }
 .mn-how { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
 .mn-how div { display: grid; gap: 4px; padding: 10px 12px; border-left: 2px solid var(--accent); background: var(--inset); }
 .mn-how b { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .14em; }

@@ -28,6 +28,16 @@ SLOTS = 6
 # Closer than this, you're at the rig (Studio can change it, 10 to 200 m).
 HERE_M = 40.0
 HERE_RANGE_M = (10, 200)
+# After EDSMT (5.5.17): rigs want room between them (78 m by its measure);
+# the game destroys a rig left 5 km behind, so warn well before; and a rig
+# that's worked two minutes is worth collecting.
+SPACING_M = 78.0
+SPACING_RANGE_M = (20, 300)
+WARN_M = 3500.0
+WARN_RANGE_M = (0, 4900)
+LOST_M = 5000.0
+LAST_WARNING_M = 4800.0
+READY_S = 120
 # Rigs left untouched this long are forgotten.
 FORGET_S = 7 * 86400
 
@@ -138,6 +148,16 @@ class RigStore:
                 out.append({"system": system, "body": body, "rigs": rigs})
         return out
 
+    def forget(self, system, body, slot):
+        """A rig the game has destroyed (left 5 km behind)."""
+        with self.lock:
+            entry = self.bodies.get(_key(system, body)) or {}
+            gone = (entry.get("rigs") or {}).pop(str(int(slot)), None)
+            self.bodies = {name: value for name, value in self.bodies.items() if value.get("rigs")}
+        if gone:
+            self.save()
+        return bool(gone)
+
     def clear(self, system, body):
         with self.lock:
             removed = self.bodies.pop(_key(system, body), None)
@@ -154,6 +174,43 @@ def collect_order(here, rigs, radius_m):
         at = (left[slot]["lat"], left[slot]["lon"])
         del left[slot]
     return order
+
+
+def _setting(config, key, default, low, high):
+    try:
+        value = float((config or {}).get(key, default))
+    except (TypeError, ValueError):
+        value = default
+    return int(round(max(low, min(high, value))))
+
+
+def rig_spacing_m(config):
+    return _setting(config, "rig_tracker_spacing_m", SPACING_M, *SPACING_RANGE_M)
+
+
+def rig_warn_m(config):
+    """How far a rig may be before the warning (0: never warn)."""
+    return _setting(config, "rig_tracker_warn_m", WARN_M, *WARN_RANGE_M)
+
+
+def rig_advice(rows, spacing_m=SPACING_M, warn_m=WARN_M):
+    """What to tell you about your rigs, from the model's rows: too close to
+    place another, too far (lost at 5 km), ready to collect."""
+    tracked = [row for row in rows or () if row.get("tracked") and row.get("distance_m") is not None]
+    close = sorted((row for row in tracked if row["distance_m"] < spacing_m), key=lambda row: row["distance_m"])
+    far = sorted((row for row in tracked if warn_m and row["distance_m"] >= warn_m), key=lambda row: -row["distance_m"])
+    ready = [row["slot"] for row in tracked if row.get("here") and (row.get("age_s") or 0) >= READY_S]
+    return {
+        "too_close": close[0]["slot"] if close else None,
+        "too_far": [{"slot": row["slot"], "distance": round(row["distance_m"]),
+                     "last": row["distance_m"] >= LAST_WARNING_M} for row in far],
+        "ready": ready,
+    }
+
+
+def placed_order(rigs):
+    """The order to collect them: the order they went down (5.5.17)."""
+    return [slot for slot, _rig in sorted(rigs.items(), key=lambda item: (float(item[1].get("at") or 0), item[0]))]
 
 
 def hold_row(name, used, capacity, partial=False):
@@ -188,7 +245,10 @@ def build_rig_model(rigs, lat, lon, heading, radius_m, body="", now=None, in_rhi
             nearest = row
     if nearest:
         nearest["nearest"] = True
-    order = collect_order((lat, lon), rigs, radius_m)
+    order = placed_order(rigs)
+    for row in slots:
+        if order and row.get("slot") == order[0] and row.get("tracked"):
+            row["next"] = True
     return {"body": str(body or ""), "slots": slots, "tracked": len(rigs), "order": order,
             "heading_known": heading is not None, "hint": "" if rigs else str(hint or ""),
             "holds": [dict(row) for row in holds or () if row.get("capacity")]}

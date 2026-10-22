@@ -73,6 +73,7 @@ class DashboardRigsMixin:
             left = len(store.rigs(system, body))
             self._rig_say(f"RIG {slot} COLLECTED", f"{left} still out" if left else "All rigs collected")
         self._rig_update_overlay()
+        self._update_surface_minimap()
         return outcome
 
     def _rig_clear_here(self):
@@ -83,6 +84,7 @@ class DashboardRigsMixin:
         if cleared:
             self._rig_say("RIGS FORGOTTEN", place[1])
         self._rig_update_overlay()
+        self._update_surface_minimap()
         return cleared
 
     def _rig_in_rhino(self):
@@ -152,6 +154,110 @@ class DashboardRigsMixin:
         if self._rig_place() is None:
             raise ApiError(409, "Forgetting rigs works on the planet they're on: you're not on a planet's surface")
         return {"forgotten": bool(self._rig_clear_here()), **self.api_rigs()}
+
+    # -- the Rhino map in the Galaxy Minimap (5.5.17) ----------------------------------
+    def _surface_note_pulse(self, raw):
+        """A refining pulse in the SRV: where you were, for the map's deposits."""
+        place = self._rig_place()
+        if place is None or not getattr(self, "current_in_srv", False):
+            return False
+        system, body, lat, lon, _radius = place
+        spots = getattr(self, "_surface_pulses", None)
+        if spots is None or spots.get("body") != (system, body):
+            spots = self._surface_pulses = {"body": (system, body), "spots": []}
+        material = str((raw or {}).get("Type_Localised") or (raw or {}).get("Type") or "").strip()
+        spots["spots"].append((lat, lon, material[:40]))
+        del spots["spots"][:-2000]
+        return True
+
+    def _surface_mining_signals(self, body):
+        for signals in (getattr(self, "body_signals", None) or {}).values():
+            if str(signals.get("body_name") or "").casefold() == str(body or "").casefold():
+                return int(signals.get("mining") or 0)
+        return 0
+
+    def _surface_map_model(self):
+        from voidcompass.overlays.rig_tracker import rig_here_m as here_m, rig_spacing_m, rig_warn_m
+        from voidcompass.overlays.surface_map import build_surface_map, surface_options, wants_surface
+        options = surface_options(getattr(self, "config", None) or {})
+        vehicle = ("RHINO" if self._rig_in_rhino() else "ON FOOT" if getattr(self, "current_on_foot", False)
+                   else "SRV" if getattr(self, "current_in_srv", False) else "SHIP")
+        place = self._rig_place()
+        rigs_here = bool(place and self.rig_store().rigs(place[0], place[1]))
+        if not wants_surface(options["mode"], on_planet=bool(getattr(self, "on_planet", False)),
+                             in_srv=bool(getattr(self, "current_in_srv", False)),
+                             vehicle=str(getattr(self, "current_vehicle_name", "") or ""),
+                             on_foot=bool(getattr(self, "current_on_foot", False)), rigs_here=rigs_here):
+            return None
+        planetary = getattr(self, "_planetary_map", None)
+        plane_map = planetary() if callable(planetary) and place else None
+        plane = getattr(self, "_planetary_plane", None)
+        if not plane_map or plane is None:
+            return None
+        system, body = place[0], place[1]
+        rigs = self.rig_store().rigs(system, body)
+        pulses = getattr(self, "_surface_pulses", None) or {}
+        spots = pulses.get("spots") or [] if pulses.get("body") == (system, body) else []
+        return build_surface_map(
+            plane_map, plane, rig_model=self._rig_model(),
+            rig_points={slot: (rig["lat"], rig["lon"]) for slot, rig in rigs.items()},
+            here_m=here_m(getattr(self, "config", None) or {}), spots=spots,
+            signals=self._surface_mining_signals(body), vehicle=vehicle, options=options,
+            spacing_m=rig_spacing_m(getattr(self, "config", None) or {}), warn_m=rig_warn_m(getattr(self, "config", None) or {}))
+
+    def _rig_range_watch(self):
+        """A rig getting too far away: said once a trip, as the game destroys
+        it at 5 km (after EDSMT). Said again only after you've been back near."""
+        from voidcompass.overlays.rig_tracker import LOST_M, rig_advice, rig_warn_m
+        warn = rig_warn_m(getattr(self, "config", None) or {})
+        model = self._rig_model() if warn else None
+        far = {row["slot"]: row for row in rig_advice((model or {}).get("slots"), warn_m=warn)["too_far"]} if model else {}
+        warned = getattr(self, "_rig_far_warned", None)
+        if warned is None:
+            warned = self._rig_far_warned = set()
+        for slot, row in far.items():
+            if slot not in warned:
+                warned.add(slot)
+                left = max(0, round((LOST_M - row["distance"]) / 100) / 10)
+                self._rig_say(f"RIG {slot} TOO FAR", f"{row['distance'] / 1000:.1f} km away · lost at 5 km ({left:.1f} km to go)",
+                              severity="warn")
+        rows = {row["slot"]: row for row in (model or {}).get("slots") or () if row.get("tracked")}
+        place = self._rig_place()
+        lost = [slot for slot, row in rows.items() if (row.get("distance_m") or 0) >= LOST_M]
+        if lost and place:
+            # The game has destroyed these: stop showing them.
+            for slot in lost:
+                self.rig_store().forget(place[0], place[1], slot)
+                warned.discard(slot)
+                self._rig_say(f"RIG {slot} LOST", "More than 5 km behind: the game takes it back", severity="warn")
+            self._rig_update_overlay()
+            self._update_surface_minimap()
+        for slot in list(warned):
+            row = rows.get(slot)
+            if row is None or row["distance_m"] < warn - 200:
+                warned.discard(slot)
+        return bool(far)
+
+    def _rig_left_body(self, body):
+        """Leaving a planet takes you far past 5 km, so any rigs left on it are
+        gone. Kept, they'd bring the ground map back on the next visit."""
+        system = str(getattr(self, "current_sys", "") or "")
+        if not body or not self.rig_store().clear(system, str(body)):
+            return False
+        self._rig_say("RIGS LEFT BEHIND", f"{body}: rigs still out there are lost", severity="warn")
+        self._rig_update_overlay()
+        self._update_surface_minimap()
+        return True
+
+    def _update_surface_minimap(self):
+        hud = getattr(self, "galaxy_minimap_hud", None)
+        if hud is None or not hasattr(hud, "update_surface"):
+            return False
+        try:
+            return hud.update_surface(self._surface_map_model())
+        except Exception:
+            logging.exception("Rhino map update failed")
+            return False
 
     def _rig_update_overlay(self):
         hud = getattr(self, "rig_tracker_hud", None)

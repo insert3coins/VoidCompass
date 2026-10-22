@@ -211,7 +211,8 @@ class PlanetMaterialsTests(unittest.TestCase):
         intel = ground_intelligence({'class':'High metal content body', 'landable':True})
         self.assertEqual(intel['ground'], 'high-metal-content')
         self.assertEqual(len(intel['best_materials']), 3)
-        self.assertGreater(intel['ground_sample'], 0)
+        # The 5.5.17 table (EDIntel, 11 Oct) gives shares, not per-ground site counts.
+        self.assertTrue(intel['sheet_generated'])
         self.assertEqual(tons_left(4, 'High'), (620, 1200))
 
     def test_invalid_legacy_scan_snapshot_does_not_hide_saved_sites(self):

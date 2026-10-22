@@ -9,20 +9,25 @@
 </head>
 <body>
   <main id="player" class="player card idle skin-deck" aria-label="Now playing">
-    <!-- What some skins draw (5.5.3.3): Glass's blurred art, Cassette's reels
-         and window, Vinyl's tonearm. Hidden unless the skin shows them. -->
-    <div class="skin-backdrop" aria-hidden="true"><img id="backdrop" alt="" hidden></div>
-    <div class="skin-deco" aria-hidden="true"><i class="tape-window"></i><i class="reel left"></i><i class="reel right"></i><i class="tonearm"></i></div>
+    <!-- Glass blurs the cover behind everything; Vinyl turns it into a record. -->
+    <div class="backdrop" aria-hidden="true"><img id="backdrop" alt="" hidden></div>
     <figure class="cover"><img id="cover" alt="" hidden><span aria-hidden="true">♪</span></figure>
+    <i class="tonearm" aria-hidden="true"></i>
     <div class="info">
-      <p class="kicker"><i class="lamp" aria-hidden="true"></i><span id="state">STANDBY</span><b id="playlist"></b><em id="modes"></em></p>
+      <p class="kicker">
+        <i class="lamp" aria-hidden="true"></i><span id="state">STANDBY</span><b id="playlist"></b><span id="scene" class="scene" hidden></span>
+        <span class="modes">
+          <svg id="shuffle" viewBox="0 0 24 24" aria-label="Shuffle" hidden><path d="M3 7h3c5 0 7 10 12 10h3M3 17h3c2 0 3.4-1.6 4.6-3.6M13.4 9.6C14.6 8 16 7 18 7h3M18 4l3 3-3 3M18 14l3 3-3 3"/></svg>
+          <svg id="repeat" viewBox="0 0 24 24" aria-label="Repeat" hidden><path d="M4 11V9a3 3 0 0 1 3-3h12l-3-3M20 13v2a3 3 0 0 1-3 3H5l3 3"/></svg><em id="repeat-one" hidden>1</em>
+        </span>
+      </p>
       <div class="title-window"><h1 id="title">Nothing playing</h1></div>
       <p id="artist" class="artist"></p>
       <p id="details" class="details"></p>
     </div>
     <canvas id="visualizer" class="visualizer" aria-hidden="true"></canvas>
-    <div class="progress" aria-hidden="true"><span id="elapsed">0:00</span><div class="rail"><i id="fill"></i><b id="head"></b></div><span id="total">0:00</span></div>
-    <p id="next" class="next" hidden><span>NEXT</span><b id="next-title"></b></p>
+    <div class="progress" aria-hidden="true"><span id="elapsed">0:00</span><div class="rail"><i id="fill"></i><u id="resume" hidden></u><b id="head"></b></div><span id="total">0:00</span></div>
+    <ol id="next" class="next" hidden></ol>
   </main>
   <script src="/assets/frame-cap.js"></script>
   <script src="/assets/overlay-layout.js"></script>

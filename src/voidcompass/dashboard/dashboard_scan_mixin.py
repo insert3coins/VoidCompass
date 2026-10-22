@@ -922,6 +922,12 @@ class DashboardScanMixin:
         )
         if vehicle_state_changed and getattr(self, "rig_tracker_hud", None) is not None:
             self._rig_update_overlay()  # into the Rhino, or out of it
+        if (moved or on_planet_changed or vehicle_state_changed) and getattr(self, "galaxy_minimap_hud", None) is not None:
+            # The Rhino map follows you as you drive (5.5.17).
+            self._update_surface_minimap()
+        if moved and self.on_planet:
+            # Rigs left too far behind are lost at 5 km: say so in time.
+            self._rig_range_watch()
         if vehicle_state_changed:
             # Cargo.json can remain on its final SRV snapshot after DockSRV.
             # Select the hold from verified Status state immediately, then ask

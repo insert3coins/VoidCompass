@@ -83,7 +83,9 @@ OVERLAY_HOTKEY_SPECS = (
     ("layout_studio", "overlay_hotkey_layout_studio", "Toggle Overlay Layout Studio", None),
     ("toggle_all", "overlay_hotkey_toggle_all", "Show / hide all overlays", None),
     _overlay_hotkey("navigation"),
-    ("navigation_layout", "overlay_hotkey_navigation_layout", "Navigation HUD layout", None),
+    # The HUD's pages (5.5.17): follow what you're doing or choose, and the next page.
+    ("hud_pages_mode", "overlay_hotkey_hud_pages_mode", "Navigation HUD: page mode (auto / manual)", None),
+    ("hud_page_next", "overlay_hotkey_hud_page_next", "Navigation HUD: next page", None),
     _overlay_hotkey("jump_info"),
     _overlay_hotkey("colony_needs"),
     _overlay_hotkey("trade_route"),

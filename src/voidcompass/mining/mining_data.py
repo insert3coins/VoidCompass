@@ -1,7 +1,7 @@
 import math
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import quote
 
 import requests
@@ -207,7 +207,7 @@ class MiningDataStore:
             return None
 
     def upsert_hotspot(self, hotspot):
-        now = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         material_name = normalize_material_name(hotspot.get("material_name") or hotspot.get("material"))
         ring_type = normalize_ring_type(hotspot.get("ring_type"))
         with self._connect() as conn:
@@ -306,7 +306,7 @@ class MiningDataStore:
                     body_name,
                     material_name,
                     notes,
-                    datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                    datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 ),
             )
             conn.commit()
@@ -393,7 +393,7 @@ class MiningDataStore:
         imported = 0
         source = sqlite3.connect(f"file:{source_db_path}?mode=ro", uri=True)
         source.row_factory = sqlite3.Row
-        now = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
             source_table = self._find_source_hotspot_table(source)
             if not source_table:

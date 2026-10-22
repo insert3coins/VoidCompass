@@ -1,4 +1,5 @@
 """Navigation state and HTML publication; no native drawing or widgets."""
+import json
 import logging
 import math
 import os
@@ -16,6 +17,8 @@ from voidcompass.overlays.html_overlay_runtime import overlay_opacity_ratio
 # every label (standard keeps the designed sizes).
 HUD_FONT_FACES = ("cockpit", "clear", "terminal")
 HUD_LABEL_SIZES = ("standard", "large", "larger")
+# Larger small text gets a wider plate rather than squeezing into the same one.
+HUD_LABEL_WIDTHS = {"standard": 500, "large": 540, "larger": 580}
 
 
 HUD_SCENE_MODES = ("full", "still", "off")
@@ -39,6 +42,34 @@ def hud_typography(config):
     }
 
 
+# Docked and on foot look different by place (5.5.17), from Docked's
+# StationType and Status.json's Flags2.
+_DOCK_PLACES = {
+    "fleetcarrier": "carrier", "outpost": "outpost", "megaship": "outpost", "spaceconstructiondepot": "outpost",
+    "craterport": "surface", "crateroutpost": "surface", "surfacestation": "surface", "onfootsettlement": "surface",
+    "planetaryconstructiondepot": "surface",
+}
+_FOOT_IN_STATION, _FOOT_ON_PLANET, _FOOT_IN_HANGAR, _FOOT_SOCIAL = 0x8, 0x10, 0x2000, 0x4000
+
+
+def dock_place(station_type):
+    """orbital (Coriolis, Orbis, Ocellus, asteroid base...), outpost, carrier or surface."""
+    key = str(station_type or "").replace(" ", "").replace("_", "").casefold()
+    return _DOCK_PLACES.get(key, "orbital")
+
+
+def foot_place(flags2, station_type="", on_carrier_deck=False):
+    """Where you are on foot: hangar, concourse, carrier or planet."""
+    flags2 = int(flags2 or 0)
+    if on_carrier_deck or (flags2 & _FOOT_IN_STATION and dock_place(station_type) == "carrier"):
+        return "carrier"
+    if flags2 & _FOOT_IN_HANGAR:
+        return "hangar"
+    if flags2 & (_FOOT_SOCIAL | _FOOT_IN_STATION):
+        return "concourse"
+    return "planet"
+
+
 def hud_text_scale_percent(config):
     """The HUD's own text size when set, else the overlay-wide one (75-200)."""
     from voidcompass.core.overlay_registry import overlay_text_percent
@@ -59,6 +90,11 @@ class TacticalHUD:
         self._html_sync_job = None
         self._html_last_window_fingerprint = None
         self._last_update_args = None
+        # The pages (5.5.17): what the lower half shows, kept apart from the
+        # navigation model so a page can change between HUD updates.
+        self._pages = None
+        self._pages_key = None
+        self._flash = None
         self.win.on_destroy(self._on_window_destroyed)
         self._schedule_html_sync()
 
@@ -69,8 +105,46 @@ class TacticalHUD:
             system_traffic, game_r_pos, route_waypoint, route_counts, hud_status, hud_health, nav_context)
         self._html_last_model = self._build_html_model(current_sys, scanned, total, r_pos,
             system_traffic, game_r_pos, route_waypoint, route_counts, nav_context)
+        self._html_last_model["pages"] = self._pages
+        self._html_last_model["flash"] = self._flash
         if self._html_bridge is not None:
             self._html_bridge.publish(self._html_last_model)
+
+    def flash(self, text, detail="", tone="accent"):
+        """A short notice on the HUD itself: what a page hotkey just did."""
+        previous = self._flash or {"seq": 0}
+        self._flash = {"seq": int(previous["seq"]) + 1, "text": str(text)[:40], "detail": str(detail)[:48],
+                       "tone": tone, "duration": 2.6, "at": time.time()}
+        if self._html_last_model is not None:
+            self._html_last_model = {**self._html_last_model, "flash": self._flash}
+            if self._html_bridge is not None:
+                self._html_bridge.publish(self._html_last_model)
+
+    def set_pages(self, pages):
+        """The page to show (or None for the HUD as it always was)."""
+        key = json.dumps(pages, sort_keys=True, default=str)
+        if key == self._pages_key:
+            return False
+        self._pages, self._pages_key = pages, key
+        if self._html_last_model is not None:
+            self._html_last_model = {**self._html_last_model, "pages": pages, "flash": self._flash,
+                                     "window": self._html_window_payload()}
+            if self._html_bridge is not None:
+                self._html_bridge.publish(self._html_last_model)
+        return True
+
+    # The HUD sizes itself (5.5.17): the page reports how tall its content is
+    # at the design width (a page, larger small text), and the window follows.
+    MAX_DESIGN_HEIGHT = 720
+
+    def _measured_height(self):
+        bridge = getattr(self, "_html_bridge", None)
+        server = getattr(getattr(bridge, "runtime", None), "server", None) or getattr(bridge, "server", None)
+        try:
+            measured = int(server.rendered_content_height("navigation")) if server is not None else 0
+        except Exception:
+            measured = 0
+        return min(self.MAX_DESIGN_HEIGHT, measured) if measured > 0 else 0
 
     @staticmethod
     def _safe_int(value, default):
@@ -80,15 +154,17 @@ class TacticalHUD:
             return int(default)
 
     def _is_compact(self):
-        # The compact geometry is the everyday Standard layout. Expanded is
-        # retained for commanders who want the additional planning detail.
-        return bool(self.config.get("hud_compact_mode", True))
+        # One layout since 5.5.17: the compact plate, sized to its content.
+        return True
 
     def _target_dimensions(self):
         width, height = (
             (self.compact_width, self.compact_height) if self._is_compact()
             else (self.full_width, self.full_height)
         )
+        if self._is_compact():
+            width = HUD_LABEL_WIDTHS[hud_typography(self.config)["labels"]]
+        height = max(height, self._measured_height())
         # The page zooms its fixed cockpit layout by the overlay text size, so
         # the window grows by the same factor instead of clipping larger type.
         scale = self._text_scale_percent() / 100.0
@@ -124,6 +200,7 @@ class TacticalHUD:
         return {
             "schema": 1,
             "layout": "standard" if self._is_compact() else "expanded",
+            "pages": self._pages,
             "theme": {
                 "accent": str(theme.accent), "orange": str(theme.orange),
                 "green": str(theme.green), "yellow": str(theme.yellow),
@@ -1262,6 +1339,9 @@ class TacticalHUD:
             "event_kind": str(journal_event.get("kind") or ""),
             "event_tone": str(journal_event.get("tone") or ""),
             "dynamics": {
+                "dock_place": dock_place(nav_context.get("station_type")),
+                "foot_place": foot_place(nav_context.get("status_flags2"), nav_context.get("station_type"),
+                                         bool(nav_context.get("on_carrier_deck"))),
                 "gravity_g": finite_number(nav_context.get("gravity_g"), 0.0),
                 "altitude_m": finite_number(approach.get("altitude_m")),
                 "vertical_mps": finite_number(approach.get("descent_mps"), 0.0),

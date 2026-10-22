@@ -14,28 +14,29 @@ from voidcompass.core.overlay_registry import overlay_text_scale, text_size_choi
 from voidcompass.core import themes
 from voidcompass.overlays import overlay_chrome
 
-# Card: the cover beside the track, the visualizer and progress beneath.
-# Strip: one slim line for the top or bottom edge of the screen.
-MUSIC_LAYOUTS = {"card": (460, 136), "strip": (580, 44)}
-# Skins (5.5.3.3): ten looks for the card, each its own size (design px,
-# before the up-next line). On the slim strip a skin sets its colours.
+# Card: the cover beside the track, then the visualizer, progress and up
+# next, each in its own lane. Strip: one slim line for a screen edge.
+MUSIC_LAYOUTS = {"card": (460, 156), "strip": (580, 44)}
+# Skins (made over in 5.5.17): five looks for the card, each its own size
+# (design px, before up next). On the slim strip a skin sets its colours.
+# A skin saved before (cassette, orb...) falls back to the deck.
 MUSIC_SKINS = {
-    "deck": ("Command Deck", (460, 136)),
-    "glass": ("Glass", (460, 140)),
-    "vinyl": ("Vinyl", (480, 140)),
-    "cassette": ("Cassette", (400, 196)),
-    "cockpit": ("Cockpit HUD", (480, 132)),
-    "terminal": ("Terminal", (470, 150)),
-    "orb": ("Orb", (440, 156)),
-    "radio": ("Radio dial", (480, 150)),
-    "minimal": ("Minimal", (440, 84)),
-    "neon": ("Neon", (470, 148)),
+    "deck": ("Command Deck", (460, 156)),
+    "cockpit": ("Cockpit HUD", (470, 156)),
+    "glass": ("Glass", (460, 156)),
+    "vinyl": ("Vinyl", (480, 172)),
+    "minimal": ("Minimal", (400, 84)),
 }
 MUSIC_VISUALIZERS = ("bars", "mirror", "wave", "off")
 MUSIC_COLOURS = ("theme", "warm", "spectrum")
 # Seconds paused before the overlay hides itself; 0 keeps it up.
 MUSIC_AUTO_HIDE = (0, 10, 30, 120)
-NEXT_LINE = 18
+# Up next: the next track, or the next three.
+MUSIC_NEXT_COUNTS = (1, 3)
+NEXT_ROW = 17
+NEXT_GAP = 5
+MUSIC_SCENES = ("docked", "space", "deep", "surface", "combat")
+LONG_MIX_S = 20 * 60
 
 
 def _integer(value, default):
@@ -52,6 +53,7 @@ def music_overlay_options(config):
     visualizer = str(config.get("music_player_visualizer") or "bars").casefold()
     colour = str(config.get("music_player_colour") or "theme").casefold()
     hide = _integer(config.get("music_player_auto_hide"), 0)
+    count = _integer(config.get("music_player_next_count"), 1)
     skin = str(config.get("music_player_skin") or "deck").casefold()
     text_scale = _integer(config.get("music_player_text_scale_percent"), 0)
     return {
@@ -62,6 +64,7 @@ def music_overlay_options(config):
         "show_art": bool(config.get("music_player_show_art", True)),
         "show_details": bool(config.get("music_player_show_details", True)),
         "show_next": bool(config.get("music_player_show_next", True)),
+        "next_count": count if count in MUSIC_NEXT_COUNTS else 1,
         "auto_hide": hide if hide in MUSIC_AUTO_HIDE else 0,
         # The overlay's own text size; 0 follows the size set for all overlays.
         "text_scale_percent": text_size_choice(text_scale),
@@ -74,13 +77,13 @@ def music_text_scale(config):
 
 
 def music_overlay_size(config):
-    """The window: its layout's size, the card taller for its up-next line."""
+    """The window: its layout's size, the card taller for each up-next row."""
     options = music_overlay_options(config)
     width, height = MUSIC_LAYOUTS[options["layout"]]
     if options["layout"] == "card":
         width, height = MUSIC_SKINS[options["skin"]][1]
     if options["layout"] == "card" and options["show_next"]:
-        height += NEXT_LINE
+        height += NEXT_GAP + NEXT_ROW * options["next_count"]
     scale = music_text_scale(config)
     return round(width * scale), round(height * scale)
 
@@ -150,7 +153,15 @@ class MusicPlayerHUD:
         options = music_overlay_options(self.config)
         status, library = self._status, self._library
         track = _track(library, status.get("track_id"))
-        following = _track(library, status.get("next_id")) if options["show_next"] else None
+        upcoming = []
+        for item in (status.get("upcoming") or [])[:3] if options["show_next"] else []:
+            found = _track(library, item.get("id"))
+            if found:
+                upcoming.append({"title": found["title"], "artist": found["artist"], "queued": bool(item.get("queued"))})
+        if options["show_next"] and not upcoming:
+            following = _track(library, status.get("next_id"))
+            if following:
+                upcoming.append({"title": following["title"], "artist": following["artist"], "queued": False})
         playlist = library.playlist(status.get("playlist_id")) if library is not None else None
         if track is None:
             state = "idle"
@@ -163,7 +174,14 @@ class MusicPlayerHUD:
         self._html_render_model = {
             "state": state,
             "track": track,
-            "next": {"title": following["title"], "artist": following["artist"]} if following else None,
+            "next": {"title": upcoming[0]["title"], "artist": upcoming[0]["artist"]} if upcoming else None,
+            "upcoming": upcoming,
+            # Follow the game: the scene this music is playing for.
+            "scene": status.get("scene") if status.get("scene") in MUSIC_SCENES else "",
+            # A long mix carries on where it was left.
+            "long_mix": bool(track and track["duration"] >= LONG_MIX_S),
+            "resume_at": library.resume_at(track["id"]) if track and library is not None
+            and track["duration"] >= LONG_MIX_S and hasattr(library, "resume_at") else 0.0,
             "playlist": str((playlist or {}).get("name") or "")[:80],
             "position": max(0.0, float(status.get("position") or 0)),
             "reported_at": float(status.get("reported_at") or 0),

@@ -51,6 +51,11 @@ _ID = re.compile(r"[0-9a-f]{16}")
 # Bumped when read_tags learns something new, so tracks read before are read
 # once more in the background (2: ReplayGain and R128 loudness).
 TAG_VERSION = 2
+# Long mixes pick up where they were left (5.5.17): any track this long, once
+# it's past the first half minute and not into its last two.
+RESUME_MIN_TRACK_S = 20 * 60
+RESUME_MIN_IN_S = 30
+RESUME_END_S = 120
 # ReplayGain 2 and EBU R128 state a track's gain against these loudnesses (LUFS).
 REPLAYGAIN_REFERENCE = -18.0
 R128_REFERENCE = -23.0
@@ -335,6 +340,7 @@ class MusicLibrary:
         self._missing: dict[str, bool] = {}
         self._overlay_art: dict[str, str] = {}
         self._pending: list[str] = []
+        self._resume: dict[str, float] = {}
         self._worker = None
         self._load()
 
@@ -362,13 +368,18 @@ class MusicLibrary:
                     "created": float(item.get("created") or 0),
                 })
         self.revision = int(data.get("revision") or 0)
+        resume = data.get("resume")
+        if isinstance(resume, dict):
+            self._resume = {str(key): float(value) for key, value in resume.items()
+                            if str(key) in self._tracks and isinstance(value, (int, float)) and value > 0}
         untagged = [key for key, track in self._tracks.items() if track.get("tagged") != TAG_VERSION]
         if untagged:
             self._queue_tags(untagged)
 
     def _save(self):
         self.root.mkdir(parents=True, exist_ok=True)
-        payload = {"version": 1, "revision": self.revision, "tracks": self._tracks, "playlists": self._playlists}
+        payload = {"version": 1, "revision": self.revision, "tracks": self._tracks, "playlists": self._playlists,
+                   "resume": self._resume}
         temporary = self.file.with_suffix(".tmp")
         temporary.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
         os.replace(temporary, self.file)
@@ -462,9 +473,11 @@ class MusicLibrary:
                         "duration": float(track.get("duration") or 0), "art": bool(track.get("art")),
                         "missing": self.missing(key),
                         "loudness": track.get("loudness"), "loudness_source": track.get("loudness_source") or "",
+                        "added": float(track.get("added") or 0),
                     }
                     for key, track in self._tracks.items()
                 },
+                "resume": dict(self._resume),
             }
 
     # -- playlists ---------------------------------------------------------------
@@ -532,11 +545,113 @@ class MusicLibrary:
             self._changed()
             return True
 
+    def move_tracks(self, playlist_id, positions, target) -> bool:
+        """Move several tracks, in their order, to sit before ``target`` (a
+        position in the list as it is now; the length puts them last)."""
+        with self._lock:
+            playlist = self.playlist(playlist_id)
+            if playlist is None:
+                return False
+            tracks = playlist["tracks"]
+            moving = sorted({int(position) for position in positions if 0 <= int(position) < len(tracks)})
+            try:
+                target = max(0, min(len(tracks), int(target)))
+            except (TypeError, ValueError):
+                return False
+            if not moving:
+                return False
+            block, chosen = [tracks[position] for position in moving], set(moving)
+            rest = [key for position, key in enumerate(tracks) if position not in chosen]
+            spot = target - sum(1 for position in moving if position < target)
+            reordered = rest[:spot] + block + rest[spot:]
+            if reordered == tracks:
+                return False
+            playlist["tracks"] = reordered
+            self._changed()
+            return True
+
+    def add_existing(self, playlist_id, identifiers) -> int:
+        """Copy tracks the library already knows into a playlist."""
+        with self._lock:
+            playlist = self.playlist(playlist_id)
+            if playlist is None:
+                return 0
+            added = [str(key) for key in identifiers if str(key) in self._tracks][:MAX_TRACKS]
+            if not added:
+                return 0
+            playlist["tracks"].extend(added)
+            self._changed()
+            return len(added)
+
+    def relink(self, identifier, path) -> int:
+        """A file that moved: point its track at where it is now, and look in
+        the same new folder for the others missing from its old one. How many
+        tracks were found."""
+        new_path = os.path.abspath(str(path or ""))
+        if not is_audio(new_path) or not Path(new_path).is_file():
+            return 0
+        with self._lock:
+            track = self._tracks.get(str(identifier))
+            if not track:
+                return 0
+            old_folder = Path(track.get("path") or "").parent
+            fixed = [(str(identifier), new_path)]
+            new_folder = Path(new_path).parent
+            for key, other in self._tracks.items():
+                if key == str(identifier) or Path(other.get("path") or "").parent != old_folder or not self.missing(key):
+                    continue
+                candidate = new_folder / Path(other.get("path") or "").name
+                if candidate.is_file():
+                    fixed.append((key, str(candidate)))
+            for key, file in fixed:
+                existing = track_id(file)
+                if existing != key and existing in self._tracks:
+                    # The new place is already in the library: use that track.
+                    for playlist in self._playlists:
+                        playlist["tracks"] = [existing if item == key else item for item in playlist["tracks"]]
+                    self._resume.pop(key, None)
+                    continue
+                self._tracks[key]["path"] = file
+                self._tracks[key]["tagged"] = False
+                self._missing.pop(key, None)
+            self._forget_unlisted()
+            self._changed()
+            self._queue_tags([key for key, _file in fixed if key in self._tracks])
+            return len(fixed)
+
+    def set_resume(self, identifier, position, duration=None) -> bool:
+        """Where a long track was left; forgotten near its start or end."""
+        identifier = str(identifier)
+        try:
+            position = float(position)
+        except (TypeError, ValueError):
+            return False
+        with self._lock:
+            track = self._tracks.get(identifier)
+            if not track:
+                return False
+            length = float(duration or 0) or float(track.get("duration") or 0)
+            keep = length >= RESUME_MIN_TRACK_S and RESUME_MIN_IN_S <= position <= length - RESUME_END_S
+            if keep:
+                if abs(self._resume.get(identifier, -100.0) - position) < 1:
+                    return False
+                self._resume[identifier] = round(position, 1)
+            elif self._resume.pop(identifier, None) is None:
+                return False
+            # Not a library change the page needs to refetch for: it keeps its own copy.
+            self._save()
+            return True
+
+    def resume_at(self, identifier) -> float:
+        with self._lock:
+            return float(self._resume.get(str(identifier)) or 0.0)
+
     def _forget_unlisted(self):
         """A track no playlist lists any more is forgotten, cover and all."""
         listed = {key for playlist in self._playlists for key in playlist["tracks"]}
         for key in [key for key in self._tracks if key not in listed]:
             self._tracks.pop(key, None)
+            self._resume.pop(key, None)
             self._missing.pop(key, None)
             self._overlay_art.pop(key, None)
             try:

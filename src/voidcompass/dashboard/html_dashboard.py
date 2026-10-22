@@ -37,7 +37,7 @@ from voidcompass.exploration.explorer_decision_deck import (
 from voidcompass.core import themes
 from voidcompass.core.version import APP_VERSION
 from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_material_catalogue, SURFACE_MINING_NEW, location_index
-from voidcompass.mining.rhino_intelligence import ground_intelligence
+from voidcompass.mining.rhino_intelligence import ground_intelligence, rhino_forecast, rhino_hint
 from voidcompass.core.config import get_active_profile, get_profile_dir
 from voidcompass.exploration.deep_survey import recon_report
 from voidcompass.exploration.exploration_intelligence import body_completion
@@ -707,6 +707,15 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                     body_payload["codex"] = body_codex_flag(row, codex_lookup, codex_variants)
                 except Exception:
                     pass
+            # For the Rhino (5.5.17): the mining sites the scan found, and what
+            # this kind of ground tends to hold (EDIntel's ground mining table).
+            signals_here = signal_rows.get(str(row.get("body_id"))) or {}
+            body_payload["mining_count"] = max(0, _integer(signals_here.get("mining"), _integer(row.get("mining_count"))))
+            if row.get("landable"):
+                ground = {"class": body_class, "volcanism": row.get("volcanism"), "landable": True}
+                forecast = rhino_forecast(ground)
+                if forecast:
+                    body_payload["rhino"] = {"hint": rhino_hint(ground), "materials": forecast}
             bodies.append(body_payload)
             if priority:
                 archived = body_payload["archived"]
@@ -2228,6 +2237,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             }
             for action, key, label, _attr in OVERLAY_HOTKEY_SPECS
         ]
+        # A to Z, so a shortcut is easy to find ("The Watcher" files under W).
+        hotkeys.sort(key=lambda row: row["label"].casefold().removeprefix("the "))
         try:
             health = self._adaptive_health_snapshot()
         except Exception:

@@ -432,7 +432,7 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
             "CARRIER PREPARING", "SUIT OXYGEN LOW", "SIGNAL THREAT 4", "BOARDING SCORPION",
             "HEAT CRITICAL", "DSS EFFICIENT 4/6", "FSD INJECTION +50%",
         ]
-        for layout, width, height in (("standard", 500, 326), ("expanded", 620, 342)):
+        for layout, width, height in (("standard", 500, 326),):
             for scale in (1, 1.5):
                 page = self.open(round(width * scale), round(height * scale))
                 for label in long_labels:

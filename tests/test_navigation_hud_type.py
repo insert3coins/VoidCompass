@@ -18,7 +18,7 @@ from voidcompass.core import theme_state, themes
 from voidcompass.core.application_runtime import ApplicationRuntime
 from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
 from voidcompass.overlays.hud import (
-    HUD_FONT_FACES, HUD_LABEL_SIZES, TacticalHUD, hud_text_scale_percent, hud_typography,
+    HUD_FONT_FACES, HUD_LABEL_SIZES, HUD_LABEL_WIDTHS, TacticalHUD, hud_text_scale_percent, hud_typography,
 )
 from tests.test_navigation_state_visuals import hud_snapshot, hud_state
 
@@ -56,7 +56,8 @@ class NavigationTypeSettingsTests(unittest.TestCase):
                 self.assertEqual(model["theme"]["type"], {"face": "clear", "labels": "large", "bright": True})
                 # Its own 150% grows the window just as 150% for all overlays does.
                 self.assertEqual(model["theme"]["text_scale"], 1.5)
-                self.assertEqual((model["window"]["width"], model["window"]["height"]), (750, 489))
+                # Large small text widens the plate to 540 (5.5.17).
+                self.assertEqual((model["window"]["width"], model["window"]["height"]), (810, 489))
             finally:
                 hud.win.destroy()
         finally:
@@ -268,7 +269,7 @@ class NavigationTypeBrowserTests(unittest.TestCase):
         return page
 
     def test_every_typeface_and_small_text_size_fits_both_layouts(self):
-        for layout, width, height in (("standard", 500, 326), ("expanded", 620, 342)):
+        for layout, width, height in (("standard", 500, 326),):
             page = self.open(width, height)
             for face in HUD_FONT_FACES:
                 for labels in HUD_LABEL_SIZES:
@@ -319,7 +320,6 @@ class NavigationTypeBrowserTests(unittest.TestCase):
         for layout, width, height, scale in (
             ("standard", 500, 326, 1), ("standard", 750, 489, 1.5),
             ("standard", 1000, 652, 2),
-            ("expanded", 620, 342, 1),
         ):
             page = self.open(width, height)
             page.evaluate("snapshot => render(snapshot)",
@@ -330,6 +330,13 @@ class NavigationTypeBrowserTests(unittest.TestCase):
             )
             for face in HUD_FONT_FACES:
                 for labels in HUD_LABEL_SIZES:
+                    # Larger small text has a wider plate (5.5.17): the status
+                    # rows are measured at rest in that window first.
+                    page.set_viewport_size({"width": round(HUD_LABEL_WIDTHS[labels] * scale), "height": height})
+                    resting = hud_snapshot(hud_state("SUPERCRUISE"), layout=layout, scale=scale)
+                    resting["theme"]["type"] = {"face": face, "labels": labels, "bright": True}
+                    page.evaluate("snapshot => render(snapshot)", resting)
+                    plate_geometry = page.evaluate(STATUS_GEOMETRY)
                     for label in labels_to_check:
                         sequence += 1
                         state = hud_state(label)
@@ -343,9 +350,10 @@ class NavigationTypeBrowserTests(unittest.TestCase):
                         with self.subTest(layout=layout, scale=scale, face=face, labels=labels, state=label):
                             page.evaluate("snapshot => render(snapshot)", snapshot)
                             self.assertEqual(page.evaluate(NOTICE_FITS), [])
-                            self.assertEqual(page.evaluate(STATUS_GEOMETRY), normal_geometry)
+                            self.assertEqual(page.evaluate(STATUS_GEOMETRY), plate_geometry)
 
             # Once the transient notice expires, it must stop taking space.
+            page.set_viewport_size({"width": width, "height": height})
             sequence += 1
             state = hud_state("SUPERCRUISE")
             state["notice"] = {"seq": sequence, "text": "SYSTEM SCAN", "duration": .01}

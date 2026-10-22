@@ -122,6 +122,9 @@ class SettingsSaveTests(unittest.TestCase):
             self.assertIn(key, data["values"])
         for key in ("overlay_mouse_passthrough", "hud_animation_intensity"):
             self.assertNotIn(key, data["values"])
+        labels = [row["label"] for row in data["hotkeys"]]
+        self.assertEqual(labels, sorted(labels, key=lambda label: label.casefold().removeprefix("the ")), "hotkeys A to Z")
+        self.assertEqual(labels[0], "Achievements")
 
     def test_no_setting_lives_in_both_settings_and_overlay_studio(self):
         # Overlay Studio holds everything about overlays; Settings holds the rest.

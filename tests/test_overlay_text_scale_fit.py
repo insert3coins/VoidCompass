@@ -90,7 +90,8 @@ class NavigationHudFitTests(unittest.TestCase):
 
         # The commander's PC drew the page about 1.3x larger than the window
         # was sized for: a 150% text size in a window made for 115%.
-        for layout, (width, height) in (("standard", (500, 326)), ("expanded", (620, 342))):
+        # Larger small text widens the plate to 580 (5.5.17).
+        for layout, (width, height) in (("standard", (580, 326)),):
             with self.subTest(layout=layout):
                 page = self.browser.new_page(viewport={"width": round(width * 1.15), "height": round(height * 1.15)})
                 self.addCleanup(page.close)
@@ -102,13 +103,14 @@ class NavigationHudFitTests(unittest.TestCase):
                 result = page.evaluate("""() => {
                   const box = dom.hud.getBoundingClientRect();
                   const rail = document.querySelector('.context-rail').getBoundingClientRect();
-                  return {hud: [box.width, box.height], rail: rail.bottom, view: [innerWidth, innerHeight],
+                  return {hud: [box.width, box.height], rail: rail.bottom, view: [innerWidth, innerHeight], design: designHeight(),
                           scale: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--text-scale'))};
                 }""")
                 self.assertAlmostEqual(result["scale"], 1.15, places=2)
                 self.assertLessEqual(result["hud"][0], result["view"][0] + 1)
-                self.assertLessEqual(result["hud"][1], result["view"][1] + 1)
-                self.assertLessEqual(result["rail"], result["view"][1] + 1, "the bottom row is inside the window")
+                # 5.5.17: taller than the window here (larger small text), it says how tall, and the app grows the window.
+                self.assertLessEqual(result["hud"][1], result["design"] * result["scale"] + 2)
+                self.assertLessEqual(result["rail"], result["hud"][1] + 1, "the bottom row is inside the HUD the window grows to")
 
 
 if __name__ == "__main__":

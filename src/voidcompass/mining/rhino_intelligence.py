@@ -2,8 +2,10 @@
 
 The ground classifier and reserve model follow Fumlop/EDRhinoSpotter's
 GPL-3.0 mining sheet and deposit evidence at commit
-30177fcd60ed3604b45a01b1d388d3dc4354ea1b.  The figures are field estimates,
-not values published by Frontier or guaranteed contents of a location.
+30177fcd60ed3604b45a01b1d388d3dc4354ea1b. The sheet itself is EDIntel's
+ground mining table (tools/vendor_ground_mining.py refreshes it). The figures
+are field estimates, not values published by Frontier or guaranteed contents
+of a location.
 """
 
 from __future__ import annotations
@@ -152,3 +154,26 @@ def surface_distance_m(lat1, lon1, lat2, lon2, radius_m):
     delta_lon = math.radians((lon2 - lon1 + 180.0) % 360.0 - 180.0)
     a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lon / 2) ** 2
     return radius_m * 2 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+
+
+# A ground is worth a Rhino trip when one of its materials is expected to
+# fetch this much a tonne (how often it turns up x its median price).
+WORTH_CR = 40_000
+
+
+def rhino_forecast(body, limit=3):
+    """What a body's ground tends to hold, best first by expected value; []
+    for a body that isn't landable or ground the sheet doesn't cover."""
+    intel = ground_intelligence(body)
+    if not intel["ground"]:
+        return []
+    return [{"material": row.get("material"), "pct": float(row.get("pct") or 0), "median": row.get("median"),
+             "expected": round(float(row.get("pct") or 0) / 100 * float(row.get("median") or 0))}
+            for row in intel["best_materials"][:limit]]
+
+
+def rhino_hint(body):
+    """The material that makes a body worth a Rhino trip, or ''."""
+    best = rhino_forecast(body, 1)
+    return str(best[0]["material"]) if best and best[0]["expected"] >= WORTH_CR else ""
+

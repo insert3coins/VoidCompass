@@ -177,6 +177,30 @@ class HtmlMiningMixin:
                     "volcanism": details["volcanism"] or "", **intel}
         return None
 
+    def _mining_system_grounds(self):
+        """This system's landable bodies, best Rhino ground first (5.5.17)."""
+        from voidcompass.mining.rhino_intelligence import rhino_forecast
+        signals = {str((value or {}).get("body_name") or "").casefold(): value
+                   for value in (getattr(self, "body_signals", None) or {}).values() if isinstance(value, dict)}
+        out = []
+        for item in getattr(self, "scan_items", None) or ():
+            if item.get("is_star") or item.get("star_type") or not item.get("landable"):
+                continue
+            details = {"class": item.get("planet_class") or item.get("class"), "volcanism": item.get("volcanism"),
+                       "landable": True}
+            forecast = rhino_forecast(details)
+            if not forecast:
+                continue
+            name = str(item.get("full_name") or item.get("name") or "")
+            intel = ground_intelligence(details)
+            out.append({"body": name, "short": str(item.get("name") or name), "ground": intel["ground_label"],
+                        "mining_count": int((signals.get(name.casefold()) or {}).get("mining") or 0),
+                        "gravity": _float(item.get("gravity_g")), "materials": forecast,
+                        "expected": forecast[0]["expected"]})
+        # Bodies with mining sites found come first, then the richest ground.
+        out.sort(key=lambda row: (not row["mining_count"], -row["expected"]))
+        return out[:8]
+
     def _mining_sites_here(self, where):
         store = getattr(self, "_planet_materials_store", None)
         if not callable(store) or not where.get("body"):
@@ -266,6 +290,7 @@ class HtmlMiningMixin:
                                   sorted(income["prices"].items(), key=lambda item: -item[1]["credits"])]},
             "record": self._mining_record_view(),
             "rigs": rigs, "ground": self._mining_ground_here(where), "sites": self._mining_sites_here(where),
+            "system_grounds": self._mining_system_grounds(),
             "material_grounds": material_grounds(),
             "grounds": [{"key": key, "label": GROUND_LABELS.get(key, key)} for key in GROUND_SPANSH],
             "ring_materials": sorted(MINING_MATERIALS), "surface_materials": mining_material_catalogue(),

@@ -409,6 +409,9 @@
       const cab = block(.6, -1.55, -.7, 1.75, -.55, .7);
       parts.push(cab, inset(cab, 5, .75, 'window', .012, .85, .5));
       parts.push(block(-1.8, -1.55, -.72, .4, -1.05, .72, 'trim'));
+      // The hopper's ribs, and the drill boom angled down ahead of the cab.
+      for (const x of [-1.5, -.9, -.3]) parts.push(block(x - .06, -1.66, -.74, x + .06, -1.55, .74, 'trim'));
+      parts.push(move(turn(block(0, -.1, -.12, 1.1, .1, .12, 'trim'), 0, 0, .55), 1.7, -.62, 0));
       for (const x of [-1.45, -.55, .35, 1.25]) for (const z of [-.95, .95]) parts.push(wheel(x, z, .36, .26));
     } else if (type === 'scorpion') {
       // Low and long, four big wheels, a heavy twin-cannon turret.

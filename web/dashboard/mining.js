@@ -354,7 +354,7 @@ function rigsPanel(data, esc) {
     return panel(`RIGS ON ${where.toUpperCase()}`, `${empty("No rigs marked here. Press the rig key (Ctrl+Alt+1 for rig 1, up to 6) as you deploy each one, and again as you collect it.")}
       ${(rigs.elsewhere || []).length ? `<p class="mn-dim">Rigs left elsewhere: ${(rigs.elsewhere || []).map((row) => `${esc(row.body)} (#${row.rigs.join(", #")})`).join(" · ")}</p>` : ""}`);
   }
-  const list = rows.map((row) => `<li class="${row.here ? "here" : row.nearest ? "nearest" : ""}"><b>#${row.slot}</b>
+  const list = rows.map((row) => `<li class="${row.here ? "here" : row.next ? "nearest" : ""}"><b>#${row.slot}</b>
       <i class="mn-arrow" style="transform:rotate(${n(row.relative).toFixed(0)}deg)" aria-hidden="true">${ARROW}</i>
       <span>${row.here ? "HERE" : distance(row.distance_m)}</span><small>down ${since(row.age_s)}</small></li>`).join("");
   const order = (rigs.collect_order || []).length > 1 ? `<p class="mn-order">COLLECT ▸ ${(rigs.collect_order || []).map((slot) => `#${slot}`).join(" → ")}</p>` : "";
@@ -369,7 +369,17 @@ function groundPanel(data, esc) {
   const list = rows.map((row) => `<li><span>${esc(row.material)}</span><i><b style="width:${Math.min(100, n(row.pct)).toFixed(1)}%"></b></i><strong>${percent(row.pct, 0)}</strong><small>${row.median ? `${cr(row.median)} a t` : ""}</small></li>`).join("");
   return panel("THIS GROUND", `<p class="mn-sub"><b>${esc(ground.ground_label)}</b>${known(ground.gravity) ? ` · ${n(ground.gravity).toFixed(2)} g` : ""}</p>
     <ul class="mn-ground">${list}</ul>
-    <p class="mn-dim">How often each turns up at a mining site on this kind of ground, and its usual price, from ${whole(ground.ground_sample)} sites charted by EDRhinoSpotter's community sheet. A guide, not a promise.</p>`);
+    <p class="mn-dim">How often each turns up at a mining site on this kind of ground, and its usual price${n(ground.ground_sample) ? `, from ${whole(ground.ground_sample)} sites` : ""}: EDIntel's ground mining table, as EDRhinoSpotter shows it. A guide, not a promise.</p>`);
+}
+
+// Every landable body in the system, best Rhino ground first (5.5.17).
+function prospectsPanel(data, esc) {
+  const rows = data.system_grounds || [];
+  if (!rows.length) return panel("RHINO PROSPECTS IN THIS SYSTEM", empty("Scan the system's landable bodies to see which ground is worth the Rhino."));
+  const list = rows.map((row) => `<li><b>${esc(row.short || row.body)}</b><span>${esc(row.ground)}${row.mining_count ? ` · <em>${row.mining_count} MINING SITES</em>` : ""}</span>
+    <small>${(row.materials || []).map((item) => `${esc(item.material)} ${percent(item.pct, 0)}`).join(" · ")}</small><strong>${cr(row.expected)} a t</strong></li>`).join("");
+  return panel("RHINO PROSPECTS IN THIS SYSTEM", `<ul class="mn-list mn-prospects">${list}</ul>
+    <p class="mn-dim">Bodies with mining sites found come first, then by what their best material is likely worth a tonne (how often it turns up × its median price).</p>`);
 }
 
 function sitesPanel(data, esc) {
@@ -392,6 +402,7 @@ function rhinoLive(data, esc) {
   </div>`;
   return `<div class="mn-grid">${rigsPanel(data, esc)}${panel("HOLDS", `${holds || empty("Waiting for your cargo.")}${tiles}`)}</div>
     <div class="mn-grid">${groundPanel(data, esc)}${yieldPanel(data, esc)}</div>
+    <div class="mn-grid">${prospectsPanel(data, esc)}</div>
     <div class="mn-grid">${sitesPanel(data, esc)}${planPanel(data, esc)}</div>`;
 }
 

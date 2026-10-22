@@ -1,5 +1,6 @@
-"""5.5.3.3: ten skins for the music player overlay, chosen in Overlay Studio,
-each with its own size; on the slim strip a skin sets its colours."""
+"""5.5.3.3: skins for the music player overlay, chosen in Overlay Studio, each
+with its own size; on the slim strip a skin sets its colours. Made over in
+5.5.17: five new skins in place of the ten."""
 
 import json
 import re
@@ -18,18 +19,20 @@ STUB = ("\nwindow.VoidCompassOverlay = {...VoidCompassOverlay, startPolling: opt
 
 
 class SkinSettingTests(unittest.TestCase):
-    def test_ten_skins_and_a_safe_default(self):
-        self.assertEqual(len(MUSIC_SKINS), 10)
+    def test_five_skins_and_a_safe_default(self):
+        # 5.5.17: the ten became five, made over; old ones fall back to the deck.
+        self.assertEqual(tuple(MUSIC_SKINS), ("deck", "cockpit", "glass", "vinyl", "minimal"))
         self.assertEqual(music_overlay_options({})["skin"], "deck")
         self.assertEqual(music_overlay_options({"music_player_skin": "VINYL"})["skin"], "vinyl")
-        self.assertEqual(music_overlay_options({"music_player_skin": "hologram"})["skin"], "deck")
+        for retired in ("cassette", "orb", "radio", "terminal", "neon", "hologram"):
+            self.assertEqual(music_overlay_options({"music_player_skin": retired})["skin"], "deck", retired)
         self.assertIn("music_player_skin", config_module.PROFILE_TEXT_SETTINGS)
 
     def test_each_skin_has_its_own_size(self):
-        self.assertEqual(music_overlay_size({"music_player_skin": "cassette", "music_player_show_next": False}), (400, 196))
-        self.assertEqual(music_overlay_size({"music_player_skin": "minimal"}), (440, 84 + 18))
-        self.assertEqual(music_overlay_size({"music_player_skin": "orb", "overlay_text_scale_percent": 150,
-                                             "music_player_show_next": False}), (660, 234))
+        self.assertEqual(music_overlay_size({"music_player_skin": "vinyl", "music_player_show_next": False}), (480, 172))
+        self.assertEqual(music_overlay_size({"music_player_skin": "minimal"}), (400, 84 + 5 + 17))
+        self.assertEqual(music_overlay_size({"music_player_skin": "cockpit", "overlay_text_scale_percent": 150,
+                                             "music_player_show_next": False}), (705, 234))
         self.assertEqual(music_overlay_size({"music_player_skin": "vinyl", "music_player_layout": "strip"}), (580, 44),
                          "the strip keeps its own size")
 
@@ -101,8 +104,7 @@ class SkinPageTests(unittest.TestCase):
                   if (!c.width || !c.height) return false;
                   const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
                   for (let i = 3; i < d.length; i += 4) if (d[i]) return true; return false; }""")
-                if skin != "cassette":  # the cassette's reels are its visualizer
-                    self.assertTrue(drawn, f"{skin} draws its visualizer")
+                self.assertTrue(drawn, f"{skin} draws its visualizer")
                 self.assertEqual(errors, [])
                 page.close()
 

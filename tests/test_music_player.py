@@ -221,16 +221,18 @@ class OverlayTests(Folder):
     def test_options_stay_within_their_choices(self):
         self.assertEqual(music_overlay_options({}), {
             "layout": "card", "skin": "deck", "visualizer": "bars", "colour": "theme", "show_art": True, "show_details": True,
-            "show_next": True, "auto_hide": 0, "text_scale_percent": 0})
+            "show_next": True, "next_count": 1, "auto_hide": 0, "text_scale_percent": 0})
         wild = music_overlay_options({"music_player_layout": "hologram", "music_player_visualizer": "lasers",
                                       "music_player_colour": "plaid", "music_player_auto_hide": 7,
                                       "music_player_text_scale_percent": 999})
         self.assertEqual((wild["layout"], wild["visualizer"], wild["colour"], wild["auto_hide"],
                           wild["text_scale_percent"]), ("card", "bars", "theme", 0, 200))
-        self.assertEqual(music_overlay_size({}), (460, 154))
-        self.assertEqual(music_overlay_size({"music_player_show_next": False}), (460, 136))
+        self.assertEqual(music_overlay_size({}), (460, 178))
+        self.assertEqual(music_overlay_size({"music_player_show_next": False}), (460, 156))
+        self.assertEqual(music_overlay_size({"music_player_next_count": 3}), (460, 212), "a row for each of the next three")
+        self.assertEqual(music_overlay_options({"music_player_next_count": 2})["next_count"], 1)
         self.assertEqual(music_overlay_size({"music_player_layout": "strip"}), (580, 44))
-        self.assertEqual(music_overlay_size({"music_player_text_scale_percent": 150}), (690, 231))
+        self.assertEqual(music_overlay_size({"music_player_text_scale_percent": 150}), (690, 267))
         self.assertEqual(music_overlay_size({"overlay_text_scale_percent": 125, "music_player_layout": "strip"}),
                          (725, 55))
 
@@ -611,7 +613,7 @@ class OverlayBrowserTests(unittest.TestCase):
         page.evaluate("s => renderMusic(s)", self.snapshot())
         self.assertEqual(page.inner_text("#title"), "Aurora")
         self.assertIn("Movements", page.inner_text("#details"))
-        self.assertIn("Rachel's Song", page.inner_text("#next-title"))
+        self.assertIn("Rachel's Song", page.inner_text("#next"))
         first = page.inner_text("#elapsed")
         page.wait_for_timeout(1200)
         self.assertNotEqual(page.inner_text("#elapsed"), first, "the position runs on between reports")
@@ -636,7 +638,7 @@ class OverlayBrowserTests(unittest.TestCase):
         page, _ = self.open(580, 44)
         page.evaluate("s => renderMusic(s)", self.snapshot(layout="strip"))
         state = page.evaluate("musicPlayerOverlay.state()")
-        self.assertEqual((state["layout"], state["next"]), ("strip", ""))
+        self.assertEqual((state["layout"], state["next"]), ("strip", []))
         box = page.locator("#player").bounding_box()
         self.assertLessEqual(box["height"], 44)
 

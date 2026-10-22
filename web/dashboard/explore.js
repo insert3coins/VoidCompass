@@ -347,6 +347,12 @@ function surveyActions(row, system, escapeHtml) {
   return `<span class="body-actions"><button type="button" data-ws-page="explore" data-ws-op="survey_pin" data-body-key="${key}" data-system="${owner}">${queued.pinned ? "UNPIN" : "PIN"}</button><button type="button" data-ws-page="explore" data-ws-op="survey_complete" data-body-key="${key}" data-system="${owner}" ${journalDone ? 'disabled title="Completed by Elite journal; only commander choices can be reopened"' : ""}>${queued.status === "complete" ? queued.manual_complete ? "REOPEN" : "JOURNAL ✓" : "DONE"}</button><button type="button" data-ws-page="explore" data-ws-op="survey_skip" data-body-key="${key}" data-system="${owner}">${queued.status === "skipped" ? "RESTORE" : "SKIP"}</button></span>`;
 }
 
+// What a body's ground tends to hold, for a chip's tooltip.
+function rhinoTitle(rhino) {
+  const rows = (rhino?.materials || []).map((row) => `${row.material} ${Math.round(Number(row.pct) || 0)}%`);
+  return rows.length ? `Rhino ground: ${rows.join(", ")} of mining sites on ground like this` : "Mining sites found";
+}
+
 function boardRowMarkup(row, system, ui) {
   const {escapeHtml, number, numeric, formatCredits} = ui;
   const {body, queued, status} = row;
@@ -364,6 +370,9 @@ function boardRowMarkup(row, system, ui) {
     bio ? `<b class="chip bio">BIO ${bio}</b>` : "",
     geo ? `<b class="chip geo">GEO ${geo}</b>` : "",
     body.terraformable ? `<b class="chip tf">TF</b>` : "",
+    // The Rhino: mining sites found, and what the ground tends to hold (5.5.17).
+    number(body.mining_count) || body.rhino?.hint
+      ? `<b class="chip rhino" title="${escapeHtml(rhinoTitle(body.rhino))}">${number(body.mining_count) ? `MINE ${number(body.mining_count)}` : "RHINO"}${body.rhino?.hint ? ` · ${escapeHtml(body.rhino.hint.toUpperCase())}` : ""}</b>` : "",
     row.rare ? `<b class="chip rare">RARE ${row.rare}</b>` : "",
     !bio && !geo && body.mapped ? `<b class="chip mapped">MAPPED</b>` : "",
     body.archived ? `<b class="chip known">KNOWN</b>` : "",

@@ -298,12 +298,9 @@ class NavigationSceneBrowserTests(unittest.TestCase):
                 frames[label] = first
                 later[label] = second
                 self.assertGreater(first["coverage"], .01, "an empty station/carrier deck")
-                if label == "STATION":
-                    # A settled port no longer sends approach traffic past the pilot.
-                    self.assertTrue(first["lane"] == second["lane"],
-                                    "station approach lane kept moving after settling")
-                else:
-                    self.assertNotEqual(first["deck"], second["deck"], "scene stopped")
+                # Inside the station (5.5.17) is alive too: the city's lights
+                # turn on the wall and your ship flies in from the slot.
+                self.assertNotEqual(first["deck"], second["deck"], "scene stopped")
         for left, right in combinations(labels, 2):
             with self.subTest(left=left, right=right):
                 self.assertNotEqual(frames[left]["deck"], frames[right]["deck"])

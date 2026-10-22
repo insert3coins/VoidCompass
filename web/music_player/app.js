@@ -3,24 +3,24 @@
   /*
    * Music player overlay. It shows the music and never plays it: the Music
    * page in the command deck is the player. The snapshot carries the track,
-   * its tags and cover, where it was when last reported and the Overlay
-   * Studio options; the position runs on from that report between reports.
+   * its tags and cover, what plays next, where it was when last reported and
+   * the Overlay Studio options; the position runs on from that report.
    *
    * The visualizer reads live levels from the overlay server (/api/live)
-   * about fifteen times a second while music plays, and eases its bars
-   * toward each reading every frame, so it moves smoothly in between.
+   * about fifteen times a second while music plays, and eases toward each
+   * reading every frame, so it moves smoothly in between.
    */
   const params = new URLSearchParams(location.search);
   const token = params.get("token") || "";
   const overlayId = params.get("overlay") || "music-player";
   const root = document.getElementById("player");
   const canvas = document.getElementById("visualizer");
-  const nodes = Object.fromEntries(["cover", "backdrop", "state", "playlist", "modes", "title", "artist", "details",
-    "elapsed", "total", "fill", "head", "next", "next-title"].map((id) => [id, document.getElementById(id)]));
-  // Skins (5.5.3.3): each its own look; some draw their own visualizer.
-  const SKINS = ["deck", "glass", "vinyl", "cassette", "cockpit", "terminal", "orb", "radio", "minimal", "neon"];
-  const SKIN_TONES = {cockpit: "orange", terminal: "green", radio: "yellow", cassette: "orange"};
-  const SKIN_VISUALS = {orb: "radial", radio: "vu", terminal: "blocks"};
+  const nodes = Object.fromEntries(["cover", "backdrop", "state", "playlist", "scene", "shuffle", "repeat", "repeat-one",
+    "title", "artist", "details", "elapsed", "total", "resume", "next"].map((id) => [id, document.getElementById(id)]));
+  // Five skins since 5.5.17; the cockpit draws its bars as lit blocks.
+  const SKINS = ["deck", "cockpit", "glass", "vinyl", "minimal"];
+  const SKIN_TONES = {cockpit: "orange", vinyl: "yellow"};
+  const SCENES = {docked: "DOCKED", space: "IN SPACE", deep: "DEEP SPACE", surface: "ON A SURFACE", combat: "COMBAT"};
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
   const BANDS = 32;
   const LIVE_MS = 66;
@@ -30,9 +30,10 @@
   let reduced = false;
   let trackId = "";
   let titleKey = "";
-  let target = new Array(BANDS).fill(0);
-  let shown = new Array(BANDS).fill(0);
-  let peaks = new Array(BANDS).fill(0);
+  let nextKey = "";
+  const target = new Array(BANDS).fill(0);
+  const shown = new Array(BANDS).fill(0);
+  const peaks = new Array(BANDS).fill(0);
   let frame = 0;
   let livePoll = 0;
   let changedTimer = 0;
@@ -46,6 +47,7 @@
     return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`
       : `${minutes}:${String(rest).padStart(2, "0")}`;
   };
+  const skinNow = () => SKINS.includes(options.skin) ? options.skin : "deck";
 
   // Where the track is now: the last report, run on while it plays.
   function position() {
@@ -60,10 +62,6 @@
     const at = position();
     nodes.elapsed.textContent = clock(at);
     nodes.total.textContent = clock(total);
-    const share = total ? `${Math.min(100, at / total * 100)}%` : "0%";
-    nodes.fill.style.width = share;
-    nodes.head.style.left = share;
-    // The track's place, for skins that show it their own way (reels, ring, dial).
     root.style.setProperty("--progress", total ? Math.min(1, at / total).toFixed(4) : "0");
   }
 
@@ -71,13 +69,60 @@
   function fitTitle() {
     const title = nodes.title;
     title.classList.remove("scrolling");
-    const room = title.parentElement.clientWidth;
-    const overflow = title.scrollWidth - room;
+    const overflow = title.scrollWidth - title.parentElement.clientWidth;
     if (overflow > 4 && !reduced) {
       title.style.setProperty("--marquee-shift", `${-overflow}px`);
       title.style.setProperty("--marquee-time", `${Math.max(6, overflow / 22 + 4)}s`);
       title.classList.add("scrolling");
     }
+  }
+
+  function renderTrack(track) {
+    nodes.title.textContent = track?.title || "Nothing playing";
+    // The strip is one line: its artist rides in the title's window, so the
+    // whole "title — artist" scrolls when it doesn't fit.
+    if (options.layout === "strip" && track?.artist) {
+      const by = document.createElement("span");
+      by.className = "by";
+      by.textContent = `  —  ${track.artist}`;
+      nodes.title.append(by);
+    }
+    nodes.artist.textContent = track ? track.artist || "Unknown artist" : "Play something on the Music page";
+    nodes.details.replaceChildren();
+    if (!track || options.show_details === false) return;
+    // A long mix says so, and while it waits, where it carries on from.
+    const resume = Number(model.resume_at) || 0;
+    if (model.long_mix) {
+      const badge = document.createElement("b");
+      badge.textContent = model.state !== "playing" && resume ? `CARRIES ON FROM ${clock(resume)}` : "LONG MIX";
+      nodes.details.append(badge, document.createTextNode("  ·  "));
+    }
+    nodes.details.append([track.album, track.year, track.format].filter(Boolean).join("  ·  "));
+    if (!nodes.details.lastChild.textContent && nodes.details.childNodes.length > 1) nodes.details.childNodes[1].remove();
+  }
+
+  function renderNext() {
+    const list = options.show_next === false || options.layout === "strip" ? []
+      : (model.upcoming || (model.next ? [model.next] : [])).slice(0, Number(options.next_count) || 1);
+    const key = JSON.stringify(list);
+    if (key === nextKey) return;
+    nextKey = key;
+    nodes.next.hidden = !list.length;
+    nodes.next.replaceChildren(...list.map((item, place) => {
+      const row = document.createElement("li");
+      row.classList.toggle("queued", Boolean(item.queued));
+      const tag = document.createElement("span");
+      tag.textContent = item.queued ? "QUEUED" : place ? "THEN" : "NEXT";
+      const name = document.createElement("b");
+      name.textContent = item.title || "Untitled";
+      if (item.artist) {
+        const by = document.createElement("i");
+        by.textContent = `  —  ${item.artist}`;
+        name.append(by);
+      }
+      row.append(tag, name);
+      return row;
+    }));
   }
 
   function render(snapshot = {}) {
@@ -91,30 +136,19 @@
     root.classList.remove("playing", "paused", "blocked", "idle");
     root.classList.add(state);
     root.classList.toggle("strip", options.layout === "strip");
-    const skin = SKINS.includes(options.skin) ? options.skin : "deck";
+    const skin = skinNow();
     for (const name of SKINS) root.classList.toggle(`skin-${name}`, name === skin);
     root.classList.toggle("no-art", options.show_art === false);
-    const visualizer = reduced ? "off" : (options.visualizer || "bars");
-    root.classList.toggle("visualizer-off", visualizer === "off");
+    root.classList.toggle("visualizer-off", reduced || options.visualizer === "off");
     nodes.state.textContent = {playing: "NOW PLAYING", paused: "PAUSED", blocked: "WAITING", idle: "STANDBY"}[state];
     nodes.playlist.textContent = model.playlist ? String(model.playlist).toUpperCase() : "";
-    nodes.modes.textContent = [model.shuffle ? "SHUFFLE" : "", {one: "REPEAT ONE", off: "", all: "REPEAT"}[model.repeat] || ""]
-      .filter(Boolean).join(" · ");
-    const nextKey = JSON.stringify([track?.title, track?.artist, track?.album, options.layout, effects.text_scale]);
-    // The strip is one line: its artist rides in the title's window, so the
-    // whole "title — artist" scrolls when it doesn't fit, rather than the
-    // artist being cut off beside a scrolling title.
-    const artist = track ? track.artist || "Unknown artist" : "Play something on the Music page";
-    nodes.title.textContent = track?.title || "Nothing playing";
-    if (options.layout === "strip" && track?.artist) {
-      const by = document.createElement("span");
-      by.className = "by";
-      by.textContent = `  —  ${track.artist}`;
-      nodes.title.append(by);
-    }
-    nodes.artist.textContent = artist;
-    nodes.details.textContent = track && options.show_details !== false
-      ? [track.album, track.year, track.format].filter(Boolean).join("  ·  ") : "";
+    nodes.scene.hidden = !SCENES[model.scene];
+    nodes.scene.textContent = SCENES[model.scene] || "";
+    // SVG has no .hidden property, only the attribute.
+    nodes.shuffle.toggleAttribute("hidden", !model.shuffle);
+    nodes.repeat.toggleAttribute("hidden", !["all", "one"].includes(model.repeat));
+    nodes["repeat-one"].hidden = model.repeat !== "one";
+    renderTrack(track);
     if (nodes.cover.dataset.src !== (model.art || "")) {
       nodes.cover.dataset.src = model.art || "";
       for (const image of [nodes.cover, nodes.backdrop]) {
@@ -123,11 +157,12 @@
         else image.removeAttribute("src");
       }
     }
-    const following = options.show_next !== false && options.layout !== "strip" ? model.next : null;
-    nodes.next.hidden = !following;
-    nodes["next-title"].textContent = following
-      ? [following.title, following.artist].filter(Boolean).join("  —  ") : "";
-    // A new track slides in.
+    renderNext();
+    const total = Number(track?.duration) || 0;
+    const resume = Number(model.resume_at) || 0;
+    nodes.resume.hidden = !(model.long_mix && resume && total && state !== "playing");
+    if (!nodes.resume.hidden) root.style.setProperty("--resume", Math.min(1, resume / total).toFixed(4));
+    // A new track arrives.
     if (track?.id !== trackId) {
       const first = trackId === "";
       trackId = track?.id || "";
@@ -139,8 +174,9 @@
         changedTimer = window.setTimeout(() => root.classList.remove("changed"), 800);
       }
     }
-    if (nextKey !== titleKey) {
-      titleKey = nextKey;
+    const fitKey = JSON.stringify([track?.title, track?.artist, options.layout, skin, effects.text_scale]);
+    if (fitKey !== titleKey) {
+      titleKey = fitKey;
       // Measured now and again once laid out: an overlay hidden while the
       // music was paused gets no animation frames until it shows again.
       fitTitle();
@@ -178,16 +214,13 @@
   // A theme colour: the snapshot's, or the page's own before one arrives.
   const tone = (name) => palette[name] || getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim();
 
-  function colourAt(band, ctx, height) {
+  function paint(ctx, height, band) {
     const scheme = options.colour || "theme";
     if (scheme === "spectrum") return `hsl(${190 + band / BANDS * 170}, 95%, 62%)`;
+    if (skinNow() === "glass" && scheme === "theme") return "rgba(255, 255, 255, .85)";
     const gradient = ctx.createLinearGradient(0, height, 0, 0);
-    // Theme tokens as applyTheme resolved them (the page's own when unset);
-    // a skin with its own tone leads with it.
-    const lead = tone(SKIN_TONES[options.skin] || "accent");
-    const stops = scheme === "warm" ? [tone("red"), tone("orange"), tone("yellow")]
-      : options.skin === "neon" ? [tone("accent"), tone("red"), tone("red")]
-      : [lead, lead, tone("orange")];
+    const lead = tone(SKIN_TONES[skinNow()] || "accent");
+    const stops = scheme === "warm" ? [tone("red"), tone("orange"), tone("yellow")] : [lead, lead, tone("orange")];
     stops.forEach((stop, place) => gradient.addColorStop(place / (stops.length - 1), stop));
     return gradient;
   }
@@ -204,126 +237,79 @@
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, width, height);
     const strip = options.layout === "strip";
-    const style = (!strip && SKIN_VISUALS[options.skin]) || options.visualizer || "bars";
-    if (style === "radial") return drawRadial(ctx, height);
-    if (style === "vu") return drawMeter(ctx, width, height);
+    const style = options.visualizer || "bars";
     const count = strip ? BANDS / 2 : BANDS;
     const values = strip ? Array.from({length: count}, (_, band) => Math.max(shown[band * 2], shown[band * 2 + 1])) : shown;
-    const shared = options.colour === "spectrum" ? null : colourAt(0, ctx, height);
-    ctx.globalCompositeOperation = "lighter";
-    if (style === "wave") {
-      const points = values.map((value, band) => [band / (count - 1) * width, height - Math.max(1, value * height * .92)]);
-      ctx.beginPath();
-      ctx.moveTo(0, height);
-      points.forEach(([x, y], band) => {
-        if (!band) ctx.lineTo(x, y);
-        else {
-          const [px, py] = points[band - 1];
-          ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
-        }
-      });
-      ctx.lineTo(width, points[count - 1][1]);
-      ctx.lineTo(width, height);
-      ctx.closePath();
-      ctx.globalAlpha = .16;
-      ctx.fillStyle = shared || colourAt(count / 2, ctx, height);
-      ctx.fill();
-      ctx.globalAlpha = .7;
-      ctx.lineWidth = 1.4;
-      ctx.strokeStyle = shared || colourAt(count / 2, ctx, height);
-      ctx.shadowColor = tone("accent");
-      ctx.shadowBlur = 8;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      return;
-    }
-    if (style === "blocks") {
-      // The terminal's meters: stacked blocks, lit from the bottom.
-      const gapX = 3, cell = (width - gapX * (count - 1)) / count, rows = 8, cellH = height / rows;
-      ctx.fillStyle = shared || colourAt(0, ctx, height);
-      values.forEach((value, band) => {
-        const lit = Math.round(value * rows);
-        for (let row = 0; row < rows; row += 1) {
-          ctx.globalAlpha = row < lit ? .2 + .5 * (row / rows) : .04;
-          ctx.fillRect(band * (cell + gapX), height - (row + 1) * cellH + 1, cell, cellH - 2);
-        }
-      });
-      return;
-    }
-    const gap = strip ? 2 : 3, bar = (width - gap * (count - 1)) / count;
+    const spectrum = options.colour === "spectrum";
+    const shared = spectrum ? null : paint(ctx, height, 0);
+    if (style === "wave") return drawWave(ctx, width, height, values, shared || paint(ctx, height, count / 2));
+    if (style === "bars" && skinNow() === "cockpit" && !strip) return drawBlocks(ctx, width, height, values, shared);
+    const gap = strip || skinNow() === "vinyl" ? 2 : 3;
+    const bar = (width - gap * (count - 1)) / count;
     const mirror = style === "mirror";
+    const round = skinNow() === "glass";
     values.forEach((value, band) => {
       const x = band * (bar + gap);
-      const tall = Math.max(1, value * (mirror ? height / 2 : height) * .95);
-      ctx.fillStyle = shared || colourAt(band * (BANDS / count), ctx, height);
-      // Behind the progress and up-next lines: bright enough to dance,
-      // never so bright it drowns the text.
-      ctx.globalAlpha = .16 + value * .34;
-      if (mirror) {
-        ctx.fillRect(x, height / 2 - tall, bar, tall);
-        ctx.globalAlpha *= .55;
-        ctx.fillRect(x, height / 2, bar, tall * .8);
-      } else {
-        ctx.fillRect(x, height - tall, bar, tall);
+      const tall = Math.max(1.5, value * (mirror ? height / 2 : height));
+      ctx.fillStyle = shared || paint(ctx, height, band * (BANDS / count));
+      ctx.globalAlpha = .35 + value * .5;
+      const top = mirror ? height / 2 - tall : height - tall;
+      fillBar(ctx, x, top, bar, mirror ? tall * 2 : tall, round);
+      if (!mirror) {
         // A cap that falls slowly after each peak.
         const peak = strip ? Math.max(peaks[band * 2], peaks[band * 2 + 1]) : peaks[band];
-        ctx.globalAlpha = .5;
-        ctx.fillRect(x, height - Math.max(2, peak * height * .95) - 2, bar, 1.5);
+        ctx.globalAlpha = .75;
+        ctx.fillRect(x, height - Math.max(2, peak * height) - 2, bar, 1.5);
       }
     });
+    ctx.globalAlpha = 1;
   }
 
-  // The orb skin: bars standing out from the ring round the cover.
-  function drawRadial(ctx, height) {
-    const cover = root.querySelector(".cover").getBoundingClientRect();
-    const box = canvas.getBoundingClientRect();
-    const cx = cover.left + cover.width / 2 - box.left, cy = cover.top + cover.height / 2 - box.top;
-    const inner = cover.width / 2 + 8 * (Number(getComputedStyle(root).getPropertyValue("--scale")) || 1);
-    const reach = Math.min(cx, cy, height - cy) - inner;
-    if (reach <= 2) return;
-    ctx.strokeStyle = colourAt(0, ctx, height);
-    ctx.lineCap = "round";
-    ctx.lineWidth = Math.max(1.5, cover.width / 50);
-    shown.forEach((value, band) => {
-      for (const side of [1, -1]) {
-        const angle = -Math.PI / 2 + side * (band + .5) / BANDS * Math.PI;
-        const length = Math.max(1, value * reach);
-        ctx.globalAlpha = .25 + value * .6;
-        ctx.beginPath();
-        ctx.moveTo(cx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner);
-        ctx.lineTo(cx + Math.cos(angle) * (inner + length), cy + Math.sin(angle) * (inner + length));
-        ctx.stroke();
-      }
-    });
-  }
-
-  // The radio skin: an analogue VU meter whose needle follows the level.
-  function drawMeter(ctx, width, height) {
-    const level = shown.reduce((sum, value) => sum + value, 0) / BANDS;
-    const cx = width / 2, cy = height * .92, radius = Math.min(width / 2, height) * .82;
-    ctx.globalCompositeOperation = "source-over";
-    ctx.lineWidth = 1;
-    for (let tick = 0; tick <= 10; tick += 1) {
-      const angle = Math.PI * (1.15 + .7 * tick / 10);
-      ctx.globalAlpha = tick >= 8 ? .9 : .5;
-      ctx.strokeStyle = tone(tick >= 8 ? "red" : "yellow");
-      ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(angle) * radius * .78, cy + Math.sin(angle) * radius * .78);
-      ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
-      ctx.stroke();
-    }
-    const swing = Math.PI * (1.15 + .7 * Math.min(1, level * 1.8));
-    ctx.globalAlpha = .95;
-    ctx.strokeStyle = tone("text");
-    ctx.lineWidth = 1.6;
+  function fillBar(ctx, x, y, w, h, round) {
+    if (!round || typeof ctx.roundRect !== "function") return ctx.fillRect(x, y, w, h);
     ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(swing) * radius * .95, cy + Math.sin(swing) * radius * .95);
-    ctx.stroke();
-    ctx.fillStyle = tone("yellow");
-    ctx.beginPath();
-    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    ctx.roundRect(x, y, w, h, Math.min(w / 2, 3));
     ctx.fill();
+  }
+
+  function drawWave(ctx, width, height, values, colour) {
+    const count = values.length;
+    const points = values.map((value, band) => [band / (count - 1) * width, height - Math.max(1, value * height * .92)]);
+    ctx.beginPath();
+    ctx.moveTo(0, height);
+    points.forEach(([x, y], band) => {
+      if (!band) ctx.lineTo(x, y);
+      else {
+        const [px, py] = points[band - 1];
+        ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
+      }
+    });
+    ctx.lineTo(width, points[count - 1][1]);
+    ctx.lineTo(width, height);
+    ctx.closePath();
+    ctx.globalAlpha = .22;
+    ctx.fillStyle = colour;
+    ctx.fill();
+    ctx.globalAlpha = .85;
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = colour;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // The cockpit's meters: stacked blocks lit from the bottom, the top two orange-red.
+  function drawBlocks(ctx, width, height, values, shared) {
+    const count = values.length, gap = 3, rows = Math.max(3, Math.round(height / 5));
+    const cell = (width - gap * (count - 1)) / count, cellH = height / rows;
+    values.forEach((value, band) => {
+      const lit = Math.round(value * rows);
+      for (let row = 0; row < rows; row += 1) {
+        ctx.fillStyle = row >= rows - 1 ? tone("red") : shared || paint(ctx, height, band);
+        ctx.globalAlpha = row < lit ? .45 + .45 * (row / rows) : .07;
+        ctx.fillRect(band * (cell + gap), height - (row + 1) * cellH + 1, cell, cellH - 2);
+      }
+    });
+    ctx.globalAlpha = 1;
   }
 
   function step() {
@@ -359,14 +345,14 @@
   });
   window.musicPlayerOverlay = {
     state: () => ({state: model.state || "idle", track: model.track?.title || "", layout: options.layout || "card",
-      skin: SKINS.find((name) => root.classList.contains(`skin-${name}`)) || "deck",
-      visualizer: root.classList.contains("visualizer-off") ? "off" : (options.visualizer || "bars"),
+      skin: skinNow(), visualizer: root.classList.contains("visualizer-off") ? "off" : (options.visualizer || "bars"),
       polling: Boolean(livePoll), level: shown.reduce((sum, value) => sum + value, 0) / BANDS,
-      elapsed: nodes.elapsed.textContent, next: nodes.next.hidden ? "" : nodes["next-title"].textContent,
-      scrolling: nodes.title.classList.contains("scrolling")}),
+      elapsed: nodes.elapsed.textContent, scene: nodes.scene.hidden ? "" : nodes.scene.textContent,
+      next: [...nodes.next.querySelectorAll("li b")].map((item) => item.textContent),
+      details: nodes.details.textContent, scrolling: nodes.title.classList.contains("scrolling")}),
   };
   poller = VoidCompassOverlay.startPolling({
     token, overlay: overlayId, render,
-    contentHeight: () => root.getBoundingClientRect().height || 136, interval: 250,
+    contentHeight: () => root.getBoundingClientRect().height || 156, interval: 250,
   });
 })();

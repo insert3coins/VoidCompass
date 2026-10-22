@@ -267,6 +267,8 @@ class GalaxyMinimapHUD:
         self._signature = None
         self._region_cache = {}
         self._html_render_model = build_minimap_model([], options=minimap_options(config))
+        # The Rhino map (5.5.17): the ground round you, while you drive.
+        self._surface = None
         self.win = OverlayWindowState(root)
         self.win.geometry(overlay_chrome.position_geometry(
             _integer(config.get("galaxy_minimap_hud_x"), 40), _integer(config.get("galaxy_minimap_hud_y"), 600)))
@@ -313,6 +315,15 @@ class GalaxyMinimapHUD:
         self._html_render_model = build_minimap_model(
             session_rows, position=position, system=system, route_entries=route_entries,
             options=options, regions_visited=visited, trip=trip, capsules=capsules, home=home)
+        self._html_render_model["surface"] = getattr(self, "_surface", None)
+        return True
+
+    def update_surface(self, surface):
+        """The ground map, or None for the galaxy again."""
+        if surface == getattr(self, "_surface", None):
+            return False
+        self._surface = surface
+        self._html_render_model = {**self._html_render_model, "surface": surface}
         return True
 
     def apply_settings(self):

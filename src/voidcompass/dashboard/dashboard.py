@@ -91,6 +91,7 @@ from voidcompass.dashboard.dashboard_capsules_mixin import DashboardCapsulesMixi
 from voidcompass.dashboard.dashboard_flight_log_mixin import DashboardFlightLogMixin
 from voidcompass.dashboard.dashboard_journey_mixin import DashboardJourneyMixin
 from voidcompass.dashboard.dashboard_rigs_mixin import DashboardRigsMixin
+from voidcompass.dashboard.dashboard_hud_pages_mixin import DashboardHudPagesMixin
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
 from voidcompass.dashboard.dashboard_home_mixin import DashboardHomeMixin
 from voidcompass.dashboard.dashboard_tools_mixin import DashboardToolsMixin
@@ -288,6 +289,7 @@ class MainDashboard(
     DashboardFlightLogMixin,
     DashboardJourneyMixin,
     DashboardRigsMixin,
+    DashboardHudPagesMixin,
     DashboardWatcherVoiceMixin,
     DashboardHomeMixin,
     DashboardToolsMixin,
@@ -646,6 +648,10 @@ class MainDashboard(
 
     def _overlay_enabled(self, attr):
         spec = OVERLAY_SPEC_BY_ATTR[attr]
+        # The Navigation HUD's pages show this one for you (5.5.17): it stays
+        # off while they're on, with its own setting kept as it was.
+        if attr != "hud" and attr in self._hud_pages_covered():
+            return False
         return spec.available and bool(self.config.get(spec.enabled_key, spec.default_enabled))
 
     @property
@@ -2941,6 +2947,7 @@ class MainDashboard(
         self._tick_runtime_trace()
         self._tick_overlay_position_sync()
         self._tick_overlay_hotkey_guard()
+        self._tick_hud_pages()
 
     def _startup_boot(self):
         splash = getattr(self.root, "_voidcompass_startup_splash", None)
@@ -3563,19 +3570,6 @@ class MainDashboard(
         if getattr(self, "is_running", True):
             self._configure_overlay_hotkeys(announce=False)
 
-    def _toggle_navigation_hud_layout(self, *, announce=True):
-        """Switch the active commander's HUD between Standard and Expanded."""
-        standard = not bool(self.config.get("hud_compact_mode", True))
-        self.config["hud_compact_mode"] = standard
-        save_config(self.config)
-        self.update_hud()
-        mode = "Standard" if standard else "Expanded"
-        if announce:
-            self.add_event_feed_entry(
-                "SYSTEM", f"Navigation HUD layout: {mode}", severity="INFO",
-            )
-        return mode
-
     def _handle_overlay_hotkey(self, action):
         if not self.is_running:
             return
@@ -3592,8 +3586,11 @@ class MainDashboard(
                 message = "Overlay Layout Studio opened"
             self.add_event_feed_entry("SYSTEM", message, severity="INFO")
             return
-        if action == "navigation_layout":
-            self._toggle_navigation_hud_layout()
+        if action == "hud_page_next":
+            self._hud_page_next()
+            return
+        if action == "hud_pages_mode":
+            self._hud_pages_mode_key()
             return
         if action == "field_bookmark":
             self._field_bookmark()
@@ -5960,6 +5957,9 @@ class MainDashboard(
             "in_srv": bool(getattr(self, "current_in_srv", False)),
             "on_foot": bool(getattr(self, "current_on_foot", False)),
             "on_carrier_deck": bool(self._navigation_on_carrier_deck()),
+            # Which kind of station, and where on foot: the scene follows (5.5.17).
+            "station_type": str(getattr(self, "current_station_type", "") or ""),
+            "status_flags2": int(getattr(self, "current_status_flags2", 0) or 0),
             "in_taxi": bool(getattr(self, "current_in_taxi", False)),
             "in_multicrew": bool(getattr(self, "current_in_multicrew", False)),
             "vehicle_name": getattr(self, "current_vehicle_name", ""),
@@ -9678,6 +9678,7 @@ class MainDashboard(
         elif ev == "LeaveBody":
             if not self.batch_mode:
                 self._check_stale_bio_scans(self.current_body_id)
+                self._rig_left_body(d.get("body_name") or self.current_body_name)
             self.current_body_id   = None
             self.current_body_name = ""
             self.current_glide_mode = False
@@ -9772,6 +9773,8 @@ class MainDashboard(
             if not self.batch_mode:
                 self.update_hud()
 
+        self._hud_pages_observe(ev, raw, startup_replay)
+
         # ── Prospector overlay — live events only, skip journal replay on startup ──
         # Use startup_replay (not batch_mode) so rapid-fire limpets that land in
         # the same poll cycle still update the overlay.  batch_mode is True for
@@ -9785,6 +9788,10 @@ class MainDashboard(
             elif ev == "MiningRefined" and not getattr(self, "current_in_srv", False):
                 mat = raw.get("Type_Localised") or raw.get("Type") or ""
                 self._ui_post(lambda m=mat: self.prospector_hud.add_refined(m))
+        if ev == "MiningRefined" and not startup_replay and getattr(self, "current_in_srv", False):
+            # Where the Rhino's drill refined, for the Rhino map's deposits.
+            if self._surface_note_pulse(raw):
+                self._ui_post(self._update_surface_minimap, key="surface-minimap")
 
         if (
             self.planet_materials_hud and not self.batch_mode

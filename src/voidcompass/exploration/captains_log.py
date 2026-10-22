@@ -7,7 +7,7 @@ import json
 import math
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.core.persistence_queue import persistence_queue
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
@@ -26,7 +26,7 @@ NOTABLE_WORLDS = {"Earthlike body", "Water world", "Ammonia world"}
 
 
 def _stamp(raw):
-    return str((raw or {}).get("timestamp") or datetime.utcnow().isoformat(timespec="seconds") + "Z")
+    return str((raw or {}).get("timestamp") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
 
 
 class CaptainsLog:

@@ -1,43 +1,74 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.16 // Systems at a Glance
-**Release Date:** 2026-Oct-21
+## v5.5.17 // One Overlay to Rule Them All
+**Release Date:** TBA 3312 *(Galactic Standard Time)*
 
-* **Navigation HUD: ship systems as an icon strip.** The lamps beside the fuel bar are now a row of cockpit-style icons, one per system and always in the same place, dim when off and lit in their colour when on. Warnings flash red in front of the strip as words, or as just their icons when there isn't room. Nothing gets cut off any more.
+### Navigation HUD
 
-  **In your ship, left to right:**
-  | Icon | Means | Lit |
-  |---|---|---|
-  | Magnifying glass, dashed box | Analysis mode | Blue, always (it's your HUD mode) |
-  | Crosshair, dashed box | Combat mode | Orange, always (it's your HUD mode) |
-  | Two barrels on a mount | Hardpoints deployed | Orange |
-  | Strut with two wheels | Landing gear down | Orange |
-  | Box with an arrow going in | Cargo scoop open | Orange |
-  | Drop | Fuel scooping | Green |
-  | Wavy lines, crossed out | Silent running | Yellow |
-  | **FA** | Flight assist off | Yellow |
-  | **SC** | Supercruise assist on | Blue |
-  | Eye | Night vision on | Blue |
+* **The Navigation HUD can be your only overlay.** Set *Pages* in Overlay Studio › Navigation HUD and its lower half becomes a page for what you're doing:
+  * **NAV:** the route and survey, as before.
+  * **JUMP:** the next system while the drive charges.
+  * **SURVEY:** what's worth a look while you scan.
+  * **PLANET:** gravity, your compass target, samples and materials.
+  * **RHINO:** six rig dials pointing at your rigs, the next one to collect, and both holds.
+  * **MINING:** the rock you just prospected and what you've refined.
+  * **COMBAT:** your target's shields, hull, rank and bounty, plus kills and threats.
+  * **STATION / COLONY / CARRIER / TRADE / POWER:** where you're docked, what a site needs, your carrier, your trade route and Powerplay.
 
-  **In the SRV:**
-  | Icon | Means | Lit |
-  |---|---|---|
-  | **P** in a circle with brackets | Handbrake on | Yellow |
-  | Turret with a barrel | Turret view | Blue |
-  | Steering wheel | Drive assist on | Blue |
-  | Eye | Night vision on | Blue |
+  *Auto* follows what you're doing; *Manual* stays on the page you choose. Two hotkeys: *page mode* (auto or manual) and *next page*, and each says what it did on the HUD itself. The overlays a page covers stay off while the pages are on (their own settings are kept, and Studio marks them *IN THE NAV HUD*). Switch each page on or off.
+* **The page key goes round every page** you've switched on, not only those with something on them now. A quiet page says what it's waiting for, and the tabs show every page in the round: the ones with nothing on them now are a dim dot.
+* **The Navigation HUD sizes itself.** One layout now (the compact one), and it grows to fit: a fuller page, or larger *Small text*, makes it taller instead of cutting text off. *Large* and *Larger* small text also widen it, so the ship's name and the labels have room. Page text is bigger too.
+* **The Navigation HUD knows where you are.** New scenes:
+  * **Docked:** a station's interior (down its length to the slot, ships leaving), an outpost's open pad on its truss arm, a fleet carrier's deck, or a planetary port.
+  * **On foot:** the concourse (its window on the hangar, shopfronts, people about), the hangar (walking to the lift under your ship), a carrier's deck, or out on a planet. The label says CONCOURSE, HANGAR or CARRIER DECK.
+  * **FSD cooldown:** the drive ring vents its heat segment by segment while a gauge fills round it.
+  * **Rhino:** your rigs standing on the ground with their beacons and lasers, the scanner pinging out, and ore sparkling up from the drill into the hopper.
+* **Five more scenes redone:** inside the station (its wall curving overhead with the city's lights, your ship flying in to its lit pad), the map (a holo-table with a route being plotted), the Codex (its four kinds of discovery and a specimen under the scanner), AFMU repair (the module list mending one by one) and system reboot (the ring and power pips coming back), and a planetary port with its ring of pads, ships landing and leaving.
+* **Combat page, sharper:** your target follows the scanner (pilot, then shields and hull, then faction, bounty and subsystem), starts afresh on a new target even of the same type, drops a subsystem you let go, names ships the journal leaves unnamed (Mandalay, Anaconda...), and treats WantedEnemy as wanted.
+* **Pages show it all:** lists on the HUD's pages (the next system's facts, bodies worth a look, threats, materials) show every row instead of "+4 MORE", and the HUD grows to fit; only past ten rows does it say how many more.
+* **A tip, once:** pages are off until you switch them on, so a little after starting the HUD says where to find them (Overlay Studio › Navigation HUD › Pages). It doesn't say it again.
 
-  **Warnings** (red, flashing, in front of the strip):
-  | Word | Icon when short of room | Means |
-  |---|---|---|
-  | NO SHIELDS | Shield, crossed out | Your shields are down |
-  | HEAT | Thermometer | Overheating (left out when the HUD already says HEAT CRITICAL) |
-  | LOW FUEL | Fuel gauge, needle low | Low fuel |
+### Rhino mining
 
-  Orange and blue here are the default theme's colours; they follow your theme.
+* **The Rhino map.** Drive the Rhino on a planet and the Galaxy Minimap becomes a map of the ground round you: your trail, the ship, your rigs with their HERE rings, the next rig to collect (with a line to it), and amber spots where your drill has refined. It glides smoothly as you drive, turns with you or keeps north up, and stays up whenever your rigs are out, on foot or back in the ship. Set it in Overlay Studio › Galaxy Minimap: *in the Rhino*, *in any SRV or on foot*, or *never*.
+* **Rhino mining helpers**
+  * **Spacing rings:** a ring round each rig (78 m by default), red when you're too close to put down another and green when you're clear.
+  * **RIG HERE:** a pin at the nearest spot clear of every rig.
+  * **Lost-rig warning:** a warning when a rig is getting too far behind (3.5 km by default, as the game destroys it at 5 km), on the map and the HUD, and a toast once a trip.
+  * **COLLECT:** shows on a rig that's had its two minutes.
+  * **Scanner range:** the scanner's 2 km reach drawn round you.
+
+  Set the spacing and the warning distance in Overlay Studio › Rig Tracker.
+* **Rigs in the order you placed them.** NEXT (on the Rig Tracker, the Rhino map, the HUD's Rhino page and the Mining page) is the next rig in the order you put them down, not the nearest.
+* **Rigs the game takes back are forgotten:** past 5 km, or once you leave the planet. Old rigs no longer bring up the Rhino map as you land on a later visit.
+* **What a planet's ground tends to hold, for the Rhino.**
+  * **Survey page:** a RHINO chip on landable bodies worth the trip (IRIDIUM on a metal-rich world, MONAZITE on rocky magma), and MINE n once mining sites are found. Hover for the likely materials.
+  * **Navigation HUD:** the Survey page notes RHINO and mining sites on bodies worth a look; the Planet page lists the ground's three best materials and how many mining sites the body has.
+  * **Mining page:** *Rhino prospects in this system*, every landable body with its likely materials, mining sites found first, then by what its best material is likely worth a tonne.
+
+### Music
+
+* **The Music page, made over like Spotify:** your library on the left, the open list under a big header with a play button, what's playing on the right with up next, and the player along the bottom.
+  * **Long mixes resume:** any track over 20 minutes carries on where you left it (*FROM START* plays it from the beginning).
+  * **The track list:** click to select (Ctrl and Shift for more), drag to reorder, and sort by title, artist, plays, date added or length. *PLAY NEXT*, *ADD TO QUEUE*, *ADD TO* and *MOVE TO* another playlist, and *LOCATE* a file that's moved (the rest of its folder is found too).
+  * **For you:** *Recently added*, *Most played*, *Never played* and *Long mixes*, plus *Recently played* with the system you were in.
+  * **Visualizer looks:** the button by *LEVEL* on the player bar opens a list of twelve. *Classic:* Bars, Peaks (falling caps), Mirror and LED (a dot-matrix meter). *Flowing:* Wave (the sound's own waveform), Horizon (a smooth skyline), Aurora (ribbons for bass, mids and treble), Waterfall (the spectrum scrolling past) and Shockwave (a ring on every beat). *Elite:* **Scanner**, your ship's scanner with a contact on a stalk for every band (red when it's loud, like a hostile), and **Witchspace**, the jump tunnel, rushing faster as the music gets louder. Or *Off*.
+  * **Follow the game** has its own place in the library, and keys work on the page: Space plays or pauses, ← → seek, Shift+← → skip, Delete removes, Ctrl+F finds.
+* **The Music Player overlay, made over.** Five new skins replace the ten: *Command Deck*, *Cockpit HUD* (Elite orange, with lit-block meters), *Glass* (your cover, blurred, behind frosted glass), *Vinyl* (a turning record, its tonearm travelling across the track) and *Minimal*. If your skin has gone, the overlay switches to Command Deck.
+  * **Nothing on top of the visualizer:** the track, the visualizer, progress and up next each have their own lane.
+  * **Shuffle and repeat** show as small icons.
+  * **Up next:** the next track or the next three, set in Overlay Studio › Music Player. Queued tracks are marked QUEUED.
+  * **Follow the game:** shows the scene the music is playing for (DOCKED, DEEP SPACE, COMBAT...).
+  * **Long mixes** say LONG MIX, and while paused, where they carry on from, marked on the progress bar too.
+
+### Also
+
+* **Hotkeys A to Z.** Settings › Hotkeys lists every shortcut in alphabetical order.
+* **Explore & Survey stays still:** it redrew itself every second or so, losing your place and fighting the scroll. It now redraws only when something on it changes.
 
 ## Earlier releases
 
+* **v5.5.16** (21 OCT 3312) — Systems at a Glance: the Navigation HUD's ship systems as a fixed strip of cockpit icons (lit when on, warnings in red in front), so nothing beside the fuel bar gets cut off.
 * **v5.5.15** — The Anaconda Mk II: the new ship on the Navigation HUD (and a large pad for Trading), and nothing drawn behind your ship's picture on the HUD any more.
 * **v5.5.14** — Every Site in Sight: Planetary Operations' ALL SITES (every saved site, grouped by planet, with FIND, from anywhere) and a Studio setting for how close counts as HERE on the Rig Tracker.
 * **v5.5.13** — Smooth Ground: the Planetary page no longer lags the deck while you're on a planet (each refresh read your whole exobiology history three times; now it reads only the planet you're on, and a refresh went from about 560 ms to under 20 ms).

@@ -551,51 +551,63 @@
 
         <section class="page music-page" data-page-name="music">
           <header class="page-title"><div><p>COCKPIT AUDIO</p><h2>Music</h2><span>Your own music for the long jumps, played from wherever it lives on this PC. Nothing is copied or moved.</span></div><div class="title-actions"><button type="button" data-page="overlay-studio" data-studio-select="music_player_hud">MUSIC OVERLAY</button></div></header>
-          <section id="music-deck" class="music-deck idle" aria-label="Now playing">
-            <canvas id="music-visualizer" class="music-visualizer" aria-hidden="true"></canvas>
-            <figure class="music-cover"><img id="music-cover" alt="" hidden><span aria-hidden="true">♪</span></figure>
-            <div class="music-now">
-              <p class="music-kicker"><span id="music-state">STANDBY</span><b id="music-source">NO PLAYLIST</b><em id="music-working" hidden>WORKING…</em></p>
-              <h3 id="music-title">Nothing playing</h3>
-              <p id="music-artist" class="music-artist">Choose a playlist below and double-click a track.</p>
-              <p id="music-details" class="music-details"></p>
-              <div class="music-seek"><span id="music-elapsed">0:00</span><input id="music-seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Position in the track"><span id="music-total">0:00</span></div>
-              <div class="music-transport">
-                <button type="button" id="music-shuffle" class="music-mode" aria-pressed="false" title="Shuffle"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M4 7h3.5l8 10H20M4 17h3.5l2.4-3M13.6 10l1.9-3H20M17 4l3 3-3 3M17 14l3 3-3 3"/></svg><span>SHUFFLE</span></button>
-                <button type="button" id="music-previous" class="music-button" aria-label="Previous track" title="Previous (or back to the start)"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg></button>
-                <button type="button" id="music-play" class="music-button music-play" aria-label="Play" title="Play"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M8 5v14l11-7z"/></svg></button>
-                <button type="button" id="music-next" class="music-button" aria-label="Next track" title="Next"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M16 5h2v14h-2zM4 5l10.5 7L4 19z"/></svg></button>
-                <button type="button" id="music-repeat" class="music-mode" aria-pressed="true" title="Repeat"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M5 11V9a2 2 0 0 1 2-2h11M15 4l3 3-3 3M19 13v2a2 2 0 0 1-2 2H6M9 20l-3-3 3-3"/></svg><span>ALL</span></button>
-                <button type="button" id="music-level" class="music-mode" aria-pressed="true" title="Levelling: every track plays equally loud"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M4 12h2M18 12h2M8 9v6M11 6v12M14 8v8M17 10v4"/></svg><span>LEVEL</span></button>
-                <label class="music-volume" title="Volume"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg><input id="music-volume" type="range" min="0" max="100" step="1" value="80" aria-label="Volume"><b id="music-volume-value">80</b></label>
-              </div>
-              <p id="music-blocked" class="music-blocked" hidden>Windows wants one click in this window before music may start by itself. Press play once; hotkeys work from then on.</p>
-            </div>
-          </section>
-          <section id="music-follow" class="card music-follow" aria-label="Follow the game"></section>
-          <div class="music-library">
-            <aside class="card music-playlists" aria-label="Playlists">
-              <header><span>PLAYLISTS</span><b id="music-playlist-count">0</b></header>
+          <!-- Spotify-style: your library, the open list, what's playing,
+               and the player along the bottom. Every control keeps its id. -->
+          <div class="music-shell">
+            <aside class="music-side" aria-label="Your library">
+              <header class="music-side-head"><span>YOUR LIBRARY</span><b id="music-playlist-count">0</b></header>
               <form id="music-create" class="music-create"><input id="music-create-name" maxlength="60" placeholder="New playlist" aria-label="New playlist name"><button type="submit">CREATE</button></form>
-              <div id="music-playlists" class="music-playlist-list"></div>
-              <footer class="music-playlists-foot"><button type="button" id="music-import">IMPORT M3U</button></footer>
+              <div class="music-playlist-scroll">
+                <div id="music-playlists" class="music-playlist-list"></div>
+                <p class="music-group-label">FOR YOU</p>
+                <div id="music-smart" class="music-playlist-list music-smart-list"></div>
+                <p class="music-group-label">IN THE COCKPIT</p>
+                <button type="button" class="music-smart music-follow-entry" data-playlist="follow"><span class="music-list-art"><i>◈</i></span><span class="music-list-text"><span>Follow the game</span><small id="music-follow-state">A playlist per scene</small></span></button>
+              </div>
+              <footer class="music-playlists-foot">
+                <p id="music-listening" class="music-listening"></p>
+                <button type="button" id="music-import">IMPORT M3U</button>
+              </footer>
             </aside>
-            <section class="card music-tracks" aria-label="Tracks">
-              <header class="music-tracks-head">
-                <div class="music-list-title"><b id="music-list-name">No playlist</b><small id="music-list-meta"></small></div>
-                <div class="music-list-actions">
-                  <input id="music-find" type="search" placeholder="Find" aria-label="Find in this playlist">
-                  <button type="button" id="music-add-files" data-music-list>＋ FILES</button>
-                  <button type="button" id="music-add-folder" data-music-list>＋ FOLDER</button>
-                  <button type="button" id="music-export" data-music-list>EXPORT</button>
-                  <button type="button" id="music-rename" data-music-list>RENAME</button>
-                  <button type="button" id="music-delete" class="danger-action" data-music-list>DELETE</button>
+            <section class="music-main" aria-label="Tracks">
+              <header id="music-hero" class="music-hero">
+                <figure id="music-hero-art" class="music-hero-art"><i>♪</i></figure>
+                <div class="music-hero-text">
+                  <p id="music-hero-kicker">PLAYLIST</p>
+                  <h3 id="music-list-name">No playlist</h3>
+                  <small id="music-list-meta"></small>
                 </div>
               </header>
-              <div class="music-track-head" aria-hidden="true"><span>#</span><span></span><span>TITLE</span><span>ALBUM</span><span>TIME</span><span></span></div>
+              <div class="music-toolbar">
+                <button type="button" id="music-list-play" class="music-list-play" aria-label="Play this list" title="Play this list"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M8 5v14l11-7z"/></svg></button>
+                <details id="music-add-menu" class="music-menu"><summary>＋ ADD</summary><div><button type="button" id="music-add-files">MUSIC FILES</button><button type="button" id="music-add-folder">A WHOLE FOLDER</button></div></details>
+                <details id="music-more-menu" class="music-menu"><summary aria-label="More for this playlist" title="More">⋯</summary><div><button type="button" id="music-export">EXPORT M3U</button><button type="button" id="music-rename">RENAME</button><button type="button" id="music-delete" class="danger-action">DELETE</button></div></details>
+                <input id="music-find" type="search" placeholder="Find" aria-label="Find in this playlist">
+              </div>
+              <section id="music-follow" class="music-follow" aria-label="Follow the game" hidden></section>
+              <div class="music-list-bar"><div id="music-track-head" class="music-track-head"></div><div id="music-selection" class="music-selection" hidden></div></div>
               <div id="music-tracks" class="music-track-list" role="list"></div>
             </section>
+            <aside class="music-now-panel" aria-label="Now playing">
+              <header class="music-side-head"><span>NOW PLAYING</span></header>
+              <figure class="music-cover"><img id="music-cover" alt="" hidden><span aria-hidden="true">♪</span></figure>
+              <p class="music-kicker"><span id="music-state">STANDBY</span><b id="music-source">NO PLAYLIST</b><em id="music-working" hidden>WORKING…</em></p>
+              <h3 id="music-title">Nothing playing</h3>
+              <p id="music-artist" class="music-artist">Choose a playlist and double-click a track.</p>
+              <p id="music-details" class="music-details"></p>
+              <div id="music-upnext" class="music-upnext" aria-label="Up next" hidden></div>
+            </aside>
           </div>
+          <section id="music-deck" class="music-deck music-bar idle" aria-label="Player">
+            <canvas id="music-visualizer" class="music-visualizer" aria-hidden="true"></canvas>
+            <div class="music-bar-now"><img id="music-bar-cover" alt="" hidden><span aria-hidden="true">♪</span><div><b id="music-bar-title">Nothing playing</b><small id="music-bar-artist"></small></div></div>
+            <div class="music-bar-centre">
+              <div class="music-transport"><button type="button" id="music-shuffle" class="music-mode" aria-pressed="false" title="Shuffle"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M4 7h3.5l8 10H20M4 17h3.5l2.4-3M13.6 10l1.9-3H20M17 4l3 3-3 3M17 14l3 3-3 3"/></svg><span>SHUFFLE</span></button><button type="button" id="music-previous" class="music-button" aria-label="Previous track" title="Previous (or back to the start)"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg></button><button type="button" id="music-play" class="music-button music-play" aria-label="Play" title="Play"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M8 5v14l11-7z"/></svg></button><button type="button" id="music-next" class="music-button" aria-label="Next track" title="Next"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M16 5h2v14h-2zM4 5l10.5 7L4 19z"/></svg></button><button type="button" id="music-repeat" class="music-mode" aria-pressed="true" title="Repeat"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M5 11V9a2 2 0 0 1 2-2h11M15 4l3 3-3 3M19 13v2a2 2 0 0 1-2 2H6M9 20l-3-3 3-3"/></svg><span>ALL</span></button></div>
+              <div class="music-seek"><span id="music-elapsed">0:00</span><div class="music-seek-rail"><input id="music-seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Position in the track"><i id="music-resume-mark" class="music-resume-mark" hidden></i></div><span id="music-total">0:00</span></div>
+            </div>
+            <div class="music-bar-right"><details id="music-viz-menu" class="music-menu music-viz-menu"><summary id="music-viz" title="Visualizer"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M3 12c2-6 4-6 6 0s4 6 6 0 4-6 6 0"/></svg><span>BARS</span></summary><div id="music-viz-list" role="menu" aria-label="Visualizer"></div></details><button type="button" id="music-level" class="music-mode" aria-pressed="true" title="Levelling: every track plays equally loud"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M4 12h2M18 12h2M8 9v6M11 6v12M14 8v8M17 10v4"/></svg><span>LEVEL</span></button><label class="music-volume" title="Volume"><svg viewBox="0 0 24 24" aria-hidden="true" class="stroke"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg><input id="music-volume" type="range" min="0" max="100" step="1" value="80" aria-label="Volume"><b id="music-volume-value">80</b></label></div>
+            <p id="music-blocked" class="music-blocked" hidden>Windows wants one click in this window before music may start by itself. Press play once; hotkeys work from then on.</p>
+          </section>
         </section>
 
         <section class="page specialist-page" data-page-name="watcher">
@@ -722,7 +734,20 @@
                 <div class="studio-surface-settings">
                   <section data-studio-settings="hud">
                     <h4>NAVIGATION HUD</h4>
-                    <label class="studio-switch"><span><b>Compact layout</b><small>The everyday standard plate; off shows the expanded one.</small></span><input type="checkbox" data-overlay-option="hud_compact_mode"><i></i></label>
+                    <label class="studio-field"><span>Pages<small>One overlay for everything: the lower half changes with what you're doing</small></span><select id="studio-hud-pages" data-studio-setting="hud_pages"><option value="off">Navigation only</option><option value="auto">Auto: follow what you're doing</option><option value="manual">Manual: choose with the next page key</option></select></label>
+                    <label class="studio-switch"><span><b>Show these here instead</b><small>The overlays the pages show stay off while the pages are on, and come back when they're off.</small></span><input type="checkbox" data-overlay-option="hud_pages_takeover"><i></i></label>
+                    <p class="studio-option-note">The pages it can change to. Two hotkeys in Settings › Hotkeys: the page mode (auto or manual), and the next page. The HUD grows to fit each page and your text size.</p>
+                    <label class="studio-switch studio-page-switch"><span><b>Jump</b><small>The next system while the drive charges and in witch space.</small></span><input type="checkbox" data-overlay-option="hud_page_jump"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Survey</b><small>What's worth a look in the system, and its signals, while you scan.</small></span><input type="checkbox" data-overlay-option="hud_page_survey"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Planet</b><small>Gravity, your compass target, samples and materials on a planet.</small></span><input type="checkbox" data-overlay-option="hud_page_planet"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Rhino</b><small>Your rigs, what to collect next, and the holds, in the Rhino.</small></span><input type="checkbox" data-overlay-option="hud_page_rhino"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Mining</b><small>The rock you just prospected, what you've refined, and the hold.</small></span><input type="checkbox" data-overlay-option="hud_page_mining"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Combat</b><small>Your target's shields, hull and bounty, kills and threats here.</small></span><input type="checkbox" data-overlay-option="hud_page_combat"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Station</b><small>Where you're docked: pads, services, and data to sell.</small></span><input type="checkbox" data-overlay-option="hud_page_station"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Colony</b><small>What a construction site still needs.</small></span><input type="checkbox" data-overlay-option="hud_page_colony"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Carrier</b><small>Your fleet carrier's jump, tritium and cargo.</small></span><input type="checkbox" data-overlay-option="hud_page_carrier"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Trade</b><small>The next stop on your trade route and what to buy or sell.</small></span><input type="checkbox" data-overlay-option="hud_page_trade"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Powerplay</b><small>Your power, merits and objective (from the page hotkey).</small></span><input type="checkbox" data-overlay-option="hud_page_powerplay"><i></i></label>
                     <label class="studio-field"><span>Scene animation<small>How lively each state's hologram is</small></span><select id="studio-hud-animation" data-studio-setting="hud_animation_intensity"><option value="Calm">Calm</option><option value="Standard">Standard</option><option value="Energetic">Energetic</option></select></label>
                     <label class="studio-field"><span>Typeface</span><select id="studio-hud-font" data-studio-setting="hud_font_face"><option value="cockpit">Cockpit</option><option value="clear">Clear</option><option value="terminal">Terminal</option></select></label>
                     <label class="studio-field"><span>Small text<small>Labels grow; the HUD keeps its size</small></span><select id="studio-hud-labels" data-studio-setting="hud_label_size"><option value="standard">Standard</option><option value="large">Large</option><option value="larger">Larger</option></select></label>
@@ -797,6 +822,8 @@
                     <label class="studio-switch"><span><b>Spansh route</b><small>The whole trip beyond the leg plotted in game: your waypoint route, or your latest neutron plot, with its neutron stars.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_spansh"><i></i></label>
                     <label class="studio-switch"><span><b>Time capsules</b><small>A small hourglass where a note you sealed on the Time Capsules page is waiting.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_capsules"><i></i></label>
                     <label class="studio-switch"><span><b>Region names</b><small>The names of the regions on the map; the one you're in, in orange.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_labels"><i></i></label>
+                    <label class="studio-field"><span>Rhino map<small>The minimap turns into a map of the ground round you: rigs, ship, trail and where you've drilled</small></span><select id="studio-minimap-surface" data-studio-setting="galaxy_minimap_surface"><option value="rhino">In the Rhino</option><option value="srv">In any SRV or on foot</option><option value="off">Never</option></select></label>
+                    <label class="studio-field"><span>Rhino map faces<small>Which way is up on the ground map</small></span><select id="studio-minimap-surface-up" data-studio-setting="galaxy_minimap_surface_up"><option value="heading">Where you're heading</option><option value="north">North</option></select></label>
                     <label class="studio-field"><span>Region names<small>Just the names on the map; bigger names leave out more of their neighbours</small></span><select id="studio-minimap-region-text" data-studio-setting="galaxy_minimap_region_text_percent"><option value="0">Same as text</option><option value="75">75%</option><option value="85">85%</option><option value="100">100%</option><option value="110">110%</option><option value="125">125%</option><option value="150">150%</option><option value="175">175%</option><option value="200">200%</option></select></label>
                   </section>
                   <section data-studio-settings="postcard_hud">
@@ -810,18 +837,20 @@
                     <h4>MUSIC PLAYER</h4>
                     <p class="studio-option-note">Shows what the Music page is playing. Play and choose music on the Music page.</p>
                     <label class="studio-field"><span>Layout</span><select id="studio-music-layout" data-studio-setting="music_player_layout"><option value="card">Card</option><option value="strip">Slim strip</option></select></label>
-                    <label class="studio-field"><span>Skin<small>Ten looks for the card; on the slim strip, its colours</small></span><select id="studio-music-skin" data-studio-setting="music_player_skin"><option value="deck">Command Deck</option><option value="glass">Glass</option><option value="vinyl">Vinyl</option><option value="cassette">Cassette</option><option value="cockpit">Cockpit HUD</option><option value="terminal">Terminal</option><option value="orb">Orb</option><option value="radio">Radio dial</option><option value="minimal">Minimal</option><option value="neon">Neon</option></select></label>
+                    <label class="studio-field"><span>Skin<small>Five looks for the card; on the slim strip, its colours</small></span><select id="studio-music-skin" data-studio-setting="music_player_skin"><option value="deck">Command Deck</option><option value="cockpit">Cockpit HUD</option><option value="glass">Glass</option><option value="vinyl">Vinyl</option><option value="minimal">Minimal</option></select></label>
                     <label class="studio-field"><span>Visualizer</span><select id="studio-music-visualizer" data-studio-setting="music_player_visualizer"><option value="bars">Spectrum bars</option><option value="mirror">Mirrored</option><option value="wave">Wave</option><option value="off">Off</option></select></label>
                     <label class="studio-field"><span>Visualizer colour</span><select id="studio-music-colour" data-studio-setting="music_player_colour"><option value="theme">Theme</option><option value="warm">Warm</option><option value="spectrum">Spectrum</option></select></label>
                     <label class="studio-switch"><span><b>Album art</b><small>The cover beside the track.</small></span><input type="checkbox" data-overlay-option="music_player_show_art"><i></i></label>
                     <label class="studio-switch"><span><b>Album and year</b><small>Album, year and format under the artist.</small></span><input type="checkbox" data-overlay-option="music_player_show_details"><i></i></label>
-                    <label class="studio-switch"><span><b>Up next</b><small>The track that plays after this one.</small></span><input type="checkbox" data-overlay-option="music_player_show_next"><i></i></label>
+                    <label class="studio-switch"><span><b>Up next</b><small>What plays after this one: the queue first, then the playlist.</small></span><input type="checkbox" data-overlay-option="music_player_show_next"><i></i></label><label class="studio-field"><span>Up next shows</span><select id="studio-music-next-count" data-studio-setting="music_player_next_count"><option value="1">The next track</option><option value="3">The next three</option></select></label>
                     <label class="studio-field"><span>Hide when paused</span><select id="studio-music-auto-hide" data-studio-setting="music_player_auto_hide"><option value="0">Never</option><option value="10">After 10 s</option><option value="30">After 30 s</option><option value="120">After 2 min</option></select></label>
                   </section>
                   <section data-studio-settings="rig_tracker_hud">
                     <h4>RIG TRACKER</h4>
                     <label class="studio-switch"><span><b>Cargo holds</b><small>How full the Rhino's hold and your ship's are, under the dials.</small></span><input type="checkbox" data-overlay-option="rig_tracker_show_holds"><i></i></label>
                     <label class="studio-field"><span>Counts as HERE within<small>10 to 200 m. A rig closer than this reads HERE, here and on the Mining page.</small></span><div><input id="studio-rig-here" type="number" min="10" max="200" step="5" data-studio-setting="rig_tracker_here_m"><b>M</b></div></label>
+                    <label class="studio-field"><span>Rig spacing<small>20 to 300 m. The ring round each rig on the Rhino map: red when you're too close to put down another</small></span><div><input id="studio-rig-spacing" type="number" min="20" max="300" step="1" data-studio-setting="rig_tracker_spacing_m"><b>M</b></div></label>
+                    <label class="studio-field"><span>Warn when a rig is this far<small>The game destroys a rig 5 km behind you. 0 turns the warning off</small></span><div><input id="studio-rig-warn" type="number" min="0" max="4900" step="100" data-studio-setting="rig_tracker_warn_m"><b>M</b></div></label>
                   </section>
                   <section data-studio-settings="galnet_ticker_hud">
                     <h4>GALNET TICKER</h4>

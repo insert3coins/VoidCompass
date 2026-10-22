@@ -9,6 +9,8 @@ and feeds the music overlay, including the visualizer's live levels.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import bisect
 import logging
 from pathlib import Path
 import threading
@@ -26,6 +28,9 @@ MUSIC_POSITION_SAVE_S = 20.0
 # Levels older than this are silence: the page has stopped sending them.
 MUSIC_LEVELS_STALE_S = 1.0
 MUSIC_BANDS = 64
+# The Music page's RECENTLY PLAYED (5.5.17).
+MUSIC_RECENT = 20
+WEEK_S = 7 * 86400
 
 
 def _text(value, limit=240):
@@ -94,7 +99,75 @@ class HtmlMusicMixin:
             "follow": follow_settings(config),
             **scene_of(getattr(self, "current_status_flags", 0), getattr(self, "current_status_flags2", 0),
                        getattr(self, "_music_population", None)),
+            "stats": self._music_stats(),
         }
+
+    def _music_stats(self):
+        """Your listening, from the music diary: plays per track, the last
+        few with where you were, and roughly how long you've listened."""
+        diary_of = getattr(self, "music_diary", None)
+        if not callable(diary_of):
+            return {"revision": 0, "plays": {}, "recent": [], "listening": {}}
+        try:
+            diary = diary_of()
+        except Exception:
+            return {"revision": 0, "plays": {}, "recent": [], "listening": {}}
+        library = self.music_library()
+        history = getattr(self, "travel_history", None)
+        travel = len(getattr(history, "rows", None) or ())
+        key = (id(diary), diary.revision, library.revision, travel)
+        cached = getattr(self, "_music_stats_cache", None)
+        if cached and cached[0] == key:
+            return cached[1]
+        with diary.lock:
+            rows = [list(row) for row in diary.rows]
+        plays, listened_all, listened_week = {}, 0.0, 0.0
+        week_from = time.time() - WEEK_S
+        for index, row in enumerate(rows):
+            started, track_id = float(row[0] or 0), str(row[1])
+            count, last = plays.get(track_id, (0, 0.0))
+            plays[track_id] = (count + 1, max(last, started))
+            # Only starts are logged: a play lasts until the next one starts,
+            # or its track's length if that's sooner.
+            gap = float(rows[index + 1][0]) - started if index + 1 < len(rows) else 0.0
+            length = float((library.track(track_id) or {}).get("duration") or 600.0)
+            heard = max(0.0, min(gap, length)) if gap else 0.0
+            listened_all += heard
+            if started >= week_from:
+                listened_week += heard
+        recent = []
+        for row in reversed(rows[-MUSIC_RECENT:]):
+            recent.append({"at": float(row[0] or 0), "track_id": str(row[1]), "title": str(row[2] or ""),
+                           "artist": str(row[3] or ""), "system": self._music_system_at(float(row[0] or 0))})
+        top = max(plays.items(), key=lambda item: (item[1][0], item[1][1]), default=None)
+        stats = {
+            "revision": diary.revision,
+            "plays": {track_id: [count, round(last, 1)] for track_id, (count, last) in plays.items()},
+            "recent": recent,
+            "listening": {"week_s": round(listened_week), "all_s": round(listened_all),
+                          "top": {"track_id": top[0], "count": top[1][0],
+                                  "title": next((str(row[2]) for row in reversed(rows) if str(row[1]) == top[0]), "")}
+                          if top else None},
+        }
+        self._music_stats_cache = (key, stats)
+        return stats
+
+    def _music_system_at(self, moment):
+        """The system you were in at a unix time, from the travel history."""
+        history = getattr(self, "travel_history", None)
+        if history is None or not moment:
+            return ""
+        stamp = datetime.fromtimestamp(moment, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        try:
+            with history.lock:
+                times = getattr(self, "_music_travel_times", None)
+                if times is None or times[0] != len(history.rows):
+                    times = (len(history.rows), [str(row[0]) for row in history.rows])
+                    self._music_travel_times = times
+                index = bisect.bisect_right(times[1], stamp) - 1
+                return str(history.rows[index][1]) if index >= 0 else ""
+        except Exception:
+            return ""
 
     def _music_observe(self, event, raw):
         """A jump or login: how many live in this system (deep space is
@@ -178,6 +251,9 @@ class HtmlMusicMixin:
         elif operation == "set_loudness":
             library.set_loudness(_text(payload.get("track_id"), 16), payload.get("lufs"))
             return True
+        elif operation == "set_resume":
+            library.set_resume(_text(payload.get("track_id"), 16), payload.get("position"), payload.get("duration"))
+            return True
         if operation == "recheck":
             library.recheck_files()
         elif operation == "create_playlist":
@@ -195,6 +271,24 @@ class HtmlMusicMixin:
             if not library.move_track(playlist_id, int(_number(payload.get("from"), -1)),
                                       int(_number(payload.get("to"), -1))):
                 return False
+        elif operation == "move_tracks":
+            positions = [int(_number(value, -1)) for value in list(payload.get("positions") or [])[:5000]]
+            if not library.move_tracks(playlist_id, positions, int(_number(payload.get("to"), -1))):
+                return False
+        elif operation == "add_tracks":
+            ids = [_text(value, 16) for value in list(payload.get("track_ids") or [])[:5000]]
+            added = library.add_existing(playlist_id, ids)
+            if not added:
+                return False
+            name = (library.playlist(playlist_id) or {}).get("name") or "the playlist"
+            self._music_say(f"Added {added} track{'s' if added != 1 else ''} to {name}.")
+        elif operation == "relink":
+            found = library.relink(_text(payload.get("track_id"), 16), _text(payload.get("path"), 2048))
+            if not found:
+                self._music_say("That isn't a music file Void Compass can play.", "warn")
+            else:
+                more = found - 1
+                self._music_say("Found it." + (f" And {more} more from the same folder." if more else ""))
         elif operation in {"add_paths", "import_m3u", "export_m3u"}:
             return self._music_file_job(operation, payload)
         else:
@@ -269,6 +363,11 @@ class HtmlMusicMixin:
             "repeat": repeat if repeat in MUSIC_REPEAT else "all",
             "normalise": bool(payload.get("normalise", True)),
             "reported_at": _number(payload.get("reported_at")),
+            # For the overlay (5.5.17): the next three, and the scene it plays for.
+            "upcoming": [{"id": _text(item.get("id"), 16), "queued": bool(item.get("queued"))}
+                         for item in (payload.get("upcoming") if isinstance(payload.get("upcoming"), list) else [])
+                         if isinstance(item, dict)][:3],
+            "scene": _text(payload.get("scene"), 12),
         }
         previous = getattr(self, "_music_status", None) or {}
         self._music_status = status
@@ -299,6 +398,9 @@ class HtmlMusicMixin:
         due = not status["playing"] or now - getattr(self, "_music_saved_at", 0.0) >= MUSIC_POSITION_SAVE_S
         if not changed and not (moved and due):
             return False
+        if status["track_id"] and moved:
+            # A long mix's place, for the next time it plays.
+            self.music_library().set_resume(status["track_id"], status["position"], status["duration"])
         config.update(lasting)
         config["music_position"] = round(status["position"], 1)
         self._music_saved_at = now

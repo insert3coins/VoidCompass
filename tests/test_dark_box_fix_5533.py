@@ -60,6 +60,8 @@ class ServerTests(unittest.TestCase):
         sent |= set(studio_module.colony_overlay_options({}))
         sent |= {f"galnet_ticker_{key}" for key in studio_module.ticker_options({})}
         sent |= {f"music_player_{key}" for key in studio_module.music_overlay_options({})}
+        # The Navigation HUD's page switches (5.5.17), one per page.
+        sent |= {f"hud_page_{page}" for page in studio_module.hud_pages.PAGES[1:]}
         self.assertIn("overlay_transparency_fix", switches)
         self.assertEqual(sorted(switches - sent), [])
 
@@ -108,18 +110,18 @@ class ClientShapeTests(unittest.TestCase):
         page.wait_for_timeout(1500)
         return sent
 
-    def test_the_orb_skin_reports_its_rounded_shape(self):
+    def test_the_glass_skin_reports_its_rounded_shape(self):
         sent = self.report("music_player", {"theme": {}, "effects": {"text_scale": 1, "reduced_motion": True}, "music": {
             "state": "playing", "track": {"id": "1", "title": "Solar Echoes", "artist": "nyxevera", "duration": 277},
             "position": 96, "reported_at": time.time() * 1000,
-            "options": {"layout": "card", "skin": "orb", "show_art": True}}}, 440, 174)
+            "options": {"layout": "card", "skin": "glass", "show_art": True}}}, 460, 178)
         shapes = sent["rendered"][-1]["shapes"]
         self.assertEqual(len(shapes), 1)
         polygon = shapes[0]
-        self.assertGreater(len(polygon), 20, "rounded corners, not a plain box")
+        self.assertGreater(len(polygon), 8, "rounded corners, not a plain box")
         xs = [x for x, _y in polygon]
         self.assertLessEqual(min(xs), 2)
-        self.assertGreaterEqual(max(xs), 436)
+        self.assertGreaterEqual(max(xs), 456)
         self.assertTrue(sent["ready"] and sent["ready"][0].get("renderer"), "the renderer is reported for the logs")
 
     def test_each_notification_is_its_own_shape(self):

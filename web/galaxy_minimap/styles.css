@@ -80,3 +80,8 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
   letter-spacing: .14em; white-space: nowrap;
 }
 .map #galaxy { will-change: transform; }
+
+/* The Rhino map (5.5.17): the ground replaces the galaxy while you drive. */
+.minimap.surface #galaxy, .minimap.surface .charting { display: none; }
+.minimap.surface .map { background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%); }
+#facts .warn { color: var(--red); }

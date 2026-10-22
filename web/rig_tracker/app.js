@@ -80,7 +80,7 @@
     byId("rigs-body").textContent = String(model.body || "").toUpperCase();
     byId("rigs-count").textContent = `${number(model.tracked)} OUT`;
     byId("rigs-dials").replaceChildren(...(model.slots || []).map((rig) => {
-      const item = node("li", `dial${rig.tracked ? "" : " idle"}${rig.nearest ? " nearest" : ""}${rig.here ? " at" : ""}`);
+      const item = node("li", `dial${rig.tracked ? "" : " idle"}${rig.next ? " nearest" : ""}${rig.here ? " at" : ""}`);
       item.append(node("span", "slot", `#${rig.slot}`), dial(rig),
         node("b", "distance", rig.tracked ? (rig.here ? "HERE" : distance(rig.distance_m)) : "--"),
         node("small", "age", rig.tracked ? age(rig.at) : ""));

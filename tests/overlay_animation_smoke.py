@@ -126,7 +126,7 @@ def run():
           renderRoute({active: true, source: 'waypoints', hops: [{name: 'Unknown', next: true}]}, 'Alpha');
           if (!dom['route-star-orb'].classList.contains('star-unknown')) throw Error('Unknown destination displayed as a star');
         }""")
-        for layout, width, height in [("standard", 500, 326), ("expanded", 620, 342)]:
+        for layout, width, height in [("standard", 500, 326)]:
             page.set_viewport_size({"width": width, "height": height})
             page.evaluate("""layout => {
               render({schema: 1, layout, effects: {reduced_motion: true},

@@ -18,6 +18,7 @@ const dom = Object.fromEntries([
   'survey-rail', 'survey-progress-fill', 'survey-acquisition', 'survey-signals',
   'survey-signal-bio', 'survey-signal-geo', 'survey-signal-mining', 'survey-signal-valuable', 'survey-signal-sites',
   'context-label', 'secondary-label', 'traffic-label', 'link-state',
+  'page-panel', 'page-title', 'page-mode', 'page-tabs', 'page-body',
 ].map((id) => [id, $(id)]));
 
 let snapshot = null;
@@ -99,12 +100,17 @@ function setTheme(theme = {}) {
 // HUD's lower and right parts. Fitting to the window actually given means the
 // whole instrument always shows, at whatever size the window really is.
 const DESIGN_SIZE = {standard: [500, 326], expanded: [620, 342]};
+// Larger small text widens the plate (Python sizes the window to match).
+const LABEL_WIDTH = {standard: 500, large: 540, larger: 580};
 let requestedScale = 1;
 let fittedScale = 1;
 
+// Since 5.5.17 the HUD sizes itself: it fits the window's width, and tells
+// the app how tall it is (a page, larger small text), so the window follows
+// (overlayfix.md). The design height is only its least.
 function fitToWindow() {
-  const [width, height] = DESIGN_SIZE[dom.hud?.classList.contains('expanded') ? 'expanded' : 'standard'];
-  const fit = innerWidth > 0 && innerHeight > 0 ? Math.min(innerWidth / width, innerHeight / height) : requestedScale;
+  const width = LABEL_WIDTH[dom.hud?.dataset.labels] || DESIGN_SIZE.standard[0];
+  const fit = innerWidth > 0 ? innerWidth / width : requestedScale;
   fittedScale = Math.max(.4, Math.min(3, Number.isFinite(fit) ? fit : requestedScale));
   document.documentElement.style.setProperty('--text-scale', fittedScale.toFixed(4));
   return fittedScale;
@@ -160,10 +166,14 @@ const DISPLAY_LABELS = {
   HANDBRAKE: 'HANDBRAKE ON',
 };
 
-function displayLabel(label) {
+// On foot, the label says where (5.5.17).
+const FOOT_LABELS = {concourse: 'CONCOURSE', hangar: 'HANGAR', carrier: 'CARRIER DECK'};
+
+function displayLabel(label, dynamics = {}) {
   const text = String(label || 'FLIGHT').toUpperCase();
   const pad = /^PAD (\d+) CLEARED$/.exec(text);
   if (pad) return `DOCKING GRANTED · PAD ${pad[1]}`;
+  if (text === 'ONFOOT' && FOOT_LABELS[dynamics.foot_place]) return FOOT_LABELS[dynamics.foot_place];
   return DISPLAY_LABELS[text] || text;
 }
 
@@ -464,6 +474,21 @@ function renderEventNotice(notice, theme, reducedMotion) {
     return;
   }
   lastNoticeSequence = notice.seq;
+  showNotice(notice, reducedMotion);
+}
+
+// A page hotkey's notice (5.5.17): its own numbering, so it never makes a
+// journal notice show twice. Only a fresh one shows on a page reload.
+let lastFlashSequence = null;
+function renderFlash(flash, reducedMotion) {
+  if (!flash || flash.seq == null || flash.seq === lastFlashSequence) return;
+  const fresh = Date.now() / 1000 - Number(flash.at || 0) < 4;
+  lastFlashSequence = flash.seq;
+  if (fresh) showNotice(flash, reducedMotion);
+}
+
+function showNotice(notice, reducedMotion) {
+  const node = dom['event-notice'];
   const tone = ['accent', 'green', 'yellow', 'orange', 'red'].includes(notice.tone) ? notice.tone : 'accent';
   node.textContent = notice.detail ? `${notice.text} · ${notice.detail}` : notice.text;
   node.style.setProperty('--event-tone', `var(--${tone})`);
@@ -494,7 +519,7 @@ function renderStatus(data, theme, reducedMotion) {
   const tone = category === 'alert' ? theme.red : colour(state.color, theme.dim);
   hud.style.setProperty('--state', tone);
   dom['state-tag'].textContent = stateTag(state);
-  dom['state-label'].textContent = displayLabel(label);
+  dom['state-label'].textContent = displayLabel(label, state.dynamics || {});
   const signature = `${category}|${label}`;
   if (lastStateSignature && signature !== lastStateSignature && !reducedMotion) {
     hud.classList.remove('state-changing');
@@ -511,6 +536,7 @@ function renderStatus(data, theme, reducedMotion) {
   renderLamps(state);
   renderFuel(data.metrics?.fuel, state.dynamics || {}, theme);
   renderEventNotice(state.notice, theme, reducedMotion);
+  renderFlash(data.flash, reducedMotion);
   return tone;
 }
 
@@ -996,13 +1022,13 @@ function render(data) {
   const expanded = data.layout === 'expanded';
   hud.classList.toggle('standard', !expanded);
   hud.classList.toggle('expanded', expanded);
-  fitToWindow();
   hud.classList.toggle('no-crt', !data.effects?.crt);
   // Overlay Studio's type choices: typeface, a floor for the small text,
   // and brighter labels. The stylesheet does the rest.
   const type = data.theme?.type || {};
   hud.dataset.face = ['clear', 'terminal'].includes(type.face) ? type.face : 'cockpit';
   hud.dataset.labels = ['large', 'larger'].includes(type.labels) ? type.labels : 'standard';
+  fitToWindow();
   hud.classList.toggle('bright-labels', Boolean(type.bright));
   const mode = sceneMode(data);
   hud.classList.toggle('scene-still', mode === 'still');
@@ -1048,11 +1074,88 @@ function render(data) {
     ? [data.context?.primary, data.context?.secondary].filter(Boolean).join('|') : '';
   if (attentionText && attentionText !== lastAttentionText) briefHighlight(dom['context-label'], 'context-attention');
   lastAttentionText = attentionText;
+  renderPages(data.pages);
   updateClock();
   // A running CSS transition can outlive a just-enabled reduced-motion rule.
   // Stop those in-flight effects as well as preventing new ones.
   if (reducedMotion) hud.getAnimations({subtree: true}).forEach((animation) => animation.cancel());
 }
+
+// ---------------------------------------------------------------------------
+// Pages (5.5.17): one overlay for everything. Python picks the page and
+// builds it from a few blocks; this draws them in the HUD's own type.
+// ---------------------------------------------------------------------------
+
+const PAGE_TONES = new Set(['hud', 'accent', 'green', 'yellow', 'red', 'orange', 'text', 'dim', 'muted']);
+const pageTone = (value) => (PAGE_TONES.has(value) ? value : 'hud');
+const pageText = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
+const ARROW_PATH = 'M10 1.5 L15.5 17.5 L10 13.5 L4.5 17.5 Z';
+let lastPageMarkup = '';
+
+const PAGE_BLOCKS = {
+  hero: (block) => `<div class="pg-hero" data-tone="${pageTone(block.tone)}"><div><b>${pageText(block.title)}</b>${block.sub ? `<small>${pageText(block.sub)}</small>` : ''}</div>${block.value ? `<strong>${pageText(block.value)}</strong>` : ''}</div>`,
+  stats: (block) => `<div class="pg-stats" data-count="${block.items.length}">${block.items.map((item) =>
+    `<span data-tone="${pageTone(item.tone)}">${item.label ? `<small>${pageText(item.label)}</small>` : ''}<b>${pageText(item.value)}</b></span>`).join('')}</div>`,
+  bars: (block) => `<div class="pg-bars" data-columns="${Math.max(1, Math.min(3, Number(block.columns) || 1))}">${block.items.map((item) =>
+    `<span class="pg-bar" data-tone="${pageTone(item.tone)}" data-ratio="${Math.max(0, Math.min(1, Number(item.ratio) || 0))}"><small>${pageText(item.label)}</small><b>${pageText(item.value)}</b><i></i></span>`).join('')}</div>`,
+  list: (block) => `<div class="pg-list">${block.title ? `<small class="pg-list-title">${pageText(block.title)}</small>` : ''}<ul>${block.items.map((item) =>
+    `<li data-tone="${pageTone(item.tone)}"><b>${pageText(item.name)}</b>${item.detail ? `<small>${pageText(item.detail)}</small>` : '<small></small>'}<em>${pageText(item.value)}</em></li>`).join('')}</ul>${block.more ? `<small class="pg-more">+${Number(block.more)} MORE</small>` : ''}</div>`,
+  compass: (block) => `<div class="pg-compass" data-tone="${pageTone(block.tone)}"><span class="pg-arrow"${Number.isFinite(Number(block.relative)) && block.relative !== null ? ` data-turn="${Number(block.relative)}"` : ' data-turn="0" data-unknown'}><svg viewBox="0 0 20 20" aria-hidden="true"><path d="${ARROW_PATH}"/></svg></span><div><small>${pageText(block.label)}</small><b>${pageText(block.distance)}</b><em>${pageText(block.detail)}</em></div></div>`,
+  dials: (block) => `<div class="pg-dials">${block.items.map((dial) =>
+    `<span class="pg-dial ${['here', 'next', 'out', 'empty'].includes(dial.state) ? dial.state : 'out'}"${dial.state !== 'empty' && Number.isFinite(Number(dial.relative)) ? ` data-turn="${Number(dial.relative)}"` : ''}><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="${ARROW_PATH}"/></svg></i><b>${Number(dial.slot)}</b><small>${pageText(dial.state === 'empty' ? '—' : dial.state === 'here' ? 'HERE' : dial.distance)}</small></span>`).join('')}</div>`,
+  note: (block) => `<p class="pg-note" data-tone="${pageTone(block.tone)}">${pageText(block.text)}</p>`,
+};
+
+function renderPages(pages) {
+  const hud = dom.hud;
+  const panel = dom['page-panel'];
+  if (!panel) return;
+  const page = pages?.page || null;
+  // A page takes the route and survey rows; NAV is the HUD as it always was.
+  hud.classList.toggle('paged', Boolean(page));
+  hud.dataset.page = pages ? String(pages.active || 'nav') : '';
+  panel.hidden = !page;
+  if (!page) {
+    lastPageMarkup = '';
+    return;
+  }
+  panel.dataset.tone = pageTone(page.tone);
+  dom['page-title'].textContent = page.title || page.label || '';
+  dom['page-mode'].textContent = pages.mode === 'manual' ? 'MANUAL' : 'AUTO';
+  dom['page-mode'].classList.toggle('pinned', pages.mode === 'manual');
+  const tabs = (pages.tabs || []).map((tab) => {
+    const on = tab.id === pages.active;
+    const classes = [on ? 'on' : '', tab.id === pages.auto ? 'auto' : '', tab.empty && !on ? 'empty' : ''].filter(Boolean).join(' ');
+    return `<i class="${classes}">${tab.empty && !on ? '' : pageText(tab.label)}</i>`;
+  }).join('');
+  const markup = `${tabs}|${(page.blocks || []).map((block) => (PAGE_BLOCKS[block.type] || (() => ''))(block)).join('')}`;
+  if (markup === lastPageMarkup) return;
+  lastPageMarkup = markup;
+  const [tabMarkup, bodyMarkup] = [markup.slice(0, tabs.length), markup.slice(tabs.length + 1)];
+  dom['page-tabs'].innerHTML = tabMarkup;
+  dom['page-body'].innerHTML = bodyMarkup;
+  // Bars and pointers take their size and turn here: the overlay's CSP keeps
+  // inline styles out of the markup.
+  dom['page-body'].querySelectorAll('[data-ratio]').forEach((node) => node.style.setProperty('--ratio', node.dataset.ratio));
+  dom['page-body'].querySelectorAll('[data-turn]').forEach((node) => node.style.setProperty('--turn', `${Number(node.dataset.turn) || 0}deg`));
+  fitPage();
+}
+
+// What doesn't fit is left out from the end, where the least important
+// sits: list rows and bars first, then whole blocks; never cut in half.
+function fitPage() {
+  const body = dom['page-body'];
+  if (!body || dom['page-panel'].hidden) return;
+  body.querySelectorAll('[hidden]').forEach((node) => { node.hidden = false; });
+  const over = () => body.scrollHeight > body.clientHeight + 1;
+  const blocks = [...body.children];
+  for (let index = blocks.length - 1; index > 0 && over(); index -= 1) {
+    const rows = [...blocks[index].querySelectorAll('li, .pg-bar')];
+    for (let row = rows.length - 1; row > 0 && over(); row -= 1) rows[row].hidden = true;
+    if (over()) blocks[index].hidden = true;
+  }
+}
+
 
 async function fetchSnapshot() {
   const response = await fetch(api('/api/snapshot'), {cache: 'no-store'});
@@ -1061,12 +1164,18 @@ async function fetchSnapshot() {
   return response.json();
 }
 
+// How tall the HUD is at its design width, for the app to size the window.
+function designHeight() {
+  if (!dom.hud) return DESIGN_SIZE.standard[1];
+  return Math.max(DESIGN_SIZE.standard[1], Math.ceil(dom.hud.getBoundingClientRect().height / (fittedScale || 1)));
+}
+
 async function acknowledgeRendered(revision) {
   try {
     const response = await fetch(api('/api/rendered'), {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({revision}),
+      body: JSON.stringify({revision, content_height: designHeight()}),
     });
     await response.arrayBuffer().catch(() => null);
     return response.ok;
@@ -1145,6 +1254,7 @@ start();
 // fit again, and let the scene re-measure on its next frame.
 window.addEventListener('resize', () => {
   if (dom.hud) fitToWindow();
+  fitPage();
 });
 // The lamps' row changes width with the fuel gauge and the window; the
 // typeface can also arrive after the first fit.

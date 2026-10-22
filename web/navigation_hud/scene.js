@@ -246,6 +246,9 @@
       neutronBoostValue: number(source.neutron_boost_value, 0, 0, 10),
       fsdInjection: Boolean(source.fsd_injection),
       fsdInjectionPercent: number(source.fsd_injection_percent, 0, 0, 100),
+      // Where you're docked or on foot (5.5.17): the scene follows.
+      dockPlace: ['orbital', 'outpost', 'carrier', 'surface'].includes(source.dock_place) ? source.dock_place : 'orbital',
+      footPlace: ['planet', 'concourse', 'hangar', 'carrier'].includes(source.foot_place) ? source.foot_place : 'planet',
     };
   }
 
@@ -1306,20 +1309,44 @@
     s.ring(s.W * .86, cy, 7, 7, 16, pal.accent, .5 + .3 * wave(st.p * .4), 1.2);
   }
 
-  // The drive cooling after a jump: the ring slows and its segments fade
-  // from white heat to dark, the nearest the core last. Not a timer.
+  // The drive cools after a jump or a drop: its ring vents heat segment by
+  // segment while a gauge fills round it, and the ship drifts on ahead.
   function cooldown(s, st, pal) {
-    const cy = s.H / 2, fx = s.W * .64, heat = 1 - smooth(st.age / 3.2);
-    for (let index = 0; index < 9; index += 1) {
-      const t = fract(st.p * .2 + index / 9), x = fx + (hash(index + 40) - .5) * s.W * .5;
-      s.line(x, cy - 4 - t * 16, x + Math.sin(t * 6 + index) * 2, cy - 8 - t * 16, st.c,
-        Math.sin(t * Math.PI) * (.12 + heat * .45));
+    const cy = s.H / 2, fx = s.W * .68, cool = smooth(clamp(st.age / 9)), hot = 1 - cool;
+    sky(s, st, .7, .4);
+    const sx = s.W * .24 + Math.sin(st.p * .25) * 3;
+    s.solid(MODELS.ship(), camera(sx, cy + 1, 5.6, {yaw: -.45, pitch: -.3, persp: 14}), {}, st.c, 1, pal.bg,
+      {engine: [st.c, .55]});
+    trail(s, [sx - 9, cy + 1.5], [sx - 30, cy + 3], st.c, .4, 8);
+    // Heat haze off the ring while it's hot.
+    for (let index = 0; index < 12; index += 1) {
+      const t = fract(st.p * .22 + index / 12), x0 = fx + (hash(index + 40) - .5) * 26, points = [];
+      for (let step = 0; step < 5; step += 1) {
+        points.push([x0 + Math.sin(step * 1.4 + t * 6 + index) * 2, cy - 7 - t * 18 - step * 2.6]);
+      }
+      s.poly(points, pal.orange, Math.sin(t * Math.PI) * hot * .5, .8);
     }
-    driveRing(s, st, pal, fx, cy, 6.4, {
-      spin: st.p * (.1 + .45 * heat),
-      lit: (index) => heat * (.6 + .4 * hash(index)) + .12,
-      core: .35 + .5 * heat,
+    // Segments cool one after another round the ring.
+    driveRing(s, st, pal, fx, cy, 6.2, {
+      spin: st.p * (.04 + .35 * hot),
+      lit: (index) => (index / 12 >= cool ? .25 + .75 * hot + .2 * hash(index + Math.floor(st.p * 3)) : .1),
+      core: .25 + .55 * hot,
     });
+    // The gauge round it, ticked like the cockpit's, filling as it cools.
+    const r = s.H * .46;
+    s.arc(fx, cy, r, r, 0, TAU, st.c, .12, 1);
+    for (let tick = 0; tick < 24; tick += 1) {
+      const angle = -Math.PI / 2 + tick * TAU / 24, lit = tick / 24 < cool;
+      s.line(fx + Math.cos(angle) * r, cy + Math.sin(angle) * r, fx + Math.cos(angle) * (r + 2.5),
+        cy + Math.sin(angle) * (r + 2.5), lit ? pal.accent : st.c, lit ? .75 : .2, 1);
+    }
+    s.arc(fx, cy, r, r, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(.01, cool), cool >= 1 ? pal.green : pal.accent,
+      .85, 1.6);
+    if (cool >= 1) {
+      // Ready: a ring goes out once a cycle.
+      const t = fract(st.p * .35);
+      s.arc(fx, cy, r + t * 12, r + t * 12, 0, TAU, pal.green, (1 - t) * .5, 1);
+    }
   }
 
   // FSD injection armed: synthesis feeds the drive's ring; the chevrons
@@ -1629,42 +1656,77 @@
     });
   }
 
-  // The Codex: a specimen crystal turning in a scanning cradle while
-  // entries orbit it.
+  // The Codex: its four kinds of discovery, one lit at a time, and a
+  // specimen turning on its pedestal under the scanner; now and then a new
+  // entry flares.
   function codex(s, st, pal) {
-    const c = st.c, x = s.W * .6, y = s.H * .5;
-    sky(s, st, .5, .2);
-    const cam = camera(x, y, 9, {yaw: st.p * .3, pitch: -.35, persp: 12});
-    for (let ring = 0; ring < 2; ring += 1) {
-      const radius = 2 + ring * .8, orbit = [];
-      for (let step = 0; step <= 36; step += 1) {
-        const angle = step * TAU / 36;
-        orbit.push(cam.project([Math.cos(angle) * radius, ring ? -.4 : .5, Math.sin(angle) * radius]));
-      }
-      s.poly(orbit, c, .25, .8);
-      for (let entry = 0; entry < 5; entry += 1) {
-        const angle = entry * TAU / 5 - st.p * (.2 + ring * .1);
-        const [ex, ey] = cam.project([Math.cos(angle) * radius, ring ? -.4 : .5, Math.sin(angle) * radius]);
-        s.rect(ex - 1.5, ey - 1.1, 3, 2.2, ring ? pal.accent : c, .7, true);
-      }
+    const c = st.c, x = s.W * .62, y = s.H * .46, lit = Math.floor(st.p * .25) % 4;
+    sky(s, st, .4, .2);
+    for (let kind = 0; kind < 4; kind += 1) {
+      const tx = s.W * .05, ty = s.H * (.08 + kind * .22), tw = s.W * .2, th = s.H * .17, on = kind === lit;
+      const tone = on ? pal.accent : c, gy = ty + th / 2, gx = tx + 6;
+      s.rect(tx, ty, tw, th, tone, on ? .8 : .28);
+      if (on) s.rect(tx + 1, ty + 1, tw - 2, th - 2, pal.accent, .12, true);
+      if (kind === 0) s.spark(gx, gy, .9, tone, pal.text, .8);
+      else if (kind === 1) s.arc(gx, gy, 2.6, 1.6, Math.PI, TAU, tone, .8, 1);
+      else if (kind === 2) s.poly([[gx, gy - 3], [gx + 2.4, gy], [gx, gy + 3], [gx - 2.4, gy]], tone, .8, 1, true);
+      else for (let dot = 0; dot < 3; dot += 1) s.dot(gx - 2 + dot * 2, gy + (dot === 1 ? -1.5 : 1), .7, tone, .8);
+      const fill = .3 + hash(kind + 50) * .6;
+      s.line(tx + 12, gy, tx + 12 + (tw - 16) * fill, gy, tone, on ? .8 : .35, 1.6);
     }
+    const [lx, ly] = [s.W * .25 + 2, s.H * (.08 + lit * .22) + s.H * .085];
+    s.poly([[lx, ly], [lx + 8, ly], [x - 18, y]], pal.accent, .3, .8);
+    for (const [r, ry, a] of [[16, 3.4, .45], [22, 4.6, .25]]) s.arc(x, y + 15, r, ry, 0, TAU, c, a, 1);
+    const cam = camera(x, y, 9, {yaw: st.p * .3, pitch: -.35, persp: 12});
     s.solid(MODELS.crystal(3), cam, {roll: Math.PI / 2, yaw: st.p * .2}, c, 1, pal.bg);
     const scan = y - 14 + wave(st.p * .25) * 28;
-    s.line(x - 26, scan, x + 26, scan, pal.accent, .55, 1);
+    s.line(x - 24, scan, x + 24, scan, pal.accent, .55, 1);
     s.bloom(x, scan, 10, pal.accent, .25);
+    for (let line = 0; line < 5; line += 1) {
+      const ry = s.H * (.18 + line * .15), length = 12 + hash(line + Math.floor(st.p * .5)) * 30;
+      s.line(s.W * .8, ry, s.W * .8 + length, ry, c, .3, 1);
+    }
+    const flare = fract(st.p * .07);
+    if (flare < .2) s.arc(x, y, 6 + flare * 90, 2 + flare * 30, 0, TAU, pal.green, (1 - flare / .2) * .6, 1.2);
   }
 
-  // An unspecified map: a navigable grid in perspective and a cursor.
+  // A map: the holo-table, rings and stars standing on it, a route being
+  // plotted through them and the cursor hopping along it.
   function genericMap(s, st, pal) {
-    const c = st.c, cam = camera(s.W * .55, s.H * .6, s.W * .07, {pitch: -.9, yaw: st.p * .03, persp: 10});
-    for (let index = -5; index <= 5; index += 1) {
-      s.line(...cam.project([index, 0, -5]).slice(0, 2), ...cam.project([index, 0, 5]).slice(0, 2), c, .22, .8);
-      s.line(...cam.project([-5, 0, index]).slice(0, 2), ...cam.project([5, 0, index]).slice(0, 2), c, .22, .8);
+    const c = st.c, cx = s.W * .56, cy = s.H * .58;
+    const cam = camera(cx, cy, s.H * .62, {pitch: -.42, yaw: st.p * .04, persp: 8});
+    const flat = (points) => points.map((point) => cam.project(point).slice(0, 2));
+    for (const r of [1, 1.6, 2.2]) {
+      s.poly(flat(Array.from({length: 49}, (_, k) => [Math.cos(k * TAU / 48) * r, 0, Math.sin(k * TAU / 48) * r])), c, .16, .8);
     }
-    const [x, y] = cam.project([Math.sin(st.p * .21) * 3.5, 0, Math.cos(st.p * .17) * 3]);
-    s.poly([[x, y - 6], [x + 4, y], [x, y + 3], [x - 4, y]], pal.accent, .9, 1.2, true, .2);
-    s.line(x, y - 6, x, y - 14, pal.accent, .5);
-    s.brackets(x, y - 2, 9, 7, c, .45);
+    for (let spoke = 0; spoke < 6; spoke += 1) {
+      const a = spoke * TAU / 12;
+      s.poly(flat([[Math.cos(a) * -2.2, 0, Math.sin(a) * -2.2], [Math.cos(a) * 2.2, 0, Math.sin(a) * 2.2]]), c, .1, .7);
+    }
+    const stars = [];
+    for (let index = 0; index < 40 && stars.length < 24; index += 1) {
+      const point = [(hash(index + 300) - .5) * 4.2, -hash(index + 301) * .5, (hash(index + 302) - .5) * 4.2];
+      if (Math.hypot(point[0], point[2]) < 2.1) stars.push(point);
+    }
+    for (const point of stars) {
+      const [x, y] = cam.project(point), [gx, gy] = cam.project([point[0], 0, point[2]]);
+      s.line(x, y, gx, gy, c, .12, .7);
+      s.dot(x, y, .8, c, .55);
+    }
+    // The route goes round the table: five stars spread by bearing.
+    const round = stars.slice().sort((a, b) => Math.atan2(a[2], a[0]) - Math.atan2(b[2], b[0]));
+    const step = Math.max(1, Math.floor(round.length / 5));
+    const route = Array.from({length: Math.min(5, round.length)}, (_, k) => cam.project(round[k * step]).slice(0, 2));
+    const drawn = fract(st.p * .08) * (route.length - 1) * 1.4;
+    for (let leg = 0; leg < route.length - 1; leg += 1) {
+      const part = clamp(drawn - leg);
+      if (part <= 0) break;
+      const [ax, ay] = route[leg], [bx, by] = route[leg + 1];
+      s.line(ax, ay, lerp(ax, bx, part), lerp(ay, by, part), pal.accent, .75, 1.2);
+    }
+    const [hx, hy] = route[Math.floor(st.p * .35) % route.length];
+    s.brackets(hx, hy, 6, 5, pal.accent, .8);
+    s.spark(hx, hy, .8, pal.accent, pal.text, .9);
   }
 
   // Nebulae and Lagrange clouds: glowing gas and slow-tumbling crystals.
@@ -1848,18 +1910,33 @@
 
   function port(s, st, pal) {
     if (st.key === 'surface_station') {
+      // A planetary port: its ring of pads round the spire, the pad lights
+      // chasing, one ship settling onto its pad and another lifting off.
       site(s, st, pal, (cam) => {
-        const [x, y] = cam.project([0, 5, -3]);
-        const portCam = camera(x, y, 4.2, {yaw: .3 + st.p * .01, pitch: -.42, persp: 14});
-        const at = s.solid(MODELS.surfacePort(), portCam, {}, st.c, 1, pal.bg,
+        const hub = [0, 5, -3], ground = (r, angle) => [hub[0] + Math.cos(angle) * r, 5, hub[2] + Math.sin(angle) * r * .8];
+        const loop = (r) => Array.from({length: 49}, (_, k) => cam.project(ground(r, k * TAU / 48)).slice(0, 2));
+        s.poly(loop(6.4), st.c, .5, 1.1);
+        s.poly(loop(3.4), st.c, .3, .9);
+        const pads = [];
+        for (let pad = 0; pad < 6; pad += 1) {
+          const angle = pad * TAU / 6 + .3, centre = ground(5, angle);
+          const ring = Array.from({length: 17}, (_, k) => cam.project([centre[0] + Math.cos(k * TAU / 16) * .9, 5,
+            centre[2] + Math.sin(k * TAU / 16) * .7]).slice(0, 2));
+          s.poly(ring, pal.accent, .25 + .5 * Math.pow(wave(st.p * .3 - pad / 6), 4), 1);
+          pads.push(cam.project(centre));
+        }
+        const [x, y] = cam.project(hub);
+        s.solid(MODELS.surfacePort(), camera(x, y, 4.2, {yaw: .3 + st.p * .01, pitch: -.42, persp: 14}), {}, st.c, 1, pal.bg,
           {window: [st.c, .6], beacon: [pal.red, .3 + .7 * Math.pow(wave(st.p * .5), 6)]});
-        // Traffic settles onto the ring's pads.
-        const t = fract(st.p * .1);
-        const [px, py] = at([3.2, -.6, 0]);
-        const sx = lerp(s.W * .95, px, smooth(t)), sy = lerp(-4, py - 3, smooth(t));
-        s.solid(MODELS.ship(), camera(sx, sy, 2.6, {yaw: .5, pitch: -.3}), {yaw: Math.PI}, st.c, ends(t, .1), pal.bg,
+        const t = fract(st.p * .09), cycle = Math.floor(st.p * .09);
+        const [lx, ly] = pads[cycle % 6], [ox, oy] = pads[(cycle + 3) % 6];
+        const down = smooth(t), height = (1 - down) * s.H * .7;
+        s.line(lx, ly, lx, ly - height, pal.accent, .25 * ends(t, .1), 1);
+        s.solid(MODELS.ship(), camera(lx, ly - height - 3, 3.4, {yaw: .5, pitch: -.3}), {}, st.c, ends(t, .1), pal.bg,
           {engine: [st.c, .8]});
-        s.bloom(sx, sy + 2, 5, pal.accent, ends(t, .1) * .4);
+        const up = smooth(fract(t + .5)), rise = up * s.H * .8;
+        s.solid(MODELS.ship(), camera(ox + up * 20, oy - rise - 3, 3.2, {yaw: -.5, pitch: -.3}), {}, st.c,
+          ends(fract(t + .5), .1) * .8, pal.bg, {engine: [pal.accent, .9]});
       });
       return;
     }
@@ -1974,8 +2051,18 @@
     }
   }
 
-  // On foot: the commander walking the surface, helmet lamp lit.
+  // On foot, by where you are (5.5.17): out on a planet, in a station's
+  // concourse, down in the hangar by your ship, or on a carrier's deck.
   function onFoot(s, st, pal) {
+    const place = st.d.footPlace;
+    if (place === 'carrier') return carrierDeck(s, st, pal);
+    if (place === 'hangar') return footHangar(s, st, pal);
+    if (place === 'concourse') return footConcourse(s, st, pal);
+    return footPlanet(s, st, pal);
+  }
+
+  // Out on a planet: walking the surface, helmet lamp lit.
+  function footPlanet(s, st, pal) {
     sky(s, st, .6, .2);
     const cam = camera(s.W * .5, s.H * .22, 6.2, {yaw: -.12, pitch: -.14, persp: 14});
     landscape(s, cam, st, pal, {z0: -22, z1: 5, rows: 7, lift: 1, floor: 5,
@@ -1986,6 +2073,55 @@
       {visor: [pal.accent, .85], lamp: [pal.text, .9]});
     const [hx, hy] = at([.2, -1.76, 0]);
     s.poly([[hx, hy], [hx + 44, hy - 4], [hx + 44, hy + 12]], pal.text, .06, 0, true, .5);
+  }
+
+  // The concourse: its great window on the hangar bay with traffic easing
+  // past, shopfronts lit on the walls, people about, and you walking through.
+  function footConcourse(s, st, pal) {
+    const c = st.c, floorY = s.H * .64, vx = s.W * .5;
+    const wx = s.W * .2, ww = s.W * .6, wy = s.H * .1, wh = s.H * .42;
+    s.rect(wx, wy, ww, wh, c, .35);
+    for (let pane = 1; pane < 6; pane += 1) s.line(wx + pane * ww / 6, wy, wx + pane * ww / 6, wy + wh, c, .16, .8);
+    const t = fract(st.p * .045);
+    s.solid(MODELS.ship(), camera(lerp(wx + 8, wx + ww - 8, t), wy + wh * .55, 3, {yaw: -.5, pitch: -.25, persp: 14}),
+      {}, c, ends(t, .15) * .55, pal.bg, {engine: [c, .6]});
+    for (let lamp = 0; lamp < 9; lamp += 1) s.dot(s.W * (.08 + lamp * .105), s.H * .04, .7, pal.text, .35);
+    // The floor runs out to the window.
+    s.line(0, floorY, s.W, floorY, c, .3, 1);
+    for (let index = -7; index <= 7; index += 1) s.line(vx + index * 7, floorY, vx + index * 46, s.H + 2, c, .09, .7);
+    for (let row = 0; row < 4; row += 1) {
+      const y = floorY + (s.H - floorY) * Math.pow((row + 1) / 4, 1.6);
+      s.line(0, y, s.W, y, c, .07 + row * .03, .7);
+    }
+    // Shopfronts: their signs glow, one after another.
+    for (const [x, tone, seed] of [[.03, pal.green, 0], [.12, pal.accent, 1], [.82, pal.yellow, 2], [.91, pal.accent, 3]]) {
+      s.rect(s.W * x, s.H * .18, s.W * .07, s.H * .4, c, .35);
+      s.rect(s.W * x + 1.5, s.H * .22, s.W * .07 - 3, s.H * .09, tone, .2 + .25 * wave(st.p * .25 + seed * .3), true);
+    }
+    for (const [x, yaw] of [[.3, .7], [.72, -.8], [.62, .4]]) {
+      s.solid(MODELS.commander(x * 7, {walking: false}), camera(s.W * x, floorY + 5, 5, {yaw, pitch: -.1}), {}, c, .45,
+        pal.bg, {visor: [pal.accent, .35]});
+    }
+    const walk = fract(st.p * .05);
+    s.solid(MODELS.commander(st.p * 3), camera(lerp(s.W * .08, s.W * .92, walk), s.H * .98, 9.5, {yaw: -.5, pitch: -.1}),
+      {}, c, ends(walk, .06), pal.bg, {visor: [pal.accent, .85], lamp: [pal.text, .8]});
+  }
+
+  // The hangar, below the pad: your ship above you on it, the walls' hazard
+  // stripes, and you walking to the lift.
+  function footHangar(s, st, pal) {
+    const c = st.c, lx = s.W * .13, ly = s.H * .22;
+    s.line(0, s.H * .14, s.W, s.H * .14, c, .2, 1);
+    for (let x = -4; x < s.W; x += 8) s.line(x, s.H * .14, x + 5, s.H * .08, pal.yellow, .22, 1);
+    for (const x of [.04, .32, .9]) s.line(s.W * x, s.H * .14, s.W * x, s.H * .78, c, .14, 1);
+    // The lift, its door lit.
+    s.rect(lx, ly, s.W * .1, s.H * .5, c, .5);
+    s.rect(lx + 2, ly + 2, s.W * .1 - 4, s.H * .5 - 4, pal.accent, .12 + .14 * wave(st.p * .3), true);
+    s.chevron(lx + s.W * .05, ly - 4, 1, pal.accent, .5 + .4 * wave(st.p * .5), 2.5);
+    shipOnPad(s, st, pal, s.W * .62, s.H * .62, 8.4, {pitch: -.36});
+    const walk = fract(st.p * .04);
+    s.solid(MODELS.commander(st.p * 3), camera(lerp(s.W * .5, lx + s.W * .05, walk), s.H * .97, 9.5, {yaw: Math.PI - .5, pitch: -.1}),
+      {}, c, ends(walk, .06), pal.bg, {visor: [pal.accent, .85], lamp: [pal.text, .8]});
   }
 
   // A craft changing hands: deploying or recovering a vehicle or fighter,
@@ -2133,85 +2269,194 @@
     onApproach(s, st, pal, station, u, {scale: .26, turnAway: -turn, offset: key === 'docking_timeout' ? .5 : 0});
   }
 
-  // Inside the station: down the length of the turning cylinder, city
-  // blocks standing in from its walls and the docking wall far ahead.
-  // Behind the pilot, on the left, the mail slot's frame holds still.
+  // Inside the station: its cylinder curving up and over with the city's
+  // lights turning on it, the slot behind you, and your ship flying in to
+  // its pad, lit and waiting.
   function stationInterior(s, st, pal) {
-    const c = st.c, cx = s.W * .68, cy = s.H * .5, roll = st.p * .08;
-    const lx = s.W * .12;
-    s.rect(lx - 18, cy - 5, 36, 10, c, .45);
-    s.rect(lx - 14, cy - 2, 28, 4, pal.green, .5, true);
-    for (const side of [-1, 1]) s.line(lx - 24, cy + side * 9, lx + 24, cy + side * 9, c, .3, 1);
-    const cam = camera(cx, cy, 11, {persp: 4});
-    // The cylinder's wall: rings receding and streets running its length.
-    for (const z of [.6, -1.5, -3.8, -6.5, -11]) {
-      const [, , , k] = cam.project([0, 0, z]);
-      s.arc(cx, cy, 3 * k * 11, 3 * k * 11, 0, TAU, c, .12 + .12 * k, .8);
+    const c = st.c, roll = st.p * .04, cx = s.W * .55, base = s.H * 1.9;
+    for (let band = 0; band < 4; band += 1) {
+      const r = s.H * (1.15 + band * .28);
+      s.arc(cx, base, r * 2.1, r, Math.PI * 1.06, Math.PI * 1.94, c, .1 + band * .05, .9);
     }
-    for (let street = 0; street < 12; street += 1) {
-      const angle = street * TAU / 12 + roll;
-      const [ax, ay] = cam.project([Math.cos(angle) * 3, Math.sin(angle) * 3, .6]);
-      const [bx, by] = cam.project([Math.cos(angle) * 3, Math.sin(angle) * 3, -11]);
-      s.line(ax, ay, bx, by, c, .14, .7);
+    for (let light = 0; light < 48; light += 1) {
+      const band = light % 4, r = s.H * (1.15 + band * .28);
+      const angle = Math.PI * (1.1 + fract(hash(light + 3) + roll * (band % 2 ? 1 : -1)) * .8);
+      s.dot(cx + Math.cos(angle) * r * 2.1, base + Math.sin(angle) * r, .6, hash(light) > .82 ? pal.yellow : c,
+        .2 + .45 * wave(st.p * .3 + light * .17));
     }
-    // The docking wall: a lit disc of pads at the far end.
-    const [, , , far] = cam.project([0, 0, -11]);
-    s.bloom(cx, cy, 3 * far * 11 * 1.4, c, .35);
-    for (let pad = 0; pad < 8; pad += 1) {
-      const angle = pad * TAU / 8 + roll;
-      s.dot(cx + Math.cos(angle) * 3 * far * 11 * .62, cy + Math.sin(angle) * 3 * far * 11 * .62, .8, pal.text,
-        .5 + .4 * wave(st.p * .4 + pad / 8));
+    // The slot behind, its green lights running in.
+    const sx = s.W * .1, sy = s.H * .46;
+    s.bloom(sx, sy, 14, pal.green, .22);
+    s.rect(sx - 9, sy - 3.5, 18, 7, c, .8);
+    s.rect(sx - 8, sy - 2.5, 16, 5, pal.green, .18 + .2 * wave(st.p * .6), true);
+    for (let lamp = 0; lamp < 5; lamp += 1) {
+      s.dot(sx + 13 + lamp * 6, sy, .7, pal.green, .15 + .65 * Math.pow(wave(st.p * .8 - lamp / 5), 4));
     }
-    s.solid(MODELS.stationCity(), cam, {roll}, c, 1, pal.bg, {window: [c, .7]});
+    // The floor and its pads; yours lit, arrows bringing you down.
+    const fy = s.H * .86, tx = s.W * .78;
+    s.line(0, fy + 1, s.W, fy - 1, c, .3, 1);
+    for (const px of [.3, .48, .64, .92]) s.arc(s.W * px, fy, 10, 2.2, 0, TAU, c, .22, .8);
+    s.arc(tx, fy, 13, 3, 0, TAU, pal.accent, .55 + .3 * wave(st.p * .6), 1.2);
+    s.bloom(tx, fy, 13, pal.accent, .22);
+    for (let arrow = 0; arrow < 3; arrow += 1) {
+      const ay = fy - 9 - arrow * 4 + fract(st.p * .6) * 4;
+      s.poly([[tx - 3, ay - 2], [tx, ay], [tx + 3, ay - 2]], pal.accent, .25 + .25 * arrow, 1);
+    }
+    const trip = fract(st.p * .06), t = smooth(trip);
+    const px = lerp(sx + 10, tx, t), py = lerp(sy, fy - 7, t) - Math.sin(t * Math.PI) * 7;
+    s.solid(MODELS.ship(), camera(px, py, 3 + t * 2.6, {yaw: -.4, pitch: -.3, persp: 14}), {}, c, ends(trip, .08), pal.bg,
+      {engine: [c, .8]});
+    s.brackets(tx, fy - 6, 17, 9, pal.accent, .45);
   }
 
-  // Docked: the ship on its pad in the hangar, the lift lights chasing
-  // round the walls. The pad and the ship hold still.
+  // Docked, by where (5.5.17): in a station's interior, on an outpost's open
+  // pad, on a carrier's deck, or at a planetary port. The ship holds still.
   function docked(s, st, pal) {
-    const c = st.c, x = s.W * .6, y = s.H * .66;
-    const cam = camera(x, y, 8.5, {yaw: -.35, pitch: -.52, persp: 14});
-    for (let index = 0; index < 14; index += 1) {
-      const angle = Math.PI * (.95 + index / 13 * 1.1);
-      const [ax, ay] = cam.project([Math.cos(angle) * 3.3, -2.2, Math.sin(angle) * 2.6]);
-      const [bx, by] = cam.project([Math.cos(angle) * 3.3, .15, Math.sin(angle) * 2.6]);
-      s.line(ax, ay, bx, by, c, .1 + .45 * Math.pow(wave(st.p * .3 - index / 14), 4), 1);
-    }
+    const place = st.d.dockPlace;
+    if (place === 'carrier') return dockedCarrier(s, st, pal);
+    if (place === 'outpost') return dockedOutpost(s, st, pal);
+    if (place === 'surface') return dockedPort(s, st, pal);
+    return dockedStation(s, st, pal);
+  }
+
+  // The ship on its pad, the pad's edge lights chasing round it.
+  function shipOnPad(s, st, pal, x, y, unit, {yaw = -.35, pitch = -.52, lights = pal.accent} = {}) {
+    const c = st.c, cam = camera(x, y, unit, {yaw, pitch, persp: 14});
     s.solid(MODELS.hexPad(), cam, {scale: 2.3}, c, 1, pal.bg);
     const pad = [];
     for (let index = 0; index < 6; index += 1) {
       const angle = index * TAU / 6;
       pad.push(cam.project([Math.cos(angle) * 2.36, -.01, Math.sin(angle) * 2.36 * .86]).slice(0, 2));
     }
-    s.traceEdges(pad, st.p * .4, pal.accent, .7);
-    s.solid(MODELS.ship(), cam, {y: -.4, scale: .9, yaw: .25}, c, 1, pal.bg, {engine: [c, .15]});
+    s.traceEdges(pad, st.p * .4, lights, .7);
+    const at = s.solid(MODELS.ship(), cam, {y: -.4, scale: .9, yaw: .25}, c, 1, pal.bg, {engine: [c, .12]});
+    return {cam, at};
   }
 
-  // Module repairs: a sweep passes along the ship and the repair points
-  // spark as it reaches them. Not a progress readout.
-  function maintenance(s, st, pal) {
-    const reboot = st.key === 'system_reboot', x = s.W * .58, y = s.H * .5;
-    sky(s, st, .4, .2);
-    const cam = camera(x, y, 9, {yaw: -.4, pitch: -.3, persp: 14});
-    const sweep = fract(st.p * .16);
-    s.solid(MODELS.ship(), cam, {}, st.c, reboot ? .35 + .65 * sweep : 1, pal.bg,
-      {engine: reboot ? [st.c, sweep > .8 ? .8 : .05] : [st.c, .5]});
-    const [ax, ay] = cam.project([lerp(-1.2, 2.2, sweep), -1, 0]), [bx, by] = cam.project([lerp(-1.2, 2.2, sweep), 1, 0]);
-    s.line(ax, ay - 6, bx, by + 6, reboot ? st.c : pal.accent, .7, 1.2);
-    s.bloom((ax + bx) / 2, (ay + by) / 2, 10, reboot ? st.c : pal.accent, .3);
-    if (!reboot) {
-      for (let index = 0; index < 5; index += 1) {
-        const px = lerp(-1, 1.8, index / 4), [sx, sy] = cam.project([px, -.25, (hash(index) - .5) * 1.4]);
-        const near = clamp(1 - Math.abs(px - lerp(-1.2, 2.2, sweep)) * 2.5);
-        if (near > .05) {
-          for (let spark = 0; spark < 3; spark += 1) {
-            const angle = hash(index * 3 + spark + Math.floor(st.p * 8)) * TAU;
-            s.line(sx, sy, sx + Math.cos(angle) * 4, sy + Math.sin(angle) * 4, pal.yellow, near * .8, .8);
-          }
-        }
-      }
-    } else {
-      alarmChevrons(s, st, .43 + .43 * wave(st.p * .5));
+  // Inside the station: down its length to the slot, the pads on its wall
+  // turning with it, a ship leaving now and then; yours on its pad in front.
+  function dockedStation(s, st, pal) {
+    const c = st.c, sx = s.W * .24, sy = s.H * .42, roll = st.p * .05, unit = 9;
+    const tunnel = camera(sx, sy, unit, {persp: 4});
+    for (const z of [.8, -1.2, -3.4, -6.4, -10]) {
+      const [, , , k] = tunnel.project([0, 0, z]);
+      s.arc(sx, sy, 3.2 * k * unit, 3.2 * k * unit, 0, TAU, c, .08 + .12 * k, .8);
     }
+    for (let street = 0; street < 10; street += 1) {
+      const angle = street * TAU / 10 + roll;
+      const [ax, ay] = tunnel.project([Math.cos(angle) * 3.2, Math.sin(angle) * 3.2, .8]);
+      const [bx, by] = tunnel.project([Math.cos(angle) * 3.2, Math.sin(angle) * 3.2, -10]);
+      s.line(ax, ay, bx, by, c, .1, .7);
+      for (const z of [-1.6, -4.6]) {
+        const [px, py] = tunnel.project([Math.cos(angle) * 3.05, Math.sin(angle) * 3.05, z]);
+        s.dot(px, py, .7, pal.text, .2 + .5 * wave(st.p * .45 + street * .3 + z));
+      }
+    }
+    // The slot from inside, lit, its lights green for the way out.
+    const [, , , far] = tunnel.project([0, 0, -10]);
+    const w = 3.2 * far * unit * 1.1, h = w * .3;
+    s.bloom(sx, sy, w * 1.3, c, .3);
+    s.rect(sx - w / 2, sy - h / 2, w, h, c, .75);
+    s.rect(sx - w / 2 + 1, sy - h / 2 + 1, w - 2, h - 2, pal.green, .18 + .2 * wave(st.p * .5), true);
+    const t = fract(st.p * .07);
+    s.solid(MODELS.ship(), camera(lerp(sx + 4, s.W * .44, t), lerp(sy, s.H * .12, t), 1.2 + t * 2.4, {yaw: .6, pitch: -.3}),
+      {}, c, ends(t, .12) * .7, pal.bg, {engine: [c, .9]});
+    shipOnPad(s, st, pal, s.W * .66, s.H * .68, 8.5);
+  }
+
+  // An outpost: no hangar, only a pad on its long truss arm, open to space
+  // with the planet below.
+  function dockedOutpost(s, st, pal) {
+    const c = st.c, top = s.H * .58;
+    sky(s, st, .8, .15);
+    s.sphere(s.W * .12, s.H * 1.3, s.H * .95, c, pal.bg, {seed: 21, kind: 'rock', spin: st.p * .01});
+    const chord = (x) => top - x * .02;
+    s.line(0, chord(0), s.W, chord(s.W), c, .45, 1.2);
+    s.line(0, chord(0) + 8, s.W, chord(s.W) + 8, c, .28, 1);
+    for (let x = 0; x < s.W; x += 13) {
+      s.line(x, chord(x), x + 13, chord(x + 13) + 8, c, .18, .8);
+      s.line(x, chord(x), x, chord(x) + 8, c, .14, .8);
+    }
+    for (let lamp = 0; lamp < 8; lamp += 1) {
+      const x = s.W * (.06 + lamp * .125);
+      s.dot(x, chord(x) - 1, .8, lamp % 2 ? pal.red : pal.green, .3 + .6 * Math.pow(wave(st.p * .5 + lamp / 8), 6));
+    }
+    shipOnPad(s, st, pal, s.W * .6, s.H * .52, 7.6, {pitch: -.42});
+  }
+
+  // On a carrier's deck: your ship on one of its pads, the pad lights chasing.
+  function dockedCarrier(s, st, pal) {
+    sky(s, st, .7, .3);
+    const at = carrierAt(s, st, pal, {x: s.W * .56, y: s.H * .98, unit: 11.5, yaw: -.3, pitch: -.42, persp: 24,
+      lamps: padLamps((index) => [pal.accent, .25 + .5 * Math.pow(wave(st.p * .2 - index / 8), 4)])});
+    const [fx, fy] = at([2.2, -.74, .15]);
+    s.arc(fx, fy + 1, 16, 3, 0, TAU, pal.accent, .3 + .2 * wave(st.p * .4), 1);
+    s.solid(MODELS.ship(), camera(fx, fy - 3, 6.2, {yaw: -.5, pitch: -.3, persp: 14}), {}, st.c, 1, pal.bg,
+      {engine: [st.c, .12]});
+  }
+
+  // A planetary port: the pad on the ground, the port's tower behind.
+  function dockedPort(s, st, pal) {
+    site(s, st, pal, (cam) => {
+      const [x, y] = cam.project([-6, 5, -6]);
+      s.solid(MODELS.surfacePort(), camera(x, y, 3.2, {yaw: .3, pitch: -.42, persp: 14}), {}, st.c, .8, pal.bg,
+        {window: [st.c, .5], beacon: [pal.red, .3 + .7 * Math.pow(wave(st.p * .5), 6)]});
+    });
+    shipOnPad(s, st, pal, s.W * .64, s.H * .8, 7.4, {pitch: -.4});
+  }
+
+  function maintenance(s, st, pal) {
+    if (st.key === 'system_reboot') return reboot(s, st, pal);
+    // AFMU repair: the beam works along the hull while the module list
+    // mends one module after another.
+    const x = s.W * .3, y = s.H * .52;
+    sky(s, st, .4, .2);
+    const cam = camera(x, y, 8.5, {yaw: -.4, pitch: -.3, persp: 14});
+    const sweep = fract(st.p * .16), job = Math.floor(st.p * .16);
+    s.solid(MODELS.ship(), cam, {}, st.c, 1, pal.bg, {engine: [st.c, .4]});
+    const along = lerp(-1.2, 2.2, sweep);
+    const [ax, ay] = cam.project([along, -1, 0]), [bx, by] = cam.project([along, 1, 0]);
+    s.line(ax, ay - 6, bx, by + 6, pal.accent, .7, 1.2);
+    s.bloom((ax + bx) / 2, (ay + by) / 2, 10, pal.accent, .3);
+    for (let index = 0; index < 5; index += 1) {
+      const px = lerp(-1, 1.8, index / 4), [sx, sy] = cam.project([px, -.25, (hash(index) - .5) * 1.4]);
+      const near = clamp(1 - Math.abs(px - along) * 2.5);
+      for (let spark = 0; near > .05 && spark < 3; spark += 1) {
+        const angle = hash(index * 3 + spark + Math.floor(st.p * 8)) * TAU;
+        s.line(sx, sy, sx + Math.cos(angle) * 4, sy + Math.sin(angle) * 4, pal.yellow, near * .8, .8);
+      }
+    }
+    const lx = s.W * .6, width = s.W * .32, rows = 5, mending = job % rows;
+    for (let row = 0; row < rows; row += 1) {
+      const ry = s.H * (.12 + row * .19);
+      const health = row < mending ? 1 : row === mending ? lerp(.35, 1, sweep) : .3 + hash(row + job) * .35;
+      const tone = health >= 1 ? pal.green : row === mending ? pal.yellow : pal.red;
+      s.rect(lx - 9, ry - 2.5, 5, 5, tone, row === mending ? .6 + .4 * wave(st.p * 2) : .6);
+      s.line(lx, ry, lx + width, ry, st.c, .18, 2);
+      s.line(lx, ry, lx + width * health, ry, tone, .75, 2);
+    }
+  }
+
+  // System reboot: the ship goes dark and comes back a piece at a time, the
+  // ring round it relighting and the power pips refilling.
+  function reboot(s, st, pal) {
+    const x = s.W * .42, y = s.H * .5, boot = fract(st.p * .12);
+    sky(s, st, .3, .1);
+    const power = boot < .15 ? (hash(Math.floor(st.p * 20)) > .5 ? .15 : .5) : .3 + .7 * smooth((boot - .15) / .5);
+    s.solid(MODELS.ship(), camera(x, y, 8, {yaw: -.4, pitch: -.3, persp: 14}), {}, st.c, power, pal.bg,
+      {engine: [st.c, boot > .8 ? .8 : .03]});
+    const r = s.H * .44;
+    for (let segment = 0; segment < 16; segment += 1) {
+      const from = -Math.PI / 2 + segment * TAU / 16, on = segment / 16 < boot;
+      s.arc(x, y, r, r, from + .04, from + TAU / 16 - .04, on ? pal.accent : pal.red, on ? .75 : .25, 1.6);
+    }
+    for (let column = 0; column < 3; column += 1) {
+      for (let pip = 0; pip < 4; pip += 1) {
+        const on = boot * 12 > column * 4 + pip;
+        s.rect(s.W * .76 + column * 10, s.H * (.72 - pip * .17), 7, 5, on ? pal.accent : st.c, on ? .8 : .2, true);
+      }
+    }
+    alarmChevrons(s, st, (1 - boot) * (.43 + .43 * wave(st.p * .5)));
   }
 
   // ---------------------------------------------------------------------
@@ -2630,6 +2875,39 @@
       {eye: [trip > .7 ? pal.green : pal.accent, .5 + .5 * wave(st.p * 2)]});
   }
 
+  // The Rhino at work (5.5.17): it trundles past its rigs, standing on the
+  // ground with beacons blinking and lasers in the rock; its scanner pings
+  // out across the ground, and ore sparkles up from the drill into its hopper.
+  function rhinoAtWork(s, st, pal) {
+    const travel = st.p * 1.5, x = s.W * .46, y = s.H * .8;
+    sky(s, st, .6, .2);
+    const cam = camera(s.W * .5, s.H * .22, 6.2, {yaw: -.12, pitch: -.14, persp: 14});
+    landscape(s, cam, st, pal, {z0: -22, z1: 5, rows: 7, lift: .9, floor: 5,
+      travel: [travel, 0], road: {z: 0, width: 2.5}, seed: 3, alpha: .9});
+    for (const [rx, slot] of [[-9, 0], [3, 1], [14, 2], [25, 3]]) {
+      const wx = ((rx - travel) % 44 + 44) % 44 - 18;
+      const [bx, by, , k] = cam.project([wx, 5, -2.2]);
+      if (bx < -12 || bx > s.W + 12) continue;
+      const blink = Math.pow(wave(st.p * .7 + slot * .37), 6);
+      const at = s.solid(MODELS.beacon(), camera(bx, by - 2, 3.6 * k, {yaw: .3, pitch: -.25}), {}, st.c, .9, pal.bg,
+        {beacon: [pal.red, .25 + .75 * blink], window: [pal.accent, .5]});
+      const [gx, gy] = at([0, .35, 0]);
+      s.line(gx, gy, gx, gy + 5 * k, pal.accent, .45 + .35 * wave(st.p * 2 + slot), 1.4);
+      s.bloom(gx, gy + 5 * k, 7 * k, pal.accent, .35);
+    }
+    // The scanner's ping across the ground.
+    const ping = fract(st.p * .16);
+    s.arc(x, y + 1, 10 + ping * s.W * .45, 2 + ping * 7, 0, TAU, pal.accent, (1 - ping) * .4, 1);
+    const at = groundVehicle(s, st, pal, x, y, 8.2, {type: 'rhino', roll: travel * 1.6, bob: Math.sin(st.p * 2.2) * .02});
+    // The drill's sparks and the ore going up into the hopper.
+    const [dx, dy] = at([2.65, -.1, 0]), [hx, hy] = at([-.6, -1.6, 0]);
+    s.spark(dx, dy, .8, pal.yellow, pal.text, .5 + .5 * wave(st.p * 3));
+    for (let chip = 0; chip < 5; chip += 1) {
+      const t = fract(st.p * .8 + chip / 5);
+      s.dot(lerp(dx, hx, t), lerp(dy, hy, t) - Math.sin(t * Math.PI) * 10, .7, pal.yellow, ends(t, .1) * .8);
+    }
+  }
+
   const DECK = {
     flight, flight_assist_off: assistOff, silent_running: silent, fighter, multicrew, exploration,
     supercruise: cruise, supercruise_overcharge: cruise, supercruise_assist: cruise, taxi,
@@ -2651,7 +2929,7 @@
     heat_critical: heat, suit_hazard: suit, jet_cone_damage: jetCone, system_reboot: maintenance,
     docked, station, station_vicinity: station, docking_clearance: station, docking_denied: station,
     docking_cancelled: station, docking_timeout: station, docking_assist: station, maintenance,
-    srv: rover, scarab: rover, scorpion: rover, rhino: rover, nomad: rover,
+    srv: rover, scarab: rover, scorpion: rover, rhino: rhinoAtWork, nomad: rover,
     srv_handbrake: rover, srv_turret: rover, srv_drive_assist: rover, on_foot: onFoot,
     left_panel: panel, right_panel: panel, comms_panel: panel, role_panel: panel, station_services: panel,
   };
@@ -3055,7 +3333,7 @@
         label,
         vehicleKey,
         aura: auraOf(key),
-        identity: `${key}|${label}|${vehicleKey}|${boostTier(d)}`,
+        identity: `${key}|${label}|${vehicleKey}|${boostTier(d)}|${key === 'docked' ? d.dockPlace : key === 'on_foot' ? d.footPlace : ''}`,
         c: palette.state || palette.hud,
         d,
         target: {altitude: d.altitude, vertical: d.vertical, gravity: d.gravity},
