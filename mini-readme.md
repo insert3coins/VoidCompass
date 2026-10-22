@@ -1,7 +1,7 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.5.17 // One Overlay to Rule Them All
-**Release Date:** TBA 3312 *(Galactic Standard Time)*
+**Release Date:** 23 OCT 3312 *(Galactic Standard Time)*
 
 ### Navigation HUD
 
