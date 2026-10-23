@@ -7374,5 +7374,35 @@
       "value": 1,
       "compare": "gte"
     }
+  },
+  {
+    "id": "watcher_book_four_begins",
+    "title": "The Choice",
+    "desc": "Hear the Watcher begin its fourth story, The Road Taken, and be asked to choose",
+    "icon": "🚪",
+    "category": "The Watcher",
+    "points": 150,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "BookFourBegun",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "watcher_book_four",
+    "title": "The Road Taken",
+    "desc": "Hear the Watcher's fourth story to its end, on the road you chose",
+    "icon": "🛤",
+    "category": "The Watcher",
+    "points": 1000,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "BookFour",
+      "value": 1,
+      "compare": "gte"
+    }
   }
 ]

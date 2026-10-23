@@ -378,15 +378,16 @@ export function createScene(container) {
   const travel = lineMesh({width: 2.2, opacity: .95, order: 2});
   const retrace = lineMesh({width: 2, opacity: .9, order: 2});
   const planned = lineMesh({width: 2.6, opacity: 1, order: 3});
+  const trip = lineMesh({width: 2.4, opacity: .95, order: 3});
   const stalk = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDashedMaterial({dashSize: 1, gapSize: 1, transparent: true, opacity: .6, depthTest: false}));
   stalk.frustumCulled = false;
   const systems = pointCloud(4);
   const markers = pointCloud(5);
   const beacons = pointCloud(6);
-  scene.add(sectors, travelGlow, travel, retrace, planned, stalk, systems, markers, beacons);
+  scene.add(sectors, travelGlow, travel, retrace, planned, trip, stalk, systems, markers, beacons);
 
-  const lines = [travelGlow, travel, retrace, planned];
-  let lastRoute = [], lastPlanned = [], lastRetrace = [];
+  const lines = [travelGlow, travel, retrace, planned, trip];
+  let lastRoute = [], lastPlanned = [], lastRetrace = [], lastTrip = [];
   let pixelRatio = 1;
   let systemRows = [], markerRows = [], beaconRows = [];
 
@@ -409,6 +410,8 @@ export function createScene(container) {
     retrace.material.uniforms.uNew.value = u.uGreen.value.clone();
     planned.material.uniforms.uOld.value = u.uOrange.value.clone();
     planned.material.uniforms.uNew.value = u.uOrange.value.clone();
+    trip.material.uniforms.uOld.value = u.uGreen.value.clone();
+    trip.material.uniforms.uNew.value = u.uGreen.value.clone();
     stalk.material.color = u.uAccent.value.clone();
     for (const cloud of [systems, markers, beacons]) cloud.material.uniforms.uOutline.value = u.uBg.value.clone();
   }
@@ -450,6 +453,10 @@ export function createScene(container) {
   function setPlanned(route) {
     lastPlanned = route;
     setLinePoints(planned, route, depth);
+  }
+  function setExpedition(route) {
+    lastTrip = route;
+    setLinePoints(trip, route, depth);
   }
   function setSystems(rows) {
     systemRows = rows;
@@ -494,6 +501,7 @@ export function createScene(container) {
     setRoute(lastRoute);
     setRetrace(lastRetrace);
     setPlanned(lastPlanned);
+    setExpedition(lastTrip);
     setSystems(systemRows);
     setMarkers(markerRows);
     const current = beaconRows.find((row) => row.current);
@@ -505,6 +513,7 @@ export function createScene(container) {
     travel.visible = travelGlow.visible = systems.visible = Boolean(layers.Travel);
     retrace.visible = Boolean(layers.Return);
     planned.visible = Boolean(layers.Planned);
+    trip.visible = Boolean(layers.Expedition);
     sectors.visible = Boolean(layers.Sectors);
   }
 
@@ -539,12 +548,13 @@ export function createScene(container) {
     const dash = lyPerPixel * 14;
     planned.material.uniforms.uDash.value = dash;
     planned.material.uniforms.uPhase.value = motion ? seconds * .6 : 0;
+    trip.material.uniforms.uDash.value = dash * 1.6;
     stalk.material.dashSize = stalk.material.gapSize = Math.max(.5, lyPerPixel * 4);
     renderer.render(scene, camera);
   }
 
   return {
-    renderer, useCamera(value) { camera = value; }, setTheme, setRegions, setVisitedRegions, setRoute, setRetrace, setPlanned, setSystems,
+    renderer, useCamera(value) { camera = value; }, setTheme, setRegions, setVisitedRegions, setRoute, setRetrace, setPlanned, setExpedition, setSystems,
     setMarkers, setBeacons, setSectors, setDepth, setVisibility, resize, project, render,
     setRegionState(values) {
       const u = galaxyMaterial.uniforms;

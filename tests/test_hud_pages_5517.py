@@ -78,10 +78,11 @@ class PickTests(unittest.TestCase):
         self.assertEqual(self.pick("fsd_charge", "drive", has_jump=False), "nav")
 
     def test_the_page_hotkey_goes_round_and_back(self):
-        available = ["nav", "survey", "planet", "mining"]
-        self.assertEqual(hp.next_page("planet", "planet", available), "mining")
-        self.assertEqual(hp.next_page("mining", "planet", available), "nav")
-        self.assertEqual(hp.next_page("survey", "planet", available), "planet", "round to the automatic page")
+        # 5.6.1: NAV, then A to Z.
+        available = ["nav", "mining", "planet", "survey"]
+        self.assertEqual(hp.next_page("planet", "planet", available), "survey")
+        self.assertEqual(hp.next_page("survey", "planet", available), "nav")
+        self.assertEqual(hp.next_page("mining", "planet", available), "planet", "round to the automatic page")
 
 
 class BuilderTests(unittest.TestCase):
@@ -112,7 +113,8 @@ class BuilderTests(unittest.TestCase):
         page = hp.mining_page({"content_label": "HIGH CONTENT", "content_tone": "green", "remaining": 100.0, "core_material": "",
                                "materials": [{"name": "Platinum", "proportion": 30.0}], "refined": [{"name": "Platinum", "tonnes": 4}]},
                               {"total": 10, "capacity": 64, "free": 54, "capacity_known": True})
-        self.assertEqual(self.blocks(page), ["hero", "bars", "bars", "stats"])
+        # 5.6.1: what came off the rock as a labelled list, then the hold.
+        self.assertEqual(self.blocks(page), ["hero", "bars", "list", "bars"])
         self.assertIsNone(hp.mining_page(None, None))
 
     def test_combat(self):
@@ -192,13 +194,13 @@ class Deck(DashboardHudPagesMixin):
 
 class DeckTests(unittest.TestCase):
     def test_covered_overlays_stay_off_and_keep_their_setting(self):
-        deck = Deck({"cargo_overlay_enabled": True, "hud_pages": "auto"})
-        self.assertFalse(deck._overlay_enabled("cargo_hud"))
+        deck = Deck({"prospector_overlay_enabled": True, "hud_pages": "auto"})
+        self.assertFalse(deck._overlay_enabled("prospector_hud"))
         self.assertTrue(deck._overlay_enabled("hud"))
         deck.config["hud_pages"] = "off"
-        self.assertTrue(deck._overlay_enabled("cargo_hud"))
+        self.assertTrue(deck._overlay_enabled("prospector_hud"))
         deck.config.update(hud_pages="auto", overlay_enabled=False)
-        self.assertTrue(deck._overlay_enabled("cargo_hud"), "with the HUD off there's nothing to cover for")
+        self.assertTrue(deck._overlay_enabled("prospector_hud"), "with the HUD off there's nothing to cover for")
 
     def test_target_and_prospect_from_the_journal(self):
         deck = Deck()
@@ -279,7 +281,7 @@ class HotkeyTests(unittest.TestCase):
         deck = self.deck("auto")
         deck._hud_page_next()
         self.assertEqual(deck.config["hud_pages"], "manual", "choosing a page is manual")
-        self.assertEqual(deck.flashes[-1], ("PAGE · JUMP", "MANUAL"))
+        self.assertEqual(deck.flashes[-1], (f"PAGE · {hp.LABELS[hp.PAGES[1]]}", "MANUAL"))
         # Round every page switched on, with or without something on it now.
         for _ in range(len(hp.PAGES) - 1):
             deck._hud_page_next()

@@ -337,9 +337,8 @@ class DashboardOverviewVisualTests(unittest.TestCase):
         ]
         self.render(state)
         self.assertEqual(self.page.locator("#body-workboard .body-row:not(.empty)").count(), 35)
-        self.assertEqual(self.page.locator("#workboard-orbits .workboard-body-marker").count(), 18)
-        self.assertEqual(self.page.locator("#workboard-orbits .workboard-more").inner_text(), "+17 MORE")
-        self.assertIn("18 of 35", self.page.locator("#workboard-orbits").get_attribute("aria-label"))
+        # 5.6.1: the 18-body strip gave way to the orrery, which shows them all.
+        self.assertEqual(self.page.locator("#workboard-orbits").count(), 0)
         self.page.locator('.nav-item[data-page="explore"]').click()
         workboard = self.page.locator("#body-workboard")
         initial = workboard.evaluate("""node => {
@@ -356,7 +355,6 @@ class DashboardOverviewVisualTests(unittest.TestCase):
         state["survey"]["bodies"].append({"body_id": 36, "name": "SYNUEFE AA-A H1 36"})
         self.render(state)
         self.assertEqual(workboard.locator(".body-row:not(.empty)").count(), 36)
-        self.assertEqual(self.page.locator("#workboard-orbits .workboard-more").inner_text(), "+18 MORE")
         self.assertEqual(workboard.evaluate("node => node.scrollTop"), initial["top"])
         self.assertFalse(self.errors, self.errors)
 

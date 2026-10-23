@@ -42,10 +42,10 @@ class DashboardWatcherVoiceMixin:
         hud.voice_listener = self._watcher_voice_say
         self._watcher_voice_sync()
 
-    def _watcher_voice_say(self, words, key=None):
+    def _watcher_voice_say(self, words, key=None, feel=None):
         if getattr(self, "_closing", False) or not self._watcher_voice_on():
             return False
-        said = self._watcher_speaker().say(words, key)
+        said = self._watcher_speaker().say(words, key, feel=feel)
         if said and hasattr(self, "_api_publish"):
             self._api_publish("voice", {"text": words, "from": "api" if str(key or "").startswith("api-") else "watcher"})
         return said

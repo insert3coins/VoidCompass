@@ -67,9 +67,10 @@ def _body_visual_meta(item, system_name):
 
 
 def _body_notes(item):
-    from voidcompass.exploration.stellar_cartography import _body_facts
+    # The orrery's cached facts (5.6.1): the survey was rebuilding them too.
+    from voidcompass.exploration.stellar_cartography import _cached_body_facts
     try:
-        return list(_body_facts(item, bool(item.get('is_star'))).get('notes') or ())
+        return list(_cached_body_facts(item, bool(item.get('is_star'))).get('notes') or ())
     except Exception:
         return []
 
@@ -514,6 +515,16 @@ def build_survey_model(system_name, scan_items, focused_body_id=None, focused_bo
     latest_scan = next((row for row in scan_items or []
                         if not row.get('is_star') and row.get('planet_class')), None)
 
+    # Each body's look and notes once per build (5.6.1): the notable list and
+    # the body list share most bodies, and big systems paid for both.
+    visual_cache = {}
+
+    def visual(item):
+        key = id(item)
+        if key not in visual_cache:
+            visual_cache[key] = _body_visual_meta(item, system_name)
+        return visual_cache[key]
+
     def is_latest_scan(body):
         return bool(latest_scan and _body_matches(
             body, latest_scan.get('body_id'), latest_scan.get('name'),
@@ -524,7 +535,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None, focused_bo
     for row in notable_rows:
         source = scanned_by_id.get(str(row.get('body_id'))) if row.get('body_id') is not None else None
         source = source or scanned_by_name.get(str(row.get('name') or '').casefold()) or row
-        row.update(_body_visual_meta(source, system_name))
+        row.update(visual(source))
         row['display_name'] = _body_display_name(row.get('name'), system_name, row.get('planet_class'), row.get('terraformable'))
     notable_by_id = {str(row.get('body_id')): row for row in notable_rows if row.get('body_id') is not None}
     notable_by_name = {str(row.get('name') or '').casefold(): row for row in notable_rows}
@@ -534,7 +545,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None, focused_bo
     # the journal names differently) falls back to the whole system rather
     # than hiding the survey while other worlds still have biology to find.
     if focus_requested and focused is not None:
-        focused.update(_body_visual_meta(focused, system_name))
+        focused.update(visual(focused))
         focused['recent_scan'] = is_latest_scan(focused)
         focused_notable = notable_by_id.get(str(focused.get('body_id'))) if focused.get('body_id') is not None else None
         focused_notable = focused_notable or notable_by_name.get(str(focused.get('name') or '').casefold())
@@ -556,7 +567,7 @@ def build_survey_model(system_name, scan_items, focused_body_id=None, focused_bo
         if notable:
             represented_notable.add((str(notable.get('body_id')), str(notable.get('name') or '').casefold()))
         lo, hi = _body_value_range(body)
-        rows.append({'body_id': body.get('body_id'), 'name': body.get('name') or 'Unknown body', 'display_name': _body_display_name(body.get('name'), system_name, body.get('planet_class'), body.get('terraformable')), **_body_visual_meta(body, system_name), 'planet_class': body.get('planet_class') or '', 'terraformable': bool(body.get('terraformable')), 'bio_count': bio_count, 'geo_count': geo_count, 'mining_count': mining_count, 'sites': sites, 'complete': complete, 'bio_complete': bool(bio_count and complete >= bio_count), 'needs_dss': needs_dss, 'dss_probes_used': body.get('dss_probes_used'), 'dss_efficiency_target': body.get('dss_efficiency_target'), 'dss_efficiency_met': body.get('dss_efficiency_met'), 'min_value': lo, 'max_value': hi, 'first_footfall': bool(body.get('first_footfall')), 'landable': bool(body.get('landable')), 'landable_known': 'landable' in body and body.get('landable') is not None, 'gravity_g': body.get('gravity_g'), 'notable': notable, 'priority': priority, 'expanded': bool(show_all_bodies and not priority), 'recent_scan': recent_scan, 'scan_timestamp': body.get('scan_timestamp'), 'bio_details': [detail for detail in _body_detail_rows(body) if detail.get('kind') not in PREDICTED_KINDS]})
+        rows.append({'body_id': body.get('body_id'), 'name': body.get('name') or 'Unknown body', 'display_name': _body_display_name(body.get('name'), system_name, body.get('planet_class'), body.get('terraformable')), **visual(body), 'planet_class': body.get('planet_class') or '', 'terraformable': bool(body.get('terraformable')), 'bio_count': bio_count, 'geo_count': geo_count, 'mining_count': mining_count, 'sites': sites, 'complete': complete, 'bio_complete': bool(bio_count and complete >= bio_count), 'needs_dss': needs_dss, 'dss_probes_used': body.get('dss_probes_used'), 'dss_efficiency_target': body.get('dss_efficiency_target'), 'dss_efficiency_met': body.get('dss_efficiency_met'), 'min_value': lo, 'max_value': hi, 'first_footfall': bool(body.get('first_footfall')), 'landable': bool(body.get('landable')), 'landable_known': 'landable' in body and body.get('landable') is not None, 'gravity_g': body.get('gravity_g'), 'notable': notable, 'priority': priority, 'expanded': bool(show_all_bodies and not priority), 'recent_scan': recent_scan, 'scan_timestamp': body.get('scan_timestamp'), 'bio_details': [detail for detail in _body_detail_rows(body) if detail.get('kind') not in PREDICTED_KINDS]})
     rows.sort(key=lambda row: (not row['recent_scan'], bool(row['bio_complete']), not bool(row['bio_count'] or row['geo_count'] or row['mining_count'] or row['landable']), not bool(row['bio_count']), row['name']))
     remaining_notable = [row for row in notable_rows if (str(row.get('body_id')), str(row.get('name') or '').casefold()) not in represented_notable]
     scan_in_progress = bool(total_known and _safe_int(total) > 0 and (_safe_int(scanned) < _safe_int(total)))

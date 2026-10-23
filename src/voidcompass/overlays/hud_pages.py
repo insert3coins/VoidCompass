@@ -13,25 +13,42 @@ overlays already use, so the HUD reads the same journal facts they do.
 
 from __future__ import annotations
 
-PAGES = ("nav", "jump", "survey", "planet", "rhino", "mining", "combat", "station", "colony", "carrier", "trade",
-         "powerplay")
+# NAV first, then A to Z (5.6.1): the tab row and the page key's round.
+PAGES = ("nav", "carrier", "colony", "combat", "expedition", "jump", "mining", "planet", "powerplay", "rhino", "station",
+         "survey", "trade")
 LABELS = {"nav": "NAV", "jump": "JUMP", "survey": "SURVEY", "planet": "PLANET", "rhino": "RHINO", "mining": "MINING",
           "combat": "COMBAT", "station": "STATION", "colony": "COLONY", "carrier": "CARRIER", "trade": "TRADE",
-          "powerplay": "POWER"}
+          "powerplay": "POWER", "expedition": "EXPEDITION"}
 # The overlays each page shows, which can stay off while the HUD does.
 COVERS = {
     "jump": ("jump_info_hud",),
     "survey": ("survey_status_hud", "contact_scope_hud"),
     "planet": ("planet_materials_hud", "gravity_warning_hud", "ground_popup"),
     "rhino": ("rig_tracker_hud",),
-    "mining": ("prospector_hud", "cargo_hud"),
+    # Not the Cargo overlay (5.6.1): the pages list what's aboard, but only
+    # while they're up, so it stays for the rest of the time.
+    "mining": ("prospector_hud",),
     "combat": ("contact_scope_hud",),
     "station": ("station_info_hud",),
     "colony": ("colony_needs_hud",),
     "carrier": ("carrier_hud",),
     "trade": ("trade_route_hud",),
+    "expedition": ("expedition_hud",),
     "powerplay": ("powerplay_hud",),
 }
+# The pages' own text size (5.6.1), on top of the HUD's: the page area grows
+# with it and the HUD sizes itself to fit.
+PAGE_TEXT_SIZES = (85, 100, 115, 130, 150)
+
+
+def page_text_percent(config):
+    try:
+        value = int((config or {}).get("hud_pages_text_percent") or 100)
+    except (TypeError, ValueError):
+        value = 100
+    return value if value in PAGE_TEXT_SIZES else 100
+
+
 # Off: the HUD as it always was. Auto: the page follows what you're doing.
 # Manual: the page hotkey chooses, and it stays put.
 MODES = ("off", "auto", "manual")
@@ -143,7 +160,8 @@ def remember_page(memory, picked, state, facts, now):
 
 def hold_page(picked, memory, facts, now, enabled, survey_left=lambda: True):
     """The page to keep on screen when ``picked`` is NAV, else ``picked``.
-    ``survey_left`` says whether this system still has survey work in it."""
+    ``survey_left`` says whether this system still has survey work in it.
+    On an expedition (5.6.1) its page stands in for NAV after all of these."""
     if picked != "nav":
         return picked
     allowed = set(enabled or ())
@@ -154,6 +172,8 @@ def hold_page(picked, memory, facts, now, enabled, survey_left=lambda: True):
     system = str(facts.get("system") or "")
     if "survey" in allowed and system and memory.get("survey_system") == system and survey_left():
         return "survey"
+    if "expedition" in allowed and facts.get("expedition"):
+        return "expedition"
     return "nav"
 
 
@@ -184,20 +204,53 @@ def bars(items, columns=1):
 
 
 # The HUD grows to fit its page, so a list shows it all, up to this many
-# rows; only past that does it say "+n MORE".
+# rows; only past that does it say "+n MORE". ``rows=None`` shows every row.
 LIST_ROWS = 10
 
 
-def listing(items, more=0, title="", rows=LIST_ROWS):
+def listing(items, more=0, title="", rows=LIST_ROWS, columns=1):
     items = list(items)
-    more = int(more or 0) + max(0, len(items) - rows)
-    return {"type": "list", "title": title, "more": more, "items": [
+    shown = items if rows is None else items[:rows]
+    more = int(more or 0) + len(items) - len(shown)
+    return {"type": "list", "title": title, "more": more, "columns": columns, "items": [
         {"name": str(name), "detail": str(detail or ""), "value": str(value or ""), "tone": tone}
-        for name, detail, value, tone in items[:rows]]}
+        for name, detail, value, tone in shown]}
 
 
-def note(text, tone="dim"):
-    return {"type": "note", "text": str(text or ""), "tone": tone}
+def note(text, tone="dim", wrap=False):
+    return {"type": "note", "text": str(text or ""), "tone": tone, "wrap": bool(wrap)}
+
+
+def hold_list(cargo, title="IN THE HOLD"):
+    """What's in a hold, heaviest first, every item (5.6.1): the HUD grows to
+    fit, so nothing is left off. Mission cargo and stolen goods are marked as
+    the Cargo overlay marks them."""
+    rows = sorted((row for row in (cargo or {}).get("rows") or () if row.get("count")),
+                  key=lambda row: (-int(row["count"]), str(row["name"]).casefold()))
+    items = [(row["name"], "STOLEN" if row.get("stolen") else "MISSION" if row.get("mission") else "", f"{row['count']:,} T",
+              "red" if row.get("stolen") else "accent" if row.get("mission") else "text") for row in rows]
+    return listing(items, title=title, rows=None, columns=2 if len(items) > 4 else 1) if items else None
+
+
+def contents_blocks(contents):
+    """``contents`` is ((title, cargo model), ...); none when switched off."""
+    return [hold_list(cargo, title) for title, cargo in contents or ()]
+
+
+def alert_line(gravity=None, rigs=None):
+    """The one warning that shows over any page (5.6.1), so a pinned or held
+    page can't hide it: heavy gravity coming in to land, then the rigs."""
+    if gravity:
+        body, g = gravity
+        return {"text": f"HEAVY GRAVITY · {float(g):.2f} G{f' · {body}' if body else ''}".upper(), "tone": "red"}
+    if rigs:
+        far = rigs.get("too_far") or ()
+        if far:
+            row = far[0]
+            return {"text": f"RIG {row['slot']} {row['distance'] / 1000:.1f} KM AWAY · LOST AT 5 KM", "tone": "red"}
+        if rigs.get("ready"):
+            return {"text": f"COLLECT RIG {', '.join(str(slot) for slot in rigs['ready'])}", "tone": "accent"}
+    return None
 
 
 def _page(page_id, title, *blocks, tone="hud"):
@@ -211,7 +264,7 @@ def waiting_page(page_id):
              "mining": "PROSPECT A ROCK TO FILL IT", "combat": "TARGET A SHIP TO FILL IT", "station": "SHOWS WHILE DOCKED",
              "colony": "SHOWS AT A CONSTRUCTION SITE", "carrier": "NEEDS YOUR CARRIER'S DATA",
              "trade": "PLAN A TRADE ROUTE TO FILL IT", "powerplay": "PLEDGE TO A POWER TO FILL IT",
-             "survey": "SCAN A SYSTEM TO FILL IT"}
+             "survey": "SCAN A SYSTEM TO FILL IT", "expedition": "START AN EXPEDITION TO FILL IT"}
     return _page(page_id, LABELS.get(page_id, page_id.upper()), note(hints.get(page_id, "NOTHING TO SHOW YET"), "dim"), tone="hud")
 
 
@@ -277,6 +330,15 @@ def jump_page(model):
     )
 
 
+def survey_rank(row):
+    """The one survey order (5.5.18, everywhere since 5.6.1): biology still to
+    do, then geology and mining, then the most valuable."""
+    value = row.get("max_value") or row.get("min_value") or 0
+    work = (0 if row.get("bio_count") and not row.get("bio_complete")
+            else 1 if row.get("geo_count") or row.get("mining_count") or row.get("rhino") else 2)
+    return work, -value
+
+
 def survey_page(model, contacts=None):
     if not model and not contacts:
         return None
@@ -311,11 +373,7 @@ def survey_page(model, contacts=None):
                 continue
             tone = ("green" if row.get("bio_count") and not row.get("bio_complete") else "yellow" if value >= 1000000
                     else "hud" if row.get("rhino") or row.get("mining_count") else "text")
-            # As the survey overlay ranks them: biology still to do, then
-            # geology and mining, then the most valuable.
-            rank = (0 if row.get("bio_count") and not row.get("bio_complete")
-                    else 1 if row.get("geo_count") or row.get("mining_count") or row.get("rhino") else 2)
-            rows.append(((rank, -value), (_short(row.get("display_name") or row.get("name"), system), signals,
+            rows.append((survey_rank(row), (_short(row.get("display_name") or row.get("name"), system), signals,
                                           _credits(value) if value else "", tone)))
         rows = [row for _key, row in sorted(rows, key=lambda pair: pair[0])]
         # The system's name is on the line above: lead with what's in it.
@@ -328,11 +386,21 @@ def survey_page(model, contacts=None):
         if total and model.get("total_known"):
             blocks.append(bars([("SCANNED", f"{round(scanned / total * 100)}%", scanned / total, "accent")]))
         blocks.append(listing(rows, title="WORTH A LOOK"))
-    signals = [(group.get("name"), "", group.get("count"), "red" if group.get("kind") in {"threat", "combat"} else "text")
-               for group in (contacts or {}).get("groups") or ()]
-    if signals and len(blocks) < 4:
-        blocks.append(stats(*[(name.upper(), count, tone) for name, _detail, count, tone in signals[:4]]))
+    blocks.append(signal_list(contacts))
     return _page("survey", "SYSTEM SURVEY", *blocks, tone="accent")
+
+
+def signal_list(contacts, threats_only=False):
+    """The signals heard here by name, as Contact Scope lists them (5.6.1)."""
+    contacts = contacts or {}
+    rows = [row for row in contacts.get("rows") or () if not threats_only or row.get("threat")]
+    items = [(row.get("name") or row.get("label"),
+              " · ".join(part for part in (str(row.get("label") or "").upper(), f"×{row['count']}" if (row.get("count") or 1) > 1 else "")
+                         if part),
+              f"THREAT {row['threat']}" if row.get("threat") else "",
+              "red" if (row.get("threat") or 0) >= 3 else "yellow" if row.get("threat") else "text") for row in rows]
+    more = 0 if threats_only else int(contacts.get("more") or 0)
+    return listing(items, more=more, title="THREATS HERE" if threats_only else "SIGNALS HERE", rows=None) if items else None
 
 
 def planet_page(body="", materials=None, target=None, sampling=None, gravity=None, threshold=None):
@@ -360,7 +428,7 @@ def planet_page(body="", materials=None, target=None, sampling=None, gravity=Non
     found = [(row.get("name"), "RARE" if row.get("rare") else "", f"{row.get('percent', 0):.1f}%", "yellow" if row.get("rare") else "text")
              for row in materials.get("materials") or ()]
     if found:
-        blocks.append(bars([(name, value, min(1.0, float(value.rstrip('%')) / 30.0), tone) for name, _rare, value, tone in found[:8]],
+        blocks.append(bars([(name, value, min(1.0, float(value.rstrip('%')) / 30.0), tone) for name, _rare, value, tone in found],
                            columns=2))
     elif details.get("mining_locations"):
         blocks.append(note(f"{details['mining_locations']} MINING LOCATIONS ON THIS BODY", "yellow"))
@@ -375,7 +443,7 @@ def planet_page(body="", materials=None, target=None, sampling=None, gravity=Non
     return _page("planet", "ON THE SURFACE", *blocks, tone="red" if heavy else "hud")
 
 
-def rhino_page(rig_model, holds=(), signals=0, spacing_m=78.0, warn_m=3500.0):
+def rhino_page(rig_model, holds=(), signals=0, spacing_m=78.0, warn_m=3500.0, contents=()):
     if not rig_model:
         return None
     from voidcompass.overlays.rig_tracker import rig_advice
@@ -404,6 +472,7 @@ def rhino_page(rig_model, holds=(), signals=0, spacing_m=78.0, warn_m=3500.0):
                   "red" if row.get("free") == 0 else "green") for row in holds or () if row.get("capacity")]
     if hold_bars:
         blocks.append(bars(hold_bars, columns=2))
+    blocks.extend(contents_blocks(contents))
     blocks.append(stats(("RIGS OUT", tracked, "text"),
                         ("COLLECT NEXT", f"RIG {order[0]}" if order else "", "hud"),
                         ("NEAREST", f"RIG {nearest['slot']} · {_metres(nearest.get('distance_m'))}" if nearest else "", "text"),
@@ -413,25 +482,43 @@ def rhino_page(rig_model, holds=(), signals=0, spacing_m=78.0, warn_m=3500.0):
     return _page("rhino", "RHINO MINING", *blocks, tone="hud")
 
 
-def mining_page(prospect=None, cargo=None):
+_CONTENT_WORDS = {"HIGH": "HIGH CONTENT", "MED": "MEDIUM CONTENT", "LOW": "LOW CONTENT"}
+
+
+def hold_bar(cargo):
+    if not cargo or not cargo.get("capacity_known"):
+        return None
+    used, capacity = cargo.get("total") or 0, cargo.get("capacity") or 0
+    return bars([("HOLD", f"{used} / {capacity} T", used / capacity if capacity else 0, "red" if cargo.get("free") == 0 else "green")])
+
+
+def mining_page(prospect=None, cargo=None, contents=()):
     if not prospect and not cargo:
         return None
     blocks = []
     if prospect and prospect.get("materials"):
         core = prospect.get("core_material")
         remaining = prospect.get("remaining")
-        blocks.append(hero(prospect.get("content_label") or "ROCK", f"MOTHERLODE · {core}".upper() if core else "",
-                           f"{remaining:.0f}% LEFT" if remaining is not None else "", prospect.get("content_tone") or "hud"))
+        label = str(prospect.get("content_label") or "")
+        best = prospect["materials"][0]
+        # The rock's content in words, and what's best in it: its motherlode,
+        # or the richest material.
+        blocks.append(hero(_CONTENT_WORDS.get(label.upper(), label.upper() or "ROCK"),
+                           f"MOTHERLODE · {core}".upper() if core else f"{best['name']} {best['proportion']:.1f}%".upper(),
+                           " · ".join(part for part in (f"{remaining:.0f}% LEFT" if remaining is not None else "",
+                                                        str(prospect.get("mining_type") or "").upper()) if part),
+                           prospect.get("content_tone") or "hud"))
+        materials = prospect["materials"]
         blocks.append(bars([(row["name"], f"{row['proportion']:.1f}%", row["proportion"] / 50.0,
-                             "yellow" if index == 0 else "text") for index, row in enumerate(prospect["materials"][:8])],
-                           columns=2))
-    if cargo and cargo.get("capacity_known"):
-        used, capacity = cargo.get("total") or 0, cargo.get("capacity") or 0
-        blocks.append(bars([("HOLD", f"{used} / {capacity} T", used / capacity if capacity else 0,
-                             "red" if cargo.get("free") == 0 else "green")]))
+                             "yellow" if index == 0 else "text") for index, row in enumerate(materials)],
+                           columns=2 if len(materials) >= 4 else 1))
     refined = (prospect or {}).get("refined") or ()
     if refined:
-        blocks.append(stats(*[(row["name"].upper(), f"{row['tonnes']} T", "green") for row in refined[:4]]))
+        total = (prospect or {}).get("refined_total") or sum(row["tonnes"] for row in refined)
+        blocks.append(listing([(row["name"].upper(), "", f"{row['tonnes']} T", "green") for row in refined],
+                              title=f"REFINED FROM THIS ROCK · {total} T", rows=None, columns=2 if len(refined) > 4 else 1))
+    blocks.append(hold_bar(cargo))
+    blocks.extend(contents_blocks(contents))
     if not blocks:
         return None
     return _page("mining", "MINING", *blocks, tone=(prospect or {}).get("content_tone") or "hud")
@@ -512,28 +599,30 @@ def combat_page(target=None, session=None, contacts=None):
                             ("BOUNTIES", _credits(session.get("bounty_cr")) if session.get("bounty_cr") else "", "green"),
                             ("BONDS", _credits(session.get("bond_cr")) if session.get("bond_cr") else "", "green"),
                             ("THARGOIDS", session.get("ax_kills") or "", "red")))
-    threats = [(row.get("name") or row.get("label"), row.get("detail") or "", f"THREAT {row['threat']}" if row.get("threat") else "",
-                "red" if (row.get("threat") or 0) >= 3 else "yellow")
-               for row in (contacts or {}).get("rows") or () if row.get("threat")]
-    if threats:
-        blocks.append(listing(threats, title="THREATS HERE"))
+    blocks.append(signal_list(contacts, threats_only=True))
     return _page("combat", "COMBAT", *blocks, tone="red")
 
 
-def station_page(model=None, trade_step=None):
+def station_page(model=None, trade_step=None, contents=()):
     if not model or not model.get("station"):
         return None
-    services = [row for row in model.get("core_services") or () if row.get("available")]
+    services = [str(row.get("label") or "").upper() for key in ("core_services", "exploration_services")
+                for row in model.get(key) or () if row.get("available")]
+    services += [str(label).upper() for label in model.get("special_services") or ()]
     data = [(row["label"], row.get("service") or "", row["value"], "green" if row.get("available") else "yellow")
             for row in model.get("data_rows") or ()]
+    economies = model.get("economies")
+    economies = " · ".join(str(part) for part in economies) if isinstance(economies, (list, tuple)) else str(economies or "")
     blocks = [hero(model.get("station"), model.get("pads") or "", model.get("type") or "", "accent"),
-              note(model.get("authority") or "", "dim")]
+              note(" · ".join(part for part in (model.get("authority"), economies, model.get("distance")) if part), "dim", wrap=True)]
     if trade_step and not trade_step.get("done") and trade_step.get("here"):
         blocks.append(stats(("TRADE ROUTE", str(trade_step.get("action") or "").upper(), "green")))
     if data:
-        blocks.append(listing(data, title="TO SELL HERE"))
+        blocks.append(listing(data, title="TO SELL HERE", rows=None))
+    blocks.extend(contents_blocks(contents))
     if services:
-        blocks.append(note(" · ".join(str(row.get("label") or "").upper() for row in services[:8]), "text"))
+        # Every service, wrapping onto more lines rather than cut off.
+        blocks.append(note(" · ".join(services), "text", wrap=True))
     return _page("station", model.get("badge") or "DOCKED", *blocks, tone="accent")
 
 
@@ -546,7 +635,7 @@ def colony_page(model=None):
     rows.sort(key=lambda row: -int(row.get("need") or 0))
     needs = [(row["name"], f"{row['need']:,} T" + (f" · {row['ship']} ABOARD" if row.get("ship") else ""),
               (row.get("ship") or 0) / row["need"] if row.get("need") else 1, "green" if row.get("ship") else "hud")
-             for row in rows[:6]]
+             for row in rows]
     return _page("colony", "CONSTRUCTION NEEDS",
                  hero(model.get("header") or "PROJECT", f"{int(model.get('remaining') or 0):,} T",
                       f"{model['trips']} TRIPS" if model.get("trips") else model.get("subheader") or "", "hud"),
@@ -570,7 +659,7 @@ def carrier_page(model=None):
     return _page("carrier", model.get("carrier_type") or "FLEET CARRIER", *blocks, tone="accent")
 
 
-def trade_page(step=None, cargo=None):
+def trade_page(step=None, cargo=None, contents=()):
     if not step:
         return None
     if step.get("done"):
@@ -581,12 +670,51 @@ def trade_page(step=None, cargo=None):
                     ("NOW", "BUY" if step.get("phase") == "buy" else "SELL", "hud"),
                     ("MADE SO FAR", _credits(step.get("profit")) if step.get("profit") else "", "green")),
               note(str(step.get("action") or "").upper(), "text")]
-    if cargo and cargo.get("capacity_known"):
-        used, capacity = cargo.get("total") or 0, cargo.get("capacity") or 0
-        blocks.append(bars([("HOLD", f"{used} / {capacity} T", used / capacity if capacity else 0, "green")]))
+    blocks.append(hold_bar(cargo))
+    blocks.extend(contents_blocks(contents))
     for warning in step.get("warnings") or ():
         blocks.append(note(str(warning).upper(), "yellow"))
     return _page("trade", "TRADE ROUTE", *blocks, tone="green")
+
+
+def expedition_page(expedition, live):
+    """An expedition (5.6.1): the next stop and how far to go, the data you're
+    carrying, the streak, and anything running low. Built from the Expedition
+    overlay's own model, so it shows everything the overlay does."""
+    from voidcompass.overlays.expedition_hud import build_expedition_model
+    model = build_expedition_model(expedition, live)
+    if not model:
+        return None
+    upcoming = model["next"]
+    to_go = model["to_go_ly"]
+    sub = f"NEXT · {upcoming['name']}" + (f" · {upcoming['where']}" if upcoming["where"] else "") if upcoming else "EVERY LEG REACHED"
+    blocks = [hero(model["name"], f"{to_go:,.0f} LY TO GO" if to_go else "", sub.upper(), "green")]
+    # Part 5: a stop on a planet. In its system, which body; on it, which way.
+    surface = model["surface"] or {}
+    target = surface.get("target")
+    if target:
+        altitude = surface.get("altitude_m")
+        blocks.append({"type": "compass", "label": str(surface.get("title") or "SURFACE TARGET").upper(),
+                       "distance": "HERE" if target.get("arrived") else _metres(target.get("distance_m")), "relative": target.get("turn"),
+                       "detail": f"BEARING {int(target.get('bearing') or 0):03d}°" + (f" · ALT {_metres(altitude)}" if altitude else ""),
+                       "tone": "green"})
+    elif surface.get("here") and surface.get("body") and not surface.get("on_body"):
+        where = f" · LAND AT {surface['lat']:.4f}, {surface['lon']:.4f}" if surface.get("lat") is not None else ""
+        blocks.append(note(f"FLY TO {surface['body']}{where}".upper(), "green", wrap=True))
+    if model["share"] is not None:
+        done = model["done_ly"]
+        blocks.append(bars([("ROUTE", f"{model['share'] * 100:.0f}%" + (f" · {done:,.0f} LY" if done else ""), model["share"], "green")]))
+    blocks.append(stats(("DATA AT RISK", _credits(model["risk"]) if model["risk"] else "", "red" if model["risk_over"] else "yellow"),
+                        ("STREAK", f"{model['streak']:,} JUMPS", "text"),
+                        ("ETA", f"{model['eta_hours']:,.0f} H" if model["eta_hours"] else "", "text"),
+                        ("HULL", f"{model['hull']:.0f}%" if model["hull"] is not None else "", "text")))
+    for run in model["fuel_runs"]:
+        blocks.append(note(f"NO STAR TO SCOOP: {run['jumps']} NEUTRON JUMPS FROM {run['from']}".upper(), "yellow"))
+    if model["low"]:
+        blocks.append(note(f"RUNNING LOW · {' · '.join(model['low'])}".upper(), "yellow", wrap=True))
+    if model["ironman"]:
+        blocks.append(note("IRONMAN · ONE LIFE", "red"))
+    return _page("expedition", "EXPEDITION", *blocks, tone="green")
 
 
 def powerplay_page(model=None):

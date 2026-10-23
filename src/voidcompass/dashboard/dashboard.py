@@ -53,6 +53,7 @@ from voidcompass.exploration.contact_scope import ContactLedger
 from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.overlays.trade_route_hud import TradeRouteHUD
+from voidcompass.overlays.expedition_hud import ExpeditionHUD
 from voidcompass.overlays.rig_tracker import RigTrackerHUD
 from voidcompass.overlays.rhino_map_hud import RhinoMapHUD
 from voidcompass.overlays.galaxy_minimap_hud import GalaxyMinimapHUD
@@ -78,6 +79,7 @@ from voidcompass.overlays.html_contact_overlay import attach_html_contact_overla
 from voidcompass.overlays.html_jump_info_overlay import attach_html_jump_info_overlay
 from voidcompass.overlays.html_colony_needs_overlay import attach_html_colony_needs_overlay
 from voidcompass.overlays.html_trade_route_overlay import attach_html_trade_route_overlay
+from voidcompass.overlays.html_expedition_overlay import attach_html_expedition_overlay
 from voidcompass.overlays.html_rig_tracker_overlay import attach_html_rig_tracker_overlay
 from voidcompass.overlays.html_galaxy_minimap_overlay import attach_html_galaxy_minimap_overlay
 from voidcompass.overlays.html_rhino_map_overlay import attach_html_rhino_map_overlay
@@ -92,6 +94,7 @@ from voidcompass.dashboard.dashboard_keepsakes_mixin import DashboardKeepsakesMi
 from voidcompass.dashboard.dashboard_capsules_mixin import DashboardCapsulesMixin
 from voidcompass.dashboard.dashboard_flight_log_mixin import DashboardFlightLogMixin
 from voidcompass.dashboard.dashboard_journey_mixin import DashboardJourneyMixin
+from voidcompass.dashboard.dashboard_expedition_mixin import DashboardExpeditionMixin
 from voidcompass.dashboard.dashboard_rigs_mixin import DashboardRigsMixin
 from voidcompass.dashboard.dashboard_hud_pages_mixin import DashboardHudPagesMixin
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
@@ -290,6 +293,7 @@ class MainDashboard(
     DashboardCapsulesMixin,
     DashboardFlightLogMixin,
     DashboardJourneyMixin,
+    DashboardExpeditionMixin,
     DashboardRigsMixin,
     DashboardHudPagesMixin,
     DashboardWatcherVoiceMixin,
@@ -989,6 +993,7 @@ class MainDashboard(
             "jump_info_hud",
             "colony_needs_hud",
             "trade_route_hud",
+            "expedition_hud",
             "rig_tracker_hud",
             "galaxy_minimap_hud",
             "rhino_map_hud",
@@ -1079,7 +1084,7 @@ class MainDashboard(
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud",
             "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud",
-            "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud", "postcard_hud",
+            "expedition_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud", "postcard_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -1517,6 +1522,47 @@ class MainDashboard(
         if heartbeat is not None and hasattr(heartbeat, "poke"):
             heartbeat.poke()
 
+    def _watcher_answer(self, answer):
+        """An answer to the Watcher's question (5.6.1): a hotkey's number, or
+        the Watcher page's button (its key)."""
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        if heartbeat is None or not hasattr(heartbeat, "answer"):
+            return False
+        done = bool(heartbeat.answer(answer))
+        publish = getattr(self, "_schedule_html_dashboard_publish", None)
+        if done and callable(publish):
+            publish(immediate=True)
+        return done
+
+    def _watcher_mind(self):
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        mind = getattr(heartbeat, "mind", None)
+        if mind is None:
+            from voidcompass.overlays.heartbeat_hud import _memory_path
+            mind = watcher_mind.WatcherMind(_memory_path(self.config), self.config)
+        return mind
+
+    def _watcher_share_code(self):
+        """Your Watcher, as a code to paste for a friend (5.6.1)."""
+        from voidcompass.overlays.watcher_deeper import share_code
+        commander = str(self.config.get("active_commander_name") or getattr(self, "cmdr_name", "") or "")
+        return share_code(self._watcher_mind().share_card(commander))
+
+    def _watcher_meet(self, text):
+        """A friend's Watcher code, pasted on the Watcher page (5.6.1)."""
+        from voidcompass.overlays.watcher_deeper import read_code
+        card = read_code(text)
+        if card is None:
+            return False
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        if heartbeat is not None and hasattr(heartbeat, "meet"):
+            heartbeat.meet(card)
+        else:
+            mind = self._watcher_mind()
+            mind.meet(card)
+            mind.save()
+        return True
+
     def _watcher_reset(self):
         """The Watcher forgets everything (its page's RESET, 5.5.3.9): the
         running one if it's on, otherwise its memory file. A backup is kept."""
@@ -1568,8 +1614,13 @@ class MainDashboard(
                     context["galnet"] = str(articles[0]["title"])[:160]
             except Exception:
                 pass
-        # Where home is (5.5.4), for "light years from home".
+        # Where home is (5.5.4), for "light years from home", and how far it is
+        # now (5.6.1: far from home, it may ask if you miss it).
         context["home"] = home_anchor.home(self.config)
+        try:
+            context["home_ly"] = home_anchor.distance(getattr(self, "current_coords", None), self.config)
+        except Exception:
+            context["home_ly"] = None
         # 5.5.12: the vehicle you're in and your ship's hold, which a restart
         # mid-session hides from its journal events.
         vehicle = str(getattr(self, "current_vehicle_name", "") or "").casefold()
@@ -1903,12 +1954,20 @@ class MainDashboard(
         )
 
     def _refresh_gravity_warning(self, body_id, body_name=None):
-        if not getattr(self, "gravity_warning_hud", None) or body_id is None:
+        if body_id is None:
             return
         item = self.scan_items_by_id.get(body_id)
         gravity_g = item.get("gravity_g") if item else None
         name = body_name or (item.get("name") if item else None)
-        self.gravity_warning_hud.check_body(name, gravity_g)
+        # The Nav HUD's alert line warns too, even with the Gravity overlay
+        # covered by its pages (5.6.1). Only a live approach sets this.
+        try:
+            threshold = float(self.config.get("gravity_warning_threshold_g") or 3.0)
+        except (TypeError, ValueError):
+            threshold = 3.0
+        self._hud_heavy_body = (name, gravity_g) if name and gravity_g is not None and gravity_g >= threshold else None
+        if getattr(self, "gravity_warning_hud", None):
+            self.gravity_warning_hud.check_body(name, gravity_g)
 
     def _check_stale_bio_scans(self, body_id):
         """Warn if we're leaving a body with an in-progress (not yet 3-sample
@@ -2099,7 +2158,8 @@ class MainDashboard(
         if getattr(self, "expedition_manager", None):
             self.expedition_manager.flush(wait=False)
         self.expedition_manager = ExpeditionManager(
-            get_profile_file(new_key, "expeditions.json")
+            get_profile_file(new_key, "expeditions.json"),
+            examples=True,
         )
         if getattr(self, "specialist_engine", None):
             self.specialist_engine.switch(self.config.get("specialists_file"))
@@ -2235,7 +2295,8 @@ class MainDashboard(
         self._bgs_init()
         self._trading_init()
         self.expedition_manager = ExpeditionManager(
-            get_profile_file(get_active_profile(self.config), "expeditions.json")
+            get_profile_file(get_active_profile(self.config), "expeditions.json"),
+            examples=True,
         )
         self.specialist_engine = SpecialistEngine(self.config.get("specialists_file"))
         self.adaptive_command = AdaptiveCommandDeck(
@@ -2749,6 +2810,11 @@ class MainDashboard(
             self.trade_route_hud = TradeRouteHUD(self.root, self.config)
         else:
             self.trade_route_hud = None
+
+        if self._overlay_enabled("expedition_hud"):
+            self.expedition_hud = ExpeditionHUD(self.root, self.config)
+        else:
+            self.expedition_hud = None
 
         if self._overlay_enabled("rig_tracker_hud"):
             self.rig_tracker_hud = RigTrackerHUD(self.root, self.config)
@@ -3612,6 +3678,9 @@ class MainDashboard(
         if action == "watcher_poke":
             self._watcher_poke()
             return
+        if action.startswith("watcher_answer_"):
+            self._watcher_answer(action.rsplit("_", 1)[-1])
+            return
         if action == "colony_refresh":
             if self._colony_refresh():
                 self.add_event_feed_entry("SYSTEM", "Construction Needs: refreshing from Raven Colonial", severity="INFO")
@@ -4099,7 +4168,7 @@ class MainDashboard(
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
-            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
+            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "expedition_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
             "postcard_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
@@ -4436,33 +4505,11 @@ class MainDashboard(
         return None
 
     def _field_bookmark(self):
-        system = str(getattr(self, "current_sys", "") or "").strip()
-        if not system or system in {"---", "Unknown"}:
-            self.add_event_feed_entry(
-                "EXPEDITION", "Field bookmark unavailable until the current system is known",
-                severity="WARN",
-            )
-            return None
-        body = str(getattr(self, "current_body_name", "") or "").strip()
-        title = body or system
-        manager = getattr(self, "expedition_manager", None)
-        if manager is None:
-            return None
-        bookmark = manager.add_bookmark(
-            "Field Note", system=system, body=body, title=title,
-            tags=["field", "quick"], source="field-hotkey",
-            position=getattr(self, "current_coords", None),
-        )
-        self.add_event_feed_entry(
-            "EXPEDITION", f"Field bookmark saved: {title}", severity="INFO",
-            copy_text=system,
-        )
-        if getattr(self, "toast_hud", None):
-            self.toast_hud.push(
-                "FIELD BOOKMARK", title, severity="success", duration_s=8,
-            )
-        self._refresh_exploration_window()
-        return bookmark
+        # 5.6.1: MARK THIS PLACE, kept as one of the expedition's places.
+        place = self._expedition_mark_here()
+        if place:
+            self._refresh_exploration_window()
+        return place
 
     def open_mining_workspace(self):
         """Open the focused Mining Operations workspace."""
@@ -5139,6 +5186,14 @@ class MainDashboard(
             self.trade_route_hud.destroy()
             self.trade_route_hud = None
 
+        if self._overlay_enabled("expedition_hud"):
+            if getattr(self, "expedition_hud", None) is None:
+                self.expedition_hud = ExpeditionHUD(self.root, self.config)
+                self._expedition_overlay_refresh(force=True)
+        elif getattr(self, "expedition_hud", None):
+            self.expedition_hud.destroy()
+            self.expedition_hud = None
+
         if self._overlay_enabled("rig_tracker_hud"):
             if getattr(self, "rig_tracker_hud", None) is None:
                 self.rig_tracker_hud = RigTrackerHUD(self.root, self.config)
@@ -5254,6 +5309,10 @@ class MainDashboard(
                 )
             elif attr == "trade_route_hud":
                 attach_html_trade_route_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "expedition_hud":
+                attach_html_expedition_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "rig_tracker_hud":
@@ -8218,6 +8277,12 @@ class MainDashboard(
                     self._refresh_exploration_window()
             except Exception as exc:
                 logging.debug("Expedition objective event skipped [%s]: %s", ev, exc)
+        if not startup_replay and getattr(self, "expedition_manager", None):
+            # Milestones for the Watcher and the data-at-risk nudge (5.6.1).
+            try:
+                self._expedition_after_event(expedition_result or {}, ev)
+            except Exception as exc:
+                logging.debug("Expedition milestones skipped [%s]: %s", ev, exc)
         if expedition_result and expedition_result.get("completed") and not startup_replay:
             completed_titles = list(expedition_result.get("completed") or [])
             summary = completed_titles[0] if len(completed_titles) == 1 else f"{len(completed_titles)} objectives"

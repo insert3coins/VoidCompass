@@ -16,11 +16,12 @@ import time
 from voidcompass.exploration.explorer_fieldcraft import sector_grid
 from voidcompass.exploration.exploration_intelligence import route_context
 from voidcompass.exploration.galactic_map_server import GalacticMapServer
+from voidcompass.exploration.expedition_manager import PLACE_KINDS
 from voidcompass.exploration.galactic_regions import find_region, region_labels, region_raster
 from voidcompass.core.theme_state import THEME
 from voidcompass.core.paths import resource_path
 ANNOTATION_TYPES = ('Note', 'Danger', 'Region of Interest', 'Survey Target', 'Waypoint')
-LAYER_NAMES = ('Regions', 'Travel', 'Planned', 'Return', 'Sectors', 'Valuable', 'Biology', 'Codex', 'Photos', 'Recon', 'Revisit', 'Bookmarks', 'Annotations')
+LAYER_NAMES = ('Regions', 'Travel', 'Planned', 'Expedition', 'Return', 'Sectors', 'Valuable', 'Biology', 'Codex', 'Photos', 'Recon', 'Revisit', 'Bookmarks', 'Annotations')
 SCOPES = ('All History', 'Current Session', 'Active Expedition')
 GALACTIC_CENTRE = (0.0, 0.0, 25899.0)
 GALAXY_RADIUS_LY = 51500.0
@@ -215,7 +216,7 @@ class ExpeditionMapView:
         for row in survey_snapshot.get('revisit_queue') or ():
             add('Revisit', 'Revisit', row.get('system'), 'Unfinished exploration', row.get('detail') or 'Worthwhile survey work remains', position=row.get('position'))
         for row in bookmarks:
-            add('Bookmarks', 'Bookmark', row.get('system'), row.get('title') or row.get('kind') or 'Bookmark', ' · '.join(filter(None, (str(row.get('priority') or ''), ', '.join(row.get('tags') or [])))), position=row.get('position'), bookmark_id=row.get('id'))
+            add('Bookmarks', 'Bookmark', row.get('system'), row.get('title') or row.get('kind') or 'Bookmark', ' · '.join(filter(None, (PLACE_KINDS.get(str(row.get('kind') or ''), ''), str(row.get('body') or ''), 'visited' if row.get('status') == 'visited' else '', ', '.join(row.get('tags') or [])))), position=row.get('position'), bookmark_id=row.get('id'))
         for row in self._annotations:
             add('Annotations', 'Annotation', row.get('system'), row.get('title'), row.get('note') or row.get('category'), position=row.get('position'), annotation_id=row.get('id'), category=row.get('category'), note=row.get('note'))
         manager = getattr(self.app, 'expedition_manager', None)
@@ -263,6 +264,14 @@ class ExpeditionMapView:
         markers = self._build_markers(survey, bookmarks, positions)
         active = manager.active() if manager else None
         active_stats = (active or {}).get('stats') or {}
+        # 5.6.1: the expedition's legs, drawn as its own line on the atlas.
+        legs = []
+        for leg in (active or {}).get('legs') or ():
+            position = _position(leg.get('coords')) or positions.get(str(leg.get('system') or '').casefold())
+            if position is not None:
+                legs.append({'system': _bounded_text(leg.get('system'), 120), 'pos': list(position),
+                             'kind': _bounded_text(leg.get('kind'), 20), 'reached': bool(leg.get('reached'))})
+        start_pos = _position(active_stats.get('start_pos')) or positions.get(str((active or {}).get('start_system') or '').casefold())
         active_systems = [str(value) for value in active_stats.get('systems') or []]
         region = find_region(*current_position) if current_position else None
         total_ly = journey.get('distance_ly', 0.0)
@@ -271,7 +280,7 @@ class ExpeditionMapView:
         commander = _bounded_text(self.config.get('active_commander_name') or getattr(self.app, 'cmdr_name', ''), 120)
         ship = getattr(self.app, 'cmdr_ship', None)
         ship = ship if isinstance(ship, dict) else {}
-        return {'schema': 1, 'generated_at': datetime.now().astimezone().isoformat(timespec='seconds'), 'profile': {'id': profile, 'commander': commander}, 'theme': _theme_payload(), 'reduced_motion': bool(self.config.get('reduced_motion_enabled', False)), 'view_state': self._view_state, 'current': {'system': current_system, 'position': list(current_position) if current_position else None, 'region': {'id': int(region[0]), 'name': str(region[1])} if region else None, 'ship': _bounded_text(ship.get('ship_name') or ship.get('ship_localised') or ship.get('ship'), 100)}, 'summary': {'systems': unique_systems, 'distance_ly': round(total_ly, 1), 'markers': len(markers), 'annotations': len(self._annotations), 'regions': 42, 'journey': journey}, 'session': {'started_epoch': float(getattr(self.app, 'session_start_ts', 0.0) or 0.0)}, 'expedition': {'id': (active or {}).get('id'), 'name': (active or {}).get('name'), 'started': (active or {}).get('started'), 'start_system': (active or {}).get('start_system'), 'systems': active_systems} if active else None, 'route': route, 'planned': planned, 'route_context': {key: planned_context.get(key) for key in ('on_route', 'off_route', 'nearest_system', 'nearest_distance_ly', 'next_system', 'remaining')}, 'markers': markers, 'annotations': self._annotations, 'focus_request': self._focus_request, 'recorder_request': getattr(self.app, '_recorder_request', None)}
+        return {'schema': 1, 'generated_at': datetime.now().astimezone().isoformat(timespec='seconds'), 'profile': {'id': profile, 'commander': commander}, 'theme': _theme_payload(), 'reduced_motion': bool(self.config.get('reduced_motion_enabled', False)), 'view_state': self._view_state, 'current': {'system': current_system, 'position': list(current_position) if current_position else None, 'region': {'id': int(region[0]), 'name': str(region[1])} if region else None, 'ship': _bounded_text(ship.get('ship_name') or ship.get('ship_localised') or ship.get('ship'), 100)}, 'summary': {'systems': unique_systems, 'distance_ly': round(total_ly, 1), 'markers': len(markers), 'annotations': len(self._annotations), 'regions': 42, 'journey': journey}, 'session': {'started_epoch': float(getattr(self.app, 'session_start_ts', 0.0) or 0.0)}, 'expedition': {'id': (active or {}).get('id'), 'name': (active or {}).get('name'), 'started': (active or {}).get('started'), 'start_system': (active or {}).get('start_system'), 'systems': active_systems, 'legs': legs, 'start_pos': list(start_pos) if start_pos else None} if active else None, 'route': route, 'planned': planned, 'route_context': {key: planned_context.get(key) for key in ('on_route', 'off_route', 'nearest_system', 'nearest_distance_ly', 'next_system', 'remaining')}, 'markers': markers, 'annotations': self._annotations, 'focus_request': self._focus_request, 'recorder_request': getattr(self.app, '_recorder_request', None)}
 
     def _journey(self, survey_route):
         """The whole journey from the travel history, as the atlas draws it.

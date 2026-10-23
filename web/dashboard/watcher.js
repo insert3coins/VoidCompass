@@ -55,77 +55,112 @@ function tips(root) {
   window.addEventListener("scroll", hide, true);
 }
 
+// 5.6.1: laid out again now there's so much more of it. NOW is the eye and
+// what's live (a question, how it feels, where it wants to go); STORY the
+// four books and the echoes; YOU what it has gathered of you; SAID every
+// word; then its settings and its voice.
+const panel = (title, body, note = "", extra = "") =>
+  `<section class="watcher-card ${extra}" aria-label="${title}"><header><span>${title}</span><b${note ? ` id="${note}"` : ""}></b></header>${body}</section>`;
+
 function shell(root, ui) {
   root.classList.remove("loading-panel");
   root.innerHTML = `<nav class="watcher-tabs" role="tablist" aria-label="The Watcher">
-    <button type="button" role="tab" data-watcher-tab="overview">THE WATCHER</button>
+    <button type="button" role="tab" data-watcher-tab="now">NOW<b id="watcher-now-badge"></b></button>
+    <button type="button" role="tab" data-watcher-tab="story">STORY</button>
+    <button type="button" role="tab" data-watcher-tab="you">YOU</button>
+    <button type="button" role="tab" data-watcher-tab="said">SAID</button>
     <button type="button" role="tab" data-watcher-tab="settings">SETTINGS</button>
     <button type="button" role="tab" data-watcher-tab="voice">VOICE<b id="watcher-voice-badge"></b></button>
   </nav>
-  <div class="watcher-page" data-watcher-panel="overview">
-    <aside class="watcher-rail">
-      <section class="watcher-eye-panel" aria-label="The Watcher">
-        <div class="watcher-eye"><canvas id="watcher-orb" aria-hidden="true"></canvas></div>
-        <blockquote class="watcher-latest" id="watcher-latest"><span></span><cite></cite></blockquote>
-        <div class="watcher-actions">
-          <button type="button" class="primary" data-ws-page="watcher" data-ws-op="poke" id="watcher-poke">POKE</button>
-          <small id="watcher-hotkey"></small>
-        </div>
-        <dl class="watcher-character" id="watcher-character"></dl>
-      </section>
-      <section class="watcher-talks-panel" aria-label="What it talks about most">
-        <header><span>WHAT IT TALKS ABOUT MOST</span></header>
-        <ol class="watcher-favourites" id="watcher-favourites"></ol>
-      </section>
-      <section class="watcher-echo-panel" aria-label="Echoes">
-        <header><span>ECHOES</span><b id="watcher-echo-count"></b></header>
-        <p class="watcher-note">Things out there that stir a memory of its own.</p>
-        <ul class="watcher-echoes" id="watcher-echoes"></ul>
-      </section>
+  <div class="watcher-page watcher-now" data-watcher-panel="now">
+    <aside class="watcher-eye-panel" aria-label="The Watcher">
+      <div class="watcher-eye"><canvas id="watcher-orb" aria-hidden="true"></canvas></div>
+      <blockquote class="watcher-latest" id="watcher-latest"><span></span><cite></cite></blockquote>
+      <div class="watcher-actions">
+        <button type="button" class="primary" data-ws-page="watcher" data-ws-op="poke" id="watcher-poke">POKE</button>
+        <small id="watcher-hotkey"></small>
+      </div>
+      <dl class="watcher-character" id="watcher-character"></dl>
     </aside>
-    <div class="watcher-main">
-      <section class="watcher-bond-panel" aria-label="You and the Watcher">
-        <div class="watcher-bond">
-          <header><span>YOU AND THE WATCHER</span><b id="watcher-bond-name"></b></header>
-          <div class="watcher-bond-meter" id="watcher-bond-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i></i></div>
-          <p class="watcher-bond-next" id="watcher-bond-next"></p>
-        </div>
-        <div><header><span>TOGETHER</span></header><div class="watcher-stats" id="watcher-stats"></div></div>
-        <div><header><span>YOUR RECORDS</span><b>FROM YOUR JOURNALS</b></header><div class="watcher-stats" id="watcher-records"></div></div>
+    <div class="watcher-now-main">
+      <section class="watcher-ask" id="watcher-question" aria-live="polite"></section>
+      <section class="watcher-card watcher-bond-panel" aria-label="You and the Watcher">
+        <header><span>YOU AND THE WATCHER</span><b id="watcher-bond-name"></b></header>
+        <div class="watcher-bond-meter" id="watcher-bond-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i></i></div>
+        <p class="watcher-bond-next" id="watcher-bond-next"></p>
+        <div class="watcher-feeling" id="watcher-feeling"></div>
       </section>
-      <section class="watcher-knows-panel" aria-label="What it has watched of you">
-        <header><span>WHAT IT HAS WATCHED OF YOU</span><b id="watcher-knows-style"></b></header>
-        <p class="watcher-note" id="watcher-knows-note"></p>
-        <div class="watcher-stats" id="watcher-knows"></div>
-      </section>
-      <section class="watcher-lore-panel" aria-label="Its long story">
-        <header><span>THE LONG STORY · WHAT IT REMEMBERS</span><b id="watcher-lore-count"></b></header>
-        <div class="watcher-story">
-          <nav class="watcher-chapters" id="watcher-lore" aria-label="Chapters"></nav>
-          <article class="watcher-reader" id="watcher-reader" aria-live="polite"></article>
-        </div>
-        <p class="watcher-lore-next" id="watcher-lore-next"></p>
-        <div class="watcher-books" id="watcher-books"></div>
-      </section>
-      <section class="watcher-log-panel" aria-label="What it has said">
-        <header><span>WHAT IT HAS SAID</span><b id="watcher-log-count"></b></header>
-        <ol class="watcher-log" id="watcher-log"></ol>
-      </section>
-      <section class="watcher-reset-panel" aria-label="Reset the Watcher">
-        <div class="watcher-reset-intro"><b>Start again</b><span>Make it forget you, and wake as it did the first time.</span>
-          <button type="button" id="watcher-reset">RESET THE WATCHER</button></div>
-        <div class="watcher-reset-confirm" id="watcher-reset-confirm" hidden role="alertdialog" aria-labelledby="watcher-reset-title">
-          <b id="watcher-reset-title">ARE YOU SURE?</b>
-          <p>It forgets <em>everything</em>: its whole story, all three books, every echo you found, all it has said, the
-            postcards it kept, your records with it, and every hour and session you've spent together. It will meet you
-            again as a stranger. Your achievements stay. A copy of its old memory is kept beside the new one, just in case.</p>
-          <div class="watcher-reset-actions">
-            <button type="button" class="danger" id="watcher-reset-yes" disabled>YES, FORGET EVERYTHING</button>
-            <button type="button" id="watcher-reset-no">KEEP IT</button>
-          </div>
-        </div>
+      <div class="watcher-pair">
+        <section class="watcher-card watcher-now-story" aria-label="Its story, now">
+          <header><span>ITS STORY</span><b id="watcher-now-count"></b></header>
+          <div id="watcher-now-story"></div>
+          <button type="button" class="watcher-go" data-watcher-go="story">READ THE STORY</button>
+        </section>
+        <section class="watcher-card watcher-wish" id="watcher-wish" aria-label="Where it wants to go"></section>
+      </div>
+      <section class="watcher-card" aria-label="Lately">
+        <header><span>BEFORE THAT</span><b></b></header>
+        <ol class="watcher-log watcher-lately" id="watcher-lately"></ol>
+        <button type="button" class="watcher-go" data-watcher-go="said">EVERYTHING IT HAS SAID</button>
       </section>
     </div>
+  </div>
+  <div class="watcher-page watcher-story-page" data-watcher-panel="story" hidden>
+    <section class="watcher-card watcher-lore-panel" aria-label="Its long story">
+      <header><span>THE LONG STORY · WHAT IT REMEMBERS</span><b id="watcher-lore-count"></b></header>
+      <div class="watcher-story">
+        <nav class="watcher-chapters" id="watcher-lore" aria-label="Chapters"></nav>
+        <article class="watcher-reader" id="watcher-reader" aria-live="polite"></article>
+      </div>
+      <p class="watcher-lore-next" id="watcher-lore-next"></p>
+      <div class="watcher-books" id="watcher-books"></div>
+    </section>
+    <aside class="watcher-side">
+      <section class="watcher-card watcher-road" id="watcher-road" aria-label="Its road"></section>
+      ${panel("ECHOES", `<p class="watcher-note">Things out there that stir a memory of its own. Hover one to see how to find it.</p>
+        <ul class="watcher-echoes" id="watcher-echoes"></ul>`, "watcher-echo-count")}
+      ${panel("KEEP IT", `<p class="watcher-note">The story on your road, what it remembers, your answers and its dreams, saved as a book in the Wrapped folder.</p>
+        <div class="watcher-buttons"><button type="button" data-watcher-code="book">SAVE AS A BOOK</button></div>`)}
+    </aside>
+  </div>
+  <div class="watcher-page watcher-you" data-watcher-panel="you" hidden>
+    <section class="watcher-card watcher-wide" aria-label="Together">
+      <div class="watcher-two">
+        <div><header><span>TOGETHER</span><b></b></header><div class="watcher-stats" id="watcher-stats"></div></div>
+        <div><header><span>YOUR RECORDS</span><b>FROM YOUR JOURNALS</b></header><div class="watcher-stats" id="watcher-records"></div></div>
+      </div>
+    </section>
+    ${panel("WHAT IT HAS WATCHED OF YOU", `<p class="watcher-note" id="watcher-knows-note"></p>
+      <div class="watcher-stats" id="watcher-knows"></div>`, "watcher-knows-style", "watcher-wide watcher-knows-panel")}
+    ${panel("WHAT IT REMEMBERS OF YOU", `<ol class="watcher-log watcher-short" id="watcher-memories"></ol>`, "watcher-memories-count")}
+    ${panel("WHAT YOU TOLD IT", `<ol class="watcher-log watcher-short" id="watcher-answers"></ol>`, "watcher-answers-count")}
+    ${panel("ITS DREAMS", `<ol class="watcher-log watcher-short" id="watcher-dreams"></ol>`, "watcher-dreams-count")}
+    ${panel("WHAT IT TALKS ABOUT MOST", `<ol class="watcher-favourites" id="watcher-favourites"></ol>`)}
+    ${panel("OTHER WATCHERS", `<p class="watcher-note">Share your Watcher's code (paste it in Discord or a message). A friend's code lets yours hear theirs.</p>
+      <div class="watcher-meet"><textarea id="watcher-code" rows="2" placeholder="Paste a friend's VCWATCH1 code" spellcheck="false"></textarea>
+        <div class="watcher-buttons"><button type="button" class="primary" data-watcher-code="meet">MEET IT</button>
+        <button type="button" data-watcher-code="copy">COPY MY WATCHER'S CODE</button></div></div>
+      <ol class="watcher-log watcher-short" id="watcher-met"></ol>`, "", "watcher-wide")}
+  </div>
+  <div class="watcher-page watcher-said" data-watcher-panel="said" hidden>
+    <section class="watcher-card watcher-log-panel" aria-label="What it has said">
+      <header><span>WHAT IT HAS SAID</span><b id="watcher-log-count"></b></header>
+      <ol class="watcher-log" id="watcher-log"></ol>
+    </section>
+    <section class="watcher-reset-panel" aria-label="Reset the Watcher">
+      <div class="watcher-reset-intro"><b>Start again</b><span>Make it forget you, and wake as it did the first time.</span>
+        <button type="button" id="watcher-reset">RESET THE WATCHER</button></div>
+      <div class="watcher-reset-confirm" id="watcher-reset-confirm" hidden role="alertdialog" aria-labelledby="watcher-reset-title">
+        <b id="watcher-reset-title">ARE YOU SURE?</b>
+        <p>It forgets <em>everything</em>: its whole story, all four books, every echo you found, all it has said, your
+          answers, its dreams, the postcards it kept, your records with it, and every hour and session you've spent together. It will meet you
+          again as a stranger. Your achievements stay. A copy of its old memory is kept beside the new one, just in case.</p>
+        <div class="watcher-reset-actions">
+          <button type="button" class="danger" id="watcher-reset-yes" disabled>YES, FORGET EVERYTHING</button>
+          <button type="button" id="watcher-reset-no">KEEP IT</button>
+        </div>
+      </div>
+    </section>
   </div>
   <div class="watcher-subpage" data-watcher-panel="settings" hidden>${settingsPanel()}</div>
   <div class="watcher-subpage" data-watcher-panel="voice" hidden>${voicePanel()}</div>`;
@@ -133,6 +168,32 @@ function shell(root, ui) {
   wireTabs(root);
   wireSettings(root, ui);
   wireVoice(root, ui);
+  // Answers, the code and the book, wherever they sit.
+  root.addEventListener("click", async (event) => {
+    const go = event.target.closest("[data-watcher-go]");
+    if (go) {
+      showTab(root, go.dataset.watcherGo);
+      root.scrollIntoView({block: "start"});
+      return;
+    }
+    const answer = event.target.closest("[data-watcher-answer]");
+    if (answer) {
+      answer.disabled = true;
+      await ui.command("workspace", {page: "watcher", operation: "answer", answer: answer.dataset.watcherAnswer});
+      return;
+    }
+    const action = event.target.closest("[data-watcher-code]")?.dataset.watcherCode;
+    const box = ui.byId("watcher-code");
+    if (action === "copy") {
+      ui.showToast(await ui.command("workspace", {page: "watcher", operation: "copy_code"}) ? "Your Watcher's code is on the clipboard" : "It couldn't be copied");
+    } else if (action === "meet") {
+      const done = await ui.command("workspace", {page: "watcher", operation: "meet", code: box.value});
+      ui.showToast(done ? "It met them" : "That isn't a Watcher's code");
+      if (done) box.value = "";
+    } else if (action === "book") {
+      ui.showToast(await ui.command("workspace", {page: "watcher", operation: "save_book"}) ? "Saved in the Wrapped folder" : "It couldn't be saved");
+    }
+  });
   const canvas = root.querySelector("#watcher-orb");
   if (window.HeartbeatOrb && canvas) {
     orb?.dispose?.();
@@ -236,8 +297,12 @@ function renderLore(lore, ui) {
   if (key === lastLoreKey) return;
   lastLoreKey = key;
   loreChapters = chapters;
-  // Book One until its end; then both books (5.5.3.5); then all three (5.5.3.9).
-  const total = lore.book_three ? lore.total : lore.afterword ? (lore.book_two_total || lore.total) : (lore.book_one_total || lore.total);
+  // Book One until its end; then both books (5.5.3.5); then all three (5.5.3.9);
+  // Book Four counts only your road's chapters (5.6.1).
+  const told = (book) => chapters.filter((chapter) => chapter.book === book).reduce((sum, chapter) => sum + chapter.total, 0);
+  const total = lore.book_four ? (lore.book_two_total || 0) + told(3) + told(4)
+    : lore.book_three ? (lore.book_two_total || 0) + told(3)
+    : lore.afterword ? (lore.book_two_total || lore.total) : (lore.book_one_total || lore.total);
   ui.byId("watcher-lore-count").textContent = `${ui.numeric(lore.told)} OF ${ui.numeric(total)} TOLD`;
   let html = "";
   chapters.forEach((chapter, index) => {
@@ -246,6 +311,10 @@ function renderLore(lore, ui) {
     }
     if (chapter.book === 3 && (index === 0 || chapters[index - 1].book !== 3)) {
       html += `<div class="watcher-book-head book-three"><span>BOOK THREE</span><b>WHAT WAS PUT THERE</b><small>It unfolds slowly: weeks between chapters, days between passages.</small></div>`;
+    }
+    if (chapter.book === 4 && (index === 0 || chapters[index - 1].book !== 4)) {
+      const taken = lore.road === "shut" ? "Your road: the shutter drawn." : lore.road === "open" ? "Your road: the eye open." : "It waits for your answer about the shutter.";
+      html += `<div class="watcher-book-head book-four"><span>BOOK FOUR</span><b>THE ROAD TAKEN</b><small>${taken}</small></div>`;
     }
     if (!chapter.begun) {
       // What it still waits for, on hover (5.5.3.9).
@@ -272,9 +341,11 @@ function renderLore(lore, ui) {
     const value = Math.ceil(Number(row?.days || 0));
     return value > 0 ? `${value} day${value === 1 ? "" : "s"}` : "";
   };
-  let line = lore.book_three
-    ? "That's all three books. It still watches you. Only it, now. So it says."
-    : "That's the whole story, both books of it. Someone answered. So it says.";
+  let line = lore.road
+    ? "That's all four books, on the road you chose. It still watches you. So it says."
+    : lore.book_three
+      ? "That's all three books. It still watches you. Only it, now. So it says."
+      : "That's the whole story, both books of it. Someone answered. So it says.";
   if (!lore.told) {
     line = "It hasn't told you anything about itself yet. It might, in time. Nobody knows what it is, itself included.";
     if (next && !next.ready && until(next)) line += ` The first may surface after ${until(next)} together.`;
@@ -288,6 +359,14 @@ function renderLore(lore, ui) {
     line = until(next) ? `More may surface after ${until(next)} together.` : "More will surface soon.";
   }
   ui.byId("watcher-lore-next").textContent = line;
+  // The NOW tab's glance at it: the chapter it's on, and what comes next.
+  const current = chapters.filter((chapter) => chapter.begun).pop();
+  ui.byId("watcher-now-count").textContent = ui.byId("watcher-lore-count").textContent;
+  ui.byId("watcher-now-story").innerHTML = current
+    ? `<p class="watcher-now-chapter"><span>${ui.escapeHtml(current.numeral)}</span><b>${ui.escapeHtml(current.title)}</b><em>${chapterStatus(current, ui)}</em></p>
+      ${current.told.length ? `<p class="watcher-now-passage">${ui.escapeHtml(current.told[current.told.length - 1].text)}</p>` : ""}
+      <p class="watcher-note">${ui.escapeHtml(line)}</p>`
+    : `<p class="watcher-note">${ui.escapeHtml(line)}</p>`;
   // The keepsake: each finished book, to read as a whole.
   ui.byId("watcher-books").innerHTML = books.map((book) => `<details class="watcher-book">
       <summary><span>READ THE WHOLE STORY</span><b>BOOK ${ui.escapeHtml(book.name.toUpperCase())} · ${ui.escapeHtml(book.title.toUpperCase())}</b></summary>
@@ -369,6 +448,7 @@ export function renderWatcher(data = {}, ui) {
     : `<li class="empty">Nothing yet. It's been quiet.</li>`;
 
   renderLore(data.lore || {}, ui);
+  renderDeeper(data.deeper || {}, data.lore || {}, ui);
   renderKnows(data.habits || {}, ui);
   renderSettings(data.settings || {}, ui);
   renderVoice(data.voice || {}, ui);
@@ -380,10 +460,86 @@ export function renderWatcher(data = {}, ui) {
   const key = JSON.stringify(log.slice(0, 3).map((row) => [row.at, row.text]).concat([log.length]));
   if (key !== lastLogKey) {
     lastLogKey = key;
-    ui.byId("watcher-log").innerHTML = log.length
-      ? log.map((row) => `<li data-mood="${ui.escapeHtml(row.mood || "")}" data-kind="${ui.escapeHtml(row.kind || "")}"><time>${ui.escapeHtml(ago(row.at))}</time><p>${row.heading ? `<small>${ui.escapeHtml(row.heading)}</small>` : ""}${ui.escapeHtml(row.text)}</p>${row.mood ? `<b>${MOOD_LABELS[row.mood] || ""}</b>` : ""}</li>`).join("")
+    const line = (row) => `<li data-mood="${ui.escapeHtml(row.mood || "")}" data-kind="${ui.escapeHtml(row.kind || "")}"><time>${ui.escapeHtml(ago(row.at))}</time><p>${row.heading ? `<small>${ui.escapeHtml(row.heading)}</small>` : ""}${ui.escapeHtml(row.text)}</p>${row.mood ? `<b>${MOOD_LABELS[row.mood] || ""}</b>` : ""}</li>`;
+    ui.byId("watcher-log").innerHTML = log.length ? log.map(line).join("")
       : `<li class="empty">Its thoughts will be kept here as it shares them.</li>`;
+    ui.byId("watcher-lately").innerHTML = log.length > 1 ? log.slice(1, 6).map(line).join("")
+      : `<li class="empty">Only that, so far.</li>`;
   }
+}
+
+// ---------------------------------------------------------------------------
+// 5.6.1: what the deeper Watcher adds. Its question and how it feels about
+// you (NOW), the road Book Four took (STORY), and what it keeps of you: its
+// memories (faded where the shutter took them), your answers, its dreams,
+// the other Watchers it has met (YOU).
+
+const ROADS = {
+  shut: ["ITS EYE CLOSED", "You chose the shutter. It keeps less of what it sees, and it says that's a mercy."],
+  open: ["LOOKING BACK", "You chose to open the eye. Something out there looks at it, and it looks back."],
+};
+const drawn = new Map();
+
+// Redrawn only when it changes, so a button under the pointer stays put.
+function fill(ui, id, html) {
+  const host = ui.byId(id);
+  if (!host || drawn.get(id) === html) return;
+  drawn.set(id, html);
+  host.innerHTML = html;
+}
+
+function rows(ui, list, empty, body) {
+  return list.length ? list.map((row) => `<li${row.faded ? ' class="faded"' : ""}><time>${ui.escapeHtml(ago(row.at))}</time><p>${body(row)}</p></li>`).join("")
+    : `<li class="empty">${empty}</li>`;
+}
+
+function renderDeeper(deeper, lore, ui) {
+  const esc = ui.escapeHtml;
+  const question = deeper.question;
+  ui.byId("watcher-now-badge").textContent = question ? " ●" : "";
+  const keys = deeper.hotkeys || [];
+  const asking = ui.byId("watcher-question");
+  asking.classList.toggle("asking", Boolean(question));
+  fill(ui, "watcher-question", question
+    ? `<header><span>IT ASKS YOU</span><b>ANSWER HERE, OR WITH YOUR ANSWER KEYS IN GAME</b></header>
+      <p class="watcher-question">${esc(question.text)}</p>
+      <div class="watcher-answers">${question.answers.map((answer, index) => `<button type="button" class="watcher-answer" data-watcher-answer="${esc(answer.key)}">
+        <b>${esc(answer.label)}</b>${keys[index] ? `<kbd>${esc(keys[index])}</kbd>` : ""}</button>`).join("")}</div>`
+    : `<header><span>NOTHING ASKED</span><b></b></header>
+      <p class="watcher-note">Now and then it asks you something, in the cockpit and here. It remembers what you say. Bind its answer keys in Settings › Hotkeys to answer without leaving the game.</p>`);
+
+  const feeling = deeper.feeling || {};
+  const trust = Math.max(0, Math.min(100, Number(feeling.trust_value) || 0));
+  const road = ROADS[deeper.road];
+  fill(ui, "watcher-feeling", `<div><span>TRUST</span><b>${esc(feeling.trust || "—")}</b><i class="watcher-gauge" style="--fill:${trust}%"></i></div>
+    <div><span>MOOD LATELY</span><b>${esc(feeling.mood || "—")}</b><i class="watcher-gauge mood-${esc(feeling.mood || "")}" style="--fill:${Math.round(50 + 50 * Math.max(-1, Math.min(1, Number(feeling.mood_value) || 0)))}%"></i></div>
+    <div><span>ITS ROAD</span><b>${road ? road[0].toLowerCase() : lore.book_four ? "still deciding" : "not yet"}</b><small>${lore.book_four ? "Book Four" : "after Book Three"}</small></div>`);
+
+  const wish = deeper.pilgrimage;
+  const wishState = wish ? (wish.reached ? ["TAKEN THERE", "done"] : wish.accepted ? ["YOU SAID YOU WOULD", "promised"] : ["NOT ANSWERED", ""]) : null;
+  fill(ui, "watcher-wish", `<header><span>WHERE IT WANTS TO GO</span><b class="${wishState ? wishState[1] : ""}">${wishState ? wishState[0] : ""}</b></header>
+    ${wish ? `<p class="watcher-wish-place">${esc(wish.words)}</p><p class="watcher-note">${esc(wish.how)}.</p>
+      ${wish.reached ? "" : `<div class="watcher-buttons"><button type="button" data-page="mission">PLAN IT AS AN EXPEDITION</button></div>`}`
+      : `<p class="watcher-note">Nowhere it has asked for, yet. Later in its story it may ask you to take it somewhere: a black hole, the core, the edge. An expedition can make it an objective.</p>`}`);
+
+  fill(ui, "watcher-road", road
+    ? `<header><span>ITS ROAD</span><b>${road[0]}</b></header><p class="watcher-note">${road[1]}</p>
+      ${lore.other_road ? `<p class="watcher-note">There was another road. It doesn't talk about it.</p>` : ""}`
+    : `<header><span>ITS ROAD</span><b>${lore.book_four ? "UNDECIDED" : ""}</b></header>
+      <p class="watcher-note">${lore.book_four ? "Book Four waits for your answer about the shutter. It will ask you." : "After its third book, it will ask you something, and the story will go one of two ways."}</p>`);
+
+  const memories = deeper.memories || [];
+  const answers = deeper.answers || [];
+  const dreams = deeper.dreams || [];
+  const met = deeper.met || [];
+  ui.byId("watcher-memories-count").textContent = memories.length ? `${ui.numeric(memories.length)} KEPT` : "";
+  ui.byId("watcher-answers-count").textContent = answers.length ? `${ui.numeric(answers.length)} ASKED` : "";
+  ui.byId("watcher-dreams-count").textContent = dreams.length ? `${ui.numeric(dreams.length)}` : "";
+  fill(ui, "watcher-memories", rows(ui, memories, "Moments it keeps: first finds, ships lost, the commanders you flew with. Weeks later it brings them up.", (row) => esc(row.text)));
+  fill(ui, "watcher-answers", rows(ui, answers, "Your answers, kept. It brings them back.",
+    (row) => `<small>${esc(row.asked)}</small>${row.unanswered ? "<em>You didn't answer.</em>" : esc(row.answer)}`));
+  fill(ui, "watcher-dreams", rows(ui, dreams, "When you log off, it dreams. They're written down here.", (row) => esc(row.text)));
+  fill(ui, "watcher-met", met.length ? rows(ui, met, "", (row) => `<small>${esc(row.name || "A commander")}'s Watcher</small>${esc(row.nature || "")}${row.chapter ? `, at chapter ${esc(row.chapter)}` : ""}${row.road ? ` · ${row.road === "open" ? "looking back" : "eye closed"}` : ""}`) : "");
 }
 
 // ---------------------------------------------------------------------------
@@ -405,11 +561,14 @@ function renderKnows(habits, ui) {
   ui.byId("watcher-knows").innerHTML = facts.map((row) => stat(ui, row.label, row.value)).join("");
 }
 
-let watcherTab = "overview";
-try { watcherTab = window.localStorage.getItem("voidcompass.watcherTab") || "overview"; } catch (_error) { /* private */ }
+// The tabs before 5.6.1, to the ones that took their place.
+const OLD_TABS = {overview: "now", together: "you"};
+let watcherTab = "now";
+try { watcherTab = window.localStorage.getItem("voidcompass.watcherTab") || "now"; } catch (_error) { /* private */ }
 
 function showTab(root, tab) {
-  watcherTab = ["overview", "settings", "voice"].includes(tab) ? tab : "overview";
+  tab = OLD_TABS[tab] || tab;
+  watcherTab = ["now", "story", "you", "said", "settings", "voice"].includes(tab) ? tab : "now";
   root.querySelectorAll("[data-watcher-panel]").forEach((panel) => { panel.hidden = panel.dataset.watcherPanel !== watcherTab; });
   root.querySelectorAll("[data-watcher-tab]").forEach((button) => {
     button.setAttribute("aria-selected", button.dataset.watcherTab === watcherTab ? "true" : "false");

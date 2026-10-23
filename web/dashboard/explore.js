@@ -1,9 +1,14 @@
 /** Explore & Survey: one live system model and three task views.
  *
- *   01 SYSTEM     survey board, next target and the live orrery
- *   02 ROUTE      Elite NavRoute, saved waypoints and Spansh neutron plots
- *   03 PROSPECTS  Return Later, Exploration Scout and personal Codex gaps
- *   04 ARCHIVE    the Exploration Archive: flights, scan science, regions (5.5.4)
+ *   SURVEY     the system you're in: its hero, the survey board and the orrery
+ *   PROSPECTS  Return Later, Exploration Scout and personal Codex gaps
+ *   ARCHIVE    the Exploration Archive: flights, scan science, regions (5.5.4)
+ *
+ * 5.6.1: the page in the newer pages' style. The route (NavRoute, waypoints and
+ * the neutron plotter) lives on the Expeditions page now; a slim next-waypoint
+ * line stays in the hero. The board ranks like the Survey overlay and the Nav
+ * HUD (biology still to do, then geology and mining, then value), with a sort
+ * switch, and a picked body opens its details in place.
  *
  * Each view fills the window and scrolls its own lists, so no control sits
  * below the fold. The survey board is fed by the live snapshot, so every
@@ -13,18 +18,18 @@
  */
 
 const VIEWS = [
-  {id: "system", index: "01", label: "System survey", idle: "AWAITING SYSTEM"},
-  {id: "route", index: "02", label: "Route & waypoints", idle: "NO ROUTE"},
-  {id: "prospects", index: "03", label: "Prospects", idle: "NOTHING PENDING"},
+  {id: "system", label: "SURVEY", idle: ""},
+  {id: "prospects", label: "PROSPECTS", idle: ""},
   // 5.5.4: the Exploration Archive, merged in.
-  {id: "archive", index: "04", label: "Archive", idle: "FLIGHTS & SCIENCE"},
+  {id: "archive", label: "ARCHIVE", idle: ""},
 ];
 const VIEW_IDS = VIEWS.map((view) => view.id);
 const FILTERS = [["all", "ALL"], ["todo", "TO DO"], ["bio", "BIOLOGY"], ["done", "DONE"]];
 const FILTER_IDS = FILTERS.map(([id]) => id);
-// The schematic strip pictures the first bodies only. The board below always
-// lists every body, and the strip says how many it has not pictured.
-const STRIP_LIMIT = 18;
+// How the board ranks the bodies still to survey (5.6.1). BIO FIRST is the
+// Survey overlay's and the Nav HUD's order.
+const SORTS = [["bio", "BIO FIRST"], ["value", "VALUE"], ["distance", "DISTANCE"]];
+const SORT_IDS = SORTS.map(([id]) => id);
 const STATUS = {
   targeted: ["⌖", "ELITE TARGET"], pinned: ["◆", "PINNED"], pending: ["●", "TO DO"],
   awaiting: ["○", "AWAITING DETAILED SCAN"], listed: ["·", "SURVEY RECORD"],
@@ -32,7 +37,8 @@ const STATUS = {
 };
 const RANK = {targeted: 0, pinned: 1, pending: 2, awaiting: 3, listed: 3, skipped: 4, complete: 5, known: 6};
 
-let prefs = {profile: null, view: "system", filter: "all"};
+let prefs = {profile: null, view: "system", filter: "all", sort: "bio"};
+let uiRef = null;
 let selection = null;
 let boardFingerprint = "";
 let boardSystem = "";
@@ -61,8 +67,10 @@ function loadPrefs(ui) {
   }
   prefs = {
     profile,
+    // The old ROUTE view is on the Expeditions page now.
     view: VIEW_IDS.includes(saved.view) ? saved.view : "system",
     filter: FILTER_IDS.includes(saved.filter) ? saved.filter : "all",
+    sort: SORT_IDS.includes(saved.sort) ? saved.sort : "bio",
   };
   return prefs;
 }
@@ -70,7 +78,7 @@ function loadPrefs(ui) {
 function savePrefs() {
   try {
     localStorage.setItem(`voidcompass.explore.view.${prefs.profile}`,
-      JSON.stringify({view: prefs.view, filter: prefs.filter}));
+      JSON.stringify({view: prefs.view, filter: prefs.filter, sort: prefs.sort}));
   } catch (_error) { /* The remembered view is a convenience only. */ }
 }
 
@@ -79,40 +87,41 @@ function pending(title, detail) {
 }
 
 function skeletonMarkup() {
-  const tabs = VIEWS.map((view) => `<button type="button" role="tab" id="explore-tab-${view.id}" data-explore-view="${view.id}" aria-controls="explore-view-${view.id}" aria-selected="false" tabindex="-1"><i>${view.index}</i><span>${view.label}<small id="explore-tab-${view.id}-meta">${view.idle}</small></span></button>`).join("");
+  const tabs = VIEWS.map((view) => `<button type="button" role="tab" id="explore-tab-${view.id}" data-explore-view="${view.id}" aria-controls="explore-view-${view.id}" aria-selected="false" tabindex="-1">${view.label}<small id="explore-tab-${view.id}-meta"></small></button>`).join("");
   const filters = FILTERS.map(([id, label]) => `<button type="button" data-explore-filter="${id}" aria-pressed="false">${label}<b data-filter-count="${id}">0</b></button>`).join("");
-  return `<nav class="explore-views" role="tablist" aria-label="Explore and survey views">${tabs}
-      <div class="explore-readouts"><span><small>CARTOGRAPHY</small><b id="intel-carto">0 CR</b></span><span class="readout-bio"><small id="intel-bio-label">EXOBIOLOGY</small><b id="intel-bio">0 CR</b></span><span class="readout-region"><small>REGION</small><b id="explore-region">UNKNOWN</b></span></div>
-    </nav>
+  const sorts = SORTS.map(([id, label]) => `<button type="button" data-explore-sort="${id}" aria-pressed="false">${label}</button>`).join("");
+  return `<section class="explore-hero" aria-label="This system">
+      <div class="explore-star" aria-hidden="true"><i></i></div>
+      <div class="explore-identity">
+        <small><b id="workboard-badge">LIVE</b><span id="workboard-class">PRIMARY STAR · CLASS UNKNOWN</span><span class="explore-hero-region">REGION <b id="explore-region">UNKNOWN</b></span></small>
+        <strong id="workboard-system">NO SYSTEM DATA</strong>
+        <span class="explore-next"><small>NEXT WAYPOINT</small><b id="explore-next-waypoint">—</b><button type="button" data-ws-page="explore" data-ws-op="copy_next" id="explore-copy-next" disabled>COPY</button><button type="button" data-page="mission" title="The route, the waypoints and the neutron plotter are on the Expeditions page">ROUTE ›</button></span>
+      </div>
+      <div class="explore-hero-figures">
+        <div class="explore-fss"><small>FSS</small><b id="workboard-count">0 / ? BODIES</b><i aria-hidden="true"><em id="explore-fss-fill"></em></i><span id="workboard-percent">—</span></div>
+        <div><small>BIOLOGY</small><b id="explore-bio">0 / 0</b></div>
+        <div><small>GEOLOGY</small><b id="explore-geo">0</b></div>
+        <div><small>CARTOGRAPHY</small><b id="intel-carto">0 CR</b></div>
+        <div class="readout-bio"><small id="intel-bio-label">EXOBIOLOGY</small><b id="intel-bio">0 CR</b></div>
+        <div title="Bodies here with biology you've never logged in your Codex, or not in this region"><small>CODEX TARGETS</small><b id="explore-codex">0</b></div>
+        <div title="Landable bodies nobody has walked on yet"><small>FIRST FOOTFALL</small><b id="explore-footfall">0</b></div>
+        <div class="explore-traffic"><small>EDSM TRAFFIC</small><b id="explore-traffic">—</b></div>
+      </div>
+      <a class="explore-expedition" id="explore-expedition" data-page="mission" href="#" hidden><small>EXPEDITION <b id="expedition-badge">ACTIVE</b></small><strong id="expedition-name"></strong><span id="expedition-detail"></span><i aria-hidden="true"><em id="expedition-progress"></em></i><span id="expedition-progress-label">0 / 0</span></a>
+    </section>
+    <nav class="co-tabs explore-views" role="tablist" aria-label="Explore and survey views">${tabs}</nav>
     <section class="explore-view" role="tabpanel" id="explore-view-system" data-explore-panel="system" aria-labelledby="explore-tab-system">
-      <header class="explore-band">
-        <div class="explore-star" aria-hidden="true"><i></i></div>
-        <div class="explore-identity"><small><b id="workboard-badge">LIVE</b><span id="workboard-class">PRIMARY STAR · CLASS UNKNOWN</span></small><strong id="workboard-system">NO SYSTEM DATA</strong></div>
-        <div class="explore-progress">
-          <div class="explore-fss"><small>FSS</small><b id="workboard-count">0 / ? BODIES</b><i aria-hidden="true"><em id="explore-fss-fill"></em></i><span id="workboard-percent">—</span></div>
-          <div><small>BIOLOGY</small><b id="explore-bio">0 / 0</b></div>
-          <div><small>GEOLOGY</small><b id="explore-geo">0</b></div>
-          <div class="explore-traffic"><small>EDSM TRAFFIC</small><b id="explore-traffic">—</b></div>
-        </div>
-        <div id="workboard-orbits" class="workboard-orbits" aria-label="System body schematic"></div>
-      </header>
       <div class="explore-system-grid">
         <section class="explore-board" aria-labelledby="explore-board-title">
-          <header class="explore-board-head"><div><small>SURVEY BOARD</small><h3 id="explore-board-title">Bodies by priority</h3></div><div class="explore-filters" role="group" aria-label="Filter the survey board">${filters}</div></header>
+          <header class="explore-board-head"><div><small>SURVEY BOARD</small><h3 id="explore-board-title">Bodies by priority</h3></div>
+            <div class="explore-filters" role="group" aria-label="Filter the survey board">${filters}</div>
+            <div class="explore-filters explore-sorts" role="group" aria-label="Sort the survey board">${sorts}</div></header>
           <div id="body-workboard" class="explore-board-list" role="list" aria-label="Surveyed system bodies" tabindex="-1"></div>
           <p class="explore-board-empty" hidden>No bodies match this filter.</p>
-          <footer class="explore-board-foot"><span>Priority, actions and values come from the survey queue; journal completion cannot be reopened.</span><button type="button" id="explore-survey-reset" data-ws-page="explore" data-ws-op="survey_reset" disabled>RESET COMMANDER CHOICES</button></footer>
+          <footer class="explore-board-foot"><span>Click a body for its details. Pinned and targeted bodies stay at the top; then the sort you chose.</span><button type="button" id="explore-survey-reset" data-ws-page="explore" data-ws-op="survey_reset" disabled>RESET COMMANDER CHOICES</button></footer>
         </section>
         <section class="explore-instrument" id="explore-orrery" aria-label="Live system orrery">${pending("LINKING LIVE ORRERY", "The system architecture appears once the survey workspace is ready.")}</section>
       </div>
-    </section>
-    <section class="explore-view" role="tabpanel" id="explore-view-route" data-explore-panel="route" aria-labelledby="explore-tab-route" hidden>
-      <header class="explore-expedition" aria-label="Expedition pulse">
-        <div><small>EXPEDITION <b id="expedition-badge">NO MISSION</b></small><strong id="expedition-name">NO ACTIVE EXPEDITION</strong><span id="expedition-detail">Create or resume a named expedition in Mission Control.</span></div>
-        <div class="explore-expedition-track"><i aria-hidden="true"><em id="expedition-progress"></em></i><span id="expedition-progress-label">0 / 0</span></div>
-        <button type="button" data-command="open" data-target="mission">OPEN MISSION CONTROL</button>
-      </header>
-      <div id="explore-route" class="explore-columns explore-route-grid">${pending("LINKING ROUTE RECORDS", "Elite NavRoute, saved waypoints and neutron plots load with the survey workspace.")}</div>
     </section>
     <section class="explore-view" role="tabpanel" id="explore-view-prospects" data-explore-panel="prospects" aria-labelledby="explore-tab-prospects" hidden>
       <div id="explore-prospects" class="explore-columns explore-prospect-grid">${pending("LINKING PROSPECT RECORDS", "Return Later, Exploration Scout and Codex gaps load with the survey workspace.")}</div>
@@ -131,11 +140,28 @@ function bind(root, ui) {
       setExploreView(tab.dataset.exploreView, ui);
       return;
     }
+    const sort = event.target.closest("[data-explore-sort]");
+    if (sort) {
+      loadPrefs(ui).sort = SORT_IDS.includes(sort.dataset.exploreSort) ? sort.dataset.exploreSort : "bio";
+      savePrefs();
+      boardFingerprint = "";
+      renderBoard(root, ui);
+      return;
+    }
     const filter = event.target.closest("[data-explore-filter]");
     if (filter) {
       loadPrefs(ui).filter = FILTER_IDS.includes(filter.dataset.exploreFilter) ? filter.dataset.exploreFilter : "all";
       savePrefs();
       applyFilter(root);
+      return;
+    }
+    // 5.6.1: a body kept as one of the expedition's places, or added to its route.
+    const keep = event.target.closest("[data-explore-keep]");
+    if (keep) {
+      ui.command?.("workspace", {page: "mission", operation: "add_place", system: keep.dataset.system, body: keep.dataset.body,
+        title: keep.dataset.body, kind: "planet", route: keep.dataset.exploreKeep === "route"})
+        .then((done) => ui.showToast?.(done ? `${keep.dataset.body}: ${keep.dataset.exploreKeep === "route" ? "added to the expedition's route" : "kept as a place"}`
+          : "Start an expedition first, on the Expeditions page"));
       return;
     }
     const select = event.target.closest("[data-explore-select]");
@@ -166,7 +192,7 @@ function ensureSkeleton(ui) {
   const root = ui.byId("explore-workspace");
   if (!root) return {root: null, created: false};
   bind(root, ui);
-  if (root.querySelector(":scope > .explore-views")) return {root, created: false};
+  if (root.querySelector(":scope > .explore-hero")) return {root, created: false};
   root.classList.remove("loading-panel");
   root.innerHTML = skeletonMarkup();
   boardFingerprint = "";
@@ -215,6 +241,11 @@ function applyFilter(root) {
   }
   const empty = root.querySelector(".explore-board-empty");
   if (empty) empty.hidden = !boardCounts.all || Boolean(boardCounts[filter]);
+  for (const button of root.querySelectorAll("[data-explore-sort]")) {
+    const active = button.dataset.exploreSort === prefs.sort;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
 }
 
 function matchesSelection(row) {
@@ -236,6 +267,20 @@ function markSelection(root, {focus = false, scroll = false} = {}) {
     } else {
       row.removeAttribute("aria-current");
     }
+  }
+  list.querySelector(".body-more")?.remove();
+  if (selected && uiRef) {
+    const more = document.createElement("div");
+    more.className = "body-more";
+    const body = orreryBodyFor({bodyId: selected.dataset.bodyId, name: selected.dataset.bodyName});
+    more.innerHTML = body ? uiRef.orreryDetail(body) : fallbackDetail(selected, uiRef);
+    const name = selected.dataset.bodyName || "";
+    if (name && boardSystem) {
+      const esc = uiRef.escapeHtml;
+      more.insertAdjacentHTML("beforeend", `<div class="body-more-actions"><button type="button" data-explore-keep="place" data-system="${esc(boardSystem)}" data-body="${esc(name)}">+ EXPEDITION PLACE</button>
+        <button type="button" data-explore-keep="route" data-system="${esc(boardSystem)}" data-body="${esc(name)}">+ EXPEDITION ROUTE</button></div>`);
+    }
+    selected.after(more);
   }
   if (focus) (selected || list).focus({preventScroll: true});
   if (selected && (focus || scroll)) {
@@ -282,7 +327,7 @@ export function resetExploreProfile() {
   liveTargetId = "";
   surveyState = null;
   workspaceData = null;
-  prefs = {profile: null, view: "system", filter: "all"};
+  prefs = {profile: null, view: "system", filter: "all", sort: "bio"};
 }
 
 function sameSystem(left, right) {
@@ -330,8 +375,24 @@ function boardModel(ui) {
       rare: rare.get(bodyId) || rare.get(lower(body.name)) || 0,
     };
   });
-  // Priority first (the survey queue's order), then the journal's body order.
-  rows.sort((left, right) => RANK[left.status] - RANK[right.status]
+  // Targeted and pinned stay on top, finished work at the bottom; the bodies
+  // still to survey go in the order chosen (5.6.1). BIO FIRST is the Survey
+  // overlay's: biology still to do, then geology and mining, then value.
+  const group = (status) => (status === "targeted" ? 0 : status === "pinned" ? 1 : ["pending", "awaiting", "listed"].includes(status) ? 2 : RANK[status]);
+  const value = (row) => ui.number(row.queued?.value);
+  const distance = (row) => (row.queued?.distance_ls === null || row.queued?.distance_ls === undefined ? Infinity : ui.number(row.queued.distance_ls));
+  const work = (row) => {
+    const body = row.body;
+    if (ui.number(body.bio_count) > ui.number(body.bio_done)) return 0;
+    return ui.number(body.geo_count) || ui.number(body.mining_count) || body.rhino?.hint ? 1 : 2;
+  };
+  const order = {
+    bio: (left, right) => work(left) - work(right) || value(right) - value(left),
+    value: (left, right) => value(right) - value(left),
+    distance: (left, right) => distance(left) - distance(right),
+  }[prefs.sort] || ((left, right) => value(right) - value(left));
+  rows.sort((left, right) => group(left.status) - group(right.status)
+    || order(left, right)
     || ui.number(right.queued?.score) - ui.number(left.queued?.score)
     || ui.number(left.body.body_id, 9999) - ui.number(right.body.body_id, 9999)
     || left.order - right.order);
@@ -375,6 +436,8 @@ function boardRowMarkup(row, system, ui) {
       ? `<b class="chip rhino" title="${escapeHtml(rhinoTitle(body.rhino))}">${number(body.mining_count) ? `MINE ${number(body.mining_count)}` : "RHINO"}${body.rhino?.hint ? ` · ${escapeHtml(body.rhino.hint.toUpperCase())}` : ""}</b>` : "",
     row.rare ? `<b class="chip rare">RARE ${row.rare}</b>` : "",
     !bio && !geo && body.mapped ? `<b class="chip mapped">MAPPED</b>` : "",
+    body.footfall ? `<b class="chip footfall" title="Nobody has walked on it yet: the first footfall is yours">FOOTFALL</b>` : "",
+    bio && number(body.bio_done) >= bio ? `<b class="chip done">BIO DONE</b>` : "",
     body.archived ? `<b class="chip known">KNOWN</b>` : "",
     ...[["guardian", "GUARDIAN"], ["thargoid", "THARGOID"], ["human", "HUMAN"], ["other", "OTHER"]]
       .filter(([kind]) => number((body.sites || {})[kind]))
@@ -404,7 +467,7 @@ function renderBoard(root, ui) {
   const {system, rows, queue} = boardModel(ui);
   if (selection && !sameSystem(selection.system, system)) selection = null;
   const survey = surveyState?.survey || {};
-  const fingerprint = JSON.stringify([system, rows.map((row) => [row.body, row.queued, row.status, row.next, row.rare]),
+  const fingerprint = JSON.stringify([system, prefs.sort, rows.map((row) => [row.body, row.queued, row.status, row.next, row.rare]),
     survey.archive_loading, survey.total_known, survey.scanned]);
   const reset = root.querySelector("#explore-survey-reset");
   if (reset) {
@@ -470,6 +533,9 @@ function renderBand(root, ui) {
     ? `24H ${visits[0].toLocaleString()} · WK ${visits[1].toLocaleString()} · EVER ${visits[2].toLocaleString()}`
     : "—";
   text("explore-traffic", trafficText);
+  const bodies = Array.isArray(survey.bodies) ? survey.bodies : [];
+  text("explore-codex", String(bodies.filter((body) => CODEX_FLAGS[body.codex]).length));
+  text("explore-footfall", String(bodies.filter((body) => body.footfall).length));
   const trafficCell = root.querySelector(".explore-traffic");
   if (trafficCell) {
     trafficCell.title = traffic.discovered_by
@@ -495,46 +561,14 @@ const CODEX_FLAGS = {
   region: ["⚐", "NEW IN REGION", "Biology here you have not logged in this galactic region"],
 };
 
-function renderStrip(root) {
-  const orbits = root.querySelector("#workboard-orbits");
-  if (!orbits) return;
-  const bodies = Array.isArray(surveyState?.survey?.bodies) ? surveyState.survey.bodies : [];
-  const markers = bodies.slice(0, STRIP_LIMIT).map((row, index) => {
-    const marker = document.createElement("i");
-    marker.className = [
-      "workboard-body-marker", row.priority ? "priority" : "", row.mapped ? "mapped" : "",
-      Number(row.bio_count) ? "bio" : "", Number(row.geo_count) ? "geo" : "", row.landable === true ? "landable" : "",
-    ].filter(Boolean).join(" ");
-    marker.style.setProperty("--body-index", String(index));
-    marker.title = `${row.name || "Unknown body"} · ${row.detail || "Survey record"}`;
-    const label = document.createElement("b");
-    label.textContent = row.body_id > 0 ? String(row.body_id) : String(index + 1);
-    marker.appendChild(label);
-    return marker;
-  });
-  const hidden = Math.max(0, bodies.length - markers.length);
-  if (hidden) {
-    const more = document.createElement("span");
-    more.className = "workboard-more";
-    more.textContent = `+${hidden} MORE`;
-    markers.push(more);
-  }
-  orbits.replaceChildren(...markers);
-  orbits.setAttribute("aria-label", hidden
-    ? `System body schematic: ${markers.length - 1} of ${bodies.length} bodies pictured; ${hidden} more in the survey board`
-    : `System body schematic: ${bodies.length} bodies pictured`);
-  orbits.classList.toggle("empty", bodies.length === 0);
-}
-
 function setMeta(ui, view, value) {
-  ui.text(`explore-tab-${view}-meta`, value, VIEWS.find((row) => row.id === view)?.idle || "—");
+  ui.text(`explore-tab-${view}-meta`, value, "");
 }
 
 function renderSystemMeta(ui) {
   const survey = surveyState?.survey || {};
   const {number} = ui;
-  const fss = `${number(survey.scanned)}/${survey.total_known ? number(survey.total) : "?"} FSS`;
-  setMeta(ui, "system", surveyState?.system ? `${fss} · ${boardCounts.todo} TO DO` : "");
+  setMeta(ui, "system", surveyState?.system ? `${boardCounts.todo} TO DO` : "");
 }
 
 /** Snapshot-driven half: identity band, schematic strip and survey board. */
@@ -547,8 +581,8 @@ export function renderExploreSystem(state, ui) {
   loadPrefs(ui);
   const {root, created} = ensureSkeleton(ui);
   if (!root) return;
+  uiRef = ui;
   renderBand(root, ui);
-  renderStrip(root);
   renderBoard(root, ui);
   renderSystemMeta(ui);
   if (created && workspaceData) renderWorkspaceParts(root, ui);
@@ -595,7 +629,9 @@ function renderInstrument(root, ui) {
   }
 }
 
-function routeMarkup(data, ui) {
+/** The waypoint route, NavRoute and the neutron plotter: drawn on the
+ * Expeditions page since 5.6.1 (expeditions.js). */
+export function routeMarkup(data, ui) {
   const {escapeHtml, numeric} = ui;
   const route = Array.isArray(data.nav_route) ? data.nav_route : [];
   const waypoints = Array.isArray(data.waypoints) ? data.waypoints : [];
@@ -719,13 +755,11 @@ function renderWorkspaceParts(root, ui) {
   renderInstrument(root, ui);
   renderBoard(root, ui);
   renderSystemMeta(ui);
-  const route = root.querySelector("#explore-route");
-  if (route) replaceKeepingScroll(route, routeMarkup(data, ui));
   const prospects = root.querySelector("#explore-prospects");
   if (prospects) replaceKeepingScroll(prospects, prospectsMarkup(data, ui));
-  const stops = Array.isArray(data.nav_route) ? data.nav_route.length : 0;
-  const saved = (data.waypoints || []).filter((row) => !row.visited).length;
-  setMeta(ui, "route", stops || saved ? `${stops} STOP${stops === 1 ? "" : "S"} · ${saved} WAYPOINT${saved === 1 ? "" : "S"} LEFT` : "");
+  ui.text("explore-next-waypoint", data.next_waypoint, "—");
+  const copy = root.querySelector("#explore-copy-next");
+  if (copy) copy.disabled = !data.next_waypoint;
   const returns = number(data.return_later?.entries?.length);
   const scouted = number(data.scout?.results?.length);
   setMeta(ui, "prospects", returns || scouted ? `${returns} RETURN LATER · ${scouted} SCOUTED` : "");
@@ -739,10 +773,8 @@ export function renderExploreWorkspace(data, ui) {
   if (!root) return;
   // A workspace-only render (no snapshot yet) still needs a system context.
   if (!surveyState) surveyState = {system: String(workspaceData.current || ""), survey: {}};
+  uiRef = ui;
   // A rebuilt skeleton (after an error panel) needs the last snapshot's band.
-  if (created) {
-    renderBand(root, ui);
-    renderStrip(root);
-  }
+  if (created) renderBand(root, ui);
   renderWorkspaceParts(root, ui);
 }

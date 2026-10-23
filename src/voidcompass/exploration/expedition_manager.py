@@ -7,9 +7,11 @@ from datetime import datetime, timezone
 import json
 import math
 import os
+import re
 import threading
 import uuid
 
+from voidcompass.exploration import expedition_plan
 from voidcompass.exploration.galactic_regions import find_region
 from voidcompass.core.persistence_queue import persistence_queue
 
@@ -39,6 +41,12 @@ OBJECTIVE_KINDS = {
     "valuable_count": "Find valuable worlds",
     "first_discovery_count": "Find undiscovered bodies",
     "recon_system": "Complete system recon",
+    "codex_new_count": "Log new Codex species or colours",
+    "first_footfall_count": "Make first footfalls",
+    "pilgrimage": "Take the Watcher somewhere",
+    # 5.6.1, Part 5: the places on the list.
+    "places_all": "Visit every place on the list",
+    "places_count": "Visit places",
     "manual": "Manual objective",
 }
 
@@ -196,9 +204,29 @@ SUPPORTED_EVENTS = frozenset({
     "LoadGame", "Shutdown", "Location", "FSDJump", "CarrierJump",
     "FSSDiscoveryScan", "FSSAllBodiesFound", "Scan", "SAAScanComplete", "ScanOrganic",
     "CodexEntry", "FSSSignalDiscovered", "Screenshot",
+    # 5.6.1: the streak (deaths and hull scares) and first footfalls.
+    "Died", "HullDamage", "RepairAll", "Repair", "Disembark",
+    # Part 5: reaching a planet, or a spot on it.
+    "ApproachBody", "Touchdown", "SupercruiseExit",
 })
+# Hull below this is a scare: it ends the streak like a death does.
+SCARE_HULL = 0.25
+MAX_LEGS = 200
+MAX_PLOT_POINTS = 4000
+MAX_DAY_NOTES = 400
+STATUSES = {"active", "paused", "completed", "failed"}
 
 HIGH_VALUE_WORLDS = {"earthlike body", "earth-like world", "water world", "ammonia world"}
+
+# 5.6.1, Part 5: places along the way, grown from the bookmarks.
+PLACE_KINDS = {"system": "System", "planet": "Planet", "surface": "Surface site", "station": "Station",
+               "poi": "Point of interest", "note": "Note"}
+_PLACE_ALIASES = {"body": "planet", "moon": "planet", "world": "planet", "settlement": "station", "outpost": "station",
+                  "megaship": "poi", "nebula": "poi", "site": "surface", "landing": "surface", "point of interest": "poi"}
+MAX_FINDS = 200
+MAX_SHOTS = 12
+# A screenshot this close to a surface place is one of its pictures.
+PICTURE_M = 5000.0
 
 
 def _stamp(raw=None):
@@ -235,18 +263,49 @@ def _same(left, right):
     return bool(left and right and str(left).strip().casefold() == str(right).strip().casefold())
 
 
+def _place_kind(kind, body="", lat=None):
+    key = str(kind or "").strip().casefold()
+    key = _PLACE_ALIASES.get(key, key)
+    if key in PLACE_KINDS:
+        return "surface" if key == "planet" and lat is not None else key
+    if lat is not None:
+        return "surface"
+    return "planet" if body else ("system" if not key else "poi")
+
+
+def _bounded_place(row):
+    """A place (a bookmark grown up): what it is, where, and the pictures
+    taken there. Old bookmarks come through with their kind worked out."""
+    lat, lon = expedition_plan.latitude(row.get("lat")), expedition_plan.longitude(row.get("lon"))
+    if lat is None or lon is None:
+        lat = lon = None
+    place = dict(row)
+    url = str(row.get("url") or "")
+    place.update({
+        "kind": _place_kind(row.get("kind"), row.get("body"), lat),
+        "lat": lat, "lon": lon,
+        "radius": _number(row.get("radius")) or None,
+        "url": url[:300] if url.startswith("https://") else "",
+        "shots": [shot for shot in row.get("shots") or () if isinstance(shot, dict)][-MAX_SHOTS:],
+        "found": str(row.get("found") or "")[:40] or None,
+    })
+    return place
+
+
 def _localized(raw, key, default=""):
     return str(raw.get(f"{key}_Localised") or raw.get(key) or default)
 
 
 class ExpeditionManager:
-    def __init__(self, path):
+    def __init__(self, path, examples=False):
         self.path = path
         self.lock = threading.RLock()
         self._save_timer = None
         self.data = self._empty()
         self._seen = set()
         self.load()
+        if examples:
+            self.seed_examples()
 
     @staticmethod
     def _empty():
@@ -256,6 +315,8 @@ class ExpeditionManager:
             "expeditions": [],
             "bookmarks": [],
             "seen": [],
+            # The example expeditions already added (5.6.1), each only once.
+            "examples": [],
         }
 
     def load(self):
@@ -273,7 +334,7 @@ class ExpeditionManager:
                     for row in (self.data.get("expeditions") or []) if isinstance(row, dict)
                 ][-MAX_EXPEDITIONS:]
                 self.data["bookmarks"] = [
-                    row for row in (self.data.get("bookmarks") or []) if isinstance(row, dict)
+                    _bounded_place(row) for row in (self.data.get("bookmarks") or []) if isinstance(row, dict)
                 ][-MAX_BOOKMARKS:]
                 self.data["seen"] = list(self.data.get("seen") or [])[-MAX_SEEN:]
                 self._seen = set(self.data["seen"])
@@ -284,12 +345,21 @@ class ExpeditionManager:
         source = source if isinstance(source, dict) else {}
         clean = self._stats()
         for key in clean:
-            if key in {"systems", "facts"}:
+            if key in {"systems", "facts", "last_incident", "start_pos", "jump_times", "jump_ly"}:
                 continue
-            if key == "distance_ly":
+            if key in {"distance_ly", "streak_ly", "furthest_ly"}:
                 clean[key] = round(max(0.0, _number(source.get(key))), 2)
             else:
                 clean[key] = max(0, _integer(source.get(key)))
+        clean["last_incident"] = str(source["last_incident"])[:40] if source.get("last_incident") else None
+        start = source.get("start_pos")
+        if isinstance(start, (list, tuple)) and len(start) >= 3:
+            try:
+                clean["start_pos"] = [round(float(start[index]), 5) for index in range(3)]
+            except (TypeError, ValueError):
+                clean["start_pos"] = None
+        clean["jump_times"] = [_number(value) for value in (source.get("jump_times") or [])[-600:] if _number(value)]
+        clean["jump_ly"] = [round(_number(value), 2) for value in (source.get("jump_ly") or [])[-600:] if _number(value)]
         systems = []
         seen_systems = set()
         source_systems = source.get("systems") if isinstance(source.get("systems"), list) else []
@@ -332,6 +402,13 @@ class ExpeditionManager:
             event for event in (row.get("events") or []) if isinstance(event, dict)
         ][-MAX_EVENTS:]
         row["stats"] = self._bounded_stats(row.get("stats"))
+        row["legs"] = [self._bounded_leg(leg) for leg in (row.get("legs") or []) if isinstance(leg, dict)][-MAX_LEGS:]
+        row["ironman"] = bool(row.get("ironman"))
+        row["finds"] = [find for find in (row.get("finds") or []) if isinstance(find, dict)][-MAX_FINDS:]
+        notes = row.get("day_notes") if isinstance(row.get("day_notes"), dict) else {}
+        row["day_notes"] = {str(day)[:10]: str(text)[:2000] for day, text in list(notes.items())[-MAX_DAY_NOTES:] if str(text).strip()}
+        if row.get("status") not in STATUSES:
+            row["status"] = "paused"
         plan = row.get("sector_plan")
         if isinstance(plan, dict) and isinstance(plan.get("center"), (list, tuple)):
             try:
@@ -347,6 +424,40 @@ class ExpeditionManager:
         else:
             row["sector_plan"] = None
         return row
+
+    @staticmethod
+    def _bounded_leg(leg):
+        coords = leg.get("coords")
+        try:
+            coords = [round(float(coords[index]), 5) for index in range(3)] if isinstance(coords, (list, tuple)) and len(coords) >= 3 else None
+        except (TypeError, ValueError):
+            coords = None
+        plot = leg.get("plot") if isinstance(leg.get("plot"), dict) else None
+        if plot:
+            plot = {
+                "kind": str(plot.get("kind") or "neutron")[:20], "range": _number(plot.get("range")),
+                "total_jumps": _integer(plot.get("total_jumps")), "at": str(plot.get("at") or "")[:40],
+                "tritium": _integer(plot.get("tritium")) if plot.get("tritium") is not None else None,
+                "waypoints": [
+                    {"system": str(row.get("system") or "")[:120], "neutron": bool(row.get("neutron")),
+                     "jumps": _integer(row.get("jumps")), "coords": row.get("coords") if isinstance(row.get("coords"), list) else None}
+                    for row in (plot.get("waypoints") or [])[:MAX_PLOT_POINTS] if isinstance(row, dict) and row.get("system")
+                ],
+            }
+        lat, lon = expedition_plan.latitude(leg.get("lat")), expedition_plan.longitude(leg.get("lon"))
+        if lat is None or lon is None:
+            lat = lon = None
+        return {
+            "id": str(leg.get("id") or uuid.uuid4().hex[:10])[:16],
+            "system": str(leg.get("system") or "")[:120],
+            "kind": leg.get("kind") if leg.get("kind") in ("stop", "destination", "home", "carrier") else "stop",
+            "coords": coords, "note": str(leg.get("note") or "")[:400],
+            "reached": str(leg["reached"])[:40] if leg.get("reached") else None,
+            "plot": plot,
+            # Part 5: a planet, or a spot on it, and the place it came from.
+            "body": str(leg.get("body") or "")[:160], "lat": lat, "lon": lon,
+            "radius": _number(leg.get("radius")) or None, "place_id": str(leg.get("place_id") or "")[:16],
+        }
 
     def snapshot(self):
         with self.lock:
@@ -413,10 +524,14 @@ class ExpeditionManager:
             "signals": 0, "screenshots": 0, "valuable_worlds": 0,
             "first_discoveries": 0, "recon": 0,
             "regions": 0,
+            # 5.6.1
+            "deaths": 0, "scares": 0, "streak_jumps": 0, "streak_ly": 0.0, "best_streak_jumps": 0,
+            "furthest_ly": 0.0, "first_footfalls": 0, "codex_new": 0, "scare_open": 0,
+            "last_incident": None, "start_pos": None, "jump_times": [], "jump_ly": [],
             "facts": {},
         }
 
-    def create(self, name, description="", start_system="", destination="", return_system=""):
+    def create(self, name, description="", start_system="", destination="", return_system="", start_pos=None):
         name = str(name or "").strip() or f"Expedition {datetime.now().strftime('%Y-%m-%d')}"
         with self.lock:
             active = self._find_ref(self.data.get("active_id"))
@@ -432,12 +547,17 @@ class ExpeditionManager:
                 "destination": str(destination or "")[:120],
                 "return_system": str(return_system or "")[:120],
                 "objectives": [], "events": [], "stats": self._stats(),
-                "sector_plan": None,
+                "sector_plan": None, "ironman": False, "day_notes": {},
+                "legs": [self._bounded_leg({"system": system, "kind": kind})
+                         for system, kind in ((destination, "destination"), (return_system, "home"))
+                         if str(system or "").strip()],
             }
             # A named expedition is always created during an active
             # VoidCompass session. Future LoadGame records count subsequent
             # Elite sessions without requiring synthetic journal evidence.
             expedition["stats"]["sessions"] = 1
+            # Where it starts (5.6.1): the route's distances are measured from here.
+            expedition["stats"]["start_pos"] = expedition_plan.position(start_pos)
             if start_system:
                 expedition["stats"]["systems"] = [str(start_system)]
             rows = self.data.setdefault("expeditions", [])
@@ -447,9 +567,48 @@ class ExpeditionManager:
         self.save()
         return copy.deepcopy(expedition)
 
+    def seed_examples(self):
+        """The example expeditions, each added once per commander: delete
+        one and it stays deleted (the NEW form can add it back)."""
+        from voidcompass.exploration.expedition_examples import EXAMPLES
+        for key, example in EXAMPLES.items():
+            if not example.get("seed"):
+                continue
+            with self.lock:
+                added = key in (self.data.get("examples") or [])
+            if not added:
+                self.add_example(key)
+
+    def add_example(self, key):
+        """A real expedition, paused: its waypoints are the legs, each landing
+        site a place, with Visit every place on the list to aim for."""
+        from voidcompass.exploration.expedition_examples import EXAMPLES
+        example = EXAMPLES.get(str(key or ""))
+        if not example:
+            return None
+        with self.lock:
+            expedition = {
+                "id": uuid.uuid4().hex[:12], "name": example["name"], "description": example["description"],
+                "status": "paused", "started": _stamp(), "ended": None, "updated": _stamp(),
+                "start_system": example["start_system"], "end_system": example["start_system"],
+                "destination": example["stops"][-1]["name"], "return_system": "",
+                "objectives": [], "events": [], "stats": self._stats(), "sector_plan": None, "ironman": False, "day_notes": {},
+                "legs": [], "example": key, "source_url": example["source_url"], "credit": example["credit"],
+            }
+            expedition["stats"]["start_pos"] = expedition_plan.position(example.get("start_pos"))
+            self.data.setdefault("expeditions", []).append(expedition)
+            self.data["expeditions"] = self.data["expeditions"][-MAX_EXPEDITIONS:]
+            examples = self.data.setdefault("examples", [])
+            if key not in examples:
+                examples.append(key)
+        self.replace_legs(expedition["id"], example["stops"], keep_home=False)
+        self.add_objective(expedition["id"], "places_all")
+        self.refresh_place_objectives(expedition["id"])
+        return self.get(expedition["id"])
+
     def set_status(self, expedition_id, status):
         status = str(status or "").casefold()
-        if status not in {"active", "paused", "completed"}:
+        if status not in STATUSES:
             return False
         with self.lock:
             row = self._find_ref(expedition_id)
@@ -465,10 +624,125 @@ class ExpeditionManager:
                 self.data["active_id"] = None
             row["status"] = status
             row["updated"] = _stamp()
-            if status == "completed":
+            if status in {"completed", "failed"}:
                 row["ended"] = _stamp()
         self.save()
         return True
+
+    # -- the route (5.6.1) ---------------------------------------------------------------------
+    def _change(self, expedition_id, change):
+        with self.lock:
+            expedition = self._find_ref(expedition_id)
+            if not expedition:
+                return False
+            result = change(expedition)
+            if result is False:
+                return False
+            expedition["updated"] = _stamp()
+        self.save()
+        return True if result is None else result
+
+    def add_leg(self, expedition_id, system, kind="stop", coords=None, note="", index=None,
+                body="", lat=None, lon=None, radius=None, place_id=""):
+        system = str(system or "").strip()
+        if not system:
+            return False
+
+        def change(expedition):
+            legs = expedition.setdefault("legs", [])
+            leg = self._bounded_leg({"system": system, "kind": kind, "coords": coords, "note": note,
+                                     "body": body, "lat": lat, "lon": lon, "radius": radius, "place_id": place_id})
+            if index is None:
+                # A stop goes before the destination and the way home.
+                at = next((position for position, row in enumerate(legs) if row.get("kind") in {"destination", "home"}), len(legs))
+                at = len(legs) if kind in {"destination", "home"} else at
+            else:
+                at = max(0, min(len(legs), int(index)))
+            legs.insert(at, leg)
+            expedition["legs"] = legs[-MAX_LEGS:]
+            return leg["id"]
+        return self._change(expedition_id, change)
+
+    def update_leg(self, expedition_id, leg_id, **fields):
+        def change(expedition):
+            for leg in expedition.get("legs") or []:
+                if leg.get("id") == leg_id:
+                    merged = self._bounded_leg({**leg, **fields})
+                    leg.clear()
+                    leg.update(merged)
+                    return None
+            return False
+        return self._change(expedition_id, change)
+
+    def remove_leg(self, expedition_id, leg_id):
+        def change(expedition):
+            before = len(expedition.get("legs") or [])
+            expedition["legs"] = [leg for leg in expedition.get("legs") or [] if leg.get("id") != leg_id]
+            return None if len(expedition["legs"]) != before else False
+        return self._change(expedition_id, change)
+
+    def move_leg(self, expedition_id, leg_id, step):
+        def change(expedition):
+            legs = expedition.get("legs") or []
+            index = next((position for position, leg in enumerate(legs) if leg.get("id") == leg_id), None)
+            target = None if index is None else index + (1 if int(step) > 0 else -1)
+            if index is None or not 0 <= target < len(legs):
+                return False
+            legs[index], legs[target] = legs[target], legs[index]
+            return None
+        return self._change(expedition_id, change)
+
+    def replace_legs(self, expedition_id, systems, keep_home=True):
+        """A community expedition's list: its stops, then the destination,
+        then your way home if you'd set one."""
+        def change(expedition):
+            home = [leg for leg in expedition.get("legs") or [] if leg.get("kind") == "home"] if keep_home else []
+            rows = [row for row in systems or () if str((row or {}).get("name") or "").strip()]
+            legs = []
+            for index, row in enumerate(rows):
+                # A landing site or a named place on the list is a place too (Part 5).
+                place_id = ""
+                if row.get("body") or row.get("lat") is not None or row.get("title"):
+                    place_id = self.add_bookmark(row.get("kind"), row["name"], row.get("body"), row.get("title"),
+                                                 notes=row.get("note") or "", position=row.get("coords"), source="import",
+                                                 expedition_id=expedition["id"], lat=row.get("lat"), lon=row.get("lon"))["id"]
+                legs.append(self._bounded_leg({"system": row["name"], "coords": row.get("coords"),
+                                               "kind": "destination" if index == len(rows) - 1 else "stop",
+                                               "note": row.get("title") or row.get("note") or "", "body": row.get("body"),
+                                               "lat": row.get("lat"), "lon": row.get("lon"), "place_id": place_id}))
+            if not legs:
+                return False
+            expedition["legs"] = (legs + home)[-MAX_LEGS:]
+            expedition["destination"] = legs[-1]["system"]
+            return len(legs)
+        return self._change(expedition_id, change)
+
+    def set_ironman(self, expedition_id, on):
+        return self._change(expedition_id, lambda expedition: expedition.__setitem__("ironman", bool(on)))
+
+    def set_day_note(self, expedition_id, day, text):
+        day = str(day or "")[:10]
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", day):
+            return False
+
+        def change(expedition):
+            notes = expedition.setdefault("day_notes", {})
+            if str(text or "").strip():
+                notes[day] = str(text).strip()[:2000]
+            else:
+                notes.pop(day, None)
+        return self._change(expedition_id, change)
+
+    def note_milestone(self, expedition_id, name):
+        """Mark a milestone said, once; True the first time."""
+        with self.lock:
+            expedition = self._find_ref(expedition_id)
+            if not expedition:
+                return False
+            fresh = self._new_fact(expedition.setdefault("stats", self._stats()), "milestones", name)
+        if fresh:
+            self.save()
+        return fresh
 
     def delete(self, expedition_id):
         with self.lock:
@@ -652,8 +926,12 @@ class ExpeditionManager:
         return changed
 
     def add_bookmark(self, kind, system="", body="", title="", priority="Normal", tags=None,
-                     notes="", position=None, source="", expedition_id=None):
-        kind = str(kind or "POI").strip()[:40]
+                     notes="", position=None, source="", expedition_id=None, lat=None, lon=None,
+                     radius=None, url="", found=False):
+        lat, lon = expedition_plan.latitude(lat), expedition_plan.longitude(lon)
+        if lat is None or lon is None:
+            lat = lon = None
+        kind = _place_kind(kind, body, lat)
         system = str(system or "").strip()[:120]
         body = str(body or "").strip()[:160]
         title = str(title or body or system or kind).strip()[:200]
@@ -668,8 +946,12 @@ class ExpeditionManager:
         with self.lock:
             duplicate = next((
                 row for row in self.data.get("bookmarks") or []
-                if row.get("expedition_id") == expedition_id and _same(row.get("system"), system)
-                and _same(row.get("body") or "-", body or "-") and _same(row.get("title"), title)
+                if row.get("expedition_id") == expedition_id and (
+                    (url and row.get("url") == url)
+                    or (_same(row.get("system"), system) and _same(row.get("body") or "-", body or "-")
+                        and _same(row.get("title"), title)
+                        and (lat is None or (expedition_plan.surface_distance(row.get("lat"), row.get("lon"), lat, lon, radius)
+                                             or 0) <= expedition_plan.ARRIVE_M)))
             ), None)
             if duplicate:
                 duplicate.update({
@@ -686,7 +968,9 @@ class ExpeditionManager:
                     "notes": str(notes or "").strip()[:1000], "position": pos,
                     "source": str(source or "")[:80], "status": "pending",
                     "created": _stamp(), "updated": _stamp(), "visited": None,
+                    "lat": lat, "lon": lon, "radius": radius, "url": url, "found": _stamp() if found else None,
                 }
+                bookmark = _bounded_place(bookmark)
                 rows = self.data.setdefault("bookmarks", [])
                 rows.append(bookmark)
                 self.data["bookmarks"] = rows[-MAX_BOOKMARKS:]
@@ -701,7 +985,7 @@ class ExpeditionManager:
         return list(reversed(rows))
 
     def update_bookmark(self, bookmark_id, **updates):
-        allowed = {"priority", "tags", "notes", "status", "title"}
+        allowed = {"priority", "tags", "notes", "status", "title", "kind"}
         with self.lock:
             bookmark = next((row for row in self.data.get("bookmarks") or [] if row.get("id") == bookmark_id), None)
             if not bookmark:
@@ -713,6 +997,8 @@ class ExpeditionManager:
                     value = [str(tag).strip()[:40] for tag in (value or []) if str(tag).strip()][:12]
                 elif key == "priority":
                     value = str(value or "Normal").title()
+                elif key == "kind":
+                    value = _place_kind(value, bookmark.get("body"), bookmark.get("lat"))
                 else:
                     value = str(value or "").strip()[:1000]
                 bookmark[key] = value
@@ -723,6 +1009,137 @@ class ExpeditionManager:
                 bookmark["visited"] = None
         self.save()
         return True
+
+    def place_to_route(self, expedition_id, place_id, next_stop=False):
+        """A place becomes a stop on the route: next, or before the destination."""
+        with self.lock:
+            place = next((row for row in self.data.get("bookmarks") or () if row.get("id") == place_id), None)
+            expedition = self._find_ref(expedition_id)
+            if not place or not expedition or not place.get("system"):
+                return False
+            legs = expedition.get("legs") or []
+            if any(leg.get("place_id") == place_id for leg in legs):
+                return False
+            index = next((position for position, leg in enumerate(legs) if not leg.get("reached")), len(legs)) if next_stop else None
+        return self.add_leg(expedition_id, place["system"], "stop", coords=place.get("position"), note=place.get("title") or "",
+                            index=index, body=place.get("body") or "", lat=place.get("lat"), lon=place.get("lon"),
+                            radius=place.get("radius"), place_id=place_id)
+
+    def keep_find(self, expedition_id, find_id, dismiss=False):
+        """One of the trip's finds kept as a place, or let go."""
+        with self.lock:
+            expedition = self._find_ref(expedition_id)
+            find = next((row for row in (expedition or {}).get("finds") or () if row.get("id") == find_id), None)
+            if not find:
+                return False
+            find["state"] = "dismissed" if dismiss else "kept"
+        if dismiss:
+            self.save()
+            return True
+        return self.add_bookmark("poi" if find.get("kind") == "codex" else "planet" if find.get("body") else "system",
+                                 find.get("system"), find.get("body"), find.get("title"), notes=find.get("detail") or "",
+                                 position=find.get("position"), source="find", expedition_id=expedition_id, found=True)
+
+    def visit_near(self, system, body, lat, lon, radius=None, raw=None):
+        """You're at a surface spot (from Status.json): the places there are
+        visited, and a surface stop on the route is reached."""
+        titles, reached = [], []
+        with self.lock:
+            for place in self.data.get("bookmarks") or []:
+                if place.get("status") == "visited" or place.get("lat") is None or not _same(place.get("system"), system):
+                    continue
+                if not _same(place.get("body"), body):
+                    continue
+                metres = expedition_plan.surface_distance(place["lat"], place["lon"], lat, lon, radius or place.get("radius"))
+                if metres is not None and metres <= expedition_plan.ARRIVE_M:
+                    place["status"], place["visited"] = "visited", _stamp(raw)
+                    titles.append(place.get("title") or "A place")
+            expedition = self._find_ref(self.data.get("active_id"))
+            if expedition and expedition.get("status") == "active":
+                for leg in expedition.get("legs") or []:
+                    if leg.get("reached") or leg.get("lat") is None or not _same(leg.get("system"), system) or not _same(leg.get("body"), body):
+                        continue
+                    metres = expedition_plan.surface_distance(leg["lat"], leg["lon"], lat, lon, radius or leg.get("radius"))
+                    if metres is not None and metres <= expedition_plan.ARRIVE_M:
+                        leg["reached"] = _stamp(raw)
+                        self._record(expedition, raw or {}, "LEG", f"Reached {leg.get('note') or body}", "SURFACE")
+                        reached.append(leg.get("note") or body)
+                        break
+                if titles or reached:
+                    completed = self._place_objectives(expedition, raw)
+                    for title in completed:
+                        self._record(expedition, raw or {}, "OBJECTIVE", f"Objective complete: {title}")
+                    expedition["updated"] = _stamp(raw)
+        if titles or reached:
+            self.save()
+        return {"places": titles, "legs": reached}
+
+    def refresh_place_objectives(self, expedition_id):
+        """After places are added, kept or ticked by hand: the place
+        objectives counted again."""
+        with self.lock:
+            expedition = self._find_ref(expedition_id)
+            if not expedition:
+                return []
+            completed = self._place_objectives(expedition)
+            for title in completed:
+                self._record(expedition, {}, "OBJECTIVE", f"Objective complete: {title}")
+        self.save()
+        return completed
+
+    def _place_objectives(self, expedition, raw=None):
+        """Visit every place on the list; visit N places (of a kind)."""
+        places = [row for row in self.data.get("bookmarks") or () if row.get("expedition_id") == expedition.get("id")]
+        visited = [row for row in places if row.get("status") == "visited"]
+        completed = []
+        for objective in expedition.get("objectives") or []:
+            kind = objective.get("kind")
+            if kind not in ("places_all", "places_count") or objective.get("status") == "complete":
+                continue
+            if kind == "places_all":
+                objective["count"] = max(1, len(places))
+                objective["progress"] = len(visited)
+                done = bool(places) and len(visited) == len(places)
+            else:
+                target = _place_kind(objective.get("target")) if objective.get("target") else ""
+                count = max(1, _integer(objective.get("count"), 1))
+                objective["progress"] = min(count, sum(1 for row in visited if not target or row.get("kind") == target))
+                done = objective["progress"] >= count
+            if done:
+                objective["status"] = "complete"
+                objective["completed"] = _stamp(raw)
+                completed.append(objective.get("title") or OBJECTIVE_KINDS.get(kind, kind))
+        return completed
+
+    def _picture_places(self, raw, system, body):
+        """A screenshot taken at a place (same body, within a few km) is one
+        of its pictures. Kept as the time and file, matched to the album later."""
+        shot = {"at": _epoch(raw.get("timestamp")), "file": os.path.basename(str(raw.get("Filename") or "").replace("\\", "/"))}
+        added = 0
+        for place in self.data.get("bookmarks") or []:
+            if not _same(place.get("system"), system) or place.get("kind") == "note":
+                continue
+            if place.get("body") and not _same(place.get("body"), body):
+                continue
+            if place.get("lat") is not None:
+                metres = expedition_plan.surface_distance(place["lat"], place["lon"], raw.get("Latitude"), raw.get("Longitude"), place.get("radius"))
+                if metres is None or metres > PICTURE_M:
+                    continue
+            shots = [row for row in place.get("shots") or () if row.get("at") != shot["at"]]
+            place["shots"] = (shots + [shot])[-MAX_SHOTS:]
+            added += 1
+        return added
+
+    @staticmethod
+    def _add_find(expedition, raw, kind, system, body, title, detail="", position=None):
+        """A find worth keeping (Part 5): offered on the page, kept with a click."""
+        finds = expedition.setdefault("finds", [])
+        if any(_same(row.get("system"), system) and _same(row.get("body"), body) and _same(row.get("title"), title) for row in finds):
+            return
+        finds.append({"id": uuid.uuid4().hex[:10], "kind": kind, "system": str(system or "")[:120], "body": str(body or "")[:160],
+                      "title": str(title or "")[:200], "detail": str(detail or "")[:300], "at": _stamp(raw),
+                      "position": expedition_plan.position(position), "state": "new"})
+        expedition["finds"] = finds[-MAX_FINDS:]
 
     def remove_bookmark(self, bookmark_id):
         with self.lock:
@@ -839,6 +1256,12 @@ class ExpeditionManager:
                 continue
             if bookmark.get("body") and not _same(bookmark.get("body"), body):
                 continue
+            # A surface site needs you there, not just at its planet.
+            if bookmark.get("lat") is not None:
+                metres = expedition_plan.surface_distance(bookmark["lat"], bookmark["lon"], (raw or {}).get("Latitude"),
+                                                          (raw or {}).get("Longitude"), bookmark.get("radius"))
+                if metres is None or metres > expedition_plan.ARRIVE_M * 2:
+                    continue
             if event_epoch and event_epoch < _epoch(bookmark.get("created")):
                 continue
             bookmark["status"] = "visited"
@@ -862,16 +1285,19 @@ class ExpeditionManager:
             bookmark_visited = []
             if event in {"Location", "FSDJump", "CarrierJump"}:
                 bookmark_visited = self._visit_bookmarks(system, raw=raw)
-            elif event in {"Scan", "SAAScanComplete", "ScanOrganic", "CodexEntry", "Screenshot"}:
+            elif event in {"Scan", "SAAScanComplete", "ScanOrganic", "CodexEntry", "Screenshot",
+                           "ApproachBody", "Touchdown", "SupercruiseExit", "Disembark"}:
                 bookmark_visited = self._visit_bookmarks(system, body, raw=raw)
+            pictured = self._picture_places(raw, system, body) if event == "Screenshot" else 0
+            bookmark_visited = list(bookmark_visited)
             if not expedition or expedition.get("status") != "active":
-                if bookmark_visited:
+                if bookmark_visited or pictured:
                     self.save()
                     return {"changed": True, "completed": [], "bookmarks_visited": bookmark_visited,
                             "historical": bool(historical)}
                 return None
             if _epoch(raw.get("timestamp")) and _epoch(raw.get("timestamp")) < _epoch(expedition.get("started")):
-                if bookmark_visited:
+                if bookmark_visited or pictured:
                     self.save()
                     return {"changed": True, "completed": [], "bookmarks_visited": bookmark_visited,
                             "historical": bool(historical)}
@@ -887,7 +1313,10 @@ class ExpeditionManager:
 
             stats = expedition.setdefault("stats", self._stats())
             completed = []
-            changed = bool(bookmark_visited)
+            milestones = []
+            changed = bool(bookmark_visited or pictured)
+            if bookmark_visited:
+                completed += self._place_objectives(expedition, raw)
             if event == "LoadGame":
                 stats["sessions"] = _integer(stats.get("sessions")) + 1
                 self._record(expedition, raw, "SESSION", "Expedition session resumed", system)
@@ -902,6 +1331,22 @@ class ExpeditionManager:
                     stats["jumps"] = _integer(stats.get("jumps")) + 1
                     stats["distance_ly"] = round(_number(stats.get("distance_ly")) + _number(raw.get("JumpDist")), 2)
                     self._record(expedition, raw, "JUMP", f"Arrived in {system or 'Unknown'}", f"{_number(raw.get('JumpDist')):.1f} ly")
+                    if _integer(stats.get("jumps")) == 1:
+                        milestones.append("set_out")
+                    if event == "FSDJump":
+                        stats["streak_jumps"] = _integer(stats.get("streak_jumps")) + 1
+                        stats["streak_ly"] = round(_number(stats.get("streak_ly")) + _number(raw.get("JumpDist")), 2)
+                        stats["best_streak_jumps"] = max(_integer(stats.get("best_streak_jumps")), stats["streak_jumps"])
+                        stats["jump_times"] = (list(stats.get("jump_times") or []) + [_epoch(raw.get("timestamp"))])[-600:]
+                        stats["jump_ly"] = (list(stats.get("jump_ly") or []) + [round(_number(raw.get("JumpDist")), 2)])[-600:]
+                for leg in expedition.get("legs") or []:
+                    # A leg with a planet waits for the planet (Part 5).
+                    if not leg.get("reached") and not leg.get("body") and _same(leg.get("system"), system):
+                        leg["reached"] = _stamp(raw)
+                        self._record(expedition, raw, "LEG", f"Reached {system}", str(leg.get("kind") or "stop").upper())
+                        if leg.get("kind") == "home" and _integer(stats.get("jumps")):
+                            milestones.append("home")
+                        break
                 completed += self._advance(
                     expedition, raw, "reach_system",
                     lambda objective: _same(objective.get("target") or objective.get("system"), system),
@@ -909,6 +1354,16 @@ class ExpeditionManager:
                 )
                 position = facts.get("position")
                 region = None
+                here = expedition_plan.position(position)
+                if here is not None:
+                    if not stats.get("start_pos"):
+                        stats["start_pos"] = here
+                    far = expedition_plan.distance(stats.get("start_pos"), here) or 0.0
+                    if far > _number(stats.get("furthest_ly")):
+                        # Said each time you pass another thousand light years out.
+                        if int(far // 1000) > int(_number(stats.get("furthest_ly")) // 1000):
+                            milestones.append(f"furthest_{int(far // 1000)}")
+                        stats["furthest_ly"] = round(far, 2)
                 if isinstance(position, (list, tuple)) and len(position) >= 3:
                     try:
                         region = find_region(*(float(position[index]) for index in range(3)))
@@ -916,6 +1371,8 @@ class ExpeditionManager:
                         region = None
                 if region and self._new_fact(stats, "regions", region[0]):
                     stats["regions"] = _integer(stats.get("regions")) + 1
+                    if _integer(stats.get("jumps")):
+                        milestones.append(f"region_{region[0]}")
                     completed += self._advance(
                         expedition, raw, "region_count", lambda _objective: True,
                         f"Entered region {region[0]:02d} {region[1]}",
@@ -927,6 +1384,18 @@ class ExpeditionManager:
                         f"Entered region {region[0]:02d} {region[1]}",
                     )
                 changed = True
+            elif event in {"ApproachBody", "Touchdown", "SupercruiseExit"}:
+                for leg in expedition.get("legs") or []:
+                    if leg.get("reached") or not leg.get("body") or not _same(leg.get("system"), system) or not _same(leg.get("body"), body):
+                        continue
+                    if leg.get("lat") is not None:
+                        metres = expedition_plan.surface_distance(leg["lat"], leg["lon"], raw.get("Latitude"), raw.get("Longitude"), leg.get("radius"))
+                        if event != "Touchdown" or metres is None or metres > expedition_plan.ARRIVE_M * 2:
+                            continue
+                    leg["reached"] = _stamp(raw)
+                    self._record(expedition, raw, "LEG", f"Reached {leg.get('note') or body}", "SURFACE" if leg.get("lat") is not None else "BODY")
+                    changed = True
+                    break
             elif event == "FSSDiscoveryScan":
                 fact = raw.get("SystemAddress") or system
                 if self._new_fact(stats, "honks", fact):
@@ -970,10 +1439,15 @@ class ExpeditionManager:
                 body_fact = self._body_fact_key(raw, system, body)
                 if valuable and self._new_fact(stats, "valuable_bodies", body_fact):
                     stats["valuable_worlds"] = _integer(stats.get("valuable_worlds")) + 1
+                    label = "Terraformable " + (planet_class or "world") if terraformable and planet_class not in HIGH_VALUE_WORLDS else (planet_class or "world")
+                    self._add_find(expedition, raw, "valuable", system, body, f"{body or system}",
+                                   f"{label[:1].upper()}{label[1:]}{', first discovered' if first else ''}", facts.get("position"))
                     completed += self._advance(
                         expedition, raw, "valuable_count", lambda _objective: True,
                         f"{body or planet_class} in {system}",
                     )
+                if raw.get("WasFootfalled") is False and raw.get("Landable"):
+                    self._new_fact(stats, "unwalked", self._body_fact_key(raw, system, raw.get("BodyName") or body))
                 if first and self._new_fact(stats, "first_bodies", body_fact):
                     stats["first_discoveries"] = _integer(stats.get("first_discoveries")) + 1
                     completed += self._advance(
@@ -1027,6 +1501,12 @@ class ExpeditionManager:
                         f"{_localized(raw, 'Name', 'Codex entry')} · {category}",
                     )
                     completed += self._advance(expedition, raw, "codex_count", lambda _objective: True, _localized(raw, "Name", "Codex entry"))
+                    if raw.get("IsNewEntry"):
+                        stats["codex_new"] = _integer(stats.get("codex_new")) + 1
+                        self._add_find(expedition, raw, "codex", system, body, _localized(raw, "Name", "Codex entry"),
+                                       f"New to your codex · {category}", facts.get("position"))
+                        completed += self._advance(expedition, raw, "codex_new_count", lambda _objective: True,
+                                                   f"New to your codex: {_localized(raw, 'Name', 'Codex entry')}")
                     completed += self._advance(
                         expedition, raw, "visit_region",
                         lambda objective: _same(objective.get("target"), region),
@@ -1036,6 +1516,37 @@ class ExpeditionManager:
             elif event == "FSSSignalDiscovered":
                 stats["signals"] = _integer(stats.get("signals")) + 1
                 changed = True
+            elif event == "Died":
+                stats["deaths"] = _integer(stats.get("deaths")) + 1
+                self._incident(expedition, raw, "DEATH", "The ship was lost")
+                milestones.append("close_call")
+                if expedition.get("ironman"):
+                    expedition["status"] = "failed"
+                    expedition["ended"] = _stamp(raw)
+                    self.data["active_id"] = None
+                    self._record(expedition, raw, "IRONMAN", "Ironman expedition failed", "One life, and it was lost")
+                changed = True
+            elif event == "HullDamage":
+                health = _number(raw.get("Health"), 1.0)
+                if raw.get("PlayerPilot", True) and not raw.get("Fighter") and health < SCARE_HULL and not stats.get("scare_open"):
+                    stats["scares"] = _integer(stats.get("scares")) + 1
+                    stats["scare_open"] = 1
+                    self._incident(expedition, raw, "SCARE", f"Hull down to {health * 100:.0f}%")
+                    milestones.append("close_call")
+                    changed = True
+            elif event in {"RepairAll", "Repair"}:
+                stats["scare_open"] = 0
+            elif event == "Disembark" and raw.get("OnPlanet") and not raw.get("OnStation"):
+                # A first footfall: the body's Scan said nobody had walked it.
+                key = self._body_fact_key(raw, system, raw.get("Body") or body)
+                if key and key in (stats.get("facts") or {}).get("unwalked", {}) and self._new_fact(stats, "footfalls", key):
+                    stats["first_footfalls"] = _integer(stats.get("first_footfalls")) + 1
+                    completed += self._advance(expedition, raw, "first_footfall_count", lambda _objective: True,
+                                               f"First footfall on {raw.get('Body') or body}")
+                    self._record(expedition, raw, "FOOTFALL", f"First footfall on {raw.get('Body') or body}")
+                    self._add_find(expedition, raw, "footfall", system, raw.get("Body") or body, raw.get("Body") or body,
+                                   "Your first footfall: nobody had walked here", facts.get("position"))
+                    changed = True
             elif event == "Screenshot":
                 fact = raw.get("Filename") or self._body_fact_key(raw, system, body, raw.get("timestamp"))
                 if self._new_fact(stats, "screenshots", fact):
@@ -1048,6 +1559,17 @@ class ExpeditionManager:
                     completed += self._advance(expedition, raw, "screenshot_count", lambda _objective: True, f"Screenshot in {system}")
                     changed = True
 
+            # A place the Watcher asked to be taken (5.6.1).
+            from voidcompass.overlays import watcher_places
+            place = watcher_places.place_of(event, raw)
+            if place:
+                completed += self._advance(expedition, raw, "pilgrimage", lambda objective: _same(objective.get("target"), place),
+                                           f"Reached {watcher_places.words(place)}")
+            if event in {"Location", "FSDJump", "CarrierJump"}:
+                completed += self._advance(
+                    expedition, raw, "pilgrimage",
+                    lambda objective: objective.get("target") == "first_place" and _same(objective.get("system"), system),
+                    f"Back where it first woke: {system}")
             if completed:
                 for title in completed:
                     self._record(expedition, raw, "OBJECTIVE", f"Objective complete: {title}")
@@ -1059,8 +1581,18 @@ class ExpeditionManager:
             return {
                 "changed": True, "completed": completed,
                 "bookmarks_visited": bookmark_visited, "historical": bool(historical),
+                "milestones": [] if historical else milestones,
+                "expedition_id": expedition.get("id"),
             }
         return None
+
+    def _incident(self, expedition, raw, kind, title):
+        """A death or a hull scare: the streak starts again."""
+        stats = expedition.setdefault("stats", self._stats())
+        stats["last_incident"] = _stamp(raw)
+        stats["streak_jumps"] = 0
+        stats["streak_ly"] = 0.0
+        self._record(expedition, raw, kind, title, expedition.get("end_system") or "")
 
     def observe_recon(self, system, score=0):
         with self.lock:

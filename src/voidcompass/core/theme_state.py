@@ -37,7 +37,7 @@ def apply_theme_live(runtime, theme_name, palette):
     if app:
         for attr in ('hud','cargo_hud','carrier_hud','prospector_hud','planet_materials_hud','station_info_hud',
                      'survey_status_hud','toast_hud','achievement_hud','heartbeat_hud','galnet_ticker_hud','music_player_hud',
-                     'contact_scope_hud','gravity_warning_hud','jump_info_hud','colony_needs_hud','trade_route_hud','rig_tracker_hud','rhino_map_hud',
+                     'contact_scope_hud','gravity_warning_hud','jump_info_hud','colony_needs_hud','trade_route_hud','expedition_hud','rig_tracker_hud','rhino_map_hud',
                      'galaxy_minimap_hud','postcard_hud'):
             overlay = getattr(app, attr, None)
             if overlay is not None:

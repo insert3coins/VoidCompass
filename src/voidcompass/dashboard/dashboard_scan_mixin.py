@@ -579,6 +579,10 @@ class DashboardScanMixin:
                 "alt_m": data.get("Altitude"),
                 "body": getattr(self, "current_body_name", None) or getattr(self, "current_body_id", None),
             })
+        # 5.6.1: reaching an expedition's surface sites.
+        on_position = getattr(self, "_expedition_on_position", None)
+        if callable(on_position):
+            on_position()
         flags = data.get("Flags")
         in_supercruise = False
         if isinstance(flags, int):

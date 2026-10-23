@@ -1,21 +1,56 @@
 # VoidCompass // UPDATE LOG
 
-## v5.5.18 // Rhino Map, Refocused
-**Release Date:** 23 OCT 3312 *(Galactic Standard Time)*
+## v5.6.1 // Expeditions
+**Release Date:** 24 OCT 3312 *(Galactic Standard Time)*
 
-* **The Rhino Map is its own overlay now.** It used to take over the Galaxy Minimap, which got confusing (and a range change could send it back to the galaxy). Now the minimap stays the galaxy, and the Rhino Map pops up on its own when you deploy the Rhino (or whenever your rigs are out) and goes again when you're done. Place it, size it and set it up in Overlay Studio › Rhino Map; it has its own on/off hotkey too. It grows with its text size like every overlay, and its warnings wrap onto a second line instead of being cut short.
-* **The Rhino Map has its own zoom.** It used to zoom out to fit your ship and old refining spots too, so with the ship parked far off your rigs became specks, their spacing rings disappeared and a new rig seemed not to show. It now fits your rigs and the deposits near you; your ship and a target point from the map's edge. Or pick a fixed range in Overlay Studio › Rhino Map › *Range*: 300 m, 600 m, 1.2 km or 2.5 km. The *Rhino Map: range* hotkey (Settings › Hotkeys) goes round them from the cockpit; the map's corner shows the range it's on and lights up as it changes.
-* **The HUD keeps what you were doing.** With *Pages* on *Auto*, it no longer drops straight back to NAV the moment a screen closes:
-  * **Survey:** once you've opened the FSS or mapped a body, the Survey page stays while you fly round the system, until you jump or every body is scanned and its biology done.
-  * **Mining:** after you prospect in a ring, the Mining page stays until you're back in supercruise.
-  * **Combat:** the Combat page stays 30 seconds after the fight, so you see how it ended.
+* **Expeditions.** Mission Control is rebuilt as the Expeditions page, on the rail. Your existing expeditions carry over.
+  * **Real expeditions to start from:** **Distant Worlds 3** (3312) comes ready, paused: all sixteen waypoints with their landing sites, as its organisers published them. The NEW form adds three more: the original **Distant Worlds** (3302, 23 base camps), **Distant Worlds 2** (3305, 11 base camps) and **A Grand Day Out** (3303), a short Bubble-side tour for new explorers ending at twin Guardian ruins. Every system and body checked against EDSM, so the stops tick off as you land. RESUME one to fly it yourself.
+  * **The page:** your trips across the top, the chosen one at full width, its voyage drawn as a track (a long community route folds the middle), the next stop with FLY IT and PLOT, and the legs down a line. Long system names wrap instead of being cut short.
+  * **The route:** legs (stops, the destination and the way home), each plotted on Spansh (a neutron route, or a carrier route with the tritium it needs). FLY IT makes a leg your waypoint route, which the HUD, the minimap and COPY NEXT follow. A warning shows where a neutron chain leaves no star to scoop.
+  * **How far along:** progress by distance and objectives, and an ETA at your own pace ("about 14 hours of flying, 4 sessions").
+  * **Data at risk:** the unsold data you're carrying, against your hull and the distance home. A nudge (and a word from the Watcher) each time it passes the step you set in Settings › Flight. GO HOME and SELL NOW find the way.
+  * **Ship and supplies:** hull, AFMU, limpets and FSD injections, with what you could synthesise.
+  * **The streak:** jumps since the last death or hull scare. An optional **Ironman** expedition fails if the ship is lost.
+  * **Import a community expedition:** a pasted list, a CSV or a Spansh link becomes your legs, each one a Reach system objective.
+  * **The trip's record:** a line for each day (with your notes) and a photo album of the screenshots and postcards taken.
+  * **At the end:** the trip told as its own **Void Wrapped**, and a replay of the whole trip on the Atlas, which also draws the expedition's route.
+  * **On the Nav HUD:** an **EXPEDITION** page with the next leg, light years to go, data at risk, the streak and anything low.
+  * **An Expedition overlay:** the trip at a glance in the cockpit: how far along, the next stop (and on its planet, a compass to it), the data at risk, the streak, the ETA, the hull and anything running low. It shows only while an expedition is active, and the Nav HUD's EXPEDITION page stands in for it when the HUD's pages are on. Place it in Overlay Studio.
+  * **The Watcher comes along:** setting out, new regions, halfway, the furthest point, a close call, home again.
+  * **Places along the way:** a PLACES tab for the planets, landing sites, stations and points of interest you mean to visit or find on the way, each with your notes and the pictures you took there.
+    * **Mark where you are** with a hotkey (the old field bookmark key, now *Expedition: mark this place*). On a planet it keeps the exact spot.
+    * **+ EXPEDITION PLACE / ROUTE** on any body in Explore & Survey, and on the Planetary page.
+    * **Keep these?** The trip's valuable worlds, new Codex entries and first footfalls, each kept with one click.
+    * **Surface stops:** a stop can be a planet or a spot on one. The Nav HUD's EXPEDITION page points the way (bearing, distance, which way to turn), GUIDE ME sets the planet compass, and getting within a kilometre ticks it off.
+    * **Worth seeing near your route:** points of interest from EDAstro's Galactic Exploration Catalog near your legs, kept or added to the route with a click. Fetched once a day, credited to EDAstro (CC BY-NC-SA 3.0); switch it off, or set how far off the route, in Settings › Flight.
+    * **Files:** LOAD A FILE (.txt, .csv, .json) beside IMPORT, which now reads Body, Latitude, Longitude, Name and Notes columns, so landing sites come in as surface stops. SAVE AS A FILE writes the route and places as a CSV to the Expeditions folder.
+    * New objectives (visit every place on the list), the places on the Atlas, and a "places you kept" card in the trip's Wrapped.
+  * **Local API:** `/expedition` (now with places and the surface target) and `/expeditions`.
+* **Explore & Survey, made over:**
+  * A hero for the system you're in: FSS, biology, geology, value, codex targets, first footfalls, traffic and the next waypoint.
+  * The survey board in the same order as the Survey overlay and the Nav HUD (biology still to do, then geology and mining, then value), with a switch for value or distance.
+  * Click a body for its details, opened in place. Bodies nobody has walked on yet are marked.
+  * The route moved to the Expeditions page.
+  * Big systems redraw in about two-thirds of the time.
+* **The Watcher, deeper:**
+  * **It asks, and remembers your answer.** Answer by hotkey (Settings › Hotkeys, answer 1 to 3) or on its page. It brings your answers back weeks later. Ignore it, and it notices.
+  * **Book Four, The Road Taken:** your answer about the shutter decides which of two roads the story takes, each with its own ending. Some chapters wait for a place it asks you to take it (a black hole, the core, the edge, where it first woke), which an expedition can plan around.
+  * **What it keeps of you:** first finds, ships lost by name, the commanders you flew with, anniversaries. Its trust in you and its mood move with how you fly.
+  * **Dreams:** it dreams when you log off, and writes them down.
+  * **Other Watchers:** share your Watcher's code, and meet a friend's.
+  * **The orb and the voice:** its story leaves marks on the eye (a hairline crack, a second faint pupil, the shutter part-drawn). Its voice slows when it's weary, whispers its story, and now and then slips.
+  * **Its page, laid out again:** NOW (the eye, a question with answer buttons, trust, mood, its road, the chapter it's on, where it wants to go), STORY (all four books, echoes, SAVE AS A BOOK), YOU (what it remembers, your answers, its dreams, other Watchers), SAID, SETTINGS and VOICE.
 
-  A jump, docking, landing or the Rhino still take over when they happen, and the page you were on comes back after.
-* **The HUD's survey list, in the survey overlay's order:** bodies with biology still to do first, then geology and mining, then by value.
-* **Page mode as an icon:** a circling arrow while the HUD's page follows what you're doing, a yellow pin when you've chosen it, instead of the words AUTO and MANUAL.
+* **The Navigation HUD shows what's in your hold.** The Mining, Rhino, Station and Trade pages list every item aboard under the hold bar, heaviest first, with mission cargo and stolen goods marked. Nothing is cut off with "+N more": the HUD grows to fit. A new **Cargo** switch in Overlay Studio › Navigation HUD turns the lists off.
+* **The Cargo overlay is back.** The Mining page no longer switches it off, since that page only shows while you're mining. It's its own overlay again for hauling, missions and everything else.
+* **Warnings get through, whatever page is up.** Heavy gravity on the way down, a rig about to be lost at 5 km and a rig ready to collect now show on an alert line above any page, NAV included, in Auto and Manual. Before, a pinned or held page could hide them.
+* **A better Mining page:** "LOW CONTENT" (or medium, high) instead of a bare "LOW", the motherlode or the richest material beside it, every material in the rock, and what you've refined from it with the total.
+* **Nothing cut short:** every construction need on the Colony page (it showed six), every material on the Planet page, every service a station has (wrapping onto a second line), and the signals heard here by name on the Survey and Combat pages (megaships, conflict zones, resource sites and the rest), not just a count of each kind.
+* **A to Z:** the HUD's page tabs and the page key's round now go NAV first, then A to Z, and so does the page list in Overlay Studio.
 
 ## Earlier releases
 
+* **v5.5.18** (23 OCT 3312) — Rhino Map, Refocused: the Rhino Map as its own overlay (it shows when you deploy the Rhino) with its own zoom and a range hotkey, a Navigation HUD that keeps what you were doing (survey until you jump, mining until supercruise, combat a little after), the survey list biology first, then value, and page modes as icons.
 * **v5.5.17** (23 OCT 3312) — One Overlay to Rule Them All: the Navigation HUD's pages (one overlay that follows what you're doing), a HUD that sizes itself, new scenes by place (docked, on foot, the Rhino at work and more), a sharper combat page; the Rhino map on the Galaxy Minimap with rig spacing rings, lost-rig warnings and what a planet's ground tends to hold; the Music page and music overlay made over, with twelve visualizer looks; and Explore & Survey that stays still while you scroll.
 * **v5.5.16** (21 OCT 3312) — Systems at a Glance: the Navigation HUD's ship systems as a fixed strip of cockpit icons (lit when on, warnings in red in front), so nothing beside the fuel bar gets cut off.
 * **v5.5.15** — The Anaconda Mk II: the new ship on the Navigation HUD (and a large pad for Trading), and nothing drawn behind your ship's picture on the HUD any more.

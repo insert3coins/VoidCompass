@@ -18,7 +18,7 @@ const dom = Object.fromEntries([
   'survey-rail', 'survey-progress-fill', 'survey-acquisition', 'survey-signals',
   'survey-signal-bio', 'survey-signal-geo', 'survey-signal-mining', 'survey-signal-valuable', 'survey-signal-sites',
   'context-label', 'secondary-label', 'traffic-label', 'link-state',
-  'page-panel', 'page-title', 'page-mode', 'page-tabs', 'page-body',
+  'page-panel', 'page-title', 'page-mode', 'page-tabs', 'page-body', 'page-alert',
 ].map((id) => [id, $(id)]));
 
 let snapshot = null;
@@ -1098,12 +1098,12 @@ const PAGE_BLOCKS = {
     `<span data-tone="${pageTone(item.tone)}">${item.label ? `<small>${pageText(item.label)}</small>` : ''}<b>${pageText(item.value)}</b></span>`).join('')}</div>`,
   bars: (block) => `<div class="pg-bars" data-columns="${Math.max(1, Math.min(3, Number(block.columns) || 1))}">${block.items.map((item) =>
     `<span class="pg-bar" data-tone="${pageTone(item.tone)}" data-ratio="${Math.max(0, Math.min(1, Number(item.ratio) || 0))}"><small>${pageText(item.label)}</small><b>${pageText(item.value)}</b><i></i></span>`).join('')}</div>`,
-  list: (block) => `<div class="pg-list">${block.title ? `<small class="pg-list-title">${pageText(block.title)}</small>` : ''}<ul>${block.items.map((item) =>
+  list: (block) => `<div class="pg-list" data-columns="${Number(block.columns) === 2 ? 2 : 1}">${block.title ? `<small class="pg-list-title">${pageText(block.title)}</small>` : ''}<ul>${block.items.map((item) =>
     `<li data-tone="${pageTone(item.tone)}"><b>${pageText(item.name)}</b>${item.detail ? `<small>${pageText(item.detail)}</small>` : '<small></small>'}<em>${pageText(item.value)}</em></li>`).join('')}</ul>${block.more ? `<small class="pg-more">+${Number(block.more)} MORE</small>` : ''}</div>`,
   compass: (block) => `<div class="pg-compass" data-tone="${pageTone(block.tone)}"><span class="pg-arrow"${Number.isFinite(Number(block.relative)) && block.relative !== null ? ` data-turn="${Number(block.relative)}"` : ' data-turn="0" data-unknown'}><svg viewBox="0 0 20 20" aria-hidden="true"><path d="${ARROW_PATH}"/></svg></span><div><small>${pageText(block.label)}</small><b>${pageText(block.distance)}</b><em>${pageText(block.detail)}</em></div></div>`,
   dials: (block) => `<div class="pg-dials">${block.items.map((dial) =>
     `<span class="pg-dial ${['here', 'next', 'out', 'empty'].includes(dial.state) ? dial.state : 'out'}"${dial.state !== 'empty' && Number.isFinite(Number(dial.relative)) ? ` data-turn="${Number(dial.relative)}"` : ''}><i><svg viewBox="0 0 20 20" aria-hidden="true"><path d="${ARROW_PATH}"/></svg></i><b>${Number(dial.slot)}</b><small>${pageText(dial.state === 'empty' ? '—' : dial.state === 'here' ? 'HERE' : dial.distance)}</small></span>`).join('')}</div>`,
-  note: (block) => `<p class="pg-note" data-tone="${pageTone(block.tone)}">${pageText(block.text)}</p>`,
+  note: (block) => `<p class="pg-note${block.wrap ? ' wrap' : ''}" data-tone="${pageTone(block.tone)}">${pageText(block.text)}</p>`,
 };
 
 const MODE_ICONS = {
@@ -1111,10 +1111,26 @@ const MODE_ICONS = {
   manual: '<svg viewBox="0 0 16 16" aria-label="Manual: the page you chose"><path d="M5.5 2.5h5l-.7 4 2.2 2.5H4l2.2-2.5z"/><path d="M8 9v4.5"/></svg>',
 };
 
+// A warning over whatever page is up, NAV included (5.6.1): a pinned or
+// held page can't hide heavy gravity or a rig about to be lost.
+function renderAlert(alert) {
+  const line = dom['page-alert'];
+  if (!line) return;
+  const text = String(alert?.text || '');
+  dom.hud.classList.toggle('alerting', Boolean(text));
+  line.hidden = !text;
+  if (line.textContent !== text) line.textContent = text;
+  line.dataset.tone = pageTone(alert?.tone || 'red');
+}
+
 function renderPages(pages) {
   const hud = dom.hud;
   const panel = dom['page-panel'];
   if (!panel) return;
+  // The pages' own text size (5.6.1), on top of the HUD's.
+  const scale = Math.max(.7, Math.min(2, Number(pages?.text_scale) || 1));
+  for (const node of [panel, dom['page-alert']]) node?.style.setProperty('--page-text', String(scale));
+  renderAlert(pages?.alert);
   const page = pages?.page || null;
   // A page takes the route and survey rows; NAV is the HUD as it always was.
   hud.classList.toggle('paged', Boolean(page));

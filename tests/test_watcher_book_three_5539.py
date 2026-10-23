@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DAY = 86400.0
 T0 = 1_800_000_000.0
 
-BOOK_THREE = [row for row in watcher_lore.FRAGMENTS if row[5] >= watcher_lore.BOOK_TWO_END]
+BOOK_THREE = [row for row in watcher_lore.FRAGMENTS if watcher_lore.BOOK_TWO_END <= row[5] < watcher_lore.BOOK_THREE_END]
 BEFORE = [row for row in watcher_lore.FRAGMENTS if row[5] < watcher_lore.BOOK_TWO_END]
 
 

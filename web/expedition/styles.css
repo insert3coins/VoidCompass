@@ -1,0 +1,95 @@
+/* Expedition, in the Navigation HUD's language: frame and corner brackets,
+   Bahnschrift, the state notice. Colours are theme tokens; the values here
+   are only the fallbacks before the first snapshot. Everything sits in
+   .content, which zooms with the text size, and long names wrap. */
+:root {
+  color-scheme: dark;
+  --bg: #070b10; --panel: #0d141c; --inset: #0a1118; --border: #243746;
+  --accent: #00d1ff; --orange: #ff7a18; --green: #4ee59b; --yellow: #ffd166;
+  --red: #ff6075; --text: #dce8ef; --muted: #85939d; --dim: #52616c;
+  --scale: 1;
+  --hud: var(--orange);
+  --hud-soft: color-mix(in srgb, var(--hud) 62%, transparent);
+  --hud-faint: color-mix(in srgb, var(--hud) 22%, transparent);
+  --hud-ghost: color-mix(in srgb, var(--hud) 8%, transparent);
+  --font-hud: "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif;
+  --font-wide: "Bahnschrift", "Segoe UI", sans-serif;
+  --state: var(--green);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { width: 100%; margin: 0; overflow: hidden; background: transparent; }
+body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
+
+/* ---------------------------------------------------------------- frame -- */
+/* Sized by its content: the app measures it for the window's height. */
+.expedition {
+  position: relative; width: 100%; color: var(--text); font-variant-numeric: tabular-nums;
+  background:
+    radial-gradient(ellipse at 18% -30%, color-mix(in srgb, var(--state) 14%, transparent), transparent 58%),
+    linear-gradient(0deg, var(--hud-ghost) 1px, transparent 1px) 0 0 / 100% 4px,
+    linear-gradient(160deg, color-mix(in srgb, var(--inset) 94%, var(--hud)), var(--panel) 48%, var(--bg));
+  isolation: isolate;
+}
+.expedition.empty { opacity: 0; }
+.expedition.over { --state: var(--red); }
+.expedition::before {
+  content: ""; position: absolute; inset: 2px; z-index: -1; border: 1px solid var(--hud-faint);
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+  box-shadow: inset 0 0 26px rgba(0, 0, 0, .8);
+}
+.frame-corners { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.frame-corners i { position: absolute; width: 18px; height: 12px; border: 0 solid var(--hud-soft); }
+.frame-corners i:nth-child(1) { left: 4px; top: 4px; border-left-width: 2px; border-top-width: 2px; }
+.frame-corners i:nth-child(2) { right: 4px; top: 4px; border-right-width: 2px; border-top-width: 2px; }
+.frame-corners i:nth-child(3) { right: 4px; bottom: 4px; border-right-width: 2px; border-bottom-width: 2px; }
+.frame-corners i:nth-child(4) { left: 4px; bottom: 4px; border-left-width: 2px; border-bottom-width: 2px; }
+.scanlines { position: absolute; inset: 0; z-index: 30; pointer-events: none; opacity: .2; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .32) 3px); }
+.vignette { position: absolute; inset: 0; z-index: 29; pointer-events: none; box-shadow: inset 0 0 22px rgba(0, 0, 0, .78); }
+.expedition.no-crt .scanlines, .expedition.no-crt .vignette { display: none; }
+
+.content { position: relative; zoom: var(--scale); display: flex; flex-direction: column; gap: 6px; padding: 11px 13px 12px; }
+
+/* --------------------------------------------------------------- notice -- */
+.notice {
+  position: relative; min-width: 0; min-height: 26px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px;
+  padding: 2px 8px 2px 7px; border-left: 3px solid var(--state);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--state) 18%, transparent), color-mix(in srgb, var(--state) 5%, transparent) 60%, transparent);
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
+}
+.notice-tag { padding: 2px 5px 1px; border: 1px solid color-mix(in srgb, var(--state) 55%, transparent); color: var(--state); font: 700 8px var(--font-wide); letter-spacing: .16em; }
+#name { min-width: 0; overflow-wrap: anywhere; color: var(--text); font: 700 14px/1.15 var(--font-hud); letter-spacing: .05em; }
+.notice-aside { color: var(--state); font: 700 17px/1 var(--font-hud); text-shadow: 0 0 10px color-mix(in srgb, var(--state) 38%, transparent); }
+
+/* ------------------------------------------------------------- progress -- */
+.progress { position: relative; height: 5px; border: 1px solid var(--hud-faint); background: var(--inset); }
+.progress i { position: absolute; inset: 0 auto 0 0; width: var(--share, 0%); background: linear-gradient(90deg, color-mix(in srgb, var(--state) 55%, transparent), var(--state)); }
+.distance { margin: 0; color: var(--hud-soft); font: 700 9.5px var(--font-wide); letter-spacing: .1em; }
+
+/* ----------------------------------------------------------------- next -- */
+.next { display: grid; gap: 1px; padding: 5px 0 5px 9px; border-left: 2px solid var(--accent); }
+.next small { color: var(--accent); font: 700 8px var(--font-wide); letter-spacing: .16em; }
+.next strong { overflow-wrap: anywhere; color: var(--text); font: 700 15px/1.2 var(--font-hud); letter-spacing: .03em; }
+.next span { overflow-wrap: anywhere; color: var(--muted); font: 700 9px var(--font-wide); letter-spacing: .08em; }
+
+.compass { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 5px 8px; background: color-mix(in srgb, var(--green) 7%, transparent); border: 1px solid color-mix(in srgb, var(--green) 30%, transparent); }
+.needle { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid color-mix(in srgb, var(--green) 45%, transparent); border-radius: 50%; }
+.needle svg { width: 18px; height: 18px; fill: var(--green); transform: rotate(var(--turn, 0deg)); transition: transform .3s ease-out; }
+.needle.unknown svg { opacity: .35; }
+.compass > div { display: grid; gap: 1px; min-width: 0; }
+.compass b { color: var(--green); font: 700 18px/1 var(--font-hud); letter-spacing: .04em; }
+.compass span { overflow-wrap: anywhere; color: var(--muted); font: 700 8.5px var(--font-wide); letter-spacing: .1em; }
+.fly-to { margin: 0; padding-left: 9px; border-left: 2px solid var(--green); overflow-wrap: anywhere; color: var(--green); font: 700 9.5px/1.4 var(--font-wide); letter-spacing: .08em; }
+
+/* -------------------------------------------------------------- figures -- */
+.figures { display: flex; flex-wrap: wrap; gap: 4px 14px; padding-top: 6px; border-top: 1px solid var(--hud-faint); }
+.figure { display: grid; gap: 1px; }
+.figure small { color: var(--hud-soft); font: 700 7.5px var(--font-wide); letter-spacing: .14em; }
+.figure b { color: var(--text); font: 700 11px var(--font-wide); letter-spacing: .04em; white-space: nowrap; }
+.figure.yellow b { color: var(--yellow); }
+.figure.red b { color: var(--red); }
+.warnings { display: flex; flex-direction: column; gap: 2px; }
+.warnings span { padding-left: 9px; border-left: 2px solid var(--yellow); overflow-wrap: anywhere; color: var(--yellow); font: 700 9px/1.35 var(--font-wide); letter-spacing: .1em; }
+.warnings span.danger { border-left-color: var(--red); color: var(--red); }
+.expedition.reduced-motion * { animation: none !important; transition: none !important; }

@@ -48,6 +48,8 @@ OVERLAY_SPECS = (
     # the right-hand panel; after SrvSurvey's build commodities panel.
     OverlaySpec("colony_needs_hud", "colony-needs", "Void Compass Construction Needs", "colony_needs_overlay_enabled", "colony_needs_hud_x", "colony_needs_hud_y", (1520, 120), (360, 320), "Construction Needs", "COLONY", True, "colony_needs", "overlay_hotkey_colony_needs", "Construction Needs"),
     # Trading (5.5.2.6): only while a trade route is being followed.
+    # 5.6.1: an expedition at a glance; the HUD's EXPEDITION page stands in for it.
+    OverlaySpec("expedition_hud", "expedition", "Void Compass Expedition", "expedition_overlay_enabled", "expedition_hud_x", "expedition_hud_y", (40, 560), (380, 220), "Expedition", "EXPEDITION", True, "expedition", "overlay_hotkey_expedition", "Expedition"),
     OverlaySpec("trade_route_hud", "trade-route", "Void Compass Trade Route", "trade_route_overlay_enabled", "trade_route_hud_x", "trade_route_hud_y", (1520, 480), (360, 150), "Trade Route", "TRADE", True, "trade_route", "overlay_hotkey_trade_route", "Trade Route"),
     # 5.5.3.7: the Milky Way in a corner, with you on it; and a Polaroid of
     # each screenshot taken in game.
@@ -91,6 +93,7 @@ OVERLAY_HOTKEY_SPECS = (
     _overlay_hotkey("jump_info"),
     _overlay_hotkey("colony_needs"),
     _overlay_hotkey("trade_route"),
+    _overlay_hotkey("expedition"),
     ("colony_refresh", "overlay_hotkey_colony_refresh", "Construction Needs: refresh from Raven Colonial", None),
     ("colony_fold", "overlay_hotkey_colony_fold", "Construction Needs: fold / unfold covered groups", None),
     _overlay_hotkey("survey"),
@@ -122,8 +125,13 @@ OVERLAY_HOTKEY_SPECS = (
     ("music_previous", "overlay_hotkey_music_previous", "Music: previous track", None),
     # Poke the Watcher: it looks up and answers (5.5.3.2).
     ("watcher_poke", "overlay_hotkey_watcher_poke", "The Watcher: poke", None),
+    # 5.6.1: answering its questions.
+    ("watcher_answer_1", "overlay_hotkey_watcher_answer_1", "The Watcher: answer 1", None),
+    ("watcher_answer_2", "overlay_hotkey_watcher_answer_2", "The Watcher: answer 2", None),
+    ("watcher_answer_3", "overlay_hotkey_watcher_answer_3", "The Watcher: answer 3", None),
     _overlay_hotkey("planet_waypoint"),
-    ("field_bookmark", "overlay_hotkey_field_bookmark", "Save field bookmark", None),
+    # 5.6.1: marks the spot as one of the expedition's places.
+    ("field_bookmark", "overlay_hotkey_field_bookmark", "Expedition: mark this place", None),
 )
 
 DEFAULT_OVERLAY_HOTKEYS = {
@@ -157,6 +165,7 @@ TEXT_SIZE_KEYS = {
     "jump_info_hud": "jump_info_text_scale_percent",
     "colony_needs_hud": "colony_needs_text_scale_percent",
     "trade_route_hud": "trade_route_text_scale_percent",
+    "expedition_hud": "expedition_text_scale_percent",
     "rig_tracker_hud": "rig_tracker_text_scale_percent",
     "rhino_map_hud": "rhino_map_text_scale_percent",
     "postcard_hud": "postcard_text_scale_percent",

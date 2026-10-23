@@ -79,6 +79,24 @@ class ApiRecordsMixin:
             "sampling": engine.exobiology_snapshot() if engine is not None else None,
         })
 
+    def api_exploration_survey(self):
+        """This system's bodies in the survey order the Survey overlay, the
+        Nav HUD and Explore & Survey's board share (5.6.1)."""
+        from voidcompass.overlays.hud_pages import survey_rank
+        model = self._hud_survey_model() or {}
+        self._hud_rhino_hints(model)
+        rows = sorted((row for row in model.get("rows") or () if isinstance(row, dict)), key=survey_rank)
+        return _plain({
+            "system": model.get("system") or getattr(self, "current_sys", "") or "",
+            "scanned": int(model.get("scanned") or 0), "total": int(model.get("total") or 0),
+            "total_known": bool(model.get("total_known")),
+            "bodies": [{"body": row.get("display_name") or row.get("name") or "", "body_id": row.get("body_id"),
+                        "bio_signals": int(row.get("bio_count") or 0), "bio_done": bool(row.get("bio_complete")),
+                        "geo_signals": int(row.get("geo_count") or 0), "mining_sites": int(row.get("mining_count") or 0),
+                        "rhino": row.get("rhino") or None, "needs_mapping": bool(row.get("needs_dss")),
+                        "value_cr": int(row.get("max_value") or row.get("min_value") or 0)} for row in rows],
+        })
+
     @staticmethod
     def _api_body(system, item):
         return {

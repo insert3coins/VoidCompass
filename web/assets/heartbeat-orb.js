@@ -249,6 +249,31 @@
    * layout.
    */
   const EFFECTS = {
+    // Its story's moments (5.6.1), each played once when told: the first time
+    // it heard the sound, the shutter drawn, the eye opened to look back.
+    story_sound: {
+      ms: 3600,
+      mods: (p, m) => { m.dim *= 1 - .35 * bump(p); },
+      inner: (g, fx, p) => {
+        for (let ring = 0; ring < 4; ring += 1) {
+          const q = clamp(p * 1.5 - ring * .18);
+          if (q <= 0 || q >= 1) continue;
+          g.wave(lerp(.06, .9, smoother(q)), .03, mix(g.pal.text, fx.color, .3), bump(q) * .35 * fx.w);
+        }
+      },
+    },
+    story_shutter: {
+      ms: 2600,
+      mods: (p, m) => { m.dim *= 1 - .45 * bump(p); m.pupil *= 1 - .3 * bump(p); },
+      outer: (g, fx, p) => g.glowTrack(-Math.PI * .95, -Math.PI * .95 + Math.PI * .9 * smoother(span(p, 0, .7)),
+        .9, 1.05, fx.color, .45 * (1 - smooth(span(p, .7, 1)))),
+    },
+    story_open: {
+      ms: 2600,
+      mods: (p, m, fx) => { m.flare += .8 * fx.w * bump(p); m.iris += .1 * bump(p); },
+      outer: (g, fx, p) => g.glowTrack(-Math.PI / 2, -Math.PI / 2 + TAU * smoother(span(p, 0, .85)),
+        .88, 1.08, fx.color, .55 * (1 - smooth(span(p, .75, 1)))),
+    },
     pulse: {
       ms: 800,
       mods: (p, m, fx) => { m.flare += .45 * fx.w * bump(p); m.iris += .06 * bump(p); },
@@ -868,6 +893,8 @@
     update(input = {}) {
       const now = performance.now();
       this.decay(now);
+      // What its story has done to the eye (5.6.1): they stay once earned.
+      this.story = input.story && typeof input.story === 'object' ? input.story : {};
       this.pal = themeColors(input.palette || {});
       this.palKey = JSON.stringify(this.pal);
       this.eye = input.eye === 'hal' ? 'hal' : 'theme';
@@ -1010,6 +1037,45 @@
     speak(ms = 2000) {
       if (this.reduced || this.stalled) return;
       this.play({effect: 'speak', tone: 'accent', weight: .8}, performance.now(), Math.max(1200, Math.min(9000, ms)));
+    }
+
+    // The marks its story leaves (5.6.1), subtle and still: a hairline crack
+    // in the glass, a second faint pupil while something looks through, the
+    // shutter part-drawn across the top of the lens. Never a blink.
+    drawStory(g, gx, gy) {
+      const story = this.story || {};
+      const {ctx, cx, cy, R, k} = g;
+      if (story.shutter > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * .96, 0, TAU);
+        ctx.clip();
+        const depth = R * (.15 + .55 * clamp(Number(story.shutter)));
+        const shade = ctx.createLinearGradient(0, cy - R, 0, cy - R + depth);
+        shade.addColorStop(0, 'rgba(0, 0, 0, .55)');
+        shade.addColorStop(.8, 'rgba(0, 0, 0, .3)');
+        shade.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = shade;
+        ctx.fillRect(cx - R, cy - R, 2 * R, depth);
+        ctx.restore();
+      }
+      if (story.second_pupil) {
+        g.glow(gx + .3 * R, gy - .2 * R, 2.2 * k, g.pal.text, .22);
+      }
+      if (story.crack) {
+        ctx.save();
+        ctx.strokeStyle = g.pal.text;
+        ctx.globalAlpha = .16;
+        ctx.lineWidth = Math.max(.5, .55 * k);
+        ctx.beginPath();
+        const points = [[.95, -2.2], [.78, -2.12], [.66, -2.24], [.52, -2.15], [.41, -2.27]];
+        points.forEach(([distance, angle], index) => {
+          const x = cx + Math.cos(angle) * distance * R, y = cy + Math.sin(angle) * distance * R;
+          if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        });
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     play(event, start, ms = null) {
@@ -1342,6 +1408,7 @@
       this.drawGhosts(g, gx, gy, tintAt(.6), level);
       ctx.globalCompositeOperation = 'source-over';
       if (pose?.glint != null) this.drawGlint(g, pose.glint);
+      this.drawStory(g, gx, gy);
       if (pose) this.drawLids(g, pose);
       ctx.restore();
 

@@ -12,6 +12,7 @@ import {
 import {handleBgsChange, handleBgsClick, handleBgsSubmit, renderBgs} from "./bgs.js";
 import {handleTradingClick, handleTradingInput, handleTradingSubmit, renderTrading, resetTrading} from "./trading.js";
 import {handleMiningClick, handleMiningInput, handleMiningSubmit, renderMining, resetMining} from "./mining.js";
+import {handleExpeditionsChange, handleExpeditionsClick, handleExpeditionsInput, handleExpeditionsSubmit, renderExpeditions, resetExpeditions} from "./expeditions.js";
 import {handlePlanetaryChange, handlePlanetaryClick, handlePlanetaryInput, handlePlanetarySubmit, renderPlanetary, resetPlanetary, setPlanetaryView} from "./planetary.js";
 import {renderWatcher} from "./watcher.js";
 import {renderPostcards} from "./postcards.js";
@@ -82,7 +83,6 @@ let workspaceFingerprints = {};
 let workspaceSyncTimer = 0;
 let workspaceSyncTicket = 0;
 let groundTargetRefreshTimer = 0;
-let missionSelectedId = "";
 const achievementUi = {category: "all", status: "all", search: "", sort: "progress", visible: 24};
 let hotkeyCaptureAction = "";
 let orrerySelectedBodyId = "";
@@ -110,7 +110,8 @@ const pageLayoutDefaults = {};
 
 const PAGE_SUITES = [
   {parent: "explore", label: "EXPLORATION COMMAND", pages: [
-    ["explore", "SYSTEM SURVEY"], ["mission", "EXPEDITIONS"],
+    // Expeditions has its own place on the rail since 5.6.1.
+    ["explore", "SYSTEM SURVEY"],
     ["recon", "SCOUT & RECON"], ["ledger", "VALUE LEDGER"], ["chronicle", "CAPTAIN'S LOG"],
   ]},
   {parent: "profile", label: "COMMANDER RECORD", pages: [
@@ -1209,7 +1210,7 @@ function renderRoute(state) {
   text("route-badge", route.mode === "none" ? "NO ROUTE" : route.mode === "game" ? "GAME ROUTE" : "WAYPOINT PLAN");
   text("route-source", route.source, "NAVIGATION");
   text("route-next", route.next, "NO ACTIVE ROUTE");
-  text("route-final", route.final ? `FINAL // ${route.final}` : "Plot a route in Elite or Mission Control.");
+  text("route-final", route.final ? `FINAL // ${route.final}` : "Plot a route in Elite or on the Expeditions page.");
   text("route-progress-label", route.text, "INACTIVE");
   text("route-distance", route.distance_text, "— LY");
   text("route-remaining", `${number(route.remaining)} ${number(route.remaining) === 1 ? "JUMP" : "JUMPS"} LEFT`);
@@ -1642,11 +1643,14 @@ function renderExpedition(state) {
   const active = Boolean(expedition.active);
   text("expedition-badge", active ? String(expedition.status || "ACTIVE").toUpperCase() : "NO MISSION");
   text("expedition-name", active ? expedition.name : "NO ACTIVE EXPEDITION");
-  text("expedition-detail", active ? expedition.detail : "Create or resume a named expedition in Mission Control.");
+  text("expedition-detail", active ? expedition.detail : "Plan one on the Expeditions page.");
   const total = number(expedition.total);
   const complete = number(expedition.complete);
   percentWidth("expedition-progress", total ? (complete / total) * 100 : 0);
   text("expedition-progress-label", `${complete} / ${total}`);
+  // Explore & Survey's link to it shows only while one is on (5.6.1).
+  const banner = byId("explore-expedition");
+  if (banner) banner.hidden = !active;
 }
 
 function renderSources(state) {
@@ -2796,6 +2800,7 @@ const EXPLORE_WORKSPACE_UI = Object.freeze({
   orreryCanvas, orreryDetail, percentWidth, selectOrreryBody, setOrrerySelection, showPage, text,
   planetKind: surveyPlanetKind,
   profileKey: () => profileKey,
+  command, showToast,
 });
 
 function renderProfileWorkspace(data) {
@@ -2975,25 +2980,6 @@ function renderChronicleWorkspace(data) {
   ])}<section class="workspace-grid chronicle-feature-grid">${workspaceCard("EXPEDITION REPLAY", replayMarkup(data.replay || {}), `${numeric(data.replay?.points?.length)} ROUTE POINTS`, "replay-card")}</section>${chronicleFold("photos", `SCREENSHOT CHRONICLE · ${photos.length} RECENT`, workspaceCard("SCREENSHOT CHRONICLE", `${workspaceRows(photoRows, "Screenshots will be associated with their system, body and nearby journal event.")}<div class="workspace-actions"><button data-command="open_screenshots">OPEN SCREENSHOT FOLDER</button></div>`, `${photos.length} RECENT PHOTOS`, "photo-chronicle-card"))}${sessions.length ? "" : `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}`;
 }
 
-function renderMissionWorkspace(data) {
-  const root = byId("mission-workspace");
-  const expeditions = data.expeditions || [];
-  if (!missionSelectedId || !expeditions.some((row) => row.id === missionSelectedId)) missionSelectedId = data.active_id || expeditions[0]?.id || "";
-  const selected = expeditions.find((row) => row.id === missionSelectedId);
-  const list = expeditions.map((row) => `<button class="mission-row${row.id === missionSelectedId ? " active" : ""}" data-mission-select="${escapeHtml(row.id)}"><i></i><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.destination || row.description || "Open-ended expedition")}</small></span><em>${escapeHtml(row.status)}</em></button>`).join("");
-  let detail = `<p class="workspace-empty">Create a named expedition to begin a journal-backed mission.</p>`;
-  if (selected) {
-    const objectives = (selected.objectives || []).map((row) => `<div class="objective-row${row.complete ? " complete" : ""}"><button data-ws-page="mission" data-ws-op="toggle_objective" data-expedition-id="${escapeHtml(selected.id)}" data-objective-id="${escapeHtml(row.id)}">${row.complete ? "✓" : "○"}</button><p><strong>${escapeHtml(row.title)}</strong><span>${escapeHtml(row.detail || row.kind || "Manual expedition objective")}</span></p><button class="row-delete" data-ws-page="mission" data-ws-op="remove_objective" data-expedition-id="${escapeHtml(selected.id)}" data-objective-id="${escapeHtml(row.id)}">×</button></div>`);
-    detail = `${workspaceMetrics([
-      {label: "Jumps", value: numeric(selected.stats?.jumps), detail: `${numeric(selected.stats?.systems)} SYSTEMS`},
-      {label: "Distance", value: `${numeric(selected.stats?.distance, 1)} LY`, detail: "EXPEDITION TRAVEL"},
-      {label: "Survey", value: numeric(number(selected.stats?.fss) + number(selected.stats?.dss)), detail: `${numeric(selected.stats?.fss)} FSS · ${numeric(selected.stats?.dss)} DSS`},
-      {label: "Discoveries", value: numeric(number(selected.stats?.bio) + number(selected.stats?.codex)), detail: `${numeric(selected.stats?.bio)} BIO · ${numeric(selected.stats?.codex)} CODEX`},
-    ])}<section class="workspace-hero compact"><div><small>${escapeHtml(selected.status)} // ${escapeHtml(selected.started)}</small><h3>${escapeHtml(selected.name)}</h3><span>${escapeHtml(selected.description || "No expedition description")}</span></div><div><button data-ws-page="mission" data-ws-op="status" data-status="active" data-expedition-id="${escapeHtml(selected.id)}">RESUME</button><button data-ws-page="mission" data-ws-op="status" data-status="paused" data-expedition-id="${escapeHtml(selected.id)}">PAUSE</button><button data-ws-page="mission" data-ws-op="status" data-status="completed" data-expedition-id="${escapeHtml(selected.id)}">COMPLETE</button><button class="danger-action" data-ws-page="mission" data-ws-op="delete" data-expedition-id="${escapeHtml(selected.id)}">DELETE</button></div></section>${workspaceCard("OBJECTIVES", `${workspaceRows(objectives, "No objectives yet.")}<div class="workspace-actions"><button data-ws-page="mission" data-ws-op="add_objective" data-expedition-id="${escapeHtml(selected.id)}">ADD OBJECTIVE</button></div>`, `${objectives.filter((_, index) => selected.objectives[index]?.complete).length}/${objectives.length}`)}`;
-  }
-  root.classList.remove("loading-panel");
-  root.innerHTML = `<section class="mission-layout"><aside class="card mission-list"><header><span>EXPEDITIONS</span><b>${expeditions.length}</b></header><div>${list || `<p class="workspace-empty">NO EXPEDITIONS</p>`}</div></aside><div class="mission-detail">${detail}</div></section>`;
-}
 
 
 // The Mining page lives in mining.js (5.5.12).
@@ -3418,6 +3404,9 @@ function settingsSectionBody(id, data) {
   }
   if (id === "flight") {
     return settingGroup("FLIGHT", `${settingSelect({key: "low_fuel_threshold_pct", label: "Low fuel warning", detail: "Warn when the main tank falls below this.", value: String(number(value.low_fuel_threshold_pct, .25)), options: [.1, .15, .2, .25, .3, .4, .5].map((item) => [String(item), `${Math.round(item * 100)}%`]), type: "number"})}${settingSwitch({key: "auto_copy_waypoint", label: "Auto-copy the next waypoint", detail: "As you arrive in a system, your next saved waypoint goes on the clipboard, ready to paste into the galaxy map. Also on the Command Deck, under COPY NEXT DESTINATION.", checked: value.auto_copy_waypoint})}`)
+      + settingGroup("EXPEDITIONS", settingSelect({key: "expedition_risk_cr", label: "Data at risk", detail: "On an expedition, a nudge (and a word from the Watcher) each time the unsold data aboard passes another step of this.", value: String(number(value.expedition_risk_cr, 100000000)), options: [["0", "Off"], ["25000000", "25 M CR"], ["50000000", "50 M CR"], ["100000000", "100 M CR"], ["250000000", "250 M CR"], ["500000000", "500 M CR"], ["1000000000", "1 BN CR"]]})
+        + settingSwitch({key: "expedition_gec_enabled", label: "Points of interest near the route", detail: "Sights from EDAstro's Galactic Exploration Catalog near your expedition's route, on its PLACES tab. Fetched from edastro.com at most once a day; off means nothing is fetched.", checked: value.expedition_gec_enabled !== false})
+        + settingSelect({key: "expedition_poi_range_ly", label: "How far off the route", detail: "Points of interest this close to the line of your route are shown.", value: number(value.expedition_poi_range_ly, 150), options: [[50, "50 ly"], [100, "100 ly"], [150, "150 ly"], [250, "250 ly"], [500, "500 ly"], [1000, "1,000 ly"]], type: "number"}))
       + settingGroup("HOME", `${settingText({key: "home_system", id: "setting-home", label: "Home system", detail: "Distances \"from home\" start here: the Watcher's remarks and the Galaxy Minimap. Leave it empty for Sol.", value: value.home_system, placeholder: "Sol", status: homeStatus(data.home)})}`)
       + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
       + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingNote("Unlocks pop up in the cockpit's Achievements overlay: switch it on or off, and place it, in Overlay Studio.")}`);
@@ -3895,7 +3884,8 @@ function renderWorkspace(state) {
       renderChronicleWorkspace(data);
       renderFlightLogs(data.flight_logs || {}, WORKSHOP_UI, data.sessions || []);
     },
-    mission: renderMissionWorkspace,
+    // 5.6.1: Mission Control is the Expeditions page (expeditions.js).
+    mission: (data) => renderExpeditions(data, WORKSHOP_UI),
     mining: renderMiningWorkspace,
     powerplay: renderPowerplayWorkspace,
     carrier: renderCarrierWorkspace,
@@ -3925,10 +3915,10 @@ function renderDashboard(state) {
     profileKey = nextProfileKey;
     Object.keys(pageLayoutDefaults).forEach((page) => delete pageLayoutDefaults[page]);
     workspaceFingerprints = {};
-    missionSelectedId = "";
     resetColonisation();
     resetTrading();
     resetMining();
+    resetExpeditions();
     resetPlanetary();
     orrerySelectedBodyId = "";
     analyticsView = "trends";
@@ -4463,6 +4453,7 @@ document.addEventListener("click", async (event) => {
   if (handleBgsClick(event, WORKSHOP_UI)) return;
   if (handleTradingClick(event, WORKSHOP_UI)) return;
   if (handleMiningClick(event, WORKSHOP_UI)) return;
+  if (handleExpeditionsClick(event, WORKSHOP_UI)) return;
   if (handlePlanetaryClick(event, PLANETARY_UI)) return;
   const studioCard = event.target.closest(".studio-overlay-card");
   if (studioCard) {
@@ -4575,13 +4566,6 @@ document.addEventListener("click", async (event) => {
     renderAchievementCatalogue(model.workspace?.data || {});
     return;
   }
-  const missionSelect = event.target.closest("[data-mission-select]");
-  if (missionSelect) {
-    missionSelectedId = missionSelect.dataset.missionSelect;
-    workspaceFingerprints.mission = "";
-    renderWorkspace(model);
-    return;
-  }
   const recordHotkey = event.target.closest("[data-hotkey-record]");
   if (recordHotkey) {
     if (hotkeyCaptureAction) await finishHotkeyCapture("Starting a new capture…");
@@ -4621,13 +4605,6 @@ document.addEventListener("click", async (event) => {
     if (!window.confirm("Clear locally cached Galnet dispatches?")) return;
     const accepted = await command("clear_galnet_cache");
     showToast(accepted ? "Galnet cache cleared" : "Galnet is busy; try again after the current refresh");
-    return;
-  }
-  if (event.target.closest("#mission-new")) {
-    const name = window.prompt("Expedition name:", "Deep-space expedition");
-    if (!name?.trim()) return;
-    const destination = window.prompt("Destination system or region (optional):", "") || "";
-    if (await command("workspace", {page: "mission", operation: "create", name: name.trim(), destination, start_system: model.flight?.system || ""})) showToast("Expedition created");
     return;
   }
   const workspaceButton = event.target.closest("[data-ws-page]");
@@ -4703,10 +4680,6 @@ document.addEventListener("click", async (event) => {
       if (!payload.reference || number(payload.radius) <= 0 || number(payload.max_results) <= 0 || number(payload.jump_range) <= 0) {
         showToast("Enter a reference system and positive search values"); return;
       }
-    } else if (page === "mission" && operation === "add_objective") {
-      const target = window.prompt("Objective:", "Survey target") || "";
-      if (!target.trim()) return;
-      Object.assign(payload, {kind: "manual", target: target.trim(), system: model.flight?.system || "", count: 1});
     } else if (page === "ground" && operation === "set") {
       const prefix = {
         studio: "studio-ground",
@@ -4849,6 +4822,7 @@ document.addEventListener("input", (event) => {
 
 // Settings save as they change. Overlays are Overlay Studio's alone.
 document.addEventListener("change", (event) => {
+  if (handleExpeditionsChange(event, WORKSHOP_UI)) return;
   handlePlanetaryChange(event, PLANETARY_UI);
 });
 
@@ -4875,7 +4849,7 @@ document.addEventListener("change", async (event) => {
 
 document.addEventListener("input", (event) => {
   if (event.target.id === "settings-search") applySettingsView();
-  else if (!handleMiningInput(event, WORKSHOP_UI) && !handlePlanetaryInput(event, PLANETARY_UI)) handleTradingInput(event, WORKSHOP_UI);
+  else if (!handleMiningInput(event, WORKSHOP_UI) && !handleExpeditionsInput(event) && !handlePlanetaryInput(event, PLANETARY_UI)) handleTradingInput(event, WORKSHOP_UI);
 });
 
 document.addEventListener("toggle", (event) => {
@@ -4911,6 +4885,7 @@ document.addEventListener("submit", (event) => {
   if (handleColonisationSubmit(event, WORKSHOP_UI)) return;
   if (handleTradingSubmit(event, WORKSHOP_UI)) return;
   if (handleMiningSubmit(event, WORKSHOP_UI)) return;
+  if (handleExpeditionsSubmit(event, WORKSHOP_UI)) return;
   if (handlePlanetarySubmit(event, PLANETARY_UI)) return;
   handleBgsSubmit(event, WORKSHOP_UI);
 });

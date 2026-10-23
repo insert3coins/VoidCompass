@@ -28,6 +28,7 @@
   <link rel="stylesheet" href="bgs.css">
   <link rel="stylesheet" href="trading.css">
   <link rel="stylesheet" href="mining.css">
+  <link rel="stylesheet" href="expeditions.css">
   <link rel="stylesheet" href="planetary.css">
   <link rel="stylesheet" href="setup.css">
   <link rel="stylesheet" href="focused-log.css">
@@ -249,31 +250,32 @@
       <nav class="nav" aria-label="Command deck">
         <p>EXPLORATION</p>
         <button class="nav-item active" data-page="overview" aria-label="Dashboard" aria-current="page" title="Dashboard"><i>⌖</i><span>Dashboard</span><b>01</b></button>
-        <button class="nav-item" data-page="explore" aria-label="Explore &amp; Survey" title="Explore &amp; Survey"><i>✦</i><span>Explore & Survey</span><b>02</b></button>
-        <button class="nav-item" data-page="map" aria-label="Galactic Atlas" title="Galactic Atlas"><i>◉</i><span>Galactic Atlas</span><b>03</b></button>
-        <button class="nav-item" data-page="planet-materials" aria-label="Planetary Operations" title="Planetary Operations"><i>◇</i><span>Planetary Operations</span><b>04</b></button>
+        <button class="nav-item" data-page="mission" aria-label="Expeditions" title="Expeditions: plan a long trip and keep all of it"><i>⚐</i><span>Expeditions</span><b>02</b></button>
+        <button class="nav-item" data-page="explore" aria-label="Explore &amp; Survey" title="Explore &amp; Survey"><i>✦</i><span>Explore & Survey</span><b>03</b></button>
+        <button class="nav-item" data-page="map" aria-label="Galactic Atlas" title="Galactic Atlas"><i>◉</i><span>Galactic Atlas</span><b>04</b></button>
+        <button class="nav-item" data-page="planet-materials" aria-label="Planetary Operations" title="Planetary Operations"><i>◇</i><span>Planetary Operations</span><b>05</b></button>
         <p>RECORDS</p>
-        <button class="nav-item" data-page="profile" aria-label="Commander Record" title="Commander Record"><i>◎</i><span>Commander Record</span><b>05</b></button>
+        <button class="nav-item" data-page="profile" aria-label="Commander Record" title="Commander Record"><i>◎</i><span>Commander Record</span><b>06</b></button>
         <p>FIELD SYSTEMS</p>
-        <button class="nav-item" data-page="bgs" aria-label="BGS" title="Background Simulation: factions, influence, states and conflicts"><i>◈</i><span>BGS</span><b>06</b></button>
-        <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>07</b></button>
-        <button class="nav-item" data-page="colonisation" aria-label="Colonisation" title="Colonisation"><i>⬢</i><span>Colonisation</span><b>08</b></button>
-        <button class="nav-item" data-page="mining" aria-label="Mining Command" title="Mining Command"><i>◆</i><span>Mining Command</span><b>09</b></button>
-        <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>10</b></button>
-        <button class="nav-item" data-page="trading" aria-label="Trading" title="Trading: routes, markets and your profits"><i>⇄</i><span>Trading</span><b>11</b></button>
+        <button class="nav-item" data-page="bgs" aria-label="BGS" title="Background Simulation: factions, influence, states and conflicts"><i>◈</i><span>BGS</span><b>07</b></button>
+        <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>08</b></button>
+        <button class="nav-item" data-page="colonisation" aria-label="Colonisation" title="Colonisation"><i>⬢</i><span>Colonisation</span><b>09</b></button>
+        <button class="nav-item" data-page="mining" aria-label="Mining Command" title="Mining Command"><i>◆</i><span>Mining Command</span><b>10</b></button>
+        <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>11</b></button>
+        <button class="nav-item" data-page="trading" aria-label="Trading" title="Trading: routes, markets and your profits"><i>⇄</i><span>Trading</span><b>12</b></button>
         <p>COCKPIT</p>
-        <button class="nav-item" data-page="constellation" aria-label="Constellation" title="Your constellation: your journey drawn in the stars"><i>✧</i><span>Constellation</span><b>12</b></button>
-        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>13</b></button>
-        <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>14</b></button>
-        <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>15</b></button>
-        <button class="nav-item" data-page="capsules" aria-label="Time Capsules" title="Time Capsules: notes left for systems, and On this day"><i>⧗</i><span>Time Capsules</span><b>16</b></button>
-        <button class="nav-item" data-page="wrapped" aria-label="Void Wrapped" title="Void Wrapped: your year in Elite, told as a story"><i>✺</i><span>Void Wrapped</span><b>17</b></button>
-        <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>18</b></button>
+        <button class="nav-item" data-page="constellation" aria-label="Constellation" title="Your constellation: your journey drawn in the stars"><i>✧</i><span>Constellation</span><b>13</b></button>
+        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>14</b></button>
+        <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>15</b></button>
+        <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>16</b></button>
+        <button class="nav-item" data-page="capsules" aria-label="Time Capsules" title="Time Capsules: notes left for systems, and On this day"><i>⧗</i><span>Time Capsules</span><b>17</b></button>
+        <button class="nav-item" data-page="wrapped" aria-label="Void Wrapped" title="Void Wrapped: your year in Elite, told as a story"><i>✺</i><span>Void Wrapped</span><b>18</b></button>
+        <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>19</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>19</b></button>
-        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>20</b></button>
-        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>21</b></button>
-        <button class="nav-item" data-page="tools" aria-label="Tools" title="Tools: everything you switch often, in one place"><i>⚙</i><span>Tools</span><b>22</b></button>
+        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>20</b></button>
+        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>21</b></button>
+        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>22</b></button>
+        <button class="nav-item" data-page="tools" aria-label="Tools" title="Tools: everything you switch often, in one place"><i>⚙</i><span>Tools</span><b>23</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -376,7 +378,7 @@
               <header><span>04 / FLIGHT CORRIDOR</span><b id="route-badge">NO ROUTE</b></header>
               <div class="route-target">
                 <span class="route-radar" aria-hidden="true"><i></i><i></i></span>
-                <div><small id="route-source">NAVIGATION</small><h3 id="route-next">NO ACTIVE ROUTE</h3><p id="route-final">Plot a route in Elite or Mission Control.</p></div>
+                <div><small id="route-source">NAVIGATION</small><h3 id="route-next">NO ACTIVE ROUTE</h3><p id="route-final">Plot a route in Elite or on the Expeditions page.</p></div>
               </div>
               <div class="route-track"><i id="route-progress"></i><span id="route-progress-label">INACTIVE</span></div>
               <div class="route-meta"><span id="route-distance">— LY</span><span id="route-remaining">0 JUMPS LEFT</span></div>
@@ -439,8 +441,8 @@
         </section>
         <section class="page" data-page-name="explore">
           <header class="page-title">
-            <div><p>STELLAR CARTOGRAPHY</p><h2>Explore & survey</h2><span>Survey this system, plan the route and line up the next prospect</span></div>
-            <div class="title-actions"><button class="ghost" data-command="open" data-target="ground">GROUND NAV</button><button class="ghost" data-command="open" data-target="achievements">ACHIEVEMENTS</button><button data-page="map">GALACTIC ATLAS</button></div>
+            <div><p>STELLAR CARTOGRAPHY</p><h2>Explore & survey</h2><span>Survey the system you're in, body by body, and line up the next prospect</span></div>
+            <div class="title-actions"><button class="ghost" data-page="planet-materials">PLANETARY</button><button class="ghost" data-page="mission">EXPEDITIONS</button><button data-page="map">GALACTIC ATLAS</button></div>
           </header>
           <!-- Views, survey board and orrery are built by explore.js. -->
           <section id="explore-workspace" class="explore-shell" aria-label="Explore and survey workspace"></section>
@@ -509,8 +511,8 @@
         </section>
 
         <section class="page specialist-page" data-page-name="mission">
-          <header class="page-title"><div><p>EXPEDITION ARCHITECT</p><h2>Mission Control</h2><span>Create, resume and progress long-range exploration campaigns</span></div><div class="title-actions"><button data-page="explore">RETURN TO SURVEY</button><button class="primary" id="mission-new">NEW EXPEDITION</button></div></header>
-          <div id="mission-workspace" class="workspace-shell loading-panel">Loading expedition command…</div>
+          <header class="page-title"><div><p>EXPEDITIONS</p><h2>Expeditions</h2><span>Plan a long trip, fly it with Spansh routes, and keep the whole of it: the data at risk, your supplies, a streak, a day-by-day log and its own Void Wrapped</span></div><div class="title-actions"><button data-page="explore">EXPLORE &amp; SURVEY</button></div></header>
+          <div id="mission-workspace" class="workspace-shell loading-panel">Opening your expeditions…</div>
         </section>
 
 
@@ -736,18 +738,21 @@
                     <h4>NAVIGATION HUD</h4>
                     <label class="studio-field"><span>Pages<small>One overlay for everything: the lower half changes with what you're doing</small></span><select id="studio-hud-pages" data-studio-setting="hud_pages"><option value="off">Navigation only</option><option value="auto">Auto: follow what you're doing</option><option value="manual">Manual: choose with the next page key</option></select></label>
                     <label class="studio-switch"><span><b>Show these here instead</b><small>The overlays the pages show stay off while the pages are on, and come back when they're off.</small></span><input type="checkbox" data-overlay-option="hud_pages_takeover"><i></i></label>
+                    <label class="studio-field"><span>Pages text size<small>Just the pages and the alert line, on top of the HUD's own text size. The HUD grows to fit.</small></span><select id="studio-hud-pages-text" data-studio-setting="hud_pages_text_percent"><option value="85">85%</option><option value="100">Standard</option><option value="115">115%</option><option value="130">130%</option><option value="150">150%</option></select></label>
                     <p class="studio-option-note">The pages it can change to. Two hotkeys in Settings › Hotkeys: the page mode (auto or manual), and the next page. The HUD grows to fit each page and your text size.</p>
-                    <label class="studio-switch studio-page-switch"><span><b>Jump</b><small>The next system while the drive charges and in witch space.</small></span><input type="checkbox" data-overlay-option="hud_page_jump"><i></i></label>
-                    <label class="studio-switch studio-page-switch"><span><b>Survey</b><small>What's worth a look in the system, and its signals, while you scan.</small></span><input type="checkbox" data-overlay-option="hud_page_survey"><i></i></label>
-                    <label class="studio-switch studio-page-switch"><span><b>Planet</b><small>Gravity, your compass target, samples and materials on a planet.</small></span><input type="checkbox" data-overlay-option="hud_page_planet"><i></i></label>
-                    <label class="studio-switch studio-page-switch"><span><b>Rhino</b><small>Your rigs, what to collect next, and the holds, in the Rhino.</small></span><input type="checkbox" data-overlay-option="hud_page_rhino"><i></i></label>
-                    <label class="studio-switch studio-page-switch"><span><b>Mining</b><small>The rock you just prospected, what you've refined, and the hold.</small></span><input type="checkbox" data-overlay-option="hud_page_mining"><i></i></label>
-                    <label class="studio-switch studio-page-switch"><span><b>Combat</b><small>Your target's shields, hull and bounty, kills and threats here.</small></span><input type="checkbox" data-overlay-option="hud_page_combat"><i></i></label>
-                    <label class="studio-switch studio-page-switch"><span><b>Station</b><small>Where you're docked: pads, services, and data to sell.</small></span><input type="checkbox" data-overlay-option="hud_page_station"><i></i></label>
-                    <label class="studio-switch studio-page-switch"><span><b>Colony</b><small>What a construction site still needs.</small></span><input type="checkbox" data-overlay-option="hud_page_colony"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Cargo</b><small>What's in the hold, under the hold bar on the Mining, Rhino, Station and Trade pages.</small></span><input type="checkbox" data-overlay-option="hud_hold_lists"><i></i></label>
                     <label class="studio-switch studio-page-switch"><span><b>Carrier</b><small>Your fleet carrier's jump, tritium and cargo.</small></span><input type="checkbox" data-overlay-option="hud_page_carrier"><i></i></label>
-                    <label class="studio-switch studio-page-switch"><span><b>Trade</b><small>The next stop on your trade route and what to buy or sell.</small></span><input type="checkbox" data-overlay-option="hud_page_trade"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Colony</b><small>What a construction site still needs.</small></span><input type="checkbox" data-overlay-option="hud_page_colony"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Combat</b><small>Your target's shields, hull and bounty, kills and threats here.</small></span><input type="checkbox" data-overlay-option="hud_page_combat"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Expedition</b><small>Your expedition: the next leg, how far to go, the data aboard, the streak and low supplies.</small></span><input type="checkbox" data-overlay-option="hud_page_expedition"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Jump</b><small>The next system while the drive charges and in witch space.</small></span><input type="checkbox" data-overlay-option="hud_page_jump"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Mining</b><small>The rock you just prospected, what you've refined, and the hold.</small></span><input type="checkbox" data-overlay-option="hud_page_mining"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Planet</b><small>Gravity, your compass target, samples and materials on a planet.</small></span><input type="checkbox" data-overlay-option="hud_page_planet"><i></i></label>
                     <label class="studio-switch studio-page-switch"><span><b>Powerplay</b><small>Your power, merits and objective (from the page hotkey).</small></span><input type="checkbox" data-overlay-option="hud_page_powerplay"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Rhino</b><small>Your rigs, what to collect next, and the holds, in the Rhino.</small></span><input type="checkbox" data-overlay-option="hud_page_rhino"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Station</b><small>Where you're docked: pads, services, and data to sell.</small></span><input type="checkbox" data-overlay-option="hud_page_station"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Survey</b><small>What's worth a look in the system, and its signals, while you scan.</small></span><input type="checkbox" data-overlay-option="hud_page_survey"><i></i></label>
+                    <label class="studio-switch studio-page-switch"><span><b>Trade</b><small>The next stop on your trade route and what to buy or sell.</small></span><input type="checkbox" data-overlay-option="hud_page_trade"><i></i></label>
                     <label class="studio-field"><span>Scene animation<small>How lively each state's hologram is</small></span><select id="studio-hud-animation" data-studio-setting="hud_animation_intensity"><option value="Calm">Calm</option><option value="Standard">Standard</option><option value="Energetic">Energetic</option></select></label>
                     <label class="studio-field"><span>Typeface</span><select id="studio-hud-font" data-studio-setting="hud_font_face"><option value="cockpit">Cockpit</option><option value="clear">Clear</option><option value="terminal">Terminal</option></select></label>
                     <label class="studio-field"><span>Small text<small>Labels grow; the HUD keeps its size</small></span><select id="studio-hud-labels" data-studio-setting="hud_label_size"><option value="standard">Standard</option><option value="large">Large</option><option value="larger">Larger</option></select></label>

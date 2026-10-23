@@ -62,7 +62,9 @@ class IdleTests(unittest.TestCase):
             if thought:
                 topics.add(thought["topic"])
         self.assertTrue(topics & {"idle_star", "idle_home"}, topics)
-        self.assertTrue(all(topic in IDLE_TOPICS or topic in {"quiet", "long_session", "lore_fragment"} for topic in topics), topics)
+        # 5.6.1: now and then in a long quiet it asks you something.
+        self.assertTrue(all(topic in IDLE_TOPICS or topic in {"quiet", "long_session", "lore_fragment", "question"}
+                            for topic in topics), topics)
 
     def test_lines_for_every_idle_topic(self):
         for topic in IDLE_TOPICS:

@@ -23,6 +23,8 @@ PAGES_TICK_MS = 500
 PAGES_IDLE_MS = 1500
 # The Planet Materials workspace reads the database: once a few seconds.
 PLANET_DATA_S = 3.0
+# Signals heard here, by name, on the Survey and Combat pages (5.6.1).
+CONTACT_ROWS = 60
 
 
 class DashboardHudPagesMixin:
@@ -90,6 +92,7 @@ class DashboardHudPagesMixin:
             "trading": bool(route),
             "has_jump": phase in {"charging", "hyperspace"},
             "system": str(getattr(self, "current_sys", "") or ""),
+            "expedition": self._hud_expedition_active(),
             "has_carrier": bool(carrier.get("name") or carrier.get("callsign")),
         }
 
@@ -117,6 +120,8 @@ class DashboardHudPagesMixin:
             available.append("carrier")
         if facts["trading"]:
             available.append("trade")
+        if facts.get("expedition"):
+            available.append("expedition")
         if config.get("hud_page_powerplay", True):
             available.append("powerplay")
         return [page for page in hud_pages.PAGES if page in set(available)]
@@ -135,6 +140,13 @@ class DashboardHudPagesMixin:
     def _hud_page_jump(self):
         phase = str(getattr(self, "_navigation_jump_phase", "") or "") or "charging"
         return hud_pages.jump_page(self._jump_info_model(phase))
+
+    def _hud_expedition_active(self):
+        manager = getattr(self, "expedition_manager", None)
+        try:
+            return bool(manager is not None and (manager.active() or {}).get("status") == "active")
+        except Exception:
+            return False
 
     def _hud_survey_left(self):
         """Whether this system still has survey work in it: bodies left to
@@ -162,8 +174,19 @@ class DashboardHudPagesMixin:
     def _hud_page_survey(self, limit=None):
         model = self._hud_survey_model()
         self._hud_rhino_hints(model)
+        return hud_pages.survey_page(model, self._hud_contacts())
+
+    def _hud_contacts(self):
         ledger = getattr(self, "contact_ledger", None)
-        return hud_pages.survey_page(model, ledger.model() if ledger is not None else None)
+        return ledger.model(max_rows=CONTACT_ROWS) if ledger is not None else None
+
+    def _hud_hold_contents(self, *holds):
+        """((title, cargo model), ...) for the pages' hold lists, or nothing
+        with the Cargo switch off (Overlay Studio › Navigation HUD)."""
+        from voidcompass.overlays.cargo_hud import build_cargo_model
+        if not (getattr(self, "config", None) or {}).get("hud_hold_lists", True):
+            return ()
+        return tuple((title, build_cargo_model(inventory)) for title, inventory in holds if inventory)
 
     def _hud_rhino_hints(self, model):
         """Each body row's Rhino hint and mining sites, from the scans."""
@@ -208,9 +231,17 @@ class DashboardHudPagesMixin:
     def _hud_page_rhino(self):
         from voidcompass.overlays.rig_tracker import rig_spacing_m, rig_warn_m
         place = self._rig_place()
+        # Each hold the page has a bar for, and what's in it: the Rhino's
+        # while you drive it, and the ship's as it was last seen.
+        inventory = getattr(self, "current_cargo_inventory", None) or []
+        if str(getattr(self, "current_cargo_vessel", "Ship") or "Ship").strip().casefold() == "srv":
+            kept = (getattr(self, "_cargo_inventory_by_hold", None) or {}).get("Ship") or []
+            contents = self._hud_hold_contents(("IN THE RHINO", inventory if self._rig_in_rhino() else []), ("IN THE SHIP", kept))
+        else:
+            contents = self._hud_hold_contents(("IN THE SHIP", inventory))
         return hud_pages.rhino_page(self._rig_model(), self._rig_holds(),
                                     self._surface_mining_signals(place[1]) if place else 0,
-                                    rig_spacing_m(self.config), rig_warn_m(self.config))
+                                    rig_spacing_m(self.config), rig_warn_m(self.config), contents)
 
     def _hud_page_mining(self):
         from voidcompass.overlays.cargo_hud import build_cargo_model
@@ -218,15 +249,15 @@ class DashboardHudPagesMixin:
         prospect = getattr(self, "_hud_prospect", None)
         model = build_prospector_model(prospect["raw"], prospect["refined"]) if prospect else None
         inventory, capacity, vessel, owner = self._cargo_hold_snapshot()
-        return hud_pages.mining_page(model, build_cargo_model(inventory, capacity, vessel, owner))
+        return hud_pages.mining_page(model, build_cargo_model(inventory, capacity, vessel, owner),
+                                     self._hud_hold_contents(("IN THE HOLD", inventory)))
 
     def _hud_page_combat(self):
         engine = getattr(self, "specialist_engine", None)
         session = None
         if engine is not None and hasattr(engine, "combat_snapshot"):
             session = (engine.combat_snapshot() or {}).get("session")
-        ledger = getattr(self, "contact_ledger", None)
-        return hud_pages.combat_page(getattr(self, "_hud_target", None), session, ledger.model() if ledger is not None else None)
+        return hud_pages.combat_page(getattr(self, "_hud_target", None), session, self._hud_contacts())
 
     def _hud_page_station(self):
         from voidcompass.overlays.station_info_hud import build_station_model
@@ -234,7 +265,9 @@ class DashboardHudPagesMixin:
         if not getattr(self, "current_docked", False):
             return None
         route = getattr(self, "trading_route", None)
-        return hud_pages.station_page(build_station_model(self), trade_route.next_step(route) if route else None)
+        inventory = self._cargo_hold_snapshot()[0]
+        return hud_pages.station_page(build_station_model(self), trade_route.next_step(route) if route else None,
+                                      self._hud_hold_contents(("ABOARD", inventory)))
 
     def _hud_page_colony(self):
         if getattr(self, "colony", None) is None:
@@ -253,7 +286,8 @@ class DashboardHudPagesMixin:
         if not route:
             return None
         inventory, capacity, vessel, owner = self._cargo_hold_snapshot()
-        return hud_pages.trade_page(trade_route.next_step(route), build_cargo_model(inventory, capacity, vessel, owner))
+        return hud_pages.trade_page(trade_route.next_step(route), build_cargo_model(inventory, capacity, vessel, owner),
+                                    self._hud_hold_contents(("IN THE HOLD", inventory)))
 
     def _hud_page_powerplay(self):
         from voidcompass.overlays.powerplay_hud import build_powerplay_overlay_model
@@ -289,11 +323,32 @@ class DashboardHudPagesMixin:
         # Every page switched on, in the order the page key goes round; the
         # ones with nothing on them now are only a dim pip.
         return {
-            "active": active, "auto": auto, "mode": options["mode"],
+            "active": active, "auto": auto, "mode": options["mode"], "alert": self._hud_pages_alert(active),
+            "text_scale": hud_pages.page_text_percent(config) / 100.0,
             "tabs": [{"id": item, "label": hud_pages.LABELS[item], "empty": item not in available}
                      for item in options["enabled"]],
             "page": page,
         }
+
+    def _hud_pages_alert(self, active):
+        """A warning shown over whatever page is up (5.6.1), unless that page
+        already shows it: heavy gravity on the way down, then the rigs."""
+        gravity = None
+        heavy = getattr(self, "_hud_heavy_body", None)
+        flying = not any(getattr(self, name, False) for name in ("current_docked", "current_landed", "current_in_srv", "current_on_foot"))
+        if (active != "planet" and heavy and flying and getattr(self, "current_body_id", None) is not None
+                and str(getattr(self, "current_body_name", "") or "").casefold() == str(heavy[0]).casefold()):
+            gravity = heavy
+        rigs = None
+        if active != "rhino" and getattr(self, "on_planet", False):
+            from voidcompass.overlays.rig_tracker import rig_advice, rig_spacing_m, rig_warn_m
+            try:
+                model = self._rig_model()
+            except Exception:
+                model = None
+            if model:
+                rigs = rig_advice(model.get("slots"), rig_spacing_m(self.config), rig_warn_m(self.config))
+        return hud_pages.alert_line(gravity, rigs)
 
     def _tick_hud_pages(self, reschedule=True):
         if not getattr(self, "is_running", True):

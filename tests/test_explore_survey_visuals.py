@@ -181,9 +181,7 @@ class ExploreSurveyVisualTests(unittest.TestCase):
         controls = {
             "system": ["#body-workboard", '#body-workboard .body-row.next [data-ws-op="survey_pin"]',
                        '[data-explore-filter="todo"]', "#system-orrery-canvas", "#orrery-detail",
-                       "#explore-survey-reset"],
-            "route": ["#waypoint-name", '[data-ws-op="add_waypoint"]', '[data-ws-op="copy_next"]',
-                      "#neutron-to", '[data-ws-op="neutron_plot"]', '[data-ws-op="clear_waypoints"]'],
+                       "#explore-survey-reset", "#explore-copy-next", '[data-explore-sort="value"]'],
             "prospects": ['.return-later-entry [data-ws-op="return_later_waypoint"]',
                           "#scout-reference", '[data-ws-op="scout_search"]', ".scout-codex-row"],
         }
@@ -207,23 +205,24 @@ class ExploreSurveyVisualTests(unittest.TestCase):
                     # Nothing on this page needs a page scroll; long lists scroll inside.
                     self.assertLessEqual(report["overflow"], 0, report)
                     self.assertEqual(report["outside"], [], report)
-        self.page.locator("#explore-tab-route").click()
-        waypoints = self.page.locator('[data-scroll-key="waypoints"]')
-        self.assertTrue(waypoints.evaluate("node => node.scrollHeight > node.clientHeight"))
+        # 5.6.1: the route is on the Expeditions page; Explore keeps the next waypoint.
+        self.assertEqual(self.page.locator("#explore-tab-route").count(), 0)
+        self.page.locator("#explore-tab-system").click()
+        self.assertIn("WAYPOINT 1", self.page.locator("#explore-next-waypoint").inner_text())
         self.assertFalse(self.errors, self.errors)
 
     def test_views_switch_by_click_and_keyboard_and_are_remembered(self):
         self.open_explore()
-        tabs = {view: self.page.locator(f"#explore-tab-{view}") for view in ("system", "route", "prospects")}
+        tabs = {view: self.page.locator(f"#explore-tab-{view}") for view in ("system", "prospects", "archive")}
         panels = {view: self.page.locator(f"#explore-view-{view}") for view in tabs}
         self.assertEqual(tabs["system"].get_attribute("aria-selected"), "true")
         self.assertTrue(panels["system"].is_visible())
-        tabs["route"].click()
+        tabs["prospects"].click()
         self.assertEqual([panels[view].is_visible() for view in tabs], [False, True, False])
-        self.assertEqual(tabs["route"].get_attribute("aria-selected"), "true")
-        self.assertEqual(tabs["route"].get_attribute("tabindex"), "0")
-        self.assertIn("6 STOPS", tabs["route"].inner_text())
-        tabs["route"].press("ArrowRight")
+        self.assertEqual(tabs["prospects"].get_attribute("aria-selected"), "true")
+        self.assertEqual(tabs["prospects"].get_attribute("tabindex"), "0")
+        tabs["system"].click()
+        tabs["system"].press("ArrowRight")
         self.assertTrue(panels["prospects"].is_visible())
         self.assertTrue(tabs["prospects"].evaluate("node => node === document.activeElement"))
         tabs["prospects"].press("Home")
@@ -347,14 +346,14 @@ class ExploreSurveyVisualTests(unittest.TestCase):
         self.assertFalse(self.errors, self.errors)
 
     def test_refresh_keeps_list_scroll_and_an_error_panel_recovers(self):
-        self.open_explore(data=workspace_data(waypoints=30))
-        self.page.locator("#explore-tab-route").click()
-        waypoints = self.page.locator('[data-scroll-key="waypoints"]')
-        waypoints.evaluate("node => { node.scrollTop = 180; }")
-        refreshed = workspace_data(waypoints=31)
+        self.open_explore(data=workspace_data(entries=30))
+        self.page.locator("#explore-tab-prospects").click()
+        entries = self.page.locator('[data-scroll-key="return"]')
+        entries.evaluate("node => { node.scrollTop = 180; }")
+        refreshed = workspace_data(entries=31)
         self.page.evaluate("data => window.__exploreHarness.workspace(data)", refreshed)
-        self.assertEqual(waypoints.evaluate("node => node.scrollTop"), 180)
-        self.assertEqual(self.page.locator(".waypoint-row").count(), 31)
+        self.assertEqual(entries.evaluate("node => node.scrollTop"), 180)
+        self.assertEqual(self.page.locator(".return-later-entry").count(), 31)
         self.page.evaluate("() => window.__exploreHarness.fail('journal link interrupted')")
         self.assertIn("COMMANDER RECORD LINK INTERRUPTED",
                       self.page.locator("#explore-workspace").inner_text())
@@ -362,25 +361,25 @@ class ExploreSurveyVisualTests(unittest.TestCase):
         # The next good payload rebuilds the views and the live board with it.
         self.page.evaluate("data => window.__exploreHarness.workspace(data)", refreshed)
         self.assertEqual(self.page.locator("#explore-workspace .explore-views").count(), 1)
-        self.assertTrue(self.page.locator("#explore-view-route").is_visible())
+        self.assertTrue(self.page.locator("#explore-view-prospects").is_visible())
         self.assertEqual(len(self.board_ids()), 6)
         self.assertIn("SYNUEFE XR-H", self.page.locator("#workboard-system").inner_text().upper())
         self.assertFalse(self.errors, self.errors)
 
 
-    def test_route_buttons_stay_put_across_refreshes(self):
+    def test_prospect_buttons_stay_put_across_refreshes(self):
         # 5.5.6: redrawn on every refresh, they blinked and lost clicks.
         self.open_explore()
-        self.page.locator("#explore-tab-route").click()
-        self.page.evaluate("() => { window.__routeButton = document.querySelector('#explore-route button'); }")
+        self.page.locator("#explore-tab-prospects").click()
+        self.page.evaluate("() => { window.__prospectButton = document.querySelector('#explore-prospects button'); }")
         data = workspace_data()
-        data["current"] = "Somewhere Else"
+        data["waypoints"] = data["waypoints"][:3]  # the route lives on Expeditions now (5.6.1)
         self.page.evaluate("data => window.__exploreHarness.workspace(data)", data)
-        self.assertTrue(self.page.evaluate("() => window.__routeButton.isConnected"), "the same button, not a new one")
-        self.assertFalse(self.page.evaluate("() => document.querySelector('#explore-route button').classList.contains('cockpit-fresh')"))
-        data["waypoints"] = data["waypoints"][:3]
+        self.assertTrue(self.page.evaluate("() => window.__prospectButton.isConnected"), "the same button, not a new one")
+        self.assertFalse(self.page.evaluate("() => document.querySelector('#explore-prospects button').classList.contains('cockpit-fresh')"))
+        data["return_later"]["entries"] = data["return_later"]["entries"][:1]
         self.page.evaluate("data => window.__exploreHarness.workspace(data)", data)
-        self.assertFalse(self.page.evaluate("() => window.__routeButton.isConnected"), "changed: drawn again")
+        self.assertFalse(self.page.evaluate("() => window.__prospectButton.isConnected"), "changed: drawn again")
 
 if __name__ == "__main__":
     unittest.main()

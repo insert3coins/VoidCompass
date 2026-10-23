@@ -11,6 +11,7 @@
   const thoughtFrame = thoughtBox.querySelector(".thought-box");
   const thoughtHead = thoughtBox.querySelector(".thought-head");
   const thoughtText = thoughtBox.querySelector(".thought-words");
+  const thoughtAnswers = thoughtBox.querySelector(".thought-answers");
   let thoughtId = null;
   let typing = 0;
   // Its voice (5.5.4): what it's saying now, from /api/live.
@@ -167,6 +168,12 @@
     thoughtBox.classList.remove("done");
     thoughtFrame.dataset.kind = String(thought.kind || "");
     thoughtHead.textContent = headingFor(thought);
+    // A question (5.6.1): its answers, numbered for the answer hotkeys.
+    const answers = (thought.question && thought.question.answers) || [];
+    thoughtAnswers.hidden = !answers.length;
+    thoughtAnswers.textContent = answers.map((answer, index) => `${index + 1} · ${answer.label}`).join("   ");
+    // A story moment the eye shows once.
+    if (thought.effect && !reduced) orb.play?.({effect: thought.effect, tone: "accent", weight: 1}, performance.now());
     const script = String(thought.script || thought.text);
     const words = finalWords(script);
     if (reduced) {
@@ -251,6 +258,8 @@
       overlays: model.overlays,
       personality: model.personality,
       memory: model.memory,
+      // What its story has done to the eye (5.6.1).
+      story: (model.orb || {}).story,
     });
     showThought(model.thought, motionPreference.matches || Boolean(effects.reduced_motion), (model.orb || {}).eye,
       model.personality);

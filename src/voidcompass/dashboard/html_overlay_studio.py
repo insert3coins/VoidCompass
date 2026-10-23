@@ -327,6 +327,8 @@ class HtmlOverlayStudioMixin:
                 # The pages (5.5.17): the one overlay for everything.
                 "hud_pages": hud_pages.pages_options(self.config)["mode"],
                 "hud_pages_takeover": hud_pages.pages_options(self.config)["takeover"],
+                "hud_pages_text_percent": hud_pages.page_text_percent(self.config),
+                "hud_hold_lists": bool(self.config.get("hud_hold_lists", True)),
                 **{f"hud_page_{page}": page in hud_pages.pages_options(self.config)["enabled"] for page in hud_pages.PAGES[1:]},
                 "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
                 "overlay_frame_rate": overlay_frame_rate(self.config),
@@ -612,7 +614,7 @@ class HtmlOverlayStudioMixin:
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "rig_tracker_show_holds",
-            "hud_pages_takeover", "hud_page_jump", "hud_page_survey", "hud_page_planet", "hud_page_rhino", "hud_page_mining", "hud_page_combat", "hud_page_station", "hud_page_colony", "hud_page_carrier", "hud_page_trade", "hud_page_powerplay",
+            "hud_pages_takeover", "hud_hold_lists", "hud_page_expedition", "hud_page_jump", "hud_page_survey", "hud_page_planet", "hud_page_rhino", "hud_page_mining", "hud_page_combat", "hud_page_station", "hud_page_colony", "hud_page_carrier", "hud_page_trade", "hud_page_powerplay",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps", "overlay_transparency_fix", "overlay_classic_windows",
             "colony_show_carriers", "colony_carrier_delta", "colony_collapse_covered",
@@ -638,7 +640,7 @@ class HtmlOverlayStudioMixin:
             HtmlOverlayServer.set_classic_windows(bool(self.config[key]))
         elif key in {"hud_compact_mode", "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels"}:
             self.update_hud()
-        elif key == "hud_pages_takeover" or key.startswith("hud_page_"):
+        elif key in {"hud_pages_takeover", "hud_hold_lists"} or key.startswith("hud_page_"):
             self._hud_pages_apply_settings()
         elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading"}:
             heartbeat = getattr(self, "heartbeat_hud", None)
@@ -831,6 +833,7 @@ class HtmlOverlayStudioMixin:
             ("galaxy_minimap_size", galaxy_minimap_hud.SIZES, galaxy_minimap_hud.DEFAULT_SIZE),
             ("rhino_map_size", galaxy_minimap_hud.SIZES, galaxy_minimap_hud.DEFAULT_SIZE),
             ("postcard_hold_s", postcards.HOLDS, postcards.DEFAULT_HOLD),
+            ("hud_pages_text_percent", hud_pages.PAGE_TEXT_SIZES, 100),
         ):
             if key in payload:
                 value = _integer(payload.get(key), default)
@@ -872,7 +875,7 @@ class HtmlOverlayStudioMixin:
             overlay = getattr(self, attr, None)
             if overlay is not None and hasattr(overlay, "apply_settings"):
                 overlay.apply_settings()
-        if "hud_pages" in payload:
+        if {"hud_pages", "hud_pages_text_percent"} & set(payload):
             self._hud_pages_apply_settings()
         if {"rhino_map_show", "rhino_map_up", "rhino_map_range", "rhino_map_size"} & set(payload):
             surface = getattr(self, "_update_rhino_map", None)

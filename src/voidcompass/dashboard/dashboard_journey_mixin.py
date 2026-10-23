@@ -158,7 +158,60 @@ class DashboardJourneyMixin:
             "elite_offset": ELITE_YEARS,
             "folder": self.wrapped_folder(),
             "saved": self._wrapped_saved(),
+            # 5.6.1: an expedition's own story, from the Expeditions page.
+            "trips": self._wrapped_trips(),
+            "trip_request": dict(getattr(self, "_wrapped_trip_request", None) or {}),
         }
+
+    def _wrapped_trips(self):
+        manager = getattr(self, "expedition_manager", None)
+        rows = manager.expeditions() if manager is not None else []
+        return [{"id": row.get("id"), "name": row.get("name") or "Expedition", "status": row.get("status"),
+                 "started": row.get("started"), "ended": row.get("ended"),
+                 "jumps": int((row.get("stats") or {}).get("jumps") or 0)}
+                for row in rows if int((row.get("stats") or {}).get("jumps") or 0)][:40]
+
+    def _expedition_story(self, expedition_id):
+        """An expedition told as Void Wrapped's cards, cut to its dates."""
+        from voidcompass.exploration.flight_recorder import epoch
+        manager = getattr(self, "expedition_manager", None)
+        expedition = manager.get(expedition_id) if manager is not None else None
+        if not expedition:
+            return None
+        start = epoch(expedition.get("started")) or time.time()
+        end = epoch(expedition.get("ended")) or time.time()
+        trip = {"id": expedition["id"], "name": expedition.get("name") or "Expedition", "start": start, "end": end + 60}
+        places = manager.bookmarks(expedition_id)
+        key = (expedition.get("ended"), int((expedition.get("stats") or {}).get("jumps") or 0), self._wrapped_key(0)[1:],
+               len(places), sum(1 for row in places if row.get("status") == "visited"))
+        cache = getattr(self, "_trip_story_cache", None)
+        if cache is None:
+            cache = self._trip_story_cache = {}
+        held = cache.get(expedition_id)
+        if held and held[0] == key:
+            return held[1]
+        if expedition_id in getattr(self, "_trip_story_working", set()):
+            return held[1] if held else {"working": True, "trip": trip}
+        self._trip_story_working = getattr(self, "_trip_story_working", set()) | {expedition_id}
+
+        def work():
+            try:
+                story = self._tell_year(datetime.fromtimestamp(start).year, trip=trip)
+                # 5.6.1, Part 5: the places you kept, just before the verdict.
+                cards = story.get("cards") or []
+                if places and cards:
+                    at = next((index for index, card in enumerate(cards) if card.get("kind") == "verdict"), len(cards))
+                    cards.insert(at, {"kind": "places", "count": len(places),
+                                      "visited": sum(1 for row in places if row.get("status") == "visited"),
+                                      "names": [str(row.get("title") or row.get("body") or row.get("system") or "")[:80] for row in places][:6]})
+            except Exception:
+                logging.exception("Expedition story couldn't be told")
+                story = {"trip": trip, "error": True, "cards": []}
+            cache[expedition_id] = (key, story)
+            self._trip_story_working = getattr(self, "_trip_story_working", set()) - {expedition_id}
+
+        threading.Thread(target=work, name="expedition-story", daemon=True).start()
+        return held[1] if held else {"working": True, "trip": trip}
 
     def _wrapped_key(self, year):
         history = getattr(self, "travel_history", None)
@@ -202,8 +255,8 @@ class DashboardJourneyMixin:
         threading.Thread(target=work, name=f"void-wrapped-{year}", daemon=True).start()
         return held["story"] if held else {"working": True, "year": year}
 
-    def _tell_year(self, year):
-        start, end = year_bounds(year)
+    def _tell_year(self, year, trip=None):
+        start, end = (trip["start"], trip["end"]) if trip else year_bounds(year)
         config = getattr(self, "config", None) or {}
         sources = {
             "rows": self._journey_rows(),
@@ -254,7 +307,7 @@ class DashboardJourneyMixin:
                                               str(config.get("active_commander_fid") or "") or None)
         except Exception as exc:
             logging.debug("Wrapped journal events skipped: %s", exc)
-        return year_story(year, sources, watcher_mind.personality(config), commander)
+        return year_story(year, sources, watcher_mind.personality(config), commander, trip=trip)
 
     def wrapped_folder(self):
         return str(application_dir() / WRAPPED_FOLDER)
@@ -359,7 +412,17 @@ class DashboardJourneyMixin:
         sessions = self._journey_sessions()
         if not wanted:
             return {"sessions": recorder_sessions(sessions, rows=self._journey_rows())}
-        session = next((row for row in sessions if str(row.get("started") or "") == wanted), None)
+        if wanted.startswith("expedition:"):
+            # 5.6.1: a whole expedition, played as one long session.
+            manager = getattr(self, "expedition_manager", None)
+            expedition = manager.get(wanted.split(":", 1)[1]) if manager is not None else None
+            session = {"started": expedition.get("started"), "ended": expedition.get("ended"),
+                       "jumps": int((expedition.get("stats") or {}).get("jumps") or 0),
+                       "highlights": [{"kind": row.get("kind"), "title": row.get("title"), "detail": row.get("detail"),
+                                       "timestamp": row.get("timestamp")} for row in expedition.get("events") or ()
+                                      if row.get("kind") not in {"JUMP", "SESSION"}]} if expedition else None
+        else:
+            session = next((row for row in sessions if str(row.get("started") or "") == wanted), None)
         if session is None:
             return None
         cached = getattr(self, "_recorder_cache", None)
@@ -426,6 +489,9 @@ class DashboardJourneyMixin:
         """Answers the deck asks for by name (on the dashboard server's
         thread): (content type, bytes) or None."""
         query = query or {}
+        if name == "wrapped" and query.get("expedition"):
+            story = self._expedition_story(str(query.get("expedition"))[:20])
+            return self._json_answer(story) if story is not None else None
         if name == "wrapped":
             try:
                 year = int(query.get("year") or datetime.now().year)

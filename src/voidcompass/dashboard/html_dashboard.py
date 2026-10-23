@@ -672,6 +672,10 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 "priority": priority,
                 "bio_count": max(0, _integer(row.get("bio_count"))),
                 "geo_count": max(0, _integer(row.get("geo_count"))),
+                # 5.6.1: the board puts biology still to do first, and marks
+                # bodies nobody has walked on yet.
+                "bio_done": max(0, _integer(row.get("organic_complete_count"))),
+                "footfall": bool(row.get("first_footfall")),
                 "mapped": bool(row.get("dss_complete")),
                 "terraformable": bool(row.get("terraformable")),
                 "landable": (
@@ -876,9 +880,90 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "hotkey": _text(self.config.get("overlay_hotkey_watcher_poke"), 40),
             # Its long story and the echoes heard (5.5.3.5).
             "lore": watcher_lore.page(memory, sessions, hours, _watcher_echoes(memory)),
+            # 5.6.1, deeper: its question, your answers, what it keeps of you,
+            # its trust and mood, its dreams, the Watchers it has met.
+            "deeper": self._html_watcher_deeper(mind) if hasattr(self, "_html_watcher_deeper") else {},
             # 5.5.4: its settings, its voice, and what it has learned of you.
             **(self._html_watcher_extras(mind) if hasattr(self, "_html_watcher_extras") else {}),
         }
+
+    def _html_watcher_deeper(self, mind):
+        from voidcompass.overlays import watcher_deeper, watcher_places, watcher_questions
+        memory = mind.memory
+        answers = []
+        for question_id, record in (memory.get("questions") or {}).items():
+            spec = watcher_questions.QUESTIONS.get(question_id)
+            if not spec or not isinstance(record, dict) or not record.get("asked"):
+                continue
+            label = dict(spec["answers"]).get(record.get("answer"), "")
+            asked = spec["ask"]["normal"][0]
+            try:
+                asked = asked.format(**(record.get("fields") or {}))
+            except (KeyError, IndexError):
+                pass
+            answers.append({"id": question_id, "asked": asked, "answer": label, "at": float(record.get("answered") or record["asked"]),
+                            "unanswered": not record.get("answer"), "story": bool(spec.get("story"))})
+        answers.sort(key=lambda row: -row["at"])
+        pilgrimage = memory.get("pilgrimage") or {}
+        hotkeys = [_text(self.config.get(f"overlay_hotkey_watcher_answer_{index}"), 30) for index in (1, 2, 3)]
+        return {
+            "question": mind.pending_question(),
+            "hotkeys": hotkeys,
+            "answers": answers[:40],
+            "memories": mind.memories_page(),
+            "dreams": [{"at": float(row.get("at") or 0), "text": _text(row.get("text"), 400)}
+                       for row in reversed(memory.get("dreams") or []) if isinstance(row, dict)][:30],
+            "met": [{"name": _text(row.get("name"), 60), "nature": _text(row.get("nature"), 20), "road": row.get("road"),
+                     "book": int(row.get("book") or 0), "chapter": _text(row.get("chapter"), 10), "at": float(row.get("at") or 0)}
+                    for row in reversed(memory.get("met") or []) if isinstance(row, dict)][:30],
+            "feeling": watcher_deeper.words_for(memory),
+            "road": watcher_lore.road(memory),
+            "pilgrimage": {"kind": pilgrimage.get("kind"), "words": watcher_places.words(pilgrimage.get("kind")),
+                           "how": watcher_places.how(pilgrimage.get("kind")), "accepted": pilgrimage.get("accepted"),
+                           "reached": bool(pilgrimage.get("reached"))} if pilgrimage.get("kind") else None,
+            "marks": mind.story_marks(),
+        }
+
+    def _watcher_save_book(self):
+        """The whole relationship, as a book to keep (5.6.1): the story on
+        your road, what it remembers, its dreams and your answers, saved as a
+        page in the Wrapped folder."""
+        import html as html_module
+        from datetime import datetime as _datetime
+        mind = self._watcher_mind()
+        memory = mind.memory
+        lore = watcher_lore.page(memory, int(memory.get("sessions") or 0), float(memory.get("hours") or 0))
+        deeper = self._html_watcher_deeper(mind)
+        esc = html_module.escape
+        parts = [f"<h1>The Watcher</h1><p class='sub'>{esc(str(self.config.get('active_commander_name') or ''))} · "
+                 f"{int(memory.get('hours') or 0):,} hours together · {int(memory.get('sessions') or 0):,} sessions</p>"]
+        for chapter in lore.get("chapters") or ():
+            if not chapter.get("begun"):
+                continue
+            body = chapter.get("account") or "<br>".join(esc(row["text"]) for row in chapter.get("told") or ())
+            parts.append(f"<h2>{esc(chapter['numeral'])} · {esc(chapter['title'])}</h2><p>{esc(body).replace(chr(10) + chr(10), '</p><p>') if chapter.get('account') else body}</p>")
+        if deeper["answers"]:
+            parts.append("<h2>What you told it</h2>" + "".join(f"<p><i>{esc(row['asked'])}</i><br>{esc(row['answer'] or 'You didn’t answer.')}</p>" for row in deeper["answers"]))
+        if deeper["memories"]:
+            parts.append("<h2>What it remembers</h2>" + "".join(f"<p>{esc(row['text'])}</p>" for row in deeper["memories"]))
+        if deeper["dreams"]:
+            parts.append("<h2>Its dreams</h2>" + "".join(f"<p>{esc(row['text'])}</p>" for row in deeper["dreams"]))
+        page = ("<!doctype html><meta charset='utf-8'><title>The Watcher</title><style>body{max-width:42rem;margin:3rem auto;"
+                "padding:0 1rem;background:#0b0f14;color:#dbe7ef;font:16px/1.65 Georgia,serif}h1{font-weight:400;letter-spacing:.08em}"
+                "h2{margin-top:2.4rem;color:#7fd3ff;font:600 13px Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}"
+                ".sub{color:#8aa0ae}</style>" + "".join(parts))
+        folder = Path(self.wrapped_folder()) if hasattr(self, "wrapped_folder") else Path(".")
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            target = folder / f"The Watcher {_datetime.now().strftime('%Y-%m-%d')}.html"
+            target.write_text(page, encoding="utf-8")
+        except OSError as exc:
+            logging.warning("The Watcher's book couldn't be saved: %s", exc)
+            return False
+        feed = getattr(self, "add_event_feed_entry", None)
+        if callable(feed):
+            feed("SYSTEM", f"The Watcher's book saved: {target.name}", severity="INFO")
+        return True
 
     def _html_watcher_thought(self):
         heartbeat = getattr(self, "heartbeat_hud", None)
@@ -1529,6 +1614,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
         return analytics
 
     def _html_mission_workspace(self):
+        # 5.6.1: Mission Control is the Expeditions page (dashboard_expedition_mixin).
+        if hasattr(self, "_html_expedition_workspace"):
+            return self._html_expedition_workspace()
         manager = getattr(self, "expedition_manager", None)
         expeditions = []
         active_id = ""
@@ -2264,7 +2352,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "automatic_profile_backups_enabled",
             "galnet_enabled", "galnet_auto_rotate_enabled",
             "galnet_rotation_seconds", "galnet_refresh_minutes",
-            "low_fuel_threshold_pct", "auto_copy_waypoint",
+            "low_fuel_threshold_pct", "auto_copy_waypoint", "expedition_risk_cr",
+            "expedition_gec_enabled", "expedition_poi_range_ly",
             "achievement_notifications_enabled", "adaptive_command_enabled",
             "home_system",
             "api_enabled", "api_port", "api_allow_lan", "api_allow_control",
@@ -2272,7 +2361,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             value = self.config.get(key)
             values[key] = value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
         for key, default in (
-            ("low_fuel_threshold_pct", 0.25),
+            ("low_fuel_threshold_pct", 0.25), ("expedition_risk_cr", 100_000_000),
+            ("expedition_gec_enabled", True), ("expedition_poi_range_ly", 150),
             ("auto_copy_waypoint", False), ("achievement_notifications_enabled", True),
             ("adaptive_command_enabled", True),
             ("raven_sync_enabled", True), ("raven_share_ship_cargo", False), ("bgs_online_enabled", True),
@@ -3007,6 +3097,17 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                 done = self._watcher_reset()
                 self._schedule_html_dashboard_publish(immediate=True)
                 return done
+            # 5.6.1: answer its question; your Watcher's code; a friend's.
+            if operation == "answer":
+                return self._watcher_answer(_text(payload.get("answer"), 20))
+            if operation == "copy_code":
+                return self._html_copy_text(self._watcher_share_code())
+            if operation == "meet":
+                done = self._watcher_meet(str(payload.get("code") or "")[:4000])
+                self._schedule_html_dashboard_publish(immediate=True)
+                return done
+            if operation == "save_book":
+                return self._watcher_save_book()
             # Poke the Watcher from its page (5.5.3.2).
             if operation != "poke":
                 return False
@@ -3131,6 +3232,10 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             manager = getattr(self, "expedition_manager", None)
             if manager is None:
                 return False
+            handled = self._handle_expedition_command(operation, payload) if hasattr(self, "_handle_expedition_command") else None
+            if handled is not None:
+                self._schedule_html_dashboard_publish(immediate=True)
+                return bool(handled)
             expedition_id = _text(payload.get("expedition_id"), 50)
             if operation == "create":
                 created = manager.create(
@@ -3974,6 +4079,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                     "galnet_rotation_seconds": int,
                     "galnet_refresh_minutes": int,
                     "low_fuel_threshold_pct": float,
+                    "expedition_risk_cr": int,
+                    "expedition_gec_enabled": bool,
+                    "expedition_poi_range_ly": int,
                     "auto_copy_waypoint": bool,
                     "achievements_enabled": bool,
                     "achievement_notifications_enabled": bool,
@@ -4005,6 +4113,10 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
                         updates[key] = max(1024, min(65535, _integer(value, 7380)))
                     elif key == "low_fuel_threshold_pct":
                         updates[key] = round(max(0.05, min(0.6, _number(value, 0.25))), 2)
+                    elif key == "expedition_risk_cr":
+                        updates[key] = max(0, min(10_000_000_000, _integer(value, 100_000_000)))
+                    elif key == "expedition_poi_range_ly":
+                        updates[key] = max(25, min(2000, _integer(value, 150)))
                     else:
                         updates[key] = _text(value, 1000)
                 changed_keys = {key for key, value in updates.items() if self.config.get(key) != value}

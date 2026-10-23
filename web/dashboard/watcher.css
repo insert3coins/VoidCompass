@@ -1,22 +1,100 @@
-/* The Watcher's page (5.5.3.2; laid out again in 5.5.3.5). A rail with
-   its eye and what it is, beside the bond strip and, under it, its story
-   and everything it has said, side by side and as tall as the screen. */
-.watcher-page {
-  --watcher-pane: clamp(420px, calc(100vh - 330px), 900px);
-  display: grid; gap: 14px; align-items: start;
-  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
-}
+/* The Watcher's page (5.5.3.2; laid out again in 5.5.3.5, and in 5.6.1 as
+   tabs: NOW, STORY, YOU, SAID, then its settings and voice). */
+.watcher-page { --watcher-pane: clamp(420px, calc(100vh - 330px), 900px); display: grid; gap: 14px; align-items: start; min-width: 0; }
+.watcher-page[hidden] { display: none; }
 /* Wider than the deck's other pages: the reader and the log both use it. */
 .page[data-page-name="watcher"] { max-width: 2240px; }
-.watcher-rail, .watcher-main { display: grid; gap: 14px; min-width: 0; }
-.watcher-main { grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr); align-items: start; }
-.watcher-bond-panel { grid-column: 1 / -1; }
-@media (max-width: 1500px) { .watcher-main { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 900px) { .watcher-page { grid-template-columns: minmax(0, 1fr); } }
-.watcher-rail > section, .watcher-main > section {
+.watcher-card, .watcher-eye-panel {
   border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent);
-  padding: 14px; display: grid; gap: 12px; min-width: 0;
+  padding: 14px; display: grid; gap: 12px; min-width: 0; align-content: start;
 }
+
+/* NOW: the eye beside what's live. */
+.watcher-now { grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); }
+.watcher-now-main { display: grid; gap: 14px; min-width: 0; max-width: 1280px; }
+.watcher-pair { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+@media (max-width: 1250px) { .watcher-pair { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) { .watcher-now { grid-template-columns: minmax(0, 1fr); } }
+.watcher-ask { display: grid; gap: 10px; padding: 12px 14px; border: 1px dashed var(--border); }
+.watcher-ask.asking { padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.watcher-ask .watcher-note { margin: 0; }
+.watcher-question { margin: 0; max-width: 70ch; color: var(--text); font: italic 17px/1.5 "Segoe UI", sans-serif; }
+.watcher-answers { display: flex; flex-wrap: wrap; gap: 8px; }
+.watcher-page .watcher-answer { display: inline-flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--border)); background: var(--inset); color: var(--text); cursor: pointer; }
+.watcher-answer b { font: 600 13px "Segoe UI", sans-serif; letter-spacing: 0; }
+.watcher-answer kbd { padding: 2px 6px; border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+  font: 700 9px Consolas, monospace; letter-spacing: .06em; }
+.watcher-page .watcher-answer:hover, .watcher-page .watcher-answer:focus-visible { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--inset)); }
+.watcher-page .watcher-answer:hover b { color: var(--accent); }
+.watcher-answer:disabled { opacity: .5; cursor: wait; }
+.watcher-feeling { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--border); background: var(--border); }
+@media (max-width: 640px) { .watcher-feeling { grid-template-columns: minmax(0, 1fr); } }
+.watcher-feeling > div { display: grid; gap: 4px; align-content: start; padding: 9px 11px; background: var(--panel); }
+.watcher-feeling span { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .1em; }
+.watcher-feeling b { color: var(--text); font: 600 14px "Segoe UI", sans-serif; text-transform: capitalize; }
+.watcher-feeling small { color: var(--muted); font: 10px Consolas, monospace; }
+.watcher-gauge { position: relative; display: block; height: 4px; margin-top: 2px; background: var(--bg); }
+.watcher-gauge::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--fill, 0%); background: var(--accent); opacity: .8; }
+.watcher-gauge.mood-low::after { background: var(--dim); }
+.watcher-gauge.mood-bright::after { background: var(--green); }
+.watcher-now-chapter { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0; }
+.watcher-now-chapter span { color: color-mix(in srgb, var(--red) 70%, var(--muted)); font: 700 13px Consolas, monospace; letter-spacing: .1em; }
+.watcher-now-chapter b { color: var(--text); font: 700 13px Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.watcher-now-chapter em { margin-left: auto; color: var(--accent); font: 700 9px Consolas, monospace; font-style: normal; letter-spacing: .08em; }
+.watcher-now-passage { margin: 0; padding: 8px 12px; max-width: 72ch; border-left: 2px solid color-mix(in srgb, var(--red) 55%, var(--border));
+  background: color-mix(in srgb, var(--bg) 60%, transparent); color: var(--text); font: italic 13px/1.6 "Segoe UI", sans-serif; }
+#watcher-now-story { display: grid; gap: 10px; }
+#watcher-now-story .watcher-note, .watcher-card .watcher-note { margin: 0; }
+.watcher-wish-place { margin: 0; color: var(--text); font: 600 20px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; text-transform: capitalize; }
+.watcher-wish header b.promised { color: var(--yellow); }
+.watcher-wish header b.done { color: var(--green); }
+.watcher-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.watcher-page :is(.watcher-buttons, .watcher-card) > button, .watcher-page .watcher-buttons button {
+  justify-self: start; min-height: 30px; padding: 0 14px; border: 1px solid var(--border); background: var(--inset); color: var(--text);
+  font: 700 10px Consolas, monospace; letter-spacing: .12em; cursor: pointer; }
+.watcher-page .watcher-buttons button.primary { border-color: var(--accent); color: var(--accent); }
+.watcher-page :is(.watcher-buttons, .watcher-card) > button:hover, .watcher-page .watcher-buttons button:hover { border-color: var(--accent); color: var(--accent); }
+.watcher-page .watcher-go { margin-top: auto; border-color: transparent; background: transparent; color: var(--accent); padding: 0; min-height: 22px; }
+.watcher-page .watcher-go::after { content: " →"; }
+.watcher-lately { max-height: none; }
+
+/* STORY: the reader, with its road, the echoes and the book beside it. */
+.watcher-story-page { grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); }
+.watcher-side { display: grid; gap: 14px; min-width: 0; }
+@media (max-width: 1200px) { .watcher-story-page { grid-template-columns: minmax(0, 1fr); } .watcher-side { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; } }
+.watcher-book-head.book-four span { color: var(--accent); }
+
+/* YOU: what it has gathered of you. */
+.watcher-you { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.watcher-wide { grid-column: 1 / -1; }
+@media (max-width: 1100px) { .watcher-you { grid-template-columns: minmax(0, 1fr); } }
+.watcher-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
+.watcher-two > div { display: grid; gap: 10px; align-content: start; }
+@media (max-width: 800px) { .watcher-two { grid-template-columns: minmax(0, 1fr); } }
+.watcher-log.watcher-short { max-height: 380px; }
+.watcher-log li.faded p { color: var(--muted); font-style: italic; }
+.watcher-log p em { color: var(--dim); }
+/* Ruled cells that leave no grey block where a row runs short. */
+.watcher-page :is(.watcher-stats, .watcher-character) { gap: 0; padding: 0 1px 1px 0; border: 0; background: none; }
+.watcher-page :is(.watcher-stats, .watcher-character) > div { margin: 0 -1px -1px 0; border: 1px solid var(--border); }
+.watcher-stats:empty { display: none; }
+.watcher-character > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.watcher-log.watcher-short p { font: 13px/1.5 "Segoe UI", sans-serif; }
+#watcher-dreams p { font-style: italic; }
+.watcher-log.watcher-short p small { margin-bottom: 3px; color: var(--muted); font: italic 11px/1.4 "Segoe UI", sans-serif; letter-spacing: 0; }
+.watcher-meet { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+@media (max-width: 700px) { .watcher-meet { grid-template-columns: minmax(0, 1fr); } }
+.watcher-meet textarea { min-height: 60px; padding: 8px 10px; resize: vertical; border: 1px solid var(--border); background: var(--input, var(--inset));
+  color: var(--text); font: 11px Consolas, monospace; }
+.watcher-meet textarea:focus { outline: none; border-color: var(--accent); }
+.watcher-meet .watcher-buttons { flex-direction: column; align-items: stretch; }
+#watcher-met:empty { display: none; }
+
+/* SAID: every word, then RESET. */
+.watcher-said { max-width: 1280px; }
+.watcher-said .watcher-log { max-height: none; }
 .watcher-note { margin: -4px 0 0; color: var(--muted); font: italic 11px/1.4 "Segoe UI", sans-serif; }
 .watcher-page header { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 .watcher-page header span { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .1em; }
@@ -39,11 +117,7 @@
   background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 60%, transparent), var(--accent)); }
 .watcher-bond-meter[data-level="3"] i { background: linear-gradient(90deg, color-mix(in srgb, var(--green) 60%, transparent), var(--green)); }
 .watcher-bond-next { margin: 0; color: var(--muted); font-size: 12px; }
-.watcher-bond-panel { grid-template-columns: minmax(220px, .8fr) minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 12px 18px; }
-.watcher-bond-panel > div { display: grid; gap: 8px; min-width: 0; }
-@media (max-width: 1200px) { .watcher-bond-panel { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .watcher-bond { grid-column: 1 / -1; } }
-@media (max-width: 640px) { .watcher-bond-panel { grid-template-columns: minmax(0, 1fr); } }
-.watcher-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--border); background: var(--border); }
+.watcher-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1px; border: 1px solid var(--border); background: var(--border); }
 .watcher-stats div { padding: 9px 10px; background: var(--panel); min-width: 0; }
 .watcher-stats span { display: block; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .08em; }
 .watcher-stats strong { display: block; margin-top: 3px; color: var(--text); font: 700 16px Consolas, monospace; font-variant-numeric: tabular-nums; }

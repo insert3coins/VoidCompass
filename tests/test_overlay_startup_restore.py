@@ -90,33 +90,13 @@ class OverlayStartupRestoreTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         client = root / "web" / "assets" / "overlay-client.js"
         self.assertTrue(client.is_file())
+        # Each overlay's page folder, read from the deck's attach code.
+        from tests.test_overlay_checklist import overlay_templates
+        templates = overlay_templates()
         for spec in OVERLAY_SPECS:
             if not spec.html_managed:
                 continue
-            folder = {
-                "ground_popup": "ground",
-                "planet_materials_hud": "planet-materials-overlay",
-                "powerplay_hud": "powerplay-overlay",
-                "contact_scope_hud": "contact_scope",
-                "jump_info_hud": "jump_info",
-                "colony_needs_hud": "colony_needs",
-                "trade_route_hud": "trade_route",
-                "rig_tracker_hud": "rig_tracker",
-                "galaxy_minimap_hud": "galaxy_minimap",
-                "rhino_map_hud": "rhino_map",
-                "postcard_hud": "postcards",
-                "survey_status_hud": "survey",
-                "station_info_hud": "station",
-                "gravity_warning_hud": "gravity",
-                "carrier_hud": "carrier",
-                "prospector_hud": "prospector",
-                "heartbeat_hud": "heartbeat",
-                "galnet_ticker_hud": "galnet_ticker",
-                "music_player_hud": "music_player",
-                "cargo_hud": "cargo",
-                "toast_hud": "toast",
-        "achievement_hud": "toast",
-            }[spec.attr]
+            folder = templates[spec.attr]
             html = (root / "web" / folder / "index.html").read_text(encoding="utf-8")
             self.assertIn('/assets/overlay-client.js', html, spec.attr)
 

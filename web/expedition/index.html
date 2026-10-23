@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Expedition</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <!-- Expedition (5.6.1): the trip at a glance, in the Navigation HUD's
+       language. The HUD's EXPEDITION page shows the same model. -->
+  <main id="expedition" class="expedition empty">
+    <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="scanlines"></div><div class="vignette"></div>
+    <div id="content" class="content">
+      <header class="notice">
+        <span class="notice-tag">EXPEDITION</span>
+        <strong id="name">EXPEDITION</strong>
+        <b id="share" class="notice-aside"></b>
+      </header>
+      <div class="progress" aria-hidden="true"><i id="bar"></i></div>
+      <p id="distance" class="distance"></p>
+      <section class="next">
+        <small id="next-kind">NEXT STOP</small>
+        <strong id="next-name"></strong>
+        <span id="next-where"></span>
+      </section>
+      <section id="compass" class="compass" hidden>
+        <span id="needle" class="needle" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 19 21 12 16.5 5 21Z"/></svg></span>
+        <div><b id="target-distance"></b><span id="target-detail"></span></div>
+      </section>
+      <p id="fly-to" class="fly-to" hidden></p>
+      <footer id="figures" class="figures"></footer>
+      <div id="warnings" class="warnings"></div>
+    </div>
+  </main>
+  <script src="/assets/frame-cap.js"></script>
+  <script src="/assets/overlay-layout.js"></script>
+  <script src="/assets/overlay-client.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

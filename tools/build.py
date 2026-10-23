@@ -142,6 +142,9 @@ VSVersionInfo(
         '--name=VoidCompass',      # Name of the executable
         '--onefile',               # Bundle everything into one native executable
         '--windowed',              # Hide the console (GUI only)
+        # Never UPX-compress, even if UPX is on the PATH: packed executables
+        # set off antivirus heuristics (false positives) far more often.
+        '--noupx',
         '--clean',                 # Clean cache before building
         '--log-level=INFO',
         # Python owns application state; WebView2 owns all UI windows.

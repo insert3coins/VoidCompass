@@ -106,17 +106,17 @@ class HeartbeatModelTests(unittest.TestCase):
         self.assertEqual((model["pulse_id"], model["activity"], model["state"]), (33, "STATUS", "SUPERCRUISE"))
         self.assertFalse(model["stalled"])
         self.assertEqual(model["orb"], {"size": 54, "eye": "theme", "liveliness": "standard", "idle": True,
-                                        "frame_rate": HtmlOverlayServer.frame_rate})
+                                        "frame_rate": HtmlOverlayServer.frame_rate, "story": {"crack": False, "second_pupil": False, "shutter": 0.0}})
 
     def test_orb_settings_are_sanitised(self):
         # 5.5.7: its own Frame rate, or every overlay's when it has none.
         everyone = HtmlOverlayServer.frame_rate
         self.assertEqual(self.hud(heartbeat_orb_size=96, heartbeat_eye_color="HAL",
                                   heartbeat_frame_rate=24)._html_render_model["orb"],
-                         {"size": 96, "eye": "hal", "liveliness": "standard", "idle": True, "frame_rate": 24})
+                         {"size": 96, "eye": "hal", "liveliness": "standard", "idle": True, "frame_rate": 24, "story": {"crack": False, "second_pupil": False, "shutter": 0.0}})
         self.assertEqual(self.hud(heartbeat_orb_size="60", heartbeat_eye_color="blue", heartbeat_frame_rate="45",
                                   heartbeat_liveliness="frantic", heartbeat_idle_motion=False)._html_render_model["orb"],
-                         {"size": 54, "eye": "theme", "liveliness": "standard", "idle": False, "frame_rate": everyone})
+                         {"size": 54, "eye": "theme", "liveliness": "standard", "idle": False, "frame_rate": everyone, "story": {"crack": False, "second_pupil": False, "shutter": 0.0}})
 
     def test_window_is_the_orb_square(self):
         bridge = HtmlHeartbeatBridge.__new__(HtmlHeartbeatBridge)
@@ -243,7 +243,9 @@ class HeartbeatOrbBrowserTests(unittest.TestCase):
     def test_every_effect_the_classifier_names_has_a_painter(self):
         page = self.open()
         painters = set(page.evaluate("HeartbeatOrb.EFFECTS"))
-        self.assertEqual(painters, set(EFFECTS) - {"tick"}, "tick is a mote only")
+        # 5.6.1: its story's moments are played by the Watcher, not the journal.
+        from voidcompass.overlays.watcher_mind import STORY_EFFECTS
+        self.assertEqual(painters, set(EFFECTS) - {"tick"} | set(STORY_EFFECTS.values()), "tick is a mote only")
         self.render(page, snapshot())
         # Every painter draws through its whole run without an error.
         page.evaluate("""effects => {

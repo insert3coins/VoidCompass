@@ -1203,6 +1203,25 @@ for _bank, _combat in ((NORMAL, COMBAT_NORMAL), (WEARY, COMBAT_WEARY)):
     for _topic, _lines in _combat.items():
         _bank[_topic] = list(_lines)
 
+# 5.6.1: deeper (watcher_deeper.py): poked by trust, its slow mood, a moment
+# it kept, anniversaries, dreams, other Watchers; and Book Four's musings.
+from voidcompass.overlays.watcher_deeper import NORMAL as _DEEPER_NORMAL, WEARY as _DEEPER_WEARY  # noqa: E402
+from voidcompass.overlays.watcher_lore_four import MUSINGS_OPEN, MUSINGS_SHUT  # noqa: E402
+
+for _bank, _deeper in ((NORMAL, _DEEPER_NORMAL), (WEARY, _DEEPER_WEARY)):
+    for _topic, _lines in _deeper.items():
+        _bank[_topic] = list(_lines)
+for _bank in (NORMAL, WEARY):
+    _bank["idle_four_shut"] = list(MUSINGS_SHUT)
+    _bank["idle_four_open"] = list(MUSINGS_OPEN)
+
+# 5.6.1: an expedition's milestones (watcher_expedition.py).
+from voidcompass.overlays.watcher_expedition import EXPEDITION_NORMAL, EXPEDITION_WEARY  # noqa: E402
+
+for _bank, _trip in ((NORMAL, EXPEDITION_NORMAL), (WEARY, EXPEDITION_WEARY)):
+    for _topic, _lines in _trip.items():
+        _bank[_topic] = list(_lines)
+
 # 5.5.7: ten more lines for every topic, twenty for the busiest, so a long
 # run of the same moment finds new words (watcher_lines_deep*.py). Merged
 # last, after every bank above is in place.

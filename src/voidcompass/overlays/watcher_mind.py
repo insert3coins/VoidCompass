@@ -29,9 +29,16 @@ import zlib
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
 from voidcompass.mining.mining_record import material_name
 from voidcompass.overlays import (
-    watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures, watcher_postcards,
-    watcher_voice_lore, watcher_worlds,
+    watcher_deeper, watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures, watcher_places,
+    watcher_postcards, watcher_questions, watcher_voice_lore, watcher_worlds,
 )
+
+# Story moments the eye shows once (5.6.1): the first time it heard the
+# sound, and the shutter drawn (and kept drawn).
+STORY_EFFECTS = {"sound": "story_sound", "the_fold": "story_shutter", "iv_s_unclench": "story_shutter",
+                 "iv_o_breath": "story_open"}
+# Passages where its voice slips: a gap, a second voice under it (5.6.1).
+VOICE_SLIPS = {"let_me", "a_better_look", "it_noticed", "iv_s_knock", "iv_o_there_you_are", "iv_o_mountain"}
 
 # How often it may speak (Overlay Studio). The gap is the least time
 # between two thoughts; `minimum` is the least importance it will voice.
@@ -108,6 +115,14 @@ HEADED_TOPICS = {
     "idle_lore": ("musing", "REMEMBERING"),
     "idle_after": ("musing", "REMEMBERING"),
     "idle_lens": ("musing", "THE SEAT"),
+    # 5.6.1: Book Four's roads; a question; a dream; a moment it kept.
+    "idle_four_shut": ("musing", "THE SHUTTER"),
+    "idle_four_open": ("musing", "LOOKING BACK"),
+    "question": ("question", "A QUESTION"),
+    "callback": ("recall", "YOU SAID"),
+    "dream_told": ("recall", "A DREAM"),
+    "idle_moment": ("recall", "I KEEP THIS"),
+    "lore_meeting": ("memory", "ANOTHER WATCHER"),
     "sign_off": ("", "SIGNING OFF"),
     "sign_off_quiet": ("", "SIGNING OFF"),
     # 5.5.3.7: a note you left, handed back; where you were on this date.
@@ -150,6 +165,14 @@ def personality(config):
 # How much each topic matters: 3 it must say (a death), 2 notable, 1 worth
 # a remark, 0 idle. The words are in watcher_lines.py.
 IMPORTANCE = {
+    # 5.6.1: an expedition's milestones, each said once.
+    "expedition_set_out": 3, "expedition_region": 2, "expedition_halfway": 3, "expedition_furthest": 2,
+    "expedition_close_call": 3, "expedition_home": 3, "expedition_risk": 2,
+    "expedition_marked": 1, "expedition_place_reached": 2,
+    # 5.6.1, deeper: poked by trust, its slow mood, a moment kept, an
+    # anniversary of you two, a dream, another Watcher, Book Four's musings.
+    "poked_wary": 2, "poked_warm": 2, "mood_low": 1, "mood_high": 1, "idle_moment": 1, "anniversary_us": 3,
+    "dream_told": 2, "watchers_meet": 3, "idle_four_shut": 1, "idle_four_open": 1,
     "greet_new": 3,
     "greet_away": 3,
     "greet_soon": 2,
@@ -273,6 +296,13 @@ PERSONALITY_WEIGHTS = {
 # the matching expression): pleased, wary, curious, or downcast. Topics not
 # listed are said with a neutral eye.
 MOODS = {
+    "expedition_set_out": "curious", "expedition_region": "curious", "expedition_halfway": "pleased",
+    "expedition_furthest": "curious", "expedition_close_call": "wary", "expedition_home": "pleased",
+    "expedition_risk": "wary", "expedition_marked": "curious", "expedition_place_reached": "pleased",
+    "poked_wary": "wary", "poked_warm": "pleased", "mood_low": "downcast", "mood_high": "pleased",
+    "idle_moment": "pleased", "anniversary_us": "pleased", "dream_told": "curious", "watchers_meet": "pleased",
+    "idle_four_shut": "downcast", "idle_four_open": "curious",
+    "question": "curious", "answer": "pleased", "callback": "pleased", "lore_meeting": "pleased",
     **{topic: "pleased" for topic in (
         "rare_world", "green_giant", "valuable_world", "first_discovery_streak", "undiscovered_system",
         "codex_logged", "codex_new", "big_sale", "achievement", "promotion", "mapped_efficient",
@@ -480,7 +510,14 @@ class WatcherMind:
                        # 5.5.3.5: the memories of its past it has shared, [id, when];
                        # the echoes found, {topic: [times, last]}; when it said
                        # its afterword (Book One finished).
-                       "lore": [], "echoes": {}, "afterword": None}
+                       "lore": [], "echoes": {}, "afterword": None,
+                       # 5.6.1, deeper: its trust in you and its slow mood;
+                       # the questions it asked and your answers; moments it
+                       # keeps; the places it asked for and reached; Book
+                       # Four's road; dreams; other Watchers met.
+                       "trust": watcher_deeper.TRUST_START, "mood": 0.0, "questions": {}, "moments": [],
+                       "places": {}, "road": None, "pilgrimage": None, "dreams": [], "met": [],
+                       "first_seen": None, "first_system": None, "last_system": None, "ship_name": None}
 
     def _fresh_state(self):
         """What it holds in mind only for now (not remembered)."""
@@ -489,6 +526,11 @@ class WatcherMind:
             self.memory["thoughts"] = sum(1 for row in self.memory["said"]
                                           if isinstance(row, list) and row and ":" not in str(row[0]) and row[0] != "idle")
         self._afterthought = None
+        # 5.6.1: the question waiting for an answer, and something to say on
+        # the next quiet tick (after a greeting, a dream; a meeting's passage).
+        self._question = None
+        self._say_next = []
+        self._scared = False
         self._counted_until = None
         self._poked_at = 0.0
         self._pokes = 0
@@ -723,6 +765,12 @@ class WatcherMind:
                         "kind": kind, "heading": heading,
                         "until": now + (THOUGHT_SECONDS + len(script) * .05)
                         * THOUGHT_HOLDS[thought_style(self.config)["hold"]]}
+        # How it says it (5.6.1): slower when weary or low, quicker when wary,
+        # a whisper for its story, and rarely a slip in the voice.
+        self.thought["voice"] = self._voice_feel(topic, key)
+        effect = STORY_EFFECTS.get(str(key).split(":", 1)[-1]) if str(key).startswith("lore:") else None
+        if effect:
+            self.thought["effect"] = effect
         # The latest thing it said, kept for the deck's Focused Log.
         self.last_thought = {"text": text, "at": time.time()}
         with self.lock:
@@ -754,6 +802,9 @@ class WatcherMind:
         and a half of play, and never in a session's first minutes. Its
         thoughts switched off means no story either."""
         if FREQUENCIES.get(frequency(self.config)) is None or self._session_start is None or self._in_danger:
+            return None
+        # It keeps its story to itself while it doesn't trust you (5.6.1).
+        if float(self.memory.get("trust", watcher_deeper.TRUST_START)) < watcher_deeper.TRUST_LOW:
             return None
         now = self.clock()
         if now - self._session_start < watcher_lore.SETTLE_S:
@@ -797,6 +848,14 @@ class WatcherMind:
             self._counted_until = now
         if self._pokes >= 3:
             return self.consider("poked_again", force=True)
+        # How it answers depends on how much it trusts you (5.6.1).
+        trust = float(self.memory.get("trust", watcher_deeper.TRUST_START))
+        if trust < watcher_deeper.TRUST_LOW:
+            return self.consider("poked_wary", force=True)
+        if trust >= watcher_deeper.TRUST_HIGH and self.random.random() < .4:
+            warm = self.consider("poked_warm", force=True)
+            if warm:
+                return warm
         if self.random.random() < .5:
             known = dict(context or {})
             known.update(thoughts=self.memory.get("thoughts") or 0, sessions=self.memory.get("sessions") or 0,
@@ -864,6 +923,16 @@ class WatcherMind:
         with self.lock:
             self.memory["sessions"] = int(self.memory.get("sessions") or 0) + 1
             self.memory["session_started"] = now
+            # 5.6.1: when it first woke for you; how long you were away moves
+            # its mood; a dream from last time waits to be told.
+            if not self.memory.get("first_seen"):
+                log = self.memory.get("log") or []
+                self.memory["first_seen"] = float(log[0][0]) if log and isinstance(log[0], list) else now
+            if last:
+                away_days = (now - float(last)) / 86400.0
+                watcher_deeper.settle(self.memory, away_days)
+                watcher_deeper.shift(self.memory, "away_long" if away_days > 7 else "back_soon" if away_days < 1 else "")
+        self._queue_session_extras(now)
         hour = datetime.fromtimestamp(now).hour
         clock = datetime.fromtimestamp(now).strftime("%H:%M")
         # Died since the last session began: that comes first.
@@ -933,8 +1002,10 @@ class WatcherMind:
             greeting = self.awake()
             if greeting:
                 return greeting
+        self._observe_deeper(event, raw, now)
         if event == "Shutdown":
             self.seen()
+            self._dream()
             self.save()
             return None
         if event == "Died":
@@ -1180,6 +1251,10 @@ class WatcherMind:
             # quick close lost the sign-off from its memory).
             self.save()
             return thought
+        if kind.startswith("expedition_") and kind in IMPORTANCE:
+            # An expedition's milestones come once each (the expedition
+            # remembers them), so they're said whatever the hour.
+            return self.consider(kind, fields, force=True)
         if kind == "codex_new":
             body = str(fields.get("body") or "")
             if not body or body in self._codex_bodies:
@@ -1413,6 +1488,341 @@ class WatcherMind:
             return self.consider("fuel_low", {"fuel": int(round(fuel_percent))})
         return None
 
+    # -- 5.6.1: asking, answering, and what it keeps of you -------------------------------------
+    def _voice_feel(self, topic, key):
+        nature = personality(self.config)
+        mood = MOODS.get(topic, "")
+        feel = {"pace": 1.0, "gain": 1.0, "slip": False}
+        if nature == "weary" or mood == "downcast" or float(self.memory.get("mood", 0.0)) <= watcher_deeper.MOOD_LOW:
+            feel["pace"] = 1.07
+        if mood == "wary":
+            feel["pace"] = .95
+        if topic.startswith("lore") or topic in {"idle_lens", "idle_four_shut", "idle_four_open"}:
+            feel.update(gain=.72, pace=max(feel["pace"], 1.05))
+        if str(key).split(":", 1)[-1] in VOICE_SLIPS:
+            feel["slip"] = True
+        return feel
+
+    def story_marks(self):
+        """What its story has done to the eye, for the orb (5.6.1): a hairline
+        crack after The Draw, a second faint pupil while something looks
+        through, the shutter part-drawn. Subtle, and they stay."""
+        shared = watcher_lore.told(self.memory)
+        road = watcher_lore.road(self.memory)
+        draw = all(passage_id in shared for passage_id in ("a_cost", "sorry"))
+        through = "it_looked" in shared
+        shutter = .6 if road == "shut" else .35 if "the_fold" in shared and road is None else 0.0
+        return {"crack": bool(draw), "second_pupil": bool(road == "open" or (through and road is None)), "shutter": shutter}
+
+    def pending_question(self):
+        question = self._question
+        if not question:
+            return None
+        return {"id": question["id"], "text": question["text"], "answers": watcher_questions.choices(question["id"])}
+
+    def ask(self, question_id, fields=None, force=False):
+        """Ask a question (watcher_questions). One at a time; an everyday
+        question at most once a fortnight."""
+        spec = watcher_questions.QUESTIONS.get(question_id)
+        if spec is None or self._question is not None or FREQUENCIES.get(frequency(self.config)) is None:
+            return None
+        now = self.clock()
+        record = (self.memory.get("questions") or {}).get(question_id) or {}
+        if not force and record.get("asked") and now - float(record["asked"]) < watcher_questions.ASK_REST_S:
+            return None
+        fields = {key: str(value) for key, value in (fields or {}).items()}
+        voice = watcher_questions.voice(personality(self.config))
+        try:
+            text = self.random.choice(spec["ask"][voice]).format(**fields)
+        except (KeyError, IndexError):
+            return None
+        thought = self._utter("question", f"question:{question_id}", text, now)
+        thought["question"] = {"id": question_id, "answers": watcher_questions.choices(question_id)}
+        thought["until"] = now + watcher_questions.ASK_SECONDS
+        self._question = {"id": question_id, "asked": now, "fields": fields, "text": text}
+        with self.lock:
+            self.memory.setdefault("questions", {})[question_id] = {
+                "asked": now, "answer": None, "answered": None, "fields": fields,
+                "times": int(record.get("times") or 0) + 1}
+        self._unsaved = True
+        return thought
+
+    def answer(self, answer):
+        """Your answer to the question on screen: by its key or number."""
+        question = self._question
+        if not question:
+            return None
+        key = watcher_questions.answer_key(question["id"], answer)
+        if key is None:
+            return None
+        spec = watcher_questions.QUESTIONS[question["id"]]
+        now = self.clock()
+        self._question = None
+        with self.lock:
+            record = self.memory.setdefault("questions", {}).setdefault(question["id"], {})
+            record.update(answer=key, answered=now)
+            watcher_deeper.shift(self.memory, "answered")
+            if spec.get("road"):
+                self.memory["road"] = key
+                self._story_changed = True
+            if question["id"] == "pilgrimage" and isinstance(self.memory.get("pilgrimage"), dict):
+                self.memory["pilgrimage"]["accepted"] = key == "yes"
+        step = (spec.get("frequency") or {}).get(key)
+        if step:
+            order = ("rare", "occasional", "chatty")
+            current = frequency(self.config)
+            if current in order:
+                self.config["heartbeat_thoughts"] = order[max(0, min(len(order) - 1, order.index(current) + step))]
+        voice = watcher_questions.voice(personality(self.config))
+        reply = self.random.choice(spec["replies"][key][voice]).format(**question.get("fields") or {})
+        self._unsaved = True
+        return self._utter("answer", f"answer:{question['id']}:{key}", reply, now)
+
+    def _question_tick(self, now):
+        question = self._question
+        if question and now - question["asked"] > watcher_questions.UNANSWERED_S:
+            self._question = None
+            with self.lock:
+                record = self.memory.setdefault("questions", {}).setdefault(question["id"], {})
+                record["unanswered"] = int(record.get("unanswered") or 0) + 1
+                watcher_deeper.shift(self.memory, "unanswered")
+            self._unsaved = True
+        # The shutter, asked and never answered for days: it chooses itself.
+        record = (self.memory.get("questions") or {}).get("shutter") or {}
+        if (watcher_lore.road(self.memory) is None and record.get("asked") and not record.get("answer")
+                and now - float(record["asked"]) > watcher_questions.ROAD_SELF_CHOSEN_S):
+            with self.lock:
+                self.memory["road"] = "shut"
+                record["answer"] = None
+                record["self_chosen"] = now
+            self._story_changed = True
+            self._say_next.append(("callback_road", {}))
+
+    def _maybe_ask(self, now, context):
+        """Whether now is the moment for a question."""
+        if self._question is not None or now - self._last_spoke < 60:
+            return None
+        if watcher_lore.road_question_due(self.memory):
+            record = (self.memory.get("questions") or {}).get("shutter") or {}
+            if not record.get("asked") or now - float(record["asked"]) > 2 * 86400:
+                return self.ask("shutter", force=True)
+        sessions, hours = self.memory.get("sessions") or 0, self.memory.get("hours") or 0
+        kind = watcher_lore.waiting_place(self.memory, sessions, hours, now)
+        if kind and (self.memory.get("pilgrimage") or {}).get("kind") != kind:
+            with self.lock:
+                self.memory["pilgrimage"] = {"kind": kind, "asked": now, "accepted": None}
+            return self.ask("pilgrimage", {"place": watcher_places.words(kind)}, force=True)
+        shared = watcher_lore.told(self.memory)
+        road = watcher_lore.road(self.memory)
+        if road == "open" and "iv_o_bends" in shared:
+            asked = self._ask_once("what_said")
+            if asked:
+                return asked
+        if road == "shut" and "iv_s_choose" in shared:
+            asked = self._ask_once("forget_what")
+            if asked:
+                return asked
+        context = context or {}
+        home, far = context.get("home"), context.get("home_ly")
+        if isinstance(home, dict):
+            home = home.get("name") or home.get("system")
+        if home and far and float(far) >= 5000 and self.random.random() < .05:
+            return self.ask("miss_home", {"home": home})
+        if self._session_start and now - self._session_start > 3 * 3600 and frequency(self.config) != "rare" \
+                and self.random.random() < .02:
+            return self.ask("talk_less")
+        return None
+
+    def _ask_once(self, question_id):
+        if ((self.memory.get("questions") or {}).get(question_id) or {}).get("asked"):
+            return None
+        return self.ask(question_id, force=True)
+
+    def _say_queued(self, topic, fields, now):
+        if topic == "lore_meeting":
+            return self._utter("lore_meeting", "lore:meeting", fields["text"], now)
+        if topic == "callback_road":
+            voice = watcher_questions.voice(personality(self.config))
+            line = ("You never answered me about the shutter. I chose. I kept it closed. I hope that was right."
+                    if voice == "weary" else "You didn't answer about the shutter, so I chose: I've kept it closed.")
+            return self._utter("callback", "callback:shutter:self", line, now)
+        if topic.startswith("ask:"):
+            return self.ask(topic[4:], fields)
+        return self.consider(topic, fields, force=True)
+
+    def _callback(self, now):
+        """Something you told it (or didn't), brought back days later."""
+        rows = [(question_id, record) for question_id, record in (self.memory.get("questions") or {}).items()
+                if isinstance(record, dict) and record.get("asked") and now - float(record["asked"]) > 2 * 86400
+                and question_id in watcher_questions.QUESTIONS]
+        self.random.shuffle(rows)
+        for question_id, record in rows:
+            key = f"callback:{question_id}"
+            if self._said_recently(key, watcher_questions.CALLBACK_REST_S):
+                continue
+            lines = watcher_questions.QUESTIONS[question_id]["callbacks"].get(record.get("answer"))
+            if not lines:
+                continue
+            when = when_text(datetime.fromtimestamp(float(record.get("answered") or record["asked"])).astimezone().isoformat(), now)
+            fields = {**(record.get("fields") or {}), "when": when or "a while back", "When": (when or "a while back").capitalize()}
+            try:
+                line = self.random.choice(lines).format(**fields)
+            except (KeyError, IndexError):
+                continue
+            # Said in parts (an opener, the memory, a closer), so the same
+            # answer rarely comes back the same way twice.
+            return self._utter("callback", key, watcher_deeper.assemble(personality(self.config), line, self.random), now)
+        return None
+
+    def _queue_session_extras(self, now):
+        """Things to say once the greeting's done: a dream from last time, an
+        anniversary of you two, how it went last time."""
+        dream = next((row for row in reversed(self.memory.get("dreams") or []) if isinstance(row, dict) and not row.get("told")), None)
+        if dream and self.random.random() < .6:
+            dream["told"] = now
+            self._say_next.append(("dream_told", {"dream": dream["text"]}))
+        first = self.memory.get("first_seen")
+        if first:
+            then, today = datetime.fromtimestamp(float(first)), datetime.fromtimestamp(now)
+            years = today.year - then.year
+            if years >= 1 and (then.month, then.day) == (today.month, today.day):
+                what = f"{years} year{'s' if years != 1 else ''} since you first switched me on"
+                self._say_next.append(("anniversary_us", {"What": what[:1].upper() + what[1:], "what": what, "what_lower": what}))
+        if self.memory.get("last_death") and float(self.memory["last_death"]) > float(self.memory.get("session_started") or 0) - 86400 * 3:
+            self._say_next.append(("ask:worth_it", {}))
+
+    def _observe_deeper(self, event, raw, now):
+        """Places reached, moments kept, and what moves its trust."""
+        system = raw.get("StarSystem") or raw.get("SystemName")
+        with self.lock:
+            memory = self.memory
+            if event in {"FSDJump", "Location", "CarrierJump"} and system:
+                if not memory.get("first_system"):
+                    memory["first_system"] = str(system)
+                memory["last_system"] = str(system)
+            if event == "Loadout":
+                memory["ship_name"] = str(raw.get("ShipName") or raw.get("Ship_Localised") or raw.get("Ship") or "")[:60] or None
+            kind = watcher_places.place_of(event, raw)
+            if event in {"FSDJump", "Location", "CarrierJump"} and system and memory.get("first_system") \
+                    and str(system).casefold() == str(memory["first_system"]).casefold() and memory.get("sessions", 0) > 1:
+                kind = kind or "first_place"
+            if kind:
+                places = memory.setdefault("places", {})
+                times = int((places.get(kind) or [0])[0] or 0)
+                places[kind] = [times + 1, now]
+                wanted = memory.get("pilgrimage") or {}
+                if wanted.get("kind") == kind and not wanted.get("reached"):
+                    wanted["reached"] = now
+                    watcher_deeper.shift(memory, "pilgrimage")
+                    self._story_changed = True
+            if event == "Died":
+                watcher_deeper.shift(memory, "death")
+                ship = memory.get("ship_name") or "the ship"
+                self._keep_moment("lost", f"the {ship} we lost near {memory.get('last_system') or 'somewhere dark'}", now)
+            elif event == "HullDamage" and raw.get("PlayerPilot", True) and not raw.get("Fighter"):
+                try:
+                    low = float(raw.get("Health", 1.0)) < .25
+                except (TypeError, ValueError):
+                    low = False
+                if low and not self._scared:
+                    self._scared = True
+                    watcher_deeper.shift(memory, "scare")
+            elif event in {"RepairAll", "Repair"}:
+                self._scared = False
+                watcher_deeper.shift(memory, "repair")
+            elif event in {"SellExplorationData", "MultiSellExplorationData", "SellOrganicData"}:
+                watcher_deeper.shift(memory, "sold")
+            elif event == "Scan" and raw.get("WasDiscovered") is False and raw.get("PlanetClass"):
+                planet = str(raw.get("PlanetClass_Localised") or raw.get("PlanetClass") or "")
+                if rarity({"planet_class": raw.get("PlanetClass")}) or "earth" in planet.casefold() or "water world" in planet.casefold():
+                    self._keep_moment("first", f"the {planet.lower()} you were first to find, {raw.get('BodyName') or 'out there'}", now)
+            elif event == "WingJoin" and raw.get("Others"):
+                names = ", ".join(str(name.get("Name") if isinstance(name, dict) else name) for name in raw["Others"][:3])
+                self._keep_moment("wing", f"flying with {names}", now)
+            elif event == "WingAdd" and raw.get("Name"):
+                self._keep_moment("wing", f"flying with {raw['Name']}", now)
+
+    def _keep_moment(self, kind, text, now):
+        moments = self.memory.setdefault("moments", [])
+        moments.append({"kind": kind, "text": str(text)[:160], "at": now})
+        del moments[:-watcher_deeper.MOMENTS_KEPT]
+        self._unsaved = True
+
+    def _moment_choice(self, now):
+        """A moment it kept, at least two days old, as idle fields. With the
+        shutter drawn (Book Three), old ones come back with words missing."""
+        rows = [row for row in self.memory.get("moments") or () if isinstance(row, dict) and now - float(row.get("at") or now) > 2 * 86400]
+        if not rows:
+            return None
+        row = self.random.choice(rows)
+        about = row["text"]
+        if "the_fold" in watcher_lore.told(self.memory) and now - float(row["at"]) > watcher_deeper.FADE_AFTER_DAYS * 86400:
+            about = watcher_deeper.fade(about, row["at"])
+        when = when_text(datetime.fromtimestamp(float(row["at"])).astimezone().isoformat(), now) or "a while back"
+        return {"about": about, "About": about[:1].upper() + about[1:], "when": when, "When": when[:1].upper() + when[1:]}
+
+    def memories_page(self, now=None):
+        """What it remembers of you, as its own notes, for the Watcher page."""
+        now = self.clock() if now is None else now
+        faded = "the_fold" in watcher_lore.told(self.memory)
+        out = []
+        for row in reversed(self.memory.get("moments") or []):
+            if not isinstance(row, dict):
+                continue
+            old = faded and now - float(row.get("at") or now) > watcher_deeper.FADE_AFTER_DAYS * 86400
+            out.append({"text": watcher_deeper.fade(row["text"], row["at"]) if old else row["text"], "at": row.get("at"),
+                        "faded": bool(old), "kind": row.get("kind")})
+        return out[:120]
+
+    def _dream(self):
+        """Signing off: it dreams, from the session and the story so far."""
+        if self._session_start is None:
+            return None
+        moments = [row for row in self.memory.get("moments") or () if isinstance(row, dict)
+                   and float(row.get("at") or 0) >= self._session_start]
+        session = {"place": self.memory.get("last_system"), "thing": moments[-1]["text"] if moments else None}
+        shared = watcher_lore.told(self.memory)
+        road = watcher_lore.road(self.memory)
+        hint = ("look" if road == "open" else "shutter" if road == "shut" else "others" if "hundreds" in shared
+                else "seat" if watcher_lore.book_three_begun(self.memory) else "sound" if "sound" in shared else "")
+        text = watcher_deeper.dream(personality(self.config), session, hint, self.random)
+        with self.lock:
+            dreams = self.memory.setdefault("dreams", [])
+            dreams.append({"at": self.clock(), "text": text, "told": None})
+            del dreams[:-watcher_deeper.DREAMS_KEPT]
+        return text
+
+    def meet(self, card):
+        """Another commander's Watcher, from a shared code."""
+        if not isinstance(card, dict):
+            return None
+        now = self.clock()
+        key = f"{card.get('name')}|{card.get('nature')}|{card.get('hours')}"
+        with self.lock:
+            met = self.memory.setdefault("met", [])
+            if any(row.get("key") == key for row in met if isinstance(row, dict)):
+                return None
+            first = not met
+            met.append({**card, "key": key, "at": now})
+            watcher_deeper.shift(self.memory, "met")
+        self._unsaved = True
+        if first:
+            self._say_next.append(("lore_meeting", {"text": watcher_lore.MEETING.get(watcher_lore.road(self.memory))}))
+        nature = watcher_deeper.NATURE_WORDS.get(card.get("nature"), "another one")
+        road = watcher_deeper.ROAD_WORDS.get(card.get("road"))
+        return self.consider("watchers_meet", {"nature": nature, "Nature": nature[:1].upper() + nature[1:],
+                                                "road": road, "Road": road[:1].upper() + road[1:]}, force=True)
+
+    def share_card(self, commander=""):
+        """Your Watcher, in short, for a share code."""
+        progress = watcher_lore.progress(self.memory)
+        book = 4 if progress.get("BookFourBegun") else 3 if progress.get("BookThreeBegun") else 2 if self.memory.get("afterword") else 1
+        shared = watcher_lore.told(self.memory)
+        chapter = next((chapter[0] for chapter in reversed(watcher_lore.ALL_CHAPTERS)
+                        if any(passage_id in shared for passage_id, _words in chapter[5])), "")
+        return {"name": str(commander or "")[:60], "nature": personality(self.config), "book": book, "chapter": chapter,
+                "road": watcher_lore.road(self.memory), "bond": self.bond(), "hours": int(self.memory.get("hours") or 0)}
+
     def tick(self, context=None):
         """Idle thinking: the time, a long session, a long quiet. ``context``
         is what the rest of the app knows (the music playing, Galnet)."""
@@ -1427,6 +1837,17 @@ class WatcherMind:
         voice = self.find_voice()
         if voice:
             return voice
+        # 5.6.1: a question waiting too long goes unanswered; what's queued
+        # (a dream, a meeting's passage, a question) when it's quiet enough.
+        self._question_tick(now)
+        if self._say_next and now - self._last_spoke > 20 and not self._question:
+            topic, fields = self._say_next.pop(0)
+            queued = self._say_queued(topic, fields, now)
+            if queued:
+                return queued
+        asked = self._maybe_ask(now, context)
+        if asked:
+            return asked
         if self._session_start and now - self._session_start > 3 * 3600:
             hours = int((now - self._session_start) // 3600)
             if not self._said_recently("long_session", 3600):
@@ -1465,10 +1886,26 @@ class WatcherMind:
                          recall=watcher_lore.recall_choice(self.memory, self.random, now),
                          # 5.5.3.7: a postcard it kept.
                          postcard=watcher_postcards.recall_choice(self.memory, self.random, now))
+            known["road"] = watcher_lore.road(self.memory)
             choices = self.surroundings.choices(now, self.random, known)
             # How you play, as it has come to know you (5.5.4): now and then.
             if self.random.random() < .35:
                 choices[:0] = watcher_habits.choices(self.memory, self.bond(), self.random)[:1]
+            # 5.6.1: a moment it kept; its slow mood; what you once told it.
+            moment = self._moment_choice(now)
+            if moment and self.random.random() < .3:
+                choices.insert(0, ("idle_moment", moment))
+            mood = float(self.memory.get("mood", 0.0))
+            if mood <= watcher_deeper.MOOD_LOW:
+                choices.append(("mood_low", {}))
+            elif mood >= watcher_deeper.MOOD_HIGH:
+                choices.append(("mood_high", {}))
+            if self.random.random() < .15:
+                callback = self._callback(now)
+                if callback:
+                    with self.lock:
+                        self.memory["said"].append(["idle", now])
+                    return callback
             # The plain mutter now and then, and whenever nothing else fits.
             if not choices or self.random.random() < .25:
                 choices.insert(0, ("quiet", {}))

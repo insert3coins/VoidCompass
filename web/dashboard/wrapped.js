@@ -11,7 +11,7 @@ const NAMES = {
   longest_jump: "Longest jump", furthest: "Furthest out", regions: "Where you lived", home: "Home",
   discoveries: "First discoveries", rare: "Rarest find", codex: "Codex personality", biology: "Organics",
   money: "Credits", bgs: "Factions", music: "Soundtrack", postcards: "Postcards", constellations: "Constellations",
-  achievements: "Achievements", combat: "Combat", everyday: "The everyday", deaths: "Rebuys", verdict: "The verdict", finale: "The whole year",
+  achievements: "Achievements", combat: "Combat", everyday: "The everyday", deaths: "Rebuys", places: "Places", verdict: "The verdict", finale: "The whole year",
 };
 const PALETTES = {
   intro: ["#070a22", "#341060", "#7ae7ff"], distance: ["#03101f", "#0b3d6e", "#5be0ff"],
@@ -24,6 +24,7 @@ const PALETTES = {
   bgs: ["#190707", "#6b1d16", "#ff8a5c"], music: ["#0a081c", "#3f1468", "#ff5ce1"],
   postcards: ["#181007", "#5a3b14", "#ffcf8a"], constellations: ["#04081a", "#16205e", "#a3b5ff"],
   achievements: ["#181204", "#6b520b", "#ffd84d"], deaths: ["#170405", "#5a0b10", "#ff5c66"],
+  places: ["#04130f", "#0f4a3c", "#6fffd2"],
   combat: ["#170506", "#5e1012", "#ff4d4d"], everyday: ["#08121a", "#174256", "#7fd8ff"],
   verdict: ["#040509", "#141826", "#00d1ff"], finale: ["#05070c", "#0f2033", "#00d1ff"],
 };
@@ -36,6 +37,14 @@ const INK = "#f3f7ff", SOFT = "rgba(232, 240, 255, .72)", FAINT = "rgba(232, 240
 let ui = null;
 let years = [];
 let year = 0;
+// 5.6.1: an expedition's story, told by the same cards over its dates.
+let trips = [];
+let trip = "";
+let tripSeq = 0;
+let lastTripsKey = "";
+const span = () => (story?.trip ? "trip" : "year");
+const nameOf = (card) => (story?.trip && card?.kind === "intro" ? "Your trip" : story?.trip && card?.kind === "finale" ? "The whole trip"
+  : NAMES[card?.kind] || card?.kind || "");
 let story = null;
 let fetching = 0;
 let pollTimer = 0;
@@ -350,9 +359,10 @@ const PAINT = {
     c.save();
     c.shadowColor = colour;
     c.shadowBlur = 60 * a;
-    text(c, String(card.elite_year), W / 2, H * .5 + (1 - a) * 60, {size: 250, align: "center", alpha: a, colour: INK});
+    if (card.trip) text(c, String(card.trip), W / 2, H * .5 + (1 - a) * 60, {size: 110, align: "center", alpha: a, colour: INK, max: 960});
+    else text(c, String(card.elite_year), W / 2, H * .5 + (1 - a) * 60, {size: 250, align: "center", alpha: a, colour: INK});
     c.restore();
-    text(c, "YOUR YEAR IN THE BLACK", W / 2, H * .5 + 90, {size: 30, font: MONO, align: "center", colour, spacing: 10, alpha: appear(t, 1.6)});
+    text(c, card.trip ? "YOUR EXPEDITION, TOLD BACK" : "YOUR YEAR IN THE BLACK", W / 2, H * .5 + 90, {size: 30, font: MONO, align: "center", colour, spacing: 10, alpha: appear(t, 1.6)});
     if (card.commander) text(c, `CMDR ${card.commander}`.toUpperCase(), W / 2, H * .22, {size: 40, font: SANS, align: "center", colour: SOFT, spacing: 6, alpha: appear(t, 1.2), max: 900});
     const facts = [card.sessions ? `${fmt(card.sessions)} sessions` : "", card.days ? `${fmt(card.days)} days in the cockpit` : ""].filter(Boolean).join("  ·  ");
     text(c, facts, W / 2, H * .5 + 160, {size: 34, align: "center", colour: SOFT, alpha: appear(t, 2.1)});
@@ -361,7 +371,7 @@ const PAINT = {
   },
 
   distance(c, card, t, colour) {
-    kicker(c, "This year you flew", t, colour);
+    kicker(c, `This ${span()} you flew`, t, colour);
     const box = {x: 90, y: 560, w: W - 180, h: 560};
     const trail = card.trail || [];
     if (trail.length > 1) {
@@ -536,7 +546,7 @@ const PAINT = {
     text(c, `${card.lived_share}% of your arrivals`, 90, 400, {size: 32, colour: SOFT, alpha: appear(t, .9)});
     bars(c, card.top || [], 90, 540, W - 180, t, 1.2, colour, {label: "name", value: "arrivals"});
     const a = appear(t, 2.6);
-    text(c, `${card.visited} of ${card.of} regions visited this year`, 90, 1120, {size: 38, colour: INK, alpha: a});
+    text(c, `${card.visited} of ${card.of} regions visited this ${span()}`, 90, 1120, {size: 38, colour: INK, alpha: a});
     if (card.new_count) {
       text(c, `${card.new_count} for the very first time${card.new?.length ? `: ${card.new.slice(0, 3).join(", ")}${card.new_count > 3 ? "…" : ""}` : ""}`,
         90, 1176, {size: 28, colour: rgba(colour, 1), alpha: appear(t, 3), max: 900});
@@ -677,7 +687,7 @@ const PAINT = {
       text(c, `${credits(trade.profit)} cr profit${trade.date ? ` on ${trade.date}` : ""}`, 90, 1046, {size: 32, colour: SOFT, alpha: appear(t, 2.7), max: 900});
       if (trade.from || trade.to) text(c, `${trade.from || "?"}  →  ${trade.to || "?"}`, 90, 1098, {size: 28, colour: FAINT, alpha: appear(t, 3), max: 900});
     }
-    if (card.top_commodity) text(c, `Your commodity of the year: ${card.top_commodity}`, 90, 1200, {size: 32, colour: INK, alpha: appear(t, 3.3), max: 900});
+    if (card.top_commodity) text(c, `Your commodity of the ${span()}: ${card.top_commodity}`, 90, 1200, {size: 32, colour: INK, alpha: appear(t, 3.3), max: 900});
   },
 
   bgs(c, card, t, colour) {
@@ -761,7 +771,7 @@ const PAINT = {
     headline(c, item.name || "", W / 2, 330, t, .3, {size: 80, max: 940, align: "center"});
     paragraph(c, item.legend || "", W / 2, 1100, {size: 32, font: SERIF, colour: SOFT, width: 880, align: "center", alpha: appear(t, 2.6)});
     const others = (card.names || []).filter((name) => name !== item.name);
-    text(c, card.count > 1 ? `${card.count} constellations finished this year${others.length ? `, with ${others.slice(0, 2).join(" and ")}` : ""}` : "Finished this year",
+    text(c, card.count > 1 ? `${card.count} constellations finished this ${span()}${others.length ? `, with ${others.slice(0, 2).join(" and ")}` : ""}` : "Finished this year",
       W / 2, 1218, {size: 26, font: MONO, colour, align: "center", alpha: appear(t, 3), max: 940});
   },
 
@@ -884,6 +894,27 @@ const PAINT = {
     text(c, "You came back every time.", 90, 1180, {size: 34, colour: SOFT, alpha: appear(t, 2.6)});
   },
 
+  // An expedition's places (5.6.1): a pin for each, scattered like a chart.
+  places(c, card, t, colour) {
+    kicker(c, "The places you kept", t, colour);
+    const rng = random(seedOf(`places${card.count}`));
+    for (let index = 0; index < Math.min(28, card.count); index += 1) {
+      const x = 120 + rng() * (W - 240), y = 230 + rng() * 210;
+      c.save();
+      c.globalAlpha = appear(t, .2 + index * .05);
+      c.fillStyle = colour;
+      c.beginPath();
+      c.arc(x, y, 7, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    }
+    text(c, count(card.count, t, .3, 1), 90, 680, {size: 260, colour: INK});
+    text(c, card.count === 1 ? "PLACE" : "PLACES", 96, 760, {size: 34, font: MONO, colour, spacing: 10, alpha: appear(t, .7)});
+    text(c, `${card.visited} of them visited`, 96, 820, {size: 34, colour: SOFT, alpha: appear(t, 1)});
+    (card.names || []).slice(0, 5).forEach((name, index) => text(c, name, 90, 930 + index * 56, {size: 36, colour: index ? SOFT : INK, alpha: appear(t, 1.4 + index * .2), max: 900}));
+    text(c, "Somewhere to come back to.", 90, 1240, {size: 34, colour: SOFT, alpha: appear(t, 2.6)});
+  },
+
   verdict(c, card, t, colour) {
     kicker(c, "The Watcher's verdict", t, colour);
     // The Watcher: the orb, breathing.
@@ -913,7 +944,7 @@ const PAINT = {
 
   finale(c, card, t, colour) {
     text(c, "VOID WRAPPED", W / 2, 150, {size: 30, font: MONO, align: "center", colour, spacing: 12, alpha: appear(t, .1)});
-    headline(c, String(card.elite_year), W / 2, 290, t, .2, {size: 150, align: "center"});
+    headline(c, String(card.trip || card.elite_year), W / 2, 290, t, .2, {size: card.trip ? 76 : 150, align: "center", max: 960});
     if (card.commander) text(c, `CMDR ${card.commander}`.toUpperCase(), W / 2, 350, {size: 32, font: SANS, align: "center", colour: SOFT, spacing: 5, alpha: appear(t, .6), max: 900});
     text(c, card.title, W / 2, 420, {size: 40, font: `italic ${SERIF}`, align: "center", colour: INK, alpha: appear(t, .9), max: 940});
     const tiles = [["light years", fmt(card.ly)], ["jumps", fmt(card.jumps)], ["systems", fmt(card.systems)],
@@ -1188,6 +1219,7 @@ function shell(root) {
       <header class="wrapped-brand"><small>YOUR YEAR, TOLD BACK</small><h3>Void Wrapped</h3>
         <p>Everything you did in the black this year, as a story. Click through it, then keep the cards: each one saves or copies as a picture for Discord.</p></header>
       <section class="wrapped-years" aria-label="Years"><h4>CHOOSE A YEAR</h4><div id="wrapped-years"></div></section>
+      <section class="wrapped-years wrapped-trips" aria-label="Expeditions" id="wrapped-trips-panel" hidden><h4>OR AN EXPEDITION</h4><div id="wrapped-trips"></div></section>
       <section class="wrapped-index" aria-label="Cards"><h4>THE STORY</h4><ol id="wrapped-index"></ol></section>
       <footer class="wrapped-actions">
         <button type="button" data-wrapped="refresh" title="Tell your year again, with everything that's happened since">↻ REFRESH MY YEAR</button>
@@ -1272,6 +1304,11 @@ async function onClick(event) {
     choose(Number(pick.dataset.wrappedYear));
     return;
   }
+  const pickTrip = event.target.closest("[data-wrapped-trip]");
+  if (pickTrip) {
+    chooseTrip(pickTrip.dataset.wrappedTrip);
+    return;
+  }
   const jump = event.target.closest("[data-wrapped-card]");
   if (jump) {
     go(Number(jump.dataset.wrappedCard), {play: !player.paused});
@@ -1292,7 +1329,10 @@ async function onClick(event) {
   else if (action === "save" || action === "copy") await keep(player.index, action, button);
   else if (action === "save_all") await keepAll(button);
   else if (action === "open_folder") ui.command("workspace", {page: "wrapped", operation: "open_folder"});
-  else if (action === "refresh" && year) {
+  else if (action === "refresh" && trip) {
+    story = null;
+    await load(year, trip);
+  } else if (action === "refresh" && year) {
     // Told again from scratch: new journals, trades and the rest counted.
     button.disabled = true;
     await ui.command("workspace", {page: "wrapped", operation: "retell", year});
@@ -1318,7 +1358,7 @@ async function keep(index, action, button) {
   if (!card) return false;
   if (button) button.disabled = true;
   const done = await ui.command("workspace", {page: "wrapped", operation: action, picture: picture(index), year: story.year,
-    index: index + 1, card: NAMES[card.kind] || card.kind});
+    index: index + 1, card: nameOf(card)});
   if (button) button.disabled = false;
   if (action === "copy") ui.showToast(done ? "Card copied: paste it into Discord" : "The card couldn't be copied");
   else ui.showToast(done ? "Card saved in the wrapped folder" : "The card couldn't be saved");
@@ -1333,7 +1373,7 @@ async function keepAll(button) {
   for (let index = 0; index < list.length; index += 1) {
     button.textContent = `SAVING ${index + 1} / ${list.length}…`;
     const done = await ui.command("workspace", {page: "wrapped", operation: "save", picture: picture(index), year: story.year,
-      index: index + 1, card: NAMES[list[index].kind] || list[index].kind, last: index === list.length - 1});
+      index: index + 1, card: nameOf(list[index]), last: index === list.length - 1});
     if (done) saved += 1;
     await new Promise((resolve) => setTimeout(resolve, 30));
   }
@@ -1342,12 +1382,22 @@ async function keepAll(button) {
   ui.showToast(saved === list.length ? `All ${saved} cards saved in the wrapped folder` : `${saved} of ${list.length} cards saved`);
 }
 
+function renderTrips() {
+  const host = ui.byId("wrapped-trips");
+  const key = JSON.stringify([trips, trip]);
+  if (!host || key === lastTripsKey) return;
+  lastTripsKey = key;
+  ui.byId("wrapped-trips-panel").hidden = !trips.length;
+  host.innerHTML = trips.map((row) => `<button type="button" data-wrapped-trip="${ui.escapeHtml(row.id)}" class="${row.id === trip ? "active" : ""}">
+      <b>${ui.escapeHtml(row.name)}</b><small>${ui.escapeHtml(String(row.status || "").toUpperCase())} · ${fmt(row.jumps)} jumps</small></button>`).join("");
+}
+
 function renderYears() {
   const host = ui.byId("wrapped-years");
-  const key = JSON.stringify([years, year]);
+  const key = JSON.stringify([years, year, trip]);
   if (!host || key === lastYearsKey) return;
   lastYearsKey = key;
-  host.innerHTML = years.length ? years.map((row) => `<button type="button" data-wrapped-year="${row.year}" class="${row.year === year ? "active" : ""}">
+  host.innerHTML = years.length ? years.map((row) => `<button type="button" data-wrapped-year="${row.year}" class="${row.year === year && !trip ? "active" : ""}">
       <b>${row.elite_year}</b><small>${row.year} · ${fmt(row.jumps)} jumps · ${fmt(row.sessions)} sessions</small></button>`).join("")
     : `<p class="wrapped-empty">Your journal hasn't been read yet. Fly a little, and your year will be here.</p>`;
 }
@@ -1360,14 +1410,14 @@ function renderIndex() {
   if (host.dataset.key !== key) {
     host.dataset.key = key;
     host.innerHTML = list.map((card, index) => `<li><button type="button" data-wrapped-card="${index}" class="${index === player.index ? "active" : ""}">
-      <i style="--dot:${palette(card)[2]}"></i>${ui.escapeHtml(NAMES[card.kind] || card.kind)}</button></li>`).join("");
+      <i style="--dot:${palette(card)[2]}"></i>${ui.escapeHtml(nameOf(card))}</button></li>`).join("");
   }
   renderControls();
 }
 
 function renderControls() {
   const where = ui.byId("wrapped-where");
-  if (where) where.textContent = cards().length ? `${player.index + 1} / ${cards().length} · ${NAMES[cards()[player.index]?.kind] || ""}` : "—";
+  if (where) where.textContent = cards().length ? `${player.index + 1} / ${cards().length} · ${nameOf(cards()[player.index])}` : "—";
   const pause = ui.byId("wrapped-pause");
   if (pause) {
     const state = player.paused ? "▶" : "❚❚";
@@ -1376,21 +1426,23 @@ function renderControls() {
   }
 }
 
-async function load(wanted) {
+async function load(wanted, tripId = "") {
   const ticket = ++fetching;
   window.clearTimeout(pollTimer);
   const loading = ui.byId("wrapped-loading");
   try {
-    const response = await fetch(ui.apiUrl(`/api/data/wrapped?year=${wanted}`), {cache: "no-store"});
+    const query = tripId ? `expedition=${encodeURIComponent(tripId)}` : `year=${wanted}`;
+    const response = await fetch(ui.apiUrl(`/api/data/wrapped?${query}`), {cache: "no-store"});
     const answer = await response.json();
     if (ticket !== fetching) return;
     if (answer.working) {
       loading.hidden = false;
-      pollTimer = window.setTimeout(() => load(wanted), 1200);
+      pollTimer = window.setTimeout(() => load(wanted, tripId), 1200);
       return;
     }
     loading.hidden = true;
-    const changed = JSON.stringify(answer.cards?.map((card) => card.kind)) !== JSON.stringify(story?.cards?.map((card) => card.kind)) || answer.year !== story?.year;
+    const changed = JSON.stringify(answer.cards?.map((card) => card.kind)) !== JSON.stringify(story?.cards?.map((card) => card.kind))
+      || answer.year !== story?.year || answer.trip?.id !== story?.trip?.id;
     story = answer;
     await preload();
     if (changed) {
@@ -1422,11 +1474,22 @@ async function preload() {
 }
 
 function choose(wanted) {
-  if (!wanted || wanted === year) return;
+  if (!wanted || (wanted === year && !trip)) return;
   year = wanted;
-  lastYearsKey = "";
+  trip = "";
+  lastYearsKey = lastTripsKey = "";
   renderYears();
+  renderTrips();
   load(year);
+}
+
+function chooseTrip(id) {
+  if (!id || id === trip) return;
+  trip = id;
+  lastYearsKey = lastTripsKey = "";
+  renderYears();
+  renderTrips();
+  load(year, trip);
 }
 
 export function renderWrapped(data = {}, shared) {
@@ -1436,6 +1499,13 @@ export function renderWrapped(data = {}, shared) {
   if (!root.querySelector(".wrapped-page")) shell(root);
   root.classList.remove("loading-panel");
   years = Array.isArray(data.years) ? data.years : [];
+  trips = Array.isArray(data.trips) ? data.trips : [];
+  // TELL IT on the Expeditions page opens here on that trip.
+  const asked = data.trip_request || {};
+  if (asked.id && Number(asked.seq || 0) > tripSeq) {
+    tripSeq = Number(asked.seq || 0);
+    chooseTrip(asked.id);
+  }
   const saved = data.saved || {};
   ui.byId("wrapped-saved").textContent = saved.count ? `${fmt(saved.count)} saved in ${data.folder || "the wrapped folder"}` : "";
   if (!year && years.length) {
@@ -1446,6 +1516,7 @@ export function renderWrapped(data = {}, shared) {
     load(year);
   }
   renderYears();
+  renderTrips();
   fit();
   run();
 }

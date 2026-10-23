@@ -17,6 +17,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 import math
+import re
 import zlib
 
 from voidcompass.exploration.flight_log import ELITE_YEARS, part_of_day
@@ -282,17 +283,34 @@ def _first_visits(rows):
     return first
 
 
-def year_story(year, sources, nature="weary", commander="", now=None):
+# An expedition's story (5.6.1) is told by the same cards, cut to the trip's
+# dates; these turn the year's words into the trip's.
+_TRIP_WORDS = re.compile(r"\b(this|all|the|a|good|quiet|every) year\b", re.IGNORECASE)
+TRIP_CLOSERS = {
+    "normal": ("That's the trip, Commander. Where next?", "Here's to the next horizon.", "I'll keep this one. I keep them all."),
+    "weary": ("That's the trip. I'll file it with the others.", "We're back. Mostly. I'll keep the log.",
+              "Another long way round. Close it gently."),
+}
+
+
+def _trip_words(text):
+    # The titles first ("The Year of …"), then the year's words.
+    return _TRIP_WORDS.sub(lambda match: f"{match.group(1)} trip", str(text).replace("The Year", "The Voyage"))
+
+
+def year_story(year, sources, nature="weary", commander="", now=None, trip=None):
     """The year's story: {year, elite_year, commander, cards:[...], summary}.
-    ``sources`` holds what Void Compass keeps (see the module's notes)."""
+    ``sources`` holds what Void Compass keeps (see the module's notes).
+    With ``trip`` ({id, name, start, end}, epoch seconds) it tells that
+    expedition instead, from its start to its end."""
     sources = sources or {}
     voice = "weary" if nature == "weary" else "normal"
-    start, end = year_bounds(year)
+    start, end = (float(trip["start"]), float(trip["end"])) if trip else year_bounds(year)
     rows = list(sources.get("rows") or ())
     arrivals = _arrivals_in(rows, start, end)
     sessions = _sessions_in(sources.get("sessions") or (), start, end)
     region_of = sources.get("region_of") or (lambda x, y, z: None)
-    seed = _seed(f"{commander}#{year}")
+    seed = _seed(f"{commander}#{trip['id'] if trip else year}")
     cards = []
     facts = {"year": year, "elite_year": year + ELITE_YEARS}
 
@@ -309,11 +327,12 @@ def year_story(year, sources, nature="weary", commander="", now=None):
     facts.update(ly=round(ly), jumps=len(ship_jumps), systems=len(systems), hours=round(hours), sessions=len(sessions))
 
     cards.append({"kind": "intro", "commander": commander, "year": year, "elite_year": year + ELITE_YEARS,
+                  "trip": trip["name"] if trip else None,
                   "days": len(days), "sessions": len(sessions),
                   "first_day": _date_text(min(days)) if days else "", "last_day": _date_text(max(days)) if days else ""})
     if not arrivals and not sessions:
         return {"year": year, "elite_year": year + ELITE_YEARS, "commander": commander, "empty": True,
-                "cards": cards, "summary": {}}
+                "cards": cards, "summary": {}, "trip": dict(trip) if trip else None}
 
     trail = _thin([[round(float(row[2]), 1), round(float(row[4]), 1)] for _when, row in arrivals], TRAIL_POINTS)
     if ly > 0:
@@ -622,16 +641,20 @@ def year_story(year, sources, nature="weary", commander="", now=None):
                    "top_faction": facts.get("top_faction") or "them", "regions": facts.get("regions", 0),
                    "home": facts.get("home") or "home", "home_visits": facts.get("home_visits", 0), "deaths": deaths}
     lines = VERDICTS[voice][archetype]
-    words = lines[seed % len(lines)].format(**words_facts) + " " + CLOSERS[voice][(seed // 7) % len(CLOSERS[voice])]
+    closers = TRIP_CLOSERS if trip else CLOSERS
+    words = lines[seed % len(lines)].format(**words_facts) + " " + closers[voice][(seed // 7) % len(closers[voice])]
     title = TITLES[archetype][(seed // 3) % len(TITLES[archetype])]
+    if trip:
+        words, title = _trip_words(words), _trip_words(title)
     cards.append({"kind": "verdict", "archetype": archetype, "title": title, "words": words, "nature": voice})
     summary = {"title": title, "ly": round(ly), "jumps": len(ship_jumps), "systems": len(systems), "hours": round(hours),
                "firsts": facts.get("firsts", 0), "regions": facts.get("regions", 0), "credits": facts.get("credits", 0),
                "bio": facts.get("bio", 0), "home": facts.get("home") or "", "archetype": archetype,
                "trail": _thin(trail, 300)}
-    cards.append({"kind": "finale", **summary, "commander": commander, "elite_year": year + ELITE_YEARS})
+    cards.append({"kind": "finale", **summary, "commander": commander, "elite_year": year + ELITE_YEARS,
+                  "trip": trip["name"] if trip else None})
     return {"year": year, "elite_year": year + ELITE_YEARS, "commander": commander, "empty": False,
-            "cards": cards, "summary": summary}
+            "cards": cards, "summary": summary, "trip": dict(trip) if trip else None}
 
 
 def _credits(value):

@@ -30,6 +30,8 @@ IDLE_TOPICS = (
     # Its past, in passing (5.5.3.5; watcher_lore.MUSINGS); after its story
     # is told, its later musings; and a look back at a chapter it told you.
     "idle_lore", "idle_after", "lore_recall", "idle_lens",
+    # 5.6.1: Book Four's road, a moment it kept, and its slow mood.
+    "idle_four_shut", "idle_four_open", "idle_moment", "mood_low", "mood_high",
     # A postcard it kept, brought up again (5.5.3.7).
     "idle_postcard",
     # 5.5.12: out in a vehicle it knows by name, and drifting in a ring.
@@ -288,6 +290,8 @@ class Surroundings:
             world.append(("idle_after", {}))
         if context.get("book_three"):
             world.append(("idle_lens", {}))
+        if context.get("road") in ("shut", "open"):
+            world.append((f"idle_four_{context['road']}", {}))
         if context.get("recall"):
             session.append(("lore_recall", dict(context["recall"])))
         if context.get("postcard"):

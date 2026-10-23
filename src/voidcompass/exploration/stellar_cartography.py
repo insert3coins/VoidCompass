@@ -131,6 +131,38 @@ _RING_CLASSES = {
 }
 
 
+# The orrery and the survey are rebuilt every refresh, and a big system paid
+# for every body's facts each time (5.6.1). Kept by what they're made from, so
+# a detailed scan, a map or a sample makes them anew; handed out as copies.
+_FACTS_CACHE = {}
+_FACTS_CACHE_LIMIT = 4000
+
+
+def _facts_key(item, is_star):
+    organics = tuple(sorted(
+        (str(key), scan.get("sample_idx"), bool(scan.get("is_complete")), str(scan.get("variant") or scan.get("species") or ""))
+        for key, scan in (item.get("organic_scans") or {}).items() if isinstance(scan, dict)))
+    table = item.get("value_table")
+    return (str(item.get("name") or ""), item.get("body_id"), bool(is_star), item.get("scan_type"), item.get("radius"),
+            item.get("surface_temp"), item.get("volcanism"), item.get("landable"), item.get("dss_probes_used"),
+            item.get("dss_efficiency_target"), len(item.get("genuses") or ()), organics, item.get("reserve_level"),
+            len(item.get("rings") or ()), tuple(sorted(table.items())) if isinstance(table, dict) else None)
+
+
+def _cached_body_facts(item, is_star):
+    try:
+        key = _facts_key(item, is_star)
+        hash(key)
+    except TypeError:
+        return _body_facts(item, is_star)
+    facts = _FACTS_CACHE.get(key)
+    if facts is None:
+        if len(_FACTS_CACHE) >= _FACTS_CACHE_LIMIT:
+            _FACTS_CACHE.clear()
+        facts = _FACTS_CACHE[key] = _body_facts(item, is_star)
+    return dict(facts)
+
+
 def _body_facts(item, is_star):
     """What a body's scan says about it, beyond the survey basics (the
     detail EDDiscovery shows). Only what the journal gave."""
@@ -483,7 +515,7 @@ def build_orrery(items, target=None, barycentres=None):
             "was_discovered": item.get("was_discovered"),
             "was_mapped": item.get("was_mapped"),
             "was_footfalled": item.get("was_footfalled"),
-            "facts": _body_facts(item, is_star),
+            "facts": _cached_body_facts(item, is_star),
             "mapped": mapped,
             "landable": bool(item.get("landable")),
             "terraformable": bool(item.get("terraformable")),

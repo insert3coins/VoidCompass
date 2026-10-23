@@ -319,6 +319,21 @@ class HeartbeatHUD:
             return True
         return False
 
+    def answer(self, answer):
+        """An answer to its question (the answer hotkeys, or the Watcher
+        page): by number (1 to 3) or by the answer's key (5.6.1)."""
+        thought = self.mind.answer(answer)
+        if thought:
+            self._redraw()
+        return thought
+
+    def meet(self, card):
+        """Another commander's Watcher, from a shared code (5.6.1)."""
+        thought = self.mind.meet(card)
+        if thought:
+            self._redraw()
+        return thought
+
     def reset(self):
         """The Watcher page's RESET: it forgets everything, and wakes again."""
         backup = self.mind.reset()
@@ -400,7 +415,9 @@ class HeartbeatHUD:
             'events': list(self._events),
             'orb': {'size': orb_size(self.config), 'eye': eye_color(self.config),
                     'liveliness': liveliness(self.config), 'idle': idle_motion(self.config),
-                    'frame_rate': frame_rate(self.config)},
+                    'frame_rate': frame_rate(self.config),
+                    # What its story has done to the eye (5.6.1).
+                    'story': self.mind.story_marks() if getattr(self, 'mind', None) is not None else {}},
             'vitals': dict(self._vitals),
             'personality': watcher_mind.personality(self.config),
             'overlays': overlay_directions(
@@ -443,7 +460,11 @@ class HeartbeatHUD:
             if self._speaks(thought):
                 words = self.mind.spoken_words(thought)
                 try:
-                    spoken = bool(words) and bool(self.voice_listener(words, thought['id']))
+                    try:
+                        said = self.voice_listener(words, thought['id'], feel=thought.get('voice'))
+                    except TypeError:
+                        said = self.voice_listener(words, thought['id'])  # a listener without the feel (5.6.1)
+                    spoken = bool(words) and bool(said)
                 except Exception:
                     spoken = False
                 self._voiced = (thought['id'], words == thought['text']) if spoken else None
@@ -455,7 +476,10 @@ class HeartbeatHUD:
                 'voice_full': voiced[0] == thought['id'] and voiced[1],
                 'mood': thought.get('mood') or '', 'side': self.thought_side(),
                 'kind': thought.get('kind') or '', 'heading': thought.get('heading') or '',
-                'style': watcher_mind.thought_style(self.config)}
+                'style': watcher_mind.thought_style(self.config),
+                # 5.6.1: a question to answer (the answer hotkeys, 1 to 3), and
+                # a story moment the eye shows once.
+                'question': thought.get('question'), 'effect': thought.get('effect') or ''}
 
     def thought_side(self):
         """The side asked for in Overlay Studio, or on Auto the side of the

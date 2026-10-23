@@ -92,7 +92,9 @@ class HtmlExploreWorkspaceMixin:
                 return updated
             return state
 
-    def _html_explore_workspace(self, intelligence=None):
+    def _html_route_tools(self):
+        """The waypoint route, Elite's NavRoute and the neutron plotter: on
+        the Expeditions page since 5.6.1, and Explore's next-waypoint line."""
         manager = getattr(self, "waypoint_manager", None)
         waypoints = list(getattr(manager, "waypoints", None) or [])
         current = _text(getattr(self, "current_sys", None), 140)
@@ -155,6 +157,31 @@ class HtmlExploreWorkspaceMixin:
             {"status": "ready", "detail": "Ready to plot a manual neutron route.", "route": None},
         )
         saved_form = self.config.get("system_plotter_form") or {}
+        return {
+            "current": current,
+            "destination": _text(getattr(self, "dest_name", None), 140),
+            "nav_route": nav_entries,
+            "waypoints": rendered_waypoints,
+            "next_waypoint": _text(
+                manager.get_next_waypoint(current) if manager is not None else "", 140,
+            ),
+            "auto_copy": bool(self.config.get("auto_copy_waypoint", False)),
+            "plotter": {
+                "from": _text(saved_form.get("from") or current, 140),
+                "to": _text(saved_form.get("to"), 140),
+                "range": _number(saved_form.get("range"), 30),
+                "efficiency": _integer(saved_form.get("efficiency"), 60),
+                "multiplier": _integer(saved_form.get("supercharge_multiplier"), 4),
+                "status": _text(tool.get("status"), 30),
+                "detail": _text(tool.get("detail"), 300),
+                "result": tool.get("route"),
+            },
+        }
+
+    def _html_explore_workspace(self, intelligence=None):
+        route = self._html_route_tools()
+        current = route["current"]
+        current_coords = getattr(self, "current_coords", None)
         survey_states = self.config.get("stellar_survey_queue_state") or {}
         survey_state = survey_states.get(current.casefold()) or {}
         scan_items = [
@@ -247,14 +274,7 @@ class HtmlExploreWorkspaceMixin:
             if isinstance(row, dict)
         ]
         return {
-            "current": current,
-            "destination": _text(getattr(self, "dest_name", None), 140),
-            "nav_route": nav_entries,
-            "waypoints": rendered_waypoints,
-            "next_waypoint": _text(
-                manager.get_next_waypoint(current) if manager is not None else "", 140,
-            ),
-            "auto_copy": bool(self.config.get("auto_copy_waypoint", False)),
+            **route,
             "return_later": {
                 "entries": return_later_entries,
                 "count": len(return_later_entries),
@@ -284,16 +304,6 @@ class HtmlExploreWorkspaceMixin:
                 "catalogue_count": max(0, _integer(scout.get("catalogue_count"))),
                 "audit": system_audit(completion, survey_queue),
                 "codex": codex,
-            },
-            "plotter": {
-                "from": _text(saved_form.get("from") or current, 140),
-                "to": _text(saved_form.get("to"), 140),
-                "range": _number(saved_form.get("range"), 30),
-                "efficiency": _integer(saved_form.get("efficiency"), 60),
-                "multiplier": _integer(saved_form.get("supercharge_multiplier"), 4),
-                "status": _text(tool.get("status"), 30),
-                "detail": _text(tool.get("detail"), 300),
-                "result": tool.get("route"),
             },
         }
 

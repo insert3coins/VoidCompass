@@ -77,6 +77,11 @@ class HtmlHeartbeatBridge(HtmlModelOverlayBridge):
         height = lines * font * THOUGHT_LINE_EM + THOUGHT_BACKDROP_PX + 6
         if (thought.get("style") or {}).get("heading", True):
             height += font * THOUGHT_HEADING_EM * THOUGHT_LINE_EM + THOUGHT_HEADING_GAP_PX
+        answers = ((thought.get("question") or {}).get("answers")) or ()
+        if answers:
+            # A question's answers (5.6.1), on their own line or two under it.
+            words = "   ".join(f"{index + 1} · {row.get('label')}" for index, row in enumerate(answers))
+            height += len(textwrap.wrap(words, per_line)) * font * THOUGHT_LINE_EM + 6
         return int(math.ceil(height))
 
     def _dimensions(self):

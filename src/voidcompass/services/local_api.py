@@ -336,6 +336,7 @@ class LocalApi:
             ("POST", r"/bgs/track", self._bgs_track, True),
             ("GET", r"/exploration", lambda req: self._call("api_exploration"), False),
             ("GET", r"/exploration/bodies", self._exploration_bodies, False),
+            ("GET", r"/exploration/survey", lambda req: self._call("api_exploration_survey"), False),
             ("GET", r"/exploration/systems", lambda req: self._call(
                 "api_exploration_systems", str(req.query.get("query") or "")[:80], _int(req.query.get("limit"), 100, 1, 1000)), False),
             ("GET", r"/exploration/route", lambda req: self._call(
@@ -376,6 +377,9 @@ class LocalApi:
             ("GET", r"/wrapped/([0-9]{4})", lambda req, year: self._call("api_wrapped", int(year)), False),
             ("GET", r"/recorder", lambda req: self._call("api_recorder_sessions"), False),
             ("GET", r"/recorder/tape", lambda req: self._call("api_recorder_tape", str(req.query.get("session") or "")[:40]), False),
+            # Expeditions (5.6.1): the active one, and every one you've kept.
+            ("GET", r"/expedition", lambda req: self._call("api_expedition"), False),
+            ("GET", r"/expeditions", lambda req: self._call("api_expeditions"), False),
             # The Rig Tracker (5.5.10): the rig keys, from a Stream Deck or a script.
             ("GET", r"/rigs", lambda req: self._call("api_rigs"), False),
             ("POST", r"/rigs/clear", self._clear_rigs, True),

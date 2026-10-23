@@ -36,7 +36,10 @@ class AliveTests(unittest.TestCase):
     def test_moods_name_real_topics(self):
         # A memory of its past (5.5.3.5) is a topic of its own, spoken by
         # WatcherMind.remember rather than from the line banks.
-        self.assertTrue(set(MOODS) <= set(TOPICS) | {"lore_fragment", "lore_afterword", "voice_found"})
+        # 5.6.1: a question, an answer, a callback and a meeting's passage are
+        # spoken directly too (WatcherMind.ask, answer and the queue).
+        self.assertTrue(set(MOODS) <= set(TOPICS) | {"lore_fragment", "lore_afterword", "voice_found",
+                                                     "question", "answer", "callback", "lore_meeting"})
         self.assertTrue(set(MOODS.values()) <= {"pleased", "wary", "curious", "downcast"})
 
     def test_a_thought_carries_its_mood_and_script(self):

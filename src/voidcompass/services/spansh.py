@@ -325,6 +325,25 @@ def _normalize_fleet_carrier_result(
     }
 
 
+def plotted_systems(job):
+    """The systems of any finished Spansh plotter result (neutron, exact,
+    riches or carrier), in order, with their places: for importing a
+    community expedition's Spansh link (5.6.1)."""
+    data = _call("GET", f"results/{job}", ttl=0)
+    if data.get("status") != "ok":
+        raise SpanshError("That Spansh route is still plotting, or has expired: try again shortly.")
+    result = data.get("result") or {}
+    rows = result.get("system_jumps") or result.get("jumps") or result.get("systems") or []
+    systems = []
+    for row in rows if isinstance(rows, list) else ():
+        name = (row.get("system") or row.get("name")) if isinstance(row, dict) else None
+        if name:
+            systems.append({"name": str(name), "coords": _xyz(row), "neutron": bool(row.get("neutron_star"))})
+    if not systems:
+        raise SpanshError("Spansh's result has no systems in it.")
+    return systems
+
+
 def fleet_carrier_job_id(reference):
     """Return a real Spansh result UUID, never a plausible system name."""
     value = str(reference or "").strip()

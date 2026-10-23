@@ -226,6 +226,7 @@ function compassPanel(data, ui, esc) {
     <div class="po-actions">
       <button type="button" class="primary" data-ws-page="ground" data-ws-op="set">SET TARGET</button>
       <button type="button" data-ws-page="ground" data-ws-op="set_current"${ground.on_planet ? "" : " disabled"}>USE WHERE I AM</button>
+      <button type="button" data-ws-page="mission" data-ws-op="mark_here"${ground.on_planet ? "" : " disabled"} title="Keep this spot as one of the expedition's places">+ EXPEDITION PLACE</button>
       <button type="button" data-ws-page="ground" data-ws-op="return_ship">BACK TO THE SHIP</button>
       <button type="button" data-ws-page="ground" data-ws-op="clear"${target.active ? "" : " disabled"}>CLEAR</button>
       <button type="button" data-ws-page="ground" data-ws-op="toggle_popup" aria-pressed="${Boolean(target.popup)}">COCKPIT POPUP ${target.popup ? "ON" : "OFF"}</button>

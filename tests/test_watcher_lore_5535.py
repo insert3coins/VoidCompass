@@ -47,15 +47,19 @@ class StoryTests(unittest.TestCase):
         ids = [row[0] for row in watcher_lore.FRAGMENTS]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertGreaterEqual(len(ids), 70)
-        unlocks = [(row[3], row[4]) for row in watcher_lore.FRAGMENTS]
-        self.assertEqual(unlocks, sorted(unlocks), "told in order, so unlocked in order")
+        # Told in order, so unlocked in order: along each of Book Four's roads (5.6.1).
+        for road in watcher_lore.ROADS:
+            unlocks = [(row[3], row[4]) for row in watcher_lore.FRAGMENTS if row[8] in (None, road)]
+            self.assertEqual(unlocks, sorted(unlocks), road)
         self.assertEqual((watcher_lore.FRAGMENTS[0][3], watcher_lore.FRAGMENTS[0][4]), (1, .3), "it begins quickly")
         book_one = [row for row in watcher_lore.FRAGMENTS if row[5] < len(watcher_lore.CHAPTERS)]
         self.assertEqual((len(book_one), book_one[-1][4], book_one[-1][0]), (70, 450.0, "stay"),
                          "Book One unfolds over hundreds of hours")
         book_two = [row for row in watcher_lore.FRAGMENTS if row[5] < watcher_lore.BOOK_TWO_END]
         self.assertEqual(book_two[-1][4], 600.0, "and Book Two beyond it")
-        self.assertEqual(watcher_lore.FRAGMENTS[-1][4], 1000.0, "and Book Three beyond that (5.5.3.9)")
+        book_three = [row for row in watcher_lore.FRAGMENTS if row[5] < watcher_lore.BOOK_THREE_END]
+        self.assertEqual(book_three[-1][4], 1000.0, "and Book Three beyond that (5.5.3.9)")
+        self.assertEqual(watcher_lore.FRAGMENTS[-1][4], 1300.0, "and Book Four beyond that (5.6.1)")
         for chapter in watcher_lore.ALL_CHAPTERS:
             self.assertGreater(len(chapter[4]), 600, f"chapter {chapter[0]} has a real account")
 
@@ -246,7 +250,7 @@ class AfterTheStoryTests(unittest.TestCase):
             trigger = catalogue[achievement_id]["trigger"]
             self.assertEqual((trigger["event"], trigger["field"]), ("VoidCompassWatcherStory", field))
         self.assertEqual(watcher_lore.progress({}), {"Told": 0, "BookOne": 0, "BookTwo": 0, "BookThree": 0,
-                                                     "BookThreeBegun": 0, "Echoes": 0})
+                                                     "BookThreeBegun": 0, "BookFourBegun": 0, "BookFour": 0, "Echoes": 0})
         self.assertEqual(watcher_lore.progress({"lore": book_one_told()})["BookOne"], 1)
         clock = Clock()
         mind = watcher(clock=clock)

@@ -447,11 +447,18 @@ from voidcompass.overlays.watcher_lore_three import (  # noqa: E402
 )
 
 # Every book, in the order they are told; each follows the last.
-ALL_CHAPTERS = tuple(CHAPTERS) + tuple(CHAPTERS_TWO) + tuple(CHAPTERS_THREE)
+from voidcompass.overlays.watcher_lore_four import (  # noqa: E402
+    CHAPTER_ABOUT_FOUR, CHAPTERS_FOUR, MEETING, MUSINGS_OPEN, MUSINGS_SHUT,
+)
+
+ALL_CHAPTERS = tuple(CHAPTERS) + tuple(CHAPTERS_TWO) + tuple(CHAPTERS_THREE) + tuple(CHAPTERS_FOUR)
 BOOK_TWO_END = len(CHAPTERS) + len(CHAPTERS_TWO)
+BOOK_THREE_END = BOOK_TWO_END + len(CHAPTERS_THREE)
 BOOKS = (("One", "What the Watcher Remembers", 0, len(CHAPTERS)),
          ("Two", "The Answer", len(CHAPTERS), BOOK_TWO_END),
-         ("Three", "What Was Put There", BOOK_TWO_END, len(ALL_CHAPTERS)))
+         ("Three", "What Was Put There", BOOK_TWO_END, BOOK_THREE_END),
+         ("Four", "The Road Taken", BOOK_THREE_END, len(ALL_CHAPTERS)))
+ROADS = ("shut", "open")
 # Book Three's passages come at least this many days apart; each chapter
 # also waits its own days after the one before (its 8th field).
 BOOK_THREE_PASSAGE_DAYS = 2.0
@@ -471,8 +478,36 @@ def chapter_wait_days(chapter):
 
 
 def book_of(index):
-    """1, 2 or 3: the book a chapter (by its place) belongs to."""
-    return 1 if index < len(CHAPTERS) else 2 if index < BOOK_TWO_END else 3
+    """1 to 4: the book a chapter (by its place) belongs to."""
+    return 1 if index < len(CHAPTERS) else 2 if index < BOOK_TWO_END else 3 if index < BOOK_THREE_END else 4
+
+
+def chapter_road(chapter):
+    """The road a Book Four chapter is on ("shut" or "open"), or None."""
+    return chapter[8] if len(chapter) > 8 else None
+
+
+def road(memory):
+    """The road Book Four took: the commander's answer to the shutter."""
+    value = (memory or {}).get("road")
+    return value if value in ROADS else None
+
+
+def on_road(index, memory):
+    """Whether a chapter is part of this commander's story: Book Four's road
+    chapters belong to one road each."""
+    wanted = chapter_road(ALL_CHAPTERS[index])
+    return wanted is None or wanted == road(memory)
+
+
+def need_label(needs):
+    """What a chapter waits for, in words: an echo, or a place (5.6.1)."""
+    if not needs:
+        return ""
+    if str(needs).startswith("place:"):
+        from voidcompass.overlays import watcher_places
+        return f"Take it to {watcher_places.words(str(needs)[6:])}"
+    return ECHO_LABELS.get(needs, str(needs))
 
 
 def _schedule():
@@ -490,7 +525,7 @@ def _schedule():
                 hours = round(first + (last - first) * number / max(1, len(passages) - 1), 1)
             days = (chapter_wait_days(chapter) if number == 0 else BOOK_THREE_PASSAGE_DAYS) if index >= BOOK_TWO_END else 0.0
             rows.append((passage_id, title, words, max(1, int(math.pow(hours, .6))), hours, index,
-                         chapter_needs(chapter), days))
+                         chapter_needs(chapter), days, chapter_road(chapter)))
     return tuple(rows)
 
 
@@ -718,6 +753,7 @@ CHAPTER_ABOUT = {
     "XIV": "the stone that hummed back", "XV": "my own voice coming back", "XVI": "the others hiding",
     "XVII": "the answer at the core",
     **CHAPTER_ABOUT_THREE,
+    **CHAPTER_ABOUT_FOUR,
 }
 # Callbacks to its own story: {about} what, {when}/{When} when it told you.
 RECALL = [
@@ -867,6 +903,10 @@ def encounters(memory):
     for row in (memory or {}).get("said") or ():
         if isinstance(row, (list, tuple)) and len(row) >= 2 and str(row[0]) in ECHOES and str(row[0]) not in found:
             found[str(row[0])] = (1, float(row[1] or 0))
+    # 5.6.1: the places it asked to be taken, reached.
+    for kind, value in ((memory or {}).get("places") or {}).items():
+        if isinstance(value, (list, tuple)) and len(value) >= 2:
+            found[f"place:{kind}"] = (int(value[0] or 0), float(value[1] or 0))
     return found
 
 
@@ -921,10 +961,55 @@ def due(memory, sessions, hours, now=None):
             continue
         if row[5] >= len(CHAPTERS) and not (memory or {}).get("afterword"):
             return None
+        # Book Four's roads (5.6.1): the other road's chapters are skipped;
+        # until the shutter question is answered, its road waits.
+        wanted = row[8] if len(row) > 8 else None
+        if wanted is not None and road(memory) is None:
+            return None
+        if wanted is not None and wanted != road(memory):
+            continue
         if not unlocked(row, sessions, hours, found) or days_to_wait(row, memory, now) > 0:
             return None
         return row
     return None
+
+
+def waiting_place(memory, sessions, hours, now=None):
+    """The kind of place the next passage waits for, when only the place is
+    missing (time and hours are there): what the Watcher asks you for."""
+    import time
+
+    now = time.time() if now is None else now
+    shared = told(memory)
+    found = encounters(memory)
+    for row in FRAGMENTS:
+        if row[0] in shared:
+            continue
+        wanted = row[8] if len(row) > 8 else None
+        if wanted is not None and wanted != road(memory):
+            if road(memory) is None:
+                return None
+            continue
+        needs = row[6] if len(row) > 6 else None
+        if not (needs and str(needs).startswith("place:")) or needs in found:
+            return None
+        ready = int(sessions or 0) >= row[3] and float(hours or 0) >= row[4] and days_to_wait(row, memory, now) <= 0
+        return str(needs)[6:] if ready else None
+    return None
+
+
+def road_question_due(memory):
+    """Book Four's first chapter is told and no road is chosen: time to ask."""
+    if road(memory) is not None:
+        return False
+    first = next((index for index, chapter in enumerate(ALL_CHAPTERS) if index >= BOOK_THREE_END), None)
+    if first is None:
+        return False
+    shared = told(memory)
+    # Not once a road's begun (an older memory may hold passages from before).
+    if any(row[0] in shared for row in FRAGMENTS if len(row) > 8 and row[8] is not None):
+        return False
+    return all(passage_id in shared for passage_id, _words in ALL_CHAPTERS[first][5])
 
 
 def recall_choice(memory, rng, now):
@@ -935,7 +1020,9 @@ def recall_choice(memory, rng, now):
     for chapter in ALL_CHAPTERS:
         ids = [passage_id for passage_id, _words in chapter[5]]
         if all(passage_id in shared for passage_id in ids):
-            finished.append((chapter[0], max(shared[passage_id] for passage_id in ids)))
+            # Book Four's road chapters share numerals: looked up by title.
+            key = chapter[1] if chapter[1] in CHAPTER_ABOUT else chapter[0]
+            finished.append((key, max(shared[passage_id] for passage_id in ids)))
     if not finished:
         return None
     numeral, at = rng.choice(finished)
@@ -957,11 +1044,15 @@ def progress(memory):
     finished, and how many kinds of echo found."""
     shared = told(memory)
     book_two = [row[0] for row in FRAGMENTS if len(CHAPTERS) <= row[5] < BOOK_TWO_END]
-    book_three = [row[0] for row in FRAGMENTS if row[5] >= BOOK_TWO_END]
+    book_three = [row[0] for row in FRAGMENTS if BOOK_TWO_END <= row[5] < BOOK_THREE_END]
+    # Book Four: its common chapter and the road taken (5.6.1).
+    book_four = [row[0] for row in FRAGMENTS if row[5] >= BOOK_THREE_END and (row[8] is None or row[8] == road(memory))]
     return {"Told": len(shared), "BookOne": int(BOOK_ONE_LAST in shared),
             "BookTwo": int(bool(book_two) and all(passage_id in shared for passage_id in book_two)),
             "BookThree": int(bool(book_three) and all(passage_id in shared for passage_id in book_three)),
             "BookThreeBegun": int(bool(book_three) and book_three[0] in shared),
+            "BookFourBegun": int(bool(book_four) and book_four[0] in shared),
+            "BookFour": int(road(memory) is not None and all(passage_id in shared for passage_id in book_four)),
             "Echoes": len(encounters(memory))}
 
 
@@ -980,12 +1071,18 @@ def _unlock_words(index, chapter, memory, sessions, hours, found, now):
         words.append(f"After {more_sessions:,} more session{'' if more_sessions == 1 else 's'}")
     needs = chapter_needs(chapter)
     if needs and needs not in found:
-        words.append(f"Find: {ECHO_LABELS[needs].lower()}")
+        words.append(f"Find: {need_label(needs).lower()}" if not str(needs).startswith("place:") else need_label(needs))
         anyway = first[4] + ECHO_GRACE_HOURS - float(hours or 0)
         if anyway > .05:
             words.append(f"Or it surfaces anyway after about {math.ceil(anyway):,} more hours together")
+    if chapter_road(chapter) is not None and road(memory) is None:
+        words.append("Once you've answered it about the shutter")
     if index > 0:
-        previous = ALL_CHAPTERS[index - 1]
+        # The chapter before on this road (Book Four's roads sit side by side).
+        before_index = index - 1
+        while before_index > 0 and not on_road(before_index, memory):
+            before_index -= 1
+        previous = ALL_CHAPTERS[before_index]
         before = [passage_id for passage_id, _words in previous[5]]
         told_ids = told(memory)
         if not all(passage_id in told_ids for passage_id in before):
@@ -1019,6 +1116,7 @@ def page(memory, sessions, hours, echoes=None, now=None):
     now = time.time() if now is None else now
     afterword = bool((memory or {}).get("afterword"))
     book_two_told = all(row[0] in shared for row in FRAGMENTS if len(CHAPTERS) <= row[5] < BOOK_TWO_END)
+    book_three_told = all(row[0] in shared for row in FRAGMENTS if BOOK_TWO_END <= row[5] < BOOK_THREE_END)
     chapters = []
     for index, chapter in enumerate(ALL_CHAPTERS):
         numeral, title, _first, _last, account, passages = chapter[:6]
@@ -1027,6 +1125,8 @@ def page(memory, sessions, hours, echoes=None, now=None):
             continue
         if book == 3 and not book_two_told:
             continue  # Book Three appears once Book Two is told
+        if book == 4 and (not book_three_told or not on_road(index, memory)):
+            continue  # Book Four once Book Three is told; only your road's chapters
         rows = [{"id": passage_id, "text": words, "at": shared[passage_id]}
                 for passage_id, words in passages if passage_id in shared]
         begun = bool(rows)
@@ -1037,8 +1137,9 @@ def page(memory, sessions, hours, echoes=None, now=None):
                          "unlock": unlock,
                          "complete": complete, "told": rows, "total": len(passages),
                          "account": account if complete else "",
-                         "waits_for": ECHO_LABELS[needs] if needs and needs not in found and not begun else ""})
-    waiting = next((row for row in FRAGMENTS if row[0] not in shared), None)
+                         "road": chapter_road(chapter),
+                         "waits_for": need_label(needs) if needs and needs not in found and not begun else ""})
+    waiting = next((row for row in FRAGMENTS if row[0] not in shared and (row[8] is None or row[8] == road(memory))), None)
     upcoming = None
     if waiting is not None and (waiting[5] < len(CHAPTERS) or afterword):
         needs = waiting[6]
@@ -1046,7 +1147,7 @@ def page(memory, sessions, hours, echoes=None, now=None):
                     "sessions": max(0, waiting[3] - int(sessions or 0)),
                     "hours": round(max(0.0, waiting[4] - float(hours or 0)), 1),
                     "chapter": ALL_CHAPTERS[waiting[5]][0],
-                    "waits_for": ECHO_LABELS[needs] if needs and needs not in found else "",
+                    "waits_for": need_label(needs) if needs and needs not in found else "",
                     # Book Three: real days still to wait (5.5.3.9).
                     "days": round(days_to_wait(waiting, memory, now), 1),
                     "book": book_of(waiting[5])}
@@ -1058,7 +1159,7 @@ def page(memory, sessions, hours, echoes=None, now=None):
     heard.sort(key=lambda row: -row["at"])
     books = []
     for name, book_title, first, last in BOOKS:
-        part = ALL_CHAPTERS[first:last]
+        part = [chapter for offset, chapter in enumerate(ALL_CHAPTERS[first:last]) if on_road(first + offset, memory)]
         if all(all(passage_id in shared for passage_id, _words in chapter[5]) for chapter in part):
             books.append({"name": name, "title": book_title,
                           "chapters": [{"numeral": chapter[0], "title": chapter[1], "account": chapter[4]}
@@ -1068,4 +1169,6 @@ def page(memory, sessions, hours, echoes=None, now=None):
             "book_two_total": sum(1 for row in FRAGMENTS if row[5] < BOOK_TWO_END),
             "book_three": book_two_told,
             "next": upcoming, "afterword": afterword, "echoes": heard, "echo_total": len(ECHO_LABELS),
+            # Book Four (5.6.1): the road you took, and that there was another.
+            "book_four": book_three_told, "road": road(memory), "other_road": road(memory) is not None,
             "echo_labels": dict(ECHO_LABELS), "echo_how": dict(ECHO_HOW), "books": books}

@@ -1088,6 +1088,7 @@ Everything you've found, kept by Void Compass across every session: the value yo
 |---|---|---|
 | GET | `/api/v1/exploration` | Unsold data you're carrying (cartographic and organic, in credits), your last sales, your records, and organic sampling in progress |
 | GET | `/api/v1/exploration/bodies` | Bodies you've scanned, newest first, filtered as you like (below) |
+| GET | `/api/v1/exploration/survey` | The system you're in, body by body, in the survey order the board, the Survey overlay and the Nav HUD share: biology still to do first, then geology and mining, then value. Each has `bio_signals`, `bio_done`, `geo_signals`, `mining_sites`, the `rhino` ground hint, `needs_mapping` and `value_cr` |
 | GET | `/api/v1/exploration/systems` | Systems you've been to: visits, first and last arrival, position, star class, bodies found (`query`, `limit`) |
 | GET | `/api/v1/exploration/route` | Your arrivals, newest first: jumps, carrier jumps and logins (`limit`, default 100) |
 | GET | `/api/v1/exploration/regions` | The galaxy's regions you've been to, with your first and last arrival in each |
@@ -1325,6 +1326,15 @@ $text = "**$($s.title)**`n{0:N0} light years, {1:N0} jumps, {2:N0} first discove
 $json = @{ username = "Void Wrapped $($story.elite_year)"; content = $text } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri $webhook -ContentType "application/json; charset=utf-8" -Body ([Text.Encoding]::UTF8.GetBytes($json)) | Out-Null
 ```
+
+## Expeditions
+
+The Expeditions page's trips: the one you're on, followed live, and every one you've kept.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/expedition` | The active expedition: its `legs` (each `system`, `kind` stop, destination, home or carrier, `coords`, `reached`, its Spansh `plot`, `fuel_runs` with no star to scoop, and for a stop on a planet its `body` and `lat`/`lon`), `places` (each `kind` planet, surface, poi, station, system or note, `title`, `system`, `body`, `lat`/`lon`, `notes`, `visited`, `on_route`, `pictures`), the trip's unkept `finds`, `objectives` with `progress`, `stats`, the `streak` since the last death or hull scare, `days` (a line a day, with your notes), recent `events`, and `live`: `progress` (`share`, `done_ly`, `to_go_ly`, `next`), `pace` and `eta`, `risk` (unsold data `value`, `hull`, distance home) `supplies` (`rows`, and the ones running `low`) and `surface` (when the next stop is on a planet: its `body`, and on it a `target` with `distance_m`, `bearing` and `turn`). 404 when none is active |
+| GET | `/api/v1/expeditions` | Every expedition: `id`, `name`, `status` (active, paused, completed or failed), `started`, `ended`, `destination`, `ironman` and its `stats`, and the `active_id` |
 
 ## Rig Tracker
 
@@ -1781,6 +1791,7 @@ The overlay ids are:
 | `jump-info` | Jump Info |
 | `colony-needs` | Construction Needs |
 | `trade-route` | Trade Route |
+| `expedition` | Expedition |
 | `galaxy-minimap` | Galaxy Minimap |
 | `rhino-map` | Rhino Map |
 | `rig-tracker` | Rig Tracker |

@@ -683,6 +683,36 @@ body {
 #survey-block { grid-row: 4; }
 .context-rail { grid-row: 5; }
 .hud.paged #route-block, .hud.paged #survey-block { display: none; }
+/* The pages' own text size (5.6.1): every size token, times --page-text. */
+.page-panel, .page-alert {
+  --page-text: 1;
+  --size-75: max(calc(7.5px * var(--fit-small) * var(--page-text)), var(--type-floor));
+  --size-8: max(calc(8px * var(--fit-small) * var(--page-text)), var(--type-floor));
+  --size-85: max(calc(8.5px * var(--fit-small) * var(--page-text)), var(--type-floor));
+  --size-9: max(calc(9px * var(--fit-small) * var(--page-text)), var(--type-floor));
+  --size-95: max(calc(9.5px * var(--fit-small) * var(--page-text)), var(--type-floor));
+  --size-10: max(calc(10px * var(--fit-small) * var(--page-text)), var(--type-floor));
+  --size-11: max(calc(11px * var(--fit-small) * var(--page-text)), var(--type-floor));
+  --size-12: max(calc(12px * var(--fit-small) * var(--page-text)), var(--type-floor));
+  --size-13: max(calc(13px * var(--fit-big) * var(--page-text)), var(--type-floor));
+  --size-17: calc(17px * var(--fit-big) * var(--page-text));
+  --size-19: calc(19px * var(--fit-big) * var(--page-text));
+}
+
+/* The alert line takes a row of its own between the location and the rest,
+   and only while there is one (5.6.1). */
+.page-alert { grid-row: 3; margin: 0; padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--ink) 60%, transparent);
+  background: color-mix(in srgb, var(--ink) 14%, transparent); color: var(--ink); font: var(--type-weight) var(--size-95) var(--font-wide);
+  letter-spacing: calc(.12em * var(--track)); text-shadow: 0 0 6px color-mix(in srgb, var(--ink) 45%, transparent); --ink: var(--red); }
+.page-alert[hidden] { display: none; }
+.page-alert[data-tone="accent"] { --ink: var(--accent); }
+.page-alert[data-tone="yellow"] { --ink: var(--yellow); }
+.hud.alerting { grid-template-rows: minmax(102px, auto) minmax(42px, auto) auto minmax(66px, auto) minmax(62px, auto) minmax(18px, auto); }
+.hud.expanded.alerting { grid-template-rows: 110px 44px auto 68px 64px 18px; }
+.hud.alerting #route-block { grid-row: 4; }
+.hud.alerting #survey-block { grid-row: 5; }
+.hud.alerting .context-rail { grid-row: 6; }
+.hud.alerting .page-panel { grid-row: 4 / span 2; }
 .page-panel { grid-row: 3 / span 2; display: grid; grid-template-rows: auto auto; align-content: start; row-gap: 5px; padding-top: 5px; --tone: var(--hud); }
 .page-panel[hidden] { display: none; }
 .page-panel[data-tone="accent"] { --tone: var(--accent); }
@@ -707,7 +737,7 @@ body {
 
 /* The page is as tall as it needs, up to a limit; past it, fitPage leaves
    the least important out. */
-.page-body { min-width: 0; max-height: 480px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.page-body { min-width: 0; max-height: calc(480px * var(--page-text, 1)); display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
 .page-body [hidden] { display: none !important; }
 .page-body [data-tone="hud"] { --ink: var(--hud); }
 .page-body [data-tone="accent"] { --ink: var(--accent); }
@@ -736,6 +766,8 @@ body {
 .pg-bars { display: grid; grid-template-columns: repeat(var(--columns, 1), minmax(0, 1fr)); gap: 4px 12px; }
 .pg-bars[data-columns="2"] { --columns: 2; }
 .pg-bars[data-columns="3"] { --columns: 3; }
+/* An odd one out at the end of two columns takes the whole row. */
+.pg-bars[data-columns="2"] .pg-bar:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .pg-bar { --ratio: 0; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 6px; row-gap: 2px; align-items: baseline; }
 .pg-bar small { overflow: hidden; color: var(--label-muted); font: var(--type-weight) var(--size-9) var(--font-wide); letter-spacing: calc(.08em * var(--track)); text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
 .pg-bar b { color: var(--ink); font: var(--type-weight) var(--size-11) var(--font-wide); white-space: nowrap; }
@@ -745,6 +777,8 @@ body {
 .pg-list { min-width: 0; display: grid; gap: 2px; }
 .pg-list-title, .pg-more { color: var(--label-dim); font: var(--type-weight) var(--size-85) var(--font-wide); letter-spacing: calc(.14em * var(--track)); }
 .pg-list ul { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
+.pg-list[data-columns="2"] ul { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; }
+.pg-list[data-columns="2"] li { grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; }
 .pg-list li { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(52px, auto); gap: 10px; align-items: baseline; }
 .pg-list li small { text-align: right; }
 .pg-list li em { text-align: right; }
@@ -777,3 +811,4 @@ body {
 .pg-dial small { margin-top: 5px; color: var(--ink); font: var(--type-weight) var(--size-9) var(--font-wide); letter-spacing: calc(.06em * var(--track)); white-space: nowrap; }
 
 .pg-note { margin: 0; overflow: hidden; color: var(--ink); font: var(--type-weight) var(--size-9) var(--font-wide); letter-spacing: calc(.1em * var(--track)); text-overflow: ellipsis; white-space: nowrap; }
+.pg-note.wrap { white-space: normal; line-height: 1.45; }

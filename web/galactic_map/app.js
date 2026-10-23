@@ -15,12 +15,13 @@ if (window.self !== window.top) document.documentElement.classList.add('embedded
 
 const ORIENTATION = 'galactic-north-up-east-right-v3';
 const FOV_HALF = 17.5 * Math.PI / 180;
-const LAYERS = ['Regions', 'Travel', 'Planned', 'Return', 'Sectors', 'Valuable', 'Biology', 'Codex',
+const LAYERS = ['Regions', 'Travel', 'Planned', 'Expedition', 'Return', 'Sectors', 'Valuable', 'Biology', 'Codex',
   'Photos', 'Recon', 'Revisit', 'Bookmarks', 'Annotations'];
 const LAYER_INFO = {
   Regions: {label: 'Codex regions', shape: 'hexagon', tone: 'border'},
   Travel: {label: 'Where you have been', shape: 'line', tone: 'accent'},
   Planned: {label: 'Plotted route', shape: 'dash', tone: 'orange'},
+  Expedition: {label: 'Your expedition', shape: 'dash', tone: 'green'},
   Return: {label: 'Retrace the last 60 jumps', shape: 'line', tone: 'green'},
   Sectors: {label: 'Expedition sectors', shape: 'square', tone: 'muted'},
   Valuable: {label: 'Valuable worlds', shape: 'diamond', tone: 'yellow'},
@@ -63,6 +64,8 @@ let route = [];
 let systems = new Map();
 let markers = [];
 let plannedLine = [];
+// 5.6.1: the active expedition's legs, from its start.
+let expeditionLine = [];
 let visits = new Map();
 let current = null;
 let currentRegion = 0;
@@ -189,6 +192,9 @@ function derive() {
   currentRegion = current && regions ? regions.idAt(current[0], current[2]) : 0;
   const planned = (data.planned || []).filter((row) => validPos(row.pos) && !row.visited);
   plannedLine = planned.length ? [...(current ? [{pos: current, system: data.current.system}] : []), ...planned] : [];
+  const trip = data.expedition || {};
+  const legs = (trip.legs || []).filter((row) => validPos(row.pos));
+  expeditionLine = legs.length ? [...(validPos(trip.start_pos) ? [{pos: trip.start_pos, system: trip.start_system, reached: true}] : []), ...legs] : [];
   // The whole journey's region visits come counted from every jump, even when
   // a very long history is thinned for drawing; narrower scopes are recent
   // and drawn in full, so they are counted here.
@@ -216,6 +222,7 @@ function pushScene() {
   scene.setRoute(route);
   scene.setRetrace(route.slice(-61));
   scene.setPlanned(plannedLine);
+  scene.setExpedition(expeditionLine);
   const chosenSystem = selection?.kind === 'system' ? selection.name.toLowerCase() : '';
   // When each system was first reached, as a share of the journey, so a
   // replay only shows what the commander had seen by then.
@@ -257,6 +264,13 @@ function pushBeacons() {
   if (current && !head) rows.push({pos: current, color: tone('accent'), shape: MARKER_SHAPES.target, size: 38, current: true});
   if (head) rows.push({pos: head.pos, color: tone('accent'), shape: MARKER_SHAPES.target, size: 30, current: true});
   if (plannedLine.length > 1 && viewState.layers.Planned) rows.push({pos: plannedLine.at(-1).pos, color: tone('orange'), shape: MARKER_SHAPES.star, size: 16});
+  // Each leg of the expedition: reached ones dimmer, the destination a star.
+  if (viewState.layers.Expedition) {
+    for (const leg of expeditionLine) {
+      rows.push({pos: leg.pos, color: tone(leg.reached ? 'muted' : 'green'), shape: leg.kind === 'destination' ? MARKER_SHAPES.star : MARKER_SHAPES.ring,
+        size: leg.kind === 'destination' ? 16 : 11});
+    }
+  }
   for (const place of PLACES) rows.push({pos: place.pos, color: tone('muted'), shape: MARKER_SHAPES.ring, size: 10});
   scene.setBeacons(rows, head ? head.pos : current);
 }
@@ -324,6 +338,7 @@ function renderPlaces() {
   const rows = [];
   if (current) rows.push({key: 'here', icon: '◎', title: snapshot.current.system || 'Your position', sub: 'YOU ARE HERE'});
   if (plannedLine.length > 1) rows.push({key: 'dest', icon: '★', title: plannedLine.at(-1).system || 'Destination', sub: `ROUTE DESTINATION · ${plannedLine.length - 1} JUMPS`});
+  if (expeditionLine.length > 1) rows.push({key: 'expedition', icon: '⚐', title: snapshot.expedition?.name || 'Your expedition', sub: `EXPEDITION · ${expeditionLine.filter((leg) => !leg.reached).length} LEGS TO GO`});
   if (route.length > 1) rows.push({key: 'journey', icon: '⤳', title: 'Your journey', sub: `${number(journeyTotals().systems)} SYSTEMS · ${visits.size} REGIONS`});
   rows.push({key: 'galaxy', icon: '✺', title: 'The whole galaxy', sub: '42 CODEX REGIONS'});
   PLACES.forEach((place, index) => rows.push({key: `place-${index}`, icon: '◇', title: place.name, sub: place.note.toUpperCase()}));
@@ -348,6 +363,7 @@ function layerCount(name) {
   if (name === 'Regions') return 42;
   if (name === 'Travel') return journeyTotals().systems;
   if (name === 'Planned') return Math.max(0, plannedLine.length - 1);
+  if (name === 'Expedition') return expeditionLine.length;
   if (name === 'Return') return Math.min(60, Math.max(0, route.length - 1));
   return markers.filter((row) => row.layer === name).length;
 }
@@ -545,6 +561,7 @@ function initialView() {
 function place(key) {
   if (key === 'here' && current) return focusOn({kind: 'system', name: snapshot.current.system, pos: current}, 900);
   if (key === 'dest' && plannedLine.length > 1) return frame(plannedLine.map((row) => row.pos));
+  if (key === 'expedition' && expeditionLine.length > 1) return frame(expeditionLine.map((row) => row.pos));
   if (key === 'journey') return frame(route.map((row) => row.pos));
   if (key === 'galaxy') return galaxyView();
   const index = Number(String(key).replace('place-', ''));

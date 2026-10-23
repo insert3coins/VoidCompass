@@ -1,4 +1,4 @@
-"""Prospector, Cargo, Planet Materials, Station Link, the Rig Tracker and the Rhino Map (5.5.18) at large text (5.5.3.9): the page's columns grow with
+"""Prospector, Cargo, Planet Materials, Station Link, the Rig Tracker, the Rhino Map (5.5.18) and Expedition (5.6.1) at large text (5.5.3.9): the page's columns grow with
 the text size as the window does, so nothing is cut off at 150% or 200%."""
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import unittest
 from urllib.parse import urlsplit
 
 from voidcompass.overlays.cargo_hud import build_cargo_model
+from voidcompass.overlays.expedition_hud import build_expedition_model
 from voidcompass.overlays.planet_materials_hud import build_planet_materials_model
 from voidcompass.overlays.prospector_hud import build_prospector_model
 from voidcompass.overlays.rig_tracker import build_rig_model, hold_row
@@ -69,6 +70,21 @@ def _rhino_model():
     return {**model, "size": 240}
 
 
+# The Expedition overlay (5.6.1) on a busy trip: long names, a surface
+# compass, every warning. The Nav HUD's coverage test uses it too.
+EXPEDITION_SAMPLE = (
+    {"name": "Distant Worlds 3: The Long Way Round to Beagle Point", "ironman": True},
+    {"progress": {"share": .42, "done_ly": 27_500.4, "to_go_ly": 37_779.6,
+                  "next": {"system": "Eol Prou LW-L c8-306", "body": "Eol Prou LW-L c8-306 4 a", "kind": "stop",
+                           "note": "The Crystal Arches by the Canyon Wall",
+                           "fuel_runs": [{"jumps": 6, "from": "Shinrarta Dezhra Jameson Memorial"}]}},
+     "surface": {"title": "The Crystal Arches by the Canyon Wall", "body": "Eol Prou LW-L c8-306 4 a", "here": True, "on_body": True,
+                 "lat": -23.4512, "lon": 114.0821, "altitude_m": 1250.0,
+                 "target": {"distance_m": 17453.3, "bearing": 92, "turn": -35, "arrived": False}},
+     "risk": {"value": 1_234_567_890, "over": True, "hull": 64.0}, "streak": {"jumps": 1287}, "eta": {"hours": 61.2},
+     "supplies": {"low": ["Limpets", "FSD injections", "AFMU ammo"]}},
+)
+
 # (page, model key, model, design width, min height, max height)
 OVERLAYS = (
     ("prospector", "prospector", build_prospector_model(PROSPECTED, {"Platinum": 12}), 400, 180, 560),
@@ -79,6 +95,7 @@ OVERLAYS = (
     ("station", "station", build_station_model(DOCKED), 520, 330, 720),
     ("rig_tracker", "rigs", RIG_MODEL, 420, 130, 420),
     ("rhino_map", "rhino", _rhino_model(), 240, 280, 360),
+    ("expedition", "expedition", build_expedition_model(*EXPEDITION_SAMPLE), 380, 120, 640),
 )
 
 

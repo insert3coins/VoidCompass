@@ -218,7 +218,7 @@ class ExploreArchiveTests(unittest.TestCase):
         self.assertNotIn('data-target="analytics"', html)
         self.assertIn('data-page="explore" data-explore-view="archive"', html)
         explore = (WEB / "dashboard" / "explore.js").read_text(encoding="utf-8")
-        self.assertIn('{id: "archive", index: "04"', explore)
+        self.assertIn('{id: "archive", label: "ARCHIVE"', explore)  # 5.6.1: plain tabs
         self.assertIn('id="analytics-workspace"', explore)
         self.assertIn('["chronicle", "CAPTAIN\'S LOG"]', APP)
         self.assertIn("renderExploreArchive(data.archive)", APP)
