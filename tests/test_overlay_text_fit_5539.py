@@ -1,4 +1,4 @@
-"""Prospector, Cargo, Planet Materials and Station Link at large text (5.5.3.9): the page's columns grow with
+"""Prospector, Cargo, Planet Materials, Station Link, the Rig Tracker and the Rhino Map (5.5.18) at large text (5.5.3.9): the page's columns grow with
 the text size as the window does, so nothing is cut off at 150% or 200%."""
 from __future__ import annotations
 
@@ -55,6 +55,20 @@ RIGS = {slot: {"lat": 11.9 + slot * .01, "lon": -45.1 - (slot % 2) * .02, "at": 
 RIG_MODEL = build_rig_model(RIGS, 11.9, -45.1, 212, 2400000, BODY, now=1_700_100_000,
                             holds=[hold_row("RHINO", 23, 72), hold_row("SHIP", 238, 256)])
 
+# The Rhino Map (5.5.18): two rigs, one too close, the ship far off, mining
+# sites: its strip's warnings wrap rather than being cut.
+def _rhino_model():
+    from voidcompass.overlays.surface_map import build_surface_map
+    radius = 2400000.0
+    plane = lambda point: [round(point[1] * 41888, 1), round(point[0] * 41888, 1)]
+    rigs = {1: {"lat": 0.0012, "lon": 0.0, "at": 1_700_000_000}, 2: {"lat": 0.0003, "lon": 0.0004, "at": 1_700_000_300}}
+    rig_model = build_rig_model(rigs, 0.0, 0.0, 30, radius, BODY, now=1_700_000_400, in_rhino=True)
+    plane_map = {"body": BODY, "you": {"at": [0.0, 0.0], "heading": 30}, "ship": {"at": [0.0, -2500.0]}, "trail": [[0, -40], [0, 0]]}
+    model = build_surface_map(plane_map, plane, rig_model=rig_model, rig_points={slot: (rig["lat"], rig["lon"]) for slot, rig in rigs.items()},
+                              signals=4, vehicle="RHINO")
+    return {**model, "size": 240}
+
+
 # (page, model key, model, design width, min height, max height)
 OVERLAYS = (
     ("prospector", "prospector", build_prospector_model(PROSPECTED, {"Platinum": 12}), 400, 180, 560),
@@ -64,6 +78,7 @@ OVERLAYS = (
      440, 190, 680),
     ("station", "station", build_station_model(DOCKED), 520, 330, 720),
     ("rig_tracker", "rigs", RIG_MODEL, 420, 130, 420),
+    ("rhino_map", "rhino", _rhino_model(), 240, 280, 360),
 )
 
 

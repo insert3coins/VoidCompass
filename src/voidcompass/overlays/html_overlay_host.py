@@ -806,6 +806,7 @@ class _OverlayHost:
         self.closing = False
         self.last_contact = time.monotonic()
         self.last_window_created_at = 0.0
+        self.failed_windows = set()
         self.window_revision = -1
         self.presentation_held = True
 
@@ -872,6 +873,8 @@ class _OverlayHost:
             path = "/rig_tracker/index.html"
         elif template == "galaxy_minimap":
             path = "/galaxy_minimap/index.html"
+        elif template == "rhino_map":
+            path = "/rhino_map/index.html"
         elif template == "postcards":
             path = "/postcards/index.html"
         elif template == "planet-materials-overlay":
@@ -949,7 +952,16 @@ class _OverlayHost:
                                 - self.last_window_created_at
                                 < WINDOW_CREATE_INTERVAL_S):
                             continue
-                        self.create_window(overlay_id, spec, hidden=True)
+                        try:
+                            self.create_window(overlay_id, spec, hidden=True)
+                        except Exception as exc:
+                            # One window that can't be made must not hold
+                            # back every overlay after it (5.5.18).
+                            self.last_window_created_at = time.monotonic()
+                            if overlay_id not in self.failed_windows:
+                                self.failed_windows.add(overlay_id)
+                                print(f"Overlay window failed: {overlay_id} ({exc})", flush=True)
+                            continue
                         created_window = True
                     controller = self.controllers[overlay_id]
                     if spec.get("shutdown"):

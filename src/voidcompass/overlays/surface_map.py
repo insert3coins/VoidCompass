@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import math
 
-MODES = ("rhino", "srv", "off")
+# When the Rhino Map shows (5.5.18: switching it off is its Enabled switch).
+MODES = ("rhino", "srv")
 DEFAULT_MODE = "rhino"
 ORIENTATIONS = ("heading", "north")
 # Pulses this close together are the same deposit.
@@ -21,14 +22,30 @@ MAX_DEPOSITS = 60
 # The map never zooms in tighter than this each side of you, or out wider.
 MIN_HALF_M = 150.0
 MAX_HALF_M = 6000.0
+# Its own zoom (5.5.18), apart from the minimap's: "auto" fits your rigs and
+# refining spots near you; the rest are fixed ranges, metres each side of you.
+RANGES = ("auto", "300", "600", "1200", "2500")
+# Auto looks this far for rigs and deposits to fit; the ship, a target and
+# anything further sit on the map's edge as pointers instead.
+FOCUS_M = 1500.0
+
+
+RANGE_NAMES = {"auto": "YOUR RIGS", "300": "300 M", "600": "600 M", "1200": "1.2 KM", "2500": "2.5 KM"}
+
+
+def next_range(current):
+    """The Rhino map range hotkey: round the ranges, back to Your rigs."""
+    return RANGES[(RANGES.index(current) + 1) % len(RANGES)] if current in RANGES else RANGES[0]
 
 
 def surface_options(config):
     config = config or {}
-    mode = str(config.get("galaxy_minimap_surface") or DEFAULT_MODE).casefold()
-    facing = str(config.get("galaxy_minimap_surface_up") or "heading").casefold()
+    mode = str(config.get("rhino_map_show") or DEFAULT_MODE).casefold()
+    facing = str(config.get("rhino_map_up") or "heading").casefold()
+    reach = str(config.get("rhino_map_range") or "auto").casefold()
     return {"mode": mode if mode in MODES else DEFAULT_MODE,
-            "up": facing if facing in ORIENTATIONS else "heading"}
+            "up": facing if facing in ORIENTATIONS else "heading",
+            "range": reach if reach in RANGES else "auto"}
 
 
 def wants_surface(mode, *, on_planet, in_srv, vehicle="", on_foot=False, rigs_here=False):
@@ -69,12 +86,17 @@ def _bearing(origin, point):
     return round(math.degrees(math.atan2(point[0] - origin[0], point[1] - origin[1])) % 360.0, 1)
 
 
-def map_half(you, points):
-    """Half the map's width in metres: room for what matters round you."""
+def map_half(you, points, reach="auto"):
+    """Half the map's width in metres. A fixed range, or room for your rigs
+    and deposits near you: a ship parked far off no longer zooms it out until
+    the spacing rings vanish (5.5.18); it gets an edge pointer instead."""
+    if reach != "auto":
+        return float(reach)
     if not you:
         return MIN_HALF_M
-    far = max((math.hypot(point[0] - you[0], point[1] - you[1]) for point in points), default=0.0)
-    return round(max(MIN_HALF_M, min(MAX_HALF_M, far * 1.15)), 1)
+    near = [distance for distance in (math.hypot(point[0] - you[0], point[1] - you[1]) for point in points)
+            if distance <= FOCUS_M]
+    return round(max(MIN_HALF_M, min(MAX_HALF_M, max(near, default=0.0) * 1.15)), 1)
 
 
 SCANNER_M = 2000.0
@@ -131,10 +153,9 @@ def build_surface_map(plane_map, plane, *, rig_model=None, rig_points=None, here
     deposits = cluster_deposits(spots, plane)
     target = plane_map.get("target")
     sites = list(plane_map.get("sites") or [])[:30]
-    focus = [ship] if ship else []
-    focus += [rig["at"] for rig in rigs] + [item["at"] for item in deposits[:12]]
-    if target:
-        focus.append(target["at"])
+    # Only your rigs and deposits set the zoom; the ship and a target point
+    # from the edge when they're off it.
+    focus = [rig["at"] for rig in rigs] + [item["at"] for item in deposits[:12]]
     model = {
         "body": str(plane_map.get("body") or ""),
         "vehicle": str(vehicle or "").upper(),
@@ -156,7 +177,8 @@ def build_surface_map(plane_map, plane, *, rig_model=None, rig_points=None, here
         "next_spot": spot,
         "scanner_m": SCANNER_M,
         "signals": int(signals or 0),
-        "half_m": map_half(you, focus),
+        "half_m": map_half(you, focus, options.get("range", "auto")),
+        "range": RANGE_NAMES.get(options.get("range", "auto"), "YOUR RIGS"),
         "up": options["up"],
     }
     return model

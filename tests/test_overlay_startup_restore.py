@@ -103,6 +103,7 @@ class OverlayStartupRestoreTests(unittest.TestCase):
                 "trade_route_hud": "trade_route",
                 "rig_tracker_hud": "rig_tracker",
                 "galaxy_minimap_hud": "galaxy_minimap",
+                "rhino_map_hud": "rhino_map",
                 "postcard_hud": "postcards",
                 "survey_status_hud": "survey",
                 "station_info_hud": "station",

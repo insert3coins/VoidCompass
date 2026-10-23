@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Rhino Map</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <!-- The ground round you in the Rhino (5.5.18): your trail, rigs and where
+       you've refined. In the Navigation HUD's frame and type. -->
+  <main id="rhinomap" class="minimap" role="img" aria-label="Rhino map">
+    <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="map" id="map">
+      <canvas id="marks" aria-hidden="true"></canvas>
+      <span id="here-ring" class="here-ring" hidden aria-hidden="true"></span>
+    </div>
+    <footer class="strip" id="strip">
+      <strong id="region">RHINO MAP</strong>
+      <span id="facts"></span>
+      <em id="view-mode" class="view-mode">HEADING UP</em>
+    </footer>
+    <div class="scanlines"></div><div class="vignette"></div>
+  </main>
+  <script src="/assets/frame-cap.js"></script>
+  <script src="/assets/overlay-layout.js"></script>
+  <script src="/assets/overlay-client.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

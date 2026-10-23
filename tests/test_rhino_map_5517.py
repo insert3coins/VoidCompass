@@ -12,7 +12,7 @@ from tests.test_rig_tracker_5510 import BODY, RADIUS
 from voidcompass.core import config as config_module
 from voidcompass.dashboard.dashboard_rigs_mixin import DashboardRigsMixin
 from voidcompass.dashboard.html_planetary import HtmlPlanetaryMixin
-from voidcompass.overlays.galaxy_minimap_hud import GalaxyMinimapHUD
+from voidcompass.overlays.rhino_map_hud import RhinoMapHUD
 from voidcompass.overlays.rig_tracker import RigStore
 from voidcompass.overlays.surface_map import (
     MAX_HALF_M, MIN_HALF_M, build_surface_map, cluster_deposits, map_half, surface_options, wants_surface,
@@ -34,7 +34,7 @@ class Plane:
 
 class OptionTests(unittest.TestCase):
     def test_in_the_rhino_by_default(self):
-        self.assertEqual(surface_options({}), {"mode": "rhino", "up": "heading"})
+        self.assertEqual(surface_options({}), {"mode": "rhino", "up": "heading", "range": "auto"})
         self.assertTrue(wants_surface("rhino", on_planet=True, in_srv=True, vehicle="RHINO"))
         self.assertFalse(wants_surface("rhino", on_planet=True, in_srv=True, vehicle="SCARAB"))
         self.assertTrue(wants_surface("srv", on_planet=True, in_srv=False, on_foot=True))
@@ -42,12 +42,13 @@ class OptionTests(unittest.TestCase):
         self.assertFalse(wants_surface("rhino", on_planet=False, in_srv=True, vehicle="RHINO"))
 
     def test_saved_per_commander_and_set_in_studio(self):
-        for key in ("galaxy_minimap_surface", "galaxy_minimap_surface_up"):
+        for key in ("rhino_map_show", "rhino_map_up"):
             self.assertIn(key, config_module.PROFILE_SETTINGS)
         page = (ROOT / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")
-        section = page.split('data-studio-settings="galaxy_minimap_hud"', 1)[1].split("</section>", 1)[0]
-        self.assertIn('data-studio-setting="galaxy_minimap_surface"', section)
-        self.assertIn('data-studio-setting="galaxy_minimap_surface_up"', section)
+        # 5.5.18: the Rhino Map's own section.
+        section = page.split('data-studio-settings="rhino_map_hud"', 1)[1].split("</section>", 1)[0]
+        self.assertIn('data-studio-setting="rhino_map_show"', section)
+        self.assertIn('data-studio-setting="rhino_map_up"', section)
 
 
 class ModelTests(unittest.TestCase):
@@ -61,7 +62,9 @@ class ModelTests(unittest.TestCase):
     def test_the_map_zooms_to_what_matters(self):
         self.assertEqual(map_half([0, 0], []), MIN_HALF_M)
         self.assertAlmostEqual(map_half([0, 0], [[400, 0]]), 460)
-        self.assertEqual(map_half([0, 0], [[90000, 0]]), MAX_HALF_M)
+        # 5.5.18: only what's near sets the zoom; far things point from the edge.
+        self.assertEqual(map_half([0, 0], [[90000, 0]]), MIN_HALF_M)
+        self.assertEqual(map_half([0, 0], [[400, 0]], "1200"), 1200.0, "a fixed range")
 
     def test_rigs_ship_and_next_to_collect(self):
         plane_map = {"body": BODY, "you": {"at": [0.0, 0.0], "heading": 90.0}, "ship": {"at": [0.0, -300.0]},
@@ -76,7 +79,8 @@ class ModelTests(unittest.TestCase):
         self.assertEqual([rig["slot"] for rig in model["rigs"]], [1, 2])
         self.assertEqual(model["next_rig"], 1)
         self.assertTrue(model["rigs"][1]["here"])
-        self.assertEqual((model["signals"], len(model["deposits"]), model["half_m"]), (3, 1, 345.0))
+        self.assertEqual((model["signals"], len(model["deposits"]), model["half_m"]), (3, 1, 150.0),
+                         "the ship 300 m off points from the edge; it no longer zooms the map out (5.5.18)")
 
 
 class Deck(DashboardRigsMixin, HtmlPlanetaryMixin):
@@ -92,7 +96,7 @@ class Deck(DashboardRigsMixin, HtmlPlanetaryMixin):
         self.body_signals = {7: {"body_name": BODY, "mining": 4}}
         self.toast_hud = Mock()
         self.rig_tracker_hud = None
-        self.galaxy_minimap_hud = GalaxyMinimapHUD(Mock(), self.config)
+        self.rhino_map_hud = RhinoMapHUD(Mock(_voidcompass_startup_presentation_held=False), self.config)
         self._rig_store_instance = RigStore(str(Path(folder) / "rigs.json"))
 
     def rig_store(self):
@@ -110,21 +114,18 @@ class DeckTests(unittest.TestCase):
         deck._rig_mark(1)
         deck.current_latitude = degrees(80)
         deck._surface_note_pulse({"Type_Localised": "Platinum"})
-        deck._update_surface_minimap()
-        surface = deck.galaxy_minimap_hud._html_render_model["surface"]
+        deck._update_rhino_map()
+        surface = deck.rhino_map_hud._html_render_model
         self.assertEqual((surface["vehicle"], surface["signals"], len(surface["rigs"]), len(surface["deposits"])), ("RHINO", 4, 1, 1))
         self.assertEqual(surface["ship"]["distance"], 280)
 
     def test_back_to_the_galaxy_out_of_the_rhino(self):
         deck = self.deck()
-        deck._update_surface_minimap()
+        deck._update_rhino_map()
         deck.current_in_srv = False
-        deck._update_surface_minimap()
-        self.assertIsNone(deck.galaxy_minimap_hud._html_render_model["surface"])
-        deck.config["galaxy_minimap_surface"] = "off"
-        deck.current_in_srv = True
-        deck._update_surface_minimap()
-        self.assertIsNone(deck.galaxy_minimap_hud._html_render_model["surface"])
+        deck._update_rhino_map()
+        self.assertIsNone(deck.rhino_map_hud._html_render_model)
+        self.assertFalse(deck.rhino_map_hud.visible, "nothing to map: the Rhino Map hides")
 
     def test_pulses_belong_to_their_planet(self):
         deck = self.deck()
@@ -135,7 +136,7 @@ class DeckTests(unittest.TestCase):
 
 
 class PageTests(unittest.TestCase):
-    """The minimap page draws the ground instead of the galaxy."""
+    """The Rhino Map page draws the ground (5.5.18: its own overlay)."""
 
     @classmethod
     def setUpClass(cls):
@@ -163,7 +164,7 @@ class PageTests(unittest.TestCase):
                      "trail": [[0, -300], [0, 0]], "sites": [{"label": "Vein", "at": [50.0, 50.0]}], "target": None}
         surface = build_surface_map(plane_map, Plane(), rig_model={"slots": [{"slot": 1, "tracked": True, "distance_m": 120.0}], "order": [1]},
                                     rig_points={1: (degrees(120), 0.0)}, vehicle="RHINO")
-        snapshot = {"theme": dict(themes.ACTIVE_PALETTE), "effects": {}, "minimap": {"here": None, "trail": [], "options": {}, "surface": surface}}
+        snapshot = {"theme": dict(themes.ACTIVE_PALETTE), "effects": {}, "rhino": surface}
         page = self.browser.new_page(viewport={"width": 240, "height": 280})
         self.addCleanup(page.close)
         errors = []
@@ -182,12 +183,11 @@ class PageTests(unittest.TestCase):
                 route.fulfill(status=200, body="{}", content_type="application/json")
 
         page.route("http://map.test/**", serve)
-        page.goto("http://map.test/galaxy_minimap/index.html?token=t&overlay=galaxy-minimap")
-        page.wait_for_function("document.getElementById('minimap').classList.contains('surface')", timeout=5000)
+        page.goto("http://map.test/rhino_map/index.html?token=t&overlay=rhino-map")
+        page.wait_for_function("window.__rhinomap && window.__rhinomap.frame()", timeout=5000)
         self.assertEqual(page.inner_text("#region"), "RHINO MAP")
         self.assertIn("SHIP 300 M", page.inner_text("#facts"))
-        self.assertFalse(page.is_visible("#galaxy"))
-        frame = page.evaluate("window.__minimap.surface()")
+        frame = page.evaluate("window.__rhinomap.frame()")
         self.assertAlmostEqual(frame["turn"], math.radians(45), places=3)
         self.assertEqual(errors, [])
 
@@ -218,8 +218,8 @@ class RigsOutTests(unittest.TestCase):
         deck = Deck(folder.name)
         deck._rig_mark(1)
         deck.current_in_srv, deck.current_vehicle_name = False, ""
-        deck._update_surface_minimap()
-        surface = deck.galaxy_minimap_hud._html_render_model["surface"]
+        deck._update_rhino_map()
+        surface = deck.rhino_map_hud._html_render_model
         self.assertEqual((surface["vehicle"], surface["ship"]), ("SHIP", None))
         self.assertEqual(len(surface["rigs"]), 1)
 

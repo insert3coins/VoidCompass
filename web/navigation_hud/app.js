@@ -1106,6 +1106,11 @@ const PAGE_BLOCKS = {
   note: (block) => `<p class="pg-note" data-tone="${pageTone(block.tone)}">${pageText(block.text)}</p>`,
 };
 
+const MODE_ICONS = {
+  auto: '<svg viewBox="0 0 16 16" aria-label="Auto: follows what you do"><path d="M13 8a5 5 0 1 1-1.6-3.7"/><path d="M13.2 2.2v2.6h-2.6"/></svg>',
+  manual: '<svg viewBox="0 0 16 16" aria-label="Manual: the page you chose"><path d="M5.5 2.5h5l-.7 4 2.2 2.5H4l2.2-2.5z"/><path d="M8 9v4.5"/></svg>',
+};
+
 function renderPages(pages) {
   const hud = dom.hud;
   const panel = dom['page-panel'];
@@ -1121,8 +1126,14 @@ function renderPages(pages) {
   }
   panel.dataset.tone = pageTone(page.tone);
   dom['page-title'].textContent = page.title || page.label || '';
-  dom['page-mode'].textContent = pages.mode === 'manual' ? 'MANUAL' : 'AUTO';
-  dom['page-mode'].classList.toggle('pinned', pages.mode === 'manual');
+  // Icons, not words (5.5.18): a circling arrow while the page follows
+  // what you're doing, a pin when you've chosen it.
+  const manual = pages.mode === 'manual';
+  if (dom['page-mode'].dataset.mode !== (manual ? 'manual' : 'auto')) {
+    dom['page-mode'].dataset.mode = manual ? 'manual' : 'auto';
+    dom['page-mode'].innerHTML = manual ? MODE_ICONS.manual : MODE_ICONS.auto;
+  }
+  dom['page-mode'].classList.toggle('pinned', manual);
   const tabs = (pages.tabs || []).map((tab) => {
     const on = tab.id === pages.active;
     const classes = [on ? 'on' : '', tab.id === pages.auto ? 'auto' : '', tab.empty && !on ? 'empty' : ''].filter(Boolean).join(' ');

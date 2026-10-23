@@ -54,6 +54,7 @@ from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.overlays.trade_route_hud import TradeRouteHUD
 from voidcompass.overlays.rig_tracker import RigTrackerHUD
+from voidcompass.overlays.rhino_map_hud import RhinoMapHUD
 from voidcompass.overlays.galaxy_minimap_hud import GalaxyMinimapHUD
 from voidcompass.overlays.postcard_hud import PostcardHUD
 from voidcompass.exploration import bio_variants
@@ -79,6 +80,7 @@ from voidcompass.overlays.html_colony_needs_overlay import attach_html_colony_ne
 from voidcompass.overlays.html_trade_route_overlay import attach_html_trade_route_overlay
 from voidcompass.overlays.html_rig_tracker_overlay import attach_html_rig_tracker_overlay
 from voidcompass.overlays.html_galaxy_minimap_overlay import attach_html_galaxy_minimap_overlay
+from voidcompass.overlays.html_rhino_map_overlay import attach_html_rhino_map_overlay
 from voidcompass.overlays.html_postcard_overlay import attach_html_postcard_overlay
 from voidcompass.core.runtime_trace import RuntimeTrace
 from voidcompass.dashboard.dashboard_db_mixin import DashboardDBMixin
@@ -989,6 +991,7 @@ class MainDashboard(
             "trade_route_hud",
             "rig_tracker_hud",
             "galaxy_minimap_hud",
+            "rhino_map_hud",
             "postcard_hud",
         ):
             overlay = getattr(self, attr, None)
@@ -1076,7 +1079,7 @@ class MainDashboard(
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud",
             "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud",
-            "rig_tracker_hud", "galaxy_minimap_hud", "postcard_hud",
+            "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud", "postcard_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -2758,6 +2761,11 @@ class MainDashboard(
         else:
             self.galaxy_minimap_hud = None
 
+        if self._overlay_enabled("rhino_map_hud"):
+            self.rhino_map_hud = RhinoMapHUD(self.root, self.config)
+        else:
+            self.rhino_map_hud = None
+
         if self._overlay_enabled("postcard_hud"):
             self.postcard_hud = PostcardHUD(self.root, self.config)
         else:
@@ -3614,6 +3622,9 @@ class MainDashboard(
         if action == "galaxy_minimap_view":
             self._galaxy_minimap_next_view()
             return
+        if action == "rhino_map_range":
+            self._rhino_map_next_range()
+            return
         if action in {"music_play_pause", "music_next", "music_previous"}:
             self.music_remote({"music_play_pause": "toggle", "music_next": "next",
                                "music_previous": "previous"}[action])
@@ -4088,7 +4099,8 @@ class MainDashboard(
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
-            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "rig_tracker_hud", "galaxy_minimap_hud", "postcard_hud",
+            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
+            "postcard_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
             try:
@@ -5143,6 +5155,14 @@ class MainDashboard(
             self.galaxy_minimap_hud.destroy()
             self.galaxy_minimap_hud = None
 
+        if self._overlay_enabled("rhino_map_hud"):
+            if getattr(self, "rhino_map_hud", None) is None:
+                self.rhino_map_hud = RhinoMapHUD(self.root, self.config)
+                self._update_rhino_map()
+        elif getattr(self, "rhino_map_hud", None):
+            self.rhino_map_hud.destroy()
+            self.rhino_map_hud = None
+
         if self._overlay_enabled("postcard_hud"):
             if getattr(self, "postcard_hud", None) is None:
                 self.postcard_hud = PostcardHUD(self.root, self.config)
@@ -5242,6 +5262,10 @@ class MainDashboard(
                 )
             elif attr == "galaxy_minimap_hud":
                 attach_html_galaxy_minimap_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "rhino_map_hud":
+                attach_html_rhino_map_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "postcard_hud":
@@ -9791,7 +9815,7 @@ class MainDashboard(
         if ev == "MiningRefined" and not startup_replay and getattr(self, "current_in_srv", False):
             # Where the Rhino's drill refined, for the Rhino map's deposits.
             if self._surface_note_pulse(raw):
-                self._ui_post(self._update_surface_minimap, key="surface-minimap")
+                self._ui_post(self._update_rhino_map, key="surface-minimap")
 
         if (
             self.planet_materials_hud and not self.batch_mode

@@ -120,6 +120,43 @@ def pick_page(state, facts, enabled):
     return "nav"
 
 
+# When nothing needs the screen, the HUD keeps what you were doing rather
+# than falling back to NAV (5.5.18): a fight for a little while after it,
+# a mining visit until you're back in supercruise, a system's survey until
+# you jump or it's done. Anything that needs the screen still takes it.
+COMBAT_HOLD_S = 30.0
+_CRUISING = {"supercruise", "supercruise_overcharge", "supercruise_assist", "fsd_charge", "jump", "fsd_lock"}
+
+
+def remember_page(memory, picked, state, facts, now):
+    """Note what the HUD has been showing, for ``hold_page``."""
+    if picked == "combat":
+        memory["combat_at"] = now
+    if picked == "mining":
+        memory["mining_visit"] = True
+    elif str((state or {}).get("motion") or "") in _CRUISING:
+        memory["mining_visit"] = False
+    if picked == "survey" and facts.get("system"):
+        memory["survey_system"] = str(facts["system"])
+    return memory
+
+
+def hold_page(picked, memory, facts, now, enabled, survey_left=lambda: True):
+    """The page to keep on screen when ``picked`` is NAV, else ``picked``.
+    ``survey_left`` says whether this system still has survey work in it."""
+    if picked != "nav":
+        return picked
+    allowed = set(enabled or ())
+    if "combat" in allowed and now - float(memory.get("combat_at", float("-inf"))) < COMBAT_HOLD_S:
+        return "combat"
+    if "mining" in allowed and memory.get("mining_visit"):
+        return "mining"
+    system = str(facts.get("system") or "")
+    if "survey" in allowed and system and memory.get("survey_system") == system and survey_left():
+        return "survey"
+    return "nav"
+
+
 def next_page(current, auto, available):
     """The page after ``current`` for the page hotkey: round ``available``
     (every page switched on), starting from ``auto`` and back to it."""
@@ -274,7 +311,13 @@ def survey_page(model, contacts=None):
                 continue
             tone = ("green" if row.get("bio_count") and not row.get("bio_complete") else "yellow" if value >= 1000000
                     else "hud" if row.get("rhino") or row.get("mining_count") else "text")
-            rows.append((_short(row.get("display_name") or row.get("name"), system), signals, _credits(value) if value else "", tone))
+            # As the survey overlay ranks them: biology still to do, then
+            # geology and mining, then the most valuable.
+            rank = (0 if row.get("bio_count") and not row.get("bio_complete")
+                    else 1 if row.get("geo_count") or row.get("mining_count") or row.get("rhino") else 2)
+            rows.append(((rank, -value), (_short(row.get("display_name") or row.get("name"), system), signals,
+                                          _credits(value) if value else "", tone)))
+        rows = [row for _key, row in sorted(rows, key=lambda pair: pair[0])]
         # The system's name is on the line above: lead with what's in it.
         found = " · ".join(part for part in (
             f"{sum(int(row.get('bio_count') or 0) for row in model.get('rows') or ())} BIO",

@@ -1,0 +1,97 @@
+/* Rhino Map (5.5.18), in the Navigation HUD's language: its frame,
+   corner brackets, Bahnschrift type and CRT lines. Colours are theme tokens
+   (overlay-client.js sets them from the profile palette); these are only
+   the fallbacks before the first snapshot. */
+:root {
+  color-scheme: dark;
+  --bg: #070b10; --panel: #0d141c; --inset: #0a1118; --border: #243746;
+  --accent: #00d1ff; --orange: #ff7a18; --green: #4ee59b; --yellow: #ffd166;
+  --red: #ff6075; --text: #dce8ef; --muted: #85939d; --dim: #52616c;
+  --scale: 1;
+  --hud: var(--orange);
+  --hud-soft: color-mix(in srgb, var(--hud) 62%, transparent);
+  --hud-faint: color-mix(in srgb, var(--hud) 22%, transparent);
+  --font-hud: "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif;
+  --font-wide: "Bahnschrift", "Segoe UI", sans-serif;
+  --strip: calc(40px * var(--scale));
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
+body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
+
+/* Never clip the page itself: clipped corners paint as solid blocks on some
+   compositors (the Navigation HUD learned this first). */
+.minimap {
+  position: relative; width: 100%; height: 100%;
+  display: grid; grid-template-rows: minmax(0, 1fr) var(--strip);
+  color: var(--text);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--inset) 94%, var(--hud)), var(--panel) 48%, var(--bg));
+  isolation: isolate;
+}
+.minimap::before {
+  content: ""; position: absolute; inset: 2px; z-index: -1;
+  border: 1px solid var(--hud-faint);
+  box-shadow: inset 0 0 26px rgba(0, 0, 0, .8);
+}
+.frame-corners { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.frame-corners i { position: absolute; width: 16px; height: 11px; border: 0 solid var(--hud-soft); }
+.frame-corners i:nth-child(1) { left: 3px; top: 3px; border-left-width: 2px; border-top-width: 2px; }
+.frame-corners i:nth-child(2) { right: 3px; top: 3px; border-right-width: 2px; border-top-width: 2px; }
+.frame-corners i:nth-child(3) { right: 3px; bottom: 3px; border-right-width: 2px; border-bottom-width: 2px; }
+.frame-corners i:nth-child(4) { left: 3px; bottom: 3px; border-left-width: 2px; border-bottom-width: 2px; }
+.scanlines { position: absolute; inset: 0; z-index: 30; pointer-events: none; opacity: .16; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .32) 3px); }
+.vignette { position: absolute; inset: 0; z-index: 29; pointer-events: none; box-shadow: inset 0 0 20px rgba(0, 0, 0, .75); }
+.minimap.no-crt .scanlines, .minimap.no-crt .vignette { display: none; }
+
+/* The map: the galaxy (redrawn when the view changes) under the marks. */
+.map { position: relative; min-height: 0; margin: 5px 5px 0; overflow: hidden; }
+.map canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.charting { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--hud-soft); font: 700 9px var(--font-wide); letter-spacing: .2em; }
+.charting.done { display: none; }
+/* Where you are: a ring that breathes out from the dot. */
+.here-ring {
+  position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%;
+  border: 2px solid var(--hud); opacity: 0;
+  animation: here 2.4s ease-out infinite;
+}
+@keyframes here { 0% { transform: scale(.35); opacity: .9; } 100% { transform: scale(1.6); opacity: 0; } }
+.minimap.reduced-motion .here-ring { animation: none; opacity: .7; transform: scale(.8); }
+
+/* The strip: the region's name, then how far from Sol and how much of the
+   galaxy you've seen (or where the route ends). Grows with the text size. */
+.strip {
+  position: relative; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: center; column-gap: 8px; row-gap: 1px;
+  padding: 0 10px; border-top: 1px solid var(--hud-faint);
+  zoom: var(--scale);
+}
+#region { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--hud); font: 700 13px/1.1 var(--font-hud); letter-spacing: .08em; text-transform: uppercase; text-shadow: 0 0 8px color-mix(in srgb, var(--hud) 35%, transparent); }
+#facts { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font: 700 8.5px/1.2 var(--font-wide); letter-spacing: .12em; }
+#facts b { color: var(--text); font-weight: 700; }
+#facts .route { color: var(--green); }
+/* The whole Spansh trip (5.5.3.7), in the accent its line is drawn in. */
+#facts .trip { color: var(--accent); }
+#region { grid-column: 1; }
+#facts { grid-column: 1 / -1; }
+/* The view it's on (5.5.3.7), changed with the view hotkey or in Studio. */
+.view-mode {
+  grid-column: 2; grid-row: 1; align-self: center; padding: 1px 4px;
+  border: 1px solid var(--hud-faint); color: var(--muted); font: normal 700 7px/1.2 var(--font-wide);
+  letter-spacing: .14em; white-space: nowrap;
+}
+.map #galaxy { will-change: transform; }
+
+#facts .warn { color: var(--red); }
+
+/* Sized by its content (overlayfix.md): a square map, then the strip at its
+   natural height, its facts wrapping rather than cut short; the window
+   follows the height the page reports. */
+.minimap { height: auto; grid-template-rows: auto auto; }
+.map { aspect-ratio: 1 / 1; }
+.strip { padding: 4px 10px 5px; min-height: var(--strip); }
+#facts { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+#facts .fact { font-style: normal; white-space: nowrap; }
+
+/* The ground behind the marks, and the range badge lighting up as it changes. */
+.map { background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%); }
+.view-mode.flash { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent); }

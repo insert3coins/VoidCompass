@@ -52,6 +52,8 @@ OVERLAY_SPECS = (
     # 5.5.3.7: the Milky Way in a corner, with you on it; and a Polaroid of
     # each screenshot taken in game.
     OverlaySpec("galaxy_minimap_hud", "galaxy-minimap", "Void Compass Galaxy Minimap", "galaxy_minimap_overlay_enabled", "galaxy_minimap_hud_x", "galaxy_minimap_hud_y", (40, 600), (240, 280), "Galaxy Minimap", "MINIMAP", False, "galaxy_minimap", "overlay_hotkey_galaxy_minimap", "Galaxy Minimap"),
+    # 5.5.18: the ground round you in the Rhino, apart from the minimap.
+    OverlaySpec("rhino_map_hud", "rhino-map", "Void Compass Rhino Map", "rhino_map_overlay_enabled", "rhino_map_hud_x", "rhino_map_hud_y", (300, 600), (240, 280), "Rhino Map", "RHINO MAP", True, "rhino_map", "overlay_hotkey_rhino_map", "Rhino Map"),
     OverlaySpec("postcard_hud", "postcards", "Void Compass Postcards", "postcard_overlay_enabled", "postcard_hud_x", "postcard_hud_y", (1700, 640), (380, 330), "Postcards", "POSTCARDS", True, "postcards", "overlay_hotkey_postcards", "Postcards"),
     # Rhino mining (5.5.10): the rigs you've set down, after SrvSurvey's rig tracker.
     OverlaySpec("rig_tracker_hud", "rig-tracker", "Void Compass Rig Tracker", "rig_tracker_overlay_enabled", "rig_tracker_hud_x", "rig_tracker_hud_y", (1320, 400), (420, 155), "Rig Tracker", "RIGS", True, "rig_tracker", "overlay_hotkey_rig_tracker", "Rig Tracker"),
@@ -110,6 +112,8 @@ OVERLAY_HOTKEY_SPECS = (
     _overlay_hotkey("galnet_ticker"),
     _overlay_hotkey("galaxy_minimap"),
     ("galaxy_minimap_view", "overlay_hotkey_galaxy_minimap_view", "Galaxy Minimap: change the view", None),
+    _overlay_hotkey("rhino_map"),
+    ("rhino_map_range", "overlay_hotkey_rhino_map_range", "Rhino Map: range", None),
     _overlay_hotkey("postcards"),
     _overlay_hotkey("music_player"),
     # The player itself, from anywhere: in game, or with the deck on another screen.
@@ -154,6 +158,7 @@ TEXT_SIZE_KEYS = {
     "colony_needs_hud": "colony_needs_text_scale_percent",
     "trade_route_hud": "trade_route_text_scale_percent",
     "rig_tracker_hud": "rig_tracker_text_scale_percent",
+    "rhino_map_hud": "rhino_map_text_scale_percent",
     "postcard_hud": "postcard_text_scale_percent",
     "ground_popup": "ground_text_scale_percent",
 }

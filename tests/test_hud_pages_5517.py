@@ -366,9 +366,12 @@ class PageRenderTests(unittest.TestCase):
                                 {"species": "Bacterium", "progress": 1, "colony_m": 500, "clear": False, "min_distance_m": 90}, .3, 3.0)
         self.render(page, self.page_snapshot(planet, active="planet"))
         self.assertGreater(page.evaluate("designHeight()"), 326, "a fuller page grows it")
-        self.assertEqual(page.evaluate("dom['page-mode'].textContent"), "AUTO")
+        # 5.5.18: icons, not words: a circling arrow for auto, a pin for manual.
+        mode = "() => [dom['page-mode'].dataset.mode, !!dom['page-mode'].querySelector('svg'), dom['page-mode'].textContent]"
+        self.assertEqual(page.evaluate(mode), ["auto", True, ""])
         self.render(page, self.page_snapshot(planet, active="planet", mode="manual"))
-        self.assertEqual(page.evaluate("dom['page-mode'].textContent"), "MANUAL")
+        self.assertEqual(page.evaluate(mode), ["manual", True, ""])
+        self.assertTrue(page.evaluate("dom['page-mode'].classList.contains('pinned')"))
 
 
 if __name__ == "__main__":

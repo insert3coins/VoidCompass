@@ -694,7 +694,10 @@ body {
 .page-head { min-width: 0; display: flex; align-items: center; gap: 7px; }
 .page-head > b { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--tone); font: var(--type-weight) var(--size-95) var(--font-wide); letter-spacing: calc(.16em * var(--track)); text-overflow: ellipsis; white-space: nowrap; }
 .page-mode { flex: 0 0 auto; padding: 0 4px; border: 1px solid var(--hud-faint); color: var(--label-dim); font: var(--type-weight) var(--size-75) var(--font-wide); letter-spacing: calc(.12em * var(--track)); }
-.page-mode.pinned { border-color: var(--hud-soft); color: var(--hud); }
+.page-mode.pinned { border-color: color-mix(in srgb, var(--yellow) 55%, transparent); color: var(--yellow); }
+.page-mode:not(.pinned) { color: var(--tone); }
+.page-mode svg { display: block; width: calc(var(--size-85) * 1.25); height: calc(var(--size-85) * 1.25); fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .page-tabs { flex: 1 1 auto; min-width: 0; display: flex; justify-content: flex-end; gap: 5px; overflow: hidden; white-space: nowrap; }
 .page-tabs i { color: var(--label-dim); font: normal var(--type-weight) var(--size-85) var(--font-wide); letter-spacing: calc(.1em * var(--track)); }
 .page-tabs i.auto { color: var(--label-muted); }

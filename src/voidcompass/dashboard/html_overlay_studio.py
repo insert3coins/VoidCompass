@@ -37,6 +37,7 @@ from voidcompass.overlays.galnet_ticker_hud import (
 from voidcompass.overlays.music_player_hud import (
     MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_NEXT_COUNTS, MUSIC_SKINS, MUSIC_VISUALIZERS, music_overlay_options,
 )
+from voidcompass.overlays.rhino_map_hud import rhino_map_size
 from voidcompass.overlays.rig_tracker import (
     HERE_M, HERE_RANGE_M, SPACING_M, SPACING_RANGE_M, WARN_M, WARN_RANGE_M, rig_here_m, rig_spacing_m, rig_warn_m,
 )
@@ -362,8 +363,10 @@ class HtmlOverlayStudioMixin:
                 "heartbeat_orb_size": orb_size(self.config),
                 "galaxy_minimap_size": galaxy_minimap_hud.minimap_options(self.config)["size"],
                 "galaxy_minimap_view": galaxy_minimap_hud.minimap_options(self.config)["view"],
-                "galaxy_minimap_surface": surface_map.surface_options(self.config)["mode"],
-                "galaxy_minimap_surface_up": surface_map.surface_options(self.config)["up"],
+                "rhino_map_show": surface_map.surface_options(self.config)["mode"],
+                "rhino_map_up": surface_map.surface_options(self.config)["up"],
+                "rhino_map_range": surface_map.surface_options(self.config)["range"],
+                "rhino_map_size": rhino_map_size(self.config),
                 "galaxy_minimap_route": galaxy_minimap_hud.minimap_options(self.config)["route"],
                 "galaxy_minimap_labels": galaxy_minimap_hud.minimap_options(self.config)["labels"],
                 "galaxy_minimap_spansh": galaxy_minimap_hud.minimap_options(self.config)["spansh"],
@@ -705,7 +708,7 @@ class HtmlOverlayStudioMixin:
             value = max(low, min(high, value if value is not None else default))
             self.config[key] = int(round(value)) if integer else round(value, 2)
         if {"rig_tracker_here_m", "rig_tracker_spacing_m", "rig_tracker_warn_m"} & set(payload):
-            for refresh in ("_rig_update_overlay", "_update_surface_minimap"):
+            for refresh in ("_rig_update_overlay", "_update_rhino_map"):
                 update = getattr(self, refresh, None)
                 if callable(update):
                     update()
@@ -826,6 +829,7 @@ class HtmlOverlayStudioMixin:
         # The Galaxy Minimap and Postcards (5.5.3.7).
         for key, choices, default in (
             ("galaxy_minimap_size", galaxy_minimap_hud.SIZES, galaxy_minimap_hud.DEFAULT_SIZE),
+            ("rhino_map_size", galaxy_minimap_hud.SIZES, galaxy_minimap_hud.DEFAULT_SIZE),
             ("postcard_hold_s", postcards.HOLDS, postcards.DEFAULT_HOLD),
         ):
             if key in payload:
@@ -834,9 +838,10 @@ class HtmlOverlayStudioMixin:
         for key, choices, default in (
             ("galaxy_minimap_view", galaxy_minimap_hud.VIEWS, "route"),
             ("hud_pages", hud_pages.MODES, "off"),
-            # The Rhino map (5.5.17): when the minimap turns to the ground, and which way is up.
-            ("galaxy_minimap_surface", surface_map.MODES, surface_map.DEFAULT_MODE),
-            ("galaxy_minimap_surface_up", surface_map.ORIENTATIONS, "heading"),
+            # The Rhino Map (5.5.18): when it shows, which way is up, and its range.
+            ("rhino_map_show", surface_map.MODES, surface_map.DEFAULT_MODE),
+            ("rhino_map_up", surface_map.ORIENTATIONS, "heading"),
+            ("rhino_map_range", surface_map.RANGES, "auto"),
             ("postcard_size", tuple(postcards.SIZES), "standard"),
         ):
             if key in payload:
@@ -869,8 +874,8 @@ class HtmlOverlayStudioMixin:
                 overlay.apply_settings()
         if "hud_pages" in payload:
             self._hud_pages_apply_settings()
-        if {"galaxy_minimap_surface", "galaxy_minimap_surface_up"} & set(payload):
-            surface = getattr(self, "_update_surface_minimap", None)
+        if {"rhino_map_show", "rhino_map_up", "rhino_map_range", "rhino_map_size"} & set(payload):
+            surface = getattr(self, "_update_rhino_map", None)
             if callable(surface):
                 surface()
         self.update_hud()

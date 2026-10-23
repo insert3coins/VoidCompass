@@ -73,7 +73,7 @@ class DashboardRigsMixin:
             left = len(store.rigs(system, body))
             self._rig_say(f"RIG {slot} COLLECTED", f"{left} still out" if left else "All rigs collected")
         self._rig_update_overlay()
-        self._update_surface_minimap()
+        self._update_rhino_map()
         return outcome
 
     def _rig_clear_here(self):
@@ -84,7 +84,7 @@ class DashboardRigsMixin:
         if cleared:
             self._rig_say("RIGS FORGOTTEN", place[1])
         self._rig_update_overlay()
-        self._update_surface_minimap()
+        self._update_rhino_map()
         return cleared
 
     def _rig_in_rhino(self):
@@ -231,7 +231,7 @@ class DashboardRigsMixin:
                 warned.discard(slot)
                 self._rig_say(f"RIG {slot} LOST", "More than 5 km behind: the game takes it back", severity="warn")
             self._rig_update_overlay()
-            self._update_surface_minimap()
+            self._update_rhino_map()
         for slot in list(warned):
             row = rows.get(slot)
             if row is None or row["distance_m"] < warn - 200:
@@ -246,15 +246,33 @@ class DashboardRigsMixin:
             return False
         self._rig_say("RIGS LEFT BEHIND", f"{body}: rigs still out there are lost", severity="warn")
         self._rig_update_overlay()
-        self._update_surface_minimap()
+        self._update_rhino_map()
         return True
 
-    def _update_surface_minimap(self):
-        hud = getattr(self, "galaxy_minimap_hud", None)
-        if hud is None or not hasattr(hud, "update_surface"):
+    def _rhino_map_next_range(self):
+        """The Rhino map range hotkey (5.5.18): Your rigs, 300 m, 600 m, 1.2 km,
+        2.5 km, round again. Kept like Overlay Studio's Rhino map range."""
+        from voidcompass.overlays.surface_map import RANGE_NAMES, next_range, surface_options
+        reach = next_range(surface_options(getattr(self, "config", None) or {})["range"])
+        self.config["rhino_map_range"] = reach
+        persist = getattr(self, "_persist_config", None)
+        if callable(persist):
+            persist()
+        self._update_rhino_map()
+        publish = getattr(self, "_schedule_html_dashboard_publish", None)
+        if callable(publish):
+            publish(immediate=True)
+        feed = getattr(self, "add_event_feed_entry", None)
+        if callable(feed):
+            feed("SYSTEM", f"Rhino map range: {RANGE_NAMES[reach].capitalize()}", severity="INFO")
+        return reach
+
+    def _update_rhino_map(self):
+        hud = getattr(self, "rhino_map_hud", None)
+        if hud is None:
             return False
         try:
-            return hud.update_surface(self._surface_map_model())
+            return hud.update(self._surface_map_model())
         except Exception:
             logging.exception("Rhino map update failed")
             return False

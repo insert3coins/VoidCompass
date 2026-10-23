@@ -89,6 +89,7 @@ class DashboardHudPagesMixin:
             "target": bool(getattr(self, "_hud_target", None)),
             "trading": bool(route),
             "has_jump": phase in {"charging", "hyperspace"},
+            "system": str(getattr(self, "current_sys", "") or ""),
             "has_carrier": bool(carrier.get("name") or carrier.get("callsign")),
         }
 
@@ -135,19 +136,31 @@ class DashboardHudPagesMixin:
         phase = str(getattr(self, "_navigation_jump_phase", "") or "") or "charging"
         return hud_pages.jump_page(self._jump_info_model(phase))
 
-    def _hud_page_survey(self, limit=None):
+    def _hud_survey_left(self):
+        """Whether this system still has survey work in it: bodies left to
+        scan, or biology not yet finished."""
+        model = self._hud_survey_model() or {}
+        total, scanned = int(model.get("total") or 0), int(model.get("scanned") or 0)
+        if not model.get("total_known") or scanned < total:
+            return True
+        return any(row.get("bio_count") and not row.get("bio_complete") for row in model.get("rows") or ())
+
+    def _hud_survey_model(self):
         from voidcompass.overlays.survey_status_hud import build_survey_model
         config = getattr(self, "config", None) or {}
         try:
             minimum = int(float(config.get("survey_min_body_value") or 50000))
         except (TypeError, ValueError):
             minimum = 50000
-        model = build_survey_model(
+        return build_survey_model(
             getattr(self, "current_sys", ""), getattr(self, "scan_items", None) or [],
             getattr(self, "current_body_id", None), getattr(self, "current_body_name", None),
             self._sampling_snapshot(), getattr(self, "scanned", 0), getattr(self, "total", 0), minimum, None,
             bool(getattr(self, "scan_total_confirmed", False)), body_signals=getattr(self, "body_signals", None),
             belt_clusters=list(getattr(self, "belt_clusters", None) or ()), dss_stats=self._dss_efficiency_snapshot())
+
+    def _hud_page_survey(self, limit=None):
+        model = self._hud_survey_model()
         self._hud_rhino_hints(model)
         ledger = getattr(self, "contact_ledger", None)
         return hud_pages.survey_page(model, ledger.model() if ledger is not None else None)
@@ -256,6 +269,13 @@ class DashboardHudPagesMixin:
         state = ((getattr(hud, "_html_last_model", None) or {}).get("state")) or {}
         facts = self._hud_pages_facts()
         auto = hud_pages.pick_page(state, facts, options["enabled"])
+        # Nothing needs the screen: keep what you were doing (5.5.18).
+        memory = getattr(self, "_hud_pages_memory", None)
+        if memory is None:
+            memory = self._hud_pages_memory = {}
+        now = time.monotonic()
+        hud_pages.remember_page(memory, auto, state, facts, now)
+        auto = hud_pages.hold_page(auto, memory, facts, now, options["enabled"], self._hud_survey_left)
         manual = options["mode"] == "manual"
         active = (getattr(self, "_hud_pages_manual", None) or "nav") if manual else auto
         if active not in options["enabled"]:
