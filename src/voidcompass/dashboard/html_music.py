@@ -28,6 +28,7 @@ MUSIC_POSITION_SAVE_S = 20.0
 # Levels older than this are silence: the page has stopped sending them.
 MUSIC_LEVELS_STALE_S = 1.0
 MUSIC_BANDS = 64
+MUSIC_WAVE_POINTS = 64
 # The Music page's RECENTLY PLAYED (5.5.17).
 MUSIC_RECENT = 20
 WEEK_S = 7 * 86400
@@ -422,13 +423,19 @@ class HtmlMusicMixin:
             clean = [max(0, min(255, int(value))) for value in bands]
         except (TypeError, ValueError):
             return False
+        # The waveform's slice (5.6.2), for the overlay's Wave and VU looks.
+        wave = payload.get("wave")
+        try:
+            shape = [max(0, min(255, int(value))) for value in wave[:MUSIC_WAVE_POINTS]] if isinstance(wave, list) else []
+        except (TypeError, ValueError):
+            shape = []
         # One assignment, read whole by the overlay server's thread.
-        self._music_levels = {"bands": clean, "at": time.monotonic(), "playing": bool(payload.get("playing"))}
+        self._music_levels = {"bands": clean, "wave": shape, "at": time.monotonic(), "playing": bool(payload.get("playing"))}
         return True
 
     def music_levels(self):
         """The newest levels for the overlay; silence once they go stale."""
         levels = getattr(self, "_music_levels", None)
         if not levels or time.monotonic() - levels["at"] > MUSIC_LEVELS_STALE_S:
-            return {"bands": [], "playing": False}
-        return {"bands": levels["bands"], "playing": levels["playing"]}
+            return {"bands": [], "wave": [], "playing": False}
+        return {"bands": levels["bands"], "wave": levels.get("wave") or [], "playing": levels["playing"]}

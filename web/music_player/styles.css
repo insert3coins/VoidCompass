@@ -272,6 +272,85 @@ body { pointer-events: none; user-select: none; }
 .player.strip.skin-vinyl .cover { border-radius: 50%; border-color: color-mix(in srgb, var(--yellow) 45%, transparent); }
 .player.strip.skin-vinyl.playing .cover img, .player.strip.skin-vinyl.playing .cover span { animation: spin 1.8s linear infinite; }
 
+/* Neon (5.6.2), rebuilt: a title bar with a
+   live badge, the track, an AUDIO SIGNAL panel, a gradient timeline and a
+   status line. Its colours are the palettes (set as --neon-* by the
+   page), or the theme's own when none is set. */
+.neon-bar, .neon-signal, .neon-foot { display: none; }
+.player.skin-neon {
+  --neon-low: var(--accent); --neon-mid: var(--green); --neon-high: var(--orange); --neon-peak: var(--yellow);
+  --neon-panel: var(--panel); --neon-line: var(--border); --neon-ink: var(--text); --neon-dim: var(--muted);
+  --mp-tone: var(--neon-low); --mp-title: var(--neon-ink);
+  color: var(--neon-ink);
+  border: 1px solid color-mix(in srgb, var(--neon-low) 32%, var(--neon-line));
+  border-radius: 1.2rem;
+  background:
+    radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--neon-low) 12%, transparent), transparent 42%),
+    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--neon-high) 14%, transparent), transparent 46%),
+    linear-gradient(145deg, color-mix(in srgb, var(--neon-panel) 94%, transparent), color-mix(in srgb, var(--neon-panel) 88%, #000));
+  box-shadow: 0 0 2.4rem color-mix(in srgb, var(--neon-low) 13%, transparent), inset 0 1px rgba(255, 255, 255, .055);
+}
+.player.skin-neon:not(.strip) {
+  grid-template-columns: 6.6rem minmax(0, 1fr);
+  grid-template-rows: auto 6.6rem auto minmax(2.4rem, 1fr) auto auto auto;
+  grid-template-areas: "bar bar" "cover info" "signal signal" "viz viz" "progress progress" "next next" "foot foot";
+  row-gap: .5rem; column-gap: 1rem; padding: 0 1rem .2rem;
+}
+.player.skin-neon.no-art:not(.strip) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(2.4rem, 1fr) auto auto auto;
+  grid-template-areas: "bar" "info" "signal" "viz" "progress" "next" "foot";
+}
+.player.skin-neon::before { height: 2px; background: linear-gradient(90deg, var(--neon-low), var(--neon-high), transparent 88%); }
+.player.skin-neon .neon-bar {
+  grid-area: bar; display: flex; align-items: center; gap: .7rem; min-width: 0; margin: 0 -1rem; padding: .6rem 1rem .5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, .065); background: rgba(255, 255, 255, .018);
+}
+.neon-brand { flex: 0 0 auto; color: var(--neon-low); font: 700 1.1rem/1 "Bahnschrift", "Segoe UI", sans-serif; letter-spacing: .24em;
+  text-shadow: 0 0 .7rem color-mix(in srgb, var(--neon-low) 75%, transparent); }
+.neon-brand em { color: var(--neon-high); font-style: normal; text-shadow: 0 0 .7rem color-mix(in srgb, var(--neon-high) 75%, transparent); }
+.neon-tag { min-width: 0; overflow: hidden; color: var(--neon-dim); font: 600 .7rem/1 Consolas, monospace; letter-spacing: .16em; white-space: nowrap; }
+.neon-live { flex: 0 0 auto; margin-left: auto; display: inline-flex; align-items: center; gap: .5rem; padding: .3rem .65rem;
+  border: 1px solid color-mix(in srgb, currentColor 30%, var(--neon-line)); border-radius: 99rem; color: var(--neon-low);
+  background: color-mix(in srgb, currentColor 8%, transparent); font: 700 .72rem/1 Consolas, monospace; letter-spacing: .14em; }
+.neon-live i { width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; box-shadow: 0 0 .8rem currentColor; }
+.player.skin-neon.playing .neon-live i { animation: lamp 1.8s ease-in-out infinite; }
+.player.skin-neon:is(.paused, .blocked) .neon-live { color: var(--neon-peak); }
+.player.skin-neon.idle .neon-live { color: var(--neon-dim); }
+.player.skin-neon .cover { border-radius: .6rem; border-color: color-mix(in srgb, var(--neon-low) 45%, var(--neon-line));
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--neon-low) 22%, transparent); background: color-mix(in srgb, var(--neon-panel) 70%, #000); }
+.player.skin-neon .cover span { color: var(--neon-high); text-shadow: 0 0 1rem var(--neon-high); }
+.player.skin-neon .lamp { display: none; }
+.player.skin-neon #state { color: var(--neon-dim); }
+.player.skin-neon.playing #state { color: var(--neon-high); text-shadow: 0 0 .6rem color-mix(in srgb, var(--neon-high) 80%, transparent); }
+.player.skin-neon #playlist { color: var(--neon-peak); }
+.player.skin-neon #title { font: 600 1.65rem/1.2 "Cascadia Mono", Consolas, monospace; letter-spacing: .03em;
+  text-shadow: 0 0 .7rem color-mix(in srgb, var(--neon-low) 40%, transparent); }
+.player.skin-neon .artist { color: color-mix(in srgb, var(--neon-ink) 80%, var(--neon-dim)); font: 600 1.15rem/1.2 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .06em; text-transform: uppercase; }
+.player.skin-neon .details { color: var(--neon-dim); }
+.player.skin-neon .details b { color: var(--neon-peak); }
+.player.skin-neon .neon-signal { grid-area: signal; display: flex; justify-content: space-between; gap: 1rem; min-width: 0;
+  color: var(--neon-dim); font: 700 .7rem/1 Consolas, monospace; letter-spacing: .16em; }
+.neon-signal b { min-width: 0; overflow: hidden; color: var(--neon-low); text-overflow: ellipsis; white-space: nowrap; }
+.player.skin-neon .visualizer { border: 1px solid var(--neon-line); border-radius: .4rem;
+  background: color-mix(in srgb, var(--neon-panel) 60%, #000); box-shadow: inset 0 0 1.2rem rgba(0, 0, 0, .55); }
+.player.skin-neon .progress { color: var(--neon-low); }
+.player.skin-neon .progress #total { color: var(--neon-dim); }
+.player.skin-neon .rail { height: .45rem; border: 1px solid var(--neon-line); border-radius: 99rem; background: color-mix(in srgb, var(--neon-panel) 60%, #000); }
+.player.skin-neon #fill { border-radius: 99rem; background: linear-gradient(90deg, var(--neon-low), var(--neon-mid), var(--neon-high));
+  box-shadow: 0 0 .8rem color-mix(in srgb, var(--neon-low) 50%, transparent); }
+.player.skin-neon #head { width: .9rem; height: .9rem; border-radius: 50%; transform: translate(-50%, -50%); background: var(--neon-ink); box-shadow: 0 0 .8rem var(--neon-high); }
+.player.skin-neon .next li span { color: var(--neon-high); }
+.player.skin-neon .next li.queued span { color: var(--neon-low); }
+.player.skin-neon .neon-foot { grid-area: foot; display: flex; justify-content: space-between; gap: 1rem; min-width: 0; margin: 0 -1rem; padding: .45rem 1rem .35rem;
+  border-top: 1px solid var(--neon-line); color: var(--neon-dim); font: 600 .62rem/1 Consolas, monospace; letter-spacing: .18em; }
+.neon-foot b { min-width: 0; overflow: hidden; color: var(--neon-low); text-overflow: ellipsis; white-space: nowrap; }
+/* Neon's strip: its colours and glow, the rounded plate, no bars. */
+.player.skin-neon.strip { border-radius: 2.2rem; }
+.player.skin-neon.strip .neon-bar, .player.skin-neon.strip .neon-signal, .player.skin-neon.strip .neon-foot { display: none; }
+.player.skin-neon.strip .cover { border-radius: 50%; }
+.player.skin-neon.strip.playing .info::before { background: var(--neon-high); box-shadow: 0 0 .7rem var(--neon-high); }
+
 @keyframes lamp { 50% { opacity: .45; } }
 @keyframes marquee { 0%, 12% { transform: translateX(0); } 88%, 100% { transform: translateX(var(--marquee-shift, 0)); } }
 @keyframes arrive { from { opacity: 0; transform: translateY(.8rem); } }

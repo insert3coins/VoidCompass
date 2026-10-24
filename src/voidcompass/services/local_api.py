@@ -51,7 +51,8 @@ PROVIDER_CALLS = (
     "api_dashboard", "api_pages", "api_page", "api_open_page", "api_feed", "api_add_feed",
     "api_themes", "api_set_theme", "api_overlays", "api_overlay", "api_set_overlay",
     "api_toggle_overlay", "api_hide_overlays", "api_notify", "api_watcher", "api_watcher_thought",
-    "api_watcher_poke", "api_voice", "api_voice_say", "api_voice_stop", "api_music",
+    "api_watcher_poke", "api_watcher_answer", "api_watcher_code", "api_watcher_meet", "api_watcher_book",
+    "api_voice", "api_voice_say", "api_voice_stop", "api_voice_hush", "api_music",
     "api_music_library", "api_music_control", "api_galnet",
     "api_bgs", "api_bgs_factions", "api_bgs_faction", "api_bgs_systems", "api_bgs_system", "api_bgs_conflicts",
     "api_bgs_activity", "api_bgs_track",
@@ -318,9 +319,14 @@ class LocalApi:
             ("GET", r"/watcher", lambda req: self._call("api_watcher"), False),
             ("POST", r"/watcher/thought", self._thought, True),
             ("POST", r"/watcher/poke", lambda req: self._call("api_watcher_poke"), True),
+            ("POST", r"/watcher/answer", self._answer, True),
+            ("GET", r"/watcher/code", lambda req: self._call("api_watcher_code"), False),
+            ("POST", r"/watcher/meet", self._meet, True),
+            ("POST", r"/watcher/book", lambda req: self._call("api_watcher_book"), True),
             ("GET", r"/voice", lambda req: self._call("api_voice"), False),
             ("POST", r"/voice/say", self._say, True),
             ("POST", r"/voice/stop", lambda req: self._call("api_voice_stop"), True),
+            ("POST", r"/voice/hush", self._hush, True),
             ("GET", r"/music", lambda req: self._call("api_music"), False),
             ("GET", r"/music/library", lambda req: self._call("api_music_library"), False),
             ("POST", r"/music/(play-pause|next|previous)",
@@ -650,6 +656,28 @@ class LocalApi:
         return self._call("api_watcher_thought", text[:400], str(req.body.get("heading") or "")[:40],
                           # Said aloud whenever the voice is on, unless asked not to.
                           req.body.get("speak", True) is not False)
+
+    def _answer(self, req):
+        answer = req.body.get("answer")
+        if isinstance(answer, bool) or answer in (None, ""):
+            raise ApiError(400, "Give its answer: {\"answer\": 1} (1 to 3, as the hotkeys) or its key")
+        return self._call("api_watcher_answer", answer if isinstance(answer, int) else str(answer)[:40])
+
+    def _meet(self, req):
+        code = str(req.body.get("code") or "").strip()
+        if not code:
+            raise ApiError(400, "Give a friend's Watcher code: {\"code\": \"VCWATCH1...\"}")
+        return self._call("api_watcher_meet", code[:4000])
+
+    def _hush(self, req):
+        seconds = req.body.get("seconds")
+        if seconds is None:
+            return self._call("api_voice_hush", None)
+        try:
+            seconds = max(0, min(86400, int(float(seconds))))
+        except (TypeError, ValueError):
+            raise ApiError(400, "Seconds is a number: {\"seconds\": 30}, 0 to lift the hush, or leave it out to hush until lifted")
+        return self._call("api_voice_hush", seconds)
 
     def _say(self, req):
         text = " ".join(str(req.body.get("text") or "").split())

@@ -19,12 +19,14 @@ STUB = ("\nwindow.VoidCompassOverlay = {...VoidCompassOverlay, startPolling: opt
 
 
 class SkinSettingTests(unittest.TestCase):
-    def test_five_skins_and_a_safe_default(self):
+    def test_six_skins_and_a_safe_default(self):
         # 5.5.17: the ten became five, made over; old ones fall back to the deck.
-        self.assertEqual(tuple(MUSIC_SKINS), ("deck", "cockpit", "glass", "vinyl", "minimal"))
+        # 5.6.2: Neon came back, rebuilt.
+        self.assertEqual(tuple(MUSIC_SKINS), ("deck", "cockpit", "glass", "minimal", "neon", "vinyl"))
         self.assertEqual(music_overlay_options({})["skin"], "deck")
         self.assertEqual(music_overlay_options({"music_player_skin": "VINYL"})["skin"], "vinyl")
-        for retired in ("cassette", "orb", "radio", "terminal", "neon", "hologram"):
+        self.assertEqual(music_overlay_options({"music_player_skin": "neon"})["skin"], "neon")
+        for retired in ("cassette", "orb", "radio", "terminal", "hologram"):
             self.assertEqual(music_overlay_options({"music_player_skin": retired})["skin"], "deck", retired)
         self.assertIn("music_player_skin", config_module.PROFILE_TEXT_SETTINGS)
 

@@ -17,17 +17,25 @@ from voidcompass.overlays import overlay_chrome
 # Card: the cover beside the track, then the visualizer, progress and up
 # next, each in its own lane. Strip: one slim line for a screen edge.
 MUSIC_LAYOUTS = {"card": (460, 156), "strip": (580, 44)}
-# Skins (made over in 5.5.17): five looks for the card, each its own size
+# Skins (made over in 5.5.17): looks for the card, each its own size
 # (design px, before up next). On the slim strip a skin sets its colours.
-# A skin saved before (cassette, orb...) falls back to the deck.
+# A skin saved before (cassette, orb...) falls back to the deck. Neon came
+# back in 5.6.2, rebuilt, in fifteen palettes.
 MUSIC_SKINS = {
     "deck": ("Command Deck", (460, 156)),
     "cockpit": ("Cockpit HUD", (470, 156)),
     "glass": ("Glass", (460, 156)),
-    "vinyl": ("Vinyl", (480, 172)),
     "minimal": ("Minimal", (400, 84)),
+    "neon": ("Neon", (440, 232)),
+    "vinyl": ("Vinyl", (480, 172)),
 }
-MUSIC_VISUALIZERS = ("bars", "mirror", "wave", "off")
+# The looks, shared with the Music page's player bar (5.6.2): the same list
+# as web/assets/music-visualizers.js.
+MUSIC_VISUALIZERS = ("bars", "peaks", "mirror", "led", "wave", "horizon", "aurora", "waterfall", "shockwave",
+                     "scanner", "witchspace", "vu", "radial", "particles", "tunnel", "spiral", "sonar", "off")
+# The Neon skin's colours: a palette, or the theme's own.
+MUSIC_PALETTES = ("neon", "amber", "blue", "c64", "crimson", "deep", "gold", "green", "ice", "miami", "steel",
+                  "sunset", "toxic", "tron", "vaporwave", "theme")
 MUSIC_COLOURS = ("theme", "warm", "spectrum")
 # Seconds paused before the overlay hides itself; 0 keeps it up.
 MUSIC_AUTO_HIDE = (0, 10, 30, 120)
@@ -55,12 +63,14 @@ def music_overlay_options(config):
     hide = _integer(config.get("music_player_auto_hide"), 0)
     count = _integer(config.get("music_player_next_count"), 1)
     skin = str(config.get("music_player_skin") or "deck").casefold()
+    palette = str(config.get("music_player_palette") or "neon").casefold()
     text_scale = _integer(config.get("music_player_text_scale_percent"), 0)
     return {
         "layout": layout if layout in MUSIC_LAYOUTS else "card",
         "skin": skin if skin in MUSIC_SKINS else "deck",
         "visualizer": visualizer if visualizer in MUSIC_VISUALIZERS else "bars",
         "colour": colour if colour in MUSIC_COLOURS else "theme",
+        "palette": palette if palette in MUSIC_PALETTES else "neon",
         "show_art": bool(config.get("music_player_show_art", True)),
         "show_details": bool(config.get("music_player_show_details", True)),
         "show_next": bool(config.get("music_player_show_next", True)),

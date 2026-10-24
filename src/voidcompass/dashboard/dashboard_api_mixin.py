@@ -435,10 +435,34 @@ class DashboardApiMixin(ApiRecordsMixin):
         thought = hud.mind.relay(text, heading, speak)
         hud._redraw()
         return {"id": thought["id"], "text": thought["text"], "heading": thought["heading"],
-                "spoken": bool(speak and self._watcher_voice_on())}
+                "spoken": bool(speak and self._watcher_voice_on() and not self._watcher_voice_hushed())}
 
     def api_watcher_poke(self):
         return {"answered": bool(self._api_hud().poke())}
+
+    # 5.6.1: answer its question, share it, meet another, keep its book.
+    def api_watcher_answer(self, answer):
+        mind = self._watcher_mind()
+        asked = mind.pending_question() if mind is not None else None
+        if not asked:
+            raise ApiError(409, "It hasn't asked anything just now")
+        if not self._watcher_answer(answer):
+            keys = ", ".join(row["key"] for row in asked.get("answers") or ())
+            raise ApiError(400, f"That isn't one of its answers: give 1 to {len(asked.get('answers') or ())}, or one of {keys}")
+        return {"answered": True, "question": asked["id"]}
+
+    def api_watcher_code(self):
+        return {"code": self._watcher_share_code()}
+
+    def api_watcher_meet(self, code):
+        if not self._watcher_meet(code):
+            raise ApiError(400, "That isn't a Watcher's code (they start VCWATCH1)")
+        return {"met": True}
+
+    def api_watcher_book(self):
+        if not self._watcher_save_book():
+            raise ApiError(500, "The book couldn't be saved")
+        return {"saved": True, "folder": str(self.wrapped_folder()) if hasattr(self, "wrapped_folder") else ""}
 
     def api_voice(self):
         from voidcompass.voice import voice_assets
@@ -448,11 +472,16 @@ class DashboardApiMixin(ApiRecordsMixin):
         return {"enabled": bool(self.config.get("watcher_voice_enabled")),
                 "installed": bool(voice_assets.installed()),
                 "ready": bool(self._watcher_voice_on()),
-                "speaking": live is not None}
+                "speaking": live is not None,
+                # 5.6.1: kept quiet by another app (hushed_for: seconds left, null until lifted).
+                "hushed": self._watcher_voice_hushed(),
+                "hushed_for": self._watcher_voice_hush_left() if self._watcher_voice_hushed() else 0}
 
     def api_voice_say(self, text):
         if not self._watcher_voice_on():
             raise ApiError(409, "The voice is off or not downloaded yet (The Watcher › VOICE)")
+        if self._watcher_voice_hushed():
+            raise ApiError(409, "The voice is hushed: POST /voice/hush with {\"seconds\": 0} lifts it")
         if not self._watcher_voice_say(text, key=f"api-{time.time():.3f}"):
             raise ApiError(409, "The voice couldn't say that")
         return {"spoken": True}
@@ -460,8 +489,14 @@ class DashboardApiMixin(ApiRecordsMixin):
     def api_voice_stop(self):
         speaker = getattr(self, "_watcher_voice", None)
         if speaker is not None:
+            self._voice_stop_reason = "stopped"
             speaker.stop()
         return {"ok": True}
+
+    def api_voice_hush(self, seconds):
+        self._watcher_voice_hush(seconds)
+        hushed = self._watcher_voice_hushed()
+        return {"hushed": hushed, "hushed_for": self._watcher_voice_hush_left() if hushed else 0}
 
     # -- music ---------------------------------------------------------------------------
     def api_music(self):

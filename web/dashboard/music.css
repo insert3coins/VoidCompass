@@ -223,6 +223,13 @@
 .music-viz-menu > summary:hover { color: var(--text); }
 .music-viz-menu > div { top: auto; bottom: calc(100% + 10px); left: auto; right: 0; width: 270px; max-height: 60vh; overflow-y: auto; }
 .music-viz-menu h4 { margin: 6px 8px 2px; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .16em; }
+/* The looks' colours (5.6.2): the theme's, or a palette, as swatches. */
+.music-viz-colours { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; padding: 0 4px 6px; }
+.music-viz-menu .music-viz-colours button { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 5px 6px; }
+.music-viz-colours i { flex: 0 0 auto; width: 22px; height: 8px; border-radius: 2px; }
+.music-viz-colours span { min-width: 0; overflow-wrap: anywhere; color: var(--muted); font: 600 10px "Segoe UI", sans-serif; }
+.music-viz-colours button[aria-checked="true"] span { color: var(--accent); }
+.music-viz-colours button[aria-checked="true"] { box-shadow: inset 0 0 0 1px var(--accent); }
 .music-viz-menu > div button { display: grid; gap: 1px; padding: 5px 8px; border: 0; border-radius: 4px; background: transparent; color: var(--text); cursor: pointer; }
 .music-viz-menu > div button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .music-viz-menu > div button b { font: 700 9.5px Consolas, monospace; letter-spacing: .08em; }

@@ -7,6 +7,8 @@ thought settings (moved there from Overlay Studio).
 from __future__ import annotations
 
 import logging
+import math
+import time
 
 from voidcompass.overlays import watcher_habits, watcher_mind, watcher_voice_lore
 from voidcompass.overlays.heartbeat_hud import HEARTBEAT_TEXT_SIZES, heartbeat_text_size, thought_side_setting
@@ -28,7 +30,7 @@ class DashboardWatcherVoiceMixin:
     def _watcher_speaker(self):
         speaker = getattr(self, "_watcher_voice", None)
         if speaker is None:
-            speaker = WatcherSpeaker(settings=lambda: self.config)
+            speaker = WatcherSpeaker(settings=lambda: self.config, on_change=self._watcher_voice_changed)
             self._watcher_voice = speaker
         return speaker
 
@@ -43,12 +45,49 @@ class DashboardWatcherVoiceMixin:
         self._watcher_voice_sync()
 
     def _watcher_voice_say(self, words, key=None, feel=None):
-        if getattr(self, "_closing", False) or not self._watcher_voice_on():
+        if getattr(self, "_closing", False) or not self._watcher_voice_on() or self._watcher_voice_hushed():
             return False
         said = self._watcher_speaker().say(words, key, feel=feel)
         if said and hasattr(self, "_api_publish"):
-            self._api_publish("voice", {"text": words, "from": "api" if str(key or "").startswith("api-") else "watcher"})
+            self._voice_from = "api" if str(key or "").startswith("api-") else "watcher"
+            self._api_publish("voice", {"state": "started", "text": words, "from": self._voice_from})
         return said
+
+    # -- hush (5.6.1): another app's voice asks it to keep quiet ------------------
+    def _watcher_voice_hushed(self):
+        return float(getattr(self, "_voice_hush_until", 0.0) or 0.0) > time.time()
+
+    def _watcher_voice_hush(self, seconds=None):
+        """Quiet now and for ``seconds`` (None: until lifted; 0 lifts it).
+        Thoughts still show beside the orb; they just aren't said."""
+        if seconds is not None and seconds <= 0:
+            self._voice_hush_until = 0.0
+            return
+        self._voice_hush_until = math.inf if seconds is None else time.time() + float(seconds)
+        speaker = getattr(self, "_watcher_voice", None)
+        if speaker is not None:
+            self._voice_stop_reason = "hushed"
+            speaker.stop()
+
+    def _watcher_voice_hush_left(self):
+        """Seconds of hush left: 0 when not hushed, None until lifted."""
+        until = float(getattr(self, "_voice_hush_until", 0.0) or 0.0)
+        if until == math.inf:
+            return None
+        return max(0, round(until - time.time()))
+
+    def _watcher_voice_changed(self):
+        """The speaker started or stopped (any thread). A line ending goes out
+        on the API as a voice event: finished, stopped or hushed."""
+        speaker = getattr(self, "_watcher_voice", None)
+        speaking = speaker is not None and speaker.live() is not None
+        was = bool(getattr(self, "_voice_speaking", False))
+        self._voice_speaking = speaking
+        if was and not speaking:
+            reason = getattr(self, "_voice_stop_reason", "") or "finished"
+            self._voice_stop_reason = ""
+            if hasattr(self, "_api_publish"):
+                self._api_publish("voice", {"state": reason, "from": getattr(self, "_voice_from", "watcher")})
 
     def _watcher_voice_sync(self):
         """Voice on and downloaded: warm it and tell the orb. Otherwise hush."""

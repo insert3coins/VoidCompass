@@ -11,6 +11,9 @@
   <main id="player" class="player card idle skin-deck" aria-label="Now playing">
     <!-- Glass blurs the cover behind everything; Vinyl turns it into a record. -->
     <div class="backdrop" aria-hidden="true"><img id="backdrop" alt="" hidden></div>
+    <!-- Neon (5.6.2): its title bar, signal panel and status line. -->
+    <header class="neon-bar" aria-hidden="true"><span class="neon-brand">VOID<em>COMPASS</em></span><span class="neon-tag">COCKPIT AUDIO</span>
+      <span class="neon-live"><i></i><b id="neon-live">STANDBY</b></span></header>
     <figure class="cover"><img id="cover" alt="" hidden><span aria-hidden="true">♪</span></figure>
     <i class="tonearm" aria-hidden="true"></i>
     <div class="info">
@@ -25,13 +28,16 @@
       <p id="artist" class="artist"></p>
       <p id="details" class="details"></p>
     </div>
+    <div class="neon-signal" aria-hidden="true"><span>AUDIO SIGNAL</span><b id="neon-look">BARS</b></div>
     <canvas id="visualizer" class="visualizer" aria-hidden="true"></canvas>
     <div class="progress" aria-hidden="true"><span id="elapsed">0:00</span><div class="rail"><i id="fill"></i><u id="resume" hidden></u><b id="head"></b></div><span id="total">0:00</span></div>
     <ol id="next" class="next" hidden></ol>
+    <footer class="neon-foot" aria-hidden="true"><span>VOID COMPASS // COCKPIT AUDIO</span><b id="neon-format"></b></footer>
   </main>
   <script src="/assets/frame-cap.js"></script>
   <script src="/assets/overlay-layout.js"></script>
   <script src="/assets/overlay-client.js"></script>
+  <script src="/assets/music-visualizers.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

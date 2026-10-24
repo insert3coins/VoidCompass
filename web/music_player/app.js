@@ -16,9 +16,16 @@
   const root = document.getElementById("player");
   const canvas = document.getElementById("visualizer");
   const nodes = Object.fromEntries(["cover", "backdrop", "state", "playlist", "scene", "shuffle", "repeat", "repeat-one",
-    "title", "artist", "details", "elapsed", "total", "resume", "next"].map((id) => [id, document.getElementById(id)]));
-  // Five skins since 5.5.17; the cockpit draws its bars as lit blocks.
-  const SKINS = ["deck", "cockpit", "glass", "vinyl", "minimal"];
+    "title", "artist", "details", "elapsed", "total", "resume", "next", "neon-live", "neon-look", "neon-format"]
+    .map((id) => [id, document.getElementById(id)]));
+  // Five skins since 5.5.17, and Neon again in 5.6.2; the cockpit draws its bars as lit blocks.
+  const SKINS = ["deck", "cockpit", "glass", "vinyl", "minimal", "neon"];
+  // The looks are shared with the Music page (5.6.2); this page keeps its own
+  // skin-tuned bars, mirror and wave, and draws the rest with the shared painter.
+  const SHARED = window.VoidCompassVisualizers || null;
+  const OWN_LOOKS = ["bars", "mirror", "wave"];
+  const painter = SHARED ? SHARED.painter() : null;
+  const NEON_VARS = ["low", "mid", "high", "peak", "panel", "line", "ink", "dim"];
   const SKIN_TONES = {cockpit: "orange", vinyl: "yellow"};
   const SCENES = {docked: "DOCKED", space: "IN SPACE", deep: "DEEP SPACE", surface: "ON A SURFACE", combat: "COMBAT"};
   const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -39,6 +46,9 @@
   let changedTimer = 0;
   let palette = {};
   let poller = null;
+  let wave = [];
+  let lastDraw = 0;
+  let lookNow = "";
 
   const playing = () => model.state === "playing";
   const clock = (seconds) => {
@@ -125,6 +135,19 @@
     }));
   }
 
+  // Neon's colours (a palette, or the theme's) and its labels.
+  function renderNeon(state, track) {
+    const colours = SHARED?.PALETTES?.[options.palette];
+    for (const name of NEON_VARS) {
+      if (colours?.[name]) root.style.setProperty(`--neon-${name}`, colours[name]);
+      else root.style.removeProperty(`--neon-${name}`);
+    }
+    nodes["neon-live"].textContent = {playing: "LIVE", paused: "PAUSED", blocked: "WAITING", idle: "STANDBY"}[state];
+    const look = SHARED?.LOOKS?.find((item) => item.id === (options.visualizer || "bars"));
+    nodes["neon-look"].textContent = look ? look.label : String(options.visualizer || "").toUpperCase();
+    nodes["neon-format"].textContent = [track?.format, track?.year].filter(Boolean).join(" · ").toUpperCase();
+  }
+
   function render(snapshot = {}) {
     const effects = snapshot.effects || {};
     palette = VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, effects);
@@ -138,6 +161,7 @@
     root.classList.toggle("strip", options.layout === "strip");
     const skin = skinNow();
     for (const name of SKINS) root.classList.toggle(`skin-${name}`, name === skin);
+    renderNeon(state, track);
     root.classList.toggle("no-art", options.show_art === false);
     root.classList.toggle("visualizer-off", reduced || options.visualizer === "off");
     nodes.state.textContent = {playing: "NOW PLAYING", paused: "PAUSED", blocked: "WAITING", idle: "STANDBY"}[state];
@@ -203,8 +227,10 @@
         const data = response.ok ? await response.json() : (await response.arrayBuffer(), {});
         const bands = Array.isArray(data.bands) ? data.bands : [];
         for (let band = 0; band < BANDS; band += 1) target[band] = data.playing ? (Number(bands[band]) || 0) / 255 : 0;
+        wave = data.playing && Array.isArray(data.wave) ? data.wave.map((value) => Number(value) || 128) : [];
       } catch (_error) {
         target.fill(0);
+        wave = [];
       }
       if (playing() && !root.classList.contains("visualizer-off")) livePoll = window.setTimeout(ask, LIVE_MS);
     };
@@ -225,6 +251,16 @@
     return gradient;
   }
 
+  // The shared looks' colours: the Neon skin's palette, else the skin's own
+  // tone in the chosen scheme (theme, warm or spectrum).
+  function lookColours() {
+    const base = {accent: tone("accent"), orange: tone("orange"), red: tone("red"), green: tone("green"), text: tone("text"), yellow: tone("yellow")};
+    if (skinNow() === "neon") return SHARED.colours(options.palette, base);
+    if (options.colour === "warm") return {...base, accent: tone("red"), green: tone("orange"), orange: tone("yellow")};
+    if (options.colour === "spectrum") return {...base, accent: "hsl(190, 95%, 62%)", green: "hsl(275, 95%, 62%)", orange: "hsl(355, 95%, 62%)"};
+    return {...base, accent: tone(SKIN_TONES[skinNow()] || "accent")};
+  }
+
   function draw() {
     const width = canvas.clientWidth, height = canvas.clientHeight;
     if (!width || !height) return;
@@ -238,6 +274,18 @@
     ctx.clearRect(0, 0, width, height);
     const strip = options.layout === "strip";
     const style = options.visualizer || "bars";
+    const now = performance.now();
+    const dt = Math.min(50, now - (lastDraw || now));
+    lastDraw = now;
+    if (painter && (skinNow() === "neon" || !OWN_LOOKS.includes(style))) {
+      if (style !== lookNow) {
+        lookNow = style;
+        painter.reset();
+      }
+      painter.draw(style, ctx, width, height, {bands: shown.map((value) => value * 255), wave: wave.length ? wave : null,
+        playing: playing(), theme: lookColours(), now, dt, canvas, bold: 2.6});
+      return;
+    }
     const count = strip ? BANDS / 2 : BANDS;
     const values = strip ? Array.from({length: count}, (_, band) => Math.max(shown[band * 2], shown[band * 2 + 1])) : shown;
     const spectrum = options.colour === "spectrum";
@@ -324,6 +372,7 @@
     }
     renderProgress();
     if (!root.classList.contains("visualizer-off")) draw();
+    // The moving looks (stars, rings, sparks) keep going while it plays.
     if (playing() || moving) frame = window.requestAnimationFrame(step);
   }
 
@@ -346,6 +395,7 @@
   window.musicPlayerOverlay = {
     state: () => ({state: model.state || "idle", track: model.track?.title || "", layout: options.layout || "card",
       skin: skinNow(), visualizer: root.classList.contains("visualizer-off") ? "off" : (options.visualizer || "bars"),
+      palette: options.palette || "", shared: Boolean(painter), wave: wave.length,
       polling: Boolean(livePoll), level: shown.reduce((sum, value) => sum + value, 0) / BANDS,
       elapsed: nodes.elapsed.textContent, scene: nodes.scene.hidden ? "" : nodes.scene.textContent,
       next: [...nodes.next.querySelectorAll("li b")].map((item) => item.textContent),

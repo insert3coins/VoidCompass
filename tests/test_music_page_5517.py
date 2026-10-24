@@ -243,8 +243,9 @@ class PageTests(unittest.TestCase):
         }"""
         self.assertEqual(page.inner_text("#music-viz span"), "BARS")
         looks = page.eval_on_selector_all("#music-viz-list [data-viz]", "nodes => nodes.map((node) => node.dataset.viz)")
-        self.assertEqual(len(looks), 12)
+        self.assertEqual(len(looks), 18, "5.6.2: the six Pulse looks joined the twelve")
         self.assertIn("ELITE", page.text_content("#music-viz-list"), "the Elite looks have their own heading")
+        self.assertIn("PULSE", page.text_content("#music-viz-list"))
         shots = os.environ.get("VOIDCOMPASS_VIZ_SHOTS")
         for look in looks:
             page.click("#music-viz")

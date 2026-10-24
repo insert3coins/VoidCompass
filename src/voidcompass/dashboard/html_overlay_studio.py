@@ -35,7 +35,8 @@ from voidcompass.overlays.galnet_ticker_hud import (
     TICKER_STORIES, TICKER_WIDTH_RANGE, ticker_options,
 )
 from voidcompass.overlays.music_player_hud import (
-    MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_NEXT_COUNTS, MUSIC_SKINS, MUSIC_VISUALIZERS, music_overlay_options,
+    MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_NEXT_COUNTS, MUSIC_PALETTES, MUSIC_SKINS, MUSIC_VISUALIZERS,
+    music_overlay_options,
 )
 from voidcompass.overlays.rhino_map_hud import rhino_map_size
 from voidcompass.overlays.rig_tracker import (
@@ -788,6 +789,7 @@ class HtmlOverlayStudioMixin:
             ("music_player_skin", tuple(MUSIC_SKINS), "deck"),
             ("music_player_visualizer", MUSIC_VISUALIZERS, "bars"),
             ("music_player_colour", MUSIC_COLOURS, "theme"),
+            ("music_player_palette", MUSIC_PALETTES, "neon"),
         ):
             if key in payload:
                 choice = _text(payload.get(key), 20).casefold()

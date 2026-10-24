@@ -50,7 +50,8 @@ OVERLAY_ART_SIZE = 128
 _ID = re.compile(r"[0-9a-f]{16}")
 # Bumped when read_tags learns something new, so tracks read before are read
 # once more in the background (2: ReplayGain and R128 loudness).
-TAG_VERSION = 2
+# 3 (5.6.2): covers squared, so every track's art is made again once.
+TAG_VERSION = 3
 # Long mixes pick up where they were left (5.5.17): any track this long, once
 # it's past the first half minute and not into its last two.
 RESUME_MIN_TRACK_S = 20 * 60
@@ -243,6 +244,39 @@ def read_tags(path) -> dict:
         result["artist"] = result["album_artist"]
     result["cover"] = cover
     return result
+
+
+# How far a colour may stray and still count as the plain border round a cover.
+BORDER_TOLERANCE = 24
+
+
+def square_cover(image):
+    """The cover as a square (5.6.2). Pictures from video sites (yt-dlp's
+    thumbnails) are 16:9 or 4:3: the album's square art inside plain bars,
+    or between blurred copies of itself. A plain border is trimmed, then the
+    middle square kept. A square cover is left exactly as it is, frame and all."""
+    from PIL import Image, ImageChops
+    image = image.convert("RGB")
+    width, height = image.size
+    if not width or not height or abs(width - height) <= max(width, height) * .04:
+        return image
+    corners = [image.getpixel(point) for point in ((0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1))]
+    # Bars only when all four corners agree on their colour.
+    if max(max(channel) - min(channel) for channel in zip(*corners)) <= BORDER_TOLERANCE:
+        border = tuple(sum(channel) // 4 for channel in zip(*corners))
+        difference = ImageChops.difference(image, Image.new("RGB", image.size, border)).convert("L")
+        box = difference.point(lambda value: 255 if value > BORDER_TOLERANCE else 0).getbbox()
+        if box:
+            inner_w, inner_h = box[2] - box[0], box[3] - box[1]
+            # A real frame: something to trim, and enough picture left inside it.
+            if (inner_w < width * .97 or inner_h < height * .97) and min(inner_w, inner_h) >= min(width, height) * .35:
+                image = image.crop(box)
+                width, height = image.size
+    side = min(width, height)
+    if width != height:
+        left, top = (width - side) // 2, (height - side) // 2
+        image = image.crop((left, top, left + side, top + side))
+    return image
 
 
 def folder_cover(path):
@@ -820,7 +854,7 @@ class MusicLibrary:
             from PIL import Image
             self.art_root.mkdir(parents=True, exist_ok=True)
             with Image.open(source) as image:
-                image = image.convert("RGB")
+                image = square_cover(image)
                 image.thumbnail((ART_SIZE, ART_SIZE))
                 image.save(self.art_root / f"{key}.jpg", "JPEG", quality=86)
             return True

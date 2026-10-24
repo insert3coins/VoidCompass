@@ -271,8 +271,10 @@ class HtmlDashboardServer:
         # Shared browser assets live beside the dashboard folder so every
         # overlay can use the same branded cursor without duplicating it, and
         # the boot screen wakes the same watcher orb the heartbeat overlay draws.
+        # The music visualizers (5.6.2) are shared with the music overlay.
         if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png",
-                            "/assets/heartbeat-orb.js", "/assets/heartbeat-life.js"}:
+                            "/assets/heartbeat-orb.js", "/assets/heartbeat-life.js",
+                            "/assets/music-visualizers.js"}:
             candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()
             try:
                 candidate.relative_to(self.static_root.parent)

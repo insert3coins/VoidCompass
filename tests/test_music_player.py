@@ -210,17 +210,17 @@ class CommandTests(Folder):
 
     def test_visualizer_levels_are_kept_briefly_for_the_overlay(self):
         self.assertTrue(self.player.receive_music_levels({"bands": [0, 300, -5, 128], "playing": True}))
-        self.assertEqual(self.player.music_levels(), {"bands": [0, 255, 0, 128], "playing": True})
+        self.assertEqual(self.player.music_levels(), {"bands": [0, 255, 0, 128], "wave": [], "playing": True})
         self.assertFalse(self.player.receive_music_levels({"bands": list(range(100))}))
         self.assertFalse(self.player.receive_music_levels({"bands": ["loud"]}))
         self.player._music_levels["at"] -= 5
-        self.assertEqual(self.player.music_levels(), {"bands": [], "playing": False}, "stale levels are silence")
+        self.assertEqual(self.player.music_levels(), {"bands": [], "wave": [], "playing": False}, "stale levels are silence")
 
 
 class OverlayTests(Folder):
     def test_options_stay_within_their_choices(self):
         self.assertEqual(music_overlay_options({}), {
-            "layout": "card", "skin": "deck", "visualizer": "bars", "colour": "theme", "show_art": True, "show_details": True,
+            "layout": "card", "skin": "deck", "visualizer": "bars", "colour": "theme", "palette": "neon", "show_art": True, "show_details": True,
             "show_next": True, "next_count": 1, "auto_hide": 0, "text_scale_percent": 0})
         wild = music_overlay_options({"music_player_layout": "hologram", "music_player_visualizer": "lasers",
                                       "music_player_colour": "plaid", "music_player_auto_hide": 7,

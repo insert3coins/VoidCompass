@@ -71,20 +71,12 @@ const FOLLOW_VIEW = "follow";
 const FOLLOW_OPEN_KEY = "voidcompass.music.follow-open";
 // The player bar's visualizer looks (5.5.17), kept per viewer.
 const VISUALIZER_KEY = "voidcompass.music.visualizer";
-const VISUALIZERS = [
-  {id: "bars", label: "BARS", detail: "Spectrum bars", group: "CLASSIC"},
-  {id: "peaks", label: "PEAKS", detail: "Bars with falling peaks", group: "CLASSIC"},
-  {id: "mirror", label: "MIRROR", detail: "The spectrum, mirrored", group: "CLASSIC"},
-  {id: "led", label: "LED", detail: "A dot-matrix level meter", group: "CLASSIC"},
-  {id: "wave", label: "WAVE", detail: "The waveform itself", group: "FLOWING"},
-  {id: "horizon", label: "HORIZON", detail: "A smooth spectrum skyline", group: "FLOWING"},
-  {id: "aurora", label: "AURORA", detail: "Ribbons of light: bass, mids and treble", group: "FLOWING"},
-  {id: "waterfall", label: "WATERFALL", detail: "The spectrum scrolling past", group: "FLOWING"},
-  {id: "shockwave", label: "SHOCKWAVE", detail: "A ring for every beat", group: "FLOWING"},
-  {id: "scanner", label: "SCANNER", detail: "Your ship's scanner, a contact for every band", group: "ELITE"},
-  {id: "witchspace", label: "WITCHSPACE", detail: "The jump tunnel, faster as it gets louder", group: "ELITE"},
-  {id: "off", label: "OFF", detail: "No visualizer", group: ""},
-];
+// The looks themselves are shared with the music overlay (5.6.2), in
+// /assets/music-visualizers.js; the colours (palettes) too.
+const PALETTE_KEY = "voidcompass.music.palette";
+const shared = () => window.VoidCompassVisualizers || null;
+const looks = () => shared()?.LOOKS || [{id: "off", label: "OFF", detail: "No visualizer", group: ""}];
+const palettes = () => Object.entries(shared()?.PALETTES || {}).sort(([, a], [, b]) => a.label.localeCompare(b.label));
 const SORT_VALUE = {
   title: (row) => row.track.title.toLowerCase(),
   artist: (row) => (row.track.artist || "").toLowerCase(),
@@ -164,15 +156,15 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
   let visualizer = "bars";
   try {
     const kept = window.localStorage.getItem(VISUALIZER_KEY);
-    if (VISUALIZERS.some((look) => look.id === kept)) visualizer = kept;
+    if (looks().some((look) => look.id === kept)) visualizer = kept;
   } catch (_error) { /* bars, as ever */ }
+  let palette = "theme";
+  try {
+    const kept = window.localStorage.getItem(PALETTE_KEY);
+    if (kept && shared()?.PALETTES?.[kept]) palette = kept;
+  } catch (_error) { /* the theme's colours */ }
   // What the moving looks remember between frames.
-  let caps = new Array(BANDS).fill(0);
-  let trail = null;
-  let rings = [];
-  let stars = [];
-  let bassAverage = 0;
-  let lastRing = 0;
+  const painter = shared() ? shared().painter() : null;
   let lastDraw = 0;
 
   // --- The analyser, on a captured copy of the sound ------------------------
@@ -472,6 +464,15 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     return `Levelling on: every track plays equally loud. This track: ${source}.`;
   }
 
+  // A slice of the waveform for the overlay's Wave and VU looks (5.6.2):
+  // 64 points are plenty for a line that small, and light to send.
+  function waveSlice() {
+    if (!analyser || audio.paused) return [];
+    analyser.getByteTimeDomainData(samples);
+    const step = samples.length / 64;
+    return Array.from({length: 64}, (_, point) => samples[Math.floor(point * step)]);
+  }
+
   function levels() {
     if (!analyser || audio.paused) return new Array(BANDS).fill(0);
     analyser.getByteFrequencyData(bins);
@@ -563,7 +564,7 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
       settleLevel();
     }, METER_MS);
     levelsTimer = overlayOn
-      ? window.setInterval(() => post({action: "music_levels", bands: levels(), playing: true}), LEVELS_MS) : 0;
+      ? window.setInterval(() => post({action: "music_levels", bands: levels(), wave: waveSlice(), playing: true}), LEVELS_MS) : 0;
   }
 
   function stopTimers() {
@@ -1245,263 +1246,30 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     const style = getComputedStyle(document.documentElement);
     const token = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
     const theme = {accent: token("--accent", "#00d1ff"), orange: token("--orange", "#ff7a18"),
-      red: token("--red", "#ff6b70"), green: token("--green", "#54e39a"), text: token("--text", "#dce8ef")};
-    const fill = ctx.createLinearGradient(0, height, 0, 0);
-    fill.addColorStop(0, theme.accent);
-    fill.addColorStop(1, theme.orange);
-    ctx.fillStyle = fill;
-    ctx.strokeStyle = fill;
-    const draw = {bars: drawBars, peaks: drawBars, mirror: drawMirror, led: drawLed, wave: drawWave,
-      horizon: drawHorizon, aurora: drawAurora, waterfall: drawWaterfall, shockwave: drawShockwave,
-      scanner: drawScanner, witchspace: drawWitchspace}[visualizer];
-    draw(ctx, width, height, {theme, now, dt, canvas});
+      red: token("--red", "#ff6b70"), green: token("--green", "#54e39a"), text: token("--text", "#dce8ef"),
+      yellow: token("--yellow", "#f5c76d")};
+    const wave = analyser && !audio.paused ? (analyser.getByteTimeDomainData(samples), samples) : null;
+    painter?.draw(visualizer, ctx, width, height, {bands: levels(), wave, playing: !audio.paused,
+      theme: shared().colours(palette, theme), now, dt, canvas});
     ctx.globalAlpha = 1;
     if (!audio.paused) frame = window.requestAnimationFrame(drawVisualizer);
   }
 
-  function drawBars(ctx, width, height) {
-    const gap = 4, bar = (width - gap * (BANDS - 1)) / BANDS;
-    levels().forEach((level, band) => {
-      const tall = Math.max(2, level / 255 * height);
-      ctx.globalAlpha = .12 + level / 255 * .2;
-      ctx.fillRect(band * (bar + gap), height - tall, bar, tall);
-      if (visualizer !== "peaks") return;
-      // A cap sits on each bar's highest point and drifts back down.
-      caps[band] = Math.max(tall, caps[band] - height * .012);
-      ctx.globalAlpha = .55;
-      ctx.fillRect(band * (bar + gap), height - caps[band] - 3, bar, 2);
-    });
-  }
-
-  function drawMirror(ctx, width, height) {
-    const gap = 4, bar = (width - gap * (BANDS - 1)) / BANDS, middle = height / 2;
-    levels().forEach((level, band) => {
-      const half = Math.max(1, level / 255 * middle);
-      ctx.globalAlpha = .12 + level / 255 * .22;
-      ctx.fillRect(band * (bar + gap), middle - half, bar, half * 2);
-    });
-  }
-
-  function drawWave(ctx, width, height) {
-    const quiet = !analyser || audio.paused;
-    if (!quiet) analyser.getByteTimeDomainData(samples);
-    const count = quiet ? 2 : samples.length;
-    ctx.globalAlpha = .55;
-    ctx.lineWidth = 2;
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    for (let i = 0; i < count; i += 1) {
-      const x = i / (count - 1) * width;
-      const y = quiet ? height / 2 : samples[i] / 255 * height;
-      if (i) ctx.lineTo(x, y);
-      else ctx.moveTo(x, y);
-    }
-    ctx.stroke();
-  }
-
-  function drawHorizon(ctx, width, height) {
-    const points = levels().map((level, band) => [band / (BANDS - 1) * width, height - Math.max(2, level / 255 * height * .9)]);
-    ctx.beginPath();
-    ctx.moveTo(0, height);
-    ctx.lineTo(...points[0]);
-    // Through the midpoints, so the skyline is a curve rather than steps.
-    for (let i = 1; i < points.length; i += 1) {
-      const [x0, y0] = points[i - 1], [x1, y1] = points[i];
-      ctx.quadraticCurveTo(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
-    }
-    ctx.lineTo(...points[points.length - 1]);
-    ctx.lineTo(width, height);
-    ctx.closePath();
-    ctx.globalAlpha = .16;
-    ctx.fill();
-    ctx.globalAlpha = .6;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-
-  function drawLed(ctx, width, height, {theme}) {
-    const rows = 8, gap = 3;
-    const cell = (width - gap * (BANDS - 1)) / BANDS, tall = (height - gap * (rows + 1)) / rows;
-    levels().forEach((level, band) => {
-      const lit = Math.round(level / 255 * rows);
-      for (let row = 0; row < rows; row += 1) {
-        ctx.fillStyle = row >= rows - 2 ? theme.orange : theme.accent;
-        ctx.globalAlpha = row < lit ? .5 : .06;
-        ctx.fillRect(band * (cell + gap), height - gap - (row + 1) * tall - row * gap, cell, tall);
-      }
-    });
-  }
-
-  function drawAurora(ctx, width, height, {theme, now}) {
-    const bands = levels();
-    const mean = (from, to) => bands.slice(from, to).reduce((sum, level) => sum + level, 0) / (to - from) / 255;
-    [[mean(0, 8), theme.green], [mean(8, 20), theme.accent], [mean(20, BANDS), theme.orange]].forEach(([level, colour], k) => {
-      const swing = (.12 + level * .88) * height * .34;
-      const thick = 4 + level * height * .3;
-      const middle = height * (.42 + k * .08);
-      const at = (x) => middle + Math.sin(x / width * Math.PI * (2.4 + k * 1.3) + now * .0005 * (1 + k * .45) + k * 2.1)
-        * swing * (.65 + .35 * Math.sin(x / width * Math.PI * 3 + now * .0003));
-      ctx.beginPath();
-      for (let x = 0; x <= width; x += 8) ctx.lineTo(x, at(x));
-      for (let x = Math.floor(width / 8) * 8; x >= 0; x -= 8) ctx.lineTo(x, at(x) + thick);
-      ctx.closePath();
-      ctx.fillStyle = colour;
-      ctx.globalAlpha = .14 + level * .3;
-      ctx.fill();
-    });
-  }
-
-  function drawWaterfall(ctx, width, height, {theme, canvas}) {
-    if (!trail || trail.width !== canvas.width || trail.height !== canvas.height) {
-      trail = document.createElement("canvas");
-      trail.width = canvas.width;
-      trail.height = canvas.height;
-    }
-    const paper = trail.getContext("2d");
-    const step = Math.max(1, Math.round(canvas.width / width * 3));
-    // Slide what's there to the left; the newest moment comes in on the right.
-    paper.globalCompositeOperation = "copy";
-    paper.drawImage(trail, -step, 0);
-    paper.globalCompositeOperation = "source-over";
-    const row = trail.height / BANDS;
-    levels().forEach((level, band) => {
-      paper.globalAlpha = .04 + level / 255 * .86;
-      paper.fillStyle = level > 190 ? theme.orange : theme.accent;
-      paper.fillRect(trail.width - step, trail.height - (band + 1) * row, step, Math.ceil(row));
-    });
-    paper.globalAlpha = 1;
-    ctx.globalAlpha = .8;
-    ctx.drawImage(trail, 0, 0, width, height);
-  }
-
-  function drawShockwave(ctx, width, height, {theme, now}) {
-    const bands = levels();
-    const bass = bands.slice(0, 5).reduce((sum, level) => sum + level, 0) / 5 / 255;
-    bassAverage += (bass - bassAverage) * .05;
-    if (bass > .45 && bass > bassAverage * 1.15 && now - lastRing > 140 && rings.length < 30) {
-      rings.push({x: width * (.12 + Math.random() * .76), born: now, power: bass});
-      lastRing = now;
-    }
-    // A quiet skyline underneath, so the rings have somewhere to come from.
-    ctx.globalAlpha = .1;
-    ctx.beginPath();
-    ctx.moveTo(0, height);
-    bands.forEach((level, band) => ctx.lineTo(band / (BANDS - 1) * width, height - Math.max(2, level / 255 * height * .5)));
-    ctx.lineTo(width, height);
-    ctx.fill();
-    ctx.strokeStyle = theme.accent;
-    rings = rings.filter((ring) => {
-      const age = (now - ring.born) / 1400;
-      if (age >= 1) return false;
-      ctx.globalAlpha = (1 - age) * .6 * ring.power;
-      ctx.lineWidth = .5 + 2.5 * (1 - age);
-      ctx.beginPath();
-      ctx.arc(ring.x, height / 2, age * height * (1.2 + ring.power * 2.2), 0, Math.PI * 2);
-      ctx.stroke();
-      return true;
-    });
-  }
-
-  // The ship's scanner: the disc, its range rings and the forward lines, with
-  // each band a contact on a stalk. Above the plane is solid, below is hollow,
-  // and the loudest show red, like a hostile.
-  function drawScanner(ctx, width, height, {theme, now}) {
-    // Spread across the whole bar, like the other looks, rather than a disc behind the controls.
-    const cx = width / 2, cy = height * .6, ry = height * .32, rx = width * .46;
-    ctx.strokeStyle = theme.orange;
-    ctx.lineWidth = 1;
-    for (const [size, alpha] of [[1, .4], [.66, .2], [.33, .2]]) {
-      ctx.globalAlpha = alpha;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, rx * size, ry * size, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = .2;
-    ctx.beginPath();
-    for (const side of [-1, 1]) {
-      const angle = -Math.PI / 2 + side * .55;
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(angle) * rx, cy + Math.sin(angle) * ry);
-    }
-    ctx.stroke();
-    ctx.globalAlpha = .7;
-    ctx.fillStyle = theme.orange;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 4);
-    ctx.lineTo(cx - 3.5, cy + 3);
-    ctx.lineTo(cx + 3.5, cy + 3);
-    ctx.closePath();
-    ctx.fill();
-    levels().forEach((value, band) => {
-      const level = value / 255;
-      if (level < .04) return;
-      const angle = band * 2.39996 + now * .00004;
-      const reach = .25 + .7 * ((band * .618034) % 1);
-      const x = cx + Math.cos(angle) * rx * reach, y = cy + Math.sin(angle) * ry * reach;
-      const above = band % 3 !== 0;
-      const top = y - level * height * (above ? .55 : -.25);
-      const colour = level > .78 ? theme.red : theme.orange;
-      const size = 3 + level * 3;
-      ctx.strokeStyle = colour;
-      ctx.fillStyle = colour;
-      ctx.globalAlpha = .3 + level * .6;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, top);
-      ctx.stroke();
-      if (above) ctx.fillRect(x - size / 2, top - size / 2, size, size);
-      else ctx.strokeRect(x - size / 2, top - size / 2, size, size);
-      ctx.globalAlpha *= .5;
-      ctx.beginPath();
-      ctx.ellipse(x, y, 2, 1, 0, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
-
-  // Witchspace: streaks rushing out of the tunnel, the bass lighting the star ahead.
-  function drawWitchspace(ctx, width, height, {theme, dt}) {
-    const bands = levels();
-    const loud = bands.reduce((sum, level) => sum + level, 0) / BANDS / 255;
-    const bass = bands.slice(0, 4).reduce((sum, level) => sum + level, 0) / 4 / 255;
-    const cx = width / 2, cy = height / 2;
-    const star = (near = Math.random()) => ({angle: Math.random() * Math.PI * 2, depth: .01 + near * .9});
-    if (!stars.length) stars = Array.from({length: 160}, () => star());
-    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, height * (.5 + bass * 1.4));
-    glow.addColorStop(0, theme.text);
-    glow.addColorStop(.25, theme.accent);
-    glow.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.globalAlpha = .08 + bass * .3;
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, width, height);
-    const speed = (.00006 + loud * .0009) * dt;
-    ctx.lineCap = "round";
-    for (const point of stars) {
-      point.depth += speed * (.3 + point.depth * 3);
-      if (point.depth > 1.15) {
-        Object.assign(point, star(Math.random() * .06));
-        continue;
-      }
-      const tail = point.depth * (1 - .06 - loud * .3);
-      const x = (d) => cx + Math.cos(point.angle) * d * cx;
-      const y = (d) => cy + Math.sin(point.angle) * d * cy * 1.6;
-      ctx.strokeStyle = point.depth > .7 && loud > .5 ? theme.text : theme.accent;
-      ctx.globalAlpha = Math.min(1, point.depth * 1.4) * (.3 + loud * .6);
-      ctx.lineWidth = .6 + point.depth * 1.6;
-      ctx.beginPath();
-      ctx.moveTo(x(tail), y(tail));
-      ctx.lineTo(x(point.depth), y(point.depth));
-      ctx.stroke();
-    }
-  }
-
   function pickVisualizer(id) {
     visualizer = id;
-    caps = new Array(BANDS).fill(0);
-    trail = null;
-    rings = [];
-    stars = [];
+    painter?.reset();
     try {
       window.localStorage.setItem(VISUALIZER_KEY, visualizer);
+    } catch (_error) { /* this visit only */ }
+    renderVisualizerButton();
+    if (!frame) frame = window.requestAnimationFrame(drawVisualizer);
+  }
+
+  // The looks' colours (5.6.2): the theme's, or one of the palettes.
+  function pickPalette(id) {
+    palette = shared()?.PALETTES?.[id] ? id : "theme";
+    try {
+      window.localStorage.setItem(PALETTE_KEY, palette);
     } catch (_error) { /* this visit only */ }
     renderVisualizerButton();
     if (!frame) frame = window.requestAnimationFrame(drawVisualizer);
@@ -1510,18 +1278,20 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
   function renderVisualizerButton() {
     const button = byId("music-viz");
     if (!button) return;
-    const look = VISUALIZERS.find((item) => item.id === visualizer);
+    const look = looks().find((item) => item.id === visualizer) || looks()[0];
     button.querySelector("span").textContent = look.label;
     button.title = `Visualizer: ${look.detail.toLowerCase()}`;
     button.dataset.on = String(visualizer !== "off");
     const list = byId("music-viz-list");
     if (!list) return;
     let group = null;
-    list.innerHTML = VISUALIZERS.map((item) => {
+    list.innerHTML = looks().map((item) => {
       const heading = item.group && item.group !== group ? `<h4>${item.group}</h4>` : "";
       group = item.group;
       return `${heading}<button type="button" role="menuitemradio" aria-checked="${item.id === visualizer}" data-viz="${item.id}"><b>${item.label}</b><small>${escapeHtml(item.detail)}</small></button>`;
-    }).join("");
+    }).join("") + `<h4>COLOURS</h4><div class="music-viz-colours">${[["theme", {label: "Theme", low: "var(--accent)", high: "var(--orange)"}], ...palettes()]
+      .map(([id, colour]) => `<button type="button" role="menuitemradio" aria-checked="${id === palette}" data-viz-palette="${id}" title="${escapeHtml(colour.label)}">
+        <i style="background:linear-gradient(90deg, ${colour.low}, ${colour.mid || colour.low}, ${colour.high})"></i><span>${escapeHtml(colour.label)}</span></button>`).join("")}</div>`;
   }
 
   function showPage(active) {
@@ -1607,6 +1377,8 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     playNow(item.dataset.upnext);
   });
   byId("music-viz-list")?.addEventListener("click", (event) => {
+    const colour = event.target.closest("[data-viz-palette]");
+    if (colour) return pickPalette(colour.dataset.vizPalette);
     const choice = event.target.closest("[data-viz]");
     if (choice) pickVisualizer(choice.dataset.viz);
   });

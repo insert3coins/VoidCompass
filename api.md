@@ -1379,7 +1379,7 @@ Every event looks like this:
 | `feed` | A line on the command deck's event feed: `at`, `tag`, `severity`, `message` |
 | `thought` | The Watcher thought something: `id`, `text`, `heading`, `mood`, `kind` |
 | `overlay` | An overlay was switched, moved or faded, or all were hidden or shown |
-| `voice` | The voice said something: `text`, and `from` (`watcher` or `api`) |
+| `voice` | The voice started or stopped: `state` (`started` with its `text`, then `finished`, `stopped` or `hushed`), and `from` (`watcher` or `api`) |
 | `music` | The music started, stopped or changed track: `playing`, `track_id`, `title`, `artist` |
 | `exploration` | Worked out by Void Compass from the journal, with `commander` and `system`. `kind` is `first_discovery` (`body`, `class`, `value` in credits, `mapped_value` once mapped, `first_footfall_available`), `bio_analysed` (`species`, `genus`, `variant`, `body`, `value`, `estimated_value` that Vista Genomics pays, `first_logged_bonus`) or `first_footfall` (`body`) |
 
@@ -1832,13 +1832,41 @@ print(survey["enabled"], survey["data"])
 
 ## The Watcher
 
-Read the Watcher's mind, give it a thought of your own, or poke it.
+Read the Watcher's mind, give it a thought of your own, poke it, answer its questions, and meet other commanders' Watchers.
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/v1/watcher` | Its nature, how often it talks, your bond, sessions and hours, the thought on screen, and its last 50 thoughts |
+| GET | `/api/v1/watcher` | Everything on its page (below): the thought on screen, its last 50 thoughts, its question, how it feels about you, its story, what it remembers of you |
 | POST | `/api/v1/watcher/thought` | Put a thought beside the orb: `{"text": "Hello from the API.", "heading": "From chat"}` |
 | POST | `/api/v1/watcher/poke` | Poke it, like the hotkey: it looks up and answers |
+| POST | `/api/v1/watcher/answer` | Answer the question it's asking: `{"answer": 1}` (1 to 3, as the answer hotkeys) or by its key, `{"answer": "less"}`. `409` when it isn't asking anything |
+| GET | `/api/v1/watcher/code` | Your Watcher's share code (`VCWATCH1…`), to paste for a friend |
+| POST | `/api/v1/watcher/meet` | Meet a friend's Watcher: `{"code": "VCWATCH1…"}`. `400` if it isn't a Watcher's code |
+| POST | `/api/v1/watcher/book` | Save the whole relationship as a book (an HTML page) in the Wrapped folder; answers `{"saved": true, "folder": "…"}` |
+
+**What `GET /api/v1/watcher` holds** (5.6.1)
+
+- `current` (the thought on screen: `text`, `heading`, `mood`, `kind`) and `log` (its last 50 thoughts, newest first)
+- `nature`, `frequency` (how often it talks), `enabled`, `eye`, `hotkey` (the poke key)
+- `bond` (`name`, `level`, `progress` toward the `next`), `sessions`, `hours`, `thoughts`, `deaths`, `postcards`, `records`, `favourites` (what it talks about most)
+- `deeper`:
+  - `question`: what it's asking right now, or `null`: `id`, `text` and `answers` (each `key` and `label`, in hotkey order); `hotkeys` are the answer keys bound
+  - `feeling`: `trust` and `mood` in words, with `trust_value` (0 to 100) and `mood_value` (-1 to 1)
+  - `road`: Book Four's road, `"shut"`, `"open"` or `null` before you've chosen
+  - `pilgrimage`: a place it has asked you to take it (`kind`, `words`, `how`, `accepted`, `reached`), or `null`
+  - `memories` (what it keeps of you, `faded` where the shutter took them), `answers` (what you told it), `dreams`, `met` (other Watchers), `marks` (what its story did to the eye)
+- `lore`: its long story: `chapters` (each `numeral`, `title`, `book`, `begun`, `complete` and the passages `told` so far), `told` of `total`, `next` (what the next passage waits for), `echoes` found, and `books` finished
+
+**Example: answer from a Stream Deck** (three buttons, one per answer)
+
+```http
+POST /api/v1/watcher/answer
+{"answer": 2}
+```
+
+```json
+{"answered": true, "question": "talk_less"}
+```
 
 ```http
 POST /api/v1/watcher/thought
@@ -1857,11 +1885,26 @@ The Watcher's voice can say anything you give it.
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/v1/voice` | `enabled` (switched on), `installed` (downloaded), `ready` (both), `speaking` |
+| GET | `/api/v1/voice` | `enabled` (switched on), `installed` (downloaded), `ready` (both), `speaking`, `hushed`, and `hushed_for` (seconds left; `null` until lifted) |
 | POST | `/api/v1/voice/say` | Say this: `{"text": "Commander, your carrier departs in five minutes."}` |
-| POST | `/api/v1/voice/stop` | Stop talking at once |
+| POST | `/api/v1/voice/stop` | Stop talking at once (the next thought may still be said) |
+| POST | `/api/v1/voice/hush` | Stop at once and **stay quiet**: `{"seconds": 30}` for a while, `{}` until lifted, `{"seconds": 0}` to lift it |
 
 The voice must be switched on and downloaded on **The Watcher › VOICE** first, otherwise `409`. Something new to say replaces anything not yet said. Up to 400 characters at a time; the orb's pupil moves with the words.
+
+**Sharing the air with your own voice** (5.6.1)
+
+If you have a voice of your own (an assistant, a TTS bot, a co-pilot app), it can take turns with the Watcher:
+
+- **Hush it while you talk.** `POST /voice/hush` with `{"seconds": 30}` (or `{}`) before your voice speaks, and `{"seconds": 0}` after. While hushed, its thoughts still show beside the orb; they just aren't said, and `/voice/say` answers `409`. A hush is forgotten when Void Compass restarts.
+- **Wait for it to finish.** The event stream's `voice` events say when it starts and stops: `{"state": "started", "text": "…", "from": "watcher"}`, then `{"state": "finished"}` when the line ends, `"stopped"` when `/voice/stop` cut it off, or `"hushed"` when a hush did. `from` is `watcher` for its own thoughts, `api` for `/voice/say`.
+
+```powershell
+# Before your own voice speaks: the Watcher stops and keeps quiet.
+Invoke-RestMethod -Method Post http://127.0.0.1:7380/api/v1/voice/hush -ContentType "application/json" -Body '{"seconds": 60}'
+# ... your voice speaks ...
+Invoke-RestMethod -Method Post http://127.0.0.1:7380/api/v1/voice/hush -ContentType "application/json" -Body '{"seconds": 0}'
+```
 
 **Example: talking reminders** (PowerShell)
 
