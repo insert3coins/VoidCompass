@@ -204,6 +204,71 @@ class PostcardAlbum:
             self._thumbs = {key: value for key, value in self._thumbs.items() if key[0] != card_id}
         return True
 
+    def photo(self, card_id):
+        """The photo kept beside an editable postcard (its .cards JPEG), for
+        the editor to draw with (5.6.3)."""
+        path = self.path(card_id)
+        if path is None:
+            return None
+        stem = os.path.splitext(os.path.basename(path))[0]
+        try:
+            with open(os.path.join(os.path.dirname(path), ".cards", stem + ".jpg"), "rb") as handle:
+                return handle.read()
+        except OSError:
+            return None
+
+    def save_design(self, card_id, png, design, as_new=False):
+        """The editor's drawing saved (5.6.3): over the postcard, or beside it
+        as a new one with its own copy of the card and photo. The design is
+        kept in the card's settings so it opens again as you left it. The new
+        or same id, or None."""
+        path = self.path(card_id)
+        if path is None or not png.startswith(b"\x89PNG"):
+            return None
+        folder, name = os.path.split(path)
+        stem = os.path.splitext(name)[0]
+        cards = os.path.join(folder, ".cards")
+        try:
+            with open(os.path.join(cards, stem + ".json"), encoding="utf-8") as handle:
+                kept = json.load(handle)
+        except (OSError, ValueError):
+            return None
+        if not isinstance(kept, dict):
+            return None
+        target = path
+        if as_new:
+            match = _NAME.match(name)
+            title = match.group("title") if match else stem
+            import time
+            base = os.path.join(folder, f"Postcard - {title} - {time.strftime('%Y-%m-%d %H-%M-%S')}")
+            target, counter = base + ".png", 1
+            while os.path.exists(target):
+                target = f"{base} ({counter}).png"
+                counter += 1
+        new_stem = os.path.splitext(os.path.basename(target))[0]
+        settings = dict(kept.get("settings") or {})
+        settings["design"] = design
+        kept["settings"] = settings
+        try:
+            os.makedirs(cards, exist_ok=True)
+            partial = target + ".part"
+            with open(partial, "wb") as handle:
+                handle.write(png)
+            os.replace(partial, target)
+            if as_new:
+                old_photo = os.path.join(cards, stem + ".jpg")
+                if os.path.isfile(old_photo):
+                    with open(old_photo, "rb") as source, open(os.path.join(cards, new_stem + ".jpg"), "wb") as out:
+                        out.write(source.read())
+            with open(os.path.join(cards, new_stem + ".json"), "w", encoding="utf-8") as handle:
+                json.dump(kept, handle, ensure_ascii=False)
+        except OSError:
+            return None
+        new_id = postcard_id(os.path.basename(target))
+        with self._lock:
+            self._thumbs = {key: value for key, value in self._thumbs.items() if key[0] not in {card_id, new_id}}
+        return new_id
+
     def show_in_folder(self, card_id):
         path = self.path(card_id)
         if path is None or os.name != "nt":

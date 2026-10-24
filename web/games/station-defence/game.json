@@ -1,0 +1,19 @@
+{
+  "title": "Station Defence",
+  "tagline": "Thargoid caustic missiles rain on a surface settlement: shoot them down with point defence before they land.",
+  "description": "Three point-defence turrets with ten shots each a wave. A shot bursts where you click, and anything that flies into the burst goes with it, so lead them and catch several at once. Missiles split on the way down, every wave is faster, and Thargoid Scouts cross the sky dropping more. Lose a hab and you can win it back: every 10,000 points one is rebuilt.",
+  "genre": "Defence",
+  "players": "1 player",
+  "stage": "wave",
+  "accent": "#9dff6a",
+  "entry": "index.html",
+  "controls": [
+    ["MOUSE", "Aim"],
+    ["CLICK / SPACE", "Fire the nearest turret"],
+    ["1 2 3 / A S D", "Fire that turret"],
+    ["ARROWS", "Move the crosshair"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

@@ -871,6 +871,8 @@ class _OverlayHost:
             path = "/trade_route/index.html"
         elif template == "expedition":
             path = "/expedition/index.html"
+        elif template == "hatchling":
+            path = "/hatchling/index.html"
         elif template == "rig_tracker":
             path = "/rig_tracker/index.html"
         elif template == "galaxy_minimap":

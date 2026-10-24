@@ -1,0 +1,19 @@
+{
+  "title": "Hatchling",
+  "tagline": "A pocket pet for your cockpit: a Thargoid larva, a Remlok bot or an exobiology sample, raised by how you really play.",
+  "description": "It lives in real time, Void Compass open or not. Feed it from a larder you stock by buying food at real markets, play with it, vent the hold and turn the lights out. Exploring keeps it curious; combat scares it; a rebuy upsets it badly. It grows from egg to adult over real days, and how you raised it picks its adult form. Neglected, it hibernates: medicine brings it back, if you're in time. It can sit on your screen as an overlay too (Overlay Studio).",
+  "genre": "Virtual pet",
+  "players": "1 player",
+  "scores": false,
+  "input_modes": false,
+  "accent": "#4ee5b0",
+  "entry": "index.html",
+  "controls": [
+    ["CLICK / 1-5", "Feed, play, vent, medicine, lights"],
+    ["TYPE", "Name your egg"],
+    ["← →", "Choose an egg"],
+    ["ESC", "Back"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

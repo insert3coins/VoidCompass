@@ -600,6 +600,10 @@ class DashboardExpeditionMixin:
             if created:
                 self._expedition_locate(created["id"])
             return bool(created)
+        if operation == "rename":
+            description = payload.get("description")
+            return manager.rename(expedition_id, _text(payload.get("name"), 100),
+                                  description=None if description is None else _text(description, 1000))
         if operation == "add_leg":
             system = _text(payload.get("system"), 120)
             kind = payload.get("kind") if payload.get("kind") in expedition_plan.LEG_KINDS else "stop"

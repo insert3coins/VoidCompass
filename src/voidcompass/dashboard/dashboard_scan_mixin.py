@@ -583,6 +583,9 @@ class DashboardScanMixin:
         on_position = getattr(self, "_expedition_on_position", None)
         if callable(on_position):
             on_position()
+        tick = getattr(self, "_hatchling_tick", None)
+        if callable(tick):
+            tick()
         flags = data.get("Flags")
         in_supercruise = False
         if isinstance(flags, int):

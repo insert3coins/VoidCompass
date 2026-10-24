@@ -1,0 +1,19 @@
+{
+  "title": "Canyon Run",
+  "tagline": "Fly a side-scrolling canyon like the racers do: low, fast, and always running out of fuel.",
+  "description": "The canyon scrolls and the fuel falls the whole time: shoot or bomb the depots on the floor to fill up. Turrets fire up at you, the roof comes down in the overhangs and the walls close in through the narrows. Every sector ends at a checkpoint against the clock, and every moment you fly low scores. Four sectors, then round again, faster.",
+  "genre": "Scrolling shooter",
+  "players": "1 player",
+  "stage": "sector",
+  "accent": "#ff8a3d",
+  "entry": "index.html",
+  "controls": [
+    ["ARROWS / WASD", "Fly"],
+    ["MOUSE", "Fly to the pointer"],
+    ["SPACE / CLICK", "Fire"],
+    ["B / RIGHT-CLICK", "Bomb"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

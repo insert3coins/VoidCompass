@@ -1,19 +1,52 @@
 # VoidCompass // UPDATE LOG
 
-## v5.6.2 // Synthwave Supercruise
+## v5.6.3 // Insert Coin, Commander
 **Release Date:** 24 OCT 3312 *(Galactic Standard Time)*
 
-* **The Neon skin is back, rebuilt.** The music overlay's Neon look, rebuilt and better than ever: a title bar with a LIVE badge, the track with its marquee, an AUDIO SIGNAL panel naming the look, a gradient timeline and a status line.
-  * **Fifteen colour variants**: Neon, Amber Term, Blue Phosphor, C64, Crimson, Deep Space, Gold Rush, Green Phosphor, Ice, Miami, Steel, Sunset, Toxic, Tron Grid and Vaporwave, or your own theme's colours. Choose in Overlay Studio › Music Player › Neon colours.
-* **Every visualizer, everywhere.** The Music page's looks now play in the music overlay too, and six new ones join them: **VU meter, Radial, Particles, Warp tunnel, Spiral and Sonar**. Seventeen looks in all, on the player bar and in Overlay Studio, chosen separately.
-  * The overlay's Wave and VU meter read the real waveform now, not just the bands.
-  * **Colours on the player bar:** the picker's new COLOURS row gives the deck's visualizer your theme's colours or any of the fifteen palettes.
-* **Album art that fits.** Music downloaded with yt-dlp carries a video thumbnail as its cover, 16:9 or 4:3 with the album's square art inside black bars, so it sat small in its box. Covers are now trimmed of their bars and squared, everywhere: the Music page, its lists and the overlay. Square covers (spotdl's) are left as they are. Every track's art is made again once, in the background, the first time 5.6.2 starts.
-* **The Watcher's API, complete.** Answer its questions (`POST /watcher/answer`, by number or key: a Stream Deck button per answer), get your Watcher's share code (`GET /watcher/code`), meet a friend's (`POST /watcher/meet`), and save its book (`POST /watcher/book`). `GET /watcher` is documented in full: its question, trust and mood, its road, its story, memories, dreams and the Watchers it has met.
-* **Sharing the air with your own voice.** `POST /voice/hush` keeps the Watcher quiet for a while (or until lifted), its thoughts still showing; `voice` events now say when it starts, finishes, is stopped or hushed, so another voice app can take turns instead of talking over it.
+* **A Games page, with fourteen cabinets.** Something to play while the carrier jumps or the FSD cools: COCKPIT › Games. Each game has its own card (A to Z); pick one and it plays right there in the deck, with RESTART, FULL SCREEN and your best runs beside it. Leave the page and the game pauses where it was.
+  * Every card picture is a screenshot of the game itself, mid-run.
+  * Your best ten runs of each game are kept per commander.
+  * Games run sealed off from everything else: they can't reach the internet or your files, only tell the deck their score.
+  * Keyboard or mouse in every one (or pick keys only or mouse only per game), 8-bit sound made on the fly (M turns it off), an optional CRT screen (C, remembered per game), and the same speed on any monitor.
+* **Hatchling: a pocket pet for your cockpit.** Hatch a Thargoid larva, a Remlok companion bot or an exobiology sample (a bacterium, a tubus or a fungoida) and raise it.
+  * It lives in real time, Void Compass open or not: hunger, mood, a clean hold, health and sleep, each a bar. Feed it, play with it (Catch the Limpet, or Where Did the Thargon Go?), vent the hold, give it medicine and turn the lights out.
+  * **How you really play feeds it.** Food you buy at a market stocks its larder (buy Coffee and it gets coffee); exploring keeps it curious (new stars, first discoveries, codex entries); docking somewhere new is a treat; long supercruise bores it; shields down and hull damage scare it, and a rebuy upsets it badly. A larva glows near Thargoid signals and hates Guardian things. It sleeps through a carrier jump if the lights are off.
+  * It grows from egg to adult over real days, and how you raised it picks its adult form; rare forms make a collection.
+  * Neglected, it hibernates. Medicine brings it back, if you're in time: after a week it's gone, remembered, and a new egg waits.
+  * One per commander, and an overlay (Overlay Studio › Hatchling) so you can see it while you fly.
+  * It lives in a glass pod under a light the colour of its mood: its eyes follow your mouse, it hops and fidgets, and you can click to give it a pat. Feeding, venting, medicine, the lights and its hatching each have their own moment.
+* **Thargoid Swarm.** An arcade shooter in a Cobra: the swarm takes formation and peels off to dive, and every third wave a Thargoid Interceptor arrives; break its hearts one by one. Weapon upgrades, shield cells and rebuys from the wreckage, and the combat rank your run earned.
+* **Twelve more cabinets, each an 80s classic redone in Elite's world:**
+  * **Canyon Run**: a side-scrolling canyon, low and fast and always running out of fuel. Shoot or bomb the depots, dodge turrets and overhangs, beat the clock at every checkpoint.
+  * **Docking Computer**: the original's famous moment in green wireframe. Match the station's spin and fly through the slot; scrape the face and you lose shields. Coriolis, then Dodecahedron and Ocellus, with traffic leaving the slot and the Blue Danube while you're lined up.
+  * **No Fire Zone**: cross a busy station approach to its five pads. Don't bump anyone, don't speed, ride the cargo canisters across the thruster wake, and don't touch the guns.
+  * **Pod Rescue**: a side-scrolling patrol over a settlement. Thargoid Scouts snatch escape pods; shoot them, catch the falling pods and set them down. A pod carried off becomes a hunter; shock mines clear the screen.
+  * **Rock Rats**: mining in a vector asteroid field. Break rocks, send limpets for the fragments, bank a full hold; the cores are worth the most, and pirates want what you've got.
+  * **Scarab Patrol**: an SRV across a planet's surface. Hop craters, rocks and mines on the thrusters and shoot the skimmer drones, at the gravity of the world you're really at: floaty hops on light worlds, short hard ones on heavy ones.
+  * **Settlement Run**: on foot in an Odyssey settlement. Download every data port while four security guards hunt the corridors, each its own way; an Energy Link overloads their suits and turns the hunt round.
+  * **Shield Breaker**: bounce a shot off your ship to break a capital ship's shield panels, then its hull: a Farragut, a Majestic, a Thargoid Titan.
+  * **Station Defence**: Thargoid caustic missiles rain on a settlement; three point-defence turrets burst where you click. Missiles split, Scouts drop more, and lost habs come back with points.
+  * **Supercruise Runner**: a synthwave race to the station. Dodge stars, planets and traffic, and hit the blue zone for the last seven seconds or overshoot.
+  * **Touchdown**: land on a pad before the fuel runs out, at the gravity of the world you're really at (from your journal), with the high-gravity warning in red over 2 g.
+  * **Trumble Trouble**: Elite's own secret. Furry Trumbles breed in your hold; catch them, vent them, or sell them when you dock.
+
+* **Postcards, remade.** A real editor, and an album worth opening.
+  * **The editor** opens full screen with your postcard big in the middle, drawn live: every change shows at once, and what you see is exactly what's saved.
+    * Drag anything: the place name, the lettering over it, your note, the signature, the postmark, the journal's facts. Handles size and turn them; the wheel sizes them too, and they snap to the middle.
+    * Pan and zoom the photo inside its frame, give it a filter (vivid, sepia, black & white, cool, warm, dusk, neon, faded film) and set its brightness, contrast and colour.
+    * Change the look (Polaroid, Airmail, Holo, Vintage, or one of your own themes), its paper, ink and lettering colours, its tilt, and what's behind it: nothing, a colour, a desk, deep space or a hangar floor.
+    * Add your own words in six styles (heading, handwritten, caption, neon sign, typewriter, script), words straight from your journal, a postmark, and eighteen stamps and stickers: wings, First Discovered, an explorer badge, a postage stamp, a Thargoid, a Guardian glyph, a ringed planet, o7 and more.
+    * Undo and redo, revert, a fresh layout, a tilted preview, layers you can hide and reorder. Ctrl+Z, Ctrl+Y, Ctrl+S, Ctrl+D, Delete and the arrows all work.
+    * Change the picture to any of your screenshots, or a file. Save over the postcard or as a new one; it opens again just as you left it.
+  * **Any screenshot can be a postcard:** MAKE A POSTCARD on the Screenshots page makes one and opens it in the editor.
+  * **The album:** today's card at the top (on this day, or a favourite), a timeline of months, postcards grouped by month, day, region or system, and search that finds systems, regions and notes too.
+  * **A slideshow:** your postcards dealt one by one onto a desk, full screen, each at its own angle, with their notes. Shuffle, speed and desk to choose.
+* **The Orb is back.** The music overlay's round skin returns as it was: the cover in a ring that fills as the track plays. Now every visualizer works on it, drawn round the ring: Scanner sweeps it, Sonar pings out from the cover, Witchspace streams away from it, the VU meter wraps round it in two arcs, and so on. Overlay Studio › Music Player › Skin › Orb.
+* **Rename an expedition.** EDIT NAME on an expedition's page changes its name and what it's for, any time after it's started.
 
 ## Earlier releases
 
+* **v5.6.2** (24 OCT 3312) — Synthwave Supercruise: the Neon music overlay skin rebuilt with fifteen colour variants, every visualizer in the overlay too (six new looks, seventeen in all, and colours on the player bar), yt-dlp album art trimmed and squared, the Watcher's API completed (answer, share code, meet, book), and `POST /voice/hush` plus voice events so another voice app can take turns.
 * **v5.6.1** (24 OCT 3312) — Expeditions: Mission Control rebuilt as the Expeditions page (route legs plotted on Spansh, data at risk, supplies, a streak and Ironman, a day-by-day log, its own Void Wrapped and an Atlas replay), places along the way (surface stops with a compass, finds to keep, pictures, EDAstro's points of interest near the route, files in and out), real expeditions to start from (Distant Worlds 1, 2 and 3, A Grand Day Out), an Expedition overlay and Nav HUD page; Explore & Survey made over; the Watcher deeper (questions, Book Four's two roads, memories, dreams, other Watchers, a new page); and the Nav HUD's hold lists and warnings over any page.
 * **v5.5.18** (23 OCT 3312) — Rhino Map, Refocused: the Rhino Map as its own overlay (it shows when you deploy the Rhino) with its own zoom and a range hotkey, a Navigation HUD that keeps what you were doing (survey until you jump, mining until supercruise, combat a little after), the survey list biology first, then value, and page modes as icons.
 * **v5.5.17** (23 OCT 3312) — One Overlay to Rule Them All: the Navigation HUD's pages (one overlay that follows what you're doing), a HUD that sizes itself, new scenes by place (docked, on foot, the Rhino at work and more), a sharper combat page; the Rhino map on the Galaxy Minimap with rig spacing rings, lost-rig warnings and what a planet's ground tends to hold; the Music page and music overlay made over, with twelve visualizer looks; and Explore & Survey that stays still while you scroll.

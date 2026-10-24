@@ -16,7 +16,7 @@ BRIDGE_PAGES = (
     "powerplay", "carrier", "recon",
     "achievements", "ledger", "settings", "overlay-studio", "about", "music",
     "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation", "tools",
-    "wrapped",
+    "wrapped", "games",
 )
 WORKSPACE_PAGES = (
     "planet-materials", "explore", "profile", "chronicle",

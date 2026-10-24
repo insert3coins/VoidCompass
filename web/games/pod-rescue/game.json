@@ -1,0 +1,19 @@
+{
+  "title": "Pod Rescue",
+  "tagline": "Patrol a settlement's sky: shoot the Thargoid Scouts snatching escape pods, and catch the pods before they fall.",
+  "description": "A side-scrolling patrol round a whole settlement, with a scanner showing all of it. Thargoid Scouts come down and lift escape pods off the ground. Shoot one carrying a pod and the pod falls: catch it and set it down for a bonus, or it breaks if it falls too far. A pod carried off the top is lost, and its Scout comes back as a hunter. Lose every pod and the settlement is overrun. Shock mines clear the screen when it gets bad.",
+  "genre": "Scrolling shooter",
+  "players": "1 player",
+  "stage": "wave",
+  "accent": "#b48cff",
+  "entry": "index.html",
+  "controls": [
+    ["ARROWS / WASD", "Fly (left or right turns you)"],
+    ["MOUSE", "Fly towards the pointer"],
+    ["SPACE / CLICK", "Fire"],
+    ["B / RIGHT-CLICK", "Shock mine"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

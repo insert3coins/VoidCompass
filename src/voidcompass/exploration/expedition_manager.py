@@ -717,6 +717,18 @@ class ExpeditionManager:
             return len(legs)
         return self._change(expedition_id, change)
 
+    def rename(self, expedition_id, name, description=None):
+        """A new name (and what it's for) for an expedition that already exists."""
+        name = str(name or "").strip()[:100]
+        if not name:
+            return False
+
+        def change(expedition):
+            expedition["name"] = name
+            if description is not None:
+                expedition["description"] = str(description or "").strip()[:1000]
+        return self._change(expedition_id, change)
+
     def set_ironman(self, expedition_id, on):
         return self._change(expedition_id, lambda expedition: expedition.__setitem__("ironman", bool(on)))
 

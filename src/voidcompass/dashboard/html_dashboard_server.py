@@ -22,6 +22,8 @@ from voidcompass.core.static_assets import asset_type, read_asset
 # Engineering build exports can carry a complete outfitting document.  Keep a
 # firm loopback limit while allowing normal EDEC/EDSY/SLEF/Coriolis payloads.
 MAX_COMMAND_BYTES = 2 * 1024 * 1024
+# A postcard drawn in the editor (5.6.3), as a PNG in base64.
+MAX_POSTCARD_BYTES = 48 * 1024 * 1024
 # Music streams in the slices the player asks for; a file is never read whole.
 MEDIA_CHUNK_BYTES = 64 * 1024
 _MEDIA_ID = re.compile(r"[0-9a-f]{16}")
@@ -54,9 +56,13 @@ class HtmlDashboardServer:
     """Serve bundled dashboard assets and one revisioned application state."""
 
     def __init__(self, static_root, *, image_root=None, command_callback=None,
-                 host_state=None, on_asset_error=None):
+                 host_state=None, on_asset_error=None, games_root=None, gamecard_root=None):
         self.static_root = Path(static_root).resolve()
         self.image_root = Path(image_root).resolve() if image_root else None
+        # The Games page (5.6.3): each game's own files under /games/<id>/,
+        # played framed in the deck, and their card pictures under /gamecards/.
+        self.games_root = Path(games_root).resolve() if games_root else self.static_root.parent / "games"
+        self.gamecard_root = Path(gamecard_root).resolve() if gamecard_root else None
         self.command_callback = command_callback
         self.on_asset_error = on_asset_error
         self.token = secrets.token_urlsafe(32)
@@ -233,10 +239,27 @@ class HtmlDashboardServer:
             "frame-ancestors 'none'; base-uri 'none'",
         )
 
+    def _game_headers(self, handler):
+        # A game is framed by the deck and nothing else, and reaches nothing
+        # beyond its own folder: it talks to the deck only by postMessage.
+        handler.send_header("X-Content-Type-Options", "nosniff")
+        handler.send_header("Referrer-Policy", "no-referrer")
+        handler.send_header(
+            "Content-Security-Policy",
+            f"default-src 'self' {self.origin}; script-src 'self' {self.origin}; "
+            f"style-src 'self' {self.origin} 'unsafe-inline'; img-src 'self' {self.origin} data: blob:; "
+            f"media-src 'self' {self.origin} data: blob:; font-src 'self' {self.origin}; "
+            "connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; "
+            f"frame-ancestors {self.origin}; base-uri 'none'",
+        )
+
     def _send_bytes(self, handler, payload, content_type, status=200,
-                    cache="no-store"):
+                    cache="no-store", game=False):
         handler.send_response(status)
-        self._security_headers(handler)
+        if game:
+            self._game_headers(handler)
+        else:
+            self._security_headers(handler)
         handler.send_header("Cache-Control", cache)
         handler.send_header("Content-Type", content_type)
         handler.send_header("Content-Length", str(len(payload)))
@@ -255,6 +278,17 @@ class HtmlDashboardServer:
             handler, encoded, "application/json; charset=utf-8", status,
         )
 
+    @staticmethod
+    def _inside(root, relative):
+        if root is None or not relative or any(part.startswith(".") for part in relative.split("/")):
+            return None
+        candidate = (root / relative).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            return None
+        return candidate
+
     def _static_path(self, request_path):
         # Large shared artwork lives outside the web bundle under assets/images so
         # desktop views and packaged builds use one authoritative copy.
@@ -271,10 +305,11 @@ class HtmlDashboardServer:
         # Shared browser assets live beside the dashboard folder so every
         # overlay can use the same branded cursor without duplicating it, and
         # the boot screen wakes the same watcher orb the heartbeat overlay draws.
-        # The music visualizers (5.6.2) are shared with the music overlay.
+        # The music visualizers (5.6.2) are shared with the music overlay, and
+        # the Hatchling's looks (5.6.3) with its game page.
         if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png",
                             "/assets/heartbeat-orb.js", "/assets/heartbeat-life.js",
-                            "/assets/music-visualizers.js"}:
+                            "/assets/music-visualizers.js", "/assets/hatchling-art.js"}:
             candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()
             try:
                 candidate.relative_to(self.static_root.parent)
@@ -341,6 +376,10 @@ class HtmlDashboardServer:
             self._serve_music(handler, path)
             return
 
+        if path.startswith("/games/") or path.startswith("/gamecards/"):
+            self._serve_game_file(handler, path)
+            return
+
         candidate = self._static_path(path)
         if candidate is None or not candidate.is_file():
             self._report_asset_error(path, "not found")
@@ -359,6 +398,24 @@ class HtmlDashboardServer:
             content_type,
             cache="no-store" if candidate.name == "index.html" else "no-cache",
         )
+
+    def _serve_game_file(self, handler, path):
+        game = path.startswith("/games/")
+        if game:
+            candidate = self._inside(self.games_root, path.removeprefix("/games/"))
+        else:
+            candidate = self._inside(self.gamecard_root, path.removeprefix("/gamecards/"))
+            if candidate is not None and candidate.suffix.casefold() not in {".png", ".jpg", ".jpeg", ".webp"}:
+                candidate = None
+        if candidate is None or not candidate.is_file():
+            self._send_json(handler, {"error": "not found"}, 404)
+            return
+        try:
+            payload = read_asset(candidate)
+        except OSError:
+            self._send_json(handler, {"error": "asset unavailable"}, 404)
+            return
+        self._send_bytes(handler, payload, asset_type(candidate), cache="no-cache", game=game)
 
     def _serve_data(self, handler, parsed):
         name = parsed.path.removeprefix("/api/data/").strip("/")
@@ -426,10 +483,41 @@ class HtmlDashboardServer:
                 data, content_type = album.full(identifier), "image/png"
             elif kind == "postcard-thumb":
                 data, content_type = album.thumb(identifier), "image/jpeg"
+            elif kind == "postcard-photo":
+                data, content_type = album.photo(identifier), "image/jpeg"
         if not data:
             self._send_json(handler, {"error": "not found"}, 404)
             return
         self._send_bytes(handler, data, content_type, cache="no-cache")
+
+    def _save_postcard(self, handler):
+        """The editor's drawing (5.6.3): {id, mode, design, png (base64)}."""
+        origin = str(handler.headers.get("Origin") or "")
+        if origin and origin != f"http://127.0.0.1:{self.port}":
+            _body_read(handler)
+            self._send_json(handler, {"error": "invalid origin"}, 403)
+            return
+        try:
+            length = int(handler.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = 0
+        if length <= 0 or length > MAX_POSTCARD_BYTES:
+            _body_read(handler)
+            self._send_json(handler, {"ok": False, "error": "too big"}, 413)
+            return
+        try:
+            payload = json.loads(handler.rfile.read(length).decode("utf-8"))
+            _body_read(handler)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._send_json(handler, {"ok": False, "error": "invalid json"}, 400)
+            return
+        saver = getattr(self, "postcard_saver", None)
+        try:
+            answer = saver(payload) if callable(saver) and isinstance(payload, dict) else None
+        except Exception as exc:
+            answer = {"ok": False, "error": str(exc)[:120]}
+        answer = answer or {"ok": False, "error": "not saved"}
+        self._send_json(handler, answer, 200 if answer.get("ok") else 400)
 
     def _serve_constellation(self, handler, path):
         album = self.constellations
@@ -540,6 +628,9 @@ class HtmlDashboardServer:
 
     def _handle_post(self, handler):
         parsed = urlparse(handler.path)
+        if parsed.path == "/api/postcard-save" and self._authorised(handler, parsed):
+            self._save_postcard(handler)
+            return
         if parsed.path != "/api/command" or not self._authorised(handler, parsed):
             self._send_json(handler, {"error": "unauthorised"}, 403)
             return

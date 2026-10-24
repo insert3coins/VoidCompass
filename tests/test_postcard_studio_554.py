@@ -127,7 +127,9 @@ class TextSizeTests(unittest.TestCase):
             self.assertIn(f"var(--pc-{part}, 1)", css)
         page = (WEB / "dashboard" / "postcards.js").read_text(encoding="utf-8")
         self.assertIn('data-postcard-setting="postcard_size_${part}"', page)
-        self.assertIn('name="size_${part}"', page)
+        # The editor (5.6.3) starts from the same three sizes.
+        art = (WEB / "dashboard" / "postcard-art.js").read_text(encoding="utf-8")
+        self.assertIn("(sizes.lettering || 100) / 100", art)
 
 
 class StudioPreviewTests(unittest.TestCase):
@@ -212,7 +214,7 @@ class PageTests(unittest.TestCase):
     def test_album_studio_and_keeping(self):
         page = (WEB / "dashboard" / "postcards.js").read_text(encoding="utf-8")
         for marker in ('[["album", "ALBUM"], ["studio", "STUDIO"], ["keeping", "KEEPING"]]', "data-pc-restore-all",
-                       '"edit_draft"', 'send("draft", {theme: themeParams()})', "choose_picture_file", "data-pc-step",
+                       'send("edit", {id})', 'send("draft", {theme: themeParams()})', "data-pc-step",
                        "function monthOf", '"postcard_postmark"'):
             self.assertIn(marker, page)
         host = (ROOT / "src" / "voidcompass" / "dashboard" / "html_dashboard_host.py").read_text(encoding="utf-8")

@@ -1,13 +1,18 @@
-// The Postcards page (5.5.3.7, rebuilt 5.5.4): the album, the studio where
-// postcards are designed with a live preview, and keeping them. Pictures come
-// from the deck's own server by id (/media/postcard/<id>), never by path.
-// A star keeps one as a favourite (favourites.js).
+// The Postcards page (5.5.3.7, rebuilt 5.5.4, again 5.6.3): the album, the
+// studio where the look for new postcards is designed, and keeping them.
+// Pictures come from the deck's own server by id (/media/postcard/<id>),
+// never by path. A star keeps one as a favourite (favourites.js). EDIT opens
+// the editor (postcard-editor.js), which draws the card in the page and
+// saves exactly what it shows; the slideshow is postcard-show.js.
 
 import {favouritesFilter, showFavouritesFilter, showViewerStar, starButton, toggleFavourite} from "./favourites.js";
+import {editorOpen, openEditor} from "./postcard-editor.js";
+import {showOpen, startShow} from "./postcard-show.js";
 
 const TABS = [["album", "ALBUM"], ["studio", "STUDIO"], ["keeping", "KEEPING"]];
 const FILTERS = [["all", "ALL"], ["editable", "EDITABLE"], ["older", "OLDER"]];
 const SORTS = [["newest", "Newest first"], ["oldest", "Oldest first"], ["az", "Place A–Z"]];
+const GROUPS = [["month", "By month"], ["day", "By day"], ["region", "By region"], ["system", "By system"], ["none", "All together"]];
 const BASE_NAMES = {polaroid: "Polaroid", airmail: "Airmail", holo: "Holo", vintage: "Vintage"};
 // What each look's paper, ink and lettering look like, for its swatch.
 const BASE_SWATCH = {
@@ -23,12 +28,16 @@ const TEXT_SIZES = [85, 100, 115, 130, 150];
 const sizeOptions = (chosen) => TEXT_SIZES.map((size) => `<option value="${size}"${Number(chosen || 100) === size ? " selected" : ""}>${size}%</option>`).join("");
 const MONTHS = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
 
-const view = {tab: "album", filter: "all", favourites: false, find: "", sort: "newest"};
-try { view.tab = sessionStorage.getItem("vc-postcards-tab") || "album"; } catch { /* the album, then */ }
+const view = {tab: "album", filter: "all", favourites: false, find: "", sort: "newest", group: "month", month: ""};
+try {
+  view.tab = sessionStorage.getItem("vc-postcards-tab") || "album";
+  view.group = localStorage.getItem("voidcompass.postcards.group") || "month";
+} catch { /* the album, by month, then */ }
 let rows = [];
 let data = {};
 let shown = null;
 let editorWanted = "";
+let openedNext = "";
 let themeBackground = "";
 let lastAlbumKey = "";
 let lastStudioKey = "";
@@ -78,8 +87,6 @@ function lift(root, id, onClick, onLeave) {
   if (!viewer) return;
   document.body.append(viewer);
   viewer.addEventListener("click", onClick);
-  viewer.addEventListener("input", (event) => onEditorInput(event));
-  viewer.addEventListener("change", (event) => onEditorInput(event));
   document.addEventListener("click", (event) => {
     if (!viewer.hidden && event.target.closest?.(".nav-item, [data-page]") && !viewer.contains(event.target)) onLeave();
   }, true);
@@ -103,8 +110,12 @@ function shell(root) {
           `<button type="button" data-pc-filter="${id}">${label}</button>`).join("")}</div>
         ${favouritesFilter("album-favs")}
         <select id="pc-sort" aria-label="Order">${SORTS.map(([id, label]) => `<option value="${id}">${label}</option>`).join("")}</select>
+        <select id="pc-group" aria-label="Group">${GROUPS.map(([id, label]) => `<option value="${id}"${id === view.group ? " selected" : ""}>${label}</option>`).join("")}</select>
+        <button type="button" class="primary" data-pc-show>▶ SLIDESHOW</button>
         <button type="button" data-album="open_folder">OPEN FOLDER</button>
       </div>
+      <div class="pc-hero" id="pc-hero" hidden></div>
+      <div class="pc-timeline" id="pc-timeline" hidden></div>
       <div class="pc-restore" id="pc-restore" hidden></div>
       <div class="pc-album" id="pc-album"></div>
     </section>
@@ -125,7 +136,7 @@ function shell(root) {
     <div class="pc-viewer" id="pc-viewer" hidden role="dialog" aria-modal="true" aria-label="Postcard">
       <div class="pc-stage">
         <button type="button" class="pc-step" data-pc-step="-1" aria-label="Previous postcard">‹</button>
-        <figure><img id="pc-full" alt=""><span class="pc-stage-note" id="pc-stage-note" hidden>PREVIEW · NOT SAVED YET</span></figure>
+        <figure><img id="pc-full" alt=""></figure>
         <button type="button" class="pc-step" data-pc-step="1" aria-label="Next postcard">›</button>
       </div>
       <aside class="pc-side">
@@ -134,13 +145,14 @@ function shell(root) {
           <button type="button" class="album-star-wide" id="album-star" data-album="favourite">☆ FAVOURITE</button>
           <button type="button" class="primary" data-album="copy">COPY</button>
           <button type="button" data-album="show">SHOW IN FOLDER</button>
-          <button type="button" id="pc-edit" data-pc-edit>EDIT</button>
+          <button type="button" class="primary pc-edit-button" id="pc-edit" data-pc-edit>✎ EDIT IN THE EDITOR</button>
+          <button type="button" data-pc-show-here>▶ SLIDESHOW FROM HERE</button>
           <button type="button" id="pc-restore-one" data-pc-restore-one hidden>MAKE EDITABLE</button>
           <button type="button" class="danger-action" id="pc-delete" data-pc-delete>DELETE</button>
           <button type="button" data-album="close">CLOSE</button>
         </div>
+        <dl class="pc-side-facts" id="pc-side-facts"></dl>
         <p class="pc-side-note" id="pc-side-note"></p>
-        <form class="pc-editor" id="pc-editor" hidden autocomplete="off"></form>
       </aside>
     </div>
   </div>`;
@@ -174,11 +186,21 @@ function shell(root) {
       if (shown && await send("restore", {id: shown.id})) ui.showToast("Looking for its screenshot…");
       return undefined;
     }
-    if (event.target.closest("[data-pc-edit]")) {
-      if (shown && await send("edit", {id: shown.id})) editorWanted = shown.id;
-      return undefined;
+    if (event.target.closest("[data-pc-edit]")) return editCard(shown?.id);
+    const heroEdit = event.target.closest("[data-pc-hero-edit]");
+    if (heroEdit) return editCard(heroEdit.dataset.pcHeroEdit);
+    if (event.target.closest("[data-pc-show]")) return slideshow(0);
+    if (event.target.closest("[data-pc-show-here]")) {
+      const list = listed();
+      const at = Math.max(0, list.findIndex((row) => row.id === shown?.id));
+      close();
+      return slideshow(at);
     }
-    if (event.target.closest("[data-editor-cancel]")) return closeEditor(true);
+    const month = event.target.closest("[data-pc-month]");
+    if (month) {
+      view.month = view.month === month.dataset.pcMonth ? "" : month.dataset.pcMonth;
+      return drawAlbum(true);
+    }
     const remove = event.target.closest("[data-pc-delete]");
     if (remove && shown) {
       if (!remove.dataset.armed) {
@@ -196,7 +218,6 @@ function shell(root) {
       drawAlbum(true);
       return ui.showToast(`${gone.title} moved to the Recycle Bin`);
     }
-    if (event.target.closest("[data-editor-picture]")) return choosePicture();
     if (event.target.closest("[data-pc-reset]")) return resetDraft();
     if (event.target.closest("[data-theme-save]")) return saveTheme();
     if (event.target.closest("[data-theme-new]")) return newTheme();
@@ -267,6 +288,11 @@ function shell(root) {
       view.sort = event.target.value;
       return drawAlbum(true);
     }
+    if (event.target.id === "pc-group") {
+      view.group = event.target.value;
+      try { localStorage.setItem("voidcompass.postcards.group", view.group); } catch { /* not kept */ }
+      return drawAlbum(true);
+    }
     if (event.target.name === "bg_file") return readBackground(event.target);
     if (event.target.closest("#pc-theme")) return later("draft", 0, sendDraft);
     const field = event.target.closest("[data-postcard-setting]");
@@ -285,7 +311,7 @@ function shell(root) {
     return undefined;
   });
   document.addEventListener("keydown", (event) => {
-    if (!shown || ui.byId("pc-viewer")?.hidden) return;
+    if (!shown || ui.byId("pc-viewer")?.hidden || editorOpen() || showOpen()) return;
     if (event.key === "Escape") close();
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
     if (!typing && (event.key === "ArrowLeft" || event.key === "ArrowRight")) stepBy(event.key === "ArrowLeft" ? -1 : 1);
@@ -316,7 +342,8 @@ function showTab(tab) {
 function listed() {
   let list = rows.filter((row) => (view.filter === "editable" ? row.editable : view.filter === "older" ? !row.editable : true));
   if (view.favourites) list = list.filter((row) => row.favourite);
-  if (view.find) list = list.filter((row) => row.title.toLowerCase().includes(view.find));
+  if (view.find) list = list.filter((row) => [row.title, row.system, row.region, row.note].some((text) => String(text || "").toLowerCase().includes(view.find)));
+  if (view.month) list = list.filter((row) => monthOf(row.taken || row.at) === view.month);
   const taken = (row) => Number(row.taken || row.at || 0);
   if (view.sort === "oldest") list = [...list].sort((a, b) => taken(a) - taken(b));
   else if (view.sort === "az") list = [...list].sort((a, b) => a.title.localeCompare(b.title));
@@ -331,28 +358,102 @@ function drawAlbum(force = false) {
     button.setAttribute("aria-pressed", String(button.dataset.pcFilter === view.filter));
   }
   const list = listed();
-  const key = JSON.stringify([view, list.map((row) => [row.id, row.at, row.favourite, row.editable])]);
+  const key = JSON.stringify([view, list.map((row) => [row.id, row.at, row.favourite, row.editable, row.designed])]);
   if (key === lastAlbumKey && !force) return;
   lastAlbumKey = key;
+  drawHero();
+  drawTimeline();
+  const esc = ui.escapeHtml;
   const tile = (row) => `<li class="pc-tile pc-tilt-${tilt(row.id)}${row.favourite ? " favourite" : ""}">${starButton(row, ui)}
-    <button type="button" data-postcard="${ui.escapeHtml(row.id)}" title="${ui.escapeHtml(row.title)}">
+    <button type="button" data-postcard="${esc(row.id)}" title="${esc(row.title)}">
       <img src="${ui.apiUrl(`/media/postcard-thumb/${row.id}.jpg?v=${encodeURIComponent(row.at)}`)}" alt="" loading="lazy">
-      <span><b>${ui.escapeHtml(row.title)}</b><small>${ui.escapeHtml(eliteDate(row.taken || row.at))}${row.editable ? "" : " · OLDER"}</small></span></button></li>`;
+      <span><b>${esc(row.title)}</b><small>${esc([eliteDate(row.taken || row.at), row.region].filter(Boolean).join(" · "))}${row.editable ? "" : " · OLDER"}</small></span>
+      ${row.designed ? `<i class="pc-made" title="Made in the editor">✎</i>` : ""}</button></li>`;
   if (!list.length) {
-    ui.byId("pc-album").innerHTML = `<p class="album-empty">${!rows.length ? "Take a screenshot in game (F10) and its postcard is kept here. Saving them is on the KEEPING tab."
+    ui.byId("pc-album").innerHTML = `<p class="album-empty">${!rows.length ? "Take a screenshot in game (F10) and its postcard is kept here. Saving them is on the KEEPING tab. Or make one from any screenshot on the Screenshots page."
       : view.favourites ? "No favourites yet: tap the ☆ on a postcard to keep it here." : "No postcard matches."}</p>`;
     return;
   }
-  // Grouped by month (by place when sorted A–Z).
+  const groupOf = (row) => {
+    if (view.sort === "az") return row.title.slice(0, 1).toUpperCase();
+    if (view.group === "day") return eliteDate(row.taken || row.at);
+    if (view.group === "region") return (row.region || "Somewhere unknown").toUpperCase();
+    if (view.group === "system") return String(row.system || row.title).toUpperCase();
+    if (view.group === "none") return "";
+    return monthOf(row.taken || row.at);
+  };
   const groups = [];
+  const byName = new Map();
   for (const row of list) {
-    const name = view.sort === "az" ? row.title.slice(0, 1).toUpperCase() : monthOf(row.taken || row.at);
-    if (groups.at(-1)?.name !== name) groups.push({name, rows: []});
-    groups.at(-1).rows.push(row);
+    const name = groupOf(row);
+    // Regions and systems gather wherever they come in the list; days and months follow it.
+    let group = ["region", "system"].includes(view.group) && view.sort !== "az" ? byName.get(name) : groups.at(-1)?.name === name ? groups.at(-1) : null;
+    if (!group) { group = {name, rows: []}; groups.push(group); byName.set(name, group); }
+    group.rows.push(row);
   }
-  ui.byId("pc-album").innerHTML = groups.map((group) =>
-    `<section class="pc-month"><h4>${ui.escapeHtml(group.name)}<span>${group.rows.length}</span></h4>
-      <ol class="pc-grid">${group.rows.map(tile).join("")}</ol></section>`).join("");
+  ui.byId("pc-album").innerHTML = groups.map((group) => {
+    const places = [...new Set(group.rows.map((row) => row.title))];
+    const sub = view.group === "day" || view.group === "month" ? places.slice(0, 4).join(" · ") + (places.length > 4 ? ` · +${places.length - 4}` : "") : "";
+    return `<section class="pc-month">${group.name ? `<h4>${esc(group.name)}<span>${group.rows.length}</span>${sub ? `<small>${esc(sub)}</small>` : ""}</h4>` : ""}
+      <ol class="pc-grid">${group.rows.map(tile).join("")}</ol></section>`;
+  }).join("");
+}
+
+// The one to look at today: on this day in an earlier year, or a favourite, or the newest.
+function heroRow() {
+  if (!rows.length) return null;
+  const today = new Date();
+  const same = rows.filter((row) => {
+    const day = new Date(Number(row.taken || row.at) * 1000);
+    return day.getDate() === today.getDate() && day.getMonth() === today.getMonth() && day.getFullYear() < today.getFullYear();
+  });
+  if (same.length) return {row: same[0], why: `ON THIS DAY · ${today.getFullYear() - new Date(Number(same[0].taken || same[0].at) * 1000).getFullYear()} YEAR${same.length === 1 ? "" : "S"} AGO`};
+  const starred = rows.filter((row) => row.favourite);
+  const pool = starred.length ? starred : rows;
+  // The same one all day, a different one tomorrow.
+  const pick = pool[Math.floor(Date.now() / 86400000) % pool.length];
+  return {row: pick, why: starred.length ? "FROM YOUR FAVOURITES" : "FROM THE ALBUM"};
+}
+
+function drawHero() {
+  const panel = ui.byId("pc-hero");
+  const chosen = view.find || view.month || view.favourites ? null : heroRow();
+  panel.hidden = !chosen;
+  if (!chosen) return;
+  const {row, why} = chosen;
+  const esc = ui.escapeHtml;
+  panel.innerHTML = `<button type="button" class="pc-hero-card" data-postcard="${esc(row.id)}">
+      <img src="${ui.apiUrl(`/media/postcard-thumb/${row.id}.jpg?v=${encodeURIComponent(row.at)}`)}" alt=""></button>
+    <div class="pc-hero-words"><small>${why}</small><h3>${esc(row.title)}</h3>
+      <span>${esc([row.system && row.system !== row.title ? row.system : "", row.region, eliteDate(row.taken || row.at)].filter(Boolean).join(" · "))}</span>
+      ${row.note ? `<blockquote>“${esc(row.note)}”</blockquote>` : ""}
+      <div class="pc-hero-actions"><button type="button" class="primary" data-postcard="${esc(row.id)}">OPEN</button>
+        ${row.editable ? `<button type="button" data-pc-hero-edit="${esc(row.id)}">✎ EDIT</button>` : ""}
+        <button type="button" data-pc-show>▶ SLIDESHOW</button></div></div>`;
+}
+
+// A strip of months with how many were sent in each; click one to see only it.
+function drawTimeline() {
+  const panel = ui.byId("pc-timeline");
+  const months = new Map();
+  for (const row of rows) {
+    const name = monthOf(row.taken || row.at);
+    months.set(name, (months.get(name) || 0) + 1);
+  }
+  panel.hidden = months.size < 2;
+  if (months.size < 2) return;
+  const most = Math.max(...months.values());
+  const entries = [...months.entries()].reverse();
+  panel.innerHTML = `<small>TIMELINE</small><ol>${entries.map(([name, count]) =>
+    `<li><button type="button" class="${view.month === name ? "active" : ""}" data-pc-month="${ui.escapeHtml(name)}" title="${count} postcard${count === 1 ? "" : "s"}">
+      <i style="height:${Math.round(10 + 34 * count / most)}px"></i><span>${ui.escapeHtml(name.slice(0, 3))}</span><b>${count}</b></button></li>`).join("")}</ol>
+    ${view.month ? `<button type="button" class="pc-timeline-all" data-pc-month="${ui.escapeHtml(view.month)}">SHOW EVERY MONTH</button>` : ""}`;
+}
+
+function slideshow(start) {
+  const list = listed();
+  if (!list.length) return ui.showToast("No postcards to show");
+  return startShow({ui, rows: list, start, eliteDate});
 }
 
 function drawStats() {
@@ -394,10 +495,8 @@ function drawRestore() {
 function open(id) {
   const row = rows.find((item) => item.id === id);
   if (!row) return;
-  if (shown?.id !== id) closeEditor(Boolean(shown));
   shown = row;
   ui.byId("pc-full").src = ui.apiUrl(`/media/postcard/${row.id}.png?v=${encodeURIComponent(row.at)}`);
-  ui.byId("pc-stage-note").hidden = true;
   drawSide();
   ui.byId("pc-viewer").hidden = false;
 }
@@ -414,8 +513,11 @@ function drawSide() {
   ui.byId("pc-restore-one").hidden = row.editable && !row.needs_picture;
   ui.byId("pc-restore-one").textContent = row.needs_picture ? "FIND ITS SCREENSHOT" : "MAKE EDITABLE";
   ui.byId("pc-side-note").textContent = row.needs_picture
-    ? "Its screenshot wasn't found when it was made editable. FIND ITS SCREENSHOT looks again, or GIVE IT A PICTURE in EDIT."
+    ? "Its screenshot wasn't found when it was made editable. FIND ITS SCREENSHOT looks again, or pick a picture for it in the editor."
     : row.editable ? "" : "Saved before postcards could be edited. MAKE EDITABLE finds its screenshot and journal entry.";
+  const fact = (label, value) => (value ? `<dt>${label}</dt><dd>${ui.escapeHtml(value)}</dd>` : "");
+  ui.byId("pc-side-facts").innerHTML = fact("SYSTEM", row.system && row.system !== row.title ? row.system : "") + fact("REGION", row.region)
+    + fact("NOTE", row.note) + fact("MADE", row.designed ? "In the editor" : "");
   showViewerStar(ui.byId("album-star"), row);
   const list = listed();
   const index = list.findIndex((item) => item.id === row.id);
@@ -426,110 +528,56 @@ function drawSide() {
 }
 
 function stepBy(step) {
-  if (!shown || !ui.byId("pc-editor").hidden) return;
+  if (!shown || editorOpen()) return;
   const list = listed();
   const next = list[list.findIndex((item) => item.id === shown.id) + step];
   if (next) open(next.id);
 }
 
 function close() {
-  closeEditor(Boolean(shown));
   shown = null;
   ui.byId("pc-viewer").hidden = true;
   ui.byId("pc-full").removeAttribute("src");
 }
 
-function closeEditor(tell) {
-  const form = ui?.byId("pc-editor");
-  if (!form) return;
-  const wasOpen = !form.hidden || editorWanted;
-  editorWanted = "";
-  form.hidden = true;
-  ui.byId("pc-actions").hidden = false;
-  ui.byId("pc-stage-note").hidden = true;
-  if (shown) ui.byId("pc-full").src = ui.apiUrl(`/media/postcard/${shown.id}.png?v=${encodeURIComponent(shown.at)}`);
-  if (tell && wasOpen) send("edit_close");
+// -- The editor (5.6.3) ------------------------------------------------------------
+// EDIT asks the deck for the card (its words, its looks, its saved design);
+// the editor opens once that arrives.
+async function editCard(id) {
+  if (!id) return;
+  editorWanted = id;
+  if (!(await send("edit", {id}))) {
+    editorWanted = "";
+    ui.showToast("That postcard can't be edited yet: MAKE EDITABLE first");
+  }
 }
 
 function renderEditor() {
   const editing = data.editing || {};
-  const form = ui.byId("pc-editor");
-  if (!form || !editing.id || editing.id !== editorWanted || !form.hidden) return;
-  const esc = ui.escapeHtml;
-  const choices = [...Object.entries(BASE_NAMES), ...Object.keys(data.themes || {}).map((name) => [`theme:${name}`, `★ ${name}`])];
-  // A theme deleted since: the postcard keeps its look unless another is picked.
-  if (editing.style && !choices.some(([value]) => value === editing.style)) {
-    choices.unshift([editing.style, `★ ${editing.style.replace(/^theme:/, "")} (as saved)`]);
-  }
-  const looks = choices.map(([value, name]) => `<option value="${esc(value)}"${value === editing.style ? " selected" : ""}>${esc(name)}</option>`).join("");
-  const field = (name, label, value, limit) => `<label><span>${label}</span><input name="${name}" maxlength="${limit}" value="${esc(value || "")}"></label>`;
-  form.innerHTML = `<h4>EDIT THIS POSTCARD</h4>
-    ${field("title", "Place", editing.title, 80)}${field("greeting", "Lettering", editing.greeting, 40)}
-    <label><span>Note</span><textarea name="note" maxlength="160" rows="3">${esc(editing.note || "")}</textarea></label>
-    ${field("signed", "Signed", editing.signed, 40)}${field("doing", "What you were doing", editing.doing, 120)}
-    <label><span>Look</span><select name="style">${looks}</select></label>
-    <label><span>Angle <small data-angle-out>${editing.angle ?? "as the look"}${editing.angle == null ? "" : "°"}</small></span>
-      <input type="range" name="angle" min="-12" max="12" step="0.5" value="${editing.angle ?? -1.2}"></label>
-    <label class="pc-check"><input type="checkbox" name="postmark"${editing.postmark ? " checked" : ""}><span>Postmark</span></label>
-    <div class="pc-editor-sizes">${TEXT_PARTS.map(([part, label]) =>
-      `<label><span>${label}</span><select name="size_${part}">${sizeOptions((editing.sizes || {})[part])}</select></label>`).join("")}</div>
-    <button type="button" class="pc-picture" data-editor-picture>${editing.photo ? "CHANGE ITS PICTURE" : "GIVE IT A PICTURE"}</button>
-    <div class="pc-editor-actions"><button type="submit" class="primary">SAVE THE POSTCARD</button><button type="button" data-editor-cancel>CANCEL</button></div>`;
-  form.dataset.angleMoved = "";
-  form.hidden = false;
-  ui.byId("pc-actions").hidden = true;
-  form.onsubmit = saveEdit;
-  previewEdit();
+  if (!editing.id || editing.id !== editorWanted || editorOpen()) return;
+  editorWanted = "";
+  const id = editing.id;
+  openEditor({
+    ui, id, info: editing.info || {title: editing.title}, design: editing.design, looks: editing.looks, themes: data.themes || {},
+    shots: editing.shots || [], photoUrl: editing.photo ? ui.apiUrl(`/media/postcard-photo/${id}.jpg?v=${Date.now()}`) : "",
+    onSaved: (savedId, asNew) => {
+      lastAlbumKey = "";
+      if (shown) {
+        const target = asNew ? savedId : shown.id;
+        ui.byId("pc-full").src = ui.apiUrl(`/media/postcard/${target}.png?v=${Date.now()}`);
+      }
+    },
+    onClose: () => send("edit_close"),
+  });
 }
 
-function editorValues() {
-  const form = ui.byId("pc-editor");
-  const values = Object.fromEntries(new FormData(form).entries());
-  values.postmark = form.querySelector('[name="postmark"]').checked;
-  // Note: the slider always has a value; sent only once moved, so a theme's
-  // own angle isn't replaced by the default (5.5.5).
-  if (form.dataset.angleMoved !== "1") delete values.angle;
-  return values;
-}
-
-function onEditorInput(event) {
-  if (!event.target.closest("#pc-editor")) return;
-  if (event.target.name === "angle") {
-    event.target.closest("label").querySelector("[data-angle-out]").textContent = `${event.target.value}°`;
-    event.target.form.dataset.angleMoved = "1";
-  }
-  later("edit", event.type === "change" ? 0 : 320, previewEdit);
-}
-
-// The postcard redrawn with the editor's changes, before anything is saved.
-async function previewEdit() {
-  if (!shown || ui.byId("pc-editor").hidden) return;
-  if (!(await send("edit_draft", {id: shown.id, ...editorValues()}))) return;
-  loadPreview(ui.byId("pc-full"), ui.apiUrl(`/media/postcard-preview/edit-${++previewTurn}.png`));
-  ui.byId("pc-stage-note").hidden = false;
-}
-
-async function choosePicture() {
-  const api = window.pywebview?.api;
-  if (typeof api?.choose_picture_file !== "function") return ui.showToast("Choosing a picture works in the Void Compass window.");
-  const chosen = await api.choose_picture_file();
-  if (!chosen) return undefined;
-  if (!(await send("edit_picture", {id: shown?.id || "", path: String(chosen)}))) return ui.showToast("That picture couldn't be read");
-  ui.byId("pc-editor").querySelector("[data-editor-picture]").textContent = "CHANGE ITS PICTURE";
-  return previewEdit();
-}
-
-async function saveEdit(event) {
-  event.preventDefault();
-  const done = await send("edit_save", {id: shown?.id || "", ...editorValues()});
-  ui.showToast(done ? "Postcard redrawn" : "The postcard couldn't be redrawn");
-  if (done) {
-    editorWanted = "";
-    ui.byId("pc-editor").hidden = true;
-    ui.byId("pc-actions").hidden = false;
-    ui.byId("pc-stage-note").hidden = true;
-    ui.byId("pc-full").src = ui.apiUrl(`/media/postcard/${shown.id}.png?v=${Date.now()}`);
-  }
+// A screenshot made into a postcard on its page: straight into the editor.
+function openNext() {
+  const next = data.open_next || "";
+  if (!next || next === openedNext) return;
+  openedNext = next;
+  send("opened");
+  editCard(next);
 }
 
 // -- The studio ----------------------------------------------------------------
@@ -756,5 +804,6 @@ export function renderPostcards(next = {}, deck) {
   drawStudio();
   drawKeeping();
   renderEditor();
-  if (shown && ui.byId("pc-editor").hidden) drawSide();
+  openNext();
+  if (shown) drawSide();
 }

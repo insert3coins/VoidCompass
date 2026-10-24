@@ -18,8 +18,9 @@
   const nodes = Object.fromEntries(["cover", "backdrop", "state", "playlist", "scene", "shuffle", "repeat", "repeat-one",
     "title", "artist", "details", "elapsed", "total", "resume", "next", "neon-live", "neon-look", "neon-format"]
     .map((id) => [id, document.getElementById(id)]));
-  // Five skins since 5.5.17, and Neon again in 5.6.2; the cockpit draws its bars as lit blocks.
-  const SKINS = ["deck", "cockpit", "glass", "vinyl", "minimal", "neon"];
+  // Five skins since 5.5.17, Neon again in 5.6.2 and Orb in 5.6.3; the cockpit
+  // draws its bars as lit blocks, the orb as rays round its ring.
+  const SKINS = ["deck", "cockpit", "glass", "vinyl", "minimal", "neon", "orb"];
   // The looks are shared with the Music page (5.6.2); this page keeps its own
   // skin-tuned bars, mirror and wave, and draws the rest with the shared painter.
   const SHARED = window.VoidCompassVisualizers || null;
@@ -274,6 +275,7 @@
     ctx.clearRect(0, 0, width, height);
     const strip = options.layout === "strip";
     const style = options.visualizer || "bars";
+    if (skinNow() === "orb" && !strip) return drawOrb(ctx, height, style);
     const now = performance.now();
     const dt = Math.min(50, now - (lastDraw || now));
     lastDraw = now;
@@ -311,6 +313,347 @@
       }
     });
     ctx.globalAlpha = 1;
+  }
+
+  // The orb skin (5.5.3.3): every look drawn round the ring of the cover; the
+  // classic bars are rays standing out from it.
+  // Note: plain colours only. A CSS colour function in a canvas gradient
+  // throws in the app's WebView2 and stops the drawing altogether.
+  const orb = {look: "", last: 0, avg: 0, beat: 0, ping: 0, sweep: 0, phase: 0, vu: [0, 0], hist: [], rings: [], streaks: [], dots: []};
+  const TAU = Math.PI * 2;
+
+  function drawOrb(ctx, height, style) {
+    const cover = root.querySelector(".cover").getBoundingClientRect();
+    const box = canvas.getBoundingClientRect();
+    const cx = cover.left + cover.width / 2 - box.left, cy = cover.top + cover.height / 2 - box.top;
+    const scale = Number(getComputedStyle(root).getPropertyValue("--scale")) || 1;
+    const inner = cover.width / 2 + 8 * scale;
+    // Kept inside the skin's rounded edge, which hugs the ring.
+    const reach = Math.min(cx, cy, height - cy) - inner - 7 * scale;
+    if (reach <= 2) return;
+    const now = performance.now();
+    const dt = Math.min(50, now - (orb.last || now)) / 1000;
+    orb.last = now;
+    if (orb.look !== style) Object.assign(orb, {look: style, hist: [], rings: [], streaks: [], dots: [], vu: [0, 0]});
+
+    const live = playing();
+    const energy = shown.reduce((sum, value) => sum + value, 0) / BANDS;
+    const bass = (shown[0] + shown[1] + shown[2] + shown[3]) / 4;
+    const beat = live && bass > .2 && bass > orb.avg * 1.2 && now - orb.beat > 240;
+    orb.avg += (bass - orb.avg) * Math.min(1, dt * 4);
+    if (beat) orb.beat = now;
+
+    const spectrum = options.colour === "spectrum";
+    const lead = paint(ctx, height, 0);
+    const colour = (band) => spectrum ? paint(ctx, height, band) : lead;
+    const tones = lookColours();
+    const thin = Math.max(1.5, cover.width / 50);
+    const at = (angle, r) => [cx + Math.cos(angle) * r, cy + Math.sin(angle) * r];
+    // Bass at the top, the treble meeting at the bottom, the same on both sides.
+    const side = (band, s) => -Math.PI / 2 + s * (band + .5) / BANDS * Math.PI;
+    const bandAt = (i, count) => Math.min(BANDS - 1, Math.floor((i <= count / 2 ? i : count - i) / (count / 2) * BANDS));
+    const ray = (angle, from, to) => {
+      ctx.beginPath();
+      ctx.moveTo(...at(angle, from));
+      ctx.lineTo(...at(angle, to));
+      ctx.stroke();
+    };
+    const dot = (point, r) => {
+      ctx.beginPath();
+      ctx.arc(point[0], point[1], Math.max(.5, r), 0, TAU);
+      ctx.fill();
+    };
+    const circle = (r) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, TAU);
+      ctx.stroke();
+    };
+    // A closed curve round the ring, its radius set band by band.
+    const loop = (radius, count = 64) => {
+      const points = Array.from({length: count}, (_, i) => at(-Math.PI / 2 + i / count * TAU, radius(shown[bandAt(i, count)], i / count * TAU)));
+      ctx.beginPath();
+      points.forEach((point, i) => {
+        const next = points[(i + 1) % count];
+        const mid = [(point[0] + next[0]) / 2, (point[1] + next[1]) / 2];
+        if (!i) ctx.moveTo(...mid);
+        else ctx.quadraticCurveTo(point[0], point[1], mid[0], mid[1]);
+      });
+      ctx.quadraticCurveTo(points[0][0], points[0][1], ...[(points[0][0] + points[1][0]) / 2, (points[0][1] + points[1][1]) / 2]);
+      ctx.closePath();
+    };
+
+    // Only the band between the cover and the edge: nothing over the art, nothing spilling out.
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, inner + reach + 2 * scale, 0, TAU);
+    ctx.arc(cx, cy, inner - 1, 0, TAU, true);
+    ctx.clip("evenodd");
+    ctx.lineCap = "round";
+    ctx.lineWidth = thin;
+    ctx.strokeStyle = lead;
+    ctx.fillStyle = lead;
+
+    switch (style) {
+      case "mirror":
+        // Four ways round: bass at the sides, treble top and bottom.
+        for (let band = 0; band < BANDS / 2; band += 1) {
+          const value = Math.max(shown[band * 2], shown[band * 2 + 1]);
+          ctx.strokeStyle = colour(band * 2);
+          ctx.globalAlpha = .25 + value * .6;
+          for (const base of [0, Math.PI]) for (const s of [1, -1]) ray(base + s * (band + .5) / (BANDS / 2) * Math.PI / 2, inner, inner + Math.max(1, value * reach));
+        }
+        break;
+      case "led": {
+        const step = thin * 2.2, count = Math.max(3, Math.floor(reach / step));
+        ctx.lineCap = "butt";
+        ctx.lineWidth = thin * 1.5;
+        shown.forEach((value, band) => {
+          const lit = Math.round(value * count);
+          for (let k = 0; k < lit; k += 1) {
+            ctx.strokeStyle = k >= count * .8 ? tones.red : k >= count * .55 ? tones.orange : colour(band);
+            ctx.globalAlpha = .55 + k / count * .4;
+            for (const s of [1, -1]) ray(side(band, s), inner + k * step, inner + k * step + step * .55);
+          }
+        });
+        break;
+      }
+      case "wave":
+        loop((value) => inner + 1 + value * reach * .92);
+        ctx.globalAlpha = .16;
+        ctx.fill();
+        ctx.globalAlpha = .9;
+        ctx.stroke();
+        break;
+      case "horizon":
+        ctx.shadowColor = tones.accent;
+        ctx.shadowBlur = thin * 5;
+        ctx.fillStyle = tones.accent;
+        loop((value) => inner + value * reach * .85);
+        ctx.globalAlpha = .38;
+        ctx.fill();
+        ctx.strokeStyle = tones.text;
+        ctx.lineWidth = thin * .7;
+        ctx.globalAlpha = .7;
+        ctx.stroke();
+        break;
+      case "aurora":
+        ctx.globalCompositeOperation = "lighter";
+        [tones.accent, tones.green, tones.orange].forEach((tint, layer) => {
+          ctx.fillStyle = tint;
+          loop((value, angle) => inner + value * reach * (.45 + layer * .2) + Math.sin(angle * (3 + layer) + now / (900 - layer * 180)) * reach * .08 * (.4 + energy), 48);
+          ctx.globalAlpha = .2;
+          ctx.fill();
+        });
+        break;
+      case "waterfall": {
+        // The last few moments as rings, the newest at the cover.
+        const step = thin * 1.6, rows = Math.max(3, Math.floor(reach / step));
+        if (!orb.hist.length || now - orb.hist[0].at > 70) orb.hist.unshift({at: now, values: shown.slice()});
+        orb.hist.length = Math.min(orb.hist.length, rows);
+        ctx.lineCap = "butt";
+        ctx.lineWidth = step * .8;
+        orb.hist.forEach(({values}, row) => {
+          values.forEach((value, band) => {
+            if (value < .05) return;
+            ctx.strokeStyle = value > .7 ? tones.orange : value > .4 ? tones.accent : tones.green;
+            ctx.globalAlpha = value * (1 - row / rows);
+            for (const s of [1, -1]) {
+              const angle = side(band, s);
+              ctx.beginPath();
+              ctx.arc(cx, cy, inner + row * step + step / 2, angle - Math.PI / BANDS * .42, angle + Math.PI / BANDS * .42);
+              ctx.stroke();
+            }
+          });
+        });
+        break;
+      }
+      case "shockwave":
+        if (beat) orb.rings.push({r: inner, life: 1, width: thin * (1.5 + bass * 3)});
+        shown.forEach((value, band) => {
+          ctx.strokeStyle = colour(band);
+          ctx.globalAlpha = .12 + value * .25;
+          for (const s of [1, -1]) ray(side(band, s), inner, inner + value * reach * .5);
+        });
+        ctx.strokeStyle = tones.orange;
+        orb.rings = orb.rings.filter((ring) => {
+          ring.r += dt * reach * 1.7;
+          ring.life -= dt * 1.5;
+          if (ring.life <= 0 || ring.r > inner + reach) return false;
+          ctx.globalAlpha = ring.life;
+          ctx.lineWidth = ring.width * ring.life;
+          circle(ring.r);
+          return true;
+        });
+        break;
+      case "scanner": {
+        orb.sweep = (orb.sweep + dt * (live ? 2.4 : .6)) % TAU;
+        ctx.strokeStyle = tones.green;
+        ctx.lineWidth = thin * .5;
+        ctx.globalAlpha = .18;
+        circle(inner + reach * .5);
+        circle(inner + reach - 1);
+        for (let i = 0; i < 18; i += 1) {
+          ctx.globalAlpha = (1 - i / 18) * (i ? .22 : .9);
+          ctx.lineWidth = i ? thin * 1.4 : thin * .8;
+          ray(orb.sweep - i * .06, inner, inner + reach);
+        }
+        ctx.fillStyle = tones.green;
+        shown.forEach((value, band) => {
+          for (const s of [1, -1]) {
+            const angle = side(band, s);
+            const behind = ((orb.sweep - angle) % TAU + TAU) % TAU;
+            if (behind > 2.2 || value < .08) continue;
+            ctx.globalAlpha = value * (1 - behind / 2.2);
+            dot(at(angle, inner + value * reach * .92), thin * (.6 + value));
+          }
+        });
+        break;
+      }
+      case "witchspace":
+        if (live) {
+          for (let n = Math.floor(energy * 5 + Math.random() * 1.5); n > 0; n -= 1) {
+            orb.streaks.push({angle: Math.random() * TAU, r: inner, speed: reach * (1.2 + energy * 4 + Math.random() * 1.5), tint: Math.random() < .3 ? tones.text : tones.accent});
+          }
+        }
+        orb.streaks = orb.streaks.filter((streak) => {
+          streak.r += streak.speed * dt;
+          const gone = (streak.r - inner) / reach;
+          if (gone >= 1) return false;
+          ctx.strokeStyle = streak.tint;
+          ctx.globalAlpha = 1 - gone;
+          ctx.lineWidth = thin * (.4 + gone * .8);
+          ray(streak.angle, Math.max(inner, streak.r - streak.speed * .07), streak.r);
+          return true;
+        });
+        ctx.strokeStyle = tones.accent;
+        ctx.globalAlpha = .25 + bass * .5;
+        ctx.lineWidth = thin * .8;
+        circle(inner + 1);
+        break;
+      case "vu": {
+        // Two arc meters: the low half of the music up the left, the high up the right.
+        const levels = [shown.slice(0, BANDS / 2), shown.slice(BANDS / 2)].map((half) => Math.min(1, Math.max(...half) * 1.05));
+        orb.vu = orb.vu.map((held, i) => levels[i] > held ? levels[i] : Math.max(levels[i], held - dt * .9));
+        const ticks = 16, r = inner + reach * .45;
+        ctx.lineCap = "butt";
+        ctx.lineWidth = reach * .55;
+        [-1, 1].forEach((s, meter) => {
+          for (let k = 0; k < ticks; k += 1) {
+            const from = Math.PI / 2 - s * (k / ticks) * Math.PI, to = Math.PI / 2 - s * ((k + .72) / ticks) * Math.PI;
+            const lit = k < Math.round(orb.vu[meter] * ticks);
+            ctx.strokeStyle = k >= ticks * .8 ? tones.red : k >= ticks * .6 ? tones.orange : tones.green;
+            ctx.globalAlpha = lit ? .9 : .1;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, Math.min(from, to), Math.max(from, to));
+            ctx.stroke();
+          }
+        });
+        break;
+      }
+      case "radial": {
+        const spin = now / 5000;
+        ctx.lineWidth = thin * .6;
+        for (let i = 0; i < 96; i += 1) {
+          const band = bandAt(i, 96), value = shown[band];
+          ctx.strokeStyle = colour(band);
+          ctx.globalAlpha = .3 + value * .7;
+          ray(-Math.PI / 2 + i / 96 * TAU + spin, inner + value * reach * .18, inner + Math.max(1, value * reach));
+        }
+        ctx.globalAlpha = .35;
+        circle(inner);
+        break;
+      }
+      case "particles":
+        if (!orb.dots.length) orb.dots = Array.from({length: 48}, (_, i) => ({band: i % BANDS, angle: i / 48 * TAU, wobble: Math.random() * TAU}));
+        orb.dots.forEach((spark) => {
+          const value = shown[spark.band];
+          spark.angle += dt * (.25 + value * 1.6) * (spark.band % 2 ? 1 : -1);
+          spark.wobble += dt * 3;
+          const r = inner + 2 + value * reach * .9 + Math.sin(spark.wobble) * thin;
+          ctx.fillStyle = colour(spark.band);
+          ctx.globalAlpha = .25 + value * .75;
+          dot(at(spark.angle, r), thin * (.5 + value * 1.3));
+          ctx.globalAlpha *= .35;
+          dot(at(spark.angle - (spark.band % 2 ? .12 : -.12), r), thin * .5);
+        });
+        break;
+      case "tunnel": {
+        // Rings rushing out of the cover, faster when it's loud.
+        orb.phase = (orb.phase + dt * (live ? .35 + energy * 1.5 : .1)) % 1;
+        const count = 7;
+        for (let k = 0; k < count; k += 1) {
+          const f = (k + orb.phase) / count, r = inner + f * f * reach;
+          ctx.strokeStyle = k % 2 ? tones.accent : tones.green;
+          ctx.globalAlpha = (1 - f) * (.35 + energy * .65);
+          ctx.lineWidth = thin * (.4 + f * 1.6);
+          loop((value) => r + value * reach * .18 * f, 48);
+          ctx.stroke();
+        }
+        break;
+      }
+      case "spiral":
+        for (const arm of [0, 1]) {
+          const points = shown.map((value, band) => at(-Math.PI / 2 + arm * Math.PI + band / BANDS * Math.PI * 1.7 + now / 2600, inner + 2 + band / (BANDS - 1) * (reach - 4)));
+          ctx.strokeStyle = lead;
+          ctx.globalAlpha = .22;
+          ctx.lineWidth = thin * .5;
+          ctx.beginPath();
+          points.forEach((point, i) => i ? ctx.lineTo(...point) : ctx.moveTo(...point));
+          ctx.stroke();
+          points.forEach((point, band) => {
+            ctx.fillStyle = colour(band);
+            ctx.globalAlpha = .3 + shown[band] * .7;
+            dot(point, thin * (.35 + shown[band] * 1.6));
+          });
+        }
+        break;
+      case "sonar":
+        if (live && (beat || now - orb.ping > 1500)) {
+          orb.ping = now;
+          orb.rings.push({r: inner, life: 1, width: thin * .8});
+        }
+        ctx.strokeStyle = tones.green;
+        ctx.lineWidth = thin * .4;
+        ctx.globalAlpha = .15;
+        ray(0, inner, inner + reach);
+        ray(Math.PI, inner, inner + reach);
+        ray(-Math.PI / 2, inner, inner + reach);
+        ray(Math.PI / 2, inner, inner + reach);
+        orb.rings = orb.rings.filter((ring) => {
+          ring.r += dt * reach * .8;
+          ring.life = 1 - (ring.r - inner) / reach;
+          if (ring.life <= 0) return false;
+          ctx.strokeStyle = tones.green;
+          ctx.globalAlpha = ring.life * .8;
+          ctx.lineWidth = ring.width;
+          circle(ring.r);
+          // Contacts light up as the ping reaches them.
+          ctx.fillStyle = tones.green;
+          shown.forEach((value, band) => {
+            const r = inner + value * reach * .92;
+            const near = 1 - Math.abs(ring.r - r) / (reach * .25);
+            if (near <= 0 || value < .1) return;
+            ctx.globalAlpha = near * ring.life;
+            for (const s of [1, -1]) dot(at(side(band, s), r), thin * (.6 + value * .8));
+          });
+          return true;
+        });
+        break;
+      default:
+        shown.forEach((value, band) => {
+          ctx.strokeStyle = colour(band);
+          ctx.fillStyle = colour(band);
+          for (const s of [1, -1]) {
+            ctx.globalAlpha = .25 + value * .6;
+            ray(side(band, s), inner, inner + Math.max(1, value * reach));
+            if (style === "peaks") {
+              ctx.globalAlpha = .85;
+              dot(at(side(band, s), inner + Math.max(2, peaks[band] * reach) + thin * 1.5), thin * .65);
+            }
+          }
+        });
+    }
+    ctx.restore();
   }
 
   function fillBar(ctx, x, y, w, h, round) {

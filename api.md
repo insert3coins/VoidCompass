@@ -1792,6 +1792,7 @@ The overlay ids are:
 | `colony-needs` | Construction Needs |
 | `trade-route` | Trade Route |
 | `expedition` | Expedition |
+| `hatchling` | Hatchling |
 | `galaxy-minimap` | Galaxy Minimap |
 | `rhino-map` | Rhino Map |
 | `rig-tracker` | Rig Tracker |

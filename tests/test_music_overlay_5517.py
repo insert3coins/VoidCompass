@@ -149,7 +149,7 @@ class PageTests(unittest.TestCase):
                   const viz = box(document.getElementById('visualizer'));
                   const view = {w: innerWidth, h: innerHeight};
                   const parts = ['.info', '.progress', '#next'].map((sel) => box(document.querySelector(sel)));
-                  const overlaps = parts.filter((r) => r.height && r.top < viz.bottom - 1 && r.bottom > viz.top + 1);
+                  const overlaps = parts.filter((r) => r.height && r.top < viz.bottom - 1 && r.bottom > viz.top + 1 && r.left < viz.right - 1 && r.right > viz.left + 1);
                   const inside = [...document.querySelectorAll('#next li, .progress, #title')].every((el) => {
                     const r = box(el); return r.bottom <= view.h + 1 && r.right <= view.w + 1; });
                   return {lane: viz.height, overlaps: overlaps.length, inside, rows: document.querySelectorAll('#next li').length};

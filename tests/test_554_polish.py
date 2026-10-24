@@ -295,7 +295,7 @@ class PostcardThemeTests(unittest.TestCase):
         options = postcard_options({"postcard_note_mode": "own", "postcard_note_text": "  Hello   there "})
         self.assertEqual((options["note"], options["note_mode"], options["note_text"]), (False, "own", "Hello there"))
         page = (WEB / "dashboard" / "postcards.js").read_text(encoding="utf-8")
-        for needed in ('"postcard_note_mode"', "YOUR OWN THEME", "data-pc-edit", "EDIT THIS POSTCARD"):
+        for needed in ('"postcard_note_mode"', "YOUR OWN THEME", "data-pc-edit", "EDIT IN THE EDITOR"):
             self.assertIn(needed, page)
         from voidcompass.core import config
         for key in ("postcard_note_mode", "postcard_note_text", "postcard_signature", "postcard_themes"):

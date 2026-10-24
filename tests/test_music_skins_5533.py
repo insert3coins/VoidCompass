@@ -21,17 +21,19 @@ STUB = ("\nwindow.VoidCompassOverlay = {...VoidCompassOverlay, startPolling: opt
 class SkinSettingTests(unittest.TestCase):
     def test_six_skins_and_a_safe_default(self):
         # 5.5.17: the ten became five, made over; old ones fall back to the deck.
-        # 5.6.2: Neon came back, rebuilt.
-        self.assertEqual(tuple(MUSIC_SKINS), ("deck", "cockpit", "glass", "minimal", "neon", "vinyl"))
+        # 5.6.2: Neon came back, rebuilt; 5.6.3: Orb too.
+        self.assertEqual(tuple(MUSIC_SKINS), ("deck", "cockpit", "glass", "minimal", "neon", "orb", "vinyl"))
         self.assertEqual(music_overlay_options({})["skin"], "deck")
         self.assertEqual(music_overlay_options({"music_player_skin": "VINYL"})["skin"], "vinyl")
         self.assertEqual(music_overlay_options({"music_player_skin": "neon"})["skin"], "neon")
-        for retired in ("cassette", "orb", "radio", "terminal", "hologram"):
+        self.assertEqual(music_overlay_options({"music_player_skin": "orb"})["skin"], "orb")
+        for retired in ("cassette", "radio", "terminal", "hologram"):
             self.assertEqual(music_overlay_options({"music_player_skin": retired})["skin"], "deck", retired)
         self.assertIn("music_player_skin", config_module.PROFILE_TEXT_SETTINGS)
 
     def test_each_skin_has_its_own_size(self):
         self.assertEqual(music_overlay_size({"music_player_skin": "vinyl", "music_player_show_next": False}), (480, 172))
+        self.assertEqual(music_overlay_size({"music_player_skin": "orb", "music_player_show_next": False}), (440, 156), "the Orb at its old size")
         self.assertEqual(music_overlay_size({"music_player_skin": "minimal"}), (400, 84 + 5 + 17))
         self.assertEqual(music_overlay_size({"music_player_skin": "cockpit", "overlay_text_scale_percent": 150,
                                              "music_player_show_next": False}), (705, 234))
@@ -109,6 +111,47 @@ class SkinPageTests(unittest.TestCase):
                 self.assertTrue(drawn, f"{skin} draws its visualizer")
                 self.assertEqual(errors, [])
                 page.close()
+
+
+    def test_the_orb_draws_every_look_its_own_way(self):
+        looks = re.findall(r'value="([^"]+)"', re.search(r'data-studio-setting="music_player_visualizer">(.*?)</select>',
+                           (WEB / "dashboard" / "index.html").read_text(encoding="utf-8"), re.S).group(1))
+        looks = [look for look in looks if look != "off"]
+        width, height = music_overlay_size({"music_player_skin": "orb"})
+        page = self.browser.new_page(viewport={"width": width, "height": height})
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+
+        def serve(route):
+            url = urlsplit(route.request.url)
+            if url.path == "/api/live":
+                return route.fulfill(content_type="application/json",
+                                     body=json.dumps({"playing": True, "bands": [230 - i * 6 for i in range(32)]}))
+            path = WEB / url.path.lstrip("/")
+            if not path.is_file():
+                return route.fulfill(status=404, body="")
+            if path.name == "overlay-client.js":
+                return route.fulfill(content_type="application/javascript", body=path.read_text(encoding="utf-8") + STUB)
+            return route.fulfill(path=str(path))
+
+        page.route("http://m.test/**", serve)
+        page.goto("http://m.test/music_player/index.html")
+        pictures = {}
+        for look in looks:
+            page.evaluate("s => renderMusic(s)", {
+                "theme": {}, "effects": {"text_scale": 1},
+                "music": {"state": "playing", "track": {"id": "1", "title": "Into the Black", "artist": "Nyx", "duration": 200},
+                          "position": 50, "reported_at": time.time() * 1000,
+                          "options": {"layout": "card", "skin": "orb", "visualizer": look, "show_art": True, "show_next": True}}})
+            page.wait_for_timeout(700)
+            pictures[look] = page.evaluate("""() => { const c = document.getElementById('visualizer');
+              const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+              let lit = 0, sum = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) { lit += 1; sum += d[i] * (i % 997); }
+              return [lit, sum]; }""")
+            self.assertGreater(pictures[look][0], 0, f"the orb draws {look}")
+        self.assertEqual(len({tuple(picture) for picture in pictures.values()}), len(looks), "each look is its own picture")
+        self.assertEqual(errors, [])
+        page.close()
 
 
 if __name__ == "__main__":

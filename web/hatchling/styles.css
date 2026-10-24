@@ -1,0 +1,67 @@
+/* Hatchling, in the Navigation HUD's language: frame and corner brackets,
+   Bahnschrift. Colours are theme tokens; the values here are only the
+   fallbacks before the first snapshot. Everything sits in .content, which
+   zooms with the text size. */
+:root {
+  color-scheme: dark;
+  --bg: #070b10; --panel: #0d141c; --inset: #0a1118; --border: #243746;
+  --accent: #00d1ff; --orange: #ff7a18; --green: #4ee59b; --yellow: #ffd166;
+  --red: #ff6075; --text: #dce8ef; --muted: #85939d; --dim: #52616c;
+  --scale: 1;
+  --hud: var(--orange);
+  --hud-soft: color-mix(in srgb, var(--hud) 62%, transparent);
+  --hud-faint: color-mix(in srgb, var(--hud) 22%, transparent);
+  --hud-ghost: color-mix(in srgb, var(--hud) 8%, transparent);
+  --font-hud: "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif;
+  --font-wide: "Bahnschrift", "Segoe UI", sans-serif;
+  --state: var(--green);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { width: 100%; margin: 0; overflow: hidden; background: transparent; }
+body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
+
+.hatchling {
+  position: relative; width: 100%; color: var(--text); font-variant-numeric: tabular-nums;
+  background:
+    radial-gradient(ellipse at 22% 10%, color-mix(in srgb, var(--state) 16%, transparent), transparent 60%),
+    linear-gradient(0deg, var(--hud-ghost) 1px, transparent 1px) 0 0 / 100% 4px,
+    linear-gradient(160deg, color-mix(in srgb, var(--inset) 94%, var(--hud)), var(--panel) 48%, var(--bg));
+  isolation: isolate;
+}
+.hatchling.empty { opacity: 0; }
+.hatchling.low { --state: var(--yellow); }
+.hatchling::before {
+  content: ""; position: absolute; inset: 2px; z-index: -1; border: 1px solid var(--hud-faint);
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+  box-shadow: inset 0 0 26px rgba(0, 0, 0, .8);
+}
+.frame-corners { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.frame-corners i { position: absolute; width: 16px; height: 11px; border: 0 solid var(--hud-soft); }
+.frame-corners i:nth-child(1) { left: 4px; top: 4px; border-left-width: 2px; border-top-width: 2px; }
+.frame-corners i:nth-child(2) { right: 4px; top: 4px; border-right-width: 2px; border-top-width: 2px; }
+.frame-corners i:nth-child(3) { right: 4px; bottom: 4px; border-right-width: 2px; border-bottom-width: 2px; }
+.frame-corners i:nth-child(4) { left: 4px; bottom: 4px; border-left-width: 2px; border-bottom-width: 2px; }
+.scanlines { position: absolute; inset: 0; z-index: 30; pointer-events: none; opacity: .2; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .32) 3px); }
+.vignette { position: absolute; inset: 0; z-index: 29; pointer-events: none; box-shadow: inset 0 0 22px rgba(0, 0, 0, .78); }
+.hatchling.no-crt .scanlines, .hatchling.no-crt .vignette { display: none; }
+
+.content { position: relative; zoom: var(--scale); display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 11px; }
+
+.pet-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 8px; }
+.pet { width: 76px; height: 76px; display: block; }
+.pet-words { display: grid; gap: 2px; min-width: 0; }
+#name { overflow-wrap: anywhere; color: var(--text); font: 700 15px/1.1 var(--font-hud); letter-spacing: .06em; }
+#title { overflow-wrap: anywhere; color: var(--muted); font: 700 8.5px var(--font-wide); letter-spacing: .1em; }
+#mood { color: var(--state); font: 700 13px/1.1 var(--font-hud); letter-spacing: .08em; text-shadow: 0 0 10px color-mix(in srgb, var(--state) 40%, transparent); }
+.wants { justify-self: start; padding: 1px 5px; border: 1px solid color-mix(in srgb, var(--yellow) 55%, transparent); color: var(--yellow); font: 700 8px var(--font-wide); letter-spacing: .12em; }
+
+.needs { display: grid; gap: 3px; }
+.need { display: grid; grid-template-columns: 54px minmax(0, 1fr); align-items: center; gap: 6px; --tone: var(--green); }
+.need.mid { --tone: var(--yellow); }
+.need.low { --tone: var(--red); }
+.need small { color: var(--muted); font: 700 8px var(--font-wide); letter-spacing: .1em; }
+.need .track { position: relative; height: 5px; border: 1px solid var(--hud-faint); background: var(--inset); }
+.need i { position: absolute; inset: 0 auto 0 0; width: var(--fill, 0%); background: var(--tone); box-shadow: 0 0 6px color-mix(in srgb, var(--tone) 50%, transparent); }
+
+.line { margin: 0; padding-top: 4px; border-top: 1px solid var(--hud-faint); overflow-wrap: anywhere; color: var(--text); font: 600 10.5px/1.3 "Segoe UI", sans-serif; }

@@ -17,10 +17,12 @@
   <link rel="stylesheet" href="music.css">
   <link rel="stylesheet" href="watcher.css">
   <link rel="stylesheet" href="postcards.css">
+  <link rel="stylesheet" href="postcard-editor.css">
   <link rel="stylesheet" href="screenshots.css">
   <link rel="stylesheet" href="capsules.css">
   <link rel="stylesheet" href="tools.css">
   <link rel="stylesheet" href="constellation.css">
+  <link rel="stylesheet" href="games.css">
   <link rel="stylesheet" href="flightlog.css">
   <link rel="stylesheet" href="wrapped.css">
   <link rel="stylesheet" href="powerplay.css">
@@ -266,17 +268,18 @@
         <button class="nav-item" data-page="trading" aria-label="Trading" title="Trading: routes, markets and your profits"><i>⇄</i><span>Trading</span><b>12</b></button>
         <p>COCKPIT</p>
         <button class="nav-item" data-page="constellation" aria-label="Constellation" title="Your constellation: your journey drawn in the stars"><i>✧</i><span>Constellation</span><b>13</b></button>
-        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>14</b></button>
-        <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>15</b></button>
-        <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>16</b></button>
-        <button class="nav-item" data-page="capsules" aria-label="Time Capsules" title="Time Capsules: notes left for systems, and On this day"><i>⧗</i><span>Time Capsules</span><b>17</b></button>
-        <button class="nav-item" data-page="wrapped" aria-label="Void Wrapped" title="Void Wrapped: your year in Elite, told as a story"><i>✺</i><span>Void Wrapped</span><b>18</b></button>
-        <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>19</b></button>
+        <button class="nav-item" data-page="games" aria-label="Games" title="Games: something to play while the FSD charges"><i>◆</i><span>Games</span><b>14</b></button>
+        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>15</b></button>
+        <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>16</b></button>
+        <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>17</b></button>
+        <button class="nav-item" data-page="capsules" aria-label="Time Capsules" title="Time Capsules: notes left for systems, and On this day"><i>⧗</i><span>Time Capsules</span><b>18</b></button>
+        <button class="nav-item" data-page="wrapped" aria-label="Void Wrapped" title="Void Wrapped: your year in Elite, told as a story"><i>✺</i><span>Void Wrapped</span><b>19</b></button>
+        <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>20</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>20</b></button>
-        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>21</b></button>
-        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>22</b></button>
-        <button class="nav-item" data-page="tools" aria-label="Tools" title="Tools: everything you switch often, in one place"><i>⚙</i><span>Tools</span><b>23</b></button>
+        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>21</b></button>
+        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>22</b></button>
+        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>23</b></button>
+        <button class="nav-item" data-page="tools" aria-label="Tools" title="Tools: everything you switch often, in one place"><i>⚙</i><span>Tools</span><b>24</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -643,6 +646,11 @@
           <div id="constellation-workspace" class="workspace-shell loading-panel">Charting your sky…</div>
         </section>
 
+        <section class="page specialist-page" data-page-name="games">
+          <header class="page-title"><div><p>COCKPIT DOWNTIME</p><h2>Games</h2><span>Something to play while the carrier jumps or the FSD cools. Pick a card to play.</span></div></header>
+          <div id="games-workspace" class="workspace-shell loading-panel">Racking the cabinets…</div>
+        </section>
+
         <section class="page specialist-page wrapped-page-shell" data-page-name="wrapped">
           <header class="page-title"><div><p>COCKPIT KEEPSAKES</p><h2>Void Wrapped</h2><span>Your year in the black, told as a story: how far, how long, where you lived, what you found, and what the Watcher made of it all.</span></div><div class="title-actions"><button data-page="constellation">CONSTELLATION</button></div></header>
           <div id="wrapped-workspace" class="workspace-shell loading-panel">Gathering your year…</div>
@@ -849,7 +857,7 @@
                     <h4>MUSIC PLAYER</h4>
                     <p class="studio-option-note">Shows what the Music page is playing. Play and choose music on the Music page.</p>
                     <label class="studio-field"><span>Layout</span><select id="studio-music-layout" data-studio-setting="music_player_layout"><option value="card">Card</option><option value="strip">Slim strip</option></select></label>
-                    <label class="studio-field"><span>Skin<small>Six looks for the card; on the slim strip, its colours</small></span><select id="studio-music-skin" data-studio-setting="music_player_skin"><option value="deck">Command Deck</option><option value="cockpit">Cockpit HUD</option><option value="glass">Glass</option><option value="minimal">Minimal</option><option value="neon">Neon</option><option value="vinyl">Vinyl</option></select></label>
+                    <label class="studio-field"><span>Skin<small>Seven looks for the card; on the slim strip, its colours</small></span><select id="studio-music-skin" data-studio-setting="music_player_skin"><option value="deck">Command Deck</option><option value="cockpit">Cockpit HUD</option><option value="glass">Glass</option><option value="minimal">Minimal</option><option value="neon">Neon</option><option value="orb">Orb</option><option value="vinyl">Vinyl</option></select></label>
                     <label class="studio-field"><span>Visualizer<small>The same looks as the Music page's player bar</small></span><select id="studio-music-visualizer" data-studio-setting="music_player_visualizer"><optgroup label="CLASSIC"><option value="bars">Bars</option><option value="peaks">Peaks</option><option value="mirror">Mirror</option><option value="led">LED</option></optgroup><optgroup label="FLOWING"><option value="wave">Wave</option><option value="horizon">Horizon</option><option value="aurora">Aurora</option><option value="waterfall">Waterfall</option><option value="shockwave">Shockwave</option></optgroup><optgroup label="ELITE"><option value="scanner">Scanner</option><option value="witchspace">Witchspace</option></optgroup><optgroup label="PULSE"><option value="vu">VU meter</option><option value="radial">Radial</option><option value="particles">Particles</option><option value="tunnel">Warp tunnel</option><option value="spiral">Spiral</option><option value="sonar">Sonar</option></optgroup><option value="off">Off</option></select></label><label class="studio-field"><span>Neon colours<small>The Neon skin's colours: fifteen palettes, or your theme's</small></span><select id="studio-music-palette" data-studio-setting="music_player_palette"><option value="amber">Amber Term</option><option value="blue">Blue Phosphor</option><option value="c64">C64</option><option value="crimson">Crimson</option><option value="deep">Deep Space</option><option value="gold">Gold Rush</option><option value="green">Green Phosphor</option><option value="ice">Ice</option><option value="miami">Miami</option><option value="neon">Neon</option><option value="steel">Steel</option><option value="sunset">Sunset</option><option value="toxic">Toxic</option><option value="tron">Tron Grid</option><option value="vaporwave">Vaporwave</option><option value="theme">Your theme</option></select></label>
                     <label class="studio-field"><span>Visualizer colour</span><select id="studio-music-colour" data-studio-setting="music_player_colour"><option value="theme">Theme</option><option value="warm">Warm</option><option value="spectrum">Spectrum</option></select></label>
                     <label class="studio-switch"><span><b>Album art</b><small>The cover beside the track.</small></span><input type="checkbox" data-overlay-option="music_player_show_art"><i></i></label>

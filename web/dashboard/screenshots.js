@@ -76,7 +76,8 @@ function shell(root, ui) {
       <div class="album-actions">
         <button type="button" data-shots="prev" aria-label="Newer screenshot">◀</button>
         <button type="button" class="album-star-wide" id="shots-star" data-shots="favourite">☆ FAVOURITE</button>
-        <button type="button" class="primary" data-shots="copy">COPY</button>
+        <button type="button" class="primary" data-shots="postcard">✎ MAKE A POSTCARD</button>
+        <button type="button" data-shots="copy">COPY</button>
         <button type="button" data-shots="show">SHOW IN FOLDER</button>
         <button type="button" data-shots="close">CLOSE</button>
         <button type="button" data-shots="next" aria-label="Older screenshot">▶</button>
@@ -116,6 +117,17 @@ function shell(root, ui) {
     if (operation === "favourite") {
       const row = rows.find((item) => item.id === shownId);
       if (row) await toggleFavourite(row, "screenshots", ui, () => redraw(ui));
+      return;
+    }
+    if (operation === "postcard") {
+      // Made on the deck's side, then it opens in the Postcards page's editor.
+      button.disabled = true;
+      const done = await ui.command("workspace", {page: "screenshots", operation, id: shownId});
+      button.disabled = false;
+      if (!done) return ui.showToast("That screenshot couldn't be made into a postcard");
+      close(ui);
+      ui.showToast("Postcard made: opening the editor…");
+      document.querySelector('.nav-item[data-page="postcards"]')?.click();
       return;
     }
     button.disabled = true;

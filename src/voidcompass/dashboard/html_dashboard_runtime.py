@@ -124,6 +124,8 @@ class HtmlDashboardRuntime:
         self.server = HtmlDashboardServer(
             _resource_path(Path("web") / "dashboard"),
             image_root=_resource_path(Path("assets") / "images"),
+            games_root=_resource_path(Path("web") / "games"),
+            gamecard_root=_resource_path(Path("assets") / "gamecards"),
             command_callback=self._receive_command,
             host_state=host_state,
             on_asset_error=self._write_host_log,

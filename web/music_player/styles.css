@@ -240,6 +240,36 @@ body { pointer-events: none; user-select: none; }
 .player.skin-vinyl #head { width: .9rem; height: .9rem; border-radius: 50%; transform: translate(-50%, -50%); }
 .player.skin-vinyl .next li span { color: var(--yellow); }
 
+/* Orb (5.5.3.3, back in 5.6.3 as it was): the round cover ringed by the
+   track's progress, the music as rays standing out from the ring. */
+.player.skin-orb:not(.strip) {
+  grid-template-columns: 12.4rem minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-areas: "cover info" "cover progress" "cover next";
+  column-gap: 1.8rem;
+  border-radius: 8rem 1.2rem 1.2rem 8rem;
+}
+.player.skin-orb:not(.strip)::before { display: none; }
+.player.skin-orb:not(.strip) .cover {
+  align-self: center; justify-self: center; width: 9.6rem; height: 9.6rem;
+  border-radius: 50%; border: none; overflow: visible; background: transparent;
+  box-shadow: 0 0 1.8rem color-mix(in srgb, var(--mp-tone) 30%, transparent);
+}
+.player.skin-orb:not(.strip) .cover img { border-radius: 50%; }
+.player.skin-orb:not(.strip) .cover::after {
+  content: ""; position: absolute; inset: -.6rem; border-radius: 50%;
+  background: conic-gradient(var(--mp-tone) calc(var(--progress) * 1turn), color-mix(in srgb, var(--border) 70%, transparent) 0);
+  -webkit-mask: radial-gradient(circle closest-side, transparent calc(100% - .4rem), #000 calc(100% - .3rem));
+  mask: radial-gradient(circle closest-side, transparent calc(100% - .4rem), #000 calc(100% - .3rem));
+}
+.player.skin-orb.changed:not(.strip) .cover { animation: none; }
+/* The rays round the cover, in the cover's own column. */
+.player.skin-orb:not(.strip) .visualizer { position: absolute; z-index: 0; left: 0; top: 0; bottom: 0; width: 14.6rem; height: 100%; }
+.player.skin-orb:not(.strip) .rail { visibility: hidden; }
+.player.skin-orb.no-art:not(.strip) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "info" "progress" "next"; border-radius: 1.2rem; }
+.player.strip.skin-orb { border-radius: 2.2rem; }
+.player.strip.skin-orb .cover { border-radius: 50%; }
+
 /* Minimal: no plate, no frame; the words over a soft shade. */
 .player.skin-minimal:not(.strip) {
   grid-template-columns: 4.4rem minmax(0, 1fr);

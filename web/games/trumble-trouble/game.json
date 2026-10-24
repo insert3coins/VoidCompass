@@ -1,0 +1,19 @@
+{
+  "title": "Trumble Trouble",
+  "tagline": "Elite's own secret: furry Trumbles breeding in your hold. Catch them before they fill the ship.",
+  "description": "Two Trumbles came aboard at a market. They seemed harmless. They eat the food in the hold and breed, faster the more they find. Catch them in the cage, then vent them out of the airlock, or keep them until the ship docks and sell them to the buyer on the pad for more. Clear the hold for a bonus (they'll be back). When it's full of fur, the run is over.",
+  "genre": "Score attack",
+  "players": "1 player",
+  "stage": "minute",
+  "accent": "#f7b2c4",
+  "entry": "index.html",
+  "controls": [
+    ["CLICK / SPACE", "Catch a Trumble"],
+    ["ARROWS", "Move the hand"],
+    ["V", "Vent the cage"],
+    ["S", "Sell the cage (docked)"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

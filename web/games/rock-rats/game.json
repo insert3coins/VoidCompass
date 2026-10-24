@@ -1,0 +1,20 @@
+{
+  "title": "Rock Rats",
+  "tagline": "Mining in a vector asteroid field: break the rocks, send limpets for the fragments, bank a full hold.",
+  "description": "Break big rocks into smaller rocks, and every break shakes fragments loose. Send a collector limpet for each one: gravel is worth little, blue pristine rocks give more, and the glowing cores are worth the trip. A full hold banks with a bonus; lose the ship and the hold goes with it. Now and then a pirate arrives to take it: a Sidewinder, or a Viper that's harder to shake.",
+  "genre": "Mining shooter",
+  "players": "1 player",
+  "stage": "field",
+  "accent": "#7ee8ff",
+  "entry": "index.html",
+  "controls": [
+    ["MOUSE", "Aim"],
+    ["CLICK / SPACE", "Fire"],
+    ["← → / A D", "Turn"],
+    ["↑ / W", "Thrust"],
+    ["E / SHIFT", "Send a limpet"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

@@ -60,10 +60,12 @@ class ThemeEditTests(unittest.TestCase):
         deck.config["postcard_themes"]["Neon"] = postcard_themes.normalize({"base": "vintage", "paper": "#ff0000"})
         self.assertNotEqual(deck._postcard_edit_preview(), first)
 
-    def test_the_page_sends_the_angle_only_when_moved(self):
-        page = (ROOT / "web" / "dashboard" / "postcards.js").read_text(encoding="utf-8")
-        self.assertIn('if (form.dataset.angleMoved !== "1") delete values.angle;', page)
-        self.assertIn("(as saved)", page, "a theme deleted since keeps the postcard's look")
+    def test_the_editor_keeps_the_angle_it_was_saved_with(self):
+        # 5.6.3: a saved design keeps its own tilt; a fresh one starts at the theme's.
+        art = (ROOT / "web" / "dashboard" / "postcard-art.js").read_text(encoding="utf-8")
+        self.assertIn("angle: look.angle ?? -1.2", art)
+        editor = (ROOT / "web" / "dashboard" / "postcard-editor.js").read_text(encoding="utf-8")
+        self.assertIn('options.design?.v === 2 ? copy(options.design)', editor)
 
 
 class DeleteTests(unittest.TestCase):

@@ -1,0 +1,17 @@
+{
+  "title": "Shield Breaker",
+  "tagline": "Bounce a shot off your ship to break a capital ship's shield panels, then its hull plates.",
+  "description": "Each level is a capital ship laid out in plates: a Farragut Battle Cruiser, a Majestic Interdictor, a Thargoid Titan, then round again, faster. Its outline is shield panels that take two hits; inside is the hull, with armour that takes three and a core worth the most. Broken plates drop power-ups: multiball, a wider ship, a slower shot, and now and then a rebuy.",
+  "genre": "Bat and ball",
+  "players": "1 player",
+  "stage": "level",
+  "accent": "#3fd7ff",
+  "entry": "index.html",
+  "controls": [
+    ["MOUSE / ← →", "Move"],
+    ["SPACE / CLICK", "Launch the shot"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

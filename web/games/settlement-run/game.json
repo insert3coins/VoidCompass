@@ -1,0 +1,17 @@
+{
+  "title": "Settlement Run",
+  "tagline": "On foot in an Odyssey settlement: download every data port while security hunts the corridors.",
+  "description": "A maze of corridors round a settlement's security office, full of data ports to download. Four guards patrol it, each in its own way: the Sentry chases, the Hunter heads you off, the Warden flanks and the Officer keeps its distance. Grab an Energy Link and their suits overload for a while: catch them then for points, and they limp back to the office to reboot. The airlock tunnel wraps round. Empty the settlement to move on.",
+  "genre": "Maze",
+  "players": "1 player",
+  "stage": "level",
+  "accent": "#54e39a",
+  "entry": "index.html",
+  "controls": [
+    ["ARROWS / WASD", "Run"],
+    ["MOUSE", "Run towards the pointer"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

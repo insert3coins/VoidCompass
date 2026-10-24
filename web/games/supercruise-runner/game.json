@@ -1,0 +1,18 @@
+{
+  "title": "Supercruise Runner",
+  "tagline": "Race to the station in supercruise: dodge stars, planets and traffic, and hit the blue zone for the drop.",
+  "description": "An 80s road racer flown at a few hundred times the speed of light. The clock is always running; every station you drop at buys more time. Keep the throttle up on the long legs, steer round the gravity wells and exclusion zones, and for the last seven seconds bring the throttle into the blue zone. Too fast and you overshoot and loop back. A synthwave loop plays the whole way.",
+  "genre": "Racer",
+  "players": "1 player",
+  "stage": "drop",
+  "accent": "#ff3fa4",
+  "entry": "index.html",
+  "controls": [
+    ["← → / A D", "Steer"],
+    ["MOUSE", "Steer"],
+    ["↑ ↓ / W S / WHEEL", "Throttle"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

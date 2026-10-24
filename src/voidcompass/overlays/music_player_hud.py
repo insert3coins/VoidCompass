@@ -19,14 +19,15 @@ from voidcompass.overlays import overlay_chrome
 MUSIC_LAYOUTS = {"card": (460, 156), "strip": (580, 44)}
 # Skins (made over in 5.5.17): looks for the card, each its own size
 # (design px, before up next). On the slim strip a skin sets its colours.
-# A skin saved before (cassette, orb...) falls back to the deck. Neon came
-# back in 5.6.2, rebuilt, in fifteen palettes.
+# A skin saved before (cassette, radio...) falls back to the deck. Neon came
+# back in 5.6.2, rebuilt, in fifteen palettes, and Orb in 5.6.3.
 MUSIC_SKINS = {
     "deck": ("Command Deck", (460, 156)),
     "cockpit": ("Cockpit HUD", (470, 156)),
     "glass": ("Glass", (460, 156)),
     "minimal": ("Minimal", (400, 84)),
     "neon": ("Neon", (440, 232)),
+    "orb": ("Orb", (440, 156)),
     "vinyl": ("Vinyl", (480, 172)),
 }
 # The looks, shared with the Music page's player bar (5.6.2): the same list

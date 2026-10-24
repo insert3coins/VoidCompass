@@ -1,0 +1,18 @@
+{
+  "title": "No Fire Zone",
+  "tagline": "Cross a busy station approach to its pads: don't speed, don't bump anything, and don't touch the guns.",
+  "description": "Five lanes of traffic at different speeds, a buoy line, then five lanes of drifting cargo canisters to ride across: the thruster wake between them burns. Fill all five pads to clear the approach, before your docking permission runs out. Station rules apply: bump a ship and you're fined and sent back, hop too fast and you're fined for speeding, three fines and the permit goes. Fire your weapons and the station opens up on you.",
+  "genre": "Crossing",
+  "players": "1 player",
+  "stage": "approach",
+  "accent": "#54e39a",
+  "entry": "index.html",
+  "controls": [
+    ["ARROWS / WASD", "Hop"],
+    ["CLICK", "Hop towards it"],
+    ["F / SPACE", "Fire (you'll regret it)"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

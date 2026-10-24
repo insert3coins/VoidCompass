@@ -1,0 +1,18 @@
+{
+  "title": "Thargoid Swarm",
+  "tagline": "Hold the line in a Cobra against wave after wave of Thargoid drones, Scouts and Interceptors.",
+  "description": "A swarm drops out of witch space in formation and peels off to dive at you. Every third wave an Interceptor arrives: break its hearts one by one. Pick up weapon upgrades, shield cells and rebuys from the wreckage, and see what combat rank your run earns.",
+  "genre": "Arcade shooter",
+  "players": "1 player",
+  "accent": "#4ee5b0",
+  "entry": "index.html",
+  "controls": [
+    ["← → / A D", "Fly"],
+    ["MOUSE", "Steer"],
+    ["SPACE / CLICK", "Fire (hold it down)"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ],
+  "stage": "wave"
+}

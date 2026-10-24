@@ -1,0 +1,19 @@
+{
+  "title": "Scarab Patrol",
+  "tagline": "Drive an SRV across a planet's surface: hop craters and rocks on the thrusters, shoot the skimmers.",
+  "description": "A side-on patrol in a Scarab, the ground scrolling under its six wheels. Hop craters, rocks and mines on the thrusters or shoot them out of the way, and shoot the skimmer drones ahead and above before their bombs land (they leave craters too). Waypoints mark the way, each against the clock. It drives at the gravity of the world your journal says you're at: low g means long floaty hops, high g short hard ones, with the warning in red over 2 g.",
+  "genre": "Driving shooter",
+  "players": "1 player",
+  "stage": "waypoint",
+  "accent": "#ff8a3d",
+  "entry": "index.html",
+  "controls": [
+    ["SPACE / ↑ / W", "Hop"],
+    ["RIGHT-CLICK", "Hop"],
+    ["F / CLICK", "Fire ahead and up"],
+    ["← → / MOUSE", "Slower, faster"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

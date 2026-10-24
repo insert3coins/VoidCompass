@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.6.2**
+**Current version: 5.6.3**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
@@ -35,6 +35,7 @@ The command deck has a tab for each part of the game:
 - **Void Wrapped**: your year in Elite, told as a story of animated cards, from how far you flew to your fights, your soundtrack and the Watcher's verdict. Every card saves as a picture for Discord.
 - **Keepsakes**: postcards from your screenshots, time capsules (notes you leave in a system, handed back when you return), On this day, and your journey drawn as constellations.
 - **Music**: a player for your own music files, with an overlay you can show in game.
+- **Games**: fourteen arcade cabinets in Elite's world to play in the deck (from Docking Computer to Trumble Trouble), and **Hatchling**, a pocket pet that lives in real time and is raised by how you really play, with its own overlay.
 - **The Watcher**: an eye that watches your journal and thinks out loud beside it, about what you're doing, where you've been and its own long story. It remembers you between sessions. Its voice is off until you turn it on.
 
 Everything else is quiet on purpose: it shows up on the deck, in notifications and on the overlays.

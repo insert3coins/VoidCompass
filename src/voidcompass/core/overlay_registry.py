@@ -50,6 +50,8 @@ OVERLAY_SPECS = (
     # Trading (5.5.2.6): only while a trade route is being followed.
     # 5.6.1: an expedition at a glance; the HUD's EXPEDITION page stands in for it.
     OverlaySpec("expedition_hud", "expedition", "Void Compass Expedition", "expedition_overlay_enabled", "expedition_hud_x", "expedition_hud_y", (40, 560), (380, 220), "Expedition", "EXPEDITION", True, "expedition", "overlay_hotkey_expedition", "Expedition"),
+    # 5.6.3: the Games page's pocket pet, where you can see it while you fly.
+    OverlaySpec("hatchling_hud", "hatchling", "Void Compass Hatchling", "hatchling_overlay_enabled", "hatchling_hud_x", "hatchling_hud_y", (1660, 860), (250, 132), "Hatchling", "HATCHLING", False, "hatchling", "overlay_hotkey_hatchling", "Hatchling"),
     OverlaySpec("trade_route_hud", "trade-route", "Void Compass Trade Route", "trade_route_overlay_enabled", "trade_route_hud_x", "trade_route_hud_y", (1520, 480), (360, 150), "Trade Route", "TRADE", True, "trade_route", "overlay_hotkey_trade_route", "Trade Route"),
     # 5.5.3.7: the Milky Way in a corner, with you on it; and a Polaroid of
     # each screenshot taken in game.
@@ -119,6 +121,7 @@ OVERLAY_HOTKEY_SPECS = (
     ("rhino_map_range", "overlay_hotkey_rhino_map_range", "Rhino Map: range", None),
     _overlay_hotkey("postcards"),
     _overlay_hotkey("music_player"),
+    _overlay_hotkey("hatchling"),
     # The player itself, from anywhere: in game, or with the deck on another screen.
     ("music_play_pause", "overlay_hotkey_music_play_pause", "Music: play / pause", None),
     ("music_next", "overlay_hotkey_music_next", "Music: next track", None),
@@ -166,6 +169,7 @@ TEXT_SIZE_KEYS = {
     "colony_needs_hud": "colony_needs_text_scale_percent",
     "trade_route_hud": "trade_route_text_scale_percent",
     "expedition_hud": "expedition_text_scale_percent",
+    "hatchling_hud": "hatchling_text_scale_percent",
     "rig_tracker_hud": "rig_tracker_text_scale_percent",
     "rhino_map_hud": "rhino_map_text_scale_percent",
     "postcard_hud": "postcard_text_scale_percent",

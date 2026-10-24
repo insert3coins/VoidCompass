@@ -1,0 +1,19 @@
+{
+  "title": "Touchdown",
+  "tagline": "Land on a pad before the fuel runs out, at the gravity of the world you're really at.",
+  "description": "A side-on lander. Turn, burn and bring the gear down on a lit pad, level and slow; the narrow pads score most and a soft touchdown doubles it. Every landing tops the tanks up a little. If your journal says you're near a world, the game lands at its gravity: a 2.4 g world lands at 2.4 g, with the high-gravity warning in red. Away from any body it makes a world up.",
+  "genre": "Lander",
+  "players": "1 player",
+  "stage": "world",
+  "accent": "#54e39a",
+  "entry": "index.html",
+  "controls": [
+    ["← → / A D", "Turn"],
+    ["↑ / W / SPACE", "Burn"],
+    ["MOUSE", "Point the ship"],
+    ["HOLD CLICK", "Burn"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

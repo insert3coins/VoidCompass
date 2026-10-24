@@ -54,6 +54,7 @@ from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.overlays.trade_route_hud import TradeRouteHUD
 from voidcompass.overlays.expedition_hud import ExpeditionHUD
+from voidcompass.overlays.hatchling_hud import HatchlingHUD
 from voidcompass.overlays.rig_tracker import RigTrackerHUD
 from voidcompass.overlays.rhino_map_hud import RhinoMapHUD
 from voidcompass.overlays.galaxy_minimap_hud import GalaxyMinimapHUD
@@ -80,6 +81,7 @@ from voidcompass.overlays.html_jump_info_overlay import attach_html_jump_info_ov
 from voidcompass.overlays.html_colony_needs_overlay import attach_html_colony_needs_overlay
 from voidcompass.overlays.html_trade_route_overlay import attach_html_trade_route_overlay
 from voidcompass.overlays.html_expedition_overlay import attach_html_expedition_overlay
+from voidcompass.overlays.html_hatchling_overlay import attach_html_hatchling_overlay
 from voidcompass.overlays.html_rig_tracker_overlay import attach_html_rig_tracker_overlay
 from voidcompass.overlays.html_galaxy_minimap_overlay import attach_html_galaxy_minimap_overlay
 from voidcompass.overlays.html_rhino_map_overlay import attach_html_rhino_map_overlay
@@ -104,6 +106,7 @@ from voidcompass.dashboard.dashboard_api_mixin import DashboardApiMixin
 from voidcompass.dashboard.dashboard_colonisation_mixin import DashboardColonisationMixin
 from voidcompass.dashboard.dashboard_bgs_mixin import DashboardBgsMixin
 from voidcompass.dashboard.dashboard_trading_mixin import DashboardTradingMixin
+from voidcompass.dashboard.dashboard_games_mixin import DashboardGamesMixin
 from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
 from voidcompass.core.field_state import (
     get_material_category, load_colonisation_data, load_engineer_materials,
@@ -303,6 +306,7 @@ class MainDashboard(
     DashboardColonisationMixin,
     DashboardBgsMixin,
     DashboardTradingMixin,
+    DashboardGamesMixin,
     DashboardCoreMixin,
     DashboardDBMixin,
 ):
@@ -994,6 +998,7 @@ class MainDashboard(
             "colony_needs_hud",
             "trade_route_hud",
             "expedition_hud",
+            "hatchling_hud",
             "rig_tracker_hud",
             "galaxy_minimap_hud",
             "rhino_map_hud",
@@ -1084,7 +1089,7 @@ class MainDashboard(
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud",
             "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud",
-            "expedition_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud", "postcard_hud",
+            "expedition_hud", "hatchling_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud", "postcard_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -2816,6 +2821,12 @@ class MainDashboard(
         else:
             self.expedition_hud = None
 
+        if self._overlay_enabled("hatchling_hud"):
+            self.hatchling_hud = HatchlingHUD(self.root, self.config)
+            self._hatchling_overlay_refresh(force=True)
+        else:
+            self.hatchling_hud = None
+
         if self._overlay_enabled("rig_tracker_hud"):
             self.rig_tracker_hud = RigTrackerHUD(self.root, self.config)
         else:
@@ -4168,7 +4179,7 @@ class MainDashboard(
         pass
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
-            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "expedition_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
+            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "expedition_hud", "hatchling_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
             "postcard_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
@@ -5194,6 +5205,14 @@ class MainDashboard(
             self.expedition_hud.destroy()
             self.expedition_hud = None
 
+        if self._overlay_enabled("hatchling_hud"):
+            if getattr(self, "hatchling_hud", None) is None:
+                self.hatchling_hud = HatchlingHUD(self.root, self.config)
+                self._hatchling_overlay_refresh(force=True)
+        elif getattr(self, "hatchling_hud", None):
+            self.hatchling_hud.destroy()
+            self.hatchling_hud = None
+
         if self._overlay_enabled("rig_tracker_hud"):
             if getattr(self, "rig_tracker_hud", None) is None:
                 self.rig_tracker_hud = RigTrackerHUD(self.root, self.config)
@@ -5313,6 +5332,10 @@ class MainDashboard(
                 )
             elif attr == "expedition_hud":
                 attach_html_expedition_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "hatchling_hud":
+                attach_html_hatchling_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "rig_tracker_hud":
@@ -8065,6 +8088,7 @@ class MainDashboard(
             if commander:
                 self._switch_commander_profile(commander, fid)
         self._postcard_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
+        self._games_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
         self._inara_observe(ev, raw, startup_replay)
         # Jump Info learns the target before the jump phase moves on.
         self._jump_info_observe(

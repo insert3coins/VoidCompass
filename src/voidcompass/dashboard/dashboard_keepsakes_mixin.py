@@ -26,8 +26,8 @@ from voidcompass.core.config import get_active_profile
 from voidcompass.dashboard.dashboard_postcard_studio_mixin import DashboardPostcardStudioMixin
 from voidcompass.overlays import postcard_themes
 from voidcompass.overlays.postcard_picture import (
-    is_editable, jpeg_thumbnail, keep_card, kept_card, needs_picture, open_picture, open_picture_small,
-    save_postcard_picture,
+    _themed, card_colours, is_editable, jpeg_thumbnail, keep_card, kept_card, kept_info, needs_picture, open_picture,
+    open_picture_small, save_postcard_picture,
 )
 
 # Postcard previews render one at a time: the studio asks for one on every
@@ -365,6 +365,7 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             server.postcards = self.postcard_album()
             server.screenshots = self.screenshot_album()
             server.constellations = self.constellation_album()
+            server.postcard_saver = self._postcard_design_save
             # Void Wrapped, the book, the recorder and system tunes (5.5.10).
             data = getattr(self, "_html_data", None)
             if callable(data):
@@ -423,7 +424,39 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
                 feed("SYSTEM", "Screenshot copied: paste it anywhere" if done else "The screenshot couldn't be copied",
                      severity="INFO" if done else "WARN")
             return done
+        if operation == "postcard":
+            return self._postcard_from_screenshot(card_id)
         return False
+
+    def _postcard_from_screenshot(self, shot_id):
+        """Any screenshot as a new postcard: the place from its name, the
+        day and time from the file; then it opens in the editor."""
+        album = self.screenshot_album()
+        path = album.path(shot_id)
+        picture = open_picture(path) if path else None
+        if picture is None:
+            return False
+        row = next((item for item in album.rows() if item["id"] == shot_id), {})
+        taken = os.path.getmtime(path)
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(taken))
+        system = str(row.get("system") or "")
+        card = postcard_card({"System": system, "timestamp": stamp}, system=system, serial=0, now=int(taken * 1000))
+        card["greeting"] = postcard_options(self.config)["greeting"]
+        options = postcard_options(self.config)
+        palette = dict(themes.ACTIVE_PALETTE or {})
+        saved = save_postcard_picture(card, picture, postcards_folder(self.config), palette, style=options["style"],
+                                      theme=options["theme"], postmark=options["postmark"], sizes=options["sizes"])
+        if not saved:
+            return False
+        keep_card(saved, card, picture, {"style": options["style"], "theme": options["theme"], "palette": palette,
+                                         "postmark": options["postmark"], "sizes": options["sizes"]})
+        from voidcompass.services.postcard_album import postcard_id
+        self._postcard_open_next = postcard_id(os.path.basename(saved))
+        self._postcard_album_cache = None
+        publish = getattr(self, "_schedule_html_dashboard_publish", None)
+        if callable(publish):
+            publish(immediate=True)
+        return True
 
     def _html_postcards_workspace(self):
         """The deck's Postcards page: every postcard saved as a picture,
@@ -438,6 +471,10 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
                 row["editable"] = is_editable(os.path.join(folder, row["file"]))
                 row["needs_picture"] = row["editable"] and needs_picture(os.path.join(folder, row["file"]))
                 row["taken"] = saved_at(row["file"]) or row["at"]
+                info = kept_info(os.path.join(folder, row["file"])) if row["editable"] else None
+                card = (info or {}).get("card") or {}
+                row.update(system=str(card.get("place") or card.get("title") or row["title"]), region=str(card.get("region") or ""),
+                           note=str(card.get("note") or "")[:160], designed=bool(((info or {}).get("settings") or {}).get("design")))
             cache = (folder, now, rows)
             self._postcard_album_cache = cache
         options = postcard_options(self.config)
@@ -473,6 +510,8 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             "editing": dict(getattr(self, "_postcard_editing", None) or {}),
             # Older postcards being given their card back.
             "restore": dict(getattr(self, "_postcard_restore_state", None) or {}),
+            # Made from a screenshot on its page: the editor opens on it.
+            "open_next": str(getattr(self, "_postcard_open_next", "") or ""),
         }
 
     def _handle_postcards_command(self, operation, payload):
@@ -523,6 +562,14 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             return self._postcard_set_edit_draft(card_id, payload)
         if operation == "edit_picture":
             return self._postcard_swap_picture(card_id, payload.get("path"))
+        if operation == "edit_photo":
+            # Another screenshot from the album, or a file you chose (5.6.3).
+            shot = str(payload.get("shot") or "")[:16]
+            chosen = self.screenshot_album().path(shot) if shot else payload.get("path")
+            return bool(chosen) and self._postcard_swap_picture(card_id, chosen)
+        if operation == "opened":
+            self._postcard_open_next = ""
+            return True
         if operation == "restore":
             return self._postcard_restore_start([card_id] if card_id else None)
         return False
@@ -597,9 +644,56 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             "postmark": bool(settings.get("postmark")),
             "sizes": {part: round(float((settings.get("sizes") or {}).get(part) or 1.0) * 100) for part in POSTCARD_TEXT_PARTS},
             "photo": picture is not None,
+            # The editor (5.6.3) draws the card itself from these.
+            "info": {key: card.get(key) for key in ("title", "place", "region", "greeting", "note", "signed", "doing",
+                                                    "coordinates", "date", "time", "facts", "kind")}
+                    | {"system": card.get("place") or card.get("title") or "", "photo": picture is not None,
+                       "postmark": bool(settings.get("postmark")), "base": settings.get("style") or "polaroid",
+                       "sizes": {part: round(float((settings.get("sizes") or {}).get(part) or 1.0) * 100) for part in POSTCARD_TEXT_PARTS}},
+            "design": settings.get("design") if isinstance(settings.get("design"), dict) else None,
+            "looks": self._postcard_looks(settings.get("palette") or None, theme),
+            "shots": [{"id": row["id"], "title": row.get("title") or ""} for row in self.screenshot_album().rows()[:48]],
         }
         self._postcard_edit_draft = None
         return True
+
+    @staticmethod
+    def _postcard_looks(palette, theme):
+        """Each of the four looks' paper, ink and lettering, as hex, with the
+        card's own theme over the one it was built on."""
+        def hexed(colour):
+            return "#%02x%02x%02x" % tuple(colour[:3])
+        looks = {}
+        for base in ("polaroid", "airmail", "holo", "vintage"):
+            colours = card_colours(palette, base)
+            if theme and (theme.get("base") or "polaroid") == base:
+                colours = _themed(colours, theme)
+            looks[base] = {key: hexed(colours[key]) for key in ("paper", "ink", "soft", "greet")}
+            if theme and (theme.get("base") or "polaroid") == base:
+                looks[base].update({key: theme[key] for key in ("font", "filter", "angle", "background", "bg_colour") if theme.get(key) not in (None, "")})
+        return looks
+
+    def _postcard_design_save(self, payload):
+        """The editor's drawing, from the deck server's save route: over the
+        postcard, or as a new one beside it."""
+        import base64
+        card_id = str(payload.get("id") or "")[:16]
+        design = payload.get("design")
+        if not isinstance(design, dict) or len(str(design)) > 400_000:
+            return {"ok": False, "error": "no design"}
+        try:
+            png = base64.b64decode(str(payload.get("png") or ""), validate=True)
+        except ValueError:
+            return {"ok": False, "error": "not a picture"}
+        saved = self.postcard_album().save_design(card_id, png, design, as_new=payload.get("mode") == "new")
+        if not saved:
+            return {"ok": False, "error": "not saved"}
+        self._postcard_album_cache = None
+        self._postcard_editing = None
+        publish = getattr(self, "_schedule_html_dashboard_publish", None)
+        if callable(publish):
+            self._ui_post(publish, immediate=True, key="postcard-album")
+        return {"ok": True, "id": saved}
 
     def _postcard_edit_save(self, card_id, payload):
         edited = self._postcard_edited(card_id, payload)

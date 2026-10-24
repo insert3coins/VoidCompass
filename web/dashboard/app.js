@@ -20,6 +20,7 @@ import {renderScreenshots} from "./screenshots.js";
 import {renderCapsules} from "./capsules.js";
 import {renderTools} from "./tools.js";
 import {renderConstellation} from "./constellation.js";
+import {renderGames} from "./games.js";
 import {renderFlightLogs} from "./flightlog.js";
 import {renderWrapped} from "./wrapped.js";
 
@@ -157,7 +158,8 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".tr-ranges button", ".tr-station-row", ".tools-filter button", ".tools-segments button",
   ".pc-tabs button", ".pc-filter button", ".pc-look", ".pc-grid button", ".pc-step",
   ".sky-views button", ".sky-stars button", ".sky-saved ol button",
-  ".wrapped-years button", ".wrapped-index button", ".wrapped-start",
+  ".wrapped-years button", ".wrapped-index button", ".wrapped-start", ".game-card",
+  ".pe button", ".pc-show button", ".pc-hero-card", ".pc-timeline li button",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -3900,6 +3902,7 @@ function renderWorkspace(state) {
     capsules: (data) => renderCapsules(data, WORKSHOP_UI),
     tools: (data) => renderTools(data, WORKSHOP_UI),
     constellation: (data) => renderConstellation(data, WORKSHOP_UI),
+    games: (data) => renderGames(data, WORKSHOP_UI),
     wrapped: (data) => renderWrapped(data, WORKSHOP_UI),
   };
   renderers[page]?.(workspace.data || {});

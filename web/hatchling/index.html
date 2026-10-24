@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Hatchling</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <!-- Hatchling (5.6.3): the Games page's pocket pet, while you fly. -->
+  <main id="hatchling" class="hatchling empty">
+    <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="scanlines"></div><div class="vignette"></div>
+    <div id="content" class="content">
+      <div class="pet-row">
+        <canvas id="pet" class="pet" width="84" height="84" aria-hidden="true"></canvas>
+        <div class="pet-words">
+          <strong id="name"></strong>
+          <small id="title"></small>
+          <b id="mood"></b>
+          <span id="wants" class="wants" hidden></span>
+        </div>
+      </div>
+      <div id="needs" class="needs"></div>
+      <p id="line" class="line" hidden></p>
+    </div>
+  </main>
+  <script src="/assets/frame-cap.js"></script>
+  <script src="/assets/overlay-layout.js"></script>
+  <script src="/assets/overlay-client.js"></script>
+  <script src="/assets/hatchling-art.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

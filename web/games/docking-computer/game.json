@@ -1,0 +1,19 @@
+{
+  "title": "Docking Computer",
+  "tagline": "The original's famous moment: match the station's spin and fly through the slot, in green wireframe.",
+  "description": "A Coriolis station turns ahead of you, and its slot turns with it. Roll to match it, steer to line up, and throttle down: through the slot under 110 m/s and you're docked. Too fast or off-angle and you scrape the face and lose shields. Ships leave the slot as you come in, and later stations are a Dodecahedron and an Ocellus, spinning faster. Lined up, the Blue Danube plays. Scored on time, speed at the slot and shields left.",
+  "genre": "Flight",
+  "players": "1 player",
+  "stage": "station",
+  "accent": "#54ff7a",
+  "entry": "index.html",
+  "controls": [
+    ["ARROWS / MOUSE", "Steer onto the slot"],
+    ["A D / Q E", "Roll"],
+    ["MOUSE BUTTONS", "Roll right / left"],
+    ["W S / WHEEL", "Throttle"],
+    ["P / ESC", "Pause"],
+    ["M", "Sound on or off"],
+    ["C", "CRT screen on or off"]
+  ]
+}

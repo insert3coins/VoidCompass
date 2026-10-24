@@ -67,7 +67,7 @@
 .pc-panel[hidden] { display: none; }
 .pc-block { display: grid; gap: 10px; padding: 14px 16px 16px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); }
 .pc-block > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
-.pc-block h4, .pc-editor h4 { margin: 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.pc-block h4 { margin: 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
 .pc-block button, .pc-toolbar > button, .pc-restore button { min-height: 30px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
 .pc-hint { margin: 0; color: var(--muted); font: italic 11.5px/1.45 "Segoe UI", sans-serif; }
 
@@ -117,16 +117,15 @@
 .pc-tile .album-star:hover, .pc-tile .album-star.on { color: var(--yellow); border-color: color-mix(in srgb, var(--yellow) 55%, transparent); }
 @media (prefers-reduced-motion: reduce) { .pc-tile img { transition: none; } }
 
-/* The viewer: the postcard large, its details and the editor beside it. */
+#pc-group { min-height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
+
+/* The viewer: the postcard large, its details beside it. */
 .pc-viewer { position: fixed; inset: 0; z-index: 1000; display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   background: color-mix(in srgb, var(--bg) 97%, transparent); backdrop-filter: blur(6px); }
 .pc-viewer[hidden] { display: none; }
 .pc-stage { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; align-items: center; min-width: 0; padding: 24px 8px; }
 .pc-stage figure { position: relative; display: grid; place-items: center; margin: 0; min-width: 0; height: 100%; }
 .pc-stage img { display: block; max-width: 100%; max-height: calc(100vh - 60px); object-fit: contain; }
-.pc-stage-note { position: absolute; top: 0; left: 50%; transform: translateX(-50%); padding: 4px 10px; border: 1px solid var(--yellow);
-  background: color-mix(in srgb, var(--bg) 85%, transparent); color: var(--yellow); font: 700 9.5px Consolas, monospace; letter-spacing: .14em; }
-.pc-stage-note[hidden] { display: none; }
 .pc-step { width: 44px; height: 64px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 80%, transparent);
   color: var(--text); font: 28px/1 "Segoe UI", sans-serif; cursor: pointer; }
 .pc-step:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
@@ -142,18 +141,6 @@
 .pc-side-actions button { min-height: 34px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
 .pc-side-note { margin: 0; color: var(--muted); font: italic 11.5px/1.45 "Segoe UI", sans-serif; }
 .pc-side-note:empty { display: none; }
-.pc-editor { display: grid; gap: 10px; }
-.pc-editor[hidden] { display: none; }
-.pc-editor label { display: grid; gap: 4px; min-width: 0; }
-.pc-editor label > span { display: flex; justify-content: space-between; gap: 6px; color: var(--text); font: 600 11.5px "Segoe UI", sans-serif; }
-.pc-editor small { color: var(--muted); font: 10px Consolas, monospace; }
-.pc-editor input:not([type]), .pc-editor select, .pc-editor textarea { min-width: 0; min-height: 30px; padding: 4px 8px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; resize: vertical; }
-.pc-editor input[type="range"] { accent-color: var(--accent); }
-.pc-editor .pc-check { display: flex; align-items: center; gap: 8px; }
-.pc-editor .pc-check input { accent-color: var(--accent); margin: 0; }
-.pc-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.pc-editor button { min-height: 32px; padding: 0 14px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
 @media (max-width: 900px) {
   .pc-viewer { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; overflow-y: auto; }
   .pc-side { border-left: 0; border-top: 1px solid var(--border); overflow: visible; }
@@ -210,7 +197,6 @@
 .pc-sizes b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
 .pc-sizes small { color: var(--muted); font: 11px/1.4 "Segoe UI", sans-serif; }
 .pc-sizes select, .pc-editor-sizes select { min-height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: 12px "Segoe UI", sans-serif; }
-.pc-editor-sizes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .pc-theme { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; }
 .pc-theme label { display: grid; gap: 4px; min-width: 0; }
 .pc-theme label > span { display: flex; justify-content: space-between; align-items: center; gap: 6px; color: var(--text); font: 600 11.5px "Segoe UI", sans-serif; }

@@ -23,6 +23,7 @@ const day = (stamp) => String(stamp || "").slice(0, 10);
 let view = "overview";
 let selected = "";
 let creating = false;
+let renaming = "";
 let last = {};
 let drawn = "";
 let confirming = {key: "", until: 0};
@@ -112,13 +113,19 @@ function hero(row, data, esc) {
   const figure = progress.share != null && row.status === "active"
     ? `<b>${Math.round(n(progress.share) * 100)}%</b><small>${progress.to_go_ly ? `${ly(progress.to_go_ly)} to go` : progress.next ? "find where the legs are to measure it" : "every leg reached"}</small>`
     : `<b>${ly(row.stats?.ly)}</b><small>flown</small>`;
+  const title = renaming === row.id
+    ? `<form class="ex-form ex-rename" data-ex-form="rename" data-expedition-id="${esc(row.id)}">
+      <label><span>NAME</span><input name="name" maxlength="100" value="${esc(field("rename", "name", row.name))}" required></label>
+      <label><span>WHAT IT'S FOR</span><input name="description" maxlength="400" value="${esc(field("rename", "description", row.description || ""))}"></label>
+      <div class="ex-actions"><button type="submit" class="primary">SAVE</button>${button("CANCEL", "rename_form", {}, esc)}</div></form>`
+    : `<h3>${esc(row.name)}</h3>${row.description ? `<span>${esc(row.description)}</span>` : ""}`;
   return `<section class="ex-hero ${esc(row.status)}">
     <div class="ex-hero-head"><div class="ex-hero-title"><small>${STATUS[row.status] || esc(row.status)}${row.ironman ? " · IRONMAN" : ""} · SINCE ${esc(day(row.started))}</small>
-      <h3>${esc(row.name)}</h3>${row.description ? `<span>${esc(row.description)}</span>` : ""}
+      ${title}
       ${row.example ? `<p class="ex-credit">${esc(row.credit)}${row.source_url ? ` · ${button("SOURCE PAGE", "open_link", {url: row.source_url}, esc, "ex-linkish")}` : ""}</p>` : ""}</div>
       <div class="ex-hero-figure">${figure}</div></div>
     ${voyage(row, esc)}
-    <div class="ex-actions">${statusButtons}${confirmButton(`delete-${row.id}`, "DELETE", "delete", {"expedition-id": row.id}, esc)}</div>
+    <div class="ex-actions">${statusButtons}${button("EDIT NAME", "rename_form", {id: row.id}, esc)}${confirmButton(`delete-${row.id}`, "DELETE", "delete", {"expedition-id": row.id}, esc)}</div>
   </section>${job}`;
 }
 
@@ -373,6 +380,12 @@ export function handleExpeditionsClick(event, ui) {
   if (op === "view") { view = control.dataset.view || "overview"; redraw(); return true; }
   if (op === "select") { selected = control.dataset.id || ""; redraw(); return true; }
   if (op === "new") { creating = !creating; redraw(); return true; }
+  if (op === "rename_form") {
+    renaming = renaming || !control.dataset.id ? "" : control.dataset.id;
+    delete drafts.rename;
+    redraw();
+    return true;
+  }
   if (op === "place_filter") { placeFilter = control.dataset.kind || "all"; redraw(); return true; }
   if (op === "place_form") { addingPlace = !addingPlace; redraw(); return true; }
   if (control.dataset.confirmKey) {
@@ -441,6 +454,7 @@ export function handleExpeditionsSubmit(event, ui) {
   if (form.dataset.placeId) extra.place_id = form.dataset.placeId;
   delete drafts[draftKey(form)];
   if (name === "create") creating = false;
+  if (name === "rename") renaming = "";
   if (name === "add_place") addingPlace = false;
   if (name === "import") fileNote = "";
   send(ui, name, {...values, ...extra});
@@ -451,5 +465,6 @@ export function resetExpeditions() {
   Object.keys(drafts).forEach((key) => delete drafts[key]);
   selected = "";
   creating = false;
+  renaming = "";
   drawn = "";
 }

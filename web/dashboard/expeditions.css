@@ -59,6 +59,8 @@
 .ex-hero small { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
 .ex-hero h3 { margin: 0; color: var(--text); font: 600 26px/1.15 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; overflow-wrap: anywhere; text-wrap: balance; }
 .ex-hero-title > span { max-width: 80ch; color: var(--muted); font: 12.5px/1.5 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.ex-rename { max-width: 640px; }
+.ex-rename input { font: 600 18px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; }
 .ex-hero-figure { display: grid; justify-items: end; }
 .ex-hero-figure b { color: var(--green); font: 600 34px/1 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
 .ex-hero-figure small { margin-top: 4px; text-align: right; }

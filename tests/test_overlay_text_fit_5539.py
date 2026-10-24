@@ -1,4 +1,4 @@
-"""Prospector, Cargo, Planet Materials, Station Link, the Rig Tracker, the Rhino Map (5.5.18) and Expedition (5.6.1) at large text (5.5.3.9): the page's columns grow with
+"""Prospector, Cargo, Planet Materials, Station Link, the Rig Tracker, the Rhino Map (5.5.18), Expedition (5.6.1) and Hatchling (5.6.3) at large text (5.5.3.9): the page's columns grow with
 the text size as the window does, so nothing is cut off at 150% or 200%."""
 from __future__ import annotations
 
@@ -8,7 +8,9 @@ import unittest
 from urllib.parse import urlsplit
 
 from voidcompass.overlays.cargo_hud import build_cargo_model
+from voidcompass.core import hatchling
 from voidcompass.overlays.expedition_hud import build_expedition_model
+from voidcompass.overlays.hatchling_hud import build_hatchling_model
 from voidcompass.overlays.planet_materials_hud import build_planet_materials_model
 from voidcompass.overlays.prospector_hud import build_prospector_model
 from voidcompass.overlays.rig_tracker import build_rig_model, hold_row
@@ -72,6 +74,15 @@ def _rhino_model():
 
 # The Expedition overlay (5.6.1) on a busy trip: long names, a surface
 # compass, every warning. The Nav HUD's coverage test uses it too.
+def _pet():
+    """A long-named, hungry, frightened larva with a fresh log line."""
+    state = hatchling.new_state()
+    hatchling.act(state, "hatch", {"species": "larva", "name": "Thrummington-Vex"}, 0.0)
+    state["pet"]["needs"].update(hunger=20.0, mood=30.0)
+    hatchling.observe(state, {"event": "ShieldState", "ShieldsUp": False}, 7200.0)
+    return hatchling.view(state, 7200.0), 7210.0
+
+
 EXPEDITION_SAMPLE = (
     {"name": "Distant Worlds 3: The Long Way Round to Beagle Point", "ironman": True},
     {"progress": {"share": .42, "done_ly": 27_500.4, "to_go_ly": 37_779.6,
@@ -96,6 +107,7 @@ OVERLAYS = (
     ("rig_tracker", "rigs", RIG_MODEL, 420, 130, 420),
     ("rhino_map", "rhino", _rhino_model(), 240, 280, 360),
     ("expedition", "expedition", build_expedition_model(*EXPEDITION_SAMPLE), 380, 120, 640),
+    ("hatchling", "hatchling", build_hatchling_model(*_pet()), 250, 110, 260),
 )
 
 

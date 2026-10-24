@@ -1,0 +1,89 @@
+/* Games (5.6.3): the cabinet cards, and the player a card opens. */
+.games-page { --game-tone: var(--accent); display: grid; gap: 14px; }
+
+.games-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 320px)); gap: 16px; }
+.games-empty { display: grid; gap: 6px; padding: 28px; border: 1px dashed var(--border); color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.games-empty strong { color: var(--text); font: 700 11px Consolas, monospace; letter-spacing: .14em; }
+
+.game-card { --game-tone: var(--accent); display: grid; grid-template-rows: auto 1fr; padding: 0; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text); text-align: left; text-transform: none; letter-spacing: normal; cursor: pointer; overflow: hidden;
+  transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease; }
+.game-card:hover, .game-card:focus-visible { border-color: var(--game-tone); transform: translateY(-2px);
+  box-shadow: 0 10px 30px -14px color-mix(in srgb, var(--game-tone) 70%, transparent); outline: none; }
+
+.game-art { position: relative; aspect-ratio: 8 / 9; max-width: 100%; overflow: hidden; background: var(--bg); border-bottom: 1px solid var(--border-soft); }
+.game-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.game-play { position: absolute; right: 12px; bottom: 12px; padding: 6px 14px; border: 1px solid var(--game-tone);
+  background: color-mix(in srgb, var(--bg) 78%, transparent); color: var(--game-tone); font: 700 10px Consolas, monospace;
+  font-style: normal; letter-spacing: .18em; opacity: 0; transform: translateY(4px); transition: opacity .16s ease, transform .16s ease; }
+.game-card:hover .game-play, .game-card:focus-visible .game-play { opacity: 1; transform: none; }
+
+/* The stand-in until a card picture is made. */
+.game-art-blank { position: absolute; inset: 0; display: grid; place-content: center; gap: 8px; padding: 18px; text-align: center;
+  background: radial-gradient(ellipse at 50% 120%, color-mix(in srgb, var(--game-tone) 34%, transparent), transparent 62%), var(--bg); }
+.game-art-grid { position: absolute; inset: 0; opacity: .35;
+  background-image: linear-gradient(color-mix(in srgb, var(--game-tone) 30%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--game-tone) 30%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px; mask-image: linear-gradient(transparent, #000 70%); }
+.game-art-blank strong { position: relative; color: var(--game-tone); font: 700 26px/1.05 "Bahnschrift SemiCondensed", "Arial Narrow", sans-serif;
+  letter-spacing: .16em; text-transform: uppercase; text-shadow: 0 0 18px color-mix(in srgb, var(--game-tone) 60%, transparent); text-wrap: balance; }
+.game-art-blank small { position: relative; color: var(--dim); font: 9px Consolas, monospace; letter-spacing: .08em; overflow-wrap: anywhere; }
+
+.game-card-body { display: grid; grid-template-rows: auto 1fr auto; gap: 8px; padding: 14px 16px 14px; }
+.game-card-body header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.game-card-body h3 { margin: 0; color: var(--text); font: 600 19px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .04em; }
+.game-card-body header span { flex: none; color: var(--game-tone); font: 700 9px Consolas, monospace; letter-spacing: .14em; text-transform: uppercase; }
+.game-card-body p { margin: 0; color: var(--muted); font: 12.5px/1.5 "Segoe UI", sans-serif; }
+.game-card-body footer { display: flex; align-items: end; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
+.game-best { display: grid; gap: 2px; }
+.game-best b { color: var(--text); font: 700 18px Consolas, monospace; font-variant-numeric: tabular-nums; }
+.game-best small, .game-card-body footer > small { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+
+/* The player. */
+.games-player { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid var(--border); background: var(--bg); }
+.games-player[hidden], .games-library[hidden] { display: none; }
+.games-bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.games-bar > div { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.games-bar small { color: var(--game-tone); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.games-bar strong { overflow: hidden; color: var(--text); font: 600 18px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .06em; text-overflow: ellipsis; white-space: nowrap; }
+.games-bar button { min-height: 32px; padding: 0 14px; border: 1px solid var(--border); background: transparent; color: var(--muted);
+  font: 700 10px Consolas, monospace; letter-spacing: .12em; cursor: pointer; }
+.games-bar button:hover, .games-bar button:focus-visible { border-color: var(--game-tone); color: var(--game-tone); outline: none; }
+
+.games-stage { position: relative; height: clamp(480px, calc(100vh - 290px), 1400px); min-width: 0; background: #000; }
+.games-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #000; }
+
+.games-side { display: grid; align-content: start; gap: 18px; padding: 16px; border-left: 1px solid var(--border); background: var(--panel); overflow: auto; }
+.games-side section { display: grid; gap: 8px; }
+.games-side small { color: var(--game-tone); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.games-side p { margin: 0; color: var(--muted); font: 12.5px/1.55 "Segoe UI", sans-serif; }
+.games-input { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); }
+.games-input[hidden] { display: none; }
+.games-input button { min-height: 30px; padding: 0 6px; border: 0; border-right: 1px solid var(--border); background: transparent; color: var(--muted);
+  font: 700 9px Consolas, monospace; letter-spacing: .08em; cursor: pointer; }
+.games-input button:last-child { border-right: 0; }
+.games-input button:hover, .games-input button:focus-visible { color: var(--text); outline: none; }
+.games-input button[aria-pressed="true"] { background: color-mix(in srgb, var(--game-tone) 18%, transparent); color: var(--game-tone); }
+.games-side dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; }
+.games-side dt { color: var(--text); font: 700 10px Consolas, monospace; letter-spacing: .06em; white-space: nowrap; }
+.games-side dd { margin: 0; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.games-side ol { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: run; }
+.games-side li { display: grid; grid-template-columns: 22px 1fr auto; grid-template-areas: "n score when" "n note note"; gap: 1px 8px; padding: 7px 0;
+  border-bottom: 1px solid var(--border-soft); counter-increment: run; }
+.games-side li::before { content: counter(run, decimal-leading-zero); grid-area: n; color: var(--dim); font: 700 10px Consolas, monospace; padding-top: 3px; }
+.games-side li b { grid-area: score; color: var(--text); font: 700 14px Consolas, monospace; font-variant-numeric: tabular-nums; }
+.games-side li span { grid-area: note; color: var(--muted); font: 10px Consolas, monospace; letter-spacing: .06em; }
+.games-side li small { grid-area: when; color: var(--dim); letter-spacing: .08em; }
+.games-side li.games-none { display: block; color: var(--dim); font: italic 12px "Segoe UI", sans-serif; }
+.games-side li.games-none::before { content: none; }
+
+/* Full screen: the game and its bar fill the window. */
+.games-player:fullscreen { grid-template-columns: minmax(0, 1fr); }
+.games-player:fullscreen .games-side { display: none; }
+.games-player:fullscreen .games-stage { height: auto; }
+
+@media (max-width: 1100px) {
+  .games-player { grid-template-columns: minmax(0, 1fr); }
+  .games-side { border-left: 0; border-top: 1px solid var(--border); }
+}

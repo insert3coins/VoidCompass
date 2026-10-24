@@ -103,7 +103,9 @@ class PageTests(unittest.TestCase):
         page = (ROOT / "web" / "dashboard" / "postcards.js").read_text(encoding="utf-8")
         self.assertIn("function loadPreview(img, src)", page)
         self.assertIn('loadPreview(ui.byId("pc-preview-img"), previewSrc())', page)
-        self.assertIn("loadPreview(ui.byId(\"pc-full\")", page)
+        # 5.6.3: the editor draws in the page, so it asks the deck for no previews.
+        editor = (ROOT / "web" / "dashboard" / "postcard-editor.js").read_text(encoding="utf-8")
+        self.assertNotIn("postcard-preview", editor)
 
 
 if __name__ == "__main__":

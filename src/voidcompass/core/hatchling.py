@@ -1,0 +1,572 @@
+"""Hatchling (5.6.3): a pocket pet in the cockpit, after the Tamagotchi.
+
+It lives in real time, VoidCompass open or not: its needs fall by the hour
+and catch up from the clock when it's loaded. How it fares comes partly
+from the Games page (feeding, playing, venting the hold) and partly from
+how you really play, read from the journal: food bought at a market stocks
+its larder, exploring keeps it curious, combat scares it.
+
+It can't die. Left long enough with no health it hibernates, and care
+brings it back; a week hibernating and it is gone for good, into the
+memorial, and a new egg can be chosen.
+
+Everything here is plain data in, plain data out: the deck keeps one per
+commander in the profile folder.
+"""
+
+from __future__ import annotations
+
+import copy
+import json
+import re
+
+NEEDS = ("hunger", "mood", "clean", "health", "energy")
+STAGES = (("egg", 0.5), ("hatchling", 24.0), ("juvenile", 72.0), ("adult", None))
+HIBERNATE_DAYS = 7
+STORES_EVERY_H = 24
+STORES_COUNT = 3
+LARDER_MOST = 99
+LOG_KEEP = 14
+STEP_H = 1 / 6          # the clock catches up ten minutes at a time
+CATCH_UP_DAYS = 30
+
+SPECIES = {
+    "larva": {
+        "name": "Thargoid larva", "food": "HUNGER", "stores": "foodcartridges",
+        "blurb": "From a strange egg found in a damaged Thargoid structure. It hums, glows green when happy, and hates Guardian things.",
+        "forms": {"standard": "Drone", "explored": "Wanderer", "scarred": "Battle-born", "neglected": "Husk", "rare": "Hive Herald"},
+        "names": ("Hum", "Glim", "Xeno", "Pip", "Thrumm"),
+    },
+    "bot": {
+        "name": "Remlok companion bot", "food": "POWER", "stores": "hydrogenfuel",
+        "blurb": "A little maintenance drone that beeps and wants upgrades, not food.",
+        "forms": {"standard": "Maintenance Unit", "explored": "Pathfinder", "scarred": "Salvager", "neglected": "Rust Bucket",
+                  "rare": "Cartographer Prime"},
+        "names": ("Bolt", "Widget", "R3-MK", "Sprocket", "Beep"),
+    },
+    "sample": {
+        "name": "Exobiology sample", "food": "NUTRIENTS", "stores": "algae",
+        "blurb": "Grown in a sample canister: it needs light, warmth and the right atmosphere.",
+        "forms": {"standard": "Colony", "explored": "Wildbloom", "scarred": "Scorched", "neglected": "Wilted", "rare": "Luminous Bloom"},
+        "names": ("Spore", "Moss", "Tubby", "Fungi", "Bloom"),
+    },
+}
+SAMPLE_KINDS = {"bacterium": "Bacterium", "tubus": "Tubus", "fungoida": "Fungoida"}
+
+# The larder: journal commodity symbols, who eats them and what they do.
+ITEMS = {
+    "foodcartridges": {"name": "Food Cartridges", "kind": "snack", "fill": 14, "mood": 0, "for": ("larva",)},
+    "syntheticmeat": {"name": "Synthetic Meat", "kind": "meal", "fill": 30, "mood": 2, "for": ("larva",)},
+    "animalmeat": {"name": "Animal Meat", "kind": "meal", "fill": 36, "mood": 4, "for": ("larva",)},
+    "fish": {"name": "Fish", "kind": "meal", "fill": 34, "mood": 6, "for": ("larva",)},
+    "fruitandvegetables": {"name": "Fruit and Vegetables", "kind": "meal", "fill": 26, "mood": 3, "for": ("larva", "sample")},
+    "coffee": {"name": "Coffee", "kind": "treat", "fill": 6, "mood": 14, "for": ("larva", "sample")},
+    "tea": {"name": "Tea", "kind": "treat", "fill": 6, "mood": 12, "for": ("larva", "sample")},
+    "lavianbrandy": {"name": "Lavian Brandy", "kind": "treat", "fill": 4, "mood": 20, "for": ("larva",)},
+    "algae": {"name": "Algae", "kind": "snack", "fill": 14, "mood": 0, "for": ("sample",)},
+    "grain": {"name": "Grain", "kind": "meal", "fill": 28, "mood": 2, "for": ("sample",)},
+    "biowaste": {"name": "Biowaste", "kind": "meal", "fill": 34, "mood": 6, "for": ("sample",)},
+    "hydrogenfuel": {"name": "Hydrogen Fuel", "kind": "snack", "fill": 14, "mood": 0, "for": ("bot",)},
+    "powergenerators": {"name": "Power Generators", "kind": "meal", "fill": 36, "mood": 4, "for": ("bot",)},
+    "robotics": {"name": "Robotics", "kind": "meal", "fill": 30, "mood": 8, "for": ("bot",)},
+    "powerconverter": {"name": "Power Converter", "kind": "treat", "fill": 8, "mood": 16, "for": ("bot",)},
+    "basicmedicines": {"name": "Basic Medicines", "kind": "medicine", "fill": 0, "mood": 0, "for": ("larva",)},
+    "advancedmedicines": {"name": "Advanced Medicines", "kind": "medicine", "fill": 0, "mood": 4, "for": ("larva",)},
+    "agronomictreatment": {"name": "Agronomic Treatment", "kind": "medicine", "fill": 0, "mood": 0, "for": ("sample",)},
+    "microcontrollers": {"name": "Micro Controllers", "kind": "medicine", "fill": 0, "mood": 0, "for": ("bot",)},
+}
+
+# Per hour: awake, then asleep (energy comes back while it sleeps).
+# A day away leaves it hungry, not ill; about three and it hibernates.
+DECAY = {"hunger": (3.0, 1.5), "mood": (2.0, 0.0), "clean": (2.0, 1.0), "energy": (4.0, -16.0)}
+
+
+def _clamp(value, low=0.0, high=100.0):
+    return max(low, min(high, value))
+
+
+def _number(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _clean_name(value, species):
+    name = re.sub(r"[^\w '\-.]", "", str(value or ""), flags=re.UNICODE).strip()[:16]
+    return name or SPECIES[species]["names"][0]
+
+
+def new_pet(species, name="", kind="", now=0.0):
+    species = species if species in SPECIES else "larva"
+    kind = kind if species == "sample" and kind in SAMPLE_KINDS else ("bacterium" if species == "sample" else "")
+    return {
+        "species": species, "kind": kind, "name": _clean_name(name, species),
+        "born": now, "last": now, "stage": "egg", "form": "",
+        "needs": {"hunger": 70.0, "mood": 70.0, "clean": 100.0, "health": 100.0, "energy": 80.0},
+        "asleep": False, "sick": False, "dormant_since": None, "revived": 0,
+        "larder": {SPECIES[species]["stores"]: STORES_COUNT}, "stores_at": now,
+        "care": {key: 0 for key in ("meals", "treats", "plays", "vents", "explored", "discoveries", "codex",
+                                    "scares", "rebuys", "thargoid", "guardian", "neglect_h", "stations")},
+        "stations": [], "supercruise_since": None, "log": [], "reaction": "", "reaction_at": 0.0,
+    }
+
+
+def new_state():
+    return {"version": 1, "pet": None, "memorial": [], "forms_seen": []}
+
+
+def load_state(text):
+    try:
+        state = json.loads(text)
+    except (TypeError, ValueError):
+        return new_state()
+    if not isinstance(state, dict):
+        return new_state()
+    base = new_state()
+    base.update({key: state.get(key) for key in base if key in state})
+    if not isinstance(base["pet"], dict) or base["pet"].get("species") not in SPECIES:
+        base["pet"] = None
+    else:
+        fresh = new_pet(base["pet"]["species"], base["pet"].get("name"), base["pet"].get("kind"))
+        for key, value in fresh.items():
+            base["pet"].setdefault(key, value)
+        for key, value in fresh["care"].items():
+            base["pet"]["care"].setdefault(key, value)
+    base["memorial"] = [item for item in base["memorial"] or () if isinstance(item, dict)][-20:]
+    base["forms_seen"] = [str(item) for item in base["forms_seen"] or ()][:60]
+    return base
+
+
+def say(pet, now, text, tone="", reaction=""):
+    pet["log"] = ([{"at": now, "text": str(text), "tone": tone}] + list(pet.get("log") or []))[:LOG_KEEP]
+    if reaction:
+        pet["reaction"], pet["reaction_at"] = reaction, now
+
+
+def _stage_for(age_h):
+    for name, until in STAGES:
+        if until is None or age_h < until:
+            return name
+    return "adult"
+
+
+def _adult_form(pet):
+    care = pet["care"]
+    rare = {"larva": care["thargoid"] >= 5, "bot": care["discoveries"] >= 50, "sample": care["codex"] >= 3}[pet["species"]]
+    if rare:
+        return "rare"
+    if care["neglect_h"] >= 24 or pet.get("revived"):
+        return "neglected"
+    if care["scares"] + care["rebuys"] * 5 >= 20:
+        return "scarred"
+    if care["explored"] >= 40 or care["discoveries"] >= 20:
+        return "explored"
+    return "standard"
+
+
+def _grow(state, pet, now):
+    stage = _stage_for((now - pet["born"]) / 3600)
+    if stage == pet["stage"]:
+        return
+    pet["stage"] = stage
+    if stage == "hatchling":
+        say(pet, now, f"{pet['name']} hatched!", "good", "hatched")
+    elif stage == "juvenile":
+        say(pet, now, f"{pet['name']} is growing up.", "good")
+    elif stage == "adult":
+        pet["form"] = _adult_form(pet)
+        label = SPECIES[pet["species"]]["forms"][pet["form"]]
+        seen = f"{pet['species']}:{pet['form']}"
+        if seen not in state["forms_seen"]:
+            state["forms_seen"].append(seen)
+        say(pet, now, f"Fully grown: {label}.", "good", "grown")
+
+
+def _hour(state, pet, now, hours):
+    """Let `hours` of real time pass (a short step)."""
+    needs = pet["needs"]
+    if pet["stage"] == "egg":
+        return
+    asleep = pet["asleep"]
+    for need, (awake_rate, sleep_rate) in DECAY.items():
+        needs[need] = _clamp(needs[need] - (sleep_rate if asleep else awake_rate) * hours)
+    if pet["sick"]:
+        needs["mood"] = _clamp(needs["mood"] - 2 * hours)
+    low = [need for need in ("hunger", "clean", "mood") if needs[need] < 15]
+    if low or pet["sick"]:
+        needs["health"] = _clamp(needs["health"] - min(4.0, 2 * len(low) + (1.5 if pet["sick"] else 0)) * hours)
+    elif needs["hunger"] > 50 and needs["clean"] > 50:
+        needs["health"] = _clamp(needs["health"] + 2 * hours)
+    if any(needs[need] < 20 for need in ("hunger", "mood", "clean", "health")):
+        pet["care"]["neglect_h"] += hours
+    if not pet["sick"] and needs["health"] < 40:
+        pet["sick"] = True
+        say(pet, now, f"{pet['name']} is ill.", "bad", "ill")
+    if not asleep and needs["energy"] <= 5:
+        pet["asleep"] = True
+        say(pet, now, f"{pet['name']} fell asleep where it was.", "", "asleep")
+    elif asleep and needs["energy"] >= 100:
+        pet["asleep"] = False
+        say(pet, now, f"{pet['name']} woke up.", "", "awake")
+    if needs["health"] <= 0:
+        pet["dormant_since"] = now
+        pet["asleep"] = True
+        say(pet, now, f"{pet['name']} has gone into hibernation. Care can still bring it back.", "bad", "dormant")
+
+
+def advance(state, now):
+    """Bring the pet up to `now`: its needs, its growing up, the ship's
+    stores, and a hibernation that has lasted too long."""
+    pet = state.get("pet")
+    if not pet:
+        return state
+    last = _number(pet.get("last"), now)
+    if now <= last:
+        return state
+    last = max(last, now - CATCH_UP_DAYS * 86400)
+    while last < now:
+        if pet.get("dormant_since") is not None:
+            if now - pet["dormant_since"] >= HIBERNATE_DAYS * 86400:
+                _lose(state, pet, pet["dormant_since"] + HIBERNATE_DAYS * 86400)
+                return state
+            last = now
+            break
+        step = min(STEP_H * 3600, now - last)
+        last += step
+        _grow(state, pet, last)
+        _hour(state, pet, last, step / 3600)
+    pet["last"] = now
+    if now - _number(pet.get("stores_at"), now) >= STORES_EVERY_H * 3600 and pet.get("dormant_since") is None:
+        item = SPECIES[pet["species"]]["stores"]
+        pet["larder"][item] = min(LARDER_MOST, max(pet["larder"].get(item, 0), STORES_COUNT))
+        pet["stores_at"] = now
+    return state
+
+
+def _lose(state, pet, when):
+    state["memorial"] = (state.get("memorial") or [])[-19:] + [{
+        "name": pet["name"], "species": pet["species"], "form": pet.get("form") or "",
+        "stage": pet["stage"], "born": pet["born"], "lost": when,
+    }]
+    state["pet"] = None
+
+
+def _fed_up(pet):
+    return pet.get("dormant_since") is not None or pet["stage"] == "egg"
+
+
+# ---- What you do on the Games page. ---------------------------------------------------------
+
+def act(state, action, payload, now):
+    """One thing done on the pet's screen. Returns (changed, message)."""
+    payload = payload or {}
+    advance(state, now)
+    pet = state.get("pet")
+    if action == "hatch":
+        if pet:
+            return False, "There's already one aboard."
+        species = str(payload.get("species") or "")
+        if species not in SPECIES:
+            return False, "Choose an egg first."
+        state["pet"] = new_pet(species, payload.get("name"), str(payload.get("kind") or ""), now)
+        say(state["pet"], now, "An egg, warm in its cradle.", "good", "egg")
+        return True, ""
+    if not pet:
+        return False, "Nothing aboard yet."
+    needs, name = pet["needs"], pet["name"]
+    if action == "rename":
+        pet["name"] = _clean_name(payload.get("name"), pet["species"])
+        return True, ""
+    if action == "revive":
+        if pet.get("dormant_since") is None:
+            return False, f"{name} isn't hibernating."
+        medicine = _medicine(pet)
+        if not medicine:
+            return False, f"Buy medicine for it at a market: {_medicine_names(pet['species'])}."
+        _use(pet, medicine)
+        pet.update(dormant_since=None, asleep=False, sick=False, revived=int(pet.get("revived") or 0) + 1)
+        needs.update(hunger=max(needs["hunger"], 45.0), mood=max(needs["mood"], 40.0), clean=max(needs["clean"], 60.0),
+                     health=50.0, energy=max(needs["energy"], 50.0))
+        say(pet, now, f"{name} stirred and opened its eyes. It's back.", "good", "revived")
+        return True, ""
+    if _fed_up(pet):
+        return False, "It's still an egg." if pet["stage"] == "egg" else f"{name} is hibernating."
+    if action == "lights":
+        if pet["asleep"]:
+            pet["asleep"] = False
+            if needs["energy"] < 60:
+                needs["mood"] = _clamp(needs["mood"] - 6)
+                say(pet, now, f"Lights on. {name} grumbled awake.", "bad", "grumpy")
+            else:
+                say(pet, now, f"Lights on. {name} is up.", "", "awake")
+            return True, ""
+        if needs["energy"] > 75:
+            return False, f"{name} isn't tired."
+        pet["asleep"] = True
+        say(pet, now, f"Lights off. {name} curled up to sleep.", "", "asleep")
+        return True, ""
+    if pet["asleep"]:
+        return False, f"{name} is asleep. Turn the lights on first."
+    if action == "feed":
+        item = str(payload.get("item") or "")
+        spec = ITEMS.get(item)
+        if not spec or pet["larder"].get(item, 0) <= 0:
+            return False, "That isn't in the larder."
+        if pet["species"] not in spec["for"]:
+            return False, f"{name} won't touch {spec['name']}."
+        if spec["kind"] == "medicine":
+            return act(state, "medicine", {"item": item}, now)
+        if needs["hunger"] >= 96 and spec["kind"] != "treat":
+            return False, f"{name} is full."
+        _use(pet, item)
+        needs["hunger"] = _clamp(needs["hunger"] + spec["fill"])
+        needs["mood"] = _clamp(needs["mood"] + spec["mood"])
+        pet["care"]["treats" if spec["kind"] == "treat" else "meals"] += 1
+        say(pet, now, f"{name} had the {spec['name']}.", "good", "treat" if spec["kind"] == "treat" else "eat")
+        return True, ""
+    if action == "medicine":
+        item = str(payload.get("item") or "") or _medicine(pet)
+        spec = ITEMS.get(item or "")
+        if not spec or spec["kind"] != "medicine" or pet["larder"].get(item, 0) <= 0 or pet["species"] not in spec["for"]:
+            return False, f"No medicine for it in the larder: {_medicine_names(pet['species'])}."
+        if not pet["sick"] and needs["health"] >= 90:
+            return False, f"{name} is well."
+        _use(pet, item)
+        pet["sick"] = False
+        needs["health"] = _clamp(needs["health"] + 35)
+        needs["mood"] = _clamp(needs["mood"] + spec["mood"])
+        say(pet, now, f"{spec['name']} given. {name} feels better.", "good", "cured")
+        return True, ""
+    if action == "vent":
+        if needs["clean"] >= 95:
+            return False, "The hold is clean."
+        needs["clean"] = 100.0
+        pet["care"]["vents"] += 1
+        say(pet, now, "Hold vented. Spotless.", "good", "clean")
+        return True, ""
+    if action == "play":
+        if needs["energy"] < 8:
+            return False, f"{name} is too tired to play."
+        won = bool(payload.get("won"))
+        needs["mood"] = _clamp(needs["mood"] + (18 if won else 9))
+        needs["energy"] = _clamp(needs["energy"] - 7)
+        needs["hunger"] = _clamp(needs["hunger"] - 3)
+        pet["care"]["plays"] += 1
+        game = {"limpet": "Catch the Limpet", "thargon": "Where did the Thargon go?"}.get(str(payload.get("game")), "a game")
+        say(pet, now, f"Played {game}: {'won!' if won else 'it had fun anyway.'}", "good", "happy" if won else "play")
+        return True, ""
+    if action == "pet":
+        # A pat: a little cheer, at most once in a while.
+        if now - _number(pet.get("petted_at"), 0) < 90:
+            return False, ""
+        pet["petted_at"] = now
+        needs["mood"] = _clamp(needs["mood"] + 3)
+        pet["reaction"], pet["reaction_at"] = "petted", now
+        return True, ""
+    if action == "release":
+        _lose(state, pet, now)
+        state["memorial"][-1]["released"] = True
+        return True, ""
+    return False, "Nothing happened."
+
+
+def _use(pet, item):
+    left = pet["larder"].get(item, 0) - 1
+    if left > 0:
+        pet["larder"][item] = left
+    else:
+        pet["larder"].pop(item, None)
+
+
+def _medicine(pet):
+    return next((item for item, count in pet["larder"].items()
+                 if count > 0 and ITEMS.get(item, {}).get("kind") == "medicine" and pet["species"] in ITEMS[item]["for"]), "")
+
+
+def _medicine_names(species):
+    return " or ".join(spec["name"] for spec in ITEMS.values() if spec["kind"] == "medicine" and species in spec["for"])
+
+
+# ---- What you do in the game. -----------------------------------------------------------------
+
+def _mentions(event, *words):
+    text = json.dumps(event, ensure_ascii=False).casefold()
+    return any(word in text for word in words)
+
+
+def observe(state, event, now):
+    """One live journal event. Returns True when the pet noticed."""
+    pet = state.get("pet")
+    if not pet or not isinstance(event, dict):
+        return False
+    advance(state, now)
+    if not state.get("pet"):
+        return True
+    name = str(event.get("event") or "")
+    needs, care, who = pet["needs"], pet["care"], pet["name"]
+    species = pet["species"]
+
+    if name == "MarketBuy":
+        item = str(event.get("Type") or "").casefold()
+        spec = ITEMS.get(item)
+        if not spec or species not in spec["for"]:
+            return False
+        count = max(1, int(_number(event.get("Count"), 1)))
+        pet["larder"][item] = min(LARDER_MOST, pet["larder"].get(item, 0) + count)
+        say(pet, now, f"{spec['name']} into the larder ({pet['larder'][item]}).", "good")
+        return True
+    if _fed_up(pet):
+        return False
+
+    def mood(change, text, tone="", reaction=""):
+        needs["mood"] = _clamp(needs["mood"] + change)
+        say(pet, now, text, tone or ("good" if change > 0 else "bad"), reaction)
+        return True
+
+    asleep = pet["asleep"]
+    if name == "FSDJump":
+        care["explored"] += 1
+        # You arrive in supercruise: the clock on a long one starts here.
+        pet["supercruise_since"] = now
+    if name in {"FSSSignalDiscovered", "CodexEntry", "ApproachSettlement", "SupercruiseDestinationDrop", "FSDJump"}:
+        thargoid = _mentions(event, "thargoid", "nonhuman", "\"thargoidwar\"")
+        guardian = _mentions(event, "guardian", "ancient")
+        if thargoid and not (name == "FSDJump" and not event.get("ThargoidWar")):
+            care["thargoid"] += 1
+            if species == "larva":
+                return mood(10, f"Thargoid signals. {who} is glowing and humming.", "good", "excited")
+            return mood(-4, f"Something Thargoid out there. {who} has gone quiet.", "bad", "scared")
+        if guardian and name != "FSDJump":
+            care["guardian"] += 1
+            if species == "larva":
+                return mood(-10, f"Guardian things. {who} hates them.", "bad", "angry")
+            if species == "bot":
+                return mood(4, f"Guardian tech: {who}'s sensors whirr.", "good", "curious")
+    if name == "FSDJump":
+        if asleep:
+            return True
+        return mood(2, "A new star outside. Curious.", "good", "curious")
+    if name == "Scan" and event.get("WasDiscovered") is False and event.get("ScanType") in {"Detailed", "AutoScan", "Basic"}:
+        care["discoveries"] += 1
+        return mood(3, f"First to find {event.get('BodyName') or 'it'}!", "good", "happy")
+    if name == "CodexEntry" and event.get("IsNewEntry"):
+        care["codex"] += 1
+        return mood(9, f"A new codex entry: {event.get('Name_Localised') or 'something new'}.", "good", "amazed")
+    if name == "ScanOrganic" and species == "sample":
+        return mood(6, f"{who} sensed a cousin out there.", "good", "happy")
+    if name == "ShieldState" and event.get("ShieldsUp") is False:
+        care["scares"] += 1
+        return mood(-8, f"Shields down! {who} hid under the console.", "bad", "scared")
+    if name == "HullDamage" and event.get("PlayerPilot", True) and not event.get("Fighter"):
+        care["scares"] += 1
+        needs["health"] = _clamp(needs["health"] - 2)
+        return mood(-5, f"The hull shook. {who} is frightened.", "bad", "scared")
+    if name == "Died":
+        return mood(-22, f"The ship was lost. {who} made it to the escape pod.", "bad", "distraught")
+    if name == "Resurrect" and str(event.get("Option") or "").casefold() == "rebuy":
+        care["rebuys"] += 1
+        return mood(-25, f"A rebuy. {who} is very upset.", "bad", "distraught")
+    if name == "Docked":
+        pet["supercruise_since"] = None
+        market = str(event.get("MarketID") or event.get("StationName") or "")
+        if market and market not in pet["stations"]:
+            pet["stations"] = (pet["stations"] + [market])[-400:]
+            care["stations"] += 1
+            return mood(6, f"Somewhere new: {event.get('StationName') or 'a station'}. A little treat.", "good", "happy")
+        return False
+    if name == "SupercruiseEntry":
+        pet["supercruise_since"] = now
+        return False
+    if name == "SupercruiseExit" and pet.get("supercruise_since"):
+        minutes = (now - pet["supercruise_since"]) / 60
+        pet["supercruise_since"] = None
+        if minutes > 5 and not asleep:
+            return mood(-min(10, round((minutes - 5) / 2)), f"{round(minutes)} minutes of supercruise. {who} is bored.", "bad", "bored")
+        return False
+    if name == "CarrierJump":
+        if asleep:
+            needs["energy"] = _clamp(needs["energy"] + 10)
+            say(pet, now, f"{who} slept right through the carrier jump.", "good")
+            return True
+        return mood(-5, f"The carrier jump startled {who}.", "bad", "scared")
+    return False
+
+
+# ---- What the Games page and the overlay are shown. ---------------------------------------------
+
+def _mood_word(pet):
+    needs = pet["needs"]
+    if pet.get("dormant_since") is not None:
+        return "HIBERNATING"
+    if pet["stage"] == "egg":
+        return "INCUBATING"
+    if pet["asleep"]:
+        return "ASLEEP"
+    if pet["sick"]:
+        return "ILL"
+    mood = needs["mood"]
+    return "HAPPY" if mood > 80 else "CONTENT" if mood > 55 else "RESTLESS" if mood > 30 else "SAD" if mood > 10 else "MISERABLE"
+
+
+def _wants(pet):
+    needs = pet["needs"]
+    if pet.get("dormant_since") is not None:
+        return "REVIVE IT"
+    if pet["stage"] == "egg" or pet["asleep"]:
+        return ""
+    if pet["sick"]:
+        return "MEDICINE"
+    order = (("hunger", 35, "FOOD" if pet["species"] != "bot" else "POWER"), ("clean", 35, "A CLEAN HOLD"),
+             ("mood", 35, "PLAY"), ("energy", 20, "SLEEP"))
+    low = sorted((needs[need], word) for need, limit, word in order if needs[need] < limit)
+    return low[0][1] if low else ""
+
+
+def view(state, now):
+    """The pet as the game page and the overlay see it."""
+    advance(state, now)
+    pet = state.get("pet")
+    memorial = [{"name": item.get("name"), "species": item.get("species"),
+                 "form": SPECIES.get(item.get("species"), SPECIES["larva"])["forms"].get(item.get("form") or "", ""),
+                 "lost": item.get("lost"), "released": bool(item.get("released"))} for item in state.get("memorial") or ()][-8:]
+    collection = []
+    for key in state.get("forms_seen") or ():
+        species, _, form = key.partition(":")
+        if species in SPECIES and form in SPECIES[species]["forms"]:
+            collection.append({"species": species, "form": form, "label": SPECIES[species]["forms"][form]})
+    base = {"pet": None, "memorial": memorial, "collection": collection,
+            "species": {key: {"name": spec["name"], "blurb": spec["blurb"], "names": list(spec["names"])}
+                        for key, spec in SPECIES.items()},
+            "kinds": SAMPLE_KINDS, "notice": state.get("notice")}
+    if not pet:
+        return base
+    species = SPECIES[pet["species"]]
+    larder = sorted(({"id": item, "name": ITEMS[item]["name"], "kind": ITEMS[item]["kind"], "count": count}
+                     for item, count in pet["larder"].items() if item in ITEMS and count > 0),
+                    key=lambda row: (("snack", "meal", "treat", "medicine").index(row["kind"]), row["name"]))
+    dormant = pet.get("dormant_since")
+    hatch_at = pet["born"] + STAGES[0][1] * 3600
+    base["pet"] = {
+        "name": pet["name"], "species": pet["species"], "species_name": species["name"], "kind": pet.get("kind") or "",
+        "kind_name": SAMPLE_KINDS.get(pet.get("kind") or "", ""), "stage": pet["stage"],
+        "form": pet.get("form") or "", "form_name": species["forms"].get(pet.get("form") or "", ""),
+        "age_hours": round((now - pet["born"]) / 3600, 1),
+        "needs": {need: int(round(pet["needs"][need])) for need in NEEDS},
+        "food_label": species["food"], "asleep": bool(pet["asleep"]), "sick": bool(pet["sick"]),
+        "dormant": dormant is not None,
+        "dormant_hours_left": round(max(0.0, HIBERNATE_DAYS * 24 - (now - dormant) / 3600), 1) if dormant is not None else None,
+        "hatch_minutes": max(0, round((hatch_at - now) / 60)) if pet["stage"] == "egg" else 0,
+        "mood_word": _mood_word(pet), "wants": _wants(pet),
+        "mess": 0 if pet["stage"] == "egg" else min(4, int((100 - pet["needs"]["clean"]) // 20)),
+        "larder": larder, "medicine": _medicine_names(pet["species"]),
+        "stores_hours": round(max(0.0, STORES_EVERY_H - (now - _number(pet.get("stores_at"), now)) / 3600), 1),
+        "log": [{"at": row.get("at"), "text": row.get("text"), "tone": row.get("tone")} for row in pet.get("log") or ()][:8],
+        "reaction": pet.get("reaction") or "", "reaction_at": pet.get("reaction_at") or 0,
+        "care": {key: int(value) for key, value in pet["care"].items()},
+    }
+    return base
+
+
+def snapshot(state):
+    return copy.deepcopy(state)
