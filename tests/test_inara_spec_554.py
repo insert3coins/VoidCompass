@@ -127,11 +127,11 @@ class MissionAndCombatTests(unittest.TestCase):
                 "NumContributors": 101, "TopRankSize": 10, "PlayerInTopRank": False, "TierReached": "Tier 1",
                 "PlayerPercentileBand": 50, "Bonus": 200000}
         events = inara.map_event("CommunityGoal", {"CurrentGoals": [goal]})
-        self.assertEqual(events[0], ("setCommunityGoal", {
-            "communitygoalGameID": 726, "communitygoalName": "Alliance Research Initiative", "starsystemName": "Kaushpoos",
-            "stationName": "Neville Horizons", "goalExpiry": "2017-08-17T14:58:14Z", "tierReached": 1, "topRankSize": 10,
-            "isCompleted": False, "contributorsNum": 101, "contributionsTotal": 10062}))
-        self.assertEqual(events[1][1]["percentileBandReward"], 200000)
+        # 5.6.5: the goal itself is held back (Inara keeps it only from apps it
+        # has approved for it); your own progress still goes.
+        self.assertEqual([name for name, _data in events], ["setCommanderCommunityGoalProgress"])
+        self.assertEqual(events[0][1]["communitygoalGameID"], 726)
+        self.assertEqual(events[0][1]["percentileBandReward"], 200000)
 
 
 class EverythingInaraTakesTests(unittest.TestCase):

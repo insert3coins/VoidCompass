@@ -480,7 +480,10 @@ def map_event(event, raw, context=None):
                        "goalExpiry": goal.get("Expiry"), "tierReached": int(tier) if tier.isdigit() else None,
                        "topRankSize": goal.get("TopRankSize"), "isCompleted": bool(goal.get("IsComplete")),
                        "contributorsNum": goal.get("NumContributors"), "contributionsTotal": goal.get("CurrentTotal")}
-            out.append(("setCommunityGoal", {key: value for key, value in details.items() if value not in ("", None)}))
+            # Note: held back for now (5.6.5). Inara only keeps the goal itself
+            # from apps it has approved for it and answers 204 "development
+            # mode" otherwise; your own progress below is still sent.
+            # out.append(("setCommunityGoal", {key: value for key, value in details.items() if value not in ("", None)}))
             progress = {"communitygoalGameID": goal["CGID"], "contribution": goal.get("PlayerContribution"),
                         "percentileBand": goal.get("PlayerPercentileBand"), "percentileBandReward": goal.get("Bonus"),
                         "isTopRank": bool(goal.get("PlayerInTopRank"))}

@@ -157,7 +157,8 @@ class ConformanceTests(unittest.TestCase):
         by_item = {"addCommanderInventoryItem", "delCommanderInventoryItem", "setCommanderInventoryItem",
                    "addCommanderInventoryCargoItem", "delCommanderInventoryCargoItem", "setCommanderInventoryCargoItem",
                    "setCommanderInventoryMaterialsItem"}
-        writes = {name for name in SPEC if not name.startswith("get")} - by_item
+        # setCommunityGoal is held back for now (5.6.5): Inara keeps it only from approved apps.
+        writes = {name for name in SPEC if not name.startswith("get")} - by_item - {"setCommunityGoal"}
         self.assertEqual(writes - produced, set())
 
 
