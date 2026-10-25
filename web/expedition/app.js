@@ -4,7 +4,7 @@
   const token = params.get("token") || "";
   const overlay = params.get("overlay") || "expedition";
   const dom = Object.fromEntries(["expedition", "name", "share", "bar", "distance", "steps", "planet", "target-step", "target-name",
-    "target-sub", "facts", "strip", "strip-canvas", "compass", "needle", "target-distance", "target-detail", "hint", "figures",
+    "target-sub", "facts", "strip", "strip-canvas", "compass", "needle", "target-distance", "target-detail", "hint", "detour", "figures",
     "warnings"].map((id) => [id, document.getElementById(id)]));
   // From html_expedition_overlay.py: the width and least height the window is sized from.
   const DESIGN_WIDTH = 380, MIN_HEIGHT = 120;
@@ -172,13 +172,15 @@
 
     // What the body is, from your scans.
     const facts = [];
-    if (info && guide.stage !== "jump") {
+    if (info) {
       if (info.class) facts.push(chip(upper(info.class.replace(/ body$/i, ""))));
       if (known(info.ls)) facts.push(chip(`${whole(info.ls)} LS`));
       if (known(info.gravity)) facts.push(chip(`${number(info.gravity).toFixed(2)} G`, info.gravity > 2 ? "red" : info.gravity > 1.2 ? "yellow" : ""));
       if (known(info.temp)) facts.push(chip(`${whole(info.temp)} K`, info.temp > 800 ? "red" : info.temp < 100 ? "yellow" : ""));
       facts.push(chip(info.atmosphere ? upper(info.atmosphere) : "NO ATMOSPHERE", info.atmosphere ? "green" : ""));
       if (!info.landable) facts.push(chip("NOT LANDABLE", "red"));
+      if (info.footfall) facts.push(chip(`FOOTFALL ${upper(info.footfall)}`, info.footfall === "LIKELY OPEN" ? "green" : ""));
+      if (info.source === "EDSM") facts.push(chip("EDSM CATALOGUE"));
     }
     dom.facts.replaceChildren(...facts);
     dom.facts.hidden = !facts.length;
@@ -225,6 +227,11 @@
       known(model.done_ly) && number(model.done_ly) > 0 ? `${whole(model.done_ly)} LY FLOWN` : ""].filter(Boolean).join(" · ") || "PLACE THE LEGS TO MEASURE IT";
 
     renderGuide(model);
+    const detour = model.detour;
+    dom.detour.textContent = detour
+      ? `WORTH A DETOUR · ${upper(detour.system)} · ${upper(detour.body)} · ${upper(detour.reason)}${known(detour.distance_ly) ? ` · ${whole(detour.distance_ly)} LY AWAY` : ""}`
+      : "";
+    dom.detour.hidden = !detour;
 
     dom.figures.replaceChildren(
       figure("DATA AT RISK", model.risk ? credits(model.risk) : "—", model.risk_over ? "red" : "yellow"),

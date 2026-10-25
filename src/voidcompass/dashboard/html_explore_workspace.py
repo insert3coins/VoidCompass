@@ -289,7 +289,7 @@ class HtmlExploreWorkspaceMixin:
             "scout": {
                 "reference": scout_form["reference"],
                 "mode": scout_form["mode"],
-                "modes": SCOUT_MODES,
+                "modes": {key: label for key, label in SCOUT_MODES.items() if key != "route"},
                 "radius": scout_form["radius"],
                 "min_signals": scout_form["min_signals"],
                 "min_value": scout_form["min_value"],

@@ -16,6 +16,7 @@ SCOUT_MODES = {
     "biology": "Biological signals",
     "guardian": "Guardian sites",
     "thargoid": "Thargoid sites",
+    "route": "Expedition route prospects",
 }
 
 SIGNAL_MODES = {
@@ -38,6 +39,24 @@ def _integer(value, default=0):
         return int(float(value or 0))
     except (TypeError, ValueError, OverflowError):
         return default
+
+
+def _optional_flag(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().casefold()
+    if text in {"", "unknown", "none", "null"}:
+        return None
+    if text in {"1", "true", "yes", "recorded"}:
+        return True
+    if text in {"0", "false", "no", "open", "unclaimed"}:
+        return False
+    # A timestamp or other non-empty evidence means a footfall was recorded.
+    return True
 
 
 def _text(value, limit=180):
@@ -92,6 +111,10 @@ def normalise_body_prospects(payload, mode, *, searched_at=None):
         if not isinstance(raw, dict):
             continue
         signals = _signals(raw)
+        biological_count = sum(
+            item["count"] for item in signals
+            if item["name"].casefold() == "biological"
+        )
         wanted_count = sum(
             item["count"] for item in signals
             if wanted_signal and item["name"].casefold() == wanted_signal.casefold()
@@ -110,6 +133,10 @@ def normalise_body_prospects(payload, mode, *, searched_at=None):
             if wanted_signal and wanted_signal.casefold() not in f"{kind} {subtype}".casefold():
                 continue
             landmarks.append({"type": kind, "subtype": subtype})
+        footfall_raw = next((raw.get(key) for key in (
+            "first_footfall", "was_footfalled", "firstFootfall",
+            "already_first_footfalled", "alreadyFirstFootfalled",
+        ) if raw.get(key) is not None), None)
         reasons = []
         if wanted_count:
             reasons.append(f"{wanted_count} known {wanted_signal.lower()} signal{'s' if wanted_count != 1 else ''}")
@@ -121,7 +148,8 @@ def normalise_body_prospects(payload, mode, *, searched_at=None):
             named = sorted({item["subtype"] or item["type"] for item in landmarks if item["subtype"] or item["type"]})
             if named:
                 reasons.append("known sites: " + ", ".join(named[:3]))
-        score = wanted_count * 100.0 + min(80.0, mapping_value / 20_000.0)
+        score_signals = biological_count if mode == "route" else wanted_count
+        score = score_signals * 100.0 + min(80.0, mapping_value / 20_000.0)
         if distance is not None:
             score -= min(60.0, distance / 20.0)
         rows.append({
@@ -140,15 +168,19 @@ def normalise_body_prospects(payload, mode, *, searched_at=None):
             "atmosphere": _text(raw.get("atmosphere"), 100),
             "gravity": _number(raw.get("gravity")),
             "temperature": _number(raw.get("surface_temperature")),
+            "landable": bool(raw.get("is_landable", raw.get("landable", False))),
             "mapping_value": mapping_value,
             "scan_value": scan_value,
             "signal_count": wanted_count,
+            "biological_count": biological_count,
             "signals": signals[:12],
             "landmarks": landmarks[:12],
             "reasons": reasons[:4],
             "confidence": "NAMED SITE MATCH" if landmarks else "CATALOGUE SIGNAL MATCH",
             "score": round(score, 2),
             "updated_at": _text(raw.get("signals_updated_at") or raw.get("updated_at"), 40),
+            "catalogue_updated_at": _text(raw.get("updated_at"), 40),
+            "first_footfall": _optional_flag(footfall_raw),
             "source": "Spansh community catalogue",
         })
     rows.sort(key=lambda row: (
@@ -169,6 +201,39 @@ def normalise_body_prospects(payload, mode, *, searched_at=None):
         "evidence_note": "Known community records only; unreported and unexplored systems cannot appear.",
         "results": rows,
     }
+
+
+def route_prospect_reasons(row):
+    """Return the notable, bounded reasons to stop at a route body.
+
+    First-footfall availability is not consistently published by community
+    catalogues. An old body record is therefore described as a likelihood,
+    never as a confirmed free footfall.
+    """
+    row = row if isinstance(row, dict) else {}
+    reasons = []
+    footfall = row.get("first_footfall")
+    if isinstance(footfall, bool) and row.get("landable"):
+        if not footfall:
+            reasons.append("Possible first footfall")
+        else:
+            reasons.append("First footfall recorded")
+    elif (row.get("landable") and str(row.get("catalogue_updated_at") or "")[:10]
+          and str(row.get("catalogue_updated_at") or "")[:10] < "2021-05-19"):
+        reasons.append("Likely first footfall · old catalogue record")
+
+    biology = max(0, _integer(row.get("biological_count")))
+    if biology:
+        reasons.append(f"{biology} known biological signal{'s' if biology != 1 else ''}")
+
+    atmosphere = _text(row.get("atmosphere"), 100)
+    if row.get("landable") and atmosphere.casefold() not in {"", "none", "no atmosphere"}:
+        reasons.append(f"Landable atmosphere · {atmosphere}")
+
+    value = max(0, _integer(row.get("mapping_value")))
+    if value >= 500_000:
+        reasons.append(f"{value:,} CR estimated mapping value")
+    return reasons[:4]
 
 
 def normalise_value_route(systems, *, reference="", searched_at=None):

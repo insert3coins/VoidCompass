@@ -58,6 +58,18 @@ class OverrideTests(unittest.TestCase):
         self.assertTrue(health["layout"])
         self.assertEqual(health["title"], "Void Compass Survey Operations")
 
+    def test_map_visibility_changes_do_not_stale_every_overlay_page(self):
+        revisions = {key: state.revision for key, state in self.server._overlays.items()}
+        window_revision = self.server._window_revision
+
+        self.assertTrue(HtmlOverlayServer.set_overrides(hidden={"survey", "nav"}))
+
+        self.assertGreater(self.server._window_revision, window_revision)
+        self.assertEqual({key: state.revision for key, state in self.server._overlays.items()}, revisions)
+
+        HtmlOverlayServer.set_overrides(layout=True)
+        self.assertTrue(all(state.revision > revisions[key] for key, state in self.server._overlays.items()))
+
 
 class MapHidingTests(unittest.TestCase):
     def tearDown(self):

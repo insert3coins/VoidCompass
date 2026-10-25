@@ -22,6 +22,7 @@ import time
 
 from voidcompass.core.platform_support import application_dir, open_path
 from voidcompass.exploration import expedition_plan
+from voidcompass.exploration.exploration_scout import route_prospect_reasons
 from voidcompass.exploration.flight_recorder import epoch
 from voidcompass.overlays import hud_pages
 
@@ -54,19 +55,31 @@ def _short_body(name, system):
     return (short or name).upper()
 
 
-def _body_facts(item):
-    """What a body is, from its scan: type, how far in, gravity, heat, air."""
+def _body_facts(item, source=""):
+    """What a body is: journal facts first, then a community catalogue."""
     def number(key):
         try:
             return float(item.get(key))
         except (TypeError, ValueError):
             return None
     atmosphere = str(item.get("atmosphere_type") or item.get("atmosphere") or "").strip()
+    footfall = next((item.get(key) for key in (
+        "was_footfalled", "first_footfall", "already_first_footfalled",
+    ) if item.get(key) is not None), None)
+    if footfall is None:
+        footfall_label = "UNVERIFIED"
+    elif isinstance(footfall, str):
+        value = footfall.strip().casefold()
+        footfall_label = "LIKELY OPEN" if value in {"0", "false", "no", "none", ""} else "RECORDED"
+    else:
+        footfall_label = "RECORDED" if bool(footfall) else "LIKELY OPEN"
     return {"class": str(item.get("planet_class") or item.get("star_type") or ""), "ls": number("distance_to_arrival"),
             "gravity": number("gravity_g"), "temp": number("surface_temp"), "landable": bool(item.get("landable")),
             "atmosphere": "" if atmosphere.casefold() in {"", "none", "no atmosphere"} else atmosphere,
             "radius_km": round(number("radius") / 1000) if number("radius") else None,
-            "rings": bool(item.get("rings")), "terraformable": bool(item.get("terraformable"))}
+            "rings": bool(item.get("rings")), "terraformable": bool(item.get("terraformable")),
+            "source": source or str(item.get("_expedition_source") or "Ship scan"),
+            "footfall": footfall_label}
 
 
 def _day(stamp):
@@ -144,6 +157,7 @@ class DashboardExpeditionMixin:
             previous = leg.get("coords") or previous
         threshold = self._expedition_risk_threshold()
         value = int(plan.get("unsold_min_cr") or 0)
+        route_intel = self._expedition_route_intel(expedition)
         return {
             "progress": progress,
             "pace": measured,
@@ -156,6 +170,7 @@ class DashboardExpeditionMixin:
             "here": getattr(self, "current_sys", "") or "",
             "surface": self._expedition_surface(legs),
             "guide": self._expedition_guide(legs),
+            "detour": self._expedition_detour_nearby(route_intel),
         }
 
     def _expedition_surface(self, legs):
@@ -183,6 +198,7 @@ class DashboardExpeditionMixin:
         if not upcoming or not upcoming.get("system"):
             return None
         system, body = str(upcoming.get("system") or ""), str(upcoming.get("body") or "")
+        catalogue = self._expedition_body_catalogue(system) if body else None
         here = _same(getattr(self, "current_sys", ""), system)
         near = here and bool(body) and _same(getattr(self, "current_body_name", ""), body)
         grounded = bool(getattr(self, "current_landed", False) or getattr(self, "current_in_srv", False)
@@ -202,6 +218,12 @@ class DashboardExpeditionMixin:
         guide = {"stage": stage, "system": system, "body": body, "short": _short_body(body, system),
                  "title": str(upcoming.get("note") or body or system), "kind": str(upcoming.get("kind") or "stop"),
                  "lat": upcoming.get("lat"), "lon": upcoming.get("lon"), "jumps": None, "info": None, "bodies": []}
+        if catalogue and body:
+            known_rows = catalogue.get("rows") or []
+            catalogue_match = next((item for item in known_rows if
+                                    _same(item.get("full_name"), body) or _same(item.get("name"), body)), None)
+            if catalogue_match:
+                guide["info"] = _body_facts(catalogue_match, "EDSM")
         if stage == "jump":
             route = [str((row or {}).get("StarSystem") or "") for row in getattr(self, "nav_route_entries", None) or ()]
             if route and _same(route[-1], system):
@@ -210,16 +232,77 @@ class DashboardExpeditionMixin:
         if here:
             items = list((getattr(self, "scan_items_by_id", None) or {}).values())
             found = next((item for item in items if body and (_same(item.get("full_name"), body) or _same(item.get("name"), body))), None)
+            from_scan = found is not None
+            body_rows = items
+            if catalogue:
+                known_rows = catalogue.get("rows") or []
+                catalogue_match = next((item for item in known_rows if body and (
+                    _same(item.get("full_name"), body) or _same(item.get("name"), body))), None)
+                if found is None:
+                    found = catalogue_match
+                if not body_rows:
+                    body_rows = known_rows
             if found:
-                guide["info"] = _body_facts(found)
+                guide["info"] = _body_facts(found, "Ship scan" if from_scan else "EDSM")
             # The system's bodies by distance, the one you want marked.
-            rows = sorted((item for item in items if item.get("distance_to_arrival") is not None),
+            rows = sorted((item for item in body_rows if item.get("distance_to_arrival") is not None),
                           key=lambda item: float(item.get("distance_to_arrival") or 0))
             guide["bodies"] = [{"short": _short_body(item.get("full_name") or item.get("name"), system),
                                 "ls": round(float(item.get("distance_to_arrival") or 0)), "star": bool(item.get("star_type")),
                                 "class": str(item.get("planet_class") or item.get("star_type") or ""),
                                 "landable": bool(item.get("landable")), "target": item is found} for item in rows][:16]
         return guide
+
+    def _expedition_body_catalogue(self, system):
+        """Fetch the next stop's public body facts before the ship arrives."""
+        key = str(system or "").strip().casefold()
+        if not key or key in {"---", "unknown"}:
+            return None
+        cache = getattr(self, "_expedition_body_catalogue_cache", None)
+        if not isinstance(cache, dict):
+            cache = self._expedition_body_catalogue_cache = {}
+        if key in cache:
+            return cache[key]
+        pending = getattr(self, "_expedition_body_catalogue_pending", None)
+        if not isinstance(pending, set):
+            pending = self._expedition_body_catalogue_pending = set()
+        if key in pending:
+            return None
+        edsm = getattr(self, "edsm", None)
+        fetch = getattr(edsm, "fetch_system_bodies", None)
+        if not callable(fetch):
+            return None
+        pending.add(key)
+
+        def callback(payload):
+            from voidcompass.exploration.stellar_cartography import edsm_bodies_to_orrery_items
+            rows = edsm_bodies_to_orrery_items(payload, system)
+            for row in rows:
+                row["_expedition_source"] = "EDSM"
+                row["catalogue_updated_at"] = row.get("catalogue_updated_at") or ""
+            value = {"rows": rows, "known": bool(payload), "at": time.monotonic()}
+
+            def apply():
+                self._expedition_body_catalogue_pending.discard(key)
+                self._expedition_body_catalogue_cache[key] = value
+                self._expedition_overlay_refresh(force=True)
+                publish = getattr(self, "_schedule_html_dashboard_publish", None)
+                if callable(publish):
+                    publish(immediate=True)
+
+            post = getattr(self, "_ui_post", None)
+            if callable(post):
+                post(apply, key=f"expedition-body-catalogue:{key}")
+            else:
+                apply()
+
+        try:
+            fetch(system, callback)
+        except Exception as exc:
+            pending.discard(key)
+            logging.debug("Expedition body lookup skipped for %s: %s", system, exc)
+            return None
+        return None
 
     def _expedition_risk_threshold(self):
         try:
@@ -353,6 +436,138 @@ class DashboardExpeditionMixin:
                        | {"kept": poi.get("url") in kept} for poi in cache[key]]
         return out
 
+    def _expedition_route_intel(self, row):
+        """Known Spansh body prospects near the planned expedition route."""
+        all_legs = [leg for leg in row.get("legs") or () if isinstance(leg, dict)]
+        legs = [leg for leg in all_legs if not leg.get("reached")]
+        if not legs:
+            return {"rows": [], "waiting": False, "error": "", "range_ly": 0, "source": "Spansh"}
+        start = (row.get("stats") or {}).get("start_pos") or self._expedition_coords_of(row.get("start_system"))
+        # Keep the search tied to the planned remainder, so moving through
+        # ordinary jumps does not change its cache key or trigger new queries.
+        for leg in all_legs:
+            if leg.get("reached") and expedition_plan.position(leg.get("coords")):
+                start = leg.get("coords")
+        path = [expedition_plan.position(start)] if expedition_plan.position(start) else []
+        references = []
+
+        def add_point(system, coords):
+            name = str(system or "").strip()
+            coords = expedition_plan.position(coords) or self._expedition_coords_of(name)
+            if name and not any(_same(item["system"], name) for item in references):
+                references.append({"system": name, "coords": coords})
+            placed = expedition_plan.position(coords)
+            if placed and (not path or path[-1] != placed):
+                path.append(placed)
+
+        for leg in legs:
+            plotted = leg.get("plot") or {}
+            for waypoint in plotted.get("waypoints") or ():
+                if isinstance(waypoint, dict):
+                    add_point(waypoint.get("system"), waypoint.get("coords"))
+            add_point(leg.get("system"), leg.get("coords"))
+
+        if not references:
+            return {"rows": [], "waiting": False, "error": "", "range_ly": 0, "source": "Spansh"}
+
+        # One search per evenly-spaced route sample keeps long trips useful
+        # without sending a request for every jump in a neutron plot.
+        if len(references) > 5:
+            indexes = sorted({round(index * (len(references) - 1) / 4) for index in range(5)})
+            references = [references[index] for index in indexes]
+        radius = min(150, self._expedition_poi_range())
+        path_key = tuple(tuple(round(axis, 3) for axis in point) for point in path)
+        refs_key = tuple(item["system"].casefold() for item in references)
+        key = (str(row.get("id") or ""), refs_key, path_key, radius)
+        cache = getattr(self, "_expedition_route_intel_cache", None)
+        if not isinstance(cache, dict):
+            cache = self._expedition_route_intel_cache = {}
+        cached = cache.get(key)
+        if cached and time.monotonic() - cached.get("at", 0.0) < 1800:
+            return {**cached["value"], "waiting": False}
+        pending = getattr(self, "_expedition_route_intel_pending", None)
+        if not isinstance(pending, set):
+            pending = self._expedition_route_intel_pending = set()
+        if key not in pending:
+            pending.add(key)
+            samples = list(references)
+
+            def work():
+                from voidcompass.services.spansh import exploration_body_search
+                prospects, errors = [], []
+                for reference in samples:
+                    try:
+                        result = exploration_body_search(reference["system"], "route", radius, 1, 80)
+                    except Exception as exc:
+                        errors.append(str(exc))
+                        continue
+                    for body in result.get("results") or ():
+                        reasons = route_prospect_reasons(body)
+                        if not reasons:
+                            continue
+                        candidate = {**body, "reference": reference["system"], "reasons": reasons}
+                        if not expedition_plan.position(candidate.get("coords")):
+                            candidate["coords"] = self._expedition_coords_of(candidate.get("system"))
+                        prospects.append(candidate)
+                unique, seen = [], set()
+                for candidate in prospects:
+                    signature = (str(candidate.get("system") or "").casefold(), str(candidate.get("body") or "").casefold())
+                    if signature in seen:
+                        continue
+                    seen.add(signature)
+                    unique.append(candidate)
+                if path:
+                    rows = expedition_plan.near_route(unique, path, radius, 80)
+                else:
+                    rows = [{**candidate, "off_ly": candidate.get("distance"), "along_ly": 0.0}
+                            for candidate in unique if candidate.get("distance") is not None
+                            and candidate.get("distance") <= radius]
+                rows.sort(key=lambda item: (item.get("along_ly", 0), item.get("off_ly") is None,
+                                            item.get("off_ly") or 0, -item.get("mapping_value", 0)))
+                return {"rows": rows[:12], "error": "; ".join(dict.fromkeys(errors))[:240],
+                        "range_ly": radius, "references": [item["system"] for item in samples], "source": "Spansh"}
+
+            def done(result, error):
+                self._expedition_route_intel_pending.discard(key)
+                if error is not None:
+                    value = {"rows": [], "error": str(error)[:240], "range_ly": radius,
+                             "references": [item["system"] for item in samples], "source": "Spansh"}
+                else:
+                    value = result or {"rows": [], "error": "", "range_ly": radius,
+                                       "references": [item["system"] for item in samples], "source": "Spansh"}
+                cache[key] = {"at": time.monotonic(), "value": value}
+                self._expedition_overlay_refresh(force=True)
+                publish = getattr(self, "_schedule_html_dashboard_publish", None)
+                if callable(publish):
+                    publish(immediate=True)
+
+            self._expedition_worker(f"route-intel-{abs(hash(key)):x}", work, done)
+        return {"rows": cached["value"].get("rows", []) if cached else [], "waiting": True,
+                "error": cached["value"].get("error", "") if cached else "", "range_ly": radius,
+                "references": [item["system"] for item in references], "source": "Spansh"}
+
+    def _expedition_detour_nearby(self, route_intel):
+        """One quiet overlay hint when a recommended body is close to here."""
+        here = self._galaxy_minimap_position() if hasattr(self, "_galaxy_minimap_position") else None
+        system = str(getattr(self, "current_sys", "") or "").strip()
+        rows = (route_intel or {}).get("rows") or ()
+        nearby = []
+        for row in rows:
+            coords = expedition_plan.position(row.get("coords"))
+            distance = None
+            if expedition_plan.position(here) and coords:
+                distance = expedition_plan.distance(here, coords)
+            if _same(system, row.get("system")):
+                distance = 0.0
+            if distance is not None and distance <= 25:
+                nearby.append((distance, row))
+        if not nearby:
+            return None
+        distance, row = min(nearby, key=lambda item: (item[0], item[1].get("along_ly", 0)))
+        return {"system": row.get("system") or "", "body": row.get("body") or "",
+                "reason": (row.get("reasons") or ["worth a stop"])[0], "distance_ly": round(distance, 1),
+                "off_ly": row.get("off_ly")}
+
     def _expedition_places_changed(self, expedition_id):
         manager = getattr(self, "expedition_manager", None)
         if manager is not None and hasattr(manager, "refresh_place_objectives"):
@@ -434,6 +649,7 @@ class DashboardExpeditionMixin:
         surface = self._expedition_surface(legs)
         # The guide's step too (5.6.5): arriving, approaching, landing show at once.
         model = {**model, "guide": self._expedition_guide(legs),
+                 "detour": self._expedition_detour_nearby(self._expedition_route_intel(active)),
                  "surface": {key: (surface or {}).get(key) for key in (model.get("surface") or surface or {})} if surface else None}
         self._expedition_overlay_model = model
         hud.update_expedition(model)
@@ -575,6 +791,7 @@ class DashboardExpeditionMixin:
             "finds": [{key: find.get(key) for key in ("id", "kind", "system", "body", "title", "detail", "at")}
                       for find in reversed(row.get("finds") or []) if find.get("state") == "new"][:FINDS_SHOWN],
             "nearby": self._expedition_nearby(row),
+            "route_intel": self._expedition_route_intel(row) if live else None,
         }
         if live:
             # Fuel runs and carrier needs come with the plot; the live block works them out.

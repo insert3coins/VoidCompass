@@ -235,6 +235,11 @@
 .ex-poi p { max-width: 90ch; margin: 0; color: var(--muted); font: 11.5px/1.5 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
 .ex-poi .ex-actions { justify-content: flex-end; }
 .ex-poi em { color: var(--green); font: 700 9px Consolas, monospace; font-style: normal; letter-spacing: .12em; }
+.ex-route-prospect { grid-template-columns: minmax(0, 1fr) auto; }
+.ex-route-prospect p { color: var(--accent); }
+.ex-prospect-facts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.ex-prospect-facts span { padding: 3px 5px; border: 1px solid var(--border-soft); color: var(--dim); font: 10px Consolas, monospace; }
+.ex-footfall-note { margin-top: 8px; }
 .ex-credit { margin: 4px 0 0; color: var(--dim); font: 10.5px "Segoe UI", sans-serif; }
 #mission-workspace .ex-linkish { min-height: 0; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; letter-spacing: 0; text-decoration: underline; }
 @container (max-width: 640px) {

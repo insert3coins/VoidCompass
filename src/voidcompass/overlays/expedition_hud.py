@@ -60,6 +60,7 @@ def build_expedition_model(expedition, live):
                       for run in (upcoming.get("fuel_runs") or ())[:2]],
         # 5.6.5: the next stop, step by step, and its body plain to see.
         "guide": live.get("guide"),
+        "detour": live.get("detour"),
     }
 
 

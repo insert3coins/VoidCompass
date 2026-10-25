@@ -134,7 +134,7 @@ from voidcompass.exploration.explorer_fieldcraft import (
 )
 from voidcompass.exploration.stellar_cartography import edsm_bodies_to_orrery_items
 from voidcompass.exploration.expedition_manager import ExpeditionManager
-from voidcompass.core.diagnostic_logs import application_base_dir, resolve_log_path
+from voidcompass.core.diagnostic_logs import application_base_dir, prepare_log, resolve_log_path
 from voidcompass.core.adaptive_command import (
     AdaptiveCommandDeck, AUTOMATIC_MODE_IDLE_S, FOCUSED_MODES, MODE_LABELS,
 )
@@ -2624,6 +2624,7 @@ class MainDashboard(
         # stale winfo_x()/winfo_y() can overwrite the position just dragged.
         self._overlay_position_authority = {}
         self._overlay_sync_grace_until = time.time() + 4.0
+        prepare_log(resolve_log_path("shutdown.log"))
         trace_path = resolve_log_path(
             "runtime_trace.log",
             self.config.get("runtime_trace_path", "logs/runtime_trace.log"),
@@ -2818,6 +2819,10 @@ class MainDashboard(
 
         if self._overlay_enabled("expedition_hud"):
             self.expedition_hud = ExpeditionHUD(self.root, self.config)
+            # Saved expeditions are already loaded from the active profile.
+            # Build their overlay now instead of waiting for the next journal
+            # event to make an existing trip visible.
+            self._expedition_overlay_refresh(force=True)
         else:
             self.expedition_hud = None
 

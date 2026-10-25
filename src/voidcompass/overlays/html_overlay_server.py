@@ -228,6 +228,7 @@ class HtmlOverlayServer:
         ``hidden`` is the overlay ids to hide (an empty set shows them all).
         """
         changed = False
+        layout_changed = False
         if hidden is not None:
             hidden = frozenset(str(item) for item in hidden)
             if hidden != cls.overlays_hidden:
@@ -236,13 +237,19 @@ class HtmlOverlayServer:
         if layout is not None and bool(layout) != cls.layout_mode:
             cls.layout_mode = bool(layout)
             changed = True
+            layout_changed = True
         if changed:
             for server in list(cls._instances):
                 with server._condition:
                     server._window_revision += 1
-                    for state in server._overlays.values():
-                        # Pages repaint their layout outline from health.
-                        state.revision += 1
+                    if layout_changed:
+                        for state in server._overlays.values():
+                            # Pages repaint their layout outline from health.
+                            # A map visibility change belongs to native window
+                            # state only; invalidating page models here made
+                            # every hidden browser wait on its throttled poll
+                            # before it could be shown again.
+                            state.revision += 1
                     server._condition.notify_all()
         return changed
 

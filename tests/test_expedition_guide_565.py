@@ -62,6 +62,54 @@ class GuideTests(unittest.TestCase):
         self.deck.current_latitude, self.deck.current_longitude = -23.45, 114.08
         self.assertEqual(self.guide()["stage"], "arrived")
 
+    def test_edsm_body_facts_arrive_before_the_ship_and_footfall_is_qualified(self):
+        class EDSM:
+            callback = None
+
+            def fetch_system_bodies(self, system, callback):
+                self.system = system
+                self.callback = callback
+
+        edsm = EDSM()
+        self.deck.edsm = edsm
+        guide = self.guide()
+        self.assertEqual(guide["stage"], "jump")
+        self.assertIsNone(guide["info"], "the lookup is asynchronous")
+        self.assertEqual(edsm.system, SYSTEM)
+
+        edsm.callback({"name": SYSTEM, "bodies": [{
+            "bodyId": 4, "name": BODY, "type": "Planet", "subType": "High metal content body",
+            "distanceToArrival": 1834.2, "gravity": .38, "surfaceTemperature": 412,
+            "atmosphereType": "None", "isLandable": True, "wasFootfalled": False,
+        }]})
+        guide = self.guide()
+        self.assertEqual(guide["stage"], "jump")
+        self.assertEqual((guide["info"]["class"], guide["info"]["ls"], guide["info"]["gravity"],
+                          guide["info"]["temp"], guide["info"]["source"], guide["info"]["footfall"]),
+                         ("High metal content body", 1834.2, .38, 412, "EDSM", "LIKELY OPEN"))
+
+    def test_route_intel_cache_uses_the_planned_route_not_live_position(self):
+        from unittest.mock import patch
+
+        self.deck._expedition_worker = lambda _name, work, done: done(work(), None)
+        expedition = {
+            "id": "route-cache-test", "start_system": "Sol", "stats": {"start_pos": [0, 0, 0]},
+            "legs": [{"system": "Destination", "coords": [100, 0, 0], "plot": {}}],
+        }
+        response = {"results": [{
+            "system": "Near Route", "body": "Near Route 1", "coords": [50, 10, 0], "distance": 30,
+            "landable": True, "first_footfall": False, "biological_count": 2,
+            "atmosphere": "Thin Ammonia", "mapping_value": 800_000,
+        }]}
+        with patch("voidcompass.services.spansh.exploration_body_search", return_value=response) as search:
+            self.deck._expedition_route_intel(expedition)
+            self.deck.current_coords = [10, 0, 0]
+            cached = self.deck._expedition_route_intel(expedition)
+
+        search.assert_called_once_with("Destination", "route", 150, 1, 80)
+        self.assertFalse(cached["waiting"])
+        self.assertEqual(cached["rows"][0]["system"], "Near Route")
+
     def test_a_system_stop_is_jump_then_arrive(self):
         self.legs = [{"id": "b", "system": "Colonia", "kind": "destination"}]
         self.assertEqual(self.guide()["stage"], "jump")

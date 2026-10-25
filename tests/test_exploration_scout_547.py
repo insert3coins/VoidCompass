@@ -7,6 +7,7 @@ from voidcompass.exploration.exploration_scout import (
     normalise_body_prospects,
     normalise_scout_form,
     normalise_value_route,
+    route_prospect_reasons,
     system_audit,
 )
 from voidcompass.exploration.exploration_intelligence import system_completion
@@ -168,6 +169,34 @@ class ExplorationScout547Tests(unittest.TestCase):
         self.assertEqual(request["filters"]["signals"][0]["name"], "Guardian")
         self.assertEqual(request["filters"]["distance"]["max"], 250)
         self.assertEqual(request["size"], 12)
+
+    @patch("voidcompass.services.spansh.requests.post")
+    def test_route_search_returns_body_prospects_without_a_signal_filter(self, post):
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "count": 1,
+            "results": [{
+                "system_name": "Route Prospect", "name": "Route Prospect 1",
+                "system_x": 25, "system_y": 10, "system_z": -4, "distance": 40,
+                "is_landable": True, "atmosphere": "Thin Ammonia",
+                "estimated_mapping_value": 800_000, "updated_at": "2026-09-01T00:00:00Z",
+                "first_footfall": False, "signals": [{"name": "Biological", "count": 4}],
+            }],
+        }
+        post.return_value = response
+
+        result = exploration_body_search("Sol", "route", 150, 1, 80)
+
+        request = post.call_args.kwargs["json"]
+        self.assertNotIn("signals", request["filters"])
+        self.assertEqual(request["filters"]["distance"]["max"], 150)
+        body = result["results"][0]
+        reasons = route_prospect_reasons(body)
+        self.assertEqual(body["coords"], [25.0, 10.0, -4.0])
+        self.assertTrue(any("first footfall" in reason.casefold() for reason in reasons))
+        self.assertTrue(any("biological" in reason.casefold() for reason in reasons))
+        self.assertTrue(any("atmosphere" in reason.casefold() for reason in reasons))
+        self.assertTrue(any("800,000" in reason for reason in reasons))
 
     def test_value_mode_cannot_use_signal_endpoint(self):
         with self.assertRaises(SpanshError):

@@ -319,6 +319,12 @@ def edsm_bodies_to_orrery_items(payload, system_name=None):
             "surface_temp": _number(body.get("surfaceTemperature")),
             "surface_pressure": _number(body.get("surfacePressure")),
             "atmosphere_type": _text(body.get("atmosphereType"), 100),
+            "catalogue_updated_at": _text(body.get("updateTime"), 40),
+            # Some community mirrors attach these optional fields even though
+            # EDSM's public body response does not guarantee them.
+            "was_footfalled": next((body.get(key) for key in (
+                "wasFootfalled", "firstFootfall", "alreadyFirstFootfalled",
+            ) if body.get(key) is not None), None),
             "volcanism": _text(body.get("volcanismType"), 100),
             "rings": list(body.get("rings") or []),
             "reserve_level": _text(body.get("reserveLevel"), 80),

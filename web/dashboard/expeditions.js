@@ -322,6 +322,25 @@ function nearbyPanel(row, esc) {
     <p class="ex-credit">${esc(nearby.credit)} · ${button("EDASTRO.COM/GEC", "open_link", {url: nearby.credit_url}, esc, "ex-linkish")}</p>`;
 }
 
+function routeIntelPanel(row, esc) {
+  const intel = row.route_intel;
+  if (!intel) return `<p class="ex-dim">Route prospects are unavailable.</p>`;
+  const rows = (intel.rows || []).map((body) => `<div class="ex-poi ex-route-prospect">
+      <div><b>${esc(body.system)} · ${esc(body.body || "World")}</b>
+        <small>${esc(body.body_type || "Unknown world")}${body.arrival_ls != null ? ` · ${whole(body.arrival_ls)} Ls` : ""}
+          ${body.off_ly != null ? ` · ${ly(body.off_ly)} off route` : ""}</small>
+        <p>${(body.reasons || []).map(esc).join(" · ")}</p></div>
+      <div class="ex-prospect-facts">${body.gravity != null ? `<span>${n(body.gravity).toFixed(2)} g</span>` : ""}
+        ${body.temperature != null ? `<span>${whole(body.temperature)} K</span>` : ""}
+        ${body.mapping_value ? `<span>${cr(body.mapping_value)}</span>` : ""}</div></div>`).join("");
+  const empty = intel.waiting ? "Checking Spansh's known bodies along the route…"
+    : intel.error && !rows ? `Spansh couldn't check this route (${esc(intel.error)}).`
+    : (row.legs || []).some((leg) => leg.coords) ? `No notable catalogue bodies within ${ly(intel.range_ly)} of the route.`
+    : "Add route coordinates (ROUTE › FIND WHERE THEY ARE) to measure detours.";
+  return `${rows || `<p class="ex-dim">${empty}</p>`}
+    <p class="ex-dim ex-footfall-note">Catalogue footfall records can be incomplete or stale; treat an open status as a lead and verify it in-game.</p>`;
+}
+
 function placesView(row, data, esc, ui) {
   const places = row.places || [];
   const counts = {all: places.length};
@@ -349,6 +368,7 @@ function placesView(row, data, esc, ui) {
     : `<p class="ex-dim">No places yet. Mark where you are, add one by hand, keep a find, or pick from what's near the route below.</p>`;
   return `${panel("PLACES", `${tools}${form}${places.length ? `<div class="ex-chips">${chips}</div>` : ""}${list}`, {note: `${whole(places.length)} kept · ${whole(places.filter((place) => place.visited).length)} visited`})}
     ${finds ? panel("KEEP THESE?", finds, {note: "Found on this trip"}) : ""}
+    ${panel("WORTH A DETOUR", routeIntelPanel(row, esc), {note: row.route_intel ? `Known bodies within ${ly(row.route_intel.range_ly)} of sampled route systems` : "Spansh body catalogue"})}
     ${panel("WORTH SEEING NEAR YOUR ROUTE", nearbyPanel(row, esc), {note: row.nearby ? `Within ${ly(row.nearby.range_ly)} of the route, in the order you'd pass them` : ""})}`;
 }
 

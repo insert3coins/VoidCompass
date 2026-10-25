@@ -511,7 +511,7 @@ def exploration_body_search(
         raise SpanshError("No reference system known yet.")
     mode = scout_mode(mode)
     signal = SIGNAL_MODES.get(mode)
-    if signal is None:
+    if signal is None and mode != "route":
         raise SpanshError("High-value searches use the riches route service.")
     try:
         radius = max(1, min(10_000, int(float(max_distance))))
@@ -519,11 +519,11 @@ def exploration_body_search(
         limit = max(1, min(100, int(float(max_results))))
     except (TypeError, ValueError, OverflowError) as exc:
         raise SpanshError("Exploration Scout search values are invalid.") from exc
+    filters = {"distance": {"min": 0, "max": radius}}
+    if signal:
+        filters["signals"] = [{"name": signal, "value": [minimum, 100]}]
     body = {
-        "filters": {
-            "signals": [{"name": signal, "value": [minimum, 100]}],
-            "distance": {"min": 0, "max": radius},
-        },
+        "filters": filters,
         "sort": [{"distance": {"direction": "asc"}}],
         "size": limit,
         "page": 0,

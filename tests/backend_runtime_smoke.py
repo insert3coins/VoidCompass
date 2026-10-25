@@ -21,12 +21,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 from voidcompass.core import config
+from voidcompass.core import diagnostic_logs
 from voidcompass.dashboard import dashboard
 from voidcompass.core.application_runtime import ApplicationRuntime
 from voidcompass.overlays.html_overlay_runtime import HtmlOverlayRuntime
 
 with tempfile.TemporaryDirectory() as folder:
     folder = Path(folder)
+    log_dir = folder / 'logs'
+    log_dir.mkdir()
+    prior_shutdown_log = log_dir / 'shutdown.log'
+    prior_shutdown_log.write_text('previous session', encoding='utf-8')
     values = config.load_config()
     values.update(journal_path=str(folder/'journals'), active_commander_name='Migration Test',
                   active_commander_profile='migration-test', active_commander_fid='FTEST',
@@ -44,7 +49,8 @@ with tempfile.TemporaryDirectory() as folder:
     runtime=ApplicationRuntime()
     runtime._voidcompass_startup_splash = SimpleNamespace(_voidcompass_boot=SimpleNamespace(
         stop=lambda: None, set_runtime_status=lambda *args: None, _ready_emitted=True))
-    with patch.object(config,'PROFILE_DIR',str(folder/'profiles')), patch.object(config,'CONFIG_FILE',str(folder/'config.json')), \
+    with patch.object(diagnostic_logs,'application_dir',return_value=folder), \
+         patch.object(config,'PROFILE_DIR',str(folder/'profiles')), patch.object(config,'CONFIG_FILE',str(folder/'config.json')), \
          patch.object(dashboard,'CONFIG_FILE',str(folder/'config.json')), patch.object(dashboard,'load_config',return_value=values), \
          (nullcontext() if '--renderers' in sys.argv else patch.object(HtmlOverlayRuntime,'_ensure_process')), patch.object(dashboard.MainDashboard,'check_updates'), \
          patch.object(dashboard.EDSMHandler,'queue_journal_event'), patch.object(dashboard.EDSMHandler,'queue_cargo_snapshot'), patch.object(dashboard.MainDashboard,'_restart_galnet_feed_schedule'), patch.object(dashboard.MainDashboard,'_start_eddn_market_upload'):
@@ -52,6 +58,8 @@ with tempfile.TemporaryDirectory() as folder:
         app=None
         try:
             app=dashboard.MainDashboard(runtime)
+            assert not prior_shutdown_log.exists()
+            assert any(path.name.startswith('shutdown.') and path.suffix == '.log' for path in log_dir.iterdir())
             runtime._voidcompass_app=app
             surfaces = runtime._voidcompass_html_overlay_runtime.surfaces
             expected = {'navigation'} | {

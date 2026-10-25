@@ -92,6 +92,8 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 .strip-canvas { width: 100%; height: 34px; display: block; }
 .hint { margin: 0; padding-left: 9px; border-left: 2px solid var(--green); overflow-wrap: anywhere; color: var(--green);
   font: 700 9.5px/1.4 var(--font-wide); letter-spacing: .08em; }
+.detour { margin: 0; padding-left: 9px; border-left: 1px solid var(--hud-soft); overflow-wrap: anywhere; color: var(--hud-soft);
+  font: 600 8.5px/1.35 var(--font-wide); letter-spacing: .045em; }
 .compass { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 5px 8px; background: color-mix(in srgb, var(--green) 7%, transparent); border: 1px solid color-mix(in srgb, var(--green) 30%, transparent); }
 .needle { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid color-mix(in srgb, var(--green) 45%, transparent); border-radius: 50%; }
 .needle svg { width: 18px; height: 18px; fill: var(--green); transform: rotate(var(--turn, 0deg)); transition: transform .3s ease-out; }
