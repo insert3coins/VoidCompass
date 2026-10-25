@@ -802,11 +802,11 @@
       window.HatchlingArt.mess(ctx, p.mess || 0, PET.x, FLOOR - 48, 200, cab.tick / 60);
       ctx.save(); podPath(); ctx.clip();
       life.back(ctx, art, PET.x, PET.y);
-      life.drawPet(ctx, art, {x: PET.x, y: PET.y, size: PET.size, t: cab.tick / 60});
+      life.drawPet(ctx, art, {x: PET.x, y: PET.y, size: PET.size, t: cab.tick / 60, threeOnly: true});
       life.front(ctx, art, PET.x, PET.y);
       ctx.restore();
     } else {
-      life.drawPet(ctx, art, {x: HABITAT.x + 64, y: FLOOR - 40, size: 90, t: cab.tick / 60});
+      life.drawPet(ctx, art, {x: HABITAT.x + 64, y: FLOOR - 40, size: 90, t: cab.tick / 60, threeOnly: true});
       ctx.save();
       podPath();
       ctx.clip();
@@ -1034,8 +1034,9 @@
       const x = 110 + index * 190, y = 300, picked = choice.species === species, tone = HUE[species];
       pedestal(x, y, tone, picked);
       const size = picked ? 150 : 118;
-      window.HatchlingArt.draw(ctx, {species, stage: "egg", kind: choice.kind, hatch_minutes: picked ? 3 : 30, needs: {mood: picked ? 90 : 50}},
-        {x, y: y - 70 + Math.sin(cab.tick / 30 + index) * 6, size, t: cab.tick / 60, aura: picked});
+      const egg = {species, stage: "egg", kind: choice.kind, hatch_minutes: picked ? 3 : 30, needs: {mood: picked ? 90 : 50}};
+      const art = {x, y: y - 70 + Math.sin(cab.tick / 30 + index) * 6, size, t: cab.tick / 60, aura: picked};
+      window.Hatchling3D?.draw(ctx, egg, art);
       text(NAMES[species], x, y + 54, 12, picked ? "#ffffff" : colours.muted);
       buttons.push({x: x - 80, y: y - 160, w: 160, h: 230, act: () => { if (choice.species !== species) { choice.species = species; sfx.blip(); } }});
     });
@@ -1079,6 +1080,12 @@
   }
 
   function draw() {
+    // The Three.js module is deferred. During its load, keep the scene clear of
+    // the retired 2D pet so the game never visibly swaps art styles at startup.
+    if (!window.Hatchling3D) {
+      drawSpace();
+      return;
+    }
     drawSpace();
     const p = pet();
     if (!p || screen === "choose") {

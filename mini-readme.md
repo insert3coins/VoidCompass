@@ -1,15 +1,13 @@
 # VoidCompass // UPDATE LOG
 
-## v5.6.6 // Know Before You Go
+## v5.6.7 // Hatchling, Reborn
 **Release Date:** 26 OCT 3312 *(Galactic Standard Time)*
 
-* **Planetfall, with the planet in view before you arrive.** The Expedition guide looks up the next body in EDSM, so `FLY TO 4 A` can show its type, distance from the arrival star, gravity, temperature, atmosphere and landability before your own scan. Ship scans take precedence when available; catalogue facts are labelled. Footfall status is shown only when the source supplies it, with uncertain availability kept clearly qualified.
-* **Worth a stop along the way.** The Expeditions page lists notable known bodies along the planned route: likely first footfalls, strong biological prospects, landable worlds with atmospheres and high-value mapping targets. The overlay gives a quiet detour hint when one is nearby. These suggestions come from Spansh's community catalogue.
-* **Expedition overlays show up when the trip is already active.** They refresh at startup, and overlays hidden by the maps return together promptly when the map closes.
-* **Planetfall remains a step-by-step guide:** **JUMP › FLY › LAND › ARRIVE**, with the target body, a system-body strip, and a surface compass from orbital cruise through landing and arrival.
+* **A 3D life for your Hatchling.** The Thargoid larva, Remlok bot, egg and three exobiology sample species now share a Three.js renderer in the Games cabinet and transparent Pet overlay. Growth stages, adult forms, moods, animation and outfits still follow the Hatchling's existing life simulation, with distinctive details for rare, scarred and explored forms.
 
 ## Earlier releases
 
+* **v5.6.6** (26 OCT 3312) — Know Before You Go: Planetfall body facts from EDSM before your scan, notable body detours along expeditions with an overlay hint, active expedition overlays refreshed on startup, and map-hidden overlays restored together when the map closes.
 * **v5.6.5** (25 OCT 3312) — Planetfall: the Expedition overlay's **JUMP › FLY › LAND › ARRIVE** guide, target body and system strip, body facts from your scans, and a surface compass through landing and arrival; the Expeditions page shows the same next-stop planet.
 * **v5.6.4** (25 OCT 3312) — Company in the Black: the Hatchling as crew (it lives through your flying, rides the SRV, misses you on foot, welcomes you back, comes on your expeditions with its own diary, badges and Void Wrapped card, chatters a little in its own voice, dances to your music, finds toys, learns tricks, earns outfits, a Pet only overlay, SNAP and RESET), quicker startup with the game running, timed shutdowns, overlay lag fixed, and finished expeditions cleared from the minimap.
 * **v5.6.3** (24 OCT 3312) — Insert Coin, Commander: a Games page with fourteen arcade cabinets (80s classics redone in Elite's world, best runs per commander, keys only or mouse only per game), Hatchling, a pocket pet raised in real time and fed by how you really play (with its own overlay), Postcards remade (a real editor, any screenshot as a postcard, an album with a timeline and a slideshow), the Orb music skin back with every visualizer round its ring, and expeditions you can rename.

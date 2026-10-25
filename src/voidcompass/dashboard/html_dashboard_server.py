@@ -28,6 +28,11 @@ MAX_POSTCARD_BYTES = 48 * 1024 * 1024
 MEDIA_CHUNK_BYTES = 64 * 1024
 _MEDIA_ID = re.compile(r"[0-9a-f]{16}")
 _RANGE = re.compile(r"bytes=(\d*)-(\d*)")
+_SANDBOXED_MODULES = frozenset({
+    "/assets/hatchling-3d.js",
+    "/galactic_map/vendor/three.module.min.js",
+    "/galactic_map/vendor/three.core.min.js",
+})
 
 
 def _body_read(handler):
@@ -254,12 +259,17 @@ class HtmlDashboardServer:
         )
 
     def _send_bytes(self, handler, payload, content_type, status=200,
-                    cache="no-store", game=False):
+                    cache="no-store", game=False, cors=False):
         handler.send_response(status)
         if game:
             self._game_headers(handler)
         else:
             self._security_headers(handler)
+        # The games iframe deliberately has a unique sandbox origin. Browser
+        # ES modules require CORS even for same-host URLs, so grant it only for
+        # the renderer and the two bundled Three.js modules it imports.
+        if cors:
+            handler.send_header("Access-Control-Allow-Origin", "*")
         handler.send_header("Cache-Control", cache)
         handler.send_header("Content-Type", content_type)
         handler.send_header("Content-Length", str(len(payload)))
@@ -309,7 +319,9 @@ class HtmlDashboardServer:
         # the Hatchling's looks (5.6.3) with its game page.
         if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png",
                             "/assets/heartbeat-orb.js", "/assets/heartbeat-life.js",
-                            "/assets/music-visualizers.js", "/assets/hatchling-art.js", "/assets/hatchling-life.js"}:
+                            "/assets/music-visualizers.js", "/assets/hatchling-art.js", "/assets/hatchling-life.js",
+                            "/assets/hatchling-3d.js", "/galactic_map/vendor/three.module.min.js",
+                            "/galactic_map/vendor/three.core.min.js"}:
             candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()
             try:
                 candidate.relative_to(self.static_root.parent)
@@ -397,6 +409,7 @@ class HtmlDashboardServer:
             payload,
             content_type,
             cache="no-store" if candidate.name == "index.html" else "no-cache",
+            cors=path in _SANDBOXED_MODULES,
         )
 
     def _serve_game_file(self, handler, path):

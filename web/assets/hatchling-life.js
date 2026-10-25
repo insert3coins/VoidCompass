@@ -1097,10 +1097,10 @@
     }
 
     // What it wears (5.6.4), placed from its eyes.
-    function outfit(ctx, pet, px, middle, drawn) {
+    function outfit(ctx, pet, px, middle, drawn, rendered3d = false) {
       const [ey, er] = EYES[pet.species === "sample" ? pet.kind || "bacterium" : pet.species] || EYES.larva;
       const grown = pet.species === "sample" ? (pet.stage === "adult" ? 1.18 : pet.stage === "juvenile" ? 1 : .82) : 1;
-      const k = drawn / 100 * grown, eyes = middle + ey * k, gap = er * 1.75 * k, w = gap * 2 + er * 3 * k;
+      const k = drawn / 100 * grown, eyes = rendered3d ? middle - drawn * .14 : middle + ey * k, gap = er * 1.75 * k, w = gap * 2 + er * 3 * k;
       const [headY, neckY] = BODY[pet.species === "sample" ? pet.kind || "bacterium" : pet.species] || BODY.larva;
       const head = middle + headY * k, neck = middle + neckY * k;
       ctx.save();
@@ -1358,20 +1358,25 @@
         dream: me.dream.life > 0 ? me.dream.text : ""}),
 
       // The pet itself, where it is now and how it looks.
-      drawPet(ctx, pet, {x, y, size: drawn = size, t, aura = true} = {}) {
+      drawPet(ctx, pet, {x, y, size: drawn = size, t, aura = true, threeOnly = false} = {}) {
         if (!pet) return;
         const shown = me.shut && !pet.asleep ? {...pet, asleep: true, eyesShut: true} : me.face && !pet.reaction ? {...pet, reaction: me.face} : pet;
         const px = x + me.x + me.shake, feet = y + 44 * drawn / 100, middle = y - me.lift;
         ctx.save();
         if (me.tilt || me.flair) { ctx.translate(px, feet); ctx.rotate(me.tilt + me.flair); ctx.translate(-px, -feet); }
         if (me.spin) { ctx.translate(px, middle); ctx.rotate(me.spin); ctx.translate(-px, -middle); }
-        window.HatchlingArt.draw(ctx, shown, {x: px, y, size: drawn, t, look: me.look, squash: me.squash, lift: me.lift, aura});
-        if (pet.outfit && pet.stage !== "egg") outfit(ctx, pet, px, middle, drawn);
+        const rendered3d = window.Hatchling3D?.draw(ctx, shown, {
+          x: px, y, size: drawn, t, look: me.look, squash: me.squash, lift: me.lift, aura,
+          act: me.act?.name || "", dance: me.act?.style || "",
+        });
+        if (!rendered3d && !threeOnly) window.HatchlingArt.draw(ctx, shown, {x: px, y, size: drawn, t, look: me.look, squash: me.squash, lift: me.lift, aura});
+        if (pet.outfit && pet.stage !== "egg") outfit(ctx, pet, px, middle, drawn, rendered3d);
         if (me.shades > 0 && !pet.asleep && pet.stage !== "egg") {
           // Sunglasses, while it scoops fuel from a star.
           const [ey, er] = EYES[pet.species === "sample" ? pet.kind || "bacterium" : pet.species] || EYES.larva;
           const k = drawn / 100, grown = pet.species === "sample" ? (pet.stage === "adult" ? 1.18 : pet.stage === "juvenile" ? 1 : .82) : 1;
-          const gap = er * 1.75 * k * grown, lens = er * 1.25 * k * grown, cy = middle + ey * k * grown;
+          const gap = er * 1.75 * k * grown, lens = er * 1.25 * k * grown;
+          const cy = rendered3d ? middle - drawn * .14 : middle + ey * k * grown;
           ctx.globalAlpha = Math.min(1, me.shades);
           ctx.fillStyle = "#0b0f14";
           ctx.strokeStyle = "#0b0f14";
