@@ -58,6 +58,8 @@ def build_expedition_model(expedition, live):
         "low": [str(name) for name in supplies.get("low") or ()],
         "fuel_runs": [{"jumps": int(run.get("jumps") or 0), "from": str(run.get("from") or "")}
                       for run in (upcoming.get("fuel_runs") or ())[:2]],
+        # 5.6.5: the next stop, step by step, and its body plain to see.
+        "guide": live.get("guide"),
     }
 
 

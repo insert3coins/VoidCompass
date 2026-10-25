@@ -9,7 +9,8 @@
 </head>
 <body>
   <!-- Expedition (5.6.1): the trip at a glance, in the Navigation HUD's
-       language. The HUD's EXPEDITION page shows the same model. -->
+       language. The HUD's EXPEDITION page shows the same model. Reworked in
+       5.6.5 around the next stop: which planet, and how to get onto it. -->
   <main id="expedition" class="expedition empty">
     <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <div class="scanlines"></div><div class="vignette"></div>
@@ -21,16 +22,23 @@
       </header>
       <div class="progress" aria-hidden="true"><i id="bar"></i></div>
       <p id="distance" class="distance"></p>
-      <section class="next">
-        <small id="next-kind">NEXT STOP</small>
-        <strong id="next-name"></strong>
-        <span id="next-where"></span>
+      <!-- 5.6.5: the next stop, step by step: jump, fly to the body, land, arrive. -->
+      <ol id="steps" class="steps"></ol>
+      <section class="target">
+        <canvas id="planet" class="planet" width="128" height="128" aria-hidden="true"></canvas>
+        <div class="target-words">
+          <small id="target-step">NEXT STOP</small>
+          <strong id="target-name"></strong>
+          <span id="target-sub"></span>
+        </div>
       </section>
+      <div id="facts" class="facts" hidden></div>
+      <div id="strip" class="strip" hidden><canvas id="strip-canvas" class="strip-canvas" aria-hidden="true"></canvas></div>
       <section id="compass" class="compass" hidden>
         <span id="needle" class="needle" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 19 21 12 16.5 5 21Z"/></svg></span>
         <div><b id="target-distance"></b><span id="target-detail"></span></div>
       </section>
-      <p id="fly-to" class="fly-to" hidden></p>
+      <p id="hint" class="hint" hidden></p>
       <footer id="figures" class="figures"></footer>
       <div id="warnings" class="warnings"></div>
     </div>

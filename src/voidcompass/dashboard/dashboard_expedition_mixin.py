@@ -47,6 +47,28 @@ def _same(left, right):
     return str(left or "").strip().casefold() == str(right or "").strip().casefold()
 
 
+def _short_body(name, system):
+    """"Col 285 Sector AB-C d1-2 3 a" in its own system is just "3 A"."""
+    name, system = str(name or ""), str(system or "")
+    short = name[len(system):].strip() if system and name.casefold().startswith(system.casefold()) else name
+    return (short or name).upper()
+
+
+def _body_facts(item):
+    """What a body is, from its scan: type, how far in, gravity, heat, air."""
+    def number(key):
+        try:
+            return float(item.get(key))
+        except (TypeError, ValueError):
+            return None
+    atmosphere = str(item.get("atmosphere_type") or item.get("atmosphere") or "").strip()
+    return {"class": str(item.get("planet_class") or item.get("star_type") or ""), "ls": number("distance_to_arrival"),
+            "gravity": number("gravity_g"), "temp": number("surface_temp"), "landable": bool(item.get("landable")),
+            "atmosphere": "" if atmosphere.casefold() in {"", "none", "no atmosphere"} else atmosphere,
+            "radius_km": round(number("radius") / 1000) if number("radius") else None,
+            "rings": bool(item.get("rings")), "terraformable": bool(item.get("terraformable"))}
+
+
 def _day(stamp):
     when = epoch(stamp)
     return datetime.fromtimestamp(when).strftime("%Y-%m-%d") if when else ""
@@ -133,6 +155,7 @@ class DashboardExpeditionMixin:
             "streak": expedition_plan.streak(stats),
             "here": getattr(self, "current_sys", "") or "",
             "surface": self._expedition_surface(legs),
+            "guide": self._expedition_guide(legs),
         }
 
     def _expedition_surface(self, legs):
@@ -151,6 +174,52 @@ class DashboardExpeditionMixin:
                 upcoming["lat"], upcoming["lon"], getattr(self, "current_planet_radius", None) or upcoming.get("radius"))
             info["altitude_m"] = getattr(self, "current_altitude_m", None)
         return info
+
+    def _expedition_guide(self, legs):
+        """The next stop, step by step (5.6.5): jump to its system, fly to its
+        body, land at the spot, arrive. With the body's facts from your scans
+        and the system's bodies around it, so the one to land on is plain."""
+        upcoming = next((leg for leg in legs or () if not leg.get("reached")), None)
+        if not upcoming or not upcoming.get("system"):
+            return None
+        system, body = str(upcoming.get("system") or ""), str(upcoming.get("body") or "")
+        here = _same(getattr(self, "current_sys", ""), system)
+        near = here and bool(body) and _same(getattr(self, "current_body_name", ""), body)
+        grounded = bool(getattr(self, "current_landed", False) or getattr(self, "current_in_srv", False)
+                        or getattr(self, "current_on_foot", False))
+        surface = self._expedition_surface(legs) or {}
+        target = surface.get("target") or {}
+        if not here:
+            stage = "jump"
+        elif not body:
+            stage = "arrived"
+        elif not near:
+            stage = "fly"
+        elif target.get("arrived") or (grounded and upcoming.get("lat") is None):
+            stage = "arrived"
+        else:
+            stage = "ground" if grounded else "land"
+        guide = {"stage": stage, "system": system, "body": body, "short": _short_body(body, system),
+                 "title": str(upcoming.get("note") or body or system), "kind": str(upcoming.get("kind") or "stop"),
+                 "lat": upcoming.get("lat"), "lon": upcoming.get("lon"), "jumps": None, "info": None, "bodies": []}
+        if stage == "jump":
+            route = [str((row or {}).get("StarSystem") or "") for row in getattr(self, "nav_route_entries", None) or ()]
+            if route and _same(route[-1], system):
+                at = next((index for index, name in enumerate(route) if _same(name, getattr(self, "current_sys", ""))), 0)
+                guide["jumps"] = max(0, len(route) - 1 - at)
+        if here:
+            items = list((getattr(self, "scan_items_by_id", None) or {}).values())
+            found = next((item for item in items if body and (_same(item.get("full_name"), body) or _same(item.get("name"), body))), None)
+            if found:
+                guide["info"] = _body_facts(found)
+            # The system's bodies by distance, the one you want marked.
+            rows = sorted((item for item in items if item.get("distance_to_arrival") is not None),
+                          key=lambda item: float(item.get("distance_to_arrival") or 0))
+            guide["bodies"] = [{"short": _short_body(item.get("full_name") or item.get("name"), system),
+                                "ls": round(float(item.get("distance_to_arrival") or 0)), "star": bool(item.get("star_type")),
+                                "class": str(item.get("planet_class") or item.get("star_type") or ""),
+                                "landable": bool(item.get("landable")), "target": item is found} for item in rows][:16]
+        return guide
 
     def _expedition_risk_threshold(self):
         try:
@@ -354,15 +423,18 @@ class DashboardExpeditionMixin:
         """Between journal events the overlay's compass follows Status.json."""
         hud = getattr(self, "expedition_hud", None)
         model = getattr(self, "_expedition_overlay_model", None)
-        if hud is None or not model or not model.get("surface"):
+        if hud is None or not model or not (model.get("surface") or model.get("guide")):
             return
         now = time.monotonic()
         if now - float(getattr(self, "_expedition_surface_at", 0.0) or 0.0) < 0.5:
             return
         self._expedition_surface_at = now
         active = self.expedition_manager.active() or {}
-        surface = self._expedition_surface(active.get("legs") or [])
-        model = {**model, "surface": {key: (surface or {}).get(key) for key in model["surface"]} if surface else None}
+        legs = active.get("legs") or []
+        surface = self._expedition_surface(legs)
+        # The guide's step too (5.6.5): arriving, approaching, landing show at once.
+        model = {**model, "guide": self._expedition_guide(legs),
+                 "surface": {key: (surface or {}).get(key) for key in (model.get("surface") or surface or {})} if surface else None}
         self._expedition_overlay_model = model
         hud.update_expedition(model)
 

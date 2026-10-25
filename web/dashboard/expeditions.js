@@ -133,6 +133,18 @@ function hero(row, data, esc) {
 const legName = (leg) => leg.body ? leg.note || leg.body : leg.system;
 
 // What a leg needs said about it: plotted or not, a dry neutron run, a carrier short of tritium.
+// The planet to land on (5.6.5), as the Expedition overlay shows it: which
+// step you're at, and the body's facts from your scans.
+function landOn(guide, esc) {
+  if (!guide || !guide.body) return "";
+  const words = {jump: "JUMP THERE FIRST", fly: "FLY TO IT", land: "LAND", ground: "ON THE GROUND", arrived: "YOU'RE HERE"};
+  const info = guide.info || {};
+  const facts = [info.class ? info.class.replace(/ body$/i, "") : "", info.ls != null ? `${Math.round(info.ls).toLocaleString("en-GB")} Ls` : "",
+    info.gravity != null ? `${Number(info.gravity).toFixed(2)} g` : "", info.temp != null ? `${Math.round(info.temp)} K` : "",
+    guide.info ? (info.atmosphere || "no atmosphere") : ""].filter(Boolean);
+  return `<p class="ex-land"><b>LAND ON ${esc(guide.short)}</b> · ${esc(words[guide.stage] || "")}${facts.length ? `<br><span>${esc(facts.join(" · "))}</span>` : ""}</p>`;
+}
+
 function legNotes(leg, esc) {
   const plot = leg.plot;
   const runs = (leg.fuel_runs || []).map((run) => `<small class="ex-warn">No star to scoop: ${run.jumps} neutron jumps from ${esc(run.from)}</small>`).join("");
@@ -163,7 +175,7 @@ function overview(row, data, esc) {
   const streak = live.streak || {};
   const next = progress.next ? (row.legs || []).find((leg) => leg.id === progress.next.id) || progress.next : null;
   const nextCard = next ? `<section class="ex-next"><small>NEXT STOP · ${esc((KINDS.find(([key]) => key === next.kind) || [0, next.kind])[1]).toUpperCase()}</small>
-      <h3>${esc(legName(next))}</h3>${next.body ? `<p class="ex-dim">${esc(next.note ? next.body : next.system)}</p>` : ""}<div class="ex-notes">${legNotes(next, esc)}</div>
+      <h3>${esc(legName(next))}</h3>${next.body ? `<p class="ex-dim">${esc(next.note ? next.body : next.system)}</p>` : ""}${landOn(live.guide, esc)}<div class="ex-notes">${legNotes(next, esc)}</div>
       <div class="ex-actions">${button("FLY IT", "use_route", {"expedition-id": row.id, "leg-id": next.id}, esc, "primary")}${button("PLOT", "plot_leg", {"expedition-id": row.id, "leg-id": next.id}, esc)}</div></section>`
     : `<section class="ex-next"><small>NEXT STOP</small><h3>${(row.legs || []).length ? "Every leg reached" : "No legs yet"}</h3>
       <p class="ex-dim">${(row.legs || []).length ? "COMPLETE it when you're home, and it's told back as its own Void Wrapped." : "Add the stops on the way in ROUTE."}</p></section>`;

@@ -254,3 +254,7 @@
 .ex-pet-badge { grid-column: 2; color: var(--yellow); font: 700 11px "Segoe UI", sans-serif; }
 .ex-pet ul, .ex-pet p { grid-column: 1 / -1; margin: 4px 0 0; padding-left: 18px; color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif; }
 .ex-pet p { padding-left: 0; }
+
+/* The planet to land on (5.6.5). */
+.ex-land { margin: 6px 0 0; color: var(--accent); font: 700 11px/1.5 "Segoe UI", sans-serif; letter-spacing: .04em; }
+.ex-land span { color: var(--muted); font-weight: 600; letter-spacing: 0; }
