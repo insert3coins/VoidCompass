@@ -149,8 +149,11 @@ function overview(row, data, esc) {
   const found = `<div class="ex-tiles">${tile("FSS", whole(s.fss))}${tile("MAPPED", whole(s.dss))}${tile("BIOLOGY", whole(s.bio))}
     ${tile("CODEX", whole(s.codex), s.codex_new ? `${whole(s.codex_new)} new to you` : "")}${tile("FIRST DISCOVERIES", whole(s.firsts))}
     ${tile("FIRST FOOTFALLS", whole(s.footfalls))}${tile("REGIONS", whole(s.regions))}${tile("FURTHEST", ly(s.furthest), "from the start")}</div>`;
+  const pet = row.pet ? `<section class="ex-pet"><small>${row.pet.aboard ? "ABOARD" : "CAME ALONG"}</small>
+      <b>${esc(row.pet.name)}</b>${row.pet.badge ? `<span class="ex-pet-badge">✦ ${esc(row.pet.badge)}</span>` : ""}
+      ${(row.pet.lines || []).length ? `<ul>${row.pet.lines.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>` : `<p class="ex-dim">Watching the stars go by.</p>`}</section>` : "";
   if (!live) {
-    return `<div class="ex-tiles big">${tile("FLOWN", ly(s.ly), `${whole(s.jumps)} jumps`)}${tile("SYSTEMS", whole(s.systems))}
+    return `${pet}<div class="ex-tiles big">${tile("FLOWN", ly(s.ly), `${whole(s.jumps)} jumps`)}${tile("SYSTEMS", whole(s.systems))}
       ${tile("SESSIONS", whole(s.sessions))}${tile("STREAK", `${whole(row.streak?.jumps)} jumps`, `best ${whole(row.streak?.best_jumps)}`)}</div>
       ${panel("WHAT YOU FOUND", found)}<p class="ex-dim">${row.status === "paused" ? "RESUME it to follow it live: the route, the data at risk and your supplies." : ""}</p>`;
   }
@@ -164,7 +167,7 @@ function overview(row, data, esc) {
       <div class="ex-actions">${button("FLY IT", "use_route", {"expedition-id": row.id, "leg-id": next.id}, esc, "primary")}${button("PLOT", "plot_leg", {"expedition-id": row.id, "leg-id": next.id}, esc)}</div></section>`
     : `<section class="ex-next"><small>NEXT STOP</small><h3>${(row.legs || []).length ? "Every leg reached" : "No legs yet"}</h3>
       <p class="ex-dim">${(row.legs || []).length ? "COMPLETE it when you're home, and it's told back as its own Void Wrapped." : "Add the stops on the way in ROUTE."}</p></section>`;
-  const top = `<div class="ex-top">${nextCard}<div class="ex-tiles ex-figures">
+  const top = `${pet}<div class="ex-top">${nextCard}<div class="ex-tiles ex-figures">
     ${tile("ROUTE", progress.share != null ? `${Math.round(n(progress.share) * 100)}%` : "—", progress.total_ly ? `${ly(progress.done_ly)} of ${ly(progress.total_ly)}` : "Place the legs to measure it")}
     ${tile("AT YOUR PACE", eta ? `${whole(eta.hours)} h` : "—", eta ? `about ${whole(eta.jumps)} jumps${eta.sessions ? ` · ${eta.sessions} session${eta.sessions === 1 ? "" : "s"}` : ""}` : "after a few jumps")}
     ${tile("STREAK", `${whole(streak.jumps)} jumps`, `${ly(streak.ly)}${streak.days != null ? ` · ${streak.days} days` : ""} since the last close call`)}</div></div>`;

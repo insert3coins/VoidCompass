@@ -309,7 +309,7 @@ class HtmlDashboardServer:
         # the Hatchling's looks (5.6.3) with its game page.
         if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png",
                             "/assets/heartbeat-orb.js", "/assets/heartbeat-life.js",
-                            "/assets/music-visualizers.js", "/assets/hatchling-art.js"}:
+                            "/assets/music-visualizers.js", "/assets/hatchling-art.js", "/assets/hatchling-life.js"}:
             candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()
             try:
                 candidate.relative_to(self.static_root.parent)

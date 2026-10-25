@@ -1107,6 +1107,17 @@ NORMAL["capsule_early"] = list(CAPSULE_EARLY_NORMAL)
 WEARY["capsule_early"] = list(CAPSULE_EARLY_WEARY)
 NORMAL["constellation_named"] = list(CONSTELLATION_NORMAL)
 WEARY["constellation_named"] = list(CONSTELLATION_WEARY)
+# Your Hatchling (5.6.4): its toys, tricks, frights, growing up, and idle moments.
+from voidcompass.overlays import watcher_hatchling  # noqa: E402
+
+for _topic, _normal, _weary in (("hatchling_toy", watcher_hatchling.TOY_NORMAL, watcher_hatchling.TOY_WEARY),
+                                ("hatchling_trick", watcher_hatchling.TRICK_NORMAL, watcher_hatchling.TRICK_WEARY),
+                                ("hatchling_scared", watcher_hatchling.SCARED_NORMAL, watcher_hatchling.SCARED_WEARY),
+                                ("hatchling_grown", watcher_hatchling.GROWN_NORMAL, watcher_hatchling.GROWN_WEARY),
+                                ("hatchling_idle", watcher_hatchling.IDLE_NORMAL, watcher_hatchling.IDLE_WEARY),
+                                ("hatchling_said", watcher_hatchling.SAID_NORMAL, watcher_hatchling.SAID_WEARY)):
+    NORMAL[_topic] = list(_normal)
+    WEARY[_topic] = list(_weary)
 # Echoes of its past (5.5.3.5): one voice, whatever its nature.
 for _topic, _lines in ECHOES.items():
     NORMAL[_topic] = list(_lines)

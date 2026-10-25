@@ -23,7 +23,7 @@
   const HABITAT = {x: 70, y: 106, w: 460, h: 236};
 
   const cab = Kit.cabinet({width: W, height: H, colours, state0: "play", pausable: false, start() {}, update, draw,
-    onLive, key, card, report});
+    onLive, key, card, report, onLevels: (data) => life.hear(data.bands, data.playing)});
   const {ctx} = cab;
   const {text, glow} = cab.draw;
   const pointer = cab.input.pointer;
@@ -36,7 +36,13 @@
   const choice = {species: "larva", kind: "bacterium", name: "", suggest: 0};
   let mini = null;
   let fx = [], floaters = [], flying = [];
-  const body = {squash: 0, vel: 0, lift: 0, hop: 0, look: [0, 0], lookGoal: [0, 0], idle: 180, dark: 0, petCool: 0};
+  const body = {dark: 0, petCool: 0};
+  const seen = {x: 0, y: 0, at: -999};
+  // What it gets up to on its own, shared with the overlay.
+  const life = HatchlingLife.create({size: PET.size, range: 115, top: PET.y - (POD.y - POD.ry) - 4, onSound: (kind, words) => voice(kind, words)});
+  let snapFlash = 0;
+  let welcomed = 0;
+  let resetAsked = -999;
   let lastStage = "", hatchFx = 0, nebula = null, nebulaFor = "";
   const stars = [0, 1, 2].map((layer) => Array.from({length: 60 - layer * 15}, () => ({x: between(0, W), y: between(0, H), s: .4 + layer * .5, a: between(.3, 1)})));
   let shooting = null;
@@ -54,6 +60,44 @@
     lose() { cab.sound.tone("sawtooth", 330, 140, .4, .12); },
     hatch() { cab.sound.hiss(.4, .5, 4000); [392, 523, 659, 784, 1047, 1319].forEach((f, i) => cab.sound.tone("triangle", f, f, .22, .16, .2 + i * .09)); },
   };
+
+  // Its own little noises, pitched by what it is: a larva hums, a bot beeps, a sample whispers.
+  function voice(kind, words = "") {
+    const species = pet()?.species || "larva";
+    const wave = species === "bot" ? "square" : species === "sample" ? "sine" : "triangle";
+    const base = species === "bot" ? 880 : species === "sample" ? 420 : 560;
+    const tone = (from, to, length, volume = .07, delay = 0) => cab.sound.tone(wave, base * from, base * to, length, volume, delay);
+    ({
+      chirp() { tone(1, 1.3, .06); tone(1.2, 1.5, .06, .07, .08); },
+      cheer() { [1, 1.25, 1.5, 2].forEach((step, i) => tone(step, step, .08, .07, i * .07)); },
+      boing() { tone(.5, 1, .08, .05); },
+      crash() { cab.sound.hiss(.25, .35, 1800); tone(.3, .2, .25, .06); },
+      eek() { tone(2, 2.6, .09, .06); },
+      grumble() { cab.sound.tone("sawtooth", 150, 110, .3, .05); },
+      sneeze() { tone(1.4, 1.6, .05, .05); cab.sound.hiss(.2, .3, 3000); },
+      snore() { cab.sound.tone("triangle", 95, 70, .6, .04); },
+      yawn() { tone(.9, .5, .55, .05); },
+      hum() { cab.sound.tone("triangle", 200, 210, .8, .04); },
+      beep() { tone(1.4, 1.4, .04, .05); tone(1.7, 1.7, .04, .05, .07); },
+      babble() {
+        const syllables = Math.min(9, Math.max(2, Math.round(words.replace(/[^a-z]/gi, "").length / 3)));
+        for (let i = 0; i < syllables; i += 1) { const pitch = 1 + Math.random() * .5; tone(pitch, pitch * 1.06, .05, .045, i * .085); }
+      },
+    })[kind]?.();
+  }
+
+  // SNAP: the pod, sent to the deck to become a postcard.
+  function snap() {
+    const [sx, sy, sw, sh] = [POD.x - POD.rx - 8, POD.y - POD.ry - 8, POD.rx * 2 + 16, POD.ry * 2 + 16];
+    const out = document.createElement("canvas");
+    out.width = sw * 2;
+    out.height = sh * 2;
+    out.getContext("2d").drawImage(cab.canvas, sx * cab.scale, sy * cab.scale, sw * cab.scale, sh * cab.scale, 0, 0, out.width, out.height);
+    cab.tell("snap", {png: out.toDataURL("image/png").split(",")[1] || ""});
+    snapFlash = 18;
+    cab.sound.tone("square", 1800, 1800, .03, .08);
+    cab.sound.hiss(.12, .25, 5000);
+  }
 
   function ask(action, value = {}) {
     if (action !== "pet") pending = cab.tick;
@@ -149,7 +193,7 @@
   }
 
   function hop(height = 22) {
-    if (body.hop <= 0) body.hop = 40, body.hopHeight = height;
+    life.hop(height);
   }
 
   // ---- One step. ----
@@ -160,41 +204,28 @@
         && pointer.y >= button.y && pointer.y <= button.y + button.h);
       if (hit) { sfx.blip(); hit.act(); }
       else if (mini) mini.click(pointer.x, pointer.y);
-      else if (p && screen === "home" && Math.hypot(pointer.x - PET.x, pointer.y - (PET.y - body.lift)) < 80) pat(p);
+      else if (p && screen === "home" && Math.hypot(pointer.x - PET.x - life.x, pointer.y - (PET.y - life.lift)) < 80) pat(p);
     }
     if (mini) mini.step();
     if (pending && cab.tick - pending > 240) pending = 0;
     if (body.petCool > 0) body.petCool -= 1;
 
-    // Its body: a springy squash, hops, and eyes that follow you.
-    body.vel += -body.squash * .22 - body.vel * .16;
-    body.squash += body.vel;
-    if (body.hop > 0) {
-      body.hop -= 1;
-      const k = 1 - body.hop / 40;
-      body.lift = Math.sin(k * Math.PI) * (body.hopHeight || 22);
-      if (body.hop === 39) body.vel -= .35;
-      if (body.hop === 0) body.vel += .5;
-    } else body.lift = 0;
-    const still = !p || p.asleep || p.dormant || p.stage === "egg";
-    if (!still && --body.idle <= 0) {
-      body.idle = between(200, 420);
-      const roll = Math.random();
-      if (roll < .4) hop(between(12, 26));
-      else body.lookGoal = [between(-1, 1), between(-.6, .6)];
+    // Its life on its own, with eyes that follow you while you're about.
+    life.step(1 / 60, p, {busy: Boolean(mini) || screen !== "home" || Boolean(flying.length)});
+    if (pointer.x !== seen.x || pointer.y !== seen.y) Object.assign(seen, {x: pointer.x, y: pointer.y, at: cab.tick});
+    if (pointer.active && pointer.y < FLOOR + 40 && cab.tick - seen.at < 90) {
+      life.lookAt([clamp((pointer.x - PET.x - life.x) / 180, -1, 1), clamp((pointer.y - PET.y) / 180, -1, 1)]);
     }
-    if (pointer.active && pointer.y < FLOOR + 40) body.lookGoal = [clamp((pointer.x - PET.x) / 180, -1, 1), clamp((pointer.y - PET.y) / 180, -1, 1)];
-    body.look = [lerp(body.look[0], body.lookGoal[0], .12), lerp(body.look[1], body.lookGoal[1], .12)];
     body.dark = lerp(body.dark, p?.asleep && !p.dormant ? 1 : 0, .04);
 
     for (const item of flying) {
       item.t += 1 / 36;
       const k = clamp(item.t, 0, 1);
-      item.x = lerp(item.sx, PET.x, k);
+      item.x = lerp(item.sx, PET.x + life.x, k);
       item.y = lerp(item.sy, PET.y - 20, k) - Math.sin(k * Math.PI) * 120;
       if (item.t >= 1) {
         item.done = true;
-        body.vel += .6;
+        life.kick(.6);
         sfx.yum();
         burst(PET.x, PET.y - 10, "#ffd8a0", 14, 2.5);
       }
@@ -213,6 +244,7 @@
     for (const item of floaters) { item.y -= .7; item.life -= 1; }
     floaters = floaters.filter((item) => item.life > 0);
     if (hatchFx > 0) hatchFx -= 1;
+    if (snapFlash > 0) snapFlash -= 1;
     for (const layer of stars) for (const star of layer) { star.x -= star.s * .12; if (star.x < 0) star.x += W; }
     if (!shooting && Math.random() < .002) shooting = {x: between(100, W), y: between(0, 160), life: 40};
     if (shooting && --shooting.life <= 0) shooting = null;
@@ -224,9 +256,9 @@
   }
 
   function pat(p) {
-    if (p.stage === "egg" || p.dormant) { body.vel += .3; return; }
+    if (p.stage === "egg" || p.dormant) { life.kick(.3); return; }
     if (p.asleep) { float("SHH… ASLEEP", colours.muted); return; }
-    body.vel += .9;
+    life.kick(.9);
     hearts(6);
     sfx.purr();
     if (body.petCool <= 0) { body.petCool = 90 * 60; ask("pet"); }
@@ -259,7 +291,7 @@
         limpet.vy = limpet.vy / length * 2.8;
         limpet.trail = [[limpet.x, limpet.y], ...limpet.trail].slice(0, 12);
         if (limpet.flash > 0) limpet.flash -= 1;
-        body.lookGoal = [clamp((limpet.x - PET.x) / 180, -1, 1), clamp((limpet.y - PET.y) / 180, -1, 1)];
+        life.lookAt([clamp((limpet.x - HABITAT.x - 64) / 180, -1, 1), clamp((limpet.y - FLOOR + 40) / 180, -1, 1)]);
         if (this.left <= 0) finish("limpet", false);
       },
       click(x, y) {
@@ -753,6 +785,13 @@
       ctx.fillRect(0, 72, W * share, 3);
       text(`${Math.round(share * 100)}% TO ${span[2]}`, W - 22, 88, 8, colours.dim, "right");
     }
+    const outfit = (p.outfits || []).find((item) => item.id === p.outfit);
+    const about = [p.trip ? `ON ${String(p.trip.name).toUpperCase()}` : "", p.badges?.length ? `✦ ${p.badges.length}` : "",
+      p.trait ? p.trait.toUpperCase() : "", outfit ? `IN ITS ${outfit.label.toUpperCase()}` : "",
+      p.favourite_food ? `LOVES ${p.favourite_food.toUpperCase()}` : "",
+      p.tricks?.length ? `TRICKS: ${p.tricks.join(", ").toUpperCase()}` : "", p.toys?.length ? `${p.toys.length} TOY${p.toys.length > 1 ? "S" : ""}` : ""]
+      .filter(Boolean).join(" · ");
+    if (about && p.stage !== "egg") text(about, 22, 88, 8, colours.muted, "left");
   }
 
   function drawHome(p) {
@@ -761,9 +800,13 @@
     const art = petForArt(p);
     if (!mini) {
       window.HatchlingArt.mess(ctx, p.mess || 0, PET.x, FLOOR - 48, 200, cab.tick / 60);
-      window.HatchlingArt.draw(ctx, art, {x: PET.x, y: PET.y, size: PET.size, t: cab.tick / 60, look: body.look, squash: body.squash, lift: body.lift});
+      ctx.save(); podPath(); ctx.clip();
+      life.back(ctx, art, PET.x, PET.y);
+      life.drawPet(ctx, art, {x: PET.x, y: PET.y, size: PET.size, t: cab.tick / 60});
+      life.front(ctx, art, PET.x, PET.y);
+      ctx.restore();
     } else {
-      window.HatchlingArt.draw(ctx, art, {x: HABITAT.x + 64, y: FLOOR - 40, size: 90, t: cab.tick / 60, look: body.look, squash: body.squash, lift: body.lift});
+      life.drawPet(ctx, art, {x: HABITAT.x + 64, y: FLOOR - 40, size: 90, t: cab.tick / 60});
       ctx.save();
       podPath();
       ctx.clip();
@@ -793,6 +836,13 @@
       text(`${Math.max(0, p.dormant_hours_left / 24).toFixed(1)} DAYS TO BRING IT BACK`, POD.x, POD.y - POD.ry + 64, 11, "#9fc4e8");
     }
     drawHatchFx();
+    if (snapFlash > 0) {
+      ctx.save(); podPath(); ctx.clip();
+      ctx.fillStyle = `rgba(255, 255, 255, ${snapFlash / 18 * .7})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      if (snapFlash > 6) text("POSTCARD TAKEN", POD.x, POD.y, 16, "#ffffff", "center", 700, Kit.DISPLAY);
+    }
     gauges(p);
 
     buttons = [];
@@ -809,6 +859,25 @@
       button(22 + (bw + 8) * 4, y, bw, 56, p.asleep ? "WAKE" : "LIGHTS", lights, {key: "5", off, glyph: p.asleep ? "lights" : "sleep"});
     }
     drawLog(p);
+    if (p.welcome && welcomed !== p.welcome.at && !mini) drawWelcome(p);
+  }
+
+  function drawWelcome(p) {
+    const lines = p.welcome.lines || [];
+    const w = 380, h = 64 + lines.length * 19, x = (W - w) / 2, y = POD.y - h / 2 + 10;
+    ctx.fillStyle = "rgba(4, 12, 14, .92)";
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.fill();
+    ctx.strokeStyle = hue(); ctx.lineWidth = 1.2; ctx.stroke();
+    glow(hue(), 12);
+    text("WELCOME BACK", W / 2, y + 26, 18, hue(), "center", 700, Kit.DISPLAY);
+    ctx.shadowBlur = 0;
+    lines.forEach((line, index) => text(line, W / 2, y + 50 + index * 19, 12, colours.text, "center", 600, '"Segoe UI", sans-serif'));
+    // Its own button, drawn last so it's the one under your click.
+    button(W / 2 - 70, y + h - 8, 140, 26, "GLAD TO BE BACK", () => {
+      welcomed = p.welcome.at;
+      hearts(6);
+      ask("welcomed");
+    }, {key: "8"});
   }
 
   function vent() {
@@ -834,7 +903,24 @@
     ctx.beginPath(); ctx.roundRect(22, top, W - 44, H - top - 12, 6); ctx.fill();
     ctx.strokeStyle = "rgba(255,255,255,.08)"; ctx.lineWidth = 1; ctx.stroke();
     text("SHIP'S LOG", 36, top + 18, 9, hue(), "left");
-    if (pending) text("TRANSMITTING…", W - 36, top + 18, 9, colours.accent, "right");
+    if (pending) text("TRANSMITTING…", 120, top + 18, 9, colours.accent, "left");
+    // Start again: a second press within a few seconds lets it go (it's remembered).
+    const sure = cab.tick - resetAsked < 240;
+    button(W - 104 - 128 - 96, top + 4, 88, 22, sure ? "SURE?" : "RESET", () => {
+      if (!sure) { resetAsked = cab.tick; return; }
+      resetAsked = -999;
+      ask("release");
+    }, {key: "9", off: Boolean(pending) || Boolean(mini), tone: sure ? colours.red : colours.muted});
+    if (p.stage !== "egg") {
+      button(W - 104, top + 4, 76, 22, "SNAP", snap, {key: "6", off: Boolean(mini) || snapFlash > 0});
+      // What it wears: each press tries the next one it has earned, then none.
+      const earned = (p.outfits || []).filter((item) => item.earned);
+      const worn = earned.find((item) => item.id === p.outfit);
+      button(W - 104 - 128, top + 4, 120, 22, worn ? worn.label.toUpperCase() : "WEAR", () => {
+        const ids = ["", ...earned.map((item) => item.id)];
+        ask("wear", {outfit: ids[(ids.indexOf(p.outfit || "") + 1) % ids.length]});
+      }, {key: "7", off: !earned.length || Boolean(pending)});
+    }
     let row = 0;
     if (notice.text && cab.tick < notice.until) {
       text(notice.text, 36, top + 40, 12, colours.yellow, "left", 600, '"Segoe UI", sans-serif');
@@ -1021,13 +1107,13 @@
         {at: at - 7200, text: "Shields down! Glim hid under the console.", tone: "bad"}]}});
     for (let i = 0; i < 160; i += 1) { cab.tick += 1; update(); }
     hearts(4);
-    body.look = [.5, -.2];
-    body.lookGoal = [.5, -.2];
+    life.setLook([.5, -.2]);
   }
 
   function report() {
-    return {screen, pet: Boolean(pet()), name: pet()?.name || "", mini: mini?.name || "", pending: Boolean(pending), hearts: fx.filter((item) => item.kind === "heart").length};
+    return {screen, pet: Boolean(pet()), name: pet()?.name || "", mini: mini?.name || "", pending: Boolean(pending), hearts: fx.filter((item) => item.kind === "heart").length,
+      life: life.state()};
   }
 
-  window.hatchling = {state: () => ({...report(), state: cab.state})};
+  window.hatchling = {state: () => ({...report(), state: cab.state}), play: (name) => life.play(name, pet()), acts: () => life.acts};
 })();

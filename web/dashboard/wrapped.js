@@ -11,7 +11,7 @@ const NAMES = {
   longest_jump: "Longest jump", furthest: "Furthest out", regions: "Where you lived", home: "Home",
   discoveries: "First discoveries", rare: "Rarest find", codex: "Codex personality", biology: "Organics",
   money: "Credits", bgs: "Factions", music: "Soundtrack", postcards: "Postcards", constellations: "Constellations",
-  achievements: "Achievements", combat: "Combat", everyday: "The everyday", deaths: "Rebuys", places: "Places", verdict: "The verdict", finale: "The whole year",
+  achievements: "Achievements", combat: "Combat", everyday: "The everyday", deaths: "Rebuys", places: "Places", hatchling: "Along for the ride", verdict: "The verdict", finale: "The whole year",
 };
 const PALETTES = {
   intro: ["#070a22", "#341060", "#7ae7ff"], distance: ["#03101f", "#0b3d6e", "#5be0ff"],
@@ -25,6 +25,7 @@ const PALETTES = {
   postcards: ["#181007", "#5a3b14", "#ffcf8a"], constellations: ["#04081a", "#16205e", "#a3b5ff"],
   achievements: ["#181204", "#6b520b", "#ffd84d"], deaths: ["#170405", "#5a0b10", "#ff5c66"],
   places: ["#04130f", "#0f4a3c", "#6fffd2"],
+  hatchling: ["#06140f", "#14523a", "#9dffd2"],
   combat: ["#170506", "#5e1012", "#ff4d4d"], everyday: ["#08121a", "#174256", "#7fd8ff"],
   verdict: ["#040509", "#141826", "#00d1ff"], finale: ["#05070c", "#0f2033", "#00d1ff"],
 };
@@ -913,6 +914,24 @@ const PAINT = {
     text(c, `${card.visited} of them visited`, 96, 820, {size: 34, colour: SOFT, alpha: appear(t, 1)});
     (card.names || []).slice(0, 5).forEach((name, index) => text(c, name, 90, 930 + index * 56, {size: 36, colour: index ? SOFT : INK, alpha: appear(t, 1.4 + index * .2), max: 900}));
     text(c, "Somewhere to come back to.", 90, 1240, {size: 34, colour: SOFT, alpha: appear(t, 2.6)});
+  },
+
+  // Your Hatchling's side of an expedition (5.6.4): it, its diary, its badge.
+  hatchling(c, card, t, colour) {
+    kicker(c, "Along for the ride", t, colour);
+    const art = window.HatchlingArt;
+    if (art) {
+      c.save();
+      c.globalAlpha = appear(t, .2, 1);
+      art.draw(c, {name: card.name, species: card.species, kind: card.sample_kind, stage: card.stage, form: card.form,
+        mood_word: "HAPPY", needs: {mood: 95}, reaction: t > 1 ? "happy" : ""},
+      {x: W / 2, y: 440 + Math.sin(t * 2.2) * 8, size: 330, t, look: [Math.sin(t * .8) * .5, -.15]});
+      c.restore();
+    }
+    text(c, String(card.name || "").toUpperCase(), W / 2, 700, {size: 76, colour: INK, align: "center", alpha: appear(t, .6)});
+    text(c, `${card.moments} ${card.moments === 1 ? "MOMENT" : "MOMENTS"} IN ITS DIARY`, W / 2, 752, {size: 28, font: MONO, colour, spacing: 6, align: "center", alpha: appear(t, .9)});
+    (card.lines || []).slice(-5).forEach((line, index) => text(c, line, 90, 850 + index * 54, {size: 32, colour: index ? SOFT : INK, alpha: appear(t, 1.2 + index * .25), max: 900}));
+    if (card.badge) text(c, `✦ ${card.badge}`, W / 2, 1240, {size: 38, colour, align: "center", alpha: appear(t, 2.6)});
   },
 
   verdict(c, card, t, colour) {

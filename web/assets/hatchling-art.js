@@ -475,7 +475,8 @@
 
   function extras(ctx, pet, t, tone) {
     const reaction = pet.reaction || "";
-    if (pet.asleep && !pet.dormant) {
+    // eyesShut: only its eyes closed (a blink, a brace, a doze that draws its own z's).
+    if (pet.asleep && !pet.dormant && !pet.eyesShut) {
       for (let i = 0; i < 3; i += 1) {
         const k = (t * .45 + i / 3) % 1;
         ctx.globalAlpha = Math.sin(k * Math.PI);

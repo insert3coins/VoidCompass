@@ -473,6 +473,9 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
     return Array.from({length: 64}, (_, point) => samples[Math.floor(point * step)]);
   }
 
+  // The Hatchling dances to them (5.6.4): its game page asks the deck page directly.
+  window.voidcompassMusicLevels = () => ({bands: levels(), playing: !audio.paused});
+
   function levels() {
     if (!analyser || audio.paused) return new Array(BANDS).fill(0);
     analyser.getByteFrequencyData(bins);

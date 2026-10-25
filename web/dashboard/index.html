@@ -38,6 +38,7 @@
   <script defer src="/assets/heartbeat-life.js"></script>
   <script defer src="/assets/heartbeat-orb.js"></script>
   <script defer src="/assets/music-visualizers.js"></script>
+  <script defer src="/assets/hatchling-art.js"></script>
   <script type="module" src="boot-scene.js"></script>
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
@@ -871,6 +872,17 @@
                     <label class="studio-field"><span>Counts as HERE within<small>10 to 200 m. A rig closer than this reads HERE, here and on the Mining page.</small></span><div><input id="studio-rig-here" type="number" min="10" max="200" step="5" data-studio-setting="rig_tracker_here_m"><b>M</b></div></label>
                     <label class="studio-field"><span>Rig spacing<small>20 to 300 m. The ring round each rig on the Rhino map: red when you're too close to put down another</small></span><div><input id="studio-rig-spacing" type="number" min="20" max="300" step="1" data-studio-setting="rig_tracker_spacing_m"><b>M</b></div></label>
                     <label class="studio-field"><span>Warn when a rig is this far<small>The game destroys a rig 5 km behind you. 0 turns the warning off</small></span><div><input id="studio-rig-warn" type="number" min="0" max="4900" step="100" data-studio-setting="rig_tracker_warn_m"><b>M</b></div></label>
+                  </section>
+                  <section data-studio-settings="hatchling_hud">
+                    <h4>HATCHLING</h4>
+                    <label class="studio-field"><span>Look<small>A panel with its needs, or just the pet, roaming a see-through strip</small></span><select id="studio-hatchling-look" data-studio-setting="hatchling_look"><option value="panel">Panel</option><option value="pet">Pet only</option></select></label>
+                    <label class="studio-field"><span>Pet size<small>Pet only</small></span><select id="studio-hatchling-size" data-studio-setting="hatchling_pet_size"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></label>
+                    <label class="studio-field"><span>Roam<small>Pet only: how far it wanders</small></span><select id="studio-hatchling-roam" data-studio-setting="hatchling_roam"><option value="still">Stays put</option><option value="short">A short strip</option><option value="wide">A wide strip</option></select></label>
+                    <label class="studio-field"><span>Needs<small>Pet only: its needs under it, a bubble when it wants something, or nothing</small></span><select id="studio-hatchling-needs" data-studio-setting="hatchling_needs"><option value="always">Always</option><option value="low">When it wants something</option><option value="never">Never</option></select></label>
+                    <label class="studio-field"><span>Chatter<small>A few words of its own now and then, on its page and here. Never over the Watcher</small></span><select id="studio-hatchling-chatter" data-studio-setting="hatchling_chatter"><option value="off">Off</option><option value="quiet">Quiet</option><option value="chatty">Chatty</option></select></label>
+                    <label class="studio-switch"><span><b>Speech bubbles</b><small>Its words and its dreams, over its head.</small></span><input type="checkbox" data-overlay-option="hatchling_speech"><i></i></label>
+                    <label class="studio-switch"><span><b>Glow</b><small>The light around it. Off reads better over bright scenes.</small></span><input type="checkbox" data-overlay-option="hatchling_glow"><i></i></label>
+                    <label class="studio-switch"><span><b>Sounds</b><small>Its chirps, hums and beeps while you fly.</small></span><input type="checkbox" data-overlay-option="hatchling_sounds"><i></i></label>
                   </section>
                   <section data-studio-settings="galnet_ticker_hud">
                     <h4>GALNET TICKER</h4>

@@ -123,7 +123,10 @@ class PetTests(unittest.TestCase):
         observe(state, {"event": "Scan", "ScanType": "Detailed", "WasDiscovered": False, "BodyName": "Col 1 A 1"}, 2 * HOUR)
         self.assertEqual((pet["care"]["codex"], pet["care"]["discoveries"]), (1, 1))
         observe(state, {"event": "Docked", "MarketID": 128, "StationName": "Vance Ring"}, 2 * HOUR)
-        self.assertFalse(observe(state, {"event": "Docked", "MarketID": 128, "StationName": "Vance Ring"}, 3 * HOUR), "only somewhere new")
+        mood = pet["needs"]["mood"]
+        # 5.6.4: every dock is acted out; only somewhere new is a treat.
+        observe(state, {"event": "Docked", "MarketID": 128, "StationName": "Vance Ring"}, 2 * HOUR)
+        self.assertEqual((pet["needs"]["mood"], pet["care"]["stations"]), (mood, 1), "only somewhere new")
         observe(state, {"event": "SupercruiseEntry"}, 3 * HOUR)
         mood = pet["needs"]["mood"]
         observe(state, {"event": "SupercruiseExit"}, 3 * HOUR + 20 * 60)
@@ -232,6 +235,7 @@ class OverlayTests(unittest.TestCase):
         later = build_hatchling_model(view(state, 3 * HOUR), 3 * HOUR)
         self.assertEqual((later["reaction"], later["line"]), ("", ""))
         self.assertIsNone(build_hatchling_model(view(new_state(), 0), 0), "no pet, no overlay")
+
 
 
 if __name__ == "__main__":

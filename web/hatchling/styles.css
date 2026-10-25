@@ -48,9 +48,12 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 
 .content { position: relative; zoom: var(--scale); display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 11px; }
 
-.pet-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 8px; }
-.pet { width: 76px; height: 76px; display: block; }
-.pet-words { display: grid; gap: 2px; min-width: 0; }
+/* The pet's own patch of floor, where it gets up to things. */
+.pet { width: 100%; height: 74px; display: block; border-bottom: 1px solid var(--hud-faint);
+  background: radial-gradient(ellipse at 50% 100%, color-mix(in srgb, var(--state) 12%, transparent), transparent 70%); }
+.pet-words { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 8px; row-gap: 2px; min-width: 0; }
+#mood { justify-self: end; text-align: right; }
+.wants { grid-column: 2; justify-self: end; }
 #name { overflow-wrap: anywhere; color: var(--text); font: 700 15px/1.1 var(--font-hud); letter-spacing: .06em; }
 #title { overflow-wrap: anywhere; color: var(--muted); font: 700 8.5px var(--font-wide); letter-spacing: .1em; }
 #mood { color: var(--state); font: 700 13px/1.1 var(--font-hud); letter-spacing: .08em; text-shadow: 0 0 10px color-mix(in srgb, var(--state) 40%, transparent); }
@@ -65,3 +68,10 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 .need i { position: absolute; inset: 0 auto 0 0; width: var(--fill, 0%); background: var(--tone); box-shadow: 0 0 6px color-mix(in srgb, var(--tone) 50%, transparent); }
 
 .line { margin: 0; padding-top: 4px; border-top: 1px solid var(--hud-faint); overflow-wrap: anywhere; color: var(--text); font: 600 10.5px/1.3 "Segoe UI", sans-serif; }
+
+/* Pet only (5.6.4): no panel, no frame; the pet roams a see-through strip. */
+.roam { display: none; }
+.hatchling.pet-mode { height: 100vh; background: none; }
+.hatchling.pet-mode::before, .hatchling.pet-mode .frame-corners, .hatchling.pet-mode .scanlines,
+.hatchling.pet-mode .vignette, .hatchling.pet-mode .content { display: none; }
+.hatchling.pet-mode .roam { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }

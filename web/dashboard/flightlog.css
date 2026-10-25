@@ -49,6 +49,10 @@
   color: var(--text); font: italic 15px/1.6 Georgia, "Times New Roman", serif; max-width: 80ch; }
 .flightlog-words cite { display: block; margin-top: 6px; color: var(--muted); font: italic 13px "Segoe Print", Georgia, serif; text-align: right; }
 .flightlog-words cite::before { content: "— "; }
+/* The Hatchling's diary for the night (5.6.4). */
+.flightlog-pet { max-width: 80ch; padding: 10px 18px; border-left: 3px solid var(--green); background: var(--bg); }
+.flightlog-pet small { color: var(--green); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.flightlog-pet ul { margin: 6px 0 0; padding-left: 18px; color: var(--text); font: 13px/1.5 "Segoe UI", sans-serif; }
 /* One list of nights: found by system or day, grouped by month (5.5.3.8). */
 .flightlog-nights { grid-template-rows: auto auto minmax(0, 1fr) auto; }
 .flightlog-find { min-width: 0; min-height: 30px; padding: 0 9px; border: 1px solid var(--border); background: var(--bg);

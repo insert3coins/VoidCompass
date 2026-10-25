@@ -471,6 +471,8 @@ class DashboardExpeditionMixin:
         view = {
             "id": _text(row.get("id"), 20), "name": _text(row.get("name") or "Expedition", 140),
             "description": _text(row.get("description"), 400), "status": _text(row.get("status") or "paused", 20),
+            # 5.6.4: your Hatchling, along for the trip.
+            "pet": self._hatchling_trip_view(row.get("id")) if hasattr(self, "_hatchling_trip_view") else None,
             "started": _text(row.get("started"), 40), "ended": _text(row.get("ended"), 40),
             "start_system": _text(row.get("start_system"), 120), "destination": _text(row.get("destination"), 120),
             "return_system": _text(row.get("return_system"), 120), "ironman": bool(row.get("ironman")),
@@ -590,6 +592,20 @@ class DashboardExpeditionMixin:
         if manager is None:
             return False
         expedition_id = _text(payload.get("expedition_id"), 20)
+        ending = (operation == "status" and payload.get("status") in {"completed", "failed"}) or (
+            operation == "delete" and payload.get("confirmed"))
+        if ending:
+            # 5.6.4: a finished or cleared trip takes its route with it (the
+            # minimap and the HUD kept flying it).
+            expedition = manager.get(expedition_id) or {}
+            was_active = expedition.get("status") == "active"
+            changed = manager.set_status(expedition_id, payload["status"]) if operation == "status" else manager.delete(expedition_id)
+            if changed:
+                self._expedition_clear_route(expedition.get("name") or "", was_active)
+                # The Hatchling was along for it (5.6.4): finished together, a badge.
+                if hasattr(self, "_hatchling_trip_ended"):
+                    self._hatchling_trip_ended(expedition_id, operation == "status" and payload["status"] == "completed")
+            return bool(changed)
         if operation == "create":
             here = getattr(self, "current_sys", "") or ""
             created = manager.create(_text(payload.get("name"), 100), description=_text(payload.get("description"), 1000),
@@ -834,6 +850,27 @@ class DashboardExpeditionMixin:
         manager.save()
         for name in ("update_hud", "_update_galaxy_minimap_safely"):
             action = getattr(self, name, None)
+            if callable(action):
+                action()
+        return True
+
+    def _expedition_clear_route(self, name, was_active):
+        """Take an expedition's waypoints off the route: all of them (its
+        legs, the way home, a trip to sell) when it was the one being flown,
+        else only its own legs."""
+        manager = getattr(self, "waypoint_manager", None)
+        if manager is None:
+            return False
+        def ours(row):
+            note = str((row or {}).get("note") or "")
+            return note.startswith("Expedition: ") if was_active else note == f"Expedition: {name}"
+        kept = [row for row in list(manager.waypoints or []) if not ours(row)]
+        if len(kept) == len(manager.waypoints or []):
+            return False
+        manager.waypoints = kept
+        manager.save()
+        for refresh in ("update_hud", "_update_galaxy_minimap_safely"):
+            action = getattr(self, refresh, None)
             if callable(action):
                 action()
         return True

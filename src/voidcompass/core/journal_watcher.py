@@ -67,6 +67,9 @@ class JournalWatcher:
         )
         if self.startup_max_journal_lines_per_cycle < 5:
             self.startup_max_journal_lines_per_cycle = 5
+        # The catch-up's batches stay small (UI stalls), but follow each other
+        # quickly: a second between them made a long session's tail take 11 s.
+        self.startup_cycle_s = .05
         self.special_file_settle_s = float(self.config.get("watcher_special_file_settle_ms", 200) or 200) / 1000.0
         if self.special_file_settle_s < 0.0:
             self.special_file_settle_s = 0.0
@@ -446,7 +449,11 @@ class JournalWatcher:
                     self.trace_callback("watcher.worker_cycle", (time.perf_counter() - t0) * 1000.0)
                 except Exception:
                     pass
-            time.sleep(1)
+            time.sleep(self._cycle_pause())
+
+    def _cycle_pause(self):
+        """A second between checks once live; hardly any while catching up."""
+        return self.startup_cycle_s if not self._startup_catchup_done else 1.0
 
     def switch_folder(self, journal_path):
         """Watch another journal folder from now on.

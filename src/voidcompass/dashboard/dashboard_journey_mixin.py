@@ -182,8 +182,12 @@ class DashboardJourneyMixin:
         end = epoch(expedition.get("ended")) or time.time()
         trip = {"id": expedition["id"], "name": expedition.get("name") or "Expedition", "start": start, "end": end + 60}
         places = manager.bookmarks(expedition_id)
+        pet = None
+        if hasattr(self, "_hatchling_state"):
+            from voidcompass.core import hatchling
+            pet = hatchling.trip_story(self._hatchling_state(), expedition_id)
         key = (expedition.get("ended"), int((expedition.get("stats") or {}).get("jumps") or 0), self._wrapped_key(0)[1:],
-               len(places), sum(1 for row in places if row.get("status") == "visited"))
+               len(places), sum(1 for row in places if row.get("status") == "visited"), (pet or {}).get("moments"), (pet or {}).get("badge"))
         cache = getattr(self, "_trip_story_cache", None)
         if cache is None:
             cache = self._trip_story_cache = {}
@@ -204,6 +208,10 @@ class DashboardJourneyMixin:
                     cards.insert(at, {"kind": "places", "count": len(places),
                                       "visited": sum(1 for row in places if row.get("status") == "visited"),
                                       "names": [str(row.get("title") or row.get("body") or row.get("system") or "")[:80] for row in places][:6]})
+                # 5.6.4: your Hatchling's side of the trip, just before the verdict too.
+                if pet and cards:
+                    at = next((index for index, card in enumerate(cards) if card.get("kind") == "verdict"), len(cards))
+                    cards.insert(at, {**pet, "kind": "hatchling"})
             except Exception:
                 logging.exception("Expedition story couldn't be told")
                 story = {"trip": trip, "error": True, "cards": []}

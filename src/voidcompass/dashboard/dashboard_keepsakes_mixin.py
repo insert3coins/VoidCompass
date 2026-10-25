@@ -677,6 +677,14 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
         """The editor's drawing, from the deck server's save route: over the
         postcard, or as a new one beside it."""
         import base64
+        if payload.get("mode") == "snap":
+            # The Hatchling's SNAP (5.6.4): its pod as a new postcard.
+            try:
+                png = base64.b64decode(str(payload.get("png") or ""), validate=True)
+            except ValueError:
+                return {"ok": False, "error": "not a picture"}
+            saved = self._hatchling_snap(png) if hasattr(self, "_hatchling_snap") else None
+            return {"ok": True, "id": saved} if saved else {"ok": False, "error": "not saved"}
         card_id = str(payload.get("id") or "")[:16]
         design = payload.get("design")
         if not isinstance(design, dict) or len(str(design)) > 400_000:

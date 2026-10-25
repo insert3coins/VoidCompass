@@ -107,6 +107,7 @@
       if (data.type === "pause") pause();
       if (data.type === "live") setLive(data.live);
       if (data.type === "input") cab.input.setMode(data.mode);
+      if (data.type === "levels") options.onLevels?.(data);
       if (data.type === "hello") {
         for (const [name, value] of Object.entries(data.theme || {})) {
           if (name in cab.colours && /^#[0-9a-f]{3,8}$|^rgb/i.test(String(value))) cab.colours[name] = value;

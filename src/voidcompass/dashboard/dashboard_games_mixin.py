@@ -20,6 +20,7 @@ import time
 from voidcompass.core import hatchling
 from voidcompass.core.config import get_active_profile, get_profile_file
 from voidcompass.core.paths import resource_path
+from voidcompass.overlays.hatchling_hud import hatchling_overlay_options
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,11 @@ class DashboardGamesMixin:
 
     def _games_live(self, game_id):
         if game_id == "hatchling":
-            return hatchling.view(self._hatchling_state(), time.time())
+            live = hatchling.view(self._hatchling_state(), time.time())
+            if live.get("pet"):
+                live["pet"]["music"] = self._hatchling_music()
+                live["pet"]["watcher"] = self._hatchling_watcher_seen(side=(0, -1))
+            return live
         if game_id in {"touchdown", "scarab-patrol"}:
             return self._games_gravity()
         return None
@@ -214,6 +219,12 @@ class DashboardGamesMixin:
         except OSError:
             state = hatchling.new_state()
         self._hatchling_cache = (path, state)
+        # Back after time away (5.6.4): it tells you what it did meanwhile.
+        try:
+            if hatchling.welcome(state, time.time()):
+                self._hatchling_save()
+        except Exception as exc:
+            logger.debug("Hatchling welcome skipped: %s", exc)
         return state
 
     def _hatchling_save(self):
@@ -230,11 +241,41 @@ class DashboardGamesMixin:
         return True
 
     def _hatchling_changed(self, immediate=True):
-        self._hatchling_save()
+        # Note: a scan honk is dozens of events in a few seconds; each used to
+        # write the file and redraw the whole deck at once (5.6.4).
+        self._hatchling_save_soon()
         self._hatchling_overlay_refresh(force=True)
         publish = getattr(self, "_schedule_html_dashboard_publish", None)
         if callable(publish):
             publish(immediate=immediate)
+
+    def _hatchling_save_soon(self, delay_ms=4000):
+        """Save within a few seconds, once for a burst of changes."""
+        root = getattr(self, "root", None)
+        later = getattr(root, "call_later", None)
+        if not callable(later):
+            return self._hatchling_save()
+        if getattr(self, "_hatchling_save_job", None) is not None:
+            return True
+
+        def save():
+            self._hatchling_save_job = None
+            self._hatchling_save()
+
+        self._hatchling_save_job = later(delay_ms, save)
+        return True
+
+    def _hatchling_flush(self):
+        """Closing: any change still waiting is written now."""
+        job = getattr(self, "_hatchling_save_job", None)
+        if job is None:
+            return False
+        try:
+            self.root.cancel(job)
+        except Exception:
+            pass
+        self._hatchling_save_job = None
+        return self._hatchling_save()
 
     def _hatchling_action(self, payload):
         action = _text(payload.get("act"), 20)
@@ -243,6 +284,10 @@ class DashboardGamesMixin:
         # The page shows why nothing happened (the deck answers every command OK).
         self._hatchling_state()["notice"] = {"text": message, "at": time.time()} if message else None
         if changed:
+            self._hatchling_watcher()
+            moment = (self._hatchling_state().get("pet") or {}).get("moment") or {}
+            if moment.get("kind") == "trick" and moment.get("at", 0) >= time.time() - 2:
+                self._hatchling_chat("trick")
             self._hatchling_changed()
         else:
             publish = getattr(self, "_schedule_html_dashboard_publish", None)
@@ -257,21 +302,226 @@ class DashboardGamesMixin:
         state = self._hatchling_state()
         if not state.get("pet"):
             return
+        if raw.get("event") in {"Touchdown", "ApproachBody", "LaunchSRV", "Disembark"}:
+            # The world you're on, for its hops and how warm it feels.
+            world = self._hatchling_world()
+            if world:
+                raw = {**raw, "_world": world}
         try:
             noticed = hatchling.observe(state, raw, time.time())
         except Exception as exc:
             logger.debug("Hatchling skipped %s: %s", event, exc)
             return
         if noticed:
+            self._hatchling_watcher()
+            self._hatchling_react(state, raw)
+            # The overlay acts a cue out at once; the deck catches up at its own pace.
             self._hatchling_changed(immediate=False)
 
     def _hatchling_tick(self):
-        """Its needs move by the hour: the overlay catches up once a minute."""
+        """Its needs move by the hour: the overlay catches up once a minute.
+        It also hears the Watcher speak, and turns to look."""
+        heard = self._hatchling_watcher_seen()
+        if heard and not self._hatchling_watcher_busy() and heard["at"] != getattr(self, "_hatchling_answered", None):
+            # Once the Watcher has finished, now and then it answers.
+            self._hatchling_answered = heard["at"]
+            if time.time() - heard["at"] < 90:
+                self._hatchling_chat("answer")
+        if heard and heard["at"] != getattr(self, "_hatchling_heard_at", None):
+            self._hatchling_heard_at = heard["at"]
+            self._hatchling_overlay_refresh(force=True)
+            publish = getattr(self, "_schedule_html_dashboard_publish", None)
+            if callable(publish):
+                publish(immediate=False)
         now = time.monotonic()
         if now - float(getattr(self, "_hatchling_tick_at", 0.0) or 0.0) < 60.0:
             return
         self._hatchling_tick_at = now
+        self._hatchling_sync_trip()
+        self._hatchling_chat("idle")
         self._hatchling_overlay_refresh()
+        # Now and then the Watcher remarks on it (it decides how often).
+        pet = self._hatchling_state().get("pet")
+        if pet and pet.get("stage") != "egg" and pet.get("dormant_since") is None and not pet.get("asleep"):
+            self._hatchling_tell_watcher("hatchling_idle", {"name": pet["name"]})
+
+    def _hatchling_active_trip(self):
+        """The expedition being flown, as the pet knows it: {id, name, to}."""
+        manager = getattr(self, "expedition_manager", None)
+        data = getattr(manager, "data", None) or {}
+        row = manager.get(data.get("active_id")) if manager is not None and data.get("active_id") else None
+        if not row or row.get("status") != "active":
+            return None
+        legs = [leg for leg in row.get("legs") or () if leg.get("kind") != "home"]
+        to = row.get("destination") or (legs[-1].get("system") if legs else "") or ""
+        return {"id": str(row.get("id") or ""), "name": str(row.get("name") or "the expedition"), "to": str(to)}
+
+    def _hatchling_sync_trip(self):
+        """It comes along on the expedition you're flying (5.6.4)."""
+        state = self._hatchling_state()
+        if not state.get("pet"):
+            return False
+        if hatchling.join_trip(state, self._hatchling_active_trip(), time.time()):
+            self._hatchling_changed(immediate=False)
+            return True
+        return False
+
+    def _hatchling_trip_ended(self, expedition_id, completed):
+        """An expedition finished: with it aboard and completed, a badge."""
+        state = self._hatchling_state()
+        badge = hatchling.finish_trip(state, expedition_id, time.time(), completed=completed)
+        if badge:
+            self._hatchling_tell_watcher("hatchling_grown", {"name": state["pet"]["name"], "form": "seasoned traveller"})
+            self._hatchling_chat("tripdone")
+        self._hatchling_changed()
+        self._hatchling_sync_trip()
+        return badge
+
+    def _hatchling_trip_view(self, expedition_id):
+        """For the expedition's page: who's aboard, and its diary of the trip."""
+        state = self._hatchling_state()
+        pet = state.get("pet") or {}
+        story = hatchling.trip_story(state, expedition_id)
+        aboard = isinstance(pet.get("trip"), dict) and pet["trip"].get("id") == str(expedition_id)
+        if not story and not aboard:
+            return None
+        return {"name": pet.get("name") or "", "species": pet.get("species") or "", "aboard": aboard,
+                "lines": (story or {}).get("lines", [])[-4:], "badge": (story or {}).get("badge", "")}
+
+    def _hatchling_watcher_busy(self):
+        """The Watcher has a thought on screen: the pet keeps quiet."""
+        mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+        current = getattr(mind, "current", None)
+        try:
+            return bool(current()) if callable(current) else False
+        except Exception:
+            return False
+
+    def _hatchling_react(self, state, raw):
+        """A few words for what just happened, if it feels like it."""
+        pet = state.get("pet") or {}
+        cue = pet.get("cue") or {}
+        moment = pet.get("moment") or {}
+        now = pet.get("last")
+        situation = ""
+        if moment.get("kind") in {"toy", "trick"} and moment.get("at") == now:
+            situation = moment["kind"]
+        elif cue.get("at") == now:
+            situation = cue.get("kind") or ""
+            world = pet.get("world") or {}
+            if situation == "touchdown" and world.get("temp"):
+                situation = "cold" if world["temp"] < 180 else "hot" if world["temp"] > 500 else situation
+        if situation:
+            self._hatchling_chat(situation)
+
+    def _hatchling_chat(self, situation):
+        """Maybe a line of its own (5.6.4): rare, short, and never over the Watcher."""
+        from voidcompass.core import hatchling_chatter
+        state = self._hatchling_state()
+        now = time.time()
+        live = (hatchling.view(state, now) or {}).get("pet")
+        said = hatchling_chatter.chatter(state, live, situation, now, hatchling_overlay_options(self.config)["chatter"],
+                                         watcher_busy=self._hatchling_watcher_busy())
+        if not said:
+            return None
+        # Very occasionally the Watcher picks up on it.
+        if situation != "answer" and hatchling_chatter.random.random() < .1:
+            self._hatchling_tell_watcher("hatchling_said", {"name": live.get("name") or "", "said": said.strip("…. ")})
+        self._hatchling_overlay_refresh(force=True)
+        publish = getattr(self, "_schedule_html_dashboard_publish", None)
+        if callable(publish):
+            publish(immediate=False)
+        return said
+
+    def _hatchling_world(self):
+        body_id = getattr(self, "current_body_id", None)
+        item = (getattr(self, "scan_items_by_id", None) or {}).get(body_id) if body_id is not None else None
+        if not item:
+            return None
+        try:
+            gravity = float(item.get("gravity_g") or 1.0)
+            temp = float(item.get("surface_temp") or 0.0)
+        except (TypeError, ValueError):
+            return None
+        return {"body": _text(item.get("name") or getattr(self, "current_body_name", ""), 60), "gravity": round(gravity, 2), "temp": round(temp)}
+
+    def _hatchling_watcher_seen(self, side=None):
+        """The Watcher's latest thought (5.6.4): when, which way it is from the
+        pet's overlay, and whether it's the weary one."""
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        last = getattr(getattr(heartbeat, "mind", None), "last_thought", None)
+        if not isinstance(last, dict) or not last.get("at") or not self.config.get("heartbeat_overlay_enabled", True):
+            return None
+        if side is None:
+            def at(key):
+                try:
+                    return float(self.config.get(key) or 0)
+                except (TypeError, ValueError):
+                    return 0.0
+            # Monitors left of the main one have negative positions.
+            dx = at("heartbeat_hud_x") - at("hatchling_hud_x")
+            dy = at("heartbeat_hud_y") - at("hatchling_hud_y")
+            side = ((dx > 0) - (dx < 0), (dy > 0) - (dy < 0))
+        from voidcompass.overlays import watcher_mind
+        return {"at": float(last["at"]), "side": list(side), "weary": watcher_mind.personality(self.config) == "weary"}
+
+    def _hatchling_music(self):
+        return bool((getattr(self, "_music_status", None) or {}).get("playing"))
+
+    def _hatchling_watcher(self):
+        """A moment worth the Watcher's notice (5.6.4): a toy, a trick, a fright, growing up."""
+        pet = self._hatchling_state().get("pet") or {}
+        moment = pet.get("moment")
+        if not isinstance(moment, dict) or moment.get("at") == getattr(self, "_hatchling_moment_at", None):
+            return
+        self._hatchling_moment_at = moment.get("at")
+        fields = {key: value for key, value in moment.items() if key not in {"kind", "at"}}
+        self._hatchling_tell_watcher(f"hatchling_{moment.get('kind')}", {"name": pet.get("name") or "", **fields})
+
+    def _hatchling_tell_watcher(self, kind, fields):
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        if heartbeat is None or not hasattr(heartbeat, "note"):
+            return
+        try:
+            heartbeat.note(kind, fields)
+        except Exception as exc:
+            logger.debug("The Watcher missed the Hatchling: %s", exc)
+
+    def _hatchling_snap(self, png):
+        """SNAP on its page (5.6.4): the pod as a postcard."""
+        from io import BytesIO
+
+        from PIL import Image
+
+        from voidcompass.core import themes
+        from voidcompass.dashboard.dashboard_keepsakes_mixin import postcards_folder
+        from voidcompass.overlays.postcard_picture import keep_card, save_postcard_picture
+        from voidcompass.overlays.postcards import postcard_card, postcard_options
+        from voidcompass.services.postcard_album import postcard_id
+        pet = self._hatchling_state().get("pet")
+        if not pet or not png.startswith(b"\x89PNG"):
+            return None
+        try:
+            picture = Image.open(BytesIO(png)).convert("RGB")
+        except Exception:
+            return None
+        system = str(getattr(self, "current_sys", "") or "").replace("---", "")
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        card = postcard_card({"System": system, "timestamp": stamp}, system=system, serial=0, now=int(time.time() * 1000))
+        card["greeting"] = f"Greetings from {pet['name']}"
+        options = postcard_options(self.config)
+        palette = dict(themes.ACTIVE_PALETTE or {})
+        saved = save_postcard_picture(card, picture, postcards_folder(self.config), palette, style=options["style"],
+                                      theme=options["theme"], postmark=options["postmark"], sizes=options["sizes"])
+        if not saved:
+            return None
+        keep_card(saved, card, picture, {"style": options["style"], "theme": options["theme"], "palette": palette,
+                                         "postmark": options["postmark"], "sizes": options["sizes"]})
+        self._postcard_album_cache = None
+        publish = getattr(self, "_schedule_html_dashboard_publish", None)
+        if callable(publish):
+            publish(immediate=True)
+        return postcard_id(os.path.basename(saved))
 
     def _hatchling_overlay_refresh(self, force=False):
         hud = getattr(self, "hatchling_hud", None)
@@ -279,7 +529,8 @@ class DashboardGamesMixin:
             return
         from voidcompass.overlays.hatchling_hud import build_hatchling_model
         now = time.time()
-        model = build_hatchling_model(hatchling.view(self._hatchling_state(), now), now)
+        model = build_hatchling_model(hatchling.view(self._hatchling_state(), now), now, music=self._hatchling_music(),
+                                      options=hatchling_overlay_options(self.config), watcher=self._hatchling_watcher_seen())
         if not force and model == getattr(self, "_hatchling_overlay_model", None):
             return
         self._hatchling_overlay_model = model

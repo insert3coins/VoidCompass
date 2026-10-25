@@ -4137,15 +4137,21 @@ class MainDashboard(
             return
         self._closing = True
         self.is_running = False
+        # Each step timed into logs/shutdown.log (5.6.4), to find a slow close.
+        from voidcompass.core.diagnostic_logs import ShutdownClock
+        clock = ShutdownClock()
         # Note: the Watcher stops mid-word, before anything else closes.
         self._watcher_voice_close()
+        clock.mark("Watcher voice")
         self._api_close()
+        clock.mark("Local API")
         inara = getattr(self, "inara", None)
         if inara is not None:
             try:
                 inara.stop()
             except Exception:
                 logging.debug("Inara stop skipped", exc_info=True)
+        clock.mark("Inara")
         html_dashboard_job = getattr(self, "_html_dashboard_publish_job", None)
         if html_dashboard_job is not None:
             try:
@@ -4174,9 +4180,11 @@ class MainDashboard(
         raven_worker = getattr(self, "raven_worker", None)
         if raven_worker is not None:
             raven_worker.shutdown()
+        clock.mark("timers, Galnet, Raven Colonial")
         self._bgs_close()
+        clock.mark("BGS")
         self._trading_close()
-        pass
+        clock.mark("Trading")
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
             "jump_info_hud", "colony_needs_hud", "trade_route_hud", "expedition_hud", "hatchling_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
@@ -4188,6 +4196,7 @@ class MainDashboard(
                     window.withdraw()
             except Exception:
                 pass
+        clock.mark("overlay windows hidden")
         # The HTML/WebView2 cockpit is a separate process. Begin its graceful
         # teardown now so it closes in parallel with the state durability work
         # below instead of adding a serial wait after Tk is destroyed.
@@ -4197,6 +4206,7 @@ class MainDashboard(
                 html_runtime.dispose()
             except Exception:
                 pass
+        clock.mark("overlay host")
         html_dashboard_runtime = getattr(
             self.root, "_voidcompass_html_dashboard_runtime", None,
         )
@@ -4210,18 +4220,27 @@ class MainDashboard(
                 html_dashboard_runtime.dispose()
             except Exception:
                 pass
+        clock.mark("command deck host")
         if getattr(self, "watcher", None):
             self.watcher.stop()
         if getattr(self, "overlay_hotkeys", None):
             self.overlay_hotkeys.stop()
         if getattr(self, "ui_dispatcher", None):
             self.ui_dispatcher.stop()
+        clock.mark("journal watcher, hotkeys, dispatcher")
         # This is intentionally the only write site for the last cockpit
         # snapshot. It provides a fast visual restore after a normal quit
         # without turning live journal traffic into continuous disk writes.
         self._save_profile_cockpit_state()
+        clock.mark("cockpit state saved")
         self._save_exploration_checkpoint("app-close", immediate=True)
+        clock.mark("exploration checkpoint")
         self._save_watcher_memory()
+        clock.mark("Watcher memory")
+        flush_pet = getattr(self, "_hatchling_flush", None)
+        if callable(flush_pet):
+            flush_pet()
+        clock.mark("Hatchling saved")
 
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
@@ -4253,18 +4272,23 @@ class MainDashboard(
                 self.expedition_manager.flush(wait=False)
             except Exception:
                 pass
+        clock.mark("windows closed, records flushed")
 
         if getattr(self, "atlas", None):
             self.atlas.dispose()
+        clock.mark("Galactic Atlas")
         self.screenshots.stop()
+        clock.mark("screenshots")
         if time.time() >= self._overlay_sync_grace_until:
             self._capture_overlay_positions()
         if not bool(getattr(self.root, "_voidcompass_html_dashboard_enabled", False)):
             self._capture_dashboard_window_geometry()
             self.config["main_geometry"] = self.root.geometry()
         self._persist_config()
+        clock.mark("positions and settings saved")
         if hasattr(self, 'conn'):
             self._stop_db_commit_worker(close=True, timeout=0.35)
+        clock.mark("database closed")
         if self.runtime_trace:
             try:
                 self.runtime_trace.flush(extra={"shutdown": True})
@@ -4274,6 +4298,7 @@ class MainDashboard(
         # One short durability window replaces several sequential five-second
         # waits. All state was already coalesced onto the same writer.
         flush_persistence(timeout=1.0)
+        clock.mark("files written")
         if self.ground_target_window and self.ground_target_window.winfo_exists():
             try:
                 self.config["ground_target_window_geometry"] = self.ground_target_window.geometry()
@@ -4283,7 +4308,11 @@ class MainDashboard(
         self._destroy_ground_popup()
         if getattr(self, "session_guard", None):
             self.session_guard.close()
+        clock.mark("last windows")
+        clock.write()
         self.root.close()
+        clock.mark("app window closed")
+        clock.write()
 
     def _save_watcher_memory(self):
         """Closing only hides the orb (HeartbeatHUD.destroy never runs), so the
@@ -4994,7 +5023,10 @@ class MainDashboard(
         HtmlOverlayServer.set_opacity(overlay_opacity_ratio(self.config))
         # The Watcher's own frame rate (5.5.7).
         from voidcompass.overlays.heartbeat_hud import frame_rate_setting
-        HtmlOverlayServer.set_overlay_frame_rates({"heartbeat": frame_rate_setting(self.config)})
+        from voidcompass.dashboard.html_overlay_studio import overlay_frame_rate as all_overlays_rate
+        from voidcompass.overlays.hatchling_hud import hatchling_frame_rate
+        HtmlOverlayServer.set_overlay_frame_rates({"heartbeat": frame_rate_setting(self.config),
+                                                   "hatchling": hatchling_frame_rate(all_overlays_rate(self.config))})
         # Overlays with their own opacity (5.5.3.3).
         if hasattr(self, "_apply_own_opacities"):
             self._apply_own_opacities()
@@ -5336,7 +5368,7 @@ class MainDashboard(
                 )
             elif attr == "hatchling_hud":
                 attach_html_hatchling_overlay(
-                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                    overlay, overlay_id, title, enabled_key, x_key, y_key, levels=self.music_levels,
                 )
             elif attr == "rig_tracker_hud":
                 attach_html_rig_tracker_overlay(

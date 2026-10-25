@@ -121,3 +121,45 @@ class TimestampedStream:
 
     def __getattr__(self, name):
         return getattr(self._stream, name)
+
+
+class ShutdownClock:
+    """How long closing takes, step by step (5.6.4): each close appends its
+    steps to logs/shutdown.log, the last 20 closes kept."""
+
+    KEEP_CLOSES = 20
+
+    def __init__(self, clock=None):
+        import time
+        self._clock = clock or time.perf_counter
+        self.started = self.last = self._clock()
+        self.steps = []
+        self._wrote = False
+
+    def mark(self, name):
+        now = self._clock()
+        self.steps.append((str(name), now - self.last))
+        self.last = now
+
+    def report(self, when=None):
+        total = self.last - self.started
+        stamp = (when or datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
+        lines = [f"=== close {stamp} · {total:.2f} s ==="]
+        lines += [f"  {seconds * 1000:7.0f} ms  {name}" for name, seconds in self.steps if seconds >= .01]
+        return "\n".join(lines) + "\n"
+
+    def write(self, base_dir=None):
+        path = Path(resolve_log_path("shutdown.log", base_dir=base_dir))
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            old = path.read_text(encoding="utf-8") if path.exists() else ""
+            closes = [block for block in old.split("=== close ") if block.strip()]
+            if self._wrote:
+                closes = closes[:-1]  # Its own earlier block, written in case the app went first.
+            closes = closes[-(self.KEEP_CLOSES - 1):]
+            kept = "".join(f"=== close {block}" for block in closes)
+            path.write_text(kept + self.report(), encoding="utf-8")
+            self._wrote = True
+            return str(path)
+        except OSError:
+            return None

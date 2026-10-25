@@ -46,7 +46,28 @@ class DashboardFlightLogMixin:
                 logging.debug("Flight log postcards skipped: %s", exc)
         logs = flight_logs(sessions, rows, postcards, watcher_mind.personality(config), finds=finds)
         self._flight_log_cache = (key, logs, time.monotonic())
-        return logs
+        return self._flight_log_pet(logs, sessions)
+
+    def _flight_log_pet(self, logs, sessions):
+        """The Hatchling's diary for each night (5.6.4), beside the Watcher's words."""
+        state_of = getattr(self, "_hatchling_state", None)
+        if not callable(state_of):
+            return logs
+        from voidcompass.core import hatchling
+        from voidcompass.exploration.flight_log import _epoch
+        state = state_of()
+        pet = state.get("pet")
+        if not pet:
+            return logs
+        ends = {str(session.get("started") or ""): session for session in sessions if isinstance(session, dict)}
+        shown = []
+        for log in logs:
+            session = ends.get(log.get("id")) or {}
+            start = _epoch(session.get("started"))
+            end = _epoch(session.get("ended")) or time.time()
+            lines = hatchling.diary(state, start, end) if start is not None else []
+            shown.append({**log, "pet": {"name": pet["name"], "lines": lines}} if lines else log)
+        return shown
 
     def _flight_log_written(self):
         """At log-off: a notice that tonight's flight log is on the Captain's

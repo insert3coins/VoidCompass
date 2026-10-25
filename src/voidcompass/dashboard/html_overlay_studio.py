@@ -34,6 +34,10 @@ from voidcompass.overlays.galnet_ticker_hud import (
     TICKER_CONTENT, TICKER_CRT, TICKER_GLITCH, TICKER_GLITCH_STRENGTH, TICKER_SPEEDS,
     TICKER_STORIES, TICKER_WIDTH_RANGE, ticker_options,
 )
+from voidcompass.overlays.hatchling_hud import (
+    CHATTER as HATCHLING_CHATTER, LOOKS as HATCHLING_LOOKS, NEEDS_SHOWN as HATCHLING_NEEDS, PET_SIZES as HATCHLING_PET_SIZES, ROAMS as HATCHLING_ROAMS,
+    hatchling_frame_rate, hatchling_overlay_options,
+)
 from voidcompass.overlays.music_player_hud import (
     MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_NEXT_COUNTS, MUSIC_PALETTES, MUSIC_SKINS, MUSIC_VISUALIZERS,
     music_overlay_options,
@@ -377,6 +381,14 @@ class HtmlOverlayStudioMixin:
                 "galaxy_minimap_text_scale_percent": heartbeat_text_size(self.config.get("galaxy_minimap_text_scale_percent")),
                 "galaxy_minimap_region_text_percent": heartbeat_text_size(self.config.get("galaxy_minimap_region_text_percent")),
                 "rig_tracker_show_holds": bool(self.config.get("rig_tracker_show_holds", True)),
+                "hatchling_look": hatchling_overlay_options(self.config)["look"],
+                "hatchling_pet_size": hatchling_overlay_options(self.config)["size"],
+                "hatchling_roam": hatchling_overlay_options(self.config)["roam"],
+                "hatchling_needs": hatchling_overlay_options(self.config)["needs"],
+                "hatchling_chatter": hatchling_overlay_options(self.config)["chatter"],
+                "hatchling_speech": hatchling_overlay_options(self.config)["speech"],
+                "hatchling_glow": hatchling_overlay_options(self.config)["glow"],
+                "hatchling_sounds": hatchling_overlay_options(self.config)["sounds"],
                 "rig_tracker_here_m": rig_here_m(self.config),
                 "rig_tracker_spacing_m": rig_spacing_m(self.config),
                 "rig_tracker_warn_m": rig_warn_m(self.config),
@@ -615,6 +627,7 @@ class HtmlOverlayStudioMixin:
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "rig_tracker_show_holds",
+            "hatchling_speech", "hatchling_glow", "hatchling_sounds",
             "hud_pages_takeover", "hud_hold_lists", "hud_page_expedition", "hud_page_jump", "hud_page_survey", "hud_page_planet", "hud_page_rhino", "hud_page_mining", "hud_page_combat", "hud_page_station", "hud_page_colony", "hud_page_carrier", "hud_page_trade", "hud_page_powerplay",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps", "overlay_transparency_fix", "overlay_classic_windows",
@@ -666,6 +679,10 @@ class HtmlOverlayStudioMixin:
             music = getattr(self, "music_player_hud", None)
             if music is not None:
                 music.apply_settings()
+        elif key.startswith("hatchling_"):
+            refresh = getattr(self, "_hatchling_overlay_refresh", None)
+            if callable(refresh):
+                refresh(force=True)
         elif key == "rig_tracker_show_holds":
             update_rigs = getattr(self, "_rig_update_overlay", None)
             if callable(update_rigs):
@@ -724,7 +741,8 @@ class HtmlOverlayStudioMixin:
             self.config["heartbeat_frame_rate"] = rate if rate in HEARTBEAT_FRAME_RATES else 0
         # Applied every save (and at start), so new overlay windows follow it.
         HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
-        HtmlOverlayServer.set_overlay_frame_rates({"heartbeat": heartbeat_frame_rate(self.config)})
+        HtmlOverlayServer.set_overlay_frame_rates({"heartbeat": heartbeat_frame_rate(self.config),
+                                                   "hatchling": hatchling_frame_rate(overlay_frame_rate(self.config))})
         HtmlOverlayServer.set_opacity(overlay_opacity_ratio(self.config))
         if "hud_crt_intensity" in payload:
             intensity = _text(payload.get("hud_crt_intensity") or "Subtle", 20).title()
@@ -790,10 +808,19 @@ class HtmlOverlayStudioMixin:
             ("music_player_visualizer", MUSIC_VISUALIZERS, "bars"),
             ("music_player_colour", MUSIC_COLOURS, "theme"),
             ("music_player_palette", MUSIC_PALETTES, "neon"),
+            ("hatchling_look", HATCHLING_LOOKS, "panel"),
+            ("hatchling_pet_size", tuple(HATCHLING_PET_SIZES), "medium"),
+            ("hatchling_roam", tuple(HATCHLING_ROAMS), "short"),
+            ("hatchling_needs", HATCHLING_NEEDS, "low"),
+            ("hatchling_chatter", HATCHLING_CHATTER, "quiet"),
         ):
             if key in payload:
                 choice = _text(payload.get(key), 20).casefold()
                 self.config[key] = choice if choice in choices else default
+        if {"hatchling_look", "hatchling_pet_size", "hatchling_roam", "hatchling_needs", "hatchling_chatter"} & set(payload):
+            refresh = getattr(self, "_hatchling_overlay_refresh", None)
+            if callable(refresh):
+                refresh(force=True)
         if "music_player_text_scale_percent" in payload:
             self.config["music_player_text_scale_percent"] = text_size_choice(payload.get("music_player_text_scale_percent"))
         if "music_player_auto_hide" in payload:

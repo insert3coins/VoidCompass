@@ -1076,6 +1076,8 @@ def run(url):
     if os.name != "nt":
         return 2
     os.environ.setdefault("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "00000000")
+    # The Hatchling's chirps (5.6.4): an overlay never gets a click to unlock sound.
+    os.environ.setdefault("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--autoplay-policy=no-user-gesture-required")
     try:
         result = _run_composition(url)
     except Exception as exc:

@@ -245,3 +245,12 @@
 /* Example expeditions (5.6.1) in the NEW form. */
 .ex-examples { display: grid; gap: 4px; grid-column: 1 / -1; padding-top: 8px; border-top: 1px dashed var(--border); }
 .ex-examples > span { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+
+/* Your Hatchling, along for the trip (5.6.4). */
+.ex-pet { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px 10px; margin-bottom: 12px; padding: 10px 14px;
+  border: 1px solid var(--border); border-left: 3px solid var(--green); background: var(--bg); }
+.ex-pet small { color: var(--green); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.ex-pet b { color: var(--text); font: 700 15px "Segoe UI", sans-serif; }
+.ex-pet-badge { grid-column: 2; color: var(--yellow); font: 700 11px "Segoe UI", sans-serif; }
+.ex-pet ul, .ex-pet p { grid-column: 1 / -1; margin: 4px 0 0; padding-left: 18px; color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif; }
+.ex-pet p { padding-left: 0; }

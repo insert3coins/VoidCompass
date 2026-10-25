@@ -132,6 +132,8 @@ HEADED_TOPICS = {
     "on_this_day": ("recall", "ON THIS DAY"),
     "capsule_early": ("recall", "TIME CAPSULE · NOT YET"),
     "constellation_named": ("recall", "A NEW CONSTELLATION"),
+    # 5.6.4: your Hatchling.
+    **{topic: ("", "THE HATCHLING") for topic in ("hatchling_toy", "hatchling_trick", "hatchling_scared", "hatchling_grown", "hatchling_idle", "hatchling_said")},
     # 5.5.4: finding its voice, and what it has learned about you.
     "voice_found": ("memory", watcher_voice_lore.TITLE),
     "habit_milestone": ("", "A MILESTONE"),
@@ -233,6 +235,8 @@ IMPORTANCE = {
     "on_this_day": 2,
     "capsule_early": 2,
     "constellation_named": 3,
+    # 5.6.4: your Hatchling; growing up is said whatever the hour.
+    "hatchling_toy": 1, "hatchling_trick": 2, "hatchling_scared": 1, "hatchling_grown": 2, "hatchling_idle": 0, "hatchling_said": 0,
     # You and it: a poke, hiding it, moving it, and the bond over time.
     "poked": 3,
     "poked_again": 3,
@@ -348,6 +352,8 @@ MOODS = {
     "on_this_day": "downcast",
     "capsule_early": "curious",
     "constellation_named": "pleased",
+    "hatchling_toy": "pleased", "hatchling_trick": "pleased", "hatchling_scared": "wary", "hatchling_grown": "pleased",
+    "hatchling_idle": "curious", "hatchling_said": "pleased",
     **{topic: "curious" for topic in watcher_habits.HABIT_TOPICS},
     "habit_milestone": "pleased",
     "voice_found": "curious",
@@ -1251,6 +1257,8 @@ class WatcherMind:
             # quick close lost the sign-off from its memory).
             self.save()
             return thought
+        if kind.startswith("hatchling_") and kind in IMPORTANCE:
+            return self.consider(kind, fields, force=kind in {"hatchling_grown", "hatchling_trick"})
         if kind.startswith("expedition_") and kind in IMPORTANCE:
             # An expedition's milestones come once each (the expedition
             # remembers them), so they're said whatever the hour.

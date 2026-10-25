@@ -171,6 +171,19 @@ function showInput(item) {
   for (const button of box.querySelectorAll("[data-game-input]")) button.setAttribute("aria-pressed", String(button.dataset.gameInput === mode));
 }
 
+// The Hatchling hears the deck's music (5.6.4), a few times a second.
+let hearing = 0;
+function hearMusic() {
+  window.clearInterval(hearing);
+  hearing = 0;
+  if (playing !== "hatchling") return;
+  hearing = window.setInterval(() => {
+    if (playing !== "hatchling" || !frame) { window.clearInterval(hearing); hearing = 0; return; }
+    const heard = window.voidcompassMusicLevels?.();
+    if (heard?.playing) frame.contentWindow?.postMessage({source: "voidcompass-deck", type: "levels", bands: heard.bands, playing: true}, "*");
+  }, 100);
+}
+
 function setInput(mode) {
   const item = game(playing);
   if (!item) return;
@@ -206,6 +219,7 @@ function openGame(id) {
   ui.byId("games-genre").textContent = item.genre.toUpperCase();
   ui.byId("games-about").textContent = item.description || item.tagline;
   showInput(item);
+  hearMusic();
   ui.byId("games-controls").innerHTML = item.controls.map(([keys, action]) =>
     `<dt>${ui.escapeHtml(keys)}</dt><dd>${ui.escapeHtml(action)}</dd>`).join("");
   ui.byId("games-player").style.setProperty("--game-tone", item.accent || "var(--accent)");
@@ -246,6 +260,19 @@ async function received(event) {
     // "act", not "action": the deck's command already uses that key for its own name.
     await ui.command("workspace", {page: "games", operation: "action", game: item.id,
       act: String(data.action || "").slice(0, 20), value: data.value && typeof data.value === "object" ? data.value : {}});
+  } else if (data.type === "snap" && item.id === "hatchling" && typeof data.png === "string" && data.png.length < 20_000_000) {
+    // The Hatchling's SNAP (5.6.4): its pod, saved as a postcard.
+    try {
+      const response = await fetch(ui.apiUrl("/api/postcard-save"), {
+        method: "POST", cache: "no-store", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({mode: "snap", png: data.png}),
+      });
+      const reply = await response.json().catch(() => ({}));
+      if (!response.ok || !reply.ok) throw new Error(reply.error || `HTTP ${response.status}`);
+      ui.showToast?.("Postcard saved: it's on the Postcards page");
+    } catch (error) {
+      ui.showToast?.(`The postcard wasn't saved: ${error.message}`);
+    }
   } else if (data.type === "over") {
     await ui.command("workspace", {page: "games", operation: "score", game: item.id,
       score: data.score, wave: data.wave ?? data.level, accuracy: data.accuracy, rank: data.rank});

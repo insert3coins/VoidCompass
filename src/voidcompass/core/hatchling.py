@@ -10,6 +10,14 @@ It can't die. Left long enough with no health it hibernates, and care
 brings it back; a week hibernating and it is gone for good, into the
 memorial, and a new egg can be chosen.
 
+Since 5.6.4 it also notices what you're doing right now (a cue for the page
+to act out), finds toys on your trips, learns tricks, grows a personality
+from how it's raised, and dreams of where you've been. It knows the world
+you're on (its gravity and heat), rides along in the SRV, misses you on
+foot, greets you after time away, keeps a diary for the Captain's Log and
+earns outfits. It comes along on your expeditions, keeps its own diary of
+each, and earns a badge for every one you finish together.
+
 Everything here is plain data in, plain data out: the deck keeps one per
 commander in the profile folder.
 """
@@ -19,6 +27,8 @@ from __future__ import annotations
 import copy
 import json
 import re
+
+from voidcompass.core import hatchling_chatter
 
 NEEDS = ("hunger", "mood", "clean", "health", "energy")
 STAGES = (("egg", 0.5), ("hatchling", 24.0), ("juvenile", 72.0), ("adult", None))
@@ -76,6 +86,34 @@ ITEMS = {
     "microcontrollers": {"name": "Micro Controllers", "kind": "medicine", "fill": 0, "mood": 0, "for": ("bot",)},
 }
 
+# How long a cue stays worth acting out, and how many toys and places it keeps.
+CUE_S = 30
+TOYS_KEEP = 6
+PLACES_KEEP = 12
+LOW_FUEL = .25
+
+# A trick is learned from what you do together (5.6.4).
+TRICKS = (("spin", "games", "limpet", 4), ("flip", "games", "thargon", 4), ("wave", "care", "pats", 15),
+          ("juggle", "care", "plays", 12), ("bow", "care", "treats", 8))
+# Its personality: whichever has grown furthest past its mark.
+TRAITS = {
+    "curious": lambda care: (care["explored"] + 2 * care["discoveries"] + 5 * care["codex"]) / 60,
+    "brave": lambda care: (care["scares"] + 3 * care["rebuys"] + care["fights"] / 2) / 25,
+    "lazy": lambda care: care["naps"] / 12,
+    "greedy": lambda care: (2 * care["treats"] + care["meals"] / 2) / 30,
+    "clingy": lambda care: (care["pats"] + care["plays"]) / 30,
+}
+GAMES = {"limpet": "Catch the Limpet", "thargon": "Where did the Thargon go?"}
+# Outfits it earns: (name, the count that earns it, how many).
+OUTFITS = {
+    "visor": ("Scanner visor", "explored", 500), "helmet": ("Mining helmet", "mined", 100),
+    "charm": ("Guardian charm", "guardian", 3), "scarf": ("Explorer's scarf", "discoveries", 50),
+    "bowtie": ("Bow tie", "treats", 30),
+}
+DIARY_KEEP = 200
+WELCOME_AFTER_H = 3
+WELCOME_SHOWN_S = 600
+
 # Per hour: awake, then asleep (energy comes back while it sleeps).
 # A day away leaves it hungry, not ill; about three and it hibernates.
 DECAY = {"hunger": (3.0, 1.5), "mood": (2.0, 0.0), "clean": (2.0, 1.0), "energy": (4.0, -16.0)}
@@ -107,8 +145,13 @@ def new_pet(species, name="", kind="", now=0.0):
         "asleep": False, "sick": False, "dormant_since": None, "revived": 0,
         "larder": {SPECIES[species]["stores"]: STORES_COUNT}, "stores_at": now,
         "care": {key: 0 for key in ("meals", "treats", "plays", "vents", "explored", "discoveries", "codex",
-                                    "scares", "rebuys", "thargoid", "guardian", "neglect_h", "stations")},
+                                    "scares", "rebuys", "thargoid", "guardian", "neglect_h", "stations", "pats", "naps", "mined",
+                                    "fights", "missions", "ranks")},
         "stations": [], "supercruise_since": None, "log": [], "reaction": "", "reaction_at": 0.0,
+        "cue": None, "place": "space", "low_fuel": False, "fuel_capacity": 0.0, "foods": {}, "games": {},
+        "toys": [], "tricks": [], "places": [], "moment": None,
+        "world": None, "welcome": None, "diary": [], "outfits": [], "outfit": "", "ship": "",
+        "trip": None, "badges": [],
     }
 
 
@@ -136,6 +179,17 @@ def load_state(text):
     base["memorial"] = [item for item in base["memorial"] or () if isinstance(item, dict)][-20:]
     base["forms_seen"] = [str(item) for item in base["forms_seen"] or ()][:60]
     return base
+
+
+def moment(pet, now, kind, diary="", **fields):
+    """Something worth the Watcher's notice (the deck passes it on), and a
+    line in its diary for the Captain's Log."""
+    pet["moment"] = {"kind": kind, "at": now, **{key: str(value) for key, value in fields.items()}}
+    if diary:
+        row = {"at": now, "text": str(diary)[:120]}
+        if isinstance(pet.get("trip"), dict):
+            row["trip"] = pet["trip"].get("id")
+        pet["diary"] = (list(pet.get("diary") or []) + [row])[-DIARY_KEEP:]
 
 
 def say(pet, now, text, tone="", reaction=""):
@@ -172,6 +226,7 @@ def _grow(state, pet, now):
     pet["stage"] = stage
     if stage == "hatchling":
         say(pet, now, f"{pet['name']} hatched!", "good", "hatched")
+        moment(pet, now, "grown", f"{pet['name']} hatched.", form="hatchling")
     elif stage == "juvenile":
         say(pet, now, f"{pet['name']} is growing up.", "good")
     elif stage == "adult":
@@ -181,6 +236,7 @@ def _grow(state, pet, now):
         if seen not in state["forms_seen"]:
             state["forms_seen"].append(seen)
         say(pet, now, f"Fully grown: {label}.", "good", "grown")
+        moment(pet, now, "grown", f"{pet['name']} grew up into a {label}.", form=label)
 
 
 def _hour(state, pet, now, hours):
@@ -290,6 +346,19 @@ def act(state, action, payload, now):
                      health=50.0, energy=max(needs["energy"], 50.0))
         say(pet, now, f"{name} stirred and opened its eyes. It's back.", "good", "revived")
         return True, ""
+    if action == "wear":
+        outfit = str(payload.get("outfit") or "")
+        if outfit and outfit not in pet["outfits"]:
+            return False, "It hasn't earned that one yet."
+        pet["outfit"] = outfit
+        return True, ""
+    if action == "welcomed":
+        pet["welcome"] = None
+        return True, ""
+    if action == "release":
+        _lose(state, pet, now)
+        state["memorial"][-1]["released"] = True
+        return True, ""
     if _fed_up(pet):
         return False, "It's still an egg." if pet["stage"] == "egg" else f"{name} is hibernating."
     if action == "lights":
@@ -304,6 +373,7 @@ def act(state, action, payload, now):
         if needs["energy"] > 75:
             return False, f"{name} isn't tired."
         pet["asleep"] = True
+        pet["care"]["naps"] += 1
         say(pet, now, f"Lights off. {name} curled up to sleep.", "", "asleep")
         return True, ""
     if pet["asleep"]:
@@ -323,7 +393,10 @@ def act(state, action, payload, now):
         needs["hunger"] = _clamp(needs["hunger"] + spec["fill"])
         needs["mood"] = _clamp(needs["mood"] + spec["mood"])
         pet["care"]["treats" if spec["kind"] == "treat" else "meals"] += 1
+        pet["foods"][item] = pet["foods"].get(item, 0) + 1
         say(pet, now, f"{name} had the {spec['name']}.", "good", "treat" if spec["kind"] == "treat" else "eat")
+        _learn(pet, now)
+        _earn(pet, now)
         return True, ""
     if action == "medicine":
         item = str(payload.get("item") or "") or _medicine(pet)
@@ -353,22 +426,144 @@ def act(state, action, payload, now):
         needs["energy"] = _clamp(needs["energy"] - 7)
         needs["hunger"] = _clamp(needs["hunger"] - 3)
         pet["care"]["plays"] += 1
-        game = {"limpet": "Catch the Limpet", "thargon": "Where did the Thargon go?"}.get(str(payload.get("game")), "a game")
+        game_id = str(payload.get("game"))
+        if game_id in GAMES:
+            pet["games"][game_id] = pet["games"].get(game_id, 0) + 1
+        game = GAMES.get(game_id, "a game")
         say(pet, now, f"Played {game}: {'won!' if won else 'it had fun anyway.'}", "good", "happy" if won else "play")
+        _learn(pet, now)
         return True, ""
     if action == "pet":
         # A pat: a little cheer, at most once in a while.
         if now - _number(pet.get("petted_at"), 0) < 90:
             return False, ""
         pet["petted_at"] = now
+        pet["care"]["pats"] += 1
         needs["mood"] = _clamp(needs["mood"] + 3)
         pet["reaction"], pet["reaction_at"] = "petted", now
-        return True, ""
-    if action == "release":
-        _lose(state, pet, now)
-        state["memorial"][-1]["released"] = True
+        _learn(pet, now)
         return True, ""
     return False, "Nothing happened."
+
+
+def _learn(pet, now):
+    """A trick it has picked up from what you do together."""
+    for trick, where, key, enough in TRICKS:
+        have = (pet.get(where) or {}).get(key, 0)
+        if trick not in pet["tricks"] and have >= enough:
+            pet["tricks"].append(trick)
+            say(pet, now, f"{pet['name']} learned a trick: {trick}!", "good", "excited")
+            moment(pet, now, "trick", f"Learned to {trick}.", trick=trick)
+            return
+
+
+def _earn(pet, now):
+    """An outfit earned by how you play; it can wear one."""
+    earned = False
+    for outfit, (label, count, enough) in OUTFITS.items():
+        if outfit not in pet["outfits"] and pet["care"].get(count, 0) >= enough:
+            pet["outfits"].append(outfit)
+            say(pet, now, f"{pet['name']} earned an outfit: the {label}.", "good", "excited")
+            moment(pet, now, "outfit", f"Earned the {label}.", outfit=label)
+            earned = True
+    return earned
+
+
+def join_trip(state, trip, now):
+    """The expedition you're flying (5.6.4): it comes along, or steps off
+    when none is. ``trip`` is {id, name, to} or None. True when it changed."""
+    pet = state.get("pet")
+    if not pet:
+        return False
+    held = pet.get("trip") if isinstance(pet.get("trip"), dict) else None
+    if not trip:
+        if held:
+            pet["trip"] = None
+            return True
+        return False
+    if held and held.get("id") == trip.get("id"):
+        if (held.get("name"), held.get("to")) != (trip.get("name"), trip.get("to")):
+            held.update(name=str(trip.get("name") or "")[:80], to=str(trip.get("to") or "")[:80])
+            return True
+        return False
+    pet["trip"] = {"id": str(trip.get("id") or ""), "name": str(trip.get("name") or "the expedition")[:80],
+                   "to": str(trip.get("to") or "")[:80], "since": now}
+    if pet["stage"] != "egg":
+        say(pet, now, f"{pet['name']} is coming along on {pet['trip']['name']}.", "good", "excited")
+        moment(pet, now, "trip", f"Set off with you on {pet['trip']['name']}.")
+    return True
+
+
+def finish_trip(state, trip_id, now, completed=True):
+    """The expedition ended. Completed with it aboard: a badge, and a party."""
+    pet = state.get("pet")
+    held = (pet or {}).get("trip") if isinstance((pet or {}).get("trip"), dict) else None
+    if not pet or not held or held.get("id") != str(trip_id):
+        return None
+    pet["trip"] = None
+    if not completed:
+        return None
+    where = held.get("to") or held.get("name")
+    badge = {"id": held["id"], "name": held.get("name") or "", "text": f"Travelled with you to {where}", "at": now}
+    pet["badges"] = ([row for row in pet.get("badges") or [] if row.get("id") != held["id"]] + [badge])[-40:]
+    say(pet, now, f"{pet['name']} made it all the way to {where} with you. A badge for that.", "good", "excited")
+    pet["cue"] = {"kind": "tripdone", "at": now}
+    moment(pet, now, "badge", f"Finished {held.get('name') or 'the expedition'}: travelled with you to {where}.")
+    for row in pet["diary"][-1:]:
+        row["trip"] = held["id"]
+    return badge
+
+
+def trip_story(state, trip_id):
+    """Its side of an expedition, for the trip's Void Wrapped: its diary of
+    it and the badge it earned (None when it wasn't along)."""
+    pet = state.get("pet")
+    if not pet:
+        return None
+    lines = [row["text"] for row in pet.get("diary") or () if row.get("trip") == str(trip_id)]
+    badge = next((row for row in pet.get("badges") or () if row.get("id") == str(trip_id)), None)
+    if not lines and not badge:
+        return None
+    # "sample_kind", not "kind": the Wrapped card's own kind is "hatchling".
+    return {"name": pet["name"], "species": pet["species"], "sample_kind": pet.get("kind") or "", "stage": pet["stage"],
+            "form": pet.get("form") or "", "outfit": pet.get("outfit") or "", "lines": lines[-6:], "moments": len(lines),
+            "badge": badge["text"] if badge else ""}
+
+
+def welcome(state, now):
+    """Opening Void Compass after time away: what it did meanwhile. Called
+    once a session, before its clock catches up. True when it greeted you."""
+    pet = state.get("pet")
+    if not pet or pet["stage"] == "egg" or pet.get("dormant_since") is not None:
+        advance(state, now)
+        return False
+    away_h = (now - _number(pet.get("last"), now)) / 3600
+    before = dict(pet["needs"])
+    advance(state, now)
+    pet = state.get("pet")
+    if not pet or away_h < WELCOME_AFTER_H:
+        return False
+    day = int(now // 86400)
+    lines = [f"You were away {round(away_h)} hours."]
+    naps = int(away_h // 7)
+    if naps:
+        lines.append(f"It napped {naps} time{'s' if naps > 1 else ''}.")
+    games = ("It kept a limpet up {n} times in a row.", "It built a canister tower. It fell over.",
+             "It chased a mote of light around the pod.", "It joined up stars into a constellation.",
+             "It played tag with a Thargon and lost.")
+    lines.append(games[day % len(games)].format(n=7 + day % 13))
+    if pet["needs"]["hunger"] < before["hunger"] - 20:
+        lines.append("It got hungry waiting.")
+    if sum(count for item, count in pet["larder"].items() if ITEMS.get(item, {}).get("kind") != "medicine") < 3:
+        lines.append("The larder is nearly empty.")
+    if pet["toys"]:
+        lines.append(f"It played with {pet['toys'][day % len(pet['toys'])]['label']}.")
+    lines.append("It missed you.")
+    pet["welcome"] = {"at": now, "hours": round(away_h, 1), "lines": lines}
+    pet["cue"] = {"kind": "welcome", "at": now}
+    say(pet, now, f"{pet['name']} missed you: {round(away_h)} hours away.", "good", "excited")
+    moment(pet, now, "welcome", f"Greeted you after {round(away_h)} hours away.", hours=round(away_h))
+    return True
 
 
 def _use(pet, item):
@@ -395,6 +590,106 @@ def _mentions(event, *words):
     return any(word in text for word in words)
 
 
+# What it acts out for each live event (5.6.4), and where that leaves you.
+CUES = {"StartJump": "jump", "CarrierJump": "jump", "FSDJump": "arrive", "SupercruiseEntry": "cruise", "SupercruiseExit": "drop",
+        "Docked": "dock", "Undocked": "undock", "Touchdown": "touchdown", "Liftoff": "liftoff", "FuelScoop": "scoop",
+        "HeatWarning": "heat", "UnderAttack": "danger", "Interdicted": "danger", "HullDamage": "danger", "Died": "danger",
+        "LaunchSRV": "srv", "DockSRV": "srvback", "Disembark": "leave", "Embark": "welcome",
+        "Bounty": "victory", "FactionKillBond": "victory", "MissionCompleted": "mission", "MissionFailed": "sad",
+        "MissionAbandoned": "sad", "Promotion": "party", "ShipyardSwap": "newship", "SellExplorationData": "paid",
+        "MultiSellExplorationData": "paid", "SellOrganicData": "paid", "EngineerCraft": "upgrade", "RepairAll": "repaired",
+        "EscapeInterdiction": "phew", "JetConeBoost": "boost", "Screenshot": "pose", "CommitCrime": "naughty",
+        "DockingDenied": "rude", "LaunchFighter": "fighter", "FSSAllBodiesFound": "allfound", "SAAScanComplete": "mapped",
+        "ApproachSettlement": "settlement"}
+PLACES = {"SupercruiseEntry": "supercruise", "SupercruiseExit": "space", "Docked": "docked", "Undocked": "space",
+          "Touchdown": "landed", "Liftoff": "space", "FSDJump": "supercruise", "Died": "space",
+          "LaunchSRV": "srv", "DockSRV": "landed", "Disembark": "away"}
+
+
+def _cue(pet, name, event, now):
+    kind = CUES.get(name, "")
+    if name == "StartJump" and event.get("JumpType") != "Hyperspace":
+        kind = ""
+    if name in {"Touchdown", "Liftoff"} and event.get("PlayerControlled") is False:
+        kind = ""
+    if name == "ShieldState" and event.get("ShieldsUp") is False:
+        kind = "danger"
+    if (name == "Scan" and event.get("WasDiscovered") is False) or (name == "CodexEntry" and event.get("IsNewEntry")):
+        kind = "discovery"
+    if name in PLACES:
+        pet["place"] = PLACES[name]
+    if name == "Embark":
+        pet["place"] = "docked" if event.get("OnStation") else "landed" if event.get("OnPlanet") else "space"
+    if name == "Disembark" and event.get("SRV"):
+        kind = ""
+    if name == "Loadout":
+        pet["fuel_capacity"] = _number((event.get("FuelCapacity") or {}).get("Main"), pet.get("fuel_capacity") or 0.0)
+        pet["ship"] = _ship_name(event.get("ShipName"), event.get("Ship_Localised") or event.get("Ship"))
+    if name == "ShipyardSwap":
+        pet["ship"] = _ship_name("", event.get("ShipType_Localised") or event.get("ShipType"))
+    if name == "SAAScanComplete" and _number(event.get("ProbesUsed"), 99) > _number(event.get("EfficiencyTarget"), 0):
+        kind = ""
+    if name == "RefuelAll" or (name in {"FuelScoop", "RefuelPartial"} and pet.get("fuel_capacity")
+                               and _number(event.get("Total")) / pet["fuel_capacity"] > LOW_FUEL):
+        pet["low_fuel"] = False
+    if name == "FSDJump" and pet.get("fuel_capacity"):
+        low = _number(event.get("FuelLevel"), pet["fuel_capacity"]) / pet["fuel_capacity"] < LOW_FUEL
+        if low and not pet.get("low_fuel"):
+            kind = "lowfuel"
+        pet["low_fuel"] = low
+    if name == "FSDJump" and event.get("StarSystem"):
+        system = str(event["StarSystem"])[:40]
+        pet["places"] = ([{"name": system, "at": now}] + [row for row in pet["places"] if row.get("name") != system])[:PLACES_KEEP]
+    held = pet.get("cue") if isinstance(pet.get("cue"), dict) else {}
+    if kind and held.get("kind") == kind and now - _number(held.get("at")) < 15:
+        return False  # Still acting this one out (a honk is dozens of discoveries).
+    if kind:
+        pet["cue"] = {"kind": kind, "at": now}
+    return bool(kind)
+
+
+def _ship_name(given, kind):
+    """Your ship as it would say it: its own name, else its type ("krait_mkii" → "Krait Mkii")."""
+    given = str(given or "").strip()
+    if given:
+        return given[:30]
+    kind = str(kind or "")
+    if " " in kind and kind != kind.lower():
+        return kind[:30]
+    words = [part.capitalize() for part in kind.replace("_", " ").split()]
+    marks = {"Mkii": "Mk II", "Mkiii": "Mk III", "Mkiv": "Mk IV"}
+    return " ".join(marks.get(word, word) for word in words)[:30]
+
+
+def _toy(pet, now, kind, label):
+    """A keepsake from the trip, kept in its pod (one of each kind)."""
+    label = str(label)[:48]
+    held = next((toy for toy in pet["toys"] if toy.get("kind") == kind), None)
+    if held and now - _number(held.get("at")) < 3600:
+        return False
+    pet["toys"] = ([toy for toy in pet["toys"] if toy.get("kind") != kind] + [{"kind": kind, "label": label, "at": now}])[-TOYS_KEEP:]
+    say(pet, now, f"{pet['name']} found a toy: {label}.", "good", "excited")
+    moment(pet, now, "toy", f"Found {label}.", toy=label)
+    return True
+
+
+def _toys(pet, name, event, now):
+    system = str(event.get("StarSystem") or event.get("SystemName") or "")
+    if name == "CodexEntry" and _mentions(event, "guardian", "ancient"):
+        return _toy(pet, now, "relic", "a Guardian relic" + (f" from {system}" if system else ""))
+    if name in {"FSSSignalDiscovered", "CodexEntry"} and _mentions(event, "thargoid", "nonhuman"):
+        return _toy(pet, now, "sensor", "a Thargoid sensor")
+    if name == "MiningRefined":
+        return _toy(pet, now, "fragment", f"a chunk of {event.get('Type_Localised') or 'ore'}")
+    if name == "ScanOrganic" and event.get("ScanType") == "Analyse":
+        return _toy(pet, now, "pebble", f"a pebble from beside {event.get('Species_Localised') or 'something alive'}")
+    if name == "Scan" and event.get("WasDiscovered") is False and event.get("StarType"):
+        return _toy(pet, now, "beacon", f"a beacon from {event.get('BodyName') or 'a new star'}")
+    if name == "Docked" and str(event.get("MarketID") or event.get("StationName") or "") not in pet["stations"]:
+        return _toy(pet, now, "model", f"a model of {event.get('StationName') or 'a station'}")
+    return False
+
+
 def observe(state, event, now):
     """One live journal event. Returns True when the pet noticed."""
     pet = state.get("pet")
@@ -418,13 +713,30 @@ def observe(state, event, now):
         return True
     if _fed_up(pet):
         return False
+    asleep = pet["asleep"]
+    cued = _cue(pet, name, event, now)
+    toyed = _toys(pet, name, event, now)
+    noticed = _observe_mood(pet, name, event, now, needs, care, who, species, asleep)
+    if noticed and name in {"ShieldState", "HullDamage", "Died"}:
+        moment(pet, now, "scared", "Hid under the console when the ship was hit.")
+    if name == "MiningRefined":
+        care["mined"] += 1
+    if isinstance(event.get("_world"), dict) and name in {"Touchdown", "ApproachBody", "LaunchSRV", "Disembark"}:
+        world = event["_world"]
+        pet["world"] = {"body": str(world.get("body") or "")[:60], "gravity": _number(world.get("gravity"), 1.0),
+                        "temp": _number(world.get("temp"), 0.0)}
+    if name in {"LeaveBody", "FSDJump"}:
+        pet["world"] = None
+    earned = _earn(pet, now)
+    return noticed or cued or toyed or earned
 
+
+def _observe_mood(pet, name, event, now, needs, care, who, species, asleep):
     def mood(change, text, tone="", reaction=""):
         needs["mood"] = _clamp(needs["mood"] + change)
         say(pet, now, text, tone or ("good" if change > 0 else "bad"), reaction)
         return True
 
-    asleep = pet["asleep"]
     if name == "FSDJump":
         care["explored"] += 1
         # You arrive in supercruise: the clock on a long one starts here.
@@ -484,6 +796,37 @@ def observe(state, event, now):
         if minutes > 5 and not asleep:
             return mood(-min(10, round((minutes - 5) / 2)), f"{round(minutes)} minutes of supercruise. {who} is bored.", "bad", "bored")
         return False
+    if name in {"Bounty", "FactionKillBond"}:
+        care["fights"] += 1
+        if _mentions(event, "thargoid") and species == "larva":
+            return mood(-8, f"A Thargoid fell. {who} went very quiet.", "bad", "distraught")
+        return mood(3, f"Got them. {who} cheered.", "good", "excited")
+    if name == "MissionCompleted":
+        care["missions"] += 1
+        return mood(5, f"Mission done: {event.get('LocalisedName') or event.get('Name') or 'a job'}. {who} is proud.", "good", "happy")
+    if name in {"MissionFailed", "MissionAbandoned"}:
+        return mood(-4, f"A mission lost. {who} is sorry.", "bad", "")
+    if name == "Promotion":
+        care["ranks"] += 1
+        return mood(10, f"Promoted! {who} is so proud of you.", "good", "excited")
+    if name == "ShipyardSwap":
+        return mood(5, f"A different ship. {who} is sniffing every corner.", "good", "curious")
+    if name in {"SellExplorationData", "MultiSellExplorationData", "SellOrganicData"}:
+        return mood(3, f"Paid for what we found. {who} likes credits.", "good", "happy")
+    if name == "EngineerCraft":
+        return mood(8 if species == "bot" else 2, f"Upgrades! {who} {'whirrs with joy' if species == 'bot' else 'watched closely'}.", "good", "excited")
+    if name == "RepairAll":
+        needs["health"] = _clamp(needs["health"] + 3)
+        return mood(2, f"The ship's mended. {who} feels safer.", "good", "")
+    if name == "EscapeInterdiction":
+        return mood(4, f"Got away! {who} cheered.", "good", "excited")
+    if name == "Screenshot":
+        return mood(1, f"{who} posed for the picture.", "good", "happy")
+    if name == "CommitCrime":
+        return mood(-2, f"{who} saw that.", "bad", "")
+    if name == "FSSAllBodiesFound":
+        care["discoveries"] += 1
+        return mood(4, f"Every world in the system found. {who} is delighted.", "good", "happy")
     if name == "CarrierJump":
         if asleep:
             needs["energy"] = _clamp(needs["energy"] + 10)
@@ -564,8 +907,47 @@ def view(state, now):
         "log": [{"at": row.get("at"), "text": row.get("text"), "tone": row.get("tone")} for row in pet.get("log") or ()][:8],
         "reaction": pet.get("reaction") or "", "reaction_at": pet.get("reaction_at") or 0,
         "care": {key: int(value) for key, value in pet["care"].items()},
+        **_character(pet, now),
     }
     return base
+
+
+def _character(pet, now):
+    """Who it has become (5.6.4): personality, favourites, toys, tricks and
+    dreams, and what's happening right now for the page to act out."""
+    scores = {trait: round(min(3.0, score(pet["care"])), 2) for trait, score in TRAITS.items()}
+    best = max(scores, key=scores.get)
+    foods = {item: count for item, count in (pet.get("foods") or {}).items() if item in ITEMS}
+    games = {game: count for game, count in (pet.get("games") or {}).items() if game in GAMES}
+    cue = pet.get("cue") if isinstance(pet.get("cue"), dict) and now - _number(pet["cue"].get("at")) < CUE_S else None
+    return {
+        "trait": best if scores[best] >= 1 else "", "traits": scores,
+        "favourite_food": ITEMS[max(foods, key=foods.get)]["name"] if foods else "",
+        "favourite_game": GAMES[max(games, key=games.get)] if games else "",
+        "toys": [{"kind": toy.get("kind"), "label": toy.get("label")} for toy in pet.get("toys") or ()],
+        "tricks": list(pet.get("tricks") or ()),
+        "dreams": [row["name"] for row in pet.get("places") or () if now - _number(row.get("at")) < 36 * 3600][:5],
+        "cue": {"kind": cue.get("kind"), "at": cue.get("at")} if cue else None,
+        "place": pet.get("place") or "space", "low_fuel": bool(pet.get("low_fuel")),
+        "world": dict(pet["world"]) if isinstance(pet.get("world"), dict) and pet.get("place") in {"landed", "srv", "away"} else None,
+        "welcome": dict(pet["welcome"]) if isinstance(pet.get("welcome"), dict)
+        and now - _number(pet["welcome"].get("at")) < WELCOME_SHOWN_S else None,
+        "outfit": pet.get("outfit") or "", "ship": pet.get("ship") or "",
+        "trip": {"name": pet["trip"].get("name"), "to": pet["trip"].get("to")} if isinstance(pet.get("trip"), dict) else None,
+        "badges": [{"text": row.get("text"), "name": row.get("name")} for row in pet.get("badges") or ()][-12:],
+        # Its few words (5.6.4), while they're on screen.
+        "chat": hatchling_chatter.shown(pet, now),
+        "outfits": [{"id": outfit, "label": label, "earned": outfit in (pet.get("outfits") or ()),
+                     "how": f"{pet['care'].get(count, 0)} / {enough} {count}"} for outfit, (label, count, enough) in OUTFITS.items()],
+    }
+
+
+def diary(state, start, end):
+    """Its diary lines between two moments (a Captain's Log session)."""
+    pet = state.get("pet")
+    if not pet:
+        return []
+    return [row["text"] for row in pet.get("diary") or () if start <= _number(row.get("at")) <= end][-6:]
 
 
 def snapshot(state):

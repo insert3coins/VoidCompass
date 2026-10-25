@@ -48,14 +48,15 @@ class WatcherFrameRateSettingTests(unittest.TestCase):
         studio = _Studio()
         self.assertTrue(studio._html_overlay_settings_save({"heartbeat_frame_rate": "15"}))
         self.assertEqual(studio.config["heartbeat_frame_rate"], 15)
-        self.assertEqual(HtmlOverlayServer.frame_rate_by_overlay, {"heartbeat": 15})
+        # 5.6.4: the Hatchling's overlay has its own cap too (30 at most).
+        self.assertEqual(HtmlOverlayServer.frame_rate_by_overlay, {"heartbeat": 15, "hatchling": 30})
         studio._html_overlay_settings_save({"heartbeat_frame_rate": "45"})
         self.assertEqual(studio.config["heartbeat_frame_rate"], 0, "an unknown rate follows all overlays")
-        self.assertEqual(HtmlOverlayServer.frame_rate_by_overlay, {})
+        self.assertEqual(HtmlOverlayServer.frame_rate_by_overlay, {"hatchling": 30})
 
     def test_startup_applies_it_before_a_save(self):
         MainDashboard._apply_overlay_server_settings(SimpleNamespace(config={"heartbeat_frame_rate": 24}))
-        self.assertEqual(HtmlOverlayServer.frame_rate_by_overlay, {"heartbeat": 24})
+        self.assertEqual(HtmlOverlayServer.frame_rate_by_overlay, {"heartbeat": 24, "hatchling": 30})
 
     def test_each_overlay_page_hears_its_own_rate(self):
         server = HtmlOverlayServer(WEB)
