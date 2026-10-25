@@ -21,6 +21,7 @@ import {renderCapsules} from "./capsules.js";
 import {renderTools} from "./tools.js";
 import {renderConstellation} from "./constellation.js";
 import {renderGames} from "./games.js";
+import {renderHatchling, setHatchlingActive} from "./hatchling.js";
 import {renderFlightLogs} from "./flightlog.js";
 import {renderWrapped} from "./wrapped.js";
 
@@ -3903,6 +3904,7 @@ function renderWorkspace(state) {
     tools: (data) => renderTools(data, WORKSHOP_UI),
     constellation: (data) => renderConstellation(data, WORKSHOP_UI),
     games: (data) => renderGames(data, WORKSHOP_UI),
+    hatchling: (data) => renderHatchling(data, WORKSHOP_UI),
     wrapped: (data) => renderWrapped(data, WORKSHOP_UI),
   };
   renderers[page]?.(workspace.data || {});
@@ -4216,6 +4218,7 @@ function showPage(name) {
   if (pageLayoutEditing && pageLayoutEditing !== name) cancelPageLayout();
   if (name === "settings" && currentPage !== "settings") workspaceFingerprints.settings = "";
   currentPage = name;
+  setHatchlingActive(name === "hatchling");
   if (name === "about") window.requestAnimationFrame(startAboutMatrix);
   else stopAboutMatrix();
   localStorage.setItem(`voidcompass.dashboard.page.${profileKey}`, name);

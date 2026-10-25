@@ -42,6 +42,7 @@
   // On the ground: the places where a world's gravity and heat count.
   const SURFACE = ["landed", "srv", "away"];
   const CAN = 13;
+  const THREE_PROP_ACTS = new Set(["toy", "keepy", "tower", "tag", "chase", "stars", "stargaze", "trick", "holo"]);
 
   // ink: the smallest lettering in pixels (the overlay passes its pixel ratio in);
   // text: the overlay's text size, which every word it draws follows.
@@ -134,6 +135,50 @@
           hop(18 * u, 30);
           a.n += 1;
           return true;
+        },
+      },
+      stretch: {
+        weight: (p) => need(p, "energy") > 42 ? .75 : 0,
+        start() { me.face = "happy"; gaze([0, -.7]); },
+        step(a) {
+          me.tilt = Math.sin(Math.min(1, a.t / .7) * Math.PI / 2) * .12 * (a.t < 1.3 ? 1 : Math.max(0, 2.8 - a.t) / 1.5);
+          if (a.t > 1.2 && !a.sparkled) { a.sparkled = true; sparkles(me.x, -42 * u, 4); }
+          return a.t < 2.8;
+        },
+      },
+      groom: {
+        weight: (p) => !p.sick && need(p, "clean") < 85 ? .65 : .25,
+        start(a) { a.side = Math.random() < .5 ? -1 : 1; me.face = "happy"; },
+        step(a) {
+          gaze([a.side * .75, -.55]);
+          me.shut = a.t % .8 > .6;
+          if (a.t > 1.25 && !a.sparkled) { a.sparkled = true; sparkles(me.x, -27 * u, 5); }
+          return a.t < 2.2;
+        },
+        end() { me.shut = false; },
+      },
+      holo: {
+        weight: (p) => need(p, "mood") > 35 ? .45 + Math.min(1, p.traits?.curious || 0) * .5 : 0,
+        start(a) {
+          a.orb = {x: me.x + rand(-42, 42) * u, y: ceiling() + 22 * u};
+          a.orbY = a.orb.y;
+          say(pick(["WHAT'S THAT?", "A LITTLE STAR", "BOOP?"]));
+        },
+        step(a) {
+          a.orb.x += Math.sin(a.t * 1.7) * 22 * u * DT;
+          a.orb.y = a.orbY + Math.sin(a.t * 3) * 5 * u;
+          gaze([clamp((a.orb.x - me.x) / (50 * u), -1, 1), -1]);
+          if (a.t > 1.8 && !a.booped) {
+            if (Math.abs(a.orb.x - me.x) > 16 * u) walkTo(a.orb.x, 70);
+            else {
+              a.booped = true;
+              a.done = true;
+              hop(12 * u, 22);
+              me.face = "excited";
+              sparkles(a.orb.x, a.orb.y, 7);
+            }
+          }
+          return a.t < 3.5;
         },
       },
       yawn: {
@@ -987,7 +1032,7 @@
       let k = 1;
       if (night()) k *= {doze: 4, yawn: 2.5, keepy: .4, tag: .4, bounce: .5, dance: .6}[name] ?? 1;
       const lean = (trait, acts, by) => { if (acts.includes(name)) k *= 1 + Math.min(2, traits[trait] || 0) * by; };
-      lean("curious", ["stargaze", "chase", "toy", "look"], .6);
+      lean("curious", ["stargaze", "chase", "toy", "holo", "look"], .6);
       lean("lazy", ["doze", "yawn"], 1);
       lean("brave", ["tag", "keepy"], .5);
       lean("greedy", ["rumble"], .8);
@@ -1365,9 +1410,26 @@
         ctx.save();
         if (me.tilt || me.flair) { ctx.translate(px, feet); ctx.rotate(me.tilt + me.flair); ctx.translate(-px, -feet); }
         if (me.spin) { ctx.translate(px, middle); ctx.rotate(me.spin); ctx.translate(-px, -middle); }
+        const current = me.act || {};
+        const relative = (value) => Number(value || 0) - me.x - me.shake;
+        const activity = {name: current.name || "idle", t: current.t || 0, style: current.style || "", trick: current.trick || ""};
+        if (current.ball) activity.ball = {...current.ball, x: relative(current.ball.x)};
+        if (current.toy) activity.toy = {kind: current.toy.kind, x: relative(current.x ?? toyX(pet, current.toy.kind)), vx: current.vx || 0, pushes: current.pushes || 0};
+        if (current.tower) activity.tower = current.tower;
+        if (current.name === "tower") activity.tower = {x: relative(current.at), cans: current.cans || 0, lean: current.lean || 0,
+          drop: current.drop ? {y: current.drop.y + 5 * u} : null, fallen: Boolean(current.fell)};
+        if (current.th) activity.thargon = {x: relative(current.th.x), y: current.th.y, spin: current.t * 3, fleeing: Boolean(current.away)};
+        if (current.mote) activity.mote = {x: relative(current.mote.x), y: current.mote.y};
+        if (current.points) activity.stars = {points: current.points.map((point) => ({x: relative(point.x), y: point.y})), lit: current.lit || 0,
+          fade: current.done ? clamp(1 - (current.t - current.done) / 2, 0, 1) : 1};
+        if (current.star) activity.star = {x: relative(current.star.x), y: current.star.y};
+        if (current.orb) activity.orb = {x: relative(current.orb.x), y: current.orb.y};
+        const toys = pet.stage === "egg" ? [] : (pet.toys || []).map((toy) => ({kind: toy.kind,
+          x: relative(current.name === "toy" && current.toy?.kind === toy.kind ? current.x : toyX(pet, toy.kind)), y: 44 * drawn / 100}));
         const rendered3d = window.Hatchling3D?.draw(ctx, shown, {
           x: px, y, size: drawn, t, look: me.look, squash: me.squash, lift: me.lift, aura,
           act: me.act?.name || "", dance: me.act?.style || "",
+          activity, toys,
         });
         if (!rendered3d && !threeOnly) window.HatchlingArt.draw(ctx, shown, {x: px, y, size: drawn, t, look: me.look, squash: me.squash, lift: me.lift, aura});
         if (pet.outfit && pet.stage !== "egg") outfit(ctx, pet, px, middle, drawn, rendered3d);
@@ -1426,18 +1488,20 @@
           ctx.globalAlpha = 1;
         }
         if (pet.stage !== "egg") {
-          const playing = me.act?.name === "toy" ? me.act.toy.kind : "";
-          for (const toy of pet.toys || []) {
-            const x = playing === toy.kind ? me.act.x : toyX(pet, toy.kind);
-            drawToy(ctx, toy.kind, ox + x, oy + floor(), me.clock, tone);
+          if (!window.Hatchling3D) {
+            const playing = me.act?.name === "toy" ? me.act.toy.kind : "";
+            for (const toy of pet.toys || []) {
+              const x = playing === toy.kind ? me.act.x : toyX(pet, toy.kind);
+              drawToy(ctx, toy.kind, ox + x, oy + floor(), me.clock, tone);
+            }
           }
         }
-        if (me.act) ACTS[me.act.name].back?.(ctx, me.act, ox, oy, tone);
+        if (me.act && (!window.Hatchling3D || !THREE_PROP_ACTS.has(me.act.name))) ACTS[me.act.name].back?.(ctx, me.act, ox, oy, tone);
       },
       front(ctx, pet, ox, oy) {
         if (!pet) return;
         const tone = window.HatchlingArt.tones(pet);
-        if (me.act) ACTS[me.act.name].front?.(ctx, me.act, ox, oy, tone);
+        if (me.act && (!window.Hatchling3D || !THREE_PROP_ACTS.has(me.act.name))) ACTS[me.act.name].front?.(ctx, me.act, ox, oy, tone);
         for (const b of me.bits) {
           const k = b.life / b.max, x = ox + b.x, y = oy + b.y;
           ctx.globalAlpha = clamp(k * 1.5, 0, 1);

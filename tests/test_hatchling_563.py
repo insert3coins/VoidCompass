@@ -1,4 +1,4 @@
-"""5.6.3: Hatchling, the Games page's pocket pet. It lives in real time, is
+"""5.6.3: Hatchling, the Cockpit's pocket pet. It lives in real time, is
 fed by how you really play (live journal events only), hibernates when
 neglected and can be brought back with medicine, is kept per commander,
 and has an overlay."""
@@ -172,6 +172,8 @@ class DeckTests(unittest.TestCase):
         self.deck = Deck()
         self.deck.config = {}
         self.deck._hatchling_path = lambda: self.path
+        self.deck._hatchling_music = lambda: False
+        self.deck._hatchling_watcher_seen = lambda side=(0, -1): None
         self.deck._schedule_html_dashboard_publish = lambda immediate=False: self.published.append(immediate)
         self.updates = []
         self.deck.hatchling_hud = type("Hud", (), {"update_hatchling": lambda _self, model: self.updates.append(model)})()
@@ -211,7 +213,10 @@ class DeckTests(unittest.TestCase):
         games = {game["id"]: game for game in self.deck._html_games_workspace()["games"]}
         self.assertEqual(games["touchdown"]["live"], {"body": "Synuefe 4", "gravity": 2.41})
         self.assertEqual(games["scarab-patrol"]["live"], games["touchdown"]["live"])
-        self.assertIn("species", games["hatchling"]["live"])
+        self.assertNotIn("hatchling", games, "the companion is not an arcade cabinet")
+        companion = self.deck._html_hatchling_workspace()
+        self.assertIn("species", companion)
+        self.assertIsNone(companion["pet"])
         self.assertIsNone(games["rock-rats"]["live"])
         self.deck.scan_items_by_id = {4: {"gravity_g": None}}
         self.assertIsNone(self.deck._games_live("touchdown"), "away from a known world, the game makes one up")

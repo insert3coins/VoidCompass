@@ -3,6 +3,7 @@
   "tagline": "A pocket pet for your cockpit: a Thargoid larva, a Remlok bot or an exobiology sample, raised by how you really play.",
   "description": "It lives in real time, Void Compass open or not. Feed it from a larder you stock by buying food at real markets, play with it, vent the hold and turn the lights out. Exploring keeps it curious; combat scares it; a rebuy upsets it badly. It grows from egg to adult over real days, and how you raised it picks its adult form. Neglected, it hibernates: medicine brings it back, if you're in time. It can sit on your screen as an overlay too (Overlay Studio).",
   "genre": "Virtual pet",
+  "catalog": false,
   "players": "1 player",
   "scores": false,
   "input_modes": false,

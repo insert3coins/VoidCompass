@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="tools.css">
   <link rel="stylesheet" href="constellation.css">
   <link rel="stylesheet" href="games.css">
+  <link rel="stylesheet" href="hatchling.css">
   <link rel="stylesheet" href="flightlog.css">
   <link rel="stylesheet" href="wrapped.css">
   <link rel="stylesheet" href="powerplay.css">
@@ -39,6 +40,7 @@
   <script defer src="/assets/heartbeat-orb.js"></script>
   <script defer src="/assets/music-visualizers.js"></script>
   <script defer src="/assets/hatchling-art.js"></script>
+  <script defer src="/assets/hatchling-life.js"></script>
   <script type="module" src="boot-scene.js"></script>
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
@@ -270,17 +272,18 @@
         <p>COCKPIT</p>
         <button class="nav-item" data-page="constellation" aria-label="Constellation" title="Your constellation: your journey drawn in the stars"><i>✧</i><span>Constellation</span><b>13</b></button>
         <button class="nav-item" data-page="games" aria-label="Games" title="Games: something to play while the FSD charges"><i>◆</i><span>Games</span><b>14</b></button>
-        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>15</b></button>
-        <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>16</b></button>
-        <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>17</b></button>
-        <button class="nav-item" data-page="capsules" aria-label="Time Capsules" title="Time Capsules: notes left for systems, and On this day"><i>⧗</i><span>Time Capsules</span><b>18</b></button>
-        <button class="nav-item" data-page="wrapped" aria-label="Void Wrapped" title="Void Wrapped: your year in Elite, told as a story"><i>✺</i><span>Void Wrapped</span><b>19</b></button>
-        <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>20</b></button>
+        <button class="nav-item" data-page="hatchling" aria-label="Hatchling" title="Hatchling: your shipboard companion"><i>✧</i><span>Hatchling</span><b>15</b></button>
+        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>16</b></button>
+        <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>17</b></button>
+        <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>18</b></button>
+        <button class="nav-item" data-page="capsules" aria-label="Time Capsules" title="Time Capsules: notes left for systems, and On this day"><i>⧗</i><span>Time Capsules</span><b>19</b></button>
+        <button class="nav-item" data-page="wrapped" aria-label="Void Wrapped" title="Void Wrapped: your year in Elite, told as a story"><i>✺</i><span>Void Wrapped</span><b>20</b></button>
+        <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>21</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>21</b></button>
-        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>22</b></button>
-        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>23</b></button>
-        <button class="nav-item" data-page="tools" aria-label="Tools" title="Tools: everything you switch often, in one place"><i>⚙</i><span>Tools</span><b>24</b></button>
+        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>22</b></button>
+        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>23</b></button>
+        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>24</b></button>
+        <button class="nav-item" data-page="tools" aria-label="Tools" title="Tools: everything you switch often, in one place"><i>⚙</i><span>Tools</span><b>25</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -650,6 +653,11 @@
         <section class="page specialist-page" data-page-name="games">
           <header class="page-title"><div><p>COCKPIT DOWNTIME</p><h2>Games</h2><span>Something to play while the carrier jumps or the FSD cools. Pick a card to play.</span></div></header>
           <div id="games-workspace" class="workspace-shell loading-panel">Racking the cabinets…</div>
+        </section>
+
+        <section class="page specialist-page" data-page-name="hatchling">
+          <header class="page-title"><div><p>COCKPIT COMPANION</p><h2>Hatchling</h2><span>A living shipmate, shaped by your journeys. Its needs, discoveries and little habits follow the journal.</span></div></header>
+          <div id="hatchling-workspace" class="workspace-shell loading-panel">Checking the habitat…</div>
         </section>
 
         <section class="page specialist-page wrapped-page-shell" data-page-name="wrapped">

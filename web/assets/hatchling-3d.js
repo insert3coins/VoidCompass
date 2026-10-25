@@ -228,10 +228,8 @@ function makeEgg(root, pet, tone) {
   texturedBall(shell, tone, pet.species === "bot" ? "tech" : "organic", [0, 0, 0], [.68, .9, .52], {
     roughness: .23, metalness: pet.species === "bot" ? .42 : .12, clearcoat: 1, emissive: tone.dark, emissiveIntensity: .28,
   });
-  const seam = material(tone.line, {emissive: tone.glow, emissiveIntensity: .65, metalness: .48, roughness: .25});
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(.7, .018, 8, 72), seam);
-  halo.position.set(0, -.67, .05);
-  shell.add(halo);
+  // Keep the egg's shell clean: a torus around its base read as a halo/ring
+  // around the pet, which doesn't belong on any Hatchling.
   tube(shell, [[-.17, .81, .31], [-.11, .64, .46], [-.22, .49, .48], [-.08, .33, .51], [-.15, .15, .51]], tone.glow, .022,
     {emissive: tone.glow, emissiveIntensity: 1.25});
   tube(shell, [[-.2, .5, .48], [-.39, .43, .42], [-.47, .28, .36]], tone.line, .012,
@@ -472,6 +470,252 @@ function makeSample(root, pet, tone) {
   return {body, eyes: eyeParts, appendages: fronds};
 }
 
+function toyModel(parent, kind, tone) {
+  const group = new THREE.Group();
+  parent.add(group);
+  if (kind === "relic") {
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(.72, 1), material("#4a9bc4", {
+      emissive: "#348fff", emissiveIntensity: .8, metalness: .4, roughness: .18, clearcoat: 1,
+    }));
+    crystal.scale.set(.62, 1.2, .65);
+    crystal.rotation.z = .18;
+    group.add(crystal);
+    ball(group, "#bdedff", [0, 0, .49], [.16, .16, .12], {emissive: "#6bd7ff", emissiveIntensity: 1.5});
+  } else if (kind === "sensor") {
+    const petals = [];
+    for (let i = 0; i < 5; i += 1) {
+      const petal = new THREE.Group();
+      petal.rotation.z = i * Math.PI * 2 / 5;
+      group.add(petal);
+      ball(petal, "#182622", [0, .43, 0], [.18, .39, .12], {metalness: .54, roughness: .28});
+      ball(petal, "#416746", [0, .55, .08], [.08, .21, .08], {emissive: tone.glow, emissiveIntensity: .2});
+      petals.push(petal);
+    }
+    const core = ball(group, "#54e39a", [0, 0, .19], [.2, .2, .16], {emissive: "#54e39a", emissiveIntensity: 1.7});
+    glowSprite(group, [0, 0, .25], [.8, .8, 1], "#54e39a", .65);
+    group.userData.petals = petals;
+    group.userData.core = core;
+  } else if (kind === "fragment") {
+    const amber = material("#e6a73d", {emissive: "#ff9c35", emissiveIntensity: .45, metalness: .3, roughness: .23, clearcoat: 1});
+    for (const [position, scale, rotation] of [
+      [[0, 0, 0], [.42, .78, .38], .18], [[-.31, -.1, -.05], [.25, .48, .27], -.42], [[.27, -.12, .03], [.23, .39, .25], .34],
+    ]) {
+      const shard = new THREE.Mesh(new THREE.ConeGeometry(.52, 1.2, 5), amber);
+      shard.position.set(...position); shard.scale.set(...scale); shard.rotation.z = rotation; group.add(shard);
+    }
+  } else if (kind === "beacon") {
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(.52, .65, .3, 8), material("#394855", {metalness: .75, roughness: .29}));
+    base.position.y = -.39; group.add(base);
+    rod(group, [0, -.3, 0], [0, .48, 0], "#a7b5c1", .07, {metalness: .82, roughness: .22});
+    const lamp = ball(group, "#ffd166", [0, .57, .02], [.2, .2, .2], {emissive: "#ffb52e", emissiveIntensity: 1.8});
+    glowSprite(group, [0, .61, .02], [.9, .9, 1], "#ffd166", .64);
+    group.userData.lamp = lamp;
+  } else if (kind === "station" || kind === "model") {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.12, 1.12, .78), material("#9eabb7", {metalness: .72, roughness: .31}));
+    group.add(body);
+    const port = new THREE.Mesh(new THREE.TorusGeometry(.28, .07, 8, 24), material(tone.line, {emissive: tone.glow, emissiveIntensity: .6, metalness: .65}));
+    port.position.z = .43; group.add(port);
+    for (const side of [-1, 1]) {
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(.72, .18, .32), material("#65727e", {metalness: .74, roughness: .3}));
+      wing.position.set(side * .76, 0, 0); group.add(wing);
+      ball(group, tone.glow, [side * 1.07, 0, .18], [.07, .07, .07], {emissive: tone.glow, emissiveIntensity: 1.2});
+    }
+  } else {
+    const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(.72, 0), material(kind === "pebble" ? "#77848d" : "#596b6d", {
+      roughness: .82, metalness: .08,
+    }));
+    stone.scale.set(1.15, .72, .9); group.add(stone);
+    for (let i = 0; i < 3; i += 1) ball(group, tone.glow, [(-.28 + i * .28), .18 + (i % 2) * .08, .43], [.07, .055, .035], {emissive: tone.glow, emissiveIntensity: .3});
+  }
+  return group;
+}
+
+function limpetModel(parent, tone) {
+  const group = new THREE.Group();
+  parent.add(group);
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(.42, .55, .3, 8), material("#b8c6d3", {metalness: .78, roughness: .22, clearcoat: 1}));
+  group.add(shell);
+  ball(group, "#283942", [0, 0, .13], [.48, .39, .3], {metalness: .7, roughness: .24});
+  const lamp = ball(group, "#ff8a3d", [0, 0, .39], [.16, .16, .12], {emissive: "#ff8a3d", emissiveIntensity: 2});
+  glowSprite(group, [0, 0, .43], [.72, .72, 1], "#ff8a3d", .72);
+  const fins = [];
+  for (let i = 0; i < 4; i += 1) {
+    const fin = new THREE.Group();
+    fin.rotation.z = i * Math.PI / 2 + Math.PI / 4;
+    group.add(fin);
+    rod(fin, [0, .22, 0], [0, .68, 0], "#7a8b99", .045, {metalness: .8, roughness: .25});
+    const tip = ball(fin, i % 2 ? "#ffb35c" : "#c9d2db", [0, .7, .01], [.11, .14, .07], {
+      emissive: i % 2 ? "#ff8a3d" : "#6d8797", emissiveIntensity: .5,
+    });
+    fins.push({fin, tip});
+  }
+  group.userData.lamp = lamp;
+  group.userData.fins = fins;
+  return group;
+}
+
+function canisterModel(parent, colourHex = "#c7a441") {
+  const group = new THREE.Group();
+  parent.add(group);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.62, .62, 1.15, 12), material(colourHex, {metalness: .64, roughness: .28}));
+  group.add(body);
+  const stripe = new THREE.Mesh(new THREE.CylinderGeometry(.635, .635, .2, 12), material("#302a20", {metalness: .38, roughness: .35}));
+  group.add(stripe);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(.58, .05, 6, 16), material("#f0d58a", {metalness: .72, roughness: .2}));
+  lip.position.y = .5; group.add(lip);
+  return group;
+}
+
+function starModel(parent, tone, scale = .11) {
+  const group = new THREE.Group();
+  parent.add(group);
+  const star = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), material("#ffffff", {
+    emissive: tone.glow, emissiveIntensity: 1.6, metalness: .18, roughness: .2,
+  }));
+  star.scale.setScalar(scale);
+  group.add(star);
+  const glow = glowSprite(group, [0, 0, -.02], [scale * 5.4, scale * 5.4, 1], tone.glow, .62);
+  return {group, star, glow};
+}
+
+function orbModel(parent, tone) {
+  const group = new THREE.Group();
+  parent.add(group);
+  const orb = ball(group, tone.glow, [0, 0, 0], [.15, .15, .15], {emissive: tone.glow, emissiveIntensity: 1.8, roughness: .18});
+  const inner = ball(group, "#ffffff", [-.04, .045, .12], [.045, .045, .035], {emissive: "#ffffff", emissiveIntensity: .6});
+  const glow = glowSprite(group, [0, 0, -.04], [.9, .9, 1], tone.glow, .68);
+  return {group, orb, inner, glow};
+}
+
+function propKey(toys, activity, tone) {
+  const name = activity?.name || "";
+  const special = ["keepy", "tower", "tag", "chase", "stars", "stargaze", "holo"].includes(name)
+    || (name === "trick" && activity?.trick === "juggle") ? name : "";
+  return JSON.stringify([toys.map((toy) => toy.kind), special, activity?.toy?.kind || "", activity?.trick || "",
+    activity?.stars?.points?.length || 0, tone.glow, tone.line]);
+}
+
+function buildProps(view, toys, activity, tone) {
+  if (view.props) {
+    view.scene.remove(view.props);
+    dispose(view.props);
+  }
+  const root = new THREE.Group();
+  view.scene.add(root);
+  const state = {root, toys: [], activity: null};
+  for (const toy of toys) {
+    state.toys.push({kind: toy.kind, group: toyModel(root, toy.kind, tone)});
+  }
+  const name = activity?.name;
+  if (name === "keepy") state.activity = {kind: name, model: limpetModel(root, tone)};
+  else if (name === "tower") {
+    state.activity = {kind: name, cans: Array.from({length: 8}, (_, i) => ({model: canisterModel(root), index: i})),
+      drop: canisterModel(root, "#d8aa39")};
+  } else if (name === "tag") state.activity = {kind: name, model: toyModel(root, "sensor", tone)};
+  else if (name === "chase" || name === "stargaze" || name === "holo") state.activity = {kind: name, model: orbModel(root, tone)};
+  else if (name === "stars") {
+    const count = Math.min(9, activity?.stars?.points?.length || 0);
+    const stars = Array.from({length: count}, () => starModel(root, tone, .075));
+    const links = Array.from({length: Math.max(0, count - 1)}, () => {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+      const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({color: tone.glow, transparent: true, opacity: .58, depthWrite: false}));
+      root.add(line);
+      return line;
+    });
+    state.activity = {kind: name, stars, links};
+  } else if (name === "trick" && activity?.trick === "juggle") {
+    state.activity = {kind: "juggle", balls: ["#ff8a3d", "#54e39a", "#7fe8ff"].map((hex) => {
+      const model = new THREE.Group(); root.add(model);
+      ball(model, hex, [0, 0, 0], [.075, .075, .075], {emissive: hex, emissiveIntensity: .34, roughness: .22});
+      return model;
+    })};
+  }
+  view.props = root;
+  view.propState = state;
+  return state;
+}
+
+function positionProps(state, toys, activity, size, t, tone) {
+  if (!state) return;
+  const xScale = 3.4 / (size * 1.64), yScale = 3.4 / (size * 1.4);
+  const toWorld = (x, y, z = .15) => new THREE.Vector3(x * xScale, -(y + size * .08) * yScale, z);
+  const floorY = 44 * size / 100;
+  state.toys.forEach((entry, index) => {
+    const toy = toys[index];
+    if (!toy) { entry.group.visible = false; return; }
+    entry.group.visible = true;
+    const playing = activity?.name === "toy" && activity.toy?.kind === toy.kind;
+    entry.group.position.copy(toWorld(toy.x, toy.y ?? floorY, playing ? .62 : .17));
+    entry.group.scale.setScalar(playing ? .23 : .18);
+    entry.group.rotation.y = Math.sin(t * .65 + index) * .13;
+    entry.group.rotation.z = playing ? Math.sin(t * 5) * .16 : Math.sin(t * .8 + index * 1.7) * .035;
+  });
+  const prop = state.activity;
+  if (!prop) return;
+  if (prop.kind === "keepy" && activity?.ball) {
+    prop.model.position.copy(toWorld(activity.ball.x, activity.ball.y, .78));
+    prop.model.scale.setScalar(.42);
+    prop.model.rotation.z = activity.ball.spin || 0;
+    prop.model.userData.fins?.forEach(({fin}, i) => { fin.rotation.x = Math.sin(t * 13 + i) * .14; });
+  } else if (prop.kind === "tower" && activity?.tower) {
+    const tower = activity.tower;
+    prop.cans.forEach(({model, index}) => {
+      model.visible = index < tower.cans;
+      model.position.copy(toWorld(tower.x, floorY - (index + .5) * 13 * size / 100, .2));
+      model.rotation.z = tower.lean || 0;
+      model.scale.set(.15, .15, .15);
+    });
+    prop.drop.visible = Boolean(tower.drop);
+    if (tower.drop) prop.drop.position.copy(toWorld(tower.x, tower.drop.y, .23));
+    prop.drop.scale.set(.15, .15, .15);
+  } else if (prop.kind === "tag" && activity?.thargon) {
+    prop.model.position.copy(toWorld(activity.thargon.x, activity.thargon.y, .78));
+    prop.model.scale.setScalar(.32);
+    prop.model.rotation.z = activity.thargon.spin || t * 2;
+  } else if (prop.kind === "chase" && activity?.mote) {
+    prop.model.group.position.copy(toWorld(activity.mote.x, activity.mote.y, .35));
+    const pulse = .88 + (Math.sin(t * 9) + 1) * .1;
+    prop.model.group.scale.setScalar(pulse);
+  } else if (prop.kind === "stargaze" && activity?.star) {
+    prop.model.group.position.copy(toWorld(activity.star.x, activity.star.y, .25));
+    prop.model.group.rotation.z = t * .7;
+  } else if (prop.kind === "holo" && activity?.orb) {
+    prop.model.group.position.copy(toWorld(activity.orb.x, activity.orb.y, .36));
+    prop.model.group.rotation.y = t * .8;
+    prop.model.group.scale.setScalar(.92 + (Math.sin(t * 3.6) + 1) * .08);
+  } else if (prop.kind === "stars" && activity?.stars) {
+    const points = activity.stars.points || [];
+    prop.stars.forEach((entry, index) => {
+      const point = points[index];
+      entry.group.visible = Boolean(point);
+      if (!point) return;
+      entry.group.position.copy(toWorld(point.x, point.y, .2));
+      entry.star.material.emissiveIntensity = index < activity.stars.lit ? 1.9 : .35;
+      entry.glow.material.opacity = index < activity.stars.lit ? .7 : .14;
+      entry.group.scale.setScalar(activity.stars.fade ?? 1);
+    });
+    prop.links.forEach((line, index) => {
+      const first = points[index], second = points[index + 1];
+      const visible = first && second && index < activity.stars.lit - 1;
+      line.visible = Boolean(visible);
+      if (!visible) return;
+      const values = line.geometry.attributes.position.array;
+      values.set([...toWorld(first.x, first.y, .18).toArray(), ...toWorld(second.x, second.y, .18).toArray()]);
+      line.geometry.attributes.position.needsUpdate = true;
+      line.material.opacity = .58 * (activity.stars.fade ?? 1);
+    });
+  } else if (prop.kind === "juggle") {
+    prop.balls.forEach((ballModel, index) => {
+      const phase = t * 2.8 + index * Math.PI * 2 / 3;
+      ballModel.position.copy(toWorld(Math.sin(phase) * size * .17, -size * (.43 + Math.max(0, Math.cos(phase)) * .21), .42));
+      ballModel.rotation.set(phase, phase * .7, phase * .4);
+    });
+  }
+  if (prop.model?.userData?.petals) prop.model.userData.petals.forEach((petal, i) => { petal.rotation.x = Math.sin(t * 2 + i) * .05; });
+  if (prop.model?.userData?.lamp) prop.model.userData.lamp.material.emissiveIntensity = 1.1 + (Math.sin(t * 7) + 1) * .65;
+}
+
 function shadowTexture() {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 128;
@@ -516,7 +760,7 @@ function createView(canvas) {
   aura.renderOrder = 0;
   const root = new THREE.Group();
   scene.add(root);
-  return {renderer, scene, camera, root, aura, models: new Map(), model: null};
+  return {renderer, scene, camera, root, aura, models: new Map(), model: null, props: null, propKey: "", propState: null};
 }
 
 export class HatchlingRenderer3D {
@@ -525,7 +769,7 @@ export class HatchlingRenderer3D {
     this.failedCanvases = new WeakSet();
   }
 
-  draw(ctx, pet, {x, y, size, t = 0, look = [0, 0], squash = 0, lift = 0, aura = true, act = "", dance = ""} = {}) {
+  draw(ctx, pet, {x, y, size, t = 0, look = [0, 0], squash = 0, lift = 0, aura = true, act = "", dance = "", activity = null, toys = []} = {}) {
     if (!ctx?.canvas || !pet || !Number.isFinite(size) || size <= 0) return false;
     const host = ctx.canvas;
     if (this.failedCanvases.has(host)) return false;
@@ -563,18 +807,34 @@ export class HatchlingRenderer3D {
         dispose(oldest.group);
       }
       view.model = entry.model;
-      const still = pet.asleep || pet.dormant;
-      const breathing = still ? 1 + Math.sin(t * 1.2) * .012 : 1 + Math.sin(t * 2.2) * .023;
-      view.model.body.scale.x = (view.model.body.userData.baseScaleX || view.model.body.scale.x) * (1 + squash * .22) * breathing;
-      view.model.body.scale.y = (view.model.body.userData.baseScaleY || view.model.body.scale.y) * (1 - squash * .22) / breathing;
-      if (!view.model.body.userData.baseScaleX) {
-        view.model.body.userData.baseScaleX = view.model.body.scale.x / ((1 + squash * .22) * breathing);
-        view.model.body.userData.baseScaleY = view.model.body.scale.y / ((1 - squash * .22) / breathing);
+      const nextPropKey = propKey(toys, activity, tone);
+      if (view.propKey !== nextPropKey) {
+        view.propState = buildProps(view, toys, activity, tone);
+        view.propKey = nextPropKey;
       }
+      positionProps(view.propState, toys, activity, size, t, tone);
+      const still = pet.asleep || pet.dormant;
+      const action = activity?.name || act;
+      const breathing = still ? 1 + Math.sin(t * 1.2) * .012 : 1 + Math.sin(t * 2.2) * .023;
+      const stretch = action === "stretch" ? Math.sin(Math.min(1, (activity?.t || 0) / .7) * Math.PI) * .13 : 0;
+      const crouch = action === "groom" ? .035 : action === "toy" || action === "keepy" || action === "tag" ? -.025 : 0;
+      const scaleX = (1 + squash * .22) * breathing * (1 - stretch * .18);
+      const scaleY = (1 - squash * .22 + stretch + crouch) / breathing;
+      if (!view.model.body.userData.baseScaleX) {
+        view.model.body.userData.baseScaleX = view.model.body.scale.x / scaleX;
+        view.model.body.userData.baseScaleY = view.model.body.scale.y / scaleY;
+      }
+      view.model.body.scale.x = view.model.body.userData.baseScaleX * scaleX;
+      view.model.body.scale.y = view.model.body.userData.baseScaleY * scaleY;
       view.model.body.position.y = (lift / size) * 1.45 + (still ? 0 : Math.sin(t * 2.2) * .025);
-      const dancing = act === "dance";
-      view.model.body.rotation.z = still ? 0 : Math.sin(t * (dancing ? 6.5 : 1.4)) * (dancing ? .095 : .014);
-      view.model.body.rotation.x = dancing ? Math.sin(t * 5.1 + (dance === "spin" ? 1.4 : 0)) * .055 : 0;
+      const dancing = action === "dance";
+      const grooving = activity?.style || dance;
+      view.model.body.position.x = action === "groom" ? Math.sin((activity?.t || 0) * 5) * .025 : 0;
+      view.model.body.rotation.z = still ? 0 : action === "stretch" ? Math.sin(t * 3) * .025
+        : action === "groom" ? Math.sin((activity?.t || 0) * 5) * .035
+          : Math.sin(t * (dancing ? 6.5 : 1.4)) * (dancing ? .095 : .014);
+      view.model.body.rotation.x = dancing ? Math.sin(t * 5.1 + (grooving === "spin" ? 1.4 : 0)) * .055
+        : action === "yawn" || action === "doze" ? -.035 : action === "stretch" ? -.045 : 0;
       if (view.model.core) {
         const pulse = 1 + Math.sin(t * 3.2) * (still ? .035 : .09);
         if (!view.model.core.userData.baseScale) view.model.core.userData.baseScale = view.model.core.scale.clone();
@@ -612,7 +872,12 @@ export class HatchlingRenderer3D {
         part.pupil.position.y = part.iris.position.y + .005;
       }
       for (const [index, appendage] of view.model.appendages.entries()) {
-        appendage.rotation.z = Math.sin(t * (still ? .5 : dancing ? 5.4 : 2.4) + index * 1.7) * (still ? .018 : dancing ? .2 : .07);
+        const side = index % 2 ? 1 : -1;
+        const idle = Math.sin(t * (still ? .5 : dancing ? 5.4 : 2.4) + index * 1.7);
+        appendage.rotation.z = action === "stretch" ? side * (.25 + stretch * 2.2) + idle * .035
+          : action === "groom" && index === 0 ? -.42 + idle * .08
+            : action === "wave" && index === 0 ? Math.sin(t * 7) * .34
+              : idle * (still ? .018 : dancing ? .2 : .07);
       }
       view.renderer.render(view.scene, view.camera);
       ctx.drawImage(view.renderer.domElement, x - size * .82, y - size * .78, size * 1.64, size * 1.4);

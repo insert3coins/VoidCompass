@@ -3,7 +3,7 @@
 ## v5.6.7 // Hatchling, Reborn
 **Release Date:** 26 OCT 3312 *(Galactic Standard Time)*
 
-* **A 3D life for your Hatchling.** The Thargoid larva, Remlok bot, egg and three exobiology sample species now share a Three.js renderer in the Games cabinet and transparent Pet overlay. Growth stages, adult forms, moods, animation and outfits still follow the Hatchling's existing life simulation, with distinctive details for rare, scarred and explored forms.
+* **A 3D life for your Hatchling.** It now has an alphabetized Cockpit home, separate from the arcade Games list: a redesigned Three.js habitat with journal-driven care, speech, the larder, outfits, expedition keepsakes, recent journal moments and two mini-games. The Thargoid larva, Remlok bot, egg and three exobiology samples keep their growth stages, adult forms and personalities, with distinct 3D details for rare, scarred and explored forms. Journey toys and game props are 3D, with new idle stretches, grooming and hologram chasing. The Cockpit and transparent Pet overlay share the renderer and life simulation. Cockpit animation is capped at 30 FPS, with no rings around any Hatchling model.
 
 ## Earlier releases
 

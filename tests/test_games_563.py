@@ -51,6 +51,7 @@ class LibraryTests(unittest.TestCase):
             cards.mkdir()
             for name, manifest, page in (("zeta", {"title": "Zeta"}, True),
                                          ("alpha", {"title": "Alpha", "accent": "#ff00aa"}, True),
+                                         ("companion", {"title": "Companion", "catalog": False}, True),
                                          ("nopage", {"title": "No page"}, False),
                                          ("Bad Name", {"title": "Bad"}, True),
                                          ("sneaky", {"title": "Sneaky", "entry": "../dashboard/app.js"}, True)):
@@ -164,17 +165,22 @@ class ServerTests(unittest.TestCase):
 
 
 class RailTests(unittest.TestCase):
-    def test_games_sits_in_the_cockpit_after_constellation(self):
+    def test_games_and_hatchling_are_alphabetical_cockpit_destinations(self):
         html = (WEB / "dashboard" / "index.html").read_text(encoding="utf-8")
         rail = html.split('<nav class="nav"', 1)[1].split("</nav>", 1)[0]
         cockpit = rail.split("<p>COCKPIT</p>", 1)[1].split("<p>", 1)[0]
-        self.assertEqual(re.findall(r'data-page="([a-z-]+)"', cockpit)[:3], ["constellation", "games", "music"])
+        self.assertEqual(re.findall(r'data-page="([a-z-]+)"', cockpit)[:4], ["constellation", "games", "hatchling", "music"])
         self.assertIn('data-page-name="games"', html)
         self.assertIn('id="games-workspace"', html)
+        self.assertIn('data-page-name="hatchling"', html)
+        self.assertIn('id="hatchling-workspace"', html)
         self.assertIn('href="games.css"', html)
+        self.assertIn('href="hatchling.css"', html)
         app = (WEB / "dashboard" / "app.js").read_text(encoding="utf-8")
         self.assertIn('import {renderGames} from "./games.js";', app)
         self.assertIn("games: (data) => renderGames(data, WORKSHOP_UI)", app)
+        self.assertIn('import {renderHatchling, setHatchlingActive} from "./hatchling.js";', app)
+        self.assertIn("hatchling: (data) => renderHatchling(data, WORKSHOP_UI)", app)
 
 
 class PlayTests(unittest.TestCase):

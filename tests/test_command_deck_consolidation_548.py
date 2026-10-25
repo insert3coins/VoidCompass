@@ -19,7 +19,7 @@ class CommandDeckConsolidation548Tests(unittest.TestCase):
         self.assertFalse(release_is_newer("5.4.7.9", "5.4.8"))
         self.assertFalse(release_is_newer("not-a-release", "5.4.8.2"))
 
-    def test_left_rail_contains_seventeen_workflow_destinations(self):
+    def test_left_rail_destinations_are_alphabetical_and_numbered(self):
         document = (ROOT / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")
         rail = document.split('<nav class="nav"', 1)[1].split("</nav>", 1)[0]
         labels = re.findall(r'<button class="nav-item[^>]*>.*?<span>(.*?)</span>', rail)
@@ -28,16 +28,17 @@ class CommandDeckConsolidation548Tests(unittest.TestCase):
         # 5.5.2.4 BGS; 5.5.2.6 Trading; 5.5.3.2 The Watcher; 5.5.3.7 Postcards, Screenshots, Time Capsules, Constellation;
         # 5.5.4 Tools, and the Exploration Archive became Explore & Survey's Archive tab;
         # 5.5.10 Void Wrapped, the Ship Workshop gone, and each heading's pages
-        # in alphabetical order ("The" aside); 5.6.1 Expeditions (Mission Control rebuilt); 5.6.3 Games.
-        self.assertEqual(len(labels), 24)
+        # in alphabetical order ("The" aside); 5.6.1 Expeditions; 5.6.3 Games;
+        # 5.6.7 gives Hatchling its own place after Games.
+        self.assertEqual(len(labels), 25)
         self.assertEqual(labels, [
             "Dashboard", "Expeditions", "Explore & Survey", "Galactic Atlas", "Planetary Operations",
             "Commander Record",
             "BGS", "Carrier Command", "Colonisation", "Mining Command", "Powerplay", "Trading",
-            "Constellation", "Games", "Music", "Postcards", "Screenshots", "Time Capsules", "Void Wrapped", "The Watcher",
+            "Constellation", "Games", "Hatchling", "Music", "Postcards", "Screenshots", "Time Capsules", "Void Wrapped", "The Watcher",
             "About", "Overlay Studio", "Settings", "Tools",
         ])
-        self.assertEqual([int(number) for number in re.findall(r"<b>(\d+)</b></button>", rail)], list(range(1, 25)))
+        self.assertEqual([int(number) for number in re.findall(r"<b>(\d+)</b></button>", rail)], list(range(1, 26)))
         self.assertNotIn("Field Tools", labels)
 
     def test_merged_pages_remain_available_as_compatibility_routes(self):

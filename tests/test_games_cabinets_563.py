@@ -15,15 +15,16 @@ from voidcompass.dashboard.html_dashboard_server import HtmlDashboardServer
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
 GAMES = WEB / "games"
-CABINETS = ("canyon-run", "docking-computer", "hatchling", "no-fire-zone", "pod-rescue", "rock-rats", "scarab-patrol", "settlement-run",
+CABINETS = ("canyon-run", "docking-computer", "no-fire-zone", "pod-rescue", "rock-rats", "scarab-patrol", "settlement-run",
             "shield-breaker", "station-defence", "supercruise-runner", "thargoid-swarm", "touchdown", "trumble-trouble")
 KIT = ("sound.js", "input.js", "draw.js", "cabinet.js")
 
 
 class LibraryTests(unittest.TestCase):
-    def test_fourteen_cabinets_a_to_z(self):
+    def test_thirteen_arcade_cabinets_a_to_z(self):
         found = read_games()
         self.assertEqual([game["id"] for game in found], list(CABINETS))
+        self.assertNotIn("hatchling", [game["id"] for game in found], "the companion has its own Cockpit page")
         self.assertEqual(found[0]["title"], "Canyon Run")
 
     def test_each_is_on_the_kit_and_reaches_nothing(self):
@@ -143,8 +144,6 @@ class CabinetTests(unittest.TestCase):
     def test_each_cabinet_starts_and_reports_a_score(self):
         page = self.open_deck()
         for game_id in CABINETS:
-            if game_id == "hatchling":
-                continue
             with self.subTest(game=game_id):
                 page.locator(f'.game-card[data-game-open="{game_id}"]').click()
                 page.wait_for_selector("#games-player:not([hidden]) iframe.games-frame")
@@ -199,8 +198,6 @@ class CabinetTests(unittest.TestCase):
         frame = self.frame_for(page, "rock-rats")
         frame.wait_for_function("window.cabinet && window.cabinet.state().input === 'mouse'", timeout=5000)
         page.click("[data-game-back]")
-        page.locator('.game-card[data-game-open="hatchling"]').click()
-        self.assertTrue(page.locator("#games-input").is_hidden(), "Hatchling is played by clicking")
 
     def test_touchdown_and_the_scarab_go_at_the_journals_gravity(self):
         world = {"body": "Synuefe AB-C d1-2 3 a", "gravity": 2.4}
@@ -216,29 +213,29 @@ class CabinetTests(unittest.TestCase):
                 self.assertEqual((state["gravity"], state["real"], state["body"]), (2.4, True, "Synuefe AB-C d1-2 3 a"))
                 page.click("[data-game-back]")
 
-    def test_hatchling_hatches_and_asks_the_deck(self):
+    def test_hatchling_has_a_dedicated_three_js_cockpit_workspace(self):
         state = hatchling.new_state()
         page = self.open_deck(live={"hatchling": hatchling.view(state, time.time())})
-        card = page.locator('.game-card[data-game-open="hatchling"]')
-        self.assertIn("NO EGG CHOSEN YET", card.inner_text())
-        card.click()
-        frame = self.frame_for(page, "hatchling")
-        frame.wait_for_function("window.hatchling && window.hatchling.state().screen === 'choose'")
-        page.frame_locator("iframe.games-frame").locator("canvas").click(position={"x": 5, "y": 5})
-        for letter in "Moss":
-            page.keyboard.press(letter)
-        page.keyboard.press("Enter")
-        command = self.wait_for_command(page, lambda item: item.get("operation") == "action")
-        self.assertEqual((command["action"], command["game"], command["act"]), ("workspace", "hatchling", "hatch"))
-        self.assertEqual(command["value"]["name"], "Moss", "typed letters, M included (not the sound key)")
-        # The deck hatches it (an hour ago: past the egg) and sends it back.
-        hatchling.act(state, "hatch", command["value"], time.time() - 3600)
-        self.publish_games({"hatchling": hatchling.view(state, time.time())})
-        frame.wait_for_function("window.hatchling.state().screen === 'home' && window.hatchling.state().name === 'Moss'")
-        page.keyboard.press("Digit5")
-        command = self.wait_for_command(page, lambda item: item.get("operation") == "action" and item.get("act") != "hatch")
-        self.assertEqual(command["act"], "lights")
-        self.assertNotIn("score", [item.get("operation") for item in self.commands], "it keeps no scores")
+        page.locator('.nav-item[data-page="hatchling"]').click()
+        self.server.publish({**self.state, "workspace": {"page": "hatchling", "ready": True,
+                                                           "data": hatchling.view(state, time.time())}})
+        page.wait_for_selector(".hatchling-deck")
+        page.wait_for_function("typeof window.Hatchling3D === 'object'")
+        page.wait_for_function("document.querySelector('[data-hl-canvas]').width > 0")
+        page.wait_for_function("document.querySelector('[data-hl-link]').textContent === 'READY TO HATCH'")
+        page.evaluate("""() => {
+          let calls = 0;
+          const draw = window.Hatchling3D.draw.bind(window.Hatchling3D);
+          window.Hatchling3D.draw = (...args) => { calls += 1; return draw(...args); };
+          window.hatchlingDrawCalls = () => calls;
+        }""")
+        page.wait_for_function("window.hatchlingDrawCalls() > 1")
+        self.assertNotIn("hatchling", [game["id"] for game in read_games()], "the pet is no longer an arcade card")
+        page.locator("[data-hl-name]").fill("Moss")
+        page.locator("[data-hl-act='hatch']").click()
+        command = self.wait_for_command(page, lambda item: item.get("page") == "hatchling" and item.get("operation") == "action")
+        self.assertEqual((command["action"], command["page"], command["act"]), ("workspace", "hatchling", "hatch"))
+        self.assertEqual(command["value"]["name"], "Moss")
 
 
 if __name__ == "__main__":

@@ -32,6 +32,8 @@ class HatchlingRenderer3DTests(unittest.TestCase):
         self.assertIn("window.Hatchling3D?.draw(ctx, shown", life)
         self.assertIn("threeOnly = false", life)
         self.assertIn("if (!rendered3d && !threeOnly)", life)
+        egg_model = renderer.split("function makeEgg(root, pet, tone) {", 1)[1].split("function formMarks", 1)[0]
+        self.assertNotIn("TorusGeometry", egg_model, "the egg has no ring around its base")
 
     def test_dashboard_serves_only_the_renderer_and_its_two_three_modules(self):
         from voidcompass.dashboard.html_dashboard_server import HtmlDashboardServer
@@ -70,6 +72,8 @@ class HatchlingRenderer3DTests(unittest.TestCase):
             try:
                 page = browser.new_page(viewport={"width": 800, "height": 600})
                 errors = []
+                page.on("console", lambda message: errors.append(message.text)
+                        if message.type == "error" or "Hatchling's 3D renderer unavailable" in message.text else None)
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 page.goto(f"http://127.0.0.1:{server.server_address[1]}/games/hatchling/")
                 page.wait_for_function("Boolean(window.Hatchling3D)")
@@ -112,7 +116,30 @@ class HatchlingRenderer3DTests(unittest.TestCase):
                 const cornerAlpha = ctx.getImageData(0, 0, 1, 1).data[3];
                 rows.push({species: pet.species, kind: pet.kind || '', rendered, visible, cornerAlpha});
               }
-              return {webgl2: Boolean(gl), rows};
+              const activities = [
+                {name: 'idle', t: 1},
+                {name: 'toy', t: 2, toy: {kind: 'relic', x: 32}},
+                {name: 'keepy', t: 3, ball: {x: -12, y: -62, spin: .4}},
+                {name: 'tower', t: 4, tower: {x: 55, cans: 3, lean: .08, drop: {y: -45}}},
+                {name: 'tag', t: 5, thargon: {x: 42, y: -30, spin: .6}},
+                {name: 'chase', t: 6, mote: {x: -48, y: -34}},
+                {name: 'stars', t: 7, stars: {points: [{x:-50,y:-65},{x:-18,y:-40},{x:20,y:-72},{x:52,y:-48}], lit: 3, fade: 1}},
+                {name: 'stargaze', t: 8, star: {x: 35, y: -54}},
+                {name: 'holo', t: 9, orb: {x: -28, y: -60}},
+                {name: 'trick', trick: 'juggle', t: 2.5},
+              ];
+              const propRows = activities.map((activity, index) => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const rendered = window.Hatchling3D.draw(ctx, {species: 'larva', stage: 'juvenile', needs: {mood: 90}}, {
+                  x: 210, y: 190, size: 150, t: index * .6, activity,
+                  toys: ['pebble', 'relic', 'sensor', 'fragment', 'beacon', 'model'].map((kind, i) => ({kind, x: (i - 3) * 24, y: 66})),
+                });
+                const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                let visible = 0;
+                for (let i = 3; i < pixels.length; i += 4) if (pixels[i] > 0) visible++;
+                return {name: activity.name, rendered, visible};
+              });
+              return {webgl2: Boolean(gl), rows, propRows, idleActs: life.acts};
                 }""")
                 self.assertEqual(len(result["rows"]), 9)
                 self.assertTrue(result["webgl2"], "Chromium must expose WebGL2 to exercise the renderer")
@@ -120,6 +147,9 @@ class HatchlingRenderer3DTests(unittest.TestCase):
                     self.assertTrue(all(row["rendered"] for row in result["rows"]), result)
                 self.assertTrue(all(row["visible"] > 0 for row in result["rows"]), result)
                 self.assertTrue(all(row["cornerAlpha"] == 0 for row in result["rows"]), result)
+                self.assertEqual(len(result["propRows"]), 10)
+                self.assertTrue(all(row["rendered"] and row["visible"] > 0 for row in result["propRows"]), {**result, "console": errors})
+                self.assertTrue({"stretch", "groom", "holo"}.issubset(result["idleActs"]), result)
                 self.assertEqual(errors, [])
             finally:
                 browser.close()

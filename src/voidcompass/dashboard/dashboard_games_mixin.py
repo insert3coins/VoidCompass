@@ -63,7 +63,7 @@ def card_picture(game_id, folder=None):
 
 
 def read_games(root=None, cards=None):
-    """Every playable game, A to Z."""
+    """Every arcade cabinet, A to Z. Companions use their own workspace."""
     root = root or games_root()
     games = []
     try:
@@ -79,6 +79,10 @@ def read_games(root=None, cards=None):
         except (OSError, ValueError):
             continue
         if not isinstance(manifest, dict):
+            continue
+        # Companion experiences have their own Cockpit workspace, not an
+        # arcade card. Keep the manifest entry point for direct compatibility.
+        if manifest.get("catalog", True) is False:
             continue
         entry = str(manifest.get("entry") or "index.html")
         if "/" in entry or "\\" in entry or entry.startswith(".") or not (folder / entry).is_file():
@@ -150,6 +154,10 @@ class DashboardGamesMixin:
                           "played": _whole(record.get("played")), "last": _whole(record.get("last")),
                           "live": self._games_live(game["id"])})
         return {"games": games, "card_size": list(CARD_SIZE), "card_folder": str(cards_root())}
+
+    def _html_hatchling_workspace(self):
+        """The live companion view for the dedicated Cockpit page."""
+        return self._games_live("hatchling")
 
     def _games_live(self, game_id):
         if game_id == "hatchling":

@@ -109,7 +109,7 @@ _HTML_WORKSPACE_PAGES = {
     "planet-materials", "explore", "profile", "chronicle", "mission", "ground", "mining",
     "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
     "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation",
-    "tools", "wrapped", "games",
+    "tools", "wrapped", "games", "hatchling",
 }
 
 
@@ -2681,6 +2681,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "wrapped": getattr(self, "_html_wrapped_workspace", None),
             # Games (5.6.3, dashboard_games_mixin).
             "games": getattr(self, "_html_games_workspace", None),
+            # Hatchling has a dedicated Cockpit workspace (5.6.7).
+            "hatchling": getattr(self, "_html_hatchling_workspace", None),
         }
         builder = builders.get(page)
         if builder is None:
@@ -3062,6 +3064,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
 
         if page == "games":
             return self._handle_games_command(operation, payload)
+
+        if page == "hatchling":
+            return operation == "action" and self._hatchling_action(payload)
 
         if page == "wrapped":
             return self._handle_wrapped_command(operation, payload)
