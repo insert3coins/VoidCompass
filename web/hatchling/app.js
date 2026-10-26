@@ -176,7 +176,7 @@
       if (model.music && !listening) { listening = true; listen(); }
       window.HatchlingArt.mess(ctx, model.mess || 0, x, y, size);
       life.back(ctx, model, x, y);
-      life.drawPet(ctx, model, {x, y, size, t: now / 1000, aura: options.glow !== false});
+      life.drawPet(ctx, model, {x, y, size, t: now / 1000, aura: options.glow !== false, shadow: false});
       life.front(ctx, model, x, y);
       if (pet && options.needs !== "never") wantsBubble(ctx, x + life.x, y - life.lift, size, ratio);
       if (pet && options.needs === "always" && model.stage !== "egg") needBars(ctx, x + life.x, y - life.lift, size, ratio);

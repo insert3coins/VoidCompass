@@ -566,7 +566,7 @@
   }
 
   // look: where its eyes go (-1..1 each way); squash: 0 at rest, + squashed, - stretched.
-  function draw(ctx, pet, {x = 50, y = 50, size = 100, t = performance.now() / 1000, look = null, squash = 0, aura = true, lift = 0} = {}) {
+  function draw(ctx, pet, {x = 50, y = 50, size = 100, t = performance.now() / 1000, look = null, squash = 0, aura = true, shadow = true, lift = 0} = {}) {
     if (!pet) return;
     const tone = tones(pet);
     const still = pet.asleep || pet.dormant;
@@ -585,8 +585,10 @@
     // Its shadow on the floor, smaller as it leaves the ground.
     const bob = still ? 0 : Math.sin(t * 2.2) * 2.2;
     const up = Math.max(0, lift);
-    ctx.fillStyle = `rgba(0,0,0,${.35 - Math.min(.25, up / 120)})`;
-    ctx.beginPath(); ctx.ellipse(0, 44, Math.max(10, 30 - bob - up * .3), 6, 0, 0, Math.PI * 2); ctx.fill();
+    if (shadow) {
+      ctx.fillStyle = `rgba(0,0,0,${.35 - Math.min(.25, up / 120)})`;
+      ctx.beginPath(); ctx.ellipse(0, 44, Math.max(10, 30 - bob - up * .3), 6, 0, 0, Math.PI * 2); ctx.fill();
+    }
     if (pet.reaction === "scared" && !pet.asleep) ctx.translate(Math.sin(t * 40) * 1.6, 0);
     ctx.translate(0, bob - up);
     // Breathing, and the squash of a hop or a pat (it keeps its feet on the floor).

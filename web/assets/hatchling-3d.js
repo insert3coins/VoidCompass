@@ -760,7 +760,7 @@ function createView(canvas) {
   aura.renderOrder = 0;
   const root = new THREE.Group();
   scene.add(root);
-  return {renderer, scene, camera, root, aura, models: new Map(), model: null, props: null, propKey: "", propState: null};
+  return {renderer, scene, camera, root, aura, shadow, models: new Map(), model: null, props: null, propKey: "", propState: null};
 }
 
 export class HatchlingRenderer3D {
@@ -769,7 +769,7 @@ export class HatchlingRenderer3D {
     this.failedCanvases = new WeakSet();
   }
 
-  draw(ctx, pet, {x, y, size, t = 0, look = [0, 0], squash = 0, lift = 0, aura = true, act = "", dance = "", activity = null, toys = []} = {}) {
+  draw(ctx, pet, {x, y, size, t = 0, look = [0, 0], squash = 0, lift = 0, aura = true, shadow = true, act = "", dance = "", activity = null, toys = []} = {}) {
     if (!ctx?.canvas || !pet || !Number.isFinite(size) || size <= 0) return false;
     const host = ctx.canvas;
     if (this.failedCanvases.has(host)) return false;
@@ -807,6 +807,7 @@ export class HatchlingRenderer3D {
         dispose(oldest.group);
       }
       view.model = entry.model;
+      view.shadow.visible = Boolean(shadow);
       const nextPropKey = propKey(toys, activity, tone);
       if (view.propKey !== nextPropKey) {
         view.propState = buildProps(view, toys, activity, tone);

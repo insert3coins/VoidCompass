@@ -1403,7 +1403,7 @@
         dream: me.dream.life > 0 ? me.dream.text : ""}),
 
       // The pet itself, where it is now and how it looks.
-      drawPet(ctx, pet, {x, y, size: drawn = size, t, aura = true, threeOnly = false} = {}) {
+      drawPet(ctx, pet, {x, y, size: drawn = size, t, aura = true, shadow = true, threeOnly = false} = {}) {
         if (!pet) return;
         const shown = me.shut && !pet.asleep ? {...pet, asleep: true, eyesShut: true} : me.face && !pet.reaction ? {...pet, reaction: me.face} : pet;
         const px = x + me.x + me.shake, feet = y + 44 * drawn / 100, middle = y - me.lift;
@@ -1427,11 +1427,11 @@
         const toys = pet.stage === "egg" ? [] : (pet.toys || []).map((toy) => ({kind: toy.kind,
           x: relative(current.name === "toy" && current.toy?.kind === toy.kind ? current.x : toyX(pet, toy.kind)), y: 44 * drawn / 100}));
         const rendered3d = window.Hatchling3D?.draw(ctx, shown, {
-          x: px, y, size: drawn, t, look: me.look, squash: me.squash, lift: me.lift, aura,
+          x: px, y, size: drawn, t, look: me.look, squash: me.squash, lift: me.lift, aura, shadow,
           act: me.act?.name || "", dance: me.act?.style || "",
           activity, toys,
         });
-        if (!rendered3d && !threeOnly) window.HatchlingArt.draw(ctx, shown, {x: px, y, size: drawn, t, look: me.look, squash: me.squash, lift: me.lift, aura});
+        if (!rendered3d && !threeOnly) window.HatchlingArt.draw(ctx, shown, {x: px, y, size: drawn, t, look: me.look, squash: me.squash, lift: me.lift, aura, shadow});
         if (pet.outfit && pet.stage !== "egg") outfit(ctx, pet, px, middle, drawn, rendered3d);
         if (me.shades > 0 && !pet.asleep && pet.stage !== "egg") {
           // Sunglasses, while it scoops fuel from a star.
