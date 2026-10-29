@@ -17,6 +17,12 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
 
 
+def envelope(snapshot, overlay):
+    """The shared host's delivery packet (5.6.8) around a single snapshot."""
+    return {"type": "voidcompass.overlay", "overlay": overlay, "generation": 1, "layout_revision": 1, "revision": 1,
+            "health": {}, "deliveries": [{"revision": 1, "snapshot": snapshot, "ordered": False}]}
+
+
 class ServerTests(unittest.TestCase):
     def setUp(self):
         self.addCleanup(HtmlOverlayServer.set_shape_windows, False)
@@ -96,10 +102,10 @@ class ClientShapeTests(unittest.TestCase):
             if url.path == "/api/health":
                 return route.fulfill(content_type="application/json", body=json.dumps({"revision": 1}))
             if url.path == "/api/snapshot":
-                return route.fulfill(content_type="application/json", body=json.dumps(snapshot))
+                return route.fulfill(content_type="application/json", body=json.dumps(envelope(snapshot, "x")))
             if url.path in ("/api/rendered", "/api/ready"):
                 sent["rendered" if url.path.endswith("rendered") else "ready"].append(json.loads(route.request.post_data or "{}"))
-                return route.fulfill(content_type="application/json", body="{}")
+                return route.fulfill(content_type="application/json", body=json.dumps({"accepted": True, "ready": True}))
             if url.path.startswith("/api/"):
                 return route.fulfill(content_type="application/json", body="{}")
             path = WEB / url.path.lstrip("/")

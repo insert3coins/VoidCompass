@@ -176,7 +176,10 @@ class PageTests(unittest.TestCase):
             if target.is_file():
                 route.fulfill(path=str(target))
             elif path.startswith("/api/snapshot"):
-                route.fulfill(status=200, body=json.dumps(snapshot), content_type="application/json")
+                # The shared host's delivery packet (5.6.8) around the snapshot.
+                packet = {"type": "voidcompass.overlay", "overlay": "rhino-map", "generation": 1, "layout_revision": 1,
+                          "revision": 1, "health": {}, "deliveries": [{"revision": 1, "snapshot": snapshot, "ordered": False}]}
+                route.fulfill(status=200, body=json.dumps(packet), content_type="application/json")
             elif path.startswith("/api/health"):
                 route.fulfill(status=200, body='{"revision": 1}', content_type="application/json")
             else:
