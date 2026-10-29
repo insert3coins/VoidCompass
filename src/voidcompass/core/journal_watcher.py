@@ -74,6 +74,9 @@ class JournalWatcher:
         if self.special_file_settle_s < 0.0:
             self.special_file_settle_s = 0.0
         self._startup_catchup_done = False
+        # 5.6.9: checks every 0.2 s while a jump is under way (hurry()), so
+        # the HUD's jump clock reads each moment as it happens.
+        self._hurry_until = 0.0
         self._skip_partial_line_once = False
         self._startup_location_seeded = False
         self._startup_location_event = None
@@ -453,7 +456,13 @@ class JournalWatcher:
 
     def _cycle_pause(self):
         """A second between checks once live; hardly any while catching up."""
-        return self.startup_cycle_s if not self._startup_catchup_done else 1.0
+        if not self._startup_catchup_done:
+            return self.startup_cycle_s
+        return 0.2 if time.monotonic() < self._hurry_until else 1.0
+
+    def hurry(self, seconds):
+        """Check often for the next few seconds (0 stops)."""
+        self._hurry_until = time.monotonic() + max(0.0, float(seconds)) if seconds else 0.0
 
     def switch_folder(self, journal_path):
         """Watch another journal folder from now on.
@@ -1424,6 +1433,9 @@ class JournalWatcher:
                         # Status drives live HUD/ground target; don't defer it with settle timing.
                         with open(s_file, 'r', encoding='utf-8') as f:
                             data = json.load(f)
+                            if isinstance(data, dict):
+                                # When the game wrote it: the jump clock's moments.
+                                data["_written"] = mtime
                             self.status_callback(data)
                             self.last_status_mtime = mtime
                 except:

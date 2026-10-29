@@ -1,6 +1,7 @@
 /** Explore & Survey: one live system model and three task views.
  *
- *   SURVEY     the system you're in: its hero, the survey board and the orrery
+ *   SURVEY     the system you're in: its hero and the survey board
+ *   SYSTEM MAP the live 3D System Map (system-map.js), 5.6.9
  *   PROSPECTS  Return Later, Exploration Scout and personal Codex gaps
  *   ARCHIVE    the Exploration Archive: flights, scan science, regions (5.5.4)
  *
@@ -14,11 +15,12 @@
  * below the fold. The survey board is fed by the live snapshot, so every
  * discovered body is listed the moment its record arrives; the workspace
  * survey queue then adds priority order and the commander's PIN/DONE/SKIP
- * choices. Board and orrery share one selection.
+ * choices. Board and System Map share one selection.
  */
 
 const VIEWS = [
   {id: "system", label: "SURVEY", idle: ""},
+  {id: "map", label: "SYSTEM MAP", idle: ""},
   {id: "prospects", label: "PROSPECTS", idle: ""},
   // 5.5.4: the Exploration Archive, merged in.
   {id: "archive", label: "ARCHIVE", idle: ""},
@@ -120,8 +122,10 @@ function skeletonMarkup() {
           <p class="explore-board-empty" hidden>No bodies match this filter.</p>
           <footer class="explore-board-foot"><span>Click a body for its details. Pinned and targeted bodies stay at the top; then the sort you chose.</span><button type="button" id="explore-survey-reset" data-ws-page="explore" data-ws-op="survey_reset" disabled>RESET COMMANDER CHOICES</button></footer>
         </section>
-        <section class="explore-instrument" id="explore-orrery" aria-label="Live system orrery">${pending("LINKING LIVE ORRERY", "The system architecture appears once the survey workspace is ready.")}</section>
       </div>
+    </section>
+    <section class="explore-view explore-map-view" role="tabpanel" id="explore-view-map" data-explore-panel="map" aria-labelledby="explore-tab-map" hidden>
+      <section id="system-map-workspace" aria-label="Live system map"></section>
     </section>
     <section class="explore-view" role="tabpanel" id="explore-view-prospects" data-explore-panel="prospects" aria-labelledby="explore-tab-prospects" hidden>
       <div id="explore-prospects" class="explore-columns explore-prospect-grid">${pending("LINKING PROSPECT RECORDS", "Return Later, Exploration Scout and Codex gaps load with the survey workspace.")}</div>
@@ -180,11 +184,6 @@ function bind(root, ui) {
     setExploreView(VIEW_IDS[next], ui);
     root.querySelector(`[data-explore-view="${VIEW_IDS[next]}"]`)?.focus();
   });
-  // The orrery announces canvas picks so the board follows without a loop.
-  root.addEventListener("orrery-select", (event) => {
-    selection = {system: surveyState?.system || "", bodyId: String(event.detail?.id ?? ""), name: ""};
-    markSelection(root, {scroll: true});
-  });
 }
 
 /** Build the view skeleton once (and again if an error panel replaced it). */
@@ -213,8 +212,13 @@ function applyView(root, ui) {
   for (const panel of root.querySelectorAll("[data-explore-panel]")) {
     panel.hidden = panel.dataset.explorePanel !== view;
   }
+  ui.onViewChange?.(view);
   root.dataset.view = view;
   applyFilter(root);
+}
+
+export function exploreView() {
+  return prefs.view || "system";
 }
 
 export function setExploreView(view, ui) {
@@ -277,7 +281,7 @@ function markSelection(root, {focus = false, scroll = false} = {}) {
     const name = selected.dataset.bodyName || "";
     if (name && boardSystem) {
       const esc = uiRef.escapeHtml;
-      more.insertAdjacentHTML("beforeend", `<div class="body-more-actions"><button type="button" data-explore-keep="place" data-system="${esc(boardSystem)}" data-body="${esc(name)}">+ EXPEDITION PLACE</button>
+      more.insertAdjacentHTML("beforeend", `<div class="body-more-actions"><button type="button" data-system-map-body="${esc(body?.id ?? selected.dataset.bodyId ?? '')}" data-system="${esc(boardSystem)}" data-body="${esc(name)}">SYSTEM MAP ↗</button><button type="button" data-explore-keep="place" data-system="${esc(boardSystem)}" data-body="${esc(name)}">+ EXPEDITION PLACE</button>
         <button type="button" data-explore-keep="route" data-system="${esc(boardSystem)}" data-body="${esc(name)}">+ EXPEDITION ROUTE</button></div>`);
     }
     selected.after(more);
@@ -294,14 +298,6 @@ function selectBody(ui, target, options = {}) {
   selection = {system: surveyState?.system || "", bodyId: String(target.bodyId || ""), name: String(target.name || "")};
   const {root} = ensureSkeleton(ui);
   markSelection(root, options);
-  const orreryBody = orreryBodyFor(selection);
-  if (orreryBody) {
-    ui.selectOrreryBody(String(orreryBody.id));
-  } else {
-    const detail = ui.byId("orrery-detail");
-    const row = root?.querySelector("#body-workboard .body-row.selected");
-    if (detail && row) detail.innerHTML = fallbackDetail(row, ui);
-  }
 }
 
 /** Entry from the Dashboard's Current System list. */
@@ -595,38 +591,15 @@ function fallbackDetail(row, ui) {
   return `<div class="orrery-body-title"><i class="planet"></i><div><small>NOT YET IN THE ORRERY</small><h3>${escapeHtml(name)}</h3><span>${escapeHtml(note)}</span></div><b>—</b></div><div class="orrery-flags"><em>DETAILED SCAN REQUIRED FOR ORBITAL ELEMENTS</em></div>`;
 }
 
-function renderInstrument(root, ui) {
-  const slot = root.querySelector("#explore-orrery");
-  if (!slot) return;
-  const {escapeHtml, numeric} = ui;
+function followTarget(root) {
   const cartography = workspaceData?.cartography || {};
-  const orrery = cartography.orrery || {};
-  const bodies = (orrery.bodies || []).filter((body) => !body.hidden);
-  const target = orrery.target || cartography.target || {};
+  const target = cartography.orrery?.target || cartography.target || {};
   const targetId = target.resolved && target.id !== null && target.id !== undefined ? String(target.id) : "";
-  // A fresh Elite target lock takes the selection, as it always has.
   if (targetId && targetId !== liveTargetId) {
     selection = {system: cartography.system || surveyState?.system || "", bodyId: targetId, name: ""};
   }
   liveTargetId = targetId;
-  // With no explicit pick, open on the recommended next body rather than the
-  // arrival star; a picked body the orrery cannot draw gets a text readout.
-  const explicit = orreryBodyFor(selection);
-  const next = lower(cartography.queue?.next?.body);
-  const selected = explicit || bodies.find((body) => next && lower(body.name) === next)
-    || bodies.find((body) => body.kind === "planet") || bodies[0] || null;
-  ui.setOrrerySelection(selected ? String(selected.id) : "");
-  const lock = target.resolved
-    ? `<div class="cartography-target-lock"><i>⌖</i><span><small>ELITE NAVIGATION TARGET</small><b>${escapeHtml(target.name || "TARGETED BODY")}</b></span><em>BODY ${escapeHtml(target.body_id ?? "—")} · LOCKED</em></div>`
-    : "";
-  slot.innerHTML = `<header class="explore-instrument-head"><div><small>LIVE SYSTEM ORRERY</small><b>${numeric(orrery.stars)} STARS · ${numeric(orrery.planets)} PLANETS · ${numeric(orrery.mapped)} MAPPED</b></div><span>${escapeHtml(orrery.mode || "JOURNAL ARCHITECTURE")}</span></header>${lock}${ui.orreryCanvas(orrery)}<div id="orrery-detail" class="orrery-detail">${ui.orreryDetail(selected)}</div>`;
-  ui.mountSystemOrrery(orrery);
   markSelection(root);
-  if (!explicit && selection) {
-    const row = root.querySelector("#body-workboard .body-row.selected");
-    const detail = ui.byId("orrery-detail");
-    if (row && detail) detail.innerHTML = fallbackDetail(row, ui);
-  }
 }
 
 /** The waypoint route, NavRoute and the neutron plotter: drawn on the
@@ -752,7 +725,7 @@ function replaceKeepingScroll(slot, markup) {
 function renderWorkspaceParts(root, ui) {
   const data = workspaceData || {};
   const {number} = ui;
-  renderInstrument(root, ui);
+  followTarget(root);
   renderBoard(root, ui);
   renderSystemMeta(ui);
   const prospects = root.querySelector("#explore-prospects");

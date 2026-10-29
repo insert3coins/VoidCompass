@@ -251,6 +251,16 @@ class MiningDataStore:
             )
             conn.commit()
 
+    def hotspots_in(self, system_name):
+        """Every hotspot logged in one system: ring name, material and count."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT body_name, material_name, hotspot_count, ring_type FROM hotspots"
+                " WHERE system_name = ? COLLATE NOCASE ORDER BY hotspot_count DESC",
+                (str(system_name or ""),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def search_hotspots(self, material=None, ring_type=None, reference_coords=None, max_distance=None, limit=250):
         clauses = []
         params = []

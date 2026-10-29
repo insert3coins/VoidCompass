@@ -1,6 +1,6 @@
 import {renderPowerplayWorkspace as renderPowerplayOperationsWorkspace} from "./powerplay.js";
 import {
-  openExploreBody, renderExploreSystem, renderExploreWorkspace, resetExploreProfile, setExploreView,
+  openExploreBody, renderExploreSystem, renderExploreWorkspace, resetExploreProfile, setExploreView, exploreView,
 } from "./explore.js";
 import {renderExplorationArchive} from "./archive.js";
 import {createMusicDeck} from "./music.js";
@@ -25,6 +25,7 @@ import {renderHatchling, setHatchlingActive} from "./hatchling.js";
 import {renderFlightLogs} from "./flightlog.js";
 import {renderWrapped} from "./wrapped.js";
 import {renderAbout} from "./about.js";
+import {installSystemMap,renderSystemMap,setSystemMapActive,resetSystemMap,openSystemMap,systemMapState} from "./system-map.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
@@ -86,8 +87,6 @@ let workspaceSyncTicket = 0;
 let groundTargetRefreshTimer = 0;
 const achievementUi = {category: "all", status: "all", search: "", sort: "progress", visible: 24};
 let hotkeyCaptureAction = "";
-let orrerySelectedBodyId = "";
-let orreryView = null;
 let analyticsView = "trends";
 let replaySelectedSessionIndex = 0;
 let replayTimer = 0;
@@ -125,7 +124,7 @@ for (const suite of PAGE_SUITES) {
   for (const [page] of suite.pages) PAGE_SUITE_BY_PAGE.set(page, suite);
 }
 // Ground & Exobio is the Planetary page's ON THE GROUND tab since 5.5.12.
-const LEGACY_PAGE_REDIRECTS = {operations: "overview", ground: "planet-materials"};
+const LEGACY_PAGE_REDIRECTS = {operations: "overview", ground: "planet-materials", "system-map": "explore"};
 
 const HOTKEY_MODIFIER_KEYS = new Set([
   "Alt", "AltGraph", "Control", "Meta", "OS", "Shift",
@@ -624,7 +623,6 @@ function applyTheme(theme = {}) {
   const nextFingerprint = JSON.stringify({name: theme.name || "", palette: theme.palette || {}, names});
   if (nextFingerprint !== themeFingerprint) {
     themeFingerprint = nextFingerprint;
-    orreryView?.render();
   }
 }
 
@@ -2160,533 +2158,6 @@ function workspaceTable(columns, rows, empty = "No records available.") {
   return `<div class="workspace-table-wrap"><table class="workspace-table"><thead><tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${columns.map((column) => `<td>${column.render ? column.render(row) : escapeHtml(row[column.key] ?? "—")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
-const ORRERY_TAU = Math.PI * 2;
-const ORRERY_STAR_COLORS = {
-  O: "#9bb0ff", B: "#aabfff", A: "#cad7ff", F: "#f8f7ff",
-  G: "#fff4ea", K: "#ffd2a1", M: "#ffb56c", L: "#ff8c5a",
-  T: "#cc6b52", Y: "#8a4a3c", D: "#dfe9ff", N: "#b0e0ff",
-  H: "#1a0a12",
-};
-
-// Journal PlanetClass colours follow ORRERY's astronomical palette. EDSM's
-// public subtype aliases are included because recovered architecture must look
-// like the same body class without pretending its orbital phase is known.
-const ORRERY_PLANET_COLORS = new Map([
-  ["icy body", "#cfe8f5"], ["rocky ice body", "#9fb3c8"],
-  ["rocky body", "#8a7866"], ["high metal content body", "#b08060"],
-  ["metal rich body", "#d99a5b"], ["earthlike body", "#4f9bd6"],
-  ["water world", "#3f7fc9"], ["ammonia world", "#b7c65a"],
-  ["water giant", "#5c8fd6"], ["sudarsky class i gas giant", "#7fa8c9"],
-  ["sudarsky class ii gas giant", "#e0c493"], ["sudarsky class iii gas giant", "#d9a066"],
-  ["sudarsky class iv gas giant", "#c97a5a"], ["sudarsky class v gas giant", "#8a5a7a"],
-  ["gas giant with water based life", "#6fa8b0"],
-  ["gas giant with ammonia based life", "#9ab06f"],
-  // EDSM subtype spellings.
-  ["earth like world", "#4f9bd6"], ["metal rich world", "#d99a5b"],
-  ["high metal content world", "#b08060"], ["rocky ice world", "#9fb3c8"],
-  ["class i gas giant", "#7fa8c9"], ["class ii gas giant", "#e0c493"],
-  ["class iii gas giant", "#d9a066"], ["class iv gas giant", "#c97a5a"],
-  ["class v gas giant", "#8a5a7a"],
-]);
-
-const ORRERY_RING_COLORS = new Map([
-  ["eringclass icy", "#cfe8f5"], ["icy", "#cfe8f5"],
-  ["eringclass rocky", "#8a7866"], ["rocky", "#8a7866"],
-  ["eringclass metalic", "#b0b0b0"], ["metallic", "#b0b0b0"],
-  ["eringclass metalrich", "#d99a5b"], ["metal rich", "#d99a5b"],
-]);
-
-function orreryClassKey(value) {
-  return String(value || "").trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
-}
-
-function orreryHash(value) {
-  let hash = 2166136261;
-  for (const character of String(value ?? "")) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) / 4294967295;
-}
-
-function orreryPlanetColor(body) {
-  if (body.kind === "star") return ORRERY_STAR_COLORS[String(body.star_type || "?")[0]?.toUpperCase()] || "#ffc46b";
-  return ORRERY_PLANET_COLORS.get(orreryClassKey(body.class)) || "#8a8a8a";
-}
-
-function orreryRingColor(body) {
-  const key = orreryClassKey(body.ring_class);
-  return ORRERY_RING_COLORS.get(key)
-    || [...ORRERY_RING_COLORS].find(([name]) => key.includes(name))?.[1]
-    || "#7a4a1e";
-}
-
-function orreryBodyIcon(body) {
-  if (body.kind === "star") return "✦";
-  if (body.is_moon) return body.landable ? "◈" : "·";
-  return body.landable ? "◉" : "○";
-}
-
-function orreryCanvas(orrery = {}) {
-  const bodies = orrery.bodies || [];
-  if (!bodies.length) {
-    const loading = Boolean(orrery.loading);
-    return `<div class="orrery-empty${loading ? " loading" : ""}"><i></i><b>${loading ? "RECOVERING KNOWN SYSTEM" : "AWAITING SYSTEM SCANS"}</b><span>${loading ? "Requesting public body architecture while retained journal evidence remains authoritative." : "Honk or begin FSS to assemble the live architecture."}</span></div>`;
-  }
-  const resolved = bodies.filter((body) => !body.hidden && body.orbit?.resolved).length;
-  const approximate = bodies.filter((body) => !body.hidden && body.orbit?.semi_major_axis && !body.orbit?.resolved).length;
-  return `<div class="orrery-stage">
-    <canvas id="system-orrery-canvas" tabindex="0" role="img" aria-label="Interactive three-dimensional model of the current Elite Dangerous system"></canvas>
-    <div class="orrery-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-    <div class="orrery-telemetry"><span>COMPRESSED ORBITAL SCALE</span><b>${resolved ? `${resolved} LIVE POSITIONS` : "SCHEMATIC POSITIONS"}</b><em>${approximate ? `${approximate} APPROXIMATE` : "JOURNAL ELEMENTS"}</em></div>
-    <div class="orrery-legend"><span><i class="star"></i>STAR</span><span><i class="world"></i>WORLD</span><span><i class="bio"></i>BIO</span><span><i class="target"></i>TARGET</span></div>
-    <div class="orrery-controls" aria-label="Orrery view controls"><button type="button" data-orrery-action="top">TOP</button><button type="button" data-orrery-action="tilt">3D</button><button type="button" data-orrery-action="orbits">ORBITS</button><button type="button" data-orrery-action="labels">LABELS</button><button type="button" data-orrery-action="reset">RESET</button></div>
-    <div class="orrery-help">DRAG ROTATE · WHEEL ZOOM · CLICK BODY</div>
-  </div>`;
-}
-
-class EliteSystemOrrery {
-  constructor(canvas, bodies) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext("2d", {alpha: true});
-    this.bodies = (bodies || []).map((body) => ({...body, id: String(body.id)}));
-    this.byId = new Map(this.bodies.map((body) => [body.id, body]));
-    this.abort = new AbortController();
-    this.drag = null;
-    this.hovered = "";
-    this.hits = [];
-    this.world = new Map();
-    this.orbits = [];
-    this.extent = 10;
-    const firstVisible = this.bodies.find((body) => !body.hidden);
-    this.selected = String(orrerySelectedBodyId || firstVisible?.id || "");
-    this.storeKey = `voidcompass.orrery.view.${profileKey}`;
-    this.view = this.loadView();
-    this.palette = this.readPalette();
-    const fieldSeed = this.bodies.map((body) => `${body.id}:${body.name}`).join("|");
-    this.starfield = Array.from({length: 260}, (_unused, index) => ({
-      x: orreryHash(`${fieldSeed}:x:${index}`),
-      y: orreryHash(`${fieldSeed}:y:${index}`),
-      size: .45 + orreryHash(`${fieldSeed}:s:${index}`) * 1.25,
-      alpha: .16 + orreryHash(`${fieldSeed}:a:${index}`) * .48,
-      warm: index % 5 !== 0,
-    }));
-    this.prepareBodies();
-    this.buildScene(Date.now());
-    this.bind();
-    if (typeof ResizeObserver === "function") {
-      this.resizeObserver = new ResizeObserver(() => this.resize());
-      this.resizeObserver.observe(canvas);
-    } else {
-      window.addEventListener("resize", () => this.resize(), {signal: this.abort.signal});
-    }
-    this.resize();
-  }
-
-  loadView() {
-    const fallback = {yaw: -.72, pitch: .72, zoom: 1, labels: true, orbits: true};
-    try {
-      const saved = JSON.parse(localStorage.getItem(this.storeKey) || "{}");
-      return {
-        yaw: Number.isFinite(saved.yaw) ? saved.yaw : fallback.yaw,
-        pitch: Number.isFinite(saved.pitch) ? clamp(saved.pitch, 0, 1.28) : fallback.pitch,
-        zoom: Number.isFinite(saved.zoom) ? clamp(saved.zoom, .45, 5) : fallback.zoom,
-        labels: saved.labels !== false,
-        orbits: saved.orbits !== false,
-      };
-    } catch (_error) {
-      return fallback;
-    }
-  }
-
-  saveView() {
-    try { localStorage.setItem(this.storeKey, JSON.stringify(this.view)); } catch (_error) { /* Optional preference. */ }
-  }
-
-  readPalette() {
-    const styles = getComputedStyle(document.documentElement);
-    const css = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
-    return {
-      accent: css("--accent", "#43d8ff"), orange: css("--orange", "#ff9f43"),
-      yellow: css("--yellow", "#ffd166"), green: css("--green", "#72e6a6"),
-      text: css("--text", "#d9edf5"), muted: css("--muted", "#7895a4"),
-      dim: css("--dim", "#49606c"), border: css("--border", "#244150"),
-      panel: css("--panel", "#071016"),
-    };
-  }
-
-  prepareBodies() {
-    const groups = new Map();
-    for (const body of this.bodies) {
-      const parent = body.parent_id === null || body.parent_id === undefined ? "root" : String(body.parent_id);
-      if (!groups.has(parent)) groups.set(parent, []);
-      groups.get(parent).push(body);
-    }
-    for (const [parent, siblings] of groups) {
-      siblings.sort((a, b) => number(a.orbit?.semi_major_axis, Infinity) - number(b.orbit?.semi_major_axis, Infinity) || number(a.body_id) - number(b.body_id));
-      siblings.forEach((body, index) => {
-        const reported = number(body.orbit?.semi_major_axis, 0);
-        if (reported > 0) body._axis = reported;
-        else if (parent === "root" && body.kind === "star" && index === 0) body._axis = 0;
-        else {
-          const base = body.is_moon ? 2.2e6 : parent === "root" && body.kind === "star" ? 5e10 : 2.4e8;
-          body._axis = base * Math.pow(body.is_moon ? 2.05 : 2.35, Math.max(0, index));
-        }
-        const seed = orreryHash(`${body.id}:${body.name}`);
-        body._seed = seed;
-        body._ascending = body.orbit?.ascending_node_deg ?? seed * 360;
-        body._periapsis = body.orbit?.periapsis_deg ?? ((seed * 613.7) % 360);
-        body._inclination = body.orbit?.inclination_deg ?? ((seed - .5) * 12);
-      });
-    }
-  }
-
-  compressDistance(distance) {
-    if (!(distance > 0)) return 0;
-    return 2 + 7.2 * Math.log10(1 + distance / 1e8);
-  }
-
-  solveEccentric(mean, eccentricity) {
-    let anomaly = mean + eccentricity * Math.sin(mean);
-    for (let iteration = 0; iteration < 6; iteration += 1) {
-      anomaly -= (anomaly - eccentricity * Math.sin(anomaly) - mean) / (1 - eccentricity * Math.cos(anomaly));
-    }
-    return anomaly;
-  }
-
-  localPoint(body, atMs, fraction = null) {
-    const axis = number(body._axis);
-    if (!(axis > 0)) return {x: 0, y: 0, z: 0};
-    const eccentricity = clamp(number(body.orbit?.eccentricity), 0, .92);
-    let eccentricAnomaly;
-    if (fraction !== null) eccentricAnomaly = fraction * ORRERY_TAU;
-    else if (body.orbit?.resolved) {
-      const elapsed = atMs / 1000 - number(body.orbit.epoch_s);
-      const mean = (number(body.orbit.mean_anomaly_deg) * Math.PI / 180 + ORRERY_TAU * elapsed / number(body.orbit.period_s)) % ORRERY_TAU;
-      eccentricAnomaly = this.solveEccentric(mean, eccentricity);
-    } else eccentricAnomaly = body._seed * ORRERY_TAU;
-    const px = axis * (Math.cos(eccentricAnomaly) - eccentricity);
-    const py = axis * Math.sqrt(Math.max(.01, 1 - eccentricity * eccentricity)) * Math.sin(eccentricAnomaly);
-    const periapsis = number(body._periapsis) * Math.PI / 180;
-    const ascending = number(body._ascending) * Math.PI / 180;
-    const inclination = number(body._inclination) * Math.PI / 180;
-    const x1 = px * Math.cos(periapsis) - py * Math.sin(periapsis);
-    const y1 = px * Math.sin(periapsis) + py * Math.cos(periapsis);
-    const x2 = x1;
-    const y2 = y1 * Math.cos(inclination);
-    const z2 = y1 * Math.sin(inclination);
-    const x = x2 * Math.cos(ascending) - y2 * Math.sin(ascending);
-    const y = x2 * Math.sin(ascending) + y2 * Math.cos(ascending);
-    const radius = Math.hypot(x, y, z2);
-    const compressed = this.compressDistance(radius);
-    const scale = radius > 0 ? compressed / radius : 0;
-    return {x: x * scale, y: y * scale, z: z2 * scale};
-  }
-
-  buildScene(atMs) {
-    this.world.clear();
-    this.orbits = [];
-    const resolving = new Set();
-    const resolve = (body) => {
-      if (this.world.has(body.id)) return this.world.get(body.id);
-      if (resolving.has(body.id)) return {x: 0, y: 0, z: 0};
-      resolving.add(body.id);
-      const parent = this.byId.get(String(body.parent_id));
-      const origin = parent ? resolve(parent) : {x: 0, y: 0, z: 0};
-      const offset = this.localPoint(body, atMs);
-      const point = {x: origin.x + offset.x, y: origin.y + offset.y, z: origin.z + offset.z};
-      this.world.set(body.id, point);
-      resolving.delete(body.id);
-      return point;
-    };
-    for (const body of this.bodies) resolve(body);
-    for (const body of this.bodies) {
-      if (!(body._axis > 0)) continue;
-      const parent = this.byId.get(String(body.parent_id));
-      const origin = parent ? this.world.get(parent.id) : {x: 0, y: 0, z: 0};
-      const points = [];
-      for (let sample = 0; sample <= 72; sample += 1) {
-        const offset = this.localPoint(body, atMs, sample / 72);
-        points.push({x: origin.x + offset.x, y: origin.y + offset.y, z: origin.z + offset.z});
-      }
-      this.orbits.push({body, points});
-    }
-    const samples = [...this.world.values(), ...this.orbits.flatMap((orbit) => orbit.points)];
-    this.extent = Math.max(8, ...samples.map((point) => Math.hypot(point.x, point.y, point.z)));
-  }
-
-  bind() {
-    const signal = this.abort.signal;
-    this.canvas.addEventListener("pointerdown", (event) => {
-      this.canvas.setPointerCapture(event.pointerId);
-      this.drag = {id: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false};
-      this.canvas.classList.add("dragging");
-    }, {signal});
-    this.canvas.addEventListener("pointermove", (event) => {
-      if (this.drag?.id === event.pointerId) {
-        const dx = event.clientX - this.drag.x, dy = event.clientY - this.drag.y;
-        this.drag.moved ||= Math.hypot(event.clientX - this.drag.startX, event.clientY - this.drag.startY) > 3;
-        if (this.drag.moved) {
-          this.view.yaw += dx * .007;
-          this.view.pitch = clamp(this.view.pitch + dy * .006, 0, 1.28);
-          this.drag.x = event.clientX; this.drag.y = event.clientY;
-          this.render();
-        }
-        return;
-      }
-      const hit = this.hitAt(event.offsetX, event.offsetY);
-      const next = hit?.body.id || "";
-      if (next !== this.hovered) { this.hovered = next; this.canvas.style.cursor = next ? "pointer" : "grab"; this.render(); }
-    }, {signal});
-    this.canvas.addEventListener("pointerup", (event) => {
-      if (this.drag?.id !== event.pointerId) return;
-      if (!this.drag.moved) {
-        const rect = this.canvas.getBoundingClientRect();
-        const hit = this.hitAt(event.clientX - rect.left, event.clientY - rect.top);
-        if (hit) this.select(hit.body.id);
-      }
-      this.drag = null;
-      this.canvas.classList.remove("dragging");
-      this.saveView();
-    }, {signal});
-    this.canvas.addEventListener("pointercancel", () => { this.drag = null; this.canvas.classList.remove("dragging"); }, {signal});
-    this.canvas.addEventListener("pointerleave", () => { if (!this.drag && this.hovered) { this.hovered = ""; this.render(); } }, {signal});
-    this.canvas.addEventListener("wheel", (event) => {
-      event.preventDefault();
-      this.view.zoom = clamp(this.view.zoom * (event.deltaY > 0 ? .9 : 1.1), .45, 5);
-      this.saveView(); this.render();
-    }, {passive: false, signal});
-    this.canvas.addEventListener("keydown", (event) => {
-      const key = event.key;
-      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "+", "=", "-", "0"].includes(key)) return;
-      event.preventDefault();
-      if (key === "ArrowLeft") this.view.yaw -= .12;
-      if (key === "ArrowRight") this.view.yaw += .12;
-      if (key === "ArrowUp") this.view.pitch = clamp(this.view.pitch - .1, 0, 1.28);
-      if (key === "ArrowDown") this.view.pitch = clamp(this.view.pitch + .1, 0, 1.28);
-      if (key === "+" || key === "=") this.view.zoom = clamp(this.view.zoom * 1.12, .45, 5);
-      if (key === "-") this.view.zoom = clamp(this.view.zoom / 1.12, .45, 5);
-      if (key === "0") this.reset(); else { this.saveView(); this.render(); }
-    }, {signal});
-    const stage = this.canvas.closest(".orrery-stage");
-    stage?.querySelectorAll("[data-orrery-action]").forEach((button) => button.addEventListener("click", () => {
-      const action = button.dataset.orreryAction;
-      if (action === "top") this.view.pitch = 0;
-      if (action === "tilt") this.view.pitch = .72;
-      if (action === "orbits") this.view.orbits = !this.view.orbits;
-      if (action === "labels") this.view.labels = !this.view.labels;
-      if (action === "reset") { this.reset(); return; }
-      this.saveView(); this.render(); this.updateControls();
-    }, {signal}));
-    this.updateControls();
-  }
-
-  reset() {
-    Object.assign(this.view, {yaw: -.72, pitch: .72, zoom: 1, labels: true, orbits: true});
-    this.saveView(); this.updateControls(); this.render();
-  }
-
-  updateControls() {
-    const stage = this.canvas.closest(".orrery-stage");
-    stage?.querySelector('[data-orrery-action="orbits"]')?.classList.toggle("active", this.view.orbits);
-    stage?.querySelector('[data-orrery-action="labels"]')?.classList.toggle("active", this.view.labels);
-    stage?.querySelector('[data-orrery-action="top"]')?.classList.toggle("active", this.view.pitch < .08);
-    stage?.querySelector('[data-orrery-action="tilt"]')?.classList.toggle("active", this.view.pitch >= .08);
-  }
-
-  resize() {
-    const rect = this.canvas.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const ratio = Math.min(2, window.devicePixelRatio || 1);
-    const width = Math.max(1, Math.round(rect.width * ratio));
-    const height = Math.max(1, Math.round(rect.height * ratio));
-    if (this.canvas.width !== width || this.canvas.height !== height) {
-      this.canvas.width = width; this.canvas.height = height;
-    }
-    this.width = rect.width; this.height = rect.height; this.ratio = ratio;
-    this.render();
-  }
-
-  project(point) {
-    const yawCos = Math.cos(this.view.yaw), yawSin = Math.sin(this.view.yaw);
-    const rx = point.x * yawCos - point.y * yawSin;
-    const ry = point.x * yawSin + point.y * yawCos;
-    const pitchCos = Math.cos(this.view.pitch), pitchSin = Math.sin(this.view.pitch);
-    const py = ry * pitchCos - point.z * pitchSin;
-    const depth = ry * pitchSin + point.z * pitchCos;
-    const scale = Math.min(this.width * .43, this.height * .39) / this.extent * this.view.zoom;
-    return {x: this.width * .5 + rx * scale, y: this.height * .52 + py * scale, depth, scale};
-  }
-
-  line(points, color, alpha = 1, width = 1, dashed = false) {
-    if (points.length < 2) return;
-    const ctx = this.ctx;
-    ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width;
-    ctx.setLineDash(dashed ? [3, 5] : []); ctx.beginPath();
-    points.forEach((point, index) => { const p = this.project(point); if (index) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); });
-    ctx.stroke(); ctx.restore();
-  }
-
-  drawBackdrop() {
-    const ctx = this.ctx;
-    ctx.save();
-    for (const star of this.starfield) {
-      ctx.globalAlpha = star.alpha;
-      ctx.fillStyle = star.warm ? "#756151" : this.palette.dim;
-      const size = star.size;
-      ctx.fillRect(star.x * this.width, star.y * this.height, size, size);
-    }
-    ctx.restore();
-  }
-
-  bodyRadius(body) {
-    const realRadius = number(body.radius_m, 0);
-    let radius;
-    if (realRadius > 0) {
-      const star = body.kind === "star";
-      const minDisplay = star ? 1.2 : .35;
-      const scaleMetres = star ? 3e8 : 3e6;
-      const gain = star ? 1.3 : .7;
-      const compressed = minDisplay + gain * Math.log10(1 + realRadius / scaleMetres);
-      radius = star ? 7 + compressed * 3.1 : 2.35 + compressed * 3.15;
-    } else {
-      const gas = orreryClassKey(body.class).includes("gas giant");
-      radius = body.kind === "star" ? 11.5 : gas ? 6.5 : 4.5;
-    }
-    if (body.is_moon) radius *= .84;
-    return clamp(radius * clamp(Math.sqrt(this.view.zoom), .82, 1.45), body.kind === "star" ? 8 : 3, body.kind === "star" ? 18 : 10);
-  }
-
-  drawBody(body, projected) {
-    if (body.hidden) return;
-    const ctx = this.ctx, radius = this.bodyRadius(body), color = orreryPlanetColor(body);
-    const selected = body.id === this.selected, targeted = Boolean(body.targeted), hovered = body.id === this.hovered;
-    ctx.save();
-    if (body.rings) {
-      ctx.globalAlpha = body.source === "edsm" ? .3 : .68;
-      ctx.strokeStyle = orreryRingColor(body);
-      ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(projected.x, projected.y, radius * 2.15, radius * .62, -.22, 0, ORRERY_TAU); ctx.stroke();
-      ctx.globalAlpha *= .4; ctx.beginPath(); ctx.ellipse(projected.x, projected.y, radius * 1.65, radius * .45, -.22, 0, ORRERY_TAU); ctx.stroke();
-    }
-    if (body.source === "edsm") {
-      // Backfill provides system architecture, not live phase: match ORRERY's
-      // visual promise by rendering an unfilled, dashed body wireframe.
-      ctx.globalAlpha = .54; ctx.strokeStyle = color; ctx.lineWidth = 1;
-      ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.arc(projected.x, projected.y, radius, 0, ORRERY_TAU); ctx.stroke(); ctx.setLineDash([]);
-      ctx.globalAlpha = .22; ctx.beginPath(); ctx.ellipse(projected.x, projected.y, radius, radius * .38, 0, 0, ORRERY_TAU); ctx.stroke();
-    } else if (body.kind === "star") {
-      ctx.shadowColor = color; ctx.shadowBlur = body.star_type?.startsWith("H") ? 7 : 13;
-      ctx.globalAlpha = .96; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(projected.x, projected.y, radius, 0, ORRERY_TAU); ctx.fill();
-      ctx.shadowBlur = 0;
-      const light = ctx.createRadialGradient(projected.x - radius * .35, projected.y - radius * .38, 0, projected.x, projected.y, radius);
-      light.addColorStop(0, "rgba(255,255,255,.58)"); light.addColorStop(.26, "rgba(255,255,255,.16)"); light.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = light; ctx.fill();
-      ctx.globalAlpha = .34; ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(projected.x, projected.y, radius + 3, 0, ORRERY_TAU); ctx.stroke();
-    } else {
-      ctx.globalAlpha = .96; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(projected.x, projected.y, radius, 0, ORRERY_TAU); ctx.fill();
-      const shade = ctx.createRadialGradient(projected.x - radius * .42, projected.y - radius * .45, 0, projected.x, projected.y, radius * 1.12);
-      shade.addColorStop(0, "rgba(255,255,255,.24)"); shade.addColorStop(.46, "rgba(255,255,255,0)"); shade.addColorStop(1, "rgba(0,0,0,.56)");
-      ctx.fillStyle = shade; ctx.fill();
-      ctx.strokeStyle = color; ctx.globalAlpha = .72; ctx.lineWidth = .7; ctx.stroke();
-    }
-    if (body.terraformable || body.bio || body.geo) {
-      ctx.globalAlpha = body.bio ? .78 : .48;
-      ctx.strokeStyle = body.bio ? this.palette.green : body.terraformable ? this.palette.accent : this.palette.orange;
-      ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(projected.x, projected.y, radius + 4, -.25, body.bio ? 1.9 : 1.1); ctx.stroke();
-    }
-    if (body.landable) {
-      ctx.globalAlpha = .7; ctx.strokeStyle = this.palette.text; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(projected.x - radius - 3, projected.y + radius + 4); ctx.lineTo(projected.x, projected.y + radius + 7); ctx.lineTo(projected.x + radius + 3, projected.y + radius + 4); ctx.stroke();
-    }
-    if (targeted || selected || hovered) {
-      const reticle = radius + (targeted ? 10 : 7);
-      ctx.globalAlpha = targeted ? .95 : selected ? .82 : .55;
-      ctx.strokeStyle = targeted ? this.palette.yellow : selected ? this.palette.accent : this.palette.text;
-      ctx.lineWidth = targeted ? 1.6 : 1.1;
-      for (let corner = 0; corner < 4; corner += 1) {
-        const angle = corner * Math.PI / 2 + Math.PI / 4;
-        const x = projected.x + Math.cos(angle) * reticle, y = projected.y + Math.sin(angle) * reticle;
-        ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(0, 0); ctx.lineTo(0, 4); ctx.stroke(); ctx.restore();
-      }
-    }
-    ctx.restore();
-    this.hits.push({body, x: projected.x, y: projected.y, radius: Math.max(10, radius + 5), depth: projected.depth});
-  }
-
-  drawLabels(projectedBodies) {
-    if (!this.view.labels) return;
-    const ctx = this.ctx, boxes = [];
-    const dense = this.bodies.length > 18 && this.view.zoom < 1.28;
-    for (const {body, projected} of [...projectedBodies].sort((a, b) => b.projected.depth - a.projected.depth)) {
-      if (body.hidden) continue;
-      const important = body.kind === "star" || body.targeted || body.id === this.selected || body.bio || body.terraformable;
-      if (dense && !important) continue;
-      const name = `${orreryBodyIcon(body)} ${String(body.name || `Body ${body.body_id ?? "?"}`)}`;
-      const detail = `${body.is_moon ? "MOON" : body.kind.toUpperCase()} · ${String(body.class || "UNKNOWN").toUpperCase()}`;
-      ctx.font = "700 10px Consolas, monospace";
-      const width = Math.max(ctx.measureText(name).width, ctx.measureText(detail).width * .82) + 12;
-      const right = projected.x < this.width * .72;
-      const x = right ? projected.x + 12 : projected.x - width - 12;
-      const y = projected.y - 11;
-      const box = {x, y: y - 2, width, height: 27};
-      const overlaps = boxes.some((other) => box.x < other.x + other.width && box.x + box.width > other.x && box.y < other.y + other.height && box.y + box.height > other.y);
-      if (overlaps && !body.targeted && body.id !== this.selected) continue;
-      boxes.push(box);
-      ctx.save(); ctx.globalAlpha = .92; ctx.fillStyle = "rgba(3,9,13,.72)"; ctx.fillRect(box.x, box.y, box.width, box.height);
-      ctx.strokeStyle = body.targeted ? this.palette.yellow : body.id === this.selected ? this.palette.accent : this.palette.border; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(right ? projected.x + 5 : projected.x - 5, projected.y); ctx.lineTo(right ? x : x + width, projected.y); ctx.stroke();
-      ctx.fillStyle = body.targeted ? this.palette.yellow : this.palette.text; ctx.font = "700 10px Consolas, monospace"; ctx.fillText(name, x + 6, y + 8);
-      ctx.fillStyle = this.palette.dim; ctx.font = "8px Consolas, monospace"; ctx.fillText(detail, x + 6, y + 20); ctx.restore();
-    }
-  }
-
-  hitAt(x, y) {
-    return [...this.hits].reverse().find((hit) => Math.hypot(hit.x - x, hit.y - y) <= hit.radius);
-  }
-
-  select(id, {announce = true} = {}) {
-    this.selected = String(id); orrerySelectedBodyId = this.selected;
-    const body = this.byId.get(this.selected);
-    const detail = byId("orrery-detail");
-    if (detail) detail.innerHTML = orreryDetail(body);
-    this.render();
-    // Canvas picks tell the Explore survey board; board picks arrive silent.
-    if (announce) this.canvas.dispatchEvent(new CustomEvent("orrery-select", {bubbles: true, detail: {id: this.selected}}));
-  }
-
-  render() {
-    if (!this.width || !this.height || !this.ctx) return;
-    this.palette = this.readPalette();
-    const ctx = this.ctx;
-    ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0); ctx.clearRect(0, 0, this.width, this.height);
-    this.hits = [];
-    this.drawBackdrop();
-    if (this.view.orbits) {
-      for (const orbit of this.orbits) {
-        const active = orbit.body.id === this.selected || orbit.body.targeted;
-        this.line(orbit.points, active ? (orbit.body.targeted ? this.palette.yellow : this.palette.accent) : this.palette.orange,
-          orbit.body.hidden ? .11 : active ? .58 : orbit.body.source === "edsm" ? .14 : .25,
-          orbit.body.hidden ? .55 : active ? 1.25 : .75,
-          orbit.body.source === "edsm" || !orbit.body.orbit?.resolved);
-      }
-    }
-    const projectedBodies = this.bodies.map((body) => ({body, projected: this.project(this.world.get(body.id) || {x: 0, y: 0, z: 0})}));
-    projectedBodies.sort((a, b) => a.projected.depth - b.projected.depth).forEach(({body, projected}) => this.drawBody(body, projected));
-    this.drawLabels(projectedBodies);
-  }
-
-  dispose() {
-    this.saveView(); this.abort.abort(); this.resizeObserver?.disconnect();
-  }
-}
-
-function mountSystemOrrery(orrery = {}) {
-  orreryView?.dispose(); orreryView = null;
-  const canvas = byId("system-orrery-canvas");
-  if (!canvas || !(orrery.bodies || []).length) return;
-  orreryView = new EliteSystemOrrery(canvas, orrery.bodies || []);
-}
-
 // The value breakdown, the discovery record and the body's scan facts
 // (after EDDiscovery's scan panel, 5.5.3.1).
 function orreryValueBlock(body) {
@@ -2787,21 +2258,6 @@ function orreryDetail(body) {
   return `<div class="orrery-body-title"><i class="${escapeHtml(body.kind)}"></i><div><small>BODY ${escapeHtml(body.body_id ?? "—")} · ${body.is_moon ? "MOON" : escapeHtml(String(body.kind || "BODY").toUpperCase())}</small><h3>${escapeHtml(body.name)}</h3><span>${escapeHtml(body.class)}</span></div><b>${credits(body.value)}</b></div><div class="orrery-facts"><span>ORBIT <b>${period}</b></span><span>DISTANCE <b>${body.distance_ls === null ? "—" : `${numeric(Math.abs(body.distance_ls), 1)} LS`}</b></span>${body.kind === "star" ? "" : `<span>GRAVITY <b>${body.gravity_g === null ? "—" : `${numeric(body.gravity_g, 2)} G`}</b></span><span>ATMOSPHERE <b>${escapeHtml(body.atmosphere || "AIRLESS")}</b></span><span>BIOLOGY <b>${numeric(body.bio_complete)} / ${numeric(body.bio)}</b></span><span>GEOLOGY <b>${numeric(body.geo)}</b></span><span>MINING SITES <b>${numeric(body.mining)}</b></span>`}</div><div class="orrery-flags">${flags.map((flag) => `<em>${escapeHtml(flag)}</em>`).join("") || "<em>STANDARD SURVEY RECORD</em>"}</div>${materials ? `<div class="orrery-flags resource-composition">${materials}</div>` : ""}${orreryValueBlock(body)}${orreryFactsBlock(body)}`;
 }
 
-// Explore's survey board and the orrery share one selection. A board pick is
-// applied silently; a canvas pick announces itself back to the board.
-function selectOrreryBody(id) {
-  orrerySelectedBodyId = String(id || "");
-  if (orreryView?.byId.has(orrerySelectedBodyId)) {
-    orreryView.select(orrerySelectedBodyId, {announce: false});
-    return true;
-  }
-  return false;
-}
-
-function setOrrerySelection(id) {
-  orrerySelectedBodyId = String(id || "");
-}
-
 // The Planetary page lives in planetary.js (5.5.12).
 const PLANETARY_UI = {
   byId, escapeHtml, showToast, command,
@@ -2810,12 +2266,19 @@ const PLANETARY_UI = {
 };
 
 const EXPLORE_WORKSPACE_UI = Object.freeze({
-  byId, credits, escapeHtml, formatCredits, mountSystemOrrery, number, numeric,
-  orreryCanvas, orreryDetail, percentWidth, selectOrreryBody, setOrrerySelection, showPage, text,
+  byId, credits, escapeHtml, formatCredits, number, numeric,
+  orreryDetail, percentWidth, showPage, text,
   planetKind: surveyPlanetKind,
   profileKey: () => profileKey,
   command, showToast,
+  onViewChange: () => syncSystemMap(),
 });
+
+// The System Map is Explore & Survey's SYSTEM MAP tab (5.6.9): it draws only
+// on that tab, and warms up while Explore is open so the tab opens ready.
+function syncSystemMap() {
+  setSystemMapActive(currentPage === "explore" && exploreView() === "map", currentPage === "explore");
+}
 
 function renderProfileWorkspace(data) {
   const root = byId("profile-workspace");
@@ -3945,6 +3408,7 @@ function renderWorkspace(state) {
   }
   workspaceFingerprints[page] = fingerprint;
   const renderers = {
+    "system-map": renderSystemMap,
     "planet-materials": (data) => renderPlanetary(data, PLANETARY_UI),
     explore: (data) => {
       renderExploreWorkspace(data, EXPLORE_WORKSPACE_UI);
@@ -3983,8 +3447,7 @@ function renderDashboard(state) {
   const nextProfileKey = model.profile?.key || "default";
   if (nextProfileKey !== profileKey) {
     cancelPageLayout();
-    orreryView?.dispose();
-    orreryView = null;
+    resetSystemMap();
     profileKey = nextProfileKey;
     Object.keys(pageLayoutDefaults).forEach((page) => delete pageLayoutDefaults[page]);
     workspaceFingerprints = {};
@@ -3993,7 +3456,6 @@ function renderDashboard(state) {
     resetMining();
     resetExpeditions();
     resetPlanetary();
-    orrerySelectedBodyId = "";
     analyticsView = "trends";
     replaySelectedSessionIndex = 0;
     deckLayoutDraft = null;
@@ -4061,6 +3523,7 @@ function renderDashboard(state) {
     showPage(requestedPage.page);
   }
   renderAtlas(model);
+  if (model.system_map) renderSystemMap(model.system_map);
   const appVersion = model.app?.version || "DEV";
   text("rail-version", `v${appVersion} // WEBVIEW2`);
   text("boot-version", `v${appVersion}`);
@@ -4180,6 +3643,7 @@ async function eventLoop() {
 
 function showPage(name) {
   if (name === "ground") setPlanetaryView("ground");
+  if (name === "system-map") setExploreView("map", EXPLORE_WORKSPACE_UI);
   name = LEGACY_PAGE_REDIRECTS[name] || name;
   const page = document.querySelector(`[data-page-name="${CSS.escape(name)}"]`);
   if (!page) return;
@@ -4187,6 +3651,7 @@ function showPage(name) {
   if (name === "settings" && currentPage !== "settings") workspaceFingerprints.settings = "";
   currentPage = name;
   setHatchlingActive(name === "hatchling");
+  syncSystemMap();
   localStorage.setItem(`voidcompass.dashboard.page.${profileKey}`, name);
   document.querySelectorAll(".page").forEach((node) => node.classList.toggle("active", node === page));
   const navPage = navigationPage(name);
@@ -4447,6 +3912,12 @@ document.addEventListener("click", async (event) => {
   const surveyBodyButton = event.target.closest("#survey-body-list .survey-body-row");
   if (surveyBodyButton) {
     openExploreBody(surveyBodyButton, EXPLORE_WORKSPACE_UI);
+    return;
+  }
+  const systemMapButton = event.target.closest("[data-system-map-body]");
+  if (systemMapButton) {
+    event.preventDefault();
+    openSystemMap({system: systemMapButton.dataset.system || model.survey?.system || "", bodyId: systemMapButton.dataset.systemMapBody, name: systemMapButton.dataset.body || ""});
     return;
   }
   const pageButton = event.target.closest("[data-page]");
@@ -5343,3 +4814,5 @@ showPage("overview");
 // page-start.js watches for this: a page that never sets it is reported.
 window.__voidcompassDeckStarted = true;
 eventLoop();
+
+installSystemMap({showPage});

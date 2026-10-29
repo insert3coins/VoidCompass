@@ -468,6 +468,10 @@ class DashboardScanMixin:
         was_in_multicrew = bool(getattr(self, "current_in_multicrew", False))
         was_on_carrier_deck = self._navigation_on_carrier_deck()
         was_glide_mode = bool(getattr(self, "current_glide_mode", False))
+        was_fsd = (bool(getattr(self, "current_fsd_charging", False)),
+                   bool(getattr(self, "current_fsd_hyperdrive_charging", False)),
+                   bool(getattr(self, "current_fsd_jumping", False)),
+                   bool(getattr(self, "current_fsd_cooldown", False)))
         was_hud_flight_state = str(
             getattr(self, "hud_flight_state", "") or ""
         ).upper()
@@ -503,6 +507,7 @@ class DashboardScanMixin:
             bool(getattr(self, "current_suit_hot", False)),
             bool(getattr(self, "current_suit_very_cold", False)),
             bool(getattr(self, "current_suit_very_hot", False)),
+            tuple(getattr(self, "current_pips", None) or ()),
         )
         was_navigation_readiness = (
             bool(getattr(self, "current_fsd_mass_locked", False)),
@@ -637,6 +642,13 @@ class DashboardScanMixin:
                 )
                 if self.current_vehicle_name != "SRV":
                     self._last_surface_vehicle_name = self.current_vehicle_name
+        # The power distributor, in half pips (SYS, ENG, WEP); absent on foot.
+        pips = data.get("Pips")
+        self.current_pips = (
+            [max(0, min(8, int(value))) for value in pips]
+            if isinstance(pips, list) and len(pips) == 3 and all(isinstance(value, (int, float)) for value in pips)
+            else None
+        )
         flags2 = data.get("Flags2")
         if isinstance(flags2, int):
             self.current_status_flags2 = flags2
@@ -719,6 +731,9 @@ class DashboardScanMixin:
                         self.current_fuel_reservoir = float(fuel_reservoir)
                 except (TypeError, ValueError):
                     pass
+        observe_jump_clock = getattr(self, "_jump_clock_status", None)
+        if callable(observe_jump_clock):
+            observe_jump_clock(data, was_fsd)
         jump_phase = str(getattr(self, "_navigation_jump_phase", "") or "")
         set_jump_phase = getattr(self, "_set_navigation_jump_phase", None)
         if jump_phase in {"arrival", "carrier_arrival"}:
@@ -992,6 +1007,7 @@ class DashboardScanMixin:
             bool(getattr(self, "current_suit_hot", False)),
             bool(getattr(self, "current_suit_very_cold", False)),
             bool(getattr(self, "current_suit_very_hot", False)),
+            tuple(getattr(self, "current_pips", None) or ()),
         )
         if fuel_percent_changed:
             self._invalidate_exploration_intelligence()

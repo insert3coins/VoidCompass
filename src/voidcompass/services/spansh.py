@@ -815,6 +815,13 @@ def _dump_station(row, body=None):
             "body": body, "updateTime": market.get("updateTime") or row.get("updateTime"), "commodities": goods}
 
 
+def system_body_dump(system_name, id64=None):
+    """Full public architecture for the System Map; separate from market-only dumps."""
+    if id64 is None:
+        _name, id64 = system_id64(system_name)
+    return (_call("GET", f"dump/{int(id64)}", timeout=30) or {}).get("system") or {}
+
+
 def system_dump(id64):
     """Every station in a system with its whole market, in one request
     (``/api/dump/<id64>``): orbital stations at the top level, surface

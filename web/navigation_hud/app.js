@@ -216,10 +216,39 @@ function finite(value) {
   return value != null && value !== '' && Number.isFinite(Number(value));
 }
 
+// Timed rails (5.6.9): the jump, measured from the commander's own jumps (from
+// the charge to the arrival); the FSD cooldown, learned the same way; and a
+// carrier's departure, from the journal. Times are epoch ms.
+const JUMP_MOTIONS = new Set(['fsd_charge', 'jump', 'supercruise']);
+const COOLDOWN_MOTIONS = new Set(['fsd_cooldown']);
+const CARRIER_MOTIONS = new Set(['carrier_preparing', 'carrier_lockdown', 'carrier_transit']);
+const COUNT_FROM = 4;
+const CARRIER_LOCKDOWN_S = 200;
+
+function clockOf(state, field, motions) {
+  const clock = state[field];
+  return clock && typeof clock === 'object' && motions.has(String(state.motion || '')) ? clock : null;
+}
+const jumpClockOf = (state = {}) => clockOf(state, 'jump_clock', JUMP_MOTIONS);
+const cooldownClockOf = (state = {}) => clockOf(state, 'cooldown_clock', COOLDOWN_MOTIONS);
+const carrierClockOf = (state = {}) => clockOf(state, 'carrier_clock', CARRIER_MOTIONS);
+
+// The pad you were cleared to, in the hangar and walking that station.
+function landingPadOf(state = {}) {
+  const dynamics = state.dynamics || {}, pad = Number(dynamics.landing_pad) || 0;
+  const motion = String(state.motion || '');
+  const aboard = motion === 'docked' || (motion === 'on_foot' && ['hangar', 'concourse', 'carrier'].includes(dynamics.foot_place));
+  return pad > 0 && aboard ? pad : 0;
+}
+
 function instrumentFor(state = {}) {
   const category = String(state.category || 'flight');
   const motion = String(state.motion || 'flight');
   const dynamics = state.dynamics || {};
+  if (jumpClockOf(state)) return {kind: 'jump'};
+  if (cooldownClockOf(state)) return {kind: 'cooldown'};
+  if (carrierClockOf(state)) return {kind: 'carrier'};
+  if (landingPadOf(state)) return {kind: 'pad'};
   if (category === 'drive') return {kind: 'flow'};
   if (category === 'alert') return {kind: 'alert'};
   if (category === 'restrict') return {kind: 'lock'};
@@ -246,6 +275,7 @@ function formatAltitude(altitude) {
 
 function instrumentReadout(state, instrument) {
   const dynamics = state.dynamics || {};
+  if (instrument.kind === 'pad') return `PAD ${String(landingPadOf(state)).padStart(2, '0')}`;
   if (instrument.kind === 'flow') {
     if (dynamics.neutron_boost) {
       const boost = Number(dynamics.neutron_boost_value) || 0;
@@ -274,11 +304,135 @@ function instrumentReadout(state, instrument) {
   return '';
 }
 
+// A timed rail fills across its span on one CSS transition, and its readout
+// is re-read on a timer, each counted number popping in as GRAVITAS's
+// countdown does. Unmeasured, nothing is counted and the rail only breathes.
+const timedRail = {key: '', timer: 0, span: null, read: null};
+
+function jumpSpan(clock) {
+  if (clock.jumped) return clock.jump != null && clock.arrive > clock.jump ? [clock.jump, clock.arrive] : null;
+  const from = clock.press ?? clock.start;
+  return from != null && clock.exact && clock.jump > from ? [from, clock.jump] : null;
+}
+
+function jumpReading(clock, now) {
+  const left = clock.jump != null ? (clock.jump - now) / 1000 : null;
+  if (clock.jumped) return {text: clock.kind === 'supercruise' ? 'SUPERCRUISE' : 'WITCH SPACE'};
+  if (!clock.exact || left == null) return {text: 'FSD CHARGING'};
+  if (left > COUNT_FROM) return {text: 'FSD CHARGING', wait: (left - COUNT_FROM) * 1000};
+  if (left <= 0) return {text: 'ENGAGE'};
+  const count = Math.ceil(left);
+  return {text: `${clock.kind === 'supercruise' ? 'SUPERCRUISE' : 'JUMP'} IN ${count}`, count, wait: (left - (count - 1)) * 1000};
+}
+
+function cooldownReading(clock, now) {
+  if (!clock.exact || clock.ready == null) return {text: 'FSD COOLDOWN'};
+  const left = (clock.ready - now) / 1000;
+  if (left <= 0) return {text: 'FSD READY'};
+  const seconds = Math.ceil(left);
+  return {text: `FSD READY IN ${seconds}`, wait: (left - (seconds - 1)) * 1000};
+}
+
+function minutes(seconds) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function carrierReading(clock, now) {
+  const left = (clock.departure - now) / 1000;
+  if (left <= 0) return {text: 'CARRIER TRANSIT'};
+  const seconds = Math.ceil(left), wait = (left - (seconds - 1)) * 1000;
+  return {text: `${left > CARRIER_LOCKDOWN_S ? 'JUMP IN' : 'LOCKDOWN'} ${minutes(seconds)}`, wait, count: seconds <= 10 ? seconds : 0};
+}
+
+function timedRailFor(state, kind) {
+  if (kind === 'jump') {
+    const clock = jumpClockOf(state);
+    return {key: ['jump', clock.kind, clock.press, clock.start, clock.jump, clock.jumped, clock.arrive, clock.exact].join('|'),
+      span: jumpSpan(clock), read: (now) => jumpReading(clock, now)};
+  }
+  if (kind === 'cooldown') {
+    const clock = cooldownClockOf(state);
+    return {key: ['cooldown', clock.start, clock.ready, clock.exact].join('|'),
+      span: clock.exact && clock.ready > clock.start ? [clock.start, clock.ready] : null, read: (now) => cooldownReading(clock, now)};
+  }
+  const clock = carrierClockOf(state);
+  const span = clock.requested != null && clock.departure > Date.now() ? [clock.requested, clock.departure] : null;
+  return {key: ['carrier', clock.requested, clock.departure].join('|'), span, read: (now) => carrierReading(clock, now)};
+}
+
+function stopTimedRail() {
+  clearTimeout(timedRail.timer);
+  timedRail.timer = 0;
+  if (!timedRail.key) return;
+  Object.assign(timedRail, {key: '', span: null, read: null});
+  dom['instrument-fill'].style.transition = '';
+  dom.instrument.classList.remove('unmeasured', 'counting');
+  dom['instrument-readout'].classList.remove('count-pop');
+}
+
+// Reduced motion stops transitions, so the fill steps once a second instead.
+function steadyRail() {
+  return dom.hud.classList.contains('reduced-motion') || osMotionPreference.matches;
+}
+
+function railFill(span, now) {
+  const [from, to] = span;
+  return `scaleX(${Math.max(0, Math.min(1, (now - from) / (to - from))).toFixed(4)})`;
+}
+
+function renderTimedRail({key, span, read}) {
+  const fill = dom['instrument-fill'];
+  dom['instrument-marker'].hidden = true;
+  dom.instrument.classList.toggle('unmeasured', !span);
+  Object.assign(timedRail, {span, read});
+  if (key !== timedRail.key) {
+    timedRail.key = key;
+    const now = Date.now();
+    fill.style.transition = 'none';
+    fill.style.transform = span ? railFill(span, now) : 'scaleX(1)';
+    if (span && !steadyRail()) {
+      void fill.offsetWidth;
+      fill.style.transition = `transform ${Math.max(0, span[1] - now)}ms linear`;
+      fill.style.transform = 'scaleX(1)';
+    }
+  }
+  tickTimedRail();
+}
+
+function tickTimedRail() {
+  clearTimeout(timedRail.timer);
+  timedRail.timer = 0;
+  const {span, read} = timedRail;
+  if (!read) return;
+  const now = Date.now(), readout = dom['instrument-readout'], steady = span && steadyRail();
+  if (steady) dom['instrument-fill'].style.transform = railFill(span, now);
+  let {text, wait = 0, count = 0} = read(now);
+  dom.instrument.classList.toggle('counting', count > 0);
+  if (readout.textContent !== text) {
+    readout.textContent = text;
+    readout.classList.remove('count-pop');
+    if (count) {
+      void readout.offsetWidth;
+      readout.classList.add('count-pop');
+    }
+  }
+  if (steady && now < span[1]) wait = wait > 0 ? Math.min(wait, 1000) : 1000;
+  if (wait > 0) timedRail.timer = setTimeout(tickTimedRail, wait + 5);
+}
+
 function renderInstrument(state) {
   const instrument = instrumentFor(state);
   const host = dom.instrument;
   const dynamics = state.dynamics || {};
   host.dataset.instrument = instrument.kind;
+  if (['jump', 'cooldown', 'carrier'].includes(instrument.kind)) {
+    delete host.dataset.vertical;
+    host.classList.remove('supercharged');
+    renderTimedRail(timedRailFor(state, instrument.kind));
+    host.classList.add('live');
+    return instrument;
+  }
+  stopTimedRail();
   host.classList.toggle('supercharged', instrument.kind === 'flow'
     && Boolean(dynamics.neutron_boost || dynamics.fsd_injection));
   let fill = 0;
@@ -599,6 +753,13 @@ function renderScene(data, theme, tone, vehicle, reducedMotion, energy) {
     // the hologram flies the ship they are actually in.
     shipKey: window.VoidCompassShipCatalog?.resolveShip(state.vehicle || {})?.key || '',
     dynamics: state.dynamics || {},
+    jumpClock: jumpClockOf(state),
+    cooldownClock: cooldownClockOf(state),
+    carrierClock: carrierClockOf(state),
+    // Your locked target's own hull, once the scanner has named it (5.6.9).
+    targetShipKey: state.dynamics?.target?.symbol
+      ? window.VoidCompassShipCatalog?.resolveShip({ship_symbol: state.dynamics.target.symbol, ship_type: state.dynamics.target.symbol})?.key || ''
+      : '',
     energy,
     reduced: reducedMotion,
     // Hologram (Overlay Studio): full, still or off.

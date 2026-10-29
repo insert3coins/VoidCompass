@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class CommandDeckConsolidation548Tests(unittest.TestCase):
     def test_release_version_comparison_handles_elite_style_patch_versions(self):
-        self.assertEqual(APP_VERSION, "5.6.8")
+        self.assertEqual(APP_VERSION, "5.6.9")
         self.assertTrue(release_is_newer("v5.4.8.2", "5.4.8.1"))
         self.assertTrue(release_is_newer("5.4.7.1", "5.4.7"))
         self.assertTrue(release_is_newer("5.4.10", "5.4.9.9"))
@@ -29,7 +29,8 @@ class CommandDeckConsolidation548Tests(unittest.TestCase):
         # 5.5.4 Tools, and the Exploration Archive became Explore & Survey's Archive tab;
         # 5.5.10 Void Wrapped, the Ship Workshop gone, and each heading's pages
         # in alphabetical order ("The" aside); 5.6.1 Expeditions; 5.6.3 Games;
-        # 5.6.7 gives Hatchling its own place after Games.
+        # 5.6.7 gives Hatchling its own place after Games; the 5.6.9 System Map
+        # is a tab of Explore & Survey, not a page of its own.
         self.assertEqual(len(labels), 25)
         self.assertEqual(labels, [
             "Dashboard", "Expeditions", "Explore & Survey", "Galactic Atlas", "Planetary Operations",

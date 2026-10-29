@@ -149,7 +149,6 @@ class ExploreSurveyVisualTests(unittest.TestCase):
                       model.workspace = {page: 'explore', ready: false, error};
                       renderWorkspace(model);
                     },
-                    orreryPick(id) { orreryView.select(id); },
                   };
                 """
                 route.fulfill(content_type="application/javascript", body=source)
@@ -180,7 +179,7 @@ class ExploreSurveyVisualTests(unittest.TestCase):
     def test_every_view_fits_the_window_with_its_controls_on_screen(self):
         controls = {
             "system": ["#body-workboard", '#body-workboard .body-row.next [data-ws-op="survey_pin"]',
-                       '[data-explore-filter="todo"]', "#system-orrery-canvas", "#orrery-detail",
+                       '[data-explore-filter="todo"]', "#explore-tab-map",
                        "#explore-survey-reset", "#explore-copy-next", '[data-explore-sort="value"]'],
             "prospects": ['.return-later-entry [data-ws-op="return_later_waypoint"]',
                           "#scout-reference", '[data-ws-op="scout_search"]', ".scout-codex-row"],
@@ -213,16 +212,18 @@ class ExploreSurveyVisualTests(unittest.TestCase):
 
     def test_views_switch_by_click_and_keyboard_and_are_remembered(self):
         self.open_explore()
-        tabs = {view: self.page.locator(f"#explore-tab-{view}") for view in ("system", "prospects", "archive")}
+        tabs = {view: self.page.locator(f"#explore-tab-{view}") for view in ("system", "map", "prospects", "archive")}
         panels = {view: self.page.locator(f"#explore-view-{view}") for view in tabs}
         self.assertEqual(tabs["system"].get_attribute("aria-selected"), "true")
         self.assertTrue(panels["system"].is_visible())
         tabs["prospects"].click()
-        self.assertEqual([panels[view].is_visible() for view in tabs], [False, True, False])
+        self.assertEqual([panels[view].is_visible() for view in tabs], [False, False, True, False])
         self.assertEqual(tabs["prospects"].get_attribute("aria-selected"), "true")
         self.assertEqual(tabs["prospects"].get_attribute("tabindex"), "0")
         tabs["system"].click()
         tabs["system"].press("ArrowRight")
+        self.assertTrue(panels["map"].is_visible(), "5.6.9: the System Map sits beside the survey")
+        tabs["map"].press("ArrowRight")
         self.assertTrue(panels["prospects"].is_visible())
         self.assertTrue(tabs["prospects"].evaluate("node => node === document.activeElement"))
         tabs["prospects"].press("Home")
@@ -309,22 +310,23 @@ class ExploreSurveyVisualTests(unittest.TestCase):
         self.assertIn("4.2", self.page.locator("#intel-carto").inner_text())
         self.assertFalse(self.errors, self.errors)
 
-    def test_board_and_orrery_share_one_selection(self):
+    def test_board_keeps_body_facts_and_links_its_selection_to_the_system_map(self):
         signal_only = {"body_id": 7, "name": f"{SYSTEM} C 1", "planet_class": "", "bio_count": 2,
                        "signal_only": True}
         self.open_explore(snapshot_state([signal_only]))
-        detail = self.page.locator("#orrery-detail")
-        # With nothing picked, the orrery opens on the recommended next body.
-        self.assertIn(f"{SYSTEM} B 2", detail.inner_text())
+        # 5.6.9: a picked body's details open in its own row; the System Map is a tab.
+        detail = self.page.locator("#body-workboard .body-more")
+        self.assertEqual(self.page.locator("#explore-orrery").count(), 0)
         self.page.locator('#body-workboard .body-row[data-body-id="4"] .body-select').click()
         selected = self.page.locator("#body-workboard .body-row.selected")
         self.assertEqual(selected.get_attribute("data-body-id"), "4")
         self.assertEqual(selected.get_attribute("aria-current"), "true")
         self.assertIn(f"{SYSTEM} B 1", detail.inner_text())
         self.assertIn("TERRAFORMABLE", detail.inner_text())
-        self.page.evaluate("() => window.__exploreHarness.orreryPick('1')")
+        self.page.locator('#body-workboard .body-row[data-body-id="1"] .body-select').click()
         self.assertEqual(selected.get_attribute("data-body-id"), "1")
         self.assertIn("Polonium", detail.inner_text())
+        self.assertEqual(self.page.locator('.body-more-actions [data-system-map-body]').get_attribute('data-system-map-body'), '1')
         self.page.locator('#body-workboard .body-row[data-body-id="7"] .body-select').click()
         self.assertIn("NOT YET IN THE ORRERY", detail.inner_text())
         # A live refresh keeps the pick on both sides.
@@ -337,12 +339,11 @@ class ExploreSurveyVisualTests(unittest.TestCase):
     def test_elite_target_lock_takes_the_selection(self):
         target = {"name": f"{SYSTEM} A 2", "body": 2, "system": SYSTEM}
         self.open_explore(data=workspace_data(target=target))
-        self.assertIn(f"{SYSTEM} A 2", self.page.locator("#explore-orrery .cartography-target-lock").inner_text())
         row = self.page.locator('#body-workboard .body-row[data-body-id="2"]')
         self.assertIn("status-targeted", row.get_attribute("class"))
         self.assertEqual(self.board_ids()[0], "2")
         self.assertEqual(self.page.locator("#body-workboard .body-row.selected").get_attribute("data-body-id"), "2")
-        self.assertIn(f"{SYSTEM} A 2", self.page.locator("#orrery-detail").inner_text())
+        self.assertIn(f"{SYSTEM} A 2", self.page.locator("#body-workboard .body-more").inner_text())
         self.assertFalse(self.errors, self.errors)
 
     def test_refresh_keeps_list_scroll_and_an_error_panel_recovers(self):

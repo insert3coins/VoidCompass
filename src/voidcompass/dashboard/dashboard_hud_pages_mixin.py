@@ -34,7 +34,11 @@ class DashboardHudPagesMixin:
         if startup_replay or not isinstance(raw, dict):
             return
         if event == "ShipTargeted":
-            self._hud_target = hud_pages.read_target(raw, getattr(self, "_hud_target", None))
+            before = getattr(self, "_hud_target", None)
+            self._hud_target = hud_pages.read_target(raw, before)
+            # The combat scene flies your target's own hull (5.6.9).
+            if self._hud_target != before and callable(getattr(self, "update_hud", None)):
+                self.update_hud()
         elif event in {"FSDJump", "SupercruiseEntry", "Docked", "Died", "LoadGame"}:
             self._hud_target = None
         elif event == "ProspectedAsteroid":

@@ -750,6 +750,23 @@ class TacticalHUD:
         }
 
     @staticmethod
+    def _carrier_clock(travel):
+        """The carrier's departure for the HUD's rail, in epoch ms (5.6.9)."""
+        if str(travel.get("state") or "") not in {"carrier_preparing", "carrier_lockdown", "carrier_transit"}:
+            return None
+        schedule = travel.get("carrier_schedule") or {}
+        try:
+            departure = int(float(schedule["departure_epoch"]) * 1000)
+        except (KeyError, TypeError, ValueError):
+            return None
+        try:
+            requested = int(float(schedule.get("requested_epoch")) * 1000)
+        except (TypeError, ValueError):
+            requested = None
+        return {"departure": departure, "requested": requested if requested and requested < departure else None,
+                "squadron": schedule.get("carrier_type") == "SquadronCarrier"}
+
+    @staticmethod
     def _navigation_motion_profile(state_text):
         """Map journal/UI states to small, visually distinct motion families."""
         state = str(state_text or "FLIGHT").upper()
@@ -1313,6 +1330,11 @@ class TacticalHUD:
             "label": state_text,
             "color": state_color,
             "motion": motion,
+            # 5.6.9: when the jump will happen, from the commander's own jumps;
+            # when the drive will be ready again; when the carrier leaves.
+            "jump_clock": (nav_context.get("fsd_readiness") or {}).get("clock"),
+            "cooldown_clock": (nav_context.get("fsd_readiness") or {}).get("cooldown_clock"),
+            "carrier_clock": self._carrier_clock(nav_context.get("fsd_readiness") or {}),
             "category": self._navigation_category(state_text, motion),
             "vehicle": {
                 "ship_symbol": str(nav_context.get("ship_symbol") or "").casefold(),
@@ -1371,6 +1393,12 @@ class TacticalHUD:
                     (nav_context.get("fsd_injection") or {}).get("percent"), 0.0,
                 ),
                 "route_active": str(nav_context.get("route_mode") or "NO ROUTE") != "NO ROUTE",
+                # 5.6.9: the pad you were cleared to, the power distributor,
+                # your locked target and the body you're at, as the game has them.
+                "landing_pad": nav_context.get("landing_pad"),
+                "pips": nav_context.get("pips"),
+                "target": nav_context.get("combat_target"),
+                "body": nav_context.get("body_form"),
             },
         }
 

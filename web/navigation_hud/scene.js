@@ -171,6 +171,65 @@ import {ThreeSurface} from './scene-three.js';
   };
   const periodOf = (key) => PERIODS[key] || (key.startsWith('vehicle_') ? 1.3 : 1.45);
 
+  // The jump clock (5.6.9): when the charge began and when the jump will
+  // happen, in epoch ms, measured from the commander's own jumps. The last
+  // seconds count down; each one lands as a beat in the scene.
+  const COUNT_FROM = 4;
+  const TARGET_SCENES = new Set(['combat', 'heavy_combat', 'interdiction', 'interdicted']);
+  const BODY_SCENES = new Set(['orbital_approach', 'orbital_departure', 'glide', 'surface_approach', 'surface_hold',
+    'surface_departure', 'landed', 'dss']);
+  function jumpOf(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const time = (value) => (value == null || !Number.isFinite(Number(value)) ? null : Number(value));
+    return {kind: raw.kind === 'supercruise' ? 'supercruise' : 'hyperspace', press: time(raw.press),
+      start: time(raw.start), at: time(raw.jump), jumped: Boolean(raw.jumped), arrive: time(raw.arrive)};
+  }
+
+  // How far the drive is through its charge, 0 to 1. Unmeasured, it builds
+  // without ever claiming the jump.
+  function chargeOf(jump, now, age) {
+    if (!jump) return 0;
+    if (jump.jumped) return 1;
+    const from = jump.press ?? jump.start;
+    if (from != null && jump.at != null && jump.at > from) return clamp((now - from) / (jump.at - from));
+    return .85 * (1 - Math.exp(-age / 5));
+  }
+
+  // The cooldown and a carrier's departure (5.6.9): how far along, 0 to 1,
+  // or -1 when unmeasured.
+  function cooldownOf(raw) {
+    const start = Number(raw?.start), ready = Number(raw?.ready);
+    return raw && Number.isFinite(start) && Number.isFinite(ready) && ready > start ? {from: start, to: ready} : raw ? {from: null, to: null} : null;
+  }
+  function carrierOf(raw) {
+    const departure = Number(raw?.departure), requested = Number(raw?.requested);
+    return raw && Number.isFinite(departure) ? {from: Number.isFinite(requested) && requested < departure ? requested : null, to: departure} : null;
+  }
+  const spanDone = (span, now) => (span?.from != null && span.to > span.from ? clamp((now - span.from) / (span.to - span.from)) : -1);
+
+  // Through the tunnel to the arrival, 0 to 1, or -1 when unknown.
+  function travelOf(jump, now) {
+    if (!jump?.jumped || jump.at == null || jump.arrive == null || jump.arrive <= jump.at) return -1;
+    return clamp((now - jump.at) / (jump.arrive - jump.at));
+  }
+
+  // GRAVITAS's way: the clock only sets targets, and each frame eases toward
+  // them, so a re-anchored jump glides rather than snaps.
+  function paceJump(state, dt, settled) {
+    const now = Date.now(), jump = state.jump;
+    const charge = chargeOf(jump, now, state.age);
+    state.charge = settled ? charge : state.charge + (charge - state.charge) * (1 - Math.exp(-dt / .35));
+    state.travel = travelOf(jump, now);
+    const left = jump && !jump.jumped && jump.at != null ? (jump.at - now) / 1000 : null;
+    const tick = left != null && left > 0 && left <= COUNT_FROM ? Math.ceil(left) : 0;
+    if (tick && tick !== state.tick && !settled) state.beat = 1;
+    state.tick = tick;
+    state.engage = left != null && left <= 0 ? 1 : 0;
+    state.beat = settled ? 0 : state.beat * Math.exp(-dt / .18);
+    state.cool = spanDone(state.cooling, now);
+    state.depart = spanDone(state.carrier, now);
+  }
+
   function dynamicsOf(raw) {
     const source = raw && typeof raw === 'object' ? raw : {};
     const number = (value, fallback, low, high) => {
@@ -198,6 +257,21 @@ import {ThreeSurface} from './scene-three.js';
       neutronBoostValue: number(source.neutron_boost_value, 0, 0, 10),
       fsdInjection: Boolean(source.fsd_injection),
       fsdInjectionPercent: number(source.fsd_injection_percent, 0, 0, 100),
+      // 5.6.9: the power distributor in half pips (SYS, ENG, WEP), your locked
+      // target as far as it's scanned, and the body you're at as scanned.
+      pips: Array.isArray(source.pips) && source.pips.length === 3 ? source.pips.map((value) => number(value, 0, 0, 8)) : null,
+      target: source.target && typeof source.target === 'object' ? {
+        stage: number(source.target.stage, 0, 0, 3),
+        shields: source.target.shields == null ? null : number(source.target.shields, 0, 0, 100),
+        hull: source.target.hull == null ? null : number(source.target.hull, 0, 0, 100),
+        wanted: Boolean(source.target.wanted),
+      } : null,
+      body: source.body && typeof source.body === 'object' ? {
+        kind: ['rock', 'ice', 'metal', 'gas', 'water', 'earth', 'ammonia'].includes(source.body.kind) ? source.body.kind : 'rock',
+        rings: number(source.body.rings, 0, 0, 6),
+        atmosphere: Boolean(source.body.atmosphere),
+        radius: number(source.body.radius_km, 0, 0, 200000),
+      } : null,
       // Where you're docked or on foot (5.5.17): the scene follows.
       dockPlace: ['orbital', 'outpost', 'carrier', 'surface'].includes(source.dock_place) ? source.dock_place : 'orbital',
       footPlace: ['planet', 'concourse', 'hangar', 'carrier'].includes(source.foot_place) ? source.foot_place : 'planet',
@@ -341,6 +415,7 @@ import {ThreeSurface} from './scene-three.js';
       if (!state) return;
       Object.assign(state, {p: STILL_PHASE, terrain: STILL_PHASE, age: 30});
       Object.assign(state.d, state.target);
+      paceJump(state, 0, true);
     }
 
     makeState(input) {
@@ -349,6 +424,9 @@ import {ThreeSurface} from './scene-three.js';
       const shipKey = String(input.shipKey || '').toLowerCase();
       const key = sceneKey(input.motion, label, vehicleKey);
       const d = dynamicsOf(input.dynamics);
+      // The target's hull and the body's form change what a scene builds.
+      const targetKey = TARGET_SCENES.has(key) ? String(input.targetShipKey || '').toLowerCase() : '';
+      const body = BODY_SCENES.has(key) && d.body ? `${d.body.kind}${d.body.rings}${d.body.atmosphere ? 'a' : ''}${Math.round(Math.log10(d.body.radius + 1) * 4)}` : '';
       const palette = {...this.palette, ...(input.palette || {})};
       return {
         key,
@@ -356,7 +434,8 @@ import {ThreeSurface} from './scene-three.js';
         vehicleKey,
         shipKey,
         aura: auraOf(key),
-        identity: `${key}|${label}|${vehicleKey}|${shipKey}|${boostTier(d)}|${key === 'docked' ? d.dockPlace : ['on_foot','suit_hazard'].includes(key) ? d.footPlace : ''}`,
+        identity: `${key}|${label}|${vehicleKey}|${shipKey}|${boostTier(d)}|${key === 'docked' ? d.dockPlace : ['on_foot','suit_hazard'].includes(key) ? d.footPlace : ''}|${targetKey}|${body}`,
+        targetKey,
         c: palette.state || palette.hud,
         d,
         target: {altitude: d.altitude, vertical: d.vertical, gravity: d.gravity},
@@ -367,6 +446,16 @@ import {ThreeSurface} from './scene-three.js';
         // Silent running seals the ship's emissions; its hologram dims too.
         halo: d.silentRunning ? .35 : 1,
         level: input.quiet ? .8 : 1,
+        jump: jumpOf(input.jumpClock),
+        cooling: cooldownOf(input.cooldownClock),
+        carrier: carrierOf(input.carrierClock),
+        cool: -1,
+        depart: -1,
+        charge: 0,
+        travel: -1,
+        tick: 0,
+        beat: 0,
+        engage: 0,
         p: 0,
         terrain: 0,
         age: 0,
@@ -421,6 +510,9 @@ import {ThreeSurface} from './scene-three.js';
       state.targetFamily = next.targetFamily;
       state.halo = next.halo;
       state.level = next.level;
+      state.jump = next.jump;
+      state.cooling = next.cooling;
+      state.carrier = next.carrier;
       for (const [field, value] of Object.entries(next.d)) {
         if (field in state.target) state.target[field] = value;
         else state.d[field] = value;
@@ -452,6 +544,7 @@ import {ThreeSurface} from './scene-three.js';
           const target = state.target[field], old = state.d[field];
           state.d[field] = field === 'altitude' && (old < 0 || target < 0) ? target : old + (target - old) * blend;
         }
+        paceJump(state, dt, false);
         const rate = this.energy / periodOf(state.key);
         state.p += dt * rate;
         state.terrain += dt * rate * (.65 + clamp(Math.abs(state.d.vertical) / 160));
@@ -524,6 +617,7 @@ import {ThreeSurface} from './scene-three.js';
       const saved = {p: state.p, terrain: state.terrain, age: state.age};
       Object.assign(state, {p: STILL_PHASE, terrain: STILL_PHASE, age: 30});
       Object.assign(state.d, state.target);
+      paceJump(state, 0, true);
       this.draw(performance.now());
       Object.assign(state, saved);
     }

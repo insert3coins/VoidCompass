@@ -80,8 +80,9 @@
 .explore-fss > i { grid-area: bar; height: 5px; margin-top: 3px; overflow: hidden; border: 1px solid var(--border-soft); background: var(--inset); }
 .explore-fss > i > em { display: block; width: 0; height: 100%; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent), var(--accent)); box-shadow: 0 0 8px var(--accent); transition: width .4s ease; }
 
-/* System view: survey board beside the live orrery. */
-.explore-system-grid { flex: 1 1 auto; min-height: 320px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, 1fr); gap: 12px; }
+/* System view: the survey board, full width; the System Map has its own tab (5.6.9). */
+.explore-system-grid { flex: 1 1 auto; min-height: 320px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+#explore-workspace .explore-map-view { min-height: 600px; }
 .explore-board, .explore-instrument { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); background: var(--panel); }
 .explore-board { border-top: 2px solid var(--orange); background: linear-gradient(180deg, color-mix(in srgb, var(--orange) 5%, var(--panel)), var(--panel) 110px); }
 .explore-instrument { border-top: 2px solid var(--accent); }
@@ -160,9 +161,6 @@
 .explore-board .body-row.in-view .bridge-planet-sphere::before,
 .explore-board .body-row.in-view .bridge-planet-ring { animation-play-state: running; }
 
-#explore-orrery .cartography-target-lock { flex: 0 0 auto; margin: 8px 10px 0; }
-#explore-orrery .orrery-stage, #explore-orrery .orrery-empty { flex: 1 1 auto; height: auto; min-height: 180px; }
-#explore-orrery .orrery-detail { flex: 0 1 auto; min-height: min(120px, 40%); max-height: 55%; overflow: auto; padding: 10px 13px; scrollbar-width: thin; }
 
 .explore-columns { flex: 1 1 auto; min-height: 0; display: grid; gap: 12px; }
 /* Minimum working heights: on a very short window the page scrolls a little
@@ -303,8 +301,7 @@
   .explore-stack { grid-template-rows: auto auto; }
   .explore-board-list { max-height: 470px; }
   .explore-card-body, .return-later-entries, .scout-results { max-height: 420px; }
-  #explore-orrery .orrery-stage, #explore-orrery .orrery-empty { min-height: 380px; }
-  .explore-views { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .explore-views { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {

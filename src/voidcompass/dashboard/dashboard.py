@@ -1295,6 +1295,8 @@ class MainDashboard(
         self._navigation_jump_phase_started = 0.0
         self._navigation_selected_star = None
         self._navigation_docking_state = None
+        self._navigation_pad = None
+        self.current_pips = None
         self.neutron_boost_armed = False
         self.neutron_boost_value = None
         self.fsd_injection_armed = False
@@ -2506,6 +2508,8 @@ class MainDashboard(
         self._navigation_jump_phase_started = 0.0
         self._navigation_selected_star = None
         self._navigation_docking_state = None
+        self._navigation_pad = None
+        self.current_pips = None
         self._navigation_transition_job = None
         self.neutron_boost_armed = False
         self.neutron_boost_value = None
@@ -4805,10 +4809,17 @@ class MainDashboard(
             # Do not resurrect a historic transit when launching the application.
             if remaining <= -180 and current_phase != "carrier_transit":
                 return False
+            requested = None
+            try:
+                requested = datetime.fromisoformat(
+                    str(carrier.get("jump_requested_time") or "").replace("Z", "+00:00")).timestamp()
+            except (TypeError, ValueError):
+                pass
             self._navigation_carrier_schedule = {
                 "carrier_id": carrier.get("carrier_id"),
                 "carrier_type": carrier.get("carrier_type"),
                 "departure_epoch": departure.timestamp(),
+                "requested_epoch": requested,
                 "remaining_seconds": max(0, int(math.ceil(remaining))),
             }
             phase = "carrier_transit" if remaining <= 0 else "carrier_lockdown" if remaining <= 200 else "carrier_preparing"
@@ -6152,6 +6163,11 @@ class MainDashboard(
             "ship_config": ship_config,
             "suit_status": suit_status,
             "docking_state": dict(getattr(self, "_navigation_docking_state", None) or {}),
+            # 5.6.9: what the scenes draw from the game itself.
+            "landing_pad": (getattr(self, "_navigation_pad", None) or {}).get("pad"),
+            "combat_target": self._navigation_combat_target(),
+            "body_form": self._navigation_body_form(),
+            "pips": list(getattr(self, "current_pips", None) or []) or None,
             "fsd_readiness": fsd_readiness,
             "local_target": local_target,
             "galactic_vector": galactic_vector,
@@ -6379,12 +6395,17 @@ class MainDashboard(
                 "station": station,
                 "pad": pad,
             }
+            # 5.6.9: kept past Docked, so the hangar and the concourse know it.
+            self._navigation_pad = {"pad": pad, "station": station} if pad is not None else None
         elif event in {
                 "DockingCancelled", "DockingDenied", "DockingTimeout",
                 "Docked", "Undocked", "SupercruiseEntry", "StartJump",
                 "FSDJump", "CarrierJump", "Location", "LoadGame",
                 "Shutdown", "Died", "Resurrect"}:
             self._navigation_docking_state = None
+            # A carrier jumping with you aboard leaves you on the same pad.
+            if event not in {"Docked", "CarrierJump"}:
+                self._navigation_pad = None
 
     def _observe_navigation_hud_event(self, event, raw, data, startup_replay=False):
         """Publish one compact, live-only event pulse to the Navigation HUD."""
@@ -6405,6 +6426,9 @@ class MainDashboard(
             # presentation below the top instrument and in Survey Operations.
             # Do not resurrect the retired green survey channel as a short
             # journal pulse after the state-owned animation takes over.
+            return False
+        if event == "FSDTarget" and self._navigation_jump_retarget():
+            # 5.6.9: Elite targets the route's next hop itself, mid-jump.
             return False
         if event in {"Liftoff", "Touchdown"}:
             normalised = data if isinstance(data, dict) else {}
@@ -6868,6 +6892,7 @@ class MainDashboard(
             self.current_fsd_hyperdrive_charging = False
             if startup_replay:
                 return self._clear_navigation_jump_phase(refresh=False)
+            self._navigation_last_arrival = time.monotonic()
             target = raw.get("StarSystem") or data.get("star_system")
             return self._set_navigation_jump_phase("arrival", target=target)
         elif event == "CarrierLocation" and not startup_replay:
@@ -7049,6 +7074,54 @@ class MainDashboard(
             self.update_hud()
         return True
 
+    def _navigation_combat_target(self):
+        """Your locked target, as far as your scanner has got (5.6.9)."""
+        target = getattr(self, "_hud_target", None) or {}
+        if not target.get("symbol"):
+            return None
+        legal = str(target.get("legal_status") or "").upper()
+        return {
+            "symbol": str(target["symbol"]), "stage": int(target.get("stage") or 0),
+            "shields": target.get("shields"), "hull": target.get("hull"),
+            "wanted": any(word in legal for word in ("WANTED", "ENEMY", "HOSTILE", "WARRANT", "HUNTER")),
+        }
+
+    def _navigation_body_form(self):
+        """The body you're at, as your scan has it: what kind of world, rings,
+        an atmosphere, its size (5.6.9). None until it has been scanned."""
+        body_id = self._normalize_body_id(getattr(self, "current_body_id", None))
+        by_id = getattr(self, "scan_items_by_id", None) or {}
+        row = by_id.get(body_id) or by_id.get(str(body_id)) if body_id is not None else None
+        name = str(getattr(self, "current_body_name", "") or "").casefold()
+        if row is None and name:
+            row = next((item for item in getattr(self, "scan_items", None) or []
+                        if name in {str(item.get("name") or "").casefold(), str(item.get("full_name") or "").casefold()}), None)
+        planet_class = str((row or {}).get("planet_class") or "").casefold()
+        if not planet_class:
+            return None
+        kind = ("gas" if "giant" in planet_class else "ice" if "icy" in planet_class or "ice" in planet_class
+                else "metal" if "metal" in planet_class else "water" if "water" in planet_class
+                else "earth" if "earth" in planet_class else "ammonia" if "ammonia" in planet_class else "rock")
+        atmosphere = str(row.get("atmosphere_type") or row.get("atmosphere") or "").strip().casefold()
+        try:
+            radius_km = round(float(row.get("radius") or 0) / 1000.0)
+        except (TypeError, ValueError):
+            radius_km = 0
+        return {
+            "kind": kind, "rings": len(row.get("rings") or []), "radius_km": radius_km,
+            "atmosphere": kind == "gas" or atmosphere not in {"", "none", "no atmosphere"},
+        }
+
+    # How long after FSDJump a system target counts as the route's own.
+    _JUMP_RETARGET_S = 15.0
+
+    def _navigation_jump_retarget(self):
+        """A jump under way or just ended: system targets now are Elite's."""
+        if str(getattr(self, "_navigation_jump_phase", "") or "") in {"charging", "hyperspace", "arrival"}:
+            return True
+        arrived = float(getattr(self, "_navigation_last_arrival", 0.0) or 0.0)
+        return bool(arrived) and time.monotonic() - arrived < self._JUMP_RETARGET_S
+
     def _observe_navigation_target_transition(self, previous, current):
         """Turn Status Destination changes into one restrained acquisition pulse."""
         previous = previous if isinstance(previous, dict) else {}
@@ -7062,9 +7135,14 @@ class MainDashboard(
         if not current or not name:
             return self._publish_navigation_transient(
                 "target_clear", "TARGET CLEARED", "muted", 1.0, 48,
-            ) if previous else False
+            ) if previous and not self._navigation_jump_retarget() else False
         body = current.get("Body")
         system = current.get("System")
+        if body in (None, 0, "0") and self._navigation_jump_retarget():
+            # 5.6.9: on a route Elite targets the next system itself as the
+            # jump ends (and clears it at the last one); that is not the
+            # commander locking a target, so it plays no SYSTEM TARGET.
+            return False
         key = name.casefold()
         if body not in (None, 0, "0"):
             if any(word in key for word in ("signal", "beacon", "anomaly", "phenomena")):
@@ -7246,6 +7324,9 @@ class MainDashboard(
             "local_space_name": str(
                 getattr(self, "current_local_space_name", "") or ""
             ),
+            # 5.6.9: the jump's measured moments, for the HUD's countdown.
+            "clock": self._jump_clock_view() if hasattr(self, "_jump_clock_view") else None,
+            "cooldown_clock": self._jump_clock_cooldown_view() if hasattr(self, "_jump_clock_cooldown_view") else None,
         }
 
     def _navigation_local_target_context(self, next_system=None):
@@ -8134,6 +8215,7 @@ class MainDashboard(
         self._jump_info_observe(
             ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
         )
+        self._jump_clock_event(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
         self._observe_navigation_jump_event(
             ev,
             raw if isinstance(raw, dict) else d,

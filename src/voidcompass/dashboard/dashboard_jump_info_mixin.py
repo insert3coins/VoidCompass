@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 
+from voidcompass.dashboard.jump_clock import JumpClock
 from voidcompass.exploration.galactic_regions import find_region
 from voidcompass.overlays.jump_info_hud import build_jump_info_model, linger_seconds
 
@@ -106,3 +107,76 @@ class DashboardJumpInfoMixin:
         if hud.lingering and phase in {"", "arrival"}:
             return False
         return hud.clear()
+
+    # ------------------------------------------------------------ jump clock
+    # 5.6.9: the Navigation HUD counts down to the real jump, timed from the
+    # commander's own jumps (jump_clock.py).
+    def _jump_clock(self):
+        profile_path = getattr(self, "_profile_path", None)
+        try:
+            path = profile_path("jump_timing.json") if callable(profile_path) else ""
+        except Exception:
+            path = ""
+        held = self.__dict__.get("_jump_clock_held")
+        if not held or held[0] != path:
+            held = self._jump_clock_held = (path, JumpClock.load(path) if path else JumpClock())
+        return held[1]
+
+    def _jump_clock_view(self):
+        held = self.__dict__.get("_jump_clock_held")
+        return held[1].view(time.time()) if held else None
+
+    def _jump_clock_cooldown_view(self):
+        held = self.__dict__.get("_jump_clock_held")
+        return held[1].cool_view(time.time()) if held else None
+
+    def _jump_clock_status(self, data, was):
+        """Status: the charge, the hyperdrive bit, the tunnel and the cooldown, at the file's write time."""
+        now = (bool(getattr(self, "current_fsd_charging", False)),
+               bool(getattr(self, "current_fsd_hyperdrive_charging", False)),
+               bool(getattr(self, "current_fsd_jumping", False)),
+               bool(getattr(self, "current_fsd_cooldown", False)))
+        was = tuple(was) + (False,) * (4 - len(was))
+        if now == was:
+            return
+        charging, hyper, jumping, cooling = now
+        was_charging, was_hyper, was_jumping, was_cooling = was
+        written = data.get("_written") if isinstance(data, dict) else None
+        at = float(written) if isinstance(written, (int, float)) else time.time()
+        clock = self._jump_clock()
+        if charging and (not was_charging or (hyper and not was_hyper)):
+            clock.charging("hyperspace" if hyper else "supercruise", at)
+        elif was_charging and not charging:
+            clock.charge_dropped(at)
+        if jumping and not was_jumping:
+            clock.tunnel(at)
+        if cooling and not was_cooling:
+            clock.cooling(at)
+        elif was_cooling and not cooling and clock.cooled(at):
+            clock.save(self._jump_clock_held[0])
+        self._jump_clock_hurry(clock)
+
+    def _jump_clock_event(self, event, raw, startup_replay=False):
+        if startup_replay or not isinstance(raw, dict):
+            return
+        if event not in {"StartJump", "FSDJump", "SupercruiseEntry", "SupercruiseExit", "Died", "Shutdown", "LoadGame"}:
+            return
+        clock = self._jump_clock()
+        at = time.time()
+        if event == "StartJump":
+            kind = str(raw.get("JumpType") or "").casefold()
+            if kind in {"hyperspace", "supercruise"}:
+                clock.started(kind, at)
+        elif event in {"FSDJump", "SupercruiseEntry"}:
+            if clock.arrived("hyperspace" if event == "FSDJump" else "supercruise", at):
+                clock.save(self._jump_clock_held[0])
+        elif event == "SupercruiseExit":
+            clock.dropped(at)
+        else:
+            clock.cancel()
+        self._jump_clock_hurry(clock)
+
+    def _jump_clock_hurry(self, clock):
+        hurry = getattr(getattr(self, "watcher", None), "hurry", None)
+        if callable(hurry):
+            hurry(45.0 if clock.jump else 0)

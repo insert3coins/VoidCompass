@@ -160,4 +160,3 @@ price paid, bounties at fleet carriers halved, a conflict zone counted once on
 its first combat bond, ground conflict zone size from the bond's value
 (5,000 and 38,000 credits), and its Discord report layout. VoidCompass's BGS
 code (`src/voidcompass/bgs`) is its own implementation of these rules.
-

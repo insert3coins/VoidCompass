@@ -309,13 +309,16 @@ class Stage {
   planet(position = [0, 0, 0], radius = 2.1, kind = 'rock', {atmosphere = true, spin = .05, latitudes = true} = {}) {
     const globe = new THREE.Group(); globe.position.set(...position); this.root.add(globe);
     const geometry = new THREE.IcosahedronGeometry(radius, 4), vertices = geometry.attributes.position, shades = [];
-    const seed = hash(radius * 7 + position[0]) * 10, roughness = kind === 'ice' ? .5 : 1;
+    const seed = hash(radius * 7 + position[0]) * 10, gas = kind === 'gas';
+    const roughness = {ice: .5, gas: 0, metal: 1.4, water: .3, earth: .55, ammonia: .3}[kind] ?? 1;
     for (let i = 0; i < vertices.count; i++) {
       const x = vertices.getX(i) / radius, y = vertices.getY(i) / radius, z = vertices.getZ(i) / radius;
       const relief = Math.sin(x * 7 + Math.sin(z * 5 + seed)) * Math.cos(y * 6 + seed) * .5 + Math.sin(x * 15 - y * 11 + z * 9) * .22;
       const n = 1 + relief * .018 * roughness;
       vertices.setXYZ(i, x * radius * n, y * radius * n, z * radius * n);
-      const shade = .45 + .45 * (relief * roughness + .5); shades.push(shade, shade, shade);
+      // A giant is banded rather than cratered.
+      const shade = gas ? .5 + .35 * Math.sin(y * 11 + Math.sin(x * 2.3 + seed) * .9) : .45 + .45 * (relief * roughness + .5);
+      shades.push(shade, shade, shade);
     }
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3)); geometry.computeVertexNormals();
     const sphere = this.mesh(geometry, 'planet', [0, 0, 0], [1, 1, 1], 1, globe, {vertexColors: true});
@@ -328,7 +331,7 @@ class Stage {
       meridian.rotation.y = .6;
     }
     if (atmosphere) this.mesh(new THREE.SphereGeometry(radius * 1.06, 40, 24), 'shell', [0, 0, 0], [1, 1, 1], .7, globe,
-      {tint: kind === 'ice' ? 'accent' : 'state'});
+      {tint: ['ice', 'water', 'ammonia'].includes(kind) ? 'accent' : 'state'});
     globe.userData.sphere = sphere;
     this.animations.push(st => { sphere.rotation.y = st.p * spin; });
     return globe;
@@ -495,12 +498,14 @@ function hero(s, position, size, options = {}) {
 
 // The drive plume behind a ship, sized in world units whatever the model's scale.
 function wake(s, ship, strength = 1, tint = 'state') {
-  const unit = ship.userData.unit, tail = [ship.userData.tail * 1.02, 0, 0];
+  const unit = ship.userData.unit, tail = [ship.userData.tail * 1.02, 0, 0], own = ship === s.hero;
   const plume = s.glow(tail, 1, tint, .55, ship), core = s.glow(tail, 1, 'white', .45, ship);
   s.animations.push(st => {
+    // Your own engines burn with the pips you give them (5.6.9).
+    const engines = own && st.d.inMainShip && st.d.pips ? .55 + .9 * st.d.pips[1] / 8 : 1;
     const flicker = 1 + Math.sin(st.p * 11.3) * .07 + Math.sin(st.p * 7.1) * .05;
-    plume.scale.set(2.8 * strength * flicker / unit, .9 * strength / unit, 1);
-    core.scale.set(1 * strength * flicker / unit, .3 * strength / unit, 1);
+    plume.scale.set(2.8 * strength * engines * flicker / unit, .9 * strength * Math.sqrt(engines) / unit, 1);
+    core.scale.set(1 * strength * engines * flicker / unit, .3 * strength * Math.sqrt(engines) / unit, 1);
   });
   return plume;
 }
@@ -594,6 +599,24 @@ function systems(s) {
   const boost = new THREE.Group(); anchor.add(boost);
   const tier = s.state.d.neutronBoostValue >= 5.5 ? 3 : s.state.d.neutronBoostValue >= 3.5 ? 2 : 1;
   for (let i = 0; i < tier; i++) s.circle(size * (.7 + i * .09), [0, 0, 0], 'accent', .6, {tilt: .3 + i * .45, arc: TAU * .7, parent: boost});
+  // The power distributor (5.6.9): SYS, ENG and WEP as Elite's three columns
+  // of four pips in the deck's corner; the shield and hardpoints follow theirs.
+  const distributor = [0, 1, 2].map(() => [0, 1, 2, 3].map(() => s.mark([[-2.6, -1.3], [2.6, -1.3], [2.6, 1.3], [-2.6, 1.3]], 'state', .85)));
+  s.animations.push((st, view) => {
+    const pips = st.d.inMainShip ? st.d.pips : null;
+    distributor.forEach((column, c) => column.forEach((mark, i) => {
+      mark.visible = Boolean(pips);
+      if (!pips) return;
+      // Clear of the alarm chevrons in the corner.
+      mark.position.set(view.W / 2 - 62 + c * 8, -view.H / 2 + 8 + i * 4, 0);
+      const left = pips[c] - i * 2;
+      mark.material.opacity = (left >= 2 ? .9 : left === 1 ? .45 : .12) * s.opacity;
+    }));
+    if (pips) {
+      shield.material.uniforms.uOpacity.value = (.35 + .65 * pips[0] / 8) * s.opacity;
+      for (const line of hardpoints.children) line.material.opacity = (.35 + .65 * pips[2] / 8) * .8 * s.opacity;
+    }
+  });
   s.animations.push(st => {
     if (s.hero) anchor.position.copy(s.hero.position);
     const d = st.d, own = d.inMainShip;
@@ -704,36 +727,59 @@ function charge(s, key) {
     const ring = s.ring(1.25 + i * .13, [0, 0, 0], hyper ? 'cyan' : 'orange', 0, .5, TAU * .76, holder);
     rings.push({holder, ring, i});
   }
+  // The seven coils share one hologram material.
+  const coils = rings[0].ring.material;
+  // Each counted second leaves the drive as a shockwave.
+  const pulse = new THREE.Group(); pulse.position.set(-2.6, 0, .4); pulse.rotation.y = Math.PI / 2; s.root.add(pulse);
+  const shock = s.ring(1.3, [0, 0, 0], hyper ? 'cyan' : 'orange', 0, .85, TAU, pulse);
   // Energy drawn into the drive along a tightening helix.
   const count = 46, flow = new Float32Array(count * 3);
   const swirl = s.points(flow, {tint: hyper ? 'accent' : 'state', size: .13, opacity: .9});
   const core = s.glow([-4.6, 0, .4], 1.6, hyper ? 'cyan' : 'orange', .7);
+  // The jump clock (st.charge, 0 to 1) only quickens these phases, so a
+  // faster spin never jumps the coils to a new angle.
+  let last = null, spin = 0, draw = 0;
   s.animations.push(st => {
+    const dp = last == null ? 0 : clamp(st.p - last, 0, .5); last = st.p;
+    const c = st.charge || 0, beat = st.beat || 0, engage = st.engage || 0;
+    spin += dp * (hyper ? 1.5 : .8) * (1 + 2.4 * c);
+    draw += dp * .35 * (1 + 1.8 * c);
     for (const {holder, ring, i} of rings) {
-      ring.rotation.z = st.p * (hyper ? 1.5 : .8) + i * .9;
-      holder.position.x = Math.sin(st.p * .9 + i * .4) * .25 + i * .55 - 1.8;
-      holder.rotation.x = Math.sin(st.p * .6 + i) * .25;
+      ring.rotation.z = spin + i * .9;
+      // The coils close up on the drive as it charges.
+      holder.position.x = (Math.sin(st.p * .9 + i * .4) * .25 * (1 - .7 * c) + i * .55 - 1.8) * (1 - .45 * c);
+      holder.rotation.x = Math.sin(st.p * .6 + i) * .25 * (1 - .6 * c);
     }
+    coils.uniforms.uOpacity.value = Math.min(1, .5 + .3 * c + .5 * beat + .3 * engage) * s.opacity;
     for (let i = 0; i < count; i++) {
-      const t = fract(st.p * .35 + hash(i)), a = i * 2.4 + t * 6 + st.p * .8, r = (1 - t) * (2.2 + hash(i + 9) * 1.8);
+      const t = fract(draw + hash(i)), a = i * 2.4 + t * 6 + spin * .6, r = (1 - t) * (2.2 + hash(i + 9) * 1.8) * (1 - .35 * c);
       flow.set([-4.6 + Math.cos(a) * r * .8 + (1 - t) * 1.4, Math.sin(a) * r * .5, .4 + Math.cos(a * .7 + i) * r * .5], i * 3);
     }
     swirl.geometry.attributes.position.needsUpdate = true;
-    core.scale.setScalar(1.3 + wave(st.p * .9) * .9);
+    core.scale.setScalar(1.3 + 1.5 * c + wave(st.p * .9) * .9 * (1 - .5 * c) + 1.4 * beat + 1.2 * engage);
+    core.material.opacity = Math.min(1, .55 + .3 * c + .3 * beat) * s.opacity;
+    shock.visible = beat > .02;
+    shock.scale.setScalar(1 + (1 - beat) * 2.6);
+    shock.material.uniforms.uOpacity.value = Math.sqrt(beat) * .95 * s.opacity;
   });
   if (hyper) {
-    // The witchspace aperture forming ahead of the nose.
+    // The witchspace aperture forming ahead of the nose, wider as the drive charges.
     const vortex = new Float32Array(150 * 3), spiral = s.points(vortex, {tint: 'accent', size: .1, opacity: .85});
     const lip = s.ring(1.8, [7.6, 0, -1], 'cyan', 0, .7); lip.rotation.y = -.5;
-    s.glow([7.6, 0, -1], 2.6, 'white', .35);
+    const light = s.glow([7.6, 0, -1], 2.6, 'white', .35);
     s.star([7.6, 0, -1.4], .35, s.state.targetFamily, s.state.targetTone);
+    let turn = 0, prior = null;
     s.animations.push(st => {
+      const dp = prior == null ? 0 : clamp(st.p - prior, 0, .5); prior = st.p;
+      const c = st.charge || 0, open = .45 + .75 * c;
+      turn += dp * (1 + 1.5 * c);
       for (let i = 0; i < 150; i++) {
-        const arm = i % 3, t = fract(hash(i) + st.p * .15), a = arm * TAU / 3 + t * 7 - st.p * 1.2, r = .2 + t * 2.1;
+        const arm = i % 3, t = fract(hash(i) + turn * .15), a = arm * TAU / 3 + t * 7 - turn * 1.2, r = (.2 + t * 2.1) * open;
         vortex.set([7.6 + Math.sin(a) * r * .45, Math.cos(a) * r, -1 + Math.sin(a) * r * .8], i * 3);
       }
       spiral.geometry.attributes.position.needsUpdate = true;
-      lip.rotation.z = st.p * .5; lip.scale.setScalar(.9 + wave(st.p * .4) * .2);
+      lip.rotation.z = turn * .5; lip.scale.setScalar(open * (.9 + wave(st.p * .4) * .2) + (st.beat || 0) * .15);
+      light.material.opacity = Math.min(1, .2 + .45 * c + .3 * (st.engage || 0)) * s.opacity;
     });
   }
   if (inject) {
@@ -764,7 +810,11 @@ function tunnel(s, key) {
   }
   const threads = [];
   for (let i = 0; i < 10; i++) threads.push(s.strip(24, i % 2 ? 'state' : 'accent', .35));
-  const sparks = new Float32Array(60 * 3), field = s.points(sparks, {tint: 'white', size: .07, opacity: .8});
+  // Star streaks that stretch with the speed, as GRAVITAS draws its tunnel.
+  const STREAKS = 60;
+  const streaks = s.line(Array.from({length: STREAKS * 2}, () => [0, 0, 0]), 'white', .75, s.root, true);
+  streaks.frustumCulled = false;
+  const trail = streaks.geometry.attributes.position;
   s.glow([22, 0, 0], 7, 'white', .5);
   const end = s.star([24, 0, 0], .8, s.state.targetFamily, s.state.targetTone);
   end.visible = !carrier;
@@ -772,9 +822,14 @@ function tunnel(s, key) {
   if (!carrier) wake(s, vessel, 1.2, 'accent');
   const flash = s.glow([20, 0, 0], 2, 'white', .9);
   const speed = jumping ? .26 : .14;
+  let last = null, run = 0;
   s.animations.push(st => {
+    const dp = last == null ? 0 : clamp(st.p - last, 0, .5); last = st.p;
+    // Punching in: the tunnel rushes past, then settles to its cruise.
+    const warp = 1 + (carrier ? 0 : 2.2 * Math.exp(-st.age / 1.6));
+    run += dp * speed * warp;
     rings.forEach((ring, i) => {
-      const travel = fract(i / rings.length + st.p * speed);
+      const travel = fract(i / rings.length + run);
       ring.position.x = 26 - travel * 32; ring.rotation.x = st.p * .3 + i * .7;
       ring.material.opacity = .6 * ends(travel) * s.opacity;
     });
@@ -786,14 +841,19 @@ function tunnel(s, key) {
       }
       v.needsUpdate = true;
     });
-    for (let i = 0; i < 60; i++) {
-      const t = fract(hash(i) + st.p * speed * 1.6), a = hash(i + 7) * TAU, r = .6 + hash(i + 3) * 1.8;
-      sparks.set([26 - t * 32, Math.cos(a) * r, Math.sin(a) * r], i * 3);
+    for (let i = 0; i < STREAKS; i++) {
+      const t = fract(hash(i) + run * 1.6), a = hash(i + 7) * TAU, r = .6 + hash(i + 3) * 1.8;
+      const x = 26 - t * 32, y = Math.cos(a) * r, z = Math.sin(a) * r, length = (.25 + hash(i + 5) * .5) * warp * warp;
+      trail.setXYZ(i * 2, x, y, z); trail.setXYZ(i * 2 + 1, x + length, y, z);
     }
-    field.geometry.attributes.position.needsUpdate = true;
+    trail.needsUpdate = true;
     vessel.position.y = -.25 + Math.sin(st.p) * .12; vessel.rotation.x = Math.sin(st.p * .7) * .08;
+    // The far end: the destination star grows as the measured arrival nears.
+    const travel = st.travel ?? -1, near = travel < 0 ? 0 : smooth(.55, 1, travel);
+    end.scale.setScalar(1 + 1.6 * (travel < 0 ? 0 : smooth(0, 1, travel)));
     const burst = jumping ? smooth(0, 1.2, st.age) : 0;
-    flash.scale.setScalar(2 + burst * 9); flash.material.opacity = (jumping ? .2 + .6 * burst : .25 + .2 * wave(st.p * .5)) * s.opacity;
+    flash.scale.setScalar(2 + burst * 9 + near * 5);
+    flash.material.opacity = Math.min(1, (jumping ? .2 + .6 * burst : .25 + .2 * wave(st.p * .5)) + .5 * near) * s.opacity;
   });
 }
 
@@ -839,8 +899,8 @@ function arrival(s, key) {
 }
 
 function cooldown(s) {
-  // The drive core venting its heat; it follows the journal's recovery
-  // state, never a timed percentage.
+  // The drive core venting its heat. Once a cooldown has been measured
+  // (5.6.9, st.cool) it cools toward FSD ready; until then it simply vents.
   s.stars();
   const drive = new THREE.Group(); s.root.add(drive); drive.rotation.set(.12, -.1, -.08);
   const body = s.mesh(new THREE.CylinderGeometry(.64, .64, 6.4, 16), 'dark', [0, 0, 0], [1, 1, 1], 1, drive); body.rotation.z = Math.PI / 2;
@@ -856,6 +916,10 @@ function cooldown(s) {
     }
   }
   const heat = s.glow([0, 0, 0], 5, 'orange', .3, drive);
+  // Measured, a dial beside the drive fills as it comes ready.
+  const track = s.circle(.65, [5.8, 1, 0], 'state', .2, {tilt: 0, segments: 48, parent: drive});
+  const gauge = s.strip(65, 'accent', .9, drive);
+  const ready = s.glow([5.8, 1, 0], 1.9, 'cyan', .6, drive);
   const vents = [];
   for (const side of [-1, 1]) for (let i = 0; i < 14; i++) vents.push({glow: s.glow([0, 0, 0], .4, 'cyan', .3), side, i});
   for (const side of [-1, 1]) {
@@ -863,14 +927,29 @@ function cooldown(s) {
     s.line([[4.4, side * 1.6, 0], [4.9, side * 1.6, 0], [4.9, side * .8, 0]], 'state', .75);
   }
   for (let i = 0; i < 3; i++) s.circle(1.4 + i * .25, [-3.6 - i * .3, 0, 0], 'state', .25 - i * .06, {tilt: 0}).rotation.y = Math.PI / 2;
+  let last = null, vent = 0;
   s.animations.push(st => {
-    for (const {fin, y, z, i} of fins) { const breath = .5 + .5 * Math.sin(st.p * 1.8 - i * .32); fin.position.y = y * (.98 + breath * .15); fin.position.z = z * (.98 + breath * .15); }
+    const dp = last == null ? 0 : clamp(st.p - last, 0, .5); last = st.p;
+    const cooled = Math.max(0, st.cool ?? -1);
+    vent += dp * (1 - .55 * cooled);
+    for (const {fin, y, z, i} of fins) { const breath = (.5 + .5 * Math.sin(st.p * 1.8 - i * .32)) * (1 - .6 * cooled); fin.position.y = y * (.98 + breath * .15); fin.position.z = z * (.98 + breath * .15); }
     for (const {glow, side, i} of vents) {
-      const travel = fract(st.p * .38 + hash(i + side * 20)), x = -2.6 + (i % 8) * .74;
+      const travel = fract(vent * .38 + hash(i + side * 20)), x = -2.6 + (i % 8) * .74;
       glow.position.set(x + travel * .3, side * (1.1 + travel * 1.6), (hash(i + 8) - .5) * 1.2);
-      glow.scale.setScalar(.25 + travel * .6); glow.material.opacity = ends(travel) * .3 * s.opacity;
+      glow.scale.setScalar(.25 + travel * .6); glow.material.opacity = ends(travel) * .3 * (1 - .5 * cooled) * s.opacity;
     }
-    heat.material.opacity = (.2 + .12 * wave(st.p * .4)) * s.opacity;
+    heat.material.opacity = (.3 + .15 * wave(st.p * .4)) * (1 - .85 * cooled) * s.opacity;
+    heat.scale.setScalar(6 - 2.5 * cooled);
+    track.visible = gauge.visible = ready.visible = (st.cool ?? -1) >= 0;
+    if (gauge.visible) {
+      const v = gauge.geometry.attributes.position;
+      for (let i = 0; i < 65; i++) {
+        const a = Math.min(i / 64, cooled) * TAU;
+        v.setXYZ(i, 5.8 + Math.sin(a) * .65, 1 + Math.cos(a) * .65, 0);
+      }
+      v.needsUpdate = true;
+      ready.material.opacity = smooth(.85, 1, cooled) * (.5 + .3 * wave(st.p)) * s.opacity;
+    }
     drive.rotation.y = -.1 + Math.sin(st.p * .18) * .12;
   });
 }
@@ -879,6 +958,27 @@ function cooldown(s) {
 // Planets: approach, glide, the surface, pads and settlements.
 // ---------------------------------------------------------------------------
 
+// The body you're at as your scan has it (5.6.9): what kind of world, and
+// rings or an atmosphere only if it really has them. Unscanned, the scene's own.
+function world(s, position, radius, fallback, options = {}) {
+  const body = s.state.d.body;
+  const globe = s.planet(position, radius, body ? body.kind : fallback, body ? {...options, atmosphere: body.atmosphere} : options);
+  if (body?.rings) {
+    const plane = new THREE.Group(); plane.rotation.set(-Math.PI / 2 + .32, 0, .18); globe.add(plane);
+    for (let i = 0; i < Math.min(3, body.rings); i++) {
+      const inner = radius * (1.45 + i * .32);
+      s.mesh(new THREE.RingGeometry(inner, inner + radius * .24, 96, 1), 'band', [0, 0, 0], [1, 1, 1], .45 - i * .08, plane,
+        {tint: 'state', side: THREE.DoubleSide});
+    }
+  }
+  return globe;
+}
+
+// Ground relief by the kind of world: ice is smooth, metal-rich rock rugged.
+function relief(s) {
+  return {ice: .7, metal: 1.25, water: .8, ammonia: .8}[s.state.d.body?.kind] ?? 1;
+}
+
 function altitudeY(st, low = -.6, high = 1.7) {
   return st.d.altitude >= 0 ? clamp(Math.log10(st.d.altitude + 1) / 2 - .8, low, high) : .1 + Math.sin(st.p * .3) * .15;
 }
@@ -886,8 +986,10 @@ function altitudeY(st, low = -.6, high = 1.7) {
 function descent(s, key) {
   if (key.startsWith('orbital')) {
     s.stars();
-    const world = s.planet([1.5, -17.2, -7], 15, 'rock', {spin: .01});
-    s.circle(16.6, [1.5, -17.2, -7], 'accent', .35, {tilt: -Math.PI / 2 + .05, dashed: true, segments: 220});
+    // A small moon curves away sooner than a big world (5.6.9).
+    const km = s.state.d.body?.radius || 0, size = km ? clamp(10 + (Math.log10(km) - 2.5) * 7.7, 9, 22) : 15;
+    const globe = world(s, [1.5, -2.2 - size, -7], size, 'rock', {spin: .01});
+    s.circle(size + 1.6, [1.5, -2.2 - size, -7], 'accent', .35, {tilt: -Math.PI / 2 + .05, dashed: true, segments: 220});
     const leaving = key === 'orbital_departure';
     const ship = hero(s, [-4, 1, 1], 3.4, {pitch: 0, roll: leaving ? .12 : -.12, yaw: -.2});
     wake(s, ship, leaving ? 1.3 : .8);
@@ -897,11 +999,11 @@ function descent(s, key) {
       ship.position.set(leaving ? -2 + Math.sin(st.p * .2) : -4 + Math.sin(st.p * .2), y, 1);
       ship.rotation.z = leaving ? .14 + Math.sin(st.p * .3) * .03 : -.12 + Math.sin(st.p * .3) * .03;
       path.position.y = y - 1;
-      world.rotation.x = st.p * .004;
+      globe.rotation.x = st.p * .004;
     });
     return;
   }
-  s.terrain(s.seed % 12, {y: -2.1});
+  s.terrain(s.seed % 12, {y: -2.1, relief: relief(s)});
   s.planet([8.5, 3.4, -16], 1.3, 'ice', {latitudes: false});
   const glide = key === 'glide', hold = key === 'surface_hold', leaving = key === 'surface_departure';
   const ship = hero(s, [0, 0, .4], 4, {pitch: 0, yaw: -.22});
@@ -932,7 +1034,7 @@ function descent(s, key) {
 }
 
 function pads(s, key) {
-  s.terrain(s.seed % 9, {y: -2});
+  s.terrain(s.seed % 9, {y: -2, relief: key === 'landed' ? relief(s) : 1});
   s.planet([-8.5, 3.2, -15], 1.1, 'ice', {latitudes: false});
   s.shot = {...SHOT, at: [0, -.8, 0]};
   if (key === 'landed') {
@@ -1130,18 +1232,23 @@ function carrier(s, key) {
     const ship = hero(s, [-9, .8, 2], 2.2, {yaw: -.1}); wake(s, ship, .6);
     s.animations.push(st => { const t = fract(st.p * .05); ship.position.set(lerp(-11, deckX(fleet, .45), t), lerp(1.2, deckY(fleet) + .6, t), lerp(2, -1.2, t)); });
   }
-  if (key === 'carrier_preparing' || key === 'carrier_arrival') {
-    // The jump drive spooling at the stern, or the flash it arrives from.
+  if (key === 'carrier_preparing' || key === 'carrier_lockdown' || key === 'carrier_arrival') {
+    // The jump drive spooling at the stern, faster as the departure nears
+    // (5.6.9, st.depart), or the flash it arrives from.
     const stern = new THREE.Group(); stern.position.set(-7.5, -.4, -1.5); s.root.add(stern);
     const spool = [0, 1, 2].map(i => { const r = s.ring(1.8 + i * .4, [0, 0, 0], 'cyan', 0, .6, TAU * .7, stern); r.rotation.y = Math.PI / 2; return r; });
     const flare = s.glow([-7.5, -.4, -1.5], 4, 'cyan', .45);
+    let last = null, turn = 0;
     s.animations.push(st => {
-      spool.forEach((ring, i) => { ring.rotation.x = st.p * (.8 + i * .4) * (i % 2 ? -1 : 1); });
+      const dp = last == null ? 0 : clamp(st.p - last, 0, .5); last = st.p;
+      const near = Math.max(0, st.depart ?? -1);
+      turn += dp * (1 + 2.5 * near);
+      spool.forEach((ring, i) => { ring.rotation.x = turn * (.8 + i * .4) * (i % 2 ? -1 : 1); });
       if (key === 'carrier_arrival') {
         const emerge = smooth(0, 2.6, st.age);
         flare.scale.setScalar(4 + (1 - emerge) * 10); flare.material.opacity = (.3 + .6 * (1 - emerge)) * s.opacity;
         fleet.position.x = lerp(-6, 0, emerge); stern.visible = emerge < .98;
-      } else flare.material.opacity = (.25 + .35 * wave(st.p * .5)) * s.opacity;
+      } else flare.material.opacity = Math.min(1, .25 + .35 * wave(st.p * .5) + .35 * near) * s.opacity;
     });
   }
   if (lockdown) {
@@ -1301,8 +1408,7 @@ function dss(s) {
   s.stars();
   const probes = /(\d+)\s*\/\s*(\d+)/.exec(s.state.label);
   const used = probes ? Math.min(16, Number(probes[1])) : 0, goal = probes ? Math.min(16, Number(probes[2])) : 0;
-  const world = s.planet([5, 0, -1], 2.5, 'rock', {spin: .08});
-  const sphere = world.userData.sphere;
+  const sphere = world(s, [5, 0, -1], 2.5, 'rock', {spin: .08}).userData.sphere;
   for (let i = 0; i < (probes ? used : 4); i++) {
     const lat = (hash(i + 30) - .5) * 1.8, lon = i * TAU / Math.max(1, probes ? used : 4);
     const at = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon)).multiplyScalar(2.52);
@@ -1481,8 +1587,9 @@ function fight(s, key) {
     // vector ahead. Interdicted, the tether has won and the ship tumbles.
     const lost = key === 'interdicted';
     s.stars({streak: true, speed: lost ? .3 : 1.2});
-    const hunter = s.model('ship', [-7.6, .2, .4], 3.6, {type: 'interdictor', tint: 'red', yaw: -.2});
+    const hunter = s.model('ship', [-7.6, .2, .4], 3.6, {type: s.state.targetKey || 'interdictor', tint: 'red', yaw: -.2});
     wake(s, hunter, 1, 'red');
+    targetReadout(s, hunter);
     const ship = hero(s, [.5, 0, .8], 3.6, {yaw: -.2}); wake(s, ship, lost ? .3 : 1.1);
     const tether = s.strip(40, 'red', .8), v = tether.geometry.attributes.position;
     const escape = s.ring(1.2, [6.2, 0, .5], lost ? 'red' : 'cyan', 0, .8, TAU * .8); escape.rotation.y = Math.PI / 2;
@@ -1527,9 +1634,12 @@ function fight(s, key) {
     s.animations.push(st => { capital.position.x = 5.5 + Math.sin(st.p * .04) * .6; });
   }
   const ship = hero(s, [-3.2, 0, 1], 3.6, {yaw: -.2}); wake(s, ship, 1);
+  // The first is your locked target, in its own hull once the scanner names it (5.6.9).
   const enemies = Array.from({length: heavy ? 3 : 2}, (_, i) => {
-    const enemy = s.model('ship', [0, 0, 0], 2.9, {type: 'interdictor', tint: 'red'}); wake(s, enemy, .8, 'red'); return enemy;
+    const type = i === 0 && s.state.targetKey ? s.state.targetKey : 'interdictor';
+    const enemy = s.model('ship', [0, 0, 0], 2.9, {type, tint: 'red'}); wake(s, enemy, .8, 'red'); return enemy;
   });
+  targetReadout(s, enemies[0]);
   const beams = enemies.map(() => s.strip(2, 'red', .85));
   const answer = s.strip(2, 'accent', .85);
   const flash = s.glow([0, 0, 0], 1.6, 'cyan', .8);
@@ -1550,6 +1660,27 @@ function fight(s, key) {
     blasts.forEach((blast, i) => { const t = fract(st.p * .35 + i * .5), cycle = Math.floor(st.p * .35 + i * .5); blast.position.set((hash(cycle + i) - .3) * 14, (hash(cycle + 7) - .5) * 2.4, -3); blast.scale.setScalar(.6 + t * 3.4); blast.material.opacity = (1 - t) * .75 * s.opacity; });
   });
   chevrons(s);
+}
+
+// Your target as your scanner reads it (5.6.9): its shield round its hull,
+// and shield and hull bars in the corner once the scan reports them.
+function targetReadout(s, enemy) {
+  const bubble = s.mesh(new THREE.SphereGeometry(1, 20, 12), 'shell', [0, 0, 0], [1.9, .8, 1.2], .9, s.root, {tint: 'red'});
+  const rect = [[-.5, -1.4], [.5, -1.4], [.5, 1.4], [-.5, 1.4]];
+  const bars = [['accent', 'shields'], ['red', 'hull']].map(([tint, field], i) => ({field, i, back: s.mark(rect, 'state', .2), bar: s.mark(rect, tint, .85)}));
+  s.animations.push((st, view) => {
+    const target = st.d.target, scanned = Boolean(target && target.stage >= 2);
+    bubble.visible = scanned && target.shields > 0;
+    if (bubble.visible) { bubble.position.copy(enemy.position); bubble.material.uniforms.uOpacity.value = (.15 + .5 * target.shields / 100) * s.opacity; }
+    for (const {field, i, back, bar} of bars) {
+      const value = scanned ? target[field] : null;
+      back.visible = bar.visible = value != null;
+      if (value == null) continue;
+      const width = Math.min(70, view.W * .2), x = -view.W / 2 + 14, y = -view.H / 2 + 24 + i * 5;
+      back.scale.set(width, 1, 1); back.position.set(x + width / 2, y, 0);
+      bar.scale.set(Math.max(.001, width * value / 100), 1, 1); bar.position.set(x + width * value / 200, y, 0);
+    }
+  });
 }
 
 function emergency(s, key) {

@@ -30,6 +30,8 @@ _PERSIST_KEYS = {
     "fuel_level_source", "fuel_level_updated_at",
     "jump_range_curr", "jump_range_max",
     "jump_destination", "jump_destination_address", "jump_body", "jump_departure_time",
+    # 5.6.9: when the jump was asked for, so the HUD can fill to the departure.
+    "jump_requested_time",
     "previous_system", "previous_body",
     "docking_access", "allow_notorious", "pending_decom",
     "balance", "available_balance", "reserve_balance", "reserve_percent",
@@ -216,6 +218,7 @@ class CarrierTracker:
             "jump_destination_address": None,
             "jump_body": None,
             "jump_departure_time": None,
+            "jump_requested_time": None,
             "previous_system": None,
             "previous_body": None,
             "docking_access": "all",
@@ -926,6 +929,7 @@ class CarrierTracker:
         cd["jump_destination_address"] = raw.get("SystemAddress")
         cd["jump_body"] = raw.get("Body")
         cd["jump_departure_time"] = raw.get("DepartureTime")
+        cd["jump_requested_time"] = raw.get("timestamp")
         cd["_runtime_cancel_ts"] = None
         return True
 
@@ -935,6 +939,7 @@ class CarrierTracker:
         cd["jump_destination_address"] = None
         cd["jump_body"] = None
         cd["jump_departure_time"] = None
+        cd["jump_requested_time"] = None
         ts = _parse_dt(raw.get("timestamp"))
         cd["_runtime_cancel_ts"] = ts if ts else datetime.now(timezone.utc)
         return True

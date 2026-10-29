@@ -77,6 +77,7 @@ from voidcompass.dashboard.html_workspace_support import (
     text as _text,
 )
 from voidcompass.dashboard.html_explore_workspace import HtmlExploreWorkspaceMixin
+from voidcompass.dashboard.html_system_map import HtmlSystemMapMixin
 from voidcompass.dashboard.html_music import HtmlMusicMixin
 from voidcompass.dashboard.html_overlay_studio import HtmlOverlayStudioMixin
 from voidcompass.dashboard.html_colonisation import HtmlColonisationMixin
@@ -109,7 +110,7 @@ _HTML_WORKSPACE_PAGES = {
     "planet-materials", "explore", "profile", "chronicle", "mission", "ground", "mining",
     "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
     "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation",
-    "tools", "wrapped", "games", "hatchling",
+    "tools", "wrapped", "games", "hatchling", "system-map",
 }
 
 
@@ -174,7 +175,7 @@ def _watcher_echoes(memory):
             heard[row[0]] = (count + 1, max(last, float(row[1] or 0)))
     return heard
 
-class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin, HtmlMiningMixin, HtmlPlanetaryMixin):
+class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin, HtmlMiningMixin, HtmlPlanetaryMixin):
     """Publish exploration state and accept private dashboard commands."""
 
     def start_html_dashboard_bridge(self):
@@ -2655,6 +2656,7 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
 
     def _html_workspace(self, page, intelligence=None):
         builders = {
+            "system-map": self._html_system_map_workspace,
             # 5.5.12: one Planetary page; the overlay keeps the lighter sites builder.
             "planet-materials": lambda: {**self._html_planet_materials_workspace(), **self._planetary_extras()},
             # 5.5.4: the Exploration Archive is Explore & Survey's Archive tab.
@@ -2983,6 +2985,9 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             # Specialist workspaces are built only while visible. This keeps
             # profile databases, engineering inventories and long histories
             # completely out of the boot and ordinary dashboard hot paths.
+            # The System Map is a tab of Explore & Survey: its data follows once Explore opens.
+            "system_map": self._html_system_map_workspace()
+            if not boot_active and (active_page == "explore" or getattr(self, "_system_map_opened", False)) else None,
             "workspace": (
                 {"page": active_page, "ready": False, "deferred": True}
                 if boot_active or active_page not in _HTML_WORKSPACE_PAGES

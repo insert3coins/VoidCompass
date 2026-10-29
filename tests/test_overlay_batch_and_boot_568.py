@@ -8,6 +8,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
+from voidcompass.overlays.heartbeat_hud import HeartbeatHUD
 from voidcompass.overlays.html_overlay_host import _OverlayHost, _request_json
 from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 
@@ -102,6 +103,29 @@ class VoiceBootTests(unittest.TestCase):
         deck.heartbeat_hud.set_voice_active.assert_called_with(True)
         self.assertTrue(deck._watcher_voice_say('Now we can speak.', 'journal'))
         deck._watcher_voice.say.assert_called_once_with('Now we can speak.', 'journal', feel=None)
+
+    def test_the_greeting_shown_behind_the_curtain_is_said_when_the_voice_returns(self):
+        # 5.6.9: the boot hold kept the greeting silent, and nothing said it later.
+        said, shown = [], {'thought': {'id': 't1', 'text': 'Welcome back.', 'topic': 'session_start', 'importance': 1}}
+        hud = HeartbeatHUD.__new__(HeartbeatHUD)
+        hud.config = {'watcher_voice_level': 'every'}
+        hud.mind = SimpleNamespace(voice_active=False, find_voice=lambda: False,
+                                   current=lambda: dict(shown['thought']) if shown['thought'] else None,
+                                   spoken_words=lambda thought: thought['text'])
+        hud.voice_listener = lambda words, key, feel=None: said.append((words, key)) or True
+        hud._redraw = lambda: None
+        hud._spoken_id = 't1'  # it went out, unspoken, while the voice was held
+        hud.set_voice_active(True)
+        self.assertEqual(said, [('Welcome back.', 't1')])
+        self.assertEqual(hud._voiced, ('t1', True))
+        hud.set_voice_active(False)
+        hud.set_voice_active(True)
+        self.assertEqual(len(said), 1, 'said once, not again on every switch')
+        # A thought that has already left the screen stays unsaid.
+        shown['thought'], hud._spoken_id = None, 't2'
+        hud.set_voice_active(False)
+        hud.set_voice_active(True)
+        self.assertEqual(len(said), 1)
 
 
 if __name__ == '__main__':

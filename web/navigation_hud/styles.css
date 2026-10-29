@@ -348,6 +348,19 @@ body {
 }
 .instrument[data-vertical="down"] .rail-marker { animation: altitude-cue calc(1s * var(--motion-scale)) ease-in-out infinite; }
 .instrument[data-instrument="scan"] { --state: var(--accent); }
+/* Timed rails (5.6.9): the rail fills to the measured jump, then to the
+   arrival; to FSD ready; to a carrier's departure. The readout counts the
+   last seconds down. Before anything has been measured it only breathes. */
+.instrument:is([data-instrument="jump"], [data-instrument="cooldown"], [data-instrument="carrier"]) .deck-rail { opacity: 1; }
+.instrument:is([data-instrument="jump"], [data-instrument="cooldown"], [data-instrument="carrier"]).unmeasured .rail-fill { animation: jump-unmeasured calc(1.6s * var(--motion-scale)) ease-in-out infinite; }
+.instrument:is([data-instrument="jump"], [data-instrument="carrier"]).counting .readout { color: var(--state); border-left-color: var(--text); }
+.readout.count-pop { transform-origin: left center; animation: jump-count calc(.9s * var(--motion-scale)) cubic-bezier(.2, .7, .2, 1); }
+@keyframes jump-count {
+  0% { transform: scale(1.45); opacity: 0; filter: blur(3px); }
+  30% { opacity: 1; filter: blur(0); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes jump-unmeasured { 0%, 100% { opacity: .25; } 50% { opacity: .65; } }
 
 /* ----------------------------------------------------- lamps and fuel -- */
 .systems-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
@@ -663,10 +676,10 @@ body {
 .hud.scene-still .star-blackhole::before, .hud.scene-off .star-blackhole::before { filter: none; }
 .hud.scene-still :is(.star-orb, .star-orb::before, .star-orb > i, .star-orb::after,
   .route-segment.next > b, .route-segment.next::after, .survey-progress-fill::after,
-  .fuel-cells i.lit, .rail-marker),
+  .fuel-cells i.lit, .rail-marker, .readout.count-pop, .unmeasured .rail-fill),
 .hud.scene-off :is(.star-orb, .star-orb::before, .star-orb > i, .star-orb::after,
   .route-segment.next > b, .route-segment.next::after, .survey-progress-fill::after,
-  .fuel-cells i.lit, .rail-marker) { animation: none !important; }
+  .fuel-cells i.lit, .rail-marker, .readout.count-pop, .unmeasured .rail-fill) { animation: none !important; }
 .hud.scene-off #deck-canvas, .hud.scene-off #bay-canvas { visibility: hidden; }
 /* Off with nothing measured to show: the empty viewport folds away and the
    state notice and systems row share the space. The altimeter and FSS scan

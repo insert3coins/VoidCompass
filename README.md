@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.6.8**
+**Current version: 5.6.9**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
@@ -11,6 +11,7 @@ Void Compass is a companion app for *Elite Dangerous*. It reads the journal and 
 The command deck has a tab for each part of the game:
 
 - **Dashboard and Explore & Survey**: the system you're in, FSS and DSS progress, biological and geological signals, valuable worlds, your route and waypoints, and what's worth doing next.
+- **System Map** (a tab of Explore & Survey): a live Three.js view of your current system, with detailed planets, stars, atmospheres and rings. Spansh supplies known architecture while your journal scans take priority. Open a body from the Survey list, move between overview and true scale, and follow orbital time and starlight without losing your camera when new scans arrive. It marks where you are, your target, stations, settlements, fleet carriers, ring hotspots and your saved places; gives the distance and supercruise time to any body, its coming eclipses, day and night on locked worlds and a sky view from the surface; and has a survey layer with filters and a Quality setting. Public records remain separate from your discoveries; surface patterns are illustrative.
 - **Galactic Atlas**: an offline map of the galaxy's regions and everywhere you've been. Its **Flight Recorder** plays any past session back on the map, jump by jump, with your discoveries, sales and postcards where they happened and the music you were listening to.
 - **Planetary Operations**: everything on a planet's surface, in three tabs.
   - On the ground: a compass to any coordinates (or back to your ship), a field map of your trail, samples and markers, and the planet itself.

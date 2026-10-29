@@ -349,6 +349,13 @@ class HeartbeatHUD:
         self.mind.voice_active = active
         if active and self.mind.find_voice():
             self._redraw()
+            return
+        # 5.6.9: a thought that showed while the voice was held (the boot
+        # curtain, say) is still on screen: say it now rather than never.
+        thought = self.mind.current() if active else None
+        if thought and thought['id'] == self._spoken_id and (getattr(self, '_voiced', None) or (None,))[0] != thought['id']:
+            self._voice_thought(thought)
+            self._redraw()
 
     def _speaks(self, thought):
         """Whether this thought is said aloud, by the Voice level setting."""
@@ -447,6 +454,20 @@ class HeartbeatHUD:
             'bond': mind.bond(),
         }
 
+    def _voice_thought(self, thought):
+        if not self._speaks(thought):
+            return
+        words = self.mind.spoken_words(thought)
+        try:
+            try:
+                said = self.voice_listener(words, thought['id'], feel=thought.get('voice'))
+            except TypeError:
+                said = self.voice_listener(words, thought['id'])  # a listener without the feel (5.6.1)
+            spoken = bool(words) and bool(said)
+        except Exception:
+            spoken = False
+        self._voiced = (thought['id'], words == thought['text']) if spoken else None
+
     def _thought_payload(self):
         mind = getattr(self, 'mind', None)
         thought = mind.current() if mind is not None else None
@@ -462,17 +483,7 @@ class HeartbeatHUD:
                     listener(thought)
                 except Exception:
                     pass
-            if self._speaks(thought):
-                words = self.mind.spoken_words(thought)
-                try:
-                    try:
-                        said = self.voice_listener(words, thought['id'], feel=thought.get('voice'))
-                    except TypeError:
-                        said = self.voice_listener(words, thought['id'])  # a listener without the feel (5.6.1)
-                    spoken = bool(words) and bool(said)
-                except Exception:
-                    spoken = False
-                self._voiced = (thought['id'], words == thought['text']) if spoken else None
+            self._voice_thought(thought)
         voiced = getattr(self, '_voiced', None) or (None, False)
         return {'id': thought['id'], 'text': thought['text'], 'script': thought.get('script') or thought['text'],
                 # Said aloud (5.5.4): the page types it in time with the voice
