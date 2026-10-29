@@ -1,7 +1,7 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.6.9 // Worlds in Motion
-**Release Date:** TBA 3312 *(Galactic Standard Time)*
+**Release Date:** 29 OCT 3312 *(Galactic Standard Time)*
 
 * **A live System Map, inside Explore & Survey.** The old orrery corner is gone: the map is Explore & Survey's own SYSTEM MAP tab, with detailed worlds, stars, atmospheres and rings. It follows your current system, combines Spansh's public architecture with your journal scans (yours win), and updates bodies without resetting your camera. Overview, true scale, orbital time and starlight share one system model, and the Survey list opens any body on the map.
 * **Where you are, and what's there.** A YOU ARE HERE chip (click it to fly to your body), your in-game target ringed, stations, settlements and fleet carriers marked where they sit, your saved sites and expedition stops pinned to their planets, ring hotspots on the rings, and the distance and supercruise time from you to any body you pick.
