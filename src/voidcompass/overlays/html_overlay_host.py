@@ -637,7 +637,8 @@ class _WindowController:
         except Exception:
             pass
 
-    def apply(self, payload, presentation_held=False, content_ready=True, render_current=True):
+    def apply(self, payload, presentation_held=False, content_ready=True, render_current=True,
+              strict_ready=False, push_updates=False):
         payload = payload if isinstance(payload, dict) else {}
         try:
             width = max(24, int(payload.get("width") or 360))
@@ -659,15 +660,15 @@ class _WindowController:
             # A hidden overlay is revealed only once its page has drawn the
             # latest model; otherwise it appeared showing whatever it drew
             # while hidden (the first planet of a system missing from Survey
-            # until the next scan). Two seconds at most, so a page that never
-            # confirms still appears.
-            if not render_current:
+            # until the next scan). Versioned clients also confirm the layout;
+            # older clients keep their existing two-second reveal fallback.
+            if not render_current and not push_updates:
                 self._nudge()
             if visible and self.last_visible is not True and not render_current:
                 now = time.monotonic()
                 if self.reveal_waiting_since is None:
                     self.reveal_waiting_since = now
-                if now - self.reveal_waiting_since < 2.0:
+                if strict_ready or now - self.reveal_waiting_since < 2.0:
                     visible = False
             if visible or not payload.get("visible", False):
                 self.reveal_waiting_since = None
@@ -809,6 +810,7 @@ class _OverlayHost:
         self.failed_windows = set()
         self.window_revision = -1
         self.presentation_held = True
+        self.last_delivery = {}
 
     def _url(self, path, overlay_id=None):
         suffix = f"token={quote(self.token)}"
@@ -817,10 +819,13 @@ class _OverlayHost:
         return f"{self.origin}{path}?{suffix}"
 
     def manifest(self):
+        now = time.monotonic()
+        seen = {key: list(value[0][:3]) for key, value in self.last_delivery.items()
+                if now - value[1] < 2.0}
         response = _request_json(
             self._url("/api/windows")
-            + f"&since={int(self.window_revision)}&wait=0.25",
-            timeout=1.25,
+            + f"&since={int(self.window_revision)}&wait=1&deliver=1&seen={quote(json.dumps(seen, separators=(',', ':')))}",
+            timeout=2.25,
         )
         if not isinstance(response, dict):
             return {}
@@ -937,88 +942,124 @@ class _OverlayHost:
         self.last_window_created_at = time.monotonic()
         return window
 
+    def _apply_manifest(self, manifest, last_status):
+        changes = {}
+        restore_shared_transparency = False
+        # Classic WinForms still needs staggered navigation; composition controllers initialise asynchronously.
+        created_window = False
+        for overlay_id, spec in manifest.items():
+            if overlay_id not in self.controllers:
+                if (getattr(self, "runtime", None) is None and (created_window or time.monotonic()
+                        - self.last_window_created_at
+                        < WINDOW_CREATE_INTERVAL_S)):
+                    continue
+                try:
+                    self.create_window(overlay_id, spec, hidden=True)
+                except Exception as exc:
+                    # One window that can't be made must not hold
+                    # back every overlay after it (5.5.18).
+                    self.last_window_created_at = time.monotonic()
+                    if overlay_id not in self.failed_windows:
+                        self.failed_windows.add(overlay_id)
+                        print(f"Overlay window failed: {overlay_id} ({exc})", flush=True)
+                    continue
+                created_window = True
+            controller = self.controllers[overlay_id]
+            if spec.get("shutdown"):
+                controller.hide()
+                continue
+            if (not spec.get("content_ready") and
+                    bool(getattr(controller.window, "_voidcompass_navigation_failed", False))):
+                now = time.monotonic()
+                if (controller.navigation_retries < 2 and
+                        now - controller.last_navigation_retry_at >= 1.5):
+                    controller.window._voidcompass_navigation_failed = False
+                    controller.hide()
+                    controller.navigation_retries += 1
+                    controller.last_navigation_retry_at = now
+                    print(f"Overlay navigation retry: {overlay_id} ({controller.navigation_retries})", flush=True)
+                    controller.window.load_url(self.page_url(
+                        overlay_id, spec.get("template"),
+                    ) + f"&host_retry={controller.navigation_retries}")
+            elif spec.get("content_ready"):
+                controller.navigation_retries = 0
+            try:
+                reload_revision = int(spec.get("reload_revision") or 0)
+            except (TypeError, ValueError):
+                reload_revision = 0
+            if reload_revision > controller.reload_revision:
+                controller.hide()
+                print(f"Overlay page retry: {overlay_id} ({reload_revision})", flush=True)
+                controller.window.load_url(self.page_url(
+                    overlay_id, spec.get("template"),
+                ) + f"&reload={reload_revision}")
+                controller.reload_revision = reload_revision
+            result = controller.apply(
+                spec.get("window"),
+                presentation_held=self.presentation_held,
+                content_ready=bool(spec.get("content_ready", False)),
+                render_current=bool(spec.get("render_current", True)),
+                strict_ready=bool(spec.get("strict_ready", False)),
+                push_updates=isinstance(spec.get("delivery"), dict),
+            )
+            self._deliver(overlay_id, controller.window, spec.get("delivery"))
+            restore_shared_transparency = bool(
+                result.pop("_restore_all_transparency", False)
+            ) or restore_shared_transparency
+            if result != last_status.get(overlay_id):
+                changes[overlay_id] = result
+        for overlay_id, controller in self.controllers.items():
+            if overlay_id not in manifest:
+                controller.hide()
+        if restore_shared_transparency:
+            for controller in self.controllers.values():
+                if controller.last_visible:
+                    _apply_webview_transparency(controller.window)
+        return changes
+
+    def _deliver(self, overlay_id, window, packet):
+        if not isinstance(packet, dict):
+            return
+        health = packet.get("health") or {}
+        key = (packet["generation"], packet["layout_revision"], packet["revision"],
+               health.get("frame_rate"), health.get("layout"))
+        now = time.monotonic()
+        previous = self.last_delivery.get(overlay_id)
+        if previous and previous[0] == key and now - previous[1] < 2.0:
+            return
+        try:
+            sender = getattr(window, "post_message", None)
+            if callable(sender):
+                sent = sender(packet)
+            else:
+                # Classic pywebview shares the same receiver. A direct host
+                # call also bypasses hidden-page timer throttling.
+                encoded = json.dumps(packet, ensure_ascii=True, separators=(",", ":"))
+                window.run_js(f"window.__voidcompassDeliver && window.__voidcompassDeliver({encoded})")
+                sent = True
+            if sent:
+                self.last_delivery[overlay_id] = (key, now)
+        except Exception:
+            # Unattached or navigating pages are retried by the shared feed.
+            pass
+
     def control_loop(self):
         last_status = {}
         while not self.closing:
             try:
                 manifest = self.manifest()
                 self.last_contact = time.monotonic()
-                restore_shared_transparency = False
-                # pywebview/WebView2 is unreliable when several dynamically
-                # created forms all begin navigation in the same message-loop
-                # pass.  Admit one new surface at a time with a real monotonic
-                # interval so live manifest traffic cannot collapse the queue
-                # back into an immediate burst.
-                created_window = False
-                for overlay_id, spec in manifest.items():
-                    if overlay_id not in self.controllers:
-                        if (created_window or time.monotonic()
-                                - self.last_window_created_at
-                                < WINDOW_CREATE_INTERVAL_S):
-                            continue
-                        try:
-                            self.create_window(overlay_id, spec, hidden=True)
-                        except Exception as exc:
-                            # One window that can't be made must not hold
-                            # back every overlay after it (5.5.18).
-                            self.last_window_created_at = time.monotonic()
-                            if overlay_id not in self.failed_windows:
-                                self.failed_windows.add(overlay_id)
-                                print(f"Overlay window failed: {overlay_id} ({exc})", flush=True)
-                            continue
-                        created_window = True
-                    controller = self.controllers[overlay_id]
-                    if spec.get("shutdown"):
-                        controller.hide()
-                        continue
-                    if (not spec.get("content_ready") and
-                            bool(getattr(controller.window, "_voidcompass_navigation_failed", False))):
-                        now = time.monotonic()
-                        if (controller.navigation_retries < 2 and
-                                now - controller.last_navigation_retry_at >= 1.5):
-                            controller.window._voidcompass_navigation_failed = False
-                            controller.hide()
-                            controller.navigation_retries += 1
-                            controller.last_navigation_retry_at = now
-                            print(f"Overlay navigation retry: {overlay_id} ({controller.navigation_retries})", flush=True)
-                            controller.window.load_url(self.page_url(
-                                overlay_id, spec.get("template"),
-                            ) + f"&host_retry={controller.navigation_retries}")
-                    elif spec.get("content_ready"):
-                        controller.navigation_retries = 0
+                runtime = getattr(self, "runtime", None)
+                if runtime is not None:
+                    changes = runtime.call(lambda: self._apply_manifest(manifest, last_status))
+                else:
+                    changes = self._apply_manifest(manifest, last_status)
+                if changes:
                     try:
-                        reload_revision = int(spec.get("reload_revision") or 0)
-                    except (TypeError, ValueError):
-                        reload_revision = 0
-                    if reload_revision > controller.reload_revision:
-                        controller.hide()
-                        print(f"Overlay page retry: {overlay_id} ({reload_revision})", flush=True)
-                        controller.window.load_url(self.page_url(
-                            overlay_id, spec.get("template"),
-                        ) + f"&reload={reload_revision}")
-                        controller.reload_revision = reload_revision
-                    result = controller.apply(
-                        spec.get("window"),
-                        presentation_held=self.presentation_held,
-                        content_ready=bool(spec.get("content_ready", False)),
-                        render_current=bool(spec.get("render_current", True)),
-                    )
-                    restore_shared_transparency = bool(
-                        result.pop("_restore_all_transparency", False)
-                    ) or restore_shared_transparency
-                    if result != last_status.get(overlay_id):
-                        last_status[overlay_id] = result
-                        try:
-                            _request_json(self._url("/api/host-status", overlay_id), result)
-                        except Exception:
-                            pass
-                for overlay_id, controller in self.controllers.items():
-                    if overlay_id not in manifest:
-                        controller.hide()
-                if restore_shared_transparency:
-                    for controller in self.controllers.values():
-                        if controller.last_visible:
-                            _apply_webview_transparency(controller.window)
+                        _request_json(self._url("/api/host-status-batch"), {"overlays": changes})
+                        last_status.update(changes)
+                    except Exception:
+                        pass
             except Exception:
                 if time.monotonic() - self.last_contact > 15.0:
                     self.close()
@@ -1063,8 +1104,7 @@ def _run_composition(url):
         return None
     host.runtime = runtime
     try:
-        first_id, first_spec = next(iter(manifest.items()))
-        host.create_window(first_id, first_spec, hidden=True)
+        runtime.call(lambda: host._apply_manifest(manifest, {}))
         host.control_loop()
     finally:
         host.close()

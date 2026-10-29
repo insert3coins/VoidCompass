@@ -11,6 +11,7 @@ const FREQUENCIES = {off: "Off", rare: "Rare", occasional: "Occasional", chatty:
 const MOOD_LABELS = {pleased: "PLEASED", wary: "WARY", curious: "CURIOUS", downcast: "DOWNCAST"};
 
 let orb = null;
+let lastThought = "";
 let lastLogKey = "";
 
 function ago(seconds) {
@@ -74,7 +75,11 @@ function shell(root, ui) {
   </nav>
   <div class="watcher-page watcher-now" data-watcher-panel="now">
     <aside class="watcher-eye-panel" aria-label="The Watcher">
-      <div class="watcher-eye"><canvas id="watcher-orb" aria-hidden="true"></canvas></div>
+      <div class="watcher-optics-stage">
+        <div class="watcher-stage-head"><span>THE WATCHER</span><small id="watcher-feed">JOURNAL LINK</small></div>
+        <div class="watcher-eye"><canvas id="watcher-orb" aria-hidden="true"></canvas></div>
+        <div class="watcher-stage-caption"><b id="watcher-flight-state"></b><span id="watcher-last-event"></span></div>
+      </div>
       <blockquote class="watcher-latest" id="watcher-latest"><span></span><cite></cite></blockquote>
       <div class="watcher-actions">
         <button type="button" class="primary" data-ws-page="watcher" data-ws-op="poke" id="watcher-poke">POKE</button>
@@ -199,6 +204,7 @@ function shell(root, ui) {
     orb?.dispose?.();
     orb = new window.HeartbeatOrb(canvas);
     window.watcherPageOrb = orb;
+    lastThought = "";
   }
   // A chapter chosen in the index opens in the reader beside it.
   root.querySelector("#watcher-lore").addEventListener("click", (event) => {
@@ -396,14 +402,31 @@ export function renderWatcher(data = {}, ui) {
   if (!root) return;
   if (!root.querySelector(".watcher-page")) shell(root, ui);
   const reduced = document.body.classList.contains("reduced-motion");
+  const feed = data.heartbeat || {};
+  const optics = feed.orb || {};
   orb?.update({
-    palette: {}, eye: data.eye, reducedMotion: reduced, events: [], frameRate: data.frame_rate,
-    liveliness: "standard", idle: true, personality: data.nature,
-    memory: {sessions: data.sessions, bond: data.bond?.level},
+    palette: {}, eye: data.eye, reducedMotion: reduced, events: feed.events || [], frameRate: data.frame_rate,
+    liveliness: optics.liveliness || "standard", idle: optics.idle !== false, personality: data.nature,
+    memory: feed.memory || {sessions: data.sessions, bond: data.bond?.level},
+    stalled: Boolean(feed.stalled), state: feed.state, statusSeq: feed.status_seq,
+    vitals: feed.vitals, story: optics.story,
   });
+  if (data.renderer_logging) orb?.watchRenderer((renderer, reason) => ui.command("watcher_renderer", {surface: "dashboard", renderer, ...(reason ? {reason} : {})}));
 
   const log = Array.isArray(data.log) ? data.log : [];
   const latest = log[0];
+  const thoughtKey = latest ? `${latest.at}|${latest.text}` : "";
+  if (thoughtKey !== lastThought) {
+    if (latest && lastThought && latest.mood) orb?.showMood?.(latest.mood);
+    lastThought = thoughtKey;
+  }
+  const feedLabel = ui.byId("watcher-feed");
+  feedLabel.textContent = !data.enabled ? "OVERLAY OFF" : feed.status ? (feed.stalled ? "FEED QUIET" : "JOURNAL LIVE") : "JOURNAL LINK";
+  feedLabel.dataset.live = String(Boolean(data.enabled && feed.status && !feed.stalled));
+  ui.byId("watcher-flight-state").textContent = feed.state || feed.activity || "";
+  const recentEvent = (feed.events || []).at(-1);
+  const eventName = recentEvent?.event || recentEvent?.name || "";
+  ui.byId("watcher-last-event").textContent = eventName.replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase();
   const quote = ui.byId("watcher-latest");
   quote.querySelector("span").textContent = latest ? latest.text : "It hasn't said anything yet. Give it a moment.";
   quote.querySelector("cite").textContent = latest ? `THE WATCHER · ${ago(latest.at).toUpperCase()}` : "THE WATCHER";

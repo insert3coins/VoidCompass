@@ -253,6 +253,52 @@ class SurveyOverlayBrowserTests(unittest.TestCase):
 
     # -- system survey ---------------------------------------------------
 
+    def test_quiet_refreshes_and_new_counts_keep_the_live_cards_and_animation_clocks(self):
+        data = system_snapshot([bio_world(f"Atlas {i}", bio_count=2) for i in range(1, 4)],
+                               scanned=3, total=8, rotation=ALWAYS)
+        data["effects"]["reduced_motion"] = False
+        self.render(data)
+        self.page.wait_for_timeout(150)
+        self.page.evaluate("""() => {
+          window.cards = ['.spotlight', '.planet-sphere', '.manifest', '.rail-sweep'].map(s => document.querySelector(s));
+          window.turning = cards[0].getAnimations({subtree:true});
+          window.childChanges = [];
+          new MutationObserver(records => childChanges.push(...records)).observe(document.querySelector('#survey'),{childList:true,subtree:true});
+        }""")
+        data["window"] = {"height": 630, "visible": True}
+        self.render(data)
+        self.assertEqual(self.page.evaluate('childChanges.length'), 0)
+        data["survey"]["scanned"] = 4
+        self.render(data)
+        self.assertEqual(self.page.evaluate("""() => cards.map((node,i) => node === document.querySelector(
+          ['.spotlight','.planet-sphere','.manifest','.rail-sweep'][i]))"""), [True] * 4)
+        self.assertTrue(self.page.evaluate('turning.every(a => cards[0].getAnimations({subtree:true}).includes(a))'))
+        self.assertIn('FSS 4/8', self.page.locator('.context-fss').inner_text())
+        data["survey"]["rows"][0]["complete"] = 1
+        self.render(data)
+        self.page.evaluate("window.progressFill=document.querySelector('.overview-rail > i');window.fromFill=progressFill.style.getPropertyValue('--from-fill')")
+        data["survey"]["scanned"] = 5
+        self.render(data)
+        self.assertTrue(self.page.evaluate("progressFill === document.querySelector('.overview-rail > i') && progressFill.classList.contains('event-progress')"))
+        self.assertTrue(self.page.evaluate("progressFill.style.getPropertyValue('--from-fill') === fromFill"))
+        self.tick()
+        self.assertEqual(self.state()["spotIndex"], 2)
+        self.check_geometry()
+
+    def test_refresh_patches_changed_readings_without_replacing_other_worlds(self):
+        data = system_snapshot([bio_world(f"Atlas {i}", bio_count=2) for i in range(1, 4)],rotation=ALWAYS)
+        self.render(data)
+        self.page.evaluate("window.keptWorld=document.querySelector('.manifest .body-row')")
+        data["survey"]["rows"][1]["needs_dss"] = False
+        self.render(data)
+        self.assertEqual(self.state()["spotlight"], '2')
+        self.assertTrue(self.page.evaluate("keptWorld === document.querySelector('.manifest .body-row')"))
+        self.assertTrue(self.state()["held"])
+        self.assertEqual(self.page.locator('.spotlight').get_attribute('data-body-key'), 'atlas 2')
+        self.tick()
+        self.assertEqual(self.state()["spotlight"], '3')
+        self.check_geometry()
+
     def test_every_planet_class_reaches_the_spotlight(self):
         rows = []
         for index, (planet_class, _) in enumerate(CLASSES, 1):

@@ -111,6 +111,8 @@ class OverlayInputStyleTests(unittest.TestCase):
             presentation_held=False,
             content_ready=False,
             render_current=True,
+            strict_ready=False,
+            push_updates=False,
         )
 
     def test_failed_initial_navigation_retries_before_watchdog(self):

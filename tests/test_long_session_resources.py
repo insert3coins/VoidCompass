@@ -29,9 +29,10 @@ class FetchRepliesAreReadTests(unittest.TestCase):
         post = post[:post.index("\n  }\n")]
         self.assertIn("response.arrayBuffer()", post, "visualizer levels, fifteen a second")
         client = (WEB / "assets" / "overlay-client.js").read_text(encoding="utf-8")
+        sender = client[client.index("async function request(path"):client.index("async function announceReady(")]
+        self.assertIn("await response.json()", sender[:sender.index("response.ok")])
         for path in ("/api/ready", "/api/rendered"):
-            call = client[client.index(f"fetch(`{path}"):]
-            self.assertIn("await drain(response)", call[:call.index("response.ok")], path)
+            self.assertIn(f'request("{path}"', client, "every acknowledgement uses the consuming sender")
         atlas = (WEB / "galactic_map" / "app.js").read_text(encoding="utf-8")
         command = atlas[atlas.index("function command(payload)"):]
         self.assertIn("arrayBuffer()", command[:command.index("\n}\n")], "the atlas heartbeat")

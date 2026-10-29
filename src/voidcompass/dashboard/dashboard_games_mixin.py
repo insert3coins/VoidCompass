@@ -20,7 +20,7 @@ import time
 from voidcompass.core import hatchling
 from voidcompass.core.config import get_active_profile, get_profile_file
 from voidcompass.core.paths import resource_path
-from voidcompass.overlays.hatchling_hud import hatchling_overlay_options
+from voidcompass.overlays.hatchling_hud import REACTION_S, hatchling_overlay_options
 
 logger = logging.getLogger(__name__)
 
@@ -161,10 +161,15 @@ class DashboardGamesMixin:
 
     def _games_live(self, game_id):
         if game_id == "hatchling":
-            live = hatchling.view(self._hatchling_state(), time.time())
+            now = time.time()
+            live = hatchling.view(self._hatchling_state(), now)
             if live.get("pet"):
+                if now - float(live["pet"].get("reaction_at") or 0) >= REACTION_S:
+                    live["pet"]["reaction"] = ""
                 live["pet"]["music"] = self._hatchling_music()
+                live["pet"]["music_started_at"] = getattr(self, "_hatchling_music_started_at", None) if live["pet"]["music"] else None
                 live["pet"]["watcher"] = self._hatchling_watcher_seen(side=(0, -1))
+                live["pet"]["options"] = hatchling_overlay_options(self.config)
             return live
         if game_id in {"touchdown", "scarab-patrol"}:
             return self._games_gravity()
@@ -412,7 +417,9 @@ class DashboardGamesMixin:
         moment = pet.get("moment") or {}
         now = pet.get("last")
         situation = ""
-        if moment.get("kind") in {"toy", "trick"} and moment.get("at") == now:
+        if cue.get("at") == now and cue.get("kind") == "biology":
+            situation = "biology"
+        elif moment.get("kind") in {"toy", "trick"} and moment.get("at") == now:
             situation = moment["kind"]
         elif cue.get("at") == now:
             situation = cue.get("kind") or ""
@@ -537,8 +544,10 @@ class DashboardGamesMixin:
             return
         from voidcompass.overlays.hatchling_hud import build_hatchling_model
         now = time.time()
-        model = build_hatchling_model(hatchling.view(self._hatchling_state(), now), now, music=self._hatchling_music(),
-                                      options=hatchling_overlay_options(self.config), watcher=self._hatchling_watcher_seen())
+        playing = self._hatchling_music()
+        model = build_hatchling_model(hatchling.view(self._hatchling_state(), now), now, music=playing,
+                                      options=hatchling_overlay_options(self.config), watcher=self._hatchling_watcher_seen(),
+                                      music_started_at=getattr(self, "_hatchling_music_started_at", None) if playing else None)
         if not force and model == getattr(self, "_hatchling_overlay_model", None):
             return
         self._hatchling_overlay_model = model

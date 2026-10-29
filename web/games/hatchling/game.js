@@ -10,10 +10,10 @@
   const {clamp, between, pick, lerp} = Kit;
   const colours = {bg: "#03060a", panel: "#0b1513", border: "#1f3a33", accent: "#4ee5b0", orange: "#ff8a3d", text: "#e6f4f0",
     muted: "#91a8b7", dim: "#5d736d", green: "#54e39a", yellow: "#f5c76d", red: "#ff6b70"};
-  const SPECIES = ["larva", "bot", "sample"];
+  const SPECIES = ["larva", "thargoid", "bot", "sample"];
   const KINDS = ["bacterium", "tubus", "fungoida"];
-  const NAMES = {larva: "THARGOID LARVA", bot: "REMLOK BOT", sample: "EXOBIOLOGY SAMPLE"};
-  const HUE = {larva: "#4ee5b0", bot: "#ffb35c", sample: "#c7f06a"};
+  const NAMES = {larva: "THARGOID LARVA", thargoid: "THARGOID FOUNDLING", bot: "REMLOK BOT", sample: "EXOBIOLOGY SAMPLE"};
+  const HUE = {larva: "#4ee5b0", thargoid: "#b3e650", bot: "#ffb35c", sample: "#c7f06a"};
   const NEEDS = [["hunger", null], ["mood", "MOOD"], ["clean", "CLEAN"], ["health", "HEALTH"], ["energy", "SLEEP"]];
   const STAGE_ENDS = {egg: [0, .5, "HATCHLING"], hatchling: [.5, 24, "JUVENILE"], juvenile: [24, 72, "ADULT"]};
   const POD = {x: 300, y: 232, rx: 262, ry: 150};
@@ -422,7 +422,7 @@
     const n = canvas.getContext("2d");
     n.fillStyle = "#020408";
     n.fillRect(0, 0, W, H);
-    const tint = {larva: ["#0a4a3a", "#1a2a6a", "#0a3050"], bot: ["#4a2a0a", "#2a1a4a", "#3a1010"], sample: ["#2a4a0a", "#0a3a3a", "#3a2a5a"]}[species];
+    const tint = {larva: ["#0a4a3a", "#1a2a6a", "#0a3050"], thargoid: ["#244a08", "#1a3a30", "#201044"], bot: ["#4a2a0a", "#2a1a4a", "#3a1010"], sample: ["#2a4a0a", "#0a3a3a", "#3a2a5a"]}[species] || ["#0a4a3a", "#1a2a6a", "#0a3050"];
     for (let i = 0; i < 9; i += 1) {
       const x = between(-50, W + 50), y = between(-50, H * .7), r = between(120, 300);
       const cloud = n.createRadialGradient(x, y, 0, x, y, r);
@@ -615,7 +615,7 @@
   }
 
   function mixShell() {
-    return {larva: "#9dffd2", bot: "#e9edf2", sample: "#e2ff9a"}[pet()?.species || "larva"];
+    return {larva: "#9dffd2", thargoid: "#d5f7a0", bot: "#e9edf2", sample: "#e2ff9a"}[pet()?.species || "larva"];
   }
 
   function drawHatchFx() {
@@ -762,8 +762,10 @@
     glow(hue(), 16);
     text(p.name.toUpperCase(), 22, 38, 28, "#ffffff", "left", 700, Kit.DISPLAY);
     ctx.shadowBlur = 0;
+    const form = (p.form_name || p.kind_name || p.species_name).toUpperCase();
+    const stage = (p.stage_name || p.stage).toUpperCase();
     const title = p.stage === "egg" ? `${p.species_name.toUpperCase()} · EGG`
-      : `${(p.form_name || p.kind_name || p.species_name).toUpperCase()} · ${p.stage.toUpperCase()} · ${ageText(p.age_hours)}`;
+      : `${form}${stage === form ? "" : ` · ${stage}`} · ${ageText(p.age_hours)}`;
     text(title, 22, 58, 10, colours.muted, "left");
     // The mood, as a chip.
     const word = p.stage === "egg" && p.hatch_minutes > 0 ? `HATCHES IN ${p.hatch_minutes} MIN` : p.mood_word;
@@ -1031,14 +1033,14 @@
     text("A POCKET PET FOR YOUR COCKPIT · CHOOSE AN EGG", W / 2, 90, 11, colours.accent);
     buttons = [];
     SPECIES.forEach((species, index) => {
-      const x = 110 + index * 190, y = 300, picked = choice.species === species, tone = HUE[species];
+      const x = 75 + index * 150, y = 300, picked = choice.species === species, tone = HUE[species];
       pedestal(x, y, tone, picked);
-      const size = picked ? 150 : 118;
+      const size = picked ? 125 : 100;
       const egg = {species, stage: "egg", kind: choice.kind, hatch_minutes: picked ? 3 : 30, needs: {mood: picked ? 90 : 50}};
       const art = {x, y: y - 70 + Math.sin(cab.tick / 30 + index) * 6, size, t: cab.tick / 60, aura: picked};
       window.Hatchling3D?.draw(ctx, egg, art);
       text(NAMES[species], x, y + 54, 12, picked ? "#ffffff" : colours.muted);
-      buttons.push({x: x - 80, y: y - 160, w: 160, h: 230, act: () => { if (choice.species !== species) { choice.species = species; sfx.blip(); } }});
+      buttons.push({x: x - 72, y: y - 160, w: 144, h: 230, act: () => { if (choice.species !== species) { choice.species = species; sfx.blip(); } }});
     });
     const spec = view?.species?.[choice.species];
     if (spec) wrap(spec.blurb, W / 2, 392, 520, 13, colours.text, 18, 3, "center");

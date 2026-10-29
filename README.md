@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.6.7**
+**Current version: 5.6.8**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
@@ -35,7 +35,8 @@ The command deck has a tab for each part of the game:
 - **Void Wrapped**: your year in Elite, told as a story of animated cards, from how far you flew to your fights, your soundtrack and the Watcher's verdict. Every card saves as a picture for Discord.
 - **Keepsakes**: postcards from your screenshots, time capsules (notes you leave in a system, handed back when you return), On this day, and your journey drawn as constellations.
 - **Music**: a player for your own music files, with an overlay you can show in game.
-- **Games**: fourteen arcade cabinets in Elite's world to play in the deck (from Docking Computer to Trumble Trouble), and **Hatchling**, a pocket pet that lives in real time and is raised by how you really play, with its own overlay.
+- **Games**: fourteen arcade cabinets in Elite's world to play in the deck, from Docking Computer to Trumble Trouble.
+- **Hatchling**: a shipboard companion that lives in real time, is raised by how you really play, and has its own habitat and overlay.
 - **The Watcher**: an eye that watches your journal and thinks out loud beside it, about what you're doing, where you've been and its own long story. It remembers you between sessions. Its voice is off until you turn it on.
 
 Everything else is quiet on purpose: it shows up on the deck, in notifications and on the overlays.
@@ -48,7 +49,13 @@ Navigation HUD, Survey Operations, Jump Info, Deep Space Contact Scope, Construc
 
 The **Rig Tracker** is for Rhino mining: press a hotkey as you deploy each mining rig and it points the way back to every one, with how far and how long it's been down, and how full your holds are.
 
+The Navigation HUD's journal-driven state scenes use bundled Three.js graphics, projected as holograms in the state's colour. Its Hologram setting offers Full animation, Still poses or Off. A WebGL problem is shown in the scene viewport; there is no 2D scene fallback. The FSD cooldown has an animated venting drive core, driven by the journal's recovery state. Cruise fields fade individual particles at their boundaries, and FSS, DSS and exploration scenes combine native 3D objects with cockpit-style linework.
+
+The boot screen centres the Watcher's eye beneath the Void Compass title, with real journal catch-up counts, commander and ship details, independent system readiness, an update-check indicator and expandable startup details. Three.js modules preload during boot. The composition overlay host creates its windows together and applies each manifest in one UI pass, keeping its DPI and text-fit rules. Hidden pages still wait for fresh rendered content before appearing. The Watcher's voice starts only after the boot screen closes.
+
 **Overlay Studio** lays them out on your actual monitors. It also has their opacity, a frame-rate cap and per-overlay options. Overlays can hide themselves while the galaxy or system map is open, and the switches along the top of the deck turn any of them on or off quickly. OBS can capture each overlay as its own window.
+
+The shared host pushes changed models to visible and hidden overlay pages. Each model travels with its revision; ordinary readings can catch up to the latest state while notification and companion event changes retain their order. Height and shape reports identify the page generation and layout they measured, protecting newer layouts from delayed replies and preserving text and monitor scaling.
 
 ## Commanders and your data
 
@@ -98,6 +105,10 @@ python VoidCompass.py
 The code lives in `src/voidcompass`, grouped by area: `core`, `dashboard`, `overlays`, `exploration`, `engineering`, `mining`, `powerplay`, `colonisation`, `bgs` and `services`. The deck and overlay pages are in `web`, reference data in `data`, tests in `tests` and build scripts in `tools`.
 
 To build a release, run `python tools/build.py`. It creates the app in `dist` and the zip in `release`.
+
+To capture the shared Hatchling models for a community post, run `.venv\Scripts\python.exe tools\hatchling_showcase.py`. It writes individual companion and outfit cards, transparent PNGs and galleries to `exports/hatchlings-5.6.8`.
+
+To diagnose the Watcher renderer, close the app and set `"watcher_renderer_logging": true` in the root `config.json` beside the executable (or in the source run's folder). On the next launch, `logs/watcher_renderer.log` records whether the boot eye uses Three.js or the canvas fallback. It also records the dashboard Watcher and Heartbeat overlay once each when they have drawn. A fallback report says whether the Three.js module failed to load or the renderer could not start. Set it back to `false` to turn this diagnostic off; the setting is off by default.
 
 ## Contributing
 

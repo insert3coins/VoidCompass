@@ -24,6 +24,7 @@ import {renderGames} from "./games.js";
 import {renderHatchling, setHatchlingActive} from "./hatchling.js";
 import {renderFlightLogs} from "./flightlog.js";
 import {renderWrapped} from "./wrapped.js";
+import {renderAbout} from "./about.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
@@ -32,8 +33,6 @@ let model = {};
 // The music player runs behind every page once the deck is up (music.js).
 let musicDeck = null;
 let currentPage = "overview";
-let aboutMatrixFrame = 0;
-let aboutMatrixState = null;
 let profileKey = "default";
 let feedFilter = "ALL";
 let flightLogFilter = "ALL";
@@ -150,7 +149,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".suite-tabs button", "[data-analytics-view]",
   ".galnet-headline-row", "#status-galnet",
   ".survey-body-row", ".explore-views button", "[data-explore-filter]", ".body-select",
-  ".settings-tab", ".theme-option",
+  ".settings-tab", ".theme-option", ".settings-group-link", ".settings-clear-search", ".settings-studio-link",
   ".music-button", ".music-mode", ".music-playlist", ".music-smart", ".music-list-play", ".music-track-head button", ".music-upnext li button", ".music-viz-menu button",
   "[data-follow-fold]",
   ".pp-tabs button", ".pp-task-main", ".pp-power", "[data-pp-filter]",
@@ -683,11 +682,14 @@ function renderBoot(state) {
   }
   lastBootStage = activeStage.key;
   for (const [index, stage] of stages.entries()) {
-    const active = index === activeIndex;
-    stage.node.classList.toggle("ready", stage.ready);
+    const reported = boot.systems?.[stage.key];
+    const systemState = reported || (stage.ready ? "ready" : index === activeIndex ? "working" : "waiting");
+    const active = systemState === "working";
+    stage.node.dataset.state = systemState;
+    stage.node.classList.toggle("ready", systemState === "ready");
     stage.node.classList.toggle("active", active);
     const badge = stage.node.querySelector(":scope > b");
-    if (badge) badge.textContent = stage.ready ? "READY" : active ? "ACTIVE" : "WAIT";
+    if (badge) badge.textContent = ({ready: "READY", working: "ACTIVE", waiting: "WAIT", background: "BACKGROUND", cached: "CACHED", off: "OFF"})[systemState] || "WAIT";
   }
   const announcement = {
     active: Boolean(boot.active),
@@ -695,6 +697,15 @@ function renderBoot(state) {
     detail: String(boot.detail || ""),
     progress,
     events: number(boot.events),
+    eventsKnown: Number.isFinite(boot.events),
+    commander: String(state.profile?.commander || boot.commander || ""),
+    system: String(state.flight?.system || ""),
+    ship: String(state.flight?.ship || ""),
+    journalState: boot.systems?.journal || (boot.status === "JOURNAL LINK OFFLINE" ? "cached" : boot.journal_live ? "ready" : "working"),
+    overlaysReady: number(boot.overlays_ready),
+    overlaysTotal: number(boot.overlays_total),
+    eye: boot.eye === "hal" ? "hal" : "theme",
+    update: state.update || {},
     stage: activeStage.key,
     version: String(state.app?.version || ""),
   };
@@ -3308,15 +3319,14 @@ function renderLedgerWorkspace(data) {
 // channel answers before Python applies a save, so each save carries an id
 // and the next snapshot's last_save says whether it was kept.
 const SETTINGS_SECTIONS = [
-  {id: "journal", title: "Journal & files", heading: "Where Void Compass reads from"},
-  {id: "appearance", title: "Appearance", heading: "How the command deck looks"},
-  {id: "flight", title: "Flight & exploration", heading: "Warnings and helpers in flight"},
-  {id: "hotkeys", title: "Hotkeys", heading: "Shortcuts that work while Elite has focus"},
-  {id: "galnet", title: "Galnet", heading: "News from the Galnet relay"},
-  {id: "integrations", title: "Integrations", heading: "EDSM, Inara, EDDN and Discord"},
-  {id: "diagnostics", title: "Diagnostics & recovery", heading: "Logs, safety nets and the journal cache"},
-  // Its own page since 5.5.4 (it was part of Diagnostics & recovery).
-  {id: "updates", title: "Updates", heading: "New versions of Void Compass"},
+  {id: "journal", title: "Journal & files", heading: "Journal & files", category: "FLIGHT RECORDS", detail: "Connect your flight journals and screenshots. Every discovery begins with a good record."},
+  {id: "appearance", title: "Appearance", heading: "Make yourself at home", category: "PRESENTATION", detail: "Choose your palette, find a comfortable text size and make the deck your own."},
+  {id: "flight", title: "Flight & exploration", heading: "Flight & exploration", category: "FIELD PREFERENCES", detail: "Tune the helpers that travel with you, from fuel warnings to your next expedition."},
+  {id: "hotkeys", title: "Hotkeys", heading: "A shortcut to your cockpit", category: "COMMAND INPUT", detail: "Keep your hands on the controls. These shortcuts work while Elite Dangerous has focus."},
+  {id: "galnet", title: "Galnet", heading: "A signal from the Bubble", category: "NEWS RELAY", detail: "Choose how often the news arrives and how headlines move through your deck."},
+  {id: "integrations", title: "Integrations", heading: "Connections you choose", category: "EXTERNAL SERVICES", detail: "Manage community services, sharing and your local API. Each connection has its own controls."},
+  {id: "diagnostics", title: "Diagnostics & recovery", heading: "Keep the compass steady", category: "SYSTEM CARE", detail: "Check the runtime, collect a useful report and look after this commander's local history."},
+  {id: "updates", title: "Updates", heading: "Ready for the next leg", category: "RELEASE CHANNEL", detail: "Your installed version, the latest check and a clear path to the next release."},
 ];
 let settingsSection = "journal";
 let settingsSaveSequence = 0;
@@ -3324,6 +3334,36 @@ const settingsPendingSaves = new Map();
 let settingsWorkshopOpen = false;
 
 const settingSearchText = (...parts) => escapeHtml(parts.filter(Boolean).join(" ").toLocaleLowerCase());
+
+// Native schematics stay sharp when the deck's text or window scale changes.
+function settingsIcon(id) {
+  const paths = {
+    journal: '<path d="M6 3h10l3 3v15H6zM15 3v5h4M9 12h7M9 16h5"/>',
+    appearance: '<path d="M3 6h18M3 12h18M3 18h18"/><path d="M7 3v6M16 9v6M10 15v6" stroke-width="3"/>',
+    flight: '<path d="m12 2 9 18-9-4-9 4zM12 2v14"/>',
+    hotkeys: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M5 9h2m3 0h2m3 0h2M5 13h2m3 0h2m3 0h4M7 16h10"/>',
+    galnet: '<path d="M12 5v15M7 20h10M8 8a6 6 0 0 0 0 8m8-8a6 6 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/><circle cx="12" cy="10" r="2"/>',
+    integrations: '<rect x="8" y="8" width="8" height="8"/><path d="M12 2v6M12 16v6M2 12h6M16 12h6M5 5l3 3m8 8 3 3M5 19l3-3m8-8 3-3"/>',
+    diagnostics: '<path d="M2 12h5l3-8 4 16 3-8h5"/>',
+    updates: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
+  };
+  return `<svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[id] || paths.journal}</svg>`;
+}
+
+const SETTINGS_GROUP_NOTES = {
+  JOURNAL: "The source of your flight history.", SCREENSHOTS: "Bring your captures into the journey.",
+  THEME: "A different atmosphere, applied as soon as you choose it.", DISPLAY: "Comfortable reading, at your preferred scale.",
+  FLIGHT: "Small helps for the next jump.", EXPEDITIONS: "Choose what matters on the long route.",
+  HOME: "A familiar point to measure the distance from.", "COMMAND DECK": "How the dashboard follows your flight.",
+  ACHIEVEMENTS: "Milestones earned along the way.", SHORTCUTS: "Record a combination, clear it, or return to the defaults.",
+  RELAY: "A connection to Frontier's Galnet feed.", "NEWS BAR": "Set the pace of your headlines.",
+  EDSM: "Your exploration record in the community atlas.", INARA: "Your commander, ships and activity on Inara.",
+  "RAVEN COLONIAL": "Keep your colonisation team in the loop.", BGS: "Online reference data for the background simulation.",
+  TRADING: "Market and route searches when you ask for them.", EDDN: "Contribute the markets you visit to the network.",
+  "LOCAL API": "Connect your own tools and devices.", DISCORD: "Carrier and expedition updates for your channel.",
+  DIAGNOSTICS: "Useful evidence when something needs attention.", RECOVERY: "Checkpoints and backups for this commander.",
+  "JOURNAL CACHE": "Rebuild the local exploration archive from your journals.",
+};
 
 function settingFlag() {
   return `<em class="setting-flag" aria-live="polite"></em>`;
@@ -3345,7 +3385,8 @@ function settingText({key, id = "", label, detail = "", value, secret = false, b
     browse ? `<button type="button" data-settings-browse="${escapeHtml(key)}">BROWSE</button>` : "",
     secret ? `<button type="button" data-settings-reveal aria-pressed="false">SHOW</button>` : "",
   ].join("");
-  return `<div class="setting-row wide" data-search="${settingSearchText(label, detail, key)}"><span class="setting-copy"><b>${escapeHtml(label)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</span>${chip}<span class="setting-control"><input${id ? ` id="${escapeHtml(id)}"` : ""} type="${secret ? "password" : "text"}" data-setting="${escapeHtml(key)}" value="${escapeHtml(value ?? "")}" placeholder="${escapeHtml(placeholder)}" autocomplete="off" spellcheck="false">${tools}</span>${settingFlag()}</div>`;
+  const fieldId = id || `setting-${key}`;
+  return `<div class="setting-row wide" data-search="${settingSearchText(label, detail, key)}"><label class="setting-copy" for="${escapeHtml(fieldId)}"><b>${escapeHtml(label)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</label>${chip}<span class="setting-control"><input id="${escapeHtml(fieldId)}" type="${secret ? "password" : "text"}" data-setting="${escapeHtml(key)}" value="${escapeHtml(value ?? "")}" placeholder="${escapeHtml(placeholder)}" autocomplete="off" spellcheck="false">${tools}</span>${settingFlag()}</div>`;
 }
 
 function settingActions(buttons, search = "") {
@@ -3357,7 +3398,8 @@ function settingNote(textValue, id = "") {
 }
 
 function settingGroup(title, body) {
-  return `<div class="settings-group"><h4>${escapeHtml(title)}</h4>${body}</div>`;
+  const note = SETTINGS_GROUP_NOTES[title.toUpperCase()];
+  return `<div class="settings-group" data-settings-group="${layoutSlug(title)}"><header class="settings-group-head"><h4>${escapeHtml(title)}</h4>${note ? `<p>${escapeHtml(note)}</p>` : ""}</header>${body}</div>`;
 }
 
 function settingsSummaries(data) {
@@ -3403,7 +3445,7 @@ function settingsSectionBody(id, data) {
     const colors = (editor.keys || []).map((key) => `<label><span>${escapeHtml(key.replaceAll("_", " "))}</span><input type="color" data-theme-color="${escapeHtml(key)}" value="${escapeHtml(editor.palette?.[key] || "#000000")}"></label>`).join("");
     return settingGroup("THEME", `<div class="theme-options" data-search="${settingSearchText("theme palette colour color", (data.themes || []).map((theme) => theme.name).join(" "))}">${cards}</div>`)
       + settingGroup("DISPLAY", `${settingSelect({key: "ui_text_scale_percent", label: "Text size", detail: "Makes all the deck's text bigger, keeping the layout as it is.", value: number(value.ui_text_scale_percent, 100), options: [[100, "Standard"], [110, "110%"], [120, "120%"], [135, "135%"], [150, "150%"]], type: "number"})}${settingSelect({key: "ui_text_min_px", label: "Smallest text", detail: "Raises the small labels to at least this size and leaves the headings alone. The easiest fix if the fine print is hard to read.", value: number(value.ui_text_min_px, 0), options: [[0, "As designed"], [10, "10 px"], [11, "11 px"], [12, "12 px"], [13, "13 px"], [14, "14 px"]], type: "number"})}${settingSelect({key: "overlay_text_scale_percent", label: "Overlay text size", detail: "Text on every cockpit overlay. Overlays grow to fit it; one overlay can have its own size in Overlay Studio.", value: number(value.overlay_text_scale_percent, 100), options: [75, 90, 100, 110, 125, 140, 160, 180, 200].map((item) => [item, item === 100 ? "Standard" : `${item}%`]), type: "number"})}${settingSelect({key: "ui_scale_percent", label: "Command deck scale", detail: "Zooms everything in this window, text, panels and maps, as Ctrl+ does in a browser. Less fits on screen.", value: number(value.ui_scale_percent, 100), options: [90, 100, 110, 125, 140, 160].map((item) => [item, `${item}%`]), type: "number"})}${settingSwitch({key: "reduced_motion_enabled", label: "Reduced motion", detail: "Still frames instead of animation on the deck and every overlay.", checked: value.reduced_motion_enabled})}`)
-      + `<details class="settings-group theme-workshop"${settingsWorkshopOpen ? " open" : ""} data-search="${settingSearchText("theme workshop custom palette colours colors")}"><summary><h4>THEME WORKSHOP</h4><span>${numeric((editor.custom || []).length)} CUSTOM</span></summary><div class="theme-workshop-body"><div class="theme-workshop-head"><label>NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>DELETE A CUSTOM THEME<select id="custom-theme-existing"><option value="">CHOOSE ONE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><p class="setting-note">Starts from the active theme. Change any colour, then save it as your own.</p><div class="theme-colour-grid">${colors}</div><div class="setting-row actions"><button type="button" data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY</button><button type="button" class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED</button></div></div></details>`;
+      + `<details class="settings-group theme-workshop"${settingsWorkshopOpen ? " open" : ""} data-search="${settingSearchText("theme workshop custom palette colours colors")}"><summary><span class="theme-workshop-label"><h4>THEME WORKSHOP</h4><small>Build a palette of your own.</small></span><span>${numeric((editor.custom || []).length)} CUSTOM</span></summary><div class="theme-workshop-body"><div class="theme-workshop-head"><label>NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>DELETE A CUSTOM THEME<select id="custom-theme-existing"><option value="">CHOOSE ONE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><p class="setting-note">Starts from the active theme. Change any colour, then save it as your own.</p><div class="theme-colour-grid">${colors}</div><div class="setting-row actions"><button type="button" data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY</button><button type="button" class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED</button></div></div></details>`;
   }
   if (id === "flight") {
     return settingGroup("FLIGHT", `${settingSelect({key: "low_fuel_threshold_pct", label: "Low fuel warning", detail: "Warn when the main tank falls below this.", value: String(number(value.low_fuel_threshold_pct, .25)), options: [.1, .15, .2, .25, .3, .4, .5].map((item) => [String(item), `${Math.round(item * 100)}%`]), type: "number"})}${settingSwitch({key: "auto_copy_waypoint", label: "Auto-copy the next waypoint", detail: "As you arrive in a system, your next saved waypoint goes on the clipboard, ready to paste into the galaxy map. Also on the Command Deck, under COPY NEXT DESTINATION.", checked: value.auto_copy_waypoint})}`)
@@ -3415,7 +3457,7 @@ function settingsSectionBody(id, data) {
       + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingNote("Unlocks pop up in the cockpit's Achievements overlay: switch it on or off, and place it, in Overlay Studio.")}`);
   }
   if (id === "hotkeys") {
-    const rows = (data.hotkeys || []).map((row) => `<div class="setting-row hotkey-row" data-search="${settingSearchText(row.label, row.action, row.value, "hotkey shortcut")}"><span class="setting-copy"><b>${escapeHtml(row.label)}</b><small>${escapeHtml(row.default ? `Default ${row.default}` : "No default")}</small></span><span class="setting-control"><input data-hotkey-action="${escapeHtml(row.action)}" data-saved="${escapeHtml(row.value || "")}" value="${escapeHtml(row.value || "")}" placeholder="UNBOUND" readonly aria-label="${escapeHtml(row.label)} shortcut"><button type="button" data-hotkey-record="${escapeHtml(row.action)}">RECORD</button><button type="button" data-hotkey-clear="${escapeHtml(row.action)}">CLEAR</button></span>${settingFlag()}</div>`).join("");
+    const rows = (data.hotkeys || []).map((row) => `<div class="setting-row hotkey-row" data-search="${settingSearchText(row.label, row.action, row.value, "hotkey shortcut")}"><span class="setting-copy"><b>${escapeHtml(row.label)}</b><small>${escapeHtml(row.default ? `Default ${row.default}` : "No default")}</small></span><span class="setting-control"><input data-hotkey-action="${escapeHtml(row.action)}" data-saved="${escapeHtml(row.value || "")}" value="${escapeHtml(row.value || "")}" placeholder="UNBOUND" readonly aria-label="${escapeHtml(row.label)} shortcut"><button type="button" data-hotkey-record="${escapeHtml(row.action)}" aria-label="Record ${escapeHtml(row.label)} shortcut">RECORD</button><button type="button" data-hotkey-clear="${escapeHtml(row.action)}" aria-label="Clear ${escapeHtml(row.label)} shortcut">CLEAR</button></span>${settingFlag()}</div>`).join("");
     return settingGroup("SHORTCUTS", `${settingSwitch({key: "overlay_hotkeys_enabled", label: "System-wide hotkeys", detail: "Shortcuts work while Elite has focus.", checked: value.overlay_hotkeys_enabled})}<p class="hotkey-status" id="hotkey-status">Press RECORD, then the whole shortcut. It saves as soon as you press it.</p>${rows}${settingActions(`<button type="button" id="hotkey-defaults">RESTORE DEFAULTS</button>`, "restore default hotkeys")}`);
   }
   if (id === "galnet") {
@@ -3511,21 +3553,39 @@ function settingsHealthDetail(health = {}) {
 
 function renderSettingsWorkspace(data) {
   const root = byId("settings-workspace");
-  const scroller = root.closest(".page");
+  const scroller = root.closest(".pages");
   const scrollTop = scroller?.scrollTop || 0;
   const summaries = settingsSummaries(data);
   const profile = data.profile || {};
   if (!SETTINGS_SECTIONS.some((section) => section.id === settingsSection)) settingsSection = "journal";
   root.classList.remove("loading-panel");
+  const panels = SETTINGS_SECTIONS.map((section, index) => {
+    const body = document.createElement("template");
+    body.innerHTML = settingsSectionBody(section.id, data);
+    const groups = [...body.content.querySelectorAll(".settings-group")];
+    const links = groups.map((group) => {
+      const heading = group.querySelector("h4");
+      const name = heading?.textContent || "";
+      group.id = `settings-${section.id}-${group.dataset.settingsGroup || layoutSlug(name)}`;
+      if (heading) {
+        heading.id = `${group.id}-heading`;
+        heading.tabIndex = -1;
+        group.setAttribute("aria-labelledby", heading.id);
+      }
+      return `<button type="button" class="settings-group-link" data-settings-jump="${group.id}">${escapeHtml(name)}</button>`;
+    }).join("");
+    return `<section class="settings-section" data-settings-panel="${section.id}" aria-labelledby="settings-heading-${section.id}">
+      <header class="settings-section-head"><div><p>${String(index + 1).padStart(2, "0")} / ${section.category}</p><h3 id="settings-heading-${section.id}">${escapeHtml(section.heading)}</h3><span class="settings-section-detail">${escapeHtml(section.detail)}</span><small class="settings-section-summary">${escapeHtml(summaries[section.id] || "")}</small></div><div class="settings-section-emblem">${settingsIcon(section.id)}</div></header>
+      ${groups.length > 1 ? `<nav class="settings-group-nav" aria-label="Jump within ${escapeHtml(section.title)}"><span>JUMP TO</span>${links}</nav>` : ""}
+      <div class="settings-section-body">${body.innerHTML}</div></section>`;
+  }).join("");
   const html = `<div class="settings-shell">
-    <nav class="settings-rail" aria-label="Settings sections">
-      <header class="settings-commander"><small>ACTIVE PROFILE</small><b>CMDR ${escapeHtml(String(profile.name || "Unknown Commander").toUpperCase())}</b><span>${escapeHtml(profile.fid ? `FID ${profile.fid}` : "No Frontier ID yet")}</span></header>
-      ${SETTINGS_SECTIONS.map((section, index) => `<button type="button" class="settings-tab" data-settings-section="${section.id}"><i>${String(index + 1).padStart(2, "0")}</i><span><b>${escapeHtml(section.title)}</b><small>${escapeHtml(summaries[section.id] || "")}</small></span><em class="settings-tab-count"></em></button>`).join("")}
-    </nav>
-    <div class="settings-panels">
-      ${SETTINGS_SECTIONS.map((section, index) => `<section class="settings-section" data-settings-panel="${section.id}" aria-label="${escapeHtml(section.title)}"><header class="settings-section-head"><p>${String(index + 1).padStart(2, "0")} // ${escapeHtml(section.title.toUpperCase())}</p><h3>${escapeHtml(section.heading)}</h3></header>${settingsSectionBody(section.id, data)}</section>`).join("")}
-      <p class="settings-no-match" hidden>No setting matches that. Try a shorter word.</p>
-    </div>
+    <aside class="settings-rail">
+      <header class="settings-commander"><span class="settings-profile-mark" aria-hidden="true">${settingsIcon("flight")}</span><div><small>COMMANDER PREFERENCES</small><b>CMDR ${escapeHtml(profile.name || "Unknown Commander")}</b><span>${escapeHtml(profile.fid ? `FID ${profile.fid}` : "No Frontier ID yet")}</span></div></header>
+      <nav class="settings-rail-links" aria-label="Settings sections">${SETTINGS_SECTIONS.map((section) => `<button type="button" class="settings-tab" data-settings-section="${section.id}">${settingsIcon(section.id)}<span><b>${escapeHtml(section.title)}</b><small>${escapeHtml(summaries[section.id] || "")}</small></span><em class="settings-tab-count"></em></button>`).join("")}</nav>
+      <footer class="settings-rail-footer"><small>Looking for overlay windows &amp; effects?</small><button type="button" class="settings-studio-link" data-page="overlay-studio">OPEN OVERLAY STUDIO <span aria-hidden="true">↗</span></button></footer>
+    </aside>
+    <div class="settings-panels">${panels}<div class="settings-no-match" hidden><h3>No settings found.</h3><p>Try a shorter word, a feature name, or clear the search to browse.</p><button type="button" class="settings-clear-search" data-settings-clear>CLEAR SEARCH</button></div></div>
   </div>`;
   // Note: patched in place after the first draw, so a save doesn't flash the
   // whole page or take the caret out of the field you're typing in.
@@ -3635,6 +3695,7 @@ function applySettingsView() {
   const words = query.split(/\s+/).filter(Boolean);
   shell.classList.toggle("searching", Boolean(words.length));
   let matches = 0;
+  let matchingSections = 0;
   for (const panel of shell.querySelectorAll("[data-settings-panel]")) {
     const id = panel.dataset.settingsPanel;
     let panelMatches = 0;
@@ -3647,10 +3708,13 @@ function applySettingsView() {
       const rows = group.matches("[data-search]") ? [group] : [...group.querySelectorAll("[data-search]")];
       group.hidden = words.length > 0 && rows.every((row) => row.hidden);
     }
+    const jumps = panel.querySelector(".settings-group-nav");
+    if (jumps) jumps.hidden = words.length > 0;
     const health = panel.querySelector(".settings-health");
     if (health) health.hidden = words.length > 0;
     panel.hidden = words.length ? !panelMatches : id !== settingsSection;
     matches += panelMatches;
+    if (panelMatches) matchingSections += 1;
     const tab = shell.querySelector(`[data-settings-section="${id}"]`);
     if (tab) {
       tab.classList.toggle("active", !words.length && id === settingsSection);
@@ -3660,6 +3724,10 @@ function applySettingsView() {
     }
   }
   shell.querySelector(".settings-no-match").hidden = !words.length || matches > 0;
+  document.querySelector(".settings-toolbar [data-settings-clear]").hidden = !words.length;
+  text("settings-search-summary", words.length
+    ? `${matches} match${matches === 1 ? "" : "es"} across ${matchingSections} section${matchingSections === 1 ? "" : "s"}`
+    : `Search across all ${SETTINGS_SECTIONS.length} sections`);
 }
 
 function settingsSaveState(state, detail = "") {
@@ -3995,10 +4063,8 @@ function renderDashboard(state) {
   renderAtlas(model);
   const appVersion = model.app?.version || "DEV";
   text("rail-version", `v${appVersion} // WEBVIEW2`);
-  text("boot-version", `v${appVersion} // SECURE LOOPBACK // WEBVIEW2`);
-  text("about-version", `Version ${appVersion} // HTML Command Deck`);
-  text("about-footer-version", `v${appVersion}`);
-  text("about-copyright", `Copyright © ${new Date().getFullYear()} insert3coins`);
+  text("boot-version", `v${appVersion}`);
+  renderAbout(model);
   text("overview-subtitle", model.profile?.profile_label || "Journal-backed field intelligence");
   if (currentPage === "map" && !model.boot?.active) ensureAtlas();
 }
@@ -4014,10 +4080,12 @@ function renderState(state) {
     bootReleaseStarted = true;
   }
   model = incoming;
+  if (model.watcher_renderer_logging) {
+    window.bootScene?.watchRenderer?.((renderer, reason) => command("watcher_renderer", {surface: "boot", renderer, ...(reason ? {reason} : {})}));
+  }
   applyTheme(model.theme || {});
   applyTextSize(model.ui?.text_scale_percent, model.ui?.text_min_px);
   document.body.classList.toggle("reduced-motion", Boolean(model.ui?.reduced_motion));
-  if (currentPage === "about") startAboutMatrix();
   const nextBootActive = Boolean(model.boot?.active || model.onboarding?.active);
   const leavingBoot = bootActive && !nextBootActive;
   bootActive = nextBootActive;
@@ -4038,106 +4106,6 @@ function renderState(state) {
   }
   renderDashboard(model);
   return true;
-}
-
-function aboutMatrixNodes(width, height) {
-  const count = Math.max(22, Math.min(46, Math.round(width / 34)));
-  return Array.from({length: count}, (_, index) => ({
-    x: ((index * 47) % 101) / 101 * width,
-    y: ((index * 71 + 13) % 103) / 103 * Math.max(180, height * .68),
-    vx: ((index % 5) - 2) * .035,
-    vy: (((index * 3) % 5) - 2) * .022,
-    phase: index * .73,
-  }));
-}
-
-function stopAboutMatrix() {
-  if (aboutMatrixFrame) window.cancelAnimationFrame(aboutMatrixFrame);
-  aboutMatrixFrame = 0;
-}
-
-function startAboutMatrix() {
-  if (aboutMatrixFrame || currentPage !== "about" || document.hidden) return;
-  const canvas = byId("about-matrix-canvas");
-  const page = canvas?.closest(".about-page");
-  const context = canvas?.getContext("2d");
-  if (!canvas || !page || !context) return;
-
-  const draw = (now) => {
-    aboutMatrixFrame = 0;
-    if (currentPage !== "about" || document.hidden) return;
-    const width = Math.max(1, Math.round(page.clientWidth));
-    const height = Math.max(1, Math.round(page.scrollHeight));
-    const pixelRatio = Math.min(1.5, window.devicePixelRatio || 1);
-    if (!aboutMatrixState || aboutMatrixState.width !== width || aboutMatrixState.height !== height) {
-      canvas.width = Math.round(width * pixelRatio);
-      canvas.height = Math.round(height * pixelRatio);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      aboutMatrixState = {width, height, nodes: aboutMatrixNodes(width, height)};
-    }
-
-    const styles = getComputedStyle(document.documentElement);
-    const accent = styles.getPropertyValue("--accent").trim() || "#25e8ff";
-    const orange = styles.getPropertyValue("--orange").trim() || "#ff8a2a";
-    const reduced = document.body.classList.contains("reduced-motion");
-    const {nodes} = aboutMatrixState;
-    const time = now * .001;
-    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    context.clearRect(0, 0, width, height);
-
-    // Synthwave horizon and perspective grid, adapted to the active theme.
-    const horizon = Math.min(height - 150, Math.max(230, height * .66));
-    context.save();
-    context.globalAlpha = .14;
-    context.strokeStyle = orange;
-    context.lineWidth = 1;
-    for (let row = 0; row < 13; row += 1) {
-      const progress = row / 12;
-      const y = horizon + Math.pow(progress, 2.1) * (height - horizon);
-      context.beginPath(); context.moveTo(0, y); context.lineTo(width, y); context.stroke();
-    }
-    for (let column = -10; column <= 10; column += 1) {
-      const foot = width / 2 + column * width / 9;
-      context.beginPath(); context.moveTo(width / 2, horizon); context.lineTo(foot, height); context.stroke();
-    }
-    context.globalAlpha = .28;
-    context.strokeStyle = accent;
-    context.beginPath(); context.moveTo(0, horizon); context.lineTo(width, horizon); context.stroke();
-    context.restore();
-
-    if (!reduced) {
-      nodes.forEach((node) => {
-        node.x = (node.x + node.vx + width) % width;
-        node.y = (node.y + node.vy + horizon) % horizon;
-      });
-    }
-    context.save();
-    for (let left = 0; left < nodes.length; left += 1) {
-      const first = nodes[left];
-      for (let right = left + 1; right < nodes.length; right += 1) {
-        const second = nodes[right];
-        const distance = Math.hypot(first.x - second.x, first.y - second.y);
-        if (distance > 145) continue;
-        context.globalAlpha = (1 - distance / 145) * .17;
-        context.strokeStyle = accent;
-        context.beginPath(); context.moveTo(first.x, first.y); context.lineTo(second.x, second.y); context.stroke();
-      }
-      const pulse = reduced ? .7 : .55 + Math.sin(time * 1.8 + first.phase) * .25;
-      context.globalAlpha = pulse;
-      context.fillStyle = left % 7 === 0 ? orange : accent;
-      context.fillRect(first.x - 1.5, first.y - 1.5, 3, 3);
-      if (left % 6 === 0) {
-        const packet = reduced ? .4 : (time * .12 + left * .17) % 1;
-        context.globalAlpha = .65;
-        context.fillRect(first.x + packet * 32 - 16, first.y, 4, 1);
-      }
-    }
-    context.restore();
-
-    if (!reduced) aboutMatrixFrame = window.requestAnimationFrame(draw);
-  };
-  aboutMatrixFrame = window.requestAnimationFrame(draw);
 }
 
 function setConnection(online) {
@@ -4219,8 +4187,6 @@ function showPage(name) {
   if (name === "settings" && currentPage !== "settings") workspaceFingerprints.settings = "";
   currentPage = name;
   setHatchlingActive(name === "hatchling");
-  if (name === "about") window.requestAnimationFrame(startAboutMatrix);
-  else stopAboutMatrix();
   localStorage.setItem(`voidcompass.dashboard.page.${profileKey}`, name);
   document.querySelectorAll(".page").forEach((node) => node.classList.toggle("active", node === page));
   const navPage = navigationPage(name);
@@ -4501,13 +4467,27 @@ document.addEventListener("click", async (event) => {
     showPage(pageButton.dataset.page);
     return;
   }
+  if (event.target.closest("[data-settings-clear]")) {
+    byId("settings-search").value = "";
+    applySettingsView();
+    byId("settings-search").focus();
+    return;
+  }
+  const settingsJump = event.target.closest("[data-settings-jump]");
+  if (settingsJump) {
+    const group = byId(settingsJump.dataset.settingsJump);
+    if (group?.matches("details")) group.open = true;
+    group?.querySelector("h4")?.focus({preventScroll: true});
+    group?.scrollIntoView({block: "start", behavior: model.ui?.reduced_motion || window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"});
+    return;
+  }
   const settingsTab = event.target.closest("[data-settings-section]");
   if (settingsTab) {
     settingsSection = settingsTab.dataset.settingsSection;
     const search = byId("settings-search");
     if (search) search.value = "";
     applySettingsView();
-    settingsTab.closest(".page")?.scrollTo({top: 0});
+    settingsTab.closest(".pages")?.scrollTo({top: 0, behavior: "instant"});
     return;
   }
   const themeOption = event.target.closest("[data-theme-name]");
@@ -5069,6 +5049,10 @@ document.addEventListener("pointerdown", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") setOverlayQuickOpen(false);
+  if (event.key === "Escape" && event.target.id === "settings-search") {
+    event.target.value = "";
+    applySettingsView();
+  }
 });
 byId("overlay-all-toggle")?.addEventListener("click", async (event) => {
   const button = event.currentTarget;
@@ -5340,11 +5324,6 @@ window.addEventListener("error", (event) => {
 
 window.addEventListener("unhandledrejection", (event) => {
   reportClientError(event.reason, "unhandled-rejection");
-});
-
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) stopAboutMatrix();
-  else if (currentPage === "about") startAboutMatrix();
 });
 
 window.setInterval(() => text("footer-clock", new Date().toLocaleTimeString([], {hour12: false})), 500);

@@ -60,6 +60,9 @@ class GuideTests(unittest.TestCase):
         self.deck.current_landed = True
         self.assertEqual(self.guide()["stage"], "ground")
         self.deck.current_latitude, self.deck.current_longitude = -23.45, 114.08
+        self.deck.current_landed = False
+        self.assertEqual(self.guide()["stage"], "land", "flying over the coordinates is not landing")
+        self.deck.current_landed = True
         self.assertEqual(self.guide()["stage"], "arrived")
 
     def test_edsm_body_facts_arrive_before_the_ship_and_footfall_is_qualified(self):

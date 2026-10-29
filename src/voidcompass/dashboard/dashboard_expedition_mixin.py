@@ -16,6 +16,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import logging
+import math
 import re
 import threading
 import time
@@ -88,6 +89,22 @@ def _day(stamp):
 
 
 class DashboardExpeditionMixin:
+    def _expedition_jump_range(self):
+        """Use the current ship's loadout, or its restored journal details."""
+        loadout = ((getattr(self, "companion_state", None) or {}).get("loadout") or {})
+        ship = getattr(self, "cmdr_ship", None) or {}
+        values = [loadout.get("MaxJumpRange")]
+        if not loadout.get("Provisional"):
+            values.append(ship.get("max_jump_range"))
+        for value in values:
+            try:
+                number = float(value)
+                if math.isfinite(number) and number > 0:
+                    return number
+            except (TypeError, ValueError):
+                pass
+        return 0.0
+
     # -- what the page shows -------------------------------------------------------------------------
     def _expedition_coords_of(self, name):
         """Where a system is, from what Void Compass already knows: your own
@@ -211,7 +228,7 @@ class DashboardExpeditionMixin:
             stage = "arrived"
         elif not near:
             stage = "fly"
-        elif target.get("arrived") or (grounded and upcoming.get("lat") is None):
+        elif grounded and (target.get("arrived") or upcoming.get("lat") is None):
             stage = "arrived"
         else:
             stage = "ground" if grounded else "land"
@@ -669,7 +686,10 @@ class DashboardExpeditionMixin:
             return
         result = manager.visit_near(getattr(self, "current_sys", ""), getattr(self, "current_body_name", ""),
                                     getattr(self, "current_latitude", None), getattr(self, "current_longitude", None),
-                                    getattr(self, "current_planet_radius", None))
+                                    getattr(self, "current_planet_radius", None), grounded=bool(
+                                        getattr(self, "current_landed", False) or getattr(self, "current_in_srv", False)
+                                        or getattr(self, "current_on_foot", False)))
+        self._expedition_sync_route()
         reached = (result.get("legs") or []) + (result.get("places") or [])
         if not reached:
             return
@@ -816,13 +836,12 @@ class DashboardExpeditionMixin:
             kinds = [[key, label] for key, label in OBJECTIVE_KINDS.items()]
         except Exception:
             kinds = []
-        loadout = ((getattr(self, "companion_state", None) or {}).get("loadout") or {})
         self._expedition_overlay_refresh()
         return {
             "active_id": active_id or "",
             "expeditions": [self._expedition_view(row, live=row.get("id") == active_id) for row in rows[:60]],
             "templates": templates, "kinds": kinds,
-            "jump_range": round(float(loadout.get("MaxJumpRange") or 0), 1) or None,
+            "jump_range": round(self._expedition_jump_range(), 1) or None,
             "here": getattr(self, "current_sys", "") or "",
             "job": dict(getattr(self, "_expedition_job", None) or {}),
             "sell": list(getattr(self, "_expedition_sell", None) or []),
@@ -1096,10 +1115,11 @@ class DashboardExpeditionMixin:
         source = legs[index - 1]["system"] if index else (getattr(self, "current_sys", "") or expedition.get("start_system"))
         if not leg.get("reached") and index == next((position for position, row in enumerate(legs) if not row.get("reached")), None):
             source = getattr(self, "current_sys", "") or source  # the next leg starts where you are
-        loadout = ((getattr(self, "companion_state", None) or {}).get("loadout") or {})
         try:
-            jump_range = float(payload.get("range") or loadout.get("MaxJumpRange") or 0)
+            jump_range = float(payload.get("range") or self._expedition_jump_range())
         except (TypeError, ValueError):
+            jump_range = 0.0
+        if not math.isfinite(jump_range):
             jump_range = 0.0
         carrier = leg.get("kind") == "carrier"
         if not source or (not carrier and jump_range <= 0):
@@ -1135,13 +1155,51 @@ class DashboardExpeditionMixin:
         if manager is None or not rows:
             return False
         manager.waypoints = [{"name": row["system"], "coords": row.get("coords"), "note": note,
-                              "neutron": bool(row.get("neutron")), "jumps": row.get("jumps")} for row in rows if row.get("system")]
+                              "neutron": bool(row.get("neutron")), "jumps": row.get("jumps"),
+                              **({"body": row["body"], "expedition_leg_id": row["id"],
+                                  "expedition_id": row["expedition_id"]} if row.get("body") and row.get("id") and row.get("expedition_id") else {})}
+                             for row in rows if row.get("system")]
         manager.save()
         for name in ("update_hud", "_update_galaxy_minimap_safely"):
             action = getattr(self, name, None)
             if callable(action):
                 action()
         return True
+
+    def _expedition_sync_route(self):
+        """Release a surface waypoint only after its expedition leg is reached."""
+        route = getattr(self, "waypoint_manager", None)
+        expeditions = getattr(self, "expedition_manager", None)
+        if not route or not expeditions:
+            return
+        changed = False
+        # Routes saved before surface legs carried their identity can be
+        # upgraded in place, matching only the active expedition's own route.
+        active = expeditions.active() or {}
+        note = f"Expedition: {active.get('name') or 'leg'}"
+        available = [row for row in route.waypoints if row.get("note") == note and not row.get("expedition_leg_id")]
+        for leg in reversed(active.get("legs") or []):
+            if not leg.get("body") or leg.get("reached"):
+                continue
+            row = next((row for row in reversed(available) if _same(row.get("name"), leg.get("system"))), None)
+            if row is not None:
+                row.update(body=leg["body"], expedition_leg_id=leg["id"], expedition_id=active["id"])
+                available.remove(row)
+                changed = True
+        for row in route.waypoints:
+            if not row.get("expedition_leg_id") or row.get("visited"):
+                continue
+            expedition = expeditions.get(row.get("expedition_id")) or {}
+            leg = next((leg for leg in expedition.get("legs") or [] if leg.get("id") == row["expedition_leg_id"]), None)
+            if leg and leg.get("reached"):
+                row["visited"] = True
+                changed = True
+        if changed:
+            route.save()
+            for name in ("update_hud", "_update_galaxy_minimap_safely"):
+                action = getattr(self, name, None)
+                if callable(action):
+                    action()
 
     def _expedition_clear_route(self, name, was_active):
         """Take an expedition's waypoints off the route: all of them (its
@@ -1174,9 +1232,17 @@ class DashboardExpeditionMixin:
             return False
         plotted = (leg.get("plot") or {}).get("waypoints")
         if plotted:
-            rows = plotted
+            rows = [dict(row) for row in plotted]
+            if leg.get("body"):
+                target = next((row for row in reversed(rows) if _same(row.get("system"), leg.get("system"))), None)
+                if target is None:
+                    target = {"system": leg["system"], "coords": leg.get("coords")}
+                    rows.append(target)
+                target.update(body=leg["body"], id=leg["id"], expedition_id=expedition_id)
         else:
-            rows = [{"system": row["system"], "coords": row.get("coords")} for row in legs[legs.index(leg):] if not row.get("reached")]
+            rows = [{"system": row["system"], "coords": row.get("coords"), "body": row.get("body"),
+                     "id": row.get("id"), "expedition_id": expedition_id}
+                    for row in legs[legs.index(leg):] if not row.get("reached")]
         done = self._expedition_set_waypoints(rows, f"Expedition: {expedition.get('name') or 'leg'}")
         if done:
             self._expedition_job_state(f"The route is now {leg['system']}: {len(rows):,} waypoint{'s' if len(rows) != 1 else ''}.")
@@ -1186,8 +1252,7 @@ class DashboardExpeditionMixin:
         """Plot from here to one system and make it the waypoint route."""
         from voidcompass.services.spansh import neutron_route
         here = getattr(self, "current_sys", "") or ""
-        loadout = ((getattr(self, "companion_state", None) or {}).get("loadout") or {})
-        jump_range = float(loadout.get("MaxJumpRange") or 0)
+        jump_range = self._expedition_jump_range()
         if not system:
             return False
         if not here or jump_range <= 0:

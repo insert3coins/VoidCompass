@@ -47,6 +47,14 @@ SPECIES = {
         "forms": {"standard": "Drone", "explored": "Wanderer", "scarred": "Battle-born", "neglected": "Husk", "rare": "Hive Herald"},
         "names": ("Hum", "Glim", "Xeno", "Pip", "Thrumm"),
     },
+    "thargoid": {
+        "name": "Thargoid foundling", "food": "NOURISHMENT", "stores": "foodcartridges",
+        "blurb": "Found by the Watcher, this little traveller grows from Scout to Thargon to Orthrus.",
+        "forms": {"standard": "Orthrus", "explored": "Wayfarer Orthrus", "scarred": "Weathered Orthrus",
+                  "neglected": "Quiet Orthrus", "rare": "Hive-lit Orthrus"},
+        "names": ("Vela", "Khepri", "Nacre", "Nyx", "Glimmer"),
+        "stages": {"egg": "Egg", "hatchling": "Scout", "juvenile": "Thargon", "adult": "Orthrus"},
+    },
     "bot": {
         "name": "Remlok companion bot", "food": "POWER", "stores": "hydrogenfuel",
         "blurb": "A little maintenance drone that beeps and wants upgrades, not food.",
@@ -65,14 +73,14 @@ SAMPLE_KINDS = {"bacterium": "Bacterium", "tubus": "Tubus", "fungoida": "Fungoid
 
 # The larder: journal commodity symbols, who eats them and what they do.
 ITEMS = {
-    "foodcartridges": {"name": "Food Cartridges", "kind": "snack", "fill": 14, "mood": 0, "for": ("larva",)},
-    "syntheticmeat": {"name": "Synthetic Meat", "kind": "meal", "fill": 30, "mood": 2, "for": ("larva",)},
-    "animalmeat": {"name": "Animal Meat", "kind": "meal", "fill": 36, "mood": 4, "for": ("larva",)},
-    "fish": {"name": "Fish", "kind": "meal", "fill": 34, "mood": 6, "for": ("larva",)},
-    "fruitandvegetables": {"name": "Fruit and Vegetables", "kind": "meal", "fill": 26, "mood": 3, "for": ("larva", "sample")},
-    "coffee": {"name": "Coffee", "kind": "treat", "fill": 6, "mood": 14, "for": ("larva", "sample")},
-    "tea": {"name": "Tea", "kind": "treat", "fill": 6, "mood": 12, "for": ("larva", "sample")},
-    "lavianbrandy": {"name": "Lavian Brandy", "kind": "treat", "fill": 4, "mood": 20, "for": ("larva",)},
+    "foodcartridges": {"name": "Food Cartridges", "kind": "snack", "fill": 14, "mood": 0, "for": ("larva", "thargoid")},
+    "syntheticmeat": {"name": "Synthetic Meat", "kind": "meal", "fill": 30, "mood": 2, "for": ("larva", "thargoid")},
+    "animalmeat": {"name": "Animal Meat", "kind": "meal", "fill": 36, "mood": 4, "for": ("larva", "thargoid")},
+    "fish": {"name": "Fish", "kind": "meal", "fill": 34, "mood": 6, "for": ("larva", "thargoid")},
+    "fruitandvegetables": {"name": "Fruit and Vegetables", "kind": "meal", "fill": 26, "mood": 3, "for": ("larva", "thargoid", "sample")},
+    "coffee": {"name": "Coffee", "kind": "treat", "fill": 6, "mood": 14, "for": ("larva", "thargoid", "sample")},
+    "tea": {"name": "Tea", "kind": "treat", "fill": 6, "mood": 12, "for": ("larva", "thargoid", "sample")},
+    "lavianbrandy": {"name": "Lavian Brandy", "kind": "treat", "fill": 4, "mood": 20, "for": ("larva", "thargoid")},
     "algae": {"name": "Algae", "kind": "snack", "fill": 14, "mood": 0, "for": ("sample",)},
     "grain": {"name": "Grain", "kind": "meal", "fill": 28, "mood": 2, "for": ("sample",)},
     "biowaste": {"name": "Biowaste", "kind": "meal", "fill": 34, "mood": 6, "for": ("sample",)},
@@ -80,8 +88,8 @@ ITEMS = {
     "powergenerators": {"name": "Power Generators", "kind": "meal", "fill": 36, "mood": 4, "for": ("bot",)},
     "robotics": {"name": "Robotics", "kind": "meal", "fill": 30, "mood": 8, "for": ("bot",)},
     "powerconverter": {"name": "Power Converter", "kind": "treat", "fill": 8, "mood": 16, "for": ("bot",)},
-    "basicmedicines": {"name": "Basic Medicines", "kind": "medicine", "fill": 0, "mood": 0, "for": ("larva",)},
-    "advancedmedicines": {"name": "Advanced Medicines", "kind": "medicine", "fill": 0, "mood": 4, "for": ("larva",)},
+    "basicmedicines": {"name": "Basic Medicines", "kind": "medicine", "fill": 0, "mood": 0, "for": ("larva", "thargoid")},
+    "advancedmedicines": {"name": "Advanced Medicines", "kind": "medicine", "fill": 0, "mood": 4, "for": ("larva", "thargoid")},
     "agronomictreatment": {"name": "Agronomic Treatment", "kind": "medicine", "fill": 0, "mood": 0, "for": ("sample",)},
     "microcontrollers": {"name": "Micro Controllers", "kind": "medicine", "fill": 0, "mood": 0, "for": ("bot",)},
 }
@@ -207,7 +215,8 @@ def _stage_for(age_h):
 
 def _adult_form(pet):
     care = pet["care"]
-    rare = {"larva": care["thargoid"] >= 5, "bot": care["discoveries"] >= 50, "sample": care["codex"] >= 3}[pet["species"]]
+    rare = {"larva": care["thargoid"] >= 5, "thargoid": care["thargoid"] >= 5,
+            "bot": care["discoveries"] >= 50, "sample": care["codex"] >= 3}[pet["species"]]
     if rare:
         return "rare"
     if care["neglect_h"] >= 24 or pet.get("revived"):
@@ -429,14 +438,23 @@ def act(state, action, payload, now):
         game_id = str(payload.get("game"))
         if game_id in GAMES:
             pet["games"][game_id] = pet["games"].get(game_id, 0) + 1
+            held = pet.get("cue") if isinstance(pet.get("cue"), dict) else {}
+            # Share the result animation with both views, while keeping a
+            # fresh danger reaction ahead of a game played at the same time.
+            if held.get("kind") != "danger" or now - _number(held.get("at")) > 10:
+                pet["cue"] = {"kind": f"game_{game_id}", "at": now}
         game = GAMES.get(game_id, "a game")
         say(pet, now, f"Played {game}: {'won!' if won else 'it had fun anyway.'}", "good", "happy" if won else "play")
         _learn(pet, now)
         return True, ""
     if action == "pet":
-        # A pat: a little cheer, at most once in a while.
+        # Every touch has a shared visual response; the care boost is limited.
+        held = pet.get("cue") if isinstance(pet.get("cue"), dict) else {}
+        can_react = held.get("kind") != "danger" or now - _number(held.get("at")) > 10
+        if can_react:
+            pet["cue"] = {"kind": "petted", "at": now}
         if now - _number(pet.get("petted_at"), 0) < 90:
-            return False, ""
+            return can_react, ""
         pet["petted_at"] = now
         pet["care"]["pats"] += 1
         needs["mood"] = _clamp(needs["mood"] + 3)
@@ -600,7 +618,7 @@ CUES = {"StartJump": "jump", "CarrierJump": "jump", "FSDJump": "arrive", "Superc
         "MultiSellExplorationData": "paid", "SellOrganicData": "paid", "EngineerCraft": "upgrade", "RepairAll": "repaired",
         "EscapeInterdiction": "phew", "JetConeBoost": "boost", "Screenshot": "pose", "CommitCrime": "naughty",
         "DockingDenied": "rude", "LaunchFighter": "fighter", "FSSAllBodiesFound": "allfound", "SAAScanComplete": "mapped",
-        "ApproachSettlement": "settlement"}
+        "ApproachSettlement": "settlement", "FSSDiscoveryScan": "honk", "ScanOrganic": "biology"}
 PLACES = {"SupercruiseEntry": "supercruise", "SupercruiseExit": "space", "Docked": "docked", "Undocked": "space",
           "Touchdown": "landed", "Liftoff": "space", "FSDJump": "supercruise", "Died": "space",
           "LaunchSRV": "srv", "DockSRV": "landed", "Disembark": "away"}
@@ -628,6 +646,8 @@ def _cue(pet, name, event, now):
     if name == "ShipyardSwap":
         pet["ship"] = _ship_name("", event.get("ShipType_Localised") or event.get("ShipType"))
     if name == "SAAScanComplete" and _number(event.get("ProbesUsed"), 99) > _number(event.get("EfficiencyTarget"), 0):
+        kind = ""
+    if name == "ScanOrganic" and event.get("ScanType") != "Analyse":
         kind = ""
     if name == "RefuelAll" or (name in {"FuelScoop", "RefuelPartial"} and pet.get("fuel_capacity")
                                and _number(event.get("Total")) / pet["fuel_capacity"] > LOW_FUEL):
@@ -746,12 +766,12 @@ def _observe_mood(pet, name, event, now, needs, care, who, species, asleep):
         guardian = _mentions(event, "guardian", "ancient")
         if thargoid and not (name == "FSDJump" and not event.get("ThargoidWar")):
             care["thargoid"] += 1
-            if species == "larva":
+            if species in {"larva", "thargoid"}:
                 return mood(10, f"Thargoid signals. {who} is glowing and humming.", "good", "excited")
             return mood(-4, f"Something Thargoid out there. {who} has gone quiet.", "bad", "scared")
         if guardian and name != "FSDJump":
             care["guardian"] += 1
-            if species == "larva":
+            if species in {"larva", "thargoid"}:
                 return mood(-10, f"Guardian things. {who} hates them.", "bad", "angry")
             if species == "bot":
                 return mood(4, f"Guardian tech: {who}'s sensors whirr.", "good", "curious")
@@ -798,7 +818,7 @@ def _observe_mood(pet, name, event, now, needs, care, who, species, asleep):
         return False
     if name in {"Bounty", "FactionKillBond"}:
         care["fights"] += 1
-        if _mentions(event, "thargoid") and species == "larva":
+        if _mentions(event, "thargoid") and species in {"larva", "thargoid"}:
             return mood(-8, f"A Thargoid fell. {who} went very quiet.", "bad", "distraught")
         return mood(3, f"Got them. {who} cheered.", "good", "excited")
     if name == "MissionCompleted":
@@ -893,8 +913,9 @@ def view(state, now):
     base["pet"] = {
         "name": pet["name"], "species": pet["species"], "species_name": species["name"], "kind": pet.get("kind") or "",
         "kind_name": SAMPLE_KINDS.get(pet.get("kind") or "", ""), "stage": pet["stage"],
+        "stage_name": species.get("stages", {}).get(pet["stage"], pet["stage"].title()),
         "form": pet.get("form") or "", "form_name": species["forms"].get(pet.get("form") or "", ""),
-        "age_hours": round((now - pet["born"]) / 3600, 1),
+        "born": pet["born"], "age_hours": round((now - pet["born"]) / 3600, 1),
         "needs": {need: int(round(pet["needs"][need])) for need in NEEDS},
         "food_label": species["food"], "asleep": bool(pet["asleep"]), "sick": bool(pet["sick"]),
         "dormant": dormant is not None,

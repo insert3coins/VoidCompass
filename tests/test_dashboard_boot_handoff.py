@@ -124,9 +124,11 @@ class DashboardBootHandoffTests(unittest.TestCase):
         app._sync_html_overlay_windows = Mock()
         app._resync_startup_html_overlays = Mock()
         app._reapply_overlay_positions = Mock()
+        app._watcher_voice_sync = Mock()
 
         app._finish_startup_presentation()
         boot.stop.assert_called_once_with()
+        app._watcher_voice_sync.assert_not_called()
         app._release_startup_overlay_curtain.assert_not_called()
         overlay_runtime.release_startup_hold.assert_not_called()
         self.assertEqual(app._startup_overlay_handoff_pending,
@@ -143,6 +145,7 @@ class DashboardBootHandoffTests(unittest.TestCase):
         )
         overlay_runtime.release_startup_hold.assert_called_once_with()
         self.assertIsNone(root._voidcompass_startup_splash)
+        app._watcher_voice_sync.assert_called_once_with()
 
     def test_native_host_waits_for_browser_hold_and_only_requests_recovery(self):
         host = DashboardHost("http://127.0.0.1:8765/?token=test")
@@ -186,7 +189,7 @@ class DashboardBootHandoffTests(unittest.TestCase):
         self.assertEqual(len(app.root.scheduled("_finish_startup_presentation")), 1)
         app._startup_boot_update.assert_called_with(
             "VOID COMPASS LIVE",
-            "Journal, survey history and overlays are synchronized",
+            "Local flight state is ready; background work can continue",
             1.0,
         )
 

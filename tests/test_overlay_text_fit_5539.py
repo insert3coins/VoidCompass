@@ -107,7 +107,7 @@ OVERLAYS = (
     ("rig_tracker", "rigs", RIG_MODEL, 420, 130, 420),
     ("rhino_map", "rhino", _rhino_model(), 240, 280, 360),
     ("expedition", "expedition", build_expedition_model(*EXPEDITION_SAMPLE), 380, 120, 640),
-    ("hatchling", "hatchling", build_hatchling_model(*_pet()), 250, 110, 260),
+    ("hatchling", "hatchling", build_hatchling_model(*_pet()), 250, 110, 320),
 )
 
 

@@ -398,8 +398,8 @@ class HtmlOverlaySurface:
         heartbeat_s = 4.0 if settled else HIDDEN_HEARTBEAT_S
         recently_seen = bool(last_seen and now - last_seen < heartbeat_s)
         browser_rendered = server.rendered_revision(self.overlay_id) >= 0
-        # The page's revision checks are also its browser-side heartbeat.
-        # Host control requests intentionally do not update this timestamp.
+        # Page acknowledgements (or legacy revision checks) are the browser's
+        # heartbeat. Host control requests never count as proof of page life.
         if server.is_ready(self.overlay_id) and browser_rendered and recently_seen:
             self._renderer_seen = True
             self._renderer_lost_at = None

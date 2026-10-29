@@ -3224,6 +3224,7 @@ class MainDashboard(
         if self._startup_live_tail_ready:
             return
         self._startup_live_tail_ready = True
+        self._startup_journal_offline = True
         self._startup_presentation_ready = True
         self._trace_bump("startup_journal_handoff_timeout")
         self._startup_boot_update(
@@ -3235,6 +3236,7 @@ class MainDashboard(
 
     def _mark_startup_journal_live(self):
         self._startup_live_tail_ready = True
+        self._startup_journal_offline = False
         self._trace_bump("startup_journal_live")
         timeout_job = getattr(self, "_startup_boot_journal_timeout_job", None)
         self._startup_boot_journal_timeout_job = None
@@ -3276,7 +3278,7 @@ class MainDashboard(
             return
         self._startup_boot_update(
             "VOID COMPASS LIVE",
-            "Journal, survey history and overlays are synchronized",
+            "Local flight state is ready; background work can continue",
             1.0,
         )
         self._startup_boot_handoff_job = self.root.call_later(
@@ -3360,6 +3362,7 @@ class MainDashboard(
         self._startup_overlay_handoff_pending = None
         self._release_startup_overlay_curtain()
         self.root._voidcompass_startup_splash = None
+        self._watcher_voice_sync()
         self._restore_overlay_hotkey_windows(restore, force_show=False)
         self._enforce_overlay_hotkey_visibility()
         # Publish the restored overlay states before dropping the independent
@@ -8334,6 +8337,8 @@ class MainDashboard(
                     event_uid=data.get("_journal_uid"),
                     historical=startup_replay,
                 )
+                if not startup_replay and ev == "Touchdown":
+                    self._expedition_sync_route()
                 if expedition_result:
                     self._refresh_exploration_window()
             except Exception as exc:

@@ -1,26 +1,5 @@
-/*
- * Boot scene: the watcher wakes
- * -----------------------------
- * The flight computer starts under the same HAL-style eye that watches the
- * journal in the heartbeat overlay (web/assets/heartbeat-orb.js). It sits in
- * the core of a galaxy seen edge-on, and the window drifts slowly toward it.
- *
- * Everything that reads as progress is real. The ring and the four systems
- * follow the backend's boot progress, each status the backend reports is
- * written to the flight computer log with its time, and the orb takes in the
- * journal events as they are actually restored, one mote per batch. The
- * orb's other reactions, the sky and the distant jump flashes are
- * decoration.
- *
- * When the deck is ready the backend holds the boot screen for five seconds.
- * That hold becomes an FSD countdown, and the screen jumps into the deck:
- * the drifting stars stretch into hyperspace streaks from the eye as the
- * boot screen fades. app.js (renderBoot) owns the timing and the handoff;
- * this module only listens to its `voidcompass:boot` announcements.
- *
- * Nothing animates under reduced motion; the sky is painted once and the
- * orb paints still frames. Everything stops once the deck is up.
- */
+// The Watcher wakes around real startup signals. app.js owns the boot hold
+// and handoff; this scene never waits for the network update check.
 import {BOOT_FACTS} from './boot-facts.js';
 
 const TAU = Math.PI * 2;
@@ -45,7 +24,7 @@ const STATUS_REACTIONS = {
   'INDEXING PAST JOURNALS': ['yellow', 'sweep', .6],
   'HISTORICAL INDEX READY': ['green', 'complete', .75],
   'RESTORING RECENT JOURNAL': ['orange', 'gather', .55],
-  'LIVE JOURNAL TAIL REACHED': ['accent', 'honk', .85],
+  'LIVE JOURNAL TAIL REACHED': ['accent', 'glint', .7],
   'JOURNAL LINK OFFLINE': ['muted', 'deny', .6],
   'LIVE STATE READY': ['green', 'clear', .7],
   'VOID COMPASS LIVE': ['green', 'glint', .9],
@@ -116,13 +95,12 @@ class Sky {
     this.width = 0;
     this.height = 0;
     this.ratio = 1;
-    this.vanish = [.3, .5];
+    this.vanish = [.5, .43];
     this.colors = null;
     this.paletteKey = '';
     this.next = random(4242);
     this.stars = Array.from({length: 240}, () => this.spawn(true));
-    this.flashes = [];
-    this.nextFlashAt = 0;
+    this.journalStreams = [];
     this.warp = 0;
     this.jumping = false;
     this.running = false;
@@ -319,17 +297,18 @@ class Sky {
         ctx.fill();
       }
     }
-    // Now and then a ship jumps out somewhere far off.
-    for (const flash of this.flashes) {
-      const q = (this.clock - flash.start) / 900;
-      if (q < 0 || q > 1) continue;
-      const alpha = Math.sin(Math.PI * q) * .8;
-      const length = 3 + 16 * q;
-      const color = mix(c.text, c.accent, .5);
-      ctx.fillStyle = paint(color, alpha);
-      ctx.fillRect(flash.x - length, flash.y - .5, length * 2, 1);
-      ctx.fillRect(flash.x - .5, flash.y - length * .45, 1, length * .9);
-      this.glow(ctx, flash.x, flash.y, 7, 7, color, alpha * .6);
+    this.journalStreams = this.journalStreams.filter(stream => this.clock - stream.at < 1500);
+    const cx = this.vanish[0] * W, cy = this.vanish[1] * H;
+    for (const stream of this.journalStreams) {
+      const t = clamp((this.clock - stream.at) / 1500), travel = 1 - (1 - t) ** 2;
+      const bend = Math.sin(t * Math.PI) * stream.bend;
+      const x = lerp(stream.x * W, cx, travel), y = lerp(stream.y * H, cy, travel) + bend;
+      const before = Math.max(0, travel - .045);
+      const tx = lerp(stream.x * W, cx, before), ty = lerp(stream.y * H, cy, before) + bend;
+      const light = Math.sin(t * Math.PI) * .8;
+      ctx.strokeStyle = paint(c.orange, light); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y); ctx.stroke();
+      this.glow(ctx, x, y, 3, 3, c.orange, light * .6);
     }
     this.draws += 1;
   }
@@ -342,14 +321,15 @@ class Sky {
     this.last = now;
     this.clock = now;
     this.warp += ((this.jumping ? 1 : 0) - this.warp) * Math.min(1, elapsed / 700);
-    if (!this.jumping && now >= this.nextFlashAt) {
-      if (this.nextFlashAt) {
-        this.flashes = this.flashes.filter((flash) => now - flash.start < 900);
-        this.flashes.push({start: now, x: this.next() * this.width, y: this.next() * this.height});
-      }
-      this.nextFlashAt = now + 4000 + this.next() * 5000;
-    }
     this.paintDrift(elapsed);
+  }
+
+  receiveJournal(count) {
+    if (reduced() || !starting()) return;
+    const at = performance.now(), amount = Math.min(8, Math.ceil(Math.sqrt(count)));
+    for (let i = 0; i < amount; i++) this.journalStreams.push({at: at + i * 45,
+      x: i % 2 ? .92 : .08, y: .18 + this.next() * .5, bend: (this.next() - .5) * 70});
+    this.journalStreams = this.journalStreams.slice(-32);
   }
 
   start() {
@@ -374,6 +354,7 @@ const sky = new Sky($('boot-sky'), $('boot-drift'));
 const orbCanvas = $('boot-orb');
 const orb = window.HeartbeatOrb ? new window.HeartbeatOrb(orbCanvas) : null;
 let orbSeq = 0;
+let orbEye = 'theme';
 const orbEvents = [];
 
 function tellOrb(event, tone, effect, weight) {
@@ -383,46 +364,13 @@ function tellOrb(event, tone, effect, weight) {
 
 function feedOrb() {
   orb?.update({
-    palette: {}, eye: 'theme', crt: false, reducedMotion: reduced(),
+    palette: {}, eye: orbEye, crt: false, reducedMotion: reduced(),
     stalled: false, events: orbEvents, statusSeq: 0,
   });
 }
 
 // The eye opens as the page does.
 feedOrb();
-
-// Stage markers round the progress ring, from the same markup renderBoot reads.
-const ringStages = $('boot-ring-stages');
-const stageItems = [...document.querySelectorAll('.boot-sequence > [data-boot-stage]')];
-const SVG = 'http://www.w3.org/2000/svg';
-const markers = stageItems.map((item) => {
-  const angle = Number(item.dataset.bootThreshold || 0) * TAU - Math.PI / 2;
-  const group = document.createElementNS(SVG, 'g');
-  group.dataset.ringStage = item.dataset.bootStage;
-  const mark = document.createElementNS(SVG, 'rect');
-  mark.setAttribute('x', String(200 + Math.cos(angle) * 194 - 3.5));
-  mark.setAttribute('y', String(200 + Math.sin(angle) * 194 - 3.5));
-  mark.setAttribute('width', '7');
-  mark.setAttribute('height', '7');
-  mark.setAttribute('transform', `rotate(45 ${200 + Math.cos(angle) * 194} ${200 + Math.sin(angle) * 194})`);
-  const label = document.createElementNS(SVG, 'text');
-  const lx = 200 + Math.cos(angle) * 216;
-  const ly = 200 + Math.sin(angle) * 216;
-  label.setAttribute('x', String(lx));
-  label.setAttribute('y', String(ly + 3));
-  label.setAttribute('text-anchor', Math.cos(angle) > .25 ? 'start' : Math.cos(angle) < -.25 ? 'end' : 'middle');
-  label.textContent = (item.dataset.bootLabel || item.dataset.bootStage).split(' ')[0];
-  group.append(mark, label);
-  ringStages.append(group);
-  return {item, group};
-});
-
-function syncMarkers() {
-  for (const {item, group} of markers) {
-    group.classList.toggle('ready', item.classList.contains('ready'));
-    group.classList.toggle('active', item.classList.contains('active'));
-  }
-}
 
 // Flight computer log: every status the backend reports, with its time.
 const logList = $('boot-log');
@@ -454,7 +402,7 @@ function logStatus(status, detail) {
 }
 logStatus($('boot-status').textContent.trim(), $('boot-detail').textContent.trim());
 
-// Field notes, spoken by the watcher.
+// Field notes stay text-only during boot.
 const fact = $('boot-fact');
 const transmission = document.querySelector('.boot-transmission');
 let deck = [];
@@ -482,6 +430,32 @@ function nextFact() {
   voiceTimer = setTimeout(() => transmission.classList.remove('speaking'), 1800);
   tellOrb('FIELD NOTE', 'accent', 'speak', .5);
   feedOrb();
+}
+
+function showConnection(data) {
+  orbEye = data.eye === 'hal' ? 'hal' : 'theme';
+  const commander = String(data.commander || '').replace(/^CMDR\s+/i, '');
+  $('boot-commander').textContent = commander ? `Welcome back,\nCMDR ${commander}` : 'Welcome, Commander.';
+  $('boot-system').textContent = data.system || 'Awaiting flight record';
+  $('boot-ship').textContent = data.ship || 'Awaiting ship record';
+  const live = data.journalState === 'ready', cached = data.journalState === 'cached';
+  $('boot-position-label').textContent = live ? 'CURRENT SYSTEM' : 'LAST KNOWN SYSTEM';
+  $('boot-identity-note').textContent = live ? 'Your journey is connected.' : 'Reconnecting with your journey.';
+  $('boot-event-count').textContent = data.eventsKnown ? Math.max(0, data.events).toLocaleString() : '—';
+  $('boot-events').textContent = data.eventsKnown ? 'Recent events restored' : 'Awaiting journal reader';
+  $('boot-journal-state').textContent = live ? 'LIVE JOURNAL CONNECTED' : cached ? 'CACHED FLIGHT STATE' : data.eventsKnown ? 'RESTORING YOUR JOURNEY' : 'WAITING FOR JOURNAL';
+  $('boot-journal-note').textContent = live ? 'The next flight event will arrive live.' : cached ? 'Cached records are ready. The live journal is unavailable.' : 'The Watcher is finding where you left off.';
+  $('boot-link-label').textContent = live ? 'LOCAL JOURNAL / LIVE' : cached ? 'LOCAL JOURNAL / CACHED' : 'LOCAL JOURNAL / CONNECTING';
+  const total = Number(data.overlaysTotal) || 0;
+  $('boot-overlay-count').textContent = total ? `${data.overlaysReady} / ${total} surfaces ready` : 'No overlay surfaces registered';
+  const update = data.update || {}, indicator = $('boot-update');
+  let state = 'waiting', label = 'Update status pending';
+  if (update.checking) { state = 'checking'; label = 'Checking for updates'; }
+  else if (update.error) { state = 'offline'; label = 'Couldn’t check for updates'; }
+  else if (update.checked && update.available) { state = 'available'; label = update.latest_version ? `Update available · v${update.latest_version}` : 'Update available'; }
+  else if (update.checked) { state = 'current'; label = 'Up to date'; }
+  indicator.dataset.state = state;
+  $('boot-update-text').textContent = label;
 }
 
 // The version under the wordmark.
@@ -548,7 +522,7 @@ let lastDetail = '';
 function vanishingPoint() {
   const box = boot.getBoundingClientRect();
   const eye = orbCanvas.getBoundingClientRect();
-  if (!box.width || !box.height || !eye.width) return [.3, .45];
+  if (!box.width || !box.height || !eye.width) return [.5, .43];
   const point = [
     clamp((eye.left + eye.width / 2 - box.left) / box.width),
     clamp((eye.top + eye.height / 2 - box.top) / box.height),
@@ -598,7 +572,7 @@ window.addEventListener('voidcompass:boot', (event) => {
     sync();
     return;
   }
-  syncMarkers();
+  showConnection(announcement);
   showVersion(announcement);
   const events = Number(announcement.events) || 0;
   const status = announcement.handoffAt ? 'FLIGHT DECK READY' : announcement.status;
@@ -613,7 +587,11 @@ window.addEventListener('voidcompass:boot', (event) => {
     // One mote per slice of the restored journal: the eye takes it in.
     const motes = clamp(Math.ceil(Math.sqrt(events - lastEvents)), 1, 14);
     for (let index = 0; index < motes; index += 1) tellOrb('JOURNAL', 'orange', 'tick', .12);
-    $('boot-events').textContent = `${events.toLocaleString()} events restored`;
+    sky.receiveJournal(events - lastEvents);
+    const readout = document.querySelector('.boot-journal-readout');
+    readout.classList.remove('receiving');
+    void readout.offsetWidth;
+    readout.classList.add('receiving');
   }
   if (status !== lastStatus || events !== lastEvents) feedOrb();
   if (status !== lastStatus || detail !== lastDetail) logStatus(status, detail);
@@ -650,8 +628,10 @@ sync();
 
 // What the boot scene is doing, for tests and diagnostics.
 window.bootScene = Object.freeze({
+  watchRenderer: (callback) => orb?.watchRenderer(callback),
   state: () => ({
     running: sky.running,
+    journalStreams: sky.journalStreams.length,
     draws: sky.draws,
     warp: sky.warp,
     jumped,

@@ -15,11 +15,46 @@ const STATUS = {
   invalid: ["CAN'T READ", "bad"],
 };
 
-const state = {step: "welcome", session: -1, theme: "", themes: {}, probe: null, probedPath: null, timer: 0};
+const state = {step: "welcome", session: -1, theme: "", themes: {}, probedPath: null, timer: 0, sending: false};
 let ui = null;
+let eye = null, eyeKey = "";
+const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[char]));
+
+function linkedProbe(onboarding = state.lastOnboarding || {}) {
+  const result = onboarding.probe;
+  const path = $("onboarding-journal").value.trim();
+  return !onboarding.probing && result?.status === "ok"
+    && (path ? path === result.path : result.auto === true) ? result : null;
+}
+
+function syncIdentity() {
+  const result = linkedProbe();
+  $("setup-profile-name").textContent = result?.commander ? `CMDR ${result.commander}` : "Your next chapter.";
+  $("setup-profile-detail").textContent = result ? `${Number(result.journals).toLocaleString()} journals to reconnect with.` : "Four small steps to your own cockpit.";
+}
+
+function syncEye() {
+  const shown = state.step === "welcome" && !$("commissioning").hidden && !document.hidden;
+  if (!shown) {
+    eye?.dispose(); eye = null; eyeKey = "";
+    return;
+  }
+  if (!eye && window.HeartbeatOrb) eye = new window.HeartbeatOrb($("setup-orb"));
+  const reduced = motion.matches || document.body.classList.contains("reduced-motion");
+  const key = JSON.stringify([state.theme, reduced]);
+  if (eye && key !== eyeKey) {
+    eyeKey = key;
+    eye.update({palette: state.themes[state.theme] || {}, eye: "hal", crt: false,
+      reducedMotion: reduced, events: [], statusSeq: 0, liveliness: .35, idle: true, frameRate: 30});
+  }
+}
+
+export function setupPresentationState() {
+  return {step: state.step, watcher: eye?.state() || null};
+}
 
 function dateText(iso) {
   const date = iso ? new Date(`${iso}T00:00:00Z`) : null;
@@ -42,17 +77,24 @@ function showStep(step) {
   $("setup-next").hidden = index === STEPS.length - 1;
   $("onboarding-submit").hidden = index !== STEPS.length - 1;
   $("setup-progress").textContent = `STEP ${index + 1} OF ${STEPS.length}`;
+  $("setup-next").textContent = {welcome: "LINK MY JOURNALS", journal: "SET UP THE COCKPIT", cockpit: "REVIEW MY SETUP"}[state.step] || "NEXT";
   if (state.step === "launch") renderSummary();
   // Focus moves to the step's heading so the keyboard starts there.
   document.querySelector(`#commissioning [data-step="${state.step}"] h2`)?.focus({preventScroll: true});
+  const panel = document.querySelector(`#commissioning [data-step="${state.step}"]`);
+  if (panel) panel.scrollTop = 0;
+  syncEye();
 }
 
 function probe(path) {
   state.probedPath = path;
   ui?.command("onboarding_probe", {journal_path: path});
+  renderProbe({probing: true});
 }
 
 function queueProbe() {
+  renderProbe(state.lastOnboarding || {});
+  syncIdentity();
   window.clearTimeout(state.timer);
   state.timer = window.setTimeout(() => {
     const path = $("onboarding-journal").value.trim();
@@ -65,7 +107,8 @@ function renderProbe(onboarding) {
   const result = onboarding.probe;
   if (onboarding.probing || !result) {
     card.className = "setup-probe checking";
-    card.innerHTML = `<header><i></i><b>CHECKING THE FOLDER…</b></header>`;
+    const html = `<header><i></i><b>CHECKING THE FOLDER…</b></header><p>Looking for Elite Dangerous journals and your latest commander record.</p>`;
+    if (card.innerHTML !== html) card.innerHTML = html;
     return;
   }
   // The folder Elite uses is filled in when the commander has not typed one.
@@ -73,6 +116,13 @@ function renderProbe(onboarding) {
   if (result.auto && result.path && !field.value.trim() && document.activeElement !== field) {
     field.value = result.path;
     state.probedPath = result.path;
+  }
+  const path = field.value.trim();
+  if (path ? path !== result.path : result.auto !== true) {
+    card.className = "setup-probe warn";
+    const html = `<header><i></i><b>FOLDER CHANGED</b></header><p>This folder has not been checked yet. Choose CHECK, or wait for the automatic check.</p>`;
+    if (card.innerHTML !== html) card.innerHTML = html;
+    return;
   }
   const [label, tone] = STATUS[result.status] || STATUS.invalid;
   const ok = result.status === "ok";
@@ -85,9 +135,10 @@ function renderProbe(onboarding) {
     ["LIVE STATUS", result.live_status ? "STATUS.JSON PRESENT" : "STARTS WITH THE GAME"],
   ] : [];
   card.className = `setup-probe ${tone}`;
-  card.innerHTML = `<header><i></i><b>${label}</b>${result.auto && result.path ? "<em>FOUND AUTOMATICALLY</em>" : ""}</header>
+  const html = `<header><i></i><b>${label}</b>${result.auto && result.path ? "<em>FOUND AUTOMATICALLY</em>" : ""}</header>
     <p>${esc(result.message)}</p>
     ${facts.length ? `<dl>${facts.map(([name, value]) => `<div><dt>${name}</dt><dd>${esc(value)}</dd></div>`).join("")}</dl>` : ""}`;
+  if (card.innerHTML !== html) card.innerHTML = html;
 }
 
 function renderThemes() {
@@ -103,12 +154,13 @@ function renderThemes() {
 function previewTheme() {
   const palette = state.themes[state.theme];
   if (palette && ui) ui.applyTheme({name: state.theme, palette});
+  syncEye();
 }
 
 function renderSummary() {
   const result = state.lastOnboarding?.probe || {};
-  const path = $("onboarding-journal").value.trim() || result.path || "";
-  const linked = result.status === "ok" && (!path || path === result.path);
+  const path = $("onboarding-journal").value.trim() || (result.auto ? result.path : "") || "";
+  const linked = Boolean(linkedProbe());
   const on = (id) => $(id).checked;
   const rows = [
     ["JOURNAL FOLDER", path || "Not set: Void Compass will look in the usual place", linked ? "ok" : "warn"],
@@ -118,7 +170,16 @@ function renderSummary() {
     ["ADAPTIVE DECK", on("onboarding-adaptive") ? "On: the deck follows what you are doing" : "Off: the deck stays as you arrange it", ""],
     ["THEME", state.theme || "Void Cyan", ""],
   ];
-  $("setup-summary").innerHTML = rows.map(([name, value, tone]) => `<div class="${tone}"><dt>${name}</dt><dd>${esc(value)}</dd></div>`).join("");
+  const html = rows.map(([name, value, tone], index) => `<div class="${tone}"><dt>${name}</dt><dd><span>${esc(value)}</span>${index === 1 ? "" : `<button type="button" class="setup-summary-edit" data-setup-go="${index === 0 ? "journal" : "cockpit"}" aria-label="Edit ${esc(name.toLowerCase())}">EDIT</button>`}</dd></div>`).join("");
+  if ($("setup-summary").innerHTML !== html) $("setup-summary").innerHTML = html;
+  $("setup-launch-intro").textContent = linked && result.commander
+    ? `Ready, CMDR ${result.commander}. Take one last look at your choices.`
+    : "Take one last look at your choices. You can connect your flight journals when they are available.";
+}
+
+function submitting(on) {
+  for (const control of $("onboarding-form").querySelectorAll("input,button")) control.disabled = on;
+  $("onboarding-submit").textContent = on ? "COMMISSIONING…" : "COMMISSION VOID COMPASS";
 }
 
 export function renderSetup(onboarding, helpers) {
@@ -127,6 +188,8 @@ export function renderSetup(onboarding, helpers) {
   const session = Number(onboarding.session) || 0;
   if (session !== state.session) {
     state.session = session;
+    state.sending = false;
+    window.clearTimeout(state.timer);
     state.theme = onboarding.theme || "";
     state.themes = onboarding.themes || {};
     state.probedPath = onboarding.journal_path || "";
@@ -139,12 +202,12 @@ export function renderSetup(onboarding, helpers) {
   }
   previewTheme();
   renderProbe(onboarding);
+  syncIdentity();
   if (state.step === "launch") renderSummary();
   $("onboarding-error").textContent = onboarding.error || "";
   if (onboarding.error && state.step !== "journal") showStep("journal");
-  const submitting = Boolean(onboarding.submitting);
-  for (const control of $("onboarding-form").querySelectorAll("input,button")) control.disabled = submitting;
-  $("onboarding-submit").textContent = submitting ? "COMMISSIONING…" : "COMMISSION VOID COMPASS";
+  if (onboarding.error) state.sending = false;
+  submitting(Boolean(onboarding.submitting || state.sending));
 }
 
 export function installSetup(helpers) {
@@ -185,26 +248,31 @@ export function installSetup(helpers) {
   // Enter moves on through the steps; only the last one commissions.
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (state.sending || state.lastOnboarding?.submitting) return;
     if (state.step !== "launch") {
       if (event.target === form && document.activeElement?.id === "onboarding-journal") probe($("onboarding-journal").value.trim());
       else move(1);
       return;
     }
-    const submit = $("onboarding-submit");
-    submit.disabled = true;
-    submit.textContent = "COMMISSIONING…";
+    state.sending = true;
+    submitting(true);
     const result = state.lastOnboarding?.probe || {};
     const accepted = await ui.command("onboarding_submit", {
-      journal_path: $("onboarding-journal").value.trim() || (result.status === "ok" ? result.path : ""),
+      journal_path: $("onboarding-journal").value.trim() || (linkedProbe() ? result.path : ""),
       adaptive_command_enabled: $("onboarding-adaptive").checked,
       overlay_enabled: $("onboarding-overlays").checked,
       overlay_mouse_passthrough: $("onboarding-passthrough").checked,
       ui_theme_name: state.theme,
     });
     if (!accepted) {
-      submit.disabled = false;
-      submit.textContent = "COMMISSION VOID COMPASS";
+      state.sending = false;
+      submitting(false);
     }
   });
-  $("onboarding-exit").addEventListener("click", () => ui.command("onboarding_cancel"));
+  $("onboarding-exit").addEventListener("click", () => { window.clearTimeout(state.timer); ui.command("onboarding_cancel"); });
+  document.addEventListener("visibilitychange", syncEye);
+  window.addEventListener("voidcompass:boot", syncEye);
+  window.addEventListener("heartbeat-three-ready", syncEye);
+  motion.addEventListener("change", syncEye);
+  window.addEventListener("pagehide", () => { eye?.dispose(); window.clearTimeout(state.timer); });
 }

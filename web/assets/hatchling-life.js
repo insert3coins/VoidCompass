@@ -20,22 +20,21 @@
   "use strict";
   const TAU = Math.PI * 2;
   const DT = 1 / 60;
-  const rand = (a, b) => a + Math.random() * (b - a);
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const lerp = (a, b, k) => a + (b - a) * k;
   const need = (pet, key) => Number(pet.needs?.[key] ?? 60);
-  const pick = (list) => list[Math.floor(Math.random() * list.length)];
   // Where its eyes are, in its 100-unit box: [y, eye size] (for the sunglasses).
-  const EYES = {larva: [-5, 4], bot: [-8, 2.7], bacterium: [-2, 3.3], tubus: [-2, 2.4], fungoida: [12, 2.3]};
+  const EYES = {larva: [-5, 4], thargoid: [0, 5], bot: [-8, 2.7], bacterium: [-2, 3.3], tubus: [-2, 2.4], fungoida: [12, 2.3]};
   // The top of its head and its neck, for what it wears: [head, neck].
-  const BODY = {larva: [-38, 13], bot: [-31, 17], bacterium: [-30, 15], tubus: [-25, 12], fungoida: [-30, 22]};
+  const BODY = {larva: [-38, 13], thargoid: [-39, 15], bot: [-31, 17], bacterium: [-30, 15], tubus: [-25, 12], fungoida: [-30, 22]};
   // A cue from the deck, and what it does about it.
   const CUE_ACTS = {jump: "brace", arrive: "dizzy", dock: "peek", undock: "byebye", touchdown: "landed", liftoff: "liftoff",
     cruise: "whee", drop: "whoa", danger: "hide", discovery: "cheer", heat: "hot", lowfuel: "fuel", scoop: "cool",
     srv: "bumpy", srvback: "aboard", leave: "miss", welcome: "welcome",
     victory: "cheer", mission: "cheer", sad: "sulk", party: "party", newship: "inspect", paid: "coins", upgrade: "cheer",
     repaired: "relief", phew: "relief", boost: "whee", pose: "pose", naughty: "gasp", rude: "huff", fighter: "byebye",
-    allfound: "cheer", mapped: "cheer", settlement: "peek", tripdone: "party"};
+    allfound: "cheer", mapped: "cheer", settlement: "peek", tripdone: "party", honk: "honklisten", biology: "living",
+    game_limpet: "keepy", game_thargon: "tag", petted: "pat"};
   // What it shouts when it cheers, by what happened.
   const CHEERS = {victory: ["GOT 'EM!", "TAKE THAT!"], mission: ["WE DID IT!", "JOB DONE!"], upgrade: ["UPGRADES!", "SHINY!"],
     allfound: ["ALL OF THEM!", "EVERY ONE!"], mapped: ["MAPPED!", "PERFECT!"]};
@@ -44,16 +43,47 @@
   const CAN = 13;
   const THREE_PROP_ACTS = new Set(["toy", "keepy", "tower", "tag", "chase", "stars", "stargaze", "trick", "holo"]);
 
+  function wrapWords(ctx, value, width) {
+    const lines = [];
+    let line = "";
+    for (const word of String(value || "").split(/\s+/).filter(Boolean)) {
+      const joined = line ? `${line} ${word}` : word;
+      if (ctx.measureText(joined).width <= width) { line = joined; continue; }
+      if (line) { lines.push(line); line = ""; }
+      for (const letter of Array.from(word)) {
+        if (line && ctx.measureText(line + letter).width > width) { lines.push(line); line = ""; }
+        line += letter;
+      }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : [""];
+  }
+
   // ink: the smallest lettering in pixels (the overlay passes its pixel ratio in);
   // text: the overlay's text size, which every word it draws follows.
   // onSound(kind): a chirp, a cheer, a snore… for a page that has sound.
   // speech: false keeps its words and dreams to itself (the overlay's switch).
-  function create({size = 100, range = 100, top = 100, ink = 9, onSound = null, speech = true, text = 1} = {}) {
-    const me = {x: 0, squash: 0, vel: 0, lift: 0, hop: null, look: [0, 0], goal: [0, 0], held: 0, tilt: 0, shake: 0, spin: 0, flair: 0,
+  function create({size = 100, range = 100, top = 100, ink = 9, onSound = null, speech = true, text = 1, sync = false} = {}) {
+    const fresh = () => ({x: 0, squash: 0, vel: 0, lift: 0, hop: null, look: [0, 0], goal: [0, 0], held: 0, tilt: 0, shake: 0, spin: 0, flair: 0,
       face: "", shut: false, act: null, rest: 3, last: "", spare: 0, bits: [], words: [], eggWobble: 0, eggNext: 4,
       clock: 0, cueSeen: null, shades: 0, toyAt: {}, dream: {next: 4, life: 0, text: ""}, greeted: false, snore: 0,
       heavy: 1, bump: 1, heardAt: null, place: "space", chatSeen: null, chat: null,
-      danced: -999, bobbed: 0, ear: {energy: 0, bass: 0, treble: 0, avg: 0, heard: -9, lastBeat: -9, beats: 0, gaps: [], period: .5, feel: {energy: 0, bass: 0, treble: 0}}};
+      danced: -999, bobbed: 0, ear: {energy: 0, bass: 0, treble: 0, avg: 0, heard: -9, lastBeat: -9, beats: 0, gaps: [], period: .5, feel: {energy: 0, bass: 0, treble: 0}}});
+    const me = fresh();
+    let displaySize = size, displayInk = ink;
+    let pointerLook = null;
+    if (sync) { size = 100; range = 38; top = 100; }
+    let randomState = 1, replaying = false, sharedKey = "", sharedSteps = 0;
+    // The simulation stays deterministic; this is only the position at which
+    // the current view draws it, including a short correction for new cues.
+    let displayX = null, motionCorrection = 0;
+    function random() {
+      if (!sync) return Math.random();
+      randomState ^= randomState << 13; randomState ^= randomState >>> 17; randomState ^= randomState << 5;
+      return (randomState >>> 0) / 4294967296;
+    }
+    const rand = (a, b) => a + random() * (b - a);
+    const pick = (list) => list[Math.floor(random() * list.length)];
     let u = size / 100;
     const ceiling = () => -Math.min(top - 6, 90 * u);
     const floor = () => 44 * u;
@@ -67,6 +97,7 @@
     }
 
     function sound(kind, words = "") {
+      if (replaying) return;
       try { onSound?.(kind, words); } catch { /* a page without sound */ }
     }
 
@@ -112,6 +143,16 @@
     }
 
     const ACTS = {
+      pat: {
+        weight: () => 0,
+        start() { me.face = "happy"; me.squash = 0; me.vel = 0; me.hop = null; me.lift = 0; sound("chirp"); },
+        step(a) {
+          gaze([0, -.65]);
+          me.tilt = Math.sin(a.t * 3) * .035 * Math.min(1, Math.max(0, 2.4 - a.t));
+          return a.t < 2.4;
+        },
+        end() { me.tilt = 0; },
+      },
       wander: {
         weight: () => 3,
         start(a) { a.to = spot(); },
@@ -148,7 +189,7 @@
       },
       groom: {
         weight: (p) => !p.sick && need(p, "clean") < 85 ? .65 : .25,
-        start(a) { a.side = Math.random() < .5 ? -1 : 1; me.face = "happy"; },
+        start(a) { a.side = random() < .5 ? -1 : 1; me.face = "happy"; },
         step(a) {
           gaze([a.side * .75, -.55]);
           me.shut = a.t % .8 > .6;
@@ -336,7 +377,7 @@
         step(a) { gaze([0, .15]); me.held = 0; return a.t < 2.2; },
       },
       hum: {
-        weight: (p) => p.species === "larva" ? 1.5 : 0,
+        weight: (p) => ["larva", "thargoid"].includes(p.species) ? 1.5 : 0,
         step(a) {
           if (a.t % .55 < DT) bit("ring", me.x, -me.lift, {life: 1, max: 1, size: 20 * u});
           if (a.t < DT) sound("hum");
@@ -376,6 +417,17 @@
           return a.t < 4;
         },
       },
+      unfurl: {
+        // The new foundling opens its radial plates, then settles again.
+        weight: (p) => p.species === "thargoid" && !p.sick ? 1.2 : 0,
+        step(a) {
+          me.tilt = Math.sin(a.t * 1.6) * .08 * Math.min(1, a.t, Math.max(0, 4 - a.t));
+          gaze([Math.sin(a.t * 1.1) * .55, Math.cos(a.t * .9) * .25]);
+          if (!a.glint && a.t > 1.5) { a.glint = true; sparkles(me.x, -16 * u, 4); }
+          return a.t < 4;
+        },
+        end() { me.tilt = 0; },
+      },
 
       dance: {
         // Your music is playing: it dances, and how depends on what it hears
@@ -394,7 +446,7 @@
             a.style = !live ? "groove" : feel.energy < .18 ? "sway"
               : feel.energy > .55 && feel.treble > .3 ? (p.species === "bot" ? "robot" : "headbang")
                 : feel.bass > .45 ? "bounce" : "shuffle";
-            if (was && was !== a.style && Math.random() < .5) sparkles(me.x, -30 * u, 5);
+            if (was && was !== a.style && random() < .5) sparkles(me.x, -30 * u, 5);
           }
           // On the beat it hears, else on a steady half-second.
           const period = live ? ear.period : .5;
@@ -458,10 +510,10 @@
           const side = me.x <= a.x ? -1 : 1;
           if (!walkTo(a.x + side * 18 * u, 60) || a.wait > 0) return a.t < 14;
           const away = -side, kind = a.toy.kind;
-          if (kind === "sensor" && p.species !== "larva") {
+          if (kind === "sensor" && !["larva", "thargoid"].includes(p.species)) {
             me.face = "scared"; me.vel += .8; hop(14 * u, 26); say("EEK!"); sound("eek");
             a.pushes = 3; a.end = a.t + 1.6;
-          } else if (kind === "relic" && p.species === "larva") {
+          } else if (kind === "relic" && ["larva", "thargoid"].includes(p.species)) {
             me.face = "angry"; a.vx = away * 170 * u; say("HMPH"); sound("grumble");
             a.pushes = 3; a.end = a.t + 1.6;
           } else {
@@ -469,7 +521,7 @@
             a.pushes += 1;
             a.wait = .7;
             hop(6 * u, 18);
-            if (a.pushes === 1 && Math.random() < .5) say(a.toy.label.toUpperCase());
+            if (a.pushes === 1 && random() < .5) say(a.toy.label.toUpperCase());
             if (a.pushes >= 3) { a.end = a.t + 1.4; me.face = "happy"; sound("chirp"); }
           }
           return true;
@@ -533,7 +585,7 @@
       miss: {
         // You're out on foot: it waits at the glass.
         weight: (p) => p.place === "away" ? 6 : 0,
-        start() { if (Math.random() < .5) say(pick(["WHERE'D YOU GO?", "COME BACK SOON", "…"])); },
+        start() { if (random() < .5) say(pick(["WHERE'D YOU GO?", "COME BACK SOON", "…"])); },
         step(a) {
           walkTo(0, 45);
           gaze([Math.sin(a.t * .7) * .3, .35]);
@@ -642,6 +694,25 @@
       },
 
       // ---- What you're doing, acted out (the deck's cue). ----
+      honklisten: {
+        weight: () => 0,
+        start() { me.face = "curious"; },
+        step(a) {
+          me.tilt = Math.sin(a.t * 1.6) * .12;
+          gaze([Math.sin(a.t * 1.2) * .55, -.45]);
+          return a.t < 3.4;
+        },
+      },
+      living: {
+        weight: () => 0,
+        start() { me.face = "happy"; },
+        step(a) {
+          gaze([Math.sin(a.t * 1.8) * .5, .3]);
+          me.tilt = Math.sin(a.t * 2) * .08;
+          if (!a.noticed && a.t > .7) { a.noticed = true; sparkles(me.x, -30 * u, 5); }
+          return a.t < 3;
+        },
+      },
       brace: {
         weight: () => 0,
         start() { say("HOLD ON!"); sound("eek"); },
@@ -673,7 +744,7 @@
       },
       dizzy: {
         weight: () => 0,
-        start() { if (Math.random() < .6) say(pick(["WHERE ARE WE?", "WOOZY…", "NEW STAR!"])); },
+        start() { if (random() < .6) say(pick(["WHERE ARE WE?", "WOOZY…", "NEW STAR!"])); },
         step(a) {
           me.tilt = Math.sin(a.t * 9) * .1 * Math.max(0, 1 - a.t / 3);
           gaze([Math.sin(a.t * 5) * .8, Math.cos(a.t * 5) * .4]);
@@ -1051,7 +1122,7 @@
       const away = pet.place === "away";
       const options = Object.entries(ACTS).map(([name, act]) => [name, name === me.last ? 0 : act.weight(pet) * bias(name, pet)])
         .filter(([name, weight]) => weight > 0 && (!away || ["miss", "look", "doze", "yawn", "shiver", "hot"].includes(name)));
-      let roll = Math.random() * options.reduce((sum, [, weight]) => sum + weight, 0);
+      let roll = random() * options.reduce((sum, [, weight]) => sum + weight, 0);
       for (const [name, weight] of options) if ((roll -= weight) <= 0) return name;
       return "look";
     }
@@ -1145,7 +1216,8 @@
     function outfit(ctx, pet, px, middle, drawn, rendered3d = false) {
       const [ey, er] = EYES[pet.species === "sample" ? pet.kind || "bacterium" : pet.species] || EYES.larva;
       const grown = pet.species === "sample" ? (pet.stage === "adult" ? 1.18 : pet.stage === "juvenile" ? 1 : .82) : 1;
-      const k = drawn / 100 * grown, eyes = rendered3d ? middle - drawn * .14 : middle + ey * k, gap = er * 1.75 * k, w = gap * 2 + er * 3 * k;
+      const k = drawn / 100 * grown, eyes = rendered3d && pet.species !== "thargoid" ? middle - drawn * .14 : middle + ey * k;
+      const gap = er * 1.75 * k, w = pet.species === "thargoid" ? er * 4 * k : gap * 2 + er * 3 * k;
       const [headY, neckY] = BODY[pet.species === "sample" ? pet.kind || "bacterium" : pet.species] || BODY.larva;
       const head = middle + headY * k, neck = middle + neckY * k;
       ctx.save();
@@ -1270,13 +1342,12 @@
         if (me.bump <= 0) { me.bump = rand(.5, 1.4); me.vel += rand(.2, .5); me.shake = rand(-1, 1) * u; }
         else if (me.bump < .3) me.shake *= .8;
       }
-      // Its few words from the deck (5.6.4): a bubble, and a babble of chirps.
+      // Its few words from the deck are shown as text.
       const chat = pet?.chat;
       if (chat && chat.at !== me.chatSeen) {
         me.chatSeen = chat.at;
         if (Date.now() / 1000 - chat.at < 8 && !pet.asleep && !pet.dormant) {
           me.chat = {text: chat.text, life: 4.5, max: 4.5};
-          sound("babble", chat.text);
         }
       }
       if (me.chat && (me.chat.life -= DT) <= 0) me.chat = null;
@@ -1349,17 +1420,152 @@
       }
     }
 
+    function seedFor(value) {
+      let hash = 2166136261;
+      for (let i = 0; i < value.length; i += 1) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
+      return (hash >>> 0) || 1;
+    }
+
+    function sharedTick(pet) {
+      physics();
+      const surface = Boolean(pet?.world) && SURFACE.includes(pet?.place);
+      me.heavy = surface ? clamp(1 / Math.sqrt(Math.max(.05, Number(pet.world.gravity) || 1)), .55, 1.8) : 1;
+      me.place = pet?.place || "space";
+      if (pet?.asleep && !pet.dormant) { dreaming(pet); return; }
+      if (!pet || pet.dormant || pet.stage === "egg") {
+        if (pet?.stage === "egg" && !pet.dormant) {
+          me.eggNext -= DT;
+          if (me.eggNext <= 0) { me.eggWobble = 1; me.eggNext = pet.hatch_minutes > 0 && pet.hatch_minutes < 5 ? rand(1, 2.5) : rand(4, 9); }
+          me.eggWobble = Math.max(0, me.eggWobble - DT * 1.2);
+          me.tilt = Math.sin(me.eggWobble * 22) * .12 * me.eggWobble;
+        }
+        return;
+      }
+      if (!me.act) { me.tilt = lerp(me.tilt, 0, .1); return; }
+      me.act.t += DT;
+      if (ACTS[me.act.name].step(me.act, pet) === false) settle();
+    }
+
+    // Every view reconstructs the same bounded interval from the same epoch,
+    // journal cue and saved companion state. A late or hidden view can catch
+    // up without sending animation frames over the overlay server.
+    function sharedStep(pet, now) {
+      const seconds = Number.isFinite(now) ? now : Date.now() / 1000;
+      const cue = pet?.cue;
+      const cueAt = Number(cue?.at);
+      const cueAge = seconds - cueAt;
+      const liveCue = cue && CUE_ACTS[cue.kind] && Number.isFinite(cueAt) && cueAge >= 0 && cueAge < 12;
+      const heard = pet?.watcher;
+      const heardAt = Number(heard?.at), heardAge = seconds - heardAt;
+      const liveHeard = !liveCue && heard && Number.isFinite(heardAt) && heardAge >= 0 && heardAge < 8;
+      const musicAt = Number(pet?.music_started_at), musicAge = seconds - musicAt;
+      const legacyMusic = pet?.music && !(Number.isFinite(musicAt) && musicAt > 0);
+      const liveMusic = !liveCue && !liveHeard && pet?.music &&
+        (legacyMusic ? Math.floor(seconds / 15) % 4 === 0 : (musicAge >= 0 && musicAge < 12));
+      const start = liveCue ? cueAt : liveHeard ? heardAt : liveMusic && !legacyMusic ? musicAt : Math.floor(seconds / 15) * 15;
+      const action = liveCue ? CUE_ACTS[cue.kind] : liveHeard ? (heard.weary ? "company" : "listen") : liveMusic ? "dance" : "";
+      const options = pet?.options || {};
+      const signature = JSON.stringify([pet?.name, pet?.born, pet?.species, pet?.kind, pet?.stage, pet?.form, pet?.asleep, pet?.dormant,
+        pet?.sick, pet?.mess, Boolean(pet?.hatch_minutes > 0 && pet.hatch_minutes < 5),
+        pet?.needs, pet?.traits, pet?.toys, pet?.tricks, pet?.place, pet?.world, pet?.music, options.roam]);
+      const key = `${start}:${action}:${signature}`;
+      const target = Math.max(0, Math.min(15 * 60, Math.floor((seconds - start) * 60)));
+      const canonical = heard ? {...pet, watcher: {...heard, side: [0, -1]}} : pet;
+      if (key !== sharedKey || target < sharedSteps) {
+        const ear = me.ear;
+        Object.assign(me, fresh());
+        me.ear = ear;
+        me.ear.heard = ear.heard > -9 ? 0 : -9;
+        range = ({still: 8, short: 38, wide: 45})[options.roam] ?? 38;
+        randomState = seedFor(key);
+        me.greeted = true;
+        sharedKey = key;
+        sharedSteps = 0;
+        replaying = target > 18;
+        if (pet && !pet.asleep && !pet.dormant && pet.stage !== "egg") {
+          const selected = action || (pet.music && Math.floor(start / 15) % 4 === 0 ? "dance" : choose(canonical));
+          if (ACTS[selected]) begin(selected, canonical);
+        }
+      }
+      replaying = target - sharedSteps > 18;
+      while (sharedSteps < target) { sharedTick(canonical); sharedSteps += 1; }
+      replaying = false;
+      const chat = pet?.chat;
+      const age = seconds - Number(chat?.at);
+      me.chat = chat && age >= 0 && age < 4.5 && !pet.asleep && !pet.dormant
+        ? {text: chat.text, life: 4.5 - age, max: 4.5} : null;
+    }
+
+    // Every interval shares its endpoints with its neighbours. Reconstructing
+    // an interval therefore has the same position on both sides of a boundary,
+    // including in a view opened after the animation started.
+    function sharedPosition(pet, seconds) {
+      const floorTime = Math.floor(seconds / 15) * 15;
+      const boundaries = [floorTime, floorTime + 15];
+      const add = (at, duration) => {
+        if (!Number.isFinite(at) || at <= 0) return;
+        for (const time of [at, at + duration]) {
+          if (time > floorTime && time < floorTime + 15) boundaries.push(time);
+        }
+      };
+      if (CUE_ACTS[pet?.cue?.kind]) add(Number(pet.cue.at), 12);
+      add(Number(pet?.watcher?.at), 8);
+      if (pet?.music) add(Number(pet.music_started_at), 12);
+      boundaries.sort((a, b) => a - b);
+      let from = boundaries[0], to = boundaries[boundaries.length - 1];
+      for (let i = 1; i < boundaries.length; i += 1) {
+        if (seconds < boundaries[i]) { from = boundaries[i - 1]; to = boundaries[i]; break; }
+      }
+      const anchor = (time) => {
+        const id = `${pet?.name || ""}:${pet?.born || ""}:${pet?.species || ""}:${time}`;
+        return (seedFor(id) / 4294967295 * 2 - 1) * range * .45;
+      };
+      const ease = (value) => { const k = clamp(value, 0, 1); return k * k * (3 - 2 * k); };
+      const progress = (seconds - from) / Math.max(.001, to - from);
+      const base = lerp(anchor(from), anchor(to), ease(progress));
+      const interior = Math.min(ease((seconds - from) / .85), ease((to - seconds) / .85));
+      return lerp(base, me.x, interior);
+    }
+
+    function enterView(ctx, x, y, drawn = displaySize) {
+      if (!sync) return false;
+      const scale = Math.max(.01, drawn / 100);
+      ctx.save();
+      ctx.translate(x + ((displayX ?? me.x) - me.x) * scale, y);
+      ctx.scale(scale, scale);
+      ink = displayInk / scale;
+      return true;
+    }
+
     return {
       // dt in seconds; busy while the page has the pet doing something else.
-      step(dt, pet, {busy = false} = {}) {
+      step(dt, pet, {busy = false, now = Date.now() / 1000} = {}) {
+        if (sync) {
+          const previousKey = sharedKey;
+          sharedStep(pet, now);
+          const targetX = sharedPosition(pet, Number.isFinite(now) ? now : Date.now() / 1000);
+          // A newly received journal cue or snapshot cannot be predicted before
+          // it arrives. Ease that correction locally; the shared simulation and
+          // its deterministic anchors remain unchanged.
+          if (displayX != null && previousKey !== sharedKey && Math.abs(displayX - targetX) > 1)
+            motionCorrection = displayX - targetX;
+          motionCorrection *= Math.exp(-7 * clamp(Number(dt) || 0, 0, .1));
+          displayX = targetX + motionCorrection;
+          return;
+        }
         me.spare = Math.min(me.spare + dt, .25);
         while (me.spare >= DT) { me.spare -= DT; tick(pet, busy); }
       },
       resize(next) {
-        if (next.size) { size = next.size; u = size / 100; }
-        if (next.range != null) range = next.range;
-        if (next.top != null) top = next.top;
-        if (next.ink) ink = next.ink;
+        if (sync) {
+          if (next.size) displaySize = next.size;
+          if (next.ink) displayInk = next.ink;
+        } else {
+          if (next.size) { size = next.size; u = size / 100; }
+          if (next.range != null) range = next.range;
+          if (next.top != null) top = next.top;
+          if (next.ink) ink = next.ink;
+        }
         if (next.text) text = next.text;
         if (next.speech != null) speech = next.speech;
         me.x = clamp(me.x, -range, range);
@@ -1389,30 +1595,39 @@
         ear.avg += (ear.bass - ear.avg) * .3;
       },
       hop(height, frames) { hop(height, frames); },
-      kick(amount) { me.vel += amount; },
+      kick(amount) { if (!sync) me.vel += amount; },
       // Where the page wants it to look (the mouse, a minigame), for a moment.
-      lookAt(goal, seconds = .4) { me.goal = goal; me.held = seconds; },
+      lookAt(goal, seconds = .4) {
+        if (sync) pointerLook = {goal, until: Date.now() + seconds * 1000};
+        else { me.goal = goal; me.held = seconds; }
+      },
       setLook(goal) { me.goal = goal; me.look = goal; me.held = 1; },
       play(name, pet) { if (ACTS[name] && pet) { settle(); begin(name, pet); } },
       acts: Object.keys(ACTS),
-      get x() { return me.x; },
-      get lift() { return me.lift; },
+      get x() { return (sync ? (displayX ?? me.x) * displaySize / 100 : me.x); },
+      get lift() { return me.lift * (sync ? displaySize / 100 : 1); },
       get act() { return me.act?.name || ""; },
       state: () => ({act: me.act?.name || "", x: Math.round(me.x), bits: me.bits.length, shades: me.shades > 0, heavy: me.heavy,
         chat: me.chat ? me.chat.text : "", text, dance: me.act?.name === "dance" ? me.act.style : "",
-        dream: me.dream.life > 0 ? me.dream.text : ""}),
+        dream: me.dream.life > 0 ? me.dream.text : "", ...(sync ? {syncKey: sharedKey, syncSteps: sharedSteps,
+          elapsed: me.act?.t || 0, toy: me.act?.toy?.kind || "", ball: me.act?.ball ? {...me.act.ball} : null,
+          tower: me.act?.cans || 0, thargon: me.act?.th ? {...me.act.th} : null} : {})}),
 
       // The pet itself, where it is now and how it looks.
       drawPet(ctx, pet, {x, y, size: drawn = size, t, aura = true, shadow = true, threeOnly = false} = {}) {
         if (!pet) return;
+        const scaled = enterView(ctx, x, y, drawn);
+        if (scaled) { x = 0; y = 0; drawn = 100; }
         const shown = me.shut && !pet.asleep ? {...pet, asleep: true, eyesShut: true} : me.face && !pet.reaction ? {...pet, reaction: me.face} : pet;
         const px = x + me.x + me.shake, feet = y + 44 * drawn / 100, middle = y - me.lift;
+        const look = sync && pointerLook && Date.now() < pointerLook.until ? pointerLook.goal : me.look;
         ctx.save();
         if (me.tilt || me.flair) { ctx.translate(px, feet); ctx.rotate(me.tilt + me.flair); ctx.translate(-px, -feet); }
         if (me.spin) { ctx.translate(px, middle); ctx.rotate(me.spin); ctx.translate(-px, -middle); }
         const current = me.act || {};
         const relative = (value) => Number(value || 0) - me.x - me.shake;
-        const activity = {name: current.name || "idle", t: current.t || 0, style: current.style || "", trick: current.trick || ""};
+        const activity = {name: current.name || "idle", t: current.t || 0, style: current.style || "", trick: current.trick || "",
+          period: me.ear.period || .5};
         if (current.ball) activity.ball = {...current.ball, x: relative(current.ball.x)};
         if (current.toy) activity.toy = {kind: current.toy.kind, x: relative(current.x ?? toyX(pet, current.toy.kind)), vx: current.vx || 0, pushes: current.pushes || 0};
         if (current.tower) activity.tower = current.tower;
@@ -1427,33 +1642,38 @@
         const toys = pet.stage === "egg" ? [] : (pet.toys || []).map((toy) => ({kind: toy.kind,
           x: relative(current.name === "toy" && current.toy?.kind === toy.kind ? current.x : toyX(pet, toy.kind)), y: 44 * drawn / 100}));
         const rendered3d = window.Hatchling3D?.draw(ctx, shown, {
-          x: px, y, size: drawn, t, look: me.look, squash: me.squash, lift: me.lift, aura, shadow,
+          x: px, y, size: drawn, t, look, squash: me.squash, lift: me.lift, aura, shadow,
           act: me.act?.name || "", dance: me.act?.style || "",
           activity, toys,
         });
-        if (!rendered3d && !threeOnly) window.HatchlingArt.draw(ctx, shown, {x: px, y, size: drawn, t, look: me.look, squash: me.squash, lift: me.lift, aura, shadow});
-        if (pet.outfit && pet.stage !== "egg") outfit(ctx, pet, px, middle, drawn, rendered3d);
+        me.rendered3d = Boolean(rendered3d);
+        if (!rendered3d && !threeOnly) window.HatchlingArt.draw(ctx, shown, {x: px, y, size: drawn, t, look, squash: me.squash, lift: me.lift, aura, shadow});
+        if (!rendered3d && pet.outfit && pet.stage !== "egg") outfit(ctx, pet, px, middle, drawn, false);
         if (me.shades > 0 && !pet.asleep && pet.stage !== "egg") {
           // Sunglasses, while it scoops fuel from a star.
           const [ey, er] = EYES[pet.species === "sample" ? pet.kind || "bacterium" : pet.species] || EYES.larva;
           const k = drawn / 100, grown = pet.species === "sample" ? (pet.stage === "adult" ? 1.18 : pet.stage === "juvenile" ? 1 : .82) : 1;
           const gap = er * 1.75 * k * grown, lens = er * 1.25 * k * grown;
-          const cy = rendered3d ? middle - drawn * .14 : middle + ey * k * grown;
+          const cy = rendered3d && pet.species !== "thargoid" ? middle - drawn * .14 : middle + ey * k * grown;
           ctx.globalAlpha = Math.min(1, me.shades);
           ctx.fillStyle = "#0b0f14";
           ctx.strokeStyle = "#0b0f14";
           ctx.lineWidth = Math.max(1, lens * .35);
-          for (const dx of [-gap, gap]) { ctx.beginPath(); ctx.ellipse(px + dx, cy, lens * 1.25, lens, 0, 0, TAU); ctx.fill(); }
-          ctx.beginPath(); ctx.moveTo(px - gap + lens, cy); ctx.lineTo(px + gap - lens, cy); ctx.stroke();
+          const lenses = pet.species === "thargoid" ? [0] : [-gap, gap];
+          for (const dx of lenses) { ctx.beginPath(); ctx.ellipse(px + dx, cy, lens * 1.25, lens, 0, 0, TAU); ctx.fill(); }
+          if (lenses.length === 2) { ctx.beginPath(); ctx.moveTo(px - gap + lens, cy); ctx.lineTo(px + gap - lens, cy); ctx.stroke(); }
           ctx.fillStyle = "rgba(255, 255, 255, .45)";
-          for (const dx of [-gap, gap]) ctx.fillRect(px + dx - lens * .7, cy - lens * .6, lens * .5, lens * .3);
+          for (const dx of lenses) ctx.fillRect(px + dx - lens * .7, cy - lens * .6, lens * .5, lens * .3);
           ctx.globalAlpha = 1;
         }
         ctx.restore();
+        if (scaled) ctx.restore();
       },
       // What it's playing with, behind it and in front of it.
       back(ctx, pet, ox, oy) {
         if (!pet) return;
+        const scaled = enterView(ctx, ox, oy);
+        if (scaled) { ox = 0; oy = 0; }
         const tone = window.HatchlingArt.tones(pet);
         if (pet.place === "supercruise" && !pet.dormant) {
           // Stars streaming past in supercruise.
@@ -1488,7 +1708,7 @@
           ctx.globalAlpha = 1;
         }
         if (pet.stage !== "egg") {
-          if (!window.Hatchling3D) {
+          if (!window.Hatchling3D || me.rendered3d === false) {
             const playing = me.act?.name === "toy" ? me.act.toy.kind : "";
             for (const toy of pet.toys || []) {
               const x = playing === toy.kind ? me.act.x : toyX(pet, toy.kind);
@@ -1496,12 +1716,15 @@
             }
           }
         }
-        if (me.act && (!window.Hatchling3D || !THREE_PROP_ACTS.has(me.act.name))) ACTS[me.act.name].back?.(ctx, me.act, ox, oy, tone);
+        if (me.act && (!window.Hatchling3D || me.rendered3d === false || !THREE_PROP_ACTS.has(me.act.name))) ACTS[me.act.name].back?.(ctx, me.act, ox, oy, tone);
+        if (scaled) ctx.restore();
       },
       front(ctx, pet, ox, oy) {
         if (!pet) return;
+        const scaled = enterView(ctx, ox, oy);
+        if (scaled) { ox = 0; oy = 0; }
         const tone = window.HatchlingArt.tones(pet);
-        if (me.act && (!window.Hatchling3D || !THREE_PROP_ACTS.has(me.act.name))) ACTS[me.act.name].front?.(ctx, me.act, ox, oy, tone);
+        if (me.act && (!window.Hatchling3D || me.rendered3d === false || !THREE_PROP_ACTS.has(me.act.name))) ACTS[me.act.name].front?.(ctx, me.act, ox, oy, tone);
         for (const b of me.bits) {
           const k = b.life / b.max, x = ox + b.x, y = oy + b.y;
           ctx.globalAlpha = clamp(k * 1.5, 0, 1);
@@ -1569,14 +1792,11 @@
           const by = oy + Math.max(ceiling() + size, -54 * u);
           ctx.globalAlpha = fade * .85;
           ctx.fillStyle = "#0d1820";
-          ctx.strokeStyle = tone.line;
-          ctx.lineWidth = Math.max(1, u * .6);
           ctx.beginPath();
           ctx.ellipse(bx, by, wide / 2, size * 1.1, 0, 0, TAU);
           ctx.fill();
-          ctx.stroke();
           for (const [dx, dy, r] of [[-wide * .3, size * 1.6, size * .3], [-wide * .38, size * 2.3, size * .18]]) {
-            ctx.beginPath(); ctx.arc(bx + dx, by + dy, r, 0, TAU); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.arc(bx + dx, by + dy, r, 0, TAU); ctx.fill();
           }
           ctx.globalAlpha = fade;
           ctx.fillStyle = tone.glow;
@@ -1584,26 +1804,44 @@
           ctx.globalAlpha = 1;
         }
         if (speech && me.chat && !pet.asleep) {
-          // Its own words, in a bubble with a tail (not the Watcher's panel).
+          // A readable local speech bubble, kept inside both habitat and overlay.
           const fade = clamp(Math.min(me.chat.life * 2, (me.chat.max - me.chat.life) * 4), 0, 1);
-          const size = Math.max(ink * .95, 7 * u) * text;
-          ctx.font = `600 ${size}px "Segoe UI", sans-serif`;
-          const wide = ctx.measureText(me.chat.text).width + size * 1.4, high = size * 1.9;
-          const edge = range + 40 * u;
-          const bx = clamp(ox + me.x, ox - edge + wide / 2, ox + edge - wide / 2);
-          const by = oy + Math.max(ceiling() + high / 2 + 2, -62 * u - me.lift);
+          const transform = ctx.getTransform();
+          const sx = Math.abs(transform.a) || 1, sy = Math.abs(transform.d) || 1;
+          const left = -transform.e / sx + 4, right = (ctx.canvas.width - transform.e) / sx - 4;
+          const top = -transform.f / sy + 4, bottom = (ctx.canvas.height - transform.f) / sy - 4;
+          const available = Math.max(12, right - left), heightAvailable = Math.max(12, bottom - top);
+          let fontSize = Math.max(ink * .95, 7 * u) * text;
+          let lines, lineHeight, padding;
+          const minimum = Math.min(fontSize, Math.max(7, ink * .7));
+          do {
+            ctx.font = `600 ${fontSize}px "Segoe UI", sans-serif`;
+            lineHeight = fontSize * 1.3;
+            padding = fontSize * .7;
+            lines = wrapWords(ctx, me.chat.text, Math.max(8, available - padding * 2));
+            if (lines.length * lineHeight + padding * 2 <= heightAvailable * .7 || fontSize <= minimum) break;
+            fontSize = Math.max(minimum, fontSize - 1);
+          } while (true);
+          // Extremely long journal lines must never push text outside the
+          // canvas, even at the smallest supported lettering size.
+          const maxLines = Math.max(1, Math.floor((heightAvailable - padding * 2) / lineHeight));
+          if (lines.length > maxLines) {
+            lines = lines.slice(0, maxLines);
+            let last = lines[maxLines - 1];
+            while (last && ctx.measureText(`${last}…`).width > available - padding * 2) last = last.slice(0, -1);
+            lines[maxLines - 1] = `${last}…`;
+          }
+          const wide = Math.min(available, Math.max(...lines.map((line) => ctx.measureText(line).width)) + padding * 2);
+          const high = lines.length * lineHeight + padding * 2;
+          const bx = clamp(ox + me.x, left + wide / 2, right - wide / 2);
+          const by = clamp(oy + Math.max(ceiling() + high / 2 + 2, -62 * u - me.lift), top + high / 2, bottom - high / 2);
           ctx.globalAlpha = fade;
-          ctx.fillStyle = "rgba(246, 250, 252, .95)";
+          ctx.fillStyle = "rgba(7, 17, 25, .82)";
           ctx.beginPath();
-          ctx.roundRect(bx - wide / 2, by - high / 2, wide, high, high / 2);
+          ctx.roundRect(bx - wide / 2, by - high / 2, wide, high, Math.min(8 * u, fontSize * .6));
           ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(ox + me.x - 3 * u, by + high / 2 - 1);
-          ctx.lineTo(ox + me.x + 3 * u, by + high / 2 - 1);
-          ctx.lineTo(ox + me.x, by + high / 2 + 5 * u);
-          ctx.fill();
-          ctx.fillStyle = "#14202a";
-          ctx.fillText(me.chat.text, bx, by + 1);
+          ctx.fillStyle = "#edf8f8";
+          lines.forEach((line, index) => ctx.fillText(line, bx, by - (lines.length - 1) * lineHeight / 2 + index * lineHeight));
           ctx.globalAlpha = 1;
         }
         for (const word of speech ? me.words : []) {
@@ -1616,6 +1854,7 @@
         }
         ctx.shadowBlur = 0;
         ctx.globalAlpha = 1;
+        if (scaled) ctx.restore();
       },
     };
   }

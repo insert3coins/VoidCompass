@@ -80,8 +80,11 @@ class RealWindowTests(unittest.TestCase):
         if not runtime.start():
             self.skipTest(f"visual hosting unavailable: {runtime.error}")
         folder = runtime.user_data_folder
+        server = HtmlOverlayServer(WEB)
+        server.register("cargo", "cargo")
+        page_url = html_overlay_host._OverlayHost(server.url, None).page_url("cargo", "cargo")
         try:
-            window = runtime.create_window("VC Test", "data:text/html,<body style='background:transparent'>ok</body>",
+            window = runtime.create_window("VC Test", page_url,
                                            120, 60, html_overlay_host.HIDDEN_WINDOW_X, html_overlay_host.HIDDEN_WINDOW_Y)
             self.assertTrue(window._voidcompass_composition and window._voidcompass_owned)
             self.assertTrue(window.native.Handle, "a real window handle for the host's positioning code")
@@ -95,8 +98,59 @@ class RealWindowTests(unittest.TestCase):
             window.run_js("1 + 1")
         finally:
             runtime.stop()
+            server.stop()
         self.assertEqual(runtime.windows, {}, "every window destroyed")
         self.assertFalse(os.path.isdir(folder), "the private WebView2 data removed")
+
+    def test_concurrent_controller_initialisation_keeps_every_window_usable(self):
+        try:
+            import webview.platforms.edgechromium
+        except Exception as exc:
+            self.skipTest(f"WebView2 unavailable: {exc}")
+        runtime = composition_host.CompositionRuntime()
+        if not runtime.start():
+            self.skipTest(f"visual hosting unavailable: {runtime.error}")
+        server = HtmlOverlayServer(WEB)
+        from voidcompass.overlays.cargo_hud import build_cargo_model
+        from tests.test_overlay_text_fit_5539 import THEME
+        host = html_overlay_host._OverlayHost(server.url, None)
+        for index in range(8):
+            overlay_id = f"batch-{index}"
+            server.register(overlay_id, "cargo")
+            server.publish(overlay_id, {"cargo": build_cargo_model([], capacity=64), "theme": THEME})
+        try:
+            windows = runtime.call(lambda: [runtime.create_window(
+                f"VC batch {index}", host.page_url(f"batch-{index}", "cargo"),
+                180 + index * 20, 100 + index * 10,
+                html_overlay_host.HIDDEN_WINDOW_X, html_overlay_host.HIDDEN_WINDOW_Y,
+            ) for index in range(8)])
+            deadline = time.monotonic() + 25
+            while not all(window._voidcompass_navigation_completed_at for window in windows) and time.monotonic() < deadline:
+                time.sleep(.05)
+            ready_deadline = time.monotonic() + 10
+            while not all(server._overlays[f"batch-{i}"].ready.is_set() for i in range(8)) and time.monotonic() < ready_deadline:
+                time.sleep(.05)
+            for i in range(8):
+                self.assertTrue(server._overlays[f"batch-{i}"].ready.is_set(), "the actual overlay script reported ready")
+            for window in windows:
+                self.assertIsNotNone(window.controller)
+                self.assertTrue(window._voidcompass_navigation_completed_at)
+                self.assertFalse(window._voidcompass_navigation_failed)
+            controllers = [html_overlay_host._WindowController(str(i), window) for i, window in enumerate(windows)]
+            def apply(visible):
+                return runtime.call(lambda: [controller.apply({
+                    "x": html_overlay_host.HIDDEN_WINDOW_X, "y": html_overlay_host.HIDDEN_WINDOW_Y,
+                    "width": 180+i*20, "height": 100+i*10, "visible": visible,
+                    "click_through": True, "opacity": .8,
+                }) for i, controller in enumerate(controllers)])
+            for visible in (True, False, True, False):
+                results = apply(visible)
+                self.assertTrue(all(item["ok"] and item["visible"] == visible for item in results))
+                for window in windows:
+                    self.assertEqual(html_overlay_host._windows_visibility(window), visible)
+        finally:
+            runtime.stop()
+            server.stop()
 
 
 if __name__ == "__main__":

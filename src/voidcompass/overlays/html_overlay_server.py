@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from collections import deque
 import json
 import logging
 from pathlib import Path
@@ -78,10 +79,18 @@ class _OverlayState:
         self.ready = threading.Event()
         self.host_status = {}
         self.reload_revision = 0
+        self.generation = 0
+        self.layout_revision = 0
+        self.measured_layout_revision = -1
+        self.measured_revision = -1
+        self.measurement_serial = -1
+        self.ordered = deque()
+        self.event_signature = None
+        self.delivery_protocol = 0
 
 
 class HtmlOverlayServer:
-    """Serve bundled assets and independent SSE streams from one port."""
+    """Serve bundled assets, atomic models and the shared overlay-host feed."""
 
     def __init__(self, static_root, presentation_held=False, on_asset_error=None):
         self.static_root = Path(static_root).resolve()
@@ -296,6 +305,8 @@ class HtmlOverlayServer:
             shutdown = bool(snapshot.get("shutdown"))
             window_changed = window != state.window or shutdown != state.shutdown
             if window_changed:
+                if self._geometry(window) != self._geometry(state.window):
+                    state.layout_revision += 1
                 state.window = window
                 state.shutdown = shutdown
                 self._window_revision += 1
@@ -305,8 +316,67 @@ class HtmlOverlayServer:
                 return state.revision
             state.snapshot_json = encoded
             state.revision += 1
+            # One host waits for both model and window changes. Hidden pages
+            # receive the same deliveries as visible ones.
+            if not window_changed:
+                self._window_revision += 1
+            signature = self._event_signature(state.template, snapshot)
+            if signature is not None and signature != state.event_signature:
+                state.ordered.append((state.revision, encoded))
+            state.event_signature = signature
             self._condition.notify_all()
             return state.revision
+
+    @staticmethod
+    def _geometry(window):
+        return tuple(window.get(key) for key in ("x", "y", "width", "height"))
+
+    @staticmethod
+    def _event_signature(template, snapshot):
+        """Retain event-bearing changes while ordinary state may coalesce.
+
+        These queues are drained by the page's ordered acknowledgements, and
+        reset with its browser generation. They are not animation timelines.
+        """
+        if template == "toast":
+            value = snapshot.get("notifications")
+        elif template == "heartbeat":
+            model = snapshot.get("heartbeat") or {}
+            value = [model.get("events"), model.get("thought")]
+        elif template == "hatchling":
+            model = snapshot.get("hatchling") or {}
+            value = [model.get("cue"), model.get("chat"), model.get("line")]
+        else:
+            return None
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+    def delivery(self, overlay_id, after=None):
+        """An atomic model/revision envelope, including unacknowledged events."""
+        with self._condition:
+            state = self._overlays.get(str(overlay_id))
+            if state is None:
+                return None
+            records = list(state.ordered)
+            if not records or records[-1][0] != state.revision:
+                records.append((state.revision, state.snapshot_json))
+            ordered_revisions = {revision for revision, _ in state.ordered}
+            if after == [state.generation, state.layout_revision, state.revision]:
+                records = []
+            return {
+                "type": "voidcompass.overlay",
+                "overlay": state.overlay_id,
+                "generation": state.generation,
+                "layout_revision": state.layout_revision,
+                "revision": state.revision,
+                "health": {
+                    "frame_rate": self.frame_rate_by_overlay.get(state.overlay_id, self.frame_rate),
+                    "layout": self.layout_mode, "title": state.title,
+                },
+                "deliveries": [{
+                    "revision": revision, "snapshot": json.loads(encoded),
+                    "ordered": revision in ordered_revisions,
+                } for revision, encoded in records],
+            }
 
     def snapshot(self, overlay_id):
         """What an overlay page is showing now, as data (the local API), or
@@ -328,6 +398,8 @@ class HtmlOverlayServer:
         with self._condition:
             if window == state.window:
                 return self._window_revision
+            if self._geometry(window) != self._geometry(state.window):
+                state.layout_revision += 1
             state.window = window
             state.shutdown = bool(window.get("shutdown"))
             self._window_revision += 1
@@ -386,6 +458,11 @@ class HtmlOverlayServer:
             state.last_rendered_at = 0.0
             state.ready.clear()
             state.host_status = {}
+            state.generation += 1
+            state.measured_layout_revision = -1
+            state.measured_revision = -1
+            state.measurement_serial = -1
+            state.ordered.clear()
             state.reload_revision += 1
             self._window_revision += 1
             self._condition.notify_all()
@@ -415,7 +492,10 @@ class HtmlOverlayServer:
                     # The page has drawn the latest model (not just any). A
                     # hidden overlay is only revealed once it has, so it never
                     # appears showing what it drew while hidden (5.5.2.7).
-                    "render_current": bool(state.rendered_revision >= state.revision),
+                    "render_current": self._render_current(state),
+                    "strict_ready": state.delivery_protocol >= 2,
+                    "generation": state.generation,
+                    "layout_revision": state.layout_revision,
                     "content_ready": bool(
                         state.ready.is_set()
                         and state.rendered_revision >= 0
@@ -453,9 +533,63 @@ class HtmlOverlayServer:
                 state.last_rendered_at = 0.0
                 state.ready.clear()
                 state.host_status = {}
+                state.generation += 1
+                state.measured_layout_revision = -1
+                state.measured_revision = -1
+                state.measurement_serial = -1
+                state.ordered.clear()
             self._window_revision += 1
             self._condition.notify_all()
             return self._window_revision
+
+    @staticmethod
+    def _render_current(state):
+        return bool(state.rendered_revision >= state.revision and (
+            state.delivery_protocol < 2 or (state.measured_layout_revision == state.layout_revision
+                                            and state.measured_revision >= state.revision)
+        ))
+
+    def acknowledge_rendered(self, overlay_id, payload):
+        """Accept applied models in order, and only current layout measurements."""
+        revision = int(payload["revision"])
+        layout = int(payload.get("layout_revision", -1))
+        serial = int(payload.get("measurement", -1))
+        height = max(0, min(4096, int(payload.get("content_height") or 0)))
+        shapes = _clean_shapes(payload.get("shapes"))
+        with self._condition:
+            state = self._overlays[str(overlay_id)]
+            versioned = "generation" in payload
+            if (versioned and int(payload["generation"]) != state.generation) or (
+                    not versioned and state.delivery_protocol >= 2):
+                return False
+            if versioned and not 0 <= revision <= state.revision:
+                raise ValueError("invalid revision")
+            before = (self._render_current(state), state.content_height, state.shapes)
+            state.rendered_revision = max(state.rendered_revision, revision)
+            if versioned:
+                state.delivery_protocol = 2
+            current_measurement = (not versioned or (
+                revision == state.revision and layout == state.layout_revision
+                and serial > state.measurement_serial
+            ))
+            if current_measurement:
+                if "content_height" in payload:
+                    state.content_height = height
+                if "shapes" in payload:
+                    state.shapes = shapes
+                if versioned and payload.get("measured") is True:
+                    state.measured_layout_revision = layout
+                    state.measured_revision = revision
+                    state.measurement_serial = serial
+            while state.ordered and state.ordered[0][0] <= revision:
+                state.ordered.popleft()
+            state.last_rendered_at = time.monotonic()
+            state.last_client_seen = state.last_rendered_at
+            after = (self._render_current(state), state.content_height, state.shapes)
+            if before != after:
+                self._window_revision += 1
+                self._condition.notify_all()
+            return True
 
     def request_host_shutdown(self):
         """Wake the browser host and ask it to close every WebView window."""
@@ -631,6 +765,16 @@ class HtmlOverlayServer:
                         )
                     revision = self._window_revision
                     overlays = self.window_manifest()
+                    if (query.get("deliver") or [""])[0] == "1":
+                        try:
+                            seen = json.loads((query.get("seen") or ["{}"])[0])
+                            if not isinstance(seen, dict):
+                                seen = {}
+                        except (TypeError, ValueError):
+                            seen = {}
+                        for overlay_id, spec in overlays.items():
+                            if not spec["shutdown"]:
+                                spec["delivery"] = self.delivery(overlay_id, seen.get(overlay_id))
                     presentation_held = self._presentation_held
                     closing = self._host_shutdown or self._stopping.is_set()
                 self._send_json(handler, {
@@ -671,7 +815,9 @@ class HtmlOverlayServer:
             self._touch(state)
             if parsed.path == "/api/snapshot":
                 with self._condition:
-                    payload = state.snapshot_json.encode("utf-8")
+                    envelope = (parse_qs(parsed.query).get("envelope") or [""])[0] == "1"
+                    payload = (json.dumps(self.delivery(state.overlay_id), separators=(",", ":"))
+                               if envelope else state.snapshot_json).encode("utf-8")
                 self._send_bytes(handler, payload, "application/json; charset=utf-8")
             elif parsed.path == "/api/health":
                 self._send_json(handler, {
@@ -703,7 +849,10 @@ class HtmlOverlayServer:
             self._report_asset_error(parsed.path, type(exc).__name__)
             self._send_json(handler, {"error": "asset unavailable"}, 404)
             return
-        self._send_bytes(handler, payload, asset_type(candidate))
+        cache = "private, max-age=3600" if parsed.path in {
+            "/galactic_map/vendor/three.module.min.js", "/galactic_map/vendor/three.core.min.js",
+        } else "no-store"
+        self._send_bytes(handler, payload, asset_type(candidate), cache=cache)
 
     def _report_asset_error(self, path, reason):
         # A missing script leaves an overlay that never reports ready.
@@ -747,13 +896,51 @@ class HtmlOverlayServer:
 
     def _handle_post(self, handler):
         parsed = urlparse(handler.path)
-        allowed = {"/api/ready", "/api/rendered", "/api/host-status"}
+        allowed = {"/api/ready", "/api/rendered", "/api/host-status", "/api/host-status-batch", "/api/watcher-renderer"}
         if parsed.path not in allowed or not self._authorised(handler, parsed):
             self._send_json(handler, {"error": "unauthorised"}, 403)
+            return
+        if parsed.path == "/api/host-status-batch":
+            try:
+                declared = int(handler.headers.get("Content-Length", "0"))
+                if not 0 <= declared <= 65536:
+                    raise ValueError("invalid length")
+                payload = json.loads(handler.rfile.read(declared) or b"{}")
+                _body_read(handler)
+                statuses = payload["overlays"]
+                if not isinstance(statuses, dict) or any(not isinstance(item, dict) for item in statuses.values()):
+                    raise ValueError("invalid statuses")
+                with self._condition:
+                    for overlay_id, status in statuses.items():
+                        state = self._overlays.get(overlay_id)
+                        if state is not None:
+                            state.host_status = status
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError, OSError):
+                handler.close_connection = True
+                self._send_json(handler, {"error": "invalid host statuses"}, 400)
+                return
+            self._send_json(handler, {"accepted": True}, 202)
             return
         state = self._state(parsed)
         if state is None:
             self._send_json(handler, {"error": "unknown overlay"}, 404)
+            return
+        if parsed.path == "/api/watcher-renderer":
+            try:
+                length = int(handler.headers.get("Content-Length", "0"))
+                if not 0 <= length <= 1024:
+                    raise ValueError("invalid length")
+                payload = json.loads(handler.rfile.read(length) or b"{}")
+                _body_read(handler)
+                snapshot = json.loads(state.snapshot_json or "{}")
+                enabled = (snapshot.get("heartbeat") or {}).get("orb", {}).get("renderer_logging") is True
+                from voidcompass.core.watcher_renderer_diagnostics import record
+                accepted = state.overlay_id == "heartbeat" and enabled and record("overlay", str(payload.get("renderer") or ""), str(payload.get("reason") or ""))
+            except (TypeError, ValueError, AttributeError, json.JSONDecodeError, OSError):
+                handler.close_connection = True
+                self._send_json(handler, {"error": "invalid renderer report"}, 400)
+                return
+            self._send_json(handler, {"accepted": bool(accepted)}, 202 if accepted else 403)
             return
         if parsed.path == "/api/host-status":
             try:
@@ -772,32 +959,12 @@ class HtmlOverlayServer:
                 payload = json.loads(handler.rfile.read(min(32768, declared)) or b"{}")
                 if declared <= 32768:
                     _body_read(handler)
-                revision = int(payload.get("revision"))
-                content_height = max(0, min(4096, int(payload.get("content_height") or 0)))
-                shapes = _clean_shapes(payload.get("shapes"))
-            except (TypeError, ValueError, json.JSONDecodeError, OSError):
+                accepted = self.acknowledge_rendered(state.overlay_id, payload)
+                revision = int(payload["revision"])
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError, OSError):
                 self._send_json(handler, {"error": "invalid revision"}, 400)
                 return
-            with self._condition:
-                was_content_ready = bool(
-                    state.ready.is_set() and state.rendered_revision >= 0
-                )
-                state.rendered_revision = max(state.rendered_revision, revision)
-                state.content_height = content_height
-                if shapes != state.shapes:
-                    state.shapes = shapes
-                    if self.shape_windows:
-                        self._window_revision += 1
-                        self._condition.notify_all()
-                state.last_rendered_at = time.monotonic()
-                state.last_client_seen = state.last_rendered_at
-                is_content_ready = bool(
-                    state.ready.is_set() and state.rendered_revision >= 0
-                )
-                if is_content_ready != was_content_ready:
-                    self._window_revision += 1
-                    self._condition.notify_all()
-            self._send_json(handler, {"accepted": True, "revision": revision}, 202)
+            self._send_json(handler, {"accepted": accepted, "revision": revision}, 202)
             return
         # /api/ready carries a small body too. Leaving it unread corrupts the
         # next request on this HTTP/1.1 connection (e.g. "{}GET /api/health").
@@ -822,6 +989,15 @@ class HtmlOverlayServer:
             state.renderer = renderer
             logging.info("Overlay renderer: %s: %s", state.overlay_id, renderer)
         with self._condition:
+            try:
+                ready_payload = json.loads(body or b"{}")
+                if (("generation" in ready_payload and int(ready_payload["generation"]) != state.generation)
+                        or (state.delivery_protocol >= 2 and "generation" not in ready_payload)):
+                    self._send_json(handler, {"ready": False}, 202)
+                    return
+            except (TypeError, ValueError):
+                self._send_json(handler, {"ready": False}, 400)
+                return
             was_content_ready = bool(
                 state.ready.is_set() and state.rendered_revision >= 0
             )

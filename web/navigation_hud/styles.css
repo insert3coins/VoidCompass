@@ -32,27 +32,28 @@
 }
 
 /* ----------------------------------------------------------------- type --
-   Overlay Studio sets the typeface, a minimum size for the small text and
+   Overlay Studio sets the typeface, the scale and minimum for small text and
    brighter labels; every text rule below reads these tokens. A wider face
    sets its type a little smaller (--fit-*) and tracks it tighter so the
    fixed cockpit layout never clips. --type-floor lifts every size below it
-   up to it, which is what makes the small labels readable. */
+   up to it; --label-scale also grows labels already above that floor. */
 .hud {
   --type-weight: 700;
   --fit-big: 1;
   --fit-small: 1;
   --face-track: 1;
   --label-track: 1;
+  --label-scale: 1;
   --type-floor: 0px;
   --track: calc(var(--face-track) * var(--label-track));
-  --size-75: max(calc(7.5px * var(--fit-small)), var(--type-floor));
-  --size-8: max(calc(8px * var(--fit-small)), var(--type-floor));
-  --size-85: max(calc(8.5px * var(--fit-small)), var(--type-floor));
-  --size-9: max(calc(9px * var(--fit-small)), var(--type-floor));
-  --size-95: max(calc(9.5px * var(--fit-small)), var(--type-floor));
-  --size-10: max(calc(10px * var(--fit-small)), var(--type-floor));
-  --size-11: max(calc(11px * var(--fit-small)), var(--type-floor));
-  --size-12: max(calc(12px * var(--fit-small)), var(--type-floor));
+  --size-75: max(calc(7.5px * var(--fit-small) * var(--label-scale)), var(--type-floor));
+  --size-8: max(calc(8px * var(--fit-small) * var(--label-scale)), var(--type-floor));
+  --size-85: max(calc(8.5px * var(--fit-small) * var(--label-scale)), var(--type-floor));
+  --size-9: max(calc(9px * var(--fit-small) * var(--label-scale)), var(--type-floor));
+  --size-95: max(calc(9.5px * var(--fit-small) * var(--label-scale)), var(--type-floor));
+  --size-10: max(calc(10px * var(--fit-small) * var(--label-scale)), var(--type-floor));
+  --size-11: max(calc(11px * var(--fit-small) * var(--label-scale)), var(--type-floor));
+  --size-12: max(calc(12px * var(--fit-small) * var(--label-scale)), var(--type-floor));
   --size-13: max(calc(13px * var(--fit-big)), var(--type-floor));
   --size-17: calc(17px * var(--fit-big));
   --size-19: calc(19px * var(--fit-big));
@@ -74,8 +75,8 @@
   --fit-small: .9;
   --face-track: .3;
 }
-.hud[data-labels="large"] { --type-floor: 10px; --label-track: .75; }
-.hud[data-labels="larger"] { --type-floor: 11.5px; --label-track: .55; }
+.hud[data-labels="large"] { --type-floor: 10px; --label-track: .75; --label-scale: 1.08; }
+.hud[data-labels="larger"] { --type-floor: 11.5px; --label-track: .55; --label-scale: 1.16; }
 /* Labels drawn in the faded HUD tone or the dim grey come up to full tone. */
 .hud.bright-labels {
   --label-soft: var(--hud);
@@ -99,12 +100,11 @@ body {
   height: auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  /* The status plate takes the route block's spare height and a pixel from
-     each gap for the scene deck, so the window keeps its size. The deck
-     needs the height: scenes drawn in too flat a strip look squashed. */
+  /* Give the native 3D state scene enough height to read clearly. The host
+     follows this measured content height, including larger text and pages. */
   /* Each row at least its designed height, more when its text needs it
      (larger small text, a page): the window grows to match (5.5.17). */
-  grid-template-rows: minmax(102px, auto) minmax(42px, auto) minmax(66px, auto) minmax(62px, auto) minmax(18px, auto);
+  grid-template-rows: minmax(126px, auto) minmax(42px, auto) minmax(66px, auto) minmax(62px, auto) minmax(18px, auto);
   align-content: start;
   row-gap: 4px;
   padding: 10px 12px 9px;
@@ -121,7 +121,7 @@ body {
   isolation: isolate;
 }
 .hud.expanded {
-  grid-template-rows: 110px 44px 68px 64px 18px;
+  grid-template-rows: minmax(134px, auto) minmax(44px, auto) minmax(68px, auto) minmax(64px, auto) minmax(18px, auto);
   padding: 11px 16px 10px;
 }
 
@@ -200,11 +200,14 @@ body {
 .status-main {
   min-width: 0;
   display: grid;
-  grid-template-rows: minmax(26px, auto) minmax(52px, 1fr) minmax(18px, auto);
+  grid-template-rows: minmax(26px, auto) minmax(76px, 1fr) minmax(18px, auto);
   row-gap: 3px;
   align-content: center;
 }
-.hud.expanded .status-main { grid-template-rows: 27px 59px 18px; }
+.hud.expanded .status-main { grid-template-rows: 27px 83px 18px; }
+.scene-render-error { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; padding: 4px; color: var(--red); background: var(--bg); font: var(--type-weight) var(--size-9) var(--font-hud); letter-spacing: var(--track); text-align: center; }
+.scene-render-error[hidden] { display: none; }
+.scene-off .scene-render-error { display: none; }
 
 .notice {
   position: relative;
@@ -686,14 +689,14 @@ body {
 /* The pages' own text size (5.6.1): every size token, times --page-text. */
 .page-panel, .page-alert {
   --page-text: 1;
-  --size-75: max(calc(7.5px * var(--fit-small) * var(--page-text)), var(--type-floor));
-  --size-8: max(calc(8px * var(--fit-small) * var(--page-text)), var(--type-floor));
-  --size-85: max(calc(8.5px * var(--fit-small) * var(--page-text)), var(--type-floor));
-  --size-9: max(calc(9px * var(--fit-small) * var(--page-text)), var(--type-floor));
-  --size-95: max(calc(9.5px * var(--fit-small) * var(--page-text)), var(--type-floor));
-  --size-10: max(calc(10px * var(--fit-small) * var(--page-text)), var(--type-floor));
-  --size-11: max(calc(11px * var(--fit-small) * var(--page-text)), var(--type-floor));
-  --size-12: max(calc(12px * var(--fit-small) * var(--page-text)), var(--type-floor));
+  --size-75: max(calc(7.5px * var(--fit-small) * var(--label-scale) * var(--page-text)), var(--type-floor));
+  --size-8: max(calc(8px * var(--fit-small) * var(--label-scale) * var(--page-text)), var(--type-floor));
+  --size-85: max(calc(8.5px * var(--fit-small) * var(--label-scale) * var(--page-text)), var(--type-floor));
+  --size-9: max(calc(9px * var(--fit-small) * var(--label-scale) * var(--page-text)), var(--type-floor));
+  --size-95: max(calc(9.5px * var(--fit-small) * var(--label-scale) * var(--page-text)), var(--type-floor));
+  --size-10: max(calc(10px * var(--fit-small) * var(--label-scale) * var(--page-text)), var(--type-floor));
+  --size-11: max(calc(11px * var(--fit-small) * var(--label-scale) * var(--page-text)), var(--type-floor));
+  --size-12: max(calc(12px * var(--fit-small) * var(--label-scale) * var(--page-text)), var(--type-floor));
   --size-13: max(calc(13px * var(--fit-big) * var(--page-text)), var(--type-floor));
   --size-17: calc(17px * var(--fit-big) * var(--page-text));
   --size-19: calc(19px * var(--fit-big) * var(--page-text));

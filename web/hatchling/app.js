@@ -35,7 +35,8 @@
     if (!model) return;
     root.classList.toggle("low", Boolean(model.wants) || model.sick || model.dormant);
     dom.name.textContent = model.name.toUpperCase();
-    dom.title.textContent = model.stage === "egg" ? "EGG" : `${model.title}${model.stage !== "adult" ? ` · ${model.stage.toUpperCase()}` : ""}`;
+    const stageTitle = model.stage_name?.toUpperCase() || (model.stage !== "adult" ? model.stage.toUpperCase() : "");
+    dom.title.textContent = model.stage === "egg" ? "EGG" : `${model.title}${stageTitle && stageTitle !== model.title ? ` · ${stageTitle}` : ""}`;
     dom.mood.textContent = model.stage === "egg" && model.hatch_minutes > 0 ? `HATCHES IN ${model.hatch_minutes} MIN` : model.mood_word;
     dom.wants.hidden = !model.wants;
     dom.wants.textContent = model.wants ? `WANTS ${model.wants}` : "";
@@ -59,7 +60,9 @@
 
   // Its chirps in the overlay (Overlay Studio › Sounds), pitched by what it is.
   let audio = null;
-  function voice(kind, words = "") {
+  function voice(kind) {
+    // Chatter is text-only; optional habitat sounds can still accompany actions.
+    if (kind === "babble") return;
     if (!model?.options?.sounds) return;
     try {
       audio = audio || new AudioContext();
@@ -90,33 +93,44 @@
       snore() { tone(.17, .13, .6, .03); },
       beep() { tone(1.4, 1.4, .04, .04); tone(1.7, 1.7, .04, .04, .07); },
       hum() { tone(.36, .38, .8, .03); },
-      babble() {
-        const syllables = Math.min(9, Math.max(2, Math.round(words.replace(/[^a-z]/gi, "").length / 3)));
-        for (let i = 0; i < syllables; i += 1) { const pitch = 1 + Math.random() * .5; tone(pitch, pitch * 1.06, .05, .035, i * .085); }
-      },
     })[kind]?.();
   }
 
-  // A speech-bubble saying what it wants (Pet only, Needs set to show it).
+  // Needs are live values, not a sample label. A bot's food is called POWER.
+  function needWarning(pet) {
+    const want = pet.wants;
+    if (!want) return "";
+    const mapping = {
+      POWER: ["hunger", 35, "LOW POWER"],
+      FOOD: ["hunger", 35, ["NUTRIENTS", "NOURISHMENT"].includes(pet.food_label) ? `LOW ${pet.food_label}` : "LOW FOOD"],
+      "A CLEAN HOLD": ["clean", 35, "NEEDS CLEANING"], PLAY: ["mood", 35, "NEEDS PLAY"],
+      SLEEP: ["energy", 20, "NEEDS SLEEP"],
+    }[want];
+    if (!mapping) return want; // Illness and hibernation have their own warnings.
+    const [need, limit, label] = mapping, raw = pet.needs?.[need];
+    if (raw == null || raw === "" || !Number.isFinite(Number(raw))) return label;
+    const value = Math.max(0, Math.min(100, Number(raw)));
+    // A new needs snapshot can arrive before its older wants field is refreshed.
+    return value < limit ? `${label} · ${Math.floor(value)}%` : "";
+  }
+
+  // A quiet, borderless status beside the pet; speech is drawn separately.
   function wantsBubble(ctx, x, y, size, ratio) {
-    const word = model.wants;
+    const word = needWarning(model);
     if (!word) return;
     const tone = getComputedStyle(dom.hatchling).getPropertyValue("--yellow").trim() || "#ffd166";
     const font = Math.max(9 * ratio, size * .1) * textScale;
+    ctx.save();
     ctx.font = `700 ${font}px Bahnschrift, "Segoe UI", sans-serif`;
-    const wide = ctx.measureText(word).width + font * 1.4, high = font * 1.8;
+    const wide = Math.min(ctx.canvas.width - 4, ctx.measureText(word).width), high = font * 1.8;
     const bx = Math.max(wide / 2 + 2, Math.min(ctx.canvas.width - wide / 2 - 2, x - size * .42)), by = Math.max(high / 2 + 2, y - size * .62);
-    ctx.fillStyle = "rgba(10, 16, 22, .88)";
-    ctx.strokeStyle = tone;
-    ctx.lineWidth = Math.max(1, ratio);
-    ctx.beginPath();
-    ctx.roundRect(bx - wide / 2, by - high / 2, wide, high, high / 2);
-    ctx.fill();
-    ctx.stroke();
     ctx.fillStyle = tone;
+    ctx.shadowColor = "#000";
+    ctx.shadowBlur = 4 * ratio;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(word, bx, by);
+    ctx.fillText(word, bx, by, Math.max(1, ctx.canvas.width - 4));
+    ctx.restore();
   }
 
   // Its five needs as small bars beside it (Pet only, Needs: Always).
@@ -167,16 +181,16 @@
     lastFrame = now;
     if (model) {
       // Feet on the bottom edge, room above for its bubbles and what it plays with.
-      const size = pet ? height / 1.7 : height * .8, x = width / 2, y = height - size * (pet ? .5 : .47);
+      const size = pet ? height / 2.8 : height * .8, x = width / 2, y = height - size * (pet ? .5 : .47);
       const options = model.options || {};
       const fit = {size, range: Math.max(0, width / 2 - size * .5), top: y, ink: 9.5 * ratio, speech: options.speech !== false, text: textScale};
-      if (!life) life = window.HatchlingLife.create({...fit, onSound: voice});
+      if (!life) life = window.HatchlingLife.create({...fit, onSound: voice, sync: true});
       else life.resize(fit);
       life.step(dt, model);
       if (model.music && !listening) { listening = true; listen(); }
       window.HatchlingArt.mess(ctx, model.mess || 0, x, y, size);
       life.back(ctx, model, x, y);
-      life.drawPet(ctx, model, {x, y, size, t: now / 1000, aura: options.glow !== false, shadow: false});
+      life.drawPet(ctx, model, {x, y, size, t: Date.now() / 1000, aura: options.glow !== false, shadow: false});
       life.front(ctx, model, x, y);
       if (pet && options.needs !== "never") wantsBubble(ctx, x + life.x, y - life.lift, size, ratio);
       if (pet && options.needs === "always" && model.stage !== "egg") needBars(ctx, x + life.x, y - life.lift, size, ratio);

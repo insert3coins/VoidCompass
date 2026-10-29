@@ -115,6 +115,8 @@ class WaypointManager:
         current_name = str(current_name or "")
         for i, wp in enumerate(self.waypoints):
             if str(wp.get('name') or '').lower() == current_name.lower():
+                if wp.get('expedition_leg_id') and wp.get('body') and not wp.get('visited', False):
+                    return wp['name']
                 for candidate in self.waypoints[i + 1:]:
                     if not candidate.get('visited', False) and candidate.get('name'):
                         return candidate['name']

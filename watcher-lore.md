@@ -47,6 +47,11 @@ The canon for the Watcher's story. Every new book, musing, echo or line is writt
   - **XXVIII A Better Look:** waits for *the heart of the galaxy*. It lets the thing look at you past its shoulder.
   - **XXIX We Look Back:** a few still seats in great ships look up. The book ends: something old looks back, kindly.
 
+## The little one
+- While keeping watch on its travels, the Watcher found the little one. It cannot explain why it noticed; it chose to keep watch over it anyway.
+- The hatchling knows the Watcher as the one who found it. Its words appear as text, and its understanding grows through the journey and the journal. Neither remembers more about their meeting than they can honestly tell.
+- Their bond is small and protective, not an answer to the mysteries of the Watcher's origin. The commander gives both of them a place to belong.
+
 ## What it knows, and doesn't
 - **It knows:**
   - the seat;

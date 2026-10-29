@@ -108,6 +108,9 @@ GROWN_WEARY = (
 )
 
 IDLE_NORMAL = (
+    "I found {name} while I was watching. It looked back. I wasn't prepared for that.",
+    "I used to watch alone. Then I found {name}, and the silence had company.",
+    "{name} trusts me to keep watch. I take that more seriously than I let on.",
     "{name} is watching the stars go by. I think it likes the view.",
     "Have you looked at {name} lately? It's up to something.",
     "{name} has been pacing the pod. Maybe it wants a game.",
@@ -120,6 +123,9 @@ IDLE_NORMAL = (
     "Two passengers aboard: me and {name}. Only one of us bounces.",
 )
 IDLE_WEARY = (
+    "I found {name} while I was watching. I thought I was only meant to observe.",
+    "I kept watch over {name} at first. Now it waits for me to look back.",
+    "I found {name} in the long quiet. I didn't expect the quiet to change.",
     "{name} is staring at the stars. I could tell it they don't stare back.",
     "{name} is playing by itself again. I know how that feels.",
     "It's pacing. {name} paces. I loop. We cope our own ways.",

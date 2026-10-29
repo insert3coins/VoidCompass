@@ -31,7 +31,7 @@ def attach_html_hatchling_overlay(overlay, overlay_id, title, enabled_key, x_key
         bridge_attr="_html_hatchling_bridge", template="hatchling",
         snapshot_key="hatchling", model_attr="_html_render_model",
         log_name="Hatchling", width=250,
-        min_height=110, default_height=132, max_height=260,
+        min_height=110, default_height=176, max_height=320,
         bridge_class=HtmlHatchlingBridge,
     )
     bridge = getattr(overlay, "_html_hatchling_bridge", None)

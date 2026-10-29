@@ -93,13 +93,16 @@ class ManagerPlaceTests(unittest.TestCase):
         self.assertIsNone(self.manager.get(self.eid)["legs"][0]["reached"], "the system isn't the spot")
         self.manager.observe_event(event("ApproachBody", StarSystem="Colonia", Body="Colonia 4 a"), event_uid="2")
         self.assertIsNone(self.manager.get(self.eid)["legs"][0]["reached"], "nor is the planet")
-        result = self.manager.visit_near("Colonia", "Colonia 4 a", 10.001, 20.0, 1_000_000)
+        self.assertEqual(self.manager.visit_near("Colonia", "Colonia 4 a", 10.001, 20.0, 1_000_000)["legs"], [])
+        result = self.manager.visit_near("Colonia", "Colonia 4 a", 10.001, 20.0, 1_000_000, grounded=True)
         self.assertEqual((result["legs"], result["places"]), (["The Arch"], ["The Arch"]))
         self.assertTrue(self.manager.get(self.eid)["legs"][0]["reached"])
 
-    def test_a_planet_stop_is_reached_on_approach(self):
+    def test_a_planet_stop_requires_landing(self):
         self.manager.add_leg(self.eid, "Colonia", body="Colonia 2")
         self.manager.observe_event(event("ApproachBody", StarSystem="Colonia", Body="Colonia 2"), event_uid="3")
+        self.assertIsNone(self.manager.get(self.eid)["legs"][0]["reached"])
+        self.manager.observe_event(event("Touchdown", StarSystem="Colonia", Body="Colonia 2", PlayerControlled=True), event_uid="3b")
         self.assertTrue(self.manager.get(self.eid)["legs"][0]["reached"])
 
     def test_screenshots_find_their_place(self):

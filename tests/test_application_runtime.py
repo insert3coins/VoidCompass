@@ -46,14 +46,15 @@ class AboutPageTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         index = (root / "web" / "dashboard" / "index.html").read_text(encoding="utf-8")
         script = (root / "web" / "dashboard" / "app.js").read_text(encoding="utf-8")
+        about = (root / "web" / "dashboard" / "about.js").read_text(encoding="utf-8")
         self.assertNotIn(APP_VERSION, index)
         self.assertIn('model.app?.version || "DEV"', script)
-        self.assertIn('id="about-matrix-canvas"', index)
+        self.assertIn('data.app?.version || "DEV"', about)
         self.assertIn("Copyright © 2026 insert3coins", index)
         self.assertIn('data-target="license"', index)
         self.assertIn('data-target="documentation"', index)
         self.assertIn('data-target="notices"', index)
-        self.assertIn("function startAboutMatrix()", script)
+        self.assertIn("renderAbout(model)", script)
 
 
 class RhinoCargoTransferTests(unittest.TestCase):

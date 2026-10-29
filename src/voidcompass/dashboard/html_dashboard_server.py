@@ -30,6 +30,7 @@ _MEDIA_ID = re.compile(r"[0-9a-f]{16}")
 _RANGE = re.compile(r"bytes=(\d*)-(\d*)")
 _SANDBOXED_MODULES = frozenset({
     "/assets/hatchling-3d.js",
+    "/assets/heartbeat-3d.js",
     "/galactic_map/vendor/three.module.min.js",
     "/galactic_map/vendor/three.core.min.js",
 })
@@ -318,7 +319,7 @@ class HtmlDashboardServer:
         # The music visualizers (5.6.2) are shared with the music overlay, and
         # the Hatchling's looks (5.6.3) with its game page.
         if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png",
-                            "/assets/heartbeat-orb.js", "/assets/heartbeat-life.js",
+                            "/assets/heartbeat-orb.js", "/assets/heartbeat-life.js", "/assets/heartbeat-3d.js",
                             "/assets/music-visualizers.js", "/assets/hatchling-art.js", "/assets/hatchling-life.js",
                             "/assets/hatchling-3d.js", "/galactic_map/vendor/three.module.min.js",
                             "/galactic_map/vendor/three.core.min.js"}:
@@ -408,7 +409,9 @@ class HtmlDashboardServer:
             handler,
             payload,
             content_type,
-            cache="no-store" if candidate.name == "index.html" else "no-cache",
+            cache=("private, max-age=3600" if path in {
+                "/galactic_map/vendor/three.module.min.js", "/galactic_map/vendor/three.core.min.js",
+            } else "no-store" if candidate.name == "index.html" else "no-cache"),
             cors=path in _SANDBOXED_MODULES,
         )
 

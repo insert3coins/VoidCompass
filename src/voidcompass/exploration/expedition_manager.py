@@ -1052,9 +1052,10 @@ class ExpeditionManager:
                                  find.get("system"), find.get("body"), find.get("title"), notes=find.get("detail") or "",
                                  position=find.get("position"), source="find", expedition_id=expedition_id, found=True)
 
-    def visit_near(self, system, body, lat, lon, radius=None, raw=None):
-        """You're at a surface spot (from Status.json): the places there are
-        visited, and a surface stop on the route is reached."""
+    def visit_near(self, system, body, lat, lon, radius=None, raw=None, *, grounded=False):
+        """On the ground (from Status.json), visit nearby places and stops."""
+        if not grounded:
+            return {"places": [], "legs": []}
         titles, reached = [], []
         with self.lock:
             for place in self.data.get("bookmarks") or []:
@@ -1069,10 +1070,11 @@ class ExpeditionManager:
             expedition = self._find_ref(self.data.get("active_id"))
             if expedition and expedition.get("status") == "active":
                 for leg in expedition.get("legs") or []:
-                    if leg.get("reached") or leg.get("lat") is None or not _same(leg.get("system"), system) or not _same(leg.get("body"), body):
+                    if leg.get("reached") or not leg.get("body") or not _same(leg.get("system"), system) or not _same(leg.get("body"), body):
                         continue
-                    metres = expedition_plan.surface_distance(leg["lat"], leg["lon"], lat, lon, radius or leg.get("radius"))
-                    if metres is not None and metres <= expedition_plan.ARRIVE_M:
+                    metres = (expedition_plan.surface_distance(leg["lat"], leg["lon"], lat, lon, radius or leg.get("radius"))
+                              if leg.get("lat") is not None else None)
+                    if leg.get("lat") is None or (metres is not None and metres <= expedition_plan.ARRIVE_M):
                         leg["reached"] = _stamp(raw)
                         self._record(expedition, raw or {}, "LEG", f"Reached {leg.get('note') or body}", "SURFACE")
                         reached.append(leg.get("note") or body)
@@ -1270,9 +1272,11 @@ class ExpeditionManager:
                 continue
             # A surface site needs you there, not just at its planet.
             if bookmark.get("lat") is not None:
+                if (raw or {}).get("event") != "Touchdown" or (raw or {}).get("PlayerControlled") is False:
+                    continue
                 metres = expedition_plan.surface_distance(bookmark["lat"], bookmark["lon"], (raw or {}).get("Latitude"),
                                                           (raw or {}).get("Longitude"), bookmark.get("radius"))
-                if metres is None or metres > expedition_plan.ARRIVE_M * 2:
+                if metres is None or metres > expedition_plan.ARRIVE_M:
                     continue
             if event_epoch and event_epoch < _epoch(bookmark.get("created")):
                 continue
@@ -1396,13 +1400,13 @@ class ExpeditionManager:
                         f"Entered region {region[0]:02d} {region[1]}",
                     )
                 changed = True
-            elif event in {"ApproachBody", "Touchdown", "SupercruiseExit"}:
+            elif event == "Touchdown" and raw.get("PlayerControlled") is not False:
                 for leg in expedition.get("legs") or []:
                     if leg.get("reached") or not leg.get("body") or not _same(leg.get("system"), system) or not _same(leg.get("body"), body):
                         continue
                     if leg.get("lat") is not None:
                         metres = expedition_plan.surface_distance(leg["lat"], leg["lon"], raw.get("Latitude"), raw.get("Longitude"), leg.get("radius"))
-                        if event != "Touchdown" or metres is None or metres > expedition_plan.ARRIVE_M * 2:
+                        if metres is None or metres > expedition_plan.ARRIVE_M:
                             continue
                     leg["reached"] = _stamp(raw)
                     self._record(expedition, raw, "LEG", f"Reached {leg.get('note') or body}", "SURFACE" if leg.get("lat") is not None else "BODY")

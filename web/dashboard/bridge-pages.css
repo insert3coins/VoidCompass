@@ -11,7 +11,7 @@
     linear-gradient(transparent 0 99%, color-mix(in srgb, var(--accent) 2.5%, transparent) 100%) 0 0 / 44px 44px;
 }
 
-/* The About reactor owns its own full-page matrix treatment. */
+/* The About identity plate has its own background treatment. */
 .page.about-page:not([data-page-name="map"]):not([data-page-name="overview"]) {
   background: radial-gradient(circle at 50% 5%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 36%);
 }

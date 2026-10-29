@@ -3,6 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="modulepreload" href="/galactic_map/vendor/three.core.min.js">
+  <link rel="modulepreload" href="/galactic_map/vendor/three.module.min.js">
+  <link rel="modulepreload" href="/assets/heartbeat-3d.js">
+  <link rel="modulepreload" href="/assets/hatchling-3d.js">
   <title>Void Compass</title>
   <script src="page-start.js"></script>
   <link rel="stylesheet" href="styles.css">
@@ -12,6 +16,7 @@
   <link rel="stylesheet" href="explore.css">
   <link rel="stylesheet" href="archive.css">
   <link rel="stylesheet" href="bridge-systems.css">
+  <link rel="stylesheet" href="about.css">
   <link rel="stylesheet" href="overlay-studio.css">
   <link rel="stylesheet" href="settings.css">
   <link rel="stylesheet" href="music.css">
@@ -38,6 +43,7 @@
   <link rel="stylesheet" href="boot.css">
   <script defer src="/assets/heartbeat-life.js"></script>
   <script defer src="/assets/heartbeat-orb.js"></script>
+  <script type="module" src="/assets/heartbeat-3d.js"></script>
   <script defer src="/assets/music-visualizers.js"></script>
   <script defer src="/assets/hatchling-art.js"></script>
   <script defer src="/assets/hatchling-life.js"></script>
@@ -49,105 +55,84 @@
     <canvas id="boot-sky" class="boot-sky" aria-hidden="true"></canvas>
     <canvas id="boot-drift" class="boot-drift" aria-hidden="true"></canvas>
     <header class="boot-command-bar">
-      <span>VOID COMPASS // EXPLORATION FLIGHT COMPUTER</span>
-      <b><i></i>LOCAL JOURNAL LINK</b>
-      <em id="boot-version">SECURE LOOPBACK // WEBVIEW2</em>
+      <span>VOID COMPASS <em id="boot-version">FLIGHT COMPUTER</em></span>
+      <b><i></i><span id="boot-link-label">LOCAL JOURNAL / CONNECTING</span></b>
+      <div id="boot-update" class="boot-update" data-state="waiting" role="status"><i></i><span id="boot-update-text">Update status pending</span></div>
     </header>
-    <footer class="boot-footer-bar">
-      <span>FRONTIER JOURNAL // READ ONLY</span>
-      <b id="boot-stage-footer">PRE-FLIGHT SYSTEMS // STANDBY</b>
-      <em>LOCAL-FIRST // NO CLOUD ACCOUNT</em>
-    </footer>
+    <footer class="boot-footer-bar"><span>YOUR JOURNEY, REMEMBERED.</span><b id="boot-stage-footer">PROFILE CORE</b><em>LOCAL-FIRST / READ ONLY</em></footer>
 
     <section id="boot-loader" class="boot-loader" data-boot-stage="profile">
-      <section class="boot-watcher" aria-label="Compass, the journal watcher">
-        <div id="boot-track" class="boot-instrument" role="progressbar" aria-label="Flight computer startup" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-          <svg class="boot-ring" viewBox="0 0 400 400" aria-hidden="true">
-            <circle class="ring-bed" cx="200" cy="200" r="194"/>
-            <circle class="ring-ticks" cx="200" cy="200" r="184" pathLength="100"/>
-            <circle class="ring-track" cx="200" cy="200" r="194" pathLength="100"/>
-            <circle class="ring-fill" cx="200" cy="200" r="194" pathLength="100"/>
-            <circle class="ring-sweep" cx="200" cy="200" r="173" pathLength="100"/>
-            <g id="boot-ring-stages" class="ring-stages"></g>
-          </svg>
-          <canvas id="boot-orb" class="boot-orb" aria-hidden="true"></canvas>
-        </div>
-        <div class="boot-transmission">
-          <header><span><i></i>COMPASS</span><b>FIELD NOTE</b></header>
-          <p id="boot-fact"></p>
-        </div>
-      </section>
-
-      <section class="boot-copy">
-        <p class="boot-eyebrow">EXPLORATION FLIGHT COMPUTER</p>
-        <h1 class="boot-wordmark">VOID <span>COMPASS</span></h1>
-        <p id="boot-version-line" class="boot-version-line">LOCAL-FIRST EXPLORATION COMPANION</p>
-
+      <header class="boot-heading"><p class="boot-eyebrow">YOUR COMPANION IN THE BLACK</p><h1 class="boot-wordmark">VOID <span>COMPASS</span></h1><p id="boot-version-line" class="boot-version-line">VOID COMPASS / EXPLORATION FLIGHT COMPUTER</p></header>
+      <div class="boot-observation">
+        <aside class="boot-identity" aria-label="Commander connection">
+          <small>COMMANDER CONNECTION</small><h2 id="boot-commander">Welcome, Commander.</h2>
+          <dl><div><dt id="boot-position-label">LAST KNOWN SYSTEM</dt><dd id="boot-system">Awaiting flight record</dd></div><div><dt>VESSEL</dt><dd id="boot-ship">Awaiting ship record</dd></div></dl>
+          <p id="boot-identity-note">Reconnecting with your journey.</p>
+        </aside>
+        <section class="boot-watcher" aria-label="Compass, the journal watcher">
+          <div id="boot-track" class="boot-instrument" role="progressbar" aria-label="Flight computer startup" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="boot-optics" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <canvas id="boot-orb" class="boot-orb" aria-hidden="true"></canvas>
+          </div>
+          <div class="boot-transmission"><header><span><i></i>COMPASS</span><b>FIELD NOTE</b></header><p id="boot-fact"></p></div>
+        </section>
+        <aside class="boot-journal-readout" aria-label="Journal catch-up">
+          <small>JOURNAL CATCH-UP</small><strong id="boot-event-count">—</strong><span id="boot-events">Awaiting journal reader</span>
+          <div class="boot-journal-signal" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <b id="boot-journal-state">WAITING FOR JOURNAL</b><p id="boot-journal-note">The Watcher is finding where you left off.</p>
+        </aside>
+      </div>
+      <section class="boot-copy" aria-label="Startup progress">
         <div class="boot-operation">
-          <div class="boot-operation-copy">
-            <p class="boot-stage-kicker"><span id="boot-stage-code">01</span><b id="boot-stage-label">PROFILE CORE</b></p>
-            <p id="boot-status" class="boot-status" role="status" aria-live="polite">INITIALISING FLIGHT COMPUTER</p>
-            <p id="boot-detail" class="boot-detail">Starting the private command deck</p>
-          </div>
-          <div class="boot-readout">
-            <strong id="boot-progress-percent" class="boot-progress-percent">00%</strong>
-            <span id="boot-countdown" class="boot-countdown" hidden><small>FRAME SHIFT TO DECK</small><b>4</b></span>
-          </div>
+          <div class="boot-operation-copy"><p class="boot-stage-kicker"><span id="boot-stage-code">01</span><b id="boot-stage-label">PROFILE CORE</b></p><p id="boot-status" class="boot-status" role="status" aria-live="polite">INITIALISING FLIGHT COMPUTER</p><p id="boot-detail" class="boot-detail">Starting the private command deck</p></div>
+          <div class="boot-readout"><strong id="boot-progress-percent" class="boot-progress-percent">00%</strong><span id="boot-countdown" class="boot-countdown" hidden><small>LIVE DECK IN</small><b>4</b></span></div>
         </div>
         <div class="boot-rail" aria-hidden="true"><i id="boot-progress"></i></div>
-
-        <!-- Each system is ready at the progress the backend reports as its phase finishes: core built .46,
-             historical index .76, live journal tail .88, everything live 1. renderBoot and the ring read these. -->
         <ol class="boot-sequence" aria-label="Startup systems">
-          <li data-boot-stage="profile" data-boot-threshold=".46" data-boot-label="PROFILE CORE"><i></i><span>01</span><p>PROFILE VAULT<small>Commander identity</small></p><b id="boot-profile">WAIT</b></li>
-          <li data-boot-stage="survey" data-boot-threshold=".76" data-boot-label="SURVEY ARCHIVE"><i></i><span>02</span><p>SURVEY ARCHIVE<small>Discovery index</small></p><b id="boot-survey">WAIT</b></li>
-          <li data-boot-stage="journal" data-boot-threshold=".88" data-boot-label="JOURNAL TAIL"><i></i><span>03</span><p>JOURNAL TAIL<small id="boot-events">Recent events</small></p><b id="boot-journal">WAIT</b></li>
-          <li data-boot-stage="cockpit" data-boot-threshold="1" data-boot-label="COCKPIT LINK"><i></i><span>04</span><p>COCKPIT LINK<small>Live overlays</small></p><b id="boot-cockpit">WAIT</b></li>
+          <li data-boot-stage="profile" data-boot-threshold=".46" data-boot-label="PROFILE CORE"><i></i><span>01</span><p>COMMANDER PROFILE<small>Identity and local vault</small></p><b id="boot-profile">WAIT</b></li>
+          <li data-boot-stage="survey" data-boot-threshold=".76" data-boot-label="SURVEY ARCHIVE"><i></i><span>02</span><p>HISTORY ARCHIVE<small>Discovery records</small></p><b id="boot-survey">WAIT</b></li>
+          <li data-boot-stage="journal" data-boot-threshold=".88" data-boot-label="JOURNAL TAIL"><i></i><span>03</span><p>JOURNAL LINK<small>Recent flight events</small></p><b id="boot-journal">WAIT</b></li>
+          <li data-boot-stage="cockpit" data-boot-threshold="1" data-boot-label="COCKPIT LINK"><i></i><span>04</span><p>OVERLAY SURFACES<small id="boot-overlay-count">Preparing the cockpit</small></p><b id="boot-cockpit">WAIT</b></li>
         </ol>
-
-        <section class="boot-log" aria-label="Flight computer log">
-          <header><span>FLIGHT COMPUTER LOG</span><b id="boot-clock">T+00:00.0</b></header>
-          <ol id="boot-log"></ol>
-        </section>
+        <details class="boot-log"><summary><span>STARTUP DETAILS</span><b id="boot-clock">T+00:00.0</b><i aria-hidden="true">+</i></summary><ol id="boot-log"></ol></details>
       </section>
     </section>
 
     <section id="commissioning" class="commissioning" hidden>
       <form id="onboarding-form" class="setup" novalidate>
+        <header class="setup-topbar"><div class="setup-brand"><span class="setup-mark" aria-hidden="true"><i></i></span><b>VOID <span>COMPASS</span></b></div><span>FIRST-TIME SETUP <i>/</i> YOUR JOURNEY STARTS HERE</span></header>
         <nav class="setup-rail" aria-label="Setup steps">
-          <header><span class="setup-mark" aria-hidden="true">VC</span><div><small>VOID COMPASS</small><b>FIRST COMMISSIONING</b></div></header>
+          <header><small>WELCOME ABOARD</small><b id="setup-profile-name">Your next chapter.</b><span id="setup-profile-detail">Four small steps to your own cockpit.</span></header>
           <ol>
             <li><button type="button" data-setup-go="welcome"><b>01</b><span>Welcome<small>What Void Compass does</small></span></button></li>
             <li><button type="button" data-setup-go="journal"><b>02</b><span>Journal link<small>Where Elite writes its logs</small></span></button></li>
             <li><button type="button" data-setup-go="cockpit"><b>03</b><span>Cockpit<small>Overlays and theme</small></span></button></li>
-            <li><button type="button" data-setup-go="launch"><b>04</b><span>Launch<small>Check and commission</small></span></button></li>
+            <li><button type="button" data-setup-go="launch"><b>04</b><span>Ready to fly<small>Review your choices</small></span></button></li>
           </ol>
-          <footer><i></i>LOCAL-FIRST · READ-ONLY · NO ACCOUNT</footer>
+          <footer><b>YOUR JOURNAL. YOUR JOURNEY.</b><span>Local records, with a separate profile for each commander.</span></footer>
         </nav>
 
         <div class="setup-body">
           <section class="setup-step setup-welcome" data-step="welcome">
-            <p class="setup-kicker">WELCOME, COMMANDER</p>
-            <h2 tabindex="-1">Bring the flight deck <span>online.</span></h2>
-            <p class="setup-lede">Void Compass follows your Elite Dangerous journals as you fly and turns them into a command deck, a survey record and in-game overlays. It runs on this PC, from files the game already writes.</p>
+            <div class="setup-welcome-hero"><div><p class="setup-kicker">WELCOME, COMMANDER</p>
+            <h2 tabindex="-1">Void <span>Compass</span></h2><p class="setup-tagline">Your journey, remembered.</p>
+            <p class="setup-lede">A companion for the long way home. Follow your discoveries, bring useful readings into the cockpit and keep a record of the places that mattered.</p></div>
+            <figure class="setup-eye"><div class="setup-eye-frame"><canvas id="setup-orb" aria-hidden="true"></canvas><i></i><i></i><i></i><i></i></div><figcaption><b>THE WATCHER</b><span>A little company in the black.</span></figcaption></figure></div>
             <ul class="setup-features">
-              <li><b>Survey</b><span>Every body in the system, what it is worth, and the biology still to sample.</span></li>
-              <li><b>Galactic Atlas</b><span>Every system you have visited, across Elite's 42 regions.</span></li>
-              <li><b>Expeditions</b><span>Routes, waypoints, fuel stops and your carrier.</span></li>
-              <li><b>Cockpit overlays</b><span>Navigation, survey and field HUDs over the game.</span></li>
-              <li><b>Your record</b><span>Captain's log, achievements, Powerplay and music.</span></li>
+              <li><i aria-hidden="true">◇</i><b>Find your next discovery.</b><span>Survey worlds, follow biological signals and set out on an expedition.</span></li>
+              <li><i aria-hidden="true">◎</i><b>Bring the cockpit to life.</b><span>Useful overlays, a Watcher with memories and a Hatchling to travel with.</span></li>
+              <li><i aria-hidden="true">⌁</i><b>Keep more than coordinates.</b><span>Flight logs, postcards and an Atlas of everywhere you have been.</span></li>
             </ul>
             <ul class="setup-promises">
-              <li><i>✓</i>Reads your journals and never changes them</li>
-              <li><i>✓</i>Keeps everything on this PC, one profile per commander</li>
-              <li><i>✓</i>Needs no account, no sign-in and no cloud</li>
+              <li><i aria-hidden="true">✓</i>Reads Elite's journals without changing them</li>
+              <li><i aria-hidden="true">✓</i>No account needed for the core tools</li>
             </ul>
           </section>
 
           <section class="setup-step" data-step="journal" hidden>
             <p class="setup-kicker">STEP 02 · JOURNAL LINK</p>
             <h2 tabindex="-1">Link your journals</h2>
-            <p class="setup-lede">Elite writes a journal of everything you do to a folder in Saved Games. Void Compass found the usual one below; change it only if you keep your journals somewhere else.</p>
+            <p class="setup-lede">Elite writes your flight journals in Saved Games. We'll check the usual folder automatically; choose another if you keep your journals somewhere else.</p>
             <label class="setup-label" for="onboarding-journal">JOURNAL FOLDER</label>
             <div class="setup-path">
               <input id="onboarding-journal" type="text" spellcheck="false" autocomplete="off" placeholder="C:\Users\…\Saved Games\Frontier Developments\Elite Dangerous">
@@ -155,26 +140,28 @@
               <button id="setup-check" type="button">CHECK</button>
             </div>
             <article id="setup-probe" class="setup-probe checking" aria-live="polite"><header><i></i><b>CHECKING THE FOLDER…</b></header></article>
+            <aside class="setup-help"><b>Haven't flown on this PC yet?</b><p>You can finish setup now. Elite creates journals when it runs; Void Compass can connect once they are available. Your journal files are always read-only.</p></aside>
           </section>
 
           <section class="setup-step" data-step="cockpit" hidden>
             <p class="setup-kicker">STEP 03 · COCKPIT</p>
             <h2 tabindex="-1">Set up the cockpit</h2>
-            <p class="setup-lede">Overlays sit over the game window. Pick a theme to see the whole deck change colour.</p>
+            <p class="setup-lede">Choose how the deck joins your flight. You can adjust these choices later, and arrange each overlay in Overlay Studio.</p>
             <div class="setup-toggles">
               <label class="setup-toggle"><input id="onboarding-overlays" type="checkbox"><i></i><span><b>Cockpit overlays</b><small>Navigation, Survey Operations and the field HUDs over the game. Each one can be set up in Overlay Studio.</small></span></label>
               <label class="setup-toggle"><input id="onboarding-passthrough" type="checkbox"><i></i><span><b>Mouse passthrough</b><small>Clicks go through the overlays to the game, so they never get in the way.</small></span></label>
               <label class="setup-toggle"><input id="onboarding-adaptive" type="checkbox"><i></i><span><b>Adaptive deck</b><small>The command deck brings forward what matters for what you are doing.</small></span></label>
             </div>
-            <p class="setup-label">THEME</p>
+            <div class="setup-theme-heading"><p class="setup-label">MAKE IT YOUR OWN</p><span>Choose a palette to preview it here.</span></div>
             <div id="setup-themes" class="setup-themes" role="radiogroup" aria-label="Theme"></div>
           </section>
 
           <section class="setup-step" data-step="launch" hidden>
             <p class="setup-kicker">STEP 04 · LAUNCH</p>
             <h2 tabindex="-1">Ready for first flight</h2>
+            <p class="setup-lede" id="setup-launch-intro">Your flight computer is almost ready. Take one last look at your choices.</p>
             <dl id="setup-summary" class="setup-summary"></dl>
-            <p class="setup-note">The first start reads every journal once to build your history, which can take a minute with years of flying. After that it follows the game live. Everything here can be changed later in Settings, where Recovery can also run this setup again.</p>
+            <aside class="setup-help"><b>Next: reconnect with your journey.</b><p>Void Compass will build your history from the journals and follow your next flight live. A long flight history can take a little while to index. You can revisit these choices in Settings and Overlay Studio.</p></aside>
           </section>
 
           <p id="onboarding-error" class="setup-error" role="alert"></p>
@@ -678,12 +665,14 @@
 
         <section class="page settings-page" data-page-name="settings">
           <header class="page-title settings-title">
-            <div><p>APPLICATION CONTROL</p><h2>Settings</h2><span>Saved to the active commander's profile as you change them</span></div>
-            <div class="settings-find">
-              <input id="settings-search" type="search" placeholder="FIND A SETTING" aria-label="Find a setting" autocomplete="off" spellcheck="false">
-              <b id="settings-save-state" class="settings-save-state saved" role="status">ALL CHANGES SAVED</b>
-            </div>
+            <div><p>YOUR FLIGHT COMPUTER</p><h2>Settings</h2><span>A cockpit that feels like yours. Preferences save as you change them.</span></div>
+            <b id="settings-save-state" class="settings-save-state saved" role="status">ALL CHANGES SAVED</b>
           </header>
+          <div class="settings-toolbar">
+            <label class="settings-find" for="settings-search"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg><input id="settings-search" type="search" placeholder="Find a setting: fuel, text size, EDSM…" aria-label="Find a setting" aria-describedby="settings-search-summary" autocomplete="off" spellcheck="false"></label>
+            <button type="button" class="settings-clear-search" data-settings-clear hidden>CLEAR SEARCH</button>
+            <span id="settings-search-summary" class="settings-search-summary" role="status">Search across every section</span>
+          </div>
           <div id="settings-workspace" class="workspace-shell loading-panel">Loading commander settings…</div>
         </section>
 
@@ -773,7 +762,7 @@
                     <label class="studio-switch studio-page-switch"><span><b>Trade</b><small>The next stop on your trade route and what to buy or sell.</small></span><input type="checkbox" data-overlay-option="hud_page_trade"><i></i></label>
                     <label class="studio-field"><span>Scene animation<small>How lively each state's hologram is</small></span><select id="studio-hud-animation" data-studio-setting="hud_animation_intensity"><option value="Calm">Calm</option><option value="Standard">Standard</option><option value="Energetic">Energetic</option></select></label>
                     <label class="studio-field"><span>Typeface</span><select id="studio-hud-font" data-studio-setting="hud_font_face"><option value="cockpit">Cockpit</option><option value="clear">Clear</option><option value="terminal">Terminal</option></select></label>
-                    <label class="studio-field"><span>Small text<small>Labels grow; the HUD keeps its size</small></span><select id="studio-hud-labels" data-studio-setting="hud_label_size"><option value="standard">Standard</option><option value="large">Large</option><option value="larger">Larger</option></select></label>
+                    <label class="studio-field"><span>Small text<small>Larger labels widen the HUD to fit</small></span><select id="studio-hud-labels" data-studio-setting="hud_label_size"><option value="standard">Standard</option><option value="large">Large</option><option value="larger">Larger</option></select></label>
                     <label class="studio-switch"><span><b>Brighter labels</b><small>Faded and grey labels at full strength.</small></span><input type="checkbox" data-overlay-option="hud_bright_labels"><i></i></label>
                     <label class="studio-field"><span>Hologram<small>Still: for low-end PCs, it moves only when the state changes</small></span><select id="studio-hud-scene" data-studio-setting="hud_scene_mode"><option value="full">Full</option><option value="still">Still</option><option value="off">Off</option></select></label>
                   </section>
@@ -946,86 +935,84 @@
         </section>
 
         <section class="page about-page" data-page-name="about">
-          <canvas id="about-matrix-canvas" class="about-matrix-canvas" aria-hidden="true"></canvas>
-          <div class="about-scan-sweep" aria-hidden="true"></div>
-          <header class="about-hero about-neon-hero">
-            <div class="about-reactor" aria-hidden="true"><i></i><i></i><i></i><b></b><span>VC</span></div>
-            <div class="about-identity">
-              <p>INDEPENDENT ELITE DANGEROUS EXPLORATION COMPANION</p>
-              <h2>Void Compass</h2>
-              <span id="about-version">Version — // HTML Command Deck</span>
-              <div class="about-signal"><i></i><b>LOCAL JOURNAL UPLINK</b><span>NO CLOUD ACCOUNT REQUIRED</span></div>
+          <header class="about-hero">
+            <p class="about-eyebrow">ABOUT YOUR FLIGHT COMPUTER</p>
+            <div class="about-hero-inner">
+              <div class="about-identity">
+                <h2>Void <span>Compass</span></h2>
+                <p class="about-tagline">Your journey, remembered.</p>
+                <p class="about-intro">A companion for the long way home. Turn your Elite Dangerous journals into a living cockpit, a field guide and a record of the places that mattered.</p>
+                <div class="about-build"><strong id="about-version">Version —</strong><span>INDEPENDENT ELITE DANGEROUS COMPANION</span></div>
+              </div>
+              <figure class="about-chart">
+                <svg class="about-compass" viewBox="0 0 400 300" fill="none" aria-hidden="true">
+                  <defs><radialGradient id="about-chart-glow"><stop stop-color="currentColor" stop-opacity=".14"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient></defs>
+                  <ellipse cx="200" cy="146" rx="175" ry="142" fill="url(#about-chart-glow)" stroke="none"/>
+                  <g class="about-chart-grid"><path d="M20 146h360M200 6v280M60 36l280 220M60 256L340 36"/><ellipse cx="200" cy="146" rx="164" ry="57"/><ellipse cx="200" cy="146" rx="71" ry="133"/><circle cx="200" cy="146" r="130"/><circle cx="200" cy="146" r="101" stroke-dasharray="2 7"/><path d="M18 20h18M18 20v18M364 20h18v18M18 254v18h18M364 272h18v-18"/></g>
+                  <g class="about-chart-orbit"><circle cx="200" cy="146" r="119" stroke-dasharray="70 16 2 8 22 110"/><path d="M200 12v12M200 268v12M66 146H54M334 146h12"/></g>
+                  <g class="about-chart-stars"><path d="M67 94h6m-3-3v6M311 79h6m-3-3v6M289 230h6m-3-3v6M111 220h6m-3-3v6"/><circle cx="104" cy="63" r="2"/><circle cx="329" cy="187" r="2"/><circle cx="55" cy="178" r="1.5"/><circle cx="258" cy="38" r="1.5"/><circle cx="157" cy="264" r="1.5"/></g>
+                  <path class="about-chart-route" d="M73 212l48-21 24-64 55 19 55-71 59 22"/>
+                  <g class="about-chart-stops"><circle cx="73" cy="212" r="3"/><circle cx="121" cy="191" r="3"/><circle cx="145" cy="127" r="3"/><circle cx="255" cy="75" r="3"/><circle cx="314" cy="97" r="4"/></g>
+                  <g class="about-chart-bearing"><path d="M200 83l45 63-45 63-45-63z"/><path d="M200 99l31 47-31-12-31 12z"/><path d="M169 146l31 47 31-47-31 12z"/><path d="M200 67v-9m0 167v9M128 146h-9m153 0h9"/><circle cx="200" cy="146" r="5"/></g>
+                  <circle class="about-chart-pulse" cx="314" cy="97" r="11"/>
+                </svg>
+                <figcaption><span>A BEARING IN THE BLACK</span><small>Every jump is part of the story.</small></figcaption>
+              </figure>
             </div>
-            <div class="about-telemetry" aria-label="Application identity">
-              <div><small>CREATOR</small><strong>insert3coins</strong></div>
-              <div><small>PLATFORM</small><strong>WINDOWS x64</strong></div>
-              <div><small>RUNTIME</small><strong>PYTHON + WEBVIEW2</strong></div>
-              <div><small>LICENCE</small><strong>GPL-3.0-ONLY</strong></div>
-            </div>
+            <div class="about-values"><span>JOURNAL LED</span><span>LOCALLY KEPT</span><span>MADE FOR COMMANDERS</span></div>
           </header>
 
-          <section class="about-manifesto">
-            <small>MISSION PROFILE // EXPLORATION WITHOUT SURRENDERING YOUR FLIGHT HISTORY</small>
-            <p>Void Compass turns Elite's Journal, Status and companion files into a live command deck, survey record and cockpit overlay suite. It is built for long-range commanders who want useful field intelligence, durable expedition history and direct control of their own data.</p>
+          <section class="about-release" aria-label="Application updates">
+            <div class="about-update-copy" role="status"><small>RELEASE CHANNEL</small><strong id="about-update-state">Ready when you are</strong><span id="about-update-detail">Check for a newer version, or explore the release notes.</span></div>
+            <div class="about-release-actions"><button type="button" data-command="check_updates" data-update-check>CHECK FOR UPDATES</button><button type="button" data-update-view hidden>VIEW UPDATE</button><button type="button" data-command="open" data-target="releases">RELEASE NOTES</button><button type="button" data-command="open" data-target="documentation">DOCUMENTATION</button></div>
           </section>
 
-          <section class="about-grid">
-            <article class="card about-creator-card">
-              <header><span>CREATOR &amp; COPYRIGHT</span><b>AUTHENTICATED</b></header>
-              <div class="about-signature"><small>DESIGNED &amp; DEVELOPED BY</small><strong>insert3coins</strong><span id="about-copyright">Copyright © 2026 insert3coins</span></div>
-              <p>Built as an independent community tool for fellow commanders. Source contributions remain credited through the project history.</p>
-            </article>
+          <section class="about-capabilities" aria-label="Made for your journey">
+            <article><span class="about-feature-mark" aria-hidden="true">◇</span><div><h3>Find your next reason to land.</h3><p>Survey worlds, follow biological signals and plan an expedition worth taking.</p></div></article>
+            <article><span class="about-feature-mark" aria-hidden="true">◎</span><div><h3>A cockpit with company.</h3><p>Overlays follow your flight. The Watcher remembers. Your Hatchling comes along.</p></div></article>
+            <article><span class="about-feature-mark" aria-hidden="true">⌁</span><div><h3>Keep more than coordinates.</h3><p>Flight logs, postcards and discoveries turn a route into your own story.</p></div></article>
+          </section>
 
-            <article class="card about-principles-card">
-              <header><span>OPERATING PRINCIPLES</span><b>LOCAL FIRST</b></header>
-              <ul class="about-checklist">
-                <li><i></i><span><b>Journal authoritative</b><small>Game data is distinguished from estimates and commander notes.</small></span></li>
-                <li><i></i><span><b>Commander isolated</b><small>Profiles, routes, layouts and field records remain separate.</small></span></li>
-                <li><i></i><span><b>Offline capable</b><small>Core exploration tools do not require a hosted account.</small></span></li>
-              </ul>
+          <section class="about-grid" aria-label="The project and your data">
+            <article class="card about-creator-card">
+              <header><span>FROM ONE COMMANDER TO ANOTHER</span><b>THE CREATOR</b></header>
+              <div class="about-signature"><small>DESIGNED &amp; DEVELOPED BY</small><strong>insert3coins</strong><span id="about-copyright">Copyright © 2026 insert3coins</span></div>
+              <p>Built for fellow commanders who take the scenic route. Void Compass is an independent community project; contributions remain credited through the project history.</p>
             </article>
 
             <article class="card about-privacy-card">
-              <header><span>PRIVACY &amp; DATA</span><b>LOOPBACK SECURED</b></header>
-              <p>Commander data is stored locally. The HTML command deck and overlays are served only through this computer's private loopback interface. EDSM, EDDN, Spansh and Discord integrations are optional and act only when their related features are enabled or requested.</p>
-              <div class="about-data-path"><i></i><span>ELITE FILES</span><b>→</b><span>LOCAL RUNTIME</span><b>→</b><span>YOUR PROFILE</span></div>
+              <header><span>YOUR JOURNEY, YOUR RECORDS</span><b>LOCAL FIRST</b></header>
+              <p>Your flight history is stored locally, with separate records for each commander. The deck and overlays use this computer's private loopback interface; no cloud account is required for the core exploration tools.</p>
+              <div class="about-data-path"><span>ELITE JOURNALS</span><i aria-hidden="true">→</i><span>VOID COMPASS</span><i aria-hidden="true">→</i><span>YOUR PROFILE</span></div>
+              <p class="about-card-note">Online lookups support the features you use. Uploads and sharing through integrations such as EDSM, EDDN, Inara and Discord are optional.</p>
             </article>
 
             <article class="card about-requirements-card">
-              <header><span>SYSTEM REQUIREMENTS</span><b>FLIGHT COMPUTER</b></header>
+              <header><span>ON YOUR FLIGHT COMPUTER</span><b>AT A GLANCE</b></header>
               <dl class="about-specs">
                 <div><dt>Operating system</dt><dd>Windows x64</dd></div>
                 <div><dt>Display runtime</dt><dd>Microsoft Edge WebView2</dd></div>
                 <div><dt>Game interface</dt><dd>Elite Dangerous Journal &amp; Status files</dd></div>
                 <div><dt>Source runtime</dt><dd>Python 3 with project requirements</dd></div>
+                <div><dt>Graphics</dt><dd>three.js / WebGL 2</dd></div>
               </dl>
-            </article>
-
-            <article class="card about-license-card">
-              <header><span>FREE SOFTWARE</span><b>GPL-3.0-ONLY</b></header>
-              <p>You may run, study, modify and redistribute Void Compass under the GNU General Public License version 3. Distributed modifications must preserve the licence and corresponding source obligations.</p>
-              <button data-command="open" data-target="license">READ THE LICENCE</button>
+              <p class="about-card-note">Game readings, estimates and commander notes remain distinct, so you know what a reading is based on.</p>
             </article>
 
             <article class="card about-credits-card">
-              <header><span>ACKNOWLEDGEMENTS</span><b>COMMUNITY POWERED</b></header>
-              <p>Void Compass incorporates or adapts appropriately licensed work from three.js, EDSY, ED Engineering Companion and Elite Dangerous community reference projects. Full attribution and bundled licence notices are maintained in <code>THIRD_PARTY_NOTICES.md</code>.</p>
-              <button data-command="open" data-target="notices">VIEW THIRD-PARTY NOTICES</button>
-            </article>
-
-            <article class="card wide about-disclaimer-card">
-              <header><span>FRONTIER DISCLAIMER</span><b>UNOFFICIAL</b></header>
-              <p>Void Compass is an independent, non-commercial community project and is not affiliated with or endorsed by Frontier Developments plc. Elite Dangerous and all related names, marks and game assets belong to their respective owners.</p>
-            </article>
-
-            <article class="card wide about-support-card">
-              <header><span>SOURCE // SUPPORT // DIAGNOSTICS</span><b>OPEN CHANNELS</b></header>
-              <div class="action-grid about-actions"><button data-command="open" data-target="github">SOURCE CODE</button><button data-command="open" data-target="releases">RELEASES</button><button data-command="check_updates" data-update-check>CHECK FOR UPDATES</button><button data-command="open" data-target="documentation">DOCUMENTATION</button><button data-command="open" data-target="issues">REPORT AN ISSUE</button><button data-command="open_logs">OPEN LOCAL LOGS</button></div>
-              <footer><span>Bug reports and focused contributions are welcome.</span><b>github.com/insert3coins/VoidCompass</b></footer>
+              <header><span>BUILT WITH THE COMMUNITY</span><b>OPEN SOURCE</b></header>
+              <p>Void Compass incorporates or adapts work from three.js, EDSY, ED Engineering Companion and other Elite Dangerous reference projects. Full attribution and bundled licences are in <code>THIRD_PARTY_NOTICES.md</code>.</p>
+              <div class="about-licence"><strong>Free software / GPL-3.0-only</strong><p>You may run, study, modify and redistribute Void Compass under the GNU General Public License version 3. Distributed modifications must preserve the licence and corresponding source obligations.</p></div>
+              <div class="about-card-actions"><button type="button" data-command="open" data-target="notices">THIRD-PARTY NOTICES</button><button type="button" data-command="open" data-target="license">READ THE LICENCE</button></div>
             </article>
           </section>
 
-          <footer class="about-footer"><span>VOID COMPASS // MADE BY insert3coins</span><b id="about-footer-version">v—</b><span>Copyright © 2026 insert3coins</span></footer>
+          <section class="about-support" aria-label="Project support">
+            <div><small>KEEP THE COMPASS POINTING FORWARD</small><h3>Found something? Have an idea?</h3><p>Bug reports and focused contributions are welcome.</p></div>
+            <div class="about-support-actions"><button type="button" data-command="open" data-target="issues">REPORT AN ISSUE</button><button type="button" data-command="open" data-target="github">SOURCE CODE</button><button type="button" data-command="open_logs">OPEN LOCAL LOGS</button></div>
+          </section>
+          <aside class="about-disclaimer"><strong>AN UNOFFICIAL COMPANION</strong><p>Void Compass is an independent, non-commercial community project and is not affiliated with or endorsed by Frontier Developments plc. Elite Dangerous and all related names, marks and game assets belong to their respective owners.</p></aside>
+          <footer class="about-footer"><span>VOID COMPASS <i>/</i> MADE BY insert3coins</span><b id="about-footer-version">v—</b><span>o7, Commander.</span></footer>
         </section>
       </main>
 

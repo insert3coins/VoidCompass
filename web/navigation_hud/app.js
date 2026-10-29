@@ -40,9 +40,20 @@ let eventNoticeTimer = null;
 let eventPlacementSignature = '';
 const osMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 // Each state's hologram: the deck scene and the ship's aura (scene.js).
-const scene = window.NavigationScene
-  ? new window.NavigationScene({deck: $('deck-canvas'), bay: $('bay-canvas')}) : null;
-window.navigationScene = scene;
+let scene = null;
+// Keep the journal plate live while its WebGL module loads. There is one
+// scene renderer; a failure is shown explicitly rather than drawing 2D art.
+import('./scene.js').then(() => {
+  scene = new window.NavigationScene({deck: $('deck-canvas'), bay: $('bay-canvas')});
+  window.navigationScene = scene;
+  if (snapshot) render(snapshot);
+}).catch((error) => {
+  const notice = document.createElement('span');
+  notice.className = 'scene-render-error'; notice.setAttribute('role', 'status');
+  notice.textContent = '3D SCENE UNAVAILABLE';
+  $('deck-canvas').parentElement.append(notice);
+  console.warn('Navigation HUD scene module could not load:', error);
+});
 
 function routeFeedback(message) {
   clearTimeout(routeFeedbackTimer);
@@ -99,7 +110,7 @@ function setTheme(theme = {}) {
 // for (Windows' text-size setting, mixed monitor scaling), which clipped the
 // HUD's lower and right parts. Fitting to the window actually given means the
 // whole instrument always shows, at whatever size the window really is.
-const DESIGN_SIZE = {standard: [500, 326], expanded: [620, 342]};
+const DESIGN_SIZE = {standard: [500, 350], expanded: [620, 366]};
 // Larger small text widens the plate (Python sizes the window to match).
 const LABEL_WIDTH = {standard: 500, large: 540, larger: 580};
 let requestedScale = 1;
@@ -109,7 +120,9 @@ let fittedScale = 1;
 // the app how tall it is (a page, larger small text), so the window follows
 // (overlayfix.md). The design height is only its least.
 function fitToWindow() {
-  const width = LABEL_WIDTH[dom.hud?.dataset.labels] || DESIGN_SIZE.standard[0];
+  const layout = dom.hud?.classList.contains('expanded') ? 'expanded' : 'standard';
+  const labelWidth = LABEL_WIDTH[dom.hud?.dataset.labels] || LABEL_WIDTH.standard;
+  const width = DESIGN_SIZE[layout][0] * labelWidth / LABEL_WIDTH.standard;
   const fit = innerWidth > 0 ? innerWidth / width : requestedScale;
   fittedScale = Math.max(.4, Math.min(3, Number.isFinite(fit) ? fit : requestedScale));
   document.documentElement.style.setProperty('--text-scale', fittedScale.toFixed(4));
@@ -582,6 +595,9 @@ function renderScene(data, theme, tone, vehicle, reducedMotion, energy) {
     motion: state.motion,
     label: state.label,
     vehicleKey: vehicle?.key || '',
+    // The commander's own ship, whatever the portrait shows right now, so
+    // the hologram flies the ship they are actually in.
+    shipKey: window.VoidCompassShipCatalog?.resolveShip(state.vehicle || {})?.key || '',
     dynamics: state.dynamics || {},
     energy,
     reduced: reducedMotion,
@@ -1184,89 +1200,30 @@ function fitPage() {
 }
 
 
-async function fetchSnapshot() {
-  const response = await fetch(api('/api/snapshot'), {cache: 'no-store'});
-  if (!response.ok) throw new Error(`Snapshot HTTP ${response.status}`);
-  lastServerContact = Date.now();
-  return response.json();
-}
-
 // How tall the HUD is at its design width, for the app to size the window.
 function designHeight() {
   if (!dom.hud) return DESIGN_SIZE.standard[1];
   return Math.max(DESIGN_SIZE.standard[1], Math.ceil(dom.hud.getBoundingClientRect().height / (fittedScale || 1)));
 }
 
-async function acknowledgeRendered(revision) {
-  try {
-    const response = await fetch(api('/api/rendered'), {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({revision, content_height: designHeight()}),
-    });
-    await response.arrayBuffer().catch(() => null);
-    return response.ok;
-  } catch (_error) {
-    return false;
-  }
-}
-
-async function acknowledgeReady() {
-  if (pageReady || lastRevision < 0) return;
-  try {
-    const response = await fetch(api('/api/ready'), {
-      method: 'POST', body: '{}',
-    });
-    await response.arrayBuffer().catch(() => null);
-    pageReady = response.ok;
-  } catch (_error) {}
-}
-
-async function checkHostHealth() {
-  if (healthPollActive) return;
-  healthPollActive = true;
-  try {
-    const response = await fetch(api('/api/health'), {cache: 'no-store'});
-    if (!response.ok) throw new Error(`Health HTTP ${response.status}`);
-    const health = await response.json();
-    window.VoidCompassFrameCap?.set(health.frame_rate);
-    window.VoidCompassLayout?.apply(health);
-    lastServerContact = Date.now();
-    const revision = Number(health.revision);
-    pageReady = pageReady || Boolean(health.ready);
-    if (Number.isFinite(revision) && revision !== lastRevision) {
-      render(await fetchSnapshot());
-      if (await acknowledgeRendered(revision)) {
-        lastRevision = revision;
-        await acknowledgeReady();
-        dom['link-state'].textContent = 'HTML NAV // LIVE';
-      }
-    } else if (!pageReady) {
-      await acknowledgeReady();
-    }
-  } catch (_error) {
-    if (Date.now() - lastServerContact > 15000) {
-      dom['link-state'].textContent = 'HTML NAV // HOST OFFLINE';
-    }
-  } finally {
-    healthPollActive = false;
-  }
-}
-
-async function start() {
+let delivery = null;
+function start() {
   if (!token) return;
-  await checkHostHealth();
-  if (lastRevision < 0) dom['link-state'].textContent = 'HTML NAV // RETRYING';
+  delivery = window.VoidCompassOverlay.startPolling({
+    token, overlay, contentHeight: designHeight, interval: 250,
+    render(value) { render(value); dom['link-state'].textContent = 'HTML NAV // LIVE'; },
+    onContact() { lastServerContact = Date.now(); },
+    onError() {
+      if (Date.now() - lastServerContact > 15000) dom['link-state'].textContent = 'HTML NAV // HOST OFFLINE';
+    },
+  });
   arrivalTimer = setInterval(updateClock, 1000);
-  // One EventSource per overlay can exhaust WebView2's HTTP/1.1 connection
-  // pool. Revision checks transfer no model when unchanged and keep this
-  // primary flight instrument responsive without a permanent connection.
-  setInterval(checkHostHealth, 250);
-  // The host wakes a hidden HUD directly (its timers are throttled while hidden).
-  window.__voidcompassPoll = checkHostHealth;
+  // The shared client exposes __voidcompassPoll for classic host recovery.
 }
 
 window.addEventListener('beforeunload', () => {
+  delivery?.stop();
+  scene?.dispose();
   clearTimeout(routeFeedbackTimer);
   clearTimeout(routeNoticeTimer);
   clearTimeout(eventNoticeTimer);

@@ -40,6 +40,69 @@
   const collator = new Intl.Collator("en", {numeric: true, sensitivity: "base"});
   let cycle = null;
   let cycleTimer = 0;
+  let lastView = "";
+
+  function elementKey(element) {
+    if (element.nodeType !== Node.ELEMENT_NODE) return element.nodeName;
+    const role = [...element.classList].find(name => !name.startsWith("event-")) || "";
+    return `${element.tagName}|${element.id || element.dataset.bodyKey || element.dataset.group || role}`;
+  }
+
+  function syncChildren(parent, children, retained = new Map()) {
+    const available = [...parent.childNodes];
+    let cursor = parent.firstChild;
+    for (const next of children) {
+      const index = available.findIndex(old => elementKey(old) === elementKey(next));
+      const current = index < 0 ? next : available.splice(index, 1)[0];
+      retained.set(next, current);
+      if (current !== next) {
+        if (next.nodeType === Node.TEXT_NODE) {
+          if (current.nodeValue !== next.nodeValue) current.nodeValue = next.nodeValue;
+        } else {
+          const fromFill = current.classList.contains("event-progress") && !next.classList.contains("event-progress")
+            ? current.style.getPropertyValue("--from-fill") : "";
+          for (const attribute of [...current.attributes]) {
+            if (!next.hasAttribute(attribute.name)) {
+              const active = attribute.name === "class" ? [...current.classList].filter(name => name.startsWith("event-")) : [];
+              if (active.length) current.setAttribute("class", active.join(" "));
+              else current.removeAttribute(attribute.name);
+            }
+          }
+          for (const attribute of next.attributes) {
+            let value = attribute.value;
+            if (attribute.name === "class") {
+              const active = [...current.classList].filter(name => name.startsWith("event-") && !next.classList.contains(name));
+              if (active.length) value += ` ${active.join(" ")}`;
+            }
+            if (current.getAttribute(attribute.name) !== value) current.setAttribute(attribute.name, value);
+          }
+          if (fromFill) current.style.setProperty("--from-fill", fromFill);
+          syncChildren(current, [...next.childNodes], retained);
+        }
+      }
+      if (current !== cursor) parent.insertBefore(current, cursor);
+      cursor = current.nextSibling;
+    }
+    available.forEach(old => old.remove());
+    return retained;
+  }
+
+  function reconnectCycle(retained) {
+    if (!cycle) return;
+    const live = element => retained.get(element) || element;
+    cycle.spotlight = live(cycle.spotlight);
+    if (cycle.manifest) {
+      cycle.manifest.list = live(cycle.manifest.list);
+      cycle.manifest.counter = live(cycle.manifest.counter);
+    }
+    if (cycle.catalogue) cycle.catalogue.section = live(cycle.catalogue.section);
+    for (const pager of cycle.pagers) {
+      pager.items = live(pager.items);
+      pager.counter = live(pager.counter);
+      pager.elements = pager.elements.map(live);
+      pager.pages = pager.pages.map(page => page.map(live));
+    }
+  }
 
   function node(tag, className = "", text = "") {
     const element = document.createElement(tag);
@@ -353,13 +416,17 @@
       "event-active", "event-system", "event-focus-in", "event-focus-out",
       "event-scan-complete",
     ];
+    if (!motion.enabled) {
+      dom.root.classList.remove(...names);
+      return;
+    }
+    const activity = motion.rows.size || motion.notable.size || motion.sampling
+      || motion.scanAdvanced || motion.scanCompleted || motion.bioAdvanced;
+    if (!activity && !motion.systemChanged && !motion.focusEntered && !motion.focusLeft) return;
     dom.root.classList.remove(...names);
-    if (!motion.enabled) return;
     // Restart only the short acknowledgement layer; ordinary revisions do not
     // receive a class and therefore never produce ambient redraw flicker.
     void dom.root.offsetWidth;
-    const activity = motion.rows.size || motion.notable.size || motion.sampling
-      || motion.scanAdvanced || motion.scanCompleted || motion.bioAdvanced;
     if (activity) dom.root.classList.add("event-active");
     if (motion.systemChanged) dom.root.classList.add("event-system");
     if (motion.focusEntered) dom.root.classList.add("event-focus-in");
@@ -961,7 +1028,7 @@
       meter.style.animationDelay = `${-(Date.now() - cycle.periodStart)}ms`;
       card.appendChild(meter);
     }
-    slot.replaceChildren(card);
+    syncChildren(slot, [card]);
   }
 
   function spotlightPage() {
@@ -978,7 +1045,7 @@
       manifest.page = page;
       const start = page * manifest.limit;
       const rows = cycle.biology.slice(start, start + manifest.limit);
-      manifest.list.replaceChildren(...rows.map((row) => bodyRow(row, {
+      syncChildren(manifest.list, rows.map((row) => bodyRow(row, {
         system: cycle.systemName, kind: "bio", event: motionRows.get(rowKey(row)) || {},
       })));
       const total = cycle.biology.length;
@@ -1005,7 +1072,7 @@
   }
 
   function paintPager(pager) {
-    pager.items.replaceChildren(...(pager.pages[pager.page] || []));
+    syncChildren(pager.items, pager.pages[pager.page] || []);
     paintCounter(pager);
   }
 
@@ -1434,7 +1501,7 @@
     dom.footer.appendChild(node("span", "credits", right));
   }
 
-  function render(snapshot = {}) {
+  function renderView(snapshot = {}) {
     VoidCompassOverlay.applyTheme(dom.root, snapshot.theme || {}, snapshot.effects || {});
     const textScale = safeNumber(snapshot.effects?.text_scale) || 1;
     dom.root.classList.toggle("scale-large", textScale > 1.35);
@@ -1464,8 +1531,7 @@
       stopCycle();
       dom.root.classList.add("empty");
       dom.overview.replaceChildren();
-      applyMotionClass({enabled: false});
-      return;
+      return {enabled: false};
     }
     dom.root.classList.remove("empty");
     const sample = model.sampling ? sampleCard(model.sampling, motion.sampling || {}) : null;
@@ -1478,6 +1544,44 @@
       renderBody(model, motion);
     } else {
       renderSystem(model, motion, sample, snapshot.options || {});
+    }
+    return motion;
+  }
+
+  function render(snapshot = {}) {
+    VoidCompassOverlay.applyTheme(dom.root, snapshot.theme || {}, snapshot.effects || {});
+    const key = JSON.stringify([snapshot.survey, snapshot.theme, snapshot.effects, snapshot.options, dom.root.clientWidth]);
+    if (key === lastView) return;
+    const live = {...dom};
+    const draft = live.root.cloneNode(false);
+    const bounds = live.root.getBoundingClientRect();
+    draft.removeAttribute("id");
+    draft.removeAttribute("data-window-shape");
+    draft.setAttribute("aria-hidden", "true");
+    draft.inert = true;
+    Object.assign(draft.style, {position: "fixed", left: "-10000px", top: "0", visibility: "hidden",
+      width: `${bounds.width}px`, height: `${bounds.height}px`});
+    dom.root = draft;
+    for (const band of ["overview", "content", "footer"]) {
+      dom[band] = live[band].cloneNode(false);
+      draft.appendChild(dom[band]);
+    }
+    document.body.appendChild(draft);
+    let motion;
+    try {
+      // Fit the next view offscreen, then patch the live cards in place.
+      // Window acknowledgements and quiet updates keep their animation clocks.
+      motion = renderView(snapshot);
+      const retained = new Map();
+      for (const band of ["overview", "content", "footer"]) {
+        syncChildren(live[band], [...dom[band].childNodes], retained);
+      }
+      if (live.root.className !== draft.className) live.root.className = draft.className;
+      reconnectCycle(retained);
+      lastView = key;
+    } finally {
+      Object.assign(dom, live);
+      draft.remove();
     }
     applyMotionClass(motion);
   }

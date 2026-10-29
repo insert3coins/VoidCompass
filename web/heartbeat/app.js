@@ -261,6 +261,13 @@
       // What its story has done to the eye (5.6.1).
       story: (model.orb || {}).story,
     });
+    if (model.orb?.renderer_logging) orb.watchRenderer((renderer, reason) => {
+      const token = encodeURIComponent(params.get("token") || "");
+      const overlay = encodeURIComponent(params.get("overlay") || "heartbeat");
+      fetch(`/api/watcher-renderer?token=${token}&overlay=${overlay}`, {
+        method: "POST", body: JSON.stringify({renderer, ...(reason ? {reason} : {})}),
+      }).then((response) => response.arrayBuffer()).catch(() => {});
+    });
     showThought(model.thought, motionPreference.matches || Boolean(effects.reduced_motion), (model.orb || {}).eye,
       model.personality);
     const label = stalled ? "Journal watcher: feed quiet"

@@ -102,7 +102,7 @@
   };
   const GRIEF_MS = 10 * 60 * 1000;
   const ALARMS = new Set(['alarm', 'breach', 'strike']);
-  const PLEASURES = new Set(['payout', 'complete', 'clear', 'glint', 'dock']);
+  const PLEASURES = new Set(['payout', 'complete', 'clear', 'glint', 'dock', 'touchdown']);
   const FOCUS = new Set(['warp', 'charge', 'approach', 'lock']);
   const CURIOSITY = new Set(['spark', 'signal', 'sweep', 'honk']);
 

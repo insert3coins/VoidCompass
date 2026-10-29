@@ -2,8 +2,8 @@
 
 Some of the HUD's small labels were hard to read, so the commander picks a
 typeface (Cockpit, Clear or Terminal), the HUD's own text size (which grows
-the window, as the overlay-wide size does), a floor for the small text that
-keeps the window's size, and brighter labels. Every combination must still
+the window, as the overlay-wide size does), larger small text with room to
+fit, and brighter labels. Every combination must still
 fit the fixed cockpit layout in both layouts.
 """
 
@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 from urllib.parse import unquote, urlsplit
 
 from voidcompass.core import config as config_module
@@ -57,7 +58,27 @@ class NavigationTypeSettingsTests(unittest.TestCase):
                 # Its own 150% grows the window just as 150% for all overlays does.
                 self.assertEqual(model["theme"]["text_scale"], 1.5)
                 # Large small text widens the plate to 540 (5.5.17).
-                self.assertEqual((model["window"]["width"], model["window"]["height"]), (810, 489))
+                self.assertEqual((model["window"]["width"], model["window"]["height"]), (810, 525))
+            finally:
+                hud.win.destroy()
+        finally:
+            root.close()
+
+    def test_window_width_tracks_each_small_text_step(self):
+        root = ApplicationRuntime()
+        try:
+            config = {"hud_compact_mode": False, "hud_label_size": "standard"}
+            hud = TacticalHUD(root, config)
+            try:
+                for compact, expected in [(True, [500, 540, 580]), (False, [620, 670, 719])]:
+                    # The current HUD uses the standard plate. Keep the
+                    # legacy expanded rendering path consistent as well.
+                    with patch.object(hud, "_is_compact", return_value=compact):
+                        widths = []
+                        for label in HUD_LABEL_SIZES:
+                            config["hud_label_size"] = label
+                            widths.append(hud._target_dimensions()[0])
+                        self.assertEqual(widths, expected)
             finally:
                 hud.win.destroy()
         finally:
@@ -266,10 +287,11 @@ class NavigationTypeBrowserTests(unittest.TestCase):
 
         page.route("http://state.test/**", serve)
         page.goto("http://state.test/navigation_hud/index.html")
+        page.wait_for_function("Boolean(window.navigationScene)")
         return page
 
     def test_every_typeface_and_small_text_size_fits_both_layouts(self):
-        for layout, width, height in (("standard", 500, 326),):
+        for layout, width, height in (("standard", 500, 350),):
             page = self.open(width, height)
             for face in HUD_FONT_FACES:
                 for labels in HUD_LABEL_SIZES:
@@ -285,8 +307,28 @@ class NavigationTypeBrowserTests(unittest.TestCase):
                                                            "family": FAMILY[face], "floor": FLOOR[labels]})
                             self.assertEqual(failures, [])
 
+    def test_live_small_text_changes_grow_labels_already_above_the_floor(self):
+        page = self.open(500, 350)
+        sizes = []
+        # Repeat in both directions: a live change must also undo the old
+        # floor and scaling, without a restart or a state change.
+        for labels in ("standard", "large", "larger", "large", "standard"):
+            page.set_viewport_size({"width": HUD_LABEL_WIDTHS[labels], "height": 350})
+            snapshot = hud_snapshot(hud_state("SUPERCRUISE", fuel_percent=71))
+            snapshot["theme"]["type"] = {"face": "cockpit", "labels": labels, "bright": False}
+            page.evaluate("snapshot => render(snapshot)", snapshot)
+            sizes.append(page.evaluate("""() => ['#region-label', '.fuel-gauge strong'].map(
+              selector => parseFloat(getComputedStyle(document.querySelector(selector)).fontSize))"""))
+            self.assertEqual(page.evaluate(FIT, {"face": "cockpit", "labels": labels,
+                                                "family": FAMILY["cockpit"], "floor": FLOOR[labels]}), [])
+        for index in (0, 1):
+            self.assertLess(sizes[0][index], sizes[1][index])
+            self.assertLess(sizes[1][index], sizes[2][index])
+            self.assertEqual(sizes[1][index], sizes[3][index])
+            self.assertEqual(sizes[0][index], sizes[4][index])
+
     def test_brighter_labels_lift_the_faded_ones(self):
-        page = self.open(500, 326)
+        page = self.open(500, 350)
         colours = []
         for bright in (False, True):
             snapshot = hud_snapshot(hud_state("SUPERCRUISE"))
@@ -303,7 +345,7 @@ class NavigationTypeBrowserTests(unittest.TestCase):
           getComputedStyle(document.getElementById('region-label')).fontSize]"""), ["cockpit", "8.5px"])
 
     def test_display_label_uses_exact_custom_profile_colour(self):
-        page = self.open(500, 326)
+        page = self.open(500, 350)
         # The chosen accent deliberately matches a former hardcoded orange
         # mapping. It must remain the commander's accent, not become orange.
         palette = themes.normalize_theme({"accent": "#ff7a18", "orange": "#2874c2"})
@@ -318,8 +360,8 @@ class NavigationTypeBrowserTests(unittest.TestCase):
     def test_flight_state_and_event_text_remain_complete(self):
         sequence = 0
         for layout, width, height, scale in (
-            ("standard", 500, 326, 1), ("standard", 750, 489, 1.5),
-            ("standard", 1000, 652, 2),
+            ("standard", 500, 350, 1), ("standard", 750, 525, 1.5),
+            ("standard", 1000, 700, 2),
         ):
             page = self.open(width, height)
             page.evaluate("snapshot => render(snapshot)",
@@ -370,7 +412,7 @@ class NavigationTypeBrowserTests(unittest.TestCase):
             self.assertEqual(page.evaluate(STATUS_GEOMETRY), normal_geometry)
 
     def test_event_repositions_when_status_tag_changes(self):
-        page = self.open(500, 326)
+        page = self.open(500, 350)
         state = hud_state("SC ASSIST")
         state["category"] = "drive"
         state["notice"] = {

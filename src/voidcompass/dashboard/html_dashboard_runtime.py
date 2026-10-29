@@ -297,7 +297,7 @@ class HtmlDashboardRuntime:
         self._boot.update({
             "active": False,
             "status": "VOID COMPASS LIVE",
-            "detail": "Journal and exploration state synchronized",
+            "detail": "Local flight deck is ready",
             "progress": 1.0,
         })
         self._publish()
@@ -313,6 +313,31 @@ class HtmlDashboardRuntime:
     def allow_frame_source(self, origin):
         return self.server.allow_frame_source(origin)
 
+    def _boot_snapshot(self):
+        app = getattr(self, "app", None)
+        config = getattr(app, "config", None) or getattr(self, "config", {})
+        pending = bool(getattr(app, "_startup_history_pending", set()))
+        offline = bool(getattr(app, "_startup_journal_offline", False))
+        journal_live = bool(getattr(app, "_startup_live_tail_ready", False)) and not offline
+        overlay_runtime = getattr(getattr(self, "root", None), "_voidcompass_html_overlay_runtime", None)
+        surfaces = list(getattr(overlay_runtime, "surfaces", {}).keys())
+        server = getattr(overlay_runtime, "server", None)
+        ready = sum(bool(server.is_ready(key) and server.rendered_revision(key) >= 0) for key in surfaces) if server else 0
+        return {
+            **self._boot,
+            "commander": str(config.get("active_commander_name") or "")[:120],
+            "eye": "hal" if config.get("heartbeat_eye_color") == "hal" else "theme",
+            "journal_live": journal_live,
+            "overlays_ready": ready,
+            "overlays_total": len(surfaces),
+            "systems": {
+                "profile": "ready" if app else "working",
+                "survey": ("background" if getattr(app, "_startup_history_handoff_bypassed", False) else "working") if pending else "ready" if app else "waiting",
+                "journal": "cached" if offline else "ready" if journal_live else "working" if app else "waiting",
+                "cockpit": ("ready" if ready == len(surfaces) else "working") if surfaces else "off" if app else "waiting",
+            },
+        }
+
     def _publish(self):
         payload = dict(self._latest_app_model)
         payload.setdefault("app", {})
@@ -321,9 +346,10 @@ class HtmlDashboardRuntime:
             "version": self.app_version,
             **dict(payload.get("app") or {}),
         }
-        payload["boot"] = dict(self._boot)
+        payload["boot"] = self._boot_snapshot()
         payload["onboarding"] = dict(self._onboarding)
         payload["transport"] = {"renderer": "webview2", "private": True}
+        payload["watcher_renderer_logging"] = getattr(self, "config", {}).get("watcher_renderer_logging") is True
         # Mirror the presentation gate into the native host channel. The host
         # can release a stale browser curtain even if its long-poll client was
         # delayed during the final journal/overlay handoff.
@@ -339,6 +365,12 @@ class HtmlDashboardRuntime:
 
     def _receive_command(self, payload):
         action = str((payload or {}).get("action") or "").strip().casefold()
+        if action == "watcher_renderer":
+            if self.config.get("watcher_renderer_logging") is not True:
+                return False
+            from voidcompass.core.watcher_renderer_diagnostics import record
+            surface = str(payload.get("surface") or "")
+            return surface in {"boot", "dashboard"} and record(surface, str(payload.get("renderer") or ""), str(payload.get("reason") or ""))
         if action == "client_error":
             message = str(payload.get("message") or "unknown renderer error")[:2000]
             source = str(payload.get("source") or "dashboard-js")[:160]

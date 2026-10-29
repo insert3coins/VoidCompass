@@ -188,6 +188,14 @@ class HotkeyAndPageTests(unittest.TestCase):
                                _WATCHER_BONDS=HtmlDashboardMixin._WATCHER_BONDS,
                                _WATCHER_BOND_NEXT=HtmlDashboardMixin._WATCHER_BOND_NEXT)
         data = HtmlDashboardMixin._html_watcher_workspace(deck)
+        feed = {"state": "SUPERCRUISE", "status_seq": 7, "events": [{"seq": 1, "event": "FSDJump"}],
+                "orb": {"story": {"crack": True}}, "thought": {"id": "private-presentation"}}
+        deck.heartbeat_hud._html_render_model = feed
+        live = HtmlDashboardMixin._html_watcher_workspace(deck)["heartbeat"]
+        self.assertEqual(live["state"], "SUPERCRUISE")
+        self.assertEqual(live["events"], feed["events"])
+        self.assertEqual(live["orb"]["story"], {"crack": True})
+        self.assertNotIn("thought", live)
         self.assertEqual(data["log"][0]["topic"], "green_giant")
         self.assertEqual(data["log"][0]["mood"], "pleased")
         self.assertEqual(data["records"]["systems"], 2)

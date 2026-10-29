@@ -59,6 +59,16 @@ class RevealTests(unittest.TestCase):
             self.controller.apply(self.payload, render_current=False)
         self.assertTrue(self.native_visible, "a page that never confirms still appears")
 
+    def test_versioned_layout_stays_hidden_until_measured_even_after_timeout(self):
+        with mock.patch.object(host.time, "monotonic", return_value=100.0):
+            self.controller.apply(self.payload, render_current=False, strict_ready=True, push_updates=True)
+        with mock.patch.object(host.time, "monotonic", return_value=105.0):
+            self.controller.apply(self.payload, render_current=False, strict_ready=True, push_updates=True)
+        self.assertFalse(self.native_visible)
+        self.assertEqual(self.window.calls, [], "pushed pages need no timer nudge")
+        self.controller.apply(self.payload, render_current=True, strict_ready=True, push_updates=True)
+        self.assertTrue(self.native_visible)
+
     def test_a_visible_overlay_is_never_hidden_for_new_data(self):
         self.controller.apply(self.payload, render_current=True)
         self.assertTrue(self.native_visible)

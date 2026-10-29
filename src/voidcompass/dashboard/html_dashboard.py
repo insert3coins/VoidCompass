@@ -852,6 +852,8 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             except Exception:
                 records = {}
         first = records.get("first")
+        heartbeat_model = getattr(heartbeat, "_html_render_model", None)
+        heartbeat_model = heartbeat_model if isinstance(heartbeat_model, dict) else {}
         return {
             "enabled": heartbeat is not None,
             "nature": watcher_mind.personality(self.config),
@@ -859,6 +861,10 @@ class HtmlDashboardMixin(HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, Html
             "eye": _text(self.config.get("heartbeat_eye_color") or "theme", 10),
             # The orb here keeps to the Watcher's Frame rate too (5.5.7).
             "frame_rate": heartbeat_frame_rate(self.config),
+            "renderer_logging": self.config.get("watcher_renderer_logging") is True,
+            "heartbeat": {key: heartbeat_model[key] for key in (
+                "state", "status", "stalled", "status_seq", "events", "orb", "vitals", "personality", "memory", "activity",
+            ) if key in heartbeat_model},
             "thoughts": int(memory.get("thoughts") or 0),
             "sessions": sessions,
             "hours": round(hours, 1),

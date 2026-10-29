@@ -158,7 +158,7 @@ class HudTests(unittest.TestCase):
         try:
             hud = TacticalHUD(root, {"hud_pages": "auto", "hud_compact_mode": False})
             try:
-                self.assertEqual(hud._target_dimensions(), (500, 326), "compact is the only layout")
+                self.assertEqual(hud._target_dimensions(), (500, 350), "compact is the only layout")
                 server = Mock()
                 server.rendered_content_height.return_value = 410
                 hud._html_bridge = Mock(runtime=Mock(server=server))
@@ -166,13 +166,13 @@ class HudTests(unittest.TestCase):
                 server.rendered_content_height.return_value = 9999
                 self.assertEqual(hud._target_dimensions()[1], TacticalHUD.MAX_DESIGN_HEIGHT)
                 server.rendered_content_height.return_value = 200
-                self.assertEqual(hud._target_dimensions()[1], 326, "never smaller than designed")
+                self.assertEqual(hud._target_dimensions()[1], 350, "never smaller than designed")
                 hud._html_bridge = None
                 for labels, width in (("large", 540), ("larger", 580)):
                     hud.config["hud_label_size"] = labels
-                    self.assertEqual(hud._target_dimensions(), (width, 326), "larger small text gets a wider plate")
+                    self.assertEqual(hud._target_dimensions(), (width, 350), "larger small text gets a wider plate")
                 hud.config["hud_text_scale_percent"] = 150
-                self.assertEqual(hud._target_dimensions(), (870, 489), "and the text size scales it all")
+                self.assertEqual(hud._target_dimensions(), (870, 525), "and the text size scales it all")
                 hud.config.update(hud_label_size="standard", hud_text_scale_percent=0)
                 hud.update("SOL", "", 0, 0, 0, None, {})
                 self.assertTrue(hud.set_pages({"active": "nav", "page": None}))
@@ -361,13 +361,13 @@ class PageRenderTests(unittest.TestCase):
     def test_the_hud_says_how_tall_it_needs_to_be(self):
         page = self.open()
         self.render(page, self.page_snapshot(None, active="nav"))
-        self.assertEqual(page.evaluate("designHeight()"), 326, "the classic HUD at its designed height")
+        self.assertEqual(page.evaluate("designHeight()"), 350, "the HUD at its designed height")
         planet = hp.planet_page("X 1", {"short_body": "1", "details": {"gravity": .3},
                                         "materials": [{"name": f"Mat {n}", "percent": 10.0} for n in range(4)]},
                                 {"state": "OK", "label": "Vein", "distance_m": 900, "heading_delta": 10, "direction": "RIGHT"},
                                 {"species": "Bacterium", "progress": 1, "colony_m": 500, "clear": False, "min_distance_m": 90}, .3, 3.0)
         self.render(page, self.page_snapshot(planet, active="planet"))
-        self.assertGreater(page.evaluate("designHeight()"), 326, "a fuller page grows it")
+        self.assertGreater(page.evaluate("designHeight()"), 350, "a fuller page grows it")
         # 5.5.18: icons, not words: a circling arrow for auto, a pin for manual.
         mode = "() => [dom['page-mode'].dataset.mode, !!dom['page-mode'].querySelector('svg'), dom['page-mode'].textContent]"
         self.assertEqual(page.evaluate(mode), ["auto", True, ""])

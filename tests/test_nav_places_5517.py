@@ -99,7 +99,7 @@ class SceneTests(unittest.TestCase):
         cls.playwright.stop()
 
     def test_each_place_draws_its_own_scene(self):
-        page = self.browser.new_page(viewport={"width": 500, "height": 326})
+        page = self.browser.new_page(viewport={"width": 500, "height": 350})
         self.addCleanup(page.close)
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
@@ -111,6 +111,7 @@ class SceneTests(unittest.TestCase):
 
         page.route("http://p.test/**", serve)
         page.goto("http://p.test/navigation_hud/index.html")
+        page.wait_for_function('Boolean(window.navigationScene)')
         pictures = {}
         for label, key, value in (("DOCKED", "dock_place", "orbital"), ("DOCKED", "dock_place", "outpost"),
                                   ("DOCKED", "dock_place", "carrier"), ("DOCKED", "dock_place", "surface"),

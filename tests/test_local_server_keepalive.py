@@ -49,7 +49,8 @@ class LocalServerKeepAliveTests(unittest.TestCase):
         connection = self.connect(server.port)
         query = f"token={server.token}&overlay=heartbeat"
         for path, body in (("/api/rendered", {"revision": 1}), ("/api/ready", {}),
-                           ("/api/host-status", {"ok": True})):
+                           ("/api/host-status", {"ok": True}),
+                           ("/api/host-status-batch", {"overlays": {"heartbeat": {"ok": True}}})):
             connection.request("POST", f"{path}?{query}", body=json.dumps(body),
                                headers={"Content-Type": "application/json"})
             response = connection.getresponse()

@@ -589,6 +589,7 @@ GLOBAL_ONLY_KEYS = (
     "runtime_trace_enabled",
     "runtime_trace_path",
     "crash_reporting_enabled",
+    "watcher_renderer_logging",
     "watcher_max_journal_lines_per_cycle",
     "watcher_startup_max_lines_per_cycle",
     "watcher_startup_tail_bytes",
@@ -1220,6 +1221,7 @@ def load_config():
     defaults = {
         **OVERLAY_ENABLE_DEFAULTS,
         'journal_path': '',
+        'watcher_renderer_logging': False,
         'api_enabled': False,
         'api_port': 7380,
         'api_allow_lan': False,

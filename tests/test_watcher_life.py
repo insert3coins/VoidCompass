@@ -169,7 +169,9 @@ class WatcherLifeBrowserTests(unittest.TestCase):
         page.evaluate("s => renderHeartbeat(s)", {**base, "heartbeat": {"status_seq": 0, "orb": orb, "events": [
             {"seq": 1, "event": "Music", "family": "system", "tone": "muted", "effect": "tick", "weight": .05,
              "gaze": "centre", "rare": False}]}})
-        page.wait_for_timeout(250)
+        # First use may compile the Three.js scene; wait for the next live
+        # animation frames instead of assuming startup always takes 250 ms.
+        page.wait_for_function("Math.hypot(heartbeatOrb.gaze.x, heartbeatOrb.gaze.y) > .005", timeout=3000)
         gaze = page.evaluate("() => Math.hypot(heartbeatOrb.gaze.x, heartbeatOrb.gaze.y)")
         self.assertGreater(gaze, .005, "even a tick draws a glance")
 

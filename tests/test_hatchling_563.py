@@ -95,7 +95,13 @@ class PetTests(unittest.TestCase):
         self.assertEqual(act(state, "pet", {}, 2 * HOUR), (True, ""))
         self.assertEqual(state["pet"]["reaction"], "petted")
         self.assertGreater(state["pet"]["needs"]["mood"], mood)
-        self.assertEqual(act(state, "pet", {}, 2 * HOUR + 30), (False, ""), "at most once in a while, and quietly")
+        advance(state, 2 * HOUR + 30)
+        cheered_mood = state["pet"]["needs"]["mood"]
+        pats = state["pet"]["care"]["pats"]
+        self.assertEqual(act(state, "pet", {}, 2 * HOUR + 30), (True, ""))
+        self.assertEqual(state["pet"]["cue"], {"kind": "petted", "at": 2 * HOUR + 30})
+        self.assertEqual(state["pet"]["needs"]["mood"], cheered_mood)
+        self.assertEqual(state["pet"]["care"]["pats"], pats)
 
     def test_each_species_eats_its_own_food(self):
         bot = hatched("bot")

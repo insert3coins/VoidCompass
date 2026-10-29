@@ -1,9 +1,20 @@
 # Overlay fit fix (5.5.3.9.1)
 
+5.6.8 delivery: the shared host sends each page a snapshot/revision envelope,
+including while its window is hidden. Measurements carry the page generation,
+layout revision and a monotonic measurement number. Only measurements for the
+current model and layout update the server's height and shapes; a shapes-only
+report preserves the last height. Window geometry changes invalidate layout
+readiness. DOM layout can be acknowledged without waiting for a hidden
+animation frame; resize and font completion remeasure the current view.
+`fitToWindow` and `designHeight` below keep their existing units and scaling.
+
 How to fix an overlay that cuts off its text or its bottom rows, at large text or on a PC with odd Windows scaling.
 
 Already fixed: **Cargo, Prospector, Planet Materials, Station Link.**
 Fixed earlier, in their own way: Nav HUD (fits its zoom to the window), Toasts (wrap and measure).
+
+Nav HUD (5.6.8): Small text scales every small-type token as well as raising the minimum font size, so labels already above the floor also grow from Large to Larger. The window widens to fit. Its fitted design width is the layout width (500 standard, 620 legacy expanded) × label width / 500 (label widths 500 / 540 / 580). Python window sizing and the browser fit use the same ratio.
 
 ## Symptoms
 

@@ -237,6 +237,110 @@ class CabinetTests(unittest.TestCase):
         self.assertEqual((command["action"], command["page"], command["act"]), ("workspace", "hatchling", "hatch"))
         self.assertEqual(command["value"]["name"], "Moss")
 
+    def test_the_thargoid_foundling_can_be_selected_on_the_deck(self):
+        live = hatchling.view(hatchling.new_state(), time.time())
+        page = self.open_deck(live={"hatchling": live})
+        page.locator('.nav-item[data-page="hatchling"]').click()
+        self.server.publish({**self.state, "workspace": {"page": "hatchling", "ready": True, "data": live}})
+        page.wait_for_selector(".hatchling-deck")
+        page.locator('[data-hl-species="thargoid"]').click()
+        self.assertIn("selected", page.locator('[data-hl-species="thargoid"]').get_attribute("class"))
+        page.locator("[data-hl-name]").fill("Ember")
+        page.locator("[data-hl-act='hatch']").click()
+        command = self.wait_for_command(page, lambda item: item.get("page") == "hatchling" and item.get("act") == "hatch")
+        self.assertEqual((command["value"]["species"], command["value"]["name"]), ("thargoid", "Ember"))
+
+    def test_hatchling_bay_resizes_and_live_updates_keep_care_controls_open(self):
+        from tests.test_hatchling_563 import hatched
+        now = time.time()
+        live = hatchling.view(hatched("larva", now=now - 3600), now)
+        page = self.open_deck(live={"hatchling": live})
+        page.locator('.nav-item[data-page="hatchling"]').click()
+        self.server.publish({**self.state, "workspace": {"page": "hatchling", "ready": True, "data": live}})
+        page.wait_for_selector(".hatchling-deck")
+        page.wait_for_function("Boolean(window.Hatchling3D)")
+        self.assertGreaterEqual(page.locator(".hl-scene").bounding_box()["height"], 440)
+        page.locator("[data-hl-open-feed]").click()
+        self.assertTrue(page.locator("[data-hl-feed]").is_visible())
+        page.evaluate("""async data => {
+          const {renderHatchling} = await import('/hatchling.js');
+          data.pet.needs.mood -= 1;
+          renderHatchling(data, {command: () => true});
+        }""", live)
+        self.assertTrue(page.locator("[data-hl-feed]").is_visible(), "a live refresh must not close the larder")
+        name = page.locator("[data-hl-name]")
+        name.fill("Still typing")
+        page.evaluate("""async data => {
+          const {renderHatchling} = await import('/hatchling.js');
+          data.pet.needs.mood -= 2;
+          renderHatchling(data, {command: () => true});
+        }""", live)
+        self.assertEqual(name.input_value(), "Still typing")
+        for width in (1100, 750):
+            page.set_viewport_size({"width": width, "height": 900})
+            scene = page.locator(".hl-scene").bounding_box()
+            self.assertGreater(scene["width"], 200)
+            self.assertGreaterEqual(scene["height"], 360)
+            self.assertEqual(page.locator(".hatchling-deck").evaluate("el => el.scrollWidth <= el.clientWidth"), True)
+
+    def test_hatchling_recreation_games_play_and_record_the_result(self):
+        from tests.test_hatchling_563 import hatched
+        now = time.time()
+        live = hatchling.view(hatched("larva", now=now - 3600), now)
+        page = self.open_deck(live={"hatchling": live})
+        page.locator('.nav-item[data-page="hatchling"]').click()
+        self.server.publish({**self.state, "workspace": {"page": "hatchling", "ready": True, "data": live}})
+        page.wait_for_selector(".hatchling-deck")
+        page.wait_for_function("Boolean(window.Hatchling3D)")
+        page.evaluate("window.Hatchling3D.draw = () => true")
+
+        initial = page.locator('[data-hl-game="limpet"]').evaluate("""button => {
+          button.click();
+          const arena = document.querySelector('.hl-limpet-zone').getBoundingClientRect();
+          const target = document.querySelector('[data-hl-catch]').getBoundingClientRect();
+          return {inside: target.top >= arena.top && target.bottom <= arena.bottom
+            && target.left >= arena.left && target.right <= arena.right};
+        }""")
+        self.assertTrue(initial['inside'], "the target starts inside the arena before its first animation frame")
+        target = page.locator('[data-hl-catch]')
+        arena = page.locator('.hl-limpet-zone').bounding_box()
+        box = target.bounding_box()
+        self.assertTrue(arena['y'] <= box['y'] < arena['y'] + arena['height'])
+        for _ in range(3):
+            target.click(force=True, timeout=3000)
+        command = self.wait_for_command(page, lambda item: item.get('act') == 'play' and item.get('value', {}).get('game') == 'limpet')
+        self.assertTrue(command['value']['won'])
+        self.assertIn('Three catches', page.locator('.hl-mini-result').inner_text())
+        page.locator('.hl-mini-result [data-hl-mini-close]').click()
+
+        page.locator('[data-hl-game="thargon"]').click()
+        revealed = page.locator('.hl-shell.revealed')
+        identity = revealed.get_attribute('data-hl-shell')
+        self.assertEqual(revealed.evaluate("el => getComputedStyle(el).opacity"), "1")
+        original_slots = page.locator('.hl-shell').evaluate_all("els => els.map(el => el.style.getPropertyValue('--slot'))")
+        page.wait_for_function("Array.from(document.querySelectorAll('.hl-shell')).some((el, i) => el.style.getPropertyValue('--slot') !== String(i))", timeout=4000)
+        shuffled_slots = page.locator('.hl-shell').evaluate_all("els => els.map(el => el.style.getPropertyValue('--slot'))")
+        self.assertNotEqual(original_slots, shuffled_slots)
+        self.assertIn('left', page.locator('.hl-shell').first.evaluate("el => getComputedStyle(el).transitionProperty"))
+        page.wait_for_selector('[data-hl-shell]:not([disabled])', timeout=7000)
+        arena = page.locator('.hl-shells').bounding_box()
+        for stone in page.locator('.hl-shell').all():
+            box = stone.bounding_box()
+            self.assertGreaterEqual(box['y'], arena['y'])
+            self.assertLessEqual(box['y'] + box['height'], arena['y'] + arena['height'])
+        page.locator(f'[data-hl-shell="{identity}"]').click()
+        command = self.wait_for_command(page, lambda item: item.get('act') == 'play' and item.get('value', {}).get('game') == 'thargon')
+        self.assertTrue(command['value']['won'])
+        self.assertIn('followed the Thargon', page.locator('.hl-mini-result').inner_text())
+        page.locator('.hl-mini-result [data-hl-mini-close]').click()
+        page.locator('[data-hl-game="thargon"]').click()
+        identity = int(page.locator('.hl-shell.revealed').get_attribute('data-hl-shell'))
+        page.wait_for_selector('[data-hl-shell]:not([disabled])', timeout=7000)
+        page.locator(f'[data-hl-shell="{(identity + 1) % 3}"]').click()
+        loss = self.wait_for_command(page, lambda item: item.get('act') == 'play' and item.get('value', {}).get('game') == 'thargon' and not item.get('value', {}).get('won'))
+        self.assertFalse(loss['value']['won'])
+        self.assertIn('slipped past', page.locator('.hl-mini-result').inner_text())
+
 
 if __name__ == "__main__":
     unittest.main()

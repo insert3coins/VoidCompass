@@ -10,6 +10,17 @@
     larva: {light: "#2fd69a", dark: "#06261c", line: "#6bffc8", glow: "#9dffd2", eye: "#eafff6", iris: "#0e6b4b", vein: "#b6ffe0"},
     bot: {light: "#e9edf2", dark: "#4a5361", line: "#ffb35c", glow: "#ffd28a", eye: "#7fe8ff", iris: "#0c3a4a", vein: "#ffcf8f"},
     sample: {light: "#c7f06a", dark: "#203a10", line: "#dcff8a", glow: "#f0ffb0", eye: "#fffbe6", iris: "#3b4a12", vein: "#f6ffc8"},
+    thargoid: {light: "#8a9a43", dark: "#151d12", line: "#bbd967", glow: "#d8ff79", eye: "#f4ffd5", iris: "#5f8a22", vein: "#e3e981"},
+  };
+  // The foundling's changing light follows the three silhouettes in its
+  // field guide: Scout, Thargon and Orthrus-inspired, respectively.
+  const THARGOID_STAGES = {
+    juvenile: {light: "#554052", dark: "#140b19", line: "#d96272", glow: "#ff6455", eye: "#ffd5cc", iris: "#7c1d30", vein: "#c78bde"},
+    adult: {light: "#32736c", dark: "#071a20", line: "#4adcc9", glow: "#a8fff0", eye: "#e0fff9", iris: "#137d77", vein: "#8df7e4"},
+  };
+  const SAMPLE_TONES = {
+    tubus: {light: "#6d98c1", dark: "#172b41", line: "#9fd9ef", glow: "#c5f5ff", eye: "#e5fbff", iris: "#243f70", vein: "#a9d7e9"},
+    fungoida: {light: "#ae6482", dark: "#33162d", line: "#efad83", glow: "#ffdcb0", eye: "#fff3dc", iris: "#713855", vein: "#e1a8b5"},
   };
   // Adult forms change the colours a little.
   const FORM_TONES = {
@@ -21,6 +32,10 @@
     "sample:explored": {light: "#ff8adf", dark: "#3a0f30", line: "#ffb8ec", glow: "#ffe0f6"}, "sample:scarred": {light: "#9a6a3a", dark: "#2a1608", line: "#ff9a4a"},
     "sample:neglected": {light: "#a89a64", dark: "#2a2616", line: "#bdb08a", glow: "#d8cfa8"},
     "sample:rare": {light: "#6affe6", dark: "#06322c", line: "#b0fff4", glow: "#e0fffb"},
+    "thargoid:explored": {line: "#7ceee0", glow: "#c5fff5"},
+    "thargoid:scarred": {light: "#446966", line: "#a8d7c8"},
+    "thargoid:neglected": {light: "#657771", dark: "#182522", line: "#8baba0", glow: "#c5e5d8"},
+    "thargoid:rare": {line: "#a1fff1", glow: "#e0fffa", vein: "#c9fff7"},
   };
 
   function mix(a, b, k) {
@@ -30,7 +45,10 @@
   }
 
   function tones(pet) {
-    const base = {...(TONES[pet.species] || TONES.larva), ...(FORM_TONES[`${pet.species}:${pet.form}`] || {})};
+    const base = {...(TONES[pet.species] || TONES.larva),
+      ...(pet.species === "thargoid" ? THARGOID_STAGES[pet.stage] || {} : {}),
+      ...(pet.species === "sample" ? SAMPLE_TONES[pet.kind || pet.sample_kind] || {} : {}),
+      ...(FORM_TONES[`${pet.species}:${pet.form}`] || {})};
     if (pet.dormant) return {...base, light: "#7d93a8", dark: "#141c28", line: "#a9c3dc", glow: "#d6e8f8", vein: "#e4f0ff"};
     if (pet.sick) return {...base, light: mix(base.light, "#a9b84a", .45), glow: "#d6e27a"};
     return base;
@@ -165,7 +183,7 @@
     glowStroke(ctx, tone.line, 1.6, 6);
     ctx.save();
     ctx.clip();
-    if (pet.species === "larva") {
+    if (pet.species === "larva" || pet.species === "thargoid") {
       ctx.strokeStyle = tone.vein;
       ctx.globalAlpha = .55 + Math.sin(t * 2.4) * .25;
       ctx.lineWidth = 1.3;
@@ -203,6 +221,91 @@
   }
 
   // ---- The species. ----
+  // A canvas fallback for the foundling. Each animated, curling plate is
+  // drawn separately around its sensor, so an unavailable WebGL renderer
+  // still leaves a recognisable Scout / Thargon / Orthrus-like companion.
+  function thargoid(ctx, pet, t, tone, look) {
+    const adult = pet.stage === "adult", juvenile = pet.stage === "juvenile";
+    const still = pet.asleep || pet.dormant || pet.eyesShut;
+    const petals = adult ? 8 : juvenile ? 10 : 8;
+    const length = adult ? 38 : juvenile ? 34 : 29;
+    const breadth = adult ? 7.7 : juvenile ? 7 : 10;
+    ctx.save();
+    // The petals flex rather than only scaling the complete silhouette.
+    for (let i = 0; i < petals; i += 1) {
+      const adultAngles = [-1.9, -2.35, -2.85, 2.85, 2.35, 1.9, -.52, .52];
+      const angle = adult ? adultAngles[i] : i * Math.PI * 2 / petals - Math.PI / 2;
+      const curl = still ? 0 : Math.sin(t * (adult ? 1.4 : 2.2) + i * 1.55) * (adult ? .10 : .065);
+      ctx.save();
+      ctx.rotate(angle + curl);
+      if (adult && i >= 6) ctx.scale(.78, .68);
+      ctx.translate(0, -9);
+      ctx.beginPath();
+      ctx.moveTo(-breadth * .52, 6);
+      ctx.bezierCurveTo(-breadth * 1.18, -length * .14, -breadth * 1.35, -length * .48, -breadth * .75, -length * .68);
+      ctx.bezierCurveTo(-breadth * .15, -length * .82, adult ? breadth * .55 : breadth * .18, -length * .98,
+        adult ? breadth * .7 : 0, -length);
+      ctx.bezierCurveTo(breadth * .8, -length * .70, breadth * 1.2, -length * .40, breadth * .55, 3);
+      ctx.closePath();
+      const shell = ctx.createLinearGradient(-breadth, 0, breadth, -length);
+      shell.addColorStop(0, tone.dark);
+      shell.addColorStop(.43, tone.light);
+      shell.addColorStop(.72, mix(tone.dark, tone.light, .35));
+      shell.addColorStop(1, tone.dark);
+      ctx.fillStyle = shell;
+      ctx.fill();
+      ctx.strokeStyle = mix(tone.light, tone.line, .35);
+      ctx.lineWidth = .9;
+      ctx.stroke();
+      ctx.globalAlpha = .78;
+      ctx.strokeStyle = tone.line;
+      ctx.lineWidth = adult ? 1.5 : 1.1;
+      ctx.shadowColor = tone.glow;
+      ctx.shadowBlur = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, 1);
+      ctx.bezierCurveTo(-breadth * .22, -length * .25, -breadth * .15, -length * .52, breadth * .22, -length * .83);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = .55;
+      ctx.strokeStyle = tone.vein;
+      ctx.lineWidth = .6;
+      for (let rib = 1; rib <= 3; rib += 1) {
+        const y = -length * (.16 + rib * .15);
+        ctx.beginPath();
+        ctx.moveTo(-breadth * .65, y + 2);
+        ctx.quadraticCurveTo(0, y - 2, breadth * .57, y + 1);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    // Small dark plates protect a single glowing sensor which follows you.
+    ctx.beginPath();
+    ctx.arc(0, 0, adult ? 14 : 13, 0, Math.PI * 2);
+    ctx.fillStyle = bodyFill(ctx, tone, 15);
+    ctx.fill();
+    glowStroke(ctx, tone.line, 1.2, 4);
+    const px = (Number(look?.[0]) || 0) * 2.3, py = (Number(look?.[1]) || 0) * 2.3;
+    const sensor = ctx.createRadialGradient(px, py, 0, px, py, 8);
+    sensor.addColorStop(0, still ? tone.dark : "#ffffff");
+    sensor.addColorStop(.24, tone.glow);
+    sensor.addColorStop(.65, tone.iris);
+    sensor.addColorStop(1, tone.dark);
+    ctx.globalAlpha = still ? .45 : .92;
+    ctx.fillStyle = sensor;
+    ctx.shadowColor = tone.glow;
+    ctx.shadowBlur = still ? 2 : 11 + Math.sin(t * 2) * 2;
+    ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < 5; i += 1) {
+      const angle = i * Math.PI * 2 / 5;
+      ctx.beginPath(); ctx.arc(Math.cos(angle) * 10.5, Math.sin(angle) * 10.5, 1.3, 0, Math.PI * 2);
+      ctx.fillStyle = tone.line; ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function larva(ctx, pet, t, tone, look) {
     const grown = pet.stage === "adult" ? 1.2 : pet.stage === "juvenile" ? 1.03 : .84;
     const still = pet.asleep || pet.dormant;
@@ -598,6 +701,7 @@
     ctx.scale(sx, sy);
     ctx.translate(0, -40);
     if (pet.stage === "egg") egg(ctx, pet, t, tone);
+    else if (pet.species === "thargoid") thargoid(ctx, pet, t, tone, look);
     else if (pet.species === "bot") bot(ctx, pet, t, tone, look);
     else if (pet.species === "sample") sample(ctx, pet, t, tone, look);
     else larva(ctx, pet, t, tone, look);

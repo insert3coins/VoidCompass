@@ -372,6 +372,10 @@ class HtmlMusicMixin:
             "scene": _text(payload.get("scene"), 12),
         }
         previous = getattr(self, "_music_status", None) or {}
+        if not status["playing"]:
+            self._hatchling_music_started_at = None
+        elif not previous.get("playing") or not getattr(self, "_hatchling_music_started_at", None):
+            self._hatchling_music_started_at = time.time()
         self._music_status = status
         self._music_remember(status)
         self._music_update_overlay()

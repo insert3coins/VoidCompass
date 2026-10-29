@@ -45,13 +45,23 @@ class DashboardWatcherVoiceMixin:
         self._watcher_voice_sync()
 
     def _watcher_voice_say(self, words, key=None, feel=None):
-        if getattr(self, "_closing", False) or not self._watcher_voice_on() or self._watcher_voice_hushed():
+        if (getattr(self, "_closing", False) or self._watcher_voice_boot_held()
+                or not self._watcher_voice_on() or self._watcher_voice_hushed()):
             return False
         said = self._watcher_speaker().say(words, key, feel=feel)
         if said and hasattr(self, "_api_publish"):
             self._voice_from = "api" if str(key or "").startswith("api-") else "watcher"
             self._api_publish("voice", {"state": "started", "text": words, "from": self._voice_from})
         return said
+
+    def _watcher_voice_boot_held(self):
+        root = getattr(self, "root", None)
+        return bool(
+            getattr(self, "_startup_presentation_held", False)
+            or getattr(root, "_voidcompass_startup_presentation_held", False)
+            or getattr(root, "_voidcompass_startup_splash", None) is not None
+            or getattr(self, "_startup_overlay_handoff_pending", None) is not None
+        )
 
     # -- hush (5.6.1): another app's voice asks it to keep quiet ------------------
     def _watcher_voice_hushed(self):
@@ -94,7 +104,7 @@ class DashboardWatcherVoiceMixin:
         on = self._watcher_voice_on()
         hud = getattr(self, "heartbeat_hud", None)
         if hud is not None and hasattr(hud, "set_voice_active"):
-            hud.set_voice_active(on)
+            hud.set_voice_active(on and not self._watcher_voice_boot_held())
         speaker = getattr(self, "_watcher_voice", None)
         if on:
             self._watcher_speaker().warm()
@@ -247,7 +257,8 @@ class DashboardWatcherVoiceMixin:
             self._watcher_voice_sync()
             return done
         if operation == "voice_test":
-            if not voice_assets.installed():
+            if (not voice_assets.installed() or self._watcher_voice_boot_held()
+                    or getattr(self, "_closing", False)):
                 return False
             return self._watcher_speaker().say(TEST_LINE, "test")
         if operation == "voice_stop":

@@ -23,7 +23,7 @@ SHIP_ART = ROOT / "assets" / "images" / "ships"
 
 LIT_PIXELS = """(id) => {
   const canvas = document.getElementById(id);
-  const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+  const data = navigationScene.pixels(canvas.id);
   let lit = 0;
   for (let index = 3; index < data.length; index += 4) if (data[index] > 12) lit += 1;
   return lit / (canvas.width * canvas.height);
@@ -49,15 +49,24 @@ class NavigationSceneBrowserTests(unittest.TestCase):
         cls.browser.close()
         cls.playwright.stop()
 
-    def open(self, width=500, height=326):
+    def open(self, width=500, height=350, *, disable_webgl=False, missing_module=False):
         page = self.browser.new_page(viewport={"width": width, "height": height})
         self.addCleanup(page.close)
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
         self.addCleanup(lambda: self.assertEqual(errors, []))
+        if disable_webgl:
+            page.add_init_script("""(() => {
+              const get=HTMLCanvasElement.prototype.getContext;
+              HTMLCanvasElement.prototype.getContext=function(kind,...args) {
+                return /^webgl/i.test(kind) ? null : get.call(this,kind,...args);
+              };
+            })();""")
 
         def serve(route, _request=None):
             path = unquote(urlsplit(route.request.url).path)
+            if missing_module and path.endswith('/scene-three.js'):
+                return route.fulfill(status=404, body='')
             if path.startswith("/ship-art/"):
                 target = SHIP_ART / path[len("/ship-art/"):]
             else:
@@ -69,7 +78,56 @@ class NavigationSceneBrowserTests(unittest.TestCase):
 
         page.route("http://scene.test/**", serve)
         page.goto("http://scene.test/navigation_hud/index.html")
+        if missing_module:
+            page.wait_for_selector('.scene-render-error')
+        else:
+            page.wait_for_function("Boolean(window.navigationScene)")
         return page
+
+    def test_native_three_is_the_only_scene_renderer(self):
+        page = self.open()
+        self.render(page, hud_state('STATION VICINITY'))
+        self.assertEqual(page.evaluate('navigationScene.renderer'), 'three')
+        self.assertEqual(page.evaluate("['deck-canvas','bay-canvas'].map(id=>document.getElementById(id).getContext('2d')===null)"), [True, True])
+
+    def test_three_modules_load_through_the_real_overlay_server_policy(self):
+        from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
+        server = HtmlOverlayServer(WEB)
+        self.addCleanup(server.stop)
+        page = self.browser.new_page(viewport={'width': 500, 'height': 350})
+        self.addCleanup(page.close)
+        page.goto(f'http://127.0.0.1:{server.port}/navigation_hud/index.html')
+        page.wait_for_selector('#deck-canvas[data-renderer="three"]')
+        self.render(page, hud_state('CARRIER VICINITY'))
+        self.assertEqual(page.evaluate('navigationScene.renderer'), 'three')
+        self.assertGreater(page.evaluate(LIT_PIXELS, 'deck-canvas'), .01)
+
+    def test_a_restored_webgl_context_resumes_the_live_scene(self):
+        page = self.open()
+        self.render(page, hud_state('SUPERCRUISE'))
+        available = page.evaluate("""() => {
+          window.lostNavContext = navigationScene.surfaces[0].renderer.getContext().getExtension('WEBGL_lose_context');
+          return Boolean(lostNavContext);
+        }""")
+        self.assertTrue(available)
+        page.evaluate('lostNavContext.loseContext()')
+        page.wait_for_function("navigationScene.renderer === 'unavailable'")
+        page.wait_for_function('!navigationScene.running')
+        page.evaluate('lostNavContext.restoreContext()')
+        page.wait_for_function("navigationScene.renderer === 'three' && navigationScene.running")
+        page.wait_for_function("document.querySelector('.scene-render-error').hidden")
+        self.assertGreater(page.evaluate(LIT_PIXELS, 'deck-canvas'), .01)
+
+    def test_webgl_and_module_failures_are_explicit_and_keep_the_journal_plate_live(self):
+        for option in ('disable_webgl', 'missing_module'):
+            with self.subTest(option=option):
+                page = self.open(**{option: True})
+                self.render(page, hud_state('SUPERCRUISE'))
+                self.assertIn('SUPERCRUISE', page.locator('#state-label').inner_text())
+                self.assertEqual(page.locator('.scene-render-error').inner_text(), '3D SCENE UNAVAILABLE')
+                if option == 'disable_webgl':
+                    self.assertEqual(page.evaluate('navigationScene.renderer'), 'unavailable')
+                    self.assertFalse(page.evaluate('navigationScene.running'))
 
     def render(self, page, state, **options):
         options.setdefault("reduced", False)
@@ -89,8 +147,7 @@ class NavigationSceneBrowserTests(unittest.TestCase):
           scene.state.age = age;
           scene.draw(performance.now());
           const canvas = document.getElementById('deck-canvas');
-          const data = canvas.getContext('2d').getImageData(
-            0, 0, canvas.width, canvas.height).data;
+          const data = navigationScene.pixels(canvas.id);
           let lit = 0;
           for (let index = 3; index < data.length; index += 4) if (data[index] > 12) lit += 1;
           const lane = document.createElement('canvas');
@@ -200,6 +257,67 @@ class NavigationSceneBrowserTests(unittest.TestCase):
             targets[star] = self.controlled_frame(page, 1.37)["deck"]
         self.assertNotEqual(targets["H"], targets["N"])
 
+    def test_reference_vehicles_have_their_own_wheels_and_articulated_geometry(self):
+        page = self.open()
+        expected = {'scarab': 6, 'scorpion': 4, 'rhino': 8, 'nomad': 0}
+        models = page.evaluate("""() => Object.fromEntries(['scarab','scorpion','rhino','nomad'].map(type=>{
+          const m=NavigationModels.vehicle(type);
+          return [type,{wheels:m.wheels.length,hasTyres:m.f.some(f=>f.k==='tyre'),
+            finite:m.v.every(v=>v.every(Number.isFinite)),body:m.f.some(f=>f.wheel==null),
+            wheelFaces:m.wheels.every((_,i)=>m.f.some(f=>f.wheel===i))}];
+        }))""")
+        for type, count in expected.items():
+            with self.subTest(vehicle=type):
+                self.assertEqual(models[type]['wheels'], count)
+                self.assertEqual(models[type]['hasTyres'], bool(count))
+                self.assertTrue(models[type]['finite'] and models[type]['body'] and models[type]['wheelFaces'])
+                self.render(page, hud_state(type.upper()))
+                self.controlled_frame(page, 1)
+                inspect = """() => {
+                  const surface=navigationScene.surfaces.find(s=>s.role==='deck');
+                  const stage=surface.get(navigationScene.state,navigationScene.palette);
+                  const rover=stage.root.children.find(n=>n.userData.modelCentre);
+                  return rover.userData.nativeWheels.map(n=>({angle:n.rotation.z,
+                    vertices:n.children[0].geometry.attributes.position.count}));
+                }"""
+                first = page.evaluate(inspect)
+                self.assertEqual(len(first), count)
+                self.controlled_frame(page, 2)
+                second = page.evaluate(inspect)
+                for a,b in zip(first,second):
+                    self.assertGreater(a['vertices'],100)
+                    self.assertNotEqual(a['angle'],b['angle'])
+        state = hud_state('HANDBRAKE')
+        state['vehicle']['surface'] = 'Rhino'
+        self.render(page,state)
+        self.controlled_frame(page,1)
+        first=page.evaluate(inspect)
+        self.controlled_frame(page,2)
+        self.assertEqual(page.evaluate(inspect),first)
+
+    def test_on_foot_suit_joints_and_hazard_surroundings_follow_the_state(self):
+        page=self.open()
+        self.render(page,hud_state('ONFOOT',foot_place='planet'))
+        self.controlled_frame(page,1)
+        pose="""() => {
+          const surface=navigationScene.surfaces.find(s=>s.role==='deck');
+          const stage=surface.get(navigationScene.state,navigationScene.palette);
+          const person=stage.root.children.find(n=>n.userData.role==='commander');
+          return [person.userData.joints.head.rotation.y,...person.userData.joints.legs.map(n=>n.leg.rotation.x)];
+        }"""
+        first=page.evaluate(pose)
+        self.controlled_frame(page,2)
+        self.assertNotEqual(page.evaluate(pose),first)
+        identities=[]
+        for place in ('planet','concourse','hangar','carrier'):
+            self.render(page,hud_state('SUIT OXYGEN LOW',foot_place=place))
+            self.controlled_frame(page,1.4)
+            identities.append(page.evaluate('navigationScene.state.identity'))
+            self.assertEqual(page.evaluate('navigationScene.renderer'),'three')
+            self.assertGreater(page.evaluate(LIT_PIXELS,'deck-canvas'),.002)
+            self.assertTrue(page.evaluate("NavigationModels.commander().v.every(v=>v.every(Number.isFinite))"))
+        self.assertEqual(len(set(identities)),4)
+
     def test_every_state_projects_into_the_deck_and_nothing_behind_the_ship(self):
         page = self.open()
         for label in LABELS:
@@ -215,7 +333,7 @@ class NavigationSceneBrowserTests(unittest.TestCase):
         page = self.open()
         opening_frames = {}
         reduced_stills = {}
-        for label, key in (("FSD CHARGE", "fsd_charge"), ("HYPER CHARGE", "hyper_charge")):
+        for label, key in (("FSD CHARGE", "fsd_charge"), ("HYPER CHARGE", "hyper_charge"), ("FSD COOLDOWN", "fsd_cooldown")):
             with self.subTest(label=label):
                 self.render(page, hud_state(label))
                 frames = page.evaluate("""() => {
@@ -227,8 +345,7 @@ class NavigationSceneBrowserTests(unittest.TestCase):
                     scene.state.age = age;
                     scene.state.p = phase;
                     scene.draw(performance.now());
-                    const data = canvas.getContext('2d').getImageData(
-                      0, 0, canvas.width, canvas.height).data;
+                    const data = navigationScene.pixels(canvas.id);
                     let lit = 0;
                     for (let i = 3; i < data.length; i += 4) if (data[i] > 12) lit += 1;
                     return {image: canvas.toDataURL(), coverage: lit / (canvas.width * canvas.height)};
@@ -260,6 +377,7 @@ class NavigationSceneBrowserTests(unittest.TestCase):
                 self.assertEqual(page.evaluate("document.getElementById('deck-canvas').toDataURL()"), still)
                 reduced_stills[key] = still
 
+        self.assertNotEqual(opening_frames["fsd_cooldown"], opening_frames["fsd_charge"])
         self.assertNotEqual(opening_frames["fsd_charge"], opening_frames["hyper_charge"])
         self.assertNotEqual(reduced_stills["fsd_charge"], reduced_stills["hyper_charge"])
 
@@ -404,7 +522,7 @@ class NavigationSceneBrowserTests(unittest.TestCase):
         self.assertNotEqual(colours[3], colours[2], "while the notice stays quiet grey")
 
     def test_canvases_stay_sharp_at_larger_text(self):
-        page = self.open(750, 489)
+        page = self.open(750, 525)
         self.render(page, hud_state("SUPERCRUISE"), scale=1.5)
         sizes = page.evaluate("""() => ['deck-canvas', 'bay-canvas'].map((id) => {
           const canvas = document.getElementById(id);
@@ -414,7 +532,7 @@ class NavigationSceneBrowserTests(unittest.TestCase):
             self.assertAlmostEqual(backing, css * 1.5 * ratio, delta=1)
         # Back to 100%: the app shrinks the window with the text (the HUD
         # fits whatever window it has, 5.5.2.7).
-        page.set_viewport_size({"width": 500, "height": 326})
+        page.set_viewport_size({"width": 500, "height": 350})
         self.render(page, hud_state("SUPERCRUISE"), scale=1)
         backing, css, ratio = page.evaluate("""() => {
           const canvas = document.getElementById('deck-canvas');
@@ -424,7 +542,7 @@ class NavigationSceneBrowserTests(unittest.TestCase):
 
     LIT = """() => {
       const canvas = document.getElementById('deck-canvas');
-      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      const data = navigationScene.pixels(canvas.id);
       let lit = 0;
       for (let index = 3; index < data.length; index += 4) if (data[index] > 12) lit += 1;
       return lit / (canvas.width * canvas.height);
@@ -466,7 +584,7 @@ class NavigationSceneBrowserTests(unittest.TestCase):
         self.assertTrue(page.evaluate("Boolean(navigationScene.stillTimer)"), "a backstop repaint is due")
         page.evaluate("""() => {
           const canvas = document.getElementById('deck-canvas');
-          canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+          navigationScene.surfaces.find(s => s.canvas === canvas).renderer.clear();
           canvas.dispatchEvent(new Event('contextrestored'));
         }""")
         self.assertGreater(page.evaluate(self.LIT), .002, "drawn again at once")
@@ -497,22 +615,37 @@ class NavigationSceneBrowserTests(unittest.TestCase):
     def test_scenes_are_cheap_to_draw(self):
         page = self.open()
         worst = []
-        for label in ("ASTEROID FIELD", "HYPERSPACE", "SCO OVERCHARGE", "FSD CHARGE",
+        labels = ("ASTEROID FIELD", "HYPERSPACE", "SCO OVERCHARGE", "FSD CHARGE",
                       "HYPER CHARGE", "SETTLEMENT", "FSS", "SCARAB", "SCORPION",
                       "RHINO", "NOMAD", "STATION", "STATION VICINITY",
                       "CARRIER VICINITY", "CARRIER PREPARING", "CARRIER LOCKDOWN",
-                      "CARRIER TRANSIT", "CARRIER ARRIVAL", "CARRIER DECK"):
-            self.render(page, hud_state(label, shields_known=True, shields_up=False, fuel_scooping=True))
+                      "CARRIER TRANSIT", "CARRIER ARRIVAL", "CARRIER DECK")
+        cases=[(label,'planet') for label in labels]+[('ONFOOT',place) for place in ('planet','concourse','hangar','carrier')]+[('SUIT OXYGEN LOW','planet')]
+        for label, place in cases:
+            self.render(page, hud_state(label, foot_place=place, shields_known=True, shields_up=False, fuel_scooping=True))
             page.wait_for_timeout(600)
-            worst.append(page.evaluate("""() => {
-              const scene = navigationScene, start = performance.now();
-              let now = start;
-              for (let index = 0; index < 30; index += 1) { now += 33.3; scene.advance(now); scene.draw(now); }
-              return (performance.now() - start) / 30;
-            }"""))
-        # A 30 fps overlay beside the game: the whole frame stays well inside
-        # a couple of milliseconds even in software-rendered Chromium.
-        self.assertLess(max(worst), 4.0, worst)
+            cost=page.evaluate("""() => new Promise((resolve, reject) => {
+              const scene = navigationScene, draw = scene.draw, samples = [];
+              const timeout = setTimeout(() => {
+                scene.draw = draw;
+                reject(Error('Scene did not produce 30 scheduled frames'));
+              }, 5000);
+              scene.draw = function(now) {
+                const start = performance.now();
+                draw.call(this, now);
+                samples.push(performance.now() - start);
+                if (samples.length === 30) {
+                  scene.draw = draw;
+                  clearTimeout(timeout);
+                  samples.sort((a,b) => a-b);
+                  resolve(samples[Math.ceil(samples.length * .9) - 1]);
+                }
+              };
+            })""")
+            worst.append((f'{label}/{place}',cost))
+        # Sample its actual 30 fps cadence so the driver can drain between
+        # frames. The 90th percentile ignores isolated GC/scheduling stalls.
+        self.assertLess(max(cost for _,cost in worst), 4.0, worst)
 
 
 if __name__ == "__main__":

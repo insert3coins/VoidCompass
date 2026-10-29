@@ -147,128 +147,185 @@
   // Every reply is read to its end: an unread one keeps native buffers until
   // the garbage collector happens by, and overlays acknowledge many times an
   // hour (a leak that slowly grew the command deck's renderer the same way).
-  const drain = (response) => response.arrayBuffer().catch(() => null);
-
+  // The public name is retained for existing pages. Native overlays receive
+  // atomic envelopes from the shared host; HTTP also bootstraps standalone
+  // pages and remains available if the host's message channel is interrupted.
   function startPolling(options) {
-    const token = String(options.token || "");
     const overlay = String(options.overlay || "");
-    const suffix = `token=${encodeURIComponent(token)}&overlay=${encodeURIComponent(overlay)}`;
-    let revision = -1;
-    let renderedRevision = -1;
-    let polling = false;
-    let ready = false;
-    let snapshot = null;
+    const suffix = `token=${encodeURIComponent(options.token || "")}&overlay=${encodeURIComponent(overlay)}`;
+    let generation = -1, layout = -1, appliedRevision = -1, appliedLayout = -1;
+    let measurement = 0, ready = false, snapshot = null, current = null;
+    let running = false, reporting = false, polling = false, stopped = false;
+    let active = null, pendingState = null, ordered = [];
+    let lastPush = -Infinity, shapeTimer = 0;
 
-    async function announceReady() {
-      if (ready || renderedRevision < 0) return;
+    async function request(path, body, extra = "") {
+      const controller = new AbortController();
+      const timeout = global.setTimeout(() => controller.abort(), 4000);
       try {
-        const response = await fetch(`/api/ready?${suffix}`, {
-          method: "POST", body: JSON.stringify({renderer: rendererName()}),
-        });
-        await drain(response);
-        ready = response.ok;
-      } catch (_) { /* A later health poll retries the handshake. */ }
+        const response = await fetch(`${path}?${suffix}${extra}`, body === undefined
+          ? {cache: "no-store", signal: controller.signal}
+          : {method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(body), signal: controller.signal});
+        // Consume every response, including errors, to release native buffers.
+        const result = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(`Overlay HTTP ${response.status}`);
+        return result;
+      } finally {
+        global.clearTimeout(timeout);
+      }
     }
 
-    async function refresh(nextRevision) {
-      const response = await fetch(`/api/snapshot?${suffix}`, {cache: "no-store"});
-      if (!response.ok) return void drain(response);
-      snapshot = await response.json();
-      options.render(snapshot);
-      // Hidden WebViews may suspend animation frames. A page must still be
-      // able to acknowledge its rendered DOM before the host will reveal it.
-      await new Promise((resolve) => {
-        let frame = 0;
-        const finish = () => {
-          global.clearTimeout(timer);
-          global.cancelAnimationFrame(frame);
-          resolve();
-        };
-        const timer = global.setTimeout(finish, 100);
-        frame = global.requestAnimationFrame(finish);
-      });
-      const rendered = {revision: nextRevision};
-      const height = typeof options.contentHeight === "function"
-        ? Number(options.contentHeight())
-        : Number(options.contentHeight);
-      if (Number.isFinite(height) && height > 0) rendered.content_height = Math.ceil(height);
-      rendered.shapes = windowShapes();
-      lastShapes = JSON.stringify(rendered.shapes);
-      try {
-        const response = await fetch(`/api/rendered?${suffix}`, {
-          method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(rendered),
-        });
-        await drain(response);
-        if (response.ok) {
-          revision = nextRevision;
-          renderedRevision = nextRevision;
-          await announceReady();
-        }
-      } catch (_) { /* A later poll retries the renderer handshake. */ }
-      recheckShapes(nextRevision);
+    async function announceReady(epoch) {
+      if (stopped || ready || epoch !== generation || appliedRevision < 0) return;
+      const reply = await request("/api/ready", {generation: epoch, renderer: rendererName()});
+      if (epoch === generation) ready = reply?.ready === true;
     }
 
-    // Shapes measured mid-animation (a card sliding in) are measured again
-    // once the animations settle, and sent if they moved.
-    let lastShapes = "";
-    let shapeTimer = 0;
-    function recheckShapes(forRevision) {
+    async function report(record) {
+      if (stopped || !record || record.generation !== generation) return;
+      let height = typeof options.contentHeight === "function" ? Number(options.contentHeight())
+        : Number(options.contentHeight || 0);
+      if (!Number.isFinite(height) || height < 0) height = 0;
+      const body = {generation: record.generation, layout_revision: record.layout_revision,
+        revision: record.revision, measurement: ++measurement, measured: true,
+        content_height: Math.ceil(height), shapes: windowShapes()};
+      const reply = await request("/api/rendered", body);
+      if (reply?.accepted && record.generation === generation) await announceReady(record.generation);
+    }
+
+    async function reportCurrent() {
+      if (stopped || running || reporting || !current) return;
+      reporting = true;
+      try { await report(current); }
+      catch (error) { options.onError?.(error); }
+      finally { reporting = false; }
+    }
+
+    function remeasure() {
       global.clearTimeout(shapeTimer);
+      const epoch = generation;
       shapeTimer = global.setTimeout(async () => {
-        const settling = (document.getAnimations?.() || []).filter((animation) =>
+        const animations = (document.getAnimations?.() || []).filter((animation) =>
           animation.playState === "running" && Number.isFinite(animation.effect?.getComputedTiming?.().endTime));
-        if (settling.length) {
-          await Promise.race([Promise.allSettled(settling.map((animation) => animation.finished)),
+        if (animations.length) {
+          await Promise.race([Promise.allSettled(animations.map((animation) => animation.finished)),
             new Promise((resolve) => global.setTimeout(resolve, 1500))]);
         }
-        const shapes = windowShapes();
-        const key = JSON.stringify(shapes);
-        if (key === lastShapes || forRevision !== renderedRevision) return;
-        lastShapes = key;
-        try {
-          await drain(await fetch(`/api/rendered?${suffix}`, {
-            method: "POST", headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({revision: forRevision, shapes}),
-          }));
-        } catch (_) { /* The next render reports them again. */ }
+        if (epoch === generation && !stopped) reportCurrent();
       }, 120);
     }
-    global.addEventListener("resize", () => recheckShapes(renderedRevision));
 
-    async function poll() {
-      if (polling) return;
+    async function pump() {
+      if (running || stopped) return;
+      running = true;
+      let failed = false;
+      try {
+        while (!stopped && (ordered.length || pendingState)) {
+          const record = ordered.length ? ordered.shift() : pendingState;
+          if (record === pendingState) pendingState = null;
+          if (record.generation !== generation || record.revision < appliedRevision) continue;
+          active = record;
+          // Intermediate ordinary states are replaceable. Every retained
+          // notification/companion event is passed through render in order.
+          if (pendingState && pendingState.revision <= record.revision) pendingState = null;
+          snapshot = record.snapshot;
+          if (!record.applied) {
+            await options.render(snapshot);
+            record.applied = true;
+          }
+          if (record.generation !== generation) continue;
+          appliedRevision = record.revision;
+          appliedLayout = record.layout_revision;
+          current = record;
+          // DOM measurement forces layout without waiting for an animation
+          // frame, which a hidden WebView may never run.
+          await report(record);
+          remeasure();
+        }
+      } catch (error) {
+        failed = true;
+        if (active?.generation === generation) {
+          if (active.ordered) ordered.unshift(active);
+          else if (!pendingState || active.revision > pendingState.revision) pendingState = active;
+        }
+        options.onError?.(error);
+      } finally {
+        active = null;
+        running = false;
+        if (!failed && !stopped && (ordered.length || pendingState)) pump();
+      }
+    }
+
+    function receive(packet, pushed = false) {
+      if (stopped || packet?.type !== "voidcompass.overlay" || packet.overlay !== overlay) return;
+      const epoch = Number(packet.generation), nextLayout = Number(packet.layout_revision);
+      if (!Number.isInteger(epoch) || !Number.isInteger(nextLayout) || epoch < generation
+          || (epoch === generation && nextLayout < layout)) return;
+      if (pushed) lastPush = Date.now();
+      if (epoch !== generation) {
+        generation = epoch; layout = -1; appliedRevision = -1; appliedLayout = -1;
+        measurement = 0; ready = false; ordered = []; pendingState = null; current = null;
+      }
+      layout = nextLayout;
+      global.VoidCompassFrameCap?.set(packet.health?.frame_rate);
+      global.VoidCompassLayout?.apply(packet.health || {});
+      options.onContact?.();
+      for (const item of packet.deliveries || []) {
+        const revision = Number(item.revision);
+        if (!Number.isInteger(revision) || revision < appliedRevision
+            || (revision === appliedRevision && nextLayout <= appliedLayout)) continue;
+        const record = {...item, revision, generation: epoch, layout_revision: nextLayout};
+        if (item.ordered && revision > appliedRevision) {
+          if (active?.generation === epoch && active.revision === revision) {
+            if (nextLayout > active.layout_revision) pendingState = {...record, ordered: false};
+            continue;
+          }
+          const queued = ordered.find((queued) => queued.revision === revision);
+          if (!queued) ordered.push(record);
+          else if (nextLayout > queued.layout_revision) queued.layout_revision = nextLayout;
+        } else if (!pendingState || revision >= pendingState.revision) {
+          pendingState = record;
+        }
+      }
+      ordered.sort((first, second) => first.revision - second.revision);
+      if (ordered.length || pendingState) pump();
+      else reportCurrent(); // real browser heartbeat, including hidden pages
+    }
+
+    async function poll(force = false) {
+      if (stopped || polling || (!force && Date.now() - lastPush < 3000)) return;
       polling = true;
       try {
-        const response = await fetch(`/api/health?${suffix}`, {cache: "no-store"});
-        if (!response.ok) await drain(response);
-        if (response.ok) {
-          const health = await response.json();
-          global.VoidCompassFrameCap?.set(health.frame_rate);
-          global.VoidCompassLayout?.apply(health);
-          const nextRevision = Number(health.revision);
-          if (Number.isFinite(nextRevision) && nextRevision !== revision) {
-            await refresh(nextRevision);
-          } else {
-            await announceReady();
-          }
-        }
-      } catch (_) { /* Overlay server startup/recovery is transient. */ }
+        // Data and revision are read under the same server lock.
+        const packet = await request("/api/snapshot", undefined, "&envelope=1");
+        receive(packet);
+      } catch (error) { options.onError?.(error); }
       finally { polling = false; }
     }
 
-    function rerender() {
-      if (snapshot) options.render(snapshot);
-    }
-
+    const nativeMessage = (event) => receive(event.data, true);
+    const directMessage = (packet) => receive(packet, true);
+    global.chrome?.webview?.addEventListener("message", nativeMessage);
+    global.__voidcompassDeliver = directMessage;
+    global.__voidcompassPoll = () => poll(true);
+    global.addEventListener("resize", remeasure);
+    document.fonts?.ready.then(() => { if (!stopped) remeasure(); });
     poll();
-    // The host calls this to fetch new data at once while the overlay is
-    // hidden: a hidden WebView2's timers are throttled (down to about once a
-    // minute), which left a newly shown overlay drawing old data (5.5.2.7).
-    global.__voidcompassPoll = poll;
     const timer = global.setInterval(poll, Math.max(100, Number(options.interval) || 200));
-    return {poll, refresh, rerender, stop: () => global.clearInterval(timer)};
+    function stop() {
+      stopped = true;
+      ordered = []; pendingState = null;
+      global.clearInterval(timer); global.clearTimeout(shapeTimer);
+      global.removeEventListener("resize", remeasure);
+      global.chrome?.webview?.removeEventListener("message", nativeMessage);
+      if (global.__voidcompassDeliver === directMessage) delete global.__voidcompassDeliver;
+    }
+    global.addEventListener("pagehide", stop, {once: true});
+    return {poll: () => poll(true), refresh: () => poll(true),
+      rerender: () => { if (snapshot) { options.render(snapshot); remeasure(); } }, stop};
   }
+
 
   // Fit a page to the window it really got (5.5.3.9). The app sizes an
   // overlay window as its design size x the text size x the monitor's

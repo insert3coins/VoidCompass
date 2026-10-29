@@ -53,6 +53,7 @@ def run():
         }""")
         page.emulate_media(reduced_motion="no-preference")
         page.goto("http://overlay.test/navigation_hud/index.html")
+        page.wait_for_function("Boolean(window.navigationScene)")
         page.evaluate("""() => {
           for (const count of [0, 1, 5, 10, 100, 150, 1000, 5]) {
             const hops = Array.from({length: count}, (_, index) => ({
@@ -126,7 +127,7 @@ def run():
           renderRoute({active: true, source: 'waypoints', hops: [{name: 'Unknown', next: true}]}, 'Alpha');
           if (!dom['route-star-orb'].classList.contains('star-unknown')) throw Error('Unknown destination displayed as a star');
         }""")
-        for layout, width, height in [("standard", 500, 326)]:
+        for layout, width, height in [("standard", 500, 350)]:
             page.set_viewport_size({"width": width, "height": height})
             page.evaluate("""layout => {
               render({schema: 1, layout, effects: {reduced_motion: true},

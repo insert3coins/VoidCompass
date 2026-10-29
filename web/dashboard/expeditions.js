@@ -217,7 +217,7 @@ function routeView(row, data, esc, ui) {
     <input name="system" maxlength="120" placeholder="Add a system" value="${esc(field("add_leg", "system"))}" required>
     <select name="kind">${options(KINDS, field("add_leg", "kind", "stop"))}</select><button type="submit">ADD LEG</button></form>`;
   const tools = `<div class="ex-actions">${button("FLY THE NEXT LEG", "use_route", {"expedition-id": row.id}, esc, "primary")}${button("FIND WHERE THEY ARE", "locate", {"expedition-id": row.id}, esc)}</div>
-    <p class="ex-dim">PLOT asks Spansh for a neutron route at your jump range${data.jump_range ? ` (${n(data.jump_range).toFixed(1)} ly)` : ""}; a carrier leg plots a carrier route. FLY IT makes the leg your waypoint route, which the HUD, the minimap and COPY NEXT follow.</p>`;
+    <p class="ex-dim">PLOT asks Spansh for a neutron route at your ship's maximum jump range${data.jump_range ? ` (${n(data.jump_range).toFixed(1)} ly)` : " (waiting for a ship loadout)"}; a carrier leg plots a carrier route. FLY IT follows the plotted route, or sends the remaining stops directly if you haven't plotted. Planet stops are complete when you land; a marked site also requires you to be nearby.</p>`;
   const importer = `<form class="ex-form" data-ex-form="import" data-expedition-id="${esc(row.id)}">
     <label><span>IMPORT A COMMUNITY EXPEDITION</span><textarea name="text" rows="4" placeholder="One system per line, a CSV with a System column (and x, y, z if it has them), or a Spansh results link">${esc(field("import", "text"))}</textarea></label>
     <div class="ex-actions"><button type="submit">IMPORT</button><button type="button" data-ex-file-open="import">LOAD A FILE…</button>

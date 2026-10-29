@@ -351,6 +351,75 @@ class SettingsPageBrowserTests(unittest.TestCase):
         self.assertIn("9 DISPATCHES", self.page.inner_text('[data-settings-section="galnet"]'))
         self.assertEqual(self.visible_panels(), ["galnet"], "the section survives a redraw")
 
+    def test_every_section_and_the_workshop_fit_larger_text_and_smaller_windows(self):
+        settings = json.loads(json.dumps(SETTINGS))
+        settings["theme_editor"]["keys"] = list(themes.THEME_KEYS)
+        settings["themes"] = [{"name": name, "swatch": themes.resolve_theme(name, {})[1]}
+                              for name in themes.BUILTIN_THEMES]
+        settings["paths"]["journal"]["latest"] = "Journal.2026-10-29T123456.01.log"
+        self.page.evaluate("data => window.__settings.publish(data)", settings)
+        sections = ["journal", "appearance", "flight", "hotkeys", "galnet", "integrations", "diagnostics", "updates"]
+        for width, height, scale, minimum in ((1600, 1000, 100, 0), (1280, 680, 120, 12),
+                                              (980, 800, 140, 14), (700, 800, 135, 16)):
+            self.page.set_viewport_size({"width": width, "height": height})
+            self.page.evaluate("""async ([scale, minimum]) => {
+              const sizing = await import('/dashboard/text-size.js');
+              sizing.applyTextSize(scale, minimum);
+            }""", [scale, minimum])
+            for section in sections:
+                with self.subTest(section=section, width=width, scale=scale):
+                    self.page.locator(f'.settings-tab[data-settings-section="{section}"]').click()
+                    if section == "appearance":
+                        self.page.locator('.theme-workshop').evaluate('node => node.open = true')
+                    geometry = self.page.evaluate("""() => {
+                      const page = document.querySelector('.settings-page');
+                      const panel = page.querySelector('[data-settings-panel]:not([hidden])');
+                      const outer = page.getBoundingClientRect();
+                      const clipped = [...panel.querySelectorAll('h3, h4, .setting-copy, .setting-control, .setting-status, .theme-colour-grid label, button')]
+                        .filter(node => node.getClientRects().length).filter(node => {
+                          const b = node.getBoundingClientRect();
+                          return b.left < outer.left - 1 || b.right > outer.right + 1
+                            || node.scrollWidth > node.clientWidth + 2;
+                        }).map(node => node.className || node.tagName);
+                      return {fits: page.scrollWidth <= page.clientWidth + 1, clipped};
+                    }""")
+                    self.assertTrue(geometry['fits'], geometry)
+                    self.assertEqual(geometry['clipped'], [], geometry)
+        header = self.page.locator('[data-settings-panel="updates"] .settings-section-head')
+        before = header.evaluate('node => getComputedStyle(node).backgroundImage')
+        snapshot = overview_state()
+        snapshot['theme'] = {'palette': {'accent': '#bf73ff', 'orange': '#ffcb55'}}
+        self.page.evaluate('([d,s]) => window.__settings.render(d,s)', [snapshot, settings])
+        self.assertNotEqual(before, header.evaluate('node => getComputedStyle(node).backgroundImage'))
+
+    def test_search_can_be_cleared_and_group_jumps_use_the_deck_scroller(self):
+        self.page.fill('#settings-search', 'fuel')
+        self.assertEqual(self.page.locator('#settings-search-summary').inner_text(), '1 match across 1 section')
+        self.page.locator('.settings-toolbar [data-settings-clear]').click()
+        self.assertEqual(self.visible_panels(), ['journal'])
+        self.assertTrue(self.page.locator('#settings-search').evaluate('node => node === document.activeElement'))
+        self.page.fill('#settings-search', 'zzzz')
+        self.page.keyboard.press('Escape')
+        self.assertEqual(self.page.input_value('#settings-search'), '')
+        self.assertFalse(self.page.locator('.settings-no-match').is_visible())
+        self.page.locator('.settings-tab[data-settings-section="integrations"]').click()
+        self.page.locator('[data-settings-jump="settings-integrations-local-api"]').click()
+        position = self.page.evaluate("""() => {
+          const group = document.getElementById('settings-integrations-local-api');
+          const scroll = document.querySelector('.pages');
+          return {scroll: scroll.scrollTop, top: group.getBoundingClientRect().top,
+            viewportTop: scroll.getBoundingClientRect().top, viewportBottom: scroll.getBoundingClientRect().bottom,
+            focused: document.activeElement.id};
+        }""")
+        self.assertGreater(position['scroll'], 0)
+        self.assertGreaterEqual(position['top'], position['viewportTop'] - 1)
+        self.assertLess(position['top'], position['viewportBottom'])
+        self.assertEqual(position['focused'], 'settings-integrations-local-api-heading')
+        self.page.get_by_text('Port', exact=True).click()
+        self.assertTrue(self.page.locator('#setting-api-port').evaluate('node => node === document.activeElement'))
+        self.page.locator('.settings-tab[data-settings-section="journal"]').click()
+        self.assertEqual(self.page.locator('.pages').evaluate('node => node.scrollTop'), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

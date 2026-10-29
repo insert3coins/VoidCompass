@@ -199,6 +199,7 @@ class CompositionWindow:
         core = controller.CoreWebView2
         settings = core.Settings
         for name, value in (("AreDefaultContextMenusEnabled", False), ("AreDevToolsEnabled", False),
+                            ("IsWebMessageEnabled", True),
                             ("AreBrowserAcceleratorKeysEnabled", False), ("IsZoomControlEnabled", False),
                             ("IsPinchZoomEnabled", False), ("IsStatusBarEnabled", False),
                             ("IsSwipeNavigationEnabled", False), ("IsBuiltInErrorPageEnabled", False)):
@@ -303,6 +304,17 @@ class CompositionWindow:
             pass
 
     # -- what the host calls (any thread) -------------------------------------
+    def post_message(self, payload):
+        """Deliver directly to the page even while its native window is hidden."""
+        import json
+
+        def send():
+            if self.controller is None or self._closed or not self._voidcompass_navigation_completed_at:
+                return False
+            self.controller.CoreWebView2.PostWebMessageAsJson(json.dumps(payload, separators=(",", ":")))
+            return True
+        return self.runtime.call(send)
+
     def run_js(self, script):
         def run():
             if self.controller is not None and not self._closed:

@@ -203,8 +203,8 @@ class PageStartBrowserTests(unittest.TestCase):
                 lost.append(path)
                 route.abort("connectionreset")
             else:
-                target = WEB / ("assets" if path.startswith("/assets/") else "dashboard")
-                target = target / (path.removeprefix("/assets/").lstrip("/") or "index.html")
+                target = (WEB / path.lstrip("/")) if path.startswith(("/assets/", "/galactic_map/")) else (
+                    WEB / "dashboard" / (path.lstrip("/") or "index.html"))
                 route.fulfill(path=str(target)) if target.is_file() else route.fulfill(status=404, body="")
 
         page.route("http://deck.test/**", serve)

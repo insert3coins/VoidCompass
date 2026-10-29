@@ -49,7 +49,7 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 .content { position: relative; zoom: var(--scale); display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 11px; }
 
 /* The pet's own patch of floor, where it gets up to things. */
-.pet { width: 100%; height: 74px; display: block; border-bottom: 1px solid var(--hud-faint);
+.pet { width: 100%; height: 110px; display: block; border-bottom: 1px solid var(--hud-faint);
   background: radial-gradient(ellipse at 50% 100%, color-mix(in srgb, var(--state) 12%, transparent), transparent 70%); }
 .pet-words { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 8px; row-gap: 2px; min-width: 0; }
 #mood { justify-self: end; text-align: right; }

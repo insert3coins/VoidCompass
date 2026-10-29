@@ -92,3 +92,7 @@ models/installed.json
 models/.engine-unpack/
 models/**/*.part
 keepsakes.json
+
+# Generated companion showcase exports.
+/exports/hatchlings-*/
+/exports/hatchlings-*.zip

@@ -8,7 +8,7 @@ WEB = Path(__file__).resolve().parents[1] / "web"
 SOURCE = (WEB / "dashboard/app.js").read_text(encoding="utf-8")
 MILESTONES = SOURCE[SOURCE.index("function postBootMilestone(action)"):SOURCE.index("function reportClientError(")]
 RENDER = SOURCE[SOURCE.index("function renderBoot(state)"):SOURCE.index("function renderCommissioning(onboarding)")]
-STATE_RENDER = SOURCE[SOURCE.index("function renderState(state)"):SOURCE.index("function aboutMatrixNodes(")]
+STATE_RENDER = SOURCE[SOURCE.index("function renderState(state)"):SOURCE.index("function setConnection(")]
 SCENE = (WEB / "dashboard/boot-scene.js").read_text(encoding="utf-8")
 FACT_INTERVAL_MS = int(re.search(r"const FACT_INTERVAL_MS = (\d+);", SCENE).group(1))
 
@@ -51,7 +51,7 @@ def run():
                   const percentWidth = (id, value) => byId(id).style.width = `${value}%`;
                   const renderCommissioning = () => {};
                   const applyTheme = () => {};
-                  const startAboutMatrix = () => {};
+                  const applyTextSize = () => {};
                   const renderDashboard = () => { window.deckHydrations++; };
                   // The music player (music.js) is not part of the boot.
                   let musicDeck = {update() {}, showPage() {}};
@@ -72,7 +72,8 @@ def run():
             const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
             if (!pixels.some((value, index) => index % 4 === 3 && value > 0)) throw Error(`${id} is empty`);
           }
-          if (document.querySelectorAll('#boot-ring-stages > g').length !== 4) throw Error('Ring is missing stage markers');
+          if (document.querySelectorAll('.boot-sequence > li').length !== 4) throw Error('Startup systems missing');
+          if (document.querySelector('.boot-wordmark').textContent !== 'VOID COMPASS') throw Error('App name missing');
         }""")
         for width, height in [(1440, 900), (1024, 768), (800, 600), (480, 740), (960, 480)]:
             page.set_viewport_size({"width": width, "height": height})
@@ -81,13 +82,16 @@ def run():
                   bootTest({app: {version: '9.9.9'}, boot: {active: true, progress, status: 'INITIALISING FLIGHT COMPUTER', detail: 'Preparing the local exploration archive'}});
                   const loader = document.getElementById('boot-loader');
                   if (loader.dataset.bootStage !== stage) throw Error(`Wrong stage at ${progress}: ${loader.dataset.bootStage}`);
-                  if (loader.style.getPropertyValue('--boot-progress') !== String(Math.round(progress * 100))) throw Error('Ring disagrees with progress');
+                  if (loader.style.getPropertyValue('--boot-progress') !== String(Math.round(progress * 100))) throw Error('Progress rail disagrees with startup');
                   if (stage !== 'handoff') {
                     if (!document.querySelector(`.boot-sequence > [data-boot-stage="${stage}"]`).classList.contains('active')) throw Error('Missing active stage');
-                    if (!document.querySelector(`#boot-ring-stages > [data-ring-stage="${stage}"]`).classList.contains('active')) throw Error('Ring marker not active');
                   }
                   for (const selector of ['.boot-instrument', '.boot-copy', '.boot-sequence', '.boot-transmission']) {
-                    const box = document.querySelector(selector).getBoundingClientRect();
+                    const node = document.querySelector(selector);
+                    // The optional field note yields its room to startup
+                    // status on short windows; the core controls stay visible.
+                    if (selector === '.boot-transmission' && getComputedStyle(node).display === 'none') continue;
+                    const box = node.getBoundingClientRect();
                     if (box.width <= 0 || box.left < 0 || box.right > innerWidth + 1) throw Error(`Layout clipped: ${selector}`);
                   }
                   if (document.documentElement.scrollWidth > innerWidth + 1) throw Error('Boot scrolls sideways');
@@ -104,7 +108,7 @@ def run():
           const state = bootScene.state();
           if (!state.log.includes('BUILDING DASHBOARD CORE') || state.log.at(-1) !== 'RESTORING RECENT JOURNAL') throw Error('Log missed a status');
           if (!state.orb.motes) throw Error('Restored journal events never reached the watcher');
-          if (!document.getElementById('boot-events').textContent.includes('400')) throw Error('Event count missing');
+          if (!document.getElementById('boot-event-count').textContent.includes('400')) throw Error('Event count missing');
           bootTest({boot: {active: true, progress: .81, status: 'RESTORING RECENT JOURNAL', detail: 'Reduced 500 events', events: 500}});
           if (bootScene.state().log.filter(line => line === 'RESTORING RECENT JOURNAL').length !== 1) throw Error('A repeated status filled the log');
         }""")
@@ -143,6 +147,7 @@ def run():
         assert page.evaluate("bootScene.state().orb.frames") == ended_frames, "Watcher still animating after handoff"
         page.emulate_media(reduced_motion="reduce")
         page.clock.install()
+        page.clock.pause_at(page.evaluate("Date.now() / 1000") + 2)
         page.evaluate("""() => {
           document.getElementById('boot').hidden = false;
           document.body.classList.remove('ready');
@@ -199,7 +204,7 @@ def run():
         }""")
         assert not errors, errors
         browser.close()
-    print("PASS: boot stages and ring, 5 viewport sizes, sky and watcher, log and version, reduced motion, "
+    print("PASS: centred Watcher and startup systems, 5 viewport sizes, sky and watcher, log and version, reduced motion, "
           "commissioning, countdown and jump, single hydrated handoff and stale-snapshot rejection")
 
 

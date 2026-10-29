@@ -79,8 +79,8 @@ class TacticalHUD:
     def __init__(self, root, config, on_widget_click=None):
         self.config = config
         self.on_widget_click = on_widget_click
-        self.full_width, self.full_height = 620, 342
-        self.compact_width, self.compact_height = 500, 326
+        self.full_width, self.full_height = 620, 366
+        self.compact_width, self.compact_height = 500, 350
         self.width, self.base_height = self._target_dimensions()
         self._desired_pos = (self._safe_int(config.get('hud_x'), 100), self._safe_int(config.get('hud_y'), 100))
         self.win = OverlayWindowState(root, self.width, self.base_height, *self._desired_pos)
@@ -162,8 +162,7 @@ class TacticalHUD:
             (self.compact_width, self.compact_height) if self._is_compact()
             else (self.full_width, self.full_height)
         )
-        if self._is_compact():
-            width = HUD_LABEL_WIDTHS[hud_typography(self.config)["labels"]]
+        width *= HUD_LABEL_WIDTHS[hud_typography(self.config)["labels"]] / HUD_LABEL_WIDTHS["standard"]
         height = max(height, self._measured_height())
         # The page zooms its fixed cockpit layout by the overlay text size, so
         # the window grows by the same factor instead of clipping larger type.

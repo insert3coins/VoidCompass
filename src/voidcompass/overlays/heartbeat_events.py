@@ -19,7 +19,7 @@ EFFECTS = (
     "pulse", "tick", "wake", "sleep", "warp", "charge", "cruise", "plot",
     "approach", "depart", "sweep", "honk", "signal", "spark", "complete",
     "lock", "alarm", "breach", "die", "clear", "strike", "gather", "payout",
-    "crack", "dock", "undock", "deny", "speak", "glint",
+    "crack", "dock", "undock", "deny", "speak", "glint", "bioscan", "touchdown", "limpet",
 )
 
 # event: (family, tone, effect, weight)
@@ -94,7 +94,7 @@ _EVENTS = {
     "FSSAllBodiesFound": ("scan", "green", "complete", .8),
     "SAAScanComplete": ("scan", "green", "complete", .75),
     "CodexEntry": ("scan", "yellow", "spark", .7),
-    "ScanOrganic": ("scan", "green", "spark", .6),
+    "ScanOrganic": ("scan", "green", "bioscan", .6),
     "DataScanned": ("scan", "accent", "sweep", .35),
     "DatalinkScan": ("scan", "accent", "sweep", .35),
     "DatalinkVoucher": ("scan", "green", "payout", .4),
@@ -140,7 +140,7 @@ _EVENTS = {
     "MiningRefined": ("trade", "orange", "gather", .55),
     "CargoTransfer": ("trade", "orange", "gather", .35),
     "CargoDepot": ("trade", "orange", "gather", .35),
-    "LaunchDrone": ("trade", "muted", "tick", .15),
+    "LaunchDrone": ("trade", "accent", "limpet", .25),
     "BuyDrones": ("trade", "orange", "gather", .25),
     "SellDrones": ("trade", "orange", "payout", .2),
     "MaterialCollected": ("trade", "yellow", "gather", .35),
@@ -199,7 +199,7 @@ _EVENTS = {
     "DockingTimeout": ("port", "yellow", "deny", .5),
     "Docked": ("port", "green", "dock", .8),
     "Undocked": ("port", "accent", "undock", .75),
-    "Touchdown": ("port", "accent", "dock", .7),
+    "Touchdown": ("port", "accent", "touchdown", .7),
     "Liftoff": ("port", "orange", "undock", .6),
     "LaunchSRV": ("port", "accent", "undock", .6),
     "DockSRV": ("port", "accent", "dock", .6),
@@ -303,8 +303,8 @@ _FAMILY_GAZE = {
 }
 _EFFECT_GAZE = {
     "warp": "up", "charge": "up", "cruise": "up", "plot": "up",
-    "approach": "down", "dock": "down", "undock": "down",
-    "honk": "sweep", "signal": "sweep", "sweep": "sweep",
+    "approach": "down", "dock": "down", "touchdown": "down", "undock": "down",
+    "honk": "sweep", "signal": "sweep", "sweep": "sweep", "bioscan": "sweep", "limpet": "side",
     "alarm": "side", "breach": "side", "strike": "side", "lock": "side",
 }
 _RARE_PLANETS = {"earthlike body", "water world", "ammonia world"}

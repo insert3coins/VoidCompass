@@ -91,7 +91,7 @@ class NavigationHudFitTests(unittest.TestCase):
         # The commander's PC drew the page about 1.3x larger than the window
         # was sized for: a 150% text size in a window made for 115%.
         # Larger small text widens the plate to 580 (5.5.17).
-        for layout, (width, height) in (("standard", (580, 326)),):
+        for layout, (width, height) in (("standard", (580, 350)),):
             with self.subTest(layout=layout):
                 page = self.browser.new_page(viewport={"width": round(width * 1.15), "height": round(height * 1.15)})
                 self.addCleanup(page.close)

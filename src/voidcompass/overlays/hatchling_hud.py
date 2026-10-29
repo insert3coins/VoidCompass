@@ -14,6 +14,9 @@ LINE_S = 600
 LOOKS = ("panel", "pet")
 PET_SIZES = {"small": 64, "medium": 92, "large": 132}
 ROAMS = {"still": 1.7, "short": 3.2, "wide": 6.0}
+# Extra headroom for toys, jumps and speech above the pet-only strip. Keep
+# the matching drawing scale in web/hatchling/app.js in sync with this factor.
+PET_HEIGHT_FACTOR = 2.8
 NEEDS_SHOWN = ("always", "low", "never")
 # How often it chatters (5.6.4): never, now and then, or more.
 CHATTER = ("off", "quiet", "chatty")
@@ -55,10 +58,10 @@ def hatchling_pet_window(config):
     if options["look"] != "pet":
         return None
     pet = PET_SIZES[options["size"]]
-    return round(pet * ROAMS[options["roam"]]), round(pet * 1.7)
+    return round(pet * ROAMS[options["roam"]]), round(pet * PET_HEIGHT_FACTOR)
 
 
-def build_hatchling_model(view, now, music=False, options=None, watcher=None):
+def build_hatchling_model(view, now, music=False, options=None, watcher=None, music_started_at=None):
     pet = (view or {}).get("pet")
     if not pet:
         return None
@@ -67,7 +70,7 @@ def build_hatchling_model(view, now, music=False, options=None, watcher=None):
     fresh_line = latest.get("text") if now - float(latest.get("at") or 0) < LINE_S else ""
     return {
         "name": str(pet.get("name") or ""),
-        "species": pet.get("species"), "kind": pet.get("kind") or "", "stage": pet.get("stage"), "form": pet.get("form") or "",
+        "species": pet.get("species"), "kind": pet.get("kind") or "", "born": pet.get("born"), "stage": pet.get("stage"), "stage_name": pet.get("stage_name") or "", "form": pet.get("form") or "",
         "title": str(pet.get("form_name") or pet.get("kind_name") or pet.get("species_name") or "").upper(),
         "mood_word": pet.get("mood_word") or "", "wants": pet.get("wants") or "",
         "needs": dict(pet.get("needs") or {}), "food_label": pet.get("food_label") or "HUNGER",
@@ -79,7 +82,7 @@ def build_hatchling_model(view, now, music=False, options=None, watcher=None):
         "cue": pet.get("cue"), "place": pet.get("place") or "space", "low_fuel": bool(pet.get("low_fuel")),
         "trait": pet.get("trait") or "", "traits": dict(pet.get("traits") or {}),
         "toys": list(pet.get("toys") or []), "tricks": list(pet.get("tricks") or []),
-        "dreams": list(pet.get("dreams") or []), "music": bool(music),
+        "dreams": list(pet.get("dreams") or []), "music": bool(music), "music_started_at": music_started_at,
         "world": pet.get("world"), "welcome": pet.get("welcome"), "outfit": pet.get("outfit") or "", "chat": pet.get("chat"),
         "options": dict(options or hatchling_overlay_options({})), "watcher": watcher,
     }

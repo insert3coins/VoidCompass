@@ -198,8 +198,8 @@ class NavigationStatePresentationTests(unittest.TestCase):
                 self.assertEqual(model["metrics"]["fuel"]["percent"], 71)
                 self.assertEqual(model["metrics"]["fuel"]["value"], "71%")
                 # 150% text is a 150% instrument, never clipped type.
-                self.assertEqual((model["window"]["width"], model["window"]["height"]), (750, 489))
-                self.assertEqual(hud._html_window_size, (750, 489))
+                self.assertEqual((model["window"]["width"], model["window"]["height"]), (750, 525))
+                self.assertEqual(hud._html_window_size, (750, 525))
                 self.assertEqual(model["theme"]["text_scale"], 1.5)
                 # The portrait follows where the commander is, from Status.json.
                 self.assertEqual(model["state"]["vehicle"]["mode"], "ship")
@@ -232,7 +232,7 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
         cls.browser.close()
         cls.playwright.stop()
 
-    def open(self, width=500, height=326):
+    def open(self, width=500, height=350):
         page = self.browser.new_page(viewport={"width": width, "height": height})
         self.addCleanup(page.close)
         errors = []
@@ -253,6 +253,7 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
         page.route("http://state.test/**", serve)
         # No token: the page renders only what each test hands it.
         page.goto("http://state.test/navigation_hud/index.html")
+        page.wait_for_function("Boolean(window.navigationScene)")
         return page
 
     def render(self, page, snapshot):
@@ -432,7 +433,7 @@ class NavigationStatusPlateBrowserTests(unittest.TestCase):
             "CARRIER PREPARING", "SUIT OXYGEN LOW", "SIGNAL THREAT 4", "BOARDING SCORPION",
             "HEAT CRITICAL", "DSS EFFICIENT 4/6", "FSD INJECTION +50%",
         ]
-        for layout, width, height in (("standard", 500, 326),):
+        for layout, width, height in (("standard", 500, 350),):
             for scale in (1, 1.5):
                 page = self.open(round(width * scale), round(height * scale))
                 for label in long_labels:

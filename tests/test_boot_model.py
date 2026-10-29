@@ -39,6 +39,29 @@ class BootModelTests(unittest.TestCase):
         runtime.set_runtime_status("LIVE STATE READY", "", 0.91)
         self.assertEqual(runtime.server.publish.call_args.args[0]["boot"]["events"], 400)
 
+    def test_boot_systems_report_cached_and_background_work_honestly(self):
+        runtime = self.runtime()
+        runtime.config = {"active_commander_name": "Jameson", "heartbeat_eye_color": "hal"}
+        self.assertEqual(runtime._boot_snapshot()["systems"]["profile"], "working")
+        runtime.app = SimpleNamespace(config=runtime.config, _startup_history_pending={"exploration"},
+                                      _startup_history_handoff_bypassed=True, _startup_live_tail_ready=True,
+                                      _startup_journal_offline=True)
+        server = SimpleNamespace(is_ready=lambda key: key == "navigation", rendered_revision=lambda key: 3)
+        runtime.root = SimpleNamespace(_voidcompass_html_overlay_runtime=SimpleNamespace(
+            surfaces={"navigation": object(), "hatchling": object()}, server=server))
+        boot = runtime._boot_snapshot()
+        self.assertEqual(boot["eye"], "hal")
+        self.assertEqual(boot["commander"], "Jameson")
+        self.assertEqual(boot["systems"], {"profile": "ready", "survey": "background", "journal": "cached", "cockpit": "working"})
+        self.assertFalse(boot["journal_live"])
+        self.assertEqual((boot["overlays_ready"], boot["overlays_total"]), (1, 2))
+        runtime.app._startup_history_pending.clear()
+        runtime.app._startup_journal_offline = False
+        server.is_ready = lambda key: True
+        boot = runtime._boot_snapshot()
+        self.assertTrue(boot["journal_live"])
+        self.assertTrue(all(value == "ready" for value in boot["systems"].values()))
+
     def test_boot_page_can_load_the_shared_watcher_orb(self):
         # The boot screen wakes the same orb the heartbeat overlay draws.
         server = HtmlDashboardServer.__new__(HtmlDashboardServer)

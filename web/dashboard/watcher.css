@@ -99,7 +99,22 @@
 .watcher-page header { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 .watcher-page header span { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .1em; }
 .watcher-page header b { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .08em; }
-.watcher-eye { width: min(100%, 220px); aspect-ratio: 1; justify-self: center; }
+.watcher-eye-panel { padding: 0; overflow: hidden; background: linear-gradient(155deg,color-mix(in srgb,var(--raised) 50%,var(--panel)),var(--panel) 65%); }
+.watcher-eye-panel > :not(.watcher-optics-stage) { margin-left: 14px; margin-right: 14px; }
+.watcher-eye-panel > :last-child { margin-bottom: 14px; }
+.watcher-optics-stage { position: relative; display: grid; gap: 8px; padding: 14px 14px 12px; border-bottom: 1px solid var(--border);
+  background: radial-gradient(ellipse at 50% 45%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 62%),var(--bg); }
+.watcher-optics-stage::before, .watcher-optics-stage::after { content: ""; position: absolute; top: 52px; bottom: 56px; width: 12px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); pointer-events: none; }
+.watcher-optics-stage::before { left: 10px; border-left: 1px solid var(--border); }
+.watcher-optics-stage::after { right: 10px; border-right: 1px solid var(--border); }
+.watcher-stage-head, .watcher-stage-caption { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 5px 10px; }
+.watcher-stage-head span { color: var(--muted); font: 700 9px Consolas,monospace; letter-spacing: .12em; }
+.watcher-stage-head small { color: var(--dim); font: 700 8px Consolas,monospace; letter-spacing: .08em; }
+.watcher-stage-head small[data-live="true"] { color: var(--green); }
+.watcher-stage-caption { min-height: 26px; align-content: end; }
+.watcher-stage-caption b { color: var(--accent); font: 700 10px Consolas,monospace; letter-spacing: .08em; overflow-wrap: anywhere; }
+.watcher-stage-caption span { color: var(--dim); font: 8px Consolas,monospace; overflow-wrap: anywhere; }
+.watcher-eye { width: min(100%, 288px); aspect-ratio: 1; justify-self: center; }
 .watcher-eye canvas { width: 100%; height: 100%; display: block; }
 .watcher-latest { margin: 0; padding: 10px 12px; border-left: 2px solid color-mix(in srgb, var(--red) 65%, var(--border));
   background: color-mix(in srgb, var(--bg) 70%, transparent); }

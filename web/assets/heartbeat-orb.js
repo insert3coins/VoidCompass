@@ -32,6 +32,16 @@
    */
 
   const TAU = Math.PI * 2;
+  // Module load failures can happen before an overlay receives its first
+  // model, so keep the result for any eye created later on the page.
+  let threeModuleFailed = false;
+  window.addEventListener('error', (event) => {
+    const target = event.target;
+    if (target?.tagName === 'SCRIPT' && /\/assets\/heartbeat-3d\.js(?:\?|$)/.test(target.src || '')) {
+      threeModuleFailed = true;
+      window.dispatchEvent(new Event('heartbeat-three-failed'));
+    }
+  }, true);
   const FRAME_MS = 1000 / 60;
   const QUIET_FRAME_MS = 1000 / 20;
   // An effect pushed aside by a newer one fades out over this long.
@@ -249,6 +259,47 @@
    * layout.
    */
   const EFFECTS = {
+    // The eye follows a living sample: a handful of motes spiral inward and
+    // the iris brightens as the analysis resolves.
+    bioscan: {
+      ms: 2400,
+      mods: (p, m, fx) => { m.iris += .08 * bump(p); m.flare += .42 * fx.w * bump(span(p, .35, .95)); },
+      inner: (g, fx, p) => {
+        const alpha = bump(p) * fx.w;
+        for (let i = 0; i < 7; i += 1) {
+          const angle = i * TAU / 7 + p * 3.2;
+          const radius = g.R * (.55 - .35 * smoother(p));
+          const [x, y] = g.polar(angle, radius);
+          const [tx, ty] = g.polar(angle - .3, radius + .08 * g.R);
+          g.streak(tx, ty, x, y, fx.color, alpha * .55, .6);
+          g.glow(x, y, 2.8 * g.k, mix(g.pal.text, fx.color, .25), alpha * .8);
+        }
+      },
+    },
+    // A soft horizon settles below the pupil as the ship reaches the surface.
+    touchdown: {
+      ms: 2100,
+      mods: (p, m, fx) => { m.jy += .018 * bump(p); m.flare += .24 * fx.w * bump(span(p, .45, .9)); },
+      inner: (g, fx, p) => {
+        const alpha = bump(p) * fx.w;
+        g.horizon(1.65 - .35 * smoother(p), fx.color, alpha * .7);
+        for (let i = 0; i < 5; i += 1) {
+          const x = g.cx + (i - 2) * .18 * g.R;
+          g.glow(x, g.cy + .6 * g.R - p * .08 * g.R, 2 * g.k, fx.color, alpha * .35);
+        }
+      },
+    },
+    // A small probe departs across the glass, leaving a fading light trail.
+    limpet: {
+      ms: 1500,
+      mods: (p, m) => { m.iris += .025 * bump(p); },
+      inner: (g, fx, p) => {
+        const alpha = bump(p) * fx.w, x = g.cx + lerp(-.32, .56, smoother(p)) * g.R;
+        const y = g.cy + (.22 - .28 * p + .08 * Math.sin(p * Math.PI)) * g.R;
+        g.streak(x - .16 * g.R, y + .04 * g.R, x, y, fx.color, alpha * .65, .6);
+        g.glow(x, y, 3 * g.k, mix(g.pal.text, fx.color, .3), alpha);
+      },
+    },
     // Its story's moments (5.6.1), each played once when told: the first time
     // it heard the sound, the shutter drawn, the eye opened to look back.
     story_sound: {
@@ -870,6 +921,20 @@
       this.loop = this.loop.bind(this);
       this.onVisibility = () => this.schedule();
       document.addEventListener('visibilitychange', this.onVisibility);
+      // ES modules may arrive after a reduced-motion eye has painted once.
+      // Do not wake the boot eye after its host has suspended it.
+      this.renderer = 'canvas';
+      this.rendererAttempted = false;
+      this.rendererListener = null;
+      this.rendererReported = false;
+      this.onThreeReady = () => {
+        // Hidden WebViews paint when the host reveals them or another model
+        // arrives. Don't wake the already-suspended boot screen.
+        if (!this.suspended && !document.hidden && this.pal && this.size >= 8) this.draw(performance.now());
+      };
+      this.onThreeFailed = () => this.checkRenderer();
+      window.addEventListener('heartbeat-three-ready', this.onThreeReady);
+      window.addEventListener('heartbeat-three-failed', this.onThreeFailed);
       if (window.ResizeObserver) {
         this.observer = new ResizeObserver(() => { this.resize(); this.draw(performance.now()); });
         this.observer.observe(canvas);
@@ -1177,6 +1242,26 @@
       this.schedule();
     }
 
+    // Optional diagnostics wait for a real render or a definite module error.
+    watchRenderer(listener) {
+      if (this.rendererReported || this.rendererListener || typeof listener !== 'function') return;
+      this.rendererListener = listener;
+      this.checkRenderer();
+    }
+
+    checkRenderer() {
+      if (!this.rendererListener || this.rendererReported || !this.pal || this.size < 8) return;
+      const finish = () => {
+        if (!this.rendererListener || this.rendererReported) return;
+        const listener = this.rendererListener;
+        this.rendererListener = null;
+        this.rendererReported = true;
+        const reason = this.renderer === 'canvas' ? (this.rendererAttempted ? 'renderer-error' : 'module-error') : '';
+        listener(this.renderer, reason);
+      };
+      if (this.rendererAttempted || threeModuleFailed) finish();
+    }
+
     schedule() {
       const animate = !this.suspended && !this.reduced && !document.hidden && this.pal && this.size > 0;
       if (animate && !this.running) {
@@ -1348,6 +1433,21 @@
       const lookY = pose ? pose.dy : this.gaze.y;
 
       this.drawBezel(g, rim, level, this.reduced ? 0 : .05 * Math.sin(now / 11000) + 1.4 * (lookX - .5 * lookY));
+      // Cache the 3D housing separately from the live eye so the WebGL
+      // readback does not stall every animation frame. Event effects and
+      // status lamps are still painted over the housing later in this frame.
+      this.renderer = window.HeartbeatThree?.draw(this.canvas, {
+        x: cx, y: cy, size: 2 * R, tint: rim, level, spin: this.spin,
+        colorKey: `${this.eye}|${this.palKey}`, force: this.reduced || !this.running,
+        dim: 1 - .65 * Math.max(pose?.lid || 0, pose?.lidLower || 0, Number(this.story?.shutter) || 0),
+      }) ? 'three' : 'canvas';
+      if (window.HeartbeatThree) this.rendererAttempted = true;
+      this.checkRenderer();
+      if (this.renderer === 'three') window.HeartbeatThree.sheen?.(this.canvas, {
+        x: cx, y: cy, size: 2 * R, tint: rim,
+        phase: this.reduced || !this.life?.idle ? 0 : this.breath,
+        strength: .05 + .12 * level + .12 * this.voiceLevel + .06 * this.musicLevel,
+      });
 
       // Everything inside the lens.
       ctx.save();
@@ -1400,6 +1500,10 @@
       ctx.globalCompositeOperation = 'lighter';
       this.drawHeart(g, gx, gy, tint, level, flare, mods.spikes, core);
       ctx.globalCompositeOperation = 'source-over';
+      // The dimensional glass and stars are below the feathered lids and
+      // story shutter, which keeps every expression visible.
+      if (this.renderer === 'three') window.HeartbeatThree.glass(this.canvas,
+        {x: cx, y: cy, size: 2 * R, spin: this.spin, lookX, lookY, aperture: pose?.aperture || 0, level});
       // The reflections sit on the dome's surface, so they drift a little
       // against the eye as it looks about.
       ctx.drawImage(this.layer('reflections', (layer) => this.paintReflections(layer)),
@@ -1728,10 +1832,10 @@
     // iris while it thinks, their edges catching the light.
     drawDiaphragm(g, gx, gy, irisRadius, tint, level, closing) {
       const {ctx, R, pal} = g;
-      if (closing < .02 || R < 20) return;
+      if (R < 20) return;
       const blades = 7;
       const outer = irisRadius * 1.06;
-      const inner = irisRadius * (1 - .4 * closing);
+      const inner = irisRadius * (.96 - .36 * closing);
       const turn = this.spin * .03 + closing * .7;
       const corner = (index, radius) => {
         const angle = turn + index / blades * TAU;
@@ -1739,6 +1843,20 @@
       };
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';
+      for (let index=0;index<blades;index++) {
+        const a=turn+index/blades*TAU,b=a+TAU/blades;
+        const start=corner(index,inner),end=corner(index+1,inner);
+        ctx.beginPath();ctx.moveTo(...start);
+        ctx.quadraticCurveTo(gx+Math.cos(a+.62)*outer,gy+Math.sin(a+.62)*outer,
+          gx+Math.cos(b+.2)*outer,gy+Math.sin(b+.2)*outer);
+        ctx.arc(gx,gy,outer,b+.2,a+.2,true);
+        ctx.quadraticCurveTo(gx+Math.cos(a+.18)*inner*.91,gy+Math.sin(a+.18)*inner*.91,...start);
+        const metal=ctx.createLinearGradient(start[0],start[1],end[0],end[1]);
+        metal.addColorStop(0,paint(mix(pal.border,tint,.12),.18+.25*closing));
+        metal.addColorStop(.5,paint(pal.bg,.3+.3*closing));
+        metal.addColorStop(1,paint(pal.text,.035+.035*closing));
+        ctx.fillStyle=metal;ctx.fill();
+      }
       ctx.beginPath();
       ctx.arc(gx, gy, outer, 0, TAU);
       for (let index = blades; index >= 0; index -= 1) {
@@ -1959,6 +2077,7 @@
     state() {
       return {
         running: this.running,
+        renderer: this.renderer,
         // Only what's playing; one fading out under a newer one has gone.
         effects: this.effects.filter((effect) => effect.cut == null).map((effect) => effect.name),
         frameRate: Math.round(1000 / this.frameMs),
@@ -1984,7 +2103,10 @@
       this.running = false;
       cancelAnimationFrame(this.raf);
       document.removeEventListener('visibilitychange', this.onVisibility);
+      window.removeEventListener('heartbeat-three-ready', this.onThreeReady);
+      window.removeEventListener('heartbeat-three-failed', this.onThreeFailed);
       this.observer?.disconnect();
+      window.HeartbeatThree?.dispose(this.canvas);
     }
   }
 

@@ -176,8 +176,8 @@ class ShipTests(unittest.TestCase):
 class PetOnlyTests(unittest.TestCase):
     def test_its_settings_and_window(self):
         self.assertIsNone(hatchling_pet_window({}), "the panel sizes itself")
-        self.assertEqual(hatchling_pet_window({"hatchling_look": "pet"}), (294, 156))
-        self.assertEqual(hatchling_pet_window({"hatchling_look": "pet", "hatchling_pet_size": "large", "hatchling_roam": "wide"}), (792, 224))
+        self.assertEqual(hatchling_pet_window({"hatchling_look": "pet"}), (294, 258))
+        self.assertEqual(hatchling_pet_window({"hatchling_look": "pet", "hatchling_pet_size": "large", "hatchling_roam": "wide"}), (792, 370))
         options = hatchling_overlay_options({"hatchling_look": "PET", "hatchling_roam": "sideways", "hatchling_sounds": True})
         self.assertEqual((options["look"], options["roam"], options["sounds"], options["speech"]), ("pet", "short", True, True))
         for key in ("hatchling_look", "hatchling_pet_size", "hatchling_roam", "hatchling_needs", "hatchling_speech", "hatchling_glow", "hatchling_sounds"):
@@ -210,7 +210,7 @@ class PetOnlyTests(unittest.TestCase):
         from voidcompass.overlays.html_hatchling_overlay import HtmlHatchlingBridge
         bridge = HtmlHatchlingBridge.__new__(HtmlHatchlingBridge)
         bridge.config = {"hatchling_look": "pet", "hatchling_pet_size": "small", "hatchling_roam": "still"}
-        self.assertEqual(bridge._dimensions(), (109, 109))
+        self.assertEqual(bridge._dimensions(), (109, 179))
 
     def test_the_watcher_side_comes_from_where_they_are(self):
         from voidcompass.dashboard.dashboard_games_mixin import DashboardGamesMixin
@@ -283,7 +283,7 @@ class JournalTests(unittest.TestCase):
         for situation in ("victory", "mission", "sad", "party", "newship", "paid", "upgrade", "repaired", "phew", "boost",
                           "pose", "naughty", "rude", "fighter", "allfound", "mapped", "settlement"):
             self.assertTrue(hatchling_chatter._pool(pet, situation), situation)
-        self.assertIn("I like the Krait Mk II.", hatchling_chatter._pool(pet, "idle"))
+        self.assertTrue(any("Krait Mk II" in line for line in hatchling_chatter._pool(pet, "idle")))
 
 
 class MusicTests(unittest.TestCase):
@@ -706,6 +706,8 @@ class LifeTests(unittest.TestCase):
         state = hatched("larva")
         model = build_hatchling_model(view(state, 3 * HOUR), 3 * HOUR + 700)
         page, errors = self.open("hatchling/index.html", 250, 200)
+        # Manual test poses must not be replaced by the next shared time slot.
+        page.evaluate("Date.now = () => 1500000000000")
         page.wait_for_function("typeof window.renderPet === 'function'")
         page.evaluate("m => renderPet({theme: {}, effects: {text_scale: 1}, hatchling: m})", model)
         page.wait_for_function("window.hatchlingOverlay.state().life && window.hatchlingOverlay.state().life.act !== ''", timeout=9000)
@@ -825,6 +827,35 @@ class LifeTests(unittest.TestCase):
         self.assertEqual(errors, [])
         page.close()
 
+    def test_long_speech_wraps_inside_the_small_overlay(self):
+        page, errors = self.open("hatchling/index.html", 109, 131)
+        page.wait_for_function("Boolean(window.HatchlingLife && window.HatchlingArt)")
+        result = page.evaluate("""() => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 109; canvas.height = 131;
+          const ctx = canvas.getContext('2d'), rendered = [];
+          const fill = ctx.fillText.bind(ctx);
+          ctx.fillText = (text, x, y) => {
+            rendered.push({text, x, y, width: ctx.measureText(text).width});
+            fill(text, x, y);
+          };
+          const life = HatchlingLife.create({size: 64, range: 20, top: 90, ink: 9, text: 1.5});
+          const message = 'Hello, Synuefe AB-C d1-2. Another little life.';
+          const pet = {species: 'larva', stage: 'adult', needs: {mood: 80}, chat: {text: message, at: Date.now() / 1000}};
+          life.step(.05, pet);
+          life.front(ctx, pet, 54, 88);
+          return {message, rendered};
+        }""")
+        self.assertGreater(len(result["rendered"]), 1, "a long line wraps")
+        self.assertEqual(" ".join(row["text"] for row in result["rendered"]), result["message"])
+        for row in result["rendered"]:
+            self.assertGreaterEqual(row["x"] - row["width"] / 2, 0)
+            self.assertLessEqual(row["x"] + row["width"] / 2, 109)
+            self.assertGreaterEqual(row["y"], 0)
+            self.assertLessEqual(row["y"], 131)
+        self.assertEqual(errors, [])
+        page.close()
+
     def test_reset_takes_two_presses(self):
         page, errors = self.open("games/hatchling/index.html", 600, 675)
         page.wait_for_function("window.cabinet && window.hatchling")
@@ -893,6 +924,33 @@ class LifeTests(unittest.TestCase):
         self.assertEqual(errors, [])
         page.close()
 
+    def test_music_styles_move_the_three_dimensional_model(self):
+        page, errors = self.open("hatchling/index.html", 375, 300)
+        page.wait_for_function("Boolean(window.Hatchling3D)")
+        result = page.evaluate("""() => {
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 300;
+          const ctx = canvas.getContext('2d');
+          const pet = {species: 'bot', stage: 'adult', needs: {mood: 80}};
+          const frame = style => {
+            ctx.clearRect(0, 0, 300, 300);
+            const ok = Hatchling3D.draw(ctx, pet, {x: 150, y: 150, size: 145, t: 2,
+              activity: {name: 'dance', style, t: .17, period: .5}});
+            return {ok, pixels: ctx.getImageData(0, 0, 300, 300).data};
+          };
+          const sway = frame('sway'), robot = frame('robot');
+          let different = 0;
+          for (let i = 0; i < sway.pixels.length; i += 4) {
+            if (Math.abs(sway.pixels[i] - robot.pixels[i]) > 15 ||
+                Math.abs(sway.pixels[i + 3] - robot.pixels[i + 3]) > 15) different++;
+          }
+          return {ok: sway.ok && robot.ok, different};
+        }""")
+        self.assertTrue(result["ok"])
+        self.assertGreater(result["different"], 300, "the styles produce different rendered 3D poses")
+        self.assertEqual(errors, [])
+        page.close()
+
     def test_its_words_follow_the_overlay_text_size(self):
         model = build_hatchling_model(view(hatched("larva"), 3 * HOUR), 3 * HOUR)
         page, errors = self.open("hatchling/index.html", 375, 300)
@@ -930,7 +988,7 @@ class LifeTests(unittest.TestCase):
         page.route("http://h.test/api/live**", lambda route: route.fulfill(
             content_type="application/json", body='{"playing": true, "bands": [' + ",".join(["30"] * 32) + "]}"))
         page.wait_for_function("typeof window.renderPet === 'function'")
-        page.evaluate("m => renderPet({theme: {}, effects: {text_scale: 1}, hatchling: m})", model)
+        page.evaluate("m => { m.music_started_at = Date.now() / 1000; renderPet({theme: {}, effects: {text_scale: 1}, hatchling: m}); }", model)
         page.wait_for_function("window.hatchlingOverlay.state().life && window.hatchlingOverlay.state().life.dance === 'sway'", timeout=10000)
         self.assertEqual(errors, [])
         page.close()

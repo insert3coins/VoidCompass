@@ -1,6 +1,6 @@
 """Overlay Layout Studio model and command controller."""
 
-from voidcompass.core.display_scale import monitor_handle_scale, monitor_scale
+from voidcompass.core.display_scale import monitor_bounds, monitor_handle_scale, monitor_scale
 from voidcompass.core.overlay_registry import OVERLAY_SPEC_BY_ATTR, TEXT_SIZE_KEYS, TEXT_SIZES, text_size_choice
 from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 from voidcompass.overlays.html_overlay_runtime import overlay_opacity_ratio
@@ -36,7 +36,7 @@ from voidcompass.overlays.galnet_ticker_hud import (
 )
 from voidcompass.overlays.hatchling_hud import (
     CHATTER as HATCHLING_CHATTER, LOOKS as HATCHLING_LOOKS, NEEDS_SHOWN as HATCHLING_NEEDS, PET_SIZES as HATCHLING_PET_SIZES, ROAMS as HATCHLING_ROAMS,
-    hatchling_frame_rate, hatchling_overlay_options,
+    hatchling_frame_rate, hatchling_overlay_options, hatchling_pet_window,
 )
 from voidcompass.overlays.music_player_hud import (
     MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_NEXT_COUNTS, MUSIC_PALETTES, MUSIC_SKINS, MUSIC_VISUALIZERS,
@@ -707,6 +707,12 @@ class HtmlOverlayStudioMixin:
         return True
 
     def _html_overlay_settings_save(self, payload):
+        hatchling_size_before = None
+        if {"hatchling_look", "hatchling_pet_size"} & set(payload):
+            hatchling_size_before = hatchling_pet_window(self.config)
+            if hatchling_size_before is None:
+                current = getattr(getattr(self, "hatchling_hud", None), "_html_window_size", None)
+                hatchling_size_before = current if isinstance(current, (tuple, list)) and len(current) == 2 else DEFAULT_SIZES["hatchling_hud"]
         numeric = {
             "overlay_text_scale_percent": (75.0, 200.0, 100.0, True),
             "overlay_opacity_percent": (40.0, 100.0, 100.0, True),
@@ -818,6 +824,24 @@ class HtmlOverlayStudioMixin:
                 choice = _text(payload.get(key), 20).casefold()
                 self.config[key] = choice if choice in choices else default
         if {"hatchling_look", "hatchling_pet_size", "hatchling_roam", "hatchling_needs", "hatchling_chatter"} & set(payload):
+            # A taller Pet Only window may extend off the bottom of the
+            # current display. Move it only when the user changes its size,
+            # and through the normal position path so Studio and the host
+            # agree. Never reposition an ordinary drag or an unchanged size.
+            enlarged = hatchling_pet_window(self.config)
+            move = getattr(self, "_set_overlay_position", None)
+            if hatchling_size_before and enlarged and enlarged[1] > hatchling_size_before[1] and callable(move):
+                x = _integer(self.config.get("hatchling_hud_x"), DEFAULT_POSITIONS["hatchling_hud"][0])
+                y = _integer(self.config.get("hatchling_hud_y"), DEFAULT_POSITIONS["hatchling_hud"][1])
+                scale = monitor_scale(x + hatchling_size_before[0] // 2, y + hatchling_size_before[1] // 2)
+                cx = x + round(hatchling_size_before[0] * scale / 2)
+                cy = y + round(hatchling_size_before[1] * scale / 2)
+                bounds = monitor_bounds(cx, cy)
+                if bounds:
+                    scale = monitor_scale(cx, cy)
+                    new_y = max(bounds[1], min(y, bounds[3] - round(enlarged[1] * scale)))
+                    if new_y != y:
+                        move("hatchling_hud", x, new_y, authority_s=3.0)
             refresh = getattr(self, "_hatchling_overlay_refresh", None)
             if callable(refresh):
                 refresh(force=True)

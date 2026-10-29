@@ -159,6 +159,86 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
         self.assertEqual(self.page.locator("#studio-global-fade-value").text_content(), "65%")
         self.assertFalse(self.errors, self.errors)
 
+    def test_about_fits_windows_and_readability_settings_and_follows_the_theme(self):
+        self.page.evaluate("window.__bridgeHarness.activate('about')")
+        for width, height, scale, minimum in ((1600, 1000, 100, 0), (980, 680, 140, 14),
+                                              (700, 800, 140, 16)):
+            with self.subTest(width=width, scale=scale):
+                self.page.set_viewport_size({"width": width, "height": height})
+                self.page.evaluate("""async ([scale, minimum]) => {
+                  const sizing = await import('/dashboard/text-size.js');
+                  sizing.applyTextSize(scale, minimum);
+                }""", [scale, minimum])
+                geometry = self.page.evaluate("""() => {
+                  const page = document.querySelector('.about-page');
+                  const outer = page.getBoundingClientRect();
+                  return {
+                    pageFits: page.scrollWidth <= page.clientWidth + 1,
+                    contentFits: [...page.querySelectorAll('h2, h3, p, button, dd, code')]
+                      .filter(node => node.getClientRects().length).every(node => {
+                        const b = node.getBoundingClientRect();
+                        return b.left >= outer.left - 1 && b.right <= outer.right + 1
+                          && node.scrollWidth <= node.clientWidth + 1;
+                      }),
+                    reduced: document.querySelector('.about-chart-orbit').getAnimations().length === 0,
+                  };
+                }""")
+                self.assertTrue(all(geometry.values()), geometry)
+        chart = self.page.locator('.about-compass')
+        before = chart.evaluate("node => getComputedStyle(node).color")
+        self.page.evaluate("theme => window.__bridgeHarness.theme(theme)", {
+            "name": "About Test", "palette": {"accent": "#bf73ff", "orange": "#ffcb55"}})
+        self.assertNotEqual(before, chart.evaluate("node => getComputedStyle(node).color"))
+        self.page.emulate_media(reduced_motion="no-preference")
+        orbit = self.page.locator('.about-chart-orbit')
+        self.assertEqual(orbit.evaluate("node => node.getAnimations()[0]?.playState"), 'running')
+        self.page.evaluate("window.__bridgeHarness.activate('overview')")
+        self.assertEqual(orbit.evaluate("node => getComputedStyle(node).animationPlayState"), 'paused')
+        self.assertTrue(orbit.evaluate("node => node.getAnimations().every(animation => animation.playState !== 'running')"))
+        self.assertFalse(self.missing, self.missing)
+        self.assertFalse(self.errors, self.errors)
+
+    def test_about_reports_update_results_and_keeps_support_actions_working(self):
+        snapshot = overview_state()
+        snapshot["app"] = {"version": "5.6.8"}
+        self.page.evaluate("window.__bridgeHarness.activate('about')")
+        cases = (
+            ({}, "Ready when you are", "idle", False, False),
+            ({"checking": True}, "Checking for updates…", "busy", True, False),
+            ({"checked": True}, "You're up to date", "good", False, False),
+            ({"available": True, "latest_version": "5.6.9"}, "Version 5.6.9 is available", "new", False, True),
+            ({"error": "Offline", "failed_at": 20, "checked_at": 10}, "Couldn't check for updates", "bad", False, False),
+            ({"checked": True, "error": "Old failure", "failed_at": 10, "checked_at": 20}, "You're up to date", "good", False, False),
+        )
+        for update, label, tone, disabled, show in cases:
+            with self.subTest(update=update):
+                snapshot["update"] = update
+                self.page.evaluate("data => window.__bridgeHarness.render(data)", snapshot)
+                self.assertEqual(self.page.locator('#about-version').inner_text(), 'Version 5.6.8')
+                self.assertEqual(self.page.locator('#about-update-state').inner_text(), label)
+                self.assertEqual(self.page.locator('.about-release').get_attribute('data-tone'), tone)
+                self.assertEqual(self.page.locator('.about-release [data-update-check]').is_disabled(), disabled)
+                self.assertEqual(self.page.locator('.about-release [data-update-view]').is_visible(), show)
+                if show:
+                    self.page.locator('#release-update-later').click()
+                    self.assertFalse(self.page.locator('#release-update').is_visible())
+                    self.page.locator('.about-release [data-update-view]').click()
+                    self.assertTrue(self.page.locator('#release-update').is_visible())
+        for target in ('documentation', 'releases', 'github', 'issues', 'license', 'notices'):
+            with self.subTest(target=target):
+                with self.page.expect_request(lambda req: '/api/command' in req.url
+                                              and req.post_data_json.get('target') == target) as sent:
+                    self.page.locator(f'.about-page [data-target="{target}"]').click()
+                self.assertEqual(sent.value.post_data_json['action'], 'open')
+        for action in ('check_updates', 'open_logs'):
+            with self.subTest(action=action):
+                with self.page.expect_request(lambda req: '/api/command' in req.url
+                                              and req.post_data_json.get('action') == action) as sent:
+                    self.page.locator(f'.about-page [data-command="{action}"]').click()
+                self.assertEqual(sent.value.post_data_json['action'], action)
+        self.assertFalse(self.missing, self.missing)
+        self.assertFalse(self.errors, self.errors)
+
     def studio_snapshot(self):
         snapshot = overview_state()
         monitors = [

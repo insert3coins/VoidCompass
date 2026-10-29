@@ -211,6 +211,9 @@ class FindingItsVoiceTests(unittest.TestCase):
         self.assertFalse(hud._speaks({"topic": "arrival", "importance": 0}))
         self.assertTrue(hud._speaks({"topic": "died", "importance": 3}))
         self.assertTrue(hud._speaks({"topic": "voice_found", "importance": 0}), "finding its voice is always said")
+        hud.config["watcher_voice_level"] = "every"
+        self.assertFalse(hud._speaks({"topic": "hatchling_said", "importance": 0}), "quoted hatchling chatter stays text-only")
+        self.assertTrue(hud._speaks({"topic": "hatchling_idle", "importance": 0}), "the Watcher's own words still speak")
         hud.mind.voice_active = False
         self.assertFalse(hud._speaks({"topic": "died", "importance": 3}))
         page = (WEB / "heartbeat" / "app.js").read_text(encoding="utf-8")

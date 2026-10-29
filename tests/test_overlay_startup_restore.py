@@ -105,15 +105,14 @@ class OverlayStartupRestoreTests(unittest.TestCase):
         client = (root / "web" / "assets" / "overlay-client.js").read_text(
             encoding="utf-8",
         )
-        self.assertIn("let renderedRevision = -1", client)
-        self.assertIn("ready = response.ok", client)
-        self.assertIn("await announceReady()", client)
+        self.assertIn("appliedRevision < 0", client)
+        self.assertIn("ready = reply?.ready === true", client)
+        self.assertIn("await announceReady(record.generation)", client)
         navigation = (
             root / "web" / "navigation_hud" / "app.js"
         ).read_text(encoding="utf-8")
-        self.assertIn("let pageReady = false", navigation)
-        self.assertIn("pageReady = response.ok", navigation)
-        self.assertIn("await acknowledgeReady()", navigation)
+        self.assertIn("window.VoidCompassOverlay.startPolling", navigation)
+        self.assertIn("contentHeight: designHeight", navigation)
 
     def test_every_managed_overlay_has_a_settings_hotkey(self):
         managed = {spec.attr for spec in OVERLAY_SPECS if spec.available}

@@ -384,58 +384,125 @@
   function vehicle(type) {
     const wheels = [];
     const wheel = (x, z, r, width) => {
-      wheels.push({at: [x, -r, z], r});
-      return move(turn(cylinder(r, width, 8), Math.PI / 2, 0, 0), x, -r, z);
+      const index = wheels.length, parts = [turn(cylinder(r, width, 12, 'tyre'), Math.PI / 2)];
+      for (const side of [-1, 1]) {
+        parts.push(move(turn(cylinder(r * .56, .035, 12, 'alloy'), Math.PI / 2), 0, 0, side * width * .51));
+        parts.push(move(turn(cylinder(r * .22, .05, 10, 'dark'), Math.PI / 2), 0, 0, side * width * .55));
+        parts.push(move(turn(cylinder(r * .12, .055, 8, 'hub'), Math.PI / 2), 0, 0, side * width * .57));
+      }
+      for (let i = 0; i < 12; i++) {
+        const a = i * TAU / 12;
+        parts.push(move(turn(box(r * .28, r * .12, width * 1.04, 'tyre'), 0, 0, -a), Math.sin(a) * r, Math.cos(a) * r));
+      }
+      const tyre = move(merge(...parts), x, -r, z);
+      tyre.f.forEach(face => { face.wheel = index; });
+      wheels.push({at: [x, -r, z], r, width});
+      return tyre;
     };
+    const strut = (from, to, radius = .055, kind = 'alloy') => {
+      const dx=to[0]-from[0],dy=to[1]-from[1],dz=to[2]-from[2];
+      return move(turn(cylinder(radius,Math.hypot(dx,dy,dz),6,kind),-Math.atan2(dz,dx),0,Math.atan2(dy,Math.hypot(dx,dz))),
+        (from[0]+to[0])/2,(from[1]+to[1])/2,(from[2]+to[2])/2);
+    };
+    const canopy = (rear, front, top, bottom, rearWidth, frontWidth, kind = 'glass') => loft([
+      {x:rear,pts:[[top,-rearWidth],[top,rearWidth],[bottom,rearWidth*1.06],[bottom,-rearWidth*1.06]]},
+      {x:front,pts:[[bottom-.15,-frontWidth],[bottom-.15,frontWidth],[bottom,frontWidth],[bottom,-frontWidth]]},
+    ],kind);
     const parts = [];
     if (type === 'nomad') {
-      // A hover skimmer: a low wedge on four glowing lift pads.
-      const hull = loft([
-        {x: -1.7, pts: [[-.62, -.7], [-.62, .7], [-.28, .95], [-.28, -.95]]},
-        {x: .9, pts: [[-.72, -.75], [-.72, .75], [-.3, 1], [-.3, -1]]},
-        {x: 1.9, pts: [[-.48, -.35], [-.48, .35], [-.3, .5], [-.3, -.5]]},
-      ]);
-      parts.push(move(hull, 0, -.15, 0), block(-.6, -1.12, -.45, .6, -.87, .45));
-      parts.push(inset(parts[1], 1, .7, 'window', .012, .8, .5));
-      for (const x of [-1.1, 1]) {
-        for (const z of [-.7, .7]) {
-          parts.push(plate([[x - .3, -.44, z - .22], [x + .3, -.44, z - .22], [x + .3, -.44, z + .22],
-            [x - .3, -.44, z + .22]], 'hover', [x, -1, z]));
+      parts.push(loft([
+        {x:-2.3,pts:[[-1.3,-.55],[-1.3,.55],[-.65,.7],[-.65,-.7]]},
+        {x:.15,pts:[[-1.5,-.77],[-1.5,.77],[-.65,.84],[-.65,-.84]]},
+        {x:2.35,pts:[[-.87,-.44],[-.87,.44],[-.68,.48],[-.68,-.48]]},
+      ],'alloy'));
+      parts.push(canopy(.25,2.18,-1.46,-.87,.64,.32));
+      for (const side of [-1,1]) {
+        parts.push(strut([.2,-1.52,side*.67],[2.25,-.86,side*.38],.035,'dark'));
+        parts.push(strut([1.2,-1.24,side*.49],[1.3,-.87,side*.56],.025,'alloy'));
+        parts.push(move(cylinder(.38,.96,12,'hull'),-.65,-1.3,side*1.15));
+        parts.push(move(cylinder(.26,.035,12,'engine'),-.15,-1.3,side*1.15));
+        parts.push(piece([[-1.9,-1.24,side*.61],[-2.35,-1.15,side*2.55],[-1.36,-1.1,side*2.3],[-.45,-1.25,side*.75],
+          [-1.9,-1.15,side*.61],[-2.35,-1.06,side*2.55],[-1.36,-1.01,side*2.3],[-.45,-1.16,side*.75]],
+          [[0,1,2,3],[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]],'alloy'));
+        parts.push(plate([[-2.14,-1.2,side*1.5],[-2.27,-1.16,side*2.32],[-1.5,-1.11,side*2.13],[-1.05,-1.18,side*1.4]],'navy',[0,0,0]));
+        parts.push(block(-1.68,-.09,side*1.05-.14,1.1,0,side*1.05+.14,'dark'));
+        for(const x of [-1.3,.85]) {
+          parts.push(strut([x,-.75,side*.65],[x+.1,-.12,side*1.05],.075));
+          parts.push(strut([x-.25,-.72,side*.65],[x+.1,-.12,side*1.05],.035,'dark'));
         }
       }
+      parts.push(strut([.25,-1.49,0],[2.28,-.87,0],.025,'alloy'));
+      parts.push(block(-.8,-1.65,-.12,-.45,-1.4,.12,'dark'),block(-.89,-1.8,-.3,-.2,-1.6,.3,'hull'));
+      parts.push(block(-.15,-1.76,-.2,-.11,-1.64,.2,'headlamp'));
     } else if (type === 'rhino') {
-      // A heavy hauler: tall cab, cargo box, four axles.
-      parts.push(block(-1.9, -1.05, -.85, 1.2, -.35, .85));
-      const cab = block(.6, -1.55, -.7, 1.75, -.55, .7);
-      parts.push(cab, inset(cab, 5, .75, 'window', .012, .85, .5));
-      parts.push(block(-1.8, -1.55, -.72, .4, -1.05, .72, 'trim'));
-      // The hopper's ribs, and the drill boom angled down ahead of the cab.
-      for (const x of [-1.5, -.9, -.3]) parts.push(block(x - .06, -1.66, -.74, x + .06, -1.55, .74, 'trim'));
-      parts.push(move(turn(block(0, -.1, -.12, 1.1, .1, .12, 'trim'), 0, 0, .55), 1.7, -.62, 0));
-      for (const x of [-1.45, -.55, .35, 1.25]) for (const z of [-.95, .95]) parts.push(wheel(x, z, .36, .26));
+      parts.push(block(-3,-.98,-.9,2.45,-.68,.9,'dark'));
+      parts.push(loft([
+        {x:.7,pts:[[-2.35,-.84],[-2.35,.84],[-.85,1],[-.85,-1]]},
+        {x:1.25,pts:[[-2.3,-.86],[-2.3,.86],[-.85,1],[-.85,-1]]},
+        {x:2.7,pts:[[-1.28,-.84],[-1.28,.84],[-.84,.9],[-.84,-.9]]},
+      ],'ochre'));
+      parts.push(canopy(1.28,2.58,-2.19,-1.25,.74,.73));
+      for(const side of [-1,1]) {
+        parts.push(strut([1.23,-2.29,side*.81],[2.65,-1.26,side*.82],.06,'alloy'));
+        parts.push(strut([1.98,-1.8,side*.77],[2,-1.2,side*.86],.035,'dark'));
+        parts.push(strut([.63,-1.1,side*.88],[2.49,-1.1,side*.92],.075,'ochre'));
+        parts.push(block(2.67,-1.12,side*.72-.16,2.78,-.92,side*.72+.16,'headlamp'));
+        parts.push(block(.6,-2.42,side*.67-.12,.94,-2.3,side*.67+.12,'headlamp'));
+        for(const x of [-2.55,-1.15,.25,1.9]) {
+          parts.push(strut([x-.17,-1.18,side*.86],[x,-.73,side*1.18],.095,'alloy'));
+          parts.push(block(x-.59,-1.4,side*1.18-.24,x+.59,-1.28,side*1.18+.24,'ochre'));
+          parts.push(wheel(x,side*1.28,.64,.55));
+        }
+        parts.push(move(cylinder(.075,3.3,8,'alloy'),-1.23,-1.45,side*1.0));
+      }
+      for(const x of [-2.48,-1.35,-.22]) {
+        const module=block(x-.5,-2.32,-.88,x+.5,-1.05,.88,'ochre');
+        parts.push(module,block(x-.49,-1.91,-.92,x+.49,-1.56,.92,'dark'));
+        parts.push(block(x-.42,-2.4,-.7,x+.38,-2.32,-.6,'alloy'),block(x-.42,-2.4,.6,x+.38,-2.32,.7,'alloy'));
+      }
+      parts.push(block(2.58,-.84,-1.02,2.85,-.6,1.02,'alloy'));
+      parts.push(strut([1.26,-2.22,0],[2.58,-1.27,0],.04,'alloy'));
     } else if (type === 'scorpion') {
-      // Low and long, four big wheels, a heavy twin-cannon turret.
       const body = loft([
-        {x: -1.8, pts: [[-.62, -.72], [-.62, .72], [-.3, .82], [-.3, -.82]]},
-        {x: 1.2, pts: [[-.66, -.72], [-.66, .72], [-.3, .82], [-.3, -.82]]},
-        {x: 2, pts: [[-.46, -.4], [-.46, .4], [-.3, .52], [-.3, -.52]]},
-      ]);
-      parts.push(body);
-      const turret = block(-.9, -1.05, -.42, .2, -.66, .42);
-      parts.push(turret, inset(turret, 5, .6, 'window', .012, .8, .45));
-      for (const z of [-.18, .18]) parts.push(block(.2, -.95, z - .06, 1.75, -.83, z + .06));
-      for (const x of [-1.2, 1.15]) for (const z of [-.98, .98]) parts.push(wheel(x, z, .44, .3));
+        {x:-1.8,pts:[[-1.6,-.82],[-1.6,.82],[-.8,.97],[-.8,-.97]]},
+        {x:.25,pts:[[-1.7,-.96],[-1.7,.96],[-.75,1.03],[-.75,-1.03]]},
+        {x:1.92,pts:[[-1.05,-.48],[-1.05,.48],[-.72,.64],[-.72,-.64]]},
+      ],'navy');
+      parts.push(body,canopy(-.45,1.71,-1.69,-1.06,.77,.42));
+      for(const side of [-1,1]) {
+        parts.push(strut([-.48,-1.75,side*.82],[1.75,-1.07,side*.47],.045,'alloy'));
+        parts.push(strut([-.85,-.96,side*.84],[1.42,-.8,side*1.36],.11,'alloy'));
+        for(const x of [-1.35,1.23]) {
+          parts.push(strut([x*.6,-.91,side*.7],[x,-.62,side*1.34],.085,'alloy'));
+          parts.push(block(x-.44,-1.19,side*1.35-.2,x+.44,-1.08,side*1.35+.2,'navy'));
+          parts.push(wheel(x,side*1.4,.56,.42));
+        }
+        parts.push(block(1.64,-1.03,side*.5-.13,1.82,-.95,side*.5+.13,'headlamp'));
+      }
+      parts.push(strut([-.44,-1.76,0],[1.69,-1.08,0],.045,'dark'));
+      parts.push(block(-1.02,-1.91,-.34,-.23,-1.65,.34,'hull'));
+      parts.push(block(-.52,-2.2,-.26,.05,-1.89,.04,'alloy'),block(.05,-2.13,-.17,1.15,-2.02,-.06,'dark'));
+      parts.push(block(-.68,-2.13,.1,.05,-1.91,.35,'navy'));
     } else {
-      // The Scarab: six-wheeled explorer, a forward cab and a small turret.
-      const body = loft([
-        {x: -1.6, pts: [[-.8, -.72], [-.8, .72], [-.38, .8], [-.38, -.8]]},
-        {x: 1.1, pts: [[-.8, -.72], [-.8, .72], [-.38, .8], [-.38, -.8]]},
-        {x: 1.7, pts: [[-.62, -.5], [-.62, .5], [-.4, .6], [-.4, -.6]]},
-      ]);
-      const cab = block(.35, -1.2, -.58, 1.3, -.78, .58);
-      parts.push(body, cab, inset(cab, 5, .75, 'window', .012, .85, .55));
-      parts.push(block(-1.05, -1.02, -.26, -.45, -.8, .26), block(-.45, -.98, -.05, .5, -.9, .05));
-      for (const x of [-1.15, 0, 1.15]) for (const z of [-.92, .92]) parts.push(wheel(x, z, .34, .24));
+      parts.push(block(-1.7,-1.18,-.59,-.08,-.66,.59,'alloy'));
+      parts.push(loft([{x:-.12,pts:[[-1.48,-.64],[-1.48,.64],[-.59,.73],[-.59,-.73]]},
+        {x:.85,pts:[[-1.32,-.59],[-1.32,.59],[-.51,.55],[-.51,-.55]]},
+        {x:1.49,pts:[[-.84,-.28],[-.84,.28],[-.61,.36],[-.61,-.36]]}],'glass'));
+      for(const side of [-1,1]) {
+        parts.push(strut([-.18,-1.53,side*.67],[1.53,-.83,side*.3],.055,'alloy'));
+        parts.push(strut([-.1,-.61,side*.7],[1.5,-.62,side*.36],.055,'alloy'));
+        for(const x of [-1.43,-.13,1.18]) {
+          parts.push(strut([x*.65,-.84,side*.6],[x,-.5,side*1.18],.06,'alloy'));
+          parts.push(strut([x*.65-.16,-.73,side*.55],[x,-.5,side*1.18],.045,'dark'));
+          parts.push(wheel(x,side*1.24,.47,.31));
+        }
+        parts.push(block(1.23,-.87,side*.4-.08,1.4,-.75,side*.4+.08,'headlamp'));
+        parts.push(block(-.65,-1.63,side*.18-.05,.7,-1.52,side*.18+.05,'dark'));
+      }
+      parts.push(strut([-.1,-1.5,0],[1.51,-.85,0],.035,'alloy'));
+      parts.push(block(-1.02,-1.6,-.27,-.52,-1.2,.27,'hull'));
+      parts.push(strut([-1.48,-1.21,0],[-1.48,-2.1,0],.05,'alloy'));
+      parts.push(move(cylinder(.18,.1,10,'trim'),-1.48,-2.11,0));
     }
     const model = merge(...parts);
     model.wheels = wheels;
@@ -572,7 +639,7 @@
   // The commander on foot, posed each frame: boxes hinged at the hips,
   // knees, shoulders and elbows, walking toward +x.
   // ---------------------------------------------------------------------
-  function commander(stride, {walking = true, reach = 0} = {}) {
+  function commander(stride = 0, {walking = true, reach = 0} = {}) {
     const parts = [];
     const limb = (length, width, [px, py, pz], angle, knee = 0) => {
       const upper = move(turn(block(-width / 2, 0, -width / 2, width / 2, length, width / 2), 0, 0, angle),
