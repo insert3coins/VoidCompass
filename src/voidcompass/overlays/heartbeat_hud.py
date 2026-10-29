@@ -25,6 +25,9 @@ from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 from voidcompass.overlays import watcher_mind
 
 _STALL_AFTER_S = 15
+# A thought shown while the voice was held is said when it is released, if it
+# showed this recently: the page keeps it up longer than the mind does.
+_HELD_THOUGHT_S = 30
 # Enough history for the orb to catch up on a burst between two polls.
 _EVENT_HISTORY = 24
 
@@ -353,6 +356,9 @@ class HeartbeatHUD:
         # 5.6.9: a thought that showed while the voice was held (the boot
         # curtain, say) is still on screen: say it now rather than never.
         thought = self.mind.current() if active else None
+        shown = getattr(self, '_shown_thought', None)
+        if active and not thought and shown and time.monotonic() - shown[1] < _HELD_THOUGHT_S:
+            thought = shown[0]
         if thought and thought['id'] == self._spoken_id and (getattr(self, '_voiced', None) or (None,))[0] != thought['id']:
             self._voice_thought(thought)
             self._redraw()
@@ -476,6 +482,7 @@ class HeartbeatHUD:
             return None
         if thought['id'] != self._spoken_id:
             self._spoken_id = thought['id']
+            self._shown_thought = (thought, time.monotonic())
             # A new thought: the local API's event stream hears it (5.5.7).
             listener = getattr(self, 'thought_listener', None)
             if callable(listener):

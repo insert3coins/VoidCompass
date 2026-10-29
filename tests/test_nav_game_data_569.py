@@ -4,7 +4,7 @@ The FSD cooldown counts down to FSD READY once its length has been measured
 (tests/test_jump_clock_569.py learns it); a carrier's departure fills the rail
 from the request to the jump; the pad you were cleared to stays with you in
 the hangar; your locked target flies its own hull with its scanned shields and
-hull; the power distributor's pips sit in the deck's corner; and the body you
+hull; the power distributor's pips sit on the ship's portrait; and the body you
 are at is drawn as your scan has it, rings and atmosphere only if it has them.
 """
 
@@ -158,10 +158,15 @@ class GameDataHudTests(unittest.TestCase):
         self.show(page, "ORBITAL APPROACH", body={"kind": "gas", "rings": 2, "atmosphere": True, "radius_km": 60000})
         self.assertIn("gas2a", page.evaluate("navigationScene.state.identity"))
         self.assertNotEqual(self.controlled_frame(page, 1.37)["deck"], plain)
+        # The distributor sits on the ship's portrait, clear of the hologram.
         self.show(page, "FLIGHT")
-        plain = self.controlled_frame(page, 1.37)["deck"]
-        self.show(page, "FLIGHT", pips=[8, 0, 4])
-        self.assertNotEqual(self.controlled_frame(page, 1.37)["deck"], plain)
+        self.assertTrue(page.locator("#vehicle-pips").is_hidden())
+        self.show(page, "FLIGHT", pips=[8, 0, 3])
+        columns = page.evaluate("[...document.querySelectorAll('#vehicle-pips b')].map(b => [...b.children].map(i => i.className))")
+        self.assertEqual(columns, [["full"] * 4, [""] * 4, ["full", "half", "", ""]])
+        self.assertTrue(page.evaluate("document.querySelector('.holo-bay').contains(document.getElementById('vehicle-pips'))"))
+        self.show(page, "FLIGHT", pips=[8, 0, 3], in_main_ship=False)
+        self.assertTrue(page.locator("#vehicle-pips").is_hidden(), "on foot or in the SRV there is no distributor")
 
     def test_the_new_scenes_stay_cheap_to_draw(self):
         page = self.open()

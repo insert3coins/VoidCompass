@@ -599,19 +599,10 @@ function systems(s) {
   const boost = new THREE.Group(); anchor.add(boost);
   const tier = s.state.d.neutronBoostValue >= 5.5 ? 3 : s.state.d.neutronBoostValue >= 3.5 ? 2 : 1;
   for (let i = 0; i < tier; i++) s.circle(size * (.7 + i * .09), [0, 0, 0], 'accent', .6, {tilt: .3 + i * .45, arc: TAU * .7, parent: boost});
-  // The power distributor (5.6.9): SYS, ENG and WEP as Elite's three columns
-  // of four pips in the deck's corner; the shield and hardpoints follow theirs.
-  const distributor = [0, 1, 2].map(() => [0, 1, 2, 3].map(() => s.mark([[-2.6, -1.3], [2.6, -1.3], [2.6, 1.3], [-2.6, 1.3]], 'state', .85)));
-  s.animations.push((st, view) => {
+  // The shield and hardpoints follow the power distributor (5.6.9); its
+  // pips themselves sit on the ship's portrait (app.js).
+  s.animations.push(st => {
     const pips = st.d.inMainShip ? st.d.pips : null;
-    distributor.forEach((column, c) => column.forEach((mark, i) => {
-      mark.visible = Boolean(pips);
-      if (!pips) return;
-      // Clear of the alarm chevrons in the corner.
-      mark.position.set(view.W / 2 - 62 + c * 8, -view.H / 2 + 8 + i * 4, 0);
-      const left = pips[c] - i * 2;
-      mark.material.opacity = (left >= 2 ? .9 : left === 1 ? .45 : .12) * s.opacity;
-    }));
     if (pips) {
       shield.material.uniforms.uOpacity.value = (.35 + .65 * pips[0] / 8) * s.opacity;
       for (const line of hardpoints.children) line.material.opacity = (.35 + .65 * pips[2] / 8) * .8 * s.opacity;

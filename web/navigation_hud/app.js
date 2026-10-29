@@ -8,7 +8,7 @@ const dom = Object.fromEntries([
   'hud', 'notice', 'state-tag', 'state-label', 'event-notice',
   'instrument', 'instrument-fill', 'instrument-marker', 'instrument-readout',
   'lamps', 'fuel-gauge', 'fuel-cells', 'metric-fuel',
-  'vehicle-display', 'vehicle-image', 'vehicle-type', 'vehicle-name',
+  'vehicle-display', 'vehicle-image', 'vehicle-type', 'vehicle-name', 'vehicle-pips',
   'region-label', 'system-clock', 'current-system', 'current-star-orb', 'current-star-label',
   'route-block', 'route-title', 'route-target', 'route-target-label', 'route-star-orb', 'route-next', 'route-distance', 'route-progress',
   'route-pips', 'route-origin', 'route-destination', 'survey-block', 'survey-title',
@@ -892,7 +892,21 @@ function vehicleCaption(state = {}, presentation = null) {
   return {type: type || (ownShip ? 'SHIP' : ''), name: ownShip && name !== type ? name : ''};
 }
 
+// The power distributor (5.6.9), from Status.json's half pips (SYS, ENG,
+// WEP), on the portrait while you're in your ship.
+function renderPips(state = {}) {
+  const dynamics = state.dynamics || {}, pips = dynamics.pips;
+  const shown = Array.isArray(pips) && pips.length === 3 && dynamics.in_main_ship !== false;
+  dom['vehicle-pips'].hidden = !shown;
+  if (!shown) return;
+  [...dom['vehicle-pips'].children].forEach((column, c) => [...column.children].forEach((pip, i) => {
+    const left = (Number(pips[c]) || 0) - i * 2;
+    pip.className = left >= 2 ? 'full' : left === 1 ? 'half' : '';
+  }));
+}
+
 function renderVehicle(state = {}, reducedMotion = false) {
+  renderPips(state);
   const presentation = vehiclePresentation(state);
   const host = dom['vehicle-display'];
   const image = dom['vehicle-image'];

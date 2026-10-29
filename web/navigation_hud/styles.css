@@ -186,6 +186,14 @@ body {
   filter: drop-shadow(0 0 5px color-mix(in srgb, var(--hud) 34%, transparent)) saturate(.92) brightness(1.06);
 }
 .holo-bay img:not([src]) { visibility: hidden; }
+/* The power distributor (5.6.9): SYS, ENG and WEP as Elite's three columns of
+   four pips, in the portrait's bottom-right corner, filling from the bottom. */
+.vehicle-pips { position: absolute; z-index: 4; right: 4px; bottom: 3px; display: flex; gap: 2px; pointer-events: none; }
+.vehicle-pips[hidden] { display: none; }
+.vehicle-pips b { display: flex; flex-direction: column-reverse; gap: 1px; }
+.vehicle-pips i { display: block; width: 6px; height: 3px; background: var(--hud); opacity: .16; }
+.vehicle-pips i.half { opacity: .5; }
+.vehicle-pips i.full { opacity: .95; box-shadow: 0 0 3px color-mix(in srgb, var(--hud) 60%, transparent); }
 /* Projection lines keep the portrait inside the HUD's holographic layer. */
 .holo-emitter {
   position: absolute; inset: 0; z-index: 2; pointer-events: none;

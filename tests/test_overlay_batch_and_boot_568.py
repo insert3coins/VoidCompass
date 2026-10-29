@@ -1,5 +1,6 @@
 """5.6.8: batch overlay updates and a silent boot handoff."""
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -126,6 +127,17 @@ class VoiceBootTests(unittest.TestCase):
         hud.set_voice_active(False)
         hud.set_voice_active(True)
         self.assertEqual(len(said), 1)
+        # The page holds a thought longer than the mind does ("long" hold):
+        # one shown moments ago is still said; a stale one isn't.
+        hud.set_voice_active(False)
+        hud._shown_thought = ({'id': 't2', 'text': 'Your little one is asleep.', 'topic': 'hatchling_idle'}, time.monotonic() - 12)
+        hud.set_voice_active(True)
+        self.assertEqual(said[-1], ('Your little one is asleep.', 't2'))
+        hud.set_voice_active(False)
+        hud._spoken_id = 't3'
+        hud._shown_thought = ({'id': 't3', 'text': 'Long ago.', 'topic': 'idle'}, time.monotonic() - 90)
+        hud.set_voice_active(True)
+        self.assertEqual(len(said), 2)
 
 
 if __name__ == '__main__':
