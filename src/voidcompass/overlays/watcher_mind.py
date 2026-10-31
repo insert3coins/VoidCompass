@@ -27,12 +27,13 @@ from pathlib import Path
 import zlib
 
 from voidcompass.core import ranks
+from voidcompass.exploration import bio_values
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
 from voidcompass.mining.mining_record import material_name
 from voidcompass.overlays import (
-    watcher_deeper, watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures, watcher_places,
-    watcher_copilot, watcher_knowing, watcher_learning, watcher_llm, watcher_name, watcher_postcards, watcher_questions,
-    watcher_voice_lore, watcher_worlds,
+    watcher_deeper, watcher_field, watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures,
+    watcher_places, watcher_copilot, watcher_knowing, watcher_learning, watcher_llm, watcher_name, watcher_postcards,
+    watcher_questions, watcher_voice_lore, watcher_worlds,
 )
 
 # 5.7.1, its own words: how long a sign-off recap may take; how often it
@@ -222,6 +223,10 @@ IMPORTANCE = {
     "world_ammonia": 2,
     "world_terraformable": 1,
     "world_first": 3,
+    # In the field (5.7.2): the first world nobody found here, the first map
+    # and footsteps; how far to the next biology sample, and when you're clear.
+    "planet_first": 3, "mapped_first": 3, "footfall_first": 3,
+    "sample_first": 3, "sample_second": 3, "sample_clear": 3,
     # 5.5.3.1: rare worlds, and its word at the end of a session.
     "rare_world": 2,
     "green_giant": 3,
@@ -365,6 +370,8 @@ MOODS = {
     "world_ammonia": "curious",
     "world_terraformable": "curious",
     "world_first": "pleased",
+    "planet_first": "pleased", "mapped_first": "pleased", "footfall_first": "pleased",
+    "sample_first": "curious", "sample_second": "curious", "sample_clear": "curious",
     "on_this_day": "downcast",
     "capsule_early": "curious",
     "constellation_named": "pleased",
@@ -611,6 +618,8 @@ class WatcherMind:
         self._low_health = False
         self._fuel_warned = False
         self._codex_bodies = set()
+        # 5.7.2: being first in this system (its scans, until you jump).
+        self.field = watcher_field.FieldNotes()
         self._last_interesting = self.clock()
         self._pending = []           # (importance, topic, fields)
         self._dead_since = None
@@ -1456,6 +1465,13 @@ class WatcherMind:
     def _observe(self, event, raw):
         raw = raw if isinstance(raw, dict) else {}
         now = self.clock()
+        # The first map of a world, the first footsteps on one (5.7.2).
+        first = self.field.observe(event, raw)
+        if first:
+            self._last_interesting = now
+            thought = self.consider(*first)
+            if thought:
+                return thought
         # A break of a quarter of an hour or more ends the session: the
         # next sign of life starts a new one (long-session talk restarts).
         last_event, self._last_event_at = getattr(self, "_last_event_at", None), now
@@ -1552,6 +1568,15 @@ class WatcherMind:
         if event == "ScanOrganic" and str(raw.get("ScanType") or "").casefold() == "analyse":
             species = raw.get("Species_Localised") or raw.get("Genus_Localised")
             return self.consider("analysed", {"species": species}) if species else None
+        if event == "ScanOrganic" and str(raw.get("ScanType") or "").casefold() in ("log", "sample"):
+            # How far the next sample must be (5.7.2): its genus's colony range.
+            species = raw.get("Species_Localised") or raw.get("Genus_Localised")
+            genus = raw.get("Genus_Localised") or str(species or "").split(" ")[0]
+            distance = bio_values.GENUS_COLONY_M.get(genus)
+            if species and distance:
+                topic = "sample_first" if str(raw.get("ScanType")).casefold() == "log" else "sample_second"
+                return self.consider(topic, {"species": species, "distance": f"{distance:,}"}, force=True)
+            return None
         if event == "Touchdown" and raw.get("PlayerControlled", True):
             return self.consider("touchdown")
         # Flying and walking about (5.5.3.2).
@@ -1652,6 +1677,10 @@ class WatcherMind:
                 topic = {"earthlike body": "world_earthlike", "water world": "world_water",
                          "ammonia world": "world_ammonia"}.get(planet, "world_terraformable")
                 return self.consider(topic, fields)
+            # A world nobody had found, in a system others charted (5.7.2).
+            if self.field.first_world(raw):
+                self._last_interesting = now
+                return self.consider("planet_first", {"body": raw.get("BodyName") or "That world"})
             return None
         if event == "CodexEntry" and is_green_giant_codex(raw):
             self._last_interesting = now
@@ -1742,6 +1771,9 @@ class WatcherMind:
             # An expedition's milestones come once each (the expedition
             # remembers them), so they're said whatever the hour.
             return self.consider(kind, fields, force=True)
+        if kind == "sample_clear":
+            # Far enough from the last sample (5.7.2): the dashboard says once a sample.
+            return self.consider("sample_clear", fields, force=True)
         if kind == "codex_new":
             body = str(fields.get("body") or "")
             if not body or body in self._codex_bodies:

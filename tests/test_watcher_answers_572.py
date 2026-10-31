@@ -4,6 +4,8 @@ the past), new lookups name your cargo, describe the station you're docked
 at and list the system's factions, and "remember that…" is kept. The model
 is faked, as in test_watcher_llm_571."""
 
+from pathlib import Path
+import tempfile
 import threading
 import time
 import unittest
@@ -503,6 +505,126 @@ class MoreLookupTests(unittest.TestCase):
         deck.current_body_name = "Colonia 3 C"
         self.assertEqual(deck._watcher_lookup_world("what's the gravity here?")[0], "Colonia 3 C: an Icy body")
         self.assertEqual(deck._watcher_lookup_world("tell me about planet 4?")[0], "Colonia 4: a Rocky body")
+
+
+# -- what the cargo is worth, and commodity prices -----------------------------------------
+HELD = [{"symbol": "tritium", "name": "Tritium", "count": 40, "stolen": 0},
+        {"symbol": "lowtemperaturediamond", "name": "Low Temperature Diamonds", "count": 12, "stolen": 0},
+        {"symbol": "imperialslaves", "name": "Imperial Slaves", "count": 2, "stolen": 2}]
+ITEMS = [{"symbol": "gold", "name": "Gold", "buy": 48000, "sell": 47000, "mean": 46000, "stock": 500, "demand": 0},
+         {"symbol": "tritium", "name": "Tritium", "buy": 0, "sell": 51000, "mean": 42000, "stock": 0, "demand": 900},
+         {"symbol": "water", "name": "Water", "buy": 200, "sell": 150, "mean": 400, "stock": 9000, "demand": 0},
+         {"symbol": "painite", "name": "Painite", "buy": 0, "sell": 300000, "mean": 250000, "stock": 0, "demand": 20}]
+
+
+class PriceTopicTests(unittest.TestCase):
+    def test_prices_and_value(self):
+        self.assertEqual(copilot.topics_for("What's the value of my cargo?"), ["cargo"])
+        self.assertEqual(copilot.topics_for("What's the price of gold?"), ["market"])
+        self.assertEqual(copilot.topics_for("What's good to sell here?"), ["market"])
+        self.assertEqual(copilot.topics_for("How much can I sell our exploration data for?"), ["data"], "the data, not a market")
+
+
+class PriceLineTests(unittest.TestCase):
+    def test_the_cargo_priced_where_youre_docked(self):
+        lines = copilot.cargo_value_lines(HELD, "Jaques Station", {"tritium": 51000, "lowtemperaturediamond": 180000},
+                                          {"tritium": 42000, "lowtemperaturediamond": 120000},
+                                          {"lowtemperaturediamond": 650000}, {"tritium": 38000})
+        self.assertEqual(lines, [
+            "The cargo would sell for 4,200,000 credits in all at Jaques Station",
+            "Tritium, 40 tonnes: 2,040,000 credits here, 51,000 a tonne, galactic average 42,000 a tonne, "
+            "bought for about 38,000 a tonne",
+            "Low Temperature Diamonds, 12 tonnes: 2,160,000 credits here, 180,000 a tonne, galactic average 120,000 a tonne, "
+            "best price anywhere right now 650,000 a tonne",
+            "Imperial Slaves, 2 tonnes: not bought at Jaques Station, stolen, so only a black market buys it"])
+
+    def test_the_cargo_at_galactic_averages_in_flight(self):
+        lines = copilot.cargo_value_lines(HELD[:2], "", {}, {"tritium": 42000, "lowtemperaturediamond": 120000})
+        self.assertEqual(lines[0], "At the galactic average prices, the cargo is worth about 3,120,000 credits in all")
+        self.assertIn("No prices known", copilot.cargo_value_lines(HELD[:1], "", {}, {})[0])
+        self.assertEqual(copilot.cargo_value_lines([], "", {}, {}), [])
+
+    def test_a_commodity_you_name(self):
+        lines = copilot.market_lines("Jaques Station", ITEMS, [("gold", "Gold"), ("painite", "Painite"), ("voidopal", "Void Opal")],
+                                     True, None, {"Painite": (None, 520000)})
+        self.assertEqual(lines, [
+            "Prices at Jaques Station",
+            "Gold: Jaques Station sells it for 48,000 a tonne (500 in stock), galactic average 46,000 a tonne",
+            "Painite: Jaques Station buys it for 300,000 a tonne, galactic average 250,000 a tonne",
+            "Painite, best prices anywhere right now: sells for up to 520,000 a tonne",
+            "Void Opal: not traded at Jaques Station"])
+
+    def test_what_sells_well_and_whats_cheap(self):
+        lines = copilot.market_lines("Jaques Station", ITEMS, (), False, 3 * 86400)
+        self.assertEqual(lines, [
+            "Prices at Jaques Station, the last market the commander opened (3 days ago)",
+            "Best to sell there (above the galactic average): Tritium 51,000 (average 42,000), Painite 300,000 (average 250,000)",
+            "Cheapest to buy there (below the galactic average): Water 200 (average 400)"])
+
+    def test_best_prices_being_fetched_and_no_market_yet(self):
+        self.assertEqual(copilot.market_lines("", [], [("gold", "Gold")], fetching=True),
+                         ["Best prices anywhere are being fetched from Spansh: ask again in a moment"])
+        self.assertIn("No market prices known yet", copilot.market_lines("", [], ())[0])
+
+
+class PriceLookupTests(unittest.TestCase):
+    def deck(self, folder):
+        import json
+        deck = Deck()
+        deck.config = {"journal_path": folder}
+        deck.current_docked, deck.current_station_market_id = True, 128666762
+        (Path(folder) / "Market.json").write_text(json.dumps({
+            "timestamp": "2026-11-01T10:00:00Z", "MarketID": 128666762, "StationName": "Jaques Station",
+            "Items": [{"Name": "$gold_name;", "Name_Localised": "Gold", "BuyPrice": 48000, "SellPrice": 47000,
+                       "MeanPrice": 46000, "Stock": 500, "Demand": 0},
+                      {"Name": "$tritium_name;", "Name_Localised": "Tritium", "BuyPrice": 0, "SellPrice": 51000,
+                       "MeanPrice": 42000, "Stock": 0, "Demand": 900},
+                      {"Name": "$lowtemperaturediamond_name;", "Name_Localised": "Low Temperature Diamonds",
+                       "BuyPrice": 0, "SellPrice": 180000, "MeanPrice": 120000, "Stock": 0, "Demand": 50}]}),
+            encoding="utf-8")
+        deck.trading_names = None
+        deck._trading_online = lambda: False
+        deck._trading_cargo = lambda: [{"symbol": "tritium", "name": "Tritium", "count": 10, "stolen": 0}]
+        deck.trading_store = FakeTrades()
+        deck.current_cargo_inventory = [{"Name": "tritium", "Count": 10}]
+        deck.current_cargo_vessel = "Ship"
+        deck._active_cargo_capacity = lambda: 64
+        return deck
+
+    def test_the_cargo_value_from_the_games_market_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            deck = self.deck(folder)
+            lines = deck._watcher_lookup_cargo("what's the value of my cargo?")
+            self.assertEqual(lines[0], "The cargo would sell for 510,000 credits in all at Jaques Station")
+            self.assertIn("bought for about 36,000 a tonne", lines[1], "6 at 40,000 and 4 at 30,000: your buys since the last sale")
+            self.assertEqual(lines[-1], "Tritium: 10 tonnes")
+            self.assertEqual(deck._watcher_lookup_cargo("what cargo do we have?")[0],
+                             "The ship's hold carries 10 tonnes, with 54 tonnes free", "no prices unless asked")
+
+    def test_a_price_and_a_named_commodity(self):
+        with tempfile.TemporaryDirectory() as folder:
+            deck = self.deck(folder)
+            lines = deck._watcher_lookup_market("what are LTDs going for?")
+            self.assertIn("Low Temperature Diamonds: Jaques Station buys it for 180,000 a tonne, galactic average 120,000 a tonne",
+                          lines)
+            self.assertEqual(deck._watcher_commodities_named("price of gold and low temperature diamonds",
+                                                             deck._watcher_market_file()["items"]),
+                             [("lowtemperaturediamond", "Low Temperature Diamonds"), ("gold", "Gold")])
+
+    def test_a_commodity_you_carry_with_a_price_word_finds_its_value(self):
+        with tempfile.TemporaryDirectory() as folder:
+            deck = self.deck(folder)
+            deck._watcher_lookup_market = lambda question="": ["market"]
+            self.assertEqual(deck._watcher_llm_lookup("what's my tritium worth?")[0],
+                             "The cargo would sell for 510,000 credits in all at Jaques Station")
+
+
+class FakeTrades:
+    def query(self, sql, params=()):
+        if params == ("tritium",):
+            return [{"kind": "buy", "count": 6, "price": 40000}, {"kind": "buy", "count": 10, "price": 30000},
+                    {"kind": "sell", "count": 4, "price": 50000}]
+        return []
 
 
 if __name__ == "__main__":

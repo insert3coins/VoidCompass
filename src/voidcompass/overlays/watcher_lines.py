@@ -1078,6 +1078,12 @@ for _topic, _normal, _weary in (
         ("world_first", _worlds.WORLD_FIRST_NORMAL, _worlds.WORLD_FIRST_WEARY)):
     NORMAL[_topic] = list(_normal)
     WEARY[_topic] = list(_weary)
+# In the field (5.7.2): being first, and the distance between samples.
+from voidcompass.overlays import watcher_field as _field  # noqa: E402
+
+for _topic, _normal, _weary in _field.BANKS:
+    NORMAL[_topic] = list(_normal)
+    WEARY[_topic] = list(_weary)
 # Book Three (5.5.3.9): the same voice, a shade darker, once it has begun.
 from voidcompass.overlays.watcher_lore_three import MUSINGS_THREE  # noqa: E402
 

@@ -368,6 +368,26 @@ You found it answered a cargo question with the ship, the system and the jumps; 
   - `ship_lines` gains the rebuy and the legal state (`LEGAL_STATES`).
   - Topic clashes settled: "how many jumps left" is the route and "how many jumps have we made" the record; "reputation with the Federation" is ranks, not factions; a world question isn't a survey one.
   - Real 4B answers were checked for all of them.
+- **What the cargo is worth, and commodity prices** (you asked both):
+  - `cargo_value_lines` (the cargo topic when `VALUE_ASKED`): the docked station's own sell prices if Market.json is this market (`_watcher_market_file`, keyed by journal symbol like the hold), else the galactic averages it lists (`MeanPrice`).
+    - With them: what you paid (`_watcher_paid`, from your buys in trading.db since you last sold it; mined cargo gets no price), the best price anywhere (Spansh's `price_ranges`, only if already fetched), and stolen goods as black market only.
+    - "What's my tritium worth?" finds the cargo through a held commodity's name.
+  - `market_lines` (topic `market`, or a commodity named with a price word):
+    - For a commodity you name (`_watcher_commodities_named`: the market file's names, every name the Trading page knows, and aliases such as LTDs), what that market buys it for and sells it for (with stock), the galactic average, and the best prices anywhere.
+    - Naming none, what sells above the average and what's cheapest to buy there. The market file's age is given when you're not docked there.
+    - Spansh: the first price question starts the Trading page's own warm-up (`_trading_warm_up`, once a session, only with `trading_online_enabled`) and is never waited on. The answer says the prices are being fetched, and are there the next time.
+  - Real 4B answers checked: cargo 4,200,000 at Jaques Station split right; gold's price, stock and average; painite up to 520,000 anywhere against 300,000 there; what's good to sell.
+  - Not yet: where the best price is (a Spansh station search, as the Trading page does, slower and online).
+- **In the field** (`overlays/watcher_field.py`; you: "tell us when we're the first, and the distance for the next bio scan"):
+  - New Watcher topics, importance 3, with 10+ lines a voice:
+    - `planet_first`: the first world nobody found in a system others charted, once a system. An undiscovered system keeps `undiscovered_system` and the streak, and special worlds keep `world_first`.
+    - `mapped_first`: from the Scan's `WasMapped`, on `SAAScanComplete`.
+    - `footfall_first`: from `WasFootfalled`, on `Disembark` on a planet.
+  - `FieldNotes` keeps this system's scans until a jump.
+  - `sample_first` and `sample_second` (on `ScanOrganic` Log and Sample; distance from `bio_values.GENUS_COLONY_M`), and `sample_clear` (the dashboard's `_watcher_sample_clear`, once a sample, when `sample_clearance` turns clear).
+    - Said whatever the Thoughts pace (forced), except when Thoughts are off.
+    - Never reworded (`sample_` in `SET_PREFIXES`), so the distance can't be lost.
+  - `tests/test_watcher_field_572.py`.
 - **"Remember that…"** (`remember_request`, `_watcher_remember`): kept with TEACH IT (`watcher_knowing.teach`). The note-taker passes over requests, so a "remember" never stuck before. "Remember when…?" is a question, and mystery names are refused in its own words.
 - `tests/test_watcher_answers_572.py`.
 

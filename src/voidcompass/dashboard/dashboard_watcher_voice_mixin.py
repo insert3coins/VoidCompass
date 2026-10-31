@@ -6,8 +6,10 @@ thought settings (moved there from Overlay Studio).
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
+import os
 import re
 import time
 
@@ -23,6 +25,7 @@ from voidcompass.overlays import (
     watcher_copilot, watcher_deeper, watcher_habits, watcher_knowing, watcher_llm, watcher_mind, watcher_name,
     watcher_voice_lore, watcher_world,
 )
+from voidcompass.trading.commodities import symbol
 from voidcompass.overlays.heartbeat_hud import HEARTBEAT_TEXT_SIZES, heartbeat_text_size, thought_side_setting
 from voidcompass.voice import voice_assets
 from voidcompass.voice.watcher_voice import LEVELS, SPEEDS, WatcherSpeaker
@@ -36,7 +39,10 @@ WATCHER_SELECTS = (
 WATCHER_SWITCHES = ("heartbeat_thought_backdrop", "heartbeat_thought_heading")
 TEST_LINE = "This is my voice, Commander. I can hear you. Well. I can hear the ship."
 # The lookups that need what you asked: the world you name, the material you name.
-ASKS_THE_QUESTION = {"life", "planet", "materials", "codex", "world", "record"}
+ASKS_THE_QUESTION = {"life", "planet", "materials", "codex", "world", "record", "cargo", "market"}
+# Short names commanders use for commodities.
+COMMODITY_ALIASES = {"ltd": "Low Temperature Diamonds", "ltds": "Low Temperature Diamonds",
+                     "vo": "Void Opal", "vos": "Void Opal"}
 # "Where are the sites?" wants the sites first, not the crust's makeup.
 SITES_ASKED = re.compile(r"\b(sites?|rigs?|deposits?|drill\w*|where)\b", re.I)
 # A card from your sources is never kept if it names what the Watcher never
@@ -279,7 +285,19 @@ class DashboardWatcherVoiceMixin:
         """What the ship's systems show about what you asked it (5.7.1): only
         the systems the question is about, each as plain lines of fact."""
         lines = []
-        for topic in watcher_copilot.topics_for(question):
+        topics = watcher_copilot.topics_for(question)
+        # "What's my tritium worth?": a commodity you're carrying, and its value.
+        if "cargo" not in topics and watcher_copilot.VALUE_ASKED.search(str(question or "")):
+            words = _asked_words(question)
+            held = {str(row.get("Name_Localised") or row.get("Name") or "").casefold()
+                    for row in getattr(self, "current_cargo_inventory", None) or () if isinstance(row, dict)}
+            if any(name and f" {name}" in words for name in held):
+                topics.append("cargo")
+        # "What's gold going for?": a commodity named with a price word.
+        if "market" not in topics and "data" not in topics and watcher_copilot.VALUE_ASKED.search(str(question or "")):
+            if self._watcher_commodities_named(question, self._watcher_market_file().get("items") or ()):
+                topics.append("market")
+        for topic in topics:
             try:
                 lookup = getattr(self, f"_watcher_lookup_{topic}")
                 lines += lookup(question) if topic in ASKS_THE_QUESTION else lookup()
@@ -308,10 +326,115 @@ class DashboardWatcherVoiceMixin:
             ((getattr(self, "companion_state", None) or {}).get("loadout") or {}).get("Rebuy") or ship.get("rebuy"),
             getattr(self, "current_legal_state", "") or "")
 
-    def _watcher_lookup_cargo(self):
+    def _watcher_lookup_cargo(self, question=""):
         hold = str(getattr(self, "current_cargo_vessel", "Ship") or "Ship")
         capacity = self._active_cargo_capacity() if hold.casefold() == "ship" else 0
-        return watcher_copilot.cargo_lines(getattr(self, "current_cargo_inventory", None) or [], capacity, hold)
+        lines = watcher_copilot.cargo_lines(getattr(self, "current_cargo_inventory", None) or [], capacity, hold)
+        if watcher_copilot.VALUE_ASKED.search(str(question or "")):
+            # Asked what it's worth: the value first, then what's in the hold.
+            lines = self._watcher_cargo_value() + lines[1:]
+        return lines
+
+    def _watcher_market_file(self):
+        """The game's Market.json (the last commodity market opened): its
+        station, its items by symbol, and how old it is."""
+        journal_path = self.config.get("journal_path") or getattr(getattr(self, "watcher", None), "journal_path", None)
+        try:
+            with open(os.path.join(str(journal_path or ""), "Market.json"), "r", encoding="utf-8") as handle:
+                market = json.load(handle)
+        except (OSError, ValueError):
+            return {}
+        if not isinstance(market, dict):
+            return {}
+        names = getattr(self, "trading_names", None)
+        items = []
+        for item in market.get("Items") or ():
+            if not isinstance(item, dict) or not item.get("Name"):
+                continue
+            key = symbol(item.get("Name"))
+            name = str(item.get("Name_Localised") or (names.name(item.get("Name")) if names else key) or key)
+            items.append({"symbol": key, "name": name, "buy": int(item.get("BuyPrice") or 0),
+                          "sell": int(item.get("SellPrice") or 0), "mean": int(item.get("MeanPrice") or 0),
+                          "stock": int(item.get("Stock") or 0), "demand": int(item.get("Demand") or 0)})
+        docked = bool(getattr(self, "current_docked", False) and market.get("MarketID")
+                      and market.get("MarketID") == getattr(self, "current_station_market_id", None))
+        return {"station": str(market.get("StationName") or ""), "items": items, "docked": docked,
+                "timestamp": market.get("timestamp")}
+
+    def _watcher_commodities_named(self, question, items=()):
+        """The commodities your words name, as (symbol, name), longest first:
+        from the last market's list and every name the Trading page knows."""
+        words = _asked_words(question)
+        known = {row["name"]: row["symbol"] for row in items or ()}
+        names = getattr(self, "trading_names", None)
+        if names is not None:
+            for name in names.all_names():
+                known.setdefault(name, symbol(name))
+        for alias, name in COMMODITY_ALIASES.items():
+            if f" {alias} " in words:
+                words += f" {name.casefold()} "
+        found, taken = [], set()
+        for name in sorted(known, key=len, reverse=True):
+            folded = name.casefold()
+            if len(folded) > 2 and f" {folded}" in words and not any(folded in other for other in taken):
+                found.append((known[name], name))
+                taken.add(folded)
+        return found[:3]
+
+    def _watcher_lookup_market(self, question=""):
+        """Commodity prices: the market you're at or last opened, the galactic
+        averages, and Spansh's best prices (fetched once a session, never waited on)."""
+        market = self._watcher_market_file()
+        items = market.get("items") or []
+        asked = self._watcher_commodities_named(question, items)
+        ranges = getattr(self, "_trading_price_ranges", None)
+        fetching = False
+        if asked and ranges is None and self._trading_online():
+            self._trading_warm_up()
+            fetching = True
+        best = {name: ((ranges or {}).get(name) or {}) for _key, name in asked}
+        best = {name: (row.get("buy_min"), row.get("sell_max")) for name, row in best.items() if row}
+        age = time.time() - watcher_copilot._when(market.get("timestamp")) if market.get("timestamp") else None
+        return watcher_copilot.market_lines(market.get("station") or "", items, asked, market.get("docked"), age,
+                                            best, fetching)
+
+    def _watcher_cargo_value(self):
+        """The hold priced (5.7.2): Market.json gives the docked station's own
+        prices and the galactic average for what it lists; the trade store,
+        what you paid; Spansh's best prices, only if already fetched."""
+        held = self._trading_cargo()
+        market = self._watcher_market_file()
+        items = market.get("items") or []
+        averages = {row["symbol"]: row["mean"] for row in items if row["mean"]}
+        station, here = "", {}
+        if market.get("docked"):
+            station = market.get("station") or ""
+            here = {row["symbol"]: row["sell"] for row in items if row["sell"] > 0}
+        ranges = getattr(self, "_trading_price_ranges", None) or {}
+        best = {row["symbol"]: (ranges.get(row["name"]) or {}).get("sell_max") for row in held
+                if (ranges.get(row["name"]) or {}).get("sell_max")}
+        paid = {row["symbol"]: price for row in held if (price := self._watcher_paid(row["symbol"], row["count"]))}
+        return watcher_copilot.cargo_value_lines(held, station, here, averages, best, paid)
+
+    def _watcher_paid(self, commodity, count):
+        """What you paid a tonne for what you hold: your buys since you last
+        sold it (mined or salvaged cargo cost nothing, and gets no price)."""
+        store = getattr(self, "trading_store", None)
+        if store is None or count <= 0:
+            return None
+        try:
+            rows = store.query("SELECT kind, count, price FROM trades WHERE commodity = ? ORDER BY ts DESC LIMIT 40",
+                               (commodity,))
+        except Exception:
+            return None
+        bought = spent = 0
+        for row in rows:
+            if row["kind"] != "buy" or bought >= count:
+                break
+            take = min(int(row["count"] or 0), count - bought)
+            bought += take
+            spent += take * int(row["price"] or 0)
+        return round(spent / bought) if bought else None
 
     def _watcher_lookup_station(self):
         if not getattr(self, "current_docked", False):

@@ -10536,6 +10536,7 @@ class MainDashboard(
 
     def _update_sampling_clearance(self):
         sample = self._sampling_snapshot()
+        self._watcher_sample_clear(sample)
         if self.survey_status_hud:
             self._ui_post(lambda s=sample: self.survey_status_hud.update(
                 self.current_sys, self.scanned, self.total, self.scan_items, self.body_signals, sampling=s,
@@ -10547,6 +10548,20 @@ class MainDashboard(
             ), key="survey-status")
         if getattr(self, "exploration_window", None) and self.exploration_window.is_open():
             self._ui_post(self.exploration_window._render_sampling, key="exploration-sampling")
+
+    def _watcher_sample_clear(self, sample):
+        """Far enough from the last sample: the Watcher says so, once a
+        sample (5.7.2)."""
+        if not sample or not sample.get("clear") or int(sample.get("progress") or 0) >= 3 or not sample.get("colony_m"):
+            return
+        key = (sample.get("body"), sample.get("species"), sample.get("progress"))
+        if key == getattr(self, "_watcher_clear_said", None):
+            return
+        self._watcher_clear_said = key
+        hud = getattr(self, "heartbeat_hud", None)
+        if hud is not None and hasattr(hud, "note"):
+            fields = {"species": str(sample.get("species") or "it"), "distance": f"{int(sample['colony_m']):,}"}
+            self._ui_post(lambda: hud.note("sample_clear", fields), key="watcher-sample-clear")
 
     def _check_rebuy_warning(self, event=None, notify=True):
         notify = bool(notify and self.config.get("rebuy_warnings_enabled", True))

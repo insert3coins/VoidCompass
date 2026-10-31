@@ -17,8 +17,11 @@
   * **Unsold data:** what your exploration data and exobiology samples are worth, and that both are lost with the ship.
   * **The world you're at, or one you name:** what it is, landable or not, gravity, temperature, atmosphere, what it's worth scanned and mapped, and whether you were the first to discover, map or set foot on it.
   * **Your lifetime record:** hours played, systems visited, jumps, light years, and your earnings from exploration, exobiology, combat, trade and mining, whichever you ask about.
+  * **What your cargo is worth:** at the station you're docked at, or at the galactic average prices in flight, with what you paid for it and the best price anywhere. "What's my tritium worth?" works too.
+  * **Commodity prices:** what the market you're at (or last opened) pays and charges for anything you name, the galactic average, and the best prices anywhere (from Spansh, as on the Trading page; the first time you ask they're fetched, so ask again a moment later). Ask what's good to sell or cheap to buy there and it tells you.
   * **Rebuy and legal status:** what replacing the ship would cost, and whether you're clean or wanted.
 * **"Remember that…"** Tell it something to remember ("remember that my carrier is the Black Rose") and it keeps it in its LIBRARY, with what you teach it there, and draws on it when you talk.
+* **In the field, it tells you.** The Watcher now says when you're the first to find a world in a system others have charted, the first to map one, and the first to set foot on one. Sampling biology, it tells you after each sample how far the next must be (each genus its own distance, Bacterium 500 metres, Osseus 800 and so on), and when you've gone far enough. The distances are always said exactly, even when its own words are on.
 * **Overlays come back after hiding them all.** In the Rhino, hiding all overlays and bringing them back left the Rhino Map hidden: it updates as you drive, and showed itself behind the curtain without knowing it had been hidden again. It now comes back with the rest, and so does any overlay that updates itself (Construction Needs, Jump Info, Contact Scope and others).
 * **Fewer stray readouts.** "How's it going?", "Are you alive?" and "What are you listening to?" no longer bring up the route, the exobiology forecast or the music.
 

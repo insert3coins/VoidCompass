@@ -61,6 +61,10 @@ TOPICS = {
                          r"how many jumps (have|did|in total)|"
                          r"how far have (we|i)|time played|how long have (we|i)|systems (we('ve| have)|i('ve| have)) visited|"
                          r"how many systems)\b", re.I),
+    # Commodity prices: the market you're at (or last opened), the galactic
+    # averages and the best prices anywhere.
+    "market": re.compile(r"\b(prices?|market|commodit\w*|cheapest|most expensive|good to (sell|buy)|best (to sell|to buy|price)|"
+                         r"where (can|do|should) (i|we) (sell|buy)|sells? for|buy (it )?for|costs?)\b", re.I),
     # Your Codex (biology): what you've logged, here and for a species you name.
     "codex": re.compile(r"\b(codex|colou?r variants?|variants?|missing colou?rs?|colou?rs? (we|i) (have|need|haven'?t)|"
                         r"logged)\b", re.I),
@@ -107,6 +111,9 @@ def topics_for(question):
     # "Reputation with the Federation" is the superpower, not a faction.
     if "ranks" in found and "factions" in found and re.search(r"\b(empire|federation|alliance|navy|superpowers?)\b", text, re.I):
         found.discard("factions")
+    # "Sell our data" is the data; "the value of my cargo" the hold.
+    if "market" in found and "data" in found:
+        found.discard("market")
     if "codex" in found:
         if not _HERE_LIFE.search(text):
             found.discard("life")
@@ -250,6 +257,100 @@ def cargo_lines(rows, capacity=0, hold="Ship", limit=CARGO_KINDS):
                      + (f" ({', '.join(notes)})" if notes else ""))
     if len(ordered) > limit:
         lines.append(f"And {len(ordered) - limit} other kinds of cargo")
+    return lines
+
+
+# Asked what the cargo is worth: its value comes with it.
+VALUE_ASKED = re.compile(r"\b(worth|value|valued|prices?|sell\w*|profit\w*|how much (is|are|will|would|can|could|do))\b",
+                         re.I)
+
+
+def cargo_value_lines(held, station="", here=None, averages=None, best=None, paid=None, limit=6):
+    """What the cargo is worth (5.7.2): at the station you're docked at (its
+    own market file), else at the galactic average prices the game lists;
+    with the best price anywhere (when the Trading page has asked Spansh) and
+    what you paid (from your trades)."""
+    rows = [row for row in held or () if isinstance(row, dict) and (_whole(row.get("count")) or 0) > 0]
+    if not rows:
+        return []
+    here, averages, best, paid = here or {}, averages or {}, best or {}, paid or {}
+    docked = bool(station and here)
+    prices = here if docked else averages
+    total = sum(_whole(row["count"]) * prices[row["symbol"]] for row in rows if prices.get(row["symbol"]))
+    if docked:
+        lines = [f"The cargo would sell for {total:,} credits in all at {station}" if total
+                 else f"{station} buys none of the cargo"]
+    elif total:
+        lines = [f"At the galactic average prices, the cargo is worth about {total:,} credits in all"]
+    else:
+        lines = ["No prices known for the cargo yet (open a commodity market to learn them)"]
+    for row in rows[:limit]:
+        key, count = row["symbol"], _whole(row["count"])
+        parts = []
+        if prices.get(key):
+            parts.append(f"{count * prices[key]:,} credits {'here' if docked else 'at the galactic average'}, "
+                         f"{prices[key]:,} a tonne")
+        elif docked:
+            parts.append(f"not bought at {station}")
+        if docked and averages.get(key):
+            parts.append(f"galactic average {averages[key]:,} a tonne")
+        if best.get(key):
+            parts.append(f"best price anywhere right now {_whole(best[key]):,} a tonne")
+        if paid.get(key):
+            parts.append(f"bought for about {_whole(paid[key]):,} a tonne")
+        if _whole(row.get("stolen")):
+            parts.append("stolen, so only a black market buys it")
+        unit = "tonne" if count == 1 else "tonnes"
+        lines.append(f"{row['name']}, {count} {unit}: " + (", ".join(parts) if parts else "no price known yet"))
+    return lines
+
+
+def market_lines(station, items, asked=(), docked=False, age_s=None, best=None, fetching=False, limit=4):
+    """Commodity prices (5.7.2): the market you're docked at, or the last one
+    you opened (the game's Market.json), with the galactic average it lists
+    and the best prices anywhere (Spansh, when fetched). ``asked`` is the
+    commodities you named, as (symbol, name); naming none, what sells well
+    and what's cheap there."""
+    items = [row for row in items or () if isinstance(row, dict) and row.get("name")]
+    best = best or {}
+    by_symbol = {row["symbol"]: row for row in items}
+    lines = []
+    if station and items:
+        lines.append(f"Prices at {station}" + ("" if docked else ", the last market the commander opened"
+                                                + (f" ({_ago(age_s)})" if age_s is not None else "")))
+    elif not asked:
+        lines.append("No market prices known yet: open a commodity market to learn them")
+    for key, name in asked:
+        row = by_symbol.get(key)
+        if row:
+            parts = []
+            if row.get("sell") and (row.get("demand") or not row.get("buy")):
+                parts.append(f"{station} buys it for {row['sell']:,} a tonne")
+            if row.get("buy") and row.get("stock"):
+                parts.append(f"{station} sells it for {row['buy']:,} a tonne ({row['stock']:,} in stock)")
+            if row.get("mean"):
+                parts.append(f"galactic average {row['mean']:,} a tonne")
+            lines.append(f"{name}: " + (", ".join(parts) if parts else f"listed at {station}, but not traded right now"))
+        elif station:
+            lines.append(f"{name}: not traded at {station}")
+        low, high = (best.get(name) or (None, None))
+        if low or high:
+            lines.append(f"{name}, best prices anywhere right now: " + ", ".join(part for part in (
+                high and f"sells for up to {_whole(high):,} a tonne", low and f"can be bought from {_whole(low):,} a tonne")
+                if part))
+    if not asked and items:
+        selling = sorted((row for row in items if row.get("sell") and row.get("demand") and row.get("mean")
+                          and row["sell"] > row["mean"]), key=lambda row: -row["sell"] / row["mean"])[:limit]
+        if selling:
+            lines.append("Best to sell there (above the galactic average): " + ", ".join(
+                f"{row['name']} {row['sell']:,} (average {row['mean']:,})" for row in selling))
+        buying = sorted((row for row in items if row.get("buy") and row.get("stock") and row.get("mean")
+                         and row["buy"] < row["mean"]), key=lambda row: row["buy"] / row["mean"])[:limit]
+        if buying:
+            lines.append("Cheapest to buy there (below the galactic average): " + ", ".join(
+                f"{row['name']} {row['buy']:,} (average {row['mean']:,})" for row in buying))
+    if fetching and asked:
+        lines.append("Best prices anywhere are being fetched from Spansh: ask again in a moment")
     return lines
 
 

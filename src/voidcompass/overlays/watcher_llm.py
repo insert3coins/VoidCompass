@@ -136,8 +136,9 @@ TALK_FALLBACK = (
 # (set, and told as written) and words whose exact wording matters (a question
 # its answer buttons match, your own time-capsule notes, the Hatchling's own
 # words, text relayed from the local API).
+# Sample distances (5.7.2) are said as written: reworded, a line could lose the distance.
 SET_PREFIXES = ("lore", "idle_lore", "idle_lens", "idle_after", "idle_recall", "idle_four", "dream", "voice", "name_",
-                "capsule")
+                "capsule", "sample_")
 SET_TOPICS = frozenset({"question", "answer", "relay", "talk", "mind_own", "hatchling_said"})
 # A warning waits only this long for its new words.
 WARY_WAIT_S = 3.0
