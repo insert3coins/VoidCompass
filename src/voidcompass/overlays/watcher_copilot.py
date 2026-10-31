@@ -3,7 +3,8 @@ show when you ask it something, and the few small things it will do when
 asked.
 
 Only the app's own numbers go in: the route, the survey, the ship, the
-colony needs, Powerplay, the expedition, Galnet, the music. Each line is
+hold, the station you're docked at, the system's factions, the colony
+needs, Powerplay, the expedition, Galnet, the music. Each line is
 plain fact for its own words to draw on (and is checked against, like the
 rest). The actions are the harmless ones: the music, the overlays, the
 clipboard and its own voice. Nothing here touches the game.
@@ -12,30 +13,53 @@ from __future__ import annotations
 
 import re
 
-# What a question is about: the systems asked, by the words in it.
+# What a question is about: the systems asked, by the words in it. Narrow on
+# purpose (5.7.2): "how's it going" brought the route, "are you alive" the
+# exobiology readout and "what do you need" the colony, and it recited them.
 TOPICS = {
-    "route": re.compile(r"\b(route|jumps?|next system|destination|how far|plotted|waypoints?|hops?|headed|heading|going)\b", re.I),
-    "survey": re.compile(r"\b(survey|scan(ned|s)?|bod(y|ies)|fss|honk|bio(logy|logicals?)?|signals?|planets?|worth|value|"
-                         r"undiscovered|this system)\b", re.I),
-    "ship": re.compile(r"\b(ship|fuel|tank|hull|cargo|hold|jump range|range|credits|money|balance|rich)\b", re.I),
-    "colony": re.compile(r"\b(colon\w*|construction|build(ing)?|haul\w*|commodit\w*|needs?|site)\b", re.I),
-    "powerplay": re.compile(r"\b(power ?play|merits?|pledged?|powers?|rank)\b", re.I),
+    "route": re.compile(r"\b(route|next (system|jump|stop|star)|destination|how far|plotted|waypoints?|hops?|neutron|"
+                        r"jumps? (left|to go|remaining)|how many jumps|where are we (going|headed|heading)|heading (to|for))\b",
+                        re.I),
+    "survey": re.compile(r"\b(survey|scan(ned|s)?|bod(y|ies)|fss|honk|bio(logy|logicals?)?|signals?|planets?|worlds?|"
+                         r"undiscovered|first discover\w*|valuable)\b", re.I),
+    "ship": re.compile(r"\b((our|my|the|this) ship|ship'?s (state|condition|health)|fuel|tank|hull|jump range|credits|"
+                       r"money|balance)\b", re.I),
+    # What's in the hold, by name: its own topic, not the whole ship readout.
+    "cargo": re.compile(r"\b(cargo|carrying|inventory|limpets?|((the|our|my|cargo|ship'?s|srv'?s) )hold|in the hold)\b",
+                        re.I),
+    # The station you're docked at, as the game describes it on docking.
+    "station": re.compile(r"\b(station|starport|outpost|docked|services|shipyard|outfitting|black market|"
+                          r"material trader|tech(nology)? broker|interstellar factors|landing pads?)\b", re.I),
+    # The system's factions, from the BGS readings the journal gives on arrival.
+    "factions": re.compile(r"\b(factions?|bgs|influence|who (runs|controls|owns)|controll?ing|governments?|allegiance|"
+                           r"conflicts?|wars?|elections?|civil (war|unrest|liberty)|boom|expansion|lockdown|outbreak|"
+                           r"famine|retreat|reputation|population|security)\b", re.I),
+    "colony": re.compile(r"\b(colon(y|ies|is\w*)|construction|build(ing)? site|still needs?|what('s| is) (still )?needed)\b",
+                         re.I),
+    "powerplay": re.compile(r"\b(power ?play|merits?|pledged?|powers?)\b", re.I),
     "expedition": re.compile(r"\b(expeditions?|trip|journey)\b", re.I),
-    "galnet": re.compile(r"\b(galnet|news|headlines?|happening out there|in the galaxy)\b", re.I),
-    "music": re.compile(r"\b(music|song|track|tune|playing|listening)\b", re.I),
+    "galnet": re.compile(r"\b(galnet|news|headlines?|happening out there)\b", re.I),
+    "music": re.compile(r"\b(music|song|track|tune|what('s| is) playing|now playing)\b", re.I),
     # What could live on a world: Survey's own predictions, from your scans.
-    "life": re.compile(r"\b(life|living|alive|live|bio\w*|organics?|species|genus|genera|grow\w*|flora|exobio\w*|"
+    "life": re.compile(r"\b(could live|lives? (here|there|on)|life (here|there|on)|living (here|there|on)|bio(logy|logicals?)|"
+                       r"organics?|species|genus|genera|flora|exobio\w*|"
                        r"bacteri\w*|fungoid\w*|tussocks?|stratum|osseus|frutex\w*|fonticulua|concha|tubus|aleoida|"
                        r"clypeus|cactoida|electricae|recepta)\b", re.I),
 }
-LOOKUP_LIMIT = 12
+LOOKUP_LIMIT = 14
+CARGO_KINDS = 8
+# "What's in the ship's hold?" is about the hold, not the ship.
+_SHIP_ITSELF = re.compile(r"\b(fuel|tank|hull|jump range|credits|money|balance)\b", re.I)
 SCALE = {"B": "billion", "M": "million", "K": "thousand"}
 
 
 def topics_for(question):
     """The systems a question asks about, in a fixed order."""
     text = str(question or "")
-    return [name for name, pattern in TOPICS.items() if pattern.search(text)]
+    found = [name for name, pattern in TOPICS.items() if pattern.search(text)]
+    if "cargo" in found and "ship" in found and not _SHIP_ITSELF.search(text):
+        found.remove("ship")
+    return found
 
 
 # -- the lines --------------------------------------------------------------------
@@ -117,6 +141,174 @@ def ship_lines(kind="", name="", jump_range=0, fuel_percent=None, cargo_tons=0, 
         # "1.2B CR" as words: the model says "billion" whatever it's given.
         spoken = re.sub(r"(\d)([BMK]) CR$", lambda m: f"{m.group(1)} {SCALE[m.group(2)]} credits", credits)
         lines.append(f"Credits: {spoken.replace(' CR', ' credits')}")
+    return lines
+
+
+def _journal_name(row):
+    """A journal name as the game shows it: its localised name, or the symbol
+    made readable ("$Gold_Name;" is Gold)."""
+    name = str(row.get("Name_Localised") or row.get("Name") or "").strip()
+    if name.startswith("$"):
+        name = name[1:]
+    if name.casefold().endswith("_name;"):
+        name = name[:-len("_name;")]
+    name = name.strip(";").replace("_", " ").strip()
+    return name.title() if name == name.lower() else name
+
+
+def cargo_lines(rows, capacity=0, hold="Ship", limit=CARGO_KINDS):
+    """What's in the hold (5.7.2): each kind by name with its tonnes, most first."""
+    kinds = {}
+    for row in rows or ():
+        if not isinstance(row, dict):
+            continue
+        name = _journal_name(row)
+        count = _whole(row.get("Count", row.get("count"))) or 0
+        if not name or count <= 0:
+            continue
+        kind = kinds.setdefault(name, {"count": 0, "stolen": 0, "mission": 0})
+        kind["count"] += count
+        kind["stolen"] += _whole(row.get("Stolen")) or 0
+        kind["mission"] += count if row.get("MissionID") else 0
+    capacity = _whole(capacity) or 0
+    where = "The SRV's hold" if str(hold).casefold() == "srv" else "The ship's hold"
+    if not kinds:
+        return [f"{where} is empty" + (f", {capacity} tonnes free" if capacity else "")]
+    tons = sum(kind["count"] for kind in kinds.values())
+    # "60 of 64 tonnes" came back as "60 tonnes of space": carried and free, said apart.
+    free = max(0, capacity - tons)
+    lines = [f"{where} carries {tons} tonne{'' if tons == 1 else 's'}"
+             + (f", with {free} tonne{'' if free == 1 else 's'} free" if capacity else "")]
+    ordered = sorted(kinds.items(), key=lambda item: (-item[1]["count"], item[0]))
+    for name, kind in ordered[:limit]:
+        notes = [note for note, on in (("stolen", kind["stolen"]), ("for a mission", kind["mission"])) if on]
+        lines.append(f"{name}: {kind['count']} tonne{'' if kind['count'] == 1 else 's'}"
+                     + (f" ({', '.join(notes)})" if notes else ""))
+    if len(ordered) > limit:
+        lines.append(f"And {len(ordered) - limit} other kinds of cargo")
+    return lines
+
+
+STATION_KINDS = {
+    "coriolis": "Coriolis starport", "orbis": "Orbis starport", "ocellus": "Ocellus starport",
+    "bernal": "Ocellus starport", "dodec": "Dodec starport", "outpost": "outpost", "asteroidbase": "asteroid base",
+    "megaship": "megaship", "fleetcarrier": "fleet carrier", "craterport": "planetary port",
+    "crateroutpost": "planetary outpost", "surfacestation": "planetary port", "onfootsettlement": "settlement",
+    "planetaryconstructiondepot": "planetary construction site", "spaceconstructiondepot": "orbital construction site",
+}
+# The services worth saying, by the game's own names for them.
+STATION_SERVICES = (
+    ("shipyard", "shipyard"), ("outfitting", "outfitting"), ("commodities", "market"), ("blackmarket", "black market"),
+    ("materialtrader", "material trader"), ("techbroker", "technology broker"), ("facilitator", "interstellar factors"),
+    ("exploration", "Universal Cartographics"), ("vistagenomics", "Vista Genomics"), ("refuel", "refuel"),
+    ("repair", "repair"), ("rearm", "rearm"), ("engineer", "an engineer"), ("pioneersupplies", "Pioneer Supplies"),
+    ("frontlinesolutions", "Frontline Solutions"), ("bartender", "a bar"),
+)
+
+
+def _game_word(value):
+    """"$economy_HighTech;" as High Tech; already readable text as it is."""
+    text = str(value or "").strip()
+    match = re.match(r"^\$\w+?_(\w+);$", text)
+    if match:
+        text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", match.group(1))
+    return "" if text.casefold() in {"none", "$none;"} else text
+
+
+def station_lines(name, kind="", system="", faction="", faction_state="", government="", allegiance="", economy="",
+                  services=(), pads=None, distance_ls=None):
+    """The station you're docked at (5.7.2), as the game describes it on docking."""
+    if not name:
+        return ["Not docked at a station right now"]
+    readable = STATION_KINDS.get(re.sub(r"[\s_]", "", str(kind or "")).casefold(), "")
+    if not readable and kind:
+        readable = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", str(kind)).lower()
+    article = "an" if readable[:1].casefold() in ("a", "e", "i", "o", "u") else "a"
+    lines = [f"Docked at {name}" + (f", {article} {readable}" if readable else "") + (f" in {system}" if system else "")]
+    if faction:
+        # "Run by Jaques (state: Boom)" came back as "Boom runs the shipyard".
+        state = _game_word(faction_state)
+        lines.append(f"The station belongs to the faction {faction}"
+                     + (f", which is in the {state} state" if state else ""))
+    about = [part for part in (_game_word(government) and f"{_game_word(government)} government",
+                               _game_word(allegiance) and f"{_game_word(allegiance)} allegiance",
+                               _game_word(economy) and f"{_game_word(economy)} economy") if part]
+    if about:
+        lines.append("Station: " + ", ".join(about))
+    offered = {str(service).casefold() for service in services or ()}
+    shown = [label for key, label in STATION_SERVICES if key in offered]
+    if shown:
+        lines.append("Services: " + ", ".join(shown))
+    if isinstance(pads, dict):
+        counts = [(size.lower(), _whole(pads.get(size)) or 0) for size in ("Large", "Medium", "Small")]
+        sizes = [f"{count} {size}" for size, count in counts if count]
+        if sizes:
+            # With their total: it added 8, 4 and 4 up to twelve.
+            lines.append(f"Landing pads: {sum(count for _size, count in counts)} in all ({', '.join(sizes)})")
+    distance = _number(distance_ls)
+    if distance:
+        lines.append(f"Distance from the main star: {distance:,.0f} light seconds")
+    return lines
+
+
+def reputation_word(value):
+    """The game's reputation bands, from the journal's -100 to 100."""
+    number = _number(value)
+    if number is None:
+        return ""
+    for limit, word in ((90, "allied"), (35, "friendly"), (4, "cordial"), (-35, "neutral"), (-90, "unfriendly")):
+        if number >= limit:
+            return word
+    return "hostile"
+
+
+def faction_lines(snap, system="", now=None, limit=7):
+    """The system's factions (5.7.2), from the BGS reading taken on arrival."""
+    if not snap:
+        return [f"No faction readings for {system or 'this system'}: nobody lives here, or the journal hasn't said yet"]
+    lines = []
+    if snap.get("controlling"):
+        lines.append(f"Controlling faction: {snap['controlling']}")
+    about = [part for part in (snap.get("government") and f"{snap['government']} government",
+                               snap.get("allegiance") and f"{snap['allegiance']} allegiance",
+                               snap.get("economy") and f"{snap['economy']} economy",
+                               snap.get("security") and f"{snap['security']} security") if part]
+    population = _whole(snap.get("population"))
+    if population:
+        about.append(f"population {population:,}")
+    if about:
+        lines.append(f"{snap.get('system') or system}: " + ", ".join(about))
+    factions = sorted((row for row in snap.get("factions") or () if isinstance(row, dict) and row.get("name")),
+                      key=lambda row: -(_number(row.get("influence")) or 0))
+    for row in factions[:limit]:
+        # Whole percents: the model turned "55.3%" into "5.53 percent".
+        share = (_number(row.get("influence")) or 0) * 100
+        parts = [f"{round(share)}% influence" if share >= 1 else "under 1% influence"]
+        state = _game_word(row.get("state"))
+        if state:
+            parts.append(f"state {state}")
+        if row.get("government"):
+            parts.append(str(row["government"]))
+        standing = reputation_word(row.get("reputation"))
+        if standing:
+            parts.append(f"the commander is {standing} with them")
+        if row.get("squadron"):
+            parts.append("the commander's squadron faction")
+        lines.append(f"{row['name']}: {', '.join(parts)}")
+    if len(factions) > limit:
+        lines.append(f"And {len(factions) - limit} smaller factions")
+    for conflict in snap.get("conflicts") or ():
+        sides = [side for side in conflict.get("sides") or () if side.get("name")]
+        if len(sides) == 2:
+            # "has won 2 days" was read as "2 days left": who leads, and by how much.
+            first, second = sorted(sides, key=lambda side: -int(side.get("won_days") or 0))
+            won = (int(first.get("won_days") or 0), int(second.get("won_days") or 0))
+            score = (f"{first['name']} leads {second['name']} {won[0]} to {won[1]} in days won" if won[0] != won[1]
+                     else f"{first['name']} and {second['name']} are level at {won[0]} days won each")
+            lines.append(f"{(conflict.get('type') or 'conflict').title()} ({conflict.get('status') or 'active'}): {score}")
+    taken = _number(snap.get("ts"))
+    if taken and now is not None and now - taken > 36 * 3600:
+        lines.append(f"These readings are {int((now - taken) // 86400)} days old")
     return lines
 
 
@@ -242,6 +434,25 @@ INTENTS = (
 )
 
 
+# "Remember that my carrier is the Black Rose" (5.7.2): kept as you said it,
+# like TEACH IT. "Remember when we…?" is a question, not a request.
+_REMEMBER = re.compile(_PLEASE + r"(?:remember|don'?t forget|make a note|note down|keep in mind)"
+                                 r"(?:\s+(?:that|this))?[\s:,]+(.+)$", re.I)
+_RECALLING = re.compile(r"^(when|what|where|who|how|the time|us|me)\b", re.I)
+
+
+def remember_request(text):
+    """What you asked it to remember, or None."""
+    words = " ".join(str(text or "").split()).strip()
+    if not words or words.endswith("?"):
+        return None
+    match = _REMEMBER.match(words)
+    fact = match.group(1).strip(" .!") if match else ""
+    if not fact or _RECALLING.match(fact):
+        return None
+    return fact[:1].upper() + fact[1:] + "."
+
+
 def intent(text):
     """The small thing asked of it, or None (most talk asks nothing)."""
     words = " ".join(str(text or "").split()).strip(" .!?")
@@ -270,6 +481,10 @@ REPLIES = {
     "hush": ("I'll keep quiet for a while.", "Quiet, then.", "I'll keep my voice down."),
     "unhush": ("I can speak again.", "My voice is back.", "Aloud again, then."),
     "unavailable": ("I can't reach that from here.",),
+    "remember": ("I'll remember that.", "Kept. It's in my library now.", "Noted. I won't forget."),
+    "remember_known": ("I know that already.", "You told me. I kept it."),
+    "remember_refused": ("Not that. Some things I don't keep.",),
+    "remember_long": ("That's too much to keep in one go. Say it shorter.",),
 }
 
 

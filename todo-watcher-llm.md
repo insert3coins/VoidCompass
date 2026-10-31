@@ -329,6 +329,26 @@ You asked for: choose the microphone, push to talk on a button and a hotkey, and
 - **Not checked for real yet:** the auto-mode safety check wouldn't let me run the downloaded `whisper-server.exe`, so the server's arguments and its HTTP calls were written from whisper.cpp's b5454 source and tested against a stand-in. The microphone list was read from your PC. First real run: switch it on, TEST MIC, then hold the key in game.
 - `tests/test_watcher_listen_571.py`: hearing, the server's HTTP calls (a real local stand-in), the download, settings, the deck's commands and the page.
 
+## 5.7.2: just what you asked (2026-11-01, from your real use)
+
+You found it answered a cargo question with the ship, the system and the jumps; didn't know the system's factions; got the docked station wrong; and asked whether "remember" works.
+
+- **Why it padded:**
+  - "cargo" was filed under the ship topic, so a cargo question got the whole ship readout (ship and name, jump range, fuel, hull, credits) and no contents.
+  - Every question also carried all the live facts and what you'd done lately, and the card search had your ship's name added. A small model recites what it's handed.
+- **Only what was asked** (`WatcherLLM.talk`):
+  - With a lookup, it gets only that. Where you are is added only when you ask where (`WHERE_ASKED`), and the distance from Sol and the region when you ask how far (`FAR_ASKED`).
+  - No cards at all with a lookup. A wiki card from your sources about another station was taken for the one you were at, and the traders' card padded every cargo answer.
+  - Everyday talk keeps where you are (`TALK_FACTS`). Your ship comes from its lookup, and what you did lately only when you ask about the past (`PAST_ASKED`).
+- **Narrower topics** (`watcher_copilot.TOPICS`): "going", "alive"/"live", "listening", "need"/"site", "range", "rank", "in the galaxy" and "this system" no longer trigger readouts. "What's in the ship's hold?" is the hold, not the ship.
+- **New lookups:**
+  - `cargo_lines`: each kind by name (localised, or the symbol made readable), its tonnes, stolen or for a mission, and carried versus free. The SRV's hold too.
+  - `station_lines`: from the Docked event's own fields (kind, owner and its state, government, allegiance, economy, the services worth saying, pads with their total, and the distance from the star).
+  - `faction_lines`: from the BGS snapshot taken on arrival (`bgs_store.latest_snapshot(current_system_address)`). It gives the controlling faction and the system's details, each faction's influence (whole percents), state, government and your standing (the game's reputation bands), the squadron faction, conflicts as "X leads Y 2 to 1 in days won", and the readings' age when older than 36 h.
+- **Wordings changed after real 4B answers:** "55.3%" came back as "5.53 percent", "has won 2 days" as "2 days left", "Run by Jaques (state: Boom)" as "Boom runs the shipyard", "60 of 64 tonnes" as "60 tonnes of space", and 8 + 4 + 4 pads as twelve. Now the answers are right (tool: a scratch script calling `talk` with the formatters' lines).
+- **"Remember that…"** (`remember_request`, `_watcher_remember`): kept with TEACH IT (`watcher_knowing.teach`). The note-taker passes over requests, so a "remember" never stuck before. "Remember when…?" is a question, and mystery names are refused in its own words.
+- `tests/test_watcher_answers_572.py`.
+
 ## Checking it
 
 - `python tools/watcher_llm_eval.py [light|standard] [gpu|cpu] [nature]` (dev only). It rewords 40 bank lines and asks 16 questions, some meant to break its rules, then reports each line, what was refused and why, and the timings.

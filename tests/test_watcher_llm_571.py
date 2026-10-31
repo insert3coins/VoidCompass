@@ -964,7 +964,7 @@ class CopilotTests(unittest.TestCase):
         from voidcompass.overlays import watcher_copilot as copilot
 
         self.assertEqual(copilot.topics_for("How far to the next system on the route?"), ["route"])
-        self.assertEqual(copilot.topics_for("How much fuel and cargo have we got?"), ["ship"])
+        self.assertEqual(copilot.topics_for("How much fuel and cargo have we got?"), ["ship", "cargo"])
         self.assertEqual(copilot.topics_for("What's in the news on Galnet?"), ["galnet"])
         self.assertIn("colony", copilot.topics_for("What does the construction site still need?"))
         self.assertEqual(copilot.topics_for("How are you feeling?"), [])

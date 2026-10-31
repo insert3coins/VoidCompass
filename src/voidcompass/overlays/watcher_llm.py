@@ -91,6 +91,14 @@ GREETING = re.compile(
     r"^\s*(hi|hello|hey|hiya|heya|howdy|greetings|salutations|yo|o7|good\s+(morning|afternoon|evening|night|day)|"
     r"morning|evening|how\s+are\s+you(\s+doing)?(\s+today)?|how'?re\s+you|how\s+are\s+things|how'?s\s+it\s+going|"
     r"what'?s\s+up|sup)(\s+(there|again|watcher|commander|friend|old\s+friend|mate|buddy|you))*[\s,.!?~]*$", re.I)
+# Talk gets only what the question needs (5.7.2): handed everything, it
+# answered "what's in the hold?" with the ship, the system and the jumps.
+WHERE_ASKED = re.compile(r"\b(where|which system|what system|this system|here|location|around us)\b", re.I)
+FAR_ASKED = re.compile(r"\b(sol|how far|distance|region|bubble|home)\b", re.I)
+PAST_ASKED = re.compile(r"\b(today|lately|recently|last time|so far|tonight|yesterday|session|happened|noticed|seen|"
+                        r"done|did we|have we|we('ve| have) been|been up to)\b", re.I)
+# Everyday talk keeps where you are; your ship comes from its lookup, when asked.
+TALK_FACTS = ("system", "doing", "near", "region")
 NUMBER_WORDS = re.compile(
     r"\b(zero|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|"
     r"eighteen|nineteen|twenty|thirty|forty|fourty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|"
@@ -489,12 +497,13 @@ def talk_messages(nature, question, facts, history=(), cards=(), name="", lately
         user += "\nAnswer what the commander actually said. Bring in a fact or figure only when it answers them."
     if lately:
         user += "\nWhat you've seen the commander do lately, oldest first:\n" + _bullets(lately)
-    user += f"\nWhat is true right now:\n{fact_lines(facts) or '- (nothing known)'}"
+    if facts or not lookup:
+        user += f"\nWhat is true right now:\n{fact_lines(facts) or '- (nothing known)'}"
     if cards:
         user += "\nWhat you know of the galaxy:\n" + _bullets(cards)
     if lookup:
         user += ("\nWhat the ship's systems show about that, right now:\n" + _bullets(lookup)
-                 + "\nAnswer from these. Don't recite the other facts unless they were asked about.")
+                 + "\nAnswer from these, and only what was asked. Don't add where you are or what you fly.")
     user += f"\nThe commander says: {question}"
     if not greeting and re.search(r"\d", system + user):
         user += "\n(Answer in figures, not number words.)"
@@ -749,8 +758,22 @@ class WatcherLLM:
                                     else "afternoon" if hour < 17 else "evening")
             lately, remembered, lookup, story = (), (), (), ()
             knows = [line for line in knows if not re.search(r"\d", line)][:4]
-        cards = [] if greeting else watcher_world.cards_for(f"{question} {facts.get('ship', '')}")
-        if callable(self.library_provider) and not greeting:
+        asked = [line for line in lookup or () if line]
+        shown, recent = facts, lately
+        if not greeting:
+            words = str(question or "")
+            keep = set() if asked else set(TALK_FACTS)
+            if WHERE_ASKED.search(words):
+                keep |= {"system", "doing", "near"}
+            if FAR_ASKED.search(words):
+                keep |= {"distance from Sol", "region"}
+            shown = {key: value for key, value in facts.items() if key in keep}
+            recent = lately if PAST_ASKED.search(words) else ()
+        # Asked about something the ship's systems show: that, and no cards (a
+        # wiki card about another station was taken for the one you're at, and
+        # the traders' card padded every cargo answer).
+        cards = [] if greeting or asked else watcher_world.cards_for(str(question or ""))
+        if callable(self.library_provider) and not greeting and not asked:
             try:
                 # Its own cards come back from the search too: each card once.
                 found = [str(card) for card in self.library_provider(question) or ()]
@@ -758,8 +781,8 @@ class WatcherLLM:
                                        if not any(card.split(": ", 1)[-1][:80] in known for known in cards)][:3]
             except Exception:
                 logging.debug("Watcher library sources skipped", exc_info=True)
-        job = Job("talk", talk_messages(nature, question, facts, history, cards, name, lately, remembered, knows, story,
-                                        lookup, self.feeling(), greeting, liked, avoid),
+        job = Job("talk", talk_messages(nature, question, shown, history, cards, name, recent, remembered, knows, story,
+                                        asked, self.feeling(), greeting, liked, avoid),
                   allowed=(question, fact_lines(facts), " ".join(cards), name, " ".join(lately), " ".join(remembered),
                            " ".join(knows), " ".join(story_lines(story)), " ".join(lookup),
                            " ".join(str(row.get("it", "")) for row in list(history)[-HISTORY:])),

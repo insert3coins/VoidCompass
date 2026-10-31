@@ -292,6 +292,28 @@ class DashboardWatcherVoiceMixin:
             self._format_hud_credits(self._latest_hud_balance()) if self._latest_hud_balance() is not None else "",
             getattr(self, "current_hull_percent", None))
 
+    def _watcher_lookup_cargo(self):
+        hold = str(getattr(self, "current_cargo_vessel", "Ship") or "Ship")
+        capacity = self._active_cargo_capacity() if hold.casefold() == "ship" else 0
+        return watcher_copilot.cargo_lines(getattr(self, "current_cargo_inventory", None) or [], capacity, hold)
+
+    def _watcher_lookup_station(self):
+        if not getattr(self, "current_docked", False):
+            return watcher_copilot.station_lines("")
+        faction = getattr(self, "current_station_faction", None) or {}
+        return watcher_copilot.station_lines(
+            str(getattr(self, "current_station_name", "") or ""), getattr(self, "current_station_type", "") or "",
+            str(getattr(self, "current_sys", "") or ""), faction.get("name") or "", faction.get("state") or "",
+            getattr(self, "current_station_government", "") or "", getattr(self, "current_station_allegiance", "") or "",
+            getattr(self, "current_station_economy", "") or "", getattr(self, "current_station_services", None) or (),
+            getattr(self, "current_station_landing_pads", None), getattr(self, "current_station_dist_ls", None))
+
+    def _watcher_lookup_factions(self):
+        store = getattr(self, "bgs_store", None)
+        address = getattr(self, "current_system_address", None)
+        snap = store.latest_snapshot(address) if store is not None and address is not None else None
+        return watcher_copilot.faction_lines(snap, str(getattr(self, "current_sys", "") or ""), now=time.time())
+
     def _watcher_lookup_colony(self):
         colony = getattr(self, "colony", None)
         if colony is None:
@@ -353,10 +375,13 @@ class DashboardWatcherVoiceMixin:
         """The small things it does when you ask (5.7.1): the music, the
         overlays, the next system to the clipboard, its own voice. Its reply,
         or None when nothing was asked."""
+        rng = getattr(getattr(getattr(self, "heartbeat_hud", None), "mind", None), "random", None)
+        fact = watcher_copilot.remember_request(text)
+        if fact is not None:
+            return watcher_copilot.reply(self._watcher_remember(fact), rng)
         wanted = watcher_copilot.intent(text)
         if wanted is None:
             return None
-        rng = getattr(getattr(getattr(self, "heartbeat_hud", None), "mind", None), "random", None)
         outcome, fields = wanted, {}
         playing = bool((getattr(self, "_music_status", None) or {}).get("playing"))
         if wanted == "music_pause":
@@ -383,6 +408,20 @@ class DashboardWatcherVoiceMixin:
         elif wanted == "unhush":
             self._watcher_voice_hush(0)
         return watcher_copilot.reply(outcome, rng, **fields)
+
+    def _watcher_remember(self, fact):
+        """"Remember that…" (5.7.2): kept in its library as you said it, like
+        TEACH IT (its note-taker passes over requests). The reply's outcome."""
+        if watcher_llm.BANNED.search(fact) or watcher_llm.MYSTERY.search(fact):
+            return "remember_refused"
+        mind = self._watcher_mind()
+        with mind.lock:
+            error = watcher_knowing.teach(mind.memory, fact, time.time())
+        if not error:
+            mind.save()
+            self._schedule_html_dashboard_publish(immediate=True)
+            return "remember"
+        return "remember_known" if "already" in error else "remember_long"
 
     def _watcher_own_words(self, key, kind, text):
         """A page's paragraph in the Watcher's own words, once its mind has
