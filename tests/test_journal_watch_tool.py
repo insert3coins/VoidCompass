@@ -62,7 +62,7 @@ class JournalWatchTests(unittest.TestCase):
         tool = (ROOT / "tools" / "journal_watch.py").read_text(encoding="utf-8")
         self.assertNotIn("voidcompass", tool.split('"""', 2)[2])
         for path in (ROOT / "src").rglob("*.py"):
-            self.assertIsNone(re.search(r"journal_watch", path.read_text(encoding="utf-8")), path)
+            self.assertIsNone(re.search(r"\bjournal_watch\b", path.read_text(encoding="utf-8")), path)
         self.assertIn("tools/journal_watch/", (ROOT / ".gitignore").read_text(encoding="utf-8"))
 
 

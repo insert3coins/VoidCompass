@@ -1243,3 +1243,10 @@ for _bank, _deep in ((NORMAL, DEEP_NORMAL), (WEARY, DEEP_WEARY)):
     for _topic, _lines in _deep.items():
         _have = _bank.setdefault(_topic, [])
         _have.extend(line for line in _lines if line not in _have)
+
+# What the journal says of you (5.7.1): your record, power, squadron, carrier.
+from voidcompass.overlays import watcher_name as _name  # noqa: E402
+
+for _topic, (_level, _normal, _weary) in _name.FACTS.items():
+    NORMAL[_topic] = list(_normal)
+    WEARY[_topic] = list(_weary)

@@ -354,6 +354,18 @@
     return Math.max(minimum, Math.ceil(root.getBoundingClientRect().height / fit + 2));
   }
 
+  // Visual hosting (5.7.1): a window is shown hidden under a cloak and
+  // uncloaked with the rest of its group once each page has drawn again.
+  // The host asks as it shows the window; two frames later the page answers.
+  if (new URLSearchParams(global.location.search).has("painted") && global.chrome?.webview) {
+    global.__voidcompassPainted = () => {
+      const cap = global.VoidCompassFrameCap;
+      const frame = cap?.frame || global.requestAnimationFrame.bind(global);
+      cap?.wake?.();
+      frame(() => frame(() => global.chrome.webview.postMessage("voidcompass.painted")));
+    };
+  }
+
   // The window being resized refits the pages that asked to be fitted.
   global.addEventListener("resize", () => {
     for (const root of global.document.querySelectorAll("[data-fit-width]")) {

@@ -61,7 +61,14 @@
         } else {
           const fromFill = current.classList.contains("event-progress") && !next.classList.contains("event-progress")
             ? current.style.getPropertyValue("--from-fill") : "";
+          // Inline styles (the reserved heights, the progress fill) go through
+          // the style object: the overlay's policy refuses a style attribute
+          // written with setAttribute, and the live card kept the last
+          // system's heights (a gap, or a window cut short at its cap).
+          if (!next.hasAttribute("style")) current.removeAttribute("style");
+          else if (current.style.cssText !== next.style.cssText) current.style.cssText = next.style.cssText;
           for (const attribute of [...current.attributes]) {
+            if (attribute.name === "style") continue;
             if (!next.hasAttribute(attribute.name)) {
               const active = attribute.name === "class" ? [...current.classList].filter(name => name.startsWith("event-")) : [];
               if (active.length) current.setAttribute("class", active.join(" "));
@@ -69,6 +76,7 @@
             }
           }
           for (const attribute of next.attributes) {
+            if (attribute.name === "style") continue;
             let value = attribute.value;
             if (attribute.name === "class") {
               const active = [...current.classList].filter(name => name.startsWith("event-") && !next.classList.contains(name));

@@ -16,6 +16,21 @@
   let typing = 0;
   // Its voice (5.5.4): what it's saying now, from /api/live.
   let speech = null;
+  // Listening to you (5.7.1): push to talk, from /api/live.
+  const hearingRing = document.getElementById("hearing");
+  let hearing = null;
+  let hearingStage = "";
+  function showHearing(state) {
+    const stage = state ? String(state.stage || "") : "";
+    hearingRing.hidden = !stage;
+    if (stage !== hearingStage) {
+      hearingRing.dataset.stage = stage;
+      // Working out what you said: it narrows its eye to listen.
+      if (stage === "hearing") orb.think?.(900);
+      hearingStage = stage;
+    }
+    hearingRing.style.setProperty("--hear", stage === "listening" ? String(Math.min(1, (Number(state.level) || 0) * 6)) : "0");
+  }
 
   // How each nature types (5.5.3.5): ms per character (base plus a random
   // spread), the pause after a full stop and after a comma, how often it
@@ -231,6 +246,11 @@
     const palette = VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, effects);
     const model = snapshot.heartbeat || {};
     const stalled = Boolean(model.stalled);
+    // You pressed talk: the ring shows now, not on the next slow poll.
+    if (model.hearing && model.hearing !== hearingStage && !liveAsking) {
+      window.clearTimeout(livePoll);
+      listen();
+    }
     // The orb at its own size while a thought shows, when a long one makes
     // the window taller than the orb; otherwise it simply fills the window.
     const orbSize = Number((model.orb || {}).size) || 0;
@@ -279,8 +299,10 @@
   // The Music player's live levels (5.5.3.2): the eye moves with the music.
   // Asked often while something plays, once a second otherwise.
   let livePoll = 0;
+  let liveAsking = false;
   async function listen() {
     let playing = false;
+    liveAsking = true;
     try {
       const response = await fetch(`/api/live?token=${encodeURIComponent(params.get("token") || "")}&overlay=${encodeURIComponent(params.get("overlay") || "heartbeat")}`,
         {cache: "no-store"});
@@ -289,13 +311,18 @@
       orb.music?.(playing ? live.bands : null);
       speech = live.speech && typeof live.speech === "object" ? live.speech : null;
       orb.voice?.(speech ? Number(speech.level) || 0 : null);
+      hearing = live.hearing && typeof live.hearing === "object" ? live.hearing : null;
+      showHearing(hearing);
     } catch (_error) {
       orb.music?.(null);
       speech = null;
       orb.voice?.(null);
+      hearing = null;
+      showHearing(null);
     }
-    // Quick while music plays, it speaks, or a spoken thought waits for its voice.
-    const busy = playing || speech || (thoughtId !== null && !thoughtBox.classList.contains("done"));
+    liveAsking = false;
+    // Quick while music plays, it speaks or listens, or a spoken thought waits for its voice.
+    const busy = playing || speech || hearing || (thoughtId !== null && !thoughtBox.classList.contains("done"));
     livePoll = window.setTimeout(listen, busy && !document.hidden ? 100 : 1000);
   }
   listen();

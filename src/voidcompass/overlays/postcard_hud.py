@@ -58,6 +58,17 @@ class PostcardHUD(ColonyNeedsHUD):
                 return True
         return False
 
+    def set_note(self, card_id, note):
+        """The Watcher's note in its own words (5.7.1), once its mind has
+        written it: in place of the written one, on the card already shown."""
+        for card in self._cards:
+            if card["id"] == card_id:
+                card["note"] = str(note)
+                if self.visible:
+                    self.update(self._model())
+                return True
+        return False
+
     def photo(self, card_id):
         return self._photos.get(str(card_id))
 

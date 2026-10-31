@@ -137,6 +137,7 @@ class RealWindowTests(unittest.TestCase):
                 self.assertTrue(window._voidcompass_navigation_completed_at)
                 self.assertFalse(window._voidcompass_navigation_failed)
             controllers = [html_overlay_host._WindowController(str(i), window) for i, window in enumerate(windows)]
+            host.controllers = {controller.overlay_id: controller for controller in controllers}
             def apply(visible):
                 return runtime.call(lambda: [controller.apply({
                     "x": html_overlay_host.HIDDEN_WINDOW_X, "y": html_overlay_host.HIDDEN_WINDOW_Y,
@@ -145,7 +146,16 @@ class RealWindowTests(unittest.TestCase):
                 }) for i, controller in enumerate(controllers)])
             for visible in (True, False, True, False):
                 results = apply(visible)
-                self.assertTrue(all(item["ok"] and item["visible"] == visible for item in results))
+                self.assertTrue(all(item["ok"] for item in results))
+                # 5.7.1: shown under their cloaks; the host's group step puts
+                # them on the screen together once they have drawn.
+                settle_deadline = time.monotonic() + 3
+                while time.monotonic() < settle_deadline:
+                    runtime.call(host._settle)
+                    if all(controller.last_visible is visible for controller in controllers):
+                        break
+                    time.sleep(.02)
+                self.assertTrue(all(controller.last_visible is visible for controller in controllers))
                 for window in windows:
                     self.assertEqual(html_overlay_host._windows_visibility(window), visible)
         finally:

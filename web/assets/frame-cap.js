@@ -17,6 +17,7 @@
   let last = 0;
   let handle = 0;
   let scheduled = false;
+  let timer = 0;
 
   function run(now) {
     scheduled = false;
@@ -24,7 +25,7 @@
     if (now < due) {
       // Wait out the gap without waking every display refresh.
       scheduled = true;
-      global.setTimeout(() => nativeRequest(run), Math.max(0, due - now - 2));
+      timer = global.setTimeout(() => { timer = 0; nativeRequest(run); }, Math.max(0, due - now - 2));
       return;
     }
     last = now;
@@ -56,10 +57,26 @@
     else nativeCancel(id);
   };
 
+  // A page shown again after a long time hidden (5.7.1): the gap it was
+  // waiting out sits in a timer the browser throttled while it was hidden,
+  // for up to a second. Take the next frame instead.
+  function wake() {
+    if (!timer) return;
+    global.clearTimeout(timer);
+    timer = 0;
+    nativeRequest(run);
+  }
+  global.document.addEventListener("visibilitychange", () => {
+    if (global.document.visibilityState === "visible") wake();
+  });
+
   global.VoidCompassFrameCap = Object.freeze({
     set(framesPerSecond) {
       const fps = Number(framesPerSecond);
       interval = Number.isFinite(fps) && fps > 0 ? 1000 / Math.max(5, Math.min(240, fps)) : 0;
     },
+    wake,
+    // The browser's own next frame, outside the cap.
+    frame: nativeRequest,
   });
 })(window);

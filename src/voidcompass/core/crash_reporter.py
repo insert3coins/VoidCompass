@@ -117,6 +117,11 @@ def heartbeat():
     _HEARTBEAT_TS = time.monotonic()
 
 
+def heartbeat_age():
+    """Seconds since the UI thread last beat (the debugger shows it live)."""
+    return round(time.monotonic() - _HEARTBEAT_TS, 3)
+
+
 def install_ui_freeze_watchdog(root, interval_ms=500, timeout_s=5.0, dump_cooldown_s=15.0):
     global _WATCHDOG_STARTED
     heartbeat()

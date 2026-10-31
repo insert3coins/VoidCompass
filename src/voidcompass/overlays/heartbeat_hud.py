@@ -213,6 +213,8 @@ class HeartbeatHUD:
         # words) and says whether the voice is on.
         self.voice_listener = None
         self._spoken_id = None
+        # 5.7.1: listening to you (push to talk), so the page asks /api/live at once.
+        self._hearing = ''
         self._next_idle_thought = time.time() + 45
         self._last_pulse_ts = time.time()
         self._activity_kind = 'startup'
@@ -343,6 +345,13 @@ class HeartbeatHUD:
         self._redraw()
         return backup
 
+    def set_hearing(self, stage):
+        """Listening to you, working out what you said, or neither ('')."""
+        stage = str(stage or '')
+        if stage != self._hearing:
+            self._hearing = stage
+            self._redraw()
+
     def set_voice_active(self, active):
         """Its voice switched on or off (5.5.4). Switched on, it may say its
         first word at once."""
@@ -443,6 +452,7 @@ class HeartbeatHUD:
                 self._safe_int(self.config.get('heartbeat_hud_y'), 12), orb_size(self.config)),
             'memory': self._memory_summary(),
             'thought': self._thought_payload(),
+            'hearing': getattr(self, '_hearing', ''),
         }
 
     def _memory_summary(self):

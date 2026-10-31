@@ -38,6 +38,7 @@ DEFAULT_PORT = 7380
 MAX_BODY_BYTES = 64 * 1024
 MAX_STREAMS = 16
 MAIN_THREAD_TIMEOUT_S = 8.0
+DEBUG_WAIT_S = 1.5
 EVENT_TYPES = ("journal", "status", "cargo", "navroute", "market", "shiplocker",
                "feed", "thought", "overlay", "voice", "music", "exploration")
 # Anything named like these is blanked before it leaves the app: the deck's
@@ -47,7 +48,7 @@ _EVENT_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
 # What the provider answers. Every one runs on the app's own thread.
 PROVIDER_CALLS = (
-    "api_status", "api_commander", "api_location", "api_ship", "api_journal_folder", "api_companion",
+    "api_status", "api_debug", "api_commander", "api_location", "api_ship", "api_journal_folder", "api_companion",
     "api_dashboard", "api_pages", "api_page", "api_open_page", "api_feed", "api_add_feed",
     "api_themes", "api_set_theme", "api_overlays", "api_overlay", "api_set_overlay",
     "api_toggle_overlay", "api_hide_overlays", "api_notify", "api_watcher", "api_watcher_thought",
@@ -225,7 +226,10 @@ class LocalApi:
         self.error = ""
         self._stopping.clear()
         self._started_at = time.time()
-        self._thread = threading.Thread(target=self._server.serve_forever, name="local-api", daemon=True)
+        # It looks for "stop" every 0.1 s (the default half second was most of
+        # its share of a close).
+        self._thread = threading.Thread(target=self._server.serve_forever, kwargs={"poll_interval": 0.1},
+                                        name="local-api", daemon=True)
         self._thread.start()
         logging.info("Local API listening on %s:%s", host, self.port)
         return True
@@ -255,7 +259,7 @@ class LocalApi:
                 "streams": self._streams}
 
     # -- the app's thread ----------------------------------------------------
-    def _call(self, name, *args, **kwargs):
+    def _call(self, name, *args, _wait=MAIN_THREAD_TIMEOUT_S, **kwargs):
         method = getattr(self.provider, name, None)
         if not callable(method):
             raise ApiError(501, f"{name} isn't available in this build")
@@ -277,7 +281,7 @@ class LocalApi:
 
         if self.run_on_main(task) is False:
             raise ApiError(503, "Void Compass is closing")
-        if not done.wait(MAIN_THREAD_TIMEOUT_S):
+        if not done.wait(_wait):
             raise ApiError(504, "Void Compass is busy; try again in a moment")
         if "error" in box:
             raise box["error"]
@@ -291,6 +295,10 @@ class LocalApi:
             ("GET", r"/ping", self._ping, False),
             ("GET", r"/docs", self._docs, False),
             ("GET", r"/status", lambda req: self._call("api_status"), False),
+            # The live debugger (tools/debug): this PC only, whatever the settings.
+            ("GET", r"/debug", self._debug, False),
+            ("GET", r"/debug/log", self._debug_log, False),
+            ("POST", r"/debug/verbose", self._debug_verbose, True),
             ("GET", r"/commander", lambda req: self._call("api_commander"), False),
             ("GET", r"/commander/location", lambda req: self._call("api_location"), False),
             ("GET", r"/commander/ship", lambda req: self._call("api_ship"), False),
@@ -410,6 +418,42 @@ class LocalApi:
     def _index(self, req):
         return {"name": "Void Compass", "api": API_VERSION, "version": self.version,
                 "docs": f"{PREFIX}/docs", "control": self.allow_control, "endpoints": self.endpoints()}
+
+    # -- the live debugger ---------------------------------------------------------
+    @staticmethod
+    def _debug_caller(req):
+        if not _loopback(req.client):
+            raise ApiError(403, "The debugger only answers this PC")
+
+    def _debug(self, req):
+        """What's going on inside: read off the main thread first, so a stuck
+        UI still answers; then the app's own view, if its thread is free."""
+        self._debug_caller(req)
+        from voidcompass.core import crash_reporter, debug_tap
+        answer = {"process": debug_tap.process(), "ui_heartbeat_s": crash_reporter.heartbeat_age(),
+                  "threads": debug_tap.threads(stacks=req.query.get("stacks") in ("1", "true")),
+                  "verbose_s": debug_tap.verbose(), "log_seq": debug_tap.records(10**12)["seq"],
+                  "events_seq": self.bus.seq, "streams": self._streams}
+        try:
+            # A short wait: the debugger asks every second, and a stuck UI is the news.
+            answer["app"] = self._call("api_debug", _wait=DEBUG_WAIT_S)
+            answer["main_thread"] = "free"
+        except ApiError as exc:
+            answer["main_thread"] = "busy" if exc.status == 504 else exc.message
+        return answer
+
+    def _debug_log(self, req):
+        self._debug_caller(req)
+        from voidcompass.core import debug_tap
+        return debug_tap.records(_int(req.query.get("since"), 0, 0), str(req.query.get("level") or "DEBUG"),
+                                 _int(req.query.get("limit"), 500, 1, debug_tap.RING_SIZE),
+                                 str(req.query.get("text") or "")[:80])
+
+    def _debug_verbose(self, req):
+        self._debug_caller(req)
+        from voidcompass.core import debug_tap
+        return {"verbose_s": debug_tap.set_verbose(req.body.get("on") is True,
+                                                   _int(req.body.get("seconds"), debug_tap.VERBOSE_MAX_S, 10))}
 
     def _ping(self, req):
         return {"ok": True, "api": API_VERSION, "version": self.version}
@@ -728,7 +772,7 @@ class LocalApi:
             if control and not self.allow_control:
                 raise ApiError(403, "The API is read-only (allow control in Settings)")
             body = self._body(handler) if method == "POST" else {}
-            result = function(_Request(query, body), *args)
+            result = function(_Request(query, body, handler.client_address[0]), *args)
         except ApiError as exc:
             self._fail(handler, exc)
             return
@@ -861,9 +905,10 @@ class LocalApi:
 
 
 class _Request:
-    def __init__(self, query, body):
+    def __init__(self, query, body, client=""):
         self.query = query
         self.body = body
+        self.client = client
 
 
 class _Raw:

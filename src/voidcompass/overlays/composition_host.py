@@ -137,6 +137,8 @@ class CompositionWindow:
         self._voidcompass_navigation_failed = False
         self._voidcompass_renderer_failed = False
         self._voidcompass_navigation_completed_at = 0.0
+        # When the page last said it had drawn after being shown (5.7.1).
+        self._voidcompass_painted_at = 0.0
         self.controller = None
         self._target = None
         self._visual = None
@@ -209,6 +211,7 @@ class CompositionWindow:
                 pass
         core.NewWindowRequested += self._on_new_window
         core.NavigationCompleted += self._on_navigation_completed
+        core.WebMessageReceived += self._on_web_message
         controller.CursorChanged += self._on_cursor_changed
         core.Navigate(self.url)
 
@@ -226,6 +229,14 @@ class CompositionWindow:
             # Never the loopback token in diagnostics.
             print(f"WebView navigation failed: {urlparse(self.url).path} ({getattr(args, 'WebErrorStatus', 'unknown')})",
                   flush=True)
+
+    def _on_web_message(self, _sender, args):
+        try:
+            message = args.TryGetWebMessageAsString()
+        except Exception:
+            return
+        if message == "voidcompass.painted":
+            self._voidcompass_painted_at = time.monotonic()
 
     def _on_cursor_changed(self, _sender, _args):
         self._apply_cursor()

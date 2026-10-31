@@ -31,8 +31,11 @@ from voidcompass.core.journal_watcher import JournalWatcher
 from voidcompass.core.onboarding import should_show as should_show_onboarding
 from voidcompass.dashboard.html_dashboard_runtime import HtmlDashboardRuntime
 from voidcompass.core.version import APP_VERSION
+from voidcompass.core import debug_tap
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# The live debugger's view of the log (tools/debug), kept in memory only.
+debug_tap.install()
 
 _INSTANCE_LOCK_FILE = None
 

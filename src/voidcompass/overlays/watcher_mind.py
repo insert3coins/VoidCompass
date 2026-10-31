@@ -26,12 +26,23 @@ from datetime import datetime
 from pathlib import Path
 import zlib
 
+from voidcompass.core import ranks
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
 from voidcompass.mining.mining_record import material_name
 from voidcompass.overlays import (
     watcher_deeper, watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures, watcher_places,
-    watcher_postcards, watcher_questions, watcher_voice_lore, watcher_worlds,
+    watcher_copilot, watcher_knowing, watcher_learning, watcher_llm, watcher_name, watcher_postcards, watcher_questions,
+    watcher_voice_lore, watcher_worlds,
 )
+
+# 5.7.1, its own words: how long a sign-off recap may take; how often it
+# retries condensing what it knows of you; how many page paragraphs it keeps.
+RECAP_WAIT_S = 15.0
+# What it said in its own words, kept for you to rate; and your votes.
+OWN_SAID_KEPT = 40
+VOTES_KEPT = 60
+ABOUT_RETRY_S = 3600.0
+MIND_WORDS_KEPT = 40
 
 # Story moments the eye shows once (5.6.1): the first time it heard the
 # sound, and the shutter drawn (and kept drawn).
@@ -138,6 +149,9 @@ HEADED_TOPICS = {
     "voice_found": ("memory", watcher_voice_lore.TITLE),
     "habit_milestone": ("", "A MILESTONE"),
     **{topic: ("musing", "WHAT IT HAS WATCHED OF YOU") for topic in watcher_habits.HABIT_TOPICS if topic != "habit_milestone"},
+    # 5.7.1: your name, and what the journal says of you; its reply to you.
+    **watcher_name.HEADINGS,
+    "talk": ("reply", "IN REPLY"),
 }
 
 
@@ -278,6 +292,8 @@ IMPORTANCE = {
     # 5.5.4: how you play, as it has come to know it; a milestone as it happens.
     **{topic: 1 for topic in watcher_habits.HABIT_TOPICS},
     "habit_milestone": 2,
+    # 5.7.1: what the journal says of you.
+    **{topic: level for topic, (level, _normal, _weary) in watcher_name.FACTS.items()},
 }
 # Each topic: (importance, [lines]). A line takes {fields} from the context
 # that raised it; a line whose fields are missing is skipped.
@@ -395,6 +411,15 @@ def noticed(fields):
             for key, value in fields.items()}
 
 
+def noticed_in(text, fields):
+    """New words (5.7.1) with the journal's words marked again, where they appear."""
+    for key, value in (fields or {}).items():
+        value = str(value).strip()
+        if key in NOTICED_FIELDS and value and value in text and f"{NOTICE_OPEN}{value}" not in text:
+            text = text.replace(value, f"{NOTICE_OPEN}{value}{NOTICE_CLOSE}", 1)
+    return text
+
+
 def plain_text(script):
     text = _CORRECTION.sub(lambda match: match.group(2), str(script or ""))
     return text.replace(NOTICE_OPEN, "").replace(NOTICE_CLOSE, "")
@@ -503,7 +528,19 @@ class WatcherMind:
         self.lock = threading.Lock()
         self.memory = self._fresh_memory()
         self._load()
+        # 5.7.1: notes an earlier build took from your questions, let go.
+        watcher_knowing.forget_questions(self.memory)
         self._fresh_state()
+        # 5.7.1: its own words (watcher_llm.WatcherLLM) and what's true right
+        # now for them (a callable: system, ship, what you're doing); the app sets both.
+        self.llm = None
+        self.facts_provider = None
+        # What the ship's systems show about a question (route, survey, ship...),
+        # and the small things it does when asked (watcher_copilot); the app sets both.
+        self.lookup_provider = None
+        self.action_provider = None
+        # Told when a page's paragraph in its own words is ready (own_paragraph).
+        self.on_words = None
 
     @staticmethod
     def _fresh_memory():
@@ -532,6 +569,19 @@ class WatcherMind:
             self.memory["thoughts"] = sum(1 for row in self.memory["said"]
                                           if isinstance(row, list) and row and ":" not in str(row[0]) and row[0] != "idle")
         self._afterthought = None
+        # 5.7.1: a thought waiting for its own words; your words, for a reply;
+        # a thought of its own, and a diary entry, being written.
+        self._llm_pending = None
+        self._talk_pending = None
+        self._own_pending = None
+        self._diary_pending = None
+        self._notes_pending = None
+        # What it knows of you, being condensed; a page's paragraph being
+        # written in its own words, and the ones it couldn't (this run).
+        self._about_pending = None
+        self._about_tried = None
+        self._paragraph_pending = None
+        self._paragraphs_refused = set()
         # 5.6.1: the question waiting for an answer, and something to say on
         # the next quiet tick (after a greeting, a dream; a meeting's passage).
         self._question = None
@@ -660,6 +710,13 @@ class WatcherMind:
         # moments that matter most, and borrow the rest (5.5.3.2).
         own = list(watcher_natures.BANKS.get(nature, {}).get(topic, ()))
         variants = own + [line for line in variants if line not in own]
+        # 5.7.1: your name, if you said it may, at most once a session.
+        named = []
+        cmdr = watcher_name.may_name(self.memory, self._session_start) if topic in watcher_name.NAMED else None
+        if cmdr:
+            named = list(watcher_name.NAMED[topic]["weary" if nature == "weary" else "normal"])
+            fields = {**fields, "cmdr": cmdr}
+            variants = named + [line for line in variants if line not in named]
         options = []
         for template in variants:
             try:
@@ -672,6 +729,11 @@ class WatcherMind:
             return None
         # Never the same words twice while another wording is left.
         fresh = [row for row in options if not self._said_recently(row[0], 30 * 86400)]
+        named_keys = {f"{topic}:{zlib.crc32(line.encode('utf-8')):08x}" for line in named}
+        fresh_named = [row for row in fresh if row[0] in named_keys]
+        if fresh_named and self.random.random() < .5:
+            watcher_name.mark_used(self.memory, self._session_start)
+            return self.random.choice(fresh_named)[:2]
         if fresh:
             own_keys = {f"{topic}:{zlib.crc32(line.encode('utf-8')):08x}" for line in own}
             fresh_own = [row for row in fresh if row[0] in own_keys]
@@ -747,16 +809,21 @@ class WatcherMind:
         if not chosen:
             return None
         key, script = chosen
+        if self._reword(topic, key, script, fields, importance, headline_key, now):
+            return None
         self._utter(topic, key, script, now)
         if headline_key:
             with self.lock:
                 self.memory["said"].append([headline_key, now])
-        # Now and then a second beat follows, once the first has been read.
+        self._maybe_afterthought(topic, importance, script, now)
+        return self.thought
+
+    def _maybe_afterthought(self, topic, importance, script, now):
+        """Now and then a second beat follows, once the first has been read."""
         if topic != "afterthought" and importance < 3:
             chance = .3 if (topic == "quiet" or topic in watcher_idle.IDLE_TOPICS) else .12
             if self.random.random() < chance:
                 self._afterthought = {"after": self._serial, "at": now + 3.2 + len(script) * .045}
-        return self.thought
 
     def _utter(self, topic, key, script, now):
         """Say a thought: on screen for a while, and remembered."""
@@ -882,8 +949,406 @@ class WatcherMind:
             self._saved_at = now
             self.save()
 
+    # -- its own words (5.7.1, experimental) ---------------------------------
+    def _reword(self, topic, key, script, fields, importance, headline_key, now):
+        """With its mind awake, a thought goes to the model first and is said
+        when its new words come back (follow_up): as written, if they break a
+        rule or don't come back in time (a warning waits only moments). Its
+        story is never sent. True when it's waiting for them."""
+        llm = self.llm
+        if llm is None or not llm.rewording() or not llm.ready():
+            return False
+        # A self-correction ([[...]]) is part of how it's said: kept as written
+        # (but a sign-off becomes a recap of the session, written anew).
+        if not watcher_llm.eligible(topic) or ("[[" in script and topic != "sign_off"):
+            return False
+        pending = self._llm_pending
+        if pending is not None:
+            if importance < 3:
+                return True  # one thought at a time: this one stays unsaid
+            pending["job"].cancelled = True
+        nature = personality(self.config)
+        bank = (WEARY if nature == "weary" and topic in WEARY else {}).get(topic) or TOPICS.get(topic, (0, []))[1]
+        examples = []
+        plain = plain_text(script)
+        # A few lines for its tone, different each time (given always the
+        # first three, it took "The drive is happy." and ended every long jump with it).
+        templates = list(bank)
+        self.random.shuffle(templates)
+        for template in templates:
+            try:
+                line = template.format(**(fields or {}))
+            except (KeyError, IndexError, ValueError):
+                continue
+            if line != plain and "[[" not in line:
+                examples.append(line)
+        facts = {name: value for name, value in (fields or {}).items()
+                 if isinstance(value, (str, int, float)) and str(value).strip() and "{" + name + "}" in " ".join(bank)}
+        # A named line (the once-a-session name) keeps the name; no other does.
+        name = watcher_name.call_name(self.memory) or ""
+        with self.lock:
+            tonight = watcher_learning.recent(self.memory, 12, self._session_start) if topic == "sign_off" else []
+        if tonight:
+            # Signing off: a goodnight that recaps what really happened.
+            job = llm.recap(tonight, str((fields or {}).get("summary") or ""), nature,
+                            forbidden=self._unsayable_names())
+            wait = max(RECAP_WAIT_S, job.wait)
+        elif "[[" in script:
+            return False
+        else:
+            with self.lock:
+                said = [str(row[2]) for row in (self.memory.get("log") or [])
+                        if isinstance(row, list) and len(row) > 2 and row[1] == topic][-3:]
+            # Lines you liked for this moment lead its tone; ones you didn't, it steers clear of.
+            liked, disliked = self._votes(topic)
+            job = llm.reword(topic, plain, facts, (liked + examples)[:3], nature,
+                             name=name if name and name in plain else "", forbidden=self._unsayable_names(plain),
+                             said=said, avoid=disliked)
+            # A warning never waits more than moments, even on the CPU.
+            wait = watcher_llm.WARY_WAIT_S if MOODS.get(topic) == "wary" else job.wait
+        self._llm_pending = {"job": job, "topic": topic, "key": key, "script": script, "at": now, "wait": wait,
+                             "importance": importance, "headline_key": headline_key, "fields": dict(fields or {})}
+        return True
+
+    def _unsayable_names(self, allowed_text=""):
+        """The commander's names (the ship's and a nickname), unless one may be said here."""
+        row = watcher_name.record(self.memory)
+        names = (str(row.get("known") or ""), str(row.get("nickname") or ""))
+        return tuple(name for name in names if name and name not in str(allowed_text))
+
+    # How often, at most, a thought of its own, by its Thoughts setting.
+    OWN_REST_S = {"rare": 3600.0, "occasional": 1500.0, "chatty": 720.0}
+
+    def _about_step(self, now):
+        """5.7.1: what it knows of you (its notes and diary), condensed now and
+        then into a few sentences, so its memory stays small and to the point."""
+        llm = self.llm
+        if (llm is None or not llm.ready() or self._about_pending is not None or self._diary_pending is not None
+                or (self._about_tried is not None and now - self._about_tried < ABOUT_RETRY_S)):
+            return
+        with self.lock:
+            due = watcher_knowing.about_due(self.memory, time.time())
+        if due:
+            self._about_tried = now
+            lines, source = due
+            self._about_pending = {"job": llm.condense(lines), "from": source}
+
+    def own_paragraph(self, key, kind, text):
+        """5.7.1: a page's paragraph (a night's flight log, Void Wrapped's
+        verdict) in its own words once it has written them; None until then,
+        or with its mind asleep, and the page shows the written one. Written
+        one at a time in the background; on_words is told when one is ready."""
+        text = str(text or "").strip()
+        llm = self.llm
+        if not text:
+            return None
+        source = f"{zlib.crc32(text.encode('utf-8')):08x}"
+        with self.lock:
+            kept = (self.memory.get("mind_words") or {}).get(key)
+        if isinstance(kept, dict) and kept.get("from") == source:
+            return kept.get("text") or None
+        if (llm is None or not llm.rewording() or not llm.ready() or self._paragraph_pending is not None
+                or (key, source) in self._paragraphs_refused):
+            return None
+        self._paragraph_pending = key
+
+        def done(job):
+            with self.lock:
+                if job.ok:
+                    words = self.memory.setdefault("mind_words", {})
+                    words.pop(key, None)
+                    words[key] = {"from": source, "text": job.text, "at": round(time.time())}
+                    for old in list(words)[:-MIND_WORDS_KEPT]:
+                        del words[old]
+                else:
+                    self._paragraphs_refused.add((key, source))
+                self._paragraph_pending = None
+            if job.ok:
+                self._unsaved = True
+                if callable(self.on_words):
+                    self.on_words(key)
+
+        llm.paragraph(kind, text, {}, personality(self.config), forbidden=self._unsayable_names(text), on_done=done)
+        return None
+
+    def _diary_step(self, now):
+        """5.7.1: with its own words on, a diary entry for a finished session
+        it watched, written quietly in the background. Not its story: that
+        stays as written."""
+        llm = self.llm
+        config = self.config or {}
+        if llm is None or not llm.ready():
+            return
+        if config.get("watcher_llm_diary", True) and self._diary_pending is None:
+            with self.lock:
+                due = watcher_learning.diary_due(self.memory, self._session_start)
+                if due:
+                    watcher_learning.tried(self.memory, due[0])
+            if due:
+                session, lines = due
+                first = next((row.get("t") for row in self.memory.get("happened") or []
+                              if isinstance(row, dict) and row.get("s") == session), None)
+                when = datetime.fromtimestamp(float(first or session or now)).strftime("%d %B")
+                self._diary_pending = {"job": llm.write_diary(lines, when, personality(config),
+                                                              forbidden=self._unsayable_names()),
+                                       "session": session, "when": float(first or now)}
+
+    def _mind_step(self, now):
+        """5.7.1: with its own words on, now and then a thought of its own
+        about what's really been happening (never its own past or story)."""
+        llm = self.llm
+        config = self.config or {}
+        if llm is None or not llm.ready() or self._diary_pending is not None:
+            return
+        setting = FREQUENCIES.get(frequency(config))
+        rest = self.OWN_REST_S.get(frequency(config))
+        if (not config.get("watcher_llm_own_thoughts", True) or setting is None or rest is None
+                or self._own_pending is not None or self._llm_pending is not None or self._talk_pending is not None
+                or self._question or self._in_danger or now - self._session_start < 120
+                or now - self._last_spoke < max(60.0, setting["gap"]) or self._said_recently("mind_own", rest)
+                or self.random.random() > .5):
+            return
+        facts = {}
+        if callable(self.facts_provider):
+            try:
+                facts.update({key: value for key, value in (self.facts_provider() or {}).items() if value not in (None, "")})
+            except Exception:
+                pass
+        with self.lock:
+            lately = watcher_learning.recent(self.memory, 8, self._session_start)
+            remembered = watcher_learning.diary(self.memory, 2)
+            said = [str(row[2]) for row in (self.memory.get("log") or [])[-4:] if isinstance(row, list) and len(row) > 2]
+            knows = watcher_knowing.for_prompt(self.memory, 8)
+        if not lately and not remembered:
+            return  # nothing real to think about yet
+        name = watcher_name.may_name(self.memory, self._session_start) or ""
+        self._own_pending = {"job": llm.own_thought(facts, lately, remembered, said, personality(config), name=name,
+                                                    forbidden=self._unsayable_names(name), knows=knows), "at": now}
+        with self.lock:
+            # Rested from now, said or not, so a refused thought isn't retried at once.
+            self.memory["said"].append(["mind_own", now])
+
+    def _own_words_due(self):
+        """A thought or a reply whose words have come back (or waited long
+        enough): said now. None when there's nothing to say yet."""
+        now = self.clock()
+        diary = self._diary_pending
+        if diary is not None and (diary["job"].done.is_set() or now - diary["job"].made > diary["job"].wait * 2):
+            self._diary_pending = None
+            if diary["job"].ok:
+                with self.lock:
+                    watcher_learning.add_diary(self.memory, diary["session"], diary["job"].text, diary["when"])
+                self._unsaved = True
+        notes = self._notes_pending
+        if notes is not None and (notes["job"].done.is_set() or now - notes["job"].made > notes["job"].wait * 2):
+            self._notes_pending = None
+            if notes["job"].ok:
+                kept = 0
+                for line in watcher_knowing.parse_notes(notes["job"].text):
+                    ok, line, _reason = watcher_llm.check(line, (notes["said"],), 160)
+                    if ok:
+                        with self.lock:
+                            kept += watcher_knowing.add_note(self.memory, line, time.time())
+                if kept:
+                    self._unsaved = True
+        about = self._about_pending
+        if about is not None and (about["job"].done.is_set() or now - about["job"].made > about["job"].wait * 2):
+            self._about_pending = None
+            if about["job"].ok:
+                with self.lock:
+                    self.memory["about_you"] = {"text": about["job"].text, "at": round(time.time()), "from": about["from"]}
+                self._unsaved = True
+        own_pending = self._own_pending
+        if own_pending is not None and (own_pending["job"].done.is_set() or now - own_pending["at"] > own_pending["job"].wait):
+            self._own_pending = None
+            job = own_pending["job"]
+            if job.done.is_set() and job.ok and not self._in_danger:
+                thought = self._utter("mind_own", "mind_own", job.text, now)
+                thought["own_words"] = True
+                self._said_in_own_words("mind_own", job.text)
+                thought["importance"] = 1
+                name = watcher_name.may_name(self.memory, self._session_start)
+                if name and name in job.text:
+                    watcher_name.mark_used(self.memory, self._session_start)
+                return thought
+        talk = self._talk_pending
+        if talk is not None and (talk["job"].done.is_set() or now - talk["at"] > talk["job"].wait):
+            self._talk_pending = None
+            job = talk["job"]
+            reply = job.text if job.done.is_set() and job.ok else self.random.choice(watcher_llm.TALK_FALLBACK)
+            # 5.7.1: anything you said about yourself, kept as a note.
+            if (self.llm is not None and self._notes_pending is None and talk.get("said")
+                    and watcher_knowing.tells_something(talk["said"])):
+                with self.lock:
+                    known = [row["text"] for row in watcher_knowing.notes(self.memory)][-10:]
+                self._notes_pending = {"job": self.llm.take_notes(talk["said"], known), "said": talk["said"]}
+            return self._reply(reply, own=job.ok)
+        pending = self._llm_pending
+        if pending is None:
+            return None
+        job = pending["job"]
+        if not job.done.is_set() and now - pending["at"] < pending.get("wait", watcher_llm.REWORD_WAIT_S):
+            return None
+        self._llm_pending = None
+        job.cancelled = True
+        own = job.done.is_set() and job.ok
+        words = noticed_in(job.text, pending["fields"]) if own else pending["script"]
+        thought = self._utter(pending["topic"], pending["key"], words, now)
+        thought["own_words"] = own
+        if own:
+            self._said_in_own_words(pending["topic"], plain_text(words))
+        if pending["headline_key"]:
+            with self.lock:
+                self.memory["said"].append([pending["headline_key"], now])
+        self._maybe_afterthought(pending["topic"], pending["importance"], plain_text(words), now)
+        return thought
+
+    def talk(self, text, voice=False):
+        """You said something to it on the Watcher page (5.7.1), typed or
+        spoken. Its reply appears beside the orb, and in the conversation on
+        the page."""
+        words = " ".join(str(text or "").split())[:400]
+        llm = self.llm
+        # Waking (a model change): asked now, answered once it's awake.
+        if not words or llm is None or not llm.listening():
+            return False
+        with self.lock:
+            history = self.memory.setdefault("talk", [])
+            history.append({"at": round(time.time(), 1), "you": words, "it": "", **({"voice": True} if voice else {})})
+            del history[:-50]
+            recent = [dict(row) for row in history[-(watcher_llm.HISTORY + 1):-1]]
+        self._unsaved = True
+        done = None
+        if callable(self.action_provider):
+            try:
+                done = self.action_provider(words)
+            except Exception:
+                done = None
+        own = done or watcher_llm.deflection(words, self.random)
+        if own:
+            self._reply(str(own), own=False)
+            return True
+        lookup = []
+        if callable(self.lookup_provider):
+            try:
+                lookup = [str(line) for line in self.lookup_provider(words) or () if line][:watcher_copilot.LOOKUP_LIMIT]
+            except Exception:
+                lookup = []
+        facts = {}
+        provider = self.facts_provider
+        if callable(provider):
+            try:
+                facts.update({key: value for key, value in (provider() or {}).items() if value not in (None, "")})
+            except Exception:
+                pass
+        facts["sessions together"] = int(self.memory.get("sessions") or 0)
+        facts["hours together"] = int(float(self.memory.get("hours") or 0))
+        name = watcher_name.may_name(self.memory, self._session_start) or ""
+        if self._talk_pending is not None:
+            self._talk_pending["job"].cancelled = True
+        with self.lock:
+            lately = watcher_learning.recent(self.memory, 10)
+            remembered = watcher_learning.diary(self.memory, 3)
+            knows = watcher_knowing.for_prompt(self.memory)
+            story = watcher_knowing.story_told(self.memory)
+        liked, disliked = self._votes("talk")
+        job = llm.talk(words, facts, recent, personality(self.config), name=name, forbidden=self._unsayable_names(name),
+                       lately=lately, remembered=remembered, knows=knows, story=story, lookup=lookup,
+                       liked=liked, avoid=disliked)
+        self._talk_pending = {"job": job, "at": self.clock(), "said": words}
+        return True
+
+    def _reply(self, words, own=True):
+        with self.lock:
+            history = self.memory.setdefault("talk", [])
+            if history and not history[-1].get("it"):
+                history[-1]["it"] = words
+            count = len(history)
+        thought = self._utter("talk", f"talk:{count}", words, self.clock())
+        thought["importance"] = 3  # an answer to you is always said aloud
+        thought["own_words"] = own
+        if own:
+            self._said_in_own_words("talk", words)
+        if own and watcher_name.may_name(self.memory, self._session_start) and \
+                watcher_name.may_name(self.memory, self._session_start) in words:
+            watcher_name.mark_used(self.memory, self._session_start)
+        return thought
+
+    def talk_waiting(self):
+        return self._talk_pending is not None
+
+    # -- your votes on its words (5.7.1) ------------------------------------------
+    def _said_in_own_words(self, topic, text):
+        """A line it said in its own words, kept (the last few) for you to rate."""
+        with self.lock:
+            rows = self.memory.setdefault("own_said", [])
+            rows.append({"at": round(time.time(), 1), "topic": str(topic), "text": str(text)})
+            del rows[:-OWN_SAID_KEPT]
+        self._unsaved = True
+
+    def rate(self, text, vote, topic=""):
+        """👍 ("up"), 👎 ("down") or neither ("clear") on a line of its own.
+        Liked lines become its tone for that moment; disliked ones it steers
+        away from (and their phrases count as copying)."""
+        text = " ".join(str(text or "").split())
+        if not text or vote not in ("up", "down", "clear"):
+            return False
+        with self.lock:
+            if not topic:
+                topic = next((row.get("topic", "") for row in reversed(self.memory.get("own_said") or [])
+                              if row.get("text") == text), "")
+            for key in ("liked", "disliked"):
+                self.memory[key] = [row for row in self.memory.get(key) or [] if row.get("text") != text]
+            if vote != "clear":
+                rows = self.memory.setdefault("liked" if vote == "up" else "disliked", [])
+                rows.append({"at": round(time.time(), 1), "topic": str(topic), "text": text})
+                del rows[:-VOTES_KEPT]
+        self._unsaved = True
+        return True
+
+    def _votes(self, topic, limit=2):
+        """(liked, disliked) lines for a moment, newest last."""
+        with self.lock:
+            liked = [row["text"] for row in self.memory.get("liked") or [] if row.get("topic") == topic][-limit:]
+            disliked = [row["text"] for row in self.memory.get("disliked") or [] if row.get("topic") == topic][-3:]
+        return liked, disliked
+
+    def debug_state(self):
+        """What it's doing right now, for the live debugger: the thought on
+        screen, what's waiting for its words, and how big its memory is."""
+        now = self.clock()
+        waiting = {}
+        for name in ("llm", "talk", "own", "diary", "notes", "about"):
+            pending = getattr(self, f"_{name}_pending", None)
+            if pending is not None:
+                job = pending.get("job")
+                waiting[name] = {"kind": getattr(job, "kind", ""), "topic": pending.get("topic", ""),
+                                 "age_s": round(now - pending.get("at", now), 1) if "at" in pending
+                                 else round(time.monotonic() - getattr(job, "made", time.monotonic()), 1)}
+        if self._paragraph_pending:
+            waiting["paragraph"] = {"kind": "paragraph", "topic": self._paragraph_pending, "age_s": None}
+        thought = self.thought or {}
+        with self.lock:
+            sizes = {key: len(self.memory.get(key) or ()) for key in
+                     ("said", "log", "happened", "diary", "talk", "told_me", "taught", "mind_words", "postcards", "lore")}
+            feeling = watcher_deeper.words_for(self.memory)
+        return {
+            "session_s": round(now - self._session_start) if self._session_start else None,
+            "quiet_s": round(now - self._last_spoke) if self._last_spoke else None,
+            "thought": {key: thought.get(key) for key in ("topic", "text", "heading", "mood", "importance", "own_words")}
+            if thought else None,
+            "showing": bool(thought) and now < float(thought.get("until") or 0),
+            "question": bool(self._question), "in_danger": bool(self._in_danger),
+            "waiting": waiting, "feeling": feeling, "memory": sizes,
+            "nature": personality(self.config), "thoughts": frequency(self.config),
+        }
+
     def follow_up(self):
-        """The second beat of a thought, when it is due (the HUD asks often)."""
+        """The second beat of a thought, when it is due (the HUD asks often);
+        or (5.7.1) a thought or reply whose own words are ready."""
+        own = self._own_words_due()
+        if own:
+            return own
         pending = self._afterthought
         if not pending or self.clock() < pending["at"]:
             return None
@@ -929,6 +1394,7 @@ class WatcherMind:
         with self.lock:
             self.memory["sessions"] = int(self.memory.get("sessions") or 0) + 1
             self.memory["session_started"] = now
+            watcher_name.count_session(self.memory, now)
             # 5.6.1: when it first woke for you; how long you were away moves
             # its mood; a dream from last time waits to be told.
             if not self.memory.get("first_seen"):
@@ -970,6 +1436,17 @@ class WatcherMind:
         raw = raw if isinstance(raw, dict) else {}
         with self.lock:
             milestone = watcher_habits.observe(self.memory, event, raw)
+            # 5.7.1: the name the ship writes (and a new one); what it says of you;
+            # what it has seen you do, for its diary and its own words.
+            old_name = watcher_name.observe(self.memory, event, raw)
+            if watcher_learning.record(self.memory, event, raw, self._session_start, self.clock()):
+                self._unsaved = True
+        if old_name:
+            self._say_next.append(("name_renamed", {"old": old_name, "name": watcher_name.record(self.memory)["known"]}))
+        fact = watcher_name.fact_fields(event, raw)
+        if fact and not self._said_recently(fact[0], watcher_name.FACT_REST_S) \
+                and fact[0] not in {topic for topic, _fields in self._say_next}:
+            self._say_next.append(fact)
         thought = self._observe(event, raw)
         # A milestone is rare (10, 50, 100 …): it outranks a passing remark.
         if milestone and self._session_start is not None and int((thought or {}).get("importance") or 0) < 2:
@@ -1192,7 +1669,9 @@ class WatcherMind:
                 return self.consider("big_sale", {"credits": f"{total:,}"})
             return None
         if event == "Promotion":
-            rank = next((f"{key} rank {value}" for key, value in raw.items() if key not in {"timestamp", "event"}), None)
+            # 5.7.1: by its name: "Elite, in exploration".
+            rank = next((ranks.said(key, value) or f"{key} rank {value}" for key, value in raw.items()
+                         if key not in {"timestamp", "event"}), None)
             return self.consider("promotion", {"rank": rank} if rank else {})
         if event == "Docked":
             return self.consider("docked_home")
@@ -1313,8 +1792,14 @@ class WatcherMind:
         if not thought:
             return ""
         if thought.get("topic") in ("voice_found", "relay"):
-            return thought.get("text") or ""
-        return watcher_voice_lore.spoken_part(thought.get("text"), self.voice_stage())
+            words = thought.get("text") or ""
+        else:
+            words = watcher_voice_lore.spoken_part(thought.get("text"), self.voice_stage())
+        # 5.7.1: your name as you'd have it said, not as it's spelled.
+        for shown, said in watcher_name.spoken(self.memory).items():
+            if shown and said and shown != said:
+                words = words.replace(shown, said)
+        return words
 
     # -- mining (5.5.12) -------------------------------------------------------
     def _prospect_moment(self, raw):
@@ -1575,6 +2060,8 @@ class WatcherMind:
                 self._story_changed = True
             if question["id"] == "pilgrimage" and isinstance(self.memory.get("pilgrimage"), dict):
                 self.memory["pilgrimage"]["accepted"] = key == "yes"
+            if question["id"] == "your_name":
+                watcher_name.set_call(self.memory, {"yes": "name", "commander": "commander", "other": "nickname"}[key])
         step = (spec.get("frequency") or {}).get(key)
         if step:
             order = ("rare", "occasional", "chatty")
@@ -1641,12 +2128,45 @@ class WatcherMind:
             return self.ask("talk_less")
         return None
 
+    def _name_step(self, now):
+        """The next step of its arc about your name (5.7.1), in a quiet
+        moment: it notices the name, tries it, asks, and says it at last."""
+        if self._question is not None or self._in_danger or now - self._last_spoke < 60:
+            return None
+        if self._session_start is None or now - self._session_start < 90:
+            return None
+        step = watcher_name.next_step(self.memory, self.memory.get("sessions"), self.memory.get("hours"), self._session_start)
+        if not step:
+            return None
+        row = watcher_name.record(self.memory)
+        if step == "ask":
+            asked_before = bool((self.memory.get("questions") or {}).get("your_name"))
+            thought = self.ask("your_name", {"name": row["known"]}, force=not asked_before)
+        else:
+            voice = watcher_questions.voice(personality(self.config))
+            fields = {"name": row["known"], "seen": f"{max(int(self.memory.get('sessions') or 0), int(row.get('seen') or 0)):,}",
+                      "called": watcher_name.call_name(self.memory) or row["known"]}
+            text = self.random.choice(watcher_name.ARC[step][voice]).format(**fields)
+            thought = self._utter("name_lore", f"name:{step}", text, now)
+            number = watcher_name.ARC_ORDER.index(step) + 1
+            thought["kind"], thought["heading"] = "memory", f"{watcher_name.TITLE} · {number} OF {len(watcher_name.ARC_ORDER)}"
+        if thought:
+            with self.lock:
+                watcher_name.mark_step(self.memory, step, self._session_start, now)
+                if step == "first":
+                    watcher_name.mark_used(self.memory, self._session_start)
+            self._unsaved = True
+        return thought
+
     def _ask_once(self, question_id):
         if ((self.memory.get("questions") or {}).get(question_id) or {}).get("asked"):
             return None
         return self.ask(question_id, force=True)
 
     def _say_queued(self, topic, fields, now):
+        if topic == "name_renamed":
+            voice = watcher_questions.voice(personality(self.config))
+            return self._utter("name_renamed", "name:renamed", self.random.choice(watcher_name.RENAMED[voice]).format(**fields), now)
         if topic == "lore_meeting":
             return self._utter("lore_meeting", "lore:meeting", fields["text"], now)
         if topic == "callback_road":
@@ -1678,8 +2198,12 @@ class WatcherMind:
             except (KeyError, IndexError):
                 continue
             # Said in parts (an opener, the memory, a closer), so the same
-            # answer rarely comes back the same way twice.
-            return self._utter("callback", key, watcher_deeper.assemble(personality(self.config), line, self.random), now)
+            # answer rarely comes back the same way twice; with its mind
+            # awake, in its own words (5.7.1).
+            said = watcher_deeper.assemble(personality(self.config), line, self.random)
+            if self._reword("callback", key, said, fields, 2, None, now):
+                return None
+            return self._utter("callback", key, said, now)
         return None
 
     def _queue_session_extras(self, now):
@@ -1839,6 +2363,8 @@ class WatcherMind:
         if self._session_start is None:
             return None  # nothing to think about until it has seen the game
         self._account_time()
+        self._diary_step(now)
+        self._about_step(now)
         calm = self._calm(now)
         if calm:
             return calm
@@ -1853,9 +2379,13 @@ class WatcherMind:
             queued = self._say_queued(topic, fields, now)
             if queued:
                 return queued
+        named = self._name_step(now)
+        if named:
+            return named
         asked = self._maybe_ask(now, context)
         if asked:
             return asked
+        self._mind_step(now)
         if self._session_start and now - self._session_start > 3 * 3600:
             hours = int((now - self._session_start) // 3600)
             if not self._said_recently("long_session", 3600):

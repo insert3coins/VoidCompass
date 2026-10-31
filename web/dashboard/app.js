@@ -1882,6 +1882,13 @@ function selectStudioOverlay(id, follow = false) {
   if (mapHide) mapHide.disabled = !mapsOn;
   text("studio-selected-maphide-note", !mapsOn ? "Off for every overlay (All overlays)"
     : selected.hide_on_maps !== false ? "Hides on the Galaxy Map, System Map and Orrery" : "Stays on screen on the maps");
+  // The same for the menus (5.7.1), which are off for all until switched on.
+  const menusOn = Boolean((studioData().options || {}).overlay_hide_in_menus);
+  const menuHide = byId("studio-selected-menuhide");
+  fill(menuHide, selected.hide_in_menus !== false);
+  if (menuHide) menuHide.disabled = !menusOn;
+  text("studio-selected-menuhide-note", !menusOn ? "Off for every overlay (All overlays)"
+    : selected.hide_in_menus !== false ? "Hides on ship panels, station services and menus" : "Stays on screen in the menus");
   // Its own opacity (5.5.3.3), or the one set for all overlays.
   const ownOpacity = byId("studio-selected-opacity");
   if (ownOpacity && document.activeElement !== ownOpacity) ownOpacity.value = String(Number(selected.own_opacity) || 0);
@@ -4484,6 +4491,12 @@ byId("studio-selected-text").addEventListener("change", async (event) => {
 byId("studio-selected-maphide").addEventListener("change", async (event) => {
   const wanted = event.target.checked;
   if (!studioSelectedId || !(await command("overlay_studio", {operation: "map_hiding", overlay_id: studioSelectedId, hide: wanted}))) {
+    event.target.checked = !wanted;
+  }
+});
+byId("studio-selected-menuhide").addEventListener("change", async (event) => {
+  const wanted = event.target.checked;
+  if (!studioSelectedId || !(await command("overlay_studio", {operation: "menu_hiding", overlay_id: studioSelectedId, hide: wanted}))) {
     event.target.checked = !wanted;
   }
 });

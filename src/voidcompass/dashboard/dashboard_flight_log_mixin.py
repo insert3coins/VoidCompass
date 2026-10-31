@@ -32,7 +32,7 @@ class DashboardFlightLogMixin:
         flying = bool(newest) and not newest.get("ended")
         # Tonight's, still in flight, is brought up to date now and then.
         if cached and cached[0] == key and (not flying or time.monotonic() - cached[2] < 20):
-            return cached[1]
+            return self._flight_log_own_words(cached[1], sessions)
         rows = []
         if history is not None:
             with history.lock:
@@ -44,9 +44,16 @@ class DashboardFlightLogMixin:
                 postcards = album().rows()
             except Exception as exc:
                 logging.debug("Flight log postcards skipped: %s", exc)
-        logs = flight_logs(sessions, rows, postcards, watcher_mind.personality(config), finds=finds)
+        # Kept with the Hatchling's diary: the cached logs came back without it.
+        logs = self._flight_log_pet(flight_logs(sessions, rows, postcards, watcher_mind.personality(config), finds=finds),
+                                    sessions)
         self._flight_log_cache = (key, logs, time.monotonic())
-        return self._flight_log_pet(logs, sessions)
+        return self._flight_log_own_words(logs, sessions)
+
+    def _flight_log_own_words(self, logs, sessions):
+        """5.7.1: the newest nights in the Watcher's own words, once written."""
+        own = getattr(self, "_watcher_own_flight_logs", None)
+        return own(logs, sessions) if callable(own) else logs
 
     def _flight_log_pet(self, logs, sessions):
         """The Hatchling's diary for each night (5.6.4), beside the Watcher's words."""

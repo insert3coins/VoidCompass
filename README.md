@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.6.9**
+**Current version: 5.7.1**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
@@ -38,7 +38,7 @@ The command deck has a tab for each part of the game:
 - **Music**: a player for your own music files, with an overlay you can show in game.
 - **Games**: fourteen arcade cabinets in Elite's world to play in the deck, from Docking Computer to Trumble Trouble.
 - **Hatchling**: a shipboard companion that lives in real time, is raised by how you really play, and has its own habitat and overlay.
-- **The Watcher**: an eye that watches your journal and thinks out loud beside it, about what you're doing, where you've been and its own long story. It remembers you between sessions. Its voice is off until you turn it on.
+- **The Watcher**: an eye that watches your journal and thinks out loud beside it, about what you're doing, where you've been and its own long story. It remembers you between sessions and, once you know each other, asks whether it may use your name. Its voice is off until you turn it on. So is an experiment: a small language model on your own PC that lets it find its own words and answer when you talk to it, typed or spoken (push to talk, heard on this PC too), kept to what your journal says by its own rules.
 
 Everything else is quiet on purpose: it shows up on the deck, in notifications and on the overlays.
 
@@ -54,7 +54,7 @@ The Navigation HUD's journal-driven state scenes use bundled Three.js graphics, 
 
 The boot screen centres the Watcher's eye beneath the Void Compass title, with real journal catch-up counts, commander and ship details, independent system readiness, an update-check indicator and expandable startup details. Three.js modules preload during boot. The composition overlay host creates its windows together and applies each manifest in one UI pass, keeping its DPI and text-fit rules. Hidden pages still wait for fresh rendered content before appearing. The Watcher's voice starts only after the boot screen closes.
 
-**Overlay Studio** lays them out on your actual monitors. It also has their opacity, a frame-rate cap and per-overlay options. Overlays can hide themselves while the galaxy or system map is open, and the switches along the top of the deck turn any of them on or off quickly. OBS can capture each overlay as its own window.
+**Overlay Studio** lays them out on your actual monitors. It also has their opacity, a frame-rate cap and per-overlay options. Overlays can hide themselves while the galaxy or system map is open, or in the game's menus, and come and go together. The switches along the top of the deck turn any of them on or off quickly. OBS can capture each overlay as its own window.
 
 The shared host pushes changed models to visible and hidden overlay pages. Each model travels with its revision; ordinary readings can catch up to the latest state while notification and companion event changes retain their order. Height and shape reports identify the page generation and layout they measured, protecting newer layouts from delayed replies and preserving text and monitor scaling.
 

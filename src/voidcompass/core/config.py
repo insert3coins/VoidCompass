@@ -170,6 +170,12 @@ PROFILE_TEXT_SETTINGS = (
     "heartbeat_thought_side",
     "watcher_voice_speed",
     "watcher_voice_level",
+    # 5.7.1: its own words (experimental).
+    "watcher_llm_model",
+    "watcher_llm_device",
+    # Talking to it by voice: which microphone, hold or tap the key.
+    "watcher_listen_mic",
+    "watcher_listen_mode",
     "home_system",
     "hud_scene_mode",
     "hud_font_face",
@@ -270,6 +276,7 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_watcher_answer_1",
     "overlay_hotkey_watcher_answer_2",
     "overlay_hotkey_watcher_answer_3",
+    "overlay_hotkey_watcher_talk",
     "ground_target_system",
     "ground_target_body",
     "ground_target_label",
@@ -277,6 +284,7 @@ PROFILE_TEXT_SETTINGS = (
 
 PROFILE_BOOL_SETTINGS = (
     "overlay_hide_on_maps",
+    "overlay_hide_in_menus",
     "overlay_transparency_fix",
     # The old (windowed) overlay windows, for a PC where visual hosting
     # fails (5.5.3.4.1). Read when the overlay host starts.
@@ -311,6 +319,12 @@ PROFILE_BOOL_SETTINGS = (
     "heartbeat_thought_backdrop",
     "heartbeat_thought_heading",
     "watcher_voice_enabled",
+    "watcher_llm_enabled",
+    "watcher_llm_reword",
+    "watcher_llm_free_idle",
+    "watcher_llm_own_thoughts",
+    "watcher_llm_diary",
+    "watcher_listen_enabled",
     "cargo_overlay_enabled",
     "carrier_overlay_enabled",
     "prospector_overlay_enabled",
@@ -557,6 +571,7 @@ PROFILE_VALUE_SETTINGS = (
     "overlay_text_scale_percent",
     "overlay_frame_rate",
     "overlay_map_keep_visible",
+    "overlay_menu_keep_visible",
     "overlay_opacity_percent",
     "overlay_opacity_by_overlay",
     "overlay_layout_presets",
@@ -841,6 +856,10 @@ def apply_profile_config(config, profile_key=None):
         "heartbeat_thought_side": "auto",
         "watcher_voice_speed": "standard",
         "watcher_voice_level": "every",
+        "watcher_llm_model": "standard",
+        "watcher_llm_device": "gpu",
+        "watcher_listen_mic": "",
+        "watcher_listen_mode": "hold",
         "home_system": "",
         "hud_scene_mode": "full",
         "hud_font_face": "cockpit",
@@ -952,11 +971,19 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_watcher_answer_1": "",
         "overlay_hotkey_watcher_answer_2": "",
         "overlay_hotkey_watcher_answer_3": "",
+        "overlay_hotkey_watcher_talk": "Ctrl+Alt+Shift+F8",
     }
     bool_defaults = {
         **OVERLAY_ENABLE_DEFAULTS,
         "watcher_voice_enabled": False,
+        "watcher_llm_enabled": False,
+        "watcher_llm_reword": True,
+        "watcher_llm_free_idle": False,
+        "watcher_llm_own_thoughts": True,
+        "watcher_llm_diary": True,
+        "watcher_listen_enabled": False,
         "overlay_hide_on_maps": True,
+        "overlay_hide_in_menus": False,
         "edsm_upload_enabled": False,
         "inara_upload_enabled": False,
         "edsm_backfill_on_cache_rebuild": True,
@@ -1068,6 +1095,8 @@ def apply_profile_config(config, profile_key=None):
                 "overlay_transparency_fix": False,
                 "overlay_classic_windows": False,
                 "overlay_map_keep_visible": [],
+                # Construction Needs is made for station services (5.7.1).
+                "overlay_menu_keep_visible": ["colony_needs_hud"],
                 # Overlays with their own opacity (Studio id: percent).
                 "overlay_opacity_by_overlay": {},
                 "overlay_opacity_percent": 100,
@@ -1294,6 +1323,7 @@ def load_config():
         'overlay_hotkey_watcher_answer_1': '',
         'overlay_hotkey_watcher_answer_2': '',
         'overlay_hotkey_watcher_answer_3': '',
+        'overlay_hotkey_watcher_talk': 'Ctrl+Alt+Shift+F8',
         # New installs start with Standard. An older root config that somehow
         # lacks the setting keeps the historical Expanded default.
         'hud_compact_mode': not config_existed,
@@ -1462,6 +1492,17 @@ def load_config():
         # The Watcher's voice (5.5.4): Piper with the HAL model, off until
         # the commander turns it on; how loud, how fast, and how much it says.
         'watcher_voice_enabled': False,
+        'watcher_llm_enabled': False,
+        'watcher_llm_reword': True,
+        'watcher_llm_free_idle': False,
+        'watcher_llm_own_thoughts': True,
+        'watcher_llm_diary': True,
+        'watcher_llm_model': 'standard',
+        'watcher_llm_device': 'gpu',
+        # Talking to it by voice (5.7.1): off until downloaded and turned on.
+        'watcher_listen_enabled': False,
+        'watcher_listen_mic': '',
+        'watcher_listen_mode': 'hold',
         'watcher_voice_volume': 80,
         'watcher_voice_speed': 'standard',
         'watcher_voice_level': 'every',
@@ -1636,10 +1677,12 @@ def load_config():
         'ui_text_min_px': 0,
         'overlay_text_scale_percent': 100,
         'overlay_hide_on_maps': True,
+        'overlay_hide_in_menus': False,
         'overlay_frame_rate': 30,
         'overlay_transparency_fix': False,
         'overlay_classic_windows': False,
         'overlay_map_keep_visible': [],
+        'overlay_menu_keep_visible': ['colony_needs_hud'],
         'overlay_opacity_by_overlay': {},
         'overlay_opacity_percent': 100,
         'overlay_layout_presets': {},

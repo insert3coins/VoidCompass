@@ -132,6 +132,8 @@ OVERLAY_HOTKEY_SPECS = (
     ("watcher_answer_1", "overlay_hotkey_watcher_answer_1", "The Watcher: answer 1", None),
     ("watcher_answer_2", "overlay_hotkey_watcher_answer_2", "The Watcher: answer 2", None),
     ("watcher_answer_3", "overlay_hotkey_watcher_answer_3", "The Watcher: answer 3", None),
+    # 5.7.1: talk to it by voice (hold or tap, chosen on the MIND page).
+    ("watcher_talk", "overlay_hotkey_watcher_talk", "The Watcher: talk (push to talk)", None),
     _overlay_hotkey("planet_waypoint"),
     # 5.6.1: marks the spot as one of the expedition's places.
     ("field_bookmark", "overlay_hotkey_field_bookmark", "Expedition: mark this place", None),
@@ -142,6 +144,7 @@ DEFAULT_OVERLAY_HOTKEYS = {
     "overlay_hotkey_toggle_all": "Ctrl+Alt+Shift+F11",
     "overlay_hotkey_field_bookmark": "Ctrl+Alt+Shift+F12",
     "overlay_hotkey_watcher_poke": "Ctrl+Alt+Shift+F9",
+    "overlay_hotkey_watcher_talk": "Ctrl+Alt+Shift+F8",
     **{f"overlay_hotkey_rig_{n}": f"Ctrl+Alt+{n}" for n in range(1, 7)},
 }
 

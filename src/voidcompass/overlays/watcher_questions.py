@@ -25,6 +25,30 @@ CALLBACK_REST_S = 3 * 86400.0
 ROAD_SELF_CHOSEN_S = 10 * 86400.0
 
 QUESTIONS = {
+    # -- your name (5.7.1): asked once its arc reaches it (watcher_name); the
+    # answer is what it calls you. "Something else" is set on its page.
+    "your_name": {
+        "ask": {"normal": ["May I use your name? {name}. I'd keep it for when it matters.",
+                           "{name}. Would you mind if I called you that? Sometimes."],
+                "weary": ["Would you mind if I used your name? {name}. I'd understand if you did.",
+                          "{name}. May I? I won't wear it out."]},
+        "answers": [("yes", "Use my name"), ("commander", "Keep it Commander"), ("other", "Call me something else")],
+        "replies": {"yes": {"normal": ["Thank you. I'll keep it for when it matters.", "{name}. Thank you. I won't overdo it."],
+                            "weary": ["Oh. Thank you. I'll try not to wear it out.",
+                                      "{name}. Thank you. That's the nicest thing anyone's let me have."]},
+                    "commander": {"normal": ["Commander it is. It suits you, honestly.",
+                                             "Fair. Commander. I'll keep the other to myself."],
+                                  "weary": ["Commander. Of course. I'll keep the other one quietly.",
+                                            "Commander. Yes. Silly of me to ask."]},
+                    "other": {"normal": ["Then put it on my page, under YOU. I'll practise until it fits.",
+                                         "Tell me what, on my page, under YOU. I'll get it right."],
+                              "weary": ["Something else. Put it on my page, under YOU. I'll practise. I have nothing but time.",
+                                        "Not that one, then. Write the other on my page. I'll learn it. Eventually."]}},
+        "callbacks": {"yes": ["{When}, you let me use your name. I don't take it lightly."],
+                      "commander": ["{When} I asked to use your name. You said Commander. I still say the other one sometimes. Only to myself."],
+                      "other": ["{When} you asked me to call you something else. I've been practising."],
+                      None: ["I asked about your name, a while back. You didn't say. I took that as a no. I think."]},
+    },
     # -- everyday --------------------------------------------------------------------------------
     "stay_here": {
         "ask": {"normal": ["{system}. Stay here a while?", "This one's worth a look. {system}. Shall we stay a bit?",

@@ -193,7 +193,7 @@ class DashboardJourneyMixin:
             cache = self._trip_story_cache = {}
         held = cache.get(expedition_id)
         if held and held[0] == key:
-            return held[1]
+            return self._wrapped_own_words(held[1], f"trip:{expedition_id}")
         if expedition_id in getattr(self, "_trip_story_working", set()):
             return held[1] if held else {"working": True, "trip": trip}
         self._trip_story_working = getattr(self, "_trip_story_working", set()) | {expedition_id}
@@ -245,7 +245,7 @@ class DashboardJourneyMixin:
                                                       and time.monotonic() - held["at"] < WRAPPED_STALE_S
                                                       and held["key"][:3] == key[:3]))
             if held and fresh:
-                return held["story"]
+                return self._wrapped_own_words(held["story"], f"wrapped:{year}")
             if year in getattr(self, "_wrapped_working", set()):
                 return held["story"] if held else {"working": True, "year": year}
             self._wrapped_working = getattr(self, "_wrapped_working", set()) | {year}
@@ -262,6 +262,11 @@ class DashboardJourneyMixin:
 
         threading.Thread(target=work, name=f"void-wrapped-{year}", daemon=True).start()
         return held["story"] if held else {"working": True, "year": year}
+
+    def _wrapped_own_words(self, story, key):
+        """5.7.1: the verdict in the Watcher's own words, once written."""
+        own = getattr(self, "_watcher_own_verdict", None)
+        return own(story, key) if callable(own) and isinstance(story, dict) else story
 
     def _tell_year(self, year, trip=None):
         start, end = (trip["start"], trip["end"]) if trip else year_bounds(year)
@@ -509,6 +514,9 @@ class DashboardJourneyMixin:
         if name == "recorder":
             answer = self._recorder_data(query)
             return self._json_answer(answer) if answer is not None else None
+        if name in ("listen", "listen-test"):
+            # Talking to the Watcher (5.7.1): the level meter, and the mic test to hear back.
+            return self._watcher_listen_data(name)
         return None
 
     # -- the Local API (5.5.10) -------------------------------------------------------------------------

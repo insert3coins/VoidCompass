@@ -29,6 +29,10 @@ __pycache__/
 *.log
 # tools/journal_watch.py's own files (a developer tool, never released).
 tools/journal_watch/
+# tools/pause_probe.py's recordings (a developer tool, never released).
+tools/pause_probe/
+# a developer tool, never released
+tools/debug
 
 # Local-only scratch tests and generated visual-test artefacts. The real
 # regression suite under tests/ is source and must remain tracked.
@@ -91,6 +95,10 @@ models/cache/
 models/installed.json
 models/.engine-unpack/
 models/**/*.part
+# The Watcher's mind (5.7.1): llama.cpp and the Qwen model, downloaded on first use.
+models/llm/
+# The Watcher's library: the pages you gave it to read (5.7.1), kept on this PC.
+/library/
 keepsakes.json
 
 # Generated companion showcase exports.

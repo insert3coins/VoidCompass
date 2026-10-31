@@ -15,14 +15,14 @@ import time
 
 from voidcompass.bgs import ticks as bgs_ticks
 from voidcompass.bgs import views as bgs_views
-from voidcompass.core import themes
+from voidcompass.core import debug_tap, themes
 from voidcompass.core.config import get_active_profile
 from voidcompass.core.overlay_registry import OVERLAY_SPECS, OVERLAY_SPEC_BY_ATTR
 from voidcompass.core.version import APP_VERSION
 from voidcompass.exploration import bio_values
 from voidcompass.exploration.stellar_types import star_type_label
 from voidcompass.dashboard.dashboard_api_records_mixin import ApiRecordsMixin
-from voidcompass.services.local_api import ApiError, LocalApi, DEFAULT_PORT
+from voidcompass.services.local_api import _SECRET_NAME, ApiError, LocalApi, DEFAULT_PORT
 
 # Deck pages whose data the API never hands out: Settings holds the
 # commander's keys and webhooks, Tools only runs actions.
@@ -43,6 +43,24 @@ def _plain(value):
         return None
 
 
+def _secret_values(config):
+    """Every setting that's a key, token, webhook, secret or password."""
+    found = []
+
+    def walk(value, secret=False):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                walk(item, secret or bool(_SECRET_NAME.search(str(key))))
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                walk(item, secret)
+        elif secret and isinstance(value, str) and value.strip():
+            found.append(value.strip())
+
+    walk(config or {})
+    return found
+
+
 class DashboardApiMixin(ApiRecordsMixin):
     # -- lifecycle -------------------------------------------------------------
     def _api_server(self):
@@ -54,6 +72,8 @@ class DashboardApiMixin(ApiRecordsMixin):
                 return self.root.call_later(0, task) is not None
 
             api = self._local_api = LocalApi(self, run_on_main=on_main, version=APP_VERSION)
+            # The debugger's log never shows the commander's keys or webhooks.
+            debug_tap.secret_values = lambda: _secret_values(self.config)
         return api
 
     def _api_attach(self):
@@ -187,6 +207,44 @@ class DashboardApiMixin(ApiRecordsMixin):
             "overlays_hidden": bool(getattr(self, "_overlay_hotkey_global_hidden", False)),
             "voice": self._watcher_voice_on() if hasattr(self, "_watcher_voice_on") else False,
         }
+
+    def api_debug(self):
+        """The app's own view for the live debugger (tools/debug): the deck,
+        the game as Void Compass sees it, the overlays, the Watcher, the
+        voice and the music. Never a setting's value."""
+        hud = getattr(self, "heartbeat_hud", None)
+        mind = getattr(hud, "mind", None)
+        llm = getattr(self, "_watcher_mind_llm", None)
+        dispatcher = getattr(self, "ui_dispatcher", None)
+        last = getattr(self, "_api_last_journal_at", 0) or 0
+        music = getattr(self, "_music_status", None) or {}
+        in_menu = getattr(self, "_in_game_menu", None)
+        return _plain({
+            "deck": {"page": getattr(self, "_html_dashboard_active_page", "") or "",
+                     "ui_queue": dispatcher.pending if dispatcher is not None else None,
+                     "closing": bool(getattr(self, "_closing", False))},
+            "game": {"commander": getattr(self, "cmdr_name", "") or "", "system": getattr(self, "current_sys", "") or "",
+                     "body": getattr(self, "current_body_name", "") or "",
+                     "station": getattr(self, "current_station_name", "") or "",
+                     "flight_state": getattr(self, "hud_flight_state", "") or "",
+                     "gui_focus": getattr(self, "current_gui_focus", -1),
+                     "music_track": getattr(self, "current_music_track", "") or "",
+                     "last_journal_s": round(time.time() - last, 1) if last else None,
+                     "live": bool(hud is not None and not getattr(hud, "_stalled", True))},
+            "overlays": {"hidden_all": bool(getattr(self, "_overlay_hotkey_global_hidden", False)),
+                         "in_map": getattr(self, "current_gui_focus", -1) in getattr(self, "_MAP_GUI_FOCUS", ()),
+                         "in_menu": bool(in_menu()) if callable(in_menu) else False,
+                         "hide_on_maps": bool(self.config.get("overlay_hide_on_maps", True)),
+                         "hide_in_menus": bool(self.config.get("overlay_hide_in_menus", False))},
+            "watcher": {"orb": hud is not None, "mind": mind.debug_state() if mind is not None else None,
+                        "llm": llm.debug_state() if llm is not None else None},
+            "voice": {"on": self._watcher_voice_on() if hasattr(self, "_watcher_voice_on") else False,
+                      "speaking": bool(getattr(self, "_voice_speaking", False)),
+                      "hush_s": self._watcher_voice_hush_left() if hasattr(self, "_watcher_voice_hush_left") else 0},
+            "music": {"playing": bool(music.get("playing")), "track_id": music.get("track_id") or "",
+                      "position": music.get("position"), "duration": music.get("duration"),
+                      "scene": music.get("scene") or ""},
+        })
 
     def api_commander(self):
         return _plain({
@@ -351,6 +409,7 @@ class DashboardApiMixin(ApiRecordsMixin):
             "x": record.get("x"), "y": record.get("y"), "width": record.get("width"), "height": record.get("height"),
             "opacity": own or int(self.config.get("overlay_opacity_percent") or 100),
             "own_opacity": bool(own), "hide_on_maps": bool(record.get("hide_on_maps")),
+            "hide_in_menus": bool(record.get("hide_in_menus")),
         }
 
     def api_overlays(self):

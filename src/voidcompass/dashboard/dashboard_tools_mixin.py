@@ -21,10 +21,11 @@ TOOL_SWITCHES = (
     ("achievements_enabled", "Achievements", "Unlock achievements as you play.", "flight"),
     ("overlay_mouse_passthrough", "Click-through overlays", "Clicks pass through to the game.", "studio"),
     ("overlay_hide_on_maps", "Hide overlays on maps", "Out of the way on the galaxy and system maps.", "studio"),
+    ("overlay_hide_in_menus", "Hide overlays in menus", "Out of the way on panels, station services and menus.", "studio"),
     ("music_follow_game", "Music follows the game", "Playlists change with what you're doing.", "music"),
     ("reduced_motion_enabled", "Reduced motion", "Calmer animations everywhere.", "appearance"),
 )
-STUDIO_OPTIONS = {"overlay_mouse_passthrough", "overlay_hide_on_maps"}
+STUDIO_OPTIONS = {"overlay_mouse_passthrough", "overlay_hide_on_maps", "overlay_hide_in_menus"}
 # How the overlays are grouped on the page; anything new lands in "other".
 OVERLAY_GROUPS = (
     ("flight", "Flight & navigation", ("hud", "jump_info_hud", "gravity_warning_hud", "station_info_hud",

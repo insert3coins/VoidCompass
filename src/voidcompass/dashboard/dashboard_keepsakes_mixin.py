@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 import time
 import zlib
@@ -226,6 +227,10 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
         card["note"] = self._postcard_watcher_note(card, from_sol, state) if options["note"] else ""
         if options["note_mode"] == "own" and options["note_text"]:
             card["note"], card["signed"] = options["note_text"], self._postcard_signature(options)
+            mind_note = None
+        else:
+            # 5.7.1: with its mind awake, its note in its own words, when they're back.
+            mind_note = self._postcard_mind_note(card, from_sol)
         # The Watcher keeps every postcard (5.5.3.7).
         mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
         if mind is not None and hasattr(mind, "keep_postcard"):
@@ -242,9 +247,12 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             hud.post(card)
         wants_photo = hud is not None and postcard_options(self.config)["photo"]
         folder = str(self.config.get("screenshots_path") or "") or default_screenshot_path(self.config.get("journal_path"))
+        if mind_note is not None:
+            threading.Thread(target=self._postcard_mind_wait, args=(card, mind_note),
+                             name="postcard-note", daemon=True).start()
         threading.Thread(
             target=self._postcard_develop, args=(card, folder, wants_photo, captions, time.time()),
-            kwargs={"keep": keep, "palette": dict(themes.ACTIVE_PALETTE or {})},
+            kwargs={"keep": keep, "palette": dict(themes.ACTIVE_PALETTE or {}), "mind_note": mind_note},
             name="postcard-photo", daemon=True,
         ).start()
         return card
@@ -293,8 +301,48 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             del recent[:-12]
         return note
 
+    def _postcard_mind_note(self, card, from_sol):
+        """5.7.1: the Watcher's note in its own words, asked for now; None
+        with its mind asleep (or no note wanted), and the written one stays."""
+        mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+        llm = getattr(mind, "llm", None)
+        if not card.get("note") or llm is None or not llm.rewording() or not llm.ready():
+            return None
+        facts = {"place": card.get("title"), "system": card.get("place"), "kind": str(card.get("kind") or "").lower(),
+                 "region": card.get("region"), "doing": card.get("doing"),
+                 "distance from Sol": f"{float(from_sol):,.0f} light years" if from_sol is not None else "",
+                 "about it": "; ".join(self._postcard_fact_for_mind(fact) for fact in card.get("facts") or ())}
+        try:
+            return llm.postcard({key: value for key, value in facts.items() if value}, card["note"],
+                                watcher_mind.personality(self.config), forbidden=mind._unsayable_names())
+        except Exception as exc:
+            logging.debug("The Watcher's own postcard note skipped: %s", exc)
+            return None
+
+    @staticmethod
+    def _postcard_fact_for_mind(fact):
+        """A card fact as the model should read it: it can't tell 0.21 g is light."""
+        fact = str(fact)
+        match = re.fullmatch(r"(\d+(?:\.\d+)?) [gG]", fact.strip())
+        if match:
+            gravity = float(match.group(1))
+            return f"{fact} ({'light' if gravity < .5 else 'heavy' if gravity > 1.5 else 'about Earth'} gravity)"
+        return fact
+
+    def _postcard_mind_wait(self, card, job):
+        """Its own words for the note, once back (in time): on the card, and
+        on the overlay if it's still showing. True when used."""
+        if job is None or not job.done.wait(job.wait + 1) or not job.ok:
+            return False
+        if card.get("note") != job.text:
+            card["note"] = job.text
+            hud = getattr(self, "postcard_hud", None)
+            if hud is not None and hasattr(hud, "set_note"):
+                self._ui_post(hud.set_note, card["id"], job.text, key=None)
+        return True
+
     def _postcard_develop(self, card, folder, wants_photo, captions, taken_at, sleep=time.sleep,
-                          keep=False, palette=None):
+                          keep=False, palette=None, mind_note=None):
         """Find the picture (read once): shrink it for the card, write its
         caption, and with Settings > Save postcards as pictures, draw the
         postcard into a PNG in the postcards folder in Void Compass's own
@@ -315,6 +363,8 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             hud = getattr(self, "postcard_hud", None)
             if hud is not None:
                 self._ui_post(hud.attach_photo, card["id"], photo, key=None)
+        # The caption and the saved picture carry its own words, once back.
+        self._postcard_mind_wait(card, mind_note)
         if captions and path:
             self._postcard_caption(path, card)
         if keep and picture is not None:

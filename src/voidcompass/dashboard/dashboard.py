@@ -100,6 +100,7 @@ from voidcompass.dashboard.dashboard_expedition_mixin import DashboardExpedition
 from voidcompass.dashboard.dashboard_rigs_mixin import DashboardRigsMixin
 from voidcompass.dashboard.dashboard_hud_pages_mixin import DashboardHudPagesMixin
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
+from voidcompass.dashboard.dashboard_watcher_listen_mixin import DashboardWatcherListenMixin
 from voidcompass.dashboard.dashboard_home_mixin import DashboardHomeMixin
 from voidcompass.dashboard.dashboard_tools_mixin import DashboardToolsMixin
 from voidcompass.dashboard.dashboard_api_mixin import DashboardApiMixin
@@ -300,6 +301,7 @@ class MainDashboard(
     DashboardRigsMixin,
     DashboardHudPagesMixin,
     DashboardWatcherVoiceMixin,
+    DashboardWatcherListenMixin,
     DashboardHomeMixin,
     DashboardToolsMixin,
     DashboardApiMixin,
@@ -3701,6 +3703,9 @@ class MainDashboard(
         if action == "watcher_poke":
             self._watcher_poke()
             return
+        if action == "watcher_talk":
+            self._watcher_talk_key()
+            return
         if action.startswith("watcher_answer_"):
             self._watcher_answer(action.rsplit("_", 1)[-1])
             return
@@ -6265,6 +6270,7 @@ class MainDashboard(
         self._observe_navigation_music_transition(
             track, startup_replay=startup_replay,
         )
+        self._observe_menu_music(track)
         previous_track = getattr(self, "current_music_track", "")
         if track == previous_track:
             return
@@ -8337,6 +8343,9 @@ class MainDashboard(
                     self._refresh_html_workspace()
             except Exception as exc:
                 logging.debug("Captain's Log event skipped [%s]: %s", ev, exc)
+        if ev in {"LoadGame", "Shutdown"}:
+            # Out of the main menu, or the game closed: no menu is open.
+            self._observe_menu_music("")
         if ev == "Shutdown" and not startup_replay:
             self._watcher_sign_off()
             # Tonight's flight log is written (5.5.3.8).

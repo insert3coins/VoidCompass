@@ -89,6 +89,13 @@
 .watcher-meet textarea { min-height: 60px; padding: 8px 10px; resize: vertical; border: 1px solid var(--border); background: var(--input, var(--inset));
   color: var(--text); font: 11px Consolas, monospace; }
 .watcher-meet textarea:focus { outline: none; border-color: var(--accent); }
+/* Your name (5.7.1). */
+.watcher-name-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 18px; }
+.watcher-name input[type="text"] { width: 100%; min-width: 0; padding: 6px 9px; border: 1px solid var(--border); background: var(--input, var(--inset));
+  color: var(--text); font: inherit; }
+.watcher-name input[type="text"]:focus { outline: none; border-color: var(--accent); }
+.watcher-name-say { display: flex; gap: 6px; min-width: 0; }
+.watcher-name-say button { flex: none; }
 .watcher-meet .watcher-buttons { flex-direction: column; align-items: stretch; }
 #watcher-met:empty { display: none; }
 
@@ -293,3 +300,330 @@ button.watcher-chapter:focus-visible { outline: 1px solid var(--accent); outline
 .watcher-finding .watcher-lore { margin-top: 4px; }
 .watcher-knows-panel { grid-column: 1 / -1; }
 .watcher-subpage .studio-field select { width: auto; min-width: 170px; }
+
+/* Its own mind (5.7.1): a hero with its mind core, a comms console to talk
+   to it, its diary and what it has seen, then how it thinks. */
+.watcher-mindpage { display: grid; gap: 14px; }
+.mind-hero { --mind: var(--dim); position: relative; overflow: hidden; display: grid; gap: 22px; align-items: center;
+  grid-template-columns: 220px minmax(0, 1fr) minmax(220px, 300px); padding: 22px 24px;
+  border: 1px solid color-mix(in srgb, var(--mind) 45%, var(--border));
+  background: radial-gradient(120% 140% at 0% 50%, color-mix(in srgb, var(--mind) 16%, transparent), transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, transparent), color-mix(in srgb, var(--bg) 88%, transparent)); }
+.mind-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--mind) 5%, transparent) 3px 4px); }
+.mind-hero[data-state="missing"], .mind-hero[data-state="download"], .mind-hero[data-state="loading"] { --mind: var(--yellow); }
+.mind-hero[data-state="ready"] { --mind: var(--accent); }
+.mind-hero[data-state="thinking"] { --mind: var(--green); }
+.mind-hero[data-state="error"] { --mind: var(--red); }
+@media (max-width: 1250px) { .mind-hero { grid-template-columns: 180px minmax(0, 1fr); } .mind-readouts { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .mind-hero { grid-template-columns: minmax(0, 1fr); justify-items: center; } }
+
+.mind-core { position: relative; width: 200px; aspect-ratio: 1; color: var(--mind); filter: drop-shadow(0 0 18px color-mix(in srgb, var(--mind) 35%, transparent)); }
+.mind-core-art { width: 100%; height: 100%; overflow: visible; }
+.mind-core-label { position: absolute; left: 50%; bottom: -4px; transform: translateX(-50%); padding: 2px 8px; white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--mind) 50%, transparent); background: var(--bg); color: var(--mind);
+  font: 700 8px Consolas, monospace; letter-spacing: .2em; }
+.mind-ring { fill: none; stroke: currentColor; transform-origin: 100px 100px; }
+.mind-ring-outer { stroke-width: .8; opacity: .35; }
+.mind-ring-dash { stroke-width: 1.4; stroke-dasharray: 3 9; opacity: .7; animation: mind-spin 40s linear infinite; }
+.mind-ring-mid { stroke-width: .7; stroke-dasharray: 60 14 4 14; opacity: .55; animation: mind-spin 26s linear infinite reverse; }
+.mind-ring-inner { stroke-width: 1.6; opacity: .9; }
+.mind-web { transform-origin: 100px 100px; animation: mind-spin 90s linear infinite; }
+.mind-synapse { fill: none; stroke: currentColor; stroke-width: .9; stroke-dasharray: 4 6; opacity: .45; animation: mind-flow 3.4s linear infinite; animation-delay: calc(var(--i) * -.55s); }
+.mind-node { fill: var(--bg); stroke: currentColor; stroke-width: 1.4; animation: mind-pulse 3s ease-in-out infinite; animation-delay: calc(var(--i) * -.5s); }
+.mind-glow { animation: mind-breathe 4.5s ease-in-out infinite; transform-origin: 100px 100px; }
+.mind-pupil { fill: var(--bg); stroke: currentColor; stroke-width: 1.2; }
+.mind-hero[data-state="off"] .mind-core { filter: none; opacity: .55; }
+.mind-hero[data-state="off"] :is(.mind-ring-dash, .mind-ring-mid, .mind-web, .mind-synapse, .mind-node, .mind-glow),
+.mind-hero[data-state="missing"] :is(.mind-synapse, .mind-node) { animation-play-state: paused; }
+.mind-hero[data-state="loading"] .mind-ring-dash, .mind-hero[data-state="download"] .mind-ring-dash { animation-duration: 3s; }
+.mind-hero[data-state="thinking"] :is(.mind-ring-dash, .mind-ring-mid) { animation-duration: 6s; }
+.mind-hero[data-state="thinking"] .mind-synapse { animation-duration: .9s; opacity: .85; }
+.mind-hero[data-state="thinking"] .mind-glow { animation-duration: 1.2s; }
+.mind-hero[data-state="error"] :is(.mind-web, .mind-ring-dash, .mind-ring-mid) { animation: none; }
+@keyframes mind-spin { to { transform: rotate(360deg); } }
+@keyframes mind-flow { to { stroke-dashoffset: -20; } }
+@keyframes mind-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes mind-breathe { 0%, 100% { transform: scale(.88); opacity: .75; } 50% { transform: scale(1.08); opacity: 1; } }
+body.reduced-motion .watcher-mindpage *, body.reduced-motion .watcher-mindpage *::after { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .watcher-mindpage * { animation: none !important; } }
+
+.mind-hero-text { position: relative; z-index: 1; display: grid; gap: 8px; min-width: 0; align-content: center; }
+.mind-kicker { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .2em; }
+.mind-kicker em { margin-left: 8px; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--yellow) 55%, transparent);
+  color: var(--yellow); font-style: normal; letter-spacing: .14em; }
+.mind-hero h2 { margin: 0; color: var(--mind); font: 700 38px/1 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .14em;
+  text-shadow: 0 0 22px color-mix(in srgb, var(--mind) 40%, transparent); }
+.mind-hero-text > p { margin: 0; color: var(--text); font: 14px/1.5 "Segoe UI", sans-serif; }
+.mind-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mind-chips span { padding: 3px 8px; border: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 70%, transparent);
+  color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.mind-progress { max-width: 460px; }
+.mind-error { margin: 0; color: var(--red); font: 12px "Segoe UI", sans-serif; }
+.mind-error[hidden] { display: none; }
+.mind-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 4px; }
+.mind-wake { position: relative; display: inline-flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 18px 0 12px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--mind) 70%, var(--border)); background: color-mix(in srgb, var(--mind) 10%, var(--inset)); }
+.mind-wake input { position: absolute; opacity: 0; pointer-events: none; }
+.mind-wake i { position: relative; width: 38px; height: 18px; border: 1px solid var(--border); background: var(--bg); }
+.mind-wake i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--dim); transition: transform .2s ease, background .2s ease; }
+.mind-wake input:checked + i::after { transform: translateX(20px); background: var(--mind); box-shadow: 0 0 10px var(--mind); }
+.mind-wake input:focus-visible + i { outline: 1px solid var(--accent); outline-offset: 2px; }
+.mind-wake span { color: var(--text); font: 700 11px Consolas, monospace; letter-spacing: .14em; }
+.mind-button { min-height: 34px; padding: 0 16px; border: 1px solid var(--border); background: var(--inset); color: var(--text); cursor: pointer;
+  font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.mind-button:hover { border-color: var(--accent); color: var(--accent); }
+.mind-button[hidden] { display: none; }
+.mind-readouts { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; margin: 0;
+  border: 1px solid var(--border); background: var(--border); align-self: center; }
+@media (max-width: 1250px) { .mind-readouts { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
+.mind-readouts div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 12px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent); }
+.mind-readouts dt { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
+.mind-readouts dd { margin: 0; color: var(--text); font: 600 20px/1 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; }
+.mind-hero[data-state="ready"] .mind-readouts dd, .mind-hero[data-state="thinking"] .mind-readouts dd { color: var(--mind); }
+
+.mind-console, .mind-card { border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent); padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.watcher-mindpage header { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.watcher-mindpage header span { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.watcher-mindpage header b { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.mind-console { border-top: 2px solid color-mix(in srgb, var(--accent) 60%, var(--border)); }
+.mind-transcript { list-style: none; margin: 0; padding: 4px 4px 4px 0; display: grid; gap: 14px; align-content: start;
+  flex: 1; min-height: 0; overflow-y: auto; }
+.mind-turn { display: grid; gap: 8px; }
+.mind-you, .mind-it { display: grid; gap: 3px; max-width: 78%; }
+.mind-you { justify-self: end; text-align: right; }
+.mind-you p { margin: 0; padding: 8px 12px; border: 1px solid var(--border); border-right: 2px solid var(--muted);
+  background: var(--inset); color: var(--text); font: 13px/1.45 "Segoe UI", sans-serif; }
+.mind-it p { margin: 0; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-left: 3px solid var(--accent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, var(--inset)), var(--inset));
+  color: var(--text); font: italic 14px/1.55 "Segoe UI", sans-serif; }
+.mind-turn small { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
+.mind-it small { color: var(--accent); }
+.mind-empty p { margin: 0; color: var(--muted); font: italic 13px/1.5 "Segoe UI", sans-serif; }
+.mind-transcript:has(> .mind-empty) { min-height: 0; }
+.mind-typing { display: flex; align-items: center; gap: 5px; color: var(--green); }
+.mind-typing[hidden] { display: none; }
+.mind-typing i { width: 6px; height: 6px; background: currentColor; animation: mind-pulse 1s ease-in-out infinite; }
+.mind-typing i:nth-child(2) { animation-delay: -.66s; }
+.mind-typing i:nth-child(3) { animation-delay: -.33s; }
+.mind-typing span { margin-left: 6px; font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.mind-prompts { display: flex; flex-wrap: wrap; gap: 6px; }
+.mind-prompt { min-height: 28px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); background: transparent;
+  color: var(--muted); font: 12px "Segoe UI", sans-serif; cursor: pointer; }
+.mind-prompt:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.mind-prompt:disabled { opacity: .45; cursor: default; }
+.mind-say { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
+.mind-say:not(:has(.mind-mic:not([hidden]))) { grid-template-columns: minmax(0, 1fr) auto; }
+/* Push to talk (5.7.1): the ring swells with your voice, and turns while it
+   works out what you said. */
+.mind-mic { position: relative; width: 50px; border: 1px solid color-mix(in srgb, var(--green) 55%, var(--border)); background: var(--inset);
+  color: var(--green); cursor: pointer; touch-action: none; }
+.mind-mic[hidden] { display: none; }
+.mind-mic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.mind-mic rect { fill: currentColor; fill-opacity: .18; }
+.mind-mic:hover:not(:disabled) { background: color-mix(in srgb, var(--green) 14%, var(--inset)); }
+.mind-mic:disabled { opacity: .4; cursor: default; }
+.mind-mic::after { content: ""; position: absolute; inset: -1px; border: 2px solid transparent; pointer-events: none; }
+.mind-mic:is([data-stage="opening"], [data-stage="listening"]) { background: color-mix(in srgb, var(--green) 22%, var(--inset)); }
+.mind-mic[data-stage="listening"]::after { border-color: var(--green);
+  box-shadow: 0 0 calc(3px + 16px * var(--level, 0)) var(--green), inset 0 0 calc(2px + 10px * var(--level, 0)) color-mix(in srgb, var(--green) 60%, transparent); }
+.mind-mic[data-stage="hearing"] { color: var(--accent); border-color: var(--accent); }
+.mind-mic[data-stage="hearing"]::after { border-color: var(--accent) transparent; animation: mind-hear-turn 1s linear infinite; }
+@keyframes mind-hear-turn { to { transform: rotate(1turn); } }
+.mind-say textarea { min-height: 46px; resize: vertical; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--border);
+  background: var(--input); color: var(--text); font: 13px/1.45 "Segoe UI", sans-serif; }
+.mind-say textarea:focus { outline: none; border-color: var(--accent); }
+.mind-send { padding: 0 22px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--inset)); color: var(--accent);
+  font: 700 11px Consolas, monospace; letter-spacing: .16em; cursor: pointer; }
+.mind-send:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 28%, var(--inset)); }
+.mind-send:disabled { opacity: .45; cursor: default; }
+.mind-console footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.mind-console footer p { margin: 0; color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }
+.mind-link { border: 0; background: none; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .12em; cursor: pointer; }
+.mind-link:hover { color: var(--red); }
+
+.mind-diary-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.mind-diary-list li { position: relative; padding: 8px 12px 8px 16px; border-left: 2px solid color-mix(in srgb, var(--yellow) 60%, var(--border));
+  background: color-mix(in srgb, var(--yellow) 4%, var(--inset)); }
+.mind-diary-list small { color: var(--yellow); font: 700 8px Consolas, monospace; letter-spacing: .16em; }
+.mind-diary-list p { margin: 4px 0 0; color: var(--text); font: italic 13px/1.55 Georgia, "Segoe UI", serif; }
+.mind-timeline { list-style: none; margin: 0; padding: 0 0 0 10px; display: grid; gap: 2px; border-left: 1px solid var(--border); }
+.mind-timeline li { position: relative; display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: baseline; gap: 8px; padding: 5px 0 5px 8px; }
+.mind-timeline li::before { content: ""; position: absolute; left: -14px; top: 11px; width: 7px; height: 7px; border: 1px solid var(--accent); background: var(--bg); }
+.mind-timeline b { color: var(--accent); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
+.mind-timeline p { margin: 0; color: var(--text); font: 12px/1.4 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.mind-timeline small { color: var(--dim); font: 9px Consolas, monospace; }
+.mind-timeline li[data-kind="LIFE"] b, .mind-timeline li[data-kind="LIFE"]::before { color: var(--green); border-color: var(--green); }
+.mind-timeline li[data-kind="SALE"] b, .mind-timeline li[data-kind="SALE"]::before,
+.mind-timeline li[data-kind="RANK"] b, .mind-timeline li[data-kind="RANK"]::before { color: var(--yellow); border-color: var(--yellow); }
+.mind-timeline li[data-kind="RISK"] b, .mind-timeline li[data-kind="RISK"]::before { color: var(--red); border-color: var(--red); }
+.mind-timeline li.mind-empty { display: block; }
+.mind-timeline li.mind-empty::before { display: none; }
+
+.mind-fields { display: grid; gap: 10px; }
+.mind-rules { display: grid; gap: 10px; }
+.mind-rules ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; counter-reset: rule; }
+.mind-rules li { position: relative; padding: 8px 10px 8px 34px; border: 1px solid var(--border); background: var(--inset);
+  color: var(--muted); font: 12px/1.45 "Segoe UI", sans-serif; counter-increment: rule; }
+.mind-rules li::before { content: counter(rule, decimal-leading-zero); position: absolute; left: 9px; top: 9px; color: var(--accent); font: 700 10px Consolas, monospace; }
+.mind-rules li b { color: var(--text); font-weight: 600; }
+.mind-notice { margin: 0; padding: 8px 10px; border-left: 2px solid var(--yellow); background: color-mix(in srgb, var(--yellow) 6%, var(--inset));
+  color: var(--text); font: 10px/1.5 "Segoe UI", sans-serif; }
+.mind-remove { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.mind-remove[hidden] { display: none; }
+.mind-remove small { color: var(--dim); font: 10px Consolas, monospace; }
+
+/* Its mind's page, laid out again (5.7.1): a slim hero with its readouts in a
+   row; talk beside its record (what it said, its diary, what it saw) at one
+   height, each scrolling inside; then how it thinks, its voice and its rules. */
+.watcher-mindpage .mind-hero { grid-template-columns: 150px minmax(0, 1fr); grid-template-areas: "core text" "core stats";
+  gap: 14px 28px; padding: 18px 24px; }
+.watcher-mindpage .mind-core { grid-area: core; width: 150px; }
+.watcher-mindpage .mind-hero-text { grid-area: text; }
+.watcher-mindpage .mind-hero h2 { font-size: 32px; }
+.watcher-mindpage .mind-readouts { grid-area: stats; grid-column: auto; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.watcher-mindpage .mind-readouts div { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 6px; }
+@media (max-width: 1250px) { .watcher-mindpage .mind-hero { grid-template-columns: 120px minmax(0, 1fr); }
+  .watcher-mindpage .mind-core { width: 120px; } }
+@media (max-width: 760px) { .watcher-mindpage .mind-hero { grid-template-columns: minmax(0, 1fr); grid-template-areas: "core" "text" "stats"; }
+  .watcher-mindpage .mind-readouts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.mind-main { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(340px, 1fr); gap: 14px;
+  height: clamp(520px, calc(100vh - 330px), 860px); }
+.mind-main > .mind-console, .mind-main > .mind-card { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.mind-main .mind-prompts, .mind-main .mind-say, .mind-main .mind-console > footer, .mind-main .mind-typing { flex: none; }
+.mind-record { padding-top: 0; }
+.mind-record-tabs { display: flex; flex: none; margin: 0 -14px; border-bottom: 1px solid var(--border); }
+.mind-record-tabs button { flex: 1; padding: 12px 8px; border: 0; border-right: 1px solid var(--border); background: transparent;
+  color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .14em; cursor: pointer; white-space: nowrap; }
+.mind-record-tabs button:last-child { border-right: 0; }
+.mind-record-tabs button:hover { color: var(--text); }
+.mind-record-tabs button[aria-selected="true"] { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.mind-record-tabs b { margin-left: 4px; color: var(--dim); font-weight: 700; }
+.mind-record-body { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 10px; align-content: start; padding-right: 4px; }
+.mind-record-body[hidden] { display: none; }
+.mind-record-body > .watcher-note { margin: 0; }
+
+.mind-lower { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
+/* Its settings' dropdowns, as Overlay Studio draws them (they were the
+   browser's own, and too narrow for "Graphics card"). */
+.watcher-mindpage .studio-field select { width: auto; min-width: 170px; height: 33px; padding: 0 9px; border: 1px solid var(--border);
+  outline: 0; background: var(--input); color: var(--text); font: 9px Consolas, monospace; }
+.watcher-mindpage .studio-field select:focus { border-color: var(--accent); }
+.mind-lower > .mind-card { align-content: start; }
+.mind-voice h3:first-of-type { margin-top: 0; }
+@media (max-width: 1700px) { .mind-lower { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) {
+  .mind-main, .mind-lower { grid-template-columns: minmax(0, 1fr); }
+  .mind-main { height: auto; }
+  .mind-main .mind-transcript, .mind-record-body { max-height: 60vh; }
+}
+/* Talk by voice (5.7.1). */
+.mind-hear-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.mind-hear-actions:not(:has(> :not([hidden]))) { display: none; }
+.mind-hear-key { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 10px; }
+.mind-hear-key span { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.mind-hear-key kbd { padding: 5px 9px; border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); background: var(--inset);
+  color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .06em; white-space: nowrap; }
+.mind-hear-key small { color: var(--dim); font: 10px "Segoe UI", sans-serif; }
+.mind-hear-test { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+.mind-hear-test .mind-button:disabled { opacity: .45; cursor: default; }
+.mind-meter { position: relative; height: 12px; border: 1px solid var(--border); background: var(--inset); overflow: hidden; }
+.mind-meter i { position: absolute; inset: 0 auto 0 0; width: calc(100% * var(--level, 0)); transition: width .08s linear;
+  background: linear-gradient(90deg, var(--green), var(--green) 70%, var(--yellow) 88%, var(--red)); }
+.mind-hear-note { margin: 0; min-height: 1.4em; }
+.mind-hear .studio-field select:disabled { opacity: .5; }
+
+/* Its library (5.7.1). */
+.watcher-librarypage { display: grid; gap: 14px; }
+.lib-hero { grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); }
+@media (max-width: 1100px) { .lib-hero { grid-template-columns: minmax(0, 1fr); } }
+.lib-hero-text { position: relative; z-index: 1; display: grid; gap: 8px; max-width: 760px; }
+.lib-hero-text p { margin: 0; color: var(--text); font: 14px/1.5 "Segoe UI", sans-serif; }
+.lib-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
+.lib-grid > .mind-card { align-content: start; }
+@media (max-width: 1100px) { .lib-grid { grid-template-columns: minmax(0, 1fr); } }
+.watcher-librarypage .mind-card > .watcher-note { margin: 0; }
+.lib-teach-note { margin: 0; color: var(--yellow); font: 12px "Segoe UI", sans-serif; }
+.lib-teach-note:empty { display: none; }
+.lib-notes, .lib-facts, .lib-chapters { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 300px; overflow-y: auto; }
+.lib-notes li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 7px 8px 7px 12px;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 60%, var(--border)); background: var(--inset); }
+.lib-notes li p { margin: 0; color: var(--text); font: 13px/1.45 "Segoe UI", sans-serif; }
+.lib-notes li.mind-empty { display: block; border-left: 0; background: none; padding: 0; }
+.lib-forget { width: 22px; height: 22px; border: 1px solid var(--border); background: transparent; color: var(--dim); cursor: pointer; font: 11px/1 "Segoe UI", sans-serif; }
+.lib-forget:hover { border-color: var(--red); color: var(--red); }
+.lib-facts li { padding: 6px 10px; border: 1px solid var(--border); background: var(--inset); color: var(--text); font: 12px/1.45 "Segoe UI", sans-serif; }
+.lib-facts li.mind-empty { border: 0; background: none; padding: 0; }
+.lib-about { margin: 0 0 10px; padding: 10px 14px; border-left: 2px solid var(--accent); background: var(--inset); }
+.lib-about p { margin: 0; color: var(--text); font: italic 13px/1.55 "Segoe UI", sans-serif; }
+.lib-about cite { display: block; margin-top: 6px; color: var(--muted); font: 10px/1 "Consolas", monospace; letter-spacing: .12em; font-style: normal; }
+.lib-chapters { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.lib-chapters li { padding: 6px 10px; border: 1px solid color-mix(in srgb, var(--red) 40%, var(--border));
+  color: color-mix(in srgb, var(--red) 70%, var(--text)); font: 700 10px Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.lib-sources { display: grid; gap: 10px; }
+.lib-source-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lib-source-add input[type="url"] { flex: 1 1 340px; min-height: 34px; padding: 0 12px; border: 1px solid var(--border);
+  background: var(--input); color: var(--text); font: 13px "Segoe UI", sans-serif; }
+.lib-source-add input[type="url"]:focus { outline: none; border-color: var(--accent); }
+.lib-source-add input[type="checkbox"] { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
+.lib-source-add .mind-send { min-height: 34px; padding: 0 18px; }
+.lib-source-add select { min-height: 34px; padding: 0 8px; border: 1px solid var(--border); background: var(--input); color: var(--text);
+  font: 700 10px Consolas, monospace; letter-spacing: .08em; }
+.lib-source-follow { display: flex; align-items: center; gap: 6px; color: var(--muted); font: 12px "Segoe UI", sans-serif; white-space: nowrap; }
+.lib-source-add button:disabled { opacity: .45; cursor: default; }
+.lib-source-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.lib-source-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 320px; overflow-y: auto; }
+.lib-source-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 8px 10px 8px 12px;
+  border: 1px solid var(--border); border-left: 2px solid color-mix(in srgb, var(--mind) 60%, var(--border)); background: var(--inset); }
+.lib-source-list li.mind-empty { display: block; border: 0; background: none; padding: 0; }
+.lib-source-list b { display: block; color: var(--text); font: 600 14px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .03em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-source-list small { display: block; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .1em; margin-top: 2px; }
+.lib-source-list p { margin: 4px 0 0; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.lib-source-list em { color: var(--yellow); font-style: normal; }
+.lib-source-list button:disabled { opacity: .45; cursor: default; }
+.lib-card-source { border-left: 2px solid color-mix(in srgb, var(--mind) 60%, var(--border)); }
+.lib-search-row { display: flex; align-items: center; gap: 10px; }
+.lib-search-row input { flex: 1; min-height: 40px; font-size: 14px; }
+.lib-search-mode { padding: 4px 9px; border: 1px solid var(--border); color: var(--dim); font: 700 9px Consolas, monospace;
+  letter-spacing: .12em; white-space: nowrap; }
+.lib-search-mode.on { color: var(--mind); border-color: color-mix(in srgb, var(--mind) 55%, var(--border)); }
+.lib-filter .watcher-note:empty { display: none; }
+/* Its voice (5.7.1): what it said, and your votes. */
+.mind-voice h3 { margin: 4px 0 6px; color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.mind-said, .mind-votes { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.mind-votes { max-height: 300px; overflow-y: auto; }
+.mind-said li, .mind-votes li { padding: 7px 10px; border: 1px solid var(--border); background: var(--inset); }
+.mind-votes li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; align-items: start; }
+.mind-votes li small { grid-column: 1; }
+.mind-votes li p { grid-column: 1; }
+.mind-votes li .lib-forget { grid-column: 2; grid-row: 1 / span 2; }
+.mind-said li.mind-empty, .mind-votes li.mind-empty { border: 0; background: none; padding: 0; display: block; }
+.mind-said small, .mind-votes small { display: flex; align-items: center; gap: 6px; color: var(--dim); font: 700 8px Consolas, monospace;
+  letter-spacing: .12em; }
+.mind-said p, .mind-votes p { margin: 4px 0 0; color: var(--text); font: 13px/1.45 "Segoe UI", sans-serif; }
+.mind-vote-pair { display: inline-flex; gap: 3px; margin-left: auto; }
+.mind-vote { width: 24px; height: 20px; padding: 0; border: 1px solid var(--border); background: transparent; cursor: pointer;
+  font-size: 11px; line-height: 1; filter: grayscale(1); opacity: .55; }
+.mind-vote:hover { opacity: 1; filter: none; }
+.mind-vote[aria-pressed="true"] { opacity: 1; filter: none; border-color: color-mix(in srgb, var(--mind) 60%, var(--border));
+  background: color-mix(in srgb, var(--mind) 14%, transparent); }
+.mind-it small { display: flex; align-items: center; gap: 6px; }
+
+.lib-filter { display: grid; gap: 10px; }
+.lib-filter input { min-height: 34px; padding: 0 12px; border: 1px solid var(--border); background: var(--input); color: var(--text); font: 13px "Segoe UI", sans-serif; }
+.lib-filter input:focus { outline: none; border-color: var(--accent); }
+.lib-subjects { display: flex; flex-wrap: wrap; gap: 6px; }
+.lib-subject { min-height: 26px; padding: 0 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer;
+  font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.lib-subject:hover { border-color: var(--accent); color: var(--accent); }
+.lib-subject.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.lib-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; max-height: 720px; overflow-y: auto; padding-right: 4px; }
+.lib-card { display: grid; gap: 4px; align-content: start; padding: 10px 12px; border: 1px solid var(--border);
+  border-top: 2px solid color-mix(in srgb, var(--accent) 55%, var(--border)); background: var(--inset); }
+.lib-card small { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
+.lib-card b { color: var(--text); font: 600 14px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .03em; }
+.lib-card p { margin: 0; color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif; }

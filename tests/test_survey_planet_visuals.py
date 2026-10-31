@@ -13,6 +13,8 @@ from pathlib import Path
 import unittest
 from urllib.parse import urlsplit
 
+from voidcompass.overlays.html_overlay_server import OVERLAY_CSP
+
 
 WEB = Path(__file__).resolve().parents[1] / "web"
 
@@ -165,14 +167,21 @@ class SurveyOverlayBrowserTests(unittest.TestCase):
         self.failures = []
         self.page.on("pageerror", lambda error: self.failures.append(str(error)))
 
+        # Served under the overlay server's own policy: without it a refused
+        # inline style (stale heights after a jump) went unseen here.
+        self.refused = []
+        self.page.on("console", lambda message: self.refused.append(message.text)
+                     if "Content Security Policy" in message.text else None)
+        headers = {"Content-Security-Policy": OVERLAY_CSP}
+
         def serve(route):
             path = urlsplit(route.request.url).path
             if path == "/assets/overlay-client.js":
-                route.fulfill(content_type="application/javascript", body=CLIENT_STUB)
+                route.fulfill(content_type="application/javascript", body=CLIENT_STUB, headers=headers)
                 return
             file = WEB / path.lstrip("/")
             if file.is_file():
-                route.fulfill(path=str(file))
+                route.fulfill(path=str(file), headers=headers)
             else:
                 route.fulfill(status=404, body="")
 
@@ -182,6 +191,7 @@ class SurveyOverlayBrowserTests(unittest.TestCase):
     def tearDown(self):
         self.page.close()
         self.assertEqual(self.failures, [])
+        self.assertEqual(self.refused, [], "nothing refused by the overlay's policy")
 
     # -- helpers ---------------------------------------------------------
 
@@ -252,6 +262,37 @@ class SurveyOverlayBrowserTests(unittest.TestCase):
         return names
 
     # -- system survey ---------------------------------------------------
+
+    def test_a_jump_to_a_smaller_system_leaves_no_gap(self):
+        """Into a known system straight from a busier one: the kept cards take
+        the new system's heights, not the last one's (5.7.1)."""
+        def species(name, genus):
+            return {"species": name, "genus": genus, "name": name, "value": 1_000_000}
+
+        busy = system_snapshot([
+            bio_world("Busy 1", details=[species(f"Bacterium {n}", "Bacterium") for n in range(6)]),
+            bio_world("Busy 2", details=[species(f"Stratum {n}", "Stratum") for n in range(5)]),
+            bio_world("Busy 3", details=[species("Tussock A", "Tussock")]),
+            *[quiet_body(f"Busy {n}") for n in range(4, 14)],
+        ], name="Busy System", scanned=13, total=13)
+        small = system_snapshot([
+            bio_world("Small 1", details=[species("Fungoida A", "Fungoida")]),
+            bio_world("Small 2", details=[species("Osseus A", "Osseus")]),
+            quiet_body("Small 3"),
+        ], name="Small System", scanned=3, total=3)
+        measure = """() => ({
+          heights: [...document.querySelectorAll('#content [style]')].map(element => element.style.cssText),
+          asked: window.__surveyContentHeight(),
+        })"""
+        self.render(small)
+        alone = self.page.evaluate(measure)
+        self.render(busy)
+        busy_view = self.page.evaluate(measure)
+        self.render(small)
+        after = self.page.evaluate(measure)
+        self.assertGreater(busy_view["asked"], alone["asked"])
+        self.assertEqual(after, alone, "the same heights as a fresh small system")
+        self.check_geometry()
 
     def test_quiet_refreshes_and_new_counts_keep_the_live_cards_and_animation_clocks(self):
         data = system_snapshot([bio_world(f"Atlas {i}", bio_count=2) for i in range(1, 4)],

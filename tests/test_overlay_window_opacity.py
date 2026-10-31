@@ -52,7 +52,10 @@ class HostTests(unittest.TestCase):
     def test_the_host_applies_it_only_when_it_changes(self):
         source = (ROOT / "src/voidcompass/overlays/html_overlay_host.py").read_text(encoding="utf-8")
         # A window never faded keeps Windows' default: no call at all at 100%.
-        self.assertIn("if alpha != self.last_alpha and not (alpha == 255 and self.last_alpha is None):", source)
+        # A veiled window (5.7.1: drawn once, fully transparent) takes its
+        # fade when it's unveiled.
+        self.assertIn("if not self.veiled and alpha != self.last_alpha and not (alpha == 255 and self.last_alpha is None):",
+                      source)
         self.assertIn("SetLayeredWindowAttributes", source)
         self.assertNotIn("windll.user32.SetLayeredWindowAttributes", source, "private user32 handle only")
 

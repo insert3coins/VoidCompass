@@ -1948,6 +1948,27 @@ The news from the galaxy, as the Galnet ticker shows it.
 
 <!-- group: Help -->
 
+## Debugging
+
+What's going on inside Void Compass, live: for the debugger in `tools/debug` (run `python tools/debug/void_debugger.py`), or your own tools. These answer this PC only, even with other devices allowed, and never show a setting's value: keys, tokens and webhooks in the log read `<hidden>`.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/debug` | The process (memory as Task Manager counts it, its working set and commit, CPU time, handles), every thread and what it's doing, how long since the UI thread last beat, and the app's own view: the deck, the game, the overlays, the Watcher's mind and its model, the voice and the music |
+| GET | `/api/v1/debug/log` | Void Compass's recent log lines (the last 4,000, kept in memory only) |
+| POST | `/api/v1/debug/verbose` | Note debug-level lines too, for up to 15 minutes: `{"on": true, "seconds": 600}`, or `{"on": false}` (needs **Allow control**) |
+
+`/debug` takes `stacks=1` for each thread's whole stack, not just where it is now. Its process, threads and heartbeat are read straight away even when the app's own thread is stuck; `main_thread` then says `busy` and `app` is left out, which is usually the clue.
+
+`/debug/log` takes `since` (only lines after this number; each answer gives the newest `seq`), `level` (`DEBUG`, `INFO`, `WARNING` or `ERROR`, and above), `text` (only lines containing it) and `limit` (default 500).
+
+```json
+{"seq": 5120, "verbose_s": 0, "records": [
+  {"seq": 5120, "at": 1761903331.42, "level": "INFO", "name": "root", "thread": "MainThread",
+   "text": "Postcard saved: C:\\Void Compass\\postcards\\Colonia.png"}
+]}
+```
+
 ## Troubleshooting
 
 The usual suspects, and what to do about each.

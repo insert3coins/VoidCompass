@@ -40,6 +40,13 @@ def _body_read(handler):
     handler.close_connection = not getattr(handler, "keep_after_body", False)
 
 
+# Every overlay page's policy. No inline styles: a page sets styles through
+# element.style (allowed), never a style attribute (refused: only a console warning says so).
+OVERLAY_CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; "
+               "connect-src 'self'; img-src 'self' data:; object-src 'none'; "
+               "frame-ancestors 'none'; base-uri 'none'")
+
+
 class _OverlayHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -480,6 +487,9 @@ class HtmlOverlayServer:
                     if self.layout_mode:
                         window["visible"] = True
                     elif overlay_id in self.overlays_hidden:
+                        # Hidden for a map or a menu: one that would be
+                        # showing is kept drawn, to come back at once (5.7.1).
+                        window["held"] = bool(window.get("visible"))
                         window["visible"] = False
                 result[overlay_id] = {
                     "template": state.template,
@@ -677,12 +687,7 @@ class HtmlOverlayServer:
     def _security_headers(handler):
         handler.send_header("X-Content-Type-Options", "nosniff")
         handler.send_header("Referrer-Policy", "no-referrer")
-        handler.send_header(
-            "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self'; "
-            "connect-src 'self'; img-src 'self' data:; object-src 'none'; "
-            "frame-ancestors 'none'; base-uri 'none'",
-        )
+        handler.send_header("Content-Security-Policy", OVERLAY_CSP)
 
     def _send_bytes(self, handler, payload, content_type, status=200, cache="no-store"):
         try:

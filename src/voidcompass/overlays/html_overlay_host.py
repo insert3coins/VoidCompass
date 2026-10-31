@@ -43,6 +43,15 @@ DWMWA_COLOR_NONE = 0xFFFFFFFE
 HIDDEN_WINDOW_X = -32000
 HIDDEN_WINDOW_Y = -32000
 WINDOW_CREATE_INTERVAL_S = 0.25
+DWMWA_CLOAK = 13
+# Visual hosting (5.7.1). An overlay hidden for a map or a menu keeps drawing
+# under its cloak this long, so it comes back at once; then it really hides.
+HOLD_DRAWN_S = 10.0
+# Overlays arriving together wait this long at most for their slowest page,
+# and a page that never says it has drawn is taken as drawn after as long.
+REVEAL_WAIT_S = 0.3
+# A page's first draw, from cold at startup, takes longer.
+FIRST_REVEAL_WAIT_S = 1.0
 _LOOPBACK_OPENER = build_opener(ProxyHandler({}))
 # One hidden, never-shown form owns every overlay (see _own_overlay_form).
 _OVERLAY_OWNER = None
@@ -576,6 +585,22 @@ def _set_windows_visibility(window, visible):
         return False
 
 
+def _cloak_window(window, cloaked):
+    """DWM cloaking: a cloaked window stays shown (and its page keeps
+    drawing) but isn't put on the screen. Many windows cloaked or uncloaked in
+    one go change in the same frame, where ShowWindow takes milliseconds each."""
+    hwnd = _native_handle(window)
+    if not hwnd:
+        return False
+    try:
+        value = ctypes.c_int(1 if cloaked else 0)
+        return ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            ctypes.c_void_p(hwnd), DWMWA_CLOAK, ctypes.byref(value), ctypes.sizeof(value),
+        ) == 0
+    except Exception:
+        return False
+
+
 def _windows_visibility(window):
     """Read the real native visibility, independent of host bookkeeping.
 
@@ -623,6 +648,18 @@ class _WindowController:
         self.reload_revision = 0
         self.navigation_retries = 0
         self.last_navigation_retry_at = 0.0
+        # Visual hosting only (5.7.1): see _apply_composed.
+        self.cloaked = False
+        self.mapped_at = 0.0
+        self.pending_since = None
+        self.pending_live = False
+        self.render_ready = False
+        self.held_since = None
+        self.hide_due = False
+        self.ever_shown = False
+        self.veiled = False
+        self.keep_mapped = False
+        self.target_alpha = None
 
     def _nudge(self):
         """Ask the page to fetch its new data now. A hidden WebView2 throttles
@@ -657,6 +694,7 @@ class _WindowController:
                 and not presentation_held
                 and content_ready
             )
+            wanted = visible
             # A hidden overlay is revealed only once its page has drawn the
             # latest model; otherwise it appeared showing whatever it drew
             # while hidden (the first planet of a system missing from Survey
@@ -683,51 +721,18 @@ class _WindowController:
             handle = _native_handle(self.window)
             if not handle:
                 return {"ok": False, "reason": "native handle pending"}
+            if getattr(self.window, "_voidcompass_composition", False):
+                # Would be showing but for a map, a menu or the boot screen.
+                held = bool((payload.get("held") or (presentation_held and payload.get("visible")))
+                            and not payload.get("shutdown") and content_ready)
+                return self._apply_composed(payload, requested_geometry, wanted, visible, held,
+                                            handle, presentation_held, content_ready)
             resized = geometry != self.last_geometry
             if resized:
                 if not _apply_windows_geometry(self.window, *geometry):
                     return {"ok": False, "reason": "native geometry unavailable", "handle": handle}
                 self.last_geometry = geometry
-            # The Dark box fix: the window cut to the shapes its page draws.
-            polygons = payload.get("region") if isinstance(payload.get("region"), list) else None
-            if polygons:
-                key = repr(polygons)
-                if key != getattr(self, "last_region", None) or resized:
-                    shaped = _apply_window_polygons(self.window, polygons)
-                    if shaped:
-                        self.last_region = key
-                        self.last_shape = "region"
-                    if ("region", shaped) != getattr(self, "last_shape_reported", None):
-                        self.last_shape_reported = ("region", shaped)
-                        print(f"Overlay window shape: {self.overlay_id} page shapes ({len(polygons)}) {'applied' if shaped else 'FAILED'}", flush=True)
-            elif getattr(self, "last_region", None) is not None:
-                self.last_region = None
-                self.last_shape = None  # back to circle or rectangle below
-            # A round overlay (the heartbeat orb) is clipped to a circle; a
-            # resized circle is clipped again to its new size.
-            shape = "circle" if payload.get("shape") == "circle" else "rect"
-            if not polygons and (shape != self.last_shape or (resized and shape == "circle")):
-                shaped = _apply_window_shape(self.window, shape)
-                if shaped and shape == "circle":
-                    shaped = _window_has_region(self.window)
-                if (shape, shaped) != getattr(self, "last_shape_reported", None):
-                    # In the logs (and a support bundle), once per change: did
-                    # the round cut take on this PC? (5.5.3.3)
-                    self.last_shape_reported = (shape, shaped)
-                    print(f"Overlay window shape: {self.overlay_id} {shape} {'applied' if shaped else 'FAILED'}", flush=True)
-                if shaped:
-                    self.last_shape = shape
-            # Overlay Studio's OPACITY. A window never faded keeps Windows'
-            # default (no call at all), exactly as before.
-            alpha = _opacity_alpha(payload.get("opacity", 1.0))
-            if alpha != self.last_alpha and not (alpha == 255 and self.last_alpha is None):
-                if _apply_window_alpha(self.window, alpha):
-                    self.last_alpha = alpha
-            click_through = bool(payload.get("click_through", True))
-            if click_through != self.last_click_through:
-                _apply_windows_style(self.window, click_through)
-                _apply_webview_transparency(self.window)
-                self.last_click_through = click_through
+            click_through = self._apply_surface(payload, resized)
             # WebView2 occasionally maps an asynchronously-created window
             # after our first SW_HIDE. Compare with the actual HWND instead of
             # trusting only last_visible, otherwise inactive transient HUDs
@@ -757,16 +762,7 @@ class _WindowController:
                         self.restore_foreground = 0
                 else:
                     self.last_visible = None
-            now = time.monotonic()
-            if visible and now - self.last_topmost_refresh >= 12.0:
-                _apply_windows_style(self.window, click_through)
-                _apply_webview_transparency(self.window)
-                # Keep the round cut: if something took it away, put it back
-                # and say so in the logs.
-                if self.last_shape == "circle" and not _window_has_region(self.window):
-                    restored = _apply_window_shape(self.window, "circle")
-                    print(f"Overlay window shape: {self.overlay_id} circle lost; {'restored' if restored else 'restore FAILED'}", flush=True)
-                self.last_topmost_refresh = now
+            self._keep_on_top(visible, click_through)
             return {
                 "ok": True,
                 "handle": handle,
@@ -781,6 +777,184 @@ class _WindowController:
         except Exception as exc:
             return {"ok": False, "reason": f"{type(exc).__name__}: {exc}"}
 
+    def _apply_surface(self, payload, resized):
+        """Shape, opacity and click-through, the same for both kinds of
+        window. Returns whether clicks pass through."""
+        # The Dark box fix: the window cut to the shapes its page draws.
+        polygons = payload.get("region") if isinstance(payload.get("region"), list) else None
+        if polygons:
+            key = repr(polygons)
+            if key != getattr(self, "last_region", None) or resized:
+                shaped = _apply_window_polygons(self.window, polygons)
+                if shaped:
+                    self.last_region = key
+                    self.last_shape = "region"
+                if ("region", shaped) != getattr(self, "last_shape_reported", None):
+                    self.last_shape_reported = ("region", shaped)
+                    print(f"Overlay window shape: {self.overlay_id} page shapes ({len(polygons)}) {'applied' if shaped else 'FAILED'}", flush=True)
+        elif getattr(self, "last_region", None) is not None:
+            self.last_region = None
+            self.last_shape = None  # back to circle or rectangle below
+        # A round overlay (the heartbeat orb) is clipped to a circle; a
+        # resized circle is clipped again to its new size.
+        shape = "circle" if payload.get("shape") == "circle" else "rect"
+        if not polygons and (shape != self.last_shape or (resized and shape == "circle")):
+            shaped = _apply_window_shape(self.window, shape)
+            if shaped and shape == "circle":
+                shaped = _window_has_region(self.window)
+            if (shape, shaped) != getattr(self, "last_shape_reported", None):
+                # In the logs (and a support bundle), once per change: did
+                # the round cut take on this PC? (5.5.3.3)
+                self.last_shape_reported = (shape, shaped)
+                print(f"Overlay window shape: {self.overlay_id} {shape} {'applied' if shaped else 'FAILED'}", flush=True)
+            if shaped:
+                self.last_shape = shape
+        # Overlay Studio's OPACITY. A window never faded keeps Windows'
+        # default (no call at all), exactly as before.
+        alpha = _opacity_alpha(payload.get("opacity", 1.0))
+        self.target_alpha = alpha
+        if not self.veiled and alpha != self.last_alpha and not (alpha == 255 and self.last_alpha is None):
+            if _apply_window_alpha(self.window, alpha):
+                self.last_alpha = alpha
+        click_through = bool(payload.get("click_through", True))
+        if click_through != self.last_click_through:
+            _apply_windows_style(self.window, click_through)
+            _apply_webview_transparency(self.window)
+            self.last_click_through = click_through
+        return click_through
+
+    def _keep_on_top(self, visible, click_through):
+        now = time.monotonic()
+        if visible and now - self.last_topmost_refresh >= 12.0:
+            _apply_windows_style(self.window, click_through)
+            _apply_webview_transparency(self.window)
+            # Keep the round cut: if something took it away, put it back
+            # and say so in the logs.
+            if self.last_shape == "circle" and not _window_has_region(self.window):
+                restored = _apply_window_shape(self.window, "circle")
+                print(f"Overlay window shape: {self.overlay_id} circle lost; {'restored' if restored else 'restore FAILED'}", flush=True)
+            self.last_topmost_refresh = now
+
+    def _cloak(self, cloaked):
+        if _cloak_window(self.window, cloaked):
+            self.cloaked = cloaked
+            return True
+        return False
+
+    def _veil(self, veiled):
+        """Fully transparent, but on the screen as far as the page knows."""
+        alpha = 0 if veiled else (self.target_alpha if self.target_alpha is not None else 255)
+        if not _apply_window_alpha(self.window, alpha):
+            return False
+        self.veiled = veiled
+        if not veiled:
+            self.last_alpha = alpha
+        return True
+
+    def _map_hidden(self, now, must_hide=False):
+        """Show the window out of sight so its page draws, and ask the page to
+        say when it has (a page loaded hidden gets no visibility event).
+        Out of sight is under the cloak; the first time, it's veiled instead,
+        as a page that has never been on the screen doesn't draw under one."""
+        if self.ever_shown or not self._veil(True):
+            hidden = self._cloak(True)
+            if hidden and self.veiled:
+                self._veil(False)
+        else:
+            hidden = True
+            if self.cloaked:
+                self._cloak(False)
+        if must_hide and not hidden:
+            return False
+        if not _set_windows_visibility(self.window, True):
+            return False
+        self.mapped_at = now
+        try:
+            self.window.run_js("window.__voidcompassPainted && window.__voidcompassPainted()")
+        except Exception:
+            pass
+        return True
+
+    def _apply_composed(self, payload, geometry, wanted, ready, held, handle, presentation_held, content_ready):
+        """Visual hosting (5.7.1): overlays reach the screen through DWM
+        cloaking, so ones coming or going together do it in the same frame.
+        ShowWindow one window after another put them up several frames apart.
+
+        A window is shown under its cloak, draws, and the host uncloaks it
+        with the rest of its group (_OverlayHost._settle). One hidden for a
+        map or a menu (``held``) stays shown and drawing under its cloak for
+        HOLD_DRAWN_S, so it comes back at once; after that it really hides
+        and stops drawing, like any other hidden overlay."""
+        now = time.monotonic()
+        mapped = bool(_windows_visibility(self.window))
+        if held and not wanted:
+            if self.held_since is None:
+                self.held_since = now
+        else:
+            self.held_since = None
+        # Behind the boot screen, held for as long as it's up.
+        keep_mapped = wanted or (held and (presentation_held or now - self.held_since < HOLD_DRAWN_S))
+        self.keep_mapped = keep_mapped
+        # Every page is drawn once out of sight as soon as it's ready (at
+        # startup, behind the boot screen), so its first real show is quick.
+        warming = not self.ever_shown and content_ready and not payload.get("shutdown")
+        placed = keep_mapped or warming
+        resized = False
+        if placed or not mapped:
+            target = geometry if placed else (HIDDEN_WINDOW_X, HIDDEN_WINDOW_Y, geometry[2], geometry[3])
+            resized = target != self.last_geometry
+            if resized:
+                if not _apply_windows_geometry(self.window, *target):
+                    return {"ok": False, "reason": "native geometry unavailable", "handle": handle}
+                self.last_geometry = target
+        click_through = self._apply_surface(payload, resized)
+        if not wanted:
+            self.pending_since = None
+            if mapped and not (self.cloaked or self.veiled):
+                self._cloak(True)
+            elif placed and not mapped:
+                # Drawn ready for the map closing, the boot screen lifting, or
+                # (warming) its first show.
+                mapped = self._map_hidden(now, must_hide=True)
+            # Really hidden after the loop, every one at once (and at once if
+            # this PC won't cloak it).
+            if mapped and not (warming and self.veiled) and (not keep_mapped or not (self.cloaked or self.veiled)):
+                self.hide_due = True
+            self.last_visible = False
+        else:
+            if not mapped:
+                _apply_windows_style(self.window, click_through)
+                if self._map_hidden(now) and self.last_shape == "circle":
+                    _apply_window_shape(self.window, "circle")
+            if self.cloaked or self.veiled:
+                if self.pending_since is None:
+                    self.pending_since = now
+                    # Shown already: it has been drawing all along (a map or
+                    # menu visit), so it needn't wait for its latest model.
+                    self.pending_live = mapped
+                self.render_ready = ready
+            elif _windows_visibility(self.window):
+                self.last_visible = True
+        self._keep_on_top(self.last_visible is True, click_through)
+        return {
+            "ok": True,
+            "handle": handle,
+            "visible": self.last_visible is True,
+            "curtained": bool(presentation_held),
+        }
+
+    def reveal_wait(self):
+        return REVEAL_WAIT_S if self.ever_shown else FIRST_REVEAL_WAIT_S
+
+    def framed(self, now):
+        """Whether the page has drawn since its window was shown."""
+        painted = float(getattr(self.window, "_voidcompass_painted_at", 0.0) or 0.0)
+        return painted > self.mapped_at or now - self.mapped_at >= self.reveal_wait()
+
+    def drawn(self, now):
+        """Whether a window waiting out of sight is ready to be seen."""
+        return self.framed(now) and (self.pending_live or self.render_ready)
+
     def hide(self):
         _set_windows_visibility(self.window, False)
         # Navigation can remap a WinForms window. Move it away before reloading,
@@ -791,6 +965,8 @@ class _WindowController:
             if _apply_windows_geometry(self.window, *hidden_geometry):
                 self.last_geometry = hidden_geometry
         self.last_visible = False
+        self.hide_due = False
+        self.pending_since = None
 
 
 class _OverlayHost:
@@ -811,6 +987,8 @@ class _OverlayHost:
         self.window_revision = -1
         self.presentation_held = True
         self.last_delivery = {}
+        # Overlays waiting under their cloaks: the host looks again soon.
+        self.settling = False
 
     def _url(self, path, overlay_id=None):
         suffix = f"token={quote(self.token)}"
@@ -824,7 +1002,8 @@ class _OverlayHost:
                 if now - value[1] < 2.0}
         response = _request_json(
             self._url("/api/windows")
-            + f"&since={int(self.window_revision)}&wait=1&deliver=1&seen={quote(json.dumps(seen, separators=(',', ':')))}",
+            + f"&since={int(self.window_revision)}&wait={'0.03' if getattr(self, 'settling', False) else '1'}"
+            + f"&deliver=1&seen={quote(json.dumps(seen, separators=(',', ':')))}",
             timeout=2.25,
         )
         if not isinstance(response, dict):
@@ -892,7 +1071,9 @@ class _OverlayHost:
             path = "/powerplay-overlay/index.html"
         else:
             raise ValueError(f"Unsupported semantic overlay template: {template}")
-        return self._url(path, overlay_id)
+        url = self._url(path, overlay_id)
+        # Visual hosting: the page says when it has drawn after being shown.
+        return url + "&painted=1" if getattr(self, "runtime", None) is not None else url
 
     def create_window(self, overlay_id, spec, hidden=True):
         window_state = spec.get("window") if isinstance(spec, dict) else {}
@@ -944,6 +1125,7 @@ class _OverlayHost:
 
     def _apply_manifest(self, manifest, last_status):
         changes = {}
+        statuses = {}
         restore_shared_transparency = False
         # Classic WinForms still needs staggered navigation; composition controllers initialise asynchronously.
         created_window = False
@@ -1006,8 +1188,7 @@ class _OverlayHost:
             restore_shared_transparency = bool(
                 result.pop("_restore_all_transparency", False)
             ) or restore_shared_transparency
-            if result != last_status.get(overlay_id):
-                changes[overlay_id] = result
+            statuses[overlay_id] = result
         for overlay_id, controller in self.controllers.items():
             if overlay_id not in manifest:
                 controller.hide()
@@ -1015,7 +1196,52 @@ class _OverlayHost:
             for controller in self.controllers.values():
                 if controller.last_visible:
                     _apply_webview_transparency(controller.window)
+        for overlay_id in self._settle():
+            if statuses.get(overlay_id, {}).get("ok"):
+                statuses[overlay_id] = {**statuses[overlay_id], "visible": True}
+        for overlay_id, result in statuses.items():
+            if result != last_status.get(overlay_id):
+                changes[overlay_id] = result
         return changes
+
+    def _settle(self):
+        """The second half of a pass under visual hosting: really hide the
+        overlays that went (already cloaked, so they left the screen together),
+        then uncloak the ones arriving, as one group. A group waits for its
+        slowest page up to REVEAL_WAIT_S (FIRST_REVEAL_WAIT_S for a page never
+        shown yet); a page slower than that joins on its own when it's ready.
+        Returns the ids put on the screen."""
+        now = time.monotonic()
+        controllers = [controller for controller in self.controllers.values() if isinstance(controller, _WindowController)]
+        for controller in controllers:
+            if controller.hide_due:
+                controller.hide()
+        # Warmed: a page drawn once out of sight goes under its cloak, or away.
+        for controller in controllers:
+            if controller.veiled and controller.pending_since is None and controller.framed(now):
+                controller.ever_shown = True
+                if controller._cloak(True):
+                    controller._veil(False)
+                if not controller.keep_mapped:
+                    controller.hide()
+        pending = [controller for controller in controllers if controller.pending_since is not None]
+        drawn = {controller.overlay_id: controller.drawn(now) for controller in pending}
+        waiting = any(not drawn[controller.overlay_id] and now - controller.pending_since < controller.reveal_wait()
+                      for controller in pending)
+        arriving = [controller for controller in pending if drawn[controller.overlay_id]
+                    and (not waiting or now - controller.pending_since >= controller.reveal_wait())]
+        shown = [controller for controller in arriving
+                 if (controller._veil(False) if controller.veiled else controller._cloak(False))]
+        for controller in shown:
+            controller.pending_since = None
+            controller.last_visible = True
+            controller.ever_shown = True
+        # A page that never says it has drawn isn't watched closely forever;
+        # its render confirmation still wakes the host.
+        self.settling = any((controller.pending_since is not None and now - controller.pending_since < 2.0)
+                            or (controller.veiled and now - controller.mapped_at < 2.0)
+                            for controller in controllers)
+        return [controller.overlay_id for controller in shown]
 
     def _deliver(self, overlay_id, window, packet):
         if not isinstance(packet, dict):
