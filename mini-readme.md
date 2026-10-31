@@ -1,7 +1,7 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.7.2 // Just What You Asked
-**Release Date:** TBA 3312 *(Galactic Standard Time)*
+**Release Date:** 1 NOV 3312 *(Galactic Standard Time)*
 
 * **The Watcher answers what you asked.** Ask what's in the hold and it tells you the hold, not your ship, where you are and your last jumps as well. Each question now gets only what it needs: where you are when you ask where, what you've done lately when you ask about the past.
 * **What's in the hold.** It names your cargo, how many tonnes of each, what's stolen or for a mission, and how full the hold is (the SRV's too, when you're in it).
@@ -19,6 +19,7 @@
   * **Your lifetime record:** hours played, systems visited, jumps, light years, and your earnings from exploration, exobiology, combat, trade and mining, whichever you ask about.
   * **Rebuy and legal status:** what replacing the ship would cost, and whether you're clean or wanted.
 * **"Remember that…"** Tell it something to remember ("remember that my carrier is the Black Rose") and it keeps it in its LIBRARY, with what you teach it there, and draws on it when you talk.
+* **Overlays come back after hiding them all.** In the Rhino, hiding all overlays and bringing them back left the Rhino Map hidden: it updates as you drive, and showed itself behind the curtain without knowing it had been hidden again. It now comes back with the rest, and so does any overlay that updates itself (Construction Needs, Jump Info, Contact Scope and others).
 * **Fewer stray readouts.** "How's it going?", "Are you alive?" and "What are you listening to?" no longer bring up the route, the exobiology forecast or the music.
 
 ## Earlier releases

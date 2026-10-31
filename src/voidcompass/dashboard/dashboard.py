@@ -3745,11 +3745,7 @@ class MainDashboard(
                         if self._overlay_window_is_shown(window):
                             if name not in self._overlay_hotkey_hidden:
                                 self._overlay_hotkey_restore.add(name)
-                            overlay_obj = getattr(self, "hud" if name == "navigation" else name, None)
-                            if hasattr(overlay_obj, "hide") and callable(overlay_obj.hide):
-                                overlay_obj.hide()
-                            else:
-                                window.withdraw()
+                            self._overlay_hotkey_withdraw(name, window)
                     except (AttributeError, RuntimeError):
                         continue
                 message = "Overlays hidden"
@@ -3793,6 +3789,19 @@ class MainDashboard(
                 message = f"{label} shown"
         self.add_event_feed_entry("SYSTEM", message, severity="INFO")
 
+    def _overlay_hotkey_withdraw(self, attr, window):
+        """Hide one overlay behind the curtain through its own hide(), so it
+        knows it's hidden. Withdrawn behind its back, an overlay that showed
+        itself under the curtain (the Rhino Map, on every move in the Rhino)
+        still thought it was showing, and "show" did nothing when the
+        curtain lifted (5.7.2)."""
+        overlay = getattr(self, "hud" if attr == "navigation" else attr, None)
+        hide = getattr(overlay, "hide", None)
+        if overlay is not window and callable(hide):
+            hide()
+        else:
+            window.withdraw()
+
     def _enforce_overlay_hotkey_visibility(self):
         global_hidden = bool(getattr(self, "_overlay_hotkey_global_hidden", False))
         hidden = set(getattr(self, "_overlay_hotkey_hidden", set()))
@@ -3806,7 +3815,7 @@ class MainDashboard(
                     continue
                 if global_hidden and attr not in hidden:
                     self._overlay_hotkey_restore.add(attr)
-                window.withdraw()
+                self._overlay_hotkey_withdraw(attr, window)
             except (AttributeError, RuntimeError):
                 continue
 

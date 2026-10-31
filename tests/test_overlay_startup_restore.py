@@ -241,6 +241,40 @@ class RuntimeOverlayVisibilityTests(unittest.TestCase):
             for _, window in app._overlay_hotkey_window_items(): window.destroy()
             loop.close()
 
+    def test_an_overlay_that_shows_itself_under_the_curtain_comes_back(self):
+        """5.7.2: in the Rhino, the Rhino Map updates on every move and showed
+        itself under the all-overlays curtain; the guard withdrew it behind its
+        back, so it still thought it was showing, and it didn't come back when
+        the curtain lifted."""
+        from voidcompass.core.application_runtime import ApplicationRuntime
+        from voidcompass.overlays.rhino_map_hud import RhinoMapHUD
+        loop = ApplicationRuntime()
+        loop._voidcompass_startup_presentation_held = False
+        app = MainDashboard.__new__(MainDashboard)
+        app.root = loop
+        app.is_running = True
+        app._overlay_hotkey_hidden = set()
+        app._overlay_hotkey_restore = set()
+        app._overlay_hotkey_global_hidden = False
+        app.add_event_feed_entry = lambda *args, **kwargs: None
+        app.rhino_map_hud = RhinoMapHUD(loop, {})
+        app._overlay_hotkey_window_items = lambda: [("rhino_map_hud", app.rhino_map_hud.win)]
+        window = app.rhino_map_hud.win
+        try:
+            app.rhino_map_hud.update({"mode": "ground"})
+            self.assertEqual(window.state(), "normal")
+            app._handle_overlay_hotkey("toggle_all")
+            self.assertEqual(window.state(), "withdrawn")
+            app.rhino_map_hud.update({"mode": "ground", "moved": 1})   # driving on
+            app._enforce_overlay_hotkey_visibility()
+            self.assertEqual(window.state(), "withdrawn", "still behind the curtain")
+            self.assertFalse(app.rhino_map_hud.visible, "and it knows it")
+            app._handle_overlay_hotkey("toggle_all")
+            self.assertEqual(window.state(), "normal", "back with the rest")
+        finally:
+            window.destroy()
+            loop.close()
+
     def test_navigation_handoff_updates_browser_visibility_without_journal_event(self):
         from voidcompass.core.application_runtime import ApplicationRuntime
         from voidcompass.overlays.hud import TacticalHUD
