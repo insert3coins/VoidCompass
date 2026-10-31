@@ -7,6 +7,17 @@
 * **What's in the hold.** It names your cargo, how many tonnes of each, what's stolen or for a mission, and how full the hold is (the SRV's too, when you're in it).
 * **The station you're docked at.** Its name, kind, who runs it, its government, economy and services (shipyard, black market, material trader, Vista Genomics and more), its landing pads and how far it is from the star, all from the game itself. It used to take a station from your LIBRARY sources for the one you were at.
 * **The system's factions.** Who controls it, each faction's influence and state, how you stand with them, and any war or election and how many days each side has won, from the BGS readings your journal gives on arrival.
+* **Planet materials and your mining sites.** Ask what's on the planet you're at (or one you name) and it tells you its raw materials from your scan, what that kind of ground tends to hold for the Rhino, and your saved Planet Materials sites on it: each with its materials, how much is left and how far away it is, nearest first. The rigs you marked are there too. The game logs no ground sites itself, so these are the ones you saved.
+* **Your materials.** Ask about your engineering materials and it gives each kind's total and the most plentiful, or the count of the one you name.
+* **Your Codex.** How much biology you've logged and in how many regions, what's logged in this region, your latest finds, and for a species you name, which colours you have and which you're still missing ("Bacterium Aurasus: 5 of 15 colours").
+* **More of your game, when you ask:**
+  * **Missions:** each one's destination, cargo or targets, pay and time left, soonest first.
+  * **Ranks:** all of them with progress to the next, your navy ranks, and how the Federation, Empire and Alliance see you.
+  * **Your fleet carrier:** where it is, where it's jumping, its tritium, balance, docking access and free space.
+  * **Unsold data:** what your exploration data and exobiology samples are worth, and that both are lost with the ship.
+  * **The world you're at, or one you name:** what it is, landable or not, gravity, temperature, atmosphere, what it's worth scanned and mapped, and whether you were the first to discover, map or set foot on it.
+  * **Your lifetime record:** hours played, systems visited, jumps, light years, and your earnings from exploration, exobiology, combat, trade and mining, whichever you ask about.
+  * **Rebuy and legal status:** what replacing the ship would cost, and whether you're clean or wanted.
 * **"Remember that…"** Tell it something to remember ("remember that my carrier is the Black Rose") and it keeps it in its LIBRARY, with what you teach it there, and draws on it when you talk.
 * **Fewer stray readouts.** "How's it going?", "Are you alive?" and "What are you listening to?" no longer bring up the route, the exobiology forecast or the music.
 

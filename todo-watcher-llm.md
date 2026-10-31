@@ -346,6 +346,28 @@ You found it answered a cargo question with the ship, the system and the jumps; 
   - `station_lines`: from the Docked event's own fields (kind, owner and its state, government, allegiance, economy, the services worth saying, pads with their total, and the distance from the star).
   - `faction_lines`: from the BGS snapshot taken on arrival (`bgs_store.latest_snapshot(current_system_address)`). It gives the controlling faction and the system's details, each faction's influence (whole percents), state, government and your standing (the game's reputation bands), the squadron faction, conflicts as "X leads Y 2 to 1 in days won", and the readings' age when older than 36 h.
 - **Wordings changed after real 4B answers:** "55.3%" came back as "5.53 percent", "has won 2 days" as "2 days left", "Run by Jaques (state: Boom)" as "Boom runs the shipyard", "60 of 64 tonnes" as "60 tonnes of space", and 8 + 4 + 4 pads as twelve. Now the answers are right (tool: a scratch script calling `talk` with the formatters' lines).
+- **Planet materials and mining sites** (`planet_lines`, `_watcher_lookup_planet`, topic `planet`):
+  - "Planet Materials" here is your own store of surface mining sites (`planet_materials.db`), since the journal logs none.
+  - Through `_html_planet_materials_workspace()`, the lookup gives the body you're at (or one you name, punctuation ignored): its scan's raw materials (whole percents, rare ones marked), the scan's mining locations, the Rhino forecast for its ground (`rhino_forecast`), and your saved sites there, nearest first with their distance (`surface_distance_m`). It adds the rigs you marked (`rig_store`) and the sites on the system's other bodies.
+  - Asked where ("sites", "rigs", "where"), it lists the sites first, without the crust's makeup.
+  - Wordings changed after real answers: distances in words ("300 m" came back as "30 meters"), rigs as a count plus "rig 1 and rig 3" ("rigs 1, 3" was read as three), and rigs labelled "not sites" (it said "we saved two rigs").
+- **Your materials** (`materials_lines`, topic `materials`): `engineer_materials` raw, manufactured and encoded. Each kind's total and the most plentiful, one kind if you name it, or the count for a material you name. Materials somewhere ("on this planet", "here") go to `planet` instead.
+- **Your Codex** (`codex_lines`, `_watcher_lookup_codex`, topic `codex`):
+  - It reads the biological Codex index the Survey flags use (`CodexIndex.entries()`), with names from Canonn's `codexRef.json` (`codex_index.reference()`). Rows carry journal time strings, not numbers.
+  - The answer covers colours and species logged, galactic regions, this region (`_bio_location_context`, `region_names`), and the latest finds. For a species you name, it gives the colours logged and the colours still to log (with their count), and whether it's logged in this region; "here" adds what you logged on this body.
+  - A species named in a Codex question doesn't bring up the life forecast unless it's about here.
+  - Biology only: Thargoid and Guardian entries never reach it (it never speaks of them).
+  - Checked against your real index: 120 colours of 51 species across 26 regions; Bacterium Aurasus 5 of 15. Wordings changed: species before colours (it said "120 species"), "galactic regions", and the missing count given (it said "ten remain" without being told, so the answer was refused).
+- **More of the game** (you: "add in anything else to our mind we might be missing from Elite"):
+  - `missions_lines`: `companion_state["missions"]`, soonest expiry first, with destination, cargo or kills, pay, time left and illegal.
+  - `ranks_lines`: `cmdr_ranks`, `cmdr_rank_progress` and `cmdr_reputation`, with `core.ranks.name` and the same reputation bands. Navy rank 0 ("None") is left out.
+  - `carrier_lines`: `carrier_tracker.display_carrier()` (the one jumping first).
+  - `data_lines`: `unsold_exploration_cr` and `companion_features.unsold_bio_value`.
+  - `world_lines`: the scan item named or the one at `current_body_name`. Radius, rotation and rings only when asked (`WORLD_DETAIL`); star kinds named (neutron star, black hole, white dwarf).
+  - `record_lines`: `companion_state["statistics"]` (the game's Statistics), with groups chosen by the question (`RECORD`), else `RECORD_EVERYDAY`.
+  - `ship_lines` gains the rebuy and the legal state (`LEGAL_STATES`).
+  - Topic clashes settled: "how many jumps left" is the route and "how many jumps have we made" the record; "reputation with the Federation" is ranks, not factions; a world question isn't a survey one.
+  - Real 4B answers were checked for all of them.
 - **"Remember that…"** (`remember_request`, `_watcher_remember`): kept with TEACH IT (`watcher_knowing.teach`). The note-taker passes over requests, so a "remember" never stuck before. "Remember when…?" is a question, and mystery names are refused in its own words.
 - `tests/test_watcher_answers_572.py`.
 

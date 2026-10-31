@@ -236,5 +236,274 @@ class AskedTests(unittest.TestCase):
         self.assertIn("22,000 light years", said)
 
 
+# -- planet materials, mining sites, your materials and your Codex -----------------------
+SITES = [
+    {"name": "North ridge", "materials": "Painite, Platinum", "density": "High", "amount": "Medium",
+     "tons_left": "Estimated 220–600 t left", "distance_m": 1240},
+    {"name": "Crater floor", "materials": "Osmium", "amount": "Depleted", "tons_left": "Depleted", "distance_m": 300},
+]
+REFERENCE = {
+    "$Codex_Ent_Bacterial_01_G_Name;": ("Bacterium Aurasus - Teal", "Biology"),
+    "$Codex_Ent_Bacterial_01_L_Name;": ("Bacterium Aurasus - Lime", "Biology"),
+    "$Codex_Ent_Bacterial_01_R_Name;": ("Bacterium Aurasus - Red", "Biology"),
+    "$Codex_Ent_Stratum_02_T_Name;": ("Stratum Tectonicas - Green", "Biology"),
+    "$Codex_Ent_Seed_Name;": ("Roseum Brain Tree", "Biology"),
+    "$Codex_Ent_Green_Water_Giant_Name;": ("Green Water Giant", "Tourist"),
+}
+
+
+class PlanetTopicTests(unittest.TestCase):
+    def test_planet_materials_your_materials_and_the_codex(self):
+        self.assertEqual(copilot.topics_for("What planet materials do we have?"), ["planet"])
+        self.assertEqual(copilot.topics_for("What materials are on this planet?"), ["planet"], "here: the planet's")
+        self.assertEqual(copilot.topics_for("Where are the mining sites?"), ["planet"])
+        self.assertEqual(copilot.topics_for("What does the ground here hold?"), ["planet"])
+        self.assertEqual(copilot.topics_for("What materials do we have?"), ["materials"], "no place: your stock")
+        self.assertEqual(copilot.topics_for("What have we logged in the Codex?"), ["codex"])
+        self.assertEqual(copilot.topics_for("Have we logged Bacterium Aurasus?"), ["codex"], "the Codex, not a forecast")
+        self.assertIn("life", copilot.topics_for("Could Bacterium Aurasus live here?"))
+        self.assertEqual(copilot.topics_for("What should I scan here?"), ["survey"])
+
+
+class PlanetLineTests(unittest.TestCase):
+    def test_the_planets_materials_ground_and_sites(self):
+        lines = copilot.planet_lines(
+            "Colonia 3 C", [{"name": "Iron", "percent": 19.8}, {"name": "Polonium", "percent": 0.6, "rare": True}],
+            [{"material": "Painite", "pct": 12.4, "median": 260000}], "Metal-Rich World", SITES, 2, {1: {}, 3: {}},
+            [("Colonia 4", 1)], "Colonia")
+        self.assertEqual(lines, [
+            "Raw materials on Colonia 3 C, from its scan: Iron 20%, Polonium under 1% (rare)",
+            "Mining locations its scan found on Colonia 3 C: 2",
+            "Metal-Rich World ground tends to hold: Painite (at 12% of sites like it, about 260,000 credits a tonne)",
+            "Your saved mining sites on Colonia 3 C: 2",
+            "Saved site Crater floor, 300 metres from here: Osmium (depleted)",
+            "Saved site North ridge, 1.2 kilometres from here: Painite, Platinum "
+            "(high density, medium amount left, about 220 to 600 tonnes left)",
+            "Rigs you marked as deployed here (not sites): 2 rigs, rig 1 and rig 3",
+            "Saved mining sites elsewhere in the system: 1 on Colonia 4"])
+
+    def test_asked_where_the_sites_are_it_leaves_out_the_crust(self):
+        lines = copilot.planet_lines("Colonia 3 C", [{"name": "Iron", "percent": 19.8}], (), "", SITES, 2, focus="sites")
+        self.assertFalse(any(line.startswith(("Raw materials", "Mining locations")) for line in lines))
+        self.assertEqual(lines[0], "Your saved mining sites on Colonia 3 C: 2")
+
+    def test_no_sites_and_no_planet(self):
+        self.assertIn("No saved mining sites on Colonia 3 C", copilot.planet_lines("Colonia 3 C"))
+        self.assertEqual(copilot.planet_lines("", elsewhere=[("Colonia 4", 2)], system="Colonia"),
+                         ["Not at or near a planet right now", "Saved mining sites in Colonia: 2 on Colonia 4"])
+
+    def test_your_materials(self):
+        stock = {"raw": {"iron": {"name": "Iron", "count": 150}, "carbon": {"name": "Carbon", "count": 290}},
+                 "encoded": {"echo": {"name": "Atypical Disrupted Wake Echoes", "count": 12}}}
+        self.assertEqual(copilot.materials_lines(stock, "how much iron have we got"), ["Iron: 150 (raw)"])
+        self.assertEqual(copilot.materials_lines(stock, "what materials do we have"), [
+            "Raw materials: 440 in all, 2 kinds", "Encoded materials: 12 in all, 1 kind",
+            "Most plentiful raw: Carbon 290, Iron 150"])
+        self.assertEqual(copilot.materials_lines(stock, "what encoded materials do we have"), [
+            "Encoded materials: 12 in all, 1 kind", "Most plentiful encoded: Atypical Disrupted Wake Echoes 12"])
+        self.assertIn("No engineering materials", copilot.materials_lines({}, "materials")[0])
+
+
+class CodexLineTests(unittest.TestCase):
+    def test_what_youve_logged(self):
+        now = time.time()
+        rows = [["2026-10-01T10:00:00Z", "$Codex_Ent_Bacterial_01_G_Name;", 18, 1, 2],
+                ["2026-10-02T10:00:00Z", "$Codex_Ent_Bacterial_01_G_Name;", 20, 1, 2],
+                ["2026-10-03T10:00:00Z", "$Codex_Ent_Bacterial_01_L_Name;", 20, 1, 2],
+                ["2026-10-04T10:00:00Z", "$Codex_Ent_Seed_Name;", 20, 1, 2],
+                ["2026-10-05T10:00:00Z", "$Codex_Ent_Green_Water_Giant_Name;", 18, 1, 0]]
+        lines = copilot.codex_lines(rows, REFERENCE, 18, "Inner Orion Spur", "what's in our codex?", now=now)
+        self.assertEqual(lines[0], "Biology logged in the commander's Codex: 2 species (3 colours in all), "
+                                   "across 2 different galactic regions")
+        self.assertEqual(lines[1], "Logged in Inner Orion Spur: 1 colour")
+        self.assertTrue(lines[2].startswith("Most recently logged: Roseum Brain Tree ("), lines[2])
+        self.assertNotIn("Green Water Giant", " ".join(lines), "biology only")
+
+    def test_a_species_you_name(self):
+        rows = [["2026-10-01T10:00:00Z", "$Codex_Ent_Bacterial_01_G_Name;", 20, 1, 2]]
+        lines = copilot.codex_lines(rows, REFERENCE, 18, "Inner Orion Spur", "have we logged bacterium aurasus?",
+                                    here=["$Codex_Ent_Bacterial_01_G_Name;"], now=time.time())
+        self.assertIn("Bacterium Aurasus: 1 of 3 colours logged (Teal)", lines)
+        self.assertIn("Bacterium Aurasus colours not logged yet (2): Lime, Red", lines)
+        self.assertIn("Bacterium Aurasus is not yet logged in Inner Orion Spur", lines)
+        self.assertIn("Logged on this body: Bacterium Aurasus - Teal", lines)
+        self.assertFalse(any(line.startswith("Most recently") for line in lines), "the species is the answer")
+
+    def test_nothing_logged(self):
+        self.assertEqual(copilot.codex_lines([], REFERENCE), ["No biology logged in the Codex yet"])
+
+    def test_the_games_names_for_its_entries(self):
+        from voidcompass.exploration import codex_index
+        self.assertEqual(codex_index.reference()["$Codex_Ent_Bacterial_01_O_Name;"],
+                         ("Bacterium Aurasus - Turquoise", "Biology"))
+
+
+class FakeRigs:
+    def rigs(self, system, body):
+        return {2: {"lat": 1, "lon": 2}}
+
+
+class FakeIndex:
+    def entries(self):
+        return [["2026-10-01T10:00:00Z", "$Codex_Ent_Bacterial_01_O_Name;", 18, 99, 4]]
+
+    def entries_on(self, address, body_id):
+        return ["$Codex_Ent_Bacterial_01_O_Name;"] if (address, body_id) == (99, 4) else []
+
+
+class PlanetLookupTests(unittest.TestCase):
+    def deck(self):
+        deck = Deck()
+        deck._html_planet_materials_workspace = lambda: {
+            "system": "Colonia", "body": "Colonia 3 C",
+            "bodies": [{"body": "Colonia 3 C", "short_name": "3 C", "materials": [{"name": "Iron", "percent": 20}],
+                        "ground": "metal-rich", "ground_label": "Metal-Rich World", "class": "Metal rich body",
+                        "landable": True, "mining_locations": 1},
+                       {"body": "Colonia 4", "short_name": "4", "materials": [{"name": "Sulphur", "percent": 25}]}],
+            "sites": [{"system": "Colonia", "body": "Colonia 3 C", "name": "North ridge", "materials": "Painite",
+                       "latitude": 10.0, "longitude": 20.0, "planet_radius": 1_000_000, "amount": "High"},
+                      {"system": "Colonia", "body": "Colonia 4", "name": "Far side", "materials": "Osmium",
+                       "latitude": 0.0, "longitude": 0.0}],
+            "current_position": {"latitude": 10.0, "longitude": 20.01, "planet_radius": 1_000_000}}
+        deck.rig_store = lambda: FakeRigs()
+        return deck
+
+    def test_the_planet_youre_on(self):
+        lines = self.deck()._watcher_lookup_planet("what planet materials do we have?")
+        self.assertEqual(lines[0], "Raw materials on Colonia 3 C, from its scan: Iron 20%")
+        site = next(line for line in lines if line.startswith("Saved site North ridge"))
+        self.assertIn("metres from here", site)
+        self.assertIn("Rigs you marked as deployed here (not sites): 1 rig, rig 2", lines)
+        self.assertIn("Saved mining sites elsewhere in the system: 1 on Colonia 4", lines)
+
+    def test_a_planet_you_name(self):
+        lines = self.deck()._watcher_lookup_planet("what materials are on Colonia 4?")
+        self.assertEqual(lines[0], "Raw materials on Colonia 4, from its scan: Sulphur 25%")
+        self.assertFalse(any("from here" in line for line in lines), "no distance to another planet's sites")
+
+    def test_the_codex_from_its_index(self):
+        deck = Deck()
+        deck.codex_index = FakeIndex()
+        deck._bio_location_context = lambda: (18, (0, 0, 0))
+        deck.current_system_address, deck.current_body_id = 99, 4
+        lines = deck._watcher_lookup_codex("what have we logged here in the codex?")
+        self.assertEqual(lines[1], "Logged in Inner Orion Spur: 1 colour")
+        self.assertIn("Logged on this body: Bacterium Aurasus - Turquoise", lines)
+
+    def test_your_materials_from_the_journal(self):
+        deck = Deck()
+        deck.engineer_materials = {"raw": {"iron": {"name": "Iron", "count": 9}}}
+        self.assertEqual(deck._watcher_lookup_materials("how much iron?"), ["Iron: 9 (raw)"])
+
+
+# -- missions, ranks, carrier, unsold data, the world here, your record, rebuy -----------
+class MoreTopicTests(unittest.TestCase):
+    def test_each_finds_its_own(self):
+        for said, topic in (("What missions do we have?", "missions"), ("What rank am I in exploration?", "ranks"),
+                            ("What's our reputation with the Federation?", "ranks"), ("Where is our carrier?", "carrier"),
+                            ("How much is our exploration data worth?", "data"), ("What's the gravity here?", "world"),
+                            ("Tell me about this planet", "world"), ("What's this moon like?", "world"),
+                            ("How many jumps have we made in total?", "record"), ("How long have we played?", "record"),
+                            ("What's our rebuy?", "ship"), ("Are we wanted?", "ship")):
+            self.assertEqual(copilot.topics_for(said), [topic], said)
+        self.assertEqual(copilot.topics_for("How many jumps left?"), ["route"], "the route, not your record")
+
+
+class MoreLineTests(unittest.TestCase):
+    def test_missions_soonest_first(self):
+        now = time.mktime((2026, 11, 1, 12, 0, 0, 0, 0, 0)) - time.timezone
+        lines = copilot.missions_lines([
+            {"name": "Deliver Gold", "destination_system": "Sol", "destination_station": "Abraham Lincoln",
+             "commodity": "Gold", "count": 20, "reward": 1250000, "expiry": "2026-11-04T12:00:00Z"},
+            {"name": "Kill pirates", "target": "Pirates", "kill_count": 12, "reward": 3000000, "expiry": "2026-11-02T12:00:00Z",
+             "illegal": True}], now)
+        self.assertEqual(lines, ["Active missions: 2, paying 4,250,000 credits in all",
+                                 "Kill pirates: 12 kills of Pirates, pays 3,000,000 credits, 24 hours left, illegal",
+                                 "Deliver Gold: to Abraham Lincoln, Sol, 20 tonnes of Gold, pays 1,250,000 credits, 3 days left"])
+        self.assertEqual(copilot.missions_lines([], now), ["No active missions"])
+
+    def test_ranks_and_the_superpowers(self):
+        from voidcompass.core import ranks
+        lines = copilot.ranks_lines({"Combat": 6, "Explore": 9, "Federation": 0, "Empire": 3}, {"Combat": 45},
+                                    {"Federation": 100.0, "Empire": -40.0}, names=ranks.name)
+        self.assertEqual(lines, ["Combat: Dangerous, 45% of the way to the next rank", "Exploration: Elite I",
+                                 "Imperial Navy: Master", "Superpower reputation: Federation allied, Empire unfriendly"])
+        self.assertIn("No ranks on record", copilot.ranks_lines({}, names=ranks.name)[0])
+
+    def test_the_carrier(self):
+        lines = copilot.carrier_lines({"carrier_id": 1, "name": "Black Rose", "callsign": "K7Q-1HT", "system": "Colonia",
+                                       "status": "jumping", "jump_destination": "Sol", "fuel_level": 640,
+                                       "fuel_capacity": 1000, "fuel_level_estimated": True, "balance": 2_500_000_000,
+                                       "available_balance": 1_900_000_000, "docking_access": "squadron",
+                                       "space_free": 12000})
+        self.assertEqual(lines, ["The carrier Black Rose (K7Q-1HT) is in Colonia", "Jumping to Sol",
+                                 "Tritium in its tank: 640 of 1000 tonnes (estimated)",
+                                 "Its balance: 2,500,000,000 credits, 1,900,000,000 available",
+                                 "Docking open to the squadron only", "Free space: 12,000 tonnes"])
+        self.assertEqual(copilot.carrier_lines(None), ["No fleet carrier on record"])
+
+    def test_unsold_data(self):
+        self.assertEqual(copilot.data_lines(48_210_000, 12_400_000)[-1],
+                         "Together about 60,610,000 credits, lost if the ship is destroyed")
+        self.assertEqual(copilot.data_lines(0, 0), ["No unsold exploration or exobiology data"])
+
+    def test_the_world_here(self):
+        world = {"full_name": "Colonia 3 C", "planet_class": "High metal content body", "landable": True, "gravity_g": 2.4,
+                 "surface_temp": 180, "atmosphere_type": "Thin Ammonia", "distance_to_arrival": 1240, "reward": 45000,
+                 "dss_reward": 210000, "was_discovered": False, "was_mapped": False, "radius": 1_800_000,
+                 "rotation_period": 216000, "tidal_lock": True}
+        lines = copilot.world_lines(world)
+        self.assertEqual(lines, ["Colonia 3 C: a High metal content body, landable", "Gravity: 2.40 g (heavy)",
+                                 "Surface temperature: -93 degrees Celsius", "Atmosphere: Thin Ammonia",
+                                 "Distance from the arrival star: 1,240 light seconds",
+                                 "Worth about 45,000 credits scanned and 210,000 credits mapped",
+                                 "The commander was the first to discover it and map it"])
+        detailed = copilot.world_lines(world, "how big is it?")
+        self.assertIn("Radius: 1,800 kilometres", detailed)
+        self.assertIn("One rotation takes 2.5 days (tidally locked)", detailed)
+        self.assertEqual(copilot.world_lines({"full_name": "Hypio A", "is_star": True, "star_type": "N"})[0],
+                         "Hypio A: a neutron star")
+        self.assertEqual(copilot.world_lines(None), ["No scanned world here to describe"])
+
+    def test_your_record(self):
+        stats = {"Exploration": {"Time_Played": 3600 * 412, "Systems_Visited": 5120, "Total_Hyperspace_Jumps": 8800},
+                 "Combat": {"Bounties_Claimed": 40}, "Bank_Account": {"Current_Wealth": 3.4e9}}
+        self.assertIn("Lifetime hyperspace jumps: 8,800", copilot.record_lines(stats, "how many jumps in total"))
+        self.assertEqual(copilot.record_lines(stats, "how many bounties have I claimed?"), ["Lifetime bounties claimed: 40"])
+        self.assertEqual(copilot.record_lines(stats, "show me our stats"), [
+            "Lifetime time played: 412 hours", "Lifetime systems visited: 5,120", "Lifetime hyperspace jumps: 8,800",
+            "Lifetime current wealth: 3,400,000,000 credits"])
+        self.assertIn("No lifetime record", copilot.record_lines(None)[0])
+
+    def test_rebuy_and_legal_status_with_the_ship(self):
+        lines = copilot.ship_lines("Krait Phantom", rebuy=4_200_000, legal="Wanted")
+        self.assertIn("Rebuy (the insurance to replace the ship): 4,200,000 credits", lines)
+        self.assertIn("Legal status: wanted", lines)
+        self.assertIn("Legal status: carrying illegal cargo", copilot.ship_lines(legal="IllegalCargo"))
+
+
+class MoreLookupTests(unittest.TestCase):
+    def test_from_the_decks_own_records(self):
+        deck = Deck()
+        deck.companion_state = {"missions": {"7": {"name": "Deliver Gold", "reward": 10}}, "unsold_exploration_cr": 500,
+                                "unsold_bio_cr": 100, "unsold_bio_bonus_potential_cr": 400,
+                                "statistics": {"Exploration": {"Systems_Visited": 9}}}
+        self.assertEqual(deck._watcher_lookup_missions()[0], "Active missions: 1, paying 10 credits in all")
+        self.assertEqual(deck._watcher_lookup_data()[1], "Unsold exobiology samples: about 500 credits (sold at Vista Genomics)")
+        self.assertEqual(deck._watcher_lookup_record("how many systems have we visited"), ["Lifetime systems visited: 9"])
+        deck.cmdr_ranks, deck.cmdr_rank_progress, deck.cmdr_reputation = {"Explore": 8}, {"Explore": 50}, {}
+        self.assertEqual(deck._watcher_lookup_ranks(), ["Exploration: Elite, 50% of the way to the next rank"])
+        deck.carrier_tracker = type("Tracker", (), {"display_carrier": lambda self: {"carrier_id": 1, "name": "Rose"}})()
+        self.assertEqual(deck._watcher_lookup_carrier(), ["The carrier Rose"])
+
+    def test_the_world_you_name_or_are_at(self):
+        deck = Deck()
+        deck.scan_items = [{"name": "3 C", "full_name": "Colonia 3 C", "planet_class": "Icy body"},
+                           {"name": "4", "full_name": "Colonia 4", "planet_class": "Rocky body"}]
+        deck.current_body_name = "Colonia 3 C"
+        self.assertEqual(deck._watcher_lookup_world("what's the gravity here?")[0], "Colonia 3 C: an Icy body")
+        self.assertEqual(deck._watcher_lookup_world("tell me about planet 4?")[0], "Colonia 4: a Rocky body")
+
+
 if __name__ == "__main__":
     unittest.main()

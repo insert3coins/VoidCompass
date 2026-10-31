@@ -15,12 +15,14 @@ language. A variant's identifier starts with its species' identifier
 
 from __future__ import annotations
 
+from functools import lru_cache
 import json
 import os
 import re
 import threading
 
 from voidcompass.core.journal_files import journal_sort_key
+from voidcompass.core.paths import resource_path
 from voidcompass.core.persistence_queue import persistence_queue
 from voidcompass.exploration.travel_history import commander_matches
 
@@ -40,6 +42,20 @@ def region_id(value):
         return value
     match = _REGION.search(str(value or "").strip())
     return int(match.group(1)) if match else None
+
+
+@lru_cache(maxsize=1)
+def reference():
+    """codexRef.json (Canonn's Codex reference): each entry's identifier
+    (``$Codex_Ent_Bacterial_01_O_Name;``) -> (English name, HUD category),
+    such as ("Bacterium Aurasus - Turquoise", "Biology")."""
+    try:
+        with open(resource_path("data", "codexRef.json"), "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return {row["name"]: (str(row.get("english_name") or ""), str(row.get("hud_category") or ""))
+            for row in (data.values() if isinstance(data, dict) else ()) if isinstance(row, dict) and row.get("name")}
 
 
 def species_prefix(species_key):
@@ -185,6 +201,11 @@ class CodexIndex:
         if region is not None and not any(row[2] == region for row in rows):
             return REGION
         return ""
+
+    def entries(self):
+        """Every row, as kept: ``[timestamp, entry, region, address, body id]``."""
+        with self.lock:
+            return [list(row) for row in self.rows]
 
     def entries_on(self, address, body_id):
         """Codex entries the commander logged on one body, oldest first."""

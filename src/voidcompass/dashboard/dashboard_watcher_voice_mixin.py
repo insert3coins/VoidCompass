@@ -11,10 +11,14 @@ import math
 import re
 import time
 
-from voidcompass.exploration.galactic_regions import find_region
+from voidcompass.core import companion_features, ranks
+from voidcompass.exploration import codex_index
+from voidcompass.exploration.galactic_regions import find_region, region_names
 from voidcompass.core.platform_support import application_dir
 from voidcompass.llm import library_sources, llm_assets
 from voidcompass.llm.llm_embed import Embedder
+from voidcompass.mining.planet_materials import PlanetMaterialsStore
+from voidcompass.mining.rhino_intelligence import rhino_forecast, surface_distance_m
 from voidcompass.overlays import (
     watcher_copilot, watcher_deeper, watcher_habits, watcher_knowing, watcher_llm, watcher_mind, watcher_name,
     watcher_voice_lore, watcher_world,
@@ -31,12 +35,22 @@ WATCHER_SELECTS = (
 )
 WATCHER_SWITCHES = ("heartbeat_thought_backdrop", "heartbeat_thought_heading")
 TEST_LINE = "This is my voice, Commander. I can hear you. Well. I can hear the ship."
+# The lookups that need what you asked: the world you name, the material you name.
+ASKS_THE_QUESTION = {"life", "planet", "materials", "codex", "world", "record"}
+# "Where are the sites?" wants the sites first, not the crust's makeup.
+SITES_ASKED = re.compile(r"\b(sites?|rigs?|deposits?|drill\w*|where)\b", re.I)
 # A card from your sources is never kept if it names what the Watcher never
 # speaks of, or reads like orders to it (a page's text is only ever reference).
 SOURCE_REFUSED = re.compile("|".join((
     watcher_llm.MYSTERY.pattern, watcher_llm.BANNED.pattern,
     r"ignore\s+(all|any|previous|the\s+above)|disregard\s+(all|previous)|you\s+are\s+now\b|new\s+instructions",
 )), re.I)
+
+
+def _asked_words(question):
+    """What you asked, lower case and padded, its punctuation gone: "on
+    Colonia 4?" names Colonia 4 (the question mark hid it)."""
+    return f" {' '.join(re.sub(r'[?!.,;:]+', ' ', str(question or '').casefold()).split())} "
 
 
 class DashboardWatcherVoiceMixin:
@@ -268,7 +282,7 @@ class DashboardWatcherVoiceMixin:
         for topic in watcher_copilot.topics_for(question):
             try:
                 lookup = getattr(self, f"_watcher_lookup_{topic}")
-                lines += lookup(question) if topic == "life" else lookup()
+                lines += lookup(question) if topic in ASKS_THE_QUESTION else lookup()
             except Exception:
                 logging.debug("Watcher lookup %s skipped", topic, exc_info=True)
         return lines[:watcher_copilot.LOOKUP_LIMIT]
@@ -290,7 +304,9 @@ class DashboardWatcherVoiceMixin:
             self._watcher_llm_facts().get("ship", ""), str(ship.get("ship_name") or ""), self._expedition_jump_range(),
             self._current_fuel_percent(), tons, self._active_cargo_capacity(),
             self._format_hud_credits(self._latest_hud_balance()) if self._latest_hud_balance() is not None else "",
-            getattr(self, "current_hull_percent", None))
+            getattr(self, "current_hull_percent", None),
+            ((getattr(self, "companion_state", None) or {}).get("loadout") or {}).get("Rebuy") or ship.get("rebuy"),
+            getattr(self, "current_legal_state", "") or "")
 
     def _watcher_lookup_cargo(self):
         hold = str(getattr(self, "current_cargo_vessel", "Ship") or "Ship")
@@ -313,6 +329,91 @@ class DashboardWatcherVoiceMixin:
         address = getattr(self, "current_system_address", None)
         snap = store.latest_snapshot(address) if store is not None and address is not None else None
         return watcher_copilot.faction_lines(snap, str(getattr(self, "current_sys", "") or ""), now=time.time())
+
+    def _watcher_lookup_planet(self, question=""):
+        """The planet you're at (or name), its scan's materials, what its ground
+        tends to hold and your saved mining sites and rigs on it (5.7.2)."""
+        workspace = self._html_planet_materials_workspace()
+        system = str(workspace.get("system") or "")
+        bodies = [row for row in workspace.get("bodies") or () if isinstance(row, dict)]
+        words = _asked_words(question)
+        named = next((row for row in sorted(bodies, key=lambda row: -len(str(row.get("body") or "")))
+                      if f" {str(row.get('body') or '').casefold()} " in words
+                      or (row.get("short_name") and f" {str(row['short_name']).casefold()} " in words
+                          and len(str(row["short_name"])) > 2)), None)
+        current = str(workspace.get("body") or "")
+        details = named or next((row for row in bodies if current and current in (row.get("body"), row.get("short_name"))), {})
+        body = str(details.get("body") or current)
+        key = PlanetMaterialsStore._body_key
+        sites = [row for row in workspace.get("sites") or ()
+                 if str(row.get("system") or "").casefold() == system.casefold()]
+        here = [row for row in sites if body and key(system, row.get("body")) == key(system, body)]
+        position = workspace.get("current_position") or {}
+        for row in here:
+            radius = position.get("planet_radius") or row.get("planet_radius")
+            if position and not named:
+                row["distance_m"] = surface_distance_m(position.get("latitude"), position.get("longitude"),
+                                                       row.get("latitude"), row.get("longitude"), radius)
+        counts = {}
+        for row in sites:
+            if row not in here:
+                counts[str(row.get("body") or "")] = counts.get(str(row.get("body") or ""), 0) + 1
+        rigs = self.rig_store().rigs(system, body) if body else {}
+        return watcher_copilot.planet_lines(
+            body, details.get("materials") or (), rhino_forecast(details) if details else (),
+            details.get("ground_label") if details.get("ground") else "", here, details.get("mining_locations") or 0,
+            rigs, sorted(counts.items()), system, focus="sites" if SITES_ASKED.search(str(question or "")) else "materials")
+
+    def _watcher_lookup_codex(self, question=""):
+        """Your Codex (biology), from the index the Survey flags use."""
+        index = getattr(self, "codex_index", None)
+        rows = index.entries() if index is not None else []
+        region, _coords = self._bio_location_context()
+        names = region_names()
+        region_name = names[region - 1] if region and 0 < region <= len(names) else ""
+        here = []
+        if index is not None and re.search(r"\b(here|this (planet|world|moon|body))\b", str(question or ""), re.I):
+            here = index.entries_on(getattr(self, "current_system_address", None), getattr(self, "current_body_id", None))
+        return watcher_copilot.codex_lines(rows, codex_index.reference(), region, region_name, question, here,
+                                           now=time.time())
+
+    def _watcher_lookup_missions(self):
+        missions = (getattr(self, "companion_state", None) or {}).get("missions") or {}
+        return watcher_copilot.missions_lines(list(missions.values()) if isinstance(missions, dict) else list(missions),
+                                              time.time())
+
+    def _watcher_lookup_ranks(self):
+        return watcher_copilot.ranks_lines(getattr(self, "cmdr_ranks", None), getattr(self, "cmdr_rank_progress", None),
+                                           getattr(self, "cmdr_reputation", None), names=ranks.name)
+
+    def _watcher_lookup_carrier(self):
+        tracker = getattr(self, "carrier_tracker", None)
+        return watcher_copilot.carrier_lines(tracker.display_carrier() if tracker is not None else None, now=time.time())
+
+    def _watcher_lookup_data(self):
+        state = getattr(self, "companion_state", None) or {}
+        return watcher_copilot.data_lines(state.get("unsold_exploration_cr"), companion_features.unsold_bio_value(state))
+
+    def _watcher_lookup_world(self, question=""):
+        """The world you name, or the one you're at, from its scan."""
+        items = [item for item in getattr(self, "scan_items", None) or () if isinstance(item, dict)]
+        words = _asked_words(question)
+
+        def named(item):
+            short = str(item.get("name") or "").casefold().strip()
+            return bool(short) and re.search(rf"(?<![\w-]){re.escape(short)}(?![\w-])", words) is not None
+
+        here = str(getattr(self, "current_body_name", "") or "").casefold()
+        chosen = (sorted((item for item in items if named(item)), key=lambda item: -len(str(item.get("name") or "")))[:1]
+                  or [item for item in items if here and here in (str(item.get("full_name") or "").casefold(),
+                                                                  str(item.get("name") or "").casefold())][:1])
+        return watcher_copilot.world_lines(chosen[0] if chosen else None, question)
+
+    def _watcher_lookup_record(self, question=""):
+        return watcher_copilot.record_lines((getattr(self, "companion_state", None) or {}).get("statistics"), question)
+
+    def _watcher_lookup_materials(self, question=""):
+        return watcher_copilot.materials_lines(getattr(self, "engineer_materials", None) or {}, question)
 
     def _watcher_lookup_colony(self):
         colony = getattr(self, "colony", None)
@@ -347,7 +448,7 @@ class DashboardWatcherVoiceMixin:
         with life, the most valuable first."""
         items = [item for item in getattr(self, "scan_items", None) or () if isinstance(item, dict)
                  and not item.get("is_star")]
-        words = f" {str(question or '').casefold()} "
+        words = _asked_words(question)
 
         def named(item):
             short = str(item.get("name") or "").casefold().strip()

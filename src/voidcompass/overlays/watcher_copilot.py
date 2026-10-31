@@ -3,14 +3,17 @@ show when you ask it something, and the few small things it will do when
 asked.
 
 Only the app's own numbers go in: the route, the survey, the ship, the
-hold, the station you're docked at, the system's factions, the colony
-needs, Powerplay, the expedition, Galnet, the music. Each line is
+hold, the station you're docked at, the system's factions, the planet's
+materials and your mining sites, your materials, your Codex, your missions,
+ranks, carrier, unsold data, the world you're at and your lifetime record,
+the colony needs, Powerplay, the expedition, Galnet, the music. Each line is
 plain fact for its own words to draw on (and is checked against, like the
 rest). The actions are the harmless ones: the music, the overlays, the
 clipboard and its own voice. Nothing here touches the game.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import re
 
 # What a question is about: the systems asked, by the words in it. Narrow on
@@ -18,12 +21,12 @@ import re
 # exobiology readout and "what do you need" the colony, and it recited them.
 TOPICS = {
     "route": re.compile(r"\b(route|next (system|jump|stop|star)|destination|how far|plotted|waypoints?|hops?|neutron|"
-                        r"jumps? (left|to go|remaining)|how many jumps|where are we (going|headed|heading)|heading (to|for))\b",
+                        r"jumps? (left|to go|remaining)|where are we (going|headed|heading)|heading (to|for))\b",
                         re.I),
     "survey": re.compile(r"\b(survey|scan(ned|s)?|bod(y|ies)|fss|honk|bio(logy|logicals?)?|signals?|planets?|worlds?|"
                          r"undiscovered|first discover\w*|valuable)\b", re.I),
     "ship": re.compile(r"\b((our|my|the|this) ship|ship'?s (state|condition|health)|fuel|tank|hull|jump range|credits|"
-                       r"money|balance)\b", re.I),
+                       r"money|balance|rebuy|insurance|wanted|legal|clean)\b", re.I),
     # What's in the hold, by name: its own topic, not the whole ship readout.
     "cargo": re.compile(r"\b(cargo|carrying|inventory|limpets?|((the|our|my|cargo|ship'?s|srv'?s) )hold|in the hold)\b",
                         re.I),
@@ -34,6 +37,35 @@ TOPICS = {
     "factions": re.compile(r"\b(factions?|bgs|influence|who (runs|controls|owns)|controll?ing|governments?|allegiance|"
                            r"conflicts?|wars?|elections?|civil (war|unrest|liberty)|boom|expansion|lockdown|outbreak|"
                            r"famine|retreat|reputation|population|security)\b", re.I),
+    # The planet's materials, its ground and your saved mining sites (the
+    # journal logs no ground sites: these are the ones you saved, and rigs).
+    "planet": re.compile(r"\b(mining sites?|saved sites?|deposits?|rigs?|rhino|drill\w*|ground mining|surface mining|"
+                         r"ores?|minerals?|planet(ary)? materials?|in the ground|ground (here|holds?|tends))\b", re.I),
+    # Your missions: where each goes, what it pays and when it runs out.
+    "missions": re.compile(r"\b(missions?|contracts?|deliver(y|ies)?|passengers?|massacre|courier)\b", re.I),
+    # Your ranks and their progress, the navies and the superpowers.
+    "ranks": re.compile(r"\b(ranks?|rating|promot\w*|navy|imperial|federal|empire|federation|alliance|superpowers?)\b",
+                        re.I),
+    # Your fleet carrier.
+    "carrier": re.compile(r"\b((fleet |our |my |the )?carrier'?s?|callsign)\b", re.I),
+    # The exploration and exobiology data you haven't sold yet.
+    "data": re.compile(r"\b(unsold|cartographic|(exploration|exobiology|biology|bio|organic|scan) data|data (we|to sell|worth|"
+                       r"value)|sell (the |our )?(data|samples)|universal cartographics)\b", re.I),
+    # The world you're at (or name): what it is, its gravity, heat and air.
+    "world": re.compile(r"\b(gravity|temperature|how (hot|cold)|atmosphere|landable|can (we|i) land|terraform\w*|volcanism|"
+                        r"radius|how big|day (length|lasts?)|rotation|tidally locked|(planet|world|moon|star) like|"
+                        r"what kind of (planet|world|moon|body|star)|tell me about (this|the|that) (planet|world|moon|body|star))\b",
+                        re.I),
+    # Your lifetime record, from the game's own Statistics.
+    "record": re.compile(r"\b(statistics|stats|career|lifetime|all time|in total|total (jumps|distance)|"
+                         r"how many jumps (have|did|in total)|"
+                         r"how far have (we|i)|time played|how long have (we|i)|systems (we('ve| have)|i('ve| have)) visited|"
+                         r"how many systems)\b", re.I),
+    # Your Codex (biology): what you've logged, here and for a species you name.
+    "codex": re.compile(r"\b(codex|colou?r variants?|variants?|missing colou?rs?|colou?rs? (we|i) (have|need|haven'?t)|"
+                        r"logged)\b", re.I),
+    # Your engineering materials: raw, manufactured, encoded.
+    "materials": re.compile(r"\b(materials?|mats|raw|manufactured|encoded)\b", re.I),
     "colony": re.compile(r"\b(colon(y|ies|is\w*)|construction|build(ing)? site|still needs?|what('s| is) (still )?needed)\b",
                          re.I),
     "powerplay": re.compile(r"\b(power ?play|merits?|pledged?|powers?)\b", re.I),
@@ -50,16 +82,37 @@ LOOKUP_LIMIT = 14
 CARGO_KINDS = 8
 # "What's in the ship's hold?" is about the hold, not the ship.
 _SHIP_ITSELF = re.compile(r"\b(fuel|tank|hull|jump range|credits|money|balance)\b", re.I)
+# Materials somewhere ("on this planet", "here") are the planet's, not your stock.
+_SOMEWHERE = re.compile(r"\b(planet\w*|worlds?|moons?|bod(y|ies)|here|ground|surface|sites?|rhino|crust)\b", re.I)
+# A species named in a Codex question is about the Codex, unless it's about here.
+_HERE_LIFE = re.compile(r"\b(here|could live|this (planet|world|moon|body)|on (it|this))\b", re.I)
+# What still makes a planet question a survey question too.
+_SURVEYING = re.compile(r"\b(survey|scan(ned|s)?|fss|honk|signals?|undiscovered|first discover\w*|valuable|bio\w*)\b", re.I)
 SCALE = {"B": "billion", "M": "million", "K": "thousand"}
 
 
 def topics_for(question):
     """The systems a question asks about, in a fixed order."""
     text = str(question or "")
-    found = [name for name, pattern in TOPICS.items() if pattern.search(text)]
+    found = {name for name, pattern in TOPICS.items() if pattern.search(text)}
     if "cargo" in found and "ship" in found and not _SHIP_ITSELF.search(text):
-        found.remove("ship")
-    return found
+        found.discard("ship")
+    if "materials" in found and _SOMEWHERE.search(text):
+        found.discard("materials")
+        found.add("planet")
+    if "planet" in found and "survey" in found and not _SURVEYING.search(text):
+        found.discard("survey")
+    if "world" in found and "survey" in found and not _SURVEYING.search(text):
+        found.discard("survey")
+    # "Reputation with the Federation" is the superpower, not a faction.
+    if "ranks" in found and "factions" in found and re.search(r"\b(empire|federation|alliance|navy|superpowers?)\b", text, re.I):
+        found.discard("factions")
+    if "codex" in found:
+        if not _HERE_LIFE.search(text):
+            found.discard("life")
+        if not re.search(r"\b(scan(ned|s)?|fss|honk|signals?|undiscovered)\b", text, re.I):
+            found.discard("survey")
+    return [name for name in TOPICS if name in found]
 
 
 # -- the lines --------------------------------------------------------------------
@@ -118,7 +171,7 @@ def survey_lines(system, scanned=0, total=0, bio_signals=0, bio_done=0, valuable
 
 
 def ship_lines(kind="", name="", jump_range=0, fuel_percent=None, cargo_tons=0, cargo_capacity=0, credits="",
-               hull_percent=None):
+               hull_percent=None, rebuy=None, legal=""):
     lines = []
     if kind:
         lines.append(f"Ship: {kind}" + (f", named {name}" if name else ""))
@@ -141,7 +194,18 @@ def ship_lines(kind="", name="", jump_range=0, fuel_percent=None, cargo_tons=0, 
         # "1.2B CR" as words: the model says "billion" whatever it's given.
         spoken = re.sub(r"(\d)([BMK]) CR$", lambda m: f"{m.group(1)} {SCALE[m.group(2)]} credits", credits)
         lines.append(f"Credits: {spoken.replace(' CR', ' credits')}")
+    if _whole(rebuy):
+        lines.append(f"Rebuy (the insurance to replace the ship): {_whole(rebuy):,} credits")
+    if legal:
+        lines.append(f"Legal status: {LEGAL_STATES.get(str(legal), re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', str(legal)).lower())}")
     return lines
+
+
+LEGAL_STATES = {
+    "Clean": "clean", "IllegalCargo": "carrying illegal cargo", "Speeding": "speeding", "Wanted": "wanted",
+    "Hostile": "hostile (wanted, with a large bounty)", "PassengerWanted": "carrying a wanted passenger",
+    "Warrant": "a warrant out for the commander", "Allied": "allied", "Thargoid": "flagged by Thargoid hostility",
+}
 
 
 def _journal_name(row):
@@ -309,6 +373,416 @@ def faction_lines(snap, system="", now=None, limit=7):
     taken = _number(snap.get("ts"))
     if taken and now is not None and now - taken > 36 * 3600:
         lines.append(f"These readings are {int((now - taken) // 86400)} days old")
+    return lines
+
+
+def _percent(value):
+    share = _number(value) or 0
+    return f"{round(share)}%" if share >= 1 else "under 1%"
+
+
+def _metres(value):
+    distance = _number(value)
+    if distance is None:
+        return ""
+    # In words: "300 m" came back as "30 meters".
+    return f"{distance / 1000:.1f} kilometres" if distance >= 1000 else f"{round(distance)} metres"
+
+
+def planet_lines(body, materials=(), forecast=(), ground="", sites=(), mining_locations=0, rigs=(), elsewhere=(),
+                 system="", site_limit=5, focus="materials"):
+    """A planet's materials, its ground and your mining sites on it (5.7.2).
+    The journal logs no ground sites: these are the ones you saved, and the
+    rigs you marked; what the ground tends to hold is the Rhino forecast."""
+    if not body:
+        lines = ["Not at or near a planet right now"]
+        if elsewhere:
+            lines.append(f"Saved mining sites in {system or 'this system'}: "
+                         + ", ".join(f"{count} on {name}" for name, count in elsewhere))
+        return lines
+    lines = []
+    # Asked where the sites are: the sites first, without the crust's makeup.
+    shown = [] if focus == "sites" else [row for row in materials or () if isinstance(row, dict) and row.get("name")][:6]
+    if shown:
+        lines.append(f"Raw materials on {body}, from its scan: "
+                     + ", ".join(f"{row['name']} {_percent(row.get('percent'))}" + (" (rare)" if row.get("rare") else "")
+                                 for row in shown))
+    if _whole(mining_locations) and focus != "sites":
+        lines.append(f"Mining locations its scan found on {body}: {_whole(mining_locations)}")
+    best = [row for row in forecast or () if isinstance(row, dict) and row.get("material")]
+    if best:
+        kind = f"{ground} ground" if ground else "Ground like this"
+        lines.append(f"{kind} tends to hold: " + ", ".join(
+            f"{row['material']} (at {round(_number(row.get('pct')) or 0)}% of sites like it"
+            + (f", about {_whole(row.get('median')):,} credits a tonne" if _whole(row.get("median")) else "") + ")"
+            for row in best))
+    ordered = sorted(sites or (), key=lambda row: (_number(row.get("distance_m")) is None, _number(row.get("distance_m")) or 0))
+    if ordered:
+        lines.append(f"Your saved mining sites on {body}: {len(ordered)}")
+        for row in ordered[:site_limit]:
+            what = str(row.get("materials") or "").strip() or ("a drill marker" if row.get("site_type") == "drill" else "")
+            # Name and distance first: it answered "where are the sites?" without either.
+            where = f", {_metres(row.get('distance_m'))} from here" if _metres(row.get("distance_m")) else ""
+            notes = []
+            if row.get("density"):
+                notes.append(f"{str(row['density']).lower()} density")
+            if row.get("depleted") or row.get("amount") == "Depleted":
+                notes.append("depleted")
+            elif row.get("amount"):
+                notes.append(f"{str(row['amount']).lower()} amount left")
+            tons = str(row.get("tons_left") or "")
+            if tons and tons != "Depleted":
+                notes.append(tons.replace("Estimated ", "about ").replace(" t left", " tonnes left").replace("–", " to "))
+            lines.append(f"Saved site {row.get('name') or 'without a name'}{where}: {what}"
+                         + (f" ({', '.join(notes)})" if notes else ""))
+        if len(ordered) > site_limit:
+            lines.append(f"And {len(ordered) - site_limit} more saved sites on {body}")
+    else:
+        lines.append(f"No saved mining sites on {body}")
+    marked = sorted(int(slot) for slot in rigs or ())
+    if marked:
+        # Not sites: "we have saved two rigs here".
+        # "rigs 1, 3" was read as three rigs.
+        numbered = " and ".join(f"rig {slot}" for slot in marked)
+        lines.append(f"Rigs you marked as deployed here (not sites): {len(marked)} rig{'' if len(marked) == 1 else 's'}, "
+                     f"{numbered}")
+    if elsewhere:
+        lines.append("Saved mining sites elsewhere in the system: " + ", ".join(f"{count} on {name}" for name, count in elsewhere))
+    return lines
+
+
+def _when(value):
+    """A journal time ("2026-01-31T00:34:48Z") or a number, as seconds; 0 if neither."""
+    number = _number(value)
+    if number is not None:
+        return number
+    try:
+        return datetime.strptime(str(value), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _ago(seconds):
+    days = int(max(0, seconds) // 86400)
+    if days < 1:
+        return "today"
+    if days < 2:
+        return "yesterday"
+    if days < 14:
+        return f"{days} days ago"
+    if days < 60:
+        return f"{days // 7} weeks ago"
+    return f"{days // 30} months ago"
+
+
+def codex_lines(rows, reference, region=None, region_name="", question="", here=(), now=None, latest=4):
+    """Your Codex (5.7.2): the biology you've logged (the index the Survey
+    flags use), named from Canonn's reference; for a species you name, the
+    colours logged and still to log; what you logged on this body."""
+    reference = reference or {}
+    logged = {}
+    for row in rows or ():
+        if len(row) < 3 or not str(row[1]).startswith("$Codex_Ent_"):
+            continue
+        name, category = reference.get(row[1], ("", ""))
+        if category and category != "Biology":
+            continue
+        info = logged.setdefault(row[1], {"first": _when(row[0]), "regions": set(), "name": name})
+        info["first"] = min(info["first"], _when(row[0]))
+        info["regions"].add(row[2])
+    if not logged:
+        return ["No biology logged in the Codex yet"]
+
+    def species(entry):
+        return logged[entry]["name"].partition(" - ")[0] or entry
+
+    named = {entry: info for entry, info in logged.items() if info["name"]}
+    kinds = {species(entry) for entry in named}
+    regions = {region_id for info in logged.values() for region_id in info["regions"] if region_id is not None}
+    # "in 26 regions" became "26 regions of the Inner Orion Spur": galactic regions, said so.
+    lines = [f"Biology logged in the commander's Codex: {len(kinds)} species ({len(logged)} colours in all), "
+             f"across {len(regions)} different galactic region{'' if len(regions) == 1 else 's'}"]
+    if region is not None:
+        count = sum(1 for info in logged.values() if region in info["regions"])
+        lines.append(f"Logged in {region_name or 'this region'}: {count} colour{'' if count == 1 else 's'}")
+    words = f" {str(question or '').casefold()} "
+    every = {}
+    for entry, (name, category) in reference.items():
+        if category == "Biology" and " - " in name:
+            kind, _separator, colour = name.partition(" - ")
+            every.setdefault(kind, {})[colour] = entry
+    asked = sorted((kind for kind in every if f" {kind.casefold()}" in words), key=len, reverse=True)[:2]
+    for kind in asked:
+        colours = every[kind]
+        have = sorted(colour for colour, entry in colours.items() if entry in logged)
+        missing = sorted(colour for colour, entry in colours.items() if entry not in logged)
+        lines.append(f"{kind}: {len(have)} of {len(colours)} colours logged" + (f" ({', '.join(have)})" if have else ""))
+        if missing:
+            # With their count: it said "ten remain", a number it wasn't given.
+            lines.append(f"{kind} colours not logged yet ({len(missing)}): {', '.join(missing)}")
+        if region is not None and have:
+            in_region = any(region in logged[colours[colour]]["regions"] for colour in have)
+            lines.append(f"{kind} {'is' if in_region else 'is not yet'} logged in {region_name or 'this region'}")
+    if here:
+        lines.append("Logged on this body: " + ", ".join(reference.get(entry, (entry, ""))[0] or entry for entry in here))
+    if now is not None and not asked:
+        newest = sorted(named.items(), key=lambda item: -item[1]["first"])[:latest]
+        if newest:
+            lines.append("Most recently logged: " + ", ".join(f"{info['name']} ({_ago(now - info['first'])})"
+                                                              for _entry, info in newest))
+    return lines
+
+
+def _hours_left(expiry, now):
+    left = _when(expiry) - now if expiry else None
+    if left is None or not _when(expiry):
+        return ""
+    if left <= 0:
+        return "expired"
+    hours = left / 3600
+    if hours < 1:
+        return f"{max(1, round(left / 60))} minutes left"
+    if hours < 48:
+        return f"{round(hours)} hours left"
+    return f"{round(hours / 24)} days left"
+
+
+def missions_lines(missions, now, limit=6):
+    """Your active missions (5.7.2): where each goes, what it pays and the time
+    left, the soonest to run out first."""
+    rows = [row for row in missions or () if isinstance(row, dict)]
+    if not rows:
+        return ["No active missions"]
+    total = sum(_whole(row.get("reward")) or 0 for row in rows)
+    lines = [f"Active missions: {len(rows)}" + (f", paying {total:,} credits in all" if total else "")]
+    rows.sort(key=lambda row: _when(row.get("expiry")) or float("inf"))
+    for row in rows[:limit]:
+        where = ", ".join(str(part) for part in (row.get("destination_station") or row.get("destination_settlement"),
+                                                 row.get("destination_system")) if part)
+        parts = [f"to {where}" if where else ""]
+        if row.get("commodity") and _whole(row.get("count")):
+            parts.append(f"{_whole(row['count'])} tonnes of {row['commodity']}")
+        if row.get("target") and _whole(row.get("kill_count")):
+            parts.append(f"{_whole(row['kill_count'])} kills of {row['target']}")
+        if _whole(row.get("reward")):
+            parts.append(f"pays {_whole(row['reward']):,} credits")
+        left = _hours_left(row.get("expiry"), now)
+        if left:
+            parts.append(left)
+        if row.get("illegal"):
+            parts.append("illegal")
+        name = str(row.get("name") or "A mission").strip()
+        lines.append(f"{name}: " + ", ".join(part for part in parts if part))
+    if len(rows) > limit:
+        lines.append(f"And {len(rows) - limit} more missions")
+    return lines
+
+
+RANK_KINDS = (("Combat", "Combat"), ("Trade", "Trade"), ("Explore", "Exploration"), ("Exobiologist", "Exobiology"),
+              ("Soldier", "Mercenary"), ("CQC", "CQC"), ("Empire", "Imperial Navy"), ("Federation", "Federal Navy"))
+
+
+def ranks_lines(ranks, progress=None, reputation=None, names=None):
+    """Your ranks with their progress to the next, and how the superpowers see
+    you (5.7.2). ``names(kind, number)`` is the rank's name (core.ranks.name)."""
+    ranks, progress, reputation = ranks or {}, progress or {}, reputation or {}
+    lines = []
+    for key, label in RANK_KINDS:
+        number = _whole(ranks.get(key))
+        title = names(key, number) if callable(names) and number is not None else ""
+        if not title or title == "None":
+            continue
+        share = _whole(progress.get(key))
+        lines.append(f"{label}: {title}" + (f", {share}% of the way to the next rank" if share else ""))
+    standing = [f"{power} {reputation_word(reputation.get(power))}" for power in ("Federation", "Empire", "Alliance", "Independent")
+                if reputation_word(reputation.get(power))]
+    if standing:
+        lines.append("Superpower reputation: " + ", ".join(standing))
+    return lines or ["No ranks on record yet (the journal lists them when the game starts)"]
+
+
+def carrier_lines(carrier, now=None):
+    """Your fleet carrier (5.7.2), as its tracker has it."""
+    carrier = carrier or {}
+    if not carrier.get("carrier_id") and not carrier.get("name") and not carrier.get("callsign"):
+        return ["No fleet carrier on record"]
+    name = str(carrier.get("name") or "").strip()
+    callsign = str(carrier.get("callsign") or "").strip()
+    title = f"{name} ({callsign})" if name and callsign else name or callsign
+    lines = [f"The carrier {title}" + (f" is in {carrier['system']}" if carrier.get("system") else "")]
+    status = str(carrier.get("status") or "")
+    if status == "jumping" and carrier.get("jump_destination"):
+        when = _hours_left(carrier.get("jump_departure_time"), now) if now is not None else ""
+        lines.append(f"Jumping to {carrier['jump_destination']}" + (f", departing with {when}" if when and when != "expired" else ""))
+    elif status.startswith("cooldown"):
+        lines.append("Its frame shift drive is cooling down after a jump")
+    fuel = _whole(carrier.get("fuel_level"))
+    if fuel is not None:
+        lines.append(f"Tritium in its tank: {fuel} of {_whole(carrier.get('fuel_capacity')) or 1000} tonnes"
+                     + (" (estimated)" if carrier.get("fuel_level_estimated") else ""))
+    balance = _whole(carrier.get("balance"))
+    if balance is not None:
+        available = _whole(carrier.get("available_balance"))
+        lines.append(f"Its balance: {balance:,} credits" + (f", {available:,} available" if available is not None else ""))
+    if carrier.get("docking_access"):
+        access = {"all": "everyone", "none": "no one", "friends": "friends only", "squadron": "the squadron only",
+                  "squadronfriends": "the squadron and friends"}.get(str(carrier["docking_access"]).casefold(),
+                                                                     str(carrier["docking_access"]))
+        lines.append(f"Docking open to {access}" + (", notorious commanders too" if carrier.get("allow_notorious") else ""))
+    free = _whole(carrier.get("space_free"))
+    if free is not None:
+        lines.append(f"Free space: {free:,} tonnes")
+    if carrier.get("pending_decom"):
+        lines.append("It is set to be decommissioned")
+    return lines
+
+
+def data_lines(exploration=0, biology=0):
+    """The data you're carrying and haven't sold (5.7.2): lost if the ship is."""
+    exploration, biology = _whole(exploration) or 0, _whole(biology) or 0
+    if not exploration and not biology:
+        return ["No unsold exploration or exobiology data"]
+    lines = []
+    if exploration:
+        lines.append(f"Unsold exploration data: about {exploration:,} credits (sold at Universal Cartographics)")
+    if biology:
+        lines.append(f"Unsold exobiology samples: about {biology:,} credits (sold at Vista Genomics)")
+    if exploration and biology:
+        lines.append(f"Together about {exploration + biology:,} credits, lost if the ship is destroyed")
+    return lines
+
+
+WORLD_DETAIL = re.compile(r"\b(big|size|radius|day|rotation|spin|tidal\w*|ring\w*)\b", re.I)
+
+
+def world_lines(item, question=""):
+    """The world you're at or name (5.7.2), from its scan."""
+    if not item:
+        return ["No scanned world here to describe"]
+    name = str(item.get("full_name") or item.get("name") or "This world")
+    if item.get("is_star") or item.get("star_type"):
+        star = str(item.get("star_type") or "")
+        kind = ("a neutron star" if star == "N" else "a black hole" if star in ("H", "SupermassiveBlackHole")
+                else "a white dwarf" if star.startswith("D") else f"a star of class {star}" if star else "a star")
+        lines = [f"{name}: {kind}"]
+    else:
+        kind = str(item.get("planet_class") or item.get("class") or "world")
+        if item.get("terraformable"):
+            kind = f"terraformable {kind}"
+        lines = [f"{name}: {'an' if kind[:1].casefold() in 'aeiou' else 'a'} {kind}"
+                 + (", landable" if item.get("landable") else ", not landable" if item.get("landable") is False else "")]
+        gravity = _number(item.get("gravity_g"))
+        if gravity:
+            lines.append(f"Gravity: {gravity:.2f} g" + (" (heavy)" if gravity > 2 else ""))
+        temperature = _number(item.get("surface_temp"))
+        if temperature:
+            lines.append(f"Surface temperature: {round(temperature - 273.15)} degrees Celsius")
+        air = str(item.get("atmosphere_type") or item.get("atmosphere") or "").strip()
+        lines.append(f"Atmosphere: {air}" if air and air.casefold() not in {"none", "no atmosphere"} else "No atmosphere")
+        volcanism = str(item.get("volcanism") or "").strip()
+        if volcanism and volcanism.casefold() != "no volcanism":
+            lines.append(f"Volcanism: {volcanism}")
+    distance = _number(item.get("distance_to_arrival"))
+    if distance:
+        lines.append(f"Distance from the arrival star: {distance:,.0f} light seconds")
+    if WORLD_DETAIL.search(str(question or "")):
+        radius = _number(item.get("radius"))
+        if radius:
+            lines.append(f"Radius: {radius / 1000:,.0f} kilometres")
+        rotation = _number(item.get("rotation_period"))
+        if rotation:
+            lines.append(f"One rotation takes {abs(rotation) / 86400:.1f} days"
+                         + (" (tidally locked)" if item.get("tidal_lock") else ""))
+        if item.get("rings"):
+            lines.append("It has rings")
+    scanned, mapped = _whole(item.get("reward")), _whole(item.get("dss_reward"))
+    if scanned or mapped:
+        lines.append("Worth about " + " and ".join(part for part in (
+            scanned and f"{scanned:,} credits scanned", mapped and f"{mapped:,} credits mapped") if part))
+    firsts = [label for label, first in (("discover it", item.get("was_discovered") is False),
+                                         ("map it", item.get("was_mapped") is False and not item.get("is_star")),
+                                         ("set foot on it", item.get("first_footfall"))) if first]
+    if firsts:
+        lines.append("The commander was the first to " + " and ".join(firsts))
+    return lines
+
+
+# The parts of your record, by what you ask; asked nothing in particular, a little of each.
+RECORD = (
+    (re.compile(r"\b(jumps?|distance|travel\w*|far|visited|systems|explor\w*|scan\w*|time|played|hours|long)\b", re.I),
+     "Exploration", (("Time_Played", "time played", "hours"), ("Systems_Visited", "systems visited", ""),
+                     ("Total_Hyperspace_Jumps", "hyperspace jumps", ""),
+                     ("Total_Hyperspace_Distance", "light years jumped", ""),
+                     ("Greatest_Distance_From_Start", "farthest from the starting system, in light years", ""),
+                     ("Planets_Scanned_To_Level_3", "bodies scanned in detail", ""),
+                     ("Exploration_Profits", "earned from exploration", "credits"))),
+    (re.compile(r"\b(bio\w*|organic\w*|species|genus|genera|exobio\w*)\b", re.I),
+     "Exobiology", (("Organic_Species_Encountered", "species encountered", ""),
+                    ("Organic_Genus_Encountered", "genera encountered", ""), ("First_Logged", "first logged", ""),
+                    ("Organic_Data_Profits", "earned from exobiology", "credits"))),
+    (re.compile(r"\b(combat|bount\w*|kills?|fight\w*|bonds?)\b", re.I),
+     "Combat", (("Bounties_Claimed", "bounties claimed", ""), ("Bounty_Hunting_Profit", "earned from bounties", "credits"),
+                ("Combat_Bonds", "combat bonds", ""), ("Combat_Bond_Profits", "earned from combat bonds", "credits"))),
+    (re.compile(r"\b(trad\w*|market\w*)\b", re.I),
+     "Trading", (("Markets_Traded_With", "markets traded with", ""), ("Market_Profits", "earned from trade", "credits"),
+                 ("Resources_Traded", "tonnes traded", ""))),
+    (re.compile(r"\b(min(ing|ed)|ores?)\b", re.I),
+     "Mining", (("Mining_Profits", "earned from mining", "credits"), ("Quantity_Mined", "tonnes mined", ""))),
+    (re.compile(r"\b(wealth|worth|rich|insurance|died|deaths?|destroyed|lost)\b", re.I),
+     "Bank_Account", (("Current_Wealth", "current wealth", "credits"), ("Insurance_Claims", "insurance claims (ships lost)", ""),
+                      ("Spent_On_Insurance", "spent on insurance", "credits"))),
+)
+RECORD_EVERYDAY = (("Exploration", "Time_Played", "time played", "hours"), ("Exploration", "Systems_Visited", "systems visited", ""),
+                   ("Exploration", "Total_Hyperspace_Jumps", "hyperspace jumps", ""),
+                   ("Exploration", "Total_Hyperspace_Distance", "light years jumped", ""),
+                   ("Bank_Account", "Current_Wealth", "current wealth", "credits"))
+
+
+def record_lines(statistics, question=""):
+    """Your lifetime record (5.7.2), from the game's own Statistics."""
+    statistics = statistics or {}
+    if not isinstance(statistics, dict) or not statistics:
+        return ["No lifetime record yet (the game sends it when it starts)"]
+
+    def line(section, key, label, unit):
+        value = _number((statistics.get(section) or {}).get(key))
+        if value is None:
+            return None
+        if unit == "hours":
+            return f"Lifetime {label}: {round(value / 3600):,} hours"
+        return f"Lifetime {label}: {round(value):,}" + (" credits" if unit == "credits" else "")
+
+    text = str(question or "")
+    chosen = [(section, key, label, unit) for pattern, section, rows in RECORD if pattern.search(text)
+              for key, label, unit in rows]
+    lines = [found for found in (line(*row) for row in chosen or RECORD_EVERYDAY) if found]
+    return lines[:10] or ["No lifetime record yet (the game sends it when it starts)"]
+
+
+def materials_lines(inventory, question="", top=5):
+    """Your engineering materials (5.7.2): the ones you named, else each kind's
+    total and the most plentiful raw ones."""
+    inventory = inventory or {}
+    kinds = (("raw", "Raw"), ("manufactured", "Manufactured"), ("encoded", "Encoded"))
+    rows = {key: [entry for entry in (inventory.get(key) or {}).values()
+                  if isinstance(entry, dict) and entry.get("name") and (_whole(entry.get("count")) or 0) > 0]
+            for key, _label in kinds}
+    if not any(rows.values()):
+        return ["No engineering materials on record yet (the journal lists them when the game starts)"]
+    words = f" {str(question or '').casefold()} "
+    named = [(label, entry) for key, label in kinds for entry in rows[key] if f" {str(entry['name']).casefold()}" in words]
+    if named:
+        return [f"{entry['name']}: {_whole(entry['count'])} ({label.lower()})" for label, entry in named[:10]]
+    asked = [key for key, label in kinds if label.casefold() in words]
+    lines = [f"{label} materials: {sum(_whole(entry['count']) for entry in rows[key]):,} in all, "
+             f"{len(rows[key])} kind{'' if len(rows[key]) == 1 else 's'}"
+             for key, label in kinds if rows[key] and (not asked or key in asked)]
+    for key, label in kinds:
+        if asked and key not in asked or not asked and key != "raw":
+            continue
+        most = sorted(rows[key], key=lambda entry: (-_whole(entry["count"]), str(entry["name"])))[:top]
+        if most:
+            lines.append(f"Most plentiful {label.lower()}: " + ", ".join(f"{entry['name']} {_whole(entry['count'])}" for entry in most))
     return lines
 
 
