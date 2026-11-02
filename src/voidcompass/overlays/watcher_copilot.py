@@ -1033,13 +1033,37 @@ def uplink_request(text, commodities):
 PADS = {"L": "large", "M": "medium", "S": "small"}
 
 
+def uplink_sell_results(rows, now=None):
+    """Two distinct buyers: reports within a day first, then the best price."""
+    now = datetime.now(timezone.utc).timestamp() if now is None else now
+    unique = {}
+    def report_time(row):
+        updated = _number(row.get("updated")) or 0
+        return updated if 0 < updated <= now else 0
+    for row in rows or ():
+        if not row:
+            continue
+        key = row.get("market_id") or (str(row.get("station") or "").casefold(), str(row.get("system") or "").casefold())
+        updated = report_time(row)
+        if key not in unique or updated > report_time(unique[key]):
+            unique[key] = row
+    def rank(row):
+        updated = report_time(row)
+        freshness = 0 if updated and now - updated <= 86400 else 1 if updated else 2
+        return freshness, -(_number(row.get("price")) or 0), _number(row.get("distance")) or 0
+    return sorted(unique.values(), key=rank)[:2]
+
+
 def uplink_lines(kind, commodity, best=(), nearest=(), system="", radius=0, now=None, error=""):
-    """What the uplink found (5.7.3): the best price within your Sell cargo
-    radius and the nearest market, each with its station, system, distance,
-    price, demand or stock and pads."""
+    """Selling: two buyers, day-old-or-newer reports first. Buying: the best
+    prices and nearest market. Each includes the station and its details."""
     if error:
         return [f"The uplink to Spansh failed: {error}"]
     best, nearest = [row for row in best or () if row], [row for row in nearest or () if row]
+    if kind == "sell":
+        now = datetime.now(timezone.utc).timestamp() if now is None else now
+        best = uplink_sell_results([*best, *nearest], now)
+        nearest = []
     station_does = "buys" if kind == "sell" else "sells"
     if not best and not nearest:
         return [f"Through the uplink: Spansh knows no station near {system or 'here'} that {station_does} {commodity}"]
@@ -1060,15 +1084,27 @@ def uplink_lines(kind, commodity, best=(), nearest=(), system="", radius=0, now=
             parts.append("on a planet")
         updated = _number(row.get("updated"))
         if now is not None and updated and now - updated >= 86400:
-            parts.append(f"prices {int((now - updated) // 86400)} days old")
+            days = int((now - updated) // 86400)
+            parts.append(f"prices {days} {'day' if days == 1 else 'days'} old")
+        elif kind == "sell":
+            if not updated or updated > now:
+                parts.append("price age unknown")
+            elif now - updated < 3600:
+                parts.append("prices less than an hour old")
+            else:
+                hours = int((now - updated) // 3600)
+                parts.append(f"prices {hours} {'hour' if hours == 1 else 'hours'} old")
         return f"{row.get('station') or 'A station'} in {row.get('system') or 'an unknown system'}: " + ", ".join(parts)
 
     verb = "sell" if kind == "sell" else "buy"
     lines = []
     if best:
-        lines.append(f"Through the uplink, the best place to {verb} {commodity} within {radius} light years: {describe(best[0])}")
+        if kind == "sell":
+            lines.append(f"Through the uplink, places to sell {commodity} within {radius} light years, prices from the last 24 hours first: {describe(best[0])}")
+        else:
+            lines.append(f"Through the uplink, the best place to {verb} {commodity} within {radius} light years: {describe(best[0])}")
         if len(best) > 1:
-            lines.append(f"Next best: {describe(best[1])}")
+            lines.append(f"{'Second result' if kind == 'sell' else 'Next best'}: {describe(best[1])}")
     def same(one, other):
         def key(row):
             return row.get("market_id") or (row.get("station"), row.get("system"))

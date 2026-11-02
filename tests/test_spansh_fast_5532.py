@@ -47,6 +47,15 @@ class FastSpanshTests(unittest.TestCase):
         self.assertEqual(session.post.call_count, 1)
         self.assertEqual(again["results"][0]["name"], "A")
 
+    def test_optional_market_age_filter_is_relative_and_does_not_change_other_callers(self):
+        with patch.object(spansh, "_call", return_value={}) as call:
+            spansh.commodity_stations("sell", "Sol", "Gold", 20, sort="price", max_age_days=1)
+            filters = call.call_args.kwargs["body"]["filters"]
+            self.assertEqual(filters["market_updated_at"], {"comparison": "<=>", "value": ["now-1d", "now"]})
+            self.assertEqual(filters["market"][0]["demand"]["value"][0], 20)
+            spansh.commodity_stations("sell", "Sol", "Gold")
+            self.assertNotIn("market_updated_at", call.call_args.kwargs["body"]["filters"])
+
     def test_a_fresh_station_check_skips_the_cache(self):
         session = Mock()
         session.get.return_value = reply(data={"record": {"name": "Jameson Memorial"}})

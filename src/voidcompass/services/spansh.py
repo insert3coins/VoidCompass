@@ -741,7 +741,7 @@ def station_types():
 
 
 def commodity_stations(kind, reference_system, commodity, amount=1, size=30,
-                       large_pad=False, carriers=True, planetary=True, radius=None, sort="distance"):
+                       large_pad=False, carriers=True, planetary=True, radius=None, sort="distance", max_age_days=None):
     """Stations near a system that buy (``kind`` "sell": where to sell it) or
     sell (``kind`` "buy": where to buy it) a commodity, by Spansh's exact
     English name, nearest first, each with its whole market.
@@ -752,7 +752,8 @@ def commodity_stations(kind, reference_system, commodity, amount=1, size=30,
     carrier and planetary choices are filtered by Spansh too, so the nearest
     ``size`` are all ones you can use. ``radius`` (light years) keeps the
     search within that distance; ``sort`` "price" asks for the best payers
-    (or the cheapest sellers) first instead of the nearest."""
+    (or the cheapest sellers) first instead of the nearest. ``max_age_days``
+    limits market reports using Spansh's relative timestamp filter."""
     if kind not in ("buy", "sell"):
         raise ValueError(kind)
     if not reference_system or not commodity:
@@ -763,6 +764,9 @@ def commodity_stations(kind, reference_system, commodity, amount=1, size=30,
               side: {"value": [max(1, int(amount or 1)), 999999999], "comparison": "<=>"},
               price: {"value": [1, 999999999], "comparison": "<=>"}}
     filters = {"market": [wanted]}
+    if max_age_days is not None:
+        days = max(1, int(max_age_days))
+        filters["market_updated_at"] = {"comparison": "<=>", "value": [f"now-{days}d", "now"]}
     if large_pad:
         filters["has_large_pad"] = {"value": True}
     if not planetary:

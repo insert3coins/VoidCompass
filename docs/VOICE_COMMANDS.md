@@ -345,6 +345,8 @@ In **Market uplink**, edit the buy command. For example:
 
 Save it, then say or type "find sellers for tritium" or "source gold". Keep `{commodity}` in every phrase for this command; replace it with the actual commodity when speaking. It remains a **buy** search regardless of its display name. Edit the separate sell command for buyer searches.
 
+For **where to sell** questions, the Watcher asks for prices updated within the last **24 hours** first and returns **two distinct stations**, ranked by sell price within that recent group. If fewer than two recent stations are found, it fills the remaining places with older reports and states their age; unknown ages are labelled. It gives fewer results when Spansh knows fewer buyers, and does not add a third nearest-station result. Your Sell cargo radius, pad, carrier and planetary filters still apply. Buying searches keep their existing best-price and nearest-station answers.
+
 Trading searches must be enabled in Settings > Integrations. The uplink uses the Trading page's search options and returns the market data it receives; renaming does not change its search radius or station filters.
 
 ### Change a greeting or the programme rundown

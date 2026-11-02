@@ -592,9 +592,8 @@ class DashboardWatcherVoiceMixin:
 
     def _watcher_uplink(self, text, request, rng=None):
         """The uplink (5.7.3): the Trading page's Spansh search for where to
-        sell (or buy) a commodity, the best price within your Sell cargo
-        radius and the nearest, in the background. Its reply now; its answer
-        from what Spansh sends when it comes."""
+        sell (or buy) a commodity. Selling favours reports within a day and
+        returns two distinct buyers within your Sell cargo radius."""
         if not request.get("kind"):
             return watcher_copilot.reply("uplink_what", rng)
         if not self._trading_online():
@@ -609,6 +608,15 @@ class DashboardWatcherVoiceMixin:
             self._trading_spansh_names()
             name = self.trading_names.spansh_name(commodity)
             choice = {"large_pad": options["large"], "carriers": options["carriers"], "planetary": options["planetary"]}
+            if kind == "sell":
+                fresh = trade_market.parse_commodity(spansh.commodity_stations(
+                    kind, system, name, amount, size=5, sort="price", radius=options["radius"], max_age_days=1, **choice), name, kind)
+                best = watcher_copilot.uplink_sell_results(fresh, time.time())
+                if len(best) < 2:
+                    older = trade_market.parse_commodity(spansh.commodity_stations(
+                        kind, system, name, amount, size=5, sort="price", radius=options["radius"], **choice), name, kind)
+                    best = watcher_copilot.uplink_sell_results([*fresh, *older], time.time())
+                return {"name": name, "best": best, "near": []}
             best = trade_market.parse_commodity(spansh.commodity_stations(
                 kind, system, name, amount, size=5, sort="price", radius=options["radius"], **choice), name, kind)
             near = trade_market.parse_commodity(spansh.commodity_stations(kind, system, name, amount, size=5, **choice),
@@ -627,7 +635,7 @@ class DashboardWatcherVoiceMixin:
 
         # A cached reply answers at once: after this question is in, not inside it.
         self._trading_task("watcher-uplink", work, lambda result, error: self._ui_post(done, result, error),
-                           cache_key=("watcher-uplink", kind, system, commodity, amount, tuple(sorted(options.items()))))
+                           cache_key=("watcher-uplink-fresh-two", kind, system, commodity, amount, tuple(sorted(options.items()))))
         return {"waiting": True, "say": watcher_copilot.reply("uplink_opening", rng, commodity=commodity, verb=kind)}
 
     def _watcher_mind_watch(self):
