@@ -20,7 +20,8 @@ from voidcompass.services.music_library import MusicLibrary
 from voidcompass.services.music_scenes import FADES, SCENES, follow_settings, scene_of
 
 MUSIC_REPEAT = ("off", "all", "one")
-MUSIC_REMOTE = ("toggle", "next", "previous")
+# Play and pause as well as the toggle (5.7.3): the Watcher says which it means.
+MUSIC_REMOTE = ("toggle", "next", "previous", "play", "pause")
 # The playing position is saved this often at most (track, playlist and
 # settings changes are saved at once), so config.json is not rewritten
 # every second while music plays.

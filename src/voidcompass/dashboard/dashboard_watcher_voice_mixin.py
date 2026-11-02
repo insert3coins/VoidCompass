@@ -14,17 +14,18 @@ import re
 import time
 
 from voidcompass.core import companion_features, ranks
+from voidcompass.core.overlay_registry import OVERLAY_SPECS
 from voidcompass.exploration import codex_index
-from voidcompass.exploration.galactic_regions import find_region, region_names
-from voidcompass.core.platform_support import application_dir
-from voidcompass.llm import library_sources, llm_assets
-from voidcompass.llm.llm_embed import Embedder
+from voidcompass.exploration.galactic_regions import region_names
+from voidcompass.core.ship_names import ship_name
+from voidcompass.core.watcher_retirement import retired_speech
 from voidcompass.mining.planet_materials import PlanetMaterialsStore
 from voidcompass.mining.rhino_intelligence import rhino_forecast, surface_distance_m
 from voidcompass.overlays import (
-    watcher_copilot, watcher_deeper, watcher_habits, watcher_knowing, watcher_llm, watcher_mind, watcher_name,
-    watcher_voice_lore, watcher_world,
+    watcher_copilot, watcher_habits, watcher_mind, watcher_name, watcher_voice_lore,
 )
+from voidcompass.services import spansh
+from voidcompass.trading import market as trade_market
 from voidcompass.trading.commodities import symbol
 from voidcompass.overlays.heartbeat_hud import HEARTBEAT_TEXT_SIZES, heartbeat_text_size, thought_side_setting
 from voidcompass.voice import voice_assets
@@ -45,12 +46,6 @@ COMMODITY_ALIASES = {"ltd": "Low Temperature Diamonds", "ltds": "Low Temperature
                      "vo": "Void Opal", "vos": "Void Opal"}
 # "Where are the sites?" wants the sites first, not the crust's makeup.
 SITES_ASKED = re.compile(r"\b(sites?|rigs?|deposits?|drill\w*|where)\b", re.I)
-# A card from your sources is never kept if it names what the Watcher never
-# speaks of, or reads like orders to it (a page's text is only ever reference).
-SOURCE_REFUSED = re.compile("|".join((
-    watcher_llm.MYSTERY.pattern, watcher_llm.BANNED.pattern,
-    r"ignore\s+(all|any|previous|the\s+above)|disregard\s+(all|previous)|you\s+are\s+now\b|new\s+instructions",
-)), re.I)
 
 
 def _asked_words(question):
@@ -72,24 +67,17 @@ class DashboardWatcherVoiceMixin:
         return bool(self.config.get("watcher_voice_enabled")) and voice_assets.installed()
 
     def _watcher_voice_attach(self, hud):
-        """A new Watcher orb: give it the voice, and its own words."""
+        """A new Watcher orb: attach its speaker and the ship's plain answers."""
         if hud is None:
             return
         hud.voice_listener = self._watcher_voice_say
         self._watcher_voice_sync()
+        if self.config.get("watcher_listen_enabled"):
+            self._watcher_listener().warm()
         mind = getattr(hud, "mind", None)
         if mind is not None:
-            mind.llm = self._watcher_llm()
-            mind.facts_provider = self._watcher_llm_facts
-            mind.lookup_provider = self._watcher_llm_lookup
+            mind.lookup_provider = self._watcher_lookup
             mind.action_provider = self._watcher_mind_action
-            mind.on_words = lambda _key: self._ui_post(self._schedule_html_dashboard_publish, key="watcher-mind-words")
-            # Its mood and trust colour how it speaks.
-            mind.llm.feeling_provider = lambda: watcher_deeper.words_for(mind.memory)
-        self._watcher_llm().sync()
-        # 5.7.1: its library search model, for those who woke it before it came.
-        if self._watcher_mind_needs_download() and self._watcher_llm().installed():
-            self._watcher_mind_start_download()
 
     def _watcher_voice_say(self, words, key=None, feel=None):
         if (getattr(self, "_closing", False) or self._watcher_voice_boot_held()
@@ -169,119 +157,18 @@ class DashboardWatcherVoiceMixin:
         return levels
 
     def _watcher_voice_close(self):
-        """App shutdown: silent at once, the engine stopped, any download
-        dropped; its own words' model unloaded."""
-        for name in ("_watcher_voice_download", "_watcher_mind_download"):
-            download = getattr(self, name, None)
-            if download is not None:
-                download.cancel()
+        """Stop the voice, hearing and any voice download on app shutdown."""
+        download = getattr(self, "_watcher_voice_download", None)
+        if download is not None:
+            download.cancel()
         speaker = getattr(self, "_watcher_voice", None)
         if speaker is not None:
             speaker.close()
-        llm = getattr(self, "_watcher_mind_llm", None)
-        if llm is not None:
-            llm.close()
-        sources = getattr(self, "_watcher_source_library", None)
-        if sources is not None:
-            sources._closing = True
-        embedder = getattr(self, "_watcher_search_model", None)
-        if embedder is not None:
-            embedder.close()
         self._watcher_listen_close()
 
-    # -- its own words (5.7.1, experimental) ------------------------------------
-    def _watcher_llm(self):
-        llm = getattr(self, "_watcher_mind_llm", None)
-        if llm is None:
-            llm = watcher_llm.WatcherLLM(settings=lambda: self.config)
-            # Loading, ready, failed or stopped: the Watcher page shows it at once.
-            llm.on_change = lambda: self._ui_post(self._watcher_mind_watch, key="watcher-mind-state")
-            # What you asked, looked up in your own sources too.
-            llm.library_provider = lambda question: self._watcher_sources().for_prompt(question)
-            self._watcher_mind_llm = llm
-        return llm
+    # -- plain answers --------------------------------------------------------
 
-    def _watcher_embedder(self):
-        """Its library search by meaning (llm_embed): one small model on the CPU."""
-        embedder = getattr(self, "_watcher_search_model", None)
-        if embedder is None:
-            embedder = self._watcher_search_model = Embedder()
-        return embedder
-
-    def _watcher_sources(self):
-        """Your own sources for its library, kept in Void Compass's folder, and
-        searched (by meaning, when its search model is here) with its own cards."""
-        sources = getattr(self, "_watcher_source_library", None)
-        if sources is None:
-            sources = library_sources.SourceLibrary(
-                application_dir() / "library", refused=SOURCE_REFUSED, embedder=self._watcher_embedder(),
-                builtin=lambda: [{"title": card["title"], "text": card["text"], "subject": subject["subject"]}
-                                 for subject in watcher_world.library() for card in subject["cards"]],
-                on_change=lambda: self._ui_post(self._schedule_html_dashboard_publish, key="watcher-library"))
-            self._watcher_source_library = sources
-            sources.fill_vectors()
-        return sources
-
-    def _watcher_mind_needs_download(self):
-        """Its words on, and the model or its search model still to fetch."""
-        return bool(self.config.get("watcher_llm_enabled")) and not (
-            self._watcher_llm().installed() and llm_assets.embedder_installed())
-
-    def _html_watcher_sources(self):
-        sources = self._watcher_sources()
-        note, when = getattr(self, "_watcher_source_note", ("", 0.0))
-        query = getattr(self, "_watcher_source_query", "")
-        return {
-            "list": sources.sources(),
-            "running": sources.running(),
-            "state": dict(sources.state),
-            "cards": sources.card_count(),
-            "note": note if time.time() - when < 12 else "",
-            "query": query,
-            "results": [{"title": card["title"], "text": card["text"][:420], "host": card["host"],
-                         "subject": card.get("subject", ""), "own": bool(card.get("own"))}
-                        for card in sources.search(query, 24)] if query else [],
-            # Search by meaning: its model here, and cards still being read for it.
-            "meaning": self._watcher_embedder().available(),
-            "indexing": dict(sources.indexing),
-            "pages": list(library_sources.PAGE_CHOICES),
-        }
-
-    def _watcher_llm_facts(self):
-        """What's true right now, for its own words: only what the journal says."""
-        ship = getattr(self, "cmdr_ship", None) or {}
-        kind = watcher_world.ship_name(ship.get("ship")) or watcher_world.ship_name(ship.get("ship_localised")) \
-            or str(ship.get("ship_localised") or "")
-        station = str(getattr(self, "current_station_name", "") or "")
-        body = str(getattr(self, "current_body_name", "") or "")
-        if getattr(self, "current_on_foot", False):
-            doing = f"on foot at {station}" if getattr(self, "current_docked", False) and station else "on foot"
-        elif getattr(self, "current_in_srv", False):
-            doing = f"driving the SRV on {body}" if body else "driving the SRV"
-        elif getattr(self, "current_docked", False):
-            doing = f"docked at {station}" if station else "docked"
-        elif getattr(self, "current_landed", False):
-            doing = f"landed on {body}" if body else "landed"
-        elif int(getattr(self, "current_status_flags", 0) or 0) & 0x10:
-            doing = "in supercruise"
-        else:
-            doing = "flying"
-        facts = {"system": str(getattr(self, "current_sys", "") or ""), "ship": kind,
-                 "ship name": str(ship.get("ship_name") or ""), "doing": doing}
-        if body and not getattr(self, "current_docked", False):
-            facts["near"] = body
-        coords = getattr(self, "current_coords", None)
-        try:
-            x, y, z = (float(value) for value in list(coords)[:3])
-            region = find_region(x, y, z)
-            if region:
-                facts["region"] = region[1]
-            facts["distance from Sol"] = f"{(x * x + y * y + z * z) ** .5:,.0f} light years"
-        except (TypeError, ValueError):
-            pass
-        return {key: value for key, value in facts.items() if value}
-
-    def _watcher_llm_lookup(self, question):
+    def _watcher_lookup(self, question):
         """What the ship's systems show about what you asked it (5.7.1): only
         the systems the question is about, each as plain lines of fact."""
         lines = []
@@ -319,7 +206,7 @@ class DashboardWatcherVoiceMixin:
         ship = getattr(self, "cmdr_ship", None) or {}
         tons = int(getattr(self, "current_cargo_tons", 0) or 0)
         return watcher_copilot.ship_lines(
-            self._watcher_llm_facts().get("ship", ""), str(ship.get("ship_name") or ""), self._expedition_jump_range(),
+            ship_name(ship.get("ship"), ship.get("ship_localised")), str(ship.get("ship_name") or ""), self._expedition_jump_range(),
             self._current_fuel_percent(), tons, self._active_cargo_capacity(),
             self._format_hud_credits(self._latest_hud_balance()) if self._latest_hud_balance() is not None else "",
             getattr(self, "current_hull_percent", None),
@@ -600,18 +487,38 @@ class DashboardWatcherVoiceMixin:
         overlays, the next system to the clipboard, its own voice. Its reply,
         or None when nothing was asked."""
         rng = getattr(getattr(getattr(self, "heartbeat_hud", None), "mind", None), "random", None)
-        fact = watcher_copilot.remember_request(text)
-        if fact is not None:
-            return watcher_copilot.reply(self._watcher_remember(fact), rng)
-        wanted = watcher_copilot.intent(text)
+        from voidcompass.core import voice_commands
+        resolved = voice_commands.native_request(text, self.config.get("watcher_ship_commands"))
+        native = resolved[0].native if resolved else {}
+        if native.get("kind") == "uplink":
+            fields = resolved[1]
+            question = f"where can I {native['value']} {fields['commodity']}" if fields.get("commodity") else text
+            commodities = self._watcher_uplink_commodities(question)
+            request = {"kind": native["value"] if commodities else None,
+                       "commodity": str(commodities[0][1]) if commodities else ""}
+            return self._watcher_uplink(text, request, rng)
+        if native.get("kind") == "overlay":
+            return self._watcher_overlay({key: native[key] for key in ("overlay", "op")}, rng)
+        # 5.7.3: the ship's own controls, pressed in Elite.
+        ship = getattr(self, "_watcher_ship", None)
+        done = ship(text, rng) if callable(ship) else None
+        if done is not None:
+            return done
+        wanted = native.get("value") if native.get("kind") == "intent" else None
         if wanted is None:
             return None
         outcome, fields = wanted, {}
-        playing = bool((getattr(self, "_music_status", None) or {}).get("playing"))
+        status = getattr(self, "_music_status", None) or {}
+        playing = bool(status.get("playing"))
+        # Play and pause, never a toggle (5.7.3): the app's idea of what's
+        # playing can lag the deck's, and "play" then paused it, or "stop" was
+        # met with "nothing is playing".
         if wanted == "music_pause":
-            outcome = wanted if playing and self.music_remote("toggle") else "music_not_playing"
+            outcome = wanted if self.music_remote("pause") else "unavailable"
         elif wanted == "music_play":
-            outcome = "music_already" if playing else wanted if self.music_remote("toggle") else "unavailable"
+            sent = self.music_remote("play")
+            outcome = ("unavailable" if not sent else "music_blocked" if status.get("blocked")
+                       else "music_already" if playing else wanted)
         elif wanted in {"music_next", "music_previous"}:
             outcome = wanted if self.music_remote(wanted.split("_")[1]) else "unavailable"
         elif wanted in {"overlays_hide", "overlays_show"}:
@@ -633,140 +540,112 @@ class DashboardWatcherVoiceMixin:
             self._watcher_voice_hush(0)
         return watcher_copilot.reply(outcome, rng, **fields)
 
-    def _watcher_remember(self, fact):
-        """"Remember that…" (5.7.2): kept in its library as you said it, like
-        TEACH IT (its note-taker passes over requests). The reply's outcome."""
-        if watcher_llm.BANNED.search(fact) or watcher_llm.MYSTERY.search(fact):
-            return "remember_refused"
-        mind = self._watcher_mind()
-        with mind.lock:
-            error = watcher_knowing.teach(mind.memory, fact, time.time())
-        if not error:
-            mind.save()
-            self._schedule_html_dashboard_publish(immediate=True)
-            return "remember"
-        return "remember_known" if "already" in error else "remember_long"
+    def _watcher_overlay(self, asked, rng=None):
+        """One overlay by name (5.7.3): hidden or shown as its hotkey does it,
+        or switched off or on as Overlay Studio does (shown, a switched-off
+        one is switched on). Its reply."""
+        spec = next((row for row in OVERLAY_SPECS if row.overlay_id == asked["overlay"]), None)
+        if spec is None:
+            return watcher_copilot.reply("unavailable", rng)
+        spoken = watcher_copilot.OVERLAY_SPOKEN.get(spec.overlay_id, spec.label)
+        fields = {"label": spoken[:1].upper() + spoken[1:], "label_l": spoken}
+        enabled = bool(self.config.get(spec.enabled_key, False))
+        op = asked["op"]
 
-    def _watcher_own_words(self, key, kind, text):
-        """A page's paragraph in the Watcher's own words, once its mind has
-        written them (5.7.1); the written one until then."""
-        mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
-        if mind is None or not text:
-            return None
-        try:
-            return mind.own_paragraph(key, kind, text)
-        except Exception:
-            logging.debug("Watcher own words skipped", exc_info=True)
-            return None
+        def reply(outcome):
+            return watcher_copilot.reply(outcome, rng, **fields)
 
-    def _watcher_own_flight_logs(self, logs, sessions, newest=5):
-        """The newest finished nights' flight logs, in its own words where written."""
-        ended = {str(row.get("started") or "") for row in sessions or () if isinstance(row, dict) and row.get("ended")}
-        shown = list(logs)
-        for index, log in enumerate(shown[:newest]):
-            if log.get("id") in ended and log.get("words"):
-                words = self._watcher_own_words(f"log:{log['id']}", "flight log for one night", log["words"])
-                if words:
-                    shown[index] = {**log, "words": words, "own_words": True}
-        return shown
+        if op in ("on", "off") or (op == "show" and not enabled):
+            wanted = op != "off"
+            if wanted == enabled:
+                return reply("overlay_already_on" if enabled else "overlay_already_off")
+            self._ui_post(self._html_overlay_toggle, spec.attr, key=f"watcher-overlay-{spec.attr}")
+            return reply("overlay_on" if wanted else "overlay_off")
+        if not enabled:
+            return reply("overlay_already_off")
+        if getattr(self, "_overlay_hotkey_global_hidden", False):
+            return reply("overlay_curtain") if op == "show" else reply("overlay_already_hidden")
+        hidden = spec.attr in (getattr(self, "_overlay_hotkey_hidden", None) or set())
+        window = self._overlay_window(getattr(self, spec.attr, None))
+        shown = bool(window is not None and self._overlay_window_is_shown(window))
+        if op == "hide":
+            if hidden or not shown:
+                return reply("overlay_already_hidden")
+            self._ui_post(self._handle_overlay_hotkey, spec.hotkey_action, key=f"watcher-overlay-{spec.attr}")
+            return reply("overlay_self") if spec.overlay_id == "heartbeat" else reply("overlay_hidden")
+        if shown and not hidden:
+            return reply("overlay_already_shown")
+        if not hidden:
+            # On, but nothing to show just now (the Rhino Map out of the Rhino, say).
+            return reply("overlay_waiting")
+        self._ui_post(self._handle_overlay_hotkey, spec.hotkey_action, key=f"watcher-overlay-{spec.attr}")
+        return reply("overlay_shown")
 
-    def _watcher_own_verdict(self, story, key):
-        """Void Wrapped's verdict, in its own words where written."""
-        cards = (story or {}).get("cards") or []
-        for index, card in enumerate(cards):
-            if card.get("kind") == "verdict" and card.get("words"):
-                words = self._watcher_own_words(key, "verdict on the commander's travels", card["words"])
-                if words:
-                    cards = list(cards)
-                    cards[index] = {**card, "words": words, "own_words": True}
-                    return {**story, "cards": cards}
-        return story
+    def _watcher_uplink_commodities(self, text):
+        """What the uplink would look up: the commodities you named, or
+        (asking about your cargo) the most you're carrying."""
+        named = self._watcher_commodities_named(text, self._watcher_market_file().get("items") or ())
+        if named or not re.search(r"\b(cargo|hold|it all|everything)\b", str(text or ""), re.I):
+            return named
+        held = self._trading_cargo() if getattr(self, "trading_names", None) is not None else []
+        return [(held[0]["symbol"], held[0]["name"])] if held else []
 
-    def _watcher_mind_downloader(self):
-        download = getattr(self, "_watcher_mind_download", None)
-        if download is None:
-            download = llm_assets.MindDownload()
-            self._watcher_mind_download = download
-        return download
+    def _watcher_uplink(self, text, request, rng=None):
+        """The uplink (5.7.3): the Trading page's Spansh search for where to
+        sell (or buy) a commodity, the best price within your Sell cargo
+        radius and the nearest, in the background. Its reply now; its answer
+        from what Spansh sends when it comes."""
+        if not request.get("kind"):
+            return watcher_copilot.reply("uplink_what", rng)
+        if not self._trading_online():
+            return watcher_copilot.reply("uplink_off", rng)
+        kind, commodity = request["kind"], request["commodity"]
+        system = str(getattr(self, "current_sys", "") or "")
+        options = self._trading_cargo_options()
+        held = {row["symbol"]: row["count"] for row in self._trading_cargo()} if kind == "sell" else {}
+        amount = max(1, int(held.get(symbol(commodity)) or 1))
 
-    def _watcher_mind_start_download(self):
-        started = self._watcher_mind_downloader().start(self._watcher_llm().choice(), self._watcher_mind_downloaded)
-        self._watcher_mind_progress()
-        return started
+        def work():
+            self._trading_spansh_names()
+            name = self.trading_names.spansh_name(commodity)
+            choice = {"large_pad": options["large"], "carriers": options["carriers"], "planetary": options["planetary"]}
+            best = trade_market.parse_commodity(spansh.commodity_stations(
+                kind, system, name, amount, size=5, sort="price", radius=options["radius"], **choice), name, kind)
+            near = trade_market.parse_commodity(spansh.commodity_stations(kind, system, name, amount, size=5, **choice),
+                                                name, kind)
+            best.sort(key=lambda row: -row["price"] if kind == "sell" else row["price"])
+            near.sort(key=lambda row: row.get("distance") or 0.0)
+            return {"name": name, "best": best, "near": near}
 
-    def _watcher_mind_progress(self):
-        download = getattr(self, "_watcher_mind_download", None)
-        if download is None or getattr(self, "_closing", False):
-            return
-        self._schedule_html_dashboard_publish(immediate=True)
-        if download.running():
-            self._watcher_mind_progress_job = self.root.call_later(700, self._watcher_mind_progress)
+        def done(result, error):
+            result = result or {}
+            lines = watcher_copilot.uplink_lines(kind, result.get("name") or commodity, result.get("best"),
+                                                 result.get("near"), system, options["radius"], time.time(), error)
+            mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+            if mind is not None and mind.uplink_answer(text, lines):
+                self._watcher_mind_watch()
 
-    def _watcher_mind_downloaded(self, state):
-        stage = state.get("stage")
-        feed = getattr(self, "add_event_feed_entry", None)
-        if callable(feed):
-            if stage == "done":
-                feed("SYSTEM", "The Watcher's own words are downloaded and loading", severity="INFO")
-            elif stage == "failed":
-                feed("SYSTEM", f"The Watcher's own words didn't download: {state.get('error')}", severity="WARNING")
-        work = lambda: (self._watcher_llm().sync(), self._watcher_mind_watch(), self._watcher_sources().fill_vectors())
-        post = getattr(self, "_ui_post", None)
-        if callable(post):
-            post(work, key="watcher-mind-download")
-        else:
-            work()
+        # A cached reply answers at once: after this question is in, not inside it.
+        self._trading_task("watcher-uplink", work, lambda result, error: self._ui_post(done, result, error),
+                           cache_key=("watcher-uplink", kind, system, commodity, amount, tuple(sorted(options.items()))))
+        return {"waiting": True, "say": watcher_copilot.reply("uplink_opening", rng, commodity=commodity, verb=kind)}
 
     def _watcher_mind_watch(self):
-        """Keep the page moving while the model loads or a reply is awaited."""
-        if getattr(self, "_closing", False):
-            return
-        self._schedule_html_dashboard_publish(immediate=True)
-        hud = getattr(self, "heartbeat_hud", None)
-        mind = getattr(hud, "mind", None)
-        loading = self._watcher_llm().state()["stage"] == "loading"
-        if loading or (mind is not None and mind.talk_waiting()):
-            self._watcher_mind_watch_job = self.root.call_later(600, self._watcher_mind_watch)
+        """Speak and publish a new command reply or uplink answer immediately."""
+        if not getattr(self, "_closing", False):
+            hud = getattr(self, "heartbeat_hud", None)
+            if hud is not None and callable(getattr(hud, "_redraw", None)):
+                hud._redraw()
+            self._schedule_html_dashboard_publish(immediate=True)
 
-    def _html_watcher_mind(self, mind):
-        llm = self._watcher_llm()
-        download = getattr(self, "_watcher_mind_download", None)
-        choice = llm.choice()
-        state = download.state() if download is not None else {"stage": "idle", "done": 0, "total": 0, "error": ""}
-        talk = [{"at": row.get("at"), "you": str(row.get("you") or ""), "it": str(row.get("it") or ""),
-                 "voice": bool(row.get("voice"))}
-                for row in (mind.memory.get("talk") or [])[-20:] if isinstance(row, dict)]
-        happened = [row for row in mind.memory.get("happened") or [] if isinstance(row, dict)]
-        hud = getattr(self, "heartbeat_hud", None)
+    def _html_watcher_talk(self, mind):
+        retired = {text for topic, text in retired_speech(mind.memory) if topic == "talk"}
         return {
-            "enabled": bool(self.config.get("watcher_llm_enabled")),
-            "installed": llm.installed(),
-            "model": choice,
-            "models": [{"id": key, "name": row["name"], "size_mb": round(row["size"] / 1_000_000),
-                        "installed": llm_assets.installed(key)} for key, row in llm_assets.MODELS.items()],
-            "device": llm.device(),
-            "reword": bool(self.config.get("watcher_llm_reword", True)),
-            "free_idle": bool(self.config.get("watcher_llm_free_idle")),
-            "own_thoughts": bool(self.config.get("watcher_llm_own_thoughts", True)),
-            "keeps_diary": bool(self.config.get("watcher_llm_diary", True)),
-            # What it has seen you do, and its diary (5.7.1), newest first.
-            "seen": [{"at": row.get("t"), "text": str(row.get("text") or "")} for row in reversed(happened[-14:])],
-            "seen_count": len(happened),
-            "diary": [{"at": row.get("at"), "text": str(row.get("text") or "")}
-                      for row in reversed((mind.memory.get("diary") or [])[-20:]) if isinstance(row, dict)],
-            "download": state,
-            "download_mb": round(llm_assets.download_bytes(choice) / 1_000_000),
-            **llm.state(),
-            "notice": llm_assets.NOTICE,
-            "talk": talk,
-            # 5.7.1: what it said in its own words, newest first, and your votes on them.
-            "said": self._html_watcher_said(mind),
-            "liked": [{"at": row.get("at"), "topic": row.get("topic", ""), "text": row["text"]}
-                      for row in reversed(mind.memory.get("liked") or []) if isinstance(row, dict) and row.get("text")],
-            "disliked": [{"at": row.get("at"), "topic": row.get("topic", ""), "text": row["text"]}
-                         for row in reversed(mind.memory.get("disliked") or []) if isinstance(row, dict) and row.get("text")],
-            "waiting": bool(getattr(getattr(hud, "mind", None), "talk_waiting", lambda: False)()),
-            "orb_on": hud is not None,
+            "talk": [{"at": row.get("at"), "you": str(row.get("you") or ""),
+                      "it": "" if " ".join(str(row.get("it") or "").split()) in retired else str(row.get("it") or ""),
+                      "voice": bool(row.get("voice"))}
+                     for row in (mind.memory.get("talk") or [])[-20:] if isinstance(row, dict)],
+            "orb_on": getattr(self, "heartbeat_hud", None) is not None,
         }
 
     # -- the download --------------------------------------------------------
@@ -846,49 +725,13 @@ class DashboardWatcherVoiceMixin:
         }
 
     def _html_watcher_extras(self, mind):
-        """The Watcher page's settings, voice and what it knows of you."""
+        """The Watcher's written thoughts, voice and command conversation."""
         return {"settings": self._html_watcher_settings(),
                 "voice": self._html_watcher_voice(mind.memory),
                 "habits": watcher_habits.summary(mind.memory, mind.bond()),
-                # 5.7.1: the name the ship writes, what it calls you, how it says it.
                 "name": watcher_name.page(mind.memory),
-                # 5.7.1: its own words (experimental), and what it knows.
-                "mind": self._html_watcher_mind(mind),
-                # 5.7.1: talking to it by voice.
-                "listen": self._html_watcher_listen(),
-                "library": self._html_watcher_library(mind)}
-
-    @staticmethod
-    def _html_watcher_said(mind):
-        liked = {row.get("text") for row in mind.memory.get("liked") or [] if isinstance(row, dict)}
-        disliked = {row.get("text") for row in mind.memory.get("disliked") or [] if isinstance(row, dict)}
-        return [{"at": row.get("at"), "topic": row.get("topic", ""), "text": row["text"],
-                 "vote": "up" if row["text"] in liked else "down" if row["text"] in disliked else ""}
-                for row in reversed((mind.memory.get("own_said") or [])[-20:]) if isinstance(row, dict) and row.get("text")]
-
-    def _html_watcher_library(self, mind):
-        """The Watcher page's LIBRARY (5.7.1): what its own mind may draw on."""
-        memory = mind.memory
-        note, when = getattr(self, "_watcher_teach_note", ("", 0.0))
-        told = watcher_knowing.story_told(memory, limit=200)
-        chapters = []
-        for title, _words in told:
-            if title not in chapters:
-                chapters.append(title)
-        return {
-            "notes": [{"at": row.get("at"), "text": row["text"]} for row in watcher_knowing.notes(memory)],
-            "taught": [{"at": row.get("at"), "text": row["text"]} for row in watcher_knowing.taught(memory)],
-            "profile": watcher_knowing.profile(memory),
-            "answers": watcher_knowing.answers(memory),
-            "about": ({"text": about["text"], "at": about.get("at")}
-                      if (about := watcher_knowing.about_you(memory)) else None),
-            "story_told": len(told),
-            "teach_note": note if time.time() - when < 10 else "",
-            "chapters": chapters,
-            "galaxy": watcher_world.library(),
-            # 5.7.1: the pages you gave it to read.
-            "sources": self._html_watcher_sources(),
-        }
+                "talk": self._html_watcher_talk(mind),
+                "listen": self._html_watcher_listen()}
 
     def _handle_watcher_settings_command(self, operation, payload):
         """The Watcher page's own controls. True when handled and done."""
@@ -962,100 +805,14 @@ class DashboardWatcherVoiceMixin:
             if callable(publish):
                 publish(immediate=True)
             return done
-        if operation == "mind_toggle":
-            self.config["watcher_llm_enabled"] = bool(payload.get("value"))
-            self._persist_config()
-            if self._watcher_mind_needs_download():
-                self._watcher_mind_start_download()
-            self._watcher_llm().sync()
-            self._watcher_mind_watch()
-            return True
-        if operation == "mind_settings":
-            values = payload.get("values") if isinstance(payload.get("values"), dict) else {}
-            if values.get("watcher_llm_model") in llm_assets.MODELS:
-                self.config["watcher_llm_model"] = values["watcher_llm_model"]
-            if values.get("watcher_llm_device") in watcher_llm.DEVICES:
-                self.config["watcher_llm_device"] = values["watcher_llm_device"]
-            for key in ("watcher_llm_reword", "watcher_llm_free_idle", "watcher_llm_own_thoughts", "watcher_llm_diary"):
-                if key in values:
-                    self.config[key] = bool(values[key])
-            self._persist_config()
-            if self._watcher_mind_needs_download():
-                self._watcher_mind_start_download()
-            self._watcher_llm().sync()
-            self._watcher_mind_watch()
-            return True
-        if operation == "mind_download":
-            return self._watcher_mind_start_download()
-        if operation == "mind_cancel":
-            self._watcher_mind_downloader().cancel()
-            return True
-        if operation == "mind_remove":
-            self._watcher_llm().stop()
-            done = llm_assets.remove()
-            self._schedule_html_dashboard_publish(immediate=True)
-            return done
-        if operation == "mind_talk":
+        if operation == "talk":
             hud = getattr(self, "heartbeat_hud", None)
             mind = getattr(hud, "mind", None)
             if mind is None or not mind.talk(payload.get("text")):
                 return False
             self._watcher_mind_watch()
             return True
-        if operation in {"mind_teach", "mind_unteach", "mind_forget_note"}:
-            # Its library (5.7.1): what you teach it, and its notes of what you said.
-            mind = self._watcher_mind()
-            text = " ".join(str(payload.get("text") or "").split())
-            if operation == "mind_teach" and watcher_llm.BANNED.search(text):
-                self._watcher_teach_note = ("That's something it never speaks of.", time.time())
-                self._schedule_html_dashboard_publish(immediate=True)
-                return False
-            try:
-                index = int(payload.get("index"))
-            except (TypeError, ValueError):
-                index = -1
-            with mind.lock:
-                if operation == "mind_teach":
-                    error = watcher_knowing.teach(mind.memory, text, time.time())
-                    done = not error
-                else:
-                    error = ""
-                    done = watcher_knowing.forget(mind.memory, "taught" if operation == "mind_unteach" else "told_me", index)
-            if operation == "mind_teach":
-                # The command channel only says it arrived: why it wasn't kept
-                # travels with the page.
-                self._watcher_teach_note = (error, time.time())
-            mind.save()
-            self._schedule_html_dashboard_publish(immediate=True)
-            return done
-        if operation in {"library_add", "library_refresh", "library_remove", "library_cancel", "library_search"}:
-            # Your own sources (5.7.1). Why one wasn't added travels with the page.
-            sources = self._watcher_sources()
-            if operation == "library_search":
-                self._watcher_source_query = " ".join(str(payload.get("text") or "").split())[:80]
-                return True
-            if operation == "library_cancel":
-                sources.cancel()
-                return True
-            if operation == "library_remove":
-                return sources.remove(str(payload.get("id") or ""))
-            if operation == "library_add":
-                try:
-                    pages = int(payload.get("pages") or 1)
-                except (TypeError, ValueError):
-                    pages = 1
-                error = sources.add(payload.get("url"), follow=payload.get("follow") is True, pages=pages)
-            else:
-                error = sources.refresh(str(payload.get("id") or ""))
-            self._watcher_source_note = (error, time.time())
-            return not error
-        if operation == "mind_rate":
-            # 👍 / 👎 on a line in its own words (5.7.1): its tone, and what it steers clear of.
-            mind = self._watcher_mind()
-            done = mind.rate(payload.get("text"), str(payload.get("vote") or ""), str(payload.get("topic") or ""))
-            mind.save()
-            return done
-        if operation == "mind_forget":
+        if operation == "talk_forget":
             mind = self._watcher_mind()
             with mind.lock:
                 mind.memory["talk"] = []

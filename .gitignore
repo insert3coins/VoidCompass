@@ -86,8 +86,8 @@ mining_data.db-*
 temp/
 
 # The Watcher voice lab: local testing only, not part of the app
-Voice/
-voice/
+/Voice/
+/voice/
 # The Watcher's voice (5.5.4): the Piper engine, its receipt and speech cache,
 # downloaded beside the HAL model (models/hal9000 is tracked)
 models/piper/

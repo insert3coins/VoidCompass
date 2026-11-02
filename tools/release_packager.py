@@ -267,6 +267,15 @@ def create_release(
     readme_images = _copy_readme_images(project, package_dir)
     runtime_images = _copy_runtime_images(project, package_dir)
 
+    documentation = set()
+    docs = project / "docs"
+    if docs.is_dir():
+        for source in sorted(docs.rglob("*")):
+            if source.is_file() and not source.is_symlink():
+                relative = Path("docs") / source.relative_to(docs)
+                _copy_required(source, package_dir / relative)
+                documentation.add(relative.as_posix())
+
     optional_names: set[str] = set()
     for pattern in OPTIONAL_LICENSE_PATTERNS:
         for source in project.glob(pattern):
@@ -296,7 +305,7 @@ def create_release(
 
     allowed = (
         PUBLIC_FILENAMES | optional_names | readme_images | runtime_images
-        | {target["executable"]}
+        | documentation | {target["executable"]}
     )
     _assert_public_tree(package_dir, allowed)
     archive_base = release_root / package_name

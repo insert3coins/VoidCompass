@@ -1,4 +1,4 @@
-"""The Watcher as co-pilot (5.7.1, experimental): what the ship's systems
+"""The Watcher as co-pilot: what the ship's systems
 show when you ask it something, and the few small things it will do when
 asked.
 
@@ -7,9 +7,8 @@ hold, the station you're docked at, the system's factions, the planet's
 materials and your mining sites, your materials, your Codex, your missions,
 ranks, carrier, unsold data, the world you're at and your lifetime record,
 the colony needs, Powerplay, the expedition, Galnet, the music. Each line is
-plain fact for its own words to draw on (and is checked against, like the
-rest). The actions are the harmless ones: the music, the overlays, the
-clipboard and its own voice. Nothing here touches the game.
+plain fact to answer from. The actions here handle the music, the overlays,
+the clipboard and its voice; ship controls have their own command catalogue.
 """
 from __future__ import annotations
 
@@ -198,7 +197,7 @@ def ship_lines(kind="", name="", jump_range=0, fuel_percent=None, cargo_tons=0, 
     elif tons:
         lines.append(f"Cargo: {tons} tonnes")
     if credits and credits != "---":
-        # "1.2B CR" as words: the model says "billion" whatever it's given.
+        # Expand the deck's abbreviated credits for speech.
         spoken = re.sub(r"(\d)([BMK]) CR$", lambda m: f"{m.group(1)} {SCALE[m.group(2)]} credits", credits)
         lines.append(f"Credits: {spoken.replace(' CR', ' credits')}")
     if _whole(rebuy):
@@ -446,7 +445,6 @@ def faction_lines(snap, system="", now=None, limit=7):
     factions = sorted((row for row in snap.get("factions") or () if isinstance(row, dict) and row.get("name")),
                       key=lambda row: -(_number(row.get("influence")) or 0))
     for row in factions[:limit]:
-        # Whole percents: the model turned "55.3%" into "5.53 percent".
         share = (_number(row.get("influence")) or 0) * 100
         parts = [f"{round(share)}% influence" if share >= 1 else "under 1% influence"]
         state = _game_word(row.get("state"))
@@ -1009,23 +1007,142 @@ INTENTS = (
 )
 
 
-# "Remember that my carrier is the Black Rose" (5.7.2): kept as you said it,
-# like TEACH IT. "Remember when we…?" is a question, not a request.
-_REMEMBER = re.compile(_PLEASE + r"(?:remember|don'?t forget|make a note|note down|keep in mind)"
-                                 r"(?:\s+(?:that|this))?[\s:,]+(.+)$", re.I)
-_RECALLING = re.compile(r"^(when|what|where|who|how|the time|us|me)\b", re.I)
+# The uplink (5.7.3): asked where to sell or buy a commodity, or to look it up
+# online, it asks Spansh's market data (the Trading page's own search) and
+# answers when the reply comes. Nothing else of yours goes online.
+_UPLINK = re.compile(r"\b(look\s*(it|that|them)?\s*up|online|internet|uplink|spansh|"
+                     r"where (can|do|should|could|would) (i|we) (sell|buy|get|find|offload)|"
+                     r"best (place|station|market|price)s? (to|for) (sell|buy)|who (buys|sells|pays)|"
+                     r"search (spansh|online|the uplink|for (the )?(best|cheapest|nearest)))\b", re.I)
+# Asked to look something up, with nothing to look up: what the uplink reaches.
+_ONLINE = re.compile(r"\b(look\s*(it|that|them)?\s*up|online|internet|uplink|spansh)\b", re.I)
+_TO_BUY = re.compile(r"\b(who sells|(i|we) (buy|get|find|purchase)|to buy|cheapest|buy (it|some|more|from))\b", re.I)
 
 
-def remember_request(text):
-    """What you asked it to remember, or None."""
-    words = " ".join(str(text or "").split()).strip()
-    if not words or words.endswith("?"):
+def uplink_request(text, commodities):
+    """{"kind": "sell" | "buy", "commodity"} for a question the uplink answers;
+    {"kind": None} asked online for nothing it can look up; else None."""
+    words = " ".join(str(text or "").split())
+    if not _UPLINK.search(words):
         return None
-    match = _REMEMBER.match(words)
-    fact = match.group(1).strip(" .!") if match else ""
-    if not fact or _RECALLING.match(fact):
+    if not commodities:
+        return {"kind": None, "commodity": ""} if _ONLINE.search(words) else None
+    return {"kind": "buy" if _TO_BUY.search(words) else "sell", "commodity": str(commodities[0][1])}
+
+
+PADS = {"L": "large", "M": "medium", "S": "small"}
+
+
+def uplink_lines(kind, commodity, best=(), nearest=(), system="", radius=0, now=None, error=""):
+    """What the uplink found (5.7.3): the best price within your Sell cargo
+    radius and the nearest market, each with its station, system, distance,
+    price, demand or stock and pads."""
+    if error:
+        return [f"The uplink to Spansh failed: {error}"]
+    best, nearest = [row for row in best or () if row], [row for row in nearest or () if row]
+    station_does = "buys" if kind == "sell" else "sells"
+    if not best and not nearest:
+        return [f"Through the uplink: Spansh knows no station near {system or 'here'} that {station_does} {commodity}"]
+
+    def describe(row):
+        parts = [f"{_whole(row.get('price')) or 0:,} credits a tonne",
+                 f"{'demand' if kind == 'sell' else 'stock'} {_whole(row.get('stock')) or 0:,}"]
+        distance = _number(row.get("distance"))
+        if distance:
+            parts.append(f"{distance:,.1f} light years away")
+        elif system and str(row.get("system") or "").casefold() == system.casefold():
+            parts.append("in this system")
+        if PADS.get(row.get("pad")):
+            parts.append(f"{PADS[row['pad']]} pads")
+        if row.get("carrier"):
+            parts.append("a fleet carrier")
+        elif row.get("planetary"):
+            parts.append("on a planet")
+        updated = _number(row.get("updated"))
+        if now is not None and updated and now - updated >= 86400:
+            parts.append(f"prices {int((now - updated) // 86400)} days old")
+        return f"{row.get('station') or 'A station'} in {row.get('system') or 'an unknown system'}: " + ", ".join(parts)
+
+    verb = "sell" if kind == "sell" else "buy"
+    lines = []
+    if best:
+        lines.append(f"Through the uplink, the best place to {verb} {commodity} within {radius} light years: {describe(best[0])}")
+        if len(best) > 1:
+            lines.append(f"Next best: {describe(best[1])}")
+    def same(one, other):
+        def key(row):
+            return row.get("market_id") or (row.get("station"), row.get("system"))
+        return key(one) == key(other)
+
+    if nearest and (not best or not same(nearest[0], best[0])):
+        lines.append(f"The nearest station that {station_does} {commodity}: {describe(nearest[0])}")
+    return lines
+
+
+# One overlay by name (5.7.3): hide or show it (as its hotkey does), or turn it
+# off or on (as Overlay Studio does). What each is called aloud, longest
+# first; "the HUD" alone stays all of them, as before.
+OVERLAY_NAMES = {
+    "navigation": ("navigation hud", "nav hud", "navigation overlay", "navigation"),
+    "cargo": ("cargo manifest", "cargo overlay", "cargo"),
+    "carrier": ("carrier hud", "carrier overlay", "fleet carrier hud", "carrier"),
+    "prospector": ("prospector analysis", "prospector overlay", "prospector"),
+    "planet-materials": ("planet materials overlay", "planet materials"),
+    "powerplay": ("powerplay overlay", "power play", "powerplay"),
+    "gravity": ("gravity warning", "gravity overlay", "gravity"),
+    "station": ("station information", "station info", "station overlay"),
+    "survey": ("survey operations", "survey overlay", "survey"),
+    "toast": ("cockpit notifications", "notifications", "toasts"),
+    "achievements": ("achievements overlay", "achievements"),
+    "galnet-ticker": ("galnet ticker", "news ticker", "ticker", "galnet"),
+    "music-player": ("music player", "music overlay", "player"),
+    "heartbeat": ("journal heartbeat", "your orb", "the orb", "orb", "yourself", "heartbeat"),
+    "contact-scope": ("deep space contact scope", "contact scope", "contacts"),
+    "jump-info": ("jump information", "jump info"),
+    "colony-needs": ("construction needs", "colony needs"),
+    "expedition": ("expedition guide", "expedition overlay", "expedition"),
+    "hatchling": ("hatchling", "pet"),
+    "trade-route": ("trade route overlay", "trade route"),
+    "galaxy-minimap": ("galaxy minimap", "minimap", "mini map"),
+    "rhino-map": ("rhino map",),
+    "postcards": ("postcards", "postcard"),
+    "rig-tracker": ("rig tracker", "rigs"),
+    "ground-target": ("planet waypoint navigation", "planet waypoint", "waypoint navigation"),
+}
+# How each is said in a reply.
+OVERLAY_SPOKEN = {"heartbeat": "my orb", "carrier": "the carrier HUD", "toast": "notifications",
+                  "ground-target": "planet waypoint navigation", "navigation": "the Navigation HUD"}
+_OVERLAY_VERBS = (
+    ("off", r"(?:turn|switch|shut)\s+off|disable"),
+    ("on", r"(?:turn|switch)\s+on|enable"),
+    ("hide", r"hide|close|put away|get rid of|lose"),
+    ("show", r"show|bring back|unhide|restore|display|open"),
+)
+_OVERLAY_ANY = "|".join(re.escape(name) for name in
+                        sorted({name for names in OVERLAY_NAMES.values() for name in names}, key=len, reverse=True))
+
+
+def overlay_request(text):
+    """{"op": "hide" | "show" | "off" | "on", "overlay": id} for one overlay
+    named; None when none is (the whole lot stays the overlays intents)."""
+    words = " ".join(str(text or "").split()).strip(" .!?").casefold()
+    if not words or len(words) > 80:
         return None
-    return fact[:1].upper() + fact[1:] + "."
+    for op, verb in _OVERLAY_VERBS:
+        # "hide the survey overlay", or "turn the minimap off".
+        ahead = re.match(_PLEASE + rf"(?:{verb})\s+(?:the\s+|my\s+|your\s+)?({_OVERLAY_ANY})"
+                                   rf"(?:\s+(?:overlay|hud|window|panel))?(?:\s+(?:for me|please|now))*$", words, re.I)
+        split = None
+        if op in ("off", "on"):
+            split = re.match(_PLEASE + rf"(?:turn|switch|shut)\s+(?:the\s+|my\s+|your\s+)?({_OVERLAY_ANY})"
+                                       rf"(?:\s+(?:overlay|hud|window|panel))?\s+{op}(?:\s+(?:for me|please|now))*$",
+                             words, re.I)
+        found = ahead or split
+        if found:
+            name = found.group(1)
+            overlay = next(key for key, names in OVERLAY_NAMES.items() if name in names)
+            return {"op": op, "overlay": overlay}
+    return None
 
 
 def intent(text):
@@ -1039,7 +1156,7 @@ def intent(text):
     return None
 
 
-# What it says when it has done it (or couldn't). Its own few words, never the model's.
+# Written replies to commands.
 REPLIES = {
     "music_pause": ("Paused. The quiet comes back.", "The music stops. I'll listen to the hull instead.", "Paused."),
     "music_play": ("Music, then.", "Playing. The dark could use it.", "There. Something to fly to."),
@@ -1047,20 +1164,50 @@ REPLIES = {
     "music_previous": ("Back one.", "That one again.", "The last one, again."),
     "music_not_playing": ("Nothing is playing.", "There's no music to stop."),
     "music_already": ("It's already playing.",),
+    # WebView2 won't start sound by itself until the deck has had one click.
+    "music_blocked": ("The deck wants one click in its window before it can play. Click it once, and ask again.",),
     "overlays_hide": ("Hidden. I'm still here.", "Gone from the glass.", "Hidden. Say the word and they're back."),
     "overlays_show": ("Back on the glass.", "There they are.", "Shown again."),
     "overlays_already_hidden": ("They're already hidden.",),
     "overlays_already_shown": ("They're already showing.",),
+    # One overlay (5.7.3).
+    "overlay_hidden": ("{label} hidden.", "{label}: off the glass.", "Hidden: {label_l}."),
+    "overlay_shown": ("{label} is back.", "There. {label}.", "{label}, shown again."),
+    "overlay_on": ("{label} switched on.", "{label} is on now."),
+    "overlay_off": ("{label} switched off.", "{label} is off now."),
+    "overlay_already_hidden": ("{label} is already hidden.",),
+    "overlay_already_shown": ("{label} is already showing.",),
+    "overlay_already_on": ("{label} is already on.",),
+    "overlay_already_off": ("{label} is already off.",),
+    "overlay_waiting": ("{label} is on. It shows itself when there's something to show.",),
+    "overlay_curtain": ("All the overlays are hidden. Ask me to show the overlays first.",),
+    "overlay_self": ("I'll keep out of sight. You'll still hear me, if my voice is on.",),
     "copy_next": ("{system} is on your clipboard.", "Copied: {system}.", "{system}. It's on the clipboard."),
     "copy_none": ("There's no next system to copy.", "Nothing is plotted to copy."),
     "hush": ("I'll keep quiet for a while.", "Quiet, then.", "I'll keep my voice down."),
     "unhush": ("I can speak again.", "My voice is back.", "Aloud again, then."),
     "unavailable": ("I can't reach that from here.",),
-    "remember": ("I'll remember that.", "Kept. It's in my library now.", "Noted. I won't forget."),
-    "remember_known": ("I know that already.", "You told me. I kept it."),
-    "remember_refused": ("Not that. Some things I don't keep.",),
-    "remember_long": ("That's too much to keep in one go. Say it shorter.",),
+    "uplink_opening": ("Opening the uplink. Where to {verb} {commodity}: a moment.",
+                       "Asking the uplink where to {verb} {commodity}.",
+                       "The uplink's open. Looking for {commodity}."),
+    "uplink_off": ("The uplink is off. Turn on trading searches in Settings, under Integrations.",),
+    "uplink_what": ("The uplink reaches Spansh's markets. Name a commodity, and ask where to sell or buy it.",),
+    "plain": ("I can work the ship's controls, show or hide overlays, and play the music. "
+              "Or ask what's in the hold, where we are, or where we're headed.",
+              "Try a ship command, or ask me what the ship's systems show. I can also look up commodity "
+              "prices through the uplink."),
 }
+
+
+# Answer a question from the ship's readings, a few lines at most.
+PLAIN_QUESTION = re.compile(r"\?\s*$|^(?:(?:please|hey|watcher|ok|okay)[\s,]+)*(?:what|what's|whats|where|where's|"
+                            r"how|how's|which|who|when|is|are|do|does|did|can|could|tell me|show me|list|any)\b", re.I)
+PLAIN_LINES = 4
+
+
+def plain_answer(lines, limit=PLAIN_LINES):
+    said = [str(line).strip().rstrip(".") for line in lines or () if str(line).strip()][:limit]
+    return ". ".join(said) + "." if said else ""
 
 
 def reply(outcome, rng, **fields):

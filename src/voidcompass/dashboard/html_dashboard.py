@@ -36,6 +36,7 @@ from voidcompass.exploration.explorer_decision_deck import (
     route_horizon,
 )
 from voidcompass.core import themes
+from voidcompass.core.watcher_retirement import written_log
 from voidcompass.core.version import APP_VERSION
 from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_material_catalogue, SURFACE_MINING_NEW, location_index
 from voidcompass.mining.rhino_intelligence import ground_intelligence, rhino_forecast, rhino_hint
@@ -166,6 +167,19 @@ def _watcher_echoes(memory):
             count, last = heard.get(row[0], (0, 0.0))
             heard[row[0]] = (count + 1, max(last, float(row[1] or 0)))
     return heard
+
+
+def _hotkey_group(action, attr):
+    """Which group of Settings › Hotkeys a shortcut is shown in (5.7.3)."""
+    if attr is not None:
+        return "overlays"
+    if action.startswith("watcher_"):
+        return "watcher"
+    if action.startswith("music_"):
+        return "music"
+    if action.startswith("rig_") or action == "field_bookmark":
+        return "field"
+    return "controls"
 
 class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin, HtmlMiningMixin, HtmlPlanetaryMixin):
     """Publish exploration state and accept private dashboard commands."""
@@ -820,7 +834,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         # The newest hundred (5.5.3.5): the page stays light however long
         # it's been talking. Each with its heading, as the orb showed it.
         log = []
-        for row in reversed(list(memory.get("log") or [])[-WATCHER_LOG_SHOWN:]):
+        for row in reversed(written_log(memory)[-WATCHER_LOG_SHOWN:]):
             if not (isinstance(row, list) and len(row) >= 3):
                 continue
             kind, heading = watcher_mind.thought_heading(row[1], row[2])
@@ -828,7 +842,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                         "mood": watcher_mind.MOODS.get(str(row[1]), ""), "kind": kind, "heading": heading})
         topics = Counter(
             str(row[0]) for row in memory.get("said") or ()
-            if isinstance(row, list) and row and ":" not in str(row[0]) and row[0] not in {"idle", "afterthought"}
+            if isinstance(row, list) and row and ":" not in str(row[0]) and row[0] not in {"idle", "afterthought", "mind_own"}
         )
         bond = mind.bond()
         sessions = int(memory.get("sessions") or 0)
@@ -2321,8 +2335,10 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 "action": action, "key": key, "label": label,
                 "value": _text(self.config.get(key), 80),
                 "default": _text(DEFAULT_OVERLAY_HOTKEYS.get(key), 80),
+                # 5.7.3: the page shows them in groups (overlays, the Watcher, music...).
+                "group": _hotkey_group(action, attr),
             }
-            for action, key, label, _attr in OVERLAY_HOTKEY_SPECS
+            for action, key, label, attr in OVERLAY_HOTKEY_SPECS
         ]
         # A to Z, so a shortcut is easy to find ("The Watcher" files under W).
         hotkeys.sort(key=lambda row: row["label"].casefold().removeprefix("the "))
@@ -2340,7 +2356,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "journal_path", "screenshots_path", "screenshots_enabled",
             "ui_scale_percent", "ui_text_scale_percent", "ui_text_min_px", "overlay_text_scale_percent",
             "reduced_motion_enabled",
-            "overlay_hotkeys_enabled",
+            "overlay_hotkeys_enabled", "controller_hotkeys_enabled", "elite_game_folder",
+            "watcher_listen_enabled", "watcher_listen_mic", "watcher_listen_mode", "watcher_listen_model", "watcher_ship_enabled", "watcher_ship_macros", "watcher_ship_commands",
             "edsm_cmdr_name", "edsm_api_key", "edsm_upload_enabled",
             "inara_cmdr_name", "inara_api_key", "inara_upload_enabled",
             "raven_api_key", "raven_sync_enabled", "raven_share_ship_cargo",
@@ -2413,8 +2430,13 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                     "bg", "panel", "border", "accent", "orange", "green", "yellow", "red", "text",
                 )},
             })
+        controllers = getattr(self, "_html_controller_settings", None)
         return {
             "values": values, "hotkeys": hotkeys, "health": health, "eddn": eddn,
+            # 5.7.3: controller buttons for the shortcuts, and what Elite does with each.
+            "controllers": controllers() if callable(controllers) else {},
+            # 5.7.3: talking to the Watcher by voice, and the ship commands it can press.
+            "voice": self._html_settings_voice(),
             # Your home system (5.5.4): the one in use and how its lookup went.
             "home": self._home_settings(),
             # Inara (5.5.4): what it has sent this session.
@@ -2488,6 +2510,20 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         self._html_settings_paths_cache = ((journal, screenshots), now, result)
         return result
 
+    def _html_settings_voice(self):
+        """Settings › Voice (5.7.3): its hearing (the live parts come from
+        /api/data/listen) and its ship commands."""
+        listen = getattr(self, "_html_watcher_listen", None)
+        ship = getattr(self, "_html_ship_controls", None)
+        hearing = {}
+        if callable(listen):
+            data = listen()
+            hearing = {key: data.get(key) for key in ("enabled", "installed", "download_mb", "notice", "mics", "mic",
+                                                      "mode", "model", "models", "hotkey", "hotkeys_on", "has_test")}
+            hearing["downloading"] = (data.get("download") or {}).get("stage") in (
+                "starting", "engine", "unpacking", "model")
+        return {"listen": hearing, "ship": ship() if callable(ship) else {}}
+
     def _apply_settings_changes(self, changed):
         """Apply only what a settings change affects.
 
@@ -2517,8 +2553,15 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             self._apply_active_profile_theme()
         if changed & {"screenshots_enabled", "screenshots_path", "reduced_motion_enabled"}:
             self._apply_runtime_feature_toggles()
-        if changed & {"hotkeys", "overlay_hotkeys_enabled"}:
+        if changed & {"hotkeys", "overlay_hotkeys_enabled", "controller_hotkeys_enabled"}:
             self._configure_overlay_hotkeys()
+        if "elite_game_folder" in changed:
+            # Elite's bindings looked for again, from the folder you gave.
+            self._elite_bindings = None
+        if "watcher_listen_model" in changed and callable(getattr(self, "_watcher_listen_model_changed", None)):
+            self._watcher_listen_model_changed()
+        elif "watcher_listen_enabled" in changed and callable(getattr(self, "_watcher_listen_switched", None)):
+            self._watcher_listen_switched()
         if changed & {"galnet_enabled", "galnet_refresh_minutes"}:
             self._restart_galnet_feed_schedule(delay_ms=250)
             self._update_galnet_ticker()
@@ -4040,6 +4083,17 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
 
                 threading.Thread(target=worker, name="HtmlIntegrationTest", daemon=True).start()
                 return True
+            sequence = getattr(self, "_handle_sequence_command", None)
+            handled = sequence(operation, payload) if callable(sequence) else None
+            if handled is not None:
+                return handled
+            controller = getattr(self, "_handle_controller_command", None)
+            handled = controller(operation, payload) if callable(controller) else None
+            if handled is not None:
+                return handled
+            # Settings › Voice's buttons (5.7.3): the same as they were on the MIND page.
+            if operation in {"listen_download", "listen_cancel", "listen_remove", "listen_test"}                     and callable(getattr(self, "_handle_watcher_listen_command", None)):
+                return self._handle_watcher_listen_command(operation, payload)
             if operation == "capture_begin":
                 self._suspend_overlay_hotkeys_for_capture()
                 return True
@@ -4070,12 +4124,20 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 # The command channel answers before this runs, so the page
                 # learns whether its save was kept from the next snapshot.
                 save_id = _integer(payload.get("save_id"), 0)
+                if "recorded_profile" in payload and payload["recorded_profile"] != get_active_profile(self.config):
+                    self._html_settings_last_save = {"id": save_id, "ok": False, "detail": "The commander changed. Record this sequence again for the current commander."}
+                    self._schedule_html_dashboard_publish(immediate=True)
+                    return False
                 allowed = {
                     "journal_path": str, "screenshots_path": str, "home_system": str,
                     "screenshots_enabled": bool, "ui_scale_percent": int,
                     "ui_text_scale_percent": int, "ui_text_min_px": int, "overlay_text_scale_percent": int,
                     "reduced_motion_enabled": bool,
                     "overlay_hotkeys_enabled": bool,
+                    "controller_hotkeys_enabled": bool, "elite_game_folder": str,
+                    "watcher_listen_enabled": bool, "watcher_listen_mic": str, "watcher_listen_mode": str,
+                    "watcher_listen_model": str,
+                    "watcher_ship_enabled": bool, "watcher_ship_macros": dict, "watcher_ship_commands": dict,
                     "edsm_cmdr_name": str,
                     "edsm_api_key": str, "edsm_upload_enabled": bool,
                     "inara_cmdr_name": str, "inara_api_key": str, "inara_upload_enabled": bool,
@@ -4107,7 +4169,35 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                     if key not in values:
                         continue
                     value = values[key]
-                    if cast is bool:
+                    if key == "watcher_ship_commands":
+                        from voidcompass.core import voice_commands
+                        try:
+                            updates[key] = voice_commands.validate(value)
+                        except ValueError as exc:
+                            self._html_settings_last_save = {"id": save_id, "ok": False, "detail": str(exc)}
+                            self._schedule_html_dashboard_publish(immediate=True)
+                            return False
+                        from voidcompass.overlays.watcher_ship import sequence_options
+                        valid = {ident for command in voice_commands.catalogue(updates[key], include_disabled=True)
+                                 for ident, *_ in sequence_options(command)}
+                        updates["watcher_ship_macros"] = {ident: steps for ident, steps in updates.get("watcher_ship_macros", self.config.get("watcher_ship_macros", {})).items() if ident in valid}
+                    elif key == "watcher_ship_macros":
+                        from voidcompass.core.elite_macros import parse_macro
+                        from voidcompass.overlays.watcher_ship import sequence_options
+                        from voidcompass.core import voice_commands
+                        commands = voice_commands.catalogue(values.get("watcher_ship_commands", self.config.get("watcher_ship_commands")), include_disabled=True)
+                        sequences = {key for command in commands for key, *_ in sequence_options(command)}
+                        try:
+                            if not isinstance(value, dict) or any(name not in sequences for name in value):
+                                raise ValueError("Choose an existing ship sequence.")
+                            for steps in value.values():
+                                parse_macro(steps)
+                        except ValueError as exc:
+                            self._html_settings_last_save = {"id": save_id, "ok": False, "detail": str(exc)}
+                            self._schedule_html_dashboard_publish(immediate=True)
+                            return False
+                        updates[key] = {name: list(steps) for name, steps in value.items()}
+                    elif cast is bool:
                         updates[key] = bool(value)
                     elif key == "galnet_rotation_seconds":
                         updates[key] = max(4, min(60, _integer(value, 7)))
@@ -4130,6 +4220,15 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                         updates[key] = max(0, min(10_000_000_000, _integer(value, 100_000_000)))
                     elif key == "expedition_poi_range_ly":
                         updates[key] = max(25, min(2000, _integer(value, 150)))
+                    elif key == "watcher_listen_model":
+                        download = getattr(self, "_watcher_listen_download", None)
+                        if value not in ("fast", "accurate") or (download is not None and download.running()):
+                            self._html_settings_last_save = {"id": save_id, "ok": False, "detail": "Finish or cancel the hearing download before changing models."}
+                            self._schedule_html_dashboard_publish(immediate=True)
+                            return False
+                        updates[key] = value
+                    elif key == "watcher_listen_mode":
+                        updates[key] = "tap" if value == "tap" else "hold"
                     else:
                         updates[key] = _text(value, 1000)
                 changed_keys = {key for key, value in updates.items() if self.config.get(key) != value}

@@ -331,6 +331,7 @@ class LocalApi:
             ("GET", r"/watcher/code", lambda req: self._call("api_watcher_code"), False),
             ("POST", r"/watcher/meet", self._meet, True),
             ("POST", r"/watcher/book", lambda req: self._call("api_watcher_book"), True),
+            # 5.7.3: its own mind (the local model), and what it hears you with.
             ("GET", r"/voice", lambda req: self._call("api_voice"), False),
             ("POST", r"/voice/say", self._say, True),
             ("POST", r"/voice/stop", lambda req: self._call("api_voice_stop"), True),

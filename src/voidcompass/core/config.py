@@ -15,6 +15,21 @@ def _get_config_file():
 CONFIG_FILE = _get_config_file()
 PROFILE_DIR = str(application_dir() / "profiles")
 PROFILE_CONFIG_NAME = "config.json"
+
+
+def _drop_retired_watcher_settings(values):
+    if not isinstance(values, dict):
+        return False
+    removed = False
+    for key in list(values):
+        if str(key).startswith("watcher_" + "llm_"):
+            values.pop(key)
+            removed = True
+    for profile in (values.get("commander_profiles") or {}).values():
+        removed = _drop_retired_watcher_settings(profile) or removed
+    return removed
+
+
 RETIRED_COMPASS_CONFIG_KEYS = (
     "voice_callouts_enabled",
     "voice_safety_enabled",
@@ -171,11 +186,10 @@ PROFILE_TEXT_SETTINGS = (
     "watcher_voice_speed",
     "watcher_voice_level",
     # 5.7.1: its own words (experimental).
-    "watcher_llm_model",
-    "watcher_llm_device",
     # Talking to it by voice: which microphone, hold or tap the key.
     "watcher_listen_mic",
     "watcher_listen_mode",
+    "watcher_listen_model",
     "home_system",
     "hud_scene_mode",
     "hud_font_face",
@@ -277,6 +291,8 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_watcher_answer_2",
     "overlay_hotkey_watcher_answer_3",
     "overlay_hotkey_watcher_talk",
+    # 5.7.3: where Elite is installed, when it isn't found by itself.
+    "elite_game_folder",
     "ground_target_system",
     "ground_target_body",
     "ground_target_label",
@@ -319,12 +335,9 @@ PROFILE_BOOL_SETTINGS = (
     "heartbeat_thought_backdrop",
     "heartbeat_thought_heading",
     "watcher_voice_enabled",
-    "watcher_llm_enabled",
-    "watcher_llm_reword",
-    "watcher_llm_free_idle",
-    "watcher_llm_own_thoughts",
-    "watcher_llm_diary",
     "watcher_listen_enabled",
+    "watcher_ship_enabled",
+    "controller_hotkeys_enabled",
     "cargo_overlay_enabled",
     "carrier_overlay_enabled",
     "prospector_overlay_enabled",
@@ -574,6 +587,10 @@ PROFILE_VALUE_SETTINGS = (
     "overlay_menu_keep_visible",
     "overlay_opacity_percent",
     "overlay_opacity_by_overlay",
+    # 5.7.3: a controller button (or combination) for each shortcut.
+    "overlay_controller_bindings",
+    "watcher_ship_macros",
+    "watcher_ship_commands",
     "overlay_layout_presets",
     "overlay_layout_studio_geometry",
     "dashboard_module_order",
@@ -719,6 +736,8 @@ def apply_profile_config(config, profile_key=None):
                 profile.update(json.load(f))
         except Exception:
             pass
+    _drop_retired_watcher_settings(config)
+    _drop_retired_watcher_settings(profile)
     # Speech/persona settings were retired in v5.3.6. Memory and cached audio
     # files remain on disk for rollback, but their old switches are no longer
     # copied into the live profile or written back to configuration.
@@ -856,10 +875,9 @@ def apply_profile_config(config, profile_key=None):
         "heartbeat_thought_side": "auto",
         "watcher_voice_speed": "standard",
         "watcher_voice_level": "every",
-        "watcher_llm_model": "standard",
-        "watcher_llm_device": "gpu",
         "watcher_listen_mic": "",
         "watcher_listen_mode": "hold",
+        "watcher_listen_model": "accurate",
         "home_system": "",
         "hud_scene_mode": "full",
         "hud_font_face": "cockpit",
@@ -972,16 +990,14 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_watcher_answer_2": "",
         "overlay_hotkey_watcher_answer_3": "",
         "overlay_hotkey_watcher_talk": "Ctrl+Alt+Shift+F8",
+        "elite_game_folder": "",
     }
     bool_defaults = {
         **OVERLAY_ENABLE_DEFAULTS,
         "watcher_voice_enabled": False,
-        "watcher_llm_enabled": False,
-        "watcher_llm_reword": True,
-        "watcher_llm_free_idle": False,
-        "watcher_llm_own_thoughts": True,
-        "watcher_llm_diary": True,
         "watcher_listen_enabled": False,
+        "watcher_ship_enabled": True,
+        "controller_hotkeys_enabled": True,
         "overlay_hide_on_maps": True,
         "overlay_hide_in_menus": False,
         "edsm_upload_enabled": False,
@@ -1099,6 +1115,9 @@ def apply_profile_config(config, profile_key=None):
                 "overlay_menu_keep_visible": ["colony_needs_hud"],
                 # Overlays with their own opacity (Studio id: percent).
                 "overlay_opacity_by_overlay": {},
+                "overlay_controller_bindings": {},
+                "watcher_ship_macros": {},
+                "watcher_ship_commands": {},
                 "overlay_opacity_percent": 100,
                 "overlay_layout_presets": {},
                 "overlay_layout_studio_geometry": "1080x720",
@@ -1190,6 +1209,7 @@ def apply_profile_config(config, profile_key=None):
 
 
 def save_active_profile_config(config):
+    _drop_retired_watcher_settings(config)
     key = get_active_profile(config)
     profiles = config.setdefault("commander_profiles", {})
     profile = profiles.setdefault(key, {})
@@ -1492,17 +1512,15 @@ def load_config():
         # The Watcher's voice (5.5.4): Piper with the HAL model, off until
         # the commander turns it on; how loud, how fast, and how much it says.
         'watcher_voice_enabled': False,
-        'watcher_llm_enabled': False,
-        'watcher_llm_reword': True,
-        'watcher_llm_free_idle': False,
-        'watcher_llm_own_thoughts': True,
-        'watcher_llm_diary': True,
-        'watcher_llm_model': 'standard',
-        'watcher_llm_device': 'gpu',
         # Talking to it by voice (5.7.1): off until downloaded and turned on.
         'watcher_listen_enabled': False,
         'watcher_listen_mic': '',
         'watcher_listen_mode': 'hold',
+        'watcher_listen_model': 'fast',
+        # The Watcher working the ship (5.7.3): only when you ask, with Elite's own keys.
+        'watcher_ship_enabled': True,
+        'watcher_ship_macros': {},
+        'watcher_ship_commands': {},
         'watcher_voice_volume': 80,
         'watcher_voice_speed': 'standard',
         'watcher_voice_level': 'every',
@@ -1684,6 +1702,10 @@ def load_config():
         'overlay_map_keep_visible': [],
         'overlay_menu_keep_visible': ['colony_needs_hud'],
         'overlay_opacity_by_overlay': {},
+        # Controller buttons as shortcuts (5.7.3): on, none bound yet.
+        'overlay_controller_bindings': {},
+        'controller_hotkeys_enabled': True,
+        'elite_game_folder': '',
         'overlay_opacity_percent': 100,
         'overlay_layout_presets': {},
         'overlay_layout_studio_geometry': '1080x720',
@@ -1700,9 +1722,12 @@ def load_config():
         try:
             with open(CONFIG_FILE, 'r') as f:
                 data = json.load(f)
+                _drop_retired_watcher_settings(data)
                 for key in DEPRECATED_CONFIG_KEYS:
                     data.pop(key, None)
                 defaults.update(data)
+                if "watcher_listen_model" not in data:
+                    defaults["watcher_listen_model"] = "accurate"
                 # Navigation animation originally shipped at 100 ms, then
                 # 40 ms. Advance only exact shipped defaults through each
                 # cadence generation; deliberate custom values stay intact.

@@ -9,8 +9,7 @@ keeps what this system's scans said until you jump.
 
 Samples: after the first and second sample of a species, how far the next
 must be (its genus's colony range), and when you're far enough. These are
-said as written (watcher_llm.SET_PREFIXES): a reworded line could lose the
-distance.
+said from the written lines, keeping the measured distance.
 """
 from __future__ import annotations
 

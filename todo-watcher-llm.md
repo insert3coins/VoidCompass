@@ -1,4 +1,6 @@
-# The Watcher's own words (experimental)
+# The Watcher's own words (historical)
+
+Retired in 5.7.3: the local language model used too much memory and graphics-card capacity. This document records its former design, not current work. Written lines, Piper voice, Whisper hearing, commands and plain answers remain; see [the removal plan](todo-remove-mind.md).
 
 A local language model for the Watcher. It says everyday thoughts in fresh
 words and answers when you talk to it. Built 2026-10-31 for 5.7.1, off by default.
@@ -69,7 +71,7 @@ Measured on the RX 6800:
   - The journal's words are highlighted again in the new words (`noticed_in`).
 - `WatcherMind.talk()` takes what you type on the Watcher page. The reply appears beside the orb with the heading IN REPLY and is always spoken. The conversation is kept in its memory (`talk`, the last 50).
 - **The MIND tab, redesigned the same day:**
-  - **A hero** with an animated SVG mind core whose colour and speed follow its state (DORMANT, NOT YET HERE, ARRIVING, WAKING, AWAKE, THINKING, IT WON'T WAKE), a big WAKE IT switch, model and device chips, and five readouts.
+  - **A hero** with an animated SVG mind core whose colour and speed follow its state (DORMANT, NOT YET HERE, ARRIVING, WAKING, AWAKE, THINKING, IT WON'T WAKE), a big on/off switch (OFF · ITS WRITTEN LINES or ON · ITS OWN MIND; the Model list also starts with Off since 5.7.3), model and device chips, and five readouts.
   - **A comms console:** the last 20 exchanges with times, a "choosing its words" indicator, five starter questions, and SAY IT.
   - **WHAT IT WROTE DOWN:** the diary.
   - **WHAT IT HAS SEEN LATELY:** a timeline marked JUMP, DOCK, SCAN, LIFE, SALE, RISK and so on.
@@ -390,6 +392,26 @@ You found it answered a cargo question with the ship, the system and the jumps; 
   - `tests/test_watcher_field_572.py`.
 - **"Remember that…"** (`remember_request`, `_watcher_remember`): kept with TEACH IT (`watcher_knowing.teach`). The note-taker passes over requests, so a "remember" never stuck before. "Remember when…?" is a question, and mystery names are refused in its own words.
 - `tests/test_watcher_answers_572.py`.
+
+## 5.7.3: the uplink (2026-11-01)
+
+You asked it to look prices up online; it said it had no internet access ("perhaps we could give it an uplink, to use what our trade does to look up prices?").
+
+- **How it works:**
+  - `watcher_copilot.uplink_request` recognises a question where to sell or buy a commodity, or a request to look it up online. The commodities come from `_watcher_commodities_named`, or the most you carry when you ask about your cargo.
+  - The deck's action (`_watcher_uplink`) runs the Trading page's own search in the background, through `_trading_task`: `spansh.commodity_stations`, the best price within the Sell cargo radius and the nearest, with your Sell cargo options and tonnage, cached like the page's.
+  - It returns `{"waiting": True, "say": ...}`. The mind says that beside the orb, leaves the talk's answer empty (the page keeps its dots, `talk_waiting`), and remembers the question (`_uplink`).
+  - When Spansh answers, `uplink_lines` (best, next best, nearest; station, system, distance, price, demand or stock, pads, carrier or planetary, age) goes to `WatcherMind.uplink_answer`, which runs the talk with them as its lookup (`_talk_job`).
+  - A question asked meanwhile drops the late reply. Without its own words, the first line is said as written.
+- A cached reply answers at once, so it's posted after the question is in (`_ui_post`). Trading searches off: it says the uplink is off. Asked online for something that isn't a commodity, it says what the uplink reaches.
+- `tests/test_watcher_uplink_573.py`.
+- **One overlay by name** (`overlay_request`, `OVERLAY_NAMES` with every overlay, `_watcher_overlay`):
+  - Hide or show goes through the overlay's hotkey action (`_handle_overlay_hotkey`, the `_overlay_hotkey_hidden` set). Off or on goes through Overlay Studio's `_html_overlay_toggle`, and so does showing one that's switched off.
+  - Replies cover already hidden or showing, on but with nothing to show, and behind the all-overlays curtain.
+  - The check runs before the whole-lot intents; "the HUD" alone stays the whole lot.
+  - Tests: `tests/test_watcher_overlay_commands_573.py`.
+- **Music play and pause** are real commands now (`MUSIC_REMOTE` gains play and pause; music.js handles play). The toggle depended on `_music_status` being current. A player that reported it's blocked gets a "click the deck once" reply.
+- **Local API** (you asked): `GET /api/v1/watcher/mind` (`api_watcher_mind`). It reports stage, the model chosen and loaded (from the running server: file, path, device, pid), each model's file, path, size, sha256 and source, the folder, the engine and search model (installed or running), context and slots, settings, stats, voice-in (Whisper, whisper.cpp, microphone, mode) and the licences. Never the engine's port or key. Docs are in api.md; tests in `tests/test_watcher_mind_api_573.py`.
 
 ## Checking it
 

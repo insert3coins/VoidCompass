@@ -2793,11 +2793,12 @@ const SETTINGS_SECTIONS = [
   {id: "appearance", title: "Appearance", heading: "Make yourself at home", category: "PRESENTATION", detail: "Choose your palette, find a comfortable text size and make the deck your own."},
   {id: "flight", title: "Flight & exploration", heading: "Flight & exploration", category: "FIELD PREFERENCES", detail: "Tune the helpers that travel with you, from fuel warnings to your next expedition."},
   {id: "hotkeys", title: "Hotkeys", heading: "A shortcut to your cockpit", category: "COMMAND INPUT", detail: "Keep your hands on the controls. These shortcuts work while Elite Dangerous has focus."},
+  {id: "voice", title: "Voice", heading: "Say the word", category: "VOICE CONTROL", detail: "Talk to the Watcher by voice, and let it work the ship: maps, gear, lights, pips and more, with Elite's own keys."},
   {id: "galnet", title: "Galnet", heading: "A signal from the Bubble", category: "NEWS RELAY", detail: "Choose how often the news arrives and how headlines move through your deck."},
   {id: "integrations", title: "Integrations", heading: "Connections you choose", category: "EXTERNAL SERVICES", detail: "Manage community services, sharing and your local API. Each connection has its own controls."},
   {id: "diagnostics", title: "Diagnostics & recovery", heading: "Keep the compass steady", category: "SYSTEM CARE", detail: "Check the runtime, collect a useful report and look after this commander's local history."},
   {id: "updates", title: "Updates", heading: "Ready for the next leg", category: "RELEASE CHANNEL", detail: "Your installed version, the latest check and a clear path to the next release."},
-];
+].sort((a, b) => a.title.localeCompare(b.title, "en"));
 let settingsSection = "journal";
 let settingsSaveSequence = 0;
 const settingsPendingSaves = new Map();
@@ -2815,17 +2816,184 @@ function settingsIcon(id) {
     galnet: '<path d="M12 5v15M7 20h10M8 8a6 6 0 0 0 0 8m8-8a6 6 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/><circle cx="12" cy="10" r="2"/>',
     integrations: '<rect x="8" y="8" width="8" height="8"/><path d="M12 2v6M12 16v6M2 12h6M16 12h6M5 5l3 3m8 8 3 3M5 19l3-3m8-8 3-3"/>',
     diagnostics: '<path d="M2 12h5l3-8 4 16 3-8h5"/>',
+    voice: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>',
     updates: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
   };
   return `<svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[id] || paths.journal}</svg>`;
 }
 
+// Settings › Hotkeys' groups (5.7.3), in order; the server says which each shortcut is in.
+const HOTKEY_GROUPS = [["overlays", "OVERLAYS"], ["controls", "OVERLAY CONTROLS"], ["watcher", "THE WATCHER"],
+  ["music", "MUSIC"], ["field", "RIGS AND EXPEDITIONS"]];
+let hotkeyFilter = (() => {
+  try { return window.localStorage.getItem("voidcompass.settings.hotkeyFilter") || "all"; } catch (_error) { return "all"; }
+})();
+
+// Settings › Hotkeys' filter: all, bound, clashes or free (the rows stay in the page, for its search).
+function applyHotkeyFilter() {
+  const panel = document.querySelector('[data-settings-panel="hotkeys"]');
+  if (!panel) return;
+  panel.querySelectorAll(".hotkey-row").forEach((row) => {
+    const shown = hotkeyFilter === "all" || (hotkeyFilter === "clashes" ? row.dataset.hotkeyClash === "1"
+      : row.dataset.hotkeyState === hotkeyFilter);
+    row.classList.toggle("filtered-out", !shown);
+  });
+  panel.querySelectorAll(".settings-group").forEach((group) => {
+    const rows = [...group.querySelectorAll(".hotkey-row")];
+    group.classList.toggle("filtered-out", rows.length > 0 && rows.every((row) => row.classList.contains("filtered-out")));
+  });
+  panel.querySelectorAll("[data-hotkey-filter]").forEach((button) =>
+    button.setAttribute("aria-pressed", String(button.dataset.hotkeyFilter === hotkeyFilter)));
+}
+
+let voiceFilter = "all";
+let voiceSearch = "";
+const voiceOpenEditors = new Set();
+const voiceActiveTabs = new Map();
+function applyVoiceFilter() {
+  const panel = document.querySelector('[data-settings-panel="voice"]');
+  if (!panel) return;
+  let shown = 0;
+  panel.querySelectorAll(".voice-command").forEach((row) => {
+    const matches = (voiceFilter === "all" || (voiceFilter === "custom" ? row.dataset.custom === "true"
+      : voiceFilter === "edited" ? row.dataset.edited === "true" : voiceFilter === "disabled" ? row.dataset.commandEnabled === "false"
+      : voiceFilter === "missing" ? row.dataset.state !== "ready" : row.dataset.state !== "none" && row.dataset.commandEnabled !== "false"))
+      && (row.dataset.voiceSearch || "").includes(voiceSearch.toLowerCase().trim());
+    row.classList.toggle("voice-filtered", !matches);
+    if (matches) shown++;
+  });
+  panel.querySelectorAll(".settings-group").forEach((group) => {
+    const rows = [...group.querySelectorAll(".voice-command")];
+    group.classList.toggle("voice-filtered", rows.length > 0 && rows.every((row) => row.classList.contains("voice-filtered")));
+  });
+  panel.querySelectorAll("[data-voice-filter]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.voiceFilter === voiceFilter)));
+  if (byId("voice-filter-empty")) byId("voice-filter-empty").hidden = shown > 0;
+}
+
+let sequenceUi = {state: {status: "idle"}, draft: "", stamp: "", timer: 0, fetching: false};
+
+function sequenceRecorderContent() {
+  const state = sequenceUi.state;
+  const active = ["armed", "recording"].includes(state.status);
+  const review = state.status === "review";
+  return `<header><b>CAPTURE & REVIEW</b><span>${escapeHtml(state.status.toUpperCase())}</span></header><p>Choose RECORD beside a sequence, switch to Elite and perform the steps. Return here to stop. Keyboard keys and controller buttons use Elite’s bindings; axes and mouse movement are not recorded.</p>${state.target ? `<p><b>${escapeHtml(state.target === "new" ? "New custom command" : state.target)}</b> · ${escapeHtml({ship: "Ship", srv: "SRV", foot: "On foot"}[state.place] || "")}</p>` : ""}<p role="status">${escapeHtml(state.note || "Your saved steps stay unchanged until you use a recording. App hotkeys and automatic ship commands pause during recording.")}</p>${active ? '<button type="button" data-sequence-stop>STOP RECORDING</button>' : ""}${(state.events || []).length ? `<ol class="sequence-recorded-inputs">${state.events.map((event) => `<li><span>${escapeHtml(event.input)} · ${numeric(event.seconds, 2)} s${event.focus > 0 ? ` · panel ${event.focus}` : ""}</span><label>Elite action<select data-sequence-choice="${event.index}"${review ? "" : " disabled"}><option value="">Choose the intended action…</option>${event.actions.map((action) => `<option value="${escapeHtml(action.action)}"${event.choice === action.action ? " selected" : ""}>${escapeHtml(action.label)} · ${escapeHtml(action.action)}${action.playable ? "" : " · NEEDS KEYBOARD BINDING"}</option>`).join("")}<option value="skip"${event.choice === "skip" ? " selected" : ""}>Skip this input</option></select></label></li>`).join("")}</ol>` : ""}${review ? `<label class="sequence-preview">REVIEW STEPS<textarea id="sequence-recording-preview" rows="7" spellcheck="false">${escapeHtml(sequenceUi.draft)}</textarea></label>${(state.errors || []).map((error) => `<p class="elite-error" role="alert">${escapeHtml(error)}</p>`).join("")}<p>Recorded panel keys add focus checks. Elite remembers its tabs and highlighted contacts: record from the same starting panel and return it to that state. Timings include playback’s minimum key gaps; review them before use.</p><button type="button" data-sequence-use${state.can_use ? "" : " disabled"}>${state.target === "new" ? "USE IN NEW COMMAND" : "USE & SAVE SEQUENCE"}</button>` : ""}${state.id && state.status !== "discarded" ? '<button type="button" data-sequence-discard>DISCARD RECORDING</button>' : ""}`;
+}
+
+function paintSequenceRecorder() {
+  const box = byId("sequence-recorder");
+  if (!box) return;
+  const stamp = JSON.stringify(sequenceUi.state);
+  if (box.dataset.stamp === stamp) return;
+  box.innerHTML = sequenceRecorderContent();
+  box.dataset.stamp = stamp;
+}
+
+async function sequenceLive() {
+  if (sequenceUi.fetching) return sequenceUi.fetching;
+  window.clearTimeout(sequenceUi.timer);
+  sequenceUi.timer = 0;
+  if (!byId("sequence-recorder")) return;
+  sequenceUi.fetching = (async () => {
+    try {
+      const response = await fetch(apiUrl("/api/data/sequence-recording"), {cache: "no-store"});
+      if (response.ok) {
+        const state = await response.json();
+        const stamp = JSON.stringify([state.id, state.events, state.steps, state.status]);
+        if (stamp !== sequenceUi.stamp) {
+          sequenceUi.draft = (state.steps || []).join("\n");
+          sequenceUi.stamp = stamp;
+        }
+        sequenceUi.state = state;
+        paintSequenceRecorder();
+      }
+    } catch (_error) {
+      // A pending command or refresh can finish before the next poll.
+    } finally {
+      sequenceUi.fetching = false;
+      if (byId("sequence-recorder")) sequenceUi.timer = window.setTimeout(sequenceLive, ["armed", "recording"].includes(sequenceUi.state.status) ? 250 : 1000);
+    }
+  })();
+  return sequenceUi.fetching;
+}
+
+async function sequenceControl(operation, payload = {}) {
+  const accepted = await command("workspace", {page: "settings", operation, record_id: sequenceUi.state.id, ...payload});
+  if (!accepted) showToast("The recorder could not do that. Check its status and try again.");
+  await sequenceLive();
+}
+
+async function useSequenceRecording() {
+  const id = sequenceUi.state.id;
+  const draft = byId("sequence-recording-preview")?.value || "";
+  await sequenceLive();
+  const state = sequenceUi.state;
+  if (state.id !== id || !state.can_use) { showToast("Review the current recording before using it."); return; }
+  if (state.target === "new") {
+    const box = byId("voice-command-new");
+    if (box.hidden) { showToast("Open Add command first, then use the recording."); return; }
+    const form = box.querySelector(".voice-definition");
+    form.dataset.recordedProfile = state.profile;
+    form.querySelector('[data-command-field="sequence"]').value = draft;
+    form.querySelectorAll("[data-command-place]").forEach((input) => { input.checked = input.dataset.commandPlace === state.place; });
+    form.querySelector('[data-command-field="sequence"]').focus();
+    showToast("Recording added. Review the name and phrases, then create the command.");
+    return;
+  }
+  const input = [...document.querySelectorAll("[data-ship-macro]")].find((item) => item.dataset.shipMacro === state.target);
+  if (!input) { showToast("This command is no longer available. Your saved steps have not changed."); return; }
+  input.value = draft;
+  if (await saveShipSequence(input, false, state.profile)) showToast("Recording applied; saving sequence…");
+}
+
+function voiceSequencePanels(editors, active, row) {
+  if (!editors.length) return `<p class="input-note">This is a Void Compass action; it does not need an Elite key binding.${row.native?.kind === "uplink" ? " Keep {commodity} in the main phrase and each alias, for example ‘find prices for {commodity}’." : ""}</p>`;
+  return `<h5>BOUND-ACTION SEQUENCES</h5><div class="voice-editor-tabs" role="group" aria-label="Choose a sequence">${editors.map((editor) => `<button type="button" data-voice-tab="${escapeHtml(editor.id)}" aria-pressed="${editor.id === active}">${escapeHtml(editor.where || "Ship")} · ${escapeHtml(editor.say)}</button>`).join("")}</div>${editors.map((editor) => `<div class="voice-sequence" data-voice-editor="${escapeHtml(editor.id)}"${editor.id !== active ? " hidden" : ""}><label>One step per line<textarea data-ship-macro="${escapeHtml(editor.id)}" aria-label="${escapeHtml(editor.say)} ${escapeHtml(editor.where || "")} sequence" rows="5" spellcheck="false">${escapeHtml((editor.sequence?.length ? editor.sequence : editor.default_sequence || []).join("\n"))}</textarea></label><small>Use a bound Elite action, ‘UI_Down x3’, ‘wait 0.5’, ‘hold UI_Select 1.2’, ‘focus FocusLeftPanel 2’ or ‘leave UI_Back 2’. Saves when you leave the field.</small><div class="sequence-actions"><button type="button" data-sequence-record="${escapeHtml(editor.id)}">RECORD IN ELITE</button><button type="button" data-ship-macro-reset="${escapeHtml(editor.id)}">RESTORE DEFAULT STEPS</button></div>${editor.error ? `<p role="alert">${escapeHtml(editor.error)}</p>` : ""}</div>`).join("")}`;
+}
+
+function voiceCommandFields(row = {}, creating = false) {
+  const field = (key, title, value, multiline = false) => `<label>${title}${multiline ? `<textarea data-command-field="${key}" rows="3" spellcheck="false">${escapeHtml(value || "")}</textarea>` : `<input data-command-field="${key}" value="${escapeHtml(value || "")}" maxlength="${key === "phrase" ? 70 : key === "reply" ? 300 : 80}">`}</label>`;
+  const custom = creating || row.custom;
+  return `<div class="voice-definition" data-command-id="${escapeHtml(row.id || "")}"${creating ? ' data-command-new="true"' : ""}><div class="voice-definition-fields">${field("name", "DISPLAY NAME", row.name || row.say)}${field("phrase", "MAIN SPOKEN PHRASE", row.phrase || row.say)}${field("aliases", "ALIASES · ONE COMPLETE PHRASE PER LINE", (row.aliases || []).join("\n"), true)}${field("group", "GROUP", row.group || "Custom commands")}${custom ? field("reply", "WATCHER'S REPLY", row.reply || "Done.") : ""}</div><div class="voice-definition-options"><label><input type="checkbox" data-command-field="enabled"${row.enabled !== false ? " checked" : ""}> ENABLED</label>${custom ? `<fieldset><legend>AVAILABLE IN</legend>${[["ship", "Ship"], ["srv", "SRV"], ["foot", "On foot"]].map(([key, label]) => `<label><input type="checkbox" data-command-place="${key}"${(row.places || ["ship"]).includes(key) ? " checked" : ""}> ${label}</label>`).join("")}</fieldset>` : `<label><input type="checkbox" data-command-field="keep_defaults"${row.keep_defaults !== false ? " checked" : ""}> ALSO ACCEPT ORIGINAL BUILT-IN PHRASES</label>`}</div>${creating ? field("sequence", "DEFAULT SEQUENCE · ONE BOUND ACTION PER LINE", "UI_Select", true) + `<div class="sequence-actions"><label>RECORD FOR<select id="sequence-new-place"><option value="ship">Ship</option><option value="srv">SRV</option><option value="foot">On foot</option></select></label><button type="button" data-sequence-record="new">RECORD IN ELITE</button></div>` : ""}<p class="input-note">The display name labels the command. Say its main phrase or an alias. Names and phrases save together; sequence edits below save when you leave the field.</p><div class="voice-definition-actions"><button type="button" data-command-save>${creating ? "CREATE COMMAND" : "SAVE NAME & PHRASES"}</button>${creating ? '<button type="button" data-command-cancel>CANCEL</button>' : custom ? '<button type="button" class="danger-action" data-command-delete>DELETE CUSTOM COMMAND</button>' : '<button type="button" data-command-restore>RESTORE NAME & PHRASES</button>'}</div><p class="voice-definition-note" role="status"></p>${settingFlag()}</div>`;
+}
+
+async function saveVoiceCommand(root, operation = "save") {
+  const ship = model.workspace?.data?.voice?.ship || {};
+  const definitions = JSON.parse(JSON.stringify(ship.definitions || {}));
+  const id = root.dataset.commandId;
+  if (operation === "delete" || operation === "restore") delete definitions[id];
+  else {
+    const value = {...(definitions[id] || {})};
+    root.querySelectorAll("[data-command-field]").forEach((input) => {
+      const key = input.dataset.commandField;
+      value[key] = input.type === "checkbox" ? input.checked : ["aliases", "sequence"].includes(key)
+        ? input.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : input.value.trim();
+    });
+    const places = [...root.querySelectorAll("[data-command-place]:checked")].map((input) => input.dataset.commandPlace);
+    if (root.querySelector("[data-command-place]")) value.places = places;
+    definitions[id] = value;
+  }
+  root.querySelector(".voice-definition-note").textContent = "Saving command…";
+  await saveSettings({watcher_ship_commands: definitions}, [root], {revert: () => {
+    if (root.isConnected) root.querySelector(".voice-definition-note").textContent = "Not saved. Check the message above, then correct the fields and try again.";
+  }, recordedProfile: root.dataset.recordedProfile});
+}
+
 const SETTINGS_GROUP_NOTES = {
+  "TALK BY VOICE": "Hold your talk key, speak, let go: it carries out a command or answers from your ship’s systems.",
+  "SHIP COMMANDS": "It presses Elite's own keys, from your bindings, when you ask. Status.json tells it what's done already.",
+  "TO BIND IN ELITE": "Actions with only a pad or stick button, by the preset they're in: it can't press these yet.",
+  "WHAT YOU CAN SAY": "A few of the ways to say each. Typed or spoken, please and thank you included.",
+  INPUT: "What Void Compass listens to, and the bindings Elite already uses.",
+  OVERLAYS: "Show or hide each overlay, wherever you are.",
+  "OVERLAY CONTROLS": "Overlay Studio, every overlay at once, and the overlays' own options.",
+  "THE WATCHER": "Poke it, answer its questions, and push to talk.",
+  MUSIC: "The music player, from anywhere.",
+  "RIGS AND EXPEDITIONS": "Mark rigs as they go down, and places along an expedition.",
   JOURNAL: "The source of your flight history.", SCREENSHOTS: "Bring your captures into the journey.",
   THEME: "A different atmosphere, applied as soon as you choose it.", DISPLAY: "Comfortable reading, at your preferred scale.",
   FLIGHT: "Small helps for the next jump.", EXPEDITIONS: "Choose what matters on the long route.",
   HOME: "A familiar point to measure the distance from.", "COMMAND DECK": "How the dashboard follows your flight.",
-  ACHIEVEMENTS: "Milestones earned along the way.", SHORTCUTS: "Record a combination, clear it, or return to the defaults.",
+  ACHIEVEMENTS: "Milestones earned along the way.", SHORTCUTS: "Show all of them, or just those bound, clashing with Elite, or free.",
   RELAY: "A connection to Frontier's Galnet feed.", "NEWS BAR": "Set the pace of your headlines.",
   EDSM: "Your exploration record in the community atlas.", INARA: "Your commander, ships and activity on Inara.",
   "RAVEN COLONIAL": "Keep your colonisation team in the loop.", BGS: "Online reference data for the background simulation.",
@@ -2877,11 +3045,13 @@ function settingsSummaries(data) {
   const journal = data.paths?.journal || {};
   const galnet = data.galnet || {};
   const bound = (data.hotkeys || []).filter((row) => row.value).length;
+  const buttonsBound = Object.keys(data.controllers?.buttons || {}).length;
   return {
     journal: journal.exists ? `JOURNAL LINKED · ${numeric(journal.logs)} LOGS` : "JOURNAL FOLDER NOT FOUND",
     appearance: String(data.theme_editor?.name || "Void Cyan").toUpperCase(),
     flight: `LOW FUEL AT ${Math.round(number(value.low_fuel_threshold_pct, .25) * 100)}%`,
-    hotkeys: value.overlay_hotkeys_enabled ? `${numeric(bound)} BOUND` : "HOTKEYS OFF",
+    hotkeys: value.overlay_hotkeys_enabled ? `${numeric(bound)} KEY${bound === 1 ? "" : "S"} · ${numeric(buttonsBound)} BUTTON${buttonsBound === 1 ? "" : "S"}` : "HOTKEYS OFF",
+    voice: `${data.voice?.listen?.enabled ? "VOICE ON" : "VOICE OFF"} · ${data.voice?.ship?.enabled === false ? "COMMANDS OFF" : `${numeric(data.voice?.ship?.ready)} OF ${numeric(data.voice?.ship?.total)} COMMANDS READY`}`,
     galnet: value.galnet_enabled ? `${String(galnet.status || "standby").toUpperCase()} · ${numeric((galnet.articles || []).length)} DISPATCHES` : "RELAY OFF",
     integrations: [value.edsm_upload_enabled ? "EDSM ON" : "EDSM OFF", value.inara_upload_enabled ? "INARA ON" : "INARA OFF", value.eddn_market_upload_enabled ? "EDDN ON" : "EDDN OFF", value.api_enabled ? "API ON" : "API OFF"].join(" · "),
     diagnostics: String(data.health?.level || "NOMINAL").toUpperCase(),
@@ -2926,9 +3096,91 @@ function settingsSectionBody(id, data) {
       + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
       + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingNote("Unlocks pop up in the cockpit's Achievements overlay: switch it on or off, and place it, in Overlay Studio.")}`);
   }
+  if (id === "voice") {
+    const voice = data.voice || {};
+    const listen = voice.listen || {};
+    const ship = voice.ship || {};
+    const mics = Array.isArray(listen.mics) ? listen.mics : [];
+    const chosen = String(listen.mic || "");
+    const names = chosen && !mics.includes(chosen) ? [...mics, chosen] : mics;
+    const choice = (key, selected, options, disabled = false) => `<div class="voice-choices" role="group">${options.map(([id, title, detail]) => `<button type="button" data-voice-choice="${key}" data-value="${escapeHtml(id)}" aria-pressed="${String(selected) === String(id)}"${disabled ? " disabled" : ""}><b>${escapeHtml(title)}</b><small>${escapeHtml(detail || "")}</small></button>`).join("")}</div>`;
+    const models = listen.models || [];
+    const keyNote = !listen.hotkey ? "Set a talk key in Hotkeys → The Watcher."
+      : listen.hotkeys_on === false ? "Enable system-wide hotkeys in Hotkeys." : "Use your keyboard shortcut or controller talk button.";
+    const hearing = settingGroup("TALK BY VOICE",
+      settingSwitch({key: "watcher_listen_enabled", label: "Talk to the Watcher", detail: "Speak a command or ask a question. Release the key to send it.", checked: listen.enabled})
+      + `<div class="input-cards voice-setup-grid"><section class="input-card" data-search="recognition model whisper fast accuracy speed download"><header><b>1 · RECOGNITION</b><span>LOCAL TO THIS PC</span></header>${choice("watcher_listen_model", listen.model || "accurate", [["fast", "Fast · recommended", "Base English · 148 MB. Quick commands; may miss unusual names."], ["accurate", "Accuracy", "Small English · 488 MB. Better with names; more time to recognise."]], listen.downloading)}<div class="setting-row voice-hearing" id="voice-hearing" data-search="hearing download whisper speech model"><span class="setting-copy"><b>${escapeHtml(models.find((item) => item.id === listen.model)?.name || "Speech model")}</b><small id="voice-hearing-state">${listen.installed ? "Downloaded." : "Download this model to use it."}</small><small id="voice-latency">Recognition warms in the background while voice is on.</small></span><span class="setting-control voice-actions"><button type="button" id="voice-download"${listen.installed || listen.downloading ? " hidden" : ""}>DOWNLOAD · ${numeric(listen.download_mb)} MB</button><button type="button" id="voice-cancel"${listen.downloading ? "" : " hidden"}>CANCEL</button><button type="button" class="danger-action" id="voice-remove"${models.some((item) => item.installed) || listen.installed ? "" : " hidden"}>REMOVE MODELS</button></span><div class="voice-progress" id="voice-progress" hidden><i></i><span></span></div></div>${settingFlag()}</section>
+      <section class="input-card" data-search="${settingSearchText("microphone input device", names.join(" "))}"><header><b>2 · MICROPHONE</b><span>CHOOSE AN INPUT</span></header>${choice("watcher_listen_mic", chosen, [["", "Windows default", "Follows Windows Sound settings."], ...names.map((name) => [name, name, mics.includes(name) ? "Available" : "Not connected"])])}${settingFlag()}</section>
+      <section class="input-card" data-search="talk key hold tap hotkey control"><header><b>3 · TALK CONTROL</b><span>${escapeHtml(listen.hotkey || "NO KEY SET")}</span></header>${choice("watcher_listen_mode", listen.mode === "tap" ? "tap" : "hold", [["hold", "Hold to talk", "Hold, speak, release for the quickest reply."], ["tap", "Tap to talk", "Tap to start; tap again to send."]])}<div class="voice-key"><kbd>${escapeHtml(listen.hotkey || "NONE")}</kbd><button type="button" data-settings-goto="hotkeys">CHANGE IN HOTKEYS</button><p>${escapeHtml(keyNote)}</p></div>${settingFlag()}</section></div>`
+      + `<div class="setting-row voice-test" data-search="test microphone mic level hear it back"><span class="setting-copy"><b>Check your microphone</b><small id="voice-test-note">Say something for a few seconds, then hear it back.</small></span><span class="setting-control"><span class="voice-meter" id="voice-meter" aria-hidden="true"><i></i></span><button type="button" id="voice-test"${listen.enabled && listen.installed ? "" : " disabled"}>TEST MIC</button><button type="button" id="voice-play"${listen.has_test ? "" : " hidden"}>HEAR IT BACK</button></span></div>`
+      + settingNote("Replies aloud also need the Watcher’s voice enabled on Watcher → Voice, and its orb enabled in Overlay Studio.")
+      + (listen.notice ? settingNote(listen.notice) : ""));
+    const missing = Array.isArray(ship.missing) ? ship.missing : [];
+    const commands = settingGroup("COMMAND CONTROLS",
+      settingSwitch({key: "watcher_ship_enabled", label: "Allow Elite key commands", detail: "Maps, panels, docking, gear, pips and custom key sequences. App controls and conversation remain available when this is off.", checked: ship.enabled !== false})
+      + `<div class="voice-ship-state"><span class="${ship.running ? "on" : ""}"><b>ELITE</b>${ship.running ? "RUNNING" : "NOT RUNNING"}</span><span class="on"><b>READY</b>${numeric(ship.ready)} OF ${numeric(ship.total)}</span><span class="${missing.length ? "warn" : "on"}"><b>KEYS MISSING</b>${numeric(missing.length)}</span></div>`
+      + (ship.error ? settingNote(ship.error) : "")
+      + (missing.length ? settingNote(`Presets needing keyboard bindings: ${[...new Set(missing.map((row) => row.preset).filter(Boolean))].join("; ")}.`) : "")
+      + settingNote("In Elite → Options → Controls, add a keyboard key to any missing action; a secondary binding is fine. Pad or stick buttons alone cannot be pressed by voice. Elite must be in front.")
+      + settingNote("Panels reopen on Elite’s remembered tab. Use ‘next tab’, ‘menu down’, ‘select’ or ‘go back’, or edit the command’s sequence to suit your layout."));
+    const allRows = (ship.groups || []).flatMap((group) => group.rows || []);
+    const custom = (row) => (row.editors?.length ? row.editors : row.default_sequence?.length ? [row] : []).some((editor) => JSON.stringify(editor.sequence || []) !== JSON.stringify(editor.default_sequence || []));
+    const counts = {all: allRows.length, ready: allRows.filter((row) => row.enabled !== false && row.state !== "none").length,
+      missing: allRows.filter((row) => row.state !== "ready").length, custom: allRows.filter((row) => row.custom).length,
+      edited: allRows.filter((row) => custom(row) || ship.definitions?.[row.id]).length, disabled: allRows.filter((row) => row.enabled === false).length};
+    const toolbar = settingGroup("WHAT YOU CAN SAY", `<div class="hotkey-toolbar"><div class="hotkey-filters" role="group" aria-label="Filter voice commands">${[["all", "ALL"], ["ready", "READY"], ["missing", "NEEDS KEYS"], ["custom", "CUSTOM COMMANDS"], ["edited", "EDITED"], ["disabled", "DISABLED"]].map(([key, label]) => `<button type="button" data-voice-filter="${key}" aria-pressed="${voiceFilter === key}">${label} <b>${numeric(counts[key])}</b></button>`).join("")}</div><button type="button" id="voice-command-add">ADD COMMAND</button><label class="voice-search">FIND A COMMAND<input id="voice-command-search" type="search" value="${escapeHtml(voiceSearch)}" placeholder="Maps, panels, docking…"></label></div><p class="input-note">Every app and ship command can be renamed. EDIT COMMAND opens its name, spoken phrases, aliases, group and sequences. Custom commands use your bound Elite actions.</p><div id="voice-command-new" hidden>${voiceCommandFields({}, true)}</div><p id="voice-filter-empty" hidden>No commands match. Try another phrase or filter.</p>`);
+    const catalogue = (ship.groups || []).map((group) => {
+      const rows = Array.isArray(group.rows) ? group.rows : [];
+      return settingGroup(group.title, `<div class="voice-command-head" aria-hidden="true"><span>COMMAND / SPOKEN PHRASE</span><span>ELITE KEYBOARD BINDINGS</span><span>SEQUENCE</span></div>` + rows.map((row, index) => {
+        const editors = row.editors?.length ? row.editors : row.default_sequence?.length ? [row] : [];
+
+        const rowKey = row.id || editors[0]?.id || row.say;
+        const isOpen = voiceOpenEditors.has(rowKey);
+        const active = voiceActiveTabs.get(rowKey) || editors[0]?.id;
+        const cells = (row.cells || []).map((item) => `<em class="${item.problem ? "missing" : ""}"><i>${escapeHtml(item.where)} · ${escapeHtml(item.action)}</i>${escapeHtml(item.key || (item.problem === "odd_key" ? "CAN’T PRESS" : "ADD A KEY IN ELITE"))}</em>`).join("");
+        return `<div class="voice-command" data-state="${escapeHtml(row.state)}" data-custom="${Boolean(row.custom)}" data-command-enabled="${row.enabled !== false}" data-edited="${custom(row) || Boolean(ship.definitions?.[row.id])}" data-voice-row="${escapeHtml(rowKey)}" data-voice-search="${escapeHtml([row.name || "", row.say, ...(row.aliases || []), group.title, ...(row.cells || []).map((cell) => cell.action)].join(" ").toLowerCase())}" data-search="${settingSearchText(row.say, group.title, "voice command")}"><span class="voice-command-say"><b>${escapeHtml(row.name || row.say)}</b><span>Say “${escapeHtml(row.phrase || row.say)}”</span><small>${row.enabled === false ? "DISABLED · " : ""}${row.state === "ready" ? "Ready" : row.state === "some" ? "Ready in some vehicles · check bindings" : "Needs keyboard bindings"}${custom(row) ? " · Custom steps" : ""}</small></span><span class="voice-keys">${cells || (row.native ? "VOID COMPASS" : "")}</span>${row.id || editors.length ? `<button type="button" data-voice-edit aria-expanded="${isOpen}">${isOpen ? "CLOSE EDITOR" : "EDIT COMMAND"}</button><div class="voice-editor"${isOpen ? "" : " hidden"}>${voiceCommandFields(row)}${voiceSequencePanels(editors, active, row)}</div>` : ""}${settingFlag()}</div>`;
+      }).join(""));
+    }).join("");
+    return hearing + commands + settingGroup("SEQUENCE RECORDER", `<section id="sequence-recorder" class="sequence-recorder">${sequenceRecorderContent()}</section>`) + toolbar + catalogue;
+  }
   if (id === "hotkeys") {
-    const rows = (data.hotkeys || []).map((row) => `<div class="setting-row hotkey-row" data-search="${settingSearchText(row.label, row.action, row.value, "hotkey shortcut")}"><span class="setting-copy"><b>${escapeHtml(row.label)}</b><small>${escapeHtml(row.default ? `Default ${row.default}` : "No default")}</small></span><span class="setting-control"><input data-hotkey-action="${escapeHtml(row.action)}" data-saved="${escapeHtml(row.value || "")}" value="${escapeHtml(row.value || "")}" placeholder="UNBOUND" readonly aria-label="${escapeHtml(row.label)} shortcut"><button type="button" data-hotkey-record="${escapeHtml(row.action)}" aria-label="Record ${escapeHtml(row.label)} shortcut">RECORD</button><button type="button" data-hotkey-clear="${escapeHtml(row.action)}" aria-label="Clear ${escapeHtml(row.label)} shortcut">CLEAR</button></span>${settingFlag()}</div>`).join("");
-    return settingGroup("SHORTCUTS", `${settingSwitch({key: "overlay_hotkeys_enabled", label: "System-wide hotkeys", detail: "Shortcuts work while Elite has focus.", checked: value.overlay_hotkeys_enabled})}<p class="hotkey-status" id="hotkey-status">Press RECORD, then the whole shortcut. It saves as soon as you press it.</p>${rows}${settingActions(`<button type="button" id="hotkey-defaults">RESTORE DEFAULTS</button>`, "restore default hotkeys")}`);
+    // Settings › Hotkeys, redone for 5.7.3: what Void Compass listens to (keyboard,
+    // controllers) and what Elite already uses; then the shortcuts, in groups.
+    const controllers = data.controllers || {};
+    const buttons = controllers.buttons || {};
+    const keyClashes = controllers.keys || {};
+    const learning = controllers.learning || {};
+    const hotkeys = data.hotkeys || [];
+    const clashes = (row) => (row.value ? keyClashes[row.action]?.clashes?.length || 0 : 0)
+      + (buttons[row.action]?.clashes?.length || 0);
+    const inElite = (found, what) => found?.clashes?.length
+      ? `<small class="hotkey-clash">${what} in Elite: ${found.clashes.map(escapeHtml).join(", ")}${found.more ? ` and ${numeric(found.more)} more` : ""}</small>` : "";
+    const shortcut = (row) => {
+      const action = escapeHtml(row.action);
+      const label = escapeHtml(row.label);
+      const button = buttons[row.action];
+      const listening = learning.action === row.action && learning.status === "listening";
+      const note = learning.action === row.action && !listening && learning.note
+        ? `<small class="hotkey-learn-note" data-status="${escapeHtml(learning.status || "")}">${escapeHtml(learning.note)}</small>` : "";
+      return `<div class="setting-row hotkey-row${listening ? " learning" : ""}" data-hotkey-state="${row.value || button ? "bound" : "free"}" data-hotkey-clash="${clashes(row) ? "1" : ""}" data-search="${settingSearchText(row.label, row.action, row.value, button?.label || "", "hotkey shortcut controller button pad joystick")}"><span class="setting-copy"><b>${label}</b><small>${escapeHtml(row.default ? `Default ${row.default}` : "No default key")}</small>${row.value ? inElite(keyClashes[row.action], "Key") : ""}${inElite(button, "Button")}${note}</span><span class="setting-control hotkey-cell hotkey-key"><input data-hotkey-action="${action}" data-saved="${escapeHtml(row.value || "")}" value="${escapeHtml(row.value || "")}" placeholder="No key" readonly aria-label="${label} shortcut"><button type="button" data-hotkey-record="${action}" aria-label="Record ${label} shortcut">RECORD</button><button type="button" class="hotkey-x" data-hotkey-clear="${action}" title="Clear the key" aria-label="Clear ${label} shortcut"${row.value ? "" : " disabled"}>✕</button></span><span class="setting-control hotkey-cell hotkey-pad controller-control"><output class="${button ? "" : "unset"}" data-controller-label="${action}">${listening ? "PRESS A BUTTON…" : escapeHtml(button?.label || "No button")}</output><button type="button" data-controller-learn="${action}" aria-label="Set a controller button for ${label}">${listening ? "CANCEL" : "SET"}</button><button type="button" class="hotkey-x" data-controller-clear="${action}" title="Clear the button" aria-label="Clear the controller button for ${label}"${button ? "" : " disabled"}>✕</button></span>${settingFlag()}</div>`;
+    };
+    const elite = controllers.elite || {};
+    const eliteRows = (elite.groups || []).map((group) => `<li><span>${escapeHtml(group.label)}</span><b>${escapeHtml(group.preset)}</b><small>${group.found ? (group.built_in ? "built-in" : "your file") : "not found"}</small></li>`).join("");
+    const keysBound = hotkeys.filter((row) => row.value).length;
+    const buttonsBound = hotkeys.filter((row) => buttons[row.action]).length;
+    const input = settingGroup("INPUT", `<div class="input-cards"><section class="input-card"><header><b>KEYBOARD</b><span>${numeric(keysBound)} BOUND</span></header>${settingSwitch({key: "overlay_hotkeys_enabled", label: "System-wide hotkeys", detail: "Your shortcuts work while Elite has focus.", checked: value.overlay_hotkeys_enabled})}<p class="input-note">A shortcut is Ctrl, Alt or Shift with a key: press RECORD, then the whole combination. Esc cancels.</p></section><section class="input-card"><header><b>CONTROLLERS</b><span>${numeric(buttonsBound)} BOUND</span></header>${settingSwitch({key: "controller_hotkeys_enabled", label: "Controller buttons", detail: "Pad, stick and HOTAS buttons, or a combination: hold one, press another.", checked: value.controller_hotkeys_enabled !== false})}<div class="controller-live" id="controller-live" data-search="${settingSearchText("controllers connected pad joystick hotas held buttons")}"><b>CONNECTED</b><span id="controller-devices">Looking…</span><b>HELD NOW</b><span id="controller-down">Nothing</span></div></section><section class="input-card controller-elite" data-search="${settingSearchText("elite bindings preset keybinds default custom game folder")}"><header><b>ELITE'S BINDINGS</b><span>${eliteRows ? "READ FROM THE GAME" : "NOT FOUND"}</span></header>${eliteRows ? `<ul class="elite-groups">${eliteRows}</ul>` : ""}${elite.error ? `<p class="elite-error">${escapeHtml(elite.error)}</p>` : `<p class="elite-note">A key or button Elite already uses is shown under its shortcut, so you can pick a free one.</p>`}<details class="elite-folder"${elite.error || value.elite_game_folder ? " open" : ""}><summary>GAME FOLDER</summary>${settingText({key: "elite_game_folder", id: "setting-elite-folder", label: "Elite's game folder", detail: "Only if its built-in presets aren't found by themselves: the folder Elite is installed in.", value: value.elite_game_folder, placeholder: "Found by itself"})}</details></section></div>`);
+    const counts = {all: hotkeys.length, bound: hotkeys.filter((row) => row.value || buttons[row.action]).length,
+      clashes: hotkeys.filter((row) => clashes(row)).length};
+    counts.free = counts.all - counts.bound;
+    const filters = [["all", "ALL"], ["bound", "BOUND"], ["clashes", "CLASHES"], ["free", "FREE"]].map(([key, label]) =>
+      `<button type="button" data-hotkey-filter="${key}" aria-pressed="${hotkeyFilter === key}">${label} <b>${numeric(counts[key])}</b></button>`).join("");
+    const toolbar = settingGroup("SHORTCUTS", `<div class="hotkey-toolbar" data-search="${settingSearchText("filter shortcuts bound clashes free restore default keys")}"><div class="hotkey-filters" role="group" aria-label="Show these shortcuts">${filters}</div><button type="button" id="hotkey-defaults">RESTORE DEFAULT KEYS</button></div><p class="hotkey-status" id="hotkey-status">RECORD a key, or SET a controller button: each saves as soon as you press it.</p>`);
+    const head = `<div class="hotkey-head" aria-hidden="true"><span>SHORTCUT</span><span>KEYBOARD</span><span>CONTROLLER</span></div>`;
+    const groups = HOTKEY_GROUPS.map(([key, title]) => {
+      const rows = hotkeys.filter((row) => (row.group || "controls") === key);
+      return rows.length ? settingGroup(title, head + rows.map(shortcut).join("")) : "";
+    }).join("");
+    return input + toolbar + groups;
   }
   if (id === "galnet") {
     const updated = galnet.updated_at ? ` · UPDATED ${String(galnet.updated_at).toUpperCase()}` : "";
@@ -3025,6 +3277,15 @@ function renderSettingsWorkspace(data) {
   const root = byId("settings-workspace");
   const scroller = root.closest(".pages");
   const scrollTop = scroller?.scrollTop || 0;
+  const previousNew = byId("voice-command-new");
+  const keepNew = root.dataset.commander === data.profile?.key && previousNew && !previousNew.hidden;
+  const newDraft = keepNew ? [...previousNew.querySelectorAll("input, textarea, select")].map((input) => ({value: input.value, checked: input.checked})) : null;
+  const newId = keepNew ? previousNew.querySelector(".voice-definition")?.dataset.commandId : "";
+  const newProfile = keepNew ? previousNew.querySelector(".voice-definition")?.dataset.recordedProfile : undefined;
+  if (root.dataset.commander !== data.profile?.key) {
+    sequenceUi.state = {status: "idle"}; sequenceUi.draft = ""; sequenceUi.stamp = "";
+  }
+  root.dataset.commander = data.profile?.key || "";
   const summaries = settingsSummaries(data);
   const profile = data.profile || {};
   if (!SETTINGS_SECTIONS.some((section) => section.id === settingsSection)) settingsSection = "journal";
@@ -3072,6 +3333,22 @@ function renderSettingsWorkspace(data) {
   updateSettingsLive(data);
   showSettingsTestResult(data.tools || {});
   if (scroller) scroller.scrollTop = scrollTop;
+  applyHotkeyFilter();
+  applyVoiceFilter();
+  startControllerLive();
+  startVoiceLive();
+  if (newDraft) {
+    const box = byId("voice-command-new");
+    box.hidden = false;
+    const form = box.querySelector(".voice-definition");
+    form.dataset.commandId = newId;
+    if (newProfile !== undefined) form.dataset.recordedProfile = newProfile;
+    box.querySelectorAll("input, textarea, select").forEach((input, index) => {
+      if (newDraft[index]) { input.value = newDraft[index].value; input.checked = newDraft[index].checked; }
+    });
+  }
+  paintSequenceRecorder();
+  if (!sequenceUi.timer) sequenceLive();
 }
 
 // Brings an element in line with a freshly built copy, touching only what
@@ -3223,7 +3500,7 @@ async function saveSettings(values, rows = [], extra = {}) {
   settingsPendingSaves.set(id, {rows, revert: extra.revert, started: Date.now()});
   rows.forEach((row) => flagSettingRow(row, "saving"));
   settingsSaveState("saving");
-  const accepted = await command("workspace", {page: "settings", operation: "save", save_id: id, values, ...(extra.hotkeys ? {hotkeys: extra.hotkeys} : {})});
+  const accepted = await command("workspace", {page: "settings", operation: "save", save_id: id, values, ...(extra.hotkeys ? {hotkeys: extra.hotkeys} : {}), ...(extra.recordedProfile !== undefined ? {recorded_profile: extra.recordedProfile} : {})});
   if (!accepted) settleSettingsSave(id, false, "the command deck could not reach Void Compass");
   // Should no snapshot confirm it, a save the channel accepted stands.
   window.setTimeout(() => { if (settingsPendingSaves.has(id)) settleSettingsSave(id, true); }, 4000);
@@ -3254,6 +3531,23 @@ function settingValue(input) {
   if (input.type === "checkbox") return input.checked;
   if (input.dataset.settingType === "number") return number(input.value);
   return input.value.trim();
+}
+
+async function saveShipSequence(input, reset = false, recordedProfile = undefined) {
+  const rows = (model.workspace?.data?.voice?.ship?.groups || []).flatMap((group) => group.rows || []);
+  const editors = rows.flatMap((row) => row.editors?.length ? row.editors : row.default_sequence?.length ? [row] : []);
+  const defaults = new Map(editors.map((editor) => [editor.id, editor.default_sequence || []]));
+  const previous = input.defaultValue;
+  if (reset) input.value = (defaults.get(input.dataset.shipMacro) || []).join("\n");
+  const macros = {};
+  document.querySelectorAll("[data-ship-macro]").forEach((editor) => {
+    const steps = editor.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (JSON.stringify(steps) !== JSON.stringify(defaults.get(editor.dataset.shipMacro))) macros[editor.dataset.shipMacro] = steps;
+  });
+  const revert = () => { input.value = previous; input.defaultValue = previous; };
+  const accepted = await saveSettings({watcher_ship_macros: macros}, [input.closest(".voice-command")], {revert, recordedProfile});
+  if (accepted) input.defaultValue = input.value;
+  return accepted;
 }
 
 async function saveSettingsHotkeys(rows, message) {
@@ -3296,12 +3590,120 @@ function settingsCanRerender() {
 }
 
 // What the page shows, without the live numbers updateSettingsLive handles.
+// Settings › Hotkeys' live readout (5.7.3): the controllers Void Compass sees and
+// what's held, asked of the app a few times a second while it's on screen.
+let controllerLiveTimer = 0;
+async function controllerLive() {
+  controllerLiveTimer = 0;
+  const box = document.getElementById("controller-live");
+  if (!box || !box.isConnected) return;
+  // Asked only while it's on screen; looked at again now and then until it is.
+  if (box.offsetParent === null || document.hidden) {
+    controllerLiveTimer = window.setTimeout(controllerLive, 1000);
+    return;
+  }
+  try {
+    const response = await fetch(apiUrl("/api/data/controllers"), {cache: "no-store"});
+    const live = response.ok ? await response.json() : null;
+    if (live) {
+      const devices = (live.devices || []).map((row) => row.name).join(" · ");
+      text("controller-devices", devices || (live.error ? `None seen (${live.error})` : "None seen: plug one in and it shows here"));
+      text("controller-down", (live.down || []).join(" · ") || "Nothing");
+    }
+  } catch (_error) {
+    // The next look tries again.
+  }
+  if (!controllerLiveTimer && document.getElementById("controller-live")) {
+    controllerLiveTimer = window.setTimeout(controllerLive, document.hidden ? 1500 : 250);
+  }
+}
+
+function startControllerLive() {
+  if (!controllerLiveTimer && document.getElementById("controller-live")) controllerLive();
+}
+
+// Settings › Voice's live parts (5.7.3): the download, the level meter and the
+// mic test, asked of the app quickly only while something is moving.
+const VOICE_STAGES = {starting: "Starting…", engine: "Downloading whisper.cpp…", unpacking: "Unpacking whisper.cpp…",
+  model: "Downloading the speech model…"};
+const VOICE_OPEN = ["opening", "listening", "test"];
+let voiceLiveTimer = 0;
+let voiceRemoveArmed = 0;
+
+function drawVoiceLive(live) {
+  const listen = model.workspace?.data?.voice?.listen || {};
+  const download = live.download || {};
+  const busy = Boolean(VOICE_STAGES[download.stage]);
+  const open = VOICE_OPEN.includes(live.stage);
+  const progress = byId("voice-progress");
+  if (progress) {
+    progress.hidden = !busy;
+    const share = Math.round(100 * (Number(download.done) || 0) / Math.max(1, Number(download.total) || 1));
+    progress.style.setProperty("--done", `${share}%`);
+    progress.querySelector("span").textContent = busy ? `${VOICE_STAGES[download.stage]} ${share}%` : "";
+  }
+  const fetchButton = byId("voice-download");
+  if (fetchButton) fetchButton.hidden = Boolean(listen.installed) || busy;
+  const remove = byId("voice-remove");
+  if (remove) remove.disabled = busy || open || live.stage === "hearing";
+  const cancel = byId("voice-cancel");
+  if (cancel) cancel.hidden = !busy;
+  text("voice-hearing-state", download.stage === "failed" ? `The download failed: ${download.error || "no reason given"}. Try again in a moment.`
+    : busy ? "Downloading its hearing…" : !listen.installed ? "Not downloaded yet."
+    : !listen.enabled ? "Downloaded. Switch it on above." : live.blocked || "Ready: hold your talk key and speak.");
+  text("voice-latency", live.stage === "hearing" ? "Recognising your words…" : live.engine === "warming" ? "Warming recognition in the background…"
+    : `${live.engine === "ready" ? "Recognition is warm." : "Recognition wakes when you speak."}${live.latency_ms != null ? ` Last recognition: ${(live.latency_ms / 1000).toFixed(2)} s after release.` : ""}`);
+  const meter = byId("voice-meter");
+  if (meter) meter.style.setProperty("--level", open ? String(Math.min(1, (Number(live.level) || 0) * 6)) : "0");
+  const test = byId("voice-test");
+  if (test) {
+    test.disabled = !(listen.enabled && listen.installed) || open || live.stage === "hearing";
+    test.textContent = live.testing && open ? "LISTENING…" : live.testing && live.stage === "hearing" ? "HEARING…" : "TEST MIC";
+  }
+  text("voice-test-note", open ? (live.stage === "opening" ? "Opening the microphone…"
+    : `${live.stage === "test" ? "Testing… say something." : "Listening…"} ${Number(live.seconds || 0).toFixed(1)} s`)
+    : live.stage === "hearing" ? "Working out what you said…"
+    : live.heard ? `It heard: “${live.heard}”` : live.note || "Say something for a few seconds, then hear it back.");
+  return open || busy || live.stage === "hearing";
+}
+
+async function voiceLive() {
+  voiceLiveTimer = 0;
+  const box = document.getElementById("voice-hearing");
+  if (!box || !box.isConnected) return;
+  if (box.offsetParent === null || document.hidden) {
+    voiceLiveTimer = window.setTimeout(voiceLive, 1000);
+    return;
+  }
+  let quick = false;
+  try {
+    const response = await fetch(apiUrl("/api/data/listen"), {cache: "no-store"});
+    const live = response.ok ? await response.json() : null;
+    if (live) quick = drawVoiceLive(live);
+  } catch (_error) {
+    // The next look tries again.
+  }
+  if (!voiceLiveTimer && document.getElementById("voice-hearing")) {
+    voiceLiveTimer = window.setTimeout(voiceLive, quick ? 120 : 1000);
+  }
+}
+
+function startVoiceLive() {
+  if (!voiceLiveTimer && document.getElementById("voice-hearing")) voiceLive();
+}
+
+function voiceLiveNow() {
+  window.clearTimeout(voiceLiveTimer);
+  voiceLiveTimer = 0;
+  voiceLive();
+}
+
 function settingsFingerprint(data = {}) {
   return JSON.stringify({
     values: data.values, hotkeys: data.hotkeys, themes: data.themes,
     profile: data.profile, paths: data.paths, editor: [data.theme_editor?.name, data.theme_editor?.custom],
     galnet: [data.galnet?.status, data.galnet?.detail, (data.galnet?.articles || []).length, data.galnet?.updated_at],
-    eddn: data.eddn,
+    eddn: data.eddn, controllers: data.controllers, voice: data.voice,
   });
 }
 
@@ -3389,6 +3791,8 @@ function renderWorkspace(state) {
   const fingerprint = page === "settings" ? settingsFingerprint(workspace.data) : JSON.stringify(fingerprintData);
   if (page === "settings" && workspaceFingerprints[page]) {
     updateSettingsLive(workspace.data || {});
+    startControllerLive();
+    startVoiceLive();
     settleSettingsSaves(workspace.data || {});
     showSettingsTestResult(workspace.data?.tools || {});
     if (fingerprint === workspaceFingerprints[page] || !settingsCanRerender()) return;
@@ -3959,9 +4363,9 @@ document.addEventListener("click", async (event) => {
     group?.scrollIntoView({block: "start", behavior: model.ui?.reduced_motion || window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"});
     return;
   }
-  const settingsTab = event.target.closest("[data-settings-section]");
+  const settingsTab = event.target.closest("[data-settings-section], [data-settings-goto]");
   if (settingsTab) {
-    settingsSection = settingsTab.dataset.settingsSection;
+    settingsSection = settingsTab.dataset.settingsSection || settingsTab.dataset.settingsGoto;
     const search = byId("settings-search");
     if (search) search.value = "";
     applySettingsView();
@@ -4043,6 +4447,128 @@ document.addEventListener("click", async (event) => {
     text("hotkey-status", "PRESS THE COMPLETE SHORTCUT · ESC CANCELS");
     recordHotkey.closest(".hotkey-row")?.classList.add("recording");
     recordHotkey.focus({preventScroll: true});
+    return;
+  }
+  const addCommand = event.target.closest("#voice-command-add");
+  if (addCommand) {
+    const box = byId("voice-command-new");
+    const form = box.querySelector(".voice-definition");
+    if (!form.dataset.commandId) form.dataset.commandId = "custom_" + Array.from(crypto.getRandomValues(new Uint8Array(16)), (value) => value.toString(16).padStart(2, "0")).join("");
+    box.hidden = false;
+    form.querySelector('[data-command-field="name"]').focus();
+    return;
+  }
+  const commandControl = event.target.closest("[data-command-save], [data-command-delete], [data-command-restore], [data-command-cancel]");
+  if (commandControl) {
+    const root = commandControl.closest(".voice-definition");
+    if (commandControl.hasAttribute("data-command-cancel")) { byId("voice-command-new").hidden = true; return; }
+    commandControl.blur();
+    await saveVoiceCommand(root, commandControl.hasAttribute("data-command-delete") ? "delete" : commandControl.hasAttribute("data-command-restore") ? "restore" : "save");
+    return;
+  }
+  const voiceChoice = event.target.closest("[data-voice-choice]");
+  if (voiceChoice) {
+    const key = voiceChoice.dataset.voiceChoice;
+    const card = voiceChoice.closest(".input-card");
+    const choices = [...card.querySelectorAll("[data-voice-choice]")];
+    const previous = choices.find((button) => button.getAttribute("aria-pressed") === "true");
+    const paint = (selected) => choices.forEach((button) => button.setAttribute("aria-pressed", String(button === selected)));
+    paint(voiceChoice);
+    await saveSettings({[key]: voiceChoice.dataset.value}, [card], {revert: () => paint(previous)});
+    voiceChoice.blur();
+    voiceLiveNow();
+    return;
+  }
+  const voiceFilterButton = event.target.closest("[data-voice-filter]");
+  if (voiceFilterButton) {
+    voiceFilter = voiceFilterButton.dataset.voiceFilter;
+    voiceFilterButton.blur();
+    applyVoiceFilter();
+    return;
+  }
+  const voiceEdit = event.target.closest("[data-voice-edit]");
+  if (voiceEdit) {
+    const row = voiceEdit.closest(".voice-command");
+    const editor = row.querySelector(".voice-editor");
+    editor.hidden = !editor.hidden;
+    if (editor.hidden) voiceOpenEditors.delete(row.dataset.voiceRow);
+    else voiceOpenEditors.add(row.dataset.voiceRow);
+    voiceEdit.setAttribute("aria-expanded", String(!editor.hidden));
+    voiceEdit.textContent = editor.hidden ? "EDIT COMMAND" : "CLOSE EDITOR";
+    return;
+  }
+  const voiceTab = event.target.closest("[data-voice-tab]");
+  if (voiceTab) {
+    const root = voiceTab.closest(".voice-editor");
+    voiceActiveTabs.set(root.closest(".voice-command").dataset.voiceRow, voiceTab.dataset.voiceTab);
+    root.querySelectorAll("[data-voice-tab]").forEach((tab) => tab.setAttribute("aria-pressed", String(tab === voiceTab)));
+    root.querySelectorAll("[data-voice-editor]").forEach((editor) => { editor.hidden = editor.dataset.voiceEditor !== voiceTab.dataset.voiceTab; });
+    return;
+  }
+  const recordSequence = event.target.closest("[data-sequence-record]");
+  if (recordSequence) {
+    recordSequence.blur();
+    await sequenceControl("sequence_record", {target: recordSequence.dataset.sequenceRecord, place: byId("sequence-new-place")?.value || "ship"});
+    byId("sequence-recorder")?.scrollIntoView({block: "center"});
+    return;
+  }
+  if (event.target.closest("[data-sequence-stop]")) { await sequenceControl("sequence_stop"); return; }
+  if (event.target.closest("[data-sequence-discard]")) { await sequenceControl("sequence_discard"); return; }
+  if (event.target.closest("[data-sequence-use]")) { await useSequenceRecording(); return; }
+  const resetSequence = event.target.closest("[data-ship-macro-reset]");
+  if (resetSequence) {
+    const input = resetSequence.closest(".voice-sequence")?.querySelector("[data-ship-macro]");
+    if (input) await saveShipSequence(input, true);
+    return;
+  }
+  // Settings › Voice (5.7.3): its hearing's buttons.
+  const voiceButton = event.target.closest("#voice-download, #voice-cancel, #voice-test, #voice-play, #voice-remove");
+  if (voiceButton) {
+    voiceButton.blur();
+    if (voiceButton.id === "voice-play") {
+      const sound = new Audio(apiUrl(`/api/data/listen-test?at=${Date.now()}`));
+      sound.play().catch(() => showToast("It couldn't be played"));
+      return;
+    }
+    if (voiceButton.id === "voice-remove" && !voiceRemoveArmed) {
+      voiceButton.textContent = "PRESS AGAIN TO REMOVE";
+      voiceRemoveArmed = window.setTimeout(() => { voiceRemoveArmed = 0; voiceButton.textContent = "REMOVE MODELS"; }, 4000);
+      return;
+    }
+    if (voiceButton.id === "voice-remove") {
+      window.clearTimeout(voiceRemoveArmed);
+      voiceRemoveArmed = 0;
+      voiceButton.textContent = "REMOVE MODELS";
+    }
+    const operation = {"voice-download": "listen_download", "voice-cancel": "listen_cancel", "voice-test": "listen_test",
+      "voice-remove": "listen_remove"}[voiceButton.id];
+    const accepted = await command("workspace", {page: "settings", operation});
+    if (voiceButton.id === "voice-remove") showToast(accepted ? "Its hearing is removed" : "Some of its files couldn't be removed");
+    voiceLiveNow();
+    return;
+  }
+  const hotkeyFilterButton = event.target.closest("[data-hotkey-filter]");
+  if (hotkeyFilterButton) {
+    hotkeyFilter = hotkeyFilterButton.dataset.hotkeyFilter || "all";
+    try { window.localStorage.setItem("voidcompass.settings.hotkeyFilter", hotkeyFilter); } catch (_error) { /* private */ }
+    hotkeyFilterButton.blur();
+    applyHotkeyFilter();
+    applyVoiceFilter();
+    return;
+  }
+  // 5.7.3: a controller button, learned by Void Compass itself (the page can't see a pad without focus).
+  const learnButton = event.target.closest("[data-controller-learn]");
+  if (learnButton) {
+    const listening = learnButton.closest(".hotkey-row")?.classList.contains("learning");
+    learnButton.blur();
+    await command("workspace", {page: "settings", operation: listening ? "controller_cancel" : "controller_learn",
+      hotkey: learnButton.dataset.controllerLearn});
+    return;
+  }
+  const clearButton = event.target.closest("[data-controller-clear]");
+  if (clearButton) {
+    clearButton.blur();
+    await command("workspace", {page: "settings", operation: "controller_clear", hotkey: clearButton.dataset.controllerClear});
     return;
   }
   const clearHotkey = event.target.closest("[data-hotkey-clear]");
@@ -4261,6 +4787,7 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  if (event.target.id === "sequence-recording-preview") sequenceUi.draft = event.target.value;
   if (event.target.id === "flightlog-search") {
     flightLogSearch = event.target.value;
     flightLogEventsFingerprint = "";
@@ -4293,6 +4820,14 @@ document.addEventListener("change", (event) => {
 document.addEventListener("change", async (event) => {
   const target = event.target;
   if (!target.closest?.("#settings-workspace")) return;
+  if (target.matches("[data-sequence-choice]")) {
+    await sequenceControl("sequence_choose", {index: Number(target.dataset.sequenceChoice), action: target.value});
+    return;
+  }
+  if (target.matches("[data-ship-macro]")) {
+    await saveShipSequence(target);
+    return;
+  }
   if (target.matches("[data-setting]")) {
     const row = target.closest(".setting-row");
     // What to put back if Python refuses this save.
@@ -4829,3 +5364,10 @@ window.__voidcompassDeckStarted = true;
 eventLoop();
 
 installSystemMap({showPage});
+
+ document.addEventListener("input", (event) => {
+  if (event.target.id === "voice-command-search") {
+    voiceSearch = event.target.value;
+    applyVoiceFilter();
+  }
+});

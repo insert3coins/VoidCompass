@@ -189,8 +189,6 @@ class PageTests(unittest.TestCase):
         for tab in ("now", "story", "you", "said", "settings", "voice"):
             self.assertIn(f'data-watcher-tab="{tab}"', script)
             self.assertIn(f'data-watcher-panel="{tab}"', script)
-        # A tab remembered from before 5.6.1 still opens something.
-        self.assertIn('const OLD_TABS = {overview: "now", together: "you"};', script)
         for marker in ("BOOK FOUR", "THE ROAD TAKEN", 'class="watcher-answer"', "<kbd>", 'data-page="mission"', "all four books"):
             self.assertIn(marker, script)
 

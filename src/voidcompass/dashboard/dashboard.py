@@ -101,6 +101,8 @@ from voidcompass.dashboard.dashboard_rigs_mixin import DashboardRigsMixin
 from voidcompass.dashboard.dashboard_hud_pages_mixin import DashboardHudPagesMixin
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
 from voidcompass.dashboard.dashboard_watcher_listen_mixin import DashboardWatcherListenMixin
+from voidcompass.dashboard.dashboard_controller_mixin import DashboardControllerMixin
+from voidcompass.dashboard.dashboard_ship_control_mixin import DashboardShipControlMixin
 from voidcompass.dashboard.dashboard_home_mixin import DashboardHomeMixin
 from voidcompass.dashboard.dashboard_tools_mixin import DashboardToolsMixin
 from voidcompass.dashboard.dashboard_api_mixin import DashboardApiMixin
@@ -302,6 +304,8 @@ class MainDashboard(
     DashboardHudPagesMixin,
     DashboardWatcherVoiceMixin,
     DashboardWatcherListenMixin,
+    DashboardControllerMixin,
+    DashboardShipControlMixin,
     DashboardHomeMixin,
     DashboardToolsMixin,
     DashboardApiMixin,
@@ -3044,6 +3048,20 @@ class MainDashboard(
         self._tick_overlay_position_sync()
         self._tick_overlay_hotkey_guard()
         self._tick_hud_pages()
+        self._retire_watcher_models()
+
+    def _retire_watcher_models(self):
+        if getattr(self, "_watcher_models_cleanup_started", False):
+            return
+        self._watcher_models_cleanup_started = True
+
+        def work():
+            from voidcompass.core.watcher_retirement import cleanup_notice, remove_retired_models
+            notice = cleanup_notice(remove_retired_models())
+            if notice and not getattr(self, "_closing", False):
+                self._ui_post(self.add_event_feed_entry, "SYSTEM", notice, severity="INFO")
+
+        threading.Thread(target=work, name="watcher-model-cleanup", daemon=True).start()
 
     def _startup_boot(self):
         splash = getattr(self.root, "_voidcompass_startup_splash", None)
@@ -3622,6 +3640,10 @@ class MainDashboard(
         if not self.config.get("overlay_hotkeys_enabled", True):
             bindings = {}
         report = manager.configure(bindings)
+        # 5.7.3: the controller buttons for the same shortcuts.
+        configure = getattr(self, "_configure_controller_hotkeys", None)
+        if callable(configure):
+            configure()
         labels = {action: label for action, _key, label, _attr in OVERLAY_HOTKEY_SPECS}
         errors = report.get("errors") or {}
         registered = report.get("registered") or {}
@@ -3671,6 +3693,8 @@ class MainDashboard(
 
     def _handle_overlay_hotkey(self, action):
         if not self.is_running:
+            return
+        if self._ship_recording():
             return
         spec = next((item for item in OVERLAY_HOTKEY_SPECS if item[0] == action), None)
         if spec is None:
@@ -4251,6 +4275,10 @@ class MainDashboard(
             self.watcher.stop()
         if getattr(self, "overlay_hotkeys", None):
             self.overlay_hotkeys.stop()
+        if callable(getattr(self, "_controller_close", None)):
+            self._controller_close()
+        if callable(getattr(self, "_ship_close", None)):
+            self._ship_close()
         if getattr(self, "ui_dispatcher", None):
             self.ui_dispatcher.stop()
         clock.mark("journal watcher, hotkeys, dispatcher")

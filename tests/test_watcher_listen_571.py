@@ -1,6 +1,6 @@
 """5.7.1: talking to the Watcher by voice. Push to talk (held or tapped),
-Whisper on whisper.cpp's server hears what you said, and it goes to its mind
-like words typed in TALK TO IT. No microphone or server runs here: both are
+Whisper hears what you said and runs the same commands and plain answers
+as the TALK box. No microphone or server runs here: both are
 faked, but for one real local HTTP server standing in for whisper-server."""
 
 import hashlib
@@ -22,8 +22,10 @@ from voidcompass.core.overlay_registry import DEFAULT_OVERLAY_HOTKEYS, OVERLAY_H
 from voidcompass.dashboard.dashboard_journey_mixin import DashboardJourneyMixin
 from voidcompass.dashboard.dashboard_watcher_listen_mixin import DashboardWatcherListenMixin
 from voidcompass.overlays import watcher_mind
+from voidcompass.overlays.heartbeat_hud import HeartbeatHUD
 from voidcompass.voice import listen_assets, listener as listener_module, microphone
 from voidcompass.voice.listener import ListenServer, WatcherListener, clean
+from voidcompass.voice import local_server
 
 ROOT = Path(__file__).resolve().parents[1]
 LOUD = (b"\x00\x40\x00\xc0" * 8000)        # a second of loud sound, 16-bit
@@ -66,7 +68,7 @@ class FakeHearing:
     text = " Where are we, Watcher?"
     ready = True
 
-    def __init__(self, exe, model, gpu=False, log_path=None):
+    def __init__(self, exe, model, log_path=None):
         self.alive = False
         self.error = ""
         self.heard = []
@@ -109,6 +111,7 @@ def make_listener(case, settings=None, recorder=None, **extra):
 
     listener = WatcherListener(lambda: settings, on_heard=on_heard, server_factory=FakeHearing,
                                recorder_factory=lambda: recorder or FakeRecorder(), **extra)
+    case.addCleanup(listener.close)
     listener.heard_list, listener.heard_done = heard, done
     return listener, settings
 
@@ -259,6 +262,49 @@ class HearingTests(unittest.TestCase):
         self.assertTrue(server.stopped)
         self.assertIsNone(listener._server(), "nothing starts after shutdown")
 
+    def test_short_or_silent_recordings_still_release_the_warmed_speech_model(self):
+        for pcm in (LOUD[:3200], QUIET):
+            with self.subTest(short=len(pcm) < len(LOUD)):
+                timers = []
+
+                def timer_factory(delay, callback):
+                    timer = mock.Mock(fire=callback)
+                    timers.append(timer)
+                    return timer
+
+                listener, _ = make_listener(self, recorder=FakeRecorder(sound=pcm))
+                with mock.patch.object(listener_module.threading, "Timer", side_effect=timer_factory):
+                    server = listener._server()
+                    listener.warm = lambda: None
+                    self.assertTrue(listener.start())
+                    self.assertFalse(listener.stop())
+                    current = listener._idle_timer
+                    self.assertIsNotNone(current)
+                    listener._used -= listener_module.IDLE_S + 1
+                    current.fire()
+                    self.assertTrue(server.stopped)
+                    self.assertIsNone(listener.server)
+                    self.assertIsNone(listener._idle_timer)
+
+    def test_idle_timer_does_not_stop_transcription_or_accept_a_stale_callback(self):
+        def timer_factory(delay, callback):
+            return mock.Mock(fire=callback)
+
+        listener, _ = make_listener(self)
+        with mock.patch.object(listener_module.threading, "Timer", side_effect=timer_factory):
+            server = listener._server()
+            stale = listener._idle_timer
+            listener._set("idle")
+            current = listener._idle_timer
+            stale.fire()
+            self.assertIs(listener._idle_timer, current)
+            listener._stage = "hearing"
+            listener._used -= listener_module.IDLE_S + 1
+            current.fire()
+            self.assertIs(listener.server, server)
+            self.assertFalse(server.stopped)
+            self.assertIsNotNone(listener._idle_timer)
+
     def test_switched_off_while_you_spoke(self):
         listener, settings = make_listener(self)
         listener.start()
@@ -293,10 +339,37 @@ class _Whisper(BaseHTTPRequestHandler):
 
 
 class ServerTests(unittest.TestCase):
+    def test_local_process_gets_a_fresh_port_and_key_without_starting_a_real_engine(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            exe, model = folder / "whisper-server.exe", folder / "model.bin"
+            exe.write_bytes(b"stand-in")
+            model.write_bytes(b"stand-in")
+            processes = [mock.Mock(poll=lambda: None), mock.Mock(poll=lambda: None)]
+            server = ListenServer(exe, model)
+            with mock.patch.object(local_server, "_free_port", side_effect=[55123, 55124]), \
+                    mock.patch.object(local_server, "_job_object", return_value=None), \
+                    mock.patch.object(local_server.subprocess, "Popen", side_effect=processes) as start:
+                self.assertTrue(server.start())
+                first_key = server.key
+                self.assertRegex(first_key, r"^[0-9a-f]{32}$")
+                server.stop(wait=False)
+                processes[0].terminate.assert_called_once()
+                processes[0].wait.assert_not_called()
+                self.assertTrue(server.start())
+                self.assertNotEqual(first_key, server.key)
+                self.assertEqual(server.port, 55124)
+                args = start.call_args.args[0]
+                self.assertEqual(args[args.index("--request-path") + 1], f"/{server.key}")
+                self.assertEqual(args[args.index("--host") + 1], "127.0.0.1")
+                self.assertEqual(args[args.index("--port") + 1], "55124")
+                server.stop()
+                processes[1].wait.assert_called_once_with(timeout=5)
+
     def test_it_listens_behind_a_random_path_on_this_pc_only(self):
         folder = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, folder, True)
-        server = ListenServer(folder / "engine" / "whisper-server.exe", folder / "model.bin", gpu=False)
+        server = ListenServer(folder / "engine" / "whisper-server.exe", folder / "model.bin")
         server.port, server.key = 5555, "abc123"
         args = server.arguments()
         self.assertEqual(args[args.index("--host") + 1], "127.0.0.1")
@@ -307,12 +380,11 @@ class ServerTests(unittest.TestCase):
         # b5454's server has no -nc (it printed its help and stopped): -mc 0 instead.
         self.assertNotIn("-nc", args)
         self.assertEqual(args[args.index("-mc") + 1], "0")
-        self.assertTrue(server.matches(None, None, None, None))
 
     def test_why_it_wouldnt_start_is_its_error_line(self):
         folder = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, folder, True)
-        server = ListenServer(folder / "engine" / "whisper-server.exe", folder / "model.bin", gpu=False,
+        server = ListenServer(folder / "engine" / "whisper-server.exe", folder / "model.bin",
                               log_path=folder / "server.log")
         (folder / "server.log").write_text("\n".join((
             "load_backend: loaded CPU backend", "error: unknown argument: -nc", "",
@@ -325,7 +397,7 @@ class ServerTests(unittest.TestCase):
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         self.addCleanup(httpd.server_close)
         self.addCleanup(httpd.shutdown)
-        server = ListenServer(Path("whisper-server.exe"), Path("model.bin"), gpu=False)
+        server = ListenServer(Path("whisper-server.exe"), Path("model.bin"))
         server.port, server.key = httpd.server_address[1], "k3y"
         server.process = mock.Mock(poll=lambda: None)
         self.assertTrue(server.ready())
@@ -439,14 +511,6 @@ class FakeMind:
         return True
 
 
-class FakeLlm:
-    def __init__(self):
-        self.awake = True
-
-    def listening(self):
-        return self.awake
-
-
 class Deck(DashboardWatcherListenMixin):
     _json_answer = staticmethod(DashboardJourneyMixin._json_answer)
 
@@ -456,16 +520,14 @@ class Deck(DashboardWatcherListenMixin):
         self.heartbeat_hud.mind = FakeMind()
         self.heartbeat_hud.set_hearing = lambda stage: self.hearing.append(stage)
         self.hearing = []
-        self.llm = FakeLlm()
+        self.current_sys = "Sol"
+        self.cmdr_ship = {"ship": "kraitlight", "ship_name": "Wanderer"}
+        self.current_body_name = "Sol 3"
+        self.current_station_name = "Abraham Lincoln"
         self.feed = []
         self.begun = []
         self.saved = 0
 
-    def _watcher_llm(self):
-        return self.llm
-
-    def _watcher_llm_facts(self):
-        return {"system": "Sol", "ship": "Krait Phantom", "ship name": "Wanderer"}
 
     def _watcher_mind_watch(self):
         pass
@@ -482,13 +544,13 @@ class Deck(DashboardWatcherListenMixin):
     def add_event_feed_entry(self, kind, text, severity="INFO"):
         self.feed.append(text)
 
-    def _watcher_listen_begin(self, key=None, test=False):
+    def _watcher_listen_begin(self, key=None, test=False, held=None):
         self.begun.append((key, test))
         return True
 
 
 def deck_for(case, **config):
-    base = {"watcher_listen_enabled": True, "watcher_llm_enabled": True, "watcher_listen_mode": "hold",
+    base = {"watcher_listen_enabled": True, "watcher_listen_mode": "hold",
             "overlay_hotkey_watcher_talk": "Ctrl+Alt+Shift+F8"}
     deck = Deck({**base, **config})
     installed = mock.patch.object(listen_assets, "installed", return_value=True)
@@ -519,21 +581,18 @@ class DeckTests(unittest.TestCase):
         deck = deck_for(self, watcher_listen_enabled=False)
         deck._watcher_talk_key()
         self.assertEqual(deck.begun, [])
-        self.assertIn("Voice in is off", deck.feed[-1])
-        deck = deck_for(self)
-        deck.llm.awake = False
-        deck._watcher_talk_key()
-        self.assertIn("own words", deck.feed[-1])
+        self.assertIn("Talking by voice is off", deck.feed[-1])
+        self.assertIn("Settings, under Voice", deck.feed[-1])
         deck = deck_for(self)
         deck.heartbeat_hud.mind = None
         deck._watcher_talk_key()
         self.assertIn("Overlay Studio", deck.feed[-1])
 
-    def test_the_mic_test_needs_no_mind(self):
-        deck = deck_for(self, watcher_llm_enabled=False)
+    def test_mic_test_and_talking_need_only_the_hearing_assets(self):
+        deck = deck_for(self)
         self.assertTrue(deck._handle_watcher_listen_command("listen_test", {}))
         self.assertEqual(deck.begun, [(None, True)])
-        self.assertFalse(deck._handle_watcher_listen_command("listen_start", {}))
+        self.assertTrue(deck._handle_watcher_listen_command("listen_start", {}), "plain commands are always available")
 
     def test_what_you_said_is_talk_marked_spoken(self):
         deck = deck_for(self)
@@ -549,7 +608,7 @@ class DeckTests(unittest.TestCase):
         self.assertEqual((deck.config["watcher_listen_mic"], deck.config["watcher_listen_mode"]), ("Microphone (USB FS AUDIO)", "tap"))
         deck._handle_watcher_listen_command("listen_settings", {"values": {"watcher_listen_mode": "shout"}})
         self.assertEqual(deck.config["watcher_listen_mode"], "tap")
-        self.assertIsNone(deck._handle_watcher_listen_command("mind_talk", {}), "not one of its own")
+        self.assertIsNone(deck._handle_watcher_listen_command("talk", {}), "not one of its own")
 
     def test_switched_on_it_downloads_switched_off_it_stops(self):
         deck = deck_for(self, watcher_listen_enabled=False)
@@ -588,13 +647,65 @@ class DeckTests(unittest.TestCase):
 
     def test_the_word_list_for_its_hearing(self):
         deck = deck_for(self)
-        self.assertEqual(deck._watcher_listen_words()[:3], ["Sol", "Wanderer", "Krait Phantom"])
+        self.assertEqual(deck._watcher_listen_words(), ["Sol", "Wanderer", "Krait Phantom", "Sol 3", "Abraham Lincoln"])
+        deck.cmdr_ship = {"ship": "unfamiliar_symbol", "ship_localised": "New Ship"}
+        self.assertEqual(deck._watcher_listen_words()[2], "New Ship", "the journal's readable name wins")
+        deck.cmdr_ship = {}
+        self.assertEqual(deck._watcher_listen_words()[1:3], ["", ""], "no model or lookup is needed for missing names")
+
+    def test_spoken_command_drives_hearing_then_the_reply_beside_the_orb_and_voice(self):
+        deck = deck_for(self)
+        mind = watcher_mind.WatcherMind(None, {})
+        mind.action_provider = lambda words: "The galaxy map."
+        mind.voice_active = True
+        mind.memory["voice"] = {"minutes": 60.0, "told": [], "found": 1.0}
+        hud = HeartbeatHUD.__new__(HeartbeatHUD)
+        hud.mind, hud.config, hud._hearing = mind, {}, ""
+        stages, visible, said = [], [], []
+        voiced = threading.Event()
+
+        def speak(words, key, **kwargs):
+            said.append(words)
+            voiced.set()
+            return True
+
+        def redraw():
+            stages.append(hud._hearing)
+            thought = mind.current()
+            if thought:
+                visible.append(thought["text"])
+                hud._voice_thought(thought)
+
+        hud.voice_listener, hud._redraw = speak, redraw
+        deck.heartbeat_hud = hud
+        listener, _settings = make_listener(self)
+        heard = threading.Event()
+
+        def reply(text):
+            deck._watcher_listen_heard(text)
+            heard.set()
+
+        listener.on_heard = reply
+        listener.on_change = deck._watcher_listen_changed
+        FakeHearing.text = "Open the galaxy map"
+        deck._watcher_listen = listener
+        self.assertTrue(listener.start())
+        self.assertEqual(hud._hearing, "listening")
+        self.assertTrue(listener.stop())
+        self.assertTrue(heard.wait(3))
+        hud._redraw()  # The next orb tick picks up the written reply.
+        self.assertTrue(voiced.is_set(), "the reply remains eligible for Piper's existing voice path")
+        self.assertTrue(wait_idle(listener))
+        self.assertIn("hearing", stages)
+        self.assertEqual(hud._hearing, "")
+        self.assertIn("The galaxy map.", visible)
+        self.assertIn("The galaxy map.", said)
+        self.assertTrue(mind.memory["talk"][-1]["voice"])
 
 
 class MindTests(unittest.TestCase):
     def test_spoken_talk_is_marked(self):
         mind = watcher_mind.WatcherMind(None, {})
-        mind.llm = FakeLlm()
         mind.action_provider = lambda words: "Done."
         self.assertTrue(mind.talk("Next track", voice=True))
         self.assertTrue(mind.memory["talk"][-1]["voice"])
@@ -603,15 +714,20 @@ class MindTests(unittest.TestCase):
 
 
 class PageTests(unittest.TestCase):
-    def test_the_mind_page(self):
+    def test_the_talk_page(self):
         script = (ROOT / "web/dashboard/watcher.js").read_text(encoding="utf-8")
-        for needle in ('id="watcher-talk-mic"', 'id="mind-hear"', 'id="watcher-hear-mic"', 'id="watcher-hear-mode"',
-                       'id="watcher-hear-test"', 'id="watcher-hear-meter"', '"listen_start"', '"listen_stop"',
-                       '"/api/data/listen"', "/api/data/listen-test", "Settings › Hotkeys", "SPOKEN"):
+        for needle in ('id="watcher-talk-mic"', '"listen_start"', '"listen_stop"', '"/api/data/listen"', "SPOKEN"):
             self.assertIn(needle, script)
+        # Its settings moved to Settings › Voice (5.7.3): never in two places.
+        self.assertNotIn('id="mind-hear"', script)
+        settings = (ROOT / "web/dashboard/app.js").read_text(encoding="utf-8")
+        for needle in ('id="voice-hearing"', 'id="voice-meter"', 'id="voice-test"', 'id="voice-play"',
+                       '"listen_test"', '"/api/data/listen"', "/api/data/listen-test", '"watcher_listen_mic"',
+                       '"watcher_listen_mode"', 'key: "watcher_listen_enabled"'):
+            self.assertIn(needle, settings)
         style = (ROOT / "web/dashboard/watcher.css").read_text(encoding="utf-8")
-        self.assertIn(".mind-mic[data-stage=\"listening\"]", style)
-        self.assertIn(".mind-meter i", style)
+        self.assertIn(".talk-mic[data-stage=\"listening\"]", style)
+        self.assertIn(".voice-meter i", (ROOT / "web/dashboard/settings.css").read_text(encoding="utf-8"))
 
     def test_the_orb_shows_it_listening(self):
         page = (ROOT / "web/heartbeat/index.html").read_text(encoding="utf-8")
@@ -619,10 +735,11 @@ class PageTests(unittest.TestCase):
         script = (ROOT / "web/heartbeat/app.js").read_text(encoding="utf-8")
         self.assertIn("live.hearing", script)
         self.assertIn("model.hearing", script)
+        self.assertIn('if (stage === "hearing") orb.think?.(900)', script)
         hud = (ROOT / "src/voidcompass/overlays/heartbeat_hud.py").read_text(encoding="utf-8")
         self.assertIn("'hearing': getattr(self, '_hearing', '')", hud)
 
-    def test_the_hotkey_is_not_a_control_on_the_mind_page(self):
+    def test_the_hotkey_is_not_a_control_on_the_talk_page(self):
         script = (ROOT / "web/dashboard/watcher.js").read_text(encoding="utf-8")
         self.assertNotIn("overlay_hotkey_watcher_talk", script, "the key is set in Settings only")
 

@@ -1662,7 +1662,8 @@ export function createMusicDeck({apiUrl, showToast, byId, escapeHtml, duration})
       notice: Number(state.notice?.seq) || 0};
     if (!seen) seen = numbers;
     if (numbers.remote > seen.remote) {
-      ({toggle, next: () => skip(true), previous: () => skip(false), pause, queue: () => playQueue(state.remote.tracks)})[state.remote.op]?.();
+      ({toggle, play, next: () => skip(true), previous: () => skip(false), pause,
+        queue: () => playQueue(state.remote.tracks)})[state.remote.op]?.();
     }
     if (numbers.focus > seen.focus && state.focus.playlist_id) {
       viewId = state.focus.playlist_id;

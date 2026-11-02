@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import unittest
 
-from voidcompass.overlays import watcher_field, watcher_lines, watcher_llm, watcher_mind
+from voidcompass.overlays import watcher_field, watcher_lines, watcher_mind
 from voidcompass.overlays.watcher_mind import WatcherMind
 
 from tests.test_watcher_worlds_5539 import Clock
@@ -44,12 +44,6 @@ class BankTests(unittest.TestCase):
         for topic in ("sample_first", "sample_second"):
             for bank in (watcher_lines.NORMAL, watcher_lines.WEARY):
                 self.assertTrue(all("{distance}" in line for line in bank[topic]), "every line says how far")
-
-    def test_the_distances_are_said_as_written(self):
-        for topic in ("sample_first", "sample_second", "sample_clear"):
-            self.assertFalse(watcher_llm.eligible(topic), "reworded, a line could lose the distance")
-        for topic in ("planet_first", "mapped_first", "footfall_first"):
-            self.assertTrue(watcher_llm.eligible(topic))
 
 
 class FieldTests(unittest.TestCase):

@@ -77,6 +77,11 @@ class ServerCase(unittest.TestCase):
 
 
 class LocalApiServerTests(ServerCase):
+    def test_the_retired_model_endpoint_is_gone(self):
+        self.assertEqual(self.call("/watcher/mind")[0], 404)
+        self.assertNotIn("api_watcher_mind", PROVIDER_CALLS)
+        self.assertFalse(hasattr(DashboardApiMixin, "api_watcher_mind"))
+
     def test_no_key_is_needed(self):
         for path in ("", "/ping", "/docs", "/status"):
             self.assertEqual(self.call(path)[0], 200, path)

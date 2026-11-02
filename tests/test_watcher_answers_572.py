@@ -1,8 +1,8 @@
-"""5.7.2: the Watcher answers what you asked. A question gets only what it
-needs (where you are when you ask where, what you've done when you ask about
-the past), new lookups name your cargo, describe the station you're docked
-at and list the system's factions, and "remember that…" is kept. The model
-is faked, as in test_watcher_llm_571."""
+"""The Watcher answers plain questions from only the requested ship systems.
+
+Cargo, station, faction, route, world and survey facts remain deterministic
+when no language model or source library exists.
+"""
 
 from pathlib import Path
 import tempfile
@@ -12,13 +12,7 @@ import unittest
 
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
 from voidcompass.overlays import watcher_copilot as copilot
-from voidcompass.overlays import watcher_knowing
-
-from tests.test_watcher_llm_571 import FakeServer, mind_llm, wait_ready, whole
-
-FACTS = {"system": "Colonia", "ship": "Krait Phantom", "ship name": "Wanderer", "doing": "docked at Jaques Station",
-         "region": "Inner Orion Spur", "distance from Sol": "22,000 light years"}
-LATELY = ["Jumped to Colonia (41.2 light years).", "Docked at Jaques Station in Colonia."]
+from voidcompass.overlays import watcher_mind
 
 
 class TopicTests(unittest.TestCase):
@@ -108,28 +102,6 @@ class LineTests(unittest.TestCase):
             self.assertEqual(copilot.reputation_word(value), word, value)
 
 
-class RememberTests(unittest.TestCase):
-    def test_what_you_ask_it_to_remember(self):
-        self.assertEqual(copilot.remember_request("Remember that my carrier is the Black Rose"),
-                         "My carrier is the Black Rose.")
-        self.assertEqual(copilot.remember_request("please remember: I hate neutron routes!"), "I hate neutron routes.")
-        self.assertEqual(copilot.remember_request("Don't forget my home is Colonia"), "My home is Colonia.")
-        for not_asked in ("Remember when we went to Colonia?", "Do you remember me?", "remember what we did",
-                          "I remember Colonia", "Remember?"):
-            self.assertIsNone(copilot.remember_request(not_asked), not_asked)
-
-    def test_it_is_kept_with_what_you_teach_it(self):
-        deck = Deck()
-        self.assertEqual(deck._watcher_mind_action("Remember that my carrier is the Black Rose"), "I'll remember that.")
-        self.assertEqual(watcher_knowing.taught(deck.mind.memory)[0]["text"], "My carrier is the Black Rose.")
-        self.assertTrue(deck.mind.saved)
-        self.assertEqual(deck._watcher_mind_action("remember that my carrier is the Black Rose"), "I know that already.")
-        self.assertEqual(deck._watcher_mind_action("Remember that Raxxla is real"), "Not that. Some things I don't keep.")
-        self.assertEqual(deck._watcher_mind_action(f"Remember that {'x' * 400}"),
-                         "That's too much to keep in one go. Say it shorter.")
-        self.assertIsNone(deck._watcher_mind_action("What do you remember?"), "a question goes to its mind")
-
-
 class FakeMind:
     def __init__(self):
         self.memory = {}
@@ -164,6 +136,29 @@ class Deck(DashboardWatcherVoiceMixin):
         pass
 
 
+class PlainAnswerTests(unittest.TestCase):
+    def test_question_uses_only_the_requested_readout(self):
+        deck = Deck()
+        deck._watcher_lookup_cargo = lambda question: ["The ship's hold carries 40 tonnes", "Tritium: 40 tonnes"]
+        deck._watcher_lookup_ship = lambda: self.fail("unasked ship details")
+        deck._watcher_lookup_route = lambda: self.fail("unasked route details")
+        mind = watcher_mind.WatcherMind(None, {})
+        mind.lookup_provider = deck._watcher_lookup
+        self.assertTrue(mind.talk("What cargo do we have?"))
+        self.assertEqual(mind.memory["talk"][-1]["it"], "The ship's hold carries 40 tonnes. Tritium: 40 tonnes.")
+        self.assertEqual(mind.thought["text"], mind.memory["talk"][-1]["it"])
+        self.assertFalse(mind.talk_waiting())
+
+    def test_everyday_talk_does_not_add_ship_or_trip_facts(self):
+        mind = watcher_mind.WatcherMind(None, {})
+        mind.lookup_provider = lambda question: self.fail("non-question should not look up the ship")
+        self.assertTrue(mind.talk("Hello, Watcher."))
+        from voidcompass.overlays import watcher_chat
+        self.assertIn(mind.memory["talk"][-1]["it"], watcher_chat.GREETINGS)
+        self.assertTrue(mind.talk("Just passing the time."))
+        self.assertIn(mind.memory["talk"][-1]["it"], copilot.REPLIES["plain"])
+
+
 class LookupTests(unittest.TestCase):
     def test_the_station_only_when_docked(self):
         deck = Deck()
@@ -195,47 +190,6 @@ class LookupTests(unittest.TestCase):
                                                         "Tritium: 5 tonnes"])
         deck.current_cargo_vessel = "SRV"
         self.assertEqual(deck._watcher_lookup_cargo()[0], "The SRV's hold carries 5 tonnes", "the ship's size isn't the SRV's")
-
-
-class AskedTests(unittest.TestCase):
-    def ask(self, question, lookup=(), lately=LATELY):
-        llm, _settings = mind_llm(self)
-        searched = []
-        llm.library_provider = lambda words: searched.append(words) or ["Jameson Memorial: an Orbis starport in Shinrarta Dezhra."]
-        wait_ready(llm)
-        FakeServer.replies = ["Forty tonnes of tritium."]
-        llm.talk(question, FACTS, lately=lately, lookup=list(lookup)).done.wait(2)
-        return whole(FakeServer.made[-1].asked[-1]), searched
-
-    def test_a_question_with_a_readout_gets_only_that(self):
-        said, searched = self.ask("What cargo do we have?", lookup=["The ship's hold: 40 of 64 tonnes", "Tritium: 40 tonnes"])
-        self.assertIn("- Tritium: 40 tonnes", said)
-        for left_out in ("Krait Phantom", "Wanderer", "Colonia", "22,000", "Jumped to"):
-            self.assertNotIn(left_out, said, left_out)
-        self.assertEqual(searched, [], "no library cards beside the ship's own readout")
-        self.assertNotIn("Jameson Memorial", said)
-        self.assertNotIn("What you know of the galaxy", said, "nor its own cards (the traders' card padded it)")
-        self.assertIn("only what was asked", said)
-
-    def test_where_you_are_when_you_ask_where(self):
-        said, _ = self.ask("Which station are we at and where is it?", lookup=["Docked at Jaques Station"])
-        self.assertIn("- system: Colonia", said)
-        self.assertNotIn("Krait Phantom", said)
-
-    def test_everyday_talk_leaves_the_ship_and_the_jumps_out(self):
-        said, searched = self.ask("What do you make of all this?")
-        self.assertIn("- system: Colonia", said)
-        for left_out in ("Krait Phantom", "Wanderer", "22,000", "Jumped to"):
-            self.assertNotIn(left_out, said, left_out)
-        self.assertEqual(searched, ["What do you make of all this?"], "the ship isn't added to its search")
-
-    def test_what_you_did_when_you_ask_about_the_past(self):
-        said, _ = self.ask("What have we done today?")
-        self.assertIn("Jumped to Colonia", said)
-
-    def test_how_far_from_home_when_asked(self):
-        said, _ = self.ask("How far are we from Sol?")
-        self.assertIn("22,000 light years", said)
 
 
 # -- planet materials, mining sites, your materials and your Codex -----------------------
@@ -615,7 +569,7 @@ class PriceLookupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             deck = self.deck(folder)
             deck._watcher_lookup_market = lambda question="": ["market"]
-            self.assertEqual(deck._watcher_llm_lookup("what's my tritium worth?")[0],
+            self.assertEqual(deck._watcher_lookup("what's my tritium worth?")[0],
                              "The cargo would sell for 510,000 credits in all at Jaques Station")
 
 

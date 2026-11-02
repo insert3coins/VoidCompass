@@ -1833,7 +1833,7 @@ print(survey["enabled"], survey["data"])
 
 ## The Watcher
 
-Read the Watcher's mind, give it a thought of your own, poke it, answer its questions, and meet other commanders' Watchers.
+Read the Watcher's thoughts and story, give it a thought of your own, poke it, answer its questions, and meet other commanders' Watchers.
 
 | Method | Path | What it does |
 |---|---|---|
@@ -1891,7 +1891,7 @@ The Watcher's voice can say anything you give it.
 | POST | `/api/v1/voice/stop` | Stop talking at once (the next thought may still be said) |
 | POST | `/api/v1/voice/hush` | Stop at once and **stay quiet**: `{"seconds": 30}` for a while, `{}` until lifted, `{"seconds": 0}` to lift it |
 
-The voice must be switched on and downloaded on **The Watcher › VOICE** first, otherwise `409`. Something new to say replaces anything not yet said. Up to 400 characters at a time; the orb's pupil moves with the words.
+The voice must be switched on and downloaded on **The Watcher › VOICE** first, otherwise `409`. New lines wait in order for the current line to finish, with a 0.6-second pause between lines. Hush clears waiting lines and stops playback. Up to 400 characters at a time; the orb's pupil moves with the words.
 
 **Sharing the air with your own voice** (5.6.1)
 
@@ -1954,7 +1954,7 @@ What's going on inside Void Compass, live: for the debugger in `tools/debug` (ru
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/v1/debug` | The process (memory as Task Manager counts it, its working set and commit, CPU time, handles), every thread and what it's doing, how long since the UI thread last beat, and the app's own view: the deck, the game, the overlays, the Watcher's mind and its model, the voice and the music |
+| GET | `/api/v1/debug` | The process (memory as Task Manager counts it, its working set and commit, CPU time, handles), every thread and what it's doing, how long since the UI thread last beat, and the app's own view: the deck, the game, the overlays, the Watcher's written thoughts and pending uplink, the voice and the music |
 | GET | `/api/v1/debug/log` | Void Compass's recent log lines (the last 4,000, kept in memory only) |
 | POST | `/api/v1/debug/verbose` | Note debug-level lines too, for up to 15 minutes: `{"on": true, "seconds": 600}`, or `{"on": false}` (needs **Allow control**) |
 

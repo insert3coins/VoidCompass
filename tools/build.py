@@ -166,6 +166,7 @@ VSVersionInfo(
         f'--add-data={project_dir / "assets" / "images"}{data_sep}assets/images',
         f'--add-data={project_dir / "assets" / "gamecards"}{data_sep}assets/gamecards',
         f'--add-data={project_dir / "web"}{data_sep}web',
+        f'--add-data={project_dir / "docs"}{data_sep}docs',
         # The local API's reference, served at /api/v1/docs (5.5.7).
         f'--add-data={project_dir / "api.md"}{data_sep}.',
         f'--add-data={project_dir / "data" / "mining_data.db"}{data_sep}data',

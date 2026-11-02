@@ -95,7 +95,6 @@
 .theme-workshop-head :is(input,select) { width:100%; min-width:0; min-height:38px; padding:8px 10px; border:1px solid var(--border); outline:0; background:var(--input); color:var(--text); font:12px/1.4 Consolas,monospace; }.theme-workshop :is(input,select):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .settings-page .theme-colour-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:9px; padding:0 0 8px; }
 .settings-page .theme-colour-grid label { display:grid; grid-template-columns:minmax(0,1fr) 42px; gap:10px; min-width:0; padding:10px 11px; border:1px solid var(--border-soft); background:var(--inset); color:var(--muted); font:11px/1.5 Consolas,monospace; }.theme-colour-grid span { overflow-wrap:anywhere; }.settings-page .theme-colour-grid input { width:42px; height:30px; }
-.hotkey-row { grid-template-columns:minmax(0,1fr) minmax(260px,360px); }.hotkey-row .setting-control input { width:100%; flex:1; margin-top:0; text-align:center; cursor:default; }.hotkey-row.recording { box-shadow:inset -2px 0 var(--orange); }.hotkey-row.recording input { color:var(--orange); border-color:var(--orange); }
 .hotkey-status { margin:16px 0 0; padding:12px 14px; border-left:2px solid var(--orange); background:var(--inset); color:var(--muted); font:12px/1.6 "Segoe UI",sans-serif; }
 .settings-health { display:grid; gap:7px; padding:17px 22px; border:1px solid var(--border-soft); border-left:2px solid var(--green); background:var(--panel); }.settings-health b { color:var(--green); font:600 18px/1.3 "Bahnschrift SemiCondensed",sans-serif; }.settings-health span { color:var(--muted); font:11px/1.5 Consolas,monospace; }
 .settings-section .cache-rebuild-state { margin-block:14px; }.settings-no-match { padding:44px 28px; border:1px dashed var(--settings-line); background:var(--panel); text-align:center; }.settings-no-match h3 { margin:0; color:var(--text); font:600 25px/1.3 "Bahnschrift SemiCondensed",sans-serif; }.settings-no-match p { margin:12px 0 20px; color:var(--muted); font:13px/1.6 "Segoe UI",sans-serif; }
@@ -124,3 +123,184 @@
 }
 body.reduced-motion .settings-page *,body.reduced-motion .settings-page *::before { animation:none !important; transition:none !important; }
 @media (prefers-reduced-motion:reduce) { .settings-page *,.settings-page *::before { animation:none !important; transition:none !important; } }
+/* Settings › Hotkeys, redone (5.7.3): three input cards, a toolbar, and each
+   group of shortcuts as a compact table (shortcut | keyboard | controller). */
+.input-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; padding:14px 0 6px; }
+.input-card { display:flex; flex-direction:column; gap:10px; min-width:0; padding:14px 16px; border:1px solid var(--border); border-top:2px solid var(--settings-line,var(--accent)); background:var(--inset); }
+.input-card > header { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+.input-card > header b { color:var(--accent); font:700 11px Consolas,monospace; letter-spacing:.12em; }
+.input-card > header span { color:var(--muted); font:700 10px Consolas,monospace; letter-spacing:.08em; }
+.input-card .setting-row { min-height:0; padding:4px 0; border-bottom:0; }
+.input-card .setting-row { grid-template-columns:minmax(0,1fr) auto; }
+.input-card .elite-folder .setting-row { grid-template-columns:minmax(0,1fr); grid-template-areas:"copy" "control" "flag"; }
+.input-card .setting-copy small { max-width:none; }
+.controller-live { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 12px; align-items:baseline; margin:0; padding:10px 12px; border:1px solid var(--border-soft); background:var(--panel); }
+.controller-live b { color:var(--muted); font:700 10px Consolas,monospace; letter-spacing:.12em; }
+.controller-live span { color:var(--text); font:12px/1.45 "Segoe UI",sans-serif; overflow-wrap:anywhere; }
+.elite-groups { display:grid; gap:4px; margin:0; padding:0; list-style:none; }
+.elite-groups li { display:grid; grid-template-columns:70px minmax(0,1fr) auto; gap:8px; align-items:baseline; padding:6px 10px; border:1px solid var(--border-soft); background:var(--panel); }
+.elite-groups span { color:var(--muted); font:700 10px Consolas,monospace; letter-spacing:.08em; text-transform:uppercase; }
+.elite-groups b { overflow-wrap:anywhere; color:var(--text); font:600 13px "Segoe UI",sans-serif; }
+.elite-groups small { color:var(--dim); font:10px Consolas,monospace; }
+.elite-note, .elite-error, .input-note { margin:0; color:var(--muted); font:12px/1.5 "Segoe UI",sans-serif; }
+.elite-error { color:var(--orange); }
+.input-note { margin-top:auto; padding-top:10px; border-top:1px solid var(--border-soft); color:var(--dim); }
+.elite-folder > summary { color:var(--dim); font:700 10px Consolas,monospace; letter-spacing:.1em; cursor:pointer; }
+.elite-folder[open] > summary { margin-bottom:6px; }
+.hotkey-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:14px 0 0; }
+.hotkey-filters { display:flex; gap:6px; flex-wrap:wrap; }
+.hotkey-toolbar > button { min-height:32px; padding:0 14px; border:1px solid var(--border); background:var(--panel-alt); color:var(--muted); font:700 10px Consolas,monospace; letter-spacing:.1em; }
+.hotkey-toolbar > button:hover, .hotkey-filters button:hover { color:var(--accent); border-color:var(--accent); }
+.hotkey-filters button { min-height:32px; padding:0 12px; border:1px solid var(--border); background:var(--inset); color:var(--muted); font:700 10px Consolas,monospace; letter-spacing:.1em; cursor:pointer; }
+.hotkey-filters button b { margin-left:6px; color:var(--dim); }
+.hotkey-filters button[aria-pressed="true"] { border-color:var(--accent); color:var(--accent); background:color-mix(in srgb,var(--accent) 9%,var(--inset)); }
+.hotkey-filters button[aria-pressed="true"] b { color:var(--accent); }
+.hotkey-head { display:grid; grid-template-columns:minmax(180px,1fr) minmax(240px,300px) minmax(240px,300px); gap:0 14px; padding:12px 0 6px; border-bottom:1px solid var(--border); }
+.hotkey-head span { color:var(--dim); font:700 10px Consolas,monospace; letter-spacing:.12em; }
+.hotkey-row { grid-template-columns:minmax(180px,1fr) minmax(240px,300px) minmax(240px,300px); grid-template-areas:"copy key pad" "copy flag flag"; gap:2px 14px; min-height:0; padding:10px 0; }
+.hotkey-row .setting-copy b { font-size:13px; }
+.hotkey-row .setting-copy small { margin-top:3px; }
+.hotkey-cell { gap:5px; }
+.hotkey-row .hotkey-key { grid-area:key; }
+.hotkey-row .hotkey-pad { grid-area:pad; }
+.hotkey-row .hotkey-cell input, .hotkey-cell output { flex:1; min-width:0; min-height:34px; margin:0; padding:6px 9px; border:1px solid var(--border); background:var(--input); color:var(--text); font:12px/1.3 Consolas,monospace; text-align:center; cursor:default; }
+.hotkey-cell output { display:flex; align-items:center; justify-content:center; overflow-wrap:anywhere; }
+.hotkey-cell output.unset, .hotkey-cell input:placeholder-shown { color:var(--dim); }
+.hotkey-cell button { min-height:34px; }
+.hotkey-cell .hotkey-x { width:30px; padding:0; }
+.hotkey-cell button:disabled { opacity:.35; cursor:default; }
+.hotkey-row.recording { box-shadow:inset -2px 0 var(--orange); }
+.hotkey-row.recording .hotkey-key input { color:var(--orange); border-color:var(--orange); }
+.hotkey-row.learning { box-shadow:inset -2px 0 var(--green); }
+.hotkey-row.learning .hotkey-pad output { color:var(--green); border-color:var(--green); }
+.hotkey-clash { color:var(--orange) !important; }
+.hotkey-learn-note[data-status="done"] { color:var(--green) !important; }
+.hotkey-learn-note:is([data-status="taken"], [data-status="none"]) { color:var(--orange) !important; }
+/* Settings › Voice (5.7.3): its hearing, the ship commands, and what to bind in Elite. */
+.voice-hearing { grid-template-areas:"copy control" "progress progress"; }
+.voice-hearing .voice-progress[hidden] { display:none; }
+.voice-actions, .voice-key .setting-control, .voice-test .setting-control { display:flex; justify-content:flex-end; align-items:center; gap:6px; flex-wrap:wrap; }
+.voice-progress { grid-area:progress; position:relative; height:22px; border:1px solid var(--border); background:var(--inset); }
+.voice-progress i { position:absolute; inset:0 auto 0 0; width:var(--done,0%); background:color-mix(in srgb,var(--accent) 35%,transparent); transition:width .3s; }
+.voice-progress span { position:relative; display:block; padding:0 9px; color:var(--text); font:10px/20px Consolas,monospace; }
+.voice-key kbd { padding:6px 10px; border:1px solid color-mix(in srgb,var(--accent) 50%,var(--border)); background:var(--inset); color:var(--accent); font:700 11px Consolas,monospace; }
+.voice-test { grid-template-columns:minmax(0,1fr) minmax(260px,auto); }
+.voice-meter { position:relative; width:110px; height:10px; border:1px solid var(--border); background:var(--inset); overflow:hidden; }
+.voice-meter i { position:absolute; inset:0 auto 0 0; width:calc(var(--level,0) * 100%); background:linear-gradient(90deg,var(--green),var(--green) 70%,var(--yellow) 88%,var(--red)); transition:width .08s linear; }
+.voice-ship-state { display:flex; gap:8px; flex-wrap:wrap; padding:12px 0 4px; }
+.voice-ship-state span { display:flex; gap:8px; align-items:baseline; padding:7px 12px; border:1px solid var(--border-soft); background:var(--inset); color:var(--muted); font:700 11px Consolas,monospace; letter-spacing:.06em; }
+.voice-ship-state b { color:var(--dim); font-size:9px; letter-spacing:.14em; }
+.voice-ship-state .on { color:var(--green); border-color:color-mix(in srgb,var(--green) 40%,var(--border-soft)); }
+.voice-ship-state .warn { color:var(--orange); border-color:color-mix(in srgb,var(--orange) 40%,var(--border-soft)); }
+.voice-bind-list, .voice-bind-list > summary span { color:var(--orange); font:700 10px Consolas,monospace; letter-spacing:.08em; }
+.voice-bind { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; align-items:baseline; padding:6px 0 6px 14px; border-top:1px solid color-mix(in srgb,var(--border-soft) 60%,transparent); }
+.voice-bind b { color:var(--text); font:600 13px "Segoe UI",sans-serif; }
+.voice-bind span { color:var(--dim); font:italic 12px "Segoe UI",sans-serif; }
+.voice-commands > summary, .voice-bind-list > summary { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:13px 0; cursor:pointer; list-style:none; }
+.voice-commands > summary::-webkit-details-marker, .voice-bind-list > summary::-webkit-details-marker { display:none; }
+.voice-commands > summary b, .voice-bind-list > summary b { color:var(--text); font:700 11px Consolas,monospace; letter-spacing:.12em; }
+.voice-commands > summary b::before, .voice-bind-list > summary b::before { content:"▸ "; color:var(--dim); }
+.voice-commands[open] > summary b::before, .voice-bind-list[open] > summary b::before { content:"▾ "; }
+.voice-commands > summary span { color:var(--orange); font:700 10px Consolas,monospace; letter-spacing:.08em; }
+.voice-commands > summary span.on { color:var(--green); }
+.voice-command { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:7px 0 7px 14px; border-top:1px solid color-mix(in srgb,var(--border-soft) 60%,transparent); }
+.voice-command > span:first-child { color:var(--text); font:13px "Segoe UI",sans-serif; }
+.voice-keys { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.voice-keys em { display:inline-flex; gap:6px; align-items:baseline; padding:4px 8px; border:1px solid var(--border); background:var(--inset); color:var(--accent); font:normal 700 11px Consolas,monospace; }
+.voice-keys em i { color:var(--dim); font:normal 9px Consolas,monospace; letter-spacing:.08em; text-transform:uppercase; }
+.voice-keys em.missing { color:var(--orange); border-color:color-mix(in srgb,var(--orange) 45%,var(--border)); }
+.voice-sequence { grid-column:1/-1; color:var(--muted); font:11px/1.5 Consolas,monospace; }
+.voice-sequence summary { cursor:pointer; padding:5px 0; }
+.voice-sequence label, .voice-sequence small { display:block; margin:8px 0; }
+.voice-sequence textarea { display:block; box-sizing:border-box; width:100%; min-height:130px; resize:vertical; padding:10px; border:1px solid var(--border); background:var(--inset); color:var(--text); font:12px/1.5 Consolas,monospace; }
+.voice-sequence p[role="alert"] { color:var(--orange); }
+@container settings-group (max-width:600px) { .voice-test { grid-template-columns:minmax(0,1fr); } .voice-command { grid-template-columns:minmax(0,1fr); } .voice-keys { justify-content:flex-start; } }
+/* A search looks through every shortcut, whatever the filter. */
+.settings-shell:not(.searching) .filtered-out { display:none !important; }
+@container settings-group (max-width:1080px) { .input-cards { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } .input-cards .controller-elite { grid-column:1/-1; } }
+@container settings-group (max-width:800px) {
+  .hotkey-head { display:none; }
+  .hotkey-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-areas:"copy copy" "key pad" "flag flag"; gap:8px 14px; }
+}
+@container settings-group (max-width:600px) {
+  .input-cards { grid-template-columns:minmax(0,1fr); }
+  .hotkey-row { grid-template-columns:minmax(0,1fr); grid-template-areas:"copy" "key" "pad" "flag"; }
+}
+
+/* Voice setup follows the same visible cards and rows as Hotkeys. */
+.voice-setup-grid { align-items:start; }
+.voice-choices { display:grid; gap:8px; padding:14px; }
+.voice-choices button { display:grid; gap:5px; text-align:left; white-space:normal; padding:12px; min-height:64px; border:1px solid var(--border); background:var(--inset); color:var(--muted); }
+.voice-choices button b { font-size:12px; color:var(--text); }
+.voice-choices button small { font:11px/1.5 Consolas,monospace; text-transform:none; letter-spacing:0; }
+.voice-choices button[aria-pressed="true"], .voice-editor-tabs button[aria-pressed="true"] { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,var(--inset)); color:var(--accent); }
+.voice-choices button[aria-pressed="true"] b { color:var(--accent); }
+.voice-setup-grid .voice-hearing { display:flex; flex-wrap:wrap; gap:12px; padding:14px; }
+.voice-setup-grid .voice-hearing .setting-copy { flex:1 1 170px; }
+.voice-setup-grid .voice-key { padding:0 14px 14px; }
+.voice-key p { color:var(--muted); font:11px/1.6 Consolas,monospace; }
+.voice-command-head, .voice-command { display:grid; grid-template-columns:minmax(160px,1fr) minmax(220px,1.6fr) 110px; gap:14px; align-items:center; }
+.voice-command-head { padding:10px 18px; color:var(--dim); font:10px Consolas,monospace; letter-spacing:.08em; border-bottom:1px solid var(--border); }
+.voice-command { padding:14px 18px; border-bottom:1px solid var(--border); }
+.voice-command-say { display:grid; gap:6px; }
+.voice-command-say b { font-size:13px; color:var(--text); }
+.voice-command-say small { font:10px/1.5 Consolas,monospace; color:var(--muted); }
+.voice-command[data-state="none"] .voice-command-say small { color:var(--orange); }
+.voice-command .voice-keys { justify-content:flex-start; }
+.voice-keys em { text-align:left; max-width:100%; overflow-wrap:anywhere; }
+.voice-keys em i { line-height:1.5; }
+.voice-search { display:grid; gap:5px; color:var(--muted); font:10px Consolas,monospace; }
+.voice-search input { min-width:220px; padding:9px; background:var(--inset); border:1px solid var(--border); color:var(--text); }
+.voice-editor { grid-column:1/-1; padding:14px; background:var(--inset); border:1px solid var(--border); }
+.voice-editor-tabs { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; }
+.voice-editor-tabs button { padding:8px; white-space:normal; text-align:left; }
+.voice-sequence textarea:focus { border-color:var(--accent); outline:1px solid var(--accent); }
+.settings-shell:not(.searching) .voice-filtered { display:none !important; }
+@container settings-group (max-width:1080px) { .voice-setup-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .voice-setup-grid > :last-child { grid-column:1/-1; } .voice-setup-grid > :last-child .voice-choices { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@container settings-group (max-width:700px) {
+ .voice-setup-grid { grid-template-columns:minmax(0,1fr); }
+ .voice-setup-grid > :last-child .voice-choices { grid-template-columns:minmax(0,1fr); }
+ .voice-command-head { display:none; }
+ .voice-command { grid-template-columns:minmax(0,1fr) auto; }
+ .voice-command .voice-keys { grid-column:1/-1; grid-row:2; }
+ .voice-editor { grid-row:3; }
+ .voice-search, .voice-search input { width:100%; min-width:0; box-sizing:border-box; }
+}
+
+.voice-key button { border:1px solid var(--border); padding:8px 10px; background:var(--inset); color:var(--accent); font:10px Consolas,monospace; }
+.voice-key button:hover { border-color:var(--accent); }
+
+.voice-definition { padding:14px 0 18px; border-bottom:1px solid var(--border); margin-bottom:18px; }
+.voice-definition-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.voice-definition label { display:grid; gap:7px; color:var(--muted); font:10px/1.5 Consolas,monospace; }
+.voice-definition input:not([type="checkbox"]), .voice-definition textarea { width:100%; box-sizing:border-box; padding:10px; background:var(--inset); border:1px solid var(--border); color:var(--text); font:12px/1.5 Consolas,monospace; }
+.voice-definition textarea { resize:vertical; min-height:80px; }
+.voice-definition-options, .voice-definition-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:14px 0; }
+.voice-definition-options label { display:flex; align-items:center; gap:8px; }
+.voice-definition-options fieldset { display:flex; flex-wrap:wrap; gap:12px; border:1px solid var(--border); padding:10px; }
+.voice-definition-options legend, .voice-editor h5 { color:var(--accent); font:10px Consolas,monospace; }
+.voice-definition button { padding:9px; background:var(--inset); border:1px solid var(--border); color:var(--accent); font:10px Consolas,monospace; }
+.voice-definition button.danger-action { color:var(--red); }
+.voice-definition .setting-flag { display:block; }
+.voice-definition-note { color:var(--orange); font:11px/1.5 Consolas,monospace; }
+#voice-command-new { margin-top:16px; padding:0 16px; border:1px solid var(--accent); }
+.voice-command-say > span { color:var(--muted); font:11px/1.5 Consolas,monospace; }
+.voice-command[data-command-enabled="false"] .voice-command-say b { color:var(--dim); }
+@container settings-group (max-width:700px) { .voice-definition-fields { grid-template-columns:minmax(0,1fr); } }
+
+.voice-command > button { font:10px Consolas,monospace; padding:8px; white-space:normal; max-width:100%; }
+.voice-command-say b, .voice-command-say > span { overflow-wrap:anywhere; }
+
+.voice-definition input[type="checkbox"] { accent-color:var(--accent); }
+.sequence-recorder { padding:16px; background:var(--inset); border:1px solid var(--border); }
+.sequence-recorder header, .sequence-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.sequence-recorder header { justify-content:space-between; color:var(--accent); font:11px Consolas,monospace; }
+.sequence-recorder p { color:var(--muted); font:12px/1.6 Consolas,monospace; overflow-wrap:anywhere; }
+.sequence-recorder button, .sequence-actions button { padding:9px; margin:6px 6px 6px 0; background:var(--inset); border:1px solid var(--border); color:var(--accent); font:10px Consolas,monospace; white-space:normal; }
+.sequence-recorder button:disabled { opacity:.45; cursor:default; }
+.sequence-recorded-inputs { display:grid; gap:10px; padding-left:24px; color:var(--text); }
+.sequence-recorded-inputs li { padding:8px; border-bottom:1px solid var(--border); font:11px/1.6 Consolas,monospace; }
+.sequence-recorded-inputs label, .sequence-preview, .sequence-actions label { display:grid; gap:6px; margin-top:8px; color:var(--muted); font:10px/1.5 Consolas,monospace; }
+.sequence-recorder select, .sequence-recorder textarea, .sequence-actions select { width:100%; max-width:100%; min-width:0; box-sizing:border-box; padding:9px; color:var(--text); background:var(--inset); border:1px solid var(--border); font:12px/1.5 Consolas,monospace; }
+.sequence-recorder textarea { resize:vertical; }
+.sequence-recorder .elite-error { color:var(--red); }

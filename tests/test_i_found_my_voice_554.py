@@ -73,20 +73,20 @@ class SpeakingTests(unittest.TestCase):
         levels = watcher_voice.envelope([0] * step + [1000] * step, 22050)
         self.assertEqual(levels, [0.0, 1.0])
 
-    def test_newest_line_wins_and_close_is_instant(self):
+    def test_lines_wait_in_order_and_close_is_instant(self):
         played = []
         speaker = watcher_voice.WatcherSpeaker(tempfile.mkdtemp(), player=played.append)
         speaker._start_worker = lambda: None  # nothing runs: only the queue is checked
         speaker.say("First thought.", key=1)
         speaker.say("Second thought.", key=2)
-        self.assertEqual(speaker._pending["text"], "Second thought.")
+        self.assertEqual([job["text"] for job in speaker._pending], ["First thought.", "Second thought."])
         speaker._live = {"key": 2, "start": 0, "duration": 1, "envelope": []}
         proc = Mock()
         speaker._proc = proc
         speaker.close()
         self.assertEqual(played, [None], "playback stopped at once")
         proc.kill.assert_called_once()
-        self.assertIsNone(speaker._pending)
+        self.assertFalse(speaker._pending)
         self.assertFalse(speaker.say("After close."), "nothing is said once closed")
 
     def test_shutdown_stops_the_voice_first(self):

@@ -1,10 +1,10 @@
 """Talking to the Watcher by voice (5.7.1), for MainDashboard: the talk key
-(held or tapped), the button and VOICE IN card on its MIND page, and the
-mic test.
+(held or tapped), the button by SAY IT, and the mic test. Its settings are
+in Settings › Voice (5.7.3).
 
-What you say goes to its mind like words typed in TALK TO IT, so its own
-words must be on to answer; the mic test works without them. The hearing
-itself is voice/listener.py.
+What you say goes to the Watcher like words typed in TALK. It does what you
+ask and answers from the ship's systems. The orb shows it listening and hearing (set_hearing).
+The hearing itself is voice/listener.py.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import os
 import threading
 import time
 
+from voidcompass.core.ship_names import ship_name
 from voidcompass.core.global_hotkeys import parse_hotkey
 from voidcompass.voice import listen_assets, microphone
 from voidcompass.voice.listener import WatcherListener
@@ -47,6 +48,16 @@ class DashboardWatcherListenMixin:
             self._watcher_listen = listener
         return listener
 
+    def _watcher_listen_model(self):
+        return "fast" if self.config.get("watcher_listen_model") == "fast" else "accurate"
+
+    def _watcher_listen_model_changed(self):
+        listener = getattr(self, "_watcher_listen", None)
+        if listener is not None:
+            listener.close()
+            self._watcher_listen = None
+        self._watcher_listen_switched()
+
     def _watcher_listen_mode(self):
         mode = str(self.config.get("watcher_listen_mode") or "hold")
         return mode if mode in LISTEN_MODES else "hold"
@@ -54,27 +65,28 @@ class DashboardWatcherListenMixin:
     def _watcher_listen_blocked(self, test=False):
         """Why it can't listen now, or "" when it can."""
         if not self.config.get("watcher_listen_enabled"):
-            return "Voice in is off: turn it on on the Watcher's MIND page."
-        if not listen_assets.installed():
-            return "Its hearing isn't downloaded yet: see VOICE IN on the Watcher's MIND page."
+            return "Talking by voice is off: turn it on in Settings, under Voice."
+        if not listen_assets.installed(model=self._watcher_listen_model()):
+            return "Its hearing isn't downloaded yet: see Settings, under Voice."
         if test:
             return ""
         if getattr(getattr(self, "heartbeat_hud", None), "mind", None) is None:
             return "The Watcher is off: turn it on in Overlay Studio to talk to it."
-        if not self.config.get("watcher_llm_enabled") or not self._watcher_llm().listening():
-            return "Its own words are off or still waking: it needs them to answer."
         return ""
 
     def _watcher_listen_words(self):
         """Where you are and what you fly, so the names come out right."""
-        facts = self._watcher_llm_facts()
-        return [facts.get("system"), facts.get("ship name"), facts.get("ship"), facts.get("near"),
+        ship = getattr(self, "cmdr_ship", None) or {}
+        return [str(getattr(self, "current_sys", "") or ""), str(ship.get("ship_name") or ""),
+                ship_name(ship.get("ship"), ship.get("ship_localised")),
+                str(getattr(self, "current_body_name", "") or ""),
                 str(getattr(self, "current_station_name", "") or "")]
 
     # -- talking --------------------------------------------------------------
-    def _watcher_talk_key(self):
+    def _watcher_talk_key(self, held=None):
         """The talk hotkey: held, it listens until you let go; tapped, it
-        listens until the next tap."""
+        listens until the next tap. ``held()`` says whether a controller
+        button is still down (5.7.3); without it, the hotkey's key is watched."""
         listener = self._watcher_listener()
         mode = self._watcher_listen_mode()
         if mode == "tap" and listener.active():
@@ -86,21 +98,22 @@ class DashboardWatcherListenMixin:
             self._watcher_listen_tell(blocked, feed=True)
             return
         key = None
-        if mode == "hold":
+        if mode == "hold" and held is None:
             try:
                 parsed = parse_hotkey(self.config.get("overlay_hotkey_watcher_talk"))
             except ValueError:
                 parsed = None
             key = parsed[1] if parsed else None
-        self._watcher_listen_begin(key=key)
+        self._watcher_listen_begin(key=key, held=held if mode == "hold" else None)
 
-    def _watcher_listen_begin(self, key=None, test=False):
+    def _watcher_listen_begin(self, key=None, test=False, held=None):
         if getattr(self, "_closing", False):
             return False
-        threading.Thread(target=self._watcher_listen_run, args=(key, test), name="watcher-talk", daemon=True).start()
+        threading.Thread(target=self._watcher_listen_run, args=(key, test, held), name="watcher-talk",
+                         daemon=True).start()
         return True
 
-    def _watcher_listen_run(self, key=None, test=False):
+    def _watcher_listen_run(self, key=None, test=False, held=None):
         listener = self._watcher_listener()
         self._watcher_listen_quiet()
         if not listener.start(test=test):
@@ -110,25 +123,27 @@ class DashboardWatcherListenMixin:
             while listener.listening() and time.monotonic() < end:
                 time.sleep(0.05)
             listener.stop()
-        elif key is not None:
-            while listener.listening() and _key_down(key):
+        elif held is not None or key is not None:
+            down = held if held is not None else (lambda: _key_down(key))
+            while listener.listening() and down():
                 time.sleep(HOLD_POLL_S)
             listener.stop()
 
     def _watcher_listen_quiet(self):
-        """You're speaking: the Watcher stops mid-line."""
+        """You're speaking: stop speech and discard waiting lines."""
         speaker = getattr(self, "_watcher_voice", None)
-        if speaker is not None and speaker.live() is not None:
-            self._voice_stop_reason = "stopped"
+        if speaker is not None:
+            if speaker.live() is not None:
+                self._voice_stop_reason = "stopped"
             speaker.stop()
 
     def _watcher_listen_heard(self, text):
-        """What you said (on the hearing thread): to its mind, as talk."""
+        """What you said (on the hearing thread): a command or plain question."""
         def work():
             mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
             if mind is None or not mind.talk(text, voice=True):
-                self._watcher_listen_tell(f"It heard “{text}”, but its own words aren't ready to answer.",
-                                          feed=True)
+                self._watcher_listen_tell(f"It heard “{text}”, but the Watcher is off: turn its orb on in "
+                                          "Overlay Studio.", feed=True)
                 return
             self._watcher_mind_watch()
         self._ui_post(work)
@@ -168,8 +183,8 @@ class DashboardWatcherListenMixin:
     # -- the download ---------------------------------------------------------
     def _watcher_listen_downloader(self):
         download = getattr(self, "_watcher_listen_download", None)
-        if download is None:
-            download = self._watcher_listen_download = listen_assets.ListenDownload()
+        if download is None or (not download.running() and download.model != self._watcher_listen_model()):
+            download = self._watcher_listen_download = listen_assets.ListenDownload(model=self._watcher_listen_model())
         return download
 
     def _watcher_listen_start_download(self):
@@ -193,6 +208,8 @@ class DashboardWatcherListenMixin:
                 feed("SYSTEM", "The Watcher can hear you now: hold your talk key and speak", severity="INFO")
             elif stage == "failed":
                 feed("SYSTEM", f"The Watcher's hearing didn't download: {state.get('error')}", severity="WARNING")
+        if stage == "done":
+            self._watcher_listener().warm()
         self._ui_post(self._schedule_html_dashboard_publish, immediate=True, key="watcher-listen-download")
 
     # -- the page -------------------------------------------------------------
@@ -214,9 +231,12 @@ class DashboardWatcherListenMixin:
             hotkey = None
         return {
             "enabled": bool(self.config.get("watcher_listen_enabled")),
-            "installed": listen_assets.installed(),
+            "installed": listen_assets.installed(model=self._watcher_listen_model()),
             "download": state,
-            "download_mb": round(listen_assets.download_bytes() / 1_000_000),
+            "download_mb": round(listen_assets.download_bytes(model=self._watcher_listen_model()) / 1_000_000),
+            "model": self._watcher_listen_model(),
+            "models": [{"id": key, "name": spec["name"], "mb": round(spec["size"] / 1_000_000),
+                        "installed": listen_assets.installed(model=key)} for key, spec in listen_assets.MODELS.items()],
             "notice": listen_assets.NOTICE,
             "mics": self._watcher_mics(),
             "mic": str(self.config.get("watcher_listen_mic") or ""),
@@ -232,12 +252,28 @@ class DashboardWatcherListenMixin:
             "blocked": self._watcher_listen_blocked(),
         }
 
+    def _watcher_listen_switched(self):
+        """Talking by voice switched on (its hearing downloaded, the first
+        time) or off (the hearing engine stopped). Settings › Voice too."""
+        if self.config.get("watcher_listen_enabled"):
+            if not listen_assets.installed(model=self._watcher_listen_model()):
+                self._watcher_listen_start_download()
+            else:
+                self._watcher_listener().warm()
+            return
+        listener = self._watcher_listener()
+        listener.stop()
+        threading.Thread(target=listener.stop_server, name="watcher-hearing-stop", daemon=True).start()
+
     def _watcher_listen_data(self, name):
         """/api/data/listen (the level meter) and /api/data/listen-test (the
         mic test, to hear back)."""
         listener = self._watcher_listener()
         if name == "listen":
-            return self._json_answer(listener.state())
+            # Settings › Voice follows its download here too (5.7.3), not on each refresh.
+            download = getattr(self, "_watcher_listen_download", None)
+            state = download.state() if download is not None else {"stage": "idle", "done": 0, "total": 0, "error": ""}
+            return self._json_answer(dict(listener.state(), download=state, blocked=self._watcher_listen_blocked()))
         if name == "listen-test":
             sound = listener.last_test()
             return ("audio/wav", sound) if sound else None
@@ -248,13 +284,7 @@ class DashboardWatcherListenMixin:
         if operation == "listen_toggle":
             self.config["watcher_listen_enabled"] = bool(payload.get("value"))
             self._persist_config()
-            if self.config["watcher_listen_enabled"]:
-                if not listen_assets.installed():
-                    self._watcher_listen_start_download()
-            else:
-                listener = self._watcher_listener()
-                listener.stop()
-                threading.Thread(target=listener.stop_server, name="watcher-hearing-stop", daemon=True).start()
+            self._watcher_listen_switched()
             self._schedule_html_dashboard_publish(immediate=True)
             return True
         if operation == "listen_settings":
@@ -275,6 +305,9 @@ class DashboardWatcherListenMixin:
             self._watcher_listen_downloader().cancel()
             return True
         if operation == "listen_remove":
+            download = getattr(self, "_watcher_listen_download", None)
+            if download is not None and download.running():
+                return False
             listener = self._watcher_listener()
             listener.stop()
             listener.stop_server()

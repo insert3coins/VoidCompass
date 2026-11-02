@@ -214,7 +214,6 @@ class DashboardApiMixin(ApiRecordsMixin):
         voice and the music. Never a setting's value."""
         hud = getattr(self, "heartbeat_hud", None)
         mind = getattr(hud, "mind", None)
-        llm = getattr(self, "_watcher_mind_llm", None)
         dispatcher = getattr(self, "ui_dispatcher", None)
         last = getattr(self, "_api_last_journal_at", 0) or 0
         music = getattr(self, "_music_status", None) or {}
@@ -236,8 +235,7 @@ class DashboardApiMixin(ApiRecordsMixin):
                          "in_menu": bool(in_menu()) if callable(in_menu) else False,
                          "hide_on_maps": bool(self.config.get("overlay_hide_on_maps", True)),
                          "hide_in_menus": bool(self.config.get("overlay_hide_in_menus", False))},
-            "watcher": {"orb": hud is not None, "mind": mind.debug_state() if mind is not None else None,
-                        "llm": llm.debug_state() if llm is not None else None},
+            "watcher": {"orb": hud is not None, "mind": mind.debug_state() if mind is not None else None},
             "voice": {"on": self._watcher_voice_on() if hasattr(self, "_watcher_voice_on") else False,
                       "speaking": bool(getattr(self, "_voice_speaking", False)),
                       "hush_s": self._watcher_voice_hush_left() if hasattr(self, "_watcher_voice_hush_left") else 0},
@@ -488,6 +486,7 @@ class DashboardApiMixin(ApiRecordsMixin):
         data["current"] = ({key: current.get(key) for key in ("id", "text", "heading", "mood", "kind")}
                            if current else None)
         return _plain(data)
+
 
     def api_watcher_thought(self, text, heading="", speak=False):
         hud = self._api_hud()

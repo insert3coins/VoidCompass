@@ -179,7 +179,7 @@ class DebugRouteTests(unittest.TestCase):
 
 class AppViewTests(unittest.TestCase):
     def test_the_app_view_with_the_real_parts(self):
-        """The real api_debug, dispatcher, mind and model wrapper (a stand-in
+        """The real api_debug, dispatcher and written Watcher (a stand-in
         provider hid a UI-queue bug that failed every call in the app)."""
         from voidcompass.core.ui_dispatcher import ApplicationDispatcher
         from voidcompass.dashboard.dashboard_api_mixin import DashboardApiMixin
@@ -194,8 +194,6 @@ class AppViewTests(unittest.TestCase):
         deck.ui_dispatcher.post(lambda: None)
         deck._ui_post = lambda callback, *args, key=None, **kwargs: callback(*args, **kwargs)
         mind = WatcherMind(None, deck.config)
-        mind.llm = deck._watcher_llm()
-        self.addCleanup(mind.llm.close)
         deck.heartbeat_hud = type("Hud", (), {"mind": mind, "_stalled": False})()
         deck._music_status = {"playing": True, "track_id": "a1", "position": 12.0, "duration": 300.0}
         deck.current_sys, deck.current_gui_focus = "Sol", 6
@@ -203,7 +201,7 @@ class AppViewTests(unittest.TestCase):
         self.assertEqual(view["deck"]["ui_queue"], 1)
         self.assertEqual(view["game"]["system"], "Sol")
         self.assertEqual(view["watcher"]["mind"]["nature"], "stoic")
-        self.assertEqual(view["watcher"]["llm"]["stage"], "off")
+        self.assertNotIn("llm", view["watcher"])
         self.assertTrue(view["music"]["playing"])
         self.assertNotIn("SECRET-KEY", json.dumps(view))
         api = LocalApi(deck, version="test")
@@ -220,25 +218,23 @@ class AppViewTests(unittest.TestCase):
 
 class MindDebugTests(unittest.TestCase):
     def test_the_watcher_says_what_it_is_doing(self):
-        from voidcompass.overlays import watcher_llm, watcher_mind
+        from voidcompass.overlays import watcher_mind
 
         mind = watcher_mind.WatcherMind(None, {})
         state = mind.debug_state()
         for key in ("thought", "waiting", "feeling", "memory", "nature", "thoughts", "question", "in_danger"):
             self.assertIn(key, state)
-        llm = watcher_llm.WatcherLLM(lambda: {})
-        self.addCleanup(llm.close)
-        debug = llm.debug_state()
-        self.assertEqual((debug["stage"], debug["queued"], debug["recent"]), ("off", 0, []))
 
 
 class ToolTests(unittest.TestCase):
     def test_it_serves_its_page_and_reads_the_process_tree(self):
         debugger = debugger_module()
         page = (ROOT / "tools" / "debug" / "web" / "index.html").read_text(encoding="utf-8")
-        for needle in ('id="event-rows"', 'id="log-rows"', 'id="thread-rows"', 'id="mind"', 'id="procs"', "debugger.js"):
+        for needle in ('id="event-rows"', 'id="log-rows"', 'id="thread-rows"', 'id="procs"', "debugger.js"):
             self.assertIn(needle, page)
+        self.assertNotIn('id="mind"', page)
         script = (ROOT / "tools" / "debug" / "web" / "debugger.js").read_text(encoding="utf-8")
+        self.assertNotIn("llama-server.exe", script)
         for route in ("/debug", "/debug/log", "/debug/verbose", "/events/stream", "/overlays", "/local/procs"):
             self.assertIn(route, script)
         server = debugger._Server(("127.0.0.1", 0), debugger.handler_for(debugger.Debugger(None)))

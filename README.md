@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.7.2**
+**Current version: 5.7.3**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
@@ -38,9 +38,11 @@ The command deck has a tab for each part of the game:
 - **Music**: a player for your own music files, with an overlay you can show in game.
 - **Games**: fourteen arcade cabinets in Elite's world to play in the deck, from Docking Computer to Trumble Trouble.
 - **Hatchling**: a shipboard companion that lives in real time, is raised by how you really play, and has its own habitat and overlay.
-- **The Watcher**: an eye that watches your journal and thinks out loud beside it, about what you're doing, where you've been and its own long story. It remembers you between sessions and, once you know each other, asks whether it may use your name. Its voice is off until you turn it on. So is an experiment: a small language model on your own PC that lets it find its own words and answer when you talk to it, typed or spoken (push to talk, heard on this PC too), kept to what your journal says by its own rules.
+- **The Watcher**: an eye that watches your journal and thinks out loud beside it, about what you're doing, where you've been and its own long story. It remembers you between sessions and, once you know each other, asks whether it may use your name. Its thoughts and story come from written lines, spoken by its optional Piper voice. The TALK tab takes typed or spoken commands and answers questions from your ship's systems. Whisper hears push-to-talk speech on this PC; the uplink can look up commodity prices through Spansh.
 
 Everything else is quiet on purpose: it shows up on the deck, in notifications and on the overlays.
+
+The Watcher can also work Elite's controls when you ask: open or close maps and cockpit panels, navigate their menus, set pips, target ships, issue fighter orders and use on-foot equipment. **Settings › Voice** lists the commands and any keyboard bindings they need. Docking requests, Nomad deployment, launch and wingman assistance can run several actions in sequence; expand **Edit sequence** there to adjust their steps and timing. See the [voice command reference](docs/VOICE_COMMANDS.md) for phrases, sequences and panel-tab behaviour.
 
 ## Cockpit overlays
 
