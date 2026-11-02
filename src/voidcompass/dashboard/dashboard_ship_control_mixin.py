@@ -64,16 +64,23 @@ class DashboardShipControlMixin:
         if recorder is not None and recorder.active:
             return False
         target = str(payload.get("target") or "")
-        options = {key: where for command in voice_commands.catalogue(self.config.get("watcher_ship_commands"), include_disabled=True)
-                   for key, where, _op, _default in watcher_ship.sequence_options(command)}
-        place = payload.get("place") if target == "new" else options.get(target)
+        options = {key: (where, default) for command in voice_commands.catalogue(self.config.get("watcher_ship_commands"), include_disabled=True)
+                   for key, where, _op, default in watcher_ship.sequence_options(command)}
+        place = payload.get("place") if target == "new" else options.get(target, (None, ()))[0]
         if not isinstance(place, str) or place not in PLACE_NAMES or (target != "new" and target not in options):
             return False
         binds = self._elite_binds()
         binds.refresh()
         bindings = elite_recorder.bindings_for(binds, place)
         profile = get_active_profile(self.config)
-        recorder = elite_recorder.SequenceRecorder(bindings, target, place, profile, gap=GAP_S)
+        preferred = ()
+        if target in options:
+            lines = self.config.get("watcher_ship_macros", {}).get(target, options[target][1])
+            try:
+                preferred = elite_macros.actions_in(elite_macros.parse_macro(lines))
+            except ValueError:
+                preferred = elite_macros.actions_in(elite_macros.parse_macro(options[target][1]))
+        recorder = elite_recorder.SequenceRecorder(bindings, target, place, profile, gap=GAP_S, target_actions=preferred)
         self._ship_sequence_recorder = recorder
         if not bindings or not self._ship_running(fresh=True):
             recorder.finish("Start Elite and make sure its active bindings can be read, then record again.", failed=True)

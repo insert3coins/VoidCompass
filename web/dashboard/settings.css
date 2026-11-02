@@ -304,3 +304,4 @@ body.reduced-motion .settings-page *,body.reduced-motion .settings-page *::befor
 .sequence-recorder select, .sequence-recorder textarea, .sequence-actions select { width:100%; max-width:100%; min-width:0; box-sizing:border-box; padding:9px; color:var(--text); background:var(--inset); border:1px solid var(--border); font:12px/1.5 Consolas,monospace; }
 .sequence-recorder textarea { resize:vertical; }
 .sequence-recorder .elite-error { color:var(--red); }
+.sequence-match-note { display:block; margin-top:7px; color:var(--muted); font:10px/1.5 Consolas,monospace; }

@@ -619,7 +619,7 @@ class SettingsPageBrowserTests(unittest.TestCase):
             self.commands.append(payload)
             if payload.get("operation") == "sequence_choose":
                 state["events"][0]["choice"] = payload["action"]
-                state.update(can_use=True, errors=[], steps=["hold GalaxyMapOpen 0.15"])
+                state.update(can_use=True, errors=[], steps=[f"hold {payload['action']} 0.15"])
             route.fulfill(content_type="application/json", body='{"accepted":true}')
         self.page.route("**/api/command*", recorder_command)
         self.page.click('[data-settings-section="voice"]')
@@ -628,15 +628,21 @@ class SettingsPageBrowserTests(unittest.TestCase):
         self.wait_for(lambda: any(row.get("operation") == "sequence_record" for row in self.commands))
         self.assertEqual(next(row["target"] for row in self.commands if row.get("operation") == "sequence_record"), "galaxy_map")
         state.update(id="record-1", profile="jeff", target="galaxy_map", place="ship", status="review",
-                     note="Recording stopped.", errors=["Choose the intended action."],
-                     events=[{"index": 0, "input": "key:m", "seconds": .15, "focus": 0, "choice": "",
+                     note="Recording stopped.", errors=[], can_use=True, steps=["hold GalaxyMapOpen 0.15"],
+                     events=[{"index": 0, "input": "key:m", "seconds": .15, "focus": 0, "choice": "GalaxyMapOpen",
+                              "match_note": "Matched an action in this sequence",
                               "actions": [{"action": "GalaxyMapOpen", "label": "Galaxy map", "playable": True},
                                           {"action": "UI_Select", "label": "Select", "playable": True}]}])
         self.page.wait_for_selector('[data-sequence-choice="0"]')
-        self.assertTrue(self.page.locator('[data-sequence-use]').is_disabled())
+        self.assertFalse(self.page.locator('[data-sequence-use]').is_disabled())
+        self.assertEqual(self.page.input_value('[data-sequence-choice="0"]'), "GalaxyMapOpen")
+        self.assertEqual(self.page.locator('[data-sequence-choice="0"] option[value=""]').count(), 0)
+        self.assertIn("Matched an action", self.page.inner_text('.sequence-match-note'))
         self.assertEqual(self.saves(), [])
+        self.page.select_option('[data-sequence-choice="0"]', "UI_Select")
+        self.page.wait_for_function("document.getElementById('sequence-recording-preview').value === 'hold UI_Select 0.15'")
         self.page.select_option('[data-sequence-choice="0"]', "GalaxyMapOpen")
-        self.page.wait_for_function("!document.querySelector('[data-sequence-use]').disabled")
+        self.page.wait_for_function("document.getElementById('sequence-recording-preview').value === 'hold GalaxyMapOpen 0.15'")
         self.page.fill('#sequence-recording-preview', "hold GalaxyMapOpen 0.15\nwait 0.9")
         self.page.locator('#sequence-recording-preview').blur()
         changed = dict(SETTINGS, values=dict(SETTINGS["values"], home_system="Sol"), voice={"listen": {}, "ship": ship})

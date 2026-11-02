@@ -78,13 +78,14 @@ class RecordingTests(unittest.TestCase):
         self.assertAlmostEqual(steps[1].seconds + rec.gap * 2, .75)
         self.assertEqual(len(state["events"]), 5)
 
-    def test_shared_keys_require_a_choice_and_skip_is_explicit(self):
+    def test_shared_keys_are_assigned_and_manual_choices_or_skip_still_work(self):
         rec = self.make()
         self.sample(0)
         self.sample(1, ["key:space"])
         self.sample(1.2)
         rec.finish()
-        self.assertFalse(rec.state()["can_use"])
+        self.assertTrue(rec.state()["can_use"])
+        self.assertEqual(rec.state()["events"][0]["choice"], "OtherSpaceAction")
         self.assertFalse(rec.choose(0, "SelfDestruct"))
         self.assertFalse(rec.choose(-1, "UI_Select"))
         self.assertTrue(rec.choose(0, "UI_Select"))
@@ -92,6 +93,92 @@ class RecordingTests(unittest.TestCase):
         self.assertTrue(rec.state()["can_use"])
         self.assertTrue(rec.choose(0, "skip"))
         self.assertFalse(rec.state()["can_use"])
+
+    def test_an_open_panel_automatically_selects_menu_actions_over_flight_controls(self):
+        rec = self.make()
+        self.sample(0, focus=2)
+        self.sample(1, ["key:space"], focus=2)
+        self.sample(1.2, focus=2)
+        rec.finish()
+        state = rec.state()
+        self.assertTrue(state["can_use"], state)
+        self.assertEqual(state["events"][0]["choice"], "UI_Select")
+        self.assertEqual(state["steps"], ["hold UI_Select 0.2"])
+        self.assertIn("open panel", state["events"][0]["match_note"])
+        rec.choose(0, "OtherSpaceAction")
+        self.assertEqual(rec.state()["steps"], ["hold OtherSpaceAction 0.2"])
+        self.assertEqual(rec.state()["events"][0]["match_note"], "Your selected action")
+
+    def test_map_controls_beat_generic_menu_and_flight_controls_on_the_map(self):
+        action = elite_recorder.Binding("GalaxyMapYawRight", "key:d", frozenset(), "Galaxy map yaw", True)
+        flight = elite_recorder.Binding("YawRightButton", "key:d", frozenset(), "Yaw", True)
+        rec = self.make((*elite_recorder.bindings_for(fixture_binds(), "ship"), action, flight))
+        self.sample(0, focus=6)
+        self.sample(1, ["key:d"], focus=6)
+        self.sample(1.2, focus=6)
+        rec.finish()
+        self.assertEqual(rec.state()["events"][0]["choice"], "GalaxyMapYawRight")
+
+    def test_observed_panel_change_resolves_an_ambiguous_open_key(self):
+        other = elite_recorder.Binding("AFlightAction", "key:1", frozenset(), "Flight action", True)
+        rec = self.make((*elite_recorder.bindings_for(fixture_binds(), "ship"), other))
+        self.sample(0)
+        self.sample(1, ["key:1"])
+        self.sample(1.1)
+        self.sample(1.5, focus=2)
+        rec.finish()
+        state = rec.state()
+        self.assertEqual(state["events"][0]["choice"], "FocusLeftPanel")
+        self.assertIn("panel change", state["events"][0]["match_note"])
+        self.assertEqual(state["steps"][0], "focus FocusLeftPanel 2")
+
+    def test_panel_prediction_handles_menu_keys_before_status_json_catches_up(self):
+        rec = self.make()
+        self.sample(0)
+        self.sample(1, ["key:1"])
+        self.sample(1.1)
+        self.sample(1.3, ["key:space"])
+        self.sample(1.4)
+        self.sample(1.6, focus=2)
+        rec.finish()
+        state = rec.state()
+        self.assertEqual([row["choice"] for row in state["events"]], ["FocusLeftPanel", "UI_Select"])
+        self.assertEqual(state["events"][1]["focus"], 2)
+        self.assertTrue(state["can_use"], state)
+
+    def test_sequence_actions_break_a_shared_menu_binding_tie(self):
+        other = elite_recorder.Binding("CycleNextPage", "key:e", frozenset(), "Next page", True)
+        rec = self.make((*elite_recorder.bindings_for(fixture_binds(), "ship"), other))
+        rec.target_actions = frozenset({"CycleNextPanel"})
+        self.sample(0, focus=2)
+        self.sample(1, ["key:e"], focus=2)
+        self.sample(1.2, focus=2)
+        rec.finish()
+        self.assertEqual(rec.state()["events"][0]["choice"], "CycleNextPanel")
+
+    def test_a_shared_secondary_key_prefers_the_action_replayed_with_those_same_keys(self):
+        binds = fixture_binds()
+        slot = elite_binds.Slot
+        binds.actions["ship"] = {"AlphaAction": [slot("Keyboard", "Key_1"), slot("Keyboard", "Key_F1")],
+                                 "BetaAction": [slot("Keyboard", "Key_F1")]}
+        rec = self.make(elite_recorder.bindings_for(binds, "ship"))
+        self.sample(0)
+        self.sample(1, ["key:f1"])
+        self.sample(1.2)
+        rec.finish()
+        self.assertEqual(rec.state()["steps"], ["hold BetaAction 0.2"])
+
+    def test_unresolved_ties_still_have_an_editable_suggestion(self):
+        other = elite_recorder.Binding("AnotherFlightAction", "key:space", frozenset(), "Another action", True,
+                                       replay_keys=frozenset({"key:space"}))
+        rec = self.make((*elite_recorder.bindings_for(fixture_binds(), "ship"), other))
+        self.sample(0)
+        self.sample(1, ["key:space"])
+        self.sample(1.2)
+        rec.finish()
+        self.assertTrue(rec.state()["can_use"])
+        self.assertTrue(rec.state()["events"][0]["choice"])
+        self.assertIn("review", rec.state()["events"][0]["match_note"])
 
     def test_controller_combo_prefers_modifiers_and_does_not_duplicate_them(self):
         modifier = elite_recorder.Binding("SomeBumperAction", "pad:LB", frozenset(), "Bumper", True)
@@ -191,6 +278,7 @@ class RecorderDeckTests(unittest.TestCase):
         with patch.object(elite_recorder, "BoundKeyboard"), patch.object(elite_recorder.SequenceRecorder, "start") as start:
             self.assertTrue(deck._handle_sequence_command("sequence_record", {"target": "request_docking"}))
             start.assert_called_once()
+            self.assertIn("CycleNextPanel", deck._ship_sequence_recorder.target_actions)
             self.assertTrue(deck._ship_recording())
             self.assertFalse(deck._handle_sequence_command("sequence_record", {"target": "galaxy_map"}))
             self.assertIn("Finish recording", deck._watcher_ship("gear down"))

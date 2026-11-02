@@ -13,6 +13,9 @@ from voidcompass.core import elite_binds, elite_keys, elite_macros
 POLL_S = 0.02
 MAX_RECORD_S = 120.0
 MAX_EVENTS = 30
+FOCUS_SETTLE_S = 2.0
+ACTION_FOCUS = {"FocusRightPanel": 1, "FocusLeftPanel": 2, "FocusCommsPanel": 3, "FocusRadarPanel": 4,
+                "GalaxyMapOpen": 6, "SystemMapOpen": 7, "ExplorationFSSEnter": 9, "OpenCodexGoToDiscovery": 11}
 
 
 @dataclass(frozen=True)
@@ -22,6 +25,7 @@ class Binding:
     modifiers: frozenset
     label: str
     playable: bool
+    replay_keys: frozenset = frozenset()
 
 
 def _tokens(binds, device, key):
@@ -49,13 +53,14 @@ def bindings_for(binds, place):
                 continue
             playback = elite_keys.keyboard_slot(slots)
             playable = playback is not None and not elite_keys.pressable(*playback)
+            replay_keys = frozenset("key:" + elite_keys.key_name(key) for key in (playback[0], *playback[1])) if playback else frozenset()
             for slot in slots:
                 modifiers = [_tokens(binds, device, key) for device, key in slot.modifiers]
                 if any(len(tokens) != 1 for tokens in modifiers):
                     continue
                 for trigger in _tokens(binds, slot.device, slot.key):
                     bindings.append(Binding(action, trigger, frozenset(tokens[0] for tokens in modifiers),
-                                            elite_binds.action_label(action), playable))
+                                            elite_binds.action_label(action), playable, replay_keys))
     return tuple(dict.fromkeys(bindings))
 
 
@@ -83,11 +88,12 @@ class BoundKeyboard:
 
 
 class SequenceRecorder:
-    def __init__(self, bindings, target, place, profile, gap=0.12, clock=time.monotonic):
+    def __init__(self, bindings, target, place, profile, gap=0.12, clock=time.monotonic, target_actions=()):
         self.id = uuid.uuid4().hex
         self.bindings = bindings
         self.target, self.place, self.profile = target, place, profile
         self.gap, self.clock = gap, clock
+        self.target_actions = frozenset(target_actions)
         self.status = "armed"
         self.note = "Switch to Elite, release held controls, then perform the sequence. Return here to stop."
         self.events = []
@@ -99,6 +105,55 @@ class SequenceRecorder:
         self._started = None
         self._thread = None
         self._stop = threading.Event()
+        self._predicted_focus = None
+
+    def _suggest(self, event):
+        before = event["focus"]
+        after = event.get("after_focus", before)
+        active_focus = after if before <= 0 and after > 0 else before
+        def score(item):
+            action = item["action"]
+            base = action.split("_")[0]
+            panel = ACTION_FOCUS.get(base)
+            menu = action.startswith("UI_") or action.startswith(("CycleNextPanel", "CyclePreviousPanel", "CycleNextPage", "CyclePreviousPage"))
+            transition = 0
+            if after != before:
+                if panel == after and after != 0:
+                    transition = 2
+                elif after == 0 and before > 0:
+                    if action == "UI_Back" or (action == "ExplorationFSSQuit" and before == 9):
+                        transition = 2
+                    elif panel == before:
+                        transition = 1
+            contextual = 0
+            if active_focus > 0:
+                map_prefix = {6: "GalaxyMap", 7: "SystemMap", 8: "SystemMap", 9: "ExplorationFSS"}.get(active_focus)
+                if map_prefix and action.startswith(map_prefix) and panel is None:
+                    contextual = 3
+                elif menu:
+                    contextual = 2
+            elif active_focus == 0 and not menu:
+                contextual = 1
+            return transition, contextual, action in self.target_actions, item.get("same_keys", False), item["playable"]
+        ranked = sorted(event["actions"], key=lambda item: item["action"])
+        item = max(ranked, key=score)
+        match = score(item)
+        tied = sum(score(other) == match for other in ranked) > 1
+        if len(ranked) == 1:
+            reason = "Matched Elite binding"
+        elif tied:
+            reason = "Shared binding: review this suggested action"
+        elif match[0]:
+            reason = "Matched the panel change reported by Elite"
+        elif match[1] > 1:
+            reason = "Matched the open panel"
+        elif match[2]:
+            reason = "Matched an action in this sequence"
+        elif match[3]:
+            reason = "Matches the recorded keyboard keys"
+        else:
+            reason = "Suggested from Elite's bindings; review if needed"
+        return item["action"], reason
 
     @property
     def active(self):
@@ -141,6 +196,15 @@ class SequenceRecorder:
             if not front or context[0] != self.place:
                 self.finish("Recording stopped when Elite lost focus." if not front else "Recording stopped when the vehicle changed.")
                 return
+            if self.events:
+                latest = self.events[-1]
+                ended = latest["end"]
+                if context[1] != latest.get("observed_focus", latest["focus"]) and "after_focus" not in latest and (ended is None or now - ended <= FOCUS_SETTLE_S):
+                    latest["after_focus"] = context[1]
+            if self._predicted_focus is not None:
+                original, _predicted, at = self._predicted_focus
+                if context[1] != original or now - at > FOCUS_SETTLE_S:
+                    self._predicted_focus = None
             for trigger in list(self._held):
                 if trigger not in down:
                     self._held.pop(trigger)["end"] = now
@@ -157,11 +221,17 @@ class SequenceRecorder:
                 if len(self.events) >= MAX_EVENTS:
                     self.finish("The 30-input recording limit was reached.")
                     return
-                event = {"index": len(self.events), "start": now, "end": None, "focus": context[1],
+                focus = self._predicted_focus[1] if self._predicted_focus is not None else context[1]
+                event = {"index": len(self.events), "start": now, "end": None, "focus": focus, "observed_focus": context[1],
                          "input": trigger, "actions": [{"action": binding.action, "label": binding.label,
-                                                        "playable": binding.playable} for binding in matches]}
+                                                        "playable": binding.playable,
+                                                        "same_keys": bool(binding.replay_keys) and binding.replay_keys == frozenset((binding.trigger, *binding.modifiers))} for binding in matches]}
                 self.events.append(event)
                 self._held[trigger] = event
+                chosen, reason = self._suggest(event)
+                panel = ACTION_FOCUS.get(chosen.split("_")[0])
+                if panel is not None and focus in (0, panel) and not reason.startswith("Shared binding"):
+                    self._predicted_focus = (context[1], panel if focus == 0 else 0, now)
             self._before = set(down)
 
     def finish(self, note="Recording stopped. Review the actions and timing before using it.", failed=False):
@@ -200,19 +270,19 @@ class SequenceRecorder:
             last_end = None
             for event in self.events:
                 choices = event["actions"]
-                choice = self.choices.get(event["index"], choices[0]["action"] if len(choices) == 1 else "")
+                suggested, reason = self._suggest(event)
+                choice = self.choices.get(event["index"], suggested)
+                if event["index"] in self.choices:
+                    reason = "Skipped input" if choice == "skip" else "Your selected action"
                 end = event["end"]
                 duration = round(max(.03, (end if end is not None else self.clock()) - event["start"]), 2)
                 rows.append({"index": event["index"], "input": event["input"], "actions": choices,
-                             "choice": choice, "seconds": duration, "focus": event["focus"]})
+                             "choice": choice, "seconds": duration, "focus": event["focus"], "match_note": reason})
                 if choice == "skip":
                     continue
                 if last_end is not None and event["start"] < last_end:
                     errors.append("Overlapping inputs cannot be replayed in order. Record one action at a time, or skip an overlapping input.")
                 last_end = max(last_end or 0, end if end is not None else self.clock())
-                if not choice:
-                    errors.append("Choose an action for every shared key or button, or skip it.")
-                    continue
                 if not next(item["playable"] for item in choices if item["action"] == choice):
                     errors.append(f"Bind a keyboard key for {choice} in Elite before recording it again.")
                 if duration > elite_macros.MAX_SECONDS:
