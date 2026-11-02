@@ -254,6 +254,17 @@ class SequenceRecorder:
             self.status = "discarded"
             self.note = "Recording discarded. Your saved sequence has not changed."
 
+    def mark_saved(self, target):
+        with self._lock:
+            if self.status != "review":
+                return False
+            self.target = target
+            self.events.clear()
+            self.choices.clear()
+            self.status = "saved"
+            self.note = "Recorded sequence saved."
+            return True
+
     def choose(self, index, action):
         with self._lock:
             if self.status != "review" or not isinstance(index, int) or not 0 <= index < len(self.events):

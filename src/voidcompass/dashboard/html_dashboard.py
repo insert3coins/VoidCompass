@@ -4259,6 +4259,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 if "bgs_online_enabled" in changed_keys and self.config.get("bgs_online_enabled", True):
                     self._bgs_refresh_tick(reschedule=False)
                 self._html_settings_last_save = {"id": save_id, "ok": True, "detail": ""}
+                recording_saved = getattr(self, "_ship_recording_saved", None)
+                if callable(recording_saved):
+                    recording_saved(payload, updates)
                 changed = True
             elif operation == "rebuild_cache":
                 self.config["edsm_backfill_on_cache_rebuild"] = bool(payload.get("upload_edsm"))

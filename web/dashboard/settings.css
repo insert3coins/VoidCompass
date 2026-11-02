@@ -305,3 +305,5 @@ body.reduced-motion .settings-page *,body.reduced-motion .settings-page *::befor
 .sequence-recorder textarea { resize:vertical; }
 .sequence-recorder .elite-error { color:var(--red); }
 .sequence-match-note { display:block; margin-top:7px; color:var(--muted); font:10px/1.5 Consolas,monospace; }
+.sequence-inline-status { margin-top:10px; padding:10px; border:1px solid var(--accent); background:var(--inset); }
+.sequence-inline-status p { margin:0; color:var(--text); font:11px/1.6 Consolas,monospace; overflow-wrap:anywhere; }

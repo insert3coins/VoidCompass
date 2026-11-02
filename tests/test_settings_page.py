@@ -652,6 +652,74 @@ class SettingsPageBrowserTests(unittest.TestCase):
         self.wait_for(lambda: self.saves())
         self.assertEqual(self.saves()[-1]["values"], {"watcher_ship_macros": {"galaxy_map": ["hold GalaxyMapOpen 0.15", "wait 0.9"]}})
         self.assertEqual(self.saves()[-1]["recorded_profile"], "jeff")
+        save = self.saves()[-1]
+        self.assertEqual(save["recording_id"], "record-1")
+        self.assertTrue(self.page.locator('#sequence-recording-preview').is_visible(), "review stays until saving succeeds")
+        updated = Deck(watcher_ship_macros=save["values"]["watcher_ship_macros"])._html_ship_controls()
+        self.page.evaluate("data => window.__settings.publish(data)", dict(changed, voice={"listen": {}, "ship": updated},
+            last_save={"id": save["save_id"], "ok": True}))
+        state.update(status="saved", events=[], steps=[], can_use=False, note="Recorded sequence saved.")
+        self.page.wait_for_function("!document.getElementById('sequence-recording-preview') && document.activeElement.dataset.shipMacro === 'galaxy_map'")
+        self.assertEqual(self.page.locator('[data-sequence-use]').count(), 0)
+        self.assertTrue(self.page.locator('[data-voice-row="galaxy_map"] .voice-editor').is_visible())
+
+    def test_rejected_recorded_sequence_save_keeps_review_and_draft_open(self):
+        from tests.test_ship_commands_573 import Deck
+        ship = Deck()._html_ship_controls()
+        settings = dict(SETTINGS, voice={"listen": {}, "ship": ship})
+        self.page.evaluate("data => window.__settings.publish(data)", settings)
+        state = {"id": "rejected-recording", "profile": "jeff", "target": "galaxy_map", "place": "ship", "status": "review",
+                 "events": [], "steps": ["hold GalaxyMapOpen 0.15"], "errors": [], "can_use": True}
+        self.page.route("**/api/data/sequence-recording*", lambda route: route.fulfill(content_type="application/json", body=json.dumps(state)))
+        self.page.click('[data-settings-section="voice"]')
+        self.page.wait_for_selector('#sequence-recording-preview')
+        draft = "hold GalaxyMapOpen 99"
+        self.page.fill('#sequence-recording-preview', draft)
+        self.page.click('[data-sequence-use]')
+        self.wait_for(lambda: self.saves())
+        save = self.saves()[-1]
+        self.page.evaluate("data => window.__settings.publish(data)", dict(settings,
+            last_save={"id": save["save_id"], "ok": False, "detail": "Invalid hold duration."}))
+        self.assertTrue(self.page.locator('#sequence-recording-preview').is_visible())
+        self.assertEqual(self.page.input_value('#sequence-recording-preview'), draft)
+        self.assertTrue(self.page.locator('[data-sequence-use]').is_visible())
+
+    def test_recording_keeps_the_editor_in_view_with_inline_status_and_stop(self):
+        from tests.test_ship_commands_573 import Deck
+        ship = Deck()._html_ship_controls()
+        self.page.evaluate("data => window.__settings.publish(data)", dict(SETTINGS, voice={"listen": {}, "ship": ship}))
+        state = {"status": "idle", "events": [], "steps": [], "errors": [], "can_use": False}
+        self.page.route("**/api/data/sequence-recording*", lambda route: route.fulfill(content_type="application/json", body=json.dumps(state)))
+        def recorder_command(route):
+            payload = json.loads(route.request.post_data or "{}")
+            self.commands.append(payload)
+            if payload.get("operation") == "sequence_record":
+                state.update(id="stay-here", profile="jeff", target=payload["target"], place="ship", status="armed",
+                             note="Switch to Elite and perform the sequence.")
+            elif payload.get("operation") == "sequence_stop":
+                state.update(status="review", note="Recording stopped.")
+            route.fulfill(content_type="application/json", body='{"accepted":true}')
+        self.page.route("**/api/command*", recorder_command)
+        self.page.click('[data-settings-section="voice"]')
+        self.page.locator('[data-voice-row="request_docking"] [data-voice-edit]').click()
+        record = self.page.locator('[data-sequence-record="request_docking"]')
+        record.scroll_into_view_if_needed()
+        before = record.bounding_box()["y"]
+        record.click()
+        inline = self.page.locator('[data-sequence-inline="request_docking"]')
+        inline.wait_for(state="visible")
+        self.assertIn("ARMED", inline.inner_text())
+        self.assertAlmostEqual(record.bounding_box()["y"], before, delta=3)
+        self.assertGreater(self.page.locator('.pages').evaluate('node => node.scrollTop'), 100)
+        self.assertTrue(inline.locator('[data-sequence-stop]').is_visible())
+        inline.locator('[data-sequence-stop]').click()
+        self.page.wait_for_function("document.querySelector('[data-sequence-inline=request_docking] [role=status]').textContent.includes('REVIEW')")
+        self.assertTrue(inline.locator('[data-sequence-review]').is_visible())
+        self.assertFalse(inline.locator('[data-sequence-stop]').is_visible())
+        self.assertEqual(self.saves(), [])
+        inline.locator('[data-sequence-review]').click()
+        self.page.wait_for_function("document.getElementById('sequence-recorder').getBoundingClientRect().top > 0")
+        self.assertTrue(self.page.locator('#sequence-recorder').is_visible())
 
     def test_recording_can_fill_a_new_custom_command_without_saving_it_early(self):
         from tests.test_ship_commands_573 import Deck
@@ -687,6 +755,16 @@ class SettingsPageBrowserTests(unittest.TestCase):
         self.wait_for(lambda: self.saves())
         value = next(iter(self.saves()[-1]["values"]["watcher_ship_commands"].values()))
         self.assertEqual((value["name"], value["sequence"], value["places"]), ("Rover panel", steps, ["srv"]))
+        save = self.saves()[-1]
+        ident = next(iter(save["values"]["watcher_ship_commands"]))
+        self.assertEqual(save["recording_id"], "record-new")
+        self.assertEqual(save["recorded_command_id"], ident)
+        updated = Deck(watcher_ship_commands=save["values"]["watcher_ship_commands"])._html_ship_controls()
+        self.page.evaluate("data => window.__settings.publish(data)", dict(changed, voice={"listen": {}, "ship": updated},
+            last_save={"id": save["save_id"], "ok": True}))
+        state.update(status="saved", target=ident + ":srv", events=[], steps=[], can_use=False, note="Recorded sequence saved.")
+        self.page.wait_for_function("wanted => !document.getElementById('sequence-recording-preview') && document.activeElement.dataset.shipMacro === wanted", arg=ident + ":srv")
+        self.assertTrue(self.page.locator('#voice-command-new').is_hidden())
         self.page.set_viewport_size({"width": 650, "height": 900})
         self.assertLessEqual(self.page.locator('#sequence-recorder').bounding_box()["width"], 650)
         self.page.screenshot(path=str(Path(tempfile.gettempdir()) / "voidcompass-sequence-recorder-650.png"))

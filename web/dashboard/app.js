@@ -2874,18 +2874,55 @@ let sequenceUi = {state: {status: "idle"}, draft: "", stamp: "", timer: 0, fetch
 
 function sequenceRecorderContent() {
   const state = sequenceUi.state;
+  if (state.status === "saved") return '<header><b>SEQUENCE RECORDER</b><span>SAVED</span></header><p role="status">Recorded sequence saved. Start another recording from any sequence editor.</p>';
   const active = ["armed", "recording"].includes(state.status);
   const review = state.status === "review";
   return `<header><b>CAPTURE & REVIEW</b><span>${escapeHtml(state.status.toUpperCase())}</span></header><p>Choose RECORD beside a sequence, switch to Elite and perform the steps. Return here to stop. Keyboard keys and controller buttons use Elite’s bindings; axes and mouse movement are not recorded.</p>${state.target ? `<p><b>${escapeHtml(state.target === "new" ? "New custom command" : state.target)}</b> · ${escapeHtml({ship: "Ship", srv: "SRV", foot: "On foot"}[state.place] || "")}</p>` : ""}<p role="status">${escapeHtml(state.note || "Actions are assigned automatically from Elite’s bindings and the current panel. Review or change a suggested action before using it. Saved steps stay unchanged until then; app hotkeys and automatic ship commands pause during recording.")}</p>${active ? '<button type="button" data-sequence-stop>STOP RECORDING</button>' : ""}${(state.events || []).length ? `<ol class="sequence-recorded-inputs">${state.events.map((event) => `<li><span>${escapeHtml(event.input)} · ${numeric(event.seconds, 2)} s${event.focus > 0 ? ` · panel ${event.focus}` : ""}</span><label>Elite action<select data-sequence-choice="${event.index}"${review ? "" : " disabled"}>${event.choice ? "" : '<option value="">Choose the intended action…</option>'}${event.actions.map((action) => `<option value="${escapeHtml(action.action)}"${event.choice === action.action ? " selected" : ""}>${escapeHtml(action.label)} · ${escapeHtml(action.action)}${action.playable ? "" : " · NEEDS KEYBOARD BINDING"}</option>`).join("")}<option value="skip"${event.choice === "skip" ? " selected" : ""}>Skip this input</option></select></label>${event.match_note ? `<small class="sequence-match-note">${escapeHtml(event.match_note)}. Change the action above if needed.</small>` : ""}</li>`).join("")}</ol>` : ""}${review ? `<label class="sequence-preview">REVIEW STEPS<textarea id="sequence-recording-preview" rows="7" spellcheck="false">${escapeHtml(sequenceUi.draft)}</textarea></label>${(state.errors || []).map((error) => `<p class="elite-error" role="alert">${escapeHtml(error)}</p>`).join("")}<p>Recorded panel keys add focus checks. Elite remembers its tabs and highlighted contacts: record from the same starting panel and return it to that state. Timings include playback’s minimum key gaps; review them before use.</p><button type="button" data-sequence-use${state.can_use ? "" : " disabled"}>${state.target === "new" ? "USE IN NEW COMMAND" : "USE & SAVE SEQUENCE"}</button>` : ""}${state.id && state.status !== "discarded" ? '<button type="button" data-sequence-discard>DISCARD RECORDING</button>' : ""}`;
 }
 
 function paintSequenceRecorder() {
+  const state = sequenceUi.state;
+  const active = ["armed", "recording"].includes(state.status);
+  document.querySelectorAll("[data-sequence-inline]").forEach((inline) => {
+    inline.hidden = inline.dataset.sequenceInline !== state.target || ["idle", "discarded", "saved"].includes(state.status);
+    if (inline.hidden) return;
+    const count = (state.events || []).length;
+    const note = `${state.status.toUpperCase()} · ${count} ${count === 1 ? "input" : "inputs"} captured. ${state.note || ""}`;
+    const status = inline.querySelector("[role=status]");
+    if (status.textContent !== note) status.textContent = note;
+    inline.querySelector("[data-sequence-stop]").hidden = !active;
+    inline.querySelector("[data-sequence-review]").hidden = active;
+  });
   const box = byId("sequence-recorder");
   if (!box) return;
   const stamp = JSON.stringify(sequenceUi.state);
   if (box.dataset.stamp === stamp) return;
   box.innerHTML = sequenceRecorderContent();
   box.dataset.stamp = stamp;
+}
+
+function sequenceInlineStatus(target) {
+  return `<div class="sequence-inline-status" data-sequence-inline="${escapeHtml(target)}" hidden><p role="status" aria-live="polite"></p><div class="sequence-actions"><button type="button" data-sequence-stop>STOP RECORDING</button><button type="button" data-sequence-review hidden>REVIEW RECORDING</button></div></div>`;
+}
+
+function returnToRecordedSequence(state) {
+  if (state.status !== "saved" || sequenceUi.returnedId === state.id) return;
+  const input = [...document.querySelectorAll("[data-ship-macro]")].find((item) => item.dataset.shipMacro === state.target);
+  if (!input) return;
+  const row = input.closest(".voice-command");
+  voiceOpenEditors.add(row.dataset.voiceRow);
+  voiceActiveTabs.set(row.dataset.voiceRow, state.target);
+  row.querySelector(".voice-editor").hidden = false;
+  const edit = row.querySelector("[data-voice-edit]");
+  edit.setAttribute("aria-expanded", "true"); edit.textContent = "CLOSE EDITOR";
+  row.querySelectorAll("[data-voice-editor]").forEach((editor) => { editor.hidden = editor.dataset.voiceEditor !== state.target; });
+  row.querySelectorAll("[data-voice-tab]").forEach((tab) => tab.setAttribute("aria-pressed", String(tab.dataset.voiceTab === state.target)));
+  const newForm = byId("voice-command-new")?.querySelector(".voice-definition");
+  if (newForm?.dataset.recordingId === state.id) byId("voice-command-new").hidden = true;
+  input.focus({preventScroll: true});
+  input.scrollIntoView({block: "nearest"});
+  sequenceUi.returnedId = state.id;
+  showToast("Recorded sequence saved.");
 }
 
 async function sequenceLive() {
@@ -2905,6 +2942,7 @@ async function sequenceLive() {
         }
         sequenceUi.state = state;
         paintSequenceRecorder();
+        returnToRecordedSequence(state);
       }
     } catch (_error) {
       // A pending command or refresh can finish before the next poll.
@@ -2933,6 +2971,7 @@ async function useSequenceRecording() {
     if (box.hidden) { showToast("Open Add command first, then use the recording."); return; }
     const form = box.querySelector(".voice-definition");
     form.dataset.recordedProfile = state.profile;
+    form.dataset.recordingId = state.id;
     form.querySelector('[data-command-field="sequence"]').value = draft;
     form.querySelectorAll("[data-command-place]").forEach((input) => { input.checked = input.dataset.commandPlace === state.place; });
     form.querySelector('[data-command-field="sequence"]').focus();
@@ -2942,18 +2981,18 @@ async function useSequenceRecording() {
   const input = [...document.querySelectorAll("[data-ship-macro]")].find((item) => item.dataset.shipMacro === state.target);
   if (!input) { showToast("This command is no longer available. Your saved steps have not changed."); return; }
   input.value = draft;
-  if (await saveShipSequence(input, false, state.profile)) showToast("Recording applied; saving sequence…");
+  if (await saveShipSequence(input, false, state.profile, id)) showToast("Recording applied; saving sequence…");
 }
 
 function voiceSequencePanels(editors, active, row) {
   if (!editors.length) return `<p class="input-note">This is a Void Compass action; it does not need an Elite key binding.${row.native?.kind === "uplink" ? " Keep {commodity} in the main phrase and each alias, for example ‘find prices for {commodity}’." : ""}</p>`;
-  return `<h5>BOUND-ACTION SEQUENCES</h5><div class="voice-editor-tabs" role="group" aria-label="Choose a sequence">${editors.map((editor) => `<button type="button" data-voice-tab="${escapeHtml(editor.id)}" aria-pressed="${editor.id === active}">${escapeHtml(editor.where || "Ship")} · ${escapeHtml(editor.say)}</button>`).join("")}</div>${editors.map((editor) => `<div class="voice-sequence" data-voice-editor="${escapeHtml(editor.id)}"${editor.id !== active ? " hidden" : ""}><label>One step per line<textarea data-ship-macro="${escapeHtml(editor.id)}" aria-label="${escapeHtml(editor.say)} ${escapeHtml(editor.where || "")} sequence" rows="5" spellcheck="false">${escapeHtml((editor.sequence?.length ? editor.sequence : editor.default_sequence || []).join("\n"))}</textarea></label><small>Use a bound Elite action, ‘UI_Down x3’, ‘wait 0.5’, ‘hold UI_Select 1.2’, ‘focus FocusLeftPanel 2’ or ‘leave UI_Back 2’. Saves when you leave the field.</small><div class="sequence-actions"><button type="button" data-sequence-record="${escapeHtml(editor.id)}">RECORD IN ELITE</button><button type="button" data-ship-macro-reset="${escapeHtml(editor.id)}">RESTORE DEFAULT STEPS</button></div>${editor.error ? `<p role="alert">${escapeHtml(editor.error)}</p>` : ""}</div>`).join("")}`;
+  return `<h5>BOUND-ACTION SEQUENCES</h5><div class="voice-editor-tabs" role="group" aria-label="Choose a sequence">${editors.map((editor) => `<button type="button" data-voice-tab="${escapeHtml(editor.id)}" aria-pressed="${editor.id === active}">${escapeHtml(editor.where || "Ship")} · ${escapeHtml(editor.say)}</button>`).join("")}</div>${editors.map((editor) => `<div class="voice-sequence" data-voice-editor="${escapeHtml(editor.id)}"${editor.id !== active ? " hidden" : ""}><label>One step per line<textarea data-ship-macro="${escapeHtml(editor.id)}" aria-label="${escapeHtml(editor.say)} ${escapeHtml(editor.where || "")} sequence" rows="5" spellcheck="false">${escapeHtml((editor.sequence?.length ? editor.sequence : editor.default_sequence || []).join("\n"))}</textarea></label><small>Use a bound Elite action, ‘UI_Down x3’, ‘wait 0.5’, ‘hold UI_Select 1.2’, ‘focus FocusLeftPanel 2’ or ‘leave UI_Back 2’. Saves when you leave the field.</small><div class="sequence-actions"><button type="button" data-sequence-record="${escapeHtml(editor.id)}">RECORD IN ELITE</button><button type="button" data-ship-macro-reset="${escapeHtml(editor.id)}">RESTORE DEFAULT STEPS</button></div>${sequenceInlineStatus(editor.id)}${editor.error ? `<p role="alert">${escapeHtml(editor.error)}</p>` : ""}</div>`).join("")}`;
 }
 
 function voiceCommandFields(row = {}, creating = false) {
   const field = (key, title, value, multiline = false) => `<label>${title}${multiline ? `<textarea data-command-field="${key}" rows="3" spellcheck="false">${escapeHtml(value || "")}</textarea>` : `<input data-command-field="${key}" value="${escapeHtml(value || "")}" maxlength="${key === "phrase" ? 70 : key === "reply" ? 300 : 80}">`}</label>`;
   const custom = creating || row.custom;
-  return `<div class="voice-definition" data-command-id="${escapeHtml(row.id || "")}"${creating ? ' data-command-new="true"' : ""}><div class="voice-definition-fields">${field("name", "DISPLAY NAME", row.name || row.say)}${field("phrase", "MAIN SPOKEN PHRASE", row.phrase || row.say)}${field("aliases", "ALIASES · ONE COMPLETE PHRASE PER LINE", (row.aliases || []).join("\n"), true)}${field("group", "GROUP", row.group || "Custom commands")}${custom ? field("reply", "WATCHER'S REPLY", row.reply || "Done.") : ""}</div><div class="voice-definition-options"><label><input type="checkbox" data-command-field="enabled"${row.enabled !== false ? " checked" : ""}> ENABLED</label>${custom ? `<fieldset><legend>AVAILABLE IN</legend>${[["ship", "Ship"], ["srv", "SRV"], ["foot", "On foot"]].map(([key, label]) => `<label><input type="checkbox" data-command-place="${key}"${(row.places || ["ship"]).includes(key) ? " checked" : ""}> ${label}</label>`).join("")}</fieldset>` : `<label><input type="checkbox" data-command-field="keep_defaults"${row.keep_defaults !== false ? " checked" : ""}> ALSO ACCEPT ORIGINAL BUILT-IN PHRASES</label>`}</div>${creating ? field("sequence", "DEFAULT SEQUENCE · ONE BOUND ACTION PER LINE", "UI_Select", true) + `<div class="sequence-actions"><label>RECORD FOR<select id="sequence-new-place"><option value="ship">Ship</option><option value="srv">SRV</option><option value="foot">On foot</option></select></label><button type="button" data-sequence-record="new">RECORD IN ELITE</button></div>` : ""}<p class="input-note">The display name labels the command. Say its main phrase or an alias. Names and phrases save together; sequence edits below save when you leave the field.</p><div class="voice-definition-actions"><button type="button" data-command-save>${creating ? "CREATE COMMAND" : "SAVE NAME & PHRASES"}</button>${creating ? '<button type="button" data-command-cancel>CANCEL</button>' : custom ? '<button type="button" class="danger-action" data-command-delete>DELETE CUSTOM COMMAND</button>' : '<button type="button" data-command-restore>RESTORE NAME & PHRASES</button>'}</div><p class="voice-definition-note" role="status"></p>${settingFlag()}</div>`;
+  return `<div class="voice-definition" data-command-id="${escapeHtml(row.id || "")}"${creating ? ' data-command-new="true"' : ""}><div class="voice-definition-fields">${field("name", "DISPLAY NAME", row.name || row.say)}${field("phrase", "MAIN SPOKEN PHRASE", row.phrase || row.say)}${field("aliases", "ALIASES · ONE COMPLETE PHRASE PER LINE", (row.aliases || []).join("\n"), true)}${field("group", "GROUP", row.group || "Custom commands")}${custom ? field("reply", "WATCHER'S REPLY", row.reply || "Done.") : ""}</div><div class="voice-definition-options"><label><input type="checkbox" data-command-field="enabled"${row.enabled !== false ? " checked" : ""}> ENABLED</label>${custom ? `<fieldset><legend>AVAILABLE IN</legend>${[["ship", "Ship"], ["srv", "SRV"], ["foot", "On foot"]].map(([key, label]) => `<label><input type="checkbox" data-command-place="${key}"${(row.places || ["ship"]).includes(key) ? " checked" : ""}> ${label}</label>`).join("")}</fieldset>` : `<label><input type="checkbox" data-command-field="keep_defaults"${row.keep_defaults !== false ? " checked" : ""}> ALSO ACCEPT ORIGINAL BUILT-IN PHRASES</label>`}</div>${creating ? field("sequence", "DEFAULT SEQUENCE · ONE BOUND ACTION PER LINE", "UI_Select", true) + `<div class="sequence-actions"><label>RECORD FOR<select id="sequence-new-place"><option value="ship">Ship</option><option value="srv">SRV</option><option value="foot">On foot</option></select></label><button type="button" data-sequence-record="new">RECORD IN ELITE</button></div>${sequenceInlineStatus("new")}` : ""}<p class="input-note">The display name labels the command. Say its main phrase or an alias. Names and phrases save together; sequence edits below save when you leave the field.</p><div class="voice-definition-actions"><button type="button" data-command-save>${creating ? "CREATE COMMAND" : "SAVE NAME & PHRASES"}</button>${creating ? '<button type="button" data-command-cancel>CANCEL</button>' : custom ? '<button type="button" class="danger-action" data-command-delete>DELETE CUSTOM COMMAND</button>' : '<button type="button" data-command-restore>RESTORE NAME & PHRASES</button>'}</div><p class="voice-definition-note" role="status"></p>${settingFlag()}</div>`;
 }
 
 async function saveVoiceCommand(root, operation = "save") {
@@ -2975,7 +3014,7 @@ async function saveVoiceCommand(root, operation = "save") {
   root.querySelector(".voice-definition-note").textContent = "Saving command…";
   await saveSettings({watcher_ship_commands: definitions}, [root], {revert: () => {
     if (root.isConnected) root.querySelector(".voice-definition-note").textContent = "Not saved. Check the message above, then correct the fields and try again.";
-  }, recordedProfile: root.dataset.recordedProfile});
+  }, recordedProfile: root.dataset.recordedProfile, recordingId: root.dataset.recordingId, recordedCommandId: id});
 }
 
 const SETTINGS_GROUP_NOTES = {
@@ -3282,6 +3321,7 @@ function renderSettingsWorkspace(data) {
   const newDraft = keepNew ? [...previousNew.querySelectorAll("input, textarea, select")].map((input) => ({value: input.value, checked: input.checked})) : null;
   const newId = keepNew ? previousNew.querySelector(".voice-definition")?.dataset.commandId : "";
   const newProfile = keepNew ? previousNew.querySelector(".voice-definition")?.dataset.recordedProfile : undefined;
+  const newRecording = keepNew ? previousNew.querySelector(".voice-definition")?.dataset.recordingId : undefined;
   if (root.dataset.commander !== data.profile?.key) {
     sequenceUi.state = {status: "idle"}; sequenceUi.draft = ""; sequenceUi.stamp = "";
   }
@@ -3343,6 +3383,7 @@ function renderSettingsWorkspace(data) {
     const form = box.querySelector(".voice-definition");
     form.dataset.commandId = newId;
     if (newProfile !== undefined) form.dataset.recordedProfile = newProfile;
+    if (newRecording !== undefined) form.dataset.recordingId = newRecording;
     box.querySelectorAll("input, textarea, select").forEach((input, index) => {
       if (newDraft[index]) { input.value = newDraft[index].value; input.checked = newDraft[index].checked; }
     });
@@ -3500,7 +3541,7 @@ async function saveSettings(values, rows = [], extra = {}) {
   settingsPendingSaves.set(id, {rows, revert: extra.revert, started: Date.now()});
   rows.forEach((row) => flagSettingRow(row, "saving"));
   settingsSaveState("saving");
-  const accepted = await command("workspace", {page: "settings", operation: "save", save_id: id, values, ...(extra.hotkeys ? {hotkeys: extra.hotkeys} : {}), ...(extra.recordedProfile !== undefined ? {recorded_profile: extra.recordedProfile} : {})});
+  const accepted = await command("workspace", {page: "settings", operation: "save", save_id: id, values, ...(extra.hotkeys ? {hotkeys: extra.hotkeys} : {}), ...(extra.recordedProfile !== undefined ? {recorded_profile: extra.recordedProfile} : {}), ...(extra.recordingId ? {recording_id: extra.recordingId, recorded_command_id: extra.recordedCommandId} : {})});
   if (!accepted) settleSettingsSave(id, false, "the command deck could not reach Void Compass");
   // Should no snapshot confirm it, a save the channel accepted stands.
   window.setTimeout(() => { if (settingsPendingSaves.has(id)) settleSettingsSave(id, true); }, 4000);
@@ -3533,7 +3574,7 @@ function settingValue(input) {
   return input.value.trim();
 }
 
-async function saveShipSequence(input, reset = false, recordedProfile = undefined) {
+async function saveShipSequence(input, reset = false, recordedProfile = undefined, recordingId = undefined) {
   const rows = (model.workspace?.data?.voice?.ship?.groups || []).flatMap((group) => group.rows || []);
   const editors = rows.flatMap((row) => row.editors?.length ? row.editors : row.default_sequence?.length ? [row] : []);
   const defaults = new Map(editors.map((editor) => [editor.id, editor.default_sequence || []]));
@@ -3545,7 +3586,7 @@ async function saveShipSequence(input, reset = false, recordedProfile = undefine
     if (JSON.stringify(steps) !== JSON.stringify(defaults.get(editor.dataset.shipMacro))) macros[editor.dataset.shipMacro] = steps;
   });
   const revert = () => { input.value = previous; input.defaultValue = previous; };
-  const accepted = await saveSettings({watcher_ship_macros: macros}, [input.closest(".voice-command")], {revert, recordedProfile});
+  const accepted = await saveSettings({watcher_ship_macros: macros}, [input.closest(".voice-command")], {revert, recordedProfile, recordingId});
   if (accepted) input.defaultValue = input.value;
   return accepted;
 }
@@ -4509,9 +4550,9 @@ document.addEventListener("click", async (event) => {
   if (recordSequence) {
     recordSequence.blur();
     await sequenceControl("sequence_record", {target: recordSequence.dataset.sequenceRecord, place: byId("sequence-new-place")?.value || "ship"});
-    byId("sequence-recorder")?.scrollIntoView({block: "center"});
     return;
   }
+  if (event.target.closest("[data-sequence-review]")) { byId("sequence-recorder")?.scrollIntoView({block: "center"}); return; }
   if (event.target.closest("[data-sequence-stop]")) { await sequenceControl("sequence_stop"); return; }
   if (event.target.closest("[data-sequence-discard]")) { await sequenceControl("sequence_discard"); return; }
   if (event.target.closest("[data-sequence-use]")) { await useSequenceRecording(); return; }

@@ -268,8 +268,56 @@ class RecordingTests(unittest.TestCase):
         sampled.assert_not_called()
         self.assertFalse(rec._thread.is_alive())
 
+    def test_finishing_a_saved_recording_clears_review_but_never_an_active_recording(self):
+        rec = self.make()
+        self.assertFalse(rec.mark_saved("request_docking"))
+        self.sample(0, focus=2)
+        self.sample(1, ["pad:A"], focus=2)
+        self.sample(1.2, focus=2)
+        rec.finish()
+        self.assertTrue(rec.state()["events"])
+        self.assertTrue(rec.mark_saved("request_docking"))
+        state = rec.state()
+        self.assertEqual(state["status"], "saved")
+        self.assertFalse(state["events"])
+        self.assertFalse(state["steps"])
+        self.assertFalse(state["can_use"])
+
 
 class RecorderDeckTests(unittest.TestCase):
+    def recording_app(self, target="request_docking", place="ship"):
+        app = dashboard()
+        app._apply_settings_changes = Mock()
+        rec = elite_recorder.SequenceRecorder(elite_recorder.bindings_for(fixture_binds(), place), target, place,
+                                              get_active_profile(app.config))
+        rec.finish()
+        app._ship_sequence_recorder = rec
+        return app, rec
+
+    def test_only_a_successful_recorded_save_finishes_the_review(self):
+        for valid in (False, True):
+            with self.subTest(valid=valid):
+                app, rec = self.recording_app()
+                payload = {"page": "settings", "operation": "save", "save_id": 9, "recording_id": rec.id,
+                           "values": {"watcher_ship_macros": {"request_docking": ["UI_Select"] if valid else ["hold UI_Select 99"]}}}
+                self.assertEqual(app._handle_html_workspace_command(payload), valid)
+                self.assertEqual(rec.state()["status"], "saved" if valid else "review")
+
+    def test_a_stale_save_does_not_close_another_recording(self):
+        app, rec = self.recording_app()
+        self.assertTrue(app._handle_html_workspace_command({"page": "settings", "operation": "save", "recording_id": "older-recording",
+            "values": {"watcher_ship_macros": {"request_docking": ["UI_Select"]}}}))
+        self.assertEqual(rec.state()["status"], "review")
+
+    def test_creating_a_recorded_custom_command_returns_its_vehicle_sequence(self):
+        app, rec = self.recording_app("new", "srv")
+        ident = "custom_rover_status"
+        definition = {"name": "Rover status", "phrase": "check rover status", "places": ["srv"], "sequence": ["FocusLeftPanel_Buggy"]}
+        self.assertTrue(app._handle_html_workspace_command({"page": "settings", "operation": "save", "recording_id": rec.id,
+            "recorded_command_id": ident, "values": {"watcher_ship_commands": {ident: definition}}}))
+        self.assertEqual(rec.state()["status"], "saved")
+        self.assertEqual(rec.state()["target"], ident + ":srv")
+
     def test_start_stop_id_validation_profile_and_automation_guards(self):
         deck = Deck()
         deck.binds = fixture_binds()

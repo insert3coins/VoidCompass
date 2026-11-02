@@ -46,6 +46,21 @@ class DashboardShipControlMixin:
             return recorder.state()
         return {"status": "idle", "note": "", "events": [], "steps": [], "errors": [], "can_use": False}
 
+    def _ship_recording_saved(self, payload, updates):
+        recorder = self._ship_recorder_current()
+        if recorder is None or recorder.id != payload.get("recording_id"):
+            return
+        target = recorder.target
+        if target == "new":
+            ident = str(payload.get("recorded_command_id") or "")
+            definition = updates.get("watcher_ship_commands", {}).get(ident)
+            if not ident.startswith("custom_") or not definition or recorder.place not in definition.get("places", ()):
+                return
+            target = ident + ("" if recorder.place == "ship" else ":" + recorder.place)
+        elif "watcher_ship_macros" not in updates:
+            return
+        recorder.mark_saved(target)
+
     def _handle_sequence_command(self, operation, payload):
         if operation not in {"sequence_record", "sequence_stop", "sequence_discard", "sequence_choose"}:
             return None
