@@ -1,18 +1,18 @@
 {
-    "dataset": "en_US-Jarvis_Real-medium",
+    "dataset": "jarvis",
     "audio": {
-        "sample_rate": 22050,
-        "quality": "real_Jarvis"
+        "sample_rate": 48000,
+        "quality": "output"
     },
     "espeak": {
-        "voice": "en-us"
+        "voice": "en-US"
     },
     "language": {
-        "code": "en_US"
+        "code": "en-US"
     },
     "inference": {
         "noise_scale": 0.667,
-        "length_scale": 1.25,
+        "length_scale": 1,
         "noise_w": 0.8
     },
     "phoneme_type": "espeak",
