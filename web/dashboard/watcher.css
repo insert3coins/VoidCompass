@@ -365,3 +365,20 @@ body.reduced-motion .talk-mic::after { animation: none !important; }
   .talk-send { padding: 0 12px; }
   .talk-mic { width: 42px; }
 }
+
+.companion-picker { padding:16px; margin-bottom:15px; border:1px solid var(--border); background:var(--panel); }
+.companion-picker header { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; margin-bottom:12px; color:var(--accent); font:10px Consolas,monospace; }
+.companion-picker header small { color:var(--muted); font:11px/1.5 Consolas,monospace; }
+.companion-picker > div { display:flex; flex-wrap:wrap; gap:10px; }
+.companion-picker button { display:grid; gap:7px; flex:1 1 200px; padding:14px; text-align:left; color:var(--text); border:1px solid var(--border); background:var(--inset); }
+.companion-picker button[aria-pressed="true"] { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 7%,var(--inset)); }
+.companion-picker button b { font:12px Consolas,monospace; color:var(--accent); }
+.companion-picker button small, .companion-picker p { font:11px/1.5 Consolas,monospace; color:var(--muted); }
+.companion-picker label { display:flex; align-items:center; gap:12px; margin-top:12px; color:var(--muted); font:11px Consolas,monospace; }
+.companion-picker select { background:var(--inset); color:var(--text); border:1px solid var(--border); padding:8px; }
+[data-companion="aster"] #watcher-question, [data-companion="aster"] #watcher-feeling,
+[data-companion="aster"] #watcher-wish, [data-companion="aster"] #watcher-road,
+[data-companion="aster"] .watcher-card:has(#watcher-dreams), [data-companion="aster"] .watcher-card:has(#watcher-answers),
+[data-companion="aster"] .watcher-card:has(#watcher-met), [data-companion="aster"] .watcher-card:has(#watcher-echoes),
+[data-companion="aster"] .watcher-finding { display:none; }
+.companion-picker [hidden] { display:none; }

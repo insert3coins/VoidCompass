@@ -7,6 +7,9 @@
   const orb = new window.HeartbeatOrb(canvas);
   window.heartbeatOrb = orb;
   let poller = null;
+  let asterModel = {};
+  let asterReduced = false;
+  let companionIdentity = "watcher";
   const thoughtBox = document.getElementById("thought");
   const thoughtFrame = thoughtBox.querySelector(".thought-box");
   const thoughtHead = thoughtBox.querySelector(".thought-head");
@@ -246,6 +249,13 @@
     const palette = VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, effects);
     const model = snapshot.heartbeat || {};
     const stalled = Boolean(model.stalled);
+    const identity = model.orb?.identity || "watcher";
+    if (identity !== companionIdentity) { companionIdentity = identity; clearTimeout(typing); thoughtId = null; }
+    asterModel = model;
+    asterReduced = motionPreference.matches || Boolean(effects.reduced_motion);
+    orb.setSuspended?.(identity === "aster");
+    window.AsterCompanion?.update(canvas, model, {speech, hearing}, {palette, reducedMotion: motionPreference.matches || Boolean(effects.reduced_motion)});
+
     // You pressed talk: the ring shows now, not on the next slow poll.
     if (model.hearing && model.hearing !== hearingStage && !liveAsking) {
       window.clearTimeout(livePoll);
@@ -312,6 +322,7 @@
       speech = live.speech && typeof live.speech === "object" ? live.speech : null;
       orb.voice?.(speech ? Number(speech.level) || 0 : null);
       hearing = live.hearing && typeof live.hearing === "object" ? live.hearing : null;
+      window.AsterCompanion?.update(canvas, asterModel, live, {reducedMotion: asterReduced});
       showHearing(hearing);
     } catch (_error) {
       orb.music?.(null);
@@ -327,6 +338,7 @@
   }
   listen();
 
+  window.addEventListener("aster-three-ready", () => poller?.rerender());
   motionPreference.addEventListener("change", () => poller?.rerender());
   window.addEventListener("pagehide", () => { window.clearTimeout(livePoll); orb.dispose(); });
   poller = VoidCompassOverlay.startPolling({

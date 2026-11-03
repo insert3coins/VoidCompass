@@ -70,10 +70,10 @@ CAPABILITIES = (
 
 def intent(text):
     words = " ".join(re.sub(r"[^a-z0-9' ]", " ", str(text).lower()).split())
-    if re.fullmatch(r"(?:hey|hi|hello)(?: there)?(?: (?:watcher|commander))?", words):
+    if re.fullmatch(r"(?:hey|hi|hello)(?: there)?(?: (?:watcher|aster|commander))?", words):
         return "greeting"
-    words = re.sub(r"^(?:(?:hey|ok|okay|watcher|the watcher|please) )+", "", words)
-    words = re.sub(r"(?: (?:watcher|commander|please|for me|thanks|thank you))+$", "", words)
+    words = re.sub(r"^(?:(?:hey|ok|okay|watcher|the watcher|aster|please) )+", "", words)
+    words = re.sub(r"(?: (?:watcher|aster|commander|please|for me|thanks|thank you))+$", "", words)
     if re.fullmatch(r"hello(?: there)?|hi(?: there)?|hey|greetings|good (?:morning|afternoon|evening)", words):
         return "greeting"
     if re.fullmatch(r"what can you do|what do you do|what can (?:void compass|this (?:app|program)) do|"

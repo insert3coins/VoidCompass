@@ -511,6 +511,8 @@ class DashboardJourneyMixin:
             return self._json_answer(answer) if answer is not None else None
         if name == "sequence-recording":
             return self._json_answer(self._ship_recorder_state())
+        if name == "companion-live":
+            return self._json_answer(self._watcher_live_levels())
         if name == "controllers":
             # Settings › Hotkeys' live readout (5.7.3): the controllers seen, and what's held.
             return self._json_answer(self._controller_live())

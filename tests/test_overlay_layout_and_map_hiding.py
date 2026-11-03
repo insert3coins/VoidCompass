@@ -163,7 +163,7 @@ class PageWiringTests(unittest.TestCase):
         self.assertIn("/assets/overlay-layout.css", script)
         self.assertTrue((WEB / "assets" / "overlay-layout.css").is_file())
         for index in WEB.glob("*/index.html"):
-            if index.parent.name in {"dashboard", "galactic_map"}:
+            if index.parent.name in {"dashboard", "galactic_map", "companion-preview"}:  # standalone design sandbox, not an overlay
                 continue
             with self.subTest(page=index.parent.name):
                 self.assertIn("/assets/overlay-layout.js", index.read_text(encoding="utf-8"))

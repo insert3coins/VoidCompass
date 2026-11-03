@@ -32,6 +32,22 @@ MODEL_FILES = (
     {"name": "hal.onnx.json", "sha256": "cb6f82c03fc9e6db1f3b6978b9601bab9854f92c40d3a0681501944b8c26745e", "size": 7087},
 )
 DOWNLOAD_BYTES = ENGINE["size"] + sum(row["size"] for row in MODEL_FILES)
+ASTER_MODEL_FILES = (
+    {"name": "en_US-Jarvis_Real-medium.onnx", "sha256": "b947bfec049798c9df91f6010625db527dcb5ad00af011fa05036001df6eec2d", "size": 63516050},
+    {"name": "en_US-Jarvis_Real-medium.onnx.json", "sha256": "53d944f306bab1655dbdb2bae22919e5b702781caa112f4430eeeebbcbf2f537", "size": 7611},
+)
+ASTER_MODEL_URL = "https://raw.githubusercontent.com/insert3coins/VoidCompass/master/models/jarvis/"
+ASTER_NOTICE = "Aster uses the locally supplied Jarvis_Real Piper model. Its source voice and model rights are separate from Aster's original character and story."
+
+
+def manifest(model="watcher"):
+    if model == "aster":
+        return "jarvis", ASTER_MODEL_FILES, ASTER_MODEL_URL
+    return "hal9000", MODEL_FILES, MODEL_URL
+
+
+def download_bytes(model="watcher"):
+    return ENGINE["size"] + sum(row["size"] for row in manifest(model)[1])
 
 # Shown before the download, as the model's own README asks.
 RIGHTS_NOTICE = (
@@ -43,6 +59,7 @@ RIGHTS_NOTICE = (
 
 _CHUNK = 256 * 1024
 _USER_AGENT = "VoidCompass voice download"
+_INSTALL_LOCK = threading.Lock()
 
 
 def voice_dir(base=None) -> Path:
@@ -53,8 +70,9 @@ def engine_exe(base=None) -> Path:
     return voice_dir(base) / "piper" / "piper.exe"
 
 
-def model_path(base=None) -> Path:
-    return voice_dir(base) / "hal9000" / "hal.onnx"
+def model_path(base=None, model="watcher") -> Path:
+    folder, files, _url = manifest(model)
+    return voice_dir(base) / folder / files[0]["name"]
 
 
 def sha256_of(path) -> str:
@@ -65,23 +83,36 @@ def sha256_of(path) -> str:
     return digest.hexdigest()
 
 
-def _receipt(base=None) -> Path:
-    return voice_dir(base) / "installed.json"
+def _receipt(base=None, model="watcher") -> Path:
+    return model_path(base, model).parent / "installed.json" if model == "aster" else voice_dir(base) / "installed.json"
 
 
-def installed(base=None) -> bool:
+def installed(base=None, model="watcher") -> bool:
     """Engine and model both in place, and installed by us (the receipt
     records the hashes checked when they arrived)."""
     try:
-        receipt = json.loads(_receipt(base).read_text(encoding="utf-8"))
+        receipt = json.loads(_receipt(base, model).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
     if receipt.get("engine") != ENGINE["sha256"]:
         return False
-    if receipt.get("model") != [row["sha256"] for row in MODEL_FILES]:
+    files = manifest(model)[1]
+    if receipt.get("model") != [row["sha256"] for row in files]:
         return False
-    folder = model_path(base).parent
-    return engine_exe(base).is_file() and all((folder / row["name"]).is_file() for row in MODEL_FILES)
+    folder = model_path(base, model).parent
+    return engine_exe(base).is_file() and all((folder / row["name"]).is_file() for row in files)
+
+
+def _engine_installed(base=None):
+    if not engine_exe(base).is_file():
+        return False
+    for selected in ("watcher", "aster"):
+        try:
+            if json.loads(_receipt(base, selected).read_text(encoding="utf-8")).get("engine") == ENGINE["sha256"]:
+                return True
+        except (OSError, ValueError, AttributeError):
+            pass
+    return False
 
 
 class Cancelled(Exception):
@@ -92,13 +123,14 @@ class VoiceDownload:
     """One download of the engine and model, on its own thread. ``state()``
     is safe to read from anywhere: {"stage", "done", "total", "error"}."""
 
-    def __init__(self, base=None, opener=None):
+    def __init__(self, base=None, opener=None, model="watcher"):
         self.base = base
+        self.model = "aster" if model == "aster" else "watcher"
         self._open = opener or (lambda url: urllib.request.urlopen(
             urllib.request.Request(url, headers={"User-Agent": _USER_AGENT}), timeout=30))
         self._cancel = threading.Event()
         self._lock = threading.Lock()
-        self._state = {"stage": "idle", "done": 0, "total": DOWNLOAD_BYTES, "error": ""}
+        self._state = {"stage": "idle", "done": 0, "total": download_bytes(self.model), "error": "", "model": self.model}
         self._thread = None
 
     def state(self):
@@ -127,6 +159,8 @@ class VoiceDownload:
     def _fetch(self, url, target, expected_sha, size, counted):
         """Download to target.part, check its hash, then move it into place.
         A file already there with the right hash is kept as it is."""
+        if self._cancel.is_set():
+            raise Cancelled()
         if Path(target).is_file() and sha256_of(target) == expected_sha:
             self._set(done=counted + size)
             return counted + size
@@ -152,49 +186,67 @@ class VoiceDownload:
         return counted + size
 
     def _run(self, on_done):
+        # A cancelled profile's request can still be returning from HTTP.
+        # Serialise writes to the shared engine before a new install starts.
+        with _INSTALL_LOCK:
+            self._run_serial(on_done)
+
+    def _run_serial(self, on_done):
         folder = voice_dir(self.base)
         try:
+            if self._cancel.is_set():
+                raise Cancelled()
             folder.mkdir(parents=True, exist_ok=True)
-            _receipt(self.base).unlink(missing_ok=True)
+            engine_ready = _engine_installed(self.base)
+            _receipt(self.base, self.model).unlink(missing_ok=True)
             counted = 0
-            self._set(stage="engine")
-            archive = folder / "piper_windows_amd64.zip"
-            counted = self._fetch(ENGINE["url"], archive, ENGINE["sha256"], ENGINE["size"], counted)
-            self._set(stage="unpacking")
-            # Unpacked beside the model, then its piper/ folder moved into place.
-            unpack = folder / ".engine-unpack"
-            shutil.rmtree(unpack, ignore_errors=True)
-            with zipfile.ZipFile(archive) as bundle:
-                for member in bundle.namelist():
-                    # Never outside the unpack folder, whatever the archive says.
-                    destination = (unpack / member).resolve()
-                    if unpack.resolve() not in destination.parents and destination != unpack.resolve():
-                        raise RuntimeError("The engine archive has an unsafe path")
-                bundle.extractall(unpack)
-            archive.unlink(missing_ok=True)
-            engine = engine_exe(self.base).parent
-            shutil.rmtree(engine, ignore_errors=True)
-            if not (unpack / "piper").is_dir():
-                raise RuntimeError("piper.exe wasn't in the engine archive")
-            os.replace(unpack / "piper", engine)
-            shutil.rmtree(unpack, ignore_errors=True)
+            if engine_ready:
+                counted = ENGINE["size"]
+            else:
+                self._set(stage="engine")
+                archive = folder / "piper_windows_amd64.zip"
+                counted = self._fetch(ENGINE["url"], archive, ENGINE["sha256"], ENGINE["size"], counted)
+                self._set(stage="unpacking")
+                # Unpacked beside the model, then its piper/ folder moved into place.
+                unpack = folder / ".engine-unpack"
+                shutil.rmtree(unpack, ignore_errors=True)
+                with zipfile.ZipFile(archive) as bundle:
+                    for member in bundle.namelist():
+                        # Never outside the unpack folder, whatever the archive says.
+                        destination = (unpack / member).resolve()
+                        if unpack.resolve() not in destination.parents and destination != unpack.resolve():
+                            raise RuntimeError("The engine archive has an unsafe path")
+                    bundle.extractall(unpack)
+                archive.unlink(missing_ok=True)
+                engine = engine_exe(self.base).parent
+                shutil.rmtree(engine, ignore_errors=True)
+                if not (unpack / "piper").is_dir():
+                    raise RuntimeError("piper.exe wasn't in the engine archive")
+                os.replace(unpack / "piper", engine)
+                shutil.rmtree(unpack, ignore_errors=True)
             self._set(stage="model")
-            model_folder = model_path(self.base).parent
-            for row in MODEL_FILES:
-                counted = self._fetch(MODEL_URL + row["name"], model_folder / row["name"], row["sha256"], row["size"], counted)
+            model_folder = model_path(self.base, self.model).parent
+            _folder, files, url = manifest(self.model)
+            for row in files:
+                counted = self._fetch(url + row["name"], model_folder / row["name"], row["sha256"], row["size"], counted)
+            if self._cancel.is_set():
+                raise Cancelled()
             if not engine_exe(self.base).is_file():
                 raise RuntimeError("piper.exe wasn't in the engine archive")
-            _receipt(self.base).write_text(json.dumps({
-                "engine": ENGINE["sha256"], "model": [row["sha256"] for row in MODEL_FILES],
+            _receipt(self.base, self.model).write_text(json.dumps({
+                "engine": ENGINE["sha256"], "model": [row["sha256"] for row in files],
             }), encoding="utf-8")
-            self._set(stage="done", done=DOWNLOAD_BYTES)
+            self._set(stage="done", done=download_bytes(self.model))
         except Cancelled:
             self._set(stage="cancelled", error="")
         except Exception as exc:
             logging.warning("Watcher voice download failed: %s", exc)
             self._set(stage="failed", error=str(exc) or exc.__class__.__name__)
         finally:
-            for leftover in folder.glob("**/*.part") if folder.exists() else ():
+            leftovers = [folder / "piper_windows_amd64.zip.part"]
+            leftovers.extend(model_path(self.base, self.model).parent / (row["name"] + ".part")
+                             for row in manifest(self.model)[1])
+            for leftover in leftovers:
                 leftover.unlink(missing_ok=True)
         if callable(on_done):
             try:
@@ -203,14 +255,17 @@ class VoiceDownload:
                 logging.debug("Voice download callback failed", exc_info=True)
 
 
-def remove(base=None) -> bool:
+def remove(base=None, model="watcher") -> bool:
     """Delete the engine and model (the speech cache with them). Only the
     files the download brought: the model's README stays."""
     folder = voice_dir(base)
-    model = model_path(base).parent
+    selected = model
+    model = model_path(base, selected).parent
+    files = manifest(selected)[1]
     ok = True
-    for target in (engine_exe(base).parent, folder / "cache", folder / "installed.json",
-                   *(model / row["name"] for row in MODEL_FILES)):
+    other = "watcher" if selected == "aster" else "aster"
+    shared = () if installed(base, other) else (engine_exe(base).parent, folder / "cache")
+    for target in (*shared, _receipt(base, selected), *(model / row["name"] for row in files)):
         try:
             if target.is_dir():
                 shutil.rmtree(target)

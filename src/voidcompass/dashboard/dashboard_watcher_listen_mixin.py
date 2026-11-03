@@ -43,7 +43,10 @@ class DashboardWatcherListenMixin:
     def _watcher_listener(self):
         listener = getattr(self, "_watcher_listen", None)
         if listener is None:
-            listener = WatcherListener(settings=lambda: self.config, on_heard=self._watcher_listen_heard,
+            from voidcompass.core.config import get_active_profile
+            from voidcompass.core import companions
+            token = (get_active_profile(self.config), companions.identity(self.config), getattr(self, "_companion_generation", 0))
+            listener = WatcherListener(settings=lambda: self.config, on_heard=lambda words: self._watcher_listen_heard(words, token),
                                        on_change=self._watcher_listen_changed, prompt_provider=self._watcher_listen_words)
             self._watcher_listen = listener
         return listener
@@ -71,7 +74,8 @@ class DashboardWatcherListenMixin:
         if test:
             return ""
         if getattr(getattr(self, "heartbeat_hud", None), "mind", None) is None:
-            return "The Watcher is off: turn it on in Overlay Studio to talk to it."
+            from voidcompass.core.companions import name
+            return f"{name(self.config)} is off: turn it on in Overlay Studio to talk to it."
         return ""
 
     def _watcher_listen_words(self):
@@ -109,11 +113,18 @@ class DashboardWatcherListenMixin:
     def _watcher_listen_begin(self, key=None, test=False, held=None):
         if getattr(self, "_closing", False):
             return False
-        threading.Thread(target=self._watcher_listen_run, args=(key, test, held), name="watcher-talk",
+        from voidcompass.core.config import get_active_profile
+        from voidcompass.core import companions
+        self._listen_companion_token = (get_active_profile(self.config), companions.identity(self.config), getattr(self, "_companion_generation", 0))
+        threading.Thread(target=self._watcher_listen_run, args=(key, test, held, self._listen_companion_token), name="watcher-talk",
                          daemon=True).start()
         return True
 
-    def _watcher_listen_run(self, key=None, test=False, held=None):
+    def _watcher_listen_run(self, key=None, test=False, held=None, expected=None):
+        from voidcompass.core.config import get_active_profile
+        from voidcompass.core import companions
+        if expected is not None and expected != (get_active_profile(self.config), companions.identity(self.config), getattr(self, "_companion_generation", 0)):
+            return
         listener = self._watcher_listener()
         self._watcher_listen_quiet()
         if not listener.start(test=test):
@@ -137,9 +148,14 @@ class DashboardWatcherListenMixin:
                 self._voice_stop_reason = "stopped"
             speaker.stop()
 
-    def _watcher_listen_heard(self, text):
+    def _watcher_listen_heard(self, text, expected=None):
         """What you said (on the hearing thread): a command or plain question."""
+        from voidcompass.core.config import get_active_profile
+        from voidcompass.core import companions
+        expected = expected if expected is not None else getattr(self, "_listen_companion_token", None)
         def work():
+            if expected is not None and expected != (get_active_profile(self.config), companions.identity(self.config), getattr(self, "_companion_generation", 0)):
+                return
             mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
             if mind is None or not mind.talk(text, voice=True):
                 self._watcher_listen_tell(f"It heard “{text}”, but the Watcher is off: turn its orb on in "

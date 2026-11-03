@@ -1552,7 +1552,8 @@ class MainDashboard(
         mind = getattr(heartbeat, "mind", None)
         if mind is None:
             from voidcompass.overlays.heartbeat_hud import _memory_path
-            mind = watcher_mind.WatcherMind(_memory_path(self.config), self.config)
+            from voidcompass.core.companions import create_mind
+            mind = create_mind(_memory_path(self.config), self.config)
         return mind
 
     def _watcher_share_code(self):
@@ -1585,7 +1586,8 @@ class MainDashboard(
                 backup = heartbeat.reset()
             else:
                 from voidcompass.overlays.heartbeat_hud import _memory_path
-                backup = watcher_mind.WatcherMind(_memory_path(self.config), self.config).reset()
+                from voidcompass.core.companions import create_mind
+                backup = create_mind(_memory_path(self.config), self.config).reset()
         except Exception as exc:
             logging.warning("Watcher reset failed: %s", exc)
             return False
@@ -1593,7 +1595,8 @@ class MainDashboard(
             return False
         feed = getattr(self, "add_event_feed_entry", None)
         if callable(feed):
-            feed("SYSTEM", "The Watcher has forgotten everything" + (f" (its old memory is kept in {os.path.basename(backup)})" if backup else ""),
+            from voidcompass.core.companions import name
+            feed("SYSTEM", f"{name(self.config)} has forgotten everything" + (f" (its old memory is kept in {os.path.basename(backup)})" if backup else ""),
                  severity="INFO")
         return True
 

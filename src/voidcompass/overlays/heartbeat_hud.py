@@ -17,7 +17,7 @@ from collections import deque
 import time
 
 from voidcompass.core.application_runtime import OverlayWindowState
-from voidcompass.core import display_scale, themes
+from voidcompass.core import display_scale, themes, companions
 from voidcompass.overlays import overlay_chrome
 from voidcompass.core.overlay_registry import OVERLAY_SPECS, TEXT_SIZES, overlay_text_scale, text_size_choice
 from voidcompass.overlays.heartbeat_events import classify
@@ -50,6 +50,12 @@ _FLAG_INTERDICTED = 0x00800000
 
 def orb_size(config):
     """The orb's window size in px, always one of ORB_SIZES."""
+    if companions.identity(config) == "aster":
+        try:
+            size = int(config.get("aster_hud_size", 144))
+        except (TypeError, ValueError):
+            size = 144
+        return size if size in (96, 144, 192) else 144
     try:
         size = int(float((config or {}).get("heartbeat_orb_size", DEFAULT_ORB_SIZE)))
     except (TypeError, ValueError):
@@ -185,7 +191,7 @@ def overlay_directions(config, orb_x, orb_y, size):
 def _memory_path(config):
     try:
         from voidcompass.core.config import get_active_profile, get_profile_file
-        return get_profile_file(get_active_profile(config), "watcher_memory.json")
+        return get_profile_file(get_active_profile(config), "aster_memory.json" if companions.identity(config) == "aster" else "watcher_memory.json")
     except Exception:
         return None
 
@@ -207,7 +213,7 @@ class HeartbeatHUD:
         self._vitals = vitals(0)
         # Its inner voice and its memory of the commander (watcher_mind).
         self._mind_path = _memory_path(config)
-        self.mind = watcher_mind.WatcherMind(self._mind_path, config)
+        self.mind = companions.create_mind(self._mind_path, config)
         self._thought_seen = None
         # 5.5.4: its voice. The dashboard sets the listener (it speaks the
         # words) and says whether the voice is on.
@@ -262,6 +268,7 @@ class HeartbeatHUD:
         self._tick_job = self.win.call_later(750, self._tick)
 
     def _tick(self):
+        self._check_profile()
         stalled = time.time() - self._last_pulse_ts > _STALL_AFTER_S
         changed = stalled != self._stalled
         now = time.time()
@@ -309,13 +316,22 @@ class HeartbeatHUD:
     def _check_profile(self):
         """A commander switch gives the Watcher that commander's memory."""
         path = _memory_path(self.config)
-        if path != self._mind_path:
+        if path != getattr(self, '_mind_path', path):
+            lookup, action = getattr(self.mind, "lookup_provider", None), getattr(self.mind, "action_provider", None)
             self.mind.seen()
             self.mind.save()
             self._mind_path = path
             active = self.mind.voice_active
-            self.mind = watcher_mind.WatcherMind(path, self.config)
+            self.mind = companions.create_mind(path, self.config)
+            self.mind.lookup_provider, self.mind.action_provider = lookup, action
             self.mind.voice_active = active
+            self._spoken_id = None
+            self._thought_seen = None
+            self._shown_thought = None
+            self._voiced = None
+            changed = getattr(self, "companion_listener", None)
+            if callable(changed):
+                changed()
 
     def poke(self):
         """The Watcher hotkey: it looks up and answers (5.5.3.2)."""
@@ -380,7 +396,7 @@ class HeartbeatHUD:
         # even when the Watcher is configured to speak every thought.
         if thought.get('topic') == 'hatchling_said':
             return False
-        level = str(self.config.get('watcher_voice_level') or 'every').casefold()
+        level = str(companions.settings(self.config).get('watcher_voice_level') or 'every').casefold()
         if thought.get('topic') == 'voice_found':
             return True
         if thought.get('topic') == 'relay':
@@ -440,13 +456,17 @@ class HeartbeatHUD:
             'status_seq': self._status_serial,
             'events': list(self._events),
             'orb': {'size': orb_size(self.config), 'eye': eye_color(self.config),
+                    'identity': companions.identity(self.config),
+                    'accent': self.config.get('aster_hud_accent', 'theme'),
+                    'motion': bool(self.config.get('aster_hud_motion', True)),
+                    'working': bool(getattr(self.mind, 'talk_waiting', lambda: False)()),
                     'liveliness': liveliness(self.config), 'idle': idle_motion(self.config),
                     'frame_rate': frame_rate(self.config),
                     'renderer_logging': self.config.get('watcher_renderer_logging') is True,
                     # What its story has done to the eye (5.6.1).
                     'story': self.mind.story_marks() if getattr(self, 'mind', None) is not None else {}},
             'vitals': dict(self._vitals),
-            'personality': watcher_mind.personality(self.config),
+            'personality': 'stoic' if companions.identity(self.config) == 'aster' else watcher_mind.personality(self.config),
             'overlays': overlay_directions(
                 self.config, self._safe_int(self.config.get('heartbeat_hud_x'), 12),
                 self._safe_int(self.config.get('heartbeat_hud_y'), 12), orb_size(self.config)),
@@ -538,7 +558,8 @@ class HeartbeatHUD:
 
     def apply_settings(self):
         """Studio changed the orb's size, eye colour, thoughts or nature."""
-        self.mind.config = self.config
+        self._check_profile()
+        self.mind.config = companions.settings(self.config, 'aster') if getattr(self.mind, 'identity', 'watcher') == 'aster' else self.config
         self._redraw()
 
     def apply_theme(self, palette=None):

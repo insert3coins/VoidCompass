@@ -1247,6 +1247,11 @@ def plain_answer(lines, limit=PLAIN_LINES):
 
 
 def reply(outcome, rng, **fields):
+    if getattr(rng, "companion_identity", "") == "aster":
+        from voidcompass.overlays.aster_lines import command_reply
+        own = command_reply(outcome, rng, fields)
+        if own:
+            return own
     lines = REPLIES.get(outcome) or REPLIES["unavailable"]
     line = rng.choice(lines) if rng is not None else lines[0]
     try:

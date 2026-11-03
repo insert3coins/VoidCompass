@@ -45,6 +45,7 @@
   <script defer src="/assets/heartbeat-life.js"></script>
   <script defer src="/assets/heartbeat-orb.js"></script>
   <script type="module" src="/assets/heartbeat-3d.js"></script>
+  <script type="module" src="/assets/aster-companion.js"></script>
   <script defer src="/assets/music-visualizers.js"></script>
   <script defer src="/assets/hatchling-art.js"></script>
   <script defer src="/assets/hatchling-life.js"></script>
@@ -820,12 +821,15 @@
                   </section>
                   <section data-studio-settings="heartbeat_hud">
                     <h4>JOURNAL HEARTBEAT</h4>
-                    <label class="studio-field"><span>Orb size</span><select id="studio-heartbeat-size" data-studio-setting="heartbeat_orb_size"><option value="54">54 PX</option><option value="72">72 PX</option><option value="96">96 PX</option></select></label>
-                    <label class="studio-field"><span>Eye colour<small>At rest; danger still turns it red</small></span><select id="studio-heartbeat-eye" data-studio-setting="heartbeat_eye_color"><option value="theme">Theme accent</option><option value="hal">HAL red</option></select></label>
-                    <label class="studio-field"><span>Liveliness<small>How much the Watcher moves and feels between events</small></span><select id="studio-heartbeat-liveliness" data-studio-setting="heartbeat_liveliness"><option value="calm">Calm</option><option value="standard">Standard</option><option value="alive">Alive</option></select></label>
+                    <label class="studio-field"><span>Watcher orb size</span><select id="studio-heartbeat-size" data-studio-setting="heartbeat_orb_size"><option value="54">54 PX</option><option value="72">72 PX</option><option value="96">96 PX</option></select></label>
+                    <label class="studio-field"><span>Watcher eye colour<small>At rest; danger still turns it red</small></span><select id="studio-heartbeat-eye" data-studio-setting="heartbeat_eye_color"><option value="theme">Theme accent</option><option value="hal">HAL red</option></select></label>
+                    <label class="studio-field"><span>Watcher liveliness<small>How much the Watcher moves and feels between events</small></span><select id="studio-heartbeat-liveliness" data-studio-setting="heartbeat_liveliness"><option value="calm">Calm</option><option value="standard">Standard</option><option value="alive">Alive</option></select></label>
                     <label class="studio-field"><span>Frame rate<small>How smoothly the orb moves; lower is lighter on an older PC</small></span><select id="studio-heartbeat-frame-rate" data-studio-setting="heartbeat_frame_rate"><option value="0">Same as all overlays</option><option value="60">Full · 60</option><option value="30">Standard · 30</option><option value="24">Gentle · 24</option><option value="15">Light · 15</option></select></label>
+                    <label class="studio-field"><span>Aster display size</span><select data-studio-setting="aster_hud_size"><option value="96">96 PX</option><option value="144">144 PX</option><option value="192">192 PX</option></select></label>
+                    <label class="studio-field"><span>Aster accent</span><select data-studio-setting="aster_hud_accent"><option value="theme">Theme accent</option><option value="cyan">Ice cyan</option><option value="brass">Brass</option></select></label>
+                    <label class="studio-switch"><span><b>Aster instrument motion</b><small>Ring movement; reduced motion still takes precedence.</small></span><input type="checkbox" data-overlay-option="aster_hud_motion"><i></i></label>
                     <p class="studio-option-note">THOUGHTS AND VOICE · What it says beside the orb, its nature and its voice are on The Watcher page (SETTINGS and VOICE). Overlay opacity fades its words with the orb.</p>
-                    <label class="studio-switch"><span><b>Idle motions</b><small>Its aperture, breathing and glances between events; off, it only reacts.</small></span><input type="checkbox" data-overlay-option="heartbeat_idle_motion"><i></i></label>
+                    <label class="studio-switch"><span><b>Watcher idle motions</b><small>Its aperture, breathing and glances between events; off, it only reacts.</small></span><input type="checkbox" data-overlay-option="heartbeat_idle_motion"><i></i></label>
                   </section>
                   <section data-studio-settings="galaxy_minimap_hud">
                     <h4>GALAXY MINIMAP</h4>

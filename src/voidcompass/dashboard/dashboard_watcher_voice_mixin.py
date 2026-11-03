@@ -13,7 +13,7 @@ import os
 import re
 import time
 
-from voidcompass.core import companion_features, ranks
+from voidcompass.core import companion_features, ranks, companions
 from voidcompass.core.overlay_registry import OVERLAY_SPECS
 from voidcompass.exploration import codex_index
 from voidcompass.exploration.galactic_regions import region_names
@@ -59,17 +59,54 @@ class DashboardWatcherVoiceMixin:
     def _watcher_speaker(self):
         speaker = getattr(self, "_watcher_voice", None)
         if speaker is None:
-            speaker = WatcherSpeaker(settings=lambda: self.config, on_change=self._watcher_voice_changed)
+            speaker = WatcherSpeaker(settings=lambda: companions.settings(self.config), on_change=self._watcher_voice_changed)
             self._watcher_voice = speaker
         return speaker
 
     def _watcher_voice_on(self):
-        return bool(self.config.get("watcher_voice_enabled")) and voice_assets.installed()
+        return bool(companions.settings(self.config).get("watcher_voice_enabled")) and self._companion_voice_installed()
+
+    def _companion_voice_installed(self):
+        return voice_assets.installed(model="aster") if companions.identity(self.config) == "aster" else voice_assets.installed()
+
+    def _companion_switch(self, selected):
+        if selected not in companions.IDENTITIES:
+            return False
+        if selected == companions.identity(self.config):
+            return True
+        download = getattr(self, "_watcher_voice_download", None)
+        if download is not None and download.running():
+            return False
+        self._companion_generation = getattr(self, "_companion_generation", 0) + 1
+        speaker = getattr(self, "_watcher_voice", None)
+        if speaker is not None:
+            speaker.close()
+            self._watcher_voice = None
+        listener = getattr(self, "_watcher_listen", None)
+        if listener is not None:
+            listener.close()
+            self._watcher_listen = None
+        self.config["companion_identity"] = selected
+        self._watcher_voice_download = None
+        hud = getattr(self, "heartbeat_hud", None)
+        if hud is not None:
+            generation = self._companion_generation
+            hud._check_profile()
+            if self._companion_generation == generation:
+                self._watcher_voice_attach(hud)
+            hud._redraw()
+            bridge = getattr(hud, "_html_heartbeat_bridge", None)
+            if bridge is not None and callable(getattr(bridge, "sync_window", None)):
+                bridge.sync_window()
+        self._persist_config()
+        self._schedule_html_dashboard_publish(immediate=True)
+        return True
 
     def _watcher_voice_attach(self, hud):
         """A new Watcher orb: attach its speaker and the ship's plain answers."""
         if hud is None:
             return
+        hud.companion_listener = self._companion_profile_changed
         hud.voice_listener = self._watcher_voice_say
         self._watcher_voice_sync()
         if self.config.get("watcher_listen_enabled"):
@@ -78,6 +115,24 @@ class DashboardWatcherVoiceMixin:
         if mind is not None:
             mind.lookup_provider = self._watcher_lookup
             mind.action_provider = self._watcher_mind_action
+
+    def _companion_profile_changed(self):
+        self._companion_generation = getattr(self, "_companion_generation", 0) + 1
+        speaker = getattr(self, "_watcher_voice", None)
+        if speaker is not None:
+            speaker.close()
+            self._watcher_voice = None
+        listener = getattr(self, "_watcher_listen", None)
+        if listener is not None:
+            listener.close()
+            self._watcher_listen = None
+        download = getattr(self, "_watcher_voice_download", None)
+        if download is not None:
+            download.cancel()
+            self._watcher_voice_download = None
+        hud = getattr(self, "heartbeat_hud", None)
+        if hud is not None:
+            self._watcher_voice_attach(hud)
 
     def _watcher_voice_say(self, words, key=None, feel=None):
         if (getattr(self, "_closing", False) or self._watcher_voice_boot_held()
@@ -154,6 +209,10 @@ class DashboardWatcherVoiceMixin:
         levels["speech"] = speaker.live() if speaker is not None else None
         # 5.7.1: listening to you, or working out what you said.
         levels["hearing"] = self._watcher_listen_live()
+        mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+        levels["working"] = bool(mind is not None and getattr(mind, "talk_waiting", lambda: False)())
+        levels["identity"] = companions.identity(self.config)
+        levels["generation"] = getattr(self, "_companion_generation", 0)
         return levels
 
     def _watcher_voice_close(self):
@@ -486,6 +545,8 @@ class DashboardWatcherVoiceMixin:
         """The small things it does when you ask (5.7.1): the music, the
         overlays, the next system to the clipboard, its own voice. Its reply,
         or None when nothing was asked."""
+        original_text = text
+        text = companions.addressed(text, companions.identity(self.config))
         rng = getattr(getattr(getattr(self, "heartbeat_hud", None), "mind", None), "random", None)
         from voidcompass.core import voice_commands
         resolved = voice_commands.native_request(text, self.config.get("watcher_ship_commands"))
@@ -496,7 +557,7 @@ class DashboardWatcherVoiceMixin:
             commodities = self._watcher_uplink_commodities(question)
             request = {"kind": native["value"] if commodities else None,
                        "commodity": str(commodities[0][1]) if commodities else ""}
-            return self._watcher_uplink(text, request, rng)
+            return self._watcher_uplink(original_text, request, rng)
         if native.get("kind") == "overlay":
             return self._watcher_overlay({key: native[key] for key in ("overlay", "op")}, rng)
         # 5.7.3: the ship's own controls, pressed in Elite.
@@ -603,6 +664,8 @@ class DashboardWatcherVoiceMixin:
         options = self._trading_cargo_options()
         held = {row["symbol"]: row["count"] for row in self._trading_cargo()} if kind == "sell" else {}
         amount = max(1, int(held.get(symbol(commodity)) or 1))
+        generation = getattr(self, "_companion_generation", 0)
+        requested_mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
 
         def work():
             self._trading_spansh_names()
@@ -626,6 +689,8 @@ class DashboardWatcherVoiceMixin:
             return {"name": name, "best": best, "near": near}
 
         def done(result, error):
+            if generation != getattr(self, "_companion_generation", 0) or requested_mind is not getattr(getattr(self, "heartbeat_hud", None), "mind", None):
+                return
             result = result or {}
             lines = watcher_copilot.uplink_lines(kind, result.get("name") or commodity, result.get("best"),
                                                  result.get("near"), system, options["radius"], time.time(), error)
@@ -659,14 +724,16 @@ class DashboardWatcherVoiceMixin:
     # -- the download --------------------------------------------------------
     def _watcher_voice_downloader(self):
         download = getattr(self, "_watcher_voice_download", None)
-        if download is None:
-            download = voice_assets.VoiceDownload()
+        selected = companions.identity(self.config)
+        if download is None or getattr(download, "model", "watcher") != selected:
+            download = voice_assets.VoiceDownload(model=selected) if selected == "aster" else voice_assets.VoiceDownload()
             self._watcher_voice_download = download
         return download
 
     def _watcher_voice_start_download(self):
         """Start the download, and keep the Watcher page's progress moving."""
-        started = self._watcher_voice_downloader().start(self._watcher_voice_downloaded)
+        generation = getattr(self, "_companion_generation", 0)
+        started = self._watcher_voice_downloader().start(lambda state: self._watcher_voice_downloaded(state) if generation == getattr(self, "_companion_generation", 0) else None)
         self._watcher_voice_progress()
         return started
 
@@ -683,9 +750,9 @@ class DashboardWatcherVoiceMixin:
         feed = getattr(self, "add_event_feed_entry", None)
         if callable(feed):
             if stage == "done":
-                feed("SYSTEM", "The Watcher's voice is downloaded and ready", severity="INFO")
+                feed("SYSTEM", f"{companions.name(self.config)}’s voice is downloaded and ready", severity="INFO")
             elif stage == "failed":
-                feed("SYSTEM", f"The Watcher's voice didn't download: {state.get('error')}", severity="WARNING")
+                feed("SYSTEM", f"{companions.name(self.config)}’s voice didn’t download: {state.get('error')}", severity="WARNING")
         post = getattr(self, "_ui_post", None)
         work = lambda: (self._watcher_voice_sync(), self._schedule_html_dashboard_publish(immediate=True))
         if callable(post):
@@ -697,7 +764,8 @@ class DashboardWatcherVoiceMixin:
     def _html_watcher_settings(self):
         style = watcher_mind.thought_style(self.config)
         return {
-            "heartbeat_thoughts": watcher_mind.frequency(self.config),
+            "heartbeat_thoughts": watcher_mind.frequency(companions.settings(self.config)),
+            "aster_humour": self.config.get("aster_humour", "dry"),
             "heartbeat_personality": watcher_mind.personality(self.config),
             "heartbeat_thought_side": thought_side_setting(self.config),
             "heartbeat_text_scale_percent": heartbeat_text_size(self.config.get("heartbeat_text_scale_percent")),
@@ -710,25 +778,29 @@ class DashboardWatcherVoiceMixin:
         }
 
     def _html_watcher_voice(self, memory):
+        selected = companions.identity(self.config)
+        config = companions.settings(self.config)
         download = getattr(self, "_watcher_voice_download", None)
         state = download.state() if download is not None else {"stage": "idle", "done": 0,
-                                                                "total": voice_assets.DOWNLOAD_BYTES, "error": ""}
+                                                                "total": voice_assets.download_bytes(selected), "error": ""}
         speaker = getattr(self, "_watcher_voice", None)
         try:
-            volume = int(float(self.config.get("watcher_voice_volume", 80)))
+            volume = int(float(config.get("watcher_voice_volume", 80)))
         except (TypeError, ValueError):
             volume = 80
         return {
-            "enabled": bool(self.config.get("watcher_voice_enabled")),
-            "installed": voice_assets.installed(),
+            "identity": selected,
+            "model_name": "Aster officer voice" if selected == "aster" else "HAL 9000 voice",
+            "enabled": bool(config.get("watcher_voice_enabled")),
+            "installed": self._companion_voice_installed(),
             "download": state,
-            "size_mb": round(voice_assets.DOWNLOAD_BYTES / 1_000_000),
-            "rights": voice_assets.RIGHTS_NOTICE,
+            "size_mb": round(voice_assets.download_bytes(selected) / 1_000_000),
+            "rights": voice_assets.ASTER_NOTICE if selected == "aster" else voice_assets.RIGHTS_NOTICE,
             "volume": max(0, min(100, volume)),
-            "speed": str(self.config.get("watcher_voice_speed") or "standard"),
-            "level": str(self.config.get("watcher_voice_level") or "every"),
+            "speed": str(config.get("watcher_voice_speed") or "standard"),
+            "level": str(config.get("watcher_voice_level") or "every"),
             "speaking": bool(speaker is not None and speaker.live()),
-            "finding": watcher_voice_lore.progress(memory),
+            "finding": {"stage": 4, "found": True, "told": [], "minutes": 0} if selected == "aster" else watcher_voice_lore.progress(memory),
             "orb_on": getattr(self, "heartbeat_hud", None) is not None,
         }
 
@@ -743,8 +815,23 @@ class DashboardWatcherVoiceMixin:
 
     def _handle_watcher_settings_command(self, operation, payload):
         """The Watcher page's own controls. True when handled and done."""
+        if operation == "companion_identity":
+            return self._companion_switch(str(payload.get("value") or ""))
+        if operation == "aster_humour":
+            if payload.get("value") not in ("off", "dry"):
+                return False
+            self.config["aster_humour"] = payload["value"]
+            self._persist_config()
+            self._schedule_html_dashboard_publish(immediate=True)
+            return True
         if operation == "settings":
             values = payload.get("values") if isinstance(payload.get("values"), dict) else {}
+            if companions.identity(self.config) == "aster" and "heartbeat_thoughts" in values:
+                if values["heartbeat_thoughts"] not in watcher_mind.FREQUENCIES:
+                    return False
+                self.config["aster_thoughts"] = values["heartbeat_thoughts"]
+                self._persist_config()
+                values = {key: value for key, value in values.items() if key != "heartbeat_thoughts"}
             selects = {key: values[key] for key in WATCHER_SELECTS if key in values}
             done = True
             if selects:
@@ -754,9 +841,9 @@ class DashboardWatcherVoiceMixin:
                     done = bool(self._html_overlay_option_toggle(key, bool(values[key]))) and done
             return done
         if operation == "voice_toggle":
-            self.config["watcher_voice_enabled"] = bool(payload.get("value"))
+            self.config[companions.key(self.config, "watcher_voice_enabled")] = bool(payload.get("value"))
             self._persist_config()
-            if self.config["watcher_voice_enabled"] and not voice_assets.installed():
+            if companions.settings(self.config).get("watcher_voice_enabled") and not self._companion_voice_installed():
                 self._watcher_voice_start_download()
             self._watcher_voice_sync()
             return True
@@ -764,13 +851,13 @@ class DashboardWatcherVoiceMixin:
             values = payload.get("values") if isinstance(payload.get("values"), dict) else {}
             if "watcher_voice_volume" in values:
                 try:
-                    self.config["watcher_voice_volume"] = max(0, min(100, int(float(values["watcher_voice_volume"]))))
+                    self.config[companions.key(self.config, "watcher_voice_volume")] = max(0, min(100, int(float(values["watcher_voice_volume"]))))
                 except (TypeError, ValueError):
                     return False
             if values.get("watcher_voice_speed") in SPEEDS:
-                self.config["watcher_voice_speed"] = values["watcher_voice_speed"]
+                self.config[companions.key(self.config, "watcher_voice_speed")] = values["watcher_voice_speed"]
             if values.get("watcher_voice_level") in LEVELS:
-                self.config["watcher_voice_level"] = values["watcher_voice_level"]
+                self.config[companions.key(self.config, "watcher_voice_level")] = values["watcher_voice_level"]
             self._persist_config()
             return True
         if operation == "voice_download":
@@ -784,14 +871,15 @@ class DashboardWatcherVoiceMixin:
             if speaker is not None:
                 speaker.stop()
                 speaker._stop_engine()
-            done = voice_assets.remove()
+            done = voice_assets.remove(model="aster") if companions.identity(self.config) == "aster" else voice_assets.remove()
             self._watcher_voice_sync()
             return done
         if operation == "voice_test":
-            if (not voice_assets.installed() or self._watcher_voice_boot_held()
+            if (not self._companion_voice_installed() or self._watcher_voice_boot_held()
                     or getattr(self, "_closing", False)):
                 return False
-            return self._watcher_speaker().say(TEST_LINE, "test")
+            line = "Aster, reporting for duty. Clear instructions, a sound ship, and room for an occasional improvement to the itinerary." if companions.identity(self.config) == "aster" else TEST_LINE
+            return self._watcher_speaker().say(line, "test")
         if operation == "voice_stop":
             speaker = getattr(self, "_watcher_voice", None)
             if speaker is not None:
@@ -828,7 +916,7 @@ class DashboardWatcherVoiceMixin:
             self._schedule_html_dashboard_publish(immediate=True)
             return True
         if operation == "name_hear":
-            if (not voice_assets.installed() or self._watcher_voice_boot_held()
+            if (not self._companion_voice_installed() or self._watcher_voice_boot_held()
                     or getattr(self, "_closing", False)):
                 return False
             known = watcher_name.record(self._watcher_mind().memory).get("known") or ""

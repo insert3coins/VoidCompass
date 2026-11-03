@@ -1,10 +1,12 @@
 # Void Compass
 
-**Current version: 5.7.3.1**
+**Current version: 5.7.4**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
 [Download a release](https://github.com/insert3coins/VoidCompass/releases) · [Report a problem](https://github.com/insert3coins/VoidCompass/issues/new/choose)
+
+Choose **The Watcher** or **Aster**, an officer with dry wit, an original six-chapter story, a separate Piper voice and a Three.js instrument overlay. [Aster setup and examples](docs/ASTER_COMPANION.md).
 
 ## What's in it
 

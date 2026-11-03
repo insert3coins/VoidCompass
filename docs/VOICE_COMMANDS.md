@@ -1,5 +1,8 @@
 # Voice controls in Elite
 
+
+Choose The Watcher or Aster using the identity cards on the **Watcher** page. The same editable command catalogue, bindings and sequences serve either companion. Aster accepts an optional address, for example `Aster, open the galaxy map`, `Aster, where are we?`, `Hello Aster` or `Aster, what can you do?`. Enable its spoken replies on that page’s **VOICE** tab; recognition and the talk key are configured in **Settings → Voice**. [Aster setup](ASTER_COMPANION.md).
+
 Type a command on the Watcher page, or hold the talk key and say it. Turn on hearing in **Settings > Voice**; its Talk control card links to **Hotkeys** to choose the talk key or controller button. Commands use the same path whether spoken or typed.
 
 Spoken replies and Watcher lines play in order. Each line finishes, followed by a 0.6-second pause before the next. Hush, turning voice off, or starting the talk microphone still stops speech and clears waiting lines.

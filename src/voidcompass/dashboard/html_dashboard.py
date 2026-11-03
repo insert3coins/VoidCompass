@@ -826,10 +826,12 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
     def _html_watcher_workspace(self):
         from collections import Counter
         from voidcompass.overlays.heartbeat_hud import _memory_path, frame_rate as heartbeat_frame_rate
+        from voidcompass.core import companions
+        from voidcompass.overlays import aster_lore
         heartbeat = getattr(self, "heartbeat_hud", None)
         mind = getattr(heartbeat, "mind", None)
         if mind is None:
-            mind = watcher_mind.WatcherMind(_memory_path(self.config), self.config)
+            mind = companions.create_mind(_memory_path(self.config), self.config)
         memory = mind.memory
         # The newest hundred (5.5.3.5): the page stays light however long
         # it's been talking. Each with its heading, as the orb showed it.
@@ -838,6 +840,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             if not (isinstance(row, list) and len(row) >= 3):
                 continue
             kind, heading = watcher_mind.thought_heading(row[1], row[2])
+            if getattr(mind, "identity", "watcher") == "aster":
+                kind, heading = aster_lore.heading(row[2]) if row[1] == "aster_lore" else ("reply" if row[1] == "talk" else "", "OFFICER ON WATCH")
             log.append({"at": float(row[0] or 0), "topic": _text(row[1], 40), "text": _text(row[2], 600),
                         "mood": watcher_mind.MOODS.get(str(row[1]), ""), "kind": kind, "heading": heading})
         topics = Counter(
@@ -862,9 +866,12 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         heartbeat_model = getattr(heartbeat, "_html_render_model", None)
         heartbeat_model = heartbeat_model if isinstance(heartbeat_model, dict) else {}
         return {
+            "identity": companions.identity(self.config),
+            "companion_name": companions.name(self.config),
+            "companion_generation": getattr(self, "_companion_generation", 0),
             "enabled": heartbeat is not None,
-            "nature": watcher_mind.personality(self.config),
-            "frequency": watcher_mind.frequency(self.config),
+            "nature": "officer" if companions.identity(self.config) == "aster" else watcher_mind.personality(self.config),
+            "frequency": watcher_mind.frequency(getattr(mind, "config", self.config)),
             "eye": _text(self.config.get("heartbeat_eye_color") or "theme", 10),
             # The orb here keeps to the Watcher's Frame rate too (5.5.7).
             "frame_rate": heartbeat_frame_rate(self.config),
@@ -892,7 +899,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "log": log,
             "hotkey": _text(self.config.get("overlay_hotkey_watcher_poke"), 40),
             # Its long story and the echoes heard (5.5.3.5).
-            "lore": watcher_lore.page(memory, sessions, hours, _watcher_echoes(memory)),
+            "lore": aster_lore.page(memory, hours) if companions.identity(self.config) == "aster" else watcher_lore.page(memory, sessions, hours, _watcher_echoes(memory)),
             # 5.6.1, deeper: its question, your answers, what it keeps of you,
             # its trust and mood, its dreams, the Watchers it has met.
             "deeper": self._html_watcher_deeper(mind) if hasattr(self, "_html_watcher_deeper") else {},
@@ -901,6 +908,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         }
 
     def _html_watcher_deeper(self, mind):
+        if getattr(mind, "identity", "watcher") == "aster":
+            return {"memories": mind.memories_page(), "answers": [], "dreams": [], "met": [], "question": None}
         from voidcompass.overlays import watcher_deeper, watcher_places, watcher_questions
         memory = mind.memory
         answers = []
@@ -942,13 +951,16 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         your road, what it remembers, its dreams and your answers, saved as a
         page in the Wrapped folder."""
         import html as html_module
+        from voidcompass.core import companions
+        from voidcompass.overlays import aster_lore
         from datetime import datetime as _datetime
         mind = self._watcher_mind()
         memory = mind.memory
-        lore = watcher_lore.page(memory, int(memory.get("sessions") or 0), float(memory.get("hours") or 0))
+        label = companions.name(self.config)
+        lore = aster_lore.page(memory, float(memory.get("hours") or 0)) if companions.identity(self.config) == "aster" else watcher_lore.page(memory, int(memory.get("sessions") or 0), float(memory.get("hours") or 0))
         deeper = self._html_watcher_deeper(mind)
         esc = html_module.escape
-        parts = [f"<h1>The Watcher</h1><p class='sub'>{esc(str(self.config.get('active_commander_name') or ''))} · "
+        parts = [f"<h1>{esc(label)}</h1><p class='sub'>{esc(str(self.config.get('active_commander_name') or ''))} · "
                  f"{int(memory.get('hours') or 0):,} hours together · {int(memory.get('sessions') or 0):,} sessions</p>"]
         for chapter in lore.get("chapters") or ():
             if not chapter.get("begun"):
@@ -961,21 +973,21 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             parts.append("<h2>What it remembers</h2>" + "".join(f"<p>{esc(row['text'])}</p>" for row in deeper["memories"]))
         if deeper["dreams"]:
             parts.append("<h2>Its dreams</h2>" + "".join(f"<p>{esc(row['text'])}</p>" for row in deeper["dreams"]))
-        page = ("<!doctype html><meta charset='utf-8'><title>The Watcher</title><style>body{max-width:42rem;margin:3rem auto;"
+        page = (f"<!doctype html><meta charset='utf-8'><title>{esc(label)}</title>" + "<style>body{max-width:42rem;margin:3rem auto;"
                 "padding:0 1rem;background:#0b0f14;color:#dbe7ef;font:16px/1.65 Georgia,serif}h1{font-weight:400;letter-spacing:.08em}"
                 "h2{margin-top:2.4rem;color:#7fd3ff;font:600 13px Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}"
                 ".sub{color:#8aa0ae}</style>" + "".join(parts))
         folder = Path(self.wrapped_folder()) if hasattr(self, "wrapped_folder") else Path(".")
         try:
             folder.mkdir(parents=True, exist_ok=True)
-            target = folder / f"The Watcher {_datetime.now().strftime('%Y-%m-%d')}.html"
+            target = folder / f"{label} {_datetime.now().strftime('%Y-%m-%d')}.html"
             target.write_text(page, encoding="utf-8")
         except OSError as exc:
             logging.warning("The Watcher's book couldn't be saved: %s", exc)
             return False
         feed = getattr(self, "add_event_feed_entry", None)
         if callable(feed):
-            feed("SYSTEM", f"The Watcher's book saved: {target.name}", severity="INFO")
+            feed("SYSTEM", f"{label}’s book saved: {target.name}", severity="INFO")
         return True
 
     def _html_watcher_thought(self):

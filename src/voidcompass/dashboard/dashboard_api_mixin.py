@@ -527,8 +527,9 @@ class DashboardApiMixin(ApiRecordsMixin):
 
         speaker = getattr(self, "_watcher_voice", None)
         live = speaker.live() if speaker is not None else None
-        return {"enabled": bool(self.config.get("watcher_voice_enabled")),
-                "installed": bool(voice_assets.installed()),
+        from voidcompass.core import companions
+        return {"identity": companions.identity(self.config), "enabled": bool(companions.settings(self.config).get("watcher_voice_enabled")),
+                "installed": bool(self._companion_voice_installed()),
                 "ready": bool(self._watcher_voice_on()),
                 "speaking": live is not None,
                 # 5.6.1: kept quiet by another app (hushed_for: seconds left, null until lifted).

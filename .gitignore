@@ -104,3 +104,8 @@ keepsakes.json
 # Generated companion showcase exports.
 /exports/hatchlings-*/
 /exports/hatchlings-*.zip
+
+# Aster voice: runtime receipt and local training material.
+models/jarvis/installed.json
+models/jarvis/*.7z
+models/jarvis/metadata.csv

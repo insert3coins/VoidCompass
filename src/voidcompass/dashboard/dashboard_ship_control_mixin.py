@@ -214,6 +214,8 @@ class DashboardShipControlMixin:
         if command.kind == "switch":
             return watcher_ship.reply(f"switch_{op}", rng, **fields)
         if command.done:
+            if not command.custom and getattr(rng, "companion_identity", "") == "aster":
+                return watcher_ship.reply("press", rng, **fields)
             return rng.choice(command.done) if rng is not None else command.done[0]
         return watcher_ship.reply("press", rng, **fields)
 
@@ -277,6 +279,7 @@ class DashboardShipControlMixin:
 
     # -- pressed (on its own thread) -----------------------------------------------------------
     def _ship_queue(self, job):
+        job.companion_generation = getattr(self, "_companion_generation", 0)
         jobs = getattr(self, "_ship_jobs", None)
         if jobs is None:
             jobs = self._ship_jobs = queue.Queue()
@@ -296,8 +299,9 @@ class DashboardShipControlMixin:
                 problem = "press_failed"
             finally:
                 self._ship_job_active = False
-            if problem and not getattr(self, "_closing", False):
-                self._ui_post(self._watcher_ship_follow_up, problem)
+            if problem and not getattr(self, "_closing", False) and getattr(job, "companion_generation", 0) == getattr(self, "_companion_generation", 0):
+                generation = getattr(self, "_companion_generation", 0)
+                self._ui_post(lambda outcome=problem, expected=generation: self._watcher_ship_follow_up(outcome) if expected == getattr(self, "_companion_generation", 0) else None)
 
     def _ship_close(self):
         recorder = getattr(self, "_ship_sequence_recorder", None)
@@ -372,7 +376,10 @@ class DashboardShipControlMixin:
     def _ship_command_job(self, command, op, where, steps):
         """Check state again when the queue reaches this request. Two quick
         'open map' requests must not become an open followed by a close."""
+        generation = getattr(self, "_companion_generation", 0)
         def job():
+            if generation != getattr(self, "_companion_generation", 0):
+                return "cancelled"
             if getattr(self, "_closing", False):
                 return "cancelled"
             if self._ship_recording():
@@ -395,12 +402,18 @@ class DashboardShipControlMixin:
                 binding = self._ship_binding(command.action(where, op))[0]
                 if binding is None:
                     return "binding_changed"
+                if generation != getattr(self, "_companion_generation", 0):
+                    return "cancelled"
                 return None if presser.press(*binding) else "lost_front"
             expected_focus = 0 if command.docked else None
             for index, step in enumerate(steps):
+                if generation != getattr(self, "_companion_generation", 0):
+                    return "cancelled"
                 problem = self._ship_pause(GAP_S if index else 0, where)
                 if problem:
                     return problem
+                if generation != getattr(self, "_companion_generation", 0):
+                    return "cancelled"
                 if step.kind == "wait":
                     problem = self._ship_pause(step.seconds, where)
                     if problem:
@@ -453,7 +466,10 @@ class DashboardShipControlMixin:
     def _ship_power_job(self, target, steps, actions):
         """Presses for the distributor. Aiming at ``target``, it reads the
         pips back after each press and plans again if the game disagreed."""
+        generation = getattr(self, "_companion_generation", 0)
         def job():
+            if generation != getattr(self, "_companion_generation", 0):
+                return "cancelled"
             if self._ship_recording():
                 return "cancelled"
             if not self._ship_game().bring_forward():
@@ -465,6 +481,8 @@ class DashboardShipControlMixin:
                 # Planned from the deck's copy, a second behind: planned again from the game's.
                 plan = watcher_ship.plan_power(state, target) or []
             for count in range(POWER_PRESSES):
+                if generation != getattr(self, "_companion_generation", 0):
+                    return "cancelled"
                 if self._ship_recording():
                     return "cancelled"
                 if not plan:
@@ -475,6 +493,8 @@ class DashboardShipControlMixin:
                     return "power_stuck"
                 if count:
                     time.sleep(GAP_S)
+                if generation != getattr(self, "_companion_generation", 0):
+                    return "cancelled"
                 if not presser.press(*binding):
                     return "lost_front"
                 if target is None:

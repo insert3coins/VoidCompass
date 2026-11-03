@@ -370,6 +370,9 @@ class HtmlOverlayStudioMixin:
                 "colony_show_on_right_panel": bool(self.config.get("colony_show_on_right_panel", True)),
                 "colony_hide_other_overlays": bool(self.config.get("colony_hide_other_overlays", False)),
                 "heartbeat_orb_size": orb_size(self.config),
+                "aster_hud_size": _integer(self.config.get("aster_hud_size"), 144),
+                "aster_hud_accent": self.config.get("aster_hud_accent", "theme"),
+                "aster_hud_motion": bool(self.config.get("aster_hud_motion", True)),
                 "galaxy_minimap_size": galaxy_minimap_hud.minimap_options(self.config)["size"],
                 "galaxy_minimap_view": galaxy_minimap_hud.minimap_options(self.config)["view"],
                 "rhino_map_show": surface_map.surface_options(self.config)["mode"],
@@ -672,7 +675,7 @@ class HtmlOverlayStudioMixin:
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies", "survey_codex_flags",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
-            "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading",
+            "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion",
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "rig_tracker_show_holds",
@@ -705,7 +708,7 @@ class HtmlOverlayStudioMixin:
             self.update_hud()
         elif key in {"hud_pages_takeover", "hud_hold_lists"} or key.startswith("hud_page_"):
             self._hud_pages_apply_settings()
-        elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading"}:
+        elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion"}:
             heartbeat = getattr(self, "heartbeat_hud", None)
             if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
                 heartbeat.apply_settings()
@@ -909,6 +912,11 @@ class HtmlOverlayStudioMixin:
         if "heartbeat_orb_size" in payload:
             size = _integer(payload.get("heartbeat_orb_size"), orb_size(self.config))
             self.config["heartbeat_orb_size"] = size if size in ORB_SIZES else orb_size(self.config)
+        if "aster_hud_size" in payload:
+            size = _integer(payload["aster_hud_size"], 144)
+            self.config["aster_hud_size"] = size if size in (96, 144, 192) else 144
+        if "aster_hud_accent" in payload:
+            self.config["aster_hud_accent"] = payload["aster_hud_accent"] if payload["aster_hud_accent"] in ("theme", "cyan", "brass") else "theme"
         if "heartbeat_eye_color" in payload:
             eye = _text(payload.get("heartbeat_eye_color"), 20).casefold()
             self.config["heartbeat_eye_color"] = eye if eye in EYE_COLORS else "theme"

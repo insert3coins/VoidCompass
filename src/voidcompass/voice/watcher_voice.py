@@ -20,6 +20,7 @@ import time
 import wave
 
 from voidcompass.voice import voice_assets
+from voidcompass.core import companions
 
 SPEEDS = {"slow": 1.15, "standard": 1.0, "fast": 0.88}
 LEVELS = ("important", "sometimes", "every")
@@ -166,6 +167,7 @@ class WatcherSpeaker:
         self._live = None
         self._proc = None
         self._proc_speed = None
+        self._proc_model = None
         self._closed = False
         self._worker = None
         self._last_used = time.time()
@@ -175,22 +177,25 @@ class WatcherSpeaker:
         return SPEEDS.get(str(self._settings().get("watcher_voice_speed") or "standard"), 1.0)
 
     def _ensure_engine(self):
-        if self._closed or not voice_assets.installed(self.base):
+        model = companions.identity(self._settings())
+        ready = voice_assets.installed(self.base, model="aster") if model == "aster" else voice_assets.installed(self.base)
+        if self._closed or not ready:
             return None
         speed = self._speed()
         proc = self._proc
-        if proc is not None and proc.poll() is None and self._proc_speed == speed:
+        if proc is not None and proc.poll() is None and self._proc_speed == speed and self._proc_model == model:
             return proc
         self._stop_engine()
         flags = _CREATE_NO_WINDOW | _BELOW_NORMAL_PRIORITY if os.name == "nt" else 0
         try:
             self._proc = subprocess.Popen(
-                [str(voice_assets.engine_exe(self.base)), "-m", str(voice_assets.model_path(self.base)),
+                [str(voice_assets.engine_exe(self.base)), "-m", str(voice_assets.model_path(self.base, model)),
                  "--json-input", "-q", "--length_scale", f"{speed:.2f}"],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                 text=True, encoding="utf-8", bufsize=1, creationflags=flags,
                 cwd=str(voice_assets.engine_exe(self.base).parent))
             self._proc_speed = speed
+            self._proc_model = model
         except OSError as exc:
             logging.warning("Couldn't start the Watcher's voice: %s", exc)
             self._proc = None
@@ -313,7 +318,7 @@ class WatcherSpeaker:
             if job.get("warm"):
                 job = {"text": ".", "key": None, "serial": None, "silent": True}
             turn += 1
-            raw = voice_assets.voice_dir(self.base) / "cache" / f"speech-{turn % 3}.wav"
+            raw = voice_assets.voice_dir(self.base) / "cache" / companions.identity(self._settings()) / f"speech-{turn % 3}.wav"
             try:
                 raw.parent.mkdir(parents=True, exist_ok=True)
                 proc.stdin.write(json.dumps({"text": job["text"], "output_file": str(raw)}) + "\n")

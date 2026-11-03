@@ -517,6 +517,10 @@ def _away_text(seconds):
 
 class WatcherMind:
     """Chooses, words and remembers the Watcher's thoughts."""
+    identity = "watcher"
+
+    def command_words(self, words):
+        return words
 
     def __init__(self, memory_path=None, config=None, clock=time.time, rng=None):
         self.memory_path = Path(memory_path) if memory_path else None
@@ -943,16 +947,17 @@ class WatcherMind:
         self._uplink = None
         from voidcompass.overlays import watcher_chat
         from voidcompass.core import voice_commands
-        conversation = voice_commands.native_request(words, self.config.get("watcher_ship_commands"), kind="chat")
+        conversation = voice_commands.native_request(self.command_words(words), self.config.get("watcher_ship_commands"), kind="chat")
         chat = conversation[0].native["value"] if conversation else None
         if chat:
+            bank = getattr(self, "chat_bank", watcher_chat)
             last = getattr(self, "_chat_last", {})
             cycles = getattr(self, "_chat_used", {})
             used = cycles.get(chat, [])
-            size = len(watcher_chat.GREETINGS if chat == "greeting" else watcher_chat.CAPABILITIES)
+            size = len(bank.GREETINGS if chat == "greeting" else bank.CAPABILITIES)
             if len(used) >= size:
                 used = []
-            answer = watcher_chat.answer(chat, self.random, last.get(chat), used)
+            answer = bank.answer(chat, self.random, last.get(chat), used)
             cycles[chat] = used + [answer]
             self._chat_used = cycles
             self._chat_last = dict(last, **{chat: answer})
@@ -1133,6 +1138,16 @@ class WatcherMind:
             thought = self.consider("habit_milestone", watcher_habits.milestone_fields(*milestone), force=True) or thought
         return thought
 
+    def _event_echo(self, event, raw):
+        """Identity-specific story echoes attached to otherwise shared telemetry."""
+        echo = watcher_lore.echo_for(event, raw)
+        if not echo and event == "FSDJump":
+            known = self.memory.get("echoes") or {}
+            reached = [topic for topic in watcher_lore.distance_echoes(watcher_habits.habits(self.memory)["ly"])
+                       if topic not in known]
+            echo = reached[0] if reached else None
+        return echo
+
     def _observe(self, event, raw):
         raw = raw if isinstance(raw, dict) else {}
         now = self.clock()
@@ -1194,12 +1209,7 @@ class WatcherMind:
             return self.consider("danger_over")
         # Something in the game that touches its past (5.5.3.5). Since 5.5.4
         # the distance you've flown in all counts for the far ones too.
-        echo = watcher_lore.echo_for(event, raw)
-        if not echo and event == "FSDJump":
-            known = self.memory.get("echoes") or {}
-            reached = [topic for topic in watcher_lore.distance_echoes(watcher_habits.habits(self.memory)["ly"])
-                       if topic not in known]
-            echo = reached[0] if reached else None
+        echo = self._event_echo(event, raw)
         if echo:
             with self.lock:
                 found = self.memory.setdefault("echoes", {})

@@ -607,6 +607,11 @@ REPLIES = {
 
 
 def reply(outcome, rng=None, **fields):
+    if getattr(rng, "companion_identity", "") == "aster":
+        from voidcompass.overlays.aster_lines import command_reply
+        own = command_reply(outcome, rng, fields)
+        if own:
+            return own
     lines = REPLIES.get(outcome) or REPLIES["not_here"]
     line = rng.choice(lines) if rng is not None else lines[0]
     try:

@@ -52,6 +52,8 @@ class FieldTests(unittest.TestCase):
         mind = WatcherMind(None, {"heartbeat_thoughts": "chatty", "heartbeat_personality": nature}, clock)
         mind.session_start()
         clock.now += 3600
+        # These cases check event routing, so choose to speak minor remarks.
+        mind.random.random = lambda: 0.0
         return mind, clock
 
     def test_the_first_world_nobody_found_in_a_charted_system(self):

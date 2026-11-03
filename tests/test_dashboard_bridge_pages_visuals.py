@@ -54,6 +54,9 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
 
         def serve(route):
             path = urlsplit(route.request.url).path
+            if path == "/api/data/sequence-recording":
+                route.fulfill(content_type="application/json", body=json.dumps({"status": "idle", "note": "", "events": [], "steps": [], "errors": [], "can_use": False}))
+                return
             if path == "/api/events":
                 route.fulfill(content_type="application/json", body='{"closing":true}')
                 return

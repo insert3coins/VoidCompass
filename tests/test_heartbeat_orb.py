@@ -105,7 +105,7 @@ class HeartbeatModelTests(unittest.TestCase):
         # The dashboard's own heartbeat lamp still reads these.
         self.assertEqual((model["pulse_id"], model["activity"], model["state"]), (33, "STATUS", "SUPERCRUISE"))
         self.assertFalse(model["stalled"])
-        self.assertEqual(model["orb"], {"size": 54, "eye": "theme", "liveliness": "standard", "idle": True,
+        self.assertEqual(model["orb"], {"size": 54, "eye": "theme", "identity": "watcher", "accent": "theme", "motion": True, "working": False, "liveliness": "standard", "idle": True,
                                         "frame_rate": HtmlOverlayServer.frame_rate, "renderer_logging": False, "story": {"crack": False, "second_pupil": False, "shutter": 0.0}})
 
     def test_orb_settings_are_sanitised(self):
@@ -113,10 +113,10 @@ class HeartbeatModelTests(unittest.TestCase):
         everyone = HtmlOverlayServer.frame_rate
         self.assertEqual(self.hud(heartbeat_orb_size=96, heartbeat_eye_color="HAL",
                                   heartbeat_frame_rate=24)._html_render_model["orb"],
-                         {"size": 96, "eye": "hal", "liveliness": "standard", "idle": True, "frame_rate": 24, "renderer_logging": False, "story": {"crack": False, "second_pupil": False, "shutter": 0.0}})
+                         {"size": 96, "eye": "hal", "identity": "watcher", "accent": "theme", "motion": True, "working": False, "liveliness": "standard", "idle": True, "frame_rate": 24, "renderer_logging": False, "story": {"crack": False, "second_pupil": False, "shutter": 0.0}})
         self.assertEqual(self.hud(heartbeat_orb_size="60", heartbeat_eye_color="blue", heartbeat_frame_rate="45",
                                   heartbeat_liveliness="frantic", heartbeat_idle_motion=False)._html_render_model["orb"],
-                         {"size": 54, "eye": "theme", "liveliness": "standard", "idle": False, "frame_rate": everyone, "renderer_logging": False, "story": {"crack": False, "second_pupil": False, "shutter": 0.0}})
+                         {"size": 54, "eye": "theme", "identity": "watcher", "accent": "theme", "motion": True, "working": False, "liveliness": "standard", "idle": False, "frame_rate": everyone, "renderer_logging": False, "story": {"crack": False, "second_pupil": False, "shutter": 0.0}})
         self.assertTrue(self.hud(watcher_renderer_logging=True)._html_render_model["orb"]["renderer_logging"])
 
     def test_window_is_the_orb_square(self):

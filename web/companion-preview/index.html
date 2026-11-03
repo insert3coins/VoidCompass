@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Aster · VoidCompass companion concept</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="masthead"><a class="brand" href="#preview"><span class="brand-mark">◇</span> VOIDCOMPASS <i>/</i> COMPANIONS</a><span class="preview-tag">DESIGN PREVIEW · SIMULATED SIGNALS</span></header>
+  <main>
+    <section class="intro"><p class="eyebrow">A DIFFERENT KIND OF COMPANY</p><h1>An officer.<br>A voice in your corner.</h1><p class="lede">Meet Aster. Precise when it matters. Quiet when it doesn’t.<br> Occasionally less impressed by your flying than the insurance company.</p></section>
+    <div class="workbench" id="preview">
+      <section class="stage" aria-label="Companion overlay preview">
+        <div class="stage-top"><span>COCKPIT DISPLAY</span><span><i class="status-dot"></i> <b id="stage-status">STANDING BY</b></span></div>
+        <div class="reticle" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="instrument" id="instrument"><canvas id="aster" aria-label="Aster's animated instrument display"></canvas><div class="watcher-eye" id="watcher-eye" hidden><div></div></div></div>
+        <div class="companion-caption"><span id="companion-role">SHIP’S OFFICER</span><h2 id="companion-name">ASTER</h2><p id="companion-motto">“Every departure deserves an arrival.”</p></div>
+        <div class="reply"><span id="reply-heading">OFFICER ON WATCH</span><p id="reply-text" aria-live="polite">Aster, reporting for duty. The ship is ready. I shall reserve judgement on the itinerary.</p><div class="reply-rule"></div></div>
+        <div class="stage-bottom"><span>TRANSPARENT OVERLAY CONCEPT</span><span id="signal-note">IDLE · NO AUDIO PLAYBACK</span></div>
+      </section>
+      <aside class="controls">
+        <section class="control-group"><p class="eyebrow">01 / YOUR COMPANION</p><div class="identity-options" role="group" aria-label="Preview a companion"><button data-persona="aster" aria-pressed="true"><span class="identity-symbol">✳</span><span><b>Aster</b><small>Ship’s officer · precise, dry wit</small></span><i>01</i></button><button data-persona="watcher" aria-pressed="false"><span class="identity-symbol watcher-symbol">◉</span><span><b>The Watcher</b><small>Old eyes · patient company</small></span><i>02</i></button></div><p class="control-note">The proposal keeps a separate story and memory for each companion.</p></section>
+        <section class="control-group"><p class="eyebrow">02 / TRY THE DISPLAY</p><div class="state-options" role="group" aria-label="Simulate an overlay state"><button data-state="idle" aria-pressed="true">Standing by</button><button data-state="listening" aria-pressed="false">Listening</button><button data-state="working" aria-pressed="false">Working</button><button data-state="speaking" aria-pressed="false">Speaking</button><button data-state="alert" aria-pressed="false">Alert</button></div><p class="control-note" id="state-description">Slow instrument movement. No flashing, no invented telemetry.</p></section>
+        <section class="control-group"><p class="eyebrow">03 / MAKE IT YOURS</p><div class="swatch-row" role="group" aria-label="Preview accent"><button data-colour="#65e4ef" aria-label="Ice cyan" aria-pressed="true" style="--swatch:#65e4ef"></button><button data-colour="#e8c48c" aria-label="Brass" aria-pressed="false" style="--swatch:#e8c48c"></button><button data-colour="#a6c0ed" aria-label="Starlight blue" aria-pressed="false" style="--swatch:#a6c0ed"></button><span>Follows your theme in the app.</span></div><label class="range-label" for="display-size"><span>Display size <b id="size-label">300 px</b></span><input id="display-size" type="range" min="160" max="360" value="300" step="10"></label><label class="motion-option"><input id="quiet-motion" type="checkbox"> Reduced motion</label></section>
+        <section class="control-group sample"><p class="eyebrow">04 / THE PERSON BEHIND THE VOICE</p><blockquote id="character-line">Competence first. Wit second. Never during an emergency.</blockquote><div class="sample-actions"><button id="next-line">ANOTHER WRITTEN LINE <span>↗</span></button><button id="open-story">READ THE FIRST PAGE</button></div><p class="control-note">Written samples only. This preview does not start Piper or change app settings.</p></section>
+      </aside>
+    </div>
+    <section class="direction"><div><p class="eyebrow">THE STORY / THE UNFINISHED MANIFEST</p><h2>Aster was built to count arrivals.<br>It learned to notice who was missing.</h2></div><p>Once the manifest officer aboard an independent relief ship, Aster kept meticulous accounts of cargo, fuel and crew. One final arrival report was left unsigned. Now, on your ship, a routine posting becomes a much more personal question: what makes a voyage complete?</p></section>
+    <section class="places"><article><span>COMPANION PAGE</span><h3>Identity, voice, story.</h3><p>Choose your officer or the Watcher. Their own written dialogue, lore and memory stay with them. Download and test the selected companion’s voice here.</p></article><article><span>OVERLAY STUDIO</span><h3>The instrument itself.</h3><p>Place it, scale it, choose the accent and control its motion. A compact instrument in a corner, with a readable reply beside it.</p></article><article><span>SETTINGS → VOICE</span><h3>The controls you know.</h3><p>The same microphone, talk key, editable commands and sequences. One active companion and one speech queue.</p></article></section>
+  </main>
+  <footer><span>VOIDCOMPASS / ASTER CONCEPT</span><span>Original interface study · built for the cockpit</span></footer>
+  <dialog id="story-dialog"><button id="close-story" aria-label="Close story">×</button><p class="eyebrow">THE UNFINISHED MANIFEST / I. THE APPOINTMENT</p><h2>The officer on watch.</h2><p>There is a vacant crew entry in your ship’s manifest. You did not put it there.</p><p>The terminal offers a name, a duty and a place for your signature.</p><p><strong>ASTER. MANIFEST OFFICER. AWAITING APPOINTMENT.</strong></p><p>“A formality, Commander. I am perfectly capable of speaking without a commission. I would simply prefer to know whether you intend to keep me.”</p><p>The cursor waits beneath <em>arrival certified</em>. Aster moves it back to the beginning of the form.</p><p>“Not that line. We haven’t gone anywhere yet.”</p><small>Draft opening. This is original companion lore, separate from the Watcher’s books.</small></dialog>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
