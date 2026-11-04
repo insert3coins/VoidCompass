@@ -686,7 +686,7 @@ function textRow(key, label, detail, value, limit, placeholder, extraClass = "",
 function drawStudio() {
   const settings = data.settings || {};
   const panel = ui.byId("pc-controls");
-  const key = JSON.stringify([settings, data.themes, data.preview]);
+  const key = JSON.stringify([settings, data.themes, data.preview, data.note_author]);
   const typing = panel.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
   showPreview();
   if (key === lastStudioKey || typing || drafting) return;
@@ -717,7 +717,7 @@ function drawStudio() {
         <select data-postcard-setting="postcard_greeting">${[["greetings", "Greetings from…"], ["wish", "Wish you were here"], ["custom", "Your own words"], ["none", "None"]].map(([id, label]) => option(id, label, greeting)).join("")}</select></label>
       ${textRow("postcard_greeting_text", "Your lettering", "Up to 40 letters, over the name.", settings.postcard_greeting_text, 40, "Postcard from", "pc-greeting-own", greeting !== "custom")}
       <label class="pc-row"><span><b>The note</b><small>The handwritten line on the paper.</small></span>
-        <select data-postcard-setting="postcard_note_mode">${[["watcher", "The Watcher's"], ["own", "Your own words"], ["none", "None"]].map(([id, label]) => option(id, label, mode)).join("")}</select></label>
+        <select data-postcard-setting="postcard_note_mode">${[["watcher", `${esc(data.note_author || "The Watcher")}'s`], ["own", "Your own words"], ["none", "None"]].map(([id, label]) => option(id, label, mode)).join("")}</select></label>
       ${textRow("postcard_note_text", "Your words", "Up to 160 letters, on every postcard from now on.", settings.postcard_note_text, 160, "Wish you were here. The view is better than the fuel.", "pc-note-own", mode !== "own")}
       ${textRow("postcard_signature", "Signed", "Empty signs it CMDR and your name.", settings.postcard_signature, 40, "CMDR …", "pc-note-own", mode !== "own")}
       <div class="pc-switches">

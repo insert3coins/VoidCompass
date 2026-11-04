@@ -88,7 +88,7 @@
     photo.append(greeting(card));
     const caption = node("div", "caption");
     caption.append(greeting(card), postmark(card));
-    // The Watcher's note, handwritten and signed; without one, what you
+    // The selected companion's note, handwritten and signed; without one, what you
     // were doing, in the same hand.
     if (card.note) {
       const note = node("p", "note", card.note);

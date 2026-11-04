@@ -1132,7 +1132,7 @@ OVERLAY_NAMES = {
     "achievements": ("achievements overlay", "achievements"),
     "galnet-ticker": ("galnet ticker", "news ticker", "ticker", "galnet"),
     "music-player": ("music player", "music overlay", "player"),
-    "heartbeat": ("journal heartbeat", "your orb", "the orb", "orb", "yourself", "heartbeat"),
+    "heartbeat": ("journal heartbeat", "your orb", "the orb", "orb", "yourself", "heartbeat", "aster", "watcher", "companion", "companion display"),
     "contact-scope": ("deep space contact scope", "contact scope", "contacts"),
     "jump-info": ("jump information", "jump info"),
     "colony-needs": ("construction needs", "colony needs"),
@@ -1194,6 +1194,7 @@ def intent(text):
 
 # Written replies to commands.
 REPLIES = {
+    "uplink_empty": ("The uplink came back empty.",),
     "music_pause": ("Paused. The quiet comes back.", "The music stops. I'll listen to the hull instead.", "Paused."),
     "music_play": ("Music, then.", "Playing. The dark could use it.", "There. Something to fly to."),
     "music_next": ("The next one.", "Skipped.", "On to the next."),

@@ -51,15 +51,19 @@ function update(source, model = {}, live = {}, options = {}) {
   const state = vitals.danger || vitals.overheating || vitals.low_fuel ? "alert"
     : hearing && ["listening", "opening", "test"].includes(hearing.stage) ? "listening"
     : hearing && ["hearing", "working", "transcribing"].includes(hearing.stage) ? "working"
-    : speech ? "speaking" : working ? "working" : "idle";
+    : speech ? "speaking" : working ? "working" : vitals.fsd_charging ? "charging" : "idle";
   view.canvas.dataset.state = state;
+  view.display.setContext(model);
+  view.display.setFocus(model.orb?.focus_movement);
   view.display.setState(state, speech?.level ?? hearing?.level ?? 0);
   const accent = model.orb?.accent;
   const theme = options.palette?.accent || getComputedStyle(source.parentElement).getPropertyValue("--accent").trim();
-  view.display.setColour(accent === "cyan" ? "#65e4ef" : accent === "brass" ? "#e8c48c" : /^#[a-f0-9]{6}$/i.test(theme) ? theme : "#65e4ef");
-  view.display.setMotion(!options.reducedMotion && model.orb?.motion !== false);
+  view.display.setColour(accent === "cyan" ? "#65e4ef" : accent === "brass" ? "#e8c48c" : accent === "hal" ? "#ff4455" : /^#[a-f0-9]{6}$/i.test(theme) ? theme : "#65e4ef");
+  view.display.setReducedMotion(Boolean(options.reducedMotion) || window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  view.display.setMotion(model.orb?.motion !== false);
   view.display.setFrameRate(model.orb?.frame_rate);
+  view.display.setActivity(model.orb?.liveliness);
 }
-window.AsterCompanion = {update, dispose};
+window.AsterCompanion = {update, dispose, inspect: source => views.get(source)?.display?.inspect() || null};
 window.dispatchEvent(new Event("aster-three-ready"));
 window.addEventListener("pagehide", () => { for (const source of views.keys()) dispose(source); });

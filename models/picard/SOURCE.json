@@ -1,0 +1,34 @@
+{
+  "character": "Captain Picard",
+  "source_repository": "https://github.com/dividebysandwich/piper-voice-models",
+  "source_revision": "b9c5f3d1d7b6d0e0f5647ae31dbf13b13b0d3a6f",
+  "source_directory": "Picard",
+  "downloaded_on": "2026-11-04",
+  "status": "archived_for_future_evaluation",
+  "files": [
+    {
+      "file": "en_US-picard_7399-medium.onnx",
+      "upstream_path": "Picard/en_US-picard_7399-medium.onnx",
+      "bytes": 63516050,
+      "sha256": "24edef8d75b26f498ffc995b933446229f527c66967514ab96b978f1e54c750c",
+      "git_blob_sha1": "393eaf9790800308bc87fecdca1b4c12d7a9a7ea",
+      "source_url": "https://raw.githubusercontent.com/dividebysandwich/piper-voice-models/b9c5f3d1d7b6d0e0f5647ae31dbf13b13b0d3a6f/Picard/en_US-picard_7399-medium.onnx"
+    },
+    {
+      "file": "en_US-picard_7399-medium.onnx.json",
+      "upstream_path": "Picard/en_US-picard_7399-medium.onnx.json",
+      "bytes": 4848,
+      "sha256": "4d4ad126bb0089b7f48f49a8c7349a82ec92afc49fccc934b395976a6629bbce",
+      "git_blob_sha1": "6e311cb2e224753fce9e19db3c6c2b9d3ee800c7",
+      "source_url": "https://raw.githubusercontent.com/dividebysandwich/piper-voice-models/b9c5f3d1d7b6d0e0f5647ae31dbf13b13b0d3a6f/Picard/en_US-picard_7399-medium.onnx.json"
+    },
+    {
+      "file": "UPSTREAM_README.md",
+      "upstream_path": "README.md",
+      "bytes": 1109,
+      "sha256": "7c3267b46ff63f6dd70556ed3681abe7a3ec3fef7f99dc63a080aed8adc639e3",
+      "git_blob_sha1": "972d75c03555747caf823ab4e0180a2f3ebca9e8",
+      "source_url": "https://raw.githubusercontent.com/dividebysandwich/piper-voice-models/b9c5f3d1d7b6d0e0f5647ae31dbf13b13b0d3a6f/README.md"
+    }
+  ]
+}

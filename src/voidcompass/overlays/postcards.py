@@ -80,7 +80,7 @@ def postcard_options(config):
     return {
         "hold": hold if hold in HOLDS else DEFAULT_HOLD,
         "photo": bool(config.get("postcard_photo", True)),
-        # What the journal knows of the place, and the Watcher's note.
+        # The legacy "watcher" mode follows the selected companion.
         "facts": bool(config.get("postcard_facts", True)),
         "note": note_mode == "watcher",
         # Your own words in its place, signed as you choose (5.5.4).
@@ -117,7 +117,7 @@ SIGNATURE_MAX = 40
 
 
 def note_setting(config):
-    """The note on the paper: the Watcher's, your own words, or none (5.5.4).
+    """The note: the selected companion's, your own words, or none.
     Before 5.5.4 a switch said only whether the Watcher wrote one."""
     config = config or {}
     mode = str(config.get("postcard_note_mode") or "").casefold()
@@ -223,7 +223,7 @@ def postcard_facts(item=None, from_sol=None):
 def postcard_card(raw, *, state="", system="", station="", body_name="", serial=0, now=None,
                   region="", facts=None, note="", kind=""):
     """One card from a Screenshot event and what the app knows of the moment:
-    the region, the journal's facts and a note from the Watcher (5.5.3.7)."""
+    the region, the journal's facts and a note from the companion on watch."""
     raw = raw if isinstance(raw, dict) else {}
     body = str(raw.get("Body") or body_name or "").strip()
     system = str(raw.get("System") or system or "").strip()
@@ -274,7 +274,7 @@ def caption_text(card):
     if card.get("facts"):
         lines.append(" · ".join(card["facts"]))
     if card.get("note"):
-        lines.append(f'"{card["note"]}" (the Watcher)')
+        lines.append(f'"{card["note"]}" ({card.get("signed") or "the Watcher"})')
     when = " · ".join(part for part in (card.get("date"), card.get("time")) if part)
     if when:
         lines.append(when)

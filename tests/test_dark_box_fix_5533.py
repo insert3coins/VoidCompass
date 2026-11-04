@@ -66,6 +66,7 @@ class ServerTests(unittest.TestCase):
         sent |= set(studio_module.colony_overlay_options({}))
         sent |= {f"galnet_ticker_{key}" for key in studio_module.ticker_options({})}
         sent |= {f"music_player_{key}" for key in studio_module.music_overlay_options({})}
+        sent |= set(studio_module.companions.display_options({}))
         # The Navigation HUD's page switches (5.5.17), one per page.
         sent |= {f"hud_page_{page}" for page in studio_module.hud_pages.PAGES[1:]}
         self.assertIn("overlay_transparency_fix", switches)

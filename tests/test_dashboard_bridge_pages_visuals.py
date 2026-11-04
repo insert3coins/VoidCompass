@@ -389,6 +389,38 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
         self.assertFalse(self.page.locator("#overlay-quick").is_visible())
         self.assertFalse(self.errors, self.errors)
 
+    def test_companion_labels_and_single_inspector_follow_identity(self):
+        studio = self.studio_snapshot()["overlay_studio"]
+        studio["overlays"].append({**studio["overlays"][0], "id": "heartbeat_hud", "label": "Aster", "short_label": "ASTER", "x": 20, "y": 20, "width": 144, "height": 144})
+        studio["options"].update(companion_identity="aster", companion_name="Aster", companion_size=144, companion_accent="cyan", companion_liveliness="alive", companion_focus="expressive", companion_motion=True)
+        state = overview_state()
+        state["companion"] = {"identity": "aster", "name": "Aster"}
+        state["overlay_studio"] = studio
+        self.page.evaluate("data => window.__bridgeHarness.render(data)", state)
+        self.page.evaluate("data => window.__bridgeHarness.studio(data)", studio)
+        self.page.locator('.studio-index-row[data-overlay-id="heartbeat_hud"] .studio-index-select').click()
+        self.assertEqual(self.page.text_content('.nav-item[data-page="watcher"] span'), "Aster")
+        choices = self.page.locator('[data-studio-settings="heartbeat_hud"] select').evaluate_all("nodes => nodes.map(n => [...n.options].map(o => [o.value,o.textContent]))")
+        self.assertEqual(self.page.locator('#studio-heartbeat-size option').all_text_contents(), ["54 PX", "72 PX", "96 PX", "144 PX", "192 PX", "256 PX"])
+        self.assertEqual(self.page.input_value('#studio-companion-focus'), "expressive")
+        self.assertEqual(self.page.input_value('#studio-heartbeat-size'), "144")
+        self.assertIn("ASTER", self.page.inner_text('[data-studio-settings="heartbeat_hud"] h4'))
+        self.assertEqual(self.page.locator('[data-studio-setting="aster_hud_size"], [data-studio-setting="heartbeat_orb_size"]').count(), 0)
+        with self.page.expect_request(lambda request: '/api/command' in request.url and 'companion_size' in (request.post_data or '')) as saved:
+            self.page.select_option('#studio-heartbeat-size', '192')
+        self.assertEqual(saved.value.post_data_json['companion_size'], '192')
+        self.page.focus('#studio-companion-focus')
+        studio["options"].update(companion_identity="watcher", companion_name="The Watcher", companion_size=72, companion_accent="hal", companion_focus="off", companion_liveliness="calm")
+        state["companion"] = {"identity": "watcher", "name": "The Watcher"}
+        self.page.evaluate("data => window.__bridgeHarness.render(data)", state)
+        self.page.evaluate("data => window.__bridgeHarness.studio(data)", studio)
+        self.assertEqual(self.page.locator('[data-studio-settings="heartbeat_hud"] select').evaluate_all("nodes => nodes.map(n => [...n.options].map(o => [o.value,o.textContent]))"), choices)
+        self.assertEqual(self.page.input_value('#studio-companion-focus'), "off")
+        self.assertEqual(self.page.input_value('#studio-heartbeat-liveliness'), "calm")
+        self.assertEqual(self.page.input_value('#studio-heartbeat-size'), "72")
+        self.assertEqual(self.page.text_content('.nav-item[data-page="watcher"] span'), "The Watcher")
+        self.assertEqual(self.errors, [])
+
     def test_each_overlay_chooses_whether_it_hides_on_the_maps(self):
         snapshot = self.studio_snapshot()
         snapshot["overlay_studio"].setdefault("options", {})["overlay_hide_on_maps"] = True

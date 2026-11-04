@@ -1,6 +1,8 @@
 """Aster's original officer dialogue. Facts are supplied by the game, never invented."""
 import random
 
+from voidcompass.overlays import aster_responses, aster_dockside, aster_idle
+
 GREETINGS = (
     "Aster, reporting for duty. The ship is ready. I shall reserve judgement on the itinerary.",
     "Good to hear you, Commander. What requires our attention?",
@@ -210,8 +212,129 @@ EVENTS = {
 for vehicle in ("scarab", "scorpion", "rhino", "nomad", "fighter"):
     EVENTS["idle_" + vehicle] = (f"{vehicle.title()} watch. Ready to assist.", f"The {vehicle} remains a useful argument for keeping a varied fleet.")
 
-for topic in ("hatchling_toy", "hatchling_trick", "hatchling_scared", "hatchling_grown", "hatchling_idle"):
-    EVENTS[topic] = ("{name} has my attention as well, Commander.", "I have included {name} in the crew's arrangements. No formal rank was necessary.")
+EVENTS.update({
+    "hatchling_toy": (
+        "{name} found {toy}. A new entry in the personal-effects register.",
+        "{toy}. {name} has claimed it; I shall leave ownership undisputed.",
+        "A new keepsake for {name}: {toy}.",
+        "{name}'s collection now includes {toy}. Worth a line in the record.",
+        "Our cargo has acquired a second interpretation. To {name}, {toy} is a toy.",
+        "{name} has brought back {toy}. The smallest crew member has its own priorities.",
+        "Personal effects for {name}: {toy}. No customs declaration has been requested.",
+        "{toy}, found by {name}. An entirely reasonable souvenir of the watch.",
+    ),
+    "hatchling_trick": (
+        "{name} has learned to {trick}. A new skill for the crew record.",
+        "New qualification for {name}: {trick}. I shall dispense with the examination board.",
+        "{name} can now {trick}, Commander. Your time together has made a difference.",
+        "The {trick} is part of {name}'s repertoire now. Nicely taught.",
+        "{name} has mastered {trick}. A small accomplishment deserves a proper entry.",
+        "Learning record updated for {name}: {trick}.",
+        "{name} learned the {trick}. A welcome addition to the watch's less formal duties.",
+        "The lesson has taken, Commander. {name} can {trick}.",
+    ),
+    "hatchling_scared": (
+        "{name} is frightened. Some reassurance when we are clear would help.",
+        "The disturbance has unsettled {name}. Give the little one time to recover.",
+        "{name} found that alarming. I have made a note to keep the next watch gentler.",
+        "A difficult moment for {name}. Allow a quiet interval when you can.",
+        "{name} is shaken, Commander. Its comfort deserves a place in the recovery plan.",
+        "When the immediate work is done, check on {name}.",
+        "{name} could do with a calmer watch. I find the request reasonable.",
+        "The little one, {name}, has been startled. Keep it in mind after the danger.",
+    ),
+    "hatchling_grown": (
+        "{name} is a {form} now. I have amended the crew record.",
+        "Growth milestone for {name}: {form}. My congratulations on the care involved.",
+        "{name} has become a {form}. A rather good reason to mark the date.",
+        "The manifest's smallest entry has changed: {name}, {form}.",
+        "A new stage for {name}, now a {form}. This posting is leaving its mark on us all.",
+        "{name}'s growth is on record: {form}. An occasion for a little professional pride.",
+        "A {form}, Commander. {name} has made good use of its place aboard.",
+        "We have watched {name} grow into a {form}. I am glad we were here for it.",
+    ),
+    "hatchling_idle": (
+        "{name} has a place in my watch, Commander. The small appointments matter too.",
+        "I have left a little room around {name}'s entry in the crew record.",
+        "Serving aboard includes making room for {name}. A useful broadening of the job description.",
+        "{name} needn't be useful to justify its berth. A principle I find quite sound.",
+        "There is no duty roster for {name}. I am resisting the urge to draw one up.",
+        "The manifest tells me where {name} belongs. It says rather less about what the company means.",
+        "It is good to keep a watch that has room for {name} in it.",
+        "I once thought an accurate crew list was sufficient. {name} continues to complicate that view.",
+        "A place aboard for {name}. Some entries improve a manifest without adding much to its weight.",
+        "{name} is part of our arrangements. I find the less formal ones are often the better ones.",
+        "I have given {name} no official duties. Morale appears to be an entirely voluntary contribution.",
+        "The smallest member of this crew, {name}, has acquired a rather substantial place in the watch.",
+    ),
+    "hatchling_said": (
+        "{name} says, \"{said}.\" A short report, duly received.",
+        "\"{said}.\" {name}'s contribution to the watch. I shall leave it the last word.",
+        "A remark from {name}: \"{said}.\" Noted for the informal record.",
+        "{name} has offered \"{said}.\" No amendment from this officer.",
+        "\"{said}.\" An observation from {name}, entered without a committee review.",
+        "{name}'s assessment is \"{said}.\" I appreciate a concise report.",
+        "\"{said},\" according to {name}. A view from our smallest berth.",
+        "The record of {name}'s opinion reads, \"{said}.\" Properly attributed.",
+    ),
+})
+
+EVENT_VARIATIONS = {
+    "quiet": ("Nothing calls for a report just now. I shall leave you the view.", "The watch continues. Some entries are best left unwritten.", "A little room between reports is part of the service.", "I have no urgent business with your attention, Commander."),
+    "arrival": ("{system}. Arrival entered in the log.", "We have reached {system}. Primary classification: {star}.", "On station in {system}. The next decision is yours."),
+    "jump_long": ("{dist} covered. That leg is behind us.", "Transit recorded at {dist}. Ready for the next leg.", "{dist}. A useful amendment to our position."),
+    "scooped": ("Fuel collection noted. A prudent use of the approach.", "The scoop has made its contribution to the itinerary.", "Refuelling recorded for the watch."),
+    "fss_complete": ("Survey of {system} complete. The observations are on file.", "{system}: system scan entered in the record.", "The scan of {system} is complete. We can consider the next task."),
+    "mapped": ("{body}: mapping entered in the survey log.", "Map of {body} recorded. Another blank attended to.", "The survey record now includes a map of {body}."),
+    "mapped_efficient": ("{body}: efficiency target met. Neatly handled.", "An efficient survey of {body}. Nothing further to add.", "{body} mapped within the efficiency target."),
+    "analysed": ("{species}: analysis entered in the biological record.", "The analysis of {species} is complete. A thorough piece of fieldwork.", "A complete analysis for {species}. The record has it."),
+    "touchdown": ("The landing is in the log. Take your time with the next step.", "Surface arrival acknowledged. Confirm the ground around us.", "Touchdown. A moment to assess the site would be well spent."),
+    "undocked": ("We have left the berth. The watch is yours, Commander.", "Departure entered. Ready to assist with the route.", "Clear of the docking appointment. On to the next one."),
+    "on_foot": ("Away from the ship. Mind your suit and the way back.", "Disembarkation noted. I shall keep the ship's end of the watch.", "Your departure on foot is recorded. Proceed at your discretion."),
+    "mission_done": ("That assignment is entered as complete.", "Mission result acknowledged. One fewer outstanding obligation.", "The completion is in the log. A satisfactory entry."),
+    "bounty": ("{reward} added to the bounty record.", "Bounty result entered: {reward}.", "A recorded bounty of {reward}. The accounts will take an interest."),
+    "mined": ("{material}: refinery output entered in the record.", "Another measure of {material}. The work is producing a return.", "Refining result noted: {material}."),
+    "mined_surface": ("{material} collection entered in the field log.", "A quantity of {material}, recorded for our purposes.", "Material recovery noted: {material}."),
+    "idle_self": ("Still keeping the watch. No ceremonial inspection required.", "I find a useful posting leaves rather little need to advertise oneself.", "You have my attention when you need it, Commander."),
+    "idle_supercruise": ("{system}. I shall keep the reports brief while we are in transit.", "Still travelling through {system}. Not every interval needs filling.", "Transit watch in {system}. A good time to consider the next arrival."),
+    "docked_home": ("Back at home port. The return is on record.", "Home berth acknowledged. A familiar entry in the arrivals column.", "Home again. The next departure can wait its turn."),
+    "world_earthlike": ("{body}: an Earth-like world for the survey log.", "An Earth-like finding at {body}. Worth a careful entry.", "{body}. The classification makes a welcome change from an empty column."),
+    "world_water": ("{body}: water world classification recorded.", "A water world at {body}. The observations are worth keeping.", "{body} belongs in the water-world record."),
+    "world_ammonia": ("{body}: ammonia-world classification entered.", "An ammonia world at {body}. Include it in the survey notes.", "{body}. A useful reminder that a world need not suit us to merit attention."),
+    "world_terraformable": ("Terraforming potential noted for {body}.", "{body}: a candidate for a rather different future.", "The record for {body} includes its terraforming potential."),
+    "planet_first": ("No earlier discoverer is recorded for {body}.", "{body}: your first-discovery entry is on file.", "First-discovery status confirmed for {body}. A worthwhile observation."),
+    "mapped_first": ("{body}: this crew's first map is on record.", "No earlier mapping credit for {body}. This one is yours.", "First mapping of {body}, entered with the survey results."),
+    "footfall_first": ("{body}: your first-footfall record is in the log.", "First arrival on foot at {body}. Keep an eye on the terrain.", "{body}. The first-footfall entry belongs to you, Commander."),
+    "sample_first": ("{species}: one sample recorded. Allow {distance} before the next.", "The first {species} sample is logged. Required separation: {distance}.", "Sampling begun for {species}. We need {distance} of separation."),
+    "sample_second": ("{species}: two samples recorded. Another {distance} to separate the last.", "Second {species} sample entered. The final one still needs {distance} of separation.", "Two samples on file for {species}. Keep {distance} between collections."),
+    "sample_clear": ("{species}: sufficient separation for the next collection, {distance}.", "The next {species} sample is now far enough away: {distance}.", "Separation check clear for {species}, at {distance}."),
+    "rare_world": ("{kind} at {body}. Give the observation a proper entry.", "{body}: {kind}, recorded for the survey.", "A finding worth marking: {body}, {kind}."),
+    "new_region": ("{region}. Region crossing entered in the log.", "We have entered {region}. Ready to begin the next part of the record.", "Now in {region}. A fresh heading for the itinerary."),
+    "valuable_world": ("{body}: a promising survey target.", "A closer look at {body} may be worthwhile.", "{body} merits a place on the survey list."),
+    "undiscovered_system": ("An unrecorded system. Let the observations set the pace.", "The discovery record is open here. Proceed with the survey.", "No previous discovery entry. We have room to make a useful contribution."),
+    "first_discovery_streak": ("{count} successive first discoveries, now in the record.", "The first-discovery run stands at {count}.", "{count} first discoveries in a row. The survey is earning its pages."),
+}
+for topic, lines in EVENT_VARIATIONS.items():
+    EVENTS[topic] += lines
+
+# Restraint changes the tone, rather than reducing every report to one line.
+RESTRAINED_EVENTS = {}
+for topic, lines in aster_responses.RESTRAINED_EVENTS.items():
+    original = EVENTS.get(topic, ())
+    RESTRAINED_EVENTS[topic] = tuple(dict.fromkeys(original[:1] + lines))
+    EVENTS[topic] = tuple(dict.fromkeys(original + lines))
+for topic, lines in aster_responses.OFFICER_EVENTS.items():
+    EVENTS[topic] = tuple(dict.fromkeys(EVENTS[topic] + lines))
+for bank in (aster_dockside, aster_idle):
+    for topic, lines in bank.PLAIN.items():
+        RESTRAINED_EVENTS[topic] = tuple(dict.fromkeys(RESTRAINED_EVENTS.get(topic, ()) + lines))
+        EVENTS[topic] = tuple(dict.fromkeys(EVENTS.get(topic, ()) + lines + bank.DRY.get(topic, ())))
+
+RESTRAINED_GREETINGS = tuple(GREETINGS[index] for index in (1, 2, 5, 8, 10, 13, 14, 18, 22, 28))
+
+
+def event_lines(topic, restrained=False):
+    return (RESTRAINED_EVENTS if restrained else EVENTS).get(topic, ())
 
 COMMANDS = {
     "music_not_playing": ("There is no music playing at present.",),
@@ -273,21 +396,57 @@ COMMANDS = {
     "uplink_opening": ("Checking where to {verb} {commodity}, Commander.", "Requesting the {commodity} market report. One moment."),
     "uplink_off": ("Trading searches are disabled. Enable them in Settings, under Integrations, to use the market uplink.",),
     "uplink_what": ("The uplink searches commodity markets. Name a commodity and ask where to buy or sell it.",),
+    "uplink_empty": ("The market uplink returned no usable report, Commander.",
+                     "No usable market result came back for that request.",
+                     "The uplink has no report to give us on that enquiry.",
+                     "Our market enquiry returned empty. There is no result for me to report."),
     "plain": ("I can answer from your recorded game data or carry out a configured command. Ask what I can do for a concise rundown.",),
 }
 
 
-def answer(kind, rng=None, previous=None, used=()):
-    pool = GREETINGS if kind == "greeting" else CAPABILITIES
+COMMAND_VARIATIONS = {
+    "press": ("{Label}: executing the configured control.", "Carrying out {label_l}.", "Taking care of {label_l}, Commander.", "Operating {label_l} now."),
+    "screen_open": ("Bringing {label_l} into view.", "Displaying {label_l}.", "{Label}, as requested.", "Opening the requested view: {label_l}."),
+    "screen_close": ("{Label}: closing the view.", "Putting {label_l} away.", "Withdrawing {label_l}.", "{Label}: view closed."),
+    "screen_already": ("We already have {label_l} in view.", "{Label} is on screen, Commander.", "The requested view is already displayed: {label_l}."),
+    "switch_on": ("Enabling {label_l}.", "{Label} set to {on}.", "Applying {on} to {label_l}."),
+    "switch_off": ("Disabling {label_l}.", "{Label} set to {off}.", "Applying {off} to {label_l}."),
+    "music_play": ("Resuming the musical portion of the watch.", "Starting playback.", "Music, as requested."),
+    "music_pause": ("Holding playback for now.", "A little quiet. Playback paused.", "Putting the music on hold."),
+    "music_next": ("Moving on in the playlist.", "Selecting the following track.", "On to the next selection."),
+    "music_previous": ("Returning to the preceding track.", "Back to the earlier selection.", "Revisiting the last track."),
+    "overlay_hidden": ("Taking {label_l} off the display.", "{Label}: withdrawn.", "Clearing {label_l} from view."),
+    "overlay_shown": ("{Label}: displayed.", "Bringing {label_l} back into view.", "Restoring the {label_l} display."),
+    "uplink_opening": ("Looking up destinations to {verb} {commodity}.", "I will consult the markets for {commodity}.", "Checking the current {commodity} listings."),
+}
+for outcome, lines in COMMAND_VARIATIONS.items():
+    COMMANDS[outcome] += lines
+for outcome, lines in aster_responses.COMMAND_VARIATIONS.items():
+    COMMANDS[outcome] = tuple(dict.fromkeys(COMMANDS[outcome] + lines))
+
+
+def answer(kind, rng=None, previous=None, used=(), restrained=False):
+    pool = (RESTRAINED_GREETINGS if restrained else GREETINGS) if kind == "greeting" else CAPABILITIES
+    picker = getattr(rng, "dialogue_choice", None)
+    if callable(picker):
+        return picker(kind, pool)
     choices = [line for line in pool if line != previous and line not in used]
     return (rng or random).choice(choices or [line for line in pool if line != previous] or list(pool))
 
 
 def command_reply(outcome, rng, fields):
-    lines = COMMANDS.get(outcome)
-    if not lines:
-        return None
-    try:
-        return (rng or random).choice(lines).format(**fields)
-    except (KeyError, IndexError, ValueError):
-        return None
+    # Pick only usable templates, so a missing field cannot consume a wording
+    # or accidentally send the officer down the Watcher's fallback path.
+    candidates = {}
+    for line in COMMANDS.get(outcome, ()):
+        try:
+            candidates[line] = line.format(**fields)
+        except (KeyError, IndexError, ValueError):
+            continue
+    if not candidates:
+        outcome = "unavailable"
+        candidates = dict.fromkeys(COMMANDS[outcome])
+        candidates = {line: line for line in candidates}
+    picker = getattr(rng, "command_choice", None)
+    line = picker(outcome, tuple(candidates)) if callable(picker) else (rng or random).choice(tuple(candidates))
+    return candidates[line]

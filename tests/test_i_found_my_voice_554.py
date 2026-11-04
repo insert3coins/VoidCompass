@@ -217,7 +217,9 @@ class FindingItsVoiceTests(unittest.TestCase):
         hud.mind.voice_active = False
         self.assertFalse(hud._speaks({"topic": "died", "importance": 3}))
         page = (WEB / "heartbeat" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("thought.voice_full", page)
+        self.assertIn("CompanionCaption", page)
+        presenter = (WEB / "assets" / "companion-caption.js").read_text(encoding="utf-8")
+        self.assertIn("thought.voice_full", presenter)
         self.assertIn("orb.voice?.(", page)
 
 

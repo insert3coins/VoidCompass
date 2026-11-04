@@ -962,7 +962,8 @@
       this.story = input.story && typeof input.story === 'object' ? input.story : {};
       this.pal = themeColors(input.palette || {});
       this.palKey = JSON.stringify(this.pal);
-      this.eye = input.eye === 'hal' ? 'hal' : 'theme';
+      this.eye = ['theme', 'cyan', 'brass', 'hal'].includes(input.eye) ? input.eye : 'theme';
+      this.focusMovement = ['off', 'tracking', 'expressive'].includes(input.focusMovement) ? input.focusMovement : 'tracking';
       this.reduced = Boolean(input.reducedMotion);
       this.crt = input.crt !== false;
       // The Watcher's own Frame rate (5.5.7): 0 leaves it at its best, 60.
@@ -1211,7 +1212,7 @@
     }
 
     base() {
-      return this.eye === 'hal' ? this.pal.red : this.pal.accent;
+      return this.eye === 'hal' ? this.pal.red : this.eye === 'cyan' ? rgb('#65e4ef') : this.eye === 'brass' ? rgb('#e8c48c') : this.pal.accent;
     }
 
     // The iris colour: the resting eye, pulled toward the strongest tone the
@@ -1360,7 +1361,9 @@
 
       const step = this.stepFor(now);
       this.pose = this.life ? this.life.pose(now) : null;
-      const pose = this.settle(this.pose, step);
+      const settled = this.settle(this.pose, step);
+      const focusScale = this.focusMovement === 'off' ? 0 : this.focusMovement === 'expressive' ? 1.45 : 1;
+      const pose = settled ? {...settled, dx: settled.dx * focusScale, dy: settled.dy * focusScale} : null;
       const mods = {flare: 0, pupil: pose?.pupil ?? 1, iris: pose?.iris ?? 1, dim: pose?.dim ?? 1,
         jx: 0, jy: 0, spikes: 0};
       const live = [];
@@ -1429,8 +1432,9 @@
       g.level = level;
       // Where the eye looks, as a fraction of the orb (the springs already
       // carry the glance toward the newest mote).
-      const lookX = pose ? pose.dx : this.gaze.x;
-      const lookY = pose ? pose.dy : this.gaze.y;
+      const lookX = pose ? pose.dx : this.gaze.x * focusScale;
+      const lookY = pose ? pose.dy : this.gaze.y * focusScale;
+      this.focusGaze = {x: lookX, y: lookY};
 
       this.drawBezel(g, rim, level, this.reduced ? 0 : .05 * Math.sin(now / 11000) + 1.4 * (lookX - .5 * lookY));
       // Cache the 3D housing separately from the live eye so the WebGL
@@ -2092,6 +2096,8 @@
         lastEvent: this.lastEvent,
         frames: this.frames,
         size: this.size,
+        focusMovement: this.focusMovement || 'tracking',
+        focusGaze: this.focusGaze || {x:0,y:0},
         pose: this.pose ? {...this.pose} : null,
         shown: this.shown ? {...this.shown} : null,
         music: {level: this.musicLevel, bass: this.musicBass},

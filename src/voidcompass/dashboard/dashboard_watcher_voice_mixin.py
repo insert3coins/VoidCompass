@@ -86,7 +86,8 @@ class DashboardWatcherVoiceMixin:
         if listener is not None:
             listener.close()
             self._watcher_listen = None
-        self.config["companion_identity"] = selected
+        size = companions.display_size(self.config)
+        self.config.update(heartbeat_orb_size=size, aster_hud_size=size, companion_identity=selected)
         self._watcher_voice_download = None
         hud = getattr(self, "heartbeat_hud", None)
         if hud is not None:
@@ -108,6 +109,7 @@ class DashboardWatcherVoiceMixin:
             return
         hud.companion_listener = self._companion_profile_changed
         hud.voice_listener = self._watcher_voice_say
+        hud.voice_status_listener = self._watcher_voice_status
         self._watcher_voice_sync()
         if self.config.get("watcher_listen_enabled"):
             self._watcher_listener().warm()
@@ -153,6 +155,10 @@ class DashboardWatcherVoiceMixin:
             or getattr(self, "_startup_overlay_handoff_pending", None) is not None
         )
 
+    def _watcher_voice_status(self, key):
+        speaker = getattr(self, "_watcher_voice", None)
+        return speaker.status(key) if speaker is not None else "cancelled"
+
     # -- hush (5.6.1): another app's voice asks it to keep quiet ------------------
     def _watcher_voice_hushed(self):
         return float(getattr(self, "_voice_hush_until", 0.0) or 0.0) > time.time()
@@ -183,6 +189,10 @@ class DashboardWatcherVoiceMixin:
         speaking = speaker is not None and speaker.live() is not None
         was = bool(getattr(self, "_voice_speaking", False))
         self._voice_speaking = speaking
+        hud = getattr(self, "heartbeat_hud", None)
+        post = getattr(self, "_ui_post", None)
+        if hud is not None and callable(post):
+            post(hud._redraw)
         if was and not speaking:
             reason = getattr(self, "_voice_stop_reason", "") or "finished"
             self._voice_stop_reason = ""
@@ -213,6 +223,9 @@ class DashboardWatcherVoiceMixin:
         levels["working"] = bool(mind is not None and getattr(mind, "talk_waiting", lambda: False)())
         levels["identity"] = companions.identity(self.config)
         levels["generation"] = getattr(self, "_companion_generation", 0)
+        model = getattr(getattr(self, "heartbeat_hud", None), "_html_render_model", None)
+        thought = model.get("thought") if isinstance(model, dict) else None
+        levels["thought"] = dict(thought) if isinstance(thought, dict) else None
         return levels
 
     def _watcher_voice_close(self):
@@ -809,7 +822,7 @@ class DashboardWatcherVoiceMixin:
         return {"settings": self._html_watcher_settings(),
                 "voice": self._html_watcher_voice(mind.memory),
                 "habits": watcher_habits.summary(mind.memory, mind.bond()),
-                "name": watcher_name.page(mind.memory),
+                "name": mind.name_page() if getattr(mind, "identity", "watcher") == "aster" else watcher_name.page(mind.memory),
                 "talk": self._html_watcher_talk(mind),
                 "listen": self._html_watcher_listen()}
 

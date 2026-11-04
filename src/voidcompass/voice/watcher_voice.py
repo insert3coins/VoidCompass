@@ -163,6 +163,7 @@ class WatcherSpeaker:
         self._lock = threading.Lock()
         self._wake = threading.Event()
         self._pending = deque()
+        self._states = {}
         self._serial = 0
         self._live = None
         self._proc = None
@@ -182,20 +183,22 @@ class WatcherSpeaker:
         if self._closed or not ready:
             return None
         speed = self._speed()
+        model_file = voice_assets.model_path(self.base, model)
+        model_signature = (model, str(model_file), tuple(row["sha256"] for row in voice_assets.manifest(model)[1]))
         proc = self._proc
-        if proc is not None and proc.poll() is None and self._proc_speed == speed and self._proc_model == model:
+        if proc is not None and proc.poll() is None and self._proc_speed == speed and self._proc_model == model_signature:
             return proc
         self._stop_engine()
         flags = _CREATE_NO_WINDOW | _BELOW_NORMAL_PRIORITY if os.name == "nt" else 0
         try:
             self._proc = subprocess.Popen(
-                [str(voice_assets.engine_exe(self.base)), "-m", str(voice_assets.model_path(self.base, model)),
+                [str(voice_assets.engine_exe(self.base)), "-m", str(model_file),
                  "--json-input", "-q", "--length_scale", f"{speed:.2f}"],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                 text=True, encoding="utf-8", bufsize=1, creationflags=flags,
                 cwd=str(voice_assets.engine_exe(self.base).parent))
             self._proc_speed = speed
-            self._proc_model = model
+            self._proc_model = model_signature
         except OSError as exc:
             logging.warning("Couldn't start the Watcher's voice: %s", exc)
             self._proc = None
@@ -230,6 +233,7 @@ class WatcherSpeaker:
             if self._closed:
                 return False
             self._pending.append({"text": words, "key": key, "serial": self._serial, "feel": dict(feel or {})})
+            self._remember_state(key, "queued")
         self._wake.set()
         return True
 
@@ -237,6 +241,9 @@ class WatcherSpeaker:
         """Hush: whatever is playing stops, and nothing waiting is said."""
         with self._lock:
             self._pending.clear()
+            for key, state in self._states.items():
+                if state in {"queued", "preparing", "playing"}:
+                    self._states[key] = "cancelled"
             self._serial += 1
             was = self._live
             self._live = None
@@ -263,6 +270,7 @@ class WatcherSpeaker:
         if elapsed > live["duration"] + PLAYBACK_TAIL_S:
             with self._lock:
                 if self._live and self._live["start"] == live["start"]:
+                    self._remember_state(self._live.get("key"), "finished")
                     self._live = None
             self._changed()
             return None
@@ -271,6 +279,23 @@ class WatcherSpeaker:
         level = envelope_[index] if 0 <= index < len(envelope_) else 0.0
         return {"key": live.get("key"), "elapsed": round(max(0.0, elapsed), 3),
                 "duration": round(live["duration"], 3), "level": level}
+
+    def _remember_state(self, key, state):
+        self._states[key] = state
+        if len(self._states) > 64:
+            old = next((key for key, value in self._states.items() if value in {"finished", "failed", "cancelled"}), None)
+            if old in self._states and self._states[old] in {"finished", "failed", "cancelled"}:
+                self._states.pop(old)
+
+    def status(self, key):
+        """Caption timing includes queued synthesis, playback and failure."""
+        with self._lock:
+            return self._states.get(key, "cancelled" if self._closed else "unknown")
+
+    def _job_state(self, job, state):
+        with self._lock:
+            if job.get("serial") == self._serial:
+                self._remember_state(job.get("key"), state)
 
     def _changed(self):
         if callable(self._on_change):
@@ -311,8 +336,12 @@ class WatcherSpeaker:
                 job = {"warm": True}
             if not job or self._closed:
                 continue
+            if not job.get("warm"):
+                self._job_state(job, "preparing")
             proc = self._ensure_engine()
             if proc is None:
+                if not job.get("warm"):
+                    self._job_state(job, "failed")
                 continue
             self._last_used = time.time()
             if job.get("warm"):
@@ -327,6 +356,7 @@ class WatcherSpeaker:
                     raise OSError("the voice engine stopped")
             except (OSError, ValueError) as exc:
                 logging.warning("The Watcher's voice failed: %s", exc)
+                self._job_state(job, "failed")
                 self._stop_engine()
                 continue
             if job.get("silent") or self._closed:
@@ -339,12 +369,14 @@ class WatcherSpeaker:
                 played, duration, levels = self._prepare(raw, turn, job.get("feel"))
             except (OSError, EOFError, wave.Error) as exc:
                 logging.warning("The Watcher's voice couldn't play: %s", exc)
+                self._job_state(job, "failed")
                 continue
             with self._lock:
                 if job["serial"] != self._serial:
                     continue
                 start = time.time()
                 self._live = {"key": job.get("key"), "start": start, "duration": duration, "envelope": levels}
+                self._remember_state(job.get("key"), "playing")
                 self._play(str(played))
             self._changed()
             self._wait_playback(duration + PLAYBACK_TAIL_S, job["serial"])
@@ -355,6 +387,7 @@ class WatcherSpeaker:
         with self._lock:
             if not self._live or self._live["start"] != start:
                 return
+            self._remember_state(self._live.get("key"), "finished")
             self._live = None
         self._changed()
 

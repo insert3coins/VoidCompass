@@ -28,10 +28,10 @@ const samples = {
   ],
 };
 const states = {
-  idle: {label: "STANDING BY", note: "Slow instrument movement. No flashing, no invented telemetry.", heading: "OFFICER ON WATCH"},
-  listening: {label: "LISTENING", note: "The inner band follows microphone level; the outer instrument stays steady.", heading: "LISTENING", words: "Listening, Commander. Take your time; brevity is an aspiration, not a prerequisite."},
+  idle: {label: "STANDING BY", note: "Flowing light trails and counter-rotating command-core tracks.", heading: "OFFICER ON WATCH"},
+  listening: {label: "LISTENING", note: "A scanning trace crosses the command core and the halo responds to microphone level.", heading: "LISTENING", words: "Listening, Commander. Take your time; brevity is an aspiration, not a prerequisite."},
   working: {label: "CHECKING", note: "A controlled rotation marks a lookup in progress. It does not imply a reply is ready.", heading: "UPLINK IN PROGRESS", words: "Checking the markets. I’ll distinguish recent prices from optimistic history."},
-  speaking: {label: "SPEAKING", note: "The segment band and waveform respond to the speaking level. Here the signal is simulated.", heading: "OFFICER ON WATCH"},
+  speaking: {label: "SPEAKING", note: "Light ripples travel through the halo with the speaking level. Here the signal is simulated.", heading: "OFFICER ON WATCH"},
   alert: {label: "ATTENTION", note: "Warm amber and restrained motion. Warnings are clear and immediate, without jokes.", heading: "FLIGHT ADVISORY", words: "Fuel reserve is low. Find a scoopable star before continuing the route."},
 };
 let persona = "aster", state = "idle", sample = 0;
@@ -59,7 +59,7 @@ function update() {
   byId("open-story").disabled = persona !== "aster";
   document.querySelectorAll("[data-persona]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.persona === persona)));
   document.querySelectorAll("[data-state]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.state === state)));
-  display?.setMotion(!reduced.checked);
+  display?.setReducedMotion(reduced.checked);
 }
 document.querySelectorAll("[data-persona]").forEach((button) => button.addEventListener("click", () => {
   persona = button.dataset.persona; sample = 0; state = "idle"; update();

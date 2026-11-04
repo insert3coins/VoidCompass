@@ -23,6 +23,7 @@ from voidcompass.overlays.heartbeat_hud import (
     frame_rate_setting as heartbeat_frame_rate, idle_motion, liveliness, orb_size,
     heartbeat_text_size, thought_side_setting,
 )
+from voidcompass.core import companions
 from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, HUD_SCENE_MODES, hud_scene_mode, hud_typography
 
 # How lively the Navigation HUD's holographic scenes are.
@@ -251,8 +252,8 @@ class HtmlOverlayStudioMixin:
             html_ready = bool(getattr(overlay, "_html_ready", False))
             records.append({
                 "id": attr,
-                "label": OVERLAY_LABELS.get(attr, attr.replace("_", " ").title()),
-                "short_label": OVERLAY_CARD_LABELS.get(attr, attr.upper()),
+                "label": companions.name(self.config) if attr == "heartbeat_hud" else OVERLAY_LABELS.get(attr, attr.replace("_", " ").title()),
+                "short_label": companions.name(self.config).upper() if attr == "heartbeat_hud" else OVERLAY_CARD_LABELS.get(attr, attr.upper()),
                 "x": x, "y": y, "width": width, "height": height,
                 **({"thought": thought} if thought else {}),
                 "enabled": enabled,
@@ -370,9 +371,11 @@ class HtmlOverlayStudioMixin:
                 "colony_show_on_right_panel": bool(self.config.get("colony_show_on_right_panel", True)),
                 "colony_hide_other_overlays": bool(self.config.get("colony_hide_other_overlays", False)),
                 "heartbeat_orb_size": orb_size(self.config),
+                **companions.display_options(self.config),
                 "aster_hud_size": _integer(self.config.get("aster_hud_size"), 144),
                 "aster_hud_accent": self.config.get("aster_hud_accent", "theme"),
                 "aster_hud_motion": bool(self.config.get("aster_hud_motion", True)),
+                "aster_hud_liveliness": self.config.get("aster_hud_liveliness", "standard"),
                 "galaxy_minimap_size": galaxy_minimap_hud.minimap_options(self.config)["size"],
                 "galaxy_minimap_view": galaxy_minimap_hud.minimap_options(self.config)["view"],
                 "rhino_map_show": surface_map.surface_options(self.config)["mode"],
@@ -668,6 +671,8 @@ class HtmlOverlayStudioMixin:
     _COLONY_FOCUS_KEEP = frozenset({"colony_needs_hud", "hud", "toast_hud", "achievement_hud", "gravity_warning_hud", "heartbeat_hud"})
 
     def _html_overlay_option_toggle(self, key, requested_value=None):
+        if key == "companion_motion":
+            key = companions.display_key(self.config, key)
         allowed = {
             "overlay_mouse_passthrough", "hud_compact_mode",
             "rebuy_warnings_enabled",
@@ -759,6 +764,22 @@ class HtmlOverlayStudioMixin:
         return True
 
     def _html_overlay_settings_save(self, payload):
+        payload = dict(payload)
+        selected = companions.identity(self.config)
+        for key, choices in {
+            "companion_size": companions.DISPLAY_SIZES[selected],
+            "companion_accent": EYE_COLORS,
+            "companion_liveliness": LIVELINESS,
+            "companion_focus": ("off", "tracking", "expressive"),
+        }.items():
+            if key not in payload:
+                continue
+            value = _integer(payload[key], 0) if key == "companion_size" else payload[key]
+            if value not in choices:
+                return False
+            payload[companions.display_key(self.config, key)] = value
+            if key == "companion_size":
+                payload.update(heartbeat_orb_size=value, aster_hud_size=value)
         hatchling_size_before = None
         if {"hatchling_look", "hatchling_pet_size"} & set(payload):
             hatchling_size_before = hatchling_pet_window(self.config)
@@ -914,9 +935,15 @@ class HtmlOverlayStudioMixin:
             self.config["heartbeat_orb_size"] = size if size in ORB_SIZES else orb_size(self.config)
         if "aster_hud_size" in payload:
             size = _integer(payload["aster_hud_size"], 144)
-            self.config["aster_hud_size"] = size if size in (96, 144, 192) else 144
+            self.config["aster_hud_size"] = size if size in companions.DISPLAY_SIZES["aster"] else 144
         if "aster_hud_accent" in payload:
-            self.config["aster_hud_accent"] = payload["aster_hud_accent"] if payload["aster_hud_accent"] in ("theme", "cyan", "brass") else "theme"
+            self.config["aster_hud_accent"] = payload["aster_hud_accent"] if payload["aster_hud_accent"] in EYE_COLORS else "theme"
+        for focus_key in ("aster_hud_focus", "heartbeat_focus_movement"):
+            if focus_key in payload:
+                value = payload[focus_key]
+                self.config[focus_key] = value if value in ("off", "tracking", "expressive") else "tracking"
+        if "aster_hud_liveliness" in payload:
+            self.config["aster_hud_liveliness"] = payload["aster_hud_liveliness"] if payload["aster_hud_liveliness"] in LIVELINESS else "standard"
         if "heartbeat_eye_color" in payload:
             eye = _text(payload.get("heartbeat_eye_color"), 20).casefold()
             self.config["heartbeat_eye_color"] = eye if eye in EYE_COLORS else "theme"

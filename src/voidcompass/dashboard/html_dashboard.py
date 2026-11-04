@@ -37,6 +37,7 @@ from voidcompass.exploration.explorer_decision_deck import (
 )
 from voidcompass.core import themes
 from voidcompass.core.watcher_retirement import written_log
+from voidcompass.core import companions
 from voidcompass.core.version import APP_VERSION
 from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_material_catalogue, SURFACE_MINING_NEW, location_index
 from voidcompass.mining.rhino_intelligence import ground_intelligence, rhino_forecast, rhino_hint
@@ -827,7 +828,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         from collections import Counter
         from voidcompass.overlays.heartbeat_hud import _memory_path, frame_rate as heartbeat_frame_rate
         from voidcompass.core import companions
-        from voidcompass.overlays import aster_lore
+        from voidcompass.overlays import aster_lore, aster_name
         heartbeat = getattr(self, "heartbeat_hud", None)
         mind = getattr(heartbeat, "mind", None)
         if mind is None:
@@ -842,6 +843,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             kind, heading = watcher_mind.thought_heading(row[1], row[2])
             if getattr(mind, "identity", "watcher") == "aster":
                 kind, heading = aster_lore.heading(row[2]) if row[1] == "aster_lore" else ("reply" if row[1] == "talk" else "", "OFFICER ON WATCH")
+                if str(row[1]).startswith("aster_name_"):
+                    kind, heading = "memory", aster_name.heading(row[1])
             log.append({"at": float(row[0] or 0), "topic": _text(row[1], 40), "text": _text(row[2], 600),
                         "mood": watcher_mind.MOODS.get(str(row[1]), ""), "kind": kind, "heading": heading})
         topics = Counter(
@@ -877,7 +880,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "frame_rate": heartbeat_frame_rate(self.config),
             "renderer_logging": self.config.get("watcher_renderer_logging") is True,
             "heartbeat": {key: heartbeat_model[key] for key in (
-                "state", "status", "stalled", "status_seq", "events", "orb", "vitals", "personality", "memory", "activity",
+                "state", "status", "stalled", "status_seq", "events", "orb", "vitals", "personality", "memory", "activity", "overlays", "thought",
             ) if key in heartbeat_model},
             "thoughts": int(memory.get("thoughts") or 0),
             "sessions": sessions,
@@ -909,7 +912,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
 
     def _html_watcher_deeper(self, mind):
         if getattr(mind, "identity", "watcher") == "aster":
-            return {"memories": mind.memories_page(), "answers": [], "dreams": [], "met": [], "question": None}
+            return {"memories": mind.memories_page(), "answers": [], "dreams": [], "met": [],
+                    "question": mind.pending_question(),
+                    "hotkeys": [_text(self.config.get(f"overlay_hotkey_watcher_answer_{index}"), 30) for index in (1, 2, 3)]}
         from voidcompass.overlays import watcher_deeper, watcher_places, watcher_questions
         memory = mind.memory
         answers = []
@@ -2344,7 +2349,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
     def _html_settings_workspace(self):
         hotkeys = [
             {
-                "action": action, "key": key, "label": label,
+                "action": action, "key": key, "label": label.replace("The Watcher", companions.name(self.config)) if action.startswith("watcher_") else (companions.name(self.config) if attr == "heartbeat_hud" else label),
                 "value": _text(self.config.get(key), 80),
                 "default": _text(DEFAULT_OVERLAY_HOTKEYS.get(key), 80),
                 # 5.7.3: the page shows them in groups (overlays, the Watcher, music...).
@@ -2951,6 +2956,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 page_layouts[_text(page, 40).casefold()] = clean_containers
         return {
             "app": {"renderer": "html-command-deck", "platform": "windows"},
+            "companion": {"identity": companions.identity(self.config), "name": companions.name(self.config)},
             "update": {
                 "checked": bool(release_update.get("checked")),
                 "checking": bool(release_update.get("checking")),

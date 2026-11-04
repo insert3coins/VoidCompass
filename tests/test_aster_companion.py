@@ -6,6 +6,7 @@ from pathlib import Path
 import random
 import tempfile
 import threading
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -101,9 +102,43 @@ class AsterMindTests(unittest.TestCase):
     def test_restraint_and_frequency_are_independent(self):
         self.config.update(heartbeat_thoughts="off", aster_thoughts="chatty", aster_humour="off")
         self.assertIsNotNone(self.mind.consider("quiet", force=True))
-        self.assertEqual(self.mind.thought["text"], aster_lines.EVENTS["quiet"][0])
+        self.assertIn(self.mind.thought["text"], aster_lines.RESTRAINED_EVENTS["quiet"])
         self.config["aster_thoughts"] = "off"
         self.assertIsNone(self.mind.consider("quiet", force=True))
+
+    def test_minor_remarks_exhaust_the_bank_then_keep_quiet(self):
+        heard = []
+        for _ in aster_lines.EVENTS['quiet']:
+            heard.append(self.mind.consider('quiet', force=True)['text'])
+            self.clock.now += 600
+        self.assertEqual(len(heard), len(set(heard)))
+        self.assertIsNone(self.mind.consider('quiet', force=True))
+        self.clock.now += 3 * 86400 + 1
+        self.assertIsNotNone(self.mind.consider('quiet', force=True))
+        # Necessary warnings still speak even when every wording has been used.
+        for _ in range(len(aster_lines.EVENTS['danger']) + 1):
+            self.assertIsNotNone(self.mind.consider('danger', force=True))
+            self.clock.now += 1
+
+    def test_old_headlines_and_idle_topics_do_not_keep_returning(self):
+        self.assertIsNotNone(self.mind.consider('idle_galnet', {'headline': 'An old report'}, force=True))
+        self.clock.now += 3600
+        self.assertIsNone(self.mind.consider('idle_galnet', {'headline': 'An old report'}, force=True))
+        self.assertIsNotNone(self.mind.consider('idle_galnet', {'headline': 'A different report'}, force=True))
+        self.assertIsNotNone(self.mind.consider('idle_self', force=True))
+        self.clock.now += 1200
+        self.assertIsNone(self.mind.consider('idle_self'))
+
+    def test_command_wording_rotates_and_survives_restart(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'aster_memory.json'
+            mind = AsterMind(path, self.config, clock=self.clock, rng=random.Random(3))
+            first = watcher_copilot.reply('music_next', mind.random)
+            mind.save()
+            resumed = AsterMind(path, self.config, clock=self.clock, rng=random.Random(3))
+            cycle = [first] + [watcher_copilot.reply('music_next', resumed.random) for _ in range(len(aster_lines.COMMANDS['music_next']) - 1)]
+            self.assertEqual(len(cycle), len(set(cycle)))
+            self.assertNotEqual(watcher_copilot.reply('music_next', resumed.random), cycle[-1])
         self.assertTrue(self.mind.talk("Hello Aster"), "direct replies work with idle thoughts disabled")
 
     def test_separate_files_survive_switch_and_inactive_hours_do_not_grow(self):
@@ -162,7 +197,9 @@ class AsterMindTests(unittest.TestCase):
         hud.config, hud.mind = self.config, self.mind
         hud._mind_path = _memory_path(self.config)
         hud._redraw = Mock()
+        hud.sync_html_window = Mock()
         hud.apply_settings()
+        hud.sync_html_window.assert_called_once()
         self.assertEqual(frequency(hud.mind.config), "rare")
         self.assertIsNone(hud.mind.consider("quiet"))
 
@@ -206,6 +243,7 @@ class SwitchTests(unittest.TestCase):
         token = (get_active_profile(deck.config), "watcher", 0)
         deck._watcher_listen_heard("hello", token)
         self.assertTrue(deck._companion_switch("aster"))
+        self.assertEqual(deck.config['aster_hud_size'], deck.config['heartbeat_orb_size'])
         mind = Mock()
         deck.heartbeat_hud = SimpleNamespace(mind=mind)
         deck.posted()
@@ -273,7 +311,7 @@ class DualVoiceAssetsTests(unittest.TestCase):
         self.assertFalse(voice_assets.engine_exe(self.base).exists())
 
     def test_local_pair_is_adopted_after_checking_and_cancel_never_receipts(self):
-        folder = self.base / "models/jarvis"; folder.mkdir(parents=True)
+        folder = voice_assets.model_path(self.base, "aster").parent; folder.mkdir(parents=True)
         for row in self.aster:
             (folder / row["name"]).write_bytes(self.files[row["name"]])
         self.assertEqual(self.download("aster").state()["stage"], "done")
@@ -321,8 +359,135 @@ class AsterServerAssetsTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         server = HtmlDashboardServer(root / "web/dashboard")
         self.addCleanup(server.stop)
-        for path in ("/assets/aster-companion.js", "/assets/aster-3d.js", "/galactic_map/vendor/three.module.min.js", "/galactic_map/vendor/three.core.min.js"):
+        for path in ("/assets/aster-companion.js", "/assets/aster-3d.js", "/assets/companion-caption.js", "/galactic_map/vendor/three.module.min.js", "/galactic_map/vendor/three.core.min.js"):
             with self.subTest(path=path), urlopen(server.origin + path, timeout=5) as response:
                 self.assertEqual(response.status, 200)
                 self.assertIn("javascript", response.headers["Content-Type"])
                 self.assertGreater(len(response.read()), 100)
+
+
+class CompanionDisplayFixTests(unittest.TestCase):
+    def test_selected_settings_identity_and_model_manifest_match_current_files(self):
+        settings = companions.settings({"companion_identity": "watcher"}, "aster")
+        self.assertEqual(companions.identity(settings), "aster")
+        self.assertEqual(dict(settings)["companion_identity"], "aster")
+        root = Path(__file__).resolve().parents[1]
+        self.assertTrue(voice_assets.ASTER_MODEL_URL.endswith("models/jarvis/onnx/"))
+        self.assertEqual(voice_assets.model_path(root, "aster").parent, root / "models/jarvis/onnx")
+        for row in voice_assets.ASTER_MODEL_FILES:
+            path = root / "models/jarvis/onnx" / row["name"]
+            self.assertEqual(len(row["sha256"]), 64)
+            self.assertEqual(path.stat().st_size, row["size"])
+            self.assertEqual(voice_assets.sha256_of(path), row["sha256"])
+        self.assertEqual(voice_assets._receipt(root, "aster"), root / "models/jarvis/installed.json")
+
+    def test_studio_controls_save_to_active_companion_and_resize_live_window(self):
+        from tests.test_heartbeat_orb import _Studio
+        studio = _Studio()
+        studio.config.update(companion_identity="aster", aster_hud_size=144, aster_hud_liveliness="standard")
+        self.assertTrue(studio._html_overlay_settings_save({"companion_size": "192", "companion_accent": "brass", "companion_liveliness": "alive", "companion_focus": "expressive"}))
+        self.assertEqual(studio.config["aster_hud_size"], 192)
+        self.assertEqual(studio.config["heartbeat_orb_size"], 192)
+        self.assertEqual(studio.config["aster_hud_accent"], "brass")
+        self.assertEqual(studio.config["aster_hud_liveliness"], "alive")
+        self.assertIn("aster_hud_liveliness", config.PROFILE_TEXT_SETTINGS)
+        self.assertEqual(studio.config["aster_hud_focus"], "expressive")
+        self.assertFalse(studio._html_overlay_settings_save({"companion_size": "65", "companion_focus": "wandering"}))
+        self.assertTrue(studio._html_overlay_option_toggle("companion_motion", False))
+        self.assertFalse(studio.config["aster_hud_motion"])
+        studio.config["companion_identity"] = "watcher"
+        self.assertTrue(studio._html_overlay_settings_save({"companion_size": "72", "companion_accent": "hal", "companion_liveliness": "calm", "companion_focus": "off"}))
+        self.assertEqual(studio.config["heartbeat_orb_size"], 72)
+        self.assertEqual(studio.config["aster_hud_size"], 72)
+        self.assertEqual(companions.display_options(studio.config)["companion_size"], 72)
+        self.assertEqual(studio.config["aster_hud_liveliness"], "alive")
+        self.assertEqual(studio.config["aster_hud_focus"], "expressive")
+        self.assertEqual(studio.config["heartbeat_focus_movement"], "off")
+        self.assertEqual(companions.display_options(studio.config)["companion_focus"], "off")
+        for setting in ("aster_hud_focus", "heartbeat_focus_movement"):
+            self.assertIn(setting, config.PROFILE_TEXT_SETTINGS)
+
+    def test_each_companion_supports_every_shared_size_and_accent(self):
+        from tests.test_heartbeat_orb import _Studio, EYE_COLORS
+        for identity in companions.IDENTITIES:
+            studio = _Studio()
+            studio.config["companion_identity"] = identity
+            for size in (54, 72, 96, 144, 192, 256):
+                self.assertTrue(studio._html_overlay_settings_save({"companion_size": str(size)}))
+                self.assertEqual(companions.display_size(studio.config), size)
+            for accent in EYE_COLORS:
+                self.assertTrue(studio._html_overlay_settings_save({"companion_accent": accent}))
+                self.assertEqual(companions.display_options(studio.config)["companion_accent"], accent)
+
+    def test_replacement_manifest_restarts_an_already_warm_aster_engine(self):
+        settings = {"companion_identity": "aster"}
+        speaker = watcher_voice.WatcherSpeaker(settings=lambda: settings, player=lambda path: None)
+        first, second = Mock(), Mock()
+        first.poll.return_value = second.poll.return_value = None
+        with patch.object(voice_assets, "installed", return_value=True), patch.object(watcher_voice.subprocess, "Popen", side_effect=[first, second]) as popen:
+            self.assertIs(speaker._ensure_engine(), first)
+            changed = tuple(dict(row, sha256="f" * 64) for row in voice_assets.ASTER_MODEL_FILES)
+            with patch.object(voice_assets, "ASTER_MODEL_FILES", changed):
+                self.assertIs(speaker._ensure_engine(), second)
+            first.kill.assert_called_once()
+            self.assertTrue(popen.call_args.args[0][2].endswith("en_GB-jarvis-medium.onnx"))
+        speaker.close()
+
+
+class SpokenCaptionTests(unittest.TestCase):
+    def setUp(self):
+        from voidcompass.core.application_runtime import ApplicationRuntime
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        root = ApplicationRuntime()
+        self.addCleanup(root.close)
+        patcher = patch('voidcompass.overlays.heartbeat_hud._memory_path', return_value=Path(folder.name) / 'aster_memory.json')
+        patcher.start(); self.addCleanup(patcher.stop)
+        self.hud = HeartbeatHUD(root, {'companion_identity': 'aster'})
+        self.addCleanup(self.hud.destroy)
+        self.clock = Clock()
+        self.hud.mind.clock = self.clock
+        self.hud.mind.voice_active = True
+        self.states = {}
+        self.accepted = []
+        def say(words, key, **kwargs):
+            self.states[key] = 'queued'; self.accepted.append(key); return True
+        self.hud.voice_listener = say
+        self.hud.voice_status_listener = lambda key: self.states.get(key, 'unknown')
+
+    def utter(self, words):
+        return self.hud.mind._utter('talk', words, words, self.clock())['id']
+
+    def test_caption_waits_through_loading_playback_and_following_queued_lines(self):
+        first = self.utter('First report.')
+        self.assertEqual(self.hud._thought_payload()['voice_state'], 'queued')
+        self.clock.now += 1000
+        self.assertEqual(self.hud._thought_payload()['id'], first, 'queued speech outlives the ordinary text timeout')
+        self.states[first] = 'playing'
+        second = self.utter('A longer second report.')
+        self.assertEqual(self.hud._thought_payload()['id'], first)
+        self.assertEqual(self.accepted, [first, second])
+        self.states.update({first: 'finished', second: 'preparing'})
+        self.assertEqual(self.hud._thought_payload()['id'], first, 'keep the old caption through the speech pause')
+        self.states[second] = 'playing'
+        self.clock.now += 1000
+        payload = self.hud._thought_payload()
+        self.assertEqual(payload['id'], second)
+        self.assertTrue(payload['voice_full'])
+        self.assertEqual(self.accepted, [first, second], 'polling never queues a line twice')
+        self.states[second] = 'finished'
+        ended = time.monotonic()
+        with patch('voidcompass.overlays.heartbeat_hud.time.monotonic', return_value=ended):
+            self.assertEqual(self.hud._thought_payload()['id'], second)
+        with patch('voidcompass.overlays.heartbeat_hud.time.monotonic', return_value=ended + 1000):
+            self.assertIsNone(self.hud._thought_payload())
+
+    def test_failed_or_cancelled_speech_falls_back_to_the_written_reply(self):
+        key = self.utter('The written reply remains available.')
+        self.hud._thought_payload()
+        for state in ('failed', 'cancelled'):
+            self.states[key] = state
+            payload = self.hud._thought_payload()
+            self.assertFalse(payload['voice'])
+            self.assertEqual(payload['text'], 'The written reply remains available.')
+            self.assertEqual(payload['voice_state'], state)

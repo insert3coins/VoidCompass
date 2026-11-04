@@ -1643,6 +1643,17 @@ class MainDashboard(
         if (getattr(self, "current_in_srv", False) or getattr(self, "current_in_fighter", False)) and vehicle:
             context["vehicle"] = vehicle
         context["cargo_capacity"] = int(getattr(self, "cargo_capacity", 0) or 0)
+        heartbeat = getattr(self, "heartbeat_hud", None)
+        if getattr(heartbeat, "_status_serial", 0):
+            from voidcompass.overlays.heartbeat_hud import _STALL_AFTER_S
+            context["port"] = {
+                "live": 0 <= time.time() - getattr(heartbeat, "_last_pulse_ts", 0) <= _STALL_AFTER_S,
+                "docked": bool(getattr(self, "current_docked", False)),
+                "station": str(getattr(self, "current_station_name", "") or ""),
+                "carrier": str(getattr(self, "current_station_type", "") or "").casefold() == "fleetcarrier",
+                "commander": str(self.config.get("active_commander_name") or ""),
+                "fid": str(self.config.get("active_commander_fid") or ""),
+            }
         return context
 
     def _watcher_sign_off(self):

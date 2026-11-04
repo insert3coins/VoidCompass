@@ -33,16 +33,16 @@ MODEL_FILES = (
 )
 DOWNLOAD_BYTES = ENGINE["size"] + sum(row["size"] for row in MODEL_FILES)
 ASTER_MODEL_FILES = (
-    {"name": "en_US-Jarvis_Real-medium.onnx", "sha256": "b947bfec049798c9df91f6010625db527dcb5ad00af011fa05036001df6eec2d", "size": 63516050},
-    {"name": "en_US-Jarvis_Real-medium.onnx.json", "sha256": "53d944f306bab1655dbdb2bae22919e5b702781caa112f4430eeeebbcbf2f537", "size": 7611},
+    {"name": "en_GB-jarvis-medium.onnx", "sha256": "0b222b43cb882aac25c4eb1b648c80fd855de423351dc778c01102e578c3a64d", "size": 63511037},
+    {"name": "en_GB-jarvis-medium.onnx.json", "sha256": "8e189c86e055b672a3380cc68e1c74fe88206b1b0b5c5b1ac791b5511921be90", "size": 5068},
 )
-ASTER_MODEL_URL = "https://raw.githubusercontent.com/insert3coins/VoidCompass/master/models/jarvis/"
-ASTER_NOTICE = "Aster uses the locally supplied Jarvis_Real Piper model. Its source voice and model rights are separate from Aster's original character and story."
+ASTER_MODEL_URL = "https://raw.githubusercontent.com/insert3coins/VoidCompass/master/models/jarvis/onnx/"
+ASTER_NOTICE = "Aster uses praharshbhatt's British-English JARVIS Piper voice. Its model card limits use to personal, non-commercial purposes. The source voice is separate from Aster's original character and story."
 
 
 def manifest(model="watcher"):
     if model == "aster":
-        return "jarvis", ASTER_MODEL_FILES, ASTER_MODEL_URL
+        return "jarvis/onnx", ASTER_MODEL_FILES, ASTER_MODEL_URL
     return "hal9000", MODEL_FILES, MODEL_URL
 
 
@@ -84,7 +84,7 @@ def sha256_of(path) -> str:
 
 
 def _receipt(base=None, model="watcher") -> Path:
-    return model_path(base, model).parent / "installed.json" if model == "aster" else voice_dir(base) / "installed.json"
+    return voice_dir(base) / "jarvis" / "installed.json" if model == "aster" else voice_dir(base) / "installed.json"
 
 
 def installed(base=None, model="watcher") -> bool:
@@ -93,6 +93,8 @@ def installed(base=None, model="watcher") -> bool:
     try:
         receipt = json.loads(_receipt(base, model).read_text(encoding="utf-8"))
     except (OSError, ValueError):
+        return False
+    if not isinstance(receipt, dict):
         return False
     if receipt.get("engine") != ENGINE["sha256"]:
         return False

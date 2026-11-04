@@ -491,6 +491,8 @@ class DashboardGamesMixin:
             return
         self._hatchling_moment_at = moment.get("at")
         fields = {key: value for key, value in moment.items() if key not in {"kind", "at"}}
+        fields["_moment_at"] = moment.get("at")
+        fields["_moment_id"] = f"{pet.get('born')}:{moment.get('kind')}:{moment.get('at')}"
         self._hatchling_tell_watcher(f"hatchling_{moment.get('kind')}", {"name": pet.get("name") or "", **fields})
 
     def _hatchling_tell_watcher(self, kind, fields):

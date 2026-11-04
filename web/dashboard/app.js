@@ -15,6 +15,7 @@ import {handleMiningClick, handleMiningInput, handleMiningSubmit, renderMining, 
 import {handleExpeditionsChange, handleExpeditionsClick, handleExpeditionsInput, handleExpeditionsSubmit, renderExpeditions, resetExpeditions} from "./expeditions.js";
 import {handlePlanetaryChange, handlePlanetaryClick, handlePlanetaryInput, handlePlanetarySubmit, renderPlanetary, resetPlanetary, setPlanetaryView} from "./planetary.js";
 import {renderWatcher} from "./watcher.js";
+import {renderCompanionChrome, renderCompanionStudio} from "./companion-ui.js";
 import {renderPostcards} from "./postcards.js";
 import {renderScreenshots} from "./screenshots.js";
 import {renderCapsules} from "./capsules.js";
@@ -1966,6 +1967,7 @@ function queueStudioOpacity(value, flush = false) {
 }
 
 function updateStudioOptionControls(options, groundTarget = {}) {
+  options = renderCompanionStudio(options);
   document.querySelectorAll("[data-overlay-option]").forEach((input) => {
     if (document.activeElement !== input) input.checked = Boolean(options[input.dataset.overlayOption]);
   });
@@ -3144,7 +3146,7 @@ function settingsSectionBody(id, data) {
     const names = chosen && !mics.includes(chosen) ? [...mics, chosen] : mics;
     const choice = (key, selected, options, disabled = false) => `<div class="voice-choices" role="group">${options.map(([id, title, detail]) => `<button type="button" data-voice-choice="${key}" data-value="${escapeHtml(id)}" aria-pressed="${String(selected) === String(id)}"${disabled ? " disabled" : ""}><b>${escapeHtml(title)}</b><small>${escapeHtml(detail || "")}</small></button>`).join("")}</div>`;
     const models = listen.models || [];
-    const keyNote = !listen.hotkey ? "Set a talk key in Hotkeys → The Watcher."
+    const keyNote = !listen.hotkey ? "Set a talk key in Hotkeys → your companion."
       : listen.hotkeys_on === false ? "Enable system-wide hotkeys in Hotkeys." : "Use your keyboard shortcut or controller talk button.";
     const hearing = settingGroup("TALK BY VOICE",
       settingSwitch({key: "watcher_listen_enabled", label: "Talk to the Watcher", detail: "Speak a command or ask a question. Release the key to send it.", checked: listen.enabled})
@@ -3217,7 +3219,7 @@ function settingsSectionBody(id, data) {
     const head = `<div class="hotkey-head" aria-hidden="true"><span>SHORTCUT</span><span>KEYBOARD</span><span>CONTROLLER</span></div>`;
     const groups = HOTKEY_GROUPS.map(([key, title]) => {
       const rows = hotkeys.filter((row) => (row.group || "controls") === key);
-      return rows.length ? settingGroup(title, head + rows.map(shortcut).join("")) : "";
+      return rows.length ? settingGroup(key === "watcher" ? (model.companion?.name || "The Watcher").toUpperCase() : title, head + rows.map(shortcut).join("")) : "";
     }).join("");
     return input + toolbar + groups;
   }
@@ -3896,6 +3898,7 @@ function renderWorkspace(state) {
 }
 
 function renderDashboard(state) {
+  renderCompanionChrome(state.companion || (state.workspace?.page === "watcher" ? state.workspace.data : null) || state.overlay_studio?.options || {});
   const nextProfileKey = model.profile?.key || "default";
   if (nextProfileKey !== profileKey) {
     cancelPageLayout();

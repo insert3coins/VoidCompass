@@ -999,7 +999,7 @@ class WatcherMind:
         if pending is None or pending["said"] != words:
             return False
         self._uplink = None
-        self._reply(watcher_copilot.plain_answer(lines) or "The uplink came back empty.")
+        self._reply(watcher_copilot.plain_answer(lines) or watcher_copilot.reply("uplink_empty", self.random))
         return True
 
     def _reply(self, words):

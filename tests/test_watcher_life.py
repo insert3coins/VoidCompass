@@ -51,9 +51,9 @@ class WatcherEventTests(unittest.TestCase):
         self.assertIn("heartbeat_idle_motion", config_module.PROFILE_BOOL_SETTINGS)
         html = (WEB / "dashboard" / "index.html").read_text(encoding="utf-8")
         section = re.search(r'<section data-studio-settings="heartbeat_hud">(.*?)</section>', html, re.S).group(1)
-        lively = re.search(r'data-studio-setting="heartbeat_liveliness">(.*?)</select>', section, re.S).group(1)
+        lively = re.search(r'data-studio-setting="companion_liveliness">(.*?)</select>', section, re.S).group(1)
         self.assertEqual(tuple(re.findall(r'value="([a-z]+)"', lively)), LIVELINESS)
-        self.assertIn('data-overlay-option="heartbeat_idle_motion"', section)
+        self.assertIn('data-overlay-option="companion_motion"', section)
         for page in ("dashboard/index.html", "heartbeat/index.html"):
             source = (WEB / page).read_text(encoding="utf-8")
             self.assertLess(source.index("heartbeat-life.js"), source.index("heartbeat-orb.js"))

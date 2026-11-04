@@ -118,6 +118,26 @@ class SpeechQueueTests(unittest.TestCase):
         self.assertEqual([sample for sample, _ in self.starts()], [2000])
         self.assertEqual(self.speaker.live()["key"], 2)
 
+    def test_caption_status_distinguishes_synthesis_queue_playback_and_cancellation(self):
+        self.release.clear()
+        self.speaker.say('Loading.', 1)
+        self.assertTrue(self.synthesizing.wait(2))
+        self.assertEqual(self.speaker.status(1), 'preparing')
+        self.speaker.say('Waiting.', 2)
+        self.assertEqual(self.speaker.status(2), 'queued')
+        self.release.set()
+        self.wait_for(lambda: len(self.starts()) == 1)
+        self.assertEqual(self.speaker.status(1), 'playing')
+        self.wait_for(lambda: len(self.changed) >= 2)
+        self.assertEqual(self.speaker.status(1), 'finished')
+        self.speaker.stop()
+        self.assertEqual(self.speaker.status(2), 'cancelled')
+
+    def test_unavailable_engine_releases_the_caption_wait(self):
+        self.speaker._ensure_engine = lambda: None
+        self.speaker.say('Text fallback.', 10)
+        self.wait_for(lambda: self.speaker.status(10) == 'failed', timeout=.5)
+
     def test_talk_microphone_clears_queue_during_the_pause(self):
         self.speaker.say("First.", 1)
         self.wait_for(lambda: len(self.changed) == 1)

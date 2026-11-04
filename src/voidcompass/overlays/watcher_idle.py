@@ -173,6 +173,11 @@ class Surroundings:
                 except (TypeError, ValueError):
                     pass
             self.docked = bool(raw.get("Docked")) if event == "Location" else False
+            if event == "Location":
+                self.station = str(raw.get("StationName") or "") if self.docked else ""
+                self.carrier = self.docked and str(raw.get("StationType") or "").casefold() == "fleetcarrier"
+                if self.docked:
+                    self.supercruise = self.taxi = False
             self.landed_body = self.field = ""
         elif event == "Scan":
             if raw.get("StarType") and not raw.get("DistanceFromArrivalLS"):

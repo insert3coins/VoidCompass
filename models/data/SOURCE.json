@@ -1,0 +1,34 @@
+{
+  "character": "Commander Data",
+  "source_repository": "https://github.com/dividebysandwich/piper-voice-models",
+  "source_revision": "b9c5f3d1d7b6d0e0f5647ae31dbf13b13b0d3a6f",
+  "source_directory": "Data",
+  "downloaded_on": "2026-11-04",
+  "status": "archived_for_future_evaluation",
+  "files": [
+    {
+      "file": "en_US-data_7024-medium.onnx",
+      "upstream_path": "Data/en_US-data_7024-medium.onnx",
+      "bytes": 63516050,
+      "sha256": "b3b4b9578a0bc0bbd21385a21f9c89d57be90bdf31087e73378a3a232002a76f",
+      "git_blob_sha1": "e61ce3c31552b76fb36004909376456e43f0f688",
+      "source_url": "https://raw.githubusercontent.com/dividebysandwich/piper-voice-models/b9c5f3d1d7b6d0e0f5647ae31dbf13b13b0d3a6f/Data/en_US-data_7024-medium.onnx"
+    },
+    {
+      "file": "en_US-data_7024-medium.onnx.json",
+      "upstream_path": "Data/en_US-data_7024-medium.onnx.json",
+      "bytes": 4846,
+      "sha256": "2270937a50fb2b1cb3c79b5227abe56b060ee680cb2c3ba3b52ef366be937304",
+      "git_blob_sha1": "ac4e579ea07581a75e66f68032fe88f39bda88b6",
+      "source_url": "https://raw.githubusercontent.com/dividebysandwich/piper-voice-models/b9c5f3d1d7b6d0e0f5647ae31dbf13b13b0d3a6f/Data/en_US-data_7024-medium.onnx.json"
+    },
+    {
+      "file": "UPSTREAM_README.md",
+      "upstream_path": "README.md",
+      "bytes": 1109,
+      "sha256": "7c3267b46ff63f6dd70556ed3681abe7a3ec3fef7f99dc63a080aed8adc639e3",
+      "git_blob_sha1": "972d75c03555747caf823ab4e0180a2f3ebca9e8",
+      "source_url": "https://raw.githubusercontent.com/dividebysandwich/piper-voice-models/b9c5f3d1d7b6d0e0f5647ae31dbf13b13b0d3a6f/README.md"
+    }
+  ]
+}

@@ -22,7 +22,7 @@ from voidcompass.core.platform_support import (
     open_path,
     repaired_screenshot_path,
 )
-from voidcompass.core import themes
+from voidcompass.core import themes, companions
 from voidcompass.core.config import get_active_profile
 from voidcompass.dashboard.dashboard_postcard_studio_mixin import DashboardPostcardStudioMixin
 from voidcompass.overlays import postcard_themes
@@ -36,7 +36,7 @@ from voidcompass.overlays.postcard_picture import (
 _PREVIEW_LOCK = threading.Lock()
 from voidcompass.overlays.postcard_restore import saved_at
 from voidcompass.exploration.galactic_regions import find_region
-from voidcompass.overlays import watcher_mind
+from voidcompass.overlays import watcher_mind, aster_postcards
 from voidcompass.overlays.postcards import (
     STYLES as POSTCARD_STYLES,
     THUMBNAIL_WIDTH,
@@ -221,19 +221,20 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             body_name=getattr(self, "current_body_name", "") or "", serial=self._postcard_serial,
             region=region or "", facts=postcard_facts(item, from_sol), kind=body_kind(item),
         )
-        options = postcard_options(self.config)
+        note_config = dict(self.config)
+        options = postcard_options(note_config)
         # The note reads the facts (a first discovery, a rare world), so it is
         # written before the facts come off the card.
-        card["note"] = self._postcard_watcher_note(card, from_sol, state) if options["note"] else ""
+        card["note"] = self._postcard_companion_note(card, from_sol, state, config=note_config) if options["note"] else ""
         if options["note_mode"] == "own" and options["note_text"]:
             card["note"], card["signed"] = options["note_text"], self._postcard_signature(options)
-        # The Watcher keeps every postcard (5.5.3.7).
+        # Keep the card with the companion on watch when it was written.
         mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
-        if mind is not None and hasattr(mind, "keep_postcard"):
+        if mind is not None and getattr(mind, "identity", "watcher") == companions.identity(note_config) and hasattr(mind, "keep_postcard"):
             try:
                 mind.keep_postcard(card)
             except Exception as exc:
-                logging.debug("The Watcher didn't keep the postcard: %s", exc)
+                logging.debug("The companion didn't keep the postcard: %s", exc)
         if not options["facts"]:
             card["facts"] = []
         if not options["doing"]:
@@ -279,19 +280,38 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
         return None
 
     def _postcard_watcher_note(self, card, from_sol, state):
-        """The Watcher's note for the card, in its nature's voice; none when
-        its overlay or its thoughts are off."""
-        if not self.config.get("heartbeat_overlay_enabled", True):
+        """Compatibility entry point for the selected companion's note."""
+        return self._postcard_companion_note(card, from_sol, state)
+
+    def _postcard_companion_note(self, card, from_sol, state, *, config=None, preview=False):
+        """Write and sign together; previews never consume a real rotation."""
+        config = dict(self.config if config is None else config)
+        if not config.get("heartbeat_overlay_enabled", True):
             return ""
-        if watcher_mind.frequency(self.config) == "off":
+        if watcher_mind.frequency(companions.settings(config)) == "off":
             return ""
-        recent = getattr(self, "_postcard_recent_notes", None)
-        if recent is None:
-            recent = self._postcard_recent_notes = []
-        note = postcard_note(card, watcher_mind.personality(self.config), from_sol, state, recent=recent)
+        import random
+        selected = companions.identity(config)
+        histories = getattr(self, "_postcard_companion_recent_notes", None)
+        if histories is None:
+            histories = self._postcard_companion_recent_notes = {}
+        recent = [] if preview else histories.setdefault(selected, [])
+        mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+        rng = random.Random(7) if preview else None
+        if selected == "aster":
+            if not preview and getattr(mind, "identity", None) == selected:
+                rng = mind.random
+            note = aster_postcards.postcard_note(card, restrained=config.get("aster_humour", "dry") == "off",
+                                                  from_sol=from_sol, state=state, rng=rng, recent=recent)
+            signature = aster_postcards.SIGNATURE
+        else:
+            note = postcard_note(card, watcher_mind.personality(config), from_sol, state, rng=rng, recent=recent)
+            signature = "the Watcher"
         if note:
-            recent.append(note)
-            del recent[:-12]
+            card["signed"] = signature
+            if not preview:
+                recent.append(note)
+                del recent[:-12]
         return note
 
     def _postcard_develop(self, card, folder, wants_photo, captions, taken_at, sleep=time.sleep,
@@ -482,6 +502,7 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
         return {
             "folder": folder,
             "saving": bool(self.config.get("screenshot_postcards", False)),
+            "note_author": companions.name(self.config),
             "rows": cache[2],
             # Everything about postcards, in one place (the overlay's own
             # options stay in Overlay Studio).
@@ -734,7 +755,9 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             "t" + format(zlib.crc32(repr((options["theme"], options["note_mode"], options["note_text"],
                                           options["signature"])).encode("utf-8")), "08x"),
             "g" + format(zlib.crc32(options["greeting"].encode("utf-8")), "08x"), int(options["postmark"]),
-            watcher_mind.personality(self.config), palette.get("accent", ""), palette.get("orange", ""),
+            companions.identity(self.config), str(self.config.get("aster_humour", "dry")),
+            watcher_mind.frequency(companions.settings(self.config)), int(bool(self.config.get("heartbeat_overlay_enabled", True))),
+            self._postcard_signature(options), watcher_mind.personality(self.config), palette.get("accent", ""), palette.get("orange", ""),
             palette.get("text", ""))).replace("#", "")
 
     def _postcard_preview_picture(self):
@@ -786,21 +809,22 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
         if cached and cached[0] == key:
             return cached[1]
         from voidcompass.overlays.postcard_picture import render_postcard
-        options = postcard_options(self._postcard_preview_config())
+        preview_config = self._postcard_preview_config()
+        options = postcard_options(preview_config)
         sample = {"planet_class": "Water world", "terraformable": True, "landable": True, "gravity_g": 1.02,
                   "was_discovered": False}
         card = postcard_card(
             {"timestamp": "2026-10-11T20:14:00Z", "System": "Hatchooe", "Body": "Hatchooe AB 3",
              "Latitude": 12.3457, "Longitude": -45.678},
             state="LANDED", region="Outer Scutum-Centaurus Arm",
-            facts=postcard_facts(sample, 57904) if options["facts"] else [], kind=body_kind(sample))
+            facts=postcard_facts(sample, 57904), kind=body_kind(sample))
         if not options["doing"]:
             card["doing"] = ""
         card["greeting"] = options["greeting"]
         if options["note"]:
-            import random
-            card["note"] = postcard_note(card, watcher_mind.personality(self.config), 57904, "LANDED",
-                                         rng=random.Random(7))
+            card["note"] = self._postcard_companion_note(card, 57904, "LANDED", config=preview_config, preview=True)
+        if not options["facts"]:
+            card["facts"] = []
         if options["note_mode"] == "own" and options["note_text"]:
             card["note"], card["signed"] = options["note_text"], self._postcard_signature(options)
         image = render_postcard(card, self._postcard_preview_picture(), dict(themes.ACTIVE_PALETTE or {}),

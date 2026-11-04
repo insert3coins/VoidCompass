@@ -55,6 +55,8 @@ body.still .hearing { animation: none; transition: none; }
 }
 body[data-thought-colour="accent"] .thought { --thought-ink: var(--accent); }
 body[data-thought-colour="red"] .thought { --thought-ink: var(--red); }
+body[data-thought-colour="cyan"] .thought { --thought-ink: #65e4ef; }
+body[data-thought-colour="brass"] .thought { --thought-ink: #e8c48c; }
 body[data-thought-size="small"] .thought { font-size: calc(10px * var(--scale, 1)); }
 body[data-thought-size="large"] .thought { font-size: calc(13.5px * var(--scale, 1)); }
 body.thought-left .thought { flex-direction: row-reverse; text-align: right; }
@@ -102,7 +104,7 @@ body.thought-left .thought-box:is([data-kind="memory"], [data-kind="afterword"],
    accent, or the bright ink when the thought itself is in the accent (or
    red). Same weight and width, so the bridge's wrapping still holds. */
 .thought-words em.noticed { font-style: inherit; color: var(--accent); }
-body:is([data-thought-colour="accent"], [data-thought-colour="red"]) .thought-words em.noticed { color: var(--thought-bright); }
+body:is([data-thought-colour="accent"], [data-thought-colour="red"], [data-thought-colour="cyan"], [data-thought-colour="brass"]) .thought-words em.noticed { color: var(--thought-bright); }
 /* As many lines as the thought takes: the window is sized for its words
    (5.5.3.5; three lines cut the long lore passages short). */
 .thought-words { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 12; -webkit-box-orient: vertical; }

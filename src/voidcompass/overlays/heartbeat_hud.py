@@ -17,6 +17,7 @@ from collections import deque
 import time
 
 from voidcompass.core.application_runtime import OverlayWindowState
+from voidcompass.core.config import get_active_profile
 from voidcompass.core import display_scale, themes, companions
 from voidcompass.overlays import overlay_chrome
 from voidcompass.core.overlay_registry import OVERLAY_SPECS, TEXT_SIZES, overlay_text_scale, text_size_choice
@@ -31,9 +32,9 @@ _HELD_THOUGHT_S = 30
 # Enough history for the orb to catch up on a burst between two polls.
 _EVENT_HISTORY = 24
 
-ORB_SIZES = (54, 72, 96)
+ORB_SIZES = companions.DISPLAY_SIZES["watcher"]
 DEFAULT_ORB_SIZE = 54
-EYE_COLORS = ("theme", "hal")
+EYE_COLORS = ("theme", "cyan", "brass", "hal")
 LIVELINESS = ("calm", "standard", "alive")
 
 # Status.json flags the Watcher's mood reads (todo-watcher-life.md).
@@ -49,18 +50,8 @@ _FLAG_INTERDICTED = 0x00800000
 
 
 def orb_size(config):
-    """The orb's window size in px, always one of ORB_SIZES."""
-    if companions.identity(config) == "aster":
-        try:
-            size = int(config.get("aster_hud_size", 144))
-        except (TypeError, ValueError):
-            size = 144
-        return size if size in (96, 144, 192) else 144
-    try:
-        size = int(float((config or {}).get("heartbeat_orb_size", DEFAULT_ORB_SIZE)))
-    except (TypeError, ValueError):
-        size = DEFAULT_ORB_SIZE
-    return size if size in ORB_SIZES else DEFAULT_ORB_SIZE
+    """The active companion's display size in design pixels."""
+    return companions.display_size(config or {})
 
 
 def liveliness(config):
@@ -218,6 +209,9 @@ class HeartbeatHUD:
         # 5.5.4: its voice. The dashboard sets the listener (it speaks the
         # words) and says whether the voice is on.
         self.voice_listener = None
+        self.voice_status_listener = None
+        self._voice_thoughts = {}
+        self._voice_caption = None
         self._spoken_id = None
         # 5.7.1: listening to you (push to talk), so the page asks /api/live at once.
         self._hearing = ''
@@ -298,7 +292,7 @@ class HeartbeatHUD:
         current = self.mind.current()
         if (current or {}).get("id") != self._thought_seen:
             changed = True
-        if changed:
+        if changed or self._voice_thoughts:
             self._redraw()
         self._schedule_tick()
 
@@ -329,6 +323,8 @@ class HeartbeatHUD:
             self._thought_seen = None
             self._shown_thought = None
             self._voiced = None
+            self._voice_thoughts = {}
+            self._voice_caption = None
             changed = getattr(self, "companion_listener", None)
             if callable(changed):
                 changed()
@@ -459,8 +455,10 @@ class HeartbeatHUD:
                     'identity': companions.identity(self.config),
                     'accent': self.config.get('aster_hud_accent', 'theme'),
                     'motion': bool(self.config.get('aster_hud_motion', True)),
+                    'focus_movement': self.config.get('aster_hud_focus' if companions.identity(self.config) == 'aster' else 'heartbeat_focus_movement', 'tracking'),
                     'working': bool(getattr(self.mind, 'talk_waiting', lambda: False)()),
-                    'liveliness': liveliness(self.config), 'idle': idle_motion(self.config),
+                    'liveliness': self.config.get('aster_hud_liveliness', 'standard') if companions.identity(self.config) == 'aster' else liveliness(self.config),
+                    'idle': idle_motion(self.config),
                     'frame_rate': frame_rate(self.config),
                     'renderer_logging': self.config.get('watcher_renderer_logging') is True,
                     # What its story has done to the eye (5.6.1).
@@ -502,15 +500,48 @@ class HeartbeatHUD:
             spoken = bool(words) and bool(said)
         except Exception:
             spoken = False
-        self._voiced = (thought['id'], words == thought['text']) if spoken else None
+        stage = getattr(self.mind, 'voice_stage', lambda: 0)()
+        full = (words == thought['text'] or thought.get('topic') in {'talk', 'relay', 'voice_found'}
+                or isinstance(stage, (int, float)) and stage >= 4)
+        self._voiced = (thought['id'], full) if spoken else None
+        if spoken and callable(getattr(self, 'voice_status_listener', None)):
+            self._voice_thoughts[thought['id']] = {'thought': dict(thought), 'full': full}
+
+    def _voice_state(self, key):
+        listener = getattr(self, 'voice_status_listener', None)
+        if callable(listener):
+            try:
+                return listener(key)
+            except Exception:
+                return 'failed'
+        return 'unknown'
+
+    def _speech_caption(self):
+        rows = getattr(self, '_voice_thoughts', {})
+        previous = getattr(self, '_voice_caption', None)
+        now = time.monotonic()
+        hold = watcher_mind.THOUGHT_SECONDS * watcher_mind.THOUGHT_HOLDS[watcher_mind.thought_style(self.config)['hold']]
+        for key, row in rows.items():
+            row['state'] = self._voice_state(key)
+            if row['state'] == 'finished':
+                row.setdefault('ended', now)
+        pending = any(row['state'] in {'queued', 'preparing', 'playing'} for row in rows.values())
+        for key, row in list(rows.items()):
+            keep_previous = pending and key == previous
+            if row['state'] not in {'queued', 'preparing', 'playing', 'finished'} or (
+                    row['state'] == 'finished' and not keep_previous and now - row['ended'] > hold):
+                rows.pop(key)
+        playing = next((key for key, row in rows.items() if row['state'] == 'playing'), None)
+        if playing is not None:
+            self._voice_caption = playing
+        elif previous not in rows:
+            self._voice_caption = next(iter(rows), None)
+        return rows.get(getattr(self, '_voice_caption', None))
 
     def _thought_payload(self):
         mind = getattr(self, 'mind', None)
         thought = mind.current() if mind is not None else None
-        self._thought_seen = (thought or {}).get('id')
-        if not thought:
-            return None
-        if thought['id'] != self._spoken_id:
+        if thought and thought['id'] != self._spoken_id:
             self._spoken_id = thought['id']
             self._shown_thought = (thought, time.monotonic())
             # A new thought: the local API's event stream hears it (5.5.7).
@@ -521,12 +552,23 @@ class HeartbeatHUD:
                 except Exception:
                     pass
             self._voice_thought(thought)
+        caption = self._speech_caption()
+        if caption:
+            thought = caption['thought']
+        self._thought_seen = (thought or {}).get('id')
+        if not thought:
+            return None
         voiced = getattr(self, '_voiced', None) or (None, False)
+        if caption:
+            voiced = (thought['id'], caption['full'])
+        voice_state = self._voice_state(thought['id'])
         return {'id': thought['id'], 'text': thought['text'], 'script': thought.get('script') or thought['text'],
+                'scope': f'{get_active_profile(self.config)}:{companions.identity(self.config)}',
                 # Said aloud (5.5.4): the page types it in time with the voice
                 # once it says whole thoughts.
-                'voice': voiced[0] == thought['id'],
+                'voice': voiced[0] == thought['id'] and voice_state not in {'failed', 'cancelled'},
                 'voice_full': voiced[0] == thought['id'] and voiced[1],
+                'voice_state': voice_state,
                 'mood': thought.get('mood') or '', 'side': self.thought_side(),
                 'kind': thought.get('kind') or '', 'heading': thought.get('heading') or '',
                 'style': watcher_mind.thought_style(self.config),
@@ -561,6 +603,9 @@ class HeartbeatHUD:
         self._check_profile()
         self.mind.config = companions.settings(self.config, 'aster') if getattr(self.mind, 'identity', 'watcher') == 'aster' else self.config
         self._redraw()
+        sync = getattr(self, 'sync_html_window', None)
+        if callable(sync):
+            sync()
 
     def apply_theme(self, palette=None):
         self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)

@@ -609,7 +609,10 @@ class WatcherTests(unittest.TestCase):
         observe(state, {"event": "MiningRefined", "Type_Localised": "Painite"}, 2 * HOUR)
         deck._hatchling_watcher()
         deck._hatchling_watcher()
-        self.assertEqual(deck.heartbeat_hud.notes, [("hatchling_toy", {"name": "Pip", "toy": "a chunk of Painite"})])
+        self.assertEqual(deck.heartbeat_hud.notes, [("hatchling_toy", {
+            "name": "Pip", "toy": "a chunk of Painite", "_moment_at": 2 * HOUR,
+            "_moment_id": f"{state['pet']['born']}:toy:{2 * HOUR}",
+        })])
 
 
 class SnapTests(unittest.TestCase):
