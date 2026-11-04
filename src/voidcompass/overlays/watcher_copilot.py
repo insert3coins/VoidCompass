@@ -1248,6 +1248,9 @@ def plain_answer(lines, limit=PLAIN_LINES):
 
 
 def reply(outcome, rng, **fields):
+    if getattr(rng, "companion_identity", "") in {"axiom", "meridian"}:
+        from voidcompass.overlays.crew_mind import command_reply
+        return command_reply(outcome, rng, fields)
     if getattr(rng, "companion_identity", "") == "aster":
         from voidcompass.overlays.aster_lines import command_reply
         own = command_reply(outcome, rng, fields)

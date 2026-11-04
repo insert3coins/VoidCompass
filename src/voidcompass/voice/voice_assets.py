@@ -19,6 +19,7 @@ import urllib.request
 import zipfile
 
 from voidcompass.core.platform_support import application_dir
+from voidcompass.core import companions
 
 ENGINE = {
     "name": "Piper engine",
@@ -38,9 +39,34 @@ ASTER_MODEL_FILES = (
 )
 ASTER_MODEL_URL = "https://raw.githubusercontent.com/insert3coins/VoidCompass/master/models/jarvis/onnx/"
 ASTER_NOTICE = "Aster uses praharshbhatt's British-English JARVIS Piper voice. Its model card limits use to personal, non-commercial purposes. The source voice is separate from Aster's original character and story."
+AXIOM_MODEL_FILES = (
+    {"name": "en_US-data_7024-medium.onnx", "sha256": "b3b4b9578a0bc0bbd21385a21f9c89d57be90bdf31087e73378a3a232002a76f", "size": 63516050},
+    {"name": "en_US-data_7024-medium.onnx.json", "sha256": "2270937a50fb2b1cb3c79b5227abe56b060ee680cb2c3ba3b52ef366be937304", "size": 4846},
+)
+MERIDIAN_MODEL_FILES = (
+    {"name": "en_US-picard_7399-medium.onnx", "sha256": "24edef8d75b26f498ffc995b933446229f527c66967514ab96b978f1e54c750c", "size": 63516050},
+    {"name": "en_US-picard_7399-medium.onnx.json", "sha256": "4d4ad126bb0089b7f48f49a8c7349a82ec92afc49fccc934b395976a6629bbce", "size": 4848},
+)
+
+
+def model_name(model):
+    return {"watcher": "HAL 9000 voice", "aster": "Aster officer voice",
+            "axiom": "Axiom voice", "meridian": "Meridian voice"}.get(model, "HAL 9000 voice")
+
+
+def notice(model):
+    if model in companions.NEW_IDENTITIES:
+        source = "Data" if model == "axiom" else "Picard"
+        return (f"{companions.NAMES[model]} uses the {source} Piper model from dividebysandwich/piper-voice-models, "
+                "trained on Star Trek Generations game dialogue. The downloaded source includes no licence or usage terms. "
+                "Source filenames and attribution are retained in models/. The voice source is separate from the companion identity.")
+    return ASTER_NOTICE if model == "aster" else RIGHTS_NOTICE
 
 
 def manifest(model="watcher"):
+    if model in companions.NEW_IDENTITIES:
+        folder, files = ("data", AXIOM_MODEL_FILES) if model == "axiom" else ("picard", MERIDIAN_MODEL_FILES)
+        return folder, files, f"https://raw.githubusercontent.com/insert3coins/VoidCompass/master/models/{folder}/"
     if model == "aster":
         return "jarvis/onnx", ASTER_MODEL_FILES, ASTER_MODEL_URL
     return "hal9000", MODEL_FILES, MODEL_URL
@@ -84,7 +110,8 @@ def sha256_of(path) -> str:
 
 
 def _receipt(base=None, model="watcher") -> Path:
-    return voice_dir(base) / "jarvis" / "installed.json" if model == "aster" else voice_dir(base) / "installed.json"
+    folder = {"aster": "jarvis", "axiom": "data", "meridian": "picard"}.get(model, "")
+    return voice_dir(base) / folder / "installed.json"
 
 
 def installed(base=None, model="watcher") -> bool:
@@ -108,7 +135,7 @@ def installed(base=None, model="watcher") -> bool:
 def _engine_installed(base=None):
     if not engine_exe(base).is_file():
         return False
-    for selected in ("watcher", "aster"):
+    for selected in companions.IDENTITIES:
         try:
             if json.loads(_receipt(base, selected).read_text(encoding="utf-8")).get("engine") == ENGINE["sha256"]:
                 return True
@@ -127,7 +154,7 @@ class VoiceDownload:
 
     def __init__(self, base=None, opener=None, model="watcher"):
         self.base = base
-        self.model = "aster" if model == "aster" else "watcher"
+        self.model = model if model in companions.IDENTITIES else "watcher"
         self._open = opener or (lambda url: urllib.request.urlopen(
             urllib.request.Request(url, headers={"User-Agent": _USER_AGENT}), timeout=30))
         self._cancel = threading.Event()
@@ -265,8 +292,7 @@ def remove(base=None, model="watcher") -> bool:
     model = model_path(base, selected).parent
     files = manifest(selected)[1]
     ok = True
-    other = "watcher" if selected == "aster" else "aster"
-    shared = () if installed(base, other) else (engine_exe(base).parent, folder / "cache")
+    shared = () if any(installed(base, other) for other in companions.IDENTITIES if other != selected) else (engine_exe(base).parent, folder / "cache")
     for target in (*shared, _receipt(base, selected), *(model / row["name"] for row in files)):
         try:
             if target.is_dir():

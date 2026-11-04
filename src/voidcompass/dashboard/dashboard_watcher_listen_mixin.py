@@ -80,11 +80,12 @@ class DashboardWatcherListenMixin:
 
     def _watcher_listen_words(self):
         """Where you are and what you fly, so the names come out right."""
+        from voidcompass.core import companions
         ship = getattr(self, "cmdr_ship", None) or {}
         return [str(getattr(self, "current_sys", "") or ""), str(ship.get("ship_name") or ""),
                 ship_name(ship.get("ship"), ship.get("ship_localised")),
                 str(getattr(self, "current_body_name", "") or ""),
-                str(getattr(self, "current_station_name", "") or "")]
+                str(getattr(self, "current_station_name", "") or ""), companions.name(self.config)]
 
     # -- talking --------------------------------------------------------------
     def _watcher_talk_key(self, held=None):

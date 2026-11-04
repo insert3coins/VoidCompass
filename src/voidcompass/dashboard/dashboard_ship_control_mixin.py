@@ -214,7 +214,7 @@ class DashboardShipControlMixin:
         if command.kind == "switch":
             return watcher_ship.reply(f"switch_{op}", rng, **fields)
         if command.done:
-            if not command.custom and getattr(rng, "companion_identity", "") == "aster":
+            if not command.custom and getattr(rng, "companion_identity", "watcher") != "watcher":
                 return watcher_ship.reply("press", rng, **fields)
             return rng.choice(command.done) if rng is not None else command.done[0]
         return watcher_ship.reply("press", rng, **fields)

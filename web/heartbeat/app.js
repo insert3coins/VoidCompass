@@ -56,7 +56,10 @@
     const style = (thought && thought.style) || {};
     document.body.classList.toggle("still", Boolean(reduced));
     document.body.classList.toggle("thought-backdrop", style.backdrop !== false);
-    document.body.dataset.thoughtColour = style.colour === "accent" ? "accent" : style.colour === "eye" ? (eye === "hal" ? "red" : ["cyan", "brass"].includes(eye) ? eye : "accent") : "bright";
+    const companion = companionIdentity !== "watcher";
+    const colours = window.CompanionColours?.resolve(companionIdentity, eye, getComputedStyle(document.documentElement).getPropertyValue("--accent").trim());
+    if (colours) document.body.style.setProperty("--companion-eye-colour", colours.primary);
+    document.body.dataset.thoughtColour = style.colour === "accent" ? "accent" : style.colour === "eye" ? (companion ? "companion" : eye === "hal" ? "red" : ["cyan", "brass"].includes(eye) ? eye : "accent") : "bright";
     document.body.dataset.thoughtSize = ["small", "large"].includes(style.size) ? style.size : "standard";
     if (!thought || !thought.text) {
       thoughtId = null;
@@ -94,8 +97,9 @@
     if (identity !== companionIdentity) { companionIdentity = identity; caption.clear(); thoughtId = null; }
     asterModel = model;
     asterReduced = motionPreference.matches || Boolean(effects.reduced_motion);
-    orb.setSuspended?.(identity === "aster");
+    orb.setSuspended?.(identity !== "watcher");
     window.AsterCompanion?.update(canvas, model, {speech, hearing}, {palette, reducedMotion: motionPreference.matches || Boolean(effects.reduced_motion)});
+    window.CrewCompanion?.update(canvas, model, {speech, hearing}, {palette, reducedMotion: asterReduced});
 
     // You pressed talk: the ring shows now, not on the next slow poll.
     if (model.hearing && model.hearing !== hearingStage && !liveAsking) {
@@ -140,9 +144,9 @@
         method: "POST", body: JSON.stringify({renderer, ...(reason ? {reason} : {})}),
       }).then((response) => response.arrayBuffer()).catch(() => {});
     });
-    showThought(model.thought, motionPreference.matches || Boolean(effects.reduced_motion), model.orb?.identity === "aster" ? model.orb.accent : model.orb?.eye,
+    showThought(model.thought, motionPreference.matches || Boolean(effects.reduced_motion), identity !== "watcher" ? model.orb.accent : model.orb?.eye,
       model.personality);
-    const companionLabel = identity === "aster" ? "Aster" : "Journal watcher";
+    const companionLabel = {aster:"Aster",axiom:"Axiom",meridian:"Meridian"}[identity] || "Journal watcher";
     const label = stalled ? `${companionLabel}: feed quiet`
       : orb.lastEvent ? `${companionLabel}: ${orb.lastEvent}` : companionLabel;
     root.setAttribute("aria-label", label);
@@ -173,6 +177,7 @@
       orb.voice?.(speech ? Number(speech.level) || 0 : null);
       hearing = live.hearing && typeof live.hearing === "object" ? live.hearing : null;
       window.AsterCompanion?.update(canvas, asterModel, live, {reducedMotion: asterReduced});
+      window.CrewCompanion?.update(canvas, asterModel, live, {reducedMotion: asterReduced});
       showHearing(hearing);
     } catch (_error) {
       orb.music?.(null);
@@ -190,6 +195,8 @@
   listen();
 
   window.addEventListener("aster-three-ready", () => poller?.rerender());
+  window.addEventListener("crew-three-ready", () => poller?.rerender());
+  window.addEventListener("companion-colours-ready", () => poller?.rerender());
   document.addEventListener("visibilitychange", () => caption.setVisible(!document.hidden));
   motionPreference.addEventListener("change", () => poller?.rerender());
   window.addEventListener("pagehide", () => { window.clearTimeout(livePoll); caption.destroy(); orb.dispose(); });

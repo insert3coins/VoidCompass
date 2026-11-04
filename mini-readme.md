@@ -18,6 +18,9 @@
 * **A clear end-of-watch report.** Aster's shutdown summary explicitly describes the completed session, with the jump count separated from its farewell and the totals included in every report variant. Larger active/quiet farewell banks have saved full rotations, keeping consecutive shutdowns different across restarts.
 * **A welcome on login.** Aster acknowledges each new game login, including quick relogs, with a saved greeting rotation and your chosen address. Duplicate login events and an immediate early-wake welcome are handled once.
 
+* **Two more voices on watch.** Axiom and Meridian join the companion picker as previews, with their own Piper voices, six welcome messages each and animated transparent Three.js displays: a violet/cyan particle field and a gold/blue wireframe portrait. Each companion has its own colour preset in Overlay Studio, including Aster cyan/violet. Shared voice timing and Studio controls work across all four companions. Their original lore and stories are pending; see [setup and examples](docs/CREW_COMPANIONS.md).
+* **Living centres.** Axiom’s particle ring surrounds a rotating lattice crystal, while Aster’s command interface contains a smaller hexagonal prism. Both gather light when listening, pulse while working and expand with speech. Meridian’s portrait has clearer lips that open and close with the real speech level, including pauses. These appear on both the deck and floating overlay and follow the existing motion settings.
+
 ## Earlier releases
 
 * **v5.7.3.1** (2 NOV 3312) — Sequence Recorder: record bound keyboard and controller-button actions in Elite, with holds, waits, automatic action assignment, panel focus checks and editable review before saving. Recording stays visible without jumping to the top, and saving closes the review. Sell searches return two distinct stations, prioritising market reports from the last 24 hours, with older reports used only to fill remaining places.

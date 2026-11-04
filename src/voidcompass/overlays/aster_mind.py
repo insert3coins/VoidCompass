@@ -23,7 +23,9 @@ def _text_key(script):
 
 
 class OfficerRandom:
-    companion_identity = "aster"
+    @property
+    def companion_identity(self):
+        return self.mind.identity
 
     def __init__(self, source, mind):
         self.source, self.mind = source, mind
@@ -89,7 +91,7 @@ class AsterMind(watcher_mind.WatcherMind):
         return SimpleNamespace(GREETINGS=aster_lines.RESTRAINED_GREETINGS, CAPABILITIES=aster_lines.CAPABILITIES, answer=answer)
 
     def __init__(self, memory_path=None, config=None, **kwargs):
-        super().__init__(memory_path, companions.settings(config if config is not None else {}, "aster"), **kwargs)
+        super().__init__(memory_path, companions.settings(config if config is not None else {}, self.identity), **kwargs)
         self.random = OfficerRandom(self.random, self)
         # Keep event wording independently of the shared, bounded activity log.
         # A busy spell of direct commands must not make earlier reports new again.
@@ -139,8 +141,11 @@ class AsterMind(watcher_mind.WatcherMind):
     def command_words(self, words):
         return companions.addressed(words, "aster") or "hello aster"
 
+    def event_lines(self, topic):
+        return aster_lines.event_lines(topic, self.config.get("aster_humour", "dry") == "off")
+
     def _variant(self, topic, fields):
-        lines = aster_lines.event_lines(topic, self.config.get("aster_humour", "dry") == "off")
+        lines = self.event_lines(topic)
         candidates = []
         eligible = {}
         for line in lines:

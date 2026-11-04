@@ -182,7 +182,7 @@ def overlay_directions(config, orb_x, orb_y, size):
 def _memory_path(config):
     try:
         from voidcompass.core.config import get_active_profile, get_profile_file
-        return get_profile_file(get_active_profile(config), "aster_memory.json" if companions.identity(config) == "aster" else "watcher_memory.json")
+        return get_profile_file(get_active_profile(config), f"{companions.identity(config)}_memory.json")
     except Exception:
         return None
 
@@ -441,6 +441,7 @@ class HeartbeatHUD:
 
     def _redraw(self):
         self._stalled = time.time() - self._last_pulse_ts > _STALL_AFTER_S
+        display = companions.display_options(self.config)
         self._html_render_model = {
             'pulse_id': self._pulse_serial,
             'stalled': self._stalled,
@@ -453,18 +454,18 @@ class HeartbeatHUD:
             'events': list(self._events),
             'orb': {'size': orb_size(self.config), 'eye': eye_color(self.config),
                     'identity': companions.identity(self.config),
-                    'accent': self.config.get('aster_hud_accent', 'theme'),
-                    'motion': bool(self.config.get('aster_hud_motion', True)),
-                    'focus_movement': self.config.get('aster_hud_focus' if companions.identity(self.config) == 'aster' else 'heartbeat_focus_movement', 'tracking'),
+                    'accent': display['companion_accent'],
+                    'motion': display['companion_motion'],
+                    'focus_movement': display['companion_focus'],
                     'working': bool(getattr(self.mind, 'talk_waiting', lambda: False)()),
-                    'liveliness': self.config.get('aster_hud_liveliness', 'standard') if companions.identity(self.config) == 'aster' else liveliness(self.config),
+                    'liveliness': display['companion_liveliness'],
                     'idle': idle_motion(self.config),
                     'frame_rate': frame_rate(self.config),
                     'renderer_logging': self.config.get('watcher_renderer_logging') is True,
                     # What its story has done to the eye (5.6.1).
                     'story': self.mind.story_marks() if getattr(self, 'mind', None) is not None else {}},
             'vitals': dict(self._vitals),
-            'personality': 'stoic' if companions.identity(self.config) == 'aster' else watcher_mind.personality(self.config),
+            'personality': 'stoic' if companions.identity(self.config) != 'watcher' else watcher_mind.personality(self.config),
             'overlays': overlay_directions(
                 self.config, self._safe_int(self.config.get('heartbeat_hud_x'), 12),
                 self._safe_int(self.config.get('heartbeat_hud_y'), 12), orb_size(self.config)),
@@ -601,11 +602,15 @@ class HeartbeatHUD:
     def apply_settings(self):
         """Studio changed the orb's size, eye colour, thoughts or nature."""
         self._check_profile()
-        self.mind.config = companions.settings(self.config, 'aster') if getattr(self.mind, 'identity', 'watcher') == 'aster' else self.config
+        self.mind.config = companions.settings(self.config, self.mind.identity) if getattr(self.mind, 'identity', 'watcher') != 'watcher' else self.config
         self._redraw()
         sync = getattr(self, 'sync_html_window', None)
         if callable(sync):
             sync()
+        bridge = getattr(self, '_html_heartbeat_bridge', None)
+        refresh = getattr(bridge, 'refresh_model', None)
+        if callable(refresh):
+            refresh()
 
     def apply_theme(self, palette=None):
         self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)

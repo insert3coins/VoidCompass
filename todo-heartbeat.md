@@ -1,6 +1,6 @@
 # Adding another heartbeat companion
 
-Reusable implementation checklist, based on **The Watcher → Aster in v5.7.4**. Last reviewed: **4 November 2026**.
+Reusable implementation checklist, based on **The Watcher → Aster in v5.7.4**. Last reviewed: **5 November 2026**.
 
 Use this when adding a fresh companion with its own character, lore, dialogue, memory, Piper voice and animated display. The goal is the same working capabilities and settings as the Watcher, expressed through the new companion's identity.
 
@@ -14,9 +14,43 @@ The checked items below record work completed for Aster. The unchecked items for
 4. Finish implementation and documentation before writing/running the regression tests for the change.
 5. Verify every companion, both display surfaces and switching between them before release.
 
-**Current limitation:** the code supports Watcher and Aster through several explicit two-way branches. Adding a name to `IDENTITIES` is only the first step. Audit the dispatch points listed below so a third identity cannot silently receive Watcher's model, memory, lore or display.
+**Current integration:** the identity registry, profile settings, voice lifecycle, memory paths, companion page and Studio support Watcher, Aster, Axiom and Meridian. Axiom and Meridian are preview companions with welcomes and functional controls; their original story content is pending. Adding another ID still requires auditing the dispatch points below.
+
+## Axiom and Meridian — v5.7.4 preview
+
+User-approved original names: **Axiom** (the Data-source Piper voice) and **Meridian** (the Picard-source Piper voice). Start with voice, display and a few welcome messages; defer lore and stories. Setup and examples: [docs/CREW_COMPANIONS.md](docs/CREW_COMPANIONS.md).
+
+- [x] Register both identities and profile-owned settings in both default blocks.
+- [x] Give each an independent commander memory, active page title, picker, voice page and pending-story page.
+- [x] Register exact model pairs, hashes, GitHub download paths and separate receipts under `models/data/` and `models/picard/`; keep one shared Piper engine until the last installed voice is removed.
+- [x] Add six testable welcome messages per companion, two practical capability replies and an identity-specific voice-test sentence. Reuse saved greeting rotation, login deduplication, factual providers and command catalogue.
+- [x] Build transparent procedural Three.js displays for both surfaces: Axiom violet/cyan particle torus inspired by `Downloads/ring-glowing-points-black/1374.jpg`; Meridian gold/blue anonymous wireframe portrait inspired by `Downloads/picard overlay.png`.
+- [x] Support speech/listening/working/alert reactions, idle animation, attention movement, shared Studio sizes, accent, focus, liveliness, frame rate and reduced motion. Preserve the shared caption/audio clock and speech queue.
+- [x] Make idle motion visible: Axiom particle currents, breathing and opposing light trails; Meridian counter-rotating rings, a moving scan band and portrait drift. Publish Studio changes to the browser model immediately along with window dimensions; verify actual rendered changes as well as saved settings. Idle Off still wakes for new activity.
+- [x] Check real Studio clicks for both previews, rendered idle motion at 54/96 px, colour changes while parked and Theme accent independent of panel decoration. Regression coverage: [test_crew_motion_studio_574.py](tests/test_crew_motion_studio_574.py).
+- [x] Give each companion a real signature palette in Studio: **Aster cyan/violet**, **Axiom violet/cyan**, **Meridian gold/blue**; the Watcher retains **HAL red**. Share labels and both light colours through [companion-colours.js](web/assets/companion-colours.js). Save `signature` per companion, interpret the earlier non-Watcher `hal` choice as its signature, and preserve explicit theme/cyan/brass choices. Apply the palette to the renderers, bezel, deck panel and Eye colour captions.
+- [x] Verify signature choices, legacy saves, real rendered colour changes, deck styling and caption ink in [test_companion_colours_574.py](tests/test_companion_colours_574.py). 83 focused companion/Studio/rendering/caption tests passed for this change; the full suite was not run.
+- [x] Give Aster, Axiom and Meridian the Watcher’s readable instrument treatment: shared bezel, dark translucent recess and stronger foreground detail. Keep each design and its motion, transparent outer corners and space between Aster/Axiom geometry. Shared renderer resource: [companion-frame.js](web/assets/companion-frame.js).
+- [x] Fill Axiom’s centre with a floating violet/cyan lattice crystal and Aster’s command interface with a smaller cyan/violet hexagonal prism. Share reactive geometry in [companion-core.js](web/assets/companion-core.js): idle rotation/breathing, incoming listening light, working pulses, audio-level speech expansion and warning colours. Reuse existing clocks, frame caps, motion preferences, palettes and both display surfaces.
+- [x] Keep Meridian’s portrait and give it visible upper/lower lip movement and a dark mouth opening driven by actual speech amplitude, with quick opening and a smooth close through pauses. Do not animate for queued text or microphone input; close when speech ends and keep still under Reduced motion. Preserve mouth movement during alert speech. Phoneme-based lip sync remains outside this implementation.
+- [x] Cover both lattice variants at 54/96 px, state reactions and speech expansion, transparent gaps, both deck variants, and Meridian’s audio/pauses/end/queued/microphone/alert/reduced-motion behaviour in [test_companion_centres_574.py](tests/test_companion_centres_574.py).
+- [x] Visually review both deck and floating presentations, then run the focused centre/palette/contrast/Studio/animation/caption regressions: **45 tests passed**. No full suite run.
+- [x] Verify bright/dark contrast at 54/96 px, selected rim colours, transparent lattice gaps/corners and the same visible size as Watcher. Preserve animation, captions and Studio controls. Coverage: [test_companion_readability_574.py](tests/test_companion_readability_574.py).
+- [x] Keep name preferences and pronunciation editable without introducing either existing persona’s name story. Include the active name in recognition hints.
+- [x] Keep source filenames, archive provenance and upstream notes unchanged. No source artwork or actor likeness is bundled.
+- [ ] Write each companion’s original character brief, lore, chapters, story gates and ending.
+- [ ] Write an original commander-name introduction and question flow for each companion.
+- [ ] Expand individual responses: event/advisory banks, dockside/idle company, hatchling reactions, greetings, capability replies and shutdown variants. Use the saved non-repetition/pacing rules below.
+- [ ] Add original postcard writing/signatures and service/story recollections. Pending identities currently omit automatic companion notes.
+- [x] Verify real Piper installation and synthesis in an isolated temporary folder: Axiom test line 5.88 seconds, Meridian 4.48 seconds, both mono 22,050 Hz. The shared engine archive passes its pinned checksum. Public GitHub JSON pairs match local hashes; both public ONNX URLs return the expected 63,516,050-byte size.
+- [x] Pass 94 focused regressions, including all four voice lifecycles, model hashes, welcome rotation, real dashboard module delivery, both new displays, Studio controls, caption timing, existing Aster/Watcher behaviour and postcards. Visually inspect both deck displays and transparent overlay captures. See `tests/test_crew_companions_574.py` and `tests/test_crew_ui_574.py`.
+- [ ] Audition the voices in game and adjust speed/volume as desired. Full remote ONNX content was not re-downloaded during these checks; local exact model hashes were verified.
+
+The shared engine is retained by all four registered voices; install/remove tests must cover mixed combinations, not just the original pair. Welcome-only companions deliberately leave fiction hooks empty until their own writing is ready.
 
 **Pending boot-screen work:** startup currently always presents the Watcher. The boot screen must instead present the selected heartbeat companion: Aster when Aster is selected, Watcher when Watcher is selected, and the appropriate display for any future companion. This remains an unchecked implementation task below.
+
+**Pending companion API work:** audit and update the existing Watcher API for Watcher, Aster, Axiom, Meridian and future companions. Decide whether to extend its existing routes, add routes for each identity, or introduce one shared companion API while retaining compatibility. See the [API checklist](#companion-api-work--pending) below.
 
 ## New companion brief — fill this in first
 
@@ -59,9 +93,11 @@ Paths are relative to the repository root. Many shared components retain `watche
 | Speech queue, timing and live audio levels | [watcher_voice.py](src/voidcompass/voice/watcher_voice.py) | Use the existing `WatcherSpeaker` queue, pauses, job states, model signature and audio clock. |
 | Native companion window and active caption | [heartbeat_hud.py](src/voidcompass/overlays/heartbeat_hud.py), [overlay_registry.py](src/voidcompass/core/overlay_registry.py), [web/heartbeat](web/heartbeat) | Keep one companion overlay, its existing placement/hotkey integration and active-identity payload. |
 | Text presentation on both surfaces | [companion-caption.js](web/assets/companion-caption.js), [heartbeat/app.js](web/heartbeat/app.js), [dashboard/watcher.js](web/dashboard/watcher.js) | Use one presenter for natural typing and actual speech timing in the native overlay and deck NOW panel. |
-| Three.js and motion controls | [heartbeat-orb.js](web/assets/heartbeat-orb.js), [aster-3d.js](web/assets/aster-3d.js), [aster-companion.js](web/assets/aster-companion.js), [frame-cap.js](web/assets/frame-cap.js), [vendored Three.js](web/galactic_map/vendor/three.module.min.js) | Reuse dependencies and the display-control contract; implement the new geometry and motion in its own renderer. |
+| Three.js and motion controls | [heartbeat-orb.js](web/assets/heartbeat-orb.js), [aster-3d.js](web/assets/aster-3d.js), [aster-companion.js](web/assets/aster-companion.js), [crew-3d.js](web/assets/crew-3d.js), [companion-core.js](web/assets/companion-core.js), [companion-frame.js](web/assets/companion-frame.js), [frame-cap.js](web/assets/frame-cap.js), [vendored Three.js](web/galactic_map/vendor/three.module.min.js) | Reuse dependencies and the display-control contract; use shared reactive cores where appropriate and keep mouth movement tied to actual audio, including during alerts. Implement a new companion’s own geometry without adding another animation loop. |
 | Deck identity, story, exports and Studio | [html_dashboard.py](src/voidcompass/dashboard/html_dashboard.py), [html_overlay_studio.py](src/voidcompass/dashboard/html_overlay_studio.py), [companion-ui.js](web/dashboard/companion-ui.js), [watcher.js](web/dashboard/watcher.js), [watcher.css](web/dashboard/watcher.css) | Extend labels, picker, panels, story adapter, book export and the common display inspector. |
 | Theme and asset serving | [themes.py](src/voidcompass/core/themes.py), [html_dashboard_server.py](src/voidcompass/dashboard/html_dashboard_server.py), [html_overlay_server.py](src/voidcompass/overlays/html_overlay_server.py) | Follow theme accents and explicitly permit new shared browser assets and required module CORS. |
+| Local API, routes and event stream | [local_api.py](src/voidcompass/services/local_api.py), [dashboard_api_mixin.py](src/voidcompass/dashboard/dashboard_api_mixin.py), [dashboard_api_records_mixin.py](src/voidcompass/dashboard/dashboard_api_records_mixin.py), [api.md](api.md) | Audit the existing Watcher/voice API for every identity; choose and document the shared/per-companion route strategy, retain compatibility and identify the companion in responses/events. |
+| Companion colour presets | [companion-colours.js](web/assets/companion-colours.js), [companions.py](src/voidcompass/core/companions.py) | Add an original named primary/highlight palette, use `signature` as its default, and share it across Studio, both displays and captions. Preserve explicit theme choices and existing Watcher colours. |
 | Build and release documentation | [build.py](tools/build.py), [release_packager.py](tools/release_packager.py), [mini-readme.md](mini-readme.md), [ASTER_COMPANION.md](docs/ASTER_COMPANION.md) | Include production code/assets and user docs; keep voice downloads and their runtime receipts separate from the application archive. |
 
 ## What we completed for Aster
@@ -79,7 +115,7 @@ Paths are relative to the repository root. Many shared components retain `watche
 - [x] Updated deck/sidebar/Studio labels to follow the selected companion; kept behaviour, voice and appearance settings in their proper locations.
 - [x] Gave Aster all Watcher Studio controls, immediate resizing, shared size across switches and visually matching diameter.
 - [x] Built a unique transparent Three.js halo and matching officer panel with real idle, listening, working, speaking, charging and alert reactions.
-- [x] Replaced its intermediate eye/dot designs with a **hollow hexagonal command core**, rotating arcs and scan traces. Aster's final design has no eyes, paired dots, pupil or central star.
+- [x] Replaced its intermediate eye/dot designs with a **hexagonal command core**, rotating arcs and scan traces; its centre now holds a translucent lattice prism. Aster's design has no eyes, paired dots, pupil or central star.
 - [x] Matched Watcher's text/speech presentation in **both** the floating overlay and NOW panel through the shared caption presenter.
 - [x] Added Aster's original **The Crew Register** name-learning introduction, shared answer keys/panel, contextual typed/spoken replies, pronunciation, persistent choice and heard-passage reader/export.
 - [x] Restored varied port company at the selected idle pace, including Rare; added dockside/carrier/concourse banks and startup station context from `Location`.
@@ -230,7 +266,7 @@ Both voices were downloaded on **4 November 2026** from [dividebysandwich/piper-
 - [x] Archived both complete pairs, each with a **63,516,050-byte ONNX model**, its matching JSON and the unchanged upstream README.
 - [x] Verified upstream Git blob hashes and file sizes, recorded SHA-256 hashes and pinned download URLs, and checked both configurations: medium quality, `en_US` / eSpeak `en-us`, one speaker, **22,050 Hz**.
 
-The [model index](models/README.md) lists these alongside the existing Watcher and Aster voices. They are stored for future evaluation; synthesis/listening checks and app integration still belong to the checklist below. The downloaded source revision supplies no licence file or usage terms; retain that source record when evaluating either candidate. A future companion still needs its own original identity, lore, dialogue, memory and display.
+The [model index](models/README.md) lists these alongside the existing Watcher and Aster voices. They now power the Axiom and Meridian previews; real synthesis/listening checks remain pending. The downloaded source revision supplies no licence file or usage terms; retain that source record when evaluating either candidate. A future companion still needs its own original identity, lore, dialogue, memory and display.
 
 ### Integration checklist
 
@@ -279,6 +315,8 @@ Keep the existing shared `watcher` page, `heartbeat_hud`/`heartbeat` overlay ide
 - [ ] Implement the renderer and its adapter, following `createAsterDisplay` and `AsterCompanion.update/dispose`.
 - [ ] Support the established controls: `setState`, `setContext`, `setColour`, `setActivity`, `setFocus`, `setMotion`, `setReducedMotion`, `setFrameRate`, `setVisible`, `setTilt`, `inspect` and `destroy`, or adapt them through one common interface.
 - [ ] Wire real idle/listening/working/speaking/charging/alert states and actual speech energy. Give idle motion a visible but restrained character.
+- [ ] Check the display over both bright scenery and dark, busy cockpit backgrounds at small sizes. Reuse `web/assets/companion-frame.js` where a hologram needs the Watcher’s bezel/recess contrast, choosing whether its centre is open or has translucent glass. Preserve the character’s design and keep outer corners transparent.
+- [ ] Compare rendered pixels at 54 and 96 px with fixed focus, no speech and no new journal events. A running frame counter alone does not prove visibly animated idle content. Exercise actual Studio selects/switches through the command handler, immediate browser-model publication and native dimensions; test recolouring a parked display, global Theme accent, motion off/on and an event waking it while idle is off.
 - [ ] Use journal/flight attention and the shared focus setting in a style that fits the design. Focus movement can rotate or orient an instrument; it does not require an eye.
 - [ ] Keep background/corners transparent and theme accents responsive. Use amber or another established warning treatment only for real warning state.
 - [ ] Match visible diameter to the Watcher at every Studio size. Aster uses an orthographic camera with calibrated bounds; equal canvas sizes alone were insufficient.
@@ -297,12 +335,13 @@ The optional [companion-preview](web/companion-preview) is useful for trying geo
 - [ ] Put identity, story, thought frequency/commentary and spoken-output setup on the companion page.
 - [ ] Keep microphone/recognition, command names/aliases, bindings and sequences in **Settings → Voice**; shortcuts stay in **Settings → Hotkeys**. Retain TALK and its setup reminder.
 - [ ] Put appearance in **Overlay Studio** using the existing single companion inspector.
-- [ ] Offer every shared control: sizes 54/72/96/144/192/256; theme/cyan/brass/HAL accent; fixed/tracking/expressive focus; calm/standard/alive intensity; idle animation; frame rate.
+- [ ] If using a reactive centre, share the renderer clock, audio envelope and colour uniforms through `companion-core.js`. If using a portrait mouth, pass speech separately from microphone/alert state, move lips from actual playback levels, and verify closure during silence, queued text and speech completion. Respect Reduced motion and test both surfaces with [test_companion_centres_574.py](tests/test_companion_centres_574.py).
+- [ ] Offer every shared control: sizes 54/72/96/144/192/256; own signature/theme/cyan/brass accent (Watcher keeps HAL red); fixed/tracking/expressive focus; calm/standard/alive intensity; idle animation; frame rate. Verify named presets, saved/legacy choices, both renderer colours, panel styling and Eye colour captions; see [test_companion_colours_574.py](tests/test_companion_colours_574.py).
 - [ ] Extend `display_key`, `display_options`, Studio snapshot/save validation and the HUD model/apply-settings path. Save updates must redraw and synchronise the live native window.
 - [ ] Extend the shared-size carry/save logic beyond `heartbeat_orb_size` and `aster_hud_size`. Size follows the user's selected size across switches; colour, focus and motion preferences remain independent per companion/profile.
 - [ ] Retain shared placement, opacity, thought layout, text scale, map hiding and hotkey behaviour. Avoid duplicating these controls on another page.
 
-## 8. Audit the places that still assume two identities
+## 8. Audit identity dispatch when adding another companion
 
 Tick these only after reviewing the whole relevant path, including its fallbacks:
 
@@ -314,6 +353,7 @@ Tick these only after reviewing the whole relevant path, including its fallbacks
 - [ ] `dashboard/dashboard_watcher_voice_mixin.py`: selection, size carry, preferences, download/remove/test labels and voice-found presentation.
 - [ ] `dashboard/html_dashboard.py`: workspace identity/nature, thought headings, story, deeper memories and book export.
 - [ ] `dashboard/html_overlay_studio.py`: settings snapshot, validation, saved-key mapping, toggles and all-companion sizing.
+- [ ] `services/local_api.py`, `dashboard/dashboard_api_mixin.py` and `dashboard_api_records_mixin.py`: public companion/voice routes, provider dispatch, status/debug labels, event identities, compatibility aliases and API reference/examples; complete the API checklist below.
 - [ ] `web/dashboard/companion-ui.js`, `watcher.js`, `watcher.css`, `index.html` and relevant `app.js` callers: picker, labels, panels, story, voice, Studio and module loading.
 - [ ] Dashboard boot presentation and renderer loading: use the saved active companion instead of always constructing the Watcher; include startup identity/profile timing and first-frame selection in the audit.
 - [ ] `web/heartbeat/app.js`/`index.html`, the new display adapter and `companion-caption.js`: active renderer selection, labels, caption nature and readiness/rerender handling.
@@ -321,6 +361,21 @@ Tick these only after reviewing the whole relevant path, including its fallbacks
 - [ ] Relevant tests and fixtures: extend identity lists instead of accidentally replacing Watcher/Aster coverage.
 
 Use targeted `rg` searches for the companion IDs and the functions above. Treat two-way `else Watcher` fallbacks as integration points. **Do not perform a global replacement of `aster`: the repository also contains unrelated asteroid data and names.** `web/dashboard/app.js` currently contains a pre-existing NUL, so use `rg -a` when searching that file and preserve its contents if editing it.
+
+### Companion API work — pending
+
+This work is still to implement. Existing public routes use `/api/v1/watcher/*` and `/api/v1/voice/*`. The deck already has an internal `/api/data/companion-live` feed; that feed and the overlay’s `/api/live` transport are separate from the public Local API.
+
+- [ ] Choose a route strategy before implementation: extend the existing Watcher routes to cover every active companion; add explicit per-companion routes; or introduce one shared companion API. Prefer a shared provider/contract so fixes and future companions do not need duplicated handlers.
+- [ ] Consider a neutral shared endpoint such as **`GET /api/v1/companion`** for the active companion, with either **`POST /api/v1/companion`** and an `operation` field or action routes under `/api/v1/companion/*`. These are proposed paths, not existing endpoints. Preserve `/api/v1/watcher/*` as documented compatibility aliases when introducing replacements.
+- [ ] If explicit identity routes are useful, consider `/api/v1/companions/{id}/*` backed by the same provider. Define how inactive companions behave: reading stored information, returning an unavailable response, or an explicit selection action. A request must not silently switch the active companion or send speech through another voice.
+- [ ] Audit every current Watcher operation and applicable voice operation: status/current thought, injected thoughts, poke, answers, share/meet/book actions, speech, stop/hush, model installation state, and status/debug/event payloads. Route supported actions through the selected companion’s existing mind, settings and voice services.
+- [ ] Return stable companion ID and display name, plus identity/generation information where needed for live results. Events must identify which companion produced them. Validate requested IDs; do not silently fall back to Watcher for an unknown identity.
+- [ ] Expose capabilities or clear unsupported-operation responses. Axiom/Meridian’s pending stories, name introductions and postcard content must not return another companion’s fiction or imply that unfinished features exist.
+- [ ] Preserve commander/profile isolation, the speech queue and audio/caption timing, existing authentication/control gates and app-thread dispatch. Guard companion/profile switches so a delayed request or response cannot affect the newly selected companion.
+- [ ] Audit internal deck/overlay feeds and callers alongside the public API. Keep active identity, speech levels, captions and errors consistent across the command deck, floating overlays and API clients; retain working internal routes during migration.
+- [ ] Update [api.md](api.md), the generated/in-app API documentation under [web/api-docs](web/api-docs), route discovery/help and affected client/debug tooling. Add examples for Watcher, Aster, Axiom and Meridian, shared-endpoint requests, compatibility aliases, inactive/unknown IDs and unsupported capabilities. Record the chosen strategy here.
+- [ ] After implementation/docs, add focused route/provider/event tests for all four identities, old aliases, permission failures, disabled overlays/voices, profile isolation and switching during a request. Extend [test_local_api_557.py](tests/test_local_api_557.py) and [test_api_voice_watcher_562.py](tests/test_api_voice_watcher_562.py) as appropriate, and add dedicated companion API coverage.
 
 ## 9. Verify the finished implementation
 
@@ -331,6 +386,7 @@ Complete implementation and docs first, then add meaningful regressions and run 
 | Identity/profile isolation | All identities selectable; restart and commander switches preserve each one's settings, story and hours. |
 | Upgrade/reset/export | Older memories load, repeat history migrates, reset backs up only the selected file, exports reveal only heard content. |
 | Command compatibility | Editable names/aliases and disabled defaults still work; maps, panels, sequences, music, overlays and uplink use shared actions with the right voice. |
+| Companion API | Chosen shared/per-identity contract documented; all companions dispatch correctly; legacy Watcher aliases, event identity, capability errors, permissions, profile isolation and switching during requests verified. |
 | Dialogue coverage | Every supported command outcome and event has valid, original wording, including restrained mode and failure replies. |
 | Repetition | Several complete command/chat cycles, restart mid-cycle, rolling-log pressure, headline rest, cross-topic duplicates and long simulated sessions. |
 | Port company | Long station/carrier/concourse watches in both commentary modes and all frequencies; startup after skipped history; fresh versus stale telemetry; no invented docking events, no port chatter in flight, and the selected voice filter. |

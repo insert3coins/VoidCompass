@@ -71,6 +71,22 @@ class HtmlModelOverlayBridge(HtmlOverlayBridgeLifecycle):
         model = getattr(self.overlay, self.model_attr, None)
         return model if isinstance(model, dict) else {}
 
+    def refresh_model(self):
+        """Publish a settings change now, including the resized window.
+
+        sync_window only updates the native window. The browser also needs
+        the new semantic model, even between the bridge's periodic polls.
+        """
+        if self.surface is None:
+            return False
+        snapshot = self._snapshot()
+        fingerprint = repr(snapshot)
+        if fingerprint != self._last_fingerprint:
+            self.surface.publish(snapshot)
+            self._last_fingerprint = fingerprint
+        self._last_quick_fingerprint = self._quick_fingerprint()
+        return True
+
     def _text_scale(self):
         """This overlay's text size (75-200%) the page zooms its content by:
         its own from Overlay Studio, or the one for all overlays."""

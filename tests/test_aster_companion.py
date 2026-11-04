@@ -462,14 +462,14 @@ class CompanionDisplayFixTests(unittest.TestCase):
             self.assertIn(setting, config.PROFILE_TEXT_SETTINGS)
 
     def test_each_companion_supports_every_shared_size_and_accent(self):
-        from tests.test_heartbeat_orb import _Studio, EYE_COLORS
+        from tests.test_heartbeat_orb import _Studio
         for identity in companions.IDENTITIES:
             studio = _Studio()
             studio.config["companion_identity"] = identity
             for size in (54, 72, 96, 144, 192, 256):
                 self.assertTrue(studio._html_overlay_settings_save({"companion_size": str(size)}))
                 self.assertEqual(companions.display_size(studio.config), size)
-            for accent in EYE_COLORS:
+            for accent in companions.accent_choices(identity):
                 self.assertTrue(studio._html_overlay_settings_save({"companion_accent": accent}))
                 self.assertEqual(companions.display_options(studio.config)["companion_accent"], accent)
 

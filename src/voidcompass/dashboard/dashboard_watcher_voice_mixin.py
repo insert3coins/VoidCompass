@@ -67,7 +67,8 @@ class DashboardWatcherVoiceMixin:
         return bool(companions.settings(self.config).get("watcher_voice_enabled")) and self._companion_voice_installed()
 
     def _companion_voice_installed(self):
-        return voice_assets.installed(model="aster") if companions.identity(self.config) == "aster" else voice_assets.installed()
+        selected = companions.identity(self.config)
+        return voice_assets.installed(model=selected) if selected != "watcher" else voice_assets.installed()
 
     def _companion_switch(self, selected):
         if selected not in companions.IDENTITIES:
@@ -87,7 +88,8 @@ class DashboardWatcherVoiceMixin:
             listener.close()
             self._watcher_listen = None
         size = companions.display_size(self.config)
-        self.config.update(heartbeat_orb_size=size, aster_hud_size=size, companion_identity=selected)
+        self.config.update({companions.display_key({"companion_identity": identity}, "companion_size"): size for identity in companions.IDENTITIES})
+        self.config["companion_identity"] = selected
         self._watcher_voice_download = None
         hud = getattr(self, "heartbeat_hud", None)
         if hud is not None:
@@ -739,7 +741,7 @@ class DashboardWatcherVoiceMixin:
         download = getattr(self, "_watcher_voice_download", None)
         selected = companions.identity(self.config)
         if download is None or getattr(download, "model", "watcher") != selected:
-            download = voice_assets.VoiceDownload(model=selected) if selected == "aster" else voice_assets.VoiceDownload()
+            download = voice_assets.VoiceDownload(model=selected) if selected != "watcher" else voice_assets.VoiceDownload()
             self._watcher_voice_download = download
         return download
 
@@ -803,17 +805,17 @@ class DashboardWatcherVoiceMixin:
             volume = 80
         return {
             "identity": selected,
-            "model_name": "Aster officer voice" if selected == "aster" else "HAL 9000 voice",
+            "model_name": voice_assets.model_name(selected),
             "enabled": bool(config.get("watcher_voice_enabled")),
             "installed": self._companion_voice_installed(),
             "download": state,
             "size_mb": round(voice_assets.download_bytes(selected) / 1_000_000),
-            "rights": voice_assets.ASTER_NOTICE if selected == "aster" else voice_assets.RIGHTS_NOTICE,
+            "rights": voice_assets.notice(selected),
             "volume": max(0, min(100, volume)),
             "speed": str(config.get("watcher_voice_speed") or "standard"),
             "level": str(config.get("watcher_voice_level") or "every"),
             "speaking": bool(speaker is not None and speaker.live()),
-            "finding": {"stage": 4, "found": True, "told": [], "minutes": 0} if selected == "aster" else watcher_voice_lore.progress(memory),
+            "finding": {"stage": 4, "found": True, "told": [], "minutes": 0} if selected != "watcher" else watcher_voice_lore.progress(memory),
             "orb_on": getattr(self, "heartbeat_hud", None) is not None,
         }
 
@@ -822,7 +824,7 @@ class DashboardWatcherVoiceMixin:
         return {"settings": self._html_watcher_settings(),
                 "voice": self._html_watcher_voice(mind.memory),
                 "habits": watcher_habits.summary(mind.memory, mind.bond()),
-                "name": mind.name_page() if getattr(mind, "identity", "watcher") == "aster" else watcher_name.page(mind.memory),
+                "name": mind.name_page() if getattr(mind, "identity", "watcher") != "watcher" else watcher_name.page(mind.memory),
                 "talk": self._html_watcher_talk(mind),
                 "listen": self._html_watcher_listen()}
 
@@ -839,10 +841,10 @@ class DashboardWatcherVoiceMixin:
             return True
         if operation == "settings":
             values = payload.get("values") if isinstance(payload.get("values"), dict) else {}
-            if companions.identity(self.config) == "aster" and "heartbeat_thoughts" in values:
+            if companions.identity(self.config) != "watcher" and "heartbeat_thoughts" in values:
                 if values["heartbeat_thoughts"] not in watcher_mind.FREQUENCIES:
                     return False
-                self.config["aster_thoughts"] = values["heartbeat_thoughts"]
+                self.config[companions.key(self.config, "heartbeat_thoughts")] = values["heartbeat_thoughts"]
                 self._persist_config()
                 values = {key: value for key, value in values.items() if key != "heartbeat_thoughts"}
             selects = {key: values[key] for key in WATCHER_SELECTS if key in values}
@@ -884,7 +886,8 @@ class DashboardWatcherVoiceMixin:
             if speaker is not None:
                 speaker.stop()
                 speaker._stop_engine()
-            done = voice_assets.remove(model="aster") if companions.identity(self.config) == "aster" else voice_assets.remove()
+            selected = companions.identity(self.config)
+            done = voice_assets.remove(model=selected) if selected != "watcher" else voice_assets.remove()
             self._watcher_voice_sync()
             return done
         if operation == "voice_test":
@@ -892,6 +895,9 @@ class DashboardWatcherVoiceMixin:
                     or getattr(self, "_closing", False)):
                 return False
             line = "Aster, reporting for duty. Clear instructions, a sound ship, and room for an occasional improvement to the itinerary." if companions.identity(self.config) == "aster" else TEST_LINE
+            if companions.identity(self.config) in companions.NEW_IDENTITIES:
+                from voidcompass.overlays.crew_mind import TEST_LINES
+                line = TEST_LINES[companions.identity(self.config)]
             return self._watcher_speaker().say(line, "test")
         if operation == "voice_stop":
             speaker = getattr(self, "_watcher_voice", None)

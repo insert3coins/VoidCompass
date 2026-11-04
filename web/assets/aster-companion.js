@@ -1,4 +1,5 @@
 import {createAsterDisplay} from "./aster-3d.js";
+import {companionColours} from "./companion-colours.js";
 
 const views = new Map();
 function dispose(source) {
@@ -14,7 +15,7 @@ function update(source, model = {}, live = {}, options = {}) {
   let view = views.get(source);
   if (!active) {
     if (view) { view.display?.setVisible(false); view.canvas.hidden = true; view.canvas.style.display = "none"; if (view.error) { view.error.hidden = true; view.error.style.display = "none"; } }
-    source.style.opacity = "";
+    source.style.opacity = model.orb?.identity && model.orb.identity !== "watcher" ? "0" : "";
     return;
   }
   if (!view) {
@@ -57,8 +58,9 @@ function update(source, model = {}, live = {}, options = {}) {
   view.display.setFocus(model.orb?.focus_movement);
   view.display.setState(state, speech?.level ?? hearing?.level ?? 0);
   const accent = model.orb?.accent;
-  const theme = options.palette?.accent || getComputedStyle(source.parentElement).getPropertyValue("--accent").trim();
-  view.display.setColour(accent === "cyan" ? "#65e4ef" : accent === "brass" ? "#e8c48c" : accent === "hal" ? "#ff4455" : /^#[a-f0-9]{6}$/i.test(theme) ? theme : "#65e4ef");
+  const theme = options.palette?.accent || getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+  const colours = companionColours("aster",accent,theme);
+  view.display.setColour(colours.primary,colours.secondary);
   view.display.setReducedMotion(Boolean(options.reducedMotion) || window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   view.display.setMotion(model.orb?.motion !== false);
   view.display.setFrameRate(model.orb?.frame_rate);

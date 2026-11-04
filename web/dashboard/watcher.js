@@ -1,5 +1,6 @@
 import "../assets/companion-caption.js";
-import {renderCompanionChrome} from "./companion-ui.js";
+import {renderCompanionChrome, COMPANIONS} from "./companion-ui.js";
+import {companionColours} from "../assets/companion-colours.js";
 // The Watcher's page (5.5.3.2): its eye, live; everything it has said; what
 // it remembers of the commander (records, places, the bond grown over
 // sessions together); and a poke.
@@ -45,7 +46,7 @@ function panelText(ui) {
     instant: !current,
   });
   panelCaption.live(companionLive.speech, companionLiveReceived);
-  const name = activeCompanion === "aster" ? "ASTER" : "THE WATCHER";
+  const name = (COMPANIONS[activeCompanion]?.name || "The Watcher").toUpperCase();
   quote.querySelector("cite").textContent = current ? `${name} · ${current.heading || "ON WATCH"}` : latestLog ? `${name} · ${ago(latestLog.at).toUpperCase()}` : name;
   return changed;
 }
@@ -53,7 +54,7 @@ function panelText(ui) {
 function asterSignal(ui) {
   const label = ui.byId("aster-signal");
   if (!label) return;
-  const state = ui.byId("watcher-orb")?.parentElement.querySelector(".aster-instrument")?.dataset.state || "idle";
+  const state = ui.byId("watcher-orb")?.parentElement.querySelector(".aster-instrument:not([hidden]), .crew-instrument:not([hidden])")?.dataset.state || "idle";
   const text = {idle:"ON WATCH",listening:"LISTENING",working:"ASSESSING",speaking:"REPLYING",alert:"ATTENTION",charging:"DRIVE CHARGING"}[state] || "ON WATCH";
   if (label.textContent !== text) label.textContent = text;
   if (label.dataset.state !== state) label.dataset.state = state;
@@ -85,6 +86,7 @@ async function companionLiveLoop(ui) {
     finally { companionAsking = false; }
   }
   window.AsterCompanion?.update(canvas, companionModel, companionLive, {visible, reducedMotion: document.body.classList.contains("reduced-motion")});
+  window.CrewCompanion?.update(canvas, companionModel, companionLive, {visible, reducedMotion: document.body.classList.contains("reduced-motion")});
   asterSignal(ui);
   orb?.voice?.(companionLive.speech ? Number(companionLive.speech.level) || 0 : null);
   panelText(ui);
@@ -144,7 +146,7 @@ const panel = (title, body, note = "", extra = "") =>
 
 function shell(root, ui) {
   root.classList.remove("loading-panel");
-  root.innerHTML = `<section class="companion-picker" aria-label="Choose your companion"><header><span>YOUR COMPANION</span><small>Separate stories, memories and voices · shared ship controls</small></header><div role="group"><button type="button" data-companion="watcher" aria-pressed="true"><b>THE WATCHER</b><small>Patient company · an ancient eye</small></button><button type="button" data-companion="aster" aria-pressed="false"><b>ASTER</b><small>Ship’s officer · precision and dry wit</small></button></div><label id="aster-humour-row" hidden>Officer’s commentary<select id="aster-humour"><option value="dry">Dry wit</option><option value="off">Restrained</option></select></label><p role="status" id="companion-choice-status"></p></section><nav class="watcher-tabs" role="tablist" aria-label="Companion">
+  root.innerHTML = `<section class="companion-picker" aria-label="Choose your companion"><header><span>YOUR COMPANION</span><small>Choose a voice and display · shared ship controls</small></header><div role="group">${Object.entries(COMPANIONS).map(([id, row]) => `<button type="button" data-companion="${id}" aria-pressed="${id === activeCompanion}"><b>${row.name.toUpperCase()}</b><small>${row.description}</small></button>`).join("")}</div><label id="aster-humour-row" hidden>Officer’s commentary<select id="aster-humour"><option value="dry">Dry wit</option><option value="off">Restrained</option></select></label><p role="status" id="companion-choice-status"></p></section><nav class="watcher-tabs" role="tablist" aria-label="Companion">
     <button type="button" role="tab" data-watcher-tab="now">NOW<b id="watcher-now-badge"></b></button>
     <button type="button" role="tab" data-watcher-tab="story">STORY</button>
     <button type="button" role="tab" data-watcher-tab="you">YOU</button>
@@ -287,7 +289,7 @@ function shell(root, ui) {
     }
   });
   const canvas = root.querySelector("#watcher-orb");
-  root.querySelectorAll("[data-companion]").forEach((button) => button.addEventListener("click", async () => {
+  root.querySelectorAll("button[data-companion]").forEach((button) => button.addEventListener("click", async () => {
     ui.byId("companion-choice-status").textContent = "Switching companion…";
     if (!(await ui.command("workspace", {page: "watcher", operation: "companion_identity", value: button.dataset.companion}))) ui.showToast("Finish or cancel any voice download before changing companion.");
   }));
@@ -340,7 +342,7 @@ function shell(root, ui) {
     const done = await ui.command("workspace", {page: "watcher", operation: "reset", confirm: "FORGET"});
     closeConfirm();
     lastLoreKey = "";
-    ui.showToast(done ? `${activeCompanion === "aster" ? "Aster" : "The Watcher"} has been reset. Its previous memory is backed up.` : "The companion could not be reset");
+    ui.showToast(done ? `${COMPANIONS[activeCompanion].name} has been reset. Its previous memory is backed up.` : "The companion could not be reset");
   });
   root.querySelector("#watcher-poke").addEventListener("click", () => {
     // It looks up as you poke it; the answer arrives with the next refresh.
@@ -388,6 +390,14 @@ function renderReader(ui) {
 }
 
 function renderLore(lore, ui) {
+  if (lore.pending) {
+    ui.byId("watcher-lore-count").textContent = "PENDING";
+    ui.byId("watcher-lore").replaceChildren();
+    ui.byId("watcher-reader").innerHTML = `<h3>${ui.escapeHtml(lore.title)}</h3><p>The voice, welcome messages and display are ready to try. Original lore, stories and a personal introduction will be added later.</p>`;
+    ui.byId("watcher-lore-next").textContent = "Try a greeting in TALK, or TEST THE VOICE on the VOICE tab.";
+    ui.byId("watcher-books").replaceChildren();
+    return;
+  }
   if (lore.identity === "aster") { renderAsterLore(lore, ui); return; }
   const chapters = Array.isArray(lore.chapters) ? lore.chapters : [];
   const echoes = Array.isArray(lore.echoes) ? lore.echoes : [];
@@ -519,14 +529,17 @@ export function renderWatcher(data = {}, ui) {
   activeGeneration = data.companion_generation || 0;
   renderCompanionChrome(data);
   root.dataset.companion = identity;
-  const selectedName = data.companion_name || (identity === "aster" ? "Aster" : "The Watcher");
-  root.querySelectorAll("[data-companion]").forEach((button) => { button.setAttribute("aria-pressed", String(button.dataset.companion === identity)); button.disabled = ["starting", "engine", "unpacking", "model"].includes(data.voice?.download?.stage); });
+  const selectedName = data.companion_name || (COMPANIONS[identity]?.name || "The Watcher");
+  root.dataset.storyPending = String(Boolean(data.lore?.pending));
+  root.querySelector(".aster-officer-mark b").textContent = (COMPANIONS[identity]?.role || "Companion").toUpperCase();
+  root.querySelector(".aster-signal-line > span").textContent = selectedName.toUpperCase();
+  root.querySelectorAll("button[data-companion]").forEach((button) => { button.setAttribute("aria-pressed", String(button.dataset.companion === identity)); button.disabled = ["starting", "engine", "unpacking", "model"].includes(data.voice?.download?.stage); });
   ui.byId("companion-choice-status").textContent = `${selectedName} is on watch.`;
   ui.byId("aster-humour-row").hidden = identity !== "aster";
   if (document.activeElement !== ui.byId("aster-humour")) ui.byId("aster-humour").value = data.settings?.aster_humour || "dry";
   root.querySelector('.watcher-stage-head > span').textContent = selectedName.toUpperCase();
-  root.querySelector('.watcher-lore-panel > header > span').textContent = identity === "aster" ? "THE UNFINISHED MANIFEST" : "THE LONG STORY · WHAT IT REMEMBERS";
-  root.querySelector('[data-watcher-setting="heartbeat_personality"]')?.closest("label")?.toggleAttribute("hidden", identity === "aster");
+  root.querySelector('.watcher-lore-panel > header > span').textContent = data.lore?.pending ? `${selectedName.toUpperCase()} · STORY PENDING` : identity === "aster" ? "THE UNFINISHED MANIFEST" : "THE LONG STORY · WHAT IT REMEMBERS";
+  root.querySelector('[data-watcher-setting="heartbeat_personality"]')?.closest("label")?.toggleAttribute("hidden", identity !== "watcher");
   root.querySelector(".watcher-eye-panel").setAttribute("aria-label", selectedName);
   root.querySelector(".watcher-bond-panel > header > span").textContent = `YOU AND ${selectedName.toUpperCase()}`;
   root.querySelector(".watcher-bond-panel").setAttribute("aria-label", `You and ${selectedName}`);
@@ -534,15 +547,19 @@ export function renderWatcher(data = {}, ui) {
   const bookNote = root.querySelector('[data-watcher-code="book"]')?.closest(".watcher-card")?.querySelector("p");
   if (bookNote) bookNote.textContent = identity === "aster" ? "Keep Aster’s heard story passages and service memories as a book in the Wrapped folder." : "Keep the story, memories, answers and dreams as a book in the Wrapped folder.";
   const resetText = root.querySelector("#watcher-reset-confirm > p");
-  if (resetText) resetText.textContent = identity === "aster" ? "Aster forgets its own story, conversation and service memory for this commander. Its previous memory is backed up first. The Watcher’s memory and your game records remain separate." : "The Watcher forgets its story, echoes, conversation and memory of this commander. Its previous memory is backed up first. Your game records and achievements remain.";
-  root.querySelectorAll('[data-watcher-code]').forEach((button) => { button.closest(".watcher-card")?.toggleAttribute("hidden", identity === "aster" && button.dataset.watcherCode !== "book"); });
+  if (resetText) resetText.textContent = data.lore?.pending ? `${selectedName} forgets its conversation and session memory for this commander. Its previous memory is backed up first.` : identity === "aster" ? "Aster forgets its own story, conversation and service memory for this commander. Its previous memory is backed up first. The Watcher’s memory and your game records remain separate." : "The Watcher forgets its story, echoes, conversation and memory of this commander. Its previous memory is backed up first. Your game records and achievements remain.";
+  root.querySelectorAll('[data-watcher-code]').forEach((button) => { button.closest(".watcher-card")?.toggleAttribute("hidden", Boolean(data.lore?.pending) || (identity !== "watcher" && button.dataset.watcherCode !== "book")); });
 
   const reduced = document.body.classList.contains("reduced-motion");
   const feed = data.heartbeat || {};
   const optics = feed.orb || {};
+  const panelColours = companionColours(identity,optics.accent,getComputedStyle(document.documentElement).getPropertyValue("--accent").trim());
+  if (identity !== "watcher") root.querySelector(".watcher-eye-panel").style.setProperty("--accent",panelColours.primary);
+  else root.querySelector(".watcher-eye-panel").style.removeProperty("--accent");
   companionModel = {...feed, orb: {...optics, identity, frame_rate: data.frame_rate}};
-  orb?.setSuspended?.(identity === "aster");
+  orb?.setSuspended?.(identity !== "watcher");
   window.AsterCompanion?.update(ui.byId("watcher-orb"), companionModel, companionLive, {reducedMotion: reduced});
+  window.CrewCompanion?.update(ui.byId("watcher-orb"), companionModel, companionLive, {reducedMotion: reduced});
   asterSignal(ui);
   orb?.update({
     palette: {}, eye: data.eye, reducedMotion: reduced, events: feed.events || [], frameRate: data.frame_rate,
@@ -573,12 +590,12 @@ export function renderWatcher(data = {}, ui) {
   if ((!companionPoll || captionChanged) && !companionAsking) { clearTimeout(companionPoll); companionPoll = 0; companionLiveLoop(ui); }
   ui.byId("watcher-hotkey").textContent = data.hotkey ? `or ${data.hotkey} in game` : "Bind a key in Settings › Hotkeys to poke it in game";
   ui.byId("watcher-poke").disabled = !data.enabled;
-  ui.byId("watcher-poke").textContent = identity === "aster" ? "CALL ASTER" : "POKE";
-  if (identity === "aster") ui.byId("watcher-hotkey").textContent = data.hotkey ? `or ${data.hotkey} in game` : "Set a companion key in Settings › Hotkeys";
+  ui.byId("watcher-poke").textContent = identity !== "watcher" ? `CALL ${selectedName.toUpperCase()}` : "POKE";
+  if (identity !== "watcher") ui.byId("watcher-hotkey").textContent = data.hotkey ? `or ${data.hotkey} in game` : "Set a companion key in Settings › Hotkeys";
   ui.byId("watcher-character").innerHTML = [
     ["NATURE", NATURES[data.nature] || data.nature || "—"],
     ["THOUGHTS", FREQUENCIES[data.frequency] || data.frequency || "—"],
-    [identity === "aster" ? "DISPLAY" : "EYE", identity === "aster" ? "Luminous halo" : data.eye === "hal" ? "HAL red" : "Theme"],
+    [identity !== "watcher" ? "DISPLAY" : "EYE", identity === "axiom" ? "Particle field" : identity === "meridian" ? "Holographic portrait" : identity === "aster" ? "Luminous halo" : data.eye === "hal" ? "HAL red" : "Theme"],
     ["OVERLAY", data.enabled ? "ON" : "OFF"],
     ["VOICE", data.voice?.enabled && data.voice?.installed ? "ON" : "OFF"],
   ].map(([label, value]) => `<div><dt>${label}</dt><dd>${ui.escapeHtml(value)}</dd></div>`).join("");
@@ -897,7 +914,7 @@ function wireName(root, ui) {
 }
 
 function renderName(name, ui) {
-  const officer = activeCompanion === "aster";
+  const officer = activeCompanion !== "watcher";
   ui.byId("watcher-name-policy").textContent = officer
     ? "Uses your chosen name or nickname in replies and reports; choose Commander to keep the title"
     : "Commander every day; a name only for the moments that matter, once a session";
@@ -908,7 +925,8 @@ function renderName(name, ui) {
   let note = "It hasn't read your name yet. It will the next time you load the game.";
   if (known) {
     note = activeCompanion === "aster" ? `Aster has read ${known} in the crew register.` : `The ship writes ${known} every time you wake it.`;
-    if (!name.call) note += told ? " It has noticed, and will ask you about it. Or choose here." : " Choose what it calls you here, or wait for it to ask.";
+    if (!name.call && ["axiom","meridian"].includes(activeCompanion)) note += " Choose its form of address here. A personal introduction is pending.";
+    else if (!name.call) note += told ? " It has noticed, and will ask you about it. Or choose here." : " Choose what it calls you here, or wait for it to ask.";
     else if (call === "name") note += officer ? " Your name is its regular form of address." : " It may use it now and then, never more than once a session.";
     else if (call === "nickname") note += nickname
       ? officer ? ` It uses ${nickname} as your regular form of address.` : ` It calls you ${nickname} now and then.`
@@ -1016,9 +1034,13 @@ function renderVoice(voice, ui) {
     : "The Watcher's orb overlay is off. Its thoughts, spoken or not, need it on in Overlay Studio. TEST THE VOICE works either way.";
 
   const findingPanel = ui.byId("watcher-finding-stage")?.closest("section");
-  if (findingPanel) findingPanel.hidden = voice.identity === "aster";
+  if (findingPanel) findingPanel.hidden = voice.identity !== "watcher";
   if (voice.identity === "aster") {
     ui.byId("watcher-voice-orb").textContent = voice.orb_on ? "Aster speaks complete reports from the start. Its story unfolds separately over active service." : "Enable the companion overlay in Overlay Studio to receive Aster’s replies. TEST THE VOICE works here either way.";
+  }
+  if (["axiom", "meridian"].includes(voice.identity)) {
+    const name = COMPANIONS[voice.identity].name;
+    ui.byId("watcher-voice-orb").textContent = voice.orb_on ? `${name} is ready for welcome messages and commands. Its story is pending. Set up your microphone and recognition in Settings › Voice.` : `Enable the companion overlay in Overlay Studio for ${name}’s replies. TEST THE VOICE works here either way.`;
   }
   const finding = voice.finding || {};
   const stageIndex = Math.max(0, Math.min(4, Number(finding.stage) || 0));

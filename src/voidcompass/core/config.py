@@ -3,6 +3,7 @@ import json
 import re
 from voidcompass.core.platform_support import application_dir, default_screenshot_path, detect_elite_journal_path
 from voidcompass.core.overlay_registry import OVERLAY_ENABLE_DEFAULTS
+from voidcompass.core import companions
 
 
 def _get_config_file():
@@ -184,6 +185,7 @@ PROFILE_TEXT_SETTINGS = (
     "heartbeat_thought_hold",
     "heartbeat_thought_side",
     "companion_identity",
+    *companions.NEW_TEXT_KEYS,
     "aster_thoughts",
     "aster_humour",
     "aster_hud_accent",
@@ -344,6 +346,7 @@ PROFILE_BOOL_SETTINGS = (
     "heartbeat_thought_backdrop",
     "heartbeat_thought_heading",
     "aster_voice_enabled",
+    *companions.NEW_BOOL_KEYS,
     "aster_hud_motion",
     "watcher_voice_enabled",
     "watcher_listen_enabled",
@@ -535,6 +538,7 @@ PROFILE_VALUE_SETTINGS = (
     "heartbeat_frame_rate",
     "heartbeat_text_scale_percent",
     "aster_voice_volume",
+    *companions.NEW_VALUE_KEYS,
     "aster_hud_size",
     "watcher_voice_volume",
     "home_system_pos",
@@ -888,8 +892,9 @@ def apply_profile_config(config, profile_key=None):
         "heartbeat_thought_side": "auto",
         "companion_identity": "watcher",
         "aster_thoughts": "occasional",
+        **companions.new_defaults(),
         "aster_humour": "dry",
-        "aster_hud_accent": "theme",
+        "aster_hud_accent": "signature",
         "aster_hud_liveliness": "standard",
         "aster_hud_focus": "tracking",
         "heartbeat_focus_movement": "tracking",
@@ -1550,8 +1555,9 @@ def load_config():
         'watcher_voice_volume': 80,
         'companion_identity': 'watcher',
         'aster_thoughts': 'occasional',
+        **companions.new_defaults(),
         'aster_humour': 'dry',
-        'aster_hud_accent': 'theme',
+        'aster_hud_accent': 'signature',
         'aster_hud_liveliness': 'standard',
         'aster_hud_focus': 'tracking',
         'heartbeat_focus_movement': 'tracking',

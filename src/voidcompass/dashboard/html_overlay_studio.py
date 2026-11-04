@@ -373,7 +373,7 @@ class HtmlOverlayStudioMixin:
                 "heartbeat_orb_size": orb_size(self.config),
                 **companions.display_options(self.config),
                 "aster_hud_size": _integer(self.config.get("aster_hud_size"), 144),
-                "aster_hud_accent": self.config.get("aster_hud_accent", "theme"),
+                "aster_hud_accent": companions.display_accent({**self.config, "companion_identity": "aster"}),
                 "aster_hud_motion": bool(self.config.get("aster_hud_motion", True)),
                 "aster_hud_liveliness": self.config.get("aster_hud_liveliness", "standard"),
                 "galaxy_minimap_size": galaxy_minimap_hud.minimap_options(self.config)["size"],
@@ -680,7 +680,7 @@ class HtmlOverlayStudioMixin:
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies", "survey_codex_flags",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
-            "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion",
+            "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion",
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "rig_tracker_show_holds",
@@ -713,7 +713,7 @@ class HtmlOverlayStudioMixin:
             self.update_hud()
         elif key in {"hud_pages_takeover", "hud_hold_lists"} or key.startswith("hud_page_"):
             self._hud_pages_apply_settings()
-        elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion"}:
+        elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion"}:
             heartbeat = getattr(self, "heartbeat_hud", None)
             if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
                 heartbeat.apply_settings()
@@ -768,18 +768,20 @@ class HtmlOverlayStudioMixin:
         selected = companions.identity(self.config)
         for key, choices in {
             "companion_size": companions.DISPLAY_SIZES[selected],
-            "companion_accent": EYE_COLORS,
+            "companion_accent": companions.accent_choices(selected),
             "companion_liveliness": LIVELINESS,
             "companion_focus": ("off", "tracking", "expressive"),
         }.items():
             if key not in payload:
                 continue
             value = _integer(payload[key], 0) if key == "companion_size" else payload[key]
+            if key == "companion_accent" and selected != "watcher" and value == "hal":
+                value = "signature"
             if value not in choices:
                 return False
             payload[companions.display_key(self.config, key)] = value
             if key == "companion_size":
-                payload.update(heartbeat_orb_size=value, aster_hud_size=value)
+                payload.update({companions.display_key({"companion_identity": identity}, "companion_size"): value for identity in companions.IDENTITIES})
         hatchling_size_before = None
         if {"hatchling_look", "hatchling_pet_size"} & set(payload):
             hatchling_size_before = hatchling_pet_window(self.config)
@@ -933,17 +935,19 @@ class HtmlOverlayStudioMixin:
         if "heartbeat_orb_size" in payload:
             size = _integer(payload.get("heartbeat_orb_size"), orb_size(self.config))
             self.config["heartbeat_orb_size"] = size if size in ORB_SIZES else orb_size(self.config)
-        if "aster_hud_size" in payload:
-            size = _integer(payload["aster_hud_size"], 144)
-            self.config["aster_hud_size"] = size if size in companions.DISPLAY_SIZES["aster"] else 144
-        if "aster_hud_accent" in payload:
-            self.config["aster_hud_accent"] = payload["aster_hud_accent"] if payload["aster_hud_accent"] in EYE_COLORS else "theme"
-        for focus_key in ("aster_hud_focus", "heartbeat_focus_movement"):
+        for identity in companions.IDENTITIES[1:]:
+            size_key, accent_key, lively_key = (f"{identity}_hud_{suffix}" for suffix in ("size", "accent", "liveliness"))
+            if size_key in payload:
+                size = _integer(payload[size_key], 144)
+                self.config[size_key] = size if size in companions.DISPLAY_SIZES[identity] else 144
+            if accent_key in payload:
+                self.config[accent_key] = companions.normalize_accent(identity, payload[accent_key])
+            if lively_key in payload:
+                self.config[lively_key] = payload[lively_key] if payload[lively_key] in LIVELINESS else "standard"
+        for focus_key in ("aster_hud_focus", "axiom_hud_focus", "meridian_hud_focus", "heartbeat_focus_movement"):
             if focus_key in payload:
                 value = payload[focus_key]
                 self.config[focus_key] = value if value in ("off", "tracking", "expressive") else "tracking"
-        if "aster_hud_liveliness" in payload:
-            self.config["aster_hud_liveliness"] = payload["aster_hud_liveliness"] if payload["aster_hud_liveliness"] in LIVELINESS else "standard"
         if "heartbeat_eye_color" in payload:
             eye = _text(payload.get("heartbeat_eye_color"), 20).casefold()
             self.config["heartbeat_eye_color"] = eye if eye in EYE_COLORS else "theme"

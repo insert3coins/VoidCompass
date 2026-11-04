@@ -179,7 +179,7 @@ class WatcherSpeaker:
 
     def _ensure_engine(self):
         model = companions.identity(self._settings())
-        ready = voice_assets.installed(self.base, model="aster") if model == "aster" else voice_assets.installed(self.base)
+        ready = voice_assets.installed(self.base, model=model) if model != "watcher" else voice_assets.installed(self.base)
         if self._closed or not ready:
             return None
         speed = self._speed()

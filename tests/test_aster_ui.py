@@ -203,7 +203,7 @@ class AsterOverlayTests(unittest.TestCase):
         for _ in range(3): page.evaluate('data => renderHeartbeat(data)', data)
         self.assertEqual(page.evaluate('window.blockedWebGL'), attempts)
 
-    def test_halo_has_an_open_command_core_instead_of_two_lights(self):
+    def test_halo_has_a_translucent_command_core_instead_of_two_lights(self):
         from PIL import Image
         from io import BytesIO
         page = self.open_page('heartbeat/index.html', reduced=True)
@@ -217,9 +217,13 @@ class AsterOverlayTests(unittest.TestCase):
         pixels = Image.open(BytesIO(canvas.screenshot(omit_background=True, path=str(ARTIFACTS / 'command-core-transparent-192.png')))).convert('RGBA')
         alpha = pixels.getchannel('A')
         self.assertEqual(alpha.getpixel((0, 0)), 0)
-        self.assertEqual(alpha.getpixel((96, 96)), 0, 'the centre shows the game, with no opaque disk')
-        self.assertLess(alpha.getpixel((83,95)), 16, 'the old left optic is gone')
-        self.assertLess(alpha.getpixel((109,95)), 16, 'the old right optic is gone')
+        self.assertLess(alpha.getpixel((96, 96)), 96, 'the lattice facets let the game show through')
+        self.assertEqual(page.evaluate('AsterCompanion.inspect(document.getElementById("orb")).reactor.design'), 'command-prism')
+        import math
+        gap = [(round(96+math.cos(i/48*math.tau)*.27/2.32*192),
+                round(96+math.sin(i/48*math.tau)*.27/2.32*192)) for i in range(48)]
+        self.assertGreater(sum(alpha.getpixel(point)<16 for point in gap),24,
+                           'most of the gap between prism and interface stays transparent')
         lit = sum(alpha.getpixel((x,y)) > 64 for x in range(48,144) for y in range(48,144))
         self.assertGreater(lit, 150, 'the centre contains luminous interface tracks')
 
@@ -227,6 +231,8 @@ class AsterOverlayTests(unittest.TestCase):
         from PIL import Image, ImageChops
         from io import BytesIO
         page = self.open_page('heartbeat/index.html')
+        live = {"speech": None, "hearing": None}
+        page.route('http://watcher3d.test/api/live*', lambda route: route.fulfill(content_type='application/json', body=json.dumps(live)))
         page.set_viewport_size({'width':192,'height':192})
         page.wait_for_function('typeof renderHeartbeat === "function" && window.AsterCompanion')
         data = snapshot(crt=False)
@@ -242,7 +248,8 @@ class AsterOverlayTests(unittest.TestCase):
         page.evaluate('data=>renderHeartbeat(data)',data)
         page.wait_for_timeout(80)
         quiet=core()
-        page.evaluate('data=>AsterCompanion.update(document.getElementById("orb"),data.heartbeat,{speech:{level:.8}},{reducedMotion:true})',data)
+        live["speech"] = {"level": .8}
+        page.wait_for_function('AsterCompanion.inspect(document.getElementById("orb"))?.state === "speaking"')
         page.wait_for_timeout(80)
         self.assertIsNotNone(ImageChops.difference(quiet,core()).getbbox(), 'the command core reads the actual speech level')
 

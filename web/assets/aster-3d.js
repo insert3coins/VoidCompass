@@ -1,4 +1,7 @@
 import * as THREE from "../galactic_map/vendor/three.module.min.js";
+import {createCompanionFrame, COMPANION_EXTENT} from "./companion-frame.js";
+import {SIGNATURES} from "./companion-colours.js";
+import {createCompanionCore} from "./companion-core.js";
 
 const TAU = Math.PI * 2;
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
@@ -115,18 +118,18 @@ const coreFragment = `
   void main(){
     vec2 p=(vUv-.5)*2.0;float r=length(p),a=atan(p.y,p.x);
     if(r>1.0)discard;
-    float outer=stroke(r-.84,.011)*(1.0-step(.76,fract((a+uTime*.30)/6.2831853*3.0)));
+    float outer=stroke(r-.84,.014)*(1.0-step(.76,fract((a+uTime*.30)/6.2831853*3.0)));
     float inner=stroke(r-.73,.005)*(1.0-step(.62,fract((a-uTime*.23+1.0)/6.2831853*3.0)));
     float h=hexagon(p);
-    float frame=stroke(h-.57,.007)+stroke(h-.42,.004)*.55;
+    float frame=stroke(h-.57,.010)+stroke(h-.42,.005)*.65;
     float trace=stroke(h-.52,.004)*pow(.5+.5*cos(a*3.0-uTime*.9),6.0);
     float tick=stroke(r-.95,.035)*(1.0-step(.06,fract(a/6.2831853*24.0)))*.32;
     float scan=stroke(p.y-sin(uTime*.72)*.53,.004)*(1.0-step(.55,h))*uScan*.45;
     float glow=exp(-pow((r-.84)/.035,2.0))*.10;
-    float alpha=clamp(outer*.8+inner*.6+frame*.65+trace*.8+tick+scan+glow,0.0,1.0);
+    float alpha=clamp(outer*.9+inner*.72+frame*.8+trace*.85+tick+scan+glow,0.0,1.0);
     vec3 colour=mix(uColour,uWarm,inner*.48);
     colour=mix(colour,vec3(.87,.97,1.0),clamp((outer+trace)*uEnergy*.5,0.0,.45));
-    gl_FragColor=vec4(colour,alpha*(.85+uEnergy*.15));
+    gl_FragColor=vec4(colour,alpha*(.96+uEnergy*.04));
     #include <colorspace_fragment>
   }`;
 const dustVertex = `
@@ -149,19 +152,22 @@ export function createAsterDisplay(canvas) {
   const renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true,premultipliedAlpha:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.setClearColor(0x000000,0);
   renderer.outputColorSpace=THREE.SRGBColorSpace;
-  const scene=new THREE.Scene(),extent=1.275;
+  const scene=new THREE.Scene(),extent=COMPANION_EXTENT;
   const camera=new THREE.OrthographicCamera(-extent,extent,extent,-extent,.1,20);camera.position.z=5;
   const assembly=new THREE.Group(),halo=new THREE.Group(),commandCore=new THREE.Group();
   scene.add(assembly);assembly.add(halo,commandCore);
-  const colour=new THREE.Color('#65e4ef'),warm=new THREE.Color('#a8b4ff');
+  halo.scale.setScalar(.87);
+  const signature=SIGNATURES.aster;
+  const colour=new THREE.Color(signature.primary),warm=new THREE.Color(signature.secondary);
   const uTime={value:0},uEnergy={value:0},uOpen={value:.61},uColour={value:colour},uWarm={value:warm},uScan={value:0};
   const shared={uTime,uEnergy,uOpen,uColour,uWarm};
+  scene.add(createCompanionFrame({colour:uColour,energy:uEnergy,opening:.29}));
   const shader=(vertexShader,fragmentShader,uniforms={})=>new THREE.ShaderMaterial({
     vertexShader,fragmentShader,uniforms:{...shared,...uniforms},transparent:true,depthWrite:false,
     blending:THREE.AdditiveBlending,side:THREE.DoubleSide,forceSinglePass:true});
   const plane=new THREE.PlaneGeometry(1,1);
   const aura=new THREE.Mesh(plane,shader(planeVertex,auraFragment));
-  aura.scale.set(2.55,2.55,1);aura.position.z=-.2;assembly.add(aura);
+  aura.scale.set(2.22,2.22,1);aura.position.z=-.2;assembly.add(aura);
   const geometry=new THREE.BufferGeometry(),angles=[],sides=[],positions=[],indices=[];
   for(let i=0;i<=320;i++)for(let edge=0;edge<2;edge++){
     const a=i/320*TAU;angles.push(a);sides.push(edge?1:-1);positions.push(Math.cos(a),Math.sin(a),0);
@@ -182,6 +188,8 @@ export function createAsterDisplay(canvas) {
   strand(.87,.003,2.3,.28,.12,1);
   const core=new THREE.Mesh(plane,shader(planeVertex,coreFragment,{uScan}));
   core.scale.set(1.16,1.16,1);core.position.z=.15;commandCore.add(core);
+  const reactor=createCompanionCore({identity:"aster",time:uTime,energy:uEnergy,colour:uColour,highlight:uWarm});
+  reactor.group.position.z=.22;commandCore.add(reactor.group);
   const seeds=[],dustPositions=[];
   for(let i=0;i<140;i++){
     const random=n=>{const x=Math.sin((i+1)*n)*43758.5453;return x-Math.floor(x);};
@@ -192,7 +200,7 @@ export function createAsterDisplay(canvas) {
   const dust=new THREE.Points(dustGeometry,shader(dustVertex,dustFragment,{uDpr:{value:renderer.getPixelRatio()}}));
   dust.frustumCulled=false;halo.add(dust);
   const life=createAsterMotion();
-  let state='idle',level=0,smoothLevel=0,accent='#65e4ef',idle=true,reduced=false,focus='tracking',activity=1;
+  let state='idle',level=0,smoothLevel=0,accent=signature.primary,secondary=signature.secondary,idle=true,reduced=false,focus='tracking',activity=1;
   let frame=0,last=0,time=0,disposed=false,visible=true,dirty=true,frameRate=30,tiltX=0,tiltY=0;
   let lastPose={x:0,y:0,aperture:.61,pulse:0,time:0,activity:'idle'},frames=0;
   function schedule(){if(!frame&&!disposed&&visible&&!document.hidden)frame=requestAnimationFrame(draw);}
@@ -200,6 +208,7 @@ export function createAsterDisplay(canvas) {
   function resize(){
     const rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;
     renderer.setSize(rect.width,rect.height,false);const aspect=rect.width/rect.height;
+    reactor.resize(rect.width,rect.height);
     camera.left=-extent*aspect;camera.right=extent*aspect;camera.updateProjectionMatrix();changed();
   }
   const observer=new ResizeObserver(resize);observer.observe(canvas);
@@ -214,13 +223,15 @@ export function createAsterDisplay(canvas) {
     smoothLevel=reduced?level:smoothLevel+(level-smoothLevel)*(1-Math.exp(-delta*9));
     const energy=(state==='speaking'?smoothLevel:state==='listening'?level*.7:state==='charging'?.45:.025)+lastPose.pulse*.28;
     uTime.value=time;uEnergy.value=energy;uOpen.value=lastPose.aperture;
-    colour.set(state==='alert'?'#ffab55':accent);warm.set(state==='alert'?'#ffdbac':'#a8b4ff');
+    colour.set(state==='alert'?'#ffab55':accent);warm.set(state==='alert'?'#ffdbac':secondary);
     halo.rotation.z=time*.026;
     halo.position.set(lastPose.x*.025,lastPose.y*.025,0);
     commandCore.position.set(lastPose.x*.045,lastPose.y*.045,0);
     commandCore.rotation.x=-lastPose.y*.12;commandCore.rotation.y=lastPose.x*.12;
     commandCore.scale.setScalar(1+(lastPose.aperture-.61)*.045+energy*.035);
     uScan.value=state==='working'?1:state==='listening'?.7:0;
+    reactor.update({state,clock:time,level:state==='speaking'?smoothLevel:state==='listening'?level*.7:0,
+      animated:active,pulse:lastPose.pulse});
     assembly.rotation.x=reduced?0:tiltY*.07;assembly.rotation.y=reduced?0:tiltX*.07;
     renderer.render(scene,camera);frames++;
     if(!reduced&&(idle||state!=='idle'||lastPose.attention>0))schedule();
@@ -231,7 +242,7 @@ export function createAsterDisplay(canvas) {
   return {
     setState(value,valueLevel=0){const next=clamp(Number(valueLevel)||0);if(state!==value||Math.abs(next-level)>.004){state=value;level=next;changed();}},
     setContext(model){if(life.context(model))changed();},
-    setColour(value){if(/^#[0-9a-f]{6}$/i.test(value)&&accent!==value){accent=value;changed();}},
+    setColour(value,highlight=signature.secondary){if(/^#[0-9a-f]{6}$/i.test(value)&&/^#[0-9a-f]{6}$/i.test(highlight)&&(accent!==value||secondary!==highlight)){accent=value;secondary=highlight;changed();}},
     setActivity(value){const next={calm:.5,standard:1,alive:1.6}[value]||1;if(activity!==next){activity=next;changed();}},
     setFocus(value){const next=['off','tracking','expressive'].includes(value)?value:'tracking';if(focus!==next){focus=next;changed();}},
     setMotion(value){if(idle!==Boolean(value)){idle=Boolean(value);changed();}},
@@ -239,7 +250,7 @@ export function createAsterDisplay(canvas) {
     setFrameRate(value){frameRate=[15,24,30,60].includes(Number(value))?Number(value):30;},
     setVisible(value){if(visible!==Boolean(value)){visible=Boolean(value);if(!visible){cancelAnimationFrame(frame);frame=0;}else changed();}},
     setTilt(x,y){tiltX=clamp(x,-1,1);tiltY=clamp(y,-1,1);changed();},
-    inspect(){return {...lastPose,frames,state,reduced,idle,focus,frameRate,drawCalls:renderer.info.render.calls,design:'luminous-halo',core:'segmented-command'};},
+    inspect(){return {...lastPose,frames,state,reduced,idle,focus,frameRate,accent,secondary,drawCalls:renderer.info.render.calls,design:'luminous-halo',core:'segmented-command',reactor:reactor.inspect()};},
     destroy(){disposed=true;cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener('visibilitychange',visibility);const geometries=new Set(),materials=new Set();scene.traverse(object=>{if(object.geometry)geometries.add(object.geometry);for(const material of Array.isArray(object.material)?object.material:[object.material])if(material)materials.add(material);});geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>material.dispose());renderer.dispose();},
   };
 }

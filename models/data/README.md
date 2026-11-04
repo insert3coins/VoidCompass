@@ -1,6 +1,6 @@
 # Commander Data — Piper voice archive
 
-Saved on 4 November 2026 for future VoidCompass voice/companion evaluation.
+Saved on 4 November 2026. Used by **Axiom**, an original Void Compass companion introduced as a voice/display preview in 5.7.4. Lore and stories are pending. See [setup and examples](../../docs/CREW_COMPANIONS.md).
 
 - Creator/source: [dividebysandwich/piper-voice-models — Data](https://github.com/dividebysandwich/piper-voice-models/tree/b9c5f3d1d7b6d0e0f5647ae31dbf13b13b0d3a6f/Data).
 - Source revision: `b9c5f3d1d7b6d0e0f5647ae31dbf13b13b0d3a6f`.

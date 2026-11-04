@@ -109,3 +109,5 @@ keepsakes.json
 models/jarvis/installed.json
 models/jarvis/*.7z
 models/jarvis/metadata.csv
+models/data/installed.json
+models/picard/installed.json

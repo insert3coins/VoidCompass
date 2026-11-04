@@ -841,6 +841,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             if not (isinstance(row, list) and len(row) >= 3):
                 continue
             kind, heading = watcher_mind.thought_heading(row[1], row[2])
+            if getattr(mind, "identity", "watcher") in companions.NEW_IDENTITIES:
+                kind, heading = "reply" if row[1] == "talk" else "", companions.name(self.config).upper()
             if getattr(mind, "identity", "watcher") == "aster":
                 kind, heading = aster_lore.heading(row[2]) if row[1] == "aster_lore" else ("reply" if row[1] == "talk" else "", "OFFICER ON WATCH")
                 if str(row[1]).startswith("aster_name_"):
@@ -871,9 +873,10 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         return {
             "identity": companions.identity(self.config),
             "companion_name": companions.name(self.config),
+            "companions": [{"id": identity, **profile} for identity, profile in companions.PROFILES.items()],
             "companion_generation": getattr(self, "_companion_generation", 0),
             "enabled": heartbeat is not None,
-            "nature": "officer" if companions.identity(self.config) == "aster" else watcher_mind.personality(self.config),
+            "nature": "officer" if companions.identity(self.config) != "watcher" else watcher_mind.personality(self.config),
             "frequency": watcher_mind.frequency(getattr(mind, "config", self.config)),
             "eye": _text(self.config.get("heartbeat_eye_color") or "theme", 10),
             # The orb here keeps to the Watcher's Frame rate too (5.5.7).
@@ -902,7 +905,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "log": log,
             "hotkey": _text(self.config.get("overlay_hotkey_watcher_poke"), 40),
             # Its long story and the echoes heard (5.5.3.5).
-            "lore": aster_lore.page(memory, hours) if companions.identity(self.config) == "aster" else watcher_lore.page(memory, sessions, hours, _watcher_echoes(memory)),
+            "lore": {"identity": companions.identity(self.config), "pending": True, "title": f"{companions.name(self.config)} · story pending", "told": 0, "total": 0, "chapters": []} if companions.pending_story(self.config) else aster_lore.page(memory, hours) if companions.identity(self.config) == "aster" else watcher_lore.page(memory, sessions, hours, _watcher_echoes(memory)),
             # 5.6.1, deeper: its question, your answers, what it keeps of you,
             # its trust and mood, its dreams, the Watchers it has met.
             "deeper": self._html_watcher_deeper(mind) if hasattr(self, "_html_watcher_deeper") else {},
@@ -911,6 +914,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         }
 
     def _html_watcher_deeper(self, mind):
+        from voidcompass.core import companions
+        if getattr(mind, "identity", "watcher") in companions.NEW_IDENTITIES:
+            return {"memories": [], "answers": [], "dreams": [], "met": [], "question": None}
         if getattr(mind, "identity", "watcher") == "aster":
             return {"memories": mind.memories_page(), "answers": [], "dreams": [], "met": [],
                     "question": mind.pending_question(),
@@ -958,6 +964,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         import html as html_module
         from voidcompass.core import companions
         from voidcompass.overlays import aster_lore
+        if companions.pending_story(self.config):
+            return False
         from datetime import datetime as _datetime
         mind = self._watcher_mind()
         memory = mind.memory

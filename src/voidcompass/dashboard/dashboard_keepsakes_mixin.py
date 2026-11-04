@@ -286,6 +286,8 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
     def _postcard_companion_note(self, card, from_sol, state, *, config=None, preview=False):
         """Write and sign together; previews never consume a real rotation."""
         config = dict(self.config if config is None else config)
+        if companions.pending_story(config):
+            return ""
         if not config.get("heartbeat_overlay_enabled", True):
             return ""
         if watcher_mind.frequency(companions.settings(config)) == "off":

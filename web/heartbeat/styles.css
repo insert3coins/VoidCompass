@@ -57,6 +57,7 @@ body[data-thought-colour="accent"] .thought { --thought-ink: var(--accent); }
 body[data-thought-colour="red"] .thought { --thought-ink: var(--red); }
 body[data-thought-colour="cyan"] .thought { --thought-ink: #65e4ef; }
 body[data-thought-colour="brass"] .thought { --thought-ink: #e8c48c; }
+body[data-thought-colour="companion"] .thought { --thought-ink: var(--companion-eye-colour, var(--accent)); }
 body[data-thought-size="small"] .thought { font-size: calc(10px * var(--scale, 1)); }
 body[data-thought-size="large"] .thought { font-size: calc(13.5px * var(--scale, 1)); }
 body.thought-left .thought { flex-direction: row-reverse; text-align: right; }
