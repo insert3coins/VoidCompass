@@ -1,7 +1,7 @@
 """Aster's original officer dialogue. Facts are supplied by the game, never invented."""
 import random
 
-from voidcompass.overlays import aster_responses, aster_dockside, aster_idle
+from voidcompass.overlays import aster_responses, aster_dockside, aster_idle, aster_signoff
 
 GREETINGS = (
     "Aster, reporting for duty. The ship is ready. I shall reserve judgement on the itinerary.",
@@ -110,7 +110,8 @@ EVENTS = {
     "sample_clear": ("Sampling separation reached for {species}: {distance}.", "The separation is sufficient for {species}. Another sample may now be taken."),
     "rare_world": ("{body}: {kind}. Mark this one for the report.", "{body}. {kind}. Even I would allow a moment away from the checklist."),
     "green_giant": ("Green giant recorded in {system}.", "{system}. A finding for which the report deserves more than its usual care."),
-    "sign_off": ("Watch complete. {summary} We can resume when you return.", "Signing off. The manifest can wait until our next departure."),
+    "sign_off": ("Watch complete. This session's record: {summary}. We can resume when you return.",
+                 "Signing off, Commander. Filed in this watch's manifest: {summary}. The next page can wait."),
     "sign_off_quiet": ("Watch complete. Until next time, Commander.", "A quiet watch is still a watch properly kept. Good night, Commander."),
     "jet_boost": ("Neutron boost recorded. Check the drive before continuing.", "A useful reduction in distance. Let us keep the drive in a condition to appreciate it."),
     "interdiction_escaped": ("Interdiction evaded. Resume only when clear.", "Escape confirmed. A sound decision requires no elaborate justification."),
@@ -325,7 +326,7 @@ for topic, lines in aster_responses.RESTRAINED_EVENTS.items():
     EVENTS[topic] = tuple(dict.fromkeys(original + lines))
 for topic, lines in aster_responses.OFFICER_EVENTS.items():
     EVENTS[topic] = tuple(dict.fromkeys(EVENTS[topic] + lines))
-for bank in (aster_dockside, aster_idle):
+for bank in (aster_dockside, aster_idle, aster_signoff):
     for topic, lines in bank.PLAIN.items():
         RESTRAINED_EVENTS[topic] = tuple(dict.fromkeys(RESTRAINED_EVENTS.get(topic, ()) + lines))
         EVENTS[topic] = tuple(dict.fromkeys(EVENTS.get(topic, ()) + lines + bank.DRY.get(topic, ())))
@@ -429,7 +430,9 @@ def answer(kind, rng=None, previous=None, used=(), restrained=False):
     pool = (RESTRAINED_GREETINGS if restrained else GREETINGS) if kind == "greeting" else CAPABILITIES
     picker = getattr(rng, "dialogue_choice", None)
     if callable(picker):
-        return picker(kind, pool)
+        line = picker(kind, pool)
+        formatter = getattr(rng, "format_words", None)
+        return formatter(line, {}) if callable(formatter) else line
     choices = [line for line in pool if line != previous and line not in used]
     return (rng or random).choice(choices or [line for line in pool if line != previous] or list(pool))
 
@@ -438,15 +441,16 @@ def command_reply(outcome, rng, fields):
     # Pick only usable templates, so a missing field cannot consume a wording
     # or accidentally send the officer down the Watcher's fallback path.
     candidates = {}
+    formatter = getattr(rng, "format_words", None)
     for line in COMMANDS.get(outcome, ()):
         try:
-            candidates[line] = line.format(**fields)
+            candidates[line] = formatter(line, fields) if callable(formatter) else line.format(**fields)
         except (KeyError, IndexError, ValueError):
             continue
     if not candidates:
         outcome = "unavailable"
         candidates = dict.fromkeys(COMMANDS[outcome])
-        candidates = {line: line for line in candidates}
+        candidates = {line: formatter(line, {}) if callable(formatter) else line for line in candidates}
     picker = getattr(rng, "command_choice", None)
     line = picker(outcome, tuple(candidates)) if callable(picker) else (rng or random).choice(tuple(candidates))
     return candidates[line]

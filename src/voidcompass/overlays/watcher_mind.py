@@ -1067,6 +1067,10 @@ class WatcherMind:
             return self.session_start()
         return None
 
+    def load_game(self, raw):
+        """An explicit login; companions can distinguish it from a fallback wake."""
+        return self.session_start()
+
     def session_start(self):
         now = self.clock()
         died_since = self.memory.get("last_death") and (
@@ -1180,7 +1184,7 @@ class WatcherMind:
         if event in {"LoadGame", "Resurrect", "RepairAll", "Docked"}:
             self._hull_warned = 0
         if event in {"LoadGame"}:
-            return self.session_start()
+            return self.load_game(raw)
         if self._session_start is None and event == "Died":
             self._session_start = now  # the death matters more than a hello
         elif self._session_start is None and event not in {"Shutdown", "Fileheader", "Commander"}:

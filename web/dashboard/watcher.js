@@ -865,7 +865,7 @@ function namePanel() {
     <header><span>YOUR NAME</span><b class="watcher-saved" id="watcher-name-saved"></b></header>
     <p class="watcher-note" id="watcher-name-note"></p>
     <div class="watcher-name-fields">
-      <label class="studio-field"><span>It calls you<small>Commander every day; a name only for the moments that matter, once a session</small></span>
+      <label class="studio-field"><span>It calls you<small id="watcher-name-policy">Choose your preferred form of address</small></span>
         <select id="watcher-name-call">${option("commander", "Commander")}${option("name", "Your name")}${option("nickname", "A name you choose")}</select></label>
       <label class="studio-field"><span>A name you choose<small>Used when it calls you by a name you choose</small></span>
         <input type="text" id="watcher-name-nickname" maxlength="24" spellcheck="false" autocomplete="off"></label>
@@ -897,6 +897,10 @@ function wireName(root, ui) {
 }
 
 function renderName(name, ui) {
+  const officer = activeCompanion === "aster";
+  ui.byId("watcher-name-policy").textContent = officer
+    ? "Uses your chosen name or nickname in replies and reports; choose Commander to keep the title"
+    : "Commander every day; a name only for the moments that matter, once a session";
   const known = String(name.known || "");
   const call = ["commander", "name", "nickname"].includes(name.call) ? name.call : "commander";
   const nickname = String(name.nickname || "");
@@ -905,8 +909,10 @@ function renderName(name, ui) {
   if (known) {
     note = activeCompanion === "aster" ? `Aster has read ${known} in the crew register.` : `The ship writes ${known} every time you wake it.`;
     if (!name.call) note += told ? " It has noticed, and will ask you about it. Or choose here." : " Choose what it calls you here, or wait for it to ask.";
-    else if (call === "name") note += " It may use it now and then, never more than once a session.";
-    else if (call === "nickname") note += nickname ? ` It calls you ${nickname} now and then.` : " Write the name you'd like below.";
+    else if (call === "name") note += officer ? " Your name is its regular form of address." : " It may use it now and then, never more than once a session.";
+    else if (call === "nickname") note += nickname
+      ? officer ? ` It uses ${nickname} as your regular form of address.` : ` It calls you ${nickname} now and then.`
+      : " Write the name you'd like below.";
     else note += " It calls you Commander.";
   }
   ui.byId("watcher-name-note").textContent = note;

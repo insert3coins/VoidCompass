@@ -1,4 +1,5 @@
 """Aster's officer on watch: original dialogue and a separate paced memory."""
+import re
 import zlib
 from types import SimpleNamespace
 
@@ -36,6 +37,15 @@ class OfficerRandom:
     def dialogue_choice(self, kind, lines):
         return self._choice("aster_dialogue", kind, lines)
 
+    def farewell_choice(self, topic, lines):
+        return self._choice("aster_farewells", topic, lines)
+
+    def welcome_choice(self, topic, lines):
+        return self._choice("aster_welcomes", topic, lines)
+
+    def format_words(self, template, fields):
+        return aster_name.format_words(self.mind.memory, template, fields)
+
     def _choice(self, collection, outcome, lines):
         keys = {line: _fingerprint(line) for line in lines}
         with self.mind.lock:
@@ -44,6 +54,13 @@ class OfficerRandom:
                 # Existing installations already have conversation records.
                 heard = [keys[row["it"]] for row in self.mind.memory.get("talk", []) if row.get("it") in keys]
                 history[outcome] = list(dict.fromkeys(reversed(heard)))[::-1]
+            if outcome not in history and collection in {"aster_farewells", "aster_welcomes"}:
+                heard = [line for line in lines
+                         if f"aster:{outcome}:{keys[line]}" in self.mind.memory["aster_wording"]]
+                heard.sort(key=lambda line: self.mind._last_said(f"aster:{outcome}:{keys[line]}"))
+                previous = self.mind.memory["aster_event_last"].get(outcome)
+                heard.sort(key=lambda line: f"aster:{outcome}:{keys[line]}" == previous)
+                history[outcome] = [keys[line] for line in heard]
             used = [key for key in history.get(outcome, []) if key in keys.values()]
             last_key = collection + ":" + outcome
             previous = self.mind.memory.setdefault("aster_choice_last", {}).get(last_key) or (used[-1] if used else None)
@@ -111,8 +128,13 @@ class AsterMind(watcher_mind.WatcherMind):
         memory.update(aster_marks={}, aster_systems=[], aster_arrivals=[], aster_moments=[],
                       aster_wording={}, aster_event_last={}, aster_texts={},
                       aster_commands={}, aster_dialogue={}, aster_choice_last={}, aster_headlines={},
-                      aster_hatchling_seen={}, aster_idle_recalled={})
+                      aster_hatchling_seen={}, aster_idle_recalled={}, aster_farewells={}, aster_lore_words={},
+                      aster_welcomes={}, aster_load_game=None)
         return memory
+
+    def _fresh_state(self):
+        super()._fresh_state()
+        self._aster_game_session = False
 
     def command_words(self, words):
         return companions.addressed(words, "aster") or "hello aster"
@@ -120,15 +142,23 @@ class AsterMind(watcher_mind.WatcherMind):
     def _variant(self, topic, fields):
         lines = aster_lines.event_lines(topic, self.config.get("aster_humour", "dry") == "off")
         candidates = []
+        eligible = {}
         for line in lines:
             try:
-                words = line.format(**watcher_mind.noticed(fields))
+                noticed = watcher_mind.noticed(fields)
+                factual = line.format(**noticed)
+                words = self.random.format_words(line, noticed)
             except (KeyError, IndexError, ValueError):
                 continue
             key = f"aster:{topic}:{_fingerprint(line)}"
-            candidates.append((key, words, words != line))
+            candidates.append((key, words, factual != line))
+            eligible[line] = (key, words)
         if not candidates:
             return None
+        if topic in {"sign_off", "sign_off_quiet"}:
+            return eligible[self.random.farewell_choice(topic, tuple(eligible))]
+        if topic in {"greet_new", "greet_away"}:
+            return eligible[self.random.welcome_choice(topic, tuple(eligible))]
         def text_fresh(row, window):
             at = self.memory["aster_texts"].get(_text_key(row[1]))
             return at is None or self.clock() - at >= window
@@ -260,10 +290,6 @@ class AsterMind(watcher_mind.WatcherMind):
         return thought
 
     def _utter(self, topic, key, script, now):
-        preferred = watcher_name.may_name(self.memory, self._session_start) if topic in watcher_name.NAMED else None
-        if preferred and "Commander" in script:
-            script = script.replace("Commander", preferred, 1)
-            watcher_name.mark_used(self.memory, self._session_start)
         thought = super()._utter(topic, key, script, now)
         if aster_idle.casual(topic):
             thought["importance"] = 1
@@ -305,15 +331,39 @@ class AsterMind(watcher_mind.WatcherMind):
                 pass
         return watcher_copilot.plain_answer(lines) or aster_lines.command_reply("plain", self.random, {})
 
-    def session_start(self):
+    def load_game(self, raw):
+        stamp = str(raw.get("timestamp") or "").strip()
+        login = [stamp, str(raw.get("FID") or ""), str(raw.get("Commander") or "")]
+        if stamp and login == self.memory.get("aster_load_game"):
+            return None
         now = self.clock()
-        if self._session_start is not None and now - (getattr(self, "_last_event_at", now) or now) < 900:
+        # Rank/Location or a fresh docked snapshot may wake us just before
+        # LoadGame. That single welcome belongs to this login, not two watches.
+        just_woke = (not self._aster_game_session and self._session_start is not None
+                     and 0 <= now - self._session_start <= 5
+                     and (self.thought or {}).get("topic") in {"greet_new", "greet_away"})
+        if just_woke:
+            self._aster_game_session = True
+            watcher_name.count_session(self.memory, self._session_start)
+            thought = None
+        else:
+            thought = self.session_start(login=True)
+        if stamp:
+            self.memory["aster_load_game"] = login
+        self._unsaved = True
+        self.save()
+        return thought
+
+    def session_start(self, *, login=False):
+        now = self.clock()
+        if not login and self._session_start is not None and now - (getattr(self, "_last_event_at", now) or now) < 900:
             return None
         self._session_start = self._counted_until = now
+        self._aster_game_session = login
         self._record_said = set()
         self.surroundings.reset_session()
         with self.lock:
-            first = not self.memory.get("last_seen")
+            first = not int(self.memory.get("sessions") or 0)
             self.memory["sessions"] = int(self.memory.get("sessions") or 0) + 1
             self.memory["session_started"] = now
             self.memory["first_seen"] = self.memory.get("first_seen") or now
@@ -380,7 +430,9 @@ class AsterMind(watcher_mind.WatcherMind):
             return None
         with self.lock:
             self.memory.setdefault("lore", []).append([row[0], now])
-        return self._utter("aster_lore", "aster:story:" + row[0], row[5], now)
+            words = self.random.format_words(row[5], {})
+            self.memory.setdefault("aster_lore_words", {})[row[0]] = words
+        return self._utter("aster_lore", "aster:story:" + row[0], words, now)
 
     def learn(self, context):
         super().learn(context)
@@ -509,7 +561,7 @@ class AsterMind(watcher_mind.WatcherMind):
         words = str((thought or {}).get("text") or "")
         for shown, said in aster_name.spoken(self.memory).items():
             if shown and said:
-                words = words.replace(shown, said)
+                words = re.sub(r"(?<!\w)" + re.escape(shown) + r"(?!\w)", lambda _match: said, words)
         return words
 
     def story_marks(self):
@@ -601,8 +653,6 @@ class AsterMind(watcher_mind.WatcherMind):
         called = watcher_name.call_name(self.memory)
         kind = "first" if called else "commander"
         words = aster_name.words(kind, self.random, called=called)
-        if called:
-            watcher_name.mark_used(self.memory, self._session_start)
         return self._name_say("first", words, now)
 
     def answer(self, answer):

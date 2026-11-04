@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
-from voidcompass.overlays import aster_name, watcher_name, watcher_questions
+from voidcompass.overlays import aster_name, aster_lines, aster_lore, watcher_name, watcher_questions, watcher_ship
 from voidcompass.overlays.aster_mind import AsterMind
 from voidcompass.overlays.heartbeat_hud import HeartbeatHUD
 
@@ -40,7 +40,7 @@ class AsterNameTests(unittest.TestCase):
         self.assertEqual(question["topic"], "aster_name_ask")
         return notice, question
 
-    def test_three_short_parts_then_approved_name_once_a_session(self):
+    def test_three_short_parts_then_approved_name_is_the_regular_address(self):
         mind = self.mind()
         self.assertIsNone(mind.tick())
         self.clock.now += 899
@@ -63,14 +63,82 @@ class AsterNameTests(unittest.TestCase):
         self.assertEqual(first["heading"], "THE CREW REGISTER · 3 OF 3")
         self.assertIn("insert3coins", first["text"])
         self.assertEqual(watcher_name.call_name(mind.memory), "insert3coins")
-        self.assertIsNone(watcher_name.may_name(mind.memory, mind._session_start))
-        self.clock.now += 3600
-        mind._session_start = self.clock()
-        first = mind._utter("greet_away", "greet-one", "Welcome back, Commander.", self.clock())
-        second = mind._utter("greet_away", "greet-two", "Welcome back, Commander.", self.clock())
-        self.assertEqual(first["text"], "Welcome back, insert3coins.")
-        self.assertEqual(second["text"], "Welcome back, Commander.")
+        reports = [mind.consider("sign_off", {"summary": "19 jumps"}, force=True)["text"]
+                   for _ in aster_lines.EVENTS["sign_off"]]
+        self.assertGreater(sum("insert3coins" in words for words in reports), 10)
+        self.assertTrue(all("Commander" not in words for words in reports))
         self.assertIsNone(mind._name_step(self.clock() + 301))
+
+    def test_approved_address_applies_to_greetings_commands_and_reports_without_changing_facts(self):
+        mind = self.mind()
+        watcher_name.set_call(mind.memory, "nickname", "Jeff {Pilot}")
+        # Old installed memories can retain this marker; Aster's new policy
+        # must not fall back to Commander after a name has already been said.
+        watcher_name.mark_used(mind.memory, mind._session_start)
+        greetings = []
+        for _ in aster_lines.GREETINGS:
+            mind.talk("Hello Aster")
+            greetings.append(mind.thought["text"])
+        self.assertTrue(any("Jeff {Pilot}" in words for words in greetings))
+        self.assertTrue(all("Commander" not in words for words in greetings))
+        replies = [watcher_ship.reply("screen_open", mind.random, label_l="Commander, Hold", Label="Commander, Hold")
+                   for _ in aster_lines.COMMANDS["screen_open"]]
+        self.assertTrue(all("Commander, Hold" in words for words in replies))
+        self.assertTrue(any("Jeff {Pilot}" in words for words in replies))
+        self.assertTrue(all("Commander, Hold" not in words.replace("Commander, Hold", "", 1) for words in replies))
+        reports = [mind.consider("promotion", {"rank": "Commander, Reserve"}, force=True)["text"]
+                   for _ in aster_lines.EVENTS["promotion"]]
+        self.assertTrue(all("Commander, Reserve" in words for words in reports))
+        self.assertTrue(any("Jeff {Pilot}" in words for words in reports))
+        external = "Commander, hold position at Commander, Hold."
+        self.assertEqual(mind.relay(external)["text"], external)
+        mind.lookup_provider = lambda _: [external]
+        mind.talk("Aster, where are we?")
+        self.assertEqual(mind.thought["text"], external)
+
+    def test_journal_name_needs_approval_and_explicit_commander_still_keeps_the_title(self):
+        mind = self.mind()
+        self.assertEqual(mind.random.format_words("Ready, Commander.", {}), "Ready, Commander.")
+        watcher_name.set_call(mind.memory, "name")
+        self.assertEqual(mind.random.format_words("Ready, Commander.", {}), "Ready, insert3coins.")
+        watcher_name.set_call(mind.memory, "commander")
+        self.assertEqual(mind.random.format_words("Ready, Commander.", {}), "Ready, Commander.")
+        self.assertEqual(mind.random.format_words("Commander record updated: {body}.", {"body": "Commander, Hold"}),
+                         "Commander record updated: Commander, Hold.")
+
+    def test_personalised_story_is_retained_as_heard_after_preference_change_and_restart(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "aster_memory.json"
+            mind = self.mind(path)
+            watcher_name.set_call(mind.memory, "nickname", "Jeff")
+            mind.memory["hours"] = 500
+            self.clock.now += 601
+            thought = mind.remember()
+            self.assertIn("A formality, Jeff.", thought["text"])
+            self.assertEqual(aster_lore.page(mind.memory, 500)["chapters"][0]["told"][0]["text"], thought["text"])
+            watcher_name.set_nickname(mind.memory, "Night Owl")
+            mind.save()
+            resumed = self.mind(path)
+            self.assertEqual(aster_lore.page(resumed.memory, 500)["chapters"][0]["told"][0]["text"], thought["text"])
+            self.assertEqual(resumed.random.format_words("Ready, Commander.", {}), "Ready, Night Owl.")
+            old = {"lore": [[aster_lore.PASSAGES[0][0], self.clock()]]}
+            self.assertEqual(aster_lore.page(old, 500)["chapters"][0]["told"][0]["text"], aster_lore.PASSAGES[0][5])
+
+    def test_name_pronunciation_does_not_change_a_longer_word(self):
+        mind = self.mind()
+        watcher_name.set_call(mind.memory, "nickname", "Jeff")
+        watcher_name.set_spoken(mind.memory, "Jef")
+        self.assertEqual(mind.spoken_words({"text": "Jeff, the Jefferson is ready."}), "Jef, the Jefferson is ready.")
+
+    def test_personal_name_does_not_shorten_minor_wording_exhaustion_rest(self):
+        mind = self.mind()
+        watcher_name.set_call(mind.memory, "nickname", "Jeff")
+        for _ in aster_lines.EVENTS["quiet"]:
+            self.assertIsNotNone(mind.consider("quiet", force=True))
+        self.clock.now += 86401
+        self.assertIsNone(mind.consider("quiet", force=True), "a changing address does not turn fixed remarks into journal facts")
+        self.clock.now += 2 * 86400
+        self.assertIsNotNone(mind.consider("quiet", force=True))
 
     def test_commander_choice_is_respected_and_does_not_nag(self):
         mind = self.mind()

@@ -8,6 +8,7 @@ UNLOCK_HOURS = .25
 SETTLE_S = 120
 GAP_S = 180
 ORDER = ("notice", "ask", "first")
+_ADDRESS = re.compile(r"\bCommander\b(?=\s*[,.:;!?]|$)")
 
 LINES = {
     "notice": (
@@ -19,7 +20,7 @@ LINES = {
         "A small matter for our crew register. Would you like me to call you {name}, retain Commander, or use a name of your own choosing?",
     ),
     "first": (
-        "{called}, then. I shall keep the rank for the formal reports. Here aboard this ship, it is good to know the person I am serving with.",
+        "{called}, then. I shall use that in our reports as well. Here aboard this ship, it is good to know the person I am serving with.",
         "Very well, {called}. Your entry in my register is in order. I rather prefer a crew made of people to one made entirely of titles.",
     ),
     "commander": (
@@ -42,7 +43,21 @@ def record(memory):
 
 
 def words(kind, rng, **fields):
-    return rng.dialogue_choice("crew:" + kind, LINES[kind]).format(**fields)
+    line = rng.dialogue_choice("crew:" + kind, LINES[kind])
+    formatter = getattr(rng, "format_words", None)
+    if kind == "renamed" and callable(formatter):
+        return formatter(line, fields)
+    return line.format(**fields)
+
+
+def format_words(memory, template, fields):
+    """Personalise authored addresses before inserting journal/user facts."""
+    called = watcher_name.call_name(memory)
+    if called:
+        template = _ADDRESS.sub("{aster_address}", template)
+    # Values are inserted once. Braces in a nickname are ordinary text,
+    # and a system or command whose name contains Commander stays intact.
+    return template.format(**{**fields, "aster_address": called or "Commander"})
 
 
 def heading(topic):

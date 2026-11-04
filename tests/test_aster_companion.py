@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch
 import zipfile
 
 from voidcompass.core import companions, config
-from voidcompass.overlays import aster_lines, aster_lore, watcher_copilot, watcher_ship
+from voidcompass.overlays import aster_lines, aster_lore, watcher_copilot, watcher_ship, watcher_mind
 from voidcompass.overlays.aster_mind import AsterMind
 from voidcompass.overlays.heartbeat_hud import HeartbeatHUD, _memory_path, orb_size
 from voidcompass.overlays.watcher_mind import WatcherMind
@@ -105,6 +105,58 @@ class AsterMindTests(unittest.TestCase):
         self.assertIn(self.mind.thought["text"], aster_lines.RESTRAINED_EVENTS["quiet"])
         self.config["aster_thoughts"] = "off"
         self.assertIsNone(self.mind.consider("quiet", force=True))
+
+    def test_every_shutdown_report_separates_completed_jumps_from_its_farewell(self):
+        for humour in ("dry", "off"):
+            with self.subTest(humour=humour):
+                mind = AsterMind(None, dict(self.config, aster_humour=humour), clock=self.clock, rng=random.Random(2))
+                mind.observe("LoadGame")
+                self.clock.now += 7200
+                mind.observe("Shutdown")
+                variants = aster_lines.event_lines("sign_off", humour == "off")
+                heard = []
+                for _ in variants:
+                    thought = mind.note("sign_off", {"summary": "19 jumps", "hours": "2h 00m"})
+                    self.assertEqual(thought["topic"], "sign_off")
+                    # The summary has no punctuation of its own. Aster must
+                    # finish its sentence before starting the farewell.
+                    self.assertIn("19 jumps. ", thought["text"])
+                    self.assertRegex(thought["text"], r"(?:record|manifest|session|account): 19 jumps\.")
+                    self.assertIn("19 jumps. ", mind.spoken_words(thought))
+                    heard.append(thought["text"])
+                self.assertEqual(len(heard), len(set(heard)))
+
+    def test_shutdown_uses_captains_log_totals_and_saves_the_report_immediately(self):
+        from voidcompass.dashboard.dashboard import MainDashboard
+
+        for humour in ("dry", "off"):
+            for counts in ({"jumps": 19}, {"jumps": 19, "first_discoveries": 2, "biology_sales": 500000}, {"jumps": 0}):
+                with self.subTest(humour=humour, counts=counts), tempfile.TemporaryDirectory() as folder:
+                    path = Path(folder) / "aster_memory.json"
+                    mind = AsterMind(path, dict(self.config, aster_humour=humour), clock=self.clock, rng=random.Random(4))
+                    mind.observe("LoadGame")
+                    self.clock.now += 7200
+                    mind.observe("Shutdown")
+                    session = {"started": "2026-11-04T01:00:00Z", "ended": "2026-11-04T03:00:00Z", **counts}
+                    note = Mock(wraps=mind.note)
+                    deck = SimpleNamespace(heartbeat_hud=SimpleNamespace(note=note),
+                                           captains_log=SimpleNamespace(sessions=lambda: [session]),
+                                           nav_route_entries=[{"StarSystem": "A different itinerary"}],
+                                           route_remaining_jumps=777)
+                    MainDashboard._watcher_sign_off(deck)
+                    expected = watcher_mind.session_summary(session)
+                    self.assertEqual(note.call_args.args, ("sign_off", {"summary": expected, "hours": "2h 00m"}))
+                    thought = mind.thought
+                    self.assertNotIn("777", thought["text"])
+                    if expected:
+                        self.assertEqual(thought["topic"], "sign_off")
+                        self.assertIn(expected + ". ", thought["text"])
+                    else:
+                        self.assertEqual(thought["topic"], "sign_off_quiet")
+                        self.assertNotIn("jumps", thought["text"])
+                    saved = json.loads(path.read_text(encoding="utf-8"))
+                    self.assertEqual(saved["log"][-1][1:], [thought["topic"], thought["text"]])
+                    self.assertEqual(saved["aster_event_last"][thought["topic"]], saved["said"][-2][0])
 
     def test_minor_remarks_exhaust_the_bank_then_keep_quiet(self):
         heard = []
@@ -203,14 +255,16 @@ class AsterMindTests(unittest.TestCase):
         self.assertEqual(frequency(hud.mind.config), "rare")
         self.assertIsNone(hud.mind.consider("quiet"))
 
-    def test_preferred_address_is_used_sparingly_and_pronounced(self):
+    def test_preferred_address_is_used_throughout_reports_and_pronounced(self):
         self.mind._session_start = self.clock.now
         self.mind.memory["name"] = {"known": "J_F", "call": "name", "spoken": "Jeff"}
-        first = self.mind._utter("greet_away", "a", "Welcome back, Commander.", self.clock.now)
-        self.assertEqual(first["text"], "Welcome back, J_F.")
-        self.assertEqual(self.mind.spoken_words(first), "Welcome back, Jeff.")
-        second = self.mind._utter("greet_away", "b", "Welcome back, Commander.", self.clock.now)
-        self.assertEqual(second["text"], "Welcome back, Commander.")
+        with patch.object(self.mind.random.source, "choice", side_effect=lambda rows: rows[0]):
+            first = self.mind.consider("greet_away", force=True)
+            second = self.mind.consider("greet_soon", force=True)
+        self.assertEqual(first["text"], "Welcome back, J_F. Ready to resume the watch.")
+        self.assertEqual(self.mind.spoken_words(first), "Welcome back, Jeff. Ready to resume the watch.")
+        self.assertEqual(second["text"], "Ready to continue, J_F.")
+        self.assertEqual(self.mind.spoken_words(second), "Ready to continue, Jeff.")
 
     def test_profile_keys_and_size_fallbacks(self):
         for name in ("companion_identity", "aster_thoughts", "aster_humour", "aster_hud_accent", "aster_voice_speed", "aster_voice_level"):

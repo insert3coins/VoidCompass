@@ -201,9 +201,9 @@ RESTRAINED_EVENTS = {
         "A green giant for the survey record in {system}, Commander.",
     ),
     "sign_off": (
-        "Closing this watch, Commander. {summary} Until our next departure.",
-        "End-of-watch report: {summary} I shall be here when you return.",
-        "Our watch concludes. {summary} Take care, Commander.",
+        "Closing this watch, Commander. Completed this session: {summary}. Until our next watch.",
+        "End-of-watch report. Recorded this session: {summary}. I shall be here when you return.",
+        "Our watch concludes. This watch's account: {summary}. Take care, Commander.",
     ),
     "sign_off_quiet": (
         "Signing off for now. Good to have shared the watch.",

@@ -103,10 +103,11 @@ def page(memory, hours):
     chapters = []
     for chapter, (numeral, title, _start, _end, _gate, lines) in enumerate(CHAPTERS):
         rows = [row for row in PASSAGES if row[1] == numeral]
-        heard = [{"id": row[0], "text": row[5], "at": shared[row[0]]} for row in rows if row[0] in shared]
+        heard = [{"id": row[0], "text": memory.get("aster_lore_words", {}).get(row[0], row[5]), "at": shared[row[0]]}
+                 for row in rows if row[0] in shared]
         chapters.append({"numeral": numeral, "title": title if heard else "Unopened report", "book": 1,
                          "begun": bool(heard), "complete": len(heard) == len(lines), "told": heard,
-                         "total": len(lines), "account": "\n\n".join(lines) if len(heard) == len(lines) else ""})
+                         "total": len(lines), "account": "\n\n".join(row["text"] for row in heard) if len(heard) == len(lines) else ""})
     row = next_passage(memory, hours)
     next_ = None
     if row:

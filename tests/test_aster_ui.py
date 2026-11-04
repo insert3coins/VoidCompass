@@ -87,11 +87,19 @@ class AsterPageTests(unittest.TestCase):
         self.render()
         self.page.click('[data-watcher-tab="you"]')
         self.assertIn("Jeff", self.page.inner_text('#watcher-name-note'))
+        self.assertIn("regular form of address", self.page.inner_text('#watcher-name-note'))
+        self.assertIn("replies and reports", self.page.inner_text('#watcher-name-policy'))
+        self.assertNotIn("once a session", self.page.inner_text('#watcher-name-policy'))
         self.page.click('#watcher-name-story summary')
         self.assertIn("THE CREW REGISTER", self.page.inner_text('#watcher-name-story'))
         self.assertEqual(self.page.locator('#watcher-name-passages li').count(), 1)
         self.assertEqual(self.page.input_value('#watcher-name-spoken'), "Jef")
         self.page.locator('.watcher-name').screenshot(path=str(ARTIFACTS / 'aster-name-reader.png'))
+        self.data["identity"] = "watcher"
+        self.data["name"]["call"] = "name"
+        self.render()
+        self.assertIn("once a session", self.page.inner_text('#watcher-name-policy'))
+        self.assertIn("once a session", self.page.inner_text('#watcher-name-note'))
 
     def test_narrow_layout_and_story_reader(self):
         self.data['lore'] = aster_lore.page({'lore': [[aster_lore.PASSAGES[0][0], 1800000000]]}, 1)

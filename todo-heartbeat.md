@@ -16,6 +16,8 @@ The checked items below record work completed for Aster. The unchecked items for
 
 **Current limitation:** the code supports Watcher and Aster through several explicit two-way branches. Adding a name to `IDENTITIES` is only the first step. Audit the dispatch points listed below so a third identity cannot silently receive Watcher's model, memory, lore or display.
 
+**Pending boot-screen work:** startup currently always presents the Watcher. The boot screen must instead present the selected heartbeat companion: Aster when Aster is selected, Watcher when Watcher is selected, and the appropriate display for any future companion. This remains an unchecked implementation task below.
+
 ## New companion brief — fill this in first
 
 | Decision | New companion |
@@ -28,7 +30,7 @@ The checked items below record work completed for Aster. The unchecked items for
 | Original story title, premise, themes and ending | To decide |
 | Chapter/passage plan and time/event gates | To decide |
 | Commander-name introduction, theme and three short beats | To decide |
-| When it may use a personal name and its formal address | To decide; Aster follows Watcher's once-per-session personal-name policy |
+| When it may use a personal name and its formal address | To decide; Aster uses the approved name/nickname as its regular address, while Watcher retains its own once-per-session policy |
 | Visual identity, motion language and panel treatment | To decide |
 | Piper model source, local folder and exact ONNX/JSON pair | To decide |
 | Published download URL and supplied attribution/terms | To record |
@@ -69,7 +71,7 @@ Paths are relative to the repository root. Many shared components retain `watche
 - [x] Added independent commander memory in `aster_memory.json`, service moments and story progress, with switching/reset/export support.
 - [x] Kept shared questions, ship controls, maps, panels, app actions, sequences, aliases, microphone and command settings working.
 - [x] Added 50 greetings and ten capability rundowns, plus all command outcomes, warnings, failed actions and event reports in Aster's voice.
-- [x] Expanded to **163 event topics / 1,410 standard wordings**, **767 restrained wordings**, and **67 command outcomes / 289 acknowledgements**. These are a reference snapshot, not fixed requirements for every future character.
+- [x] Expanded to **163 event topics / 1,470 standard wordings**, **807 restrained wordings**, and **67 command outcomes / 289 acknowledgements**. These are a reference snapshot, not fixed requirements for every future character.
 - [x] Fixed rotation boundaries, remembered command/chat cycles, migrated existing history and protected event/headline history from rolling-log loss.
 - [x] Matched Watcher's idle pacing and willingness to stay quiet; retained necessary warnings and accurate requested reports.
 - [x] Integrated the current matching Piper pair under `models/jarvis/onnx/`, pinned both hashes and sizes, and gave Aster its own receipt at `models/jarvis/installed.json`.
@@ -83,6 +85,9 @@ Paths are relative to the repository root. Many shared components retain `watche
 - [x] Restored varied port company at the selected idle pace, including Rare; added dockside/carrier/concourse banks and startup station context from `Location`.
 - [x] Audited idle triggers against Watcher: added factual habits, old postcards/service memories, heard-only lore recollections, queued commander facts, long-watch reminders and contextual call replies in Aster's theme. Watcher's dreams, shutter/eye story and mood arcs remain its own.
 - [x] Routed automatic postcard writing to the selected companion, including Aster's own context-aware plain/dry notes, signature, persistent rotations, Studio author/preview, saved PNG/editor and text caption attribution.
+- [x] Corrected shutdown reports in both commentary modes: all variants include the completed session totals, label them as the watch just recorded and finish that sentence before the farewell. The shared Captain's Log and immediate-save path remain in use.
+- [x] Made the approved name/nickname Aster's regular address across its authored greetings, commands, events, story and farewells. Added larger active/quiet shutdown banks with persistent full-cycle rotation and no consecutive repeats; captured personalised story wording for its reader/export.
+- [x] Separated explicit LoadGame handling from fallback waking: Aster welcomes quick relogs and repeated legitimate logins, remembers its welcome rotation immediately, deduplicates the same timestamped login and coalesces a welcome issued in the preceding five seconds.
 - [x] Documented setup and operation, updated the 5.7.4 release notes and saved development memory.
 
 The final reference is the code and [Aster companion guide](docs/ASTER_COMPANION.md). Older development notes and preview screenshots include superseded eye/dot designs.
@@ -122,7 +127,7 @@ Runtime `<id>_memory.json` belongs to the commander profile; installation receip
 
 - [ ] Use `AsterMind` as a guide to reusing `WatcherMind`'s event plumbing without inheriting Watcher-specific fiction accidentally.
 - [ ] Give the mind its own `identity`, dialogue bank, headings, voice feel and spoken-word handling.
-- [ ] Review inherited hooks deliberately: `_event_echo`, `_dream`, `_observe_deeper`, `remember`, `tick`, `poke`, `find_voice`, `voice_stage`, `story_marks`, `story_progress`, `pending_question`, `ask`, `meet`, `memories_page` and `_queue_session_extras`. Aster suppresses or replaces Watcher-only behaviour in these paths; a new character must make its own choices.
+- [ ] Review inherited hooks deliberately: `load_game`, `session_start`, `_event_echo`, `_dream`, `_observe_deeper`, `remember`, `tick`, `poke`, `find_voice`, `voice_stage`, `story_marks`, `story_progress`, `pending_question`, `ask`, `meet`, `memories_page` and `_queue_session_extras`. Aster suppresses or replaces Watcher-only behaviour in these paths; a new character must make its own choices.
 - [ ] Write original chapters and stable passage IDs. Record heard passages so restarts cannot retell the same story entry.
 - [ ] Define settling time, quiet/lull requirements, minimum spacing, hours-together gates and relevant journal-event counters. Provide time alternatives where an event gate would exclude a play style.
 - [ ] Keep story delivery out of immediate danger; count hours only while this companion is active.
@@ -156,7 +161,8 @@ Use [aster_name.py](src/voidcompass/overlays/aster_name.py) for the original pas
 - [ ] Save heard steps and text immediately. Aster uses `name.aster_arc.passages` with `notice`, `ask` and `first`; give another companion its own progress field.
 - [ ] Store the question/choice in that companion's memory and restore a still-current pending question after restart. Expire stale questions without guessing the answer.
 - [ ] Avoid nagging: Aster's pending question expires after **five minutes**, with at least **14 days** before another attempt if unanswered. Do not let `force=True` bypass the retry interval.
-- [ ] After approval, reuse `may_name`/`mark_used` or the equivalent policy. Aster reserves the personal name for suitable moments, **at most once per session**, and keeps Commander for formal reports.
+- [ ] After approval, implement this character's intended address policy. Aster uses `watcher_name.call_name` in its authored templates across greetings, commands, reports, story and farewells; Watcher retains `may_name`/`mark_used` and its once-per-session rule. Respect the explicit Commander choice and require permission before using a journal name.
+- [ ] Personalise authored addresses before formatting factual fields, preserving actual system/ship/command names containing Commander. Store personalised story passages as heard so later preference changes do not rewrite the reader/export, and apply pronunciation to whole names rather than substrings of other words.
 - [ ] Handle journal renames with the persona's own update wording. Cancel a question about the old name, preserve the user's preferred form of address and keep the completed introduction completed.
 - [ ] Reset and back up only this companion's name progress. Include heard passages in its memories and **SAVE BOOK** export.
 
@@ -174,7 +180,7 @@ Use [aster_name.py](src/voidcompass/overlays/aster_name.py) for the original pas
 ### Name-specific acceptance checks
 
 - [ ] Test all choices, typed and recognised-speech replies, polite refusals, pronunciation, existing/manual preferences, unknown names, danger/activity/off guards and unrelated commands during the question.
-- [ ] Test restart during each stage, answered/unanswered retry behaviour, repeated ticks, once-per-session name use, journal renames, commander/identity isolation, reset backups and book export.
+- [ ] Test restart during each stage, answered/unanswered retry behaviour, repeated ticks, the selected persona's name-use policy, journal renames, commander/identity isolation, reset backups and book export.
 - [ ] Test real browser visibility, button payloads, hotkey labels, 390px layout and heard-only passage rendering. Re-run Watcher's existing name tests to preserve its own arc.
 
 References: [test_aster_name_574.py](tests/test_aster_name_574.py), the name-question/reader cases in [test_aster_ui.py](tests/test_aster_ui.py), and [test_watcher_name_571.py](tests/test_watcher_name_571.py). Aster's implementation passed the 109-check companion regression run; the final name/Watcher/UI recheck passed 26 checks. These are focused results, not a full-suite pass.
@@ -204,6 +210,9 @@ References: [test_aster_name_574.py](tests/test_aster_name_574.py), the name-que
 - [ ] Migrate older conversation/event history when adding or changing rotation fields. Save and restore the new fields in this character's own memory.
 - [ ] Format eligible command templates before choosing one; use the character's own fallback when fields are missing.
 - [ ] Always return requested factual readings and necessary warnings. Repeated questions may require the same truthful answer; external relay text is shown as supplied.
+- [ ] Check shutdown reports through the shared Captain's Log sign-off path. Every summary-bearing variant must include the completed session totals, identify them as past activity and end the summary sentence before its farewell. A bare `19 jumps` followed by `Until our next departure` can sound like a future route prediction. Cover both commentary modes, quiet/zero-total sessions and immediate persistence after Shutdown.
+- [ ] Give active and quiet shutdown replies explicit saved template rotations rather than relying on time-window freshness alone. Complete the applicable bank before reuse and avoid the previous line at cycle boundaries, after restarts, after style changes and after long gaps. See [aster_signoff.py](src/voidcompass/overlays/aster_signoff.py) and `OfficerRandom.farewell_choice`.
+- [ ] Distinguish a real login from fallback `awake` calls. Aster's `load_game` bypasses the old 15-minute session guard for every new LoadGame, while the shared journal path still suppresses historical replay. Test quick relogs with/without Shutdown, early Rank/Location or port-snapshot waking, duplicate timestamped delivery, immediate saved welcome rotations, Off and the actual HUD voice queue. The Watcher's default `load_game` delegates to its existing `session_start` policy.
 
 Reference implementation: `OfficerRandom`, `AsterMind._variant`, `consider`, `_utter` and `tick`; banks in `aster_lines.py`, `aster_responses.py` and [aster_idle.py](src/voidcompass/overlays/aster_idle.py); regressions in `tests/test_aster_repeat_574.py` and [test_aster_idle_574.py](tests/test_aster_idle_574.py).
 
@@ -264,6 +273,8 @@ Keep the existing shared `watcher` page, `heartbeat_hud`/`heartbeat` overlay ide
 
 ## 6. Build its own Three.js display and matching panel
 
+- [ ] Make the **boot screen** follow the saved active companion from its first presentation. Replace the hardcoded Watcher display with the selected companion's existing Three.js renderer and visual identity; for Aster, use its halo/command core. Extend the selection path for future companions rather than adding another two-way fallback.
+- [ ] Load the commander's saved companion selection before choosing the boot renderer, and make companion-specific names/descriptions agree with it. Retain the shared startup progress/readiness flow and existing rule that speech waits until boot completes. Verify fresh/default startup and restarts with Watcher, Aster and any new companion selected.
 - [ ] Define a visual identity from the new character's story. Reuse the rendering infrastructure while giving its geometry, motion and panel their own treatment.
 - [ ] Implement the renderer and its adapter, following `createAsterDisplay` and `AsterCompanion.update/dispose`.
 - [ ] Support the established controls: `setState`, `setContext`, `setColour`, `setActivity`, `setFocus`, `setMotion`, `setReducedMotion`, `setFrameRate`, `setVisible`, `setTilt`, `inspect` and `destroy`, or adapt them through one common interface.
@@ -304,6 +315,7 @@ Tick these only after reviewing the whole relevant path, including its fallbacks
 - [ ] `dashboard/html_dashboard.py`: workspace identity/nature, thought headings, story, deeper memories and book export.
 - [ ] `dashboard/html_overlay_studio.py`: settings snapshot, validation, saved-key mapping, toggles and all-companion sizing.
 - [ ] `web/dashboard/companion-ui.js`, `watcher.js`, `watcher.css`, `index.html` and relevant `app.js` callers: picker, labels, panels, story, voice, Studio and module loading.
+- [ ] Dashboard boot presentation and renderer loading: use the saved active companion instead of always constructing the Watcher; include startup identity/profile timing and first-frame selection in the audit.
 - [ ] `web/heartbeat/app.js`/`index.html`, the new display adapter and `companion-caption.js`: active renderer selection, labels, caption nature and readiness/rerender handling.
 - [ ] `dashboard/html_dashboard_server.py`: shared-file serving and `_SANDBOXED_MODULES` entries.
 - [ ] Relevant tests and fixtures: extend identity lists instead of accidentally replacing Watcher/Aster coverage.
@@ -323,10 +335,11 @@ Complete implementation and docs first, then add meaningful regressions and run 
 | Repetition | Several complete command/chat cycles, restart mid-cycle, rolling-log pressure, headline rest, cross-topic duplicates and long simulated sessions. |
 | Port company | Long station/carrier/concourse watches in both commentary modes and all frequencies; startup after skipped history; fresh versus stale telemetry; no invented docking events, no port chatter in flight, and the selected voice filter. |
 | Story | Ordered one-time passages, settling/spacing, time and event gates, no danger interruption, no inherited Watcher-only fiction. |
-| Commander name | Original short introduction; explicit name/title/nickname choice; contextual replies and answer keys; pronunciation; once-per-session use; no restart/retry nagging; rename/reset/export and per-companion/profile isolation. |
+| Commander name | Original short introduction; explicit name/title/nickname choice; contextual replies and answer keys; pronunciation; each persona's intended address policy; no restart/retry nagging; rename/reset/export and per-companion/profile isolation. |
 | Voice installation | Fresh published download and local adoption; both hashes; cancellation/failure; replacement model; independent receipts; removal with other voices installed. |
 | Voice switching | Switch while loading/speaking/listening/searching; late results cannot reach the new identity or commander. |
 | Captions | Native overlay and NOW panel agree during cold loading, queue pauses, playback, late/missing samples, hidden/visible transitions and reduced motion. |
+| Boot screen | The first visible companion matches the saved active identity on fresh/default startup and restart; Aster uses its own halo/core, future companions use theirs, and shared startup progress and deferred speech still work. |
 | Visuals | Actual WebGL motion at all intensities, live states, transparent pixels, matched diameter at all six sizes, tall caption windows, hidden GPU parking and clean teardown. |
 | UI/Studio | Every shared control works immediately; active labels update; desktop and narrow panels stay readable and controls do not move while text appears. |
 | Release | New code/assets and docs included; runtime models/receipts handled as intended; existing companions pass regression checks. |
@@ -340,6 +353,7 @@ Useful existing suites to extend:
 - `tests/test_aster_idle_574.py` — factual habit triggers, heard-only lore, aged postcards/service memories, persisted per-memory rests, queued career facts, contextual calls and sixteen-hour quiet watches.
 - `tests/test_aster_postcards_574.py` — selected author/tone, saved note cycles, preview isolation, switching during background save, PNG/editor/caption attribution and real-browser author controls/overlay cards.
 - `tests/test_aster_name_574.py` — the original name introduction, choices, typed/spoken replies, quiet pacing, restart, manual preferences, rename, reset and book export; the name question/reader browser cases live in `test_aster_ui.py`.
+- [tests/test_aster_login_574.py](tests/test_aster_login_574.py) — explicit/quick logins, duplicate events, early journal/port wakes, persisted welcome cycles, Off and actual HUD speech-queue delivery.
 - `tests/test_aster_ui.py` — real browser/server, shared Studio behaviour and transparent animated renderer.
 - `tests/test_companion_captions_574.py` — both identities and both surfaces following one audio clock.
 - `tests/test_watcher_speech_queue_573.py`, `tests/test_voice_speed_573.py` — queue/state and voice playback behaviour.

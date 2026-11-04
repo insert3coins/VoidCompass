@@ -267,3 +267,46 @@ class AsterRepeatTests(unittest.TestCase):
                         heard = exploration_fixture.session("stoic", seed=seed)
                     self.assertEqual(len(heard), len(set(heard)), [line for line in set(heard) if heard.count(line) > 1])
                     self.assertGreater(len(heard), 60, "the officer remains useful through the whole watch")
+
+    def test_shutdown_cycles_complete_across_restarts_and_gaps_longer_than_freshness_window(self):
+        for humour in ("dry", "off"):
+            for topic in ("sign_off", "sign_off_quiet"):
+                with self.subTest(humour=humour, topic=topic), tempfile.TemporaryDirectory() as folder:
+                    path = Path(folder) / "aster_memory.json"
+                    previous = None
+                    size = len(aster_lines.event_lines(topic, humour == "off"))
+                    expected = {f"aster:{topic}:{_fingerprint(line)}" for line in aster_lines.event_lines(topic, humour == "off")}
+                    for cycle in range(2):
+                        used = set()
+                        for index in range(size):
+                            mind = self.mind(path, humour=humour, seed=cycle * size + index)
+                            mind.observe("LoadGame")
+                            self.clock.now += 600
+                            mind.observe("Shutdown")
+                            thought = mind.note("sign_off", {"summary": "19 jumps" if topic == "sign_off" else ""})
+                            self.assertEqual(thought["topic"], topic)
+                            self.assertNotEqual(thought["text"], previous)
+                            previous = thought["text"]
+                            key = mind.memory["aster_event_last"][topic]
+                            self.assertNotIn(key, used)
+                            used.add(key)
+                            self.clock.now += 45 * 86400
+                        self.assertEqual(used, expected)
+
+    def test_shutdown_rotation_migrates_recent_wording_and_survives_style_changes(self):
+        for topic in ("sign_off", "sign_off_quiet"):
+            with self.subTest(topic=topic), tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / "aster_memory.json"
+                fields = {"summary": "19 jumps"} if topic == "sign_off" else {}
+                old = self.mind(path, humour="off")
+                line = aster_lines.event_lines(topic, True)[0]
+                key = f"aster:{topic}:{_fingerprint(line)}"
+                old._utter(topic, key, line.format(**fields), self.clock())
+                old.save()
+                previous = old.thought["text"]
+                for humour in ("dry", "off") * 20:
+                    mind = self.mind(path, humour=humour)
+                    thought = mind.note("sign_off", fields)
+                    self.assertNotEqual(thought["text"], previous)
+                    previous = thought["text"]
+                    self.clock.now += 86400
