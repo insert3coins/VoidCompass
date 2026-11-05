@@ -138,7 +138,7 @@ function scheduleSave() {
     const {x, z, distance, heading, tilt} = cam.state;
     command({action: 'save_view', state: {
       orientation: ORIENTATION, scope: viewState.scope, layers: viewState.layers, depth_scale: viewState.depth_scale,
-      grid: viewState.grid, atmosphere: viewState.atmosphere, labels: viewState.labels,
+      grid: viewState.grid, atmosphere: viewState.atmosphere, labels: viewState.labels, follow: viewState.follow === true,
       camera: {target: [x, 0, z], distance, heading, tilt},
     }});
   }, 1200);
@@ -299,6 +299,7 @@ function applySnapshot(data, first = false) {
   if (selection) showInspector(selection, false);
   if (first) initialView();
   if (!first) recorder?.request(data.recorder_request);
+  follow(first);
   const focus = data.focus_request;
   if (focus && focus.id !== lastFocus) {
     lastFocus = focus.id;
@@ -383,6 +384,25 @@ function syncControls() {
   $('toggle-labels').checked = viewState.labels !== false;
   $('depth').value = String(viewState.depth_scale);
   $('depth-value').textContent = `${viewState.depth_scale}×`;
+  $('follow-me').setAttribute('aria-pressed', String(viewState.follow === true));
+}
+
+// FOLLOW ME (5.7.4): keep the commander's position centred, at the current
+// zoom, as new arrivals come in. Dragging the map hands control back.
+let followedAt = '';
+function follow(force = false) {
+  if (viewState.follow !== true || !current || replay.playing || recorder?.playing) return;
+  const key = current.join(',');
+  if (!force && key === followedAt) return;
+  followedAt = key;
+  cam.flyTo(aim(current[0], current[2], cam.state.distance), reducedMotion || !force && document.hidden ? 0 : 900);
+}
+
+function setFollow(on) {
+  viewState.follow = Boolean(on);
+  $('follow-me').setAttribute('aria-pressed', String(viewState.follow));
+  if (viewState.follow) follow(true);
+  scheduleSave();
 }
 
 function renderReplayLabels() {
@@ -914,6 +934,10 @@ function bind() {
   $('zoom-in').addEventListener('click', () => cam.zoom(.6));
   $('zoom-out').addEventListener('click', () => cam.zoom(1.6));
   $('tilt').addEventListener('click', () => cam.flyTo({tilt: cam.state.tilt > 3 ? 0 : 52}, reducedMotion ? 0 : 700));
+  $('follow-me').addEventListener('click', () => setFollow(viewState.follow !== true));
+  const followTip = $('follow-me').dataset.tip.split('|');
+  $('follow-me').addEventListener('pointermove', (event) => tooltip(event, `<b>${escape(followTip[0])}</b><small>${escape(followTip[1])}</small>`));
+  $('follow-me').addEventListener('pointerleave', (event) => tooltip(event, ''));
   $('replay').addEventListener('input', (event) => {
     replay.playing = false;
     replay.value = Number(event.target.value) / 1000;
@@ -1046,6 +1070,7 @@ async function start() {
     cam = createCamera(scene.renderer.domElement, {
       onChange(user) {
         pickDirty = labelsDirty = true;
+        if (user && cam?.panning && viewState.follow === true) setFollow(false);
         if (user) {
           lastInteraction = performance.now();
           scheduleSave();
@@ -1104,7 +1129,7 @@ async function start() {
     window.requestAnimationFrame(loop);
     window.voidcompassAtlas = {
       state: () => ({camera: {...cam.state}, selection: selection && {kind: selection.kind, name: selection.name || selection.subject, id: selection.id},
-        systems: systems.size, regionsVisited: visits.size, currentRegion, layers: {...viewState.layers}, replay: replay.value,
+        systems: systems.size, regionsVisited: visits.size, currentRegion, layers: {...viewState.layers}, replay: replay.value, follow: viewState.follow === true,
         labels: [...labelPool.entries()].filter(([, el]) => el.style.opacity === '1').map(([key]) => key),
         recorder: recorder?.state()}),
       project: (pos) => scene.project(pos, width, height),

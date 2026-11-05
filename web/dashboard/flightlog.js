@@ -99,7 +99,7 @@ function page(log, ui) {
         ${cards ? `<div class="flightlog-cards">${cards}</div>` : ""}
       </div>
     </div>
-    <blockquote class="flightlog-words">${ui.escapeHtml(log.words)}<cite>the Watcher</cite></blockquote>
+    <blockquote class="flightlog-words">${ui.escapeHtml(log.words)}<cite>${ui.escapeHtml(log.companion_name || "the Watcher")}</cite></blockquote>
     ${log.pet?.lines?.length ? `<section class="flightlog-pet"><small>${ui.escapeHtml(log.pet.name.toUpperCase())}'S DAY</small><ul>${log.pet.lines.map((line) => `<li>${ui.escapeHtml(line)}</li>`).join("")}</ul></section>` : ""}
   </article>`;
 }

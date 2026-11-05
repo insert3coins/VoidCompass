@@ -149,7 +149,9 @@ class ExpeditionMapView:
             depth_scale = max(1.0, min(20.0, float(state.get('depth_scale', 4.0))))
         except (TypeError, ValueError):
             depth_scale = 4.0
-        return {'renderer': 'webgl', 'orientation': MAP_ORIENTATION, 'scope': scope, 'layers': layers, 'camera': saved_camera, 'depth_scale': depth_scale, 'grid': state.get('grid') is not False, 'atmosphere': state.get('atmosphere') is not False, 'labels': state.get('labels') is not False}
+        return {'renderer': 'webgl', 'orientation': MAP_ORIENTATION, 'scope': scope, 'layers': layers, 'camera': saved_camera, 'depth_scale': depth_scale, 'grid': state.get('grid') is not False, 'atmosphere': state.get('atmosphere') is not False, 'labels': state.get('labels') is not False,
+                # 5.7.4: FOLLOW ME keeps the commander centred as they travel.
+                'follow': state.get('follow') is True}
 
     def apply_view_state(self, state):
         self._view_state = self._normalise_view_state(state)

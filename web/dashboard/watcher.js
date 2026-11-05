@@ -9,6 +9,7 @@ import {companionColours} from "../assets/companion-colours.js";
 // (and its life) survives every refresh. While the page is hidden the canvas
 // has no size and the orb stops drawing.
 
+const COMPANION_ICONS = {watcher: "◉", aster: "⬡", axiom: "◌", meridian: "◇"};
 const NATURES = {weary: "Depressed", curious: "Curious", stoic: "Stoic", nervous: "Nervous", officer: "Officer on watch"};
 const FREQUENCIES = {off: "Off", rare: "Rare", occasional: "Occasional", chatty: "Chatty"};
 const MOOD_LABELS = {pleased: "PLEASED", wary: "WARY", curious: "CURIOUS", downcast: "DOWNCAST"};
@@ -146,16 +147,23 @@ const panel = (title, body, note = "", extra = "") =>
 
 function shell(root, ui) {
   root.classList.remove("loading-panel");
-  root.innerHTML = `<section class="companion-picker" aria-label="Choose your companion"><header><span>YOUR COMPANION</span><small>Choose a voice and display · shared ship controls</small></header><div role="group">${Object.entries(COMPANIONS).map(([id, row]) => `<button type="button" data-companion="${id}" aria-pressed="${id === activeCompanion}"><b>${row.name.toUpperCase()}</b><small>${row.description}</small></button>`).join("")}</div><label id="aster-humour-row" hidden>Officer’s commentary<select id="aster-humour"><option value="dry">Dry wit</option><option value="off">Restrained</option></select></label><p role="status" id="companion-choice-status"></p></section><nav class="watcher-tabs" role="tablist" aria-label="Companion">
-    <button type="button" role="tab" data-watcher-tab="now">NOW<b id="watcher-now-badge"></b></button>
+  // 5.7.4: a compact switcher (A–Z), then BRIDGE (the display beside the
+  // conversation), STORY, YOU, LOG and SETUP (its thoughts and its voice).
+  const crew = Object.entries(COMPANIONS).sort(([, a], [, b]) => a.name.replace(/^The\s+/i, "").localeCompare(b.name.replace(/^The\s+/i, "")));
+  root.innerHTML = `<header class="companion-bar" aria-label="Choose your companion">
+    <div class="companion-switch" role="group" aria-label="Your companion">${crew.map(([id, row]) => `<button type="button" data-companion="${id}" aria-pressed="${id === activeCompanion}" title="${row.description}"><i aria-hidden="true">${COMPANION_ICONS[id] || "◉"}</i><span><b>${row.name}</b><small>${row.role}</small></span></button>`).join("")}</div>
+    <div class="companion-bar-side">
+      <label id="aster-humour-row" hidden><span id="companion-humour-label">Officer’s commentary</span><select id="aster-humour"><option value="dry">Dry wit</option><option value="off">Restrained</option></select></label>
+      <p role="status" id="companion-choice-status"></p>
+    </div>
+  </header><nav class="watcher-tabs" role="tablist" aria-label="Companion">
+    <button type="button" role="tab" data-watcher-tab="now">BRIDGE<b id="watcher-now-badge"></b></button>
     <button type="button" role="tab" data-watcher-tab="story">STORY</button>
     <button type="button" role="tab" data-watcher-tab="you">YOU</button>
-    <button type="button" role="tab" data-watcher-tab="said">SAID</button>
-    <button type="button" role="tab" data-watcher-tab="settings">SETTINGS</button>
-    <button type="button" role="tab" data-watcher-tab="voice">VOICE<b id="watcher-voice-badge"></b></button>
-    <button type="button" role="tab" data-watcher-tab="talk">TALK</button>
+    <button type="button" role="tab" data-watcher-tab="said">LOG</button>
+    <button type="button" role="tab" data-watcher-tab="settings">SETUP<b id="watcher-voice-badge"></b></button>
   </nav>
-  <div class="watcher-page watcher-now" data-watcher-panel="now">
+  <div class="watcher-page watcher-now watcher-bridge" data-watcher-panel="now">
     <aside class="watcher-eye-panel" aria-label="The Watcher">
       <div class="watcher-optics-stage">
         <div class="watcher-stage-head"><span>THE WATCHER</span><small id="watcher-feed">JOURNAL LINK</small></div>
@@ -171,28 +179,29 @@ function shell(root, ui) {
       </div>
       <dl class="watcher-character" id="watcher-character"></dl>
     </aside>
-    <div class="watcher-now-main">
+    <div class="watcher-bridge-main">
       <section class="watcher-ask" id="watcher-question" aria-live="polite"></section>
+      ${talkPanel()}
+    </div>
+    <aside class="watcher-bridge-side">
+      <section class="watcher-card watcher-now-story" aria-label="Its story, now">
+        <header><span>ITS STORY</span><b id="watcher-now-count"></b></header>
+        <div id="watcher-now-story"></div>
+        <button type="button" class="watcher-go" data-watcher-go="story">READ THE STORY</button>
+      </section>
       <section class="watcher-card watcher-bond-panel" aria-label="You and the Watcher">
         <header><span>YOU AND THE WATCHER</span><b id="watcher-bond-name"></b></header>
         <div class="watcher-bond-meter" id="watcher-bond-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i></i></div>
         <p class="watcher-bond-next" id="watcher-bond-next"></p>
         <div class="watcher-feeling" id="watcher-feeling"></div>
       </section>
-      <div class="watcher-pair">
-        <section class="watcher-card watcher-now-story" aria-label="Its story, now">
-          <header><span>ITS STORY</span><b id="watcher-now-count"></b></header>
-          <div id="watcher-now-story"></div>
-          <button type="button" class="watcher-go" data-watcher-go="story">READ THE STORY</button>
-        </section>
-        <section class="watcher-card watcher-wish" id="watcher-wish" aria-label="Where it wants to go"></section>
-      </div>
-      <section class="watcher-card" aria-label="Lately">
-        <header><span>BEFORE THAT</span><b></b></header>
+      <section class="watcher-card watcher-wish" id="watcher-wish" aria-label="Where it wants to go"></section>
+      <section class="watcher-card watcher-recent" aria-label="Lately">
+        <header><span>RECENT THOUGHTS</span><b></b></header>
         <ol class="watcher-log watcher-lately" id="watcher-lately"></ol>
-        <button type="button" class="watcher-go" data-watcher-go="said">EVERYTHING IT HAS SAID</button>
+        <button type="button" class="watcher-go" data-watcher-go="said">THE FULL LOG</button>
       </section>
-    </div>
+    </aside>
   </div>
   <div class="watcher-page watcher-story-page" data-watcher-panel="story" hidden>
     <section class="watcher-card watcher-lore-panel" aria-label="Its long story">
@@ -211,6 +220,11 @@ function shell(root, ui) {
       ${panel("KEEP IT", `<p class="watcher-note">The story on your road, what it remembers, your answers and its dreams, saved as a book in the Wrapped folder.</p>
         <div class="watcher-buttons"><button type="button" data-watcher-code="book">SAVE AS A BOOK</button></div>`)}
     </aside>
+    <section class="watcher-card watcher-crew" aria-label="The crew">
+      <header><span>THE CREW · COMING ABOARD</span><b id="watcher-crew-count"></b></header>
+      <p class="watcher-note">How each of your companions came aboard, and how they found each other. Each tells its own part in quiet moments; a passage about a crewmate waits until you've flown with that crewmate too.</p>
+      <div class="watcher-crew-grid" id="watcher-crew"></div>
+    </section>
   </div>
   <div class="watcher-page watcher-you" data-watcher-panel="you" hidden>
     <section class="watcher-card watcher-wide" aria-label="Together">
@@ -226,10 +240,10 @@ function shell(root, ui) {
     ${panel("WHAT YOU TOLD IT", `<ol class="watcher-log watcher-short" id="watcher-answers"></ol>`, "watcher-answers-count")}
     ${panel("ITS DREAMS", `<ol class="watcher-log watcher-short" id="watcher-dreams"></ol>`, "watcher-dreams-count")}
     ${panel("WHAT IT TALKS ABOUT MOST", `<ol class="watcher-favourites" id="watcher-favourites"></ol>`)}
-    ${panel("OTHER WATCHERS", `<p class="watcher-note">Share your Watcher's code (paste it in Discord or a message). A friend's code lets yours hear theirs.</p>
+    ${panel("OTHER COMMANDERS' COMPANIONS", `<p class="watcher-note">Share your companion's code (paste it in Discord or a message). A friend's code, from any companion, lets yours meet theirs.</p>
       <div class="watcher-meet"><textarea id="watcher-code" rows="2" placeholder="Paste a friend's VCWATCH1 code" spellcheck="false"></textarea>
         <div class="watcher-buttons"><button type="button" class="primary" data-watcher-code="meet">MEET IT</button>
-        <button type="button" data-watcher-code="copy">COPY MY WATCHER'S CODE</button></div></div>
+        <button type="button" data-watcher-code="copy">COPY MY COMPANION'S CODE</button></div></div>
       <ol class="watcher-log watcher-short" id="watcher-met"></ol>`, "", "watcher-wide")}
   </div>
   <div class="watcher-page watcher-said" data-watcher-panel="said" hidden>
@@ -237,6 +251,10 @@ function shell(root, ui) {
       <header><span>WHAT IT HAS SAID</span><b id="watcher-log-count"></b></header>
       <ol class="watcher-log" id="watcher-log"></ol>
     </section>
+  </div>
+  <div class="watcher-subpage watcher-setup" data-watcher-panel="settings" hidden>
+    <div class="watcher-setup-col">${settingsPanel()}</div>
+    <div class="watcher-setup-col">${voicePanel()}</div>
     <section class="watcher-reset-panel" aria-label="Reset the Watcher">
       <div class="watcher-reset-intro"><b>Start again</b><span>Make it forget you, and wake as it did the first time.</span>
         <button type="button" id="watcher-reset">RESET THE WATCHER</button></div>
@@ -251,10 +269,7 @@ function shell(root, ui) {
         </div>
       </div>
     </section>
-  </div>
-  <div class="watcher-subpage" data-watcher-panel="settings" hidden>${settingsPanel()}</div>
-  <div class="watcher-subpage" data-watcher-panel="voice" hidden>${voicePanel()}</div>
-  <div class="watcher-page watcher-talkpage" data-watcher-panel="talk" hidden>${talkPanel()}</div>`;
+  </div>`;
   talkKey = "";
   tips(root);
   wireTabs(root);
@@ -279,10 +294,10 @@ function shell(root, ui) {
     const action = event.target.closest("[data-watcher-code]")?.dataset.watcherCode;
     const box = ui.byId("watcher-code");
     if (action === "copy") {
-      ui.showToast(await ui.command("workspace", {page: "watcher", operation: "copy_code"}) ? "Your Watcher's code is on the clipboard" : "It couldn't be copied");
+      ui.showToast(await ui.command("workspace", {page: "watcher", operation: "copy_code"}) ? "Your companion's code is on the clipboard" : "It couldn't be copied");
     } else if (action === "meet") {
       const done = await ui.command("workspace", {page: "watcher", operation: "meet", code: box.value});
-      ui.showToast(done ? "It met them" : "That isn't a Watcher's code");
+      ui.showToast(done ? "It met them" : "That isn't a companion's code");
       if (done) box.value = "";
     } else if (action === "book") {
       ui.showToast(await ui.command("workspace", {page: "watcher", operation: "save_book"}) ? "Saved in the Wrapped folder" : "It couldn't be saved");
@@ -293,7 +308,7 @@ function shell(root, ui) {
     ui.byId("companion-choice-status").textContent = "Switching companion…";
     if (!(await ui.command("workspace", {page: "watcher", operation: "companion_identity", value: button.dataset.companion}))) ui.showToast("Finish or cancel any voice download before changing companion.");
   }));
-  root.querySelector("#aster-humour").addEventListener("change", (event) => ui.command("workspace", {page: "watcher", operation: "aster_humour", value: event.target.value}));
+  root.querySelector("#aster-humour").addEventListener("change", (event) => ui.command("workspace", {page: "watcher", operation: "companion_humour", value: event.target.value}));
   if (window.HeartbeatOrb && canvas) {
     orb?.dispose?.();
     orb = new window.HeartbeatOrb(canvas);
@@ -398,7 +413,7 @@ function renderLore(lore, ui) {
     ui.byId("watcher-books").replaceChildren();
     return;
   }
-  if (lore.identity === "aster") { renderAsterLore(lore, ui); return; }
+  if (["aster", "axiom", "meridian"].includes(lore.identity)) { renderCrewLore(lore, ui); return; }
   const chapters = Array.isArray(lore.chapters) ? lore.chapters : [];
   const echoes = Array.isArray(lore.echoes) ? lore.echoes : [];
   const books = Array.isArray(lore.books) ? lore.books : [];
@@ -496,23 +511,69 @@ function renderLore(lore, ui) {
   }).join("");
 }
 
-function renderAsterLore(lore, ui) {
-  const key = JSON.stringify(["aster", lore.told, lore.next]);
+// Aster, Axiom and Meridian (5.7.4): one renderer for the shared story
+// engine. Unopened chapters say how they open; echoes say what stirs them.
+function renderCrewLore(lore, ui) {
+  const echoes = Array.isArray(lore.echoes) ? lore.echoes : [];
+  const key = JSON.stringify([lore.identity, lore.told, lore.next, echoes.map((row) => [row.topic, row.count])]);
   if (lastLoreKey === key) return;
   lastLoreKey = key;
   loreChapters = lore.chapters || [];
-  ui.byId("watcher-lore-count").textContent = `${ui.numeric(lore.told)} OF ${ui.numeric(lore.total)} REPORTS`;
+  ui.byId("watcher-lore-count").textContent = `${ui.numeric(lore.told)} OF ${ui.numeric(lore.total)} TOLD`;
   ui.byId("watcher-now-count").textContent = ui.byId("watcher-lore-count").textContent;
-  ui.byId("watcher-lore").innerHTML = loreChapters.map((chapter, index) => `<button type="button" data-chapter="${index}"${chapter.begun ? "" : " disabled"}><span>${ui.escapeHtml(chapter.numeral)}</span><b>${ui.escapeHtml(chapter.title)}</b><small>${chapterStatus(chapter, ui)}</small></button>`).join("");
+  ui.byId("watcher-lore").innerHTML = loreChapters.map((chapter, index) => {
+    if (chapter.begun) return `<button type="button" class="watcher-chapter${chapter.complete ? " complete" : " telling"}" data-chapter="${index}"><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>${ui.escapeHtml(chapter.title)}</b><em>${chapterStatus(chapter, ui)}</em></button>`;
+    const unlock = chapter.unlock || [];
+    const tip = unlock.length ? ` data-tip="${ui.escapeHtml(`Chapter ${chapter.numeral}|${unlock.join("|")}`)}" tabindex="0" title="${ui.escapeHtml(unlock.join(". "))}"` : "";
+    return chapter.waits_for
+      ? `<div class="watcher-chapter locked waits"${tip}><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>Waits for ${ui.escapeHtml(chapter.waits_for)}</b></div>`
+      : `<div class="watcher-chapter locked"${tip}><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>· · ·</b></div>`;
+  }).join("");
   renderReader(ui);
-  if (!lore.told) ui.byId("watcher-reader").innerHTML = '<p class="watcher-reader-empty">Aster’s first report opens after a little time on watch together, in a quiet moment.</p>';
-  let note = lore.complete ? "The Unfinished Manifest is complete. The present crew’s log remains open." : lore.next?.ready ? "The next report is ready for a quiet moment on watch." : lore.next?.waits_for ? `The next report waits for ${lore.next.waits_for}, or more time together.` : `More opens after about ${Math.max(1, Math.ceil(Number(lore.next?.hours || 0) * 60))} minutes of active service together.`;
+  if (!lore.told) ui.byId("watcher-reader").innerHTML = `<p class="watcher-reader-empty">${ui.escapeHtml(lore.empty_note || "")}</p>`;
+  const next = lore.next;
+  const span = (hours) => { const value = Number(hours || 0); return value >= 1.5 ? `${Math.ceil(value)} hours` : `${Math.max(1, Math.ceil(value * 60))} minutes`; };
+  let note = lore.complete_note || "";
+  if (!lore.complete && next) {
+    if (next.ready) note = "The next passage is ready for a quiet moment together.";
+    else if (next.waits_for) note = `The next chapter waits for ${next.waits_for}. ${next.how || ""} Or keep flying together: it opens anyway after about ${span(next.grace)} more.`;
+    else if (Number(next.days) > 0) note = `The next chapter opens in about ${Math.ceil(next.days)} day${Math.ceil(next.days) === 1 ? "" : "s"}${Number(next.hours) > 0 ? `, after ${span(next.hours)} more together` : ""}.`;
+    else note = `More opens after about ${span(next.hours)} of active service together.`;
+  }
   ui.byId("watcher-lore-next").textContent = note;
   const current = loreChapters.filter((chapter) => chapter.begun).at(-1);
-  ui.byId("watcher-now-story").innerHTML = `${current ? `<p class="watcher-now-chapter"><span>${ui.escapeHtml(current.numeral)}</span><b>${ui.escapeHtml(current.title)}</b></p><p>${ui.escapeHtml(current.told.at(-1)?.text || "")}</p>` : ""}<p class="watcher-note">${ui.escapeHtml(note)}</p>`;
-  ui.byId("watcher-books").innerHTML = "";
-  ui.byId("watcher-echoes").innerHTML = "";
-  ui.byId("watcher-echo-count").textContent = "";
+  ui.byId("watcher-now-story").innerHTML = `${current ? `<p class="watcher-now-chapter"><span>${ui.escapeHtml(current.numeral)}</span><b>${ui.escapeHtml(current.title)}</b><em>${chapterStatus(current, ui)}</em></p><p class="watcher-now-passage">${ui.escapeHtml(current.told.at(-1)?.text || "")}</p>` : ""}<p class="watcher-note">${ui.escapeHtml(note)}</p>`;
+  const books = Array.isArray(lore.books) ? lore.books : [];
+  ui.byId("watcher-books").innerHTML = books.map((book) => `<details class="watcher-book">
+      <summary><span>READ THE WHOLE STORY</span><b>${ui.escapeHtml(String(book.title).toUpperCase())}</b></summary>
+      <article>${book.chapters.map((chapter) => `<h4><span>${ui.escapeHtml(chapter.numeral)}</span>${ui.escapeHtml(chapter.title)}</h4>
+        ${String(chapter.account).split("\n\n").map((para) => `<p>${ui.escapeHtml(para)}</p>`).join("")}`).join("")}</article>
+    </details>`).join("");
+  const heard = new Map(echoes.map((row) => [row.topic, row]));
+  const labels = lore.echo_labels || {};
+  const how = lore.echo_how || {};
+  ui.byId("watcher-echo-count").textContent = `${ui.numeric(echoes.length)} OF ${ui.numeric(lore.echo_total || 0)} FOUND`;
+  ui.byId("watcher-echoes").innerHTML = Object.entries(labels).map(([topic, label]) => {
+    const row = heard.get(topic);
+    const tip = how[topic] ? ` data-tip="${ui.escapeHtml(`${label}|${row ? "Found. " : ""}${how[topic]}`)}" tabindex="0" title="${ui.escapeHtml(how[topic])}"` : "";
+    return row
+      ? `<li class="heard"${tip}><b>${ui.escapeHtml(label)}</b><span>${ui.numeric(row.count)}×</span><time>${row.at ? ui.escapeHtml(ago(row.at)) : ""}</time></li>`
+      : `<li${tip}><b>${ui.escapeHtml(label)}</b><span>not yet</span><time></time></li>`;
+  }).join("");
+}
+
+// The crew (5.7.4): all four accounts, each from its own memory, whoever is on watch.
+function renderCrew(crew, ui) {
+  const esc = ui.escapeHtml;
+  const arcs = Array.isArray(crew.arcs) ? crew.arcs : [];
+  const count = ui.byId("watcher-crew-count");
+  if (count) count.textContent = crew.total ? `${ui.numeric(crew.told)} OF ${ui.numeric(crew.total)} TOLD · ${ui.numeric(crew.flown || 0)} OF 4 FLOWN WITH` : "";
+  fill(ui, "watcher-crew", arcs.map((arc) => `<article class="watcher-crew-arc${arc.identity === activeCompanion ? " on-watch" : ""}" data-crew="${esc(arc.identity)}">
+      <header><i aria-hidden="true">${COMPANION_ICONS[arc.identity] || "◉"}</i><span><b>${esc(arc.name)}</b><small>${esc(arc.role || "")}${arc.identity === activeCompanion ? " · ON WATCH" : arc.flown ? "" : " · NOT YET FLOWN WITH"}</small></span><em>${ui.numeric(arc.told)} / ${ui.numeric(arc.total)}</em></header>
+      <ol>${(arc.passages || []).map((row) => row.heard
+        ? `<li class="heard"><details><summary>${esc(row.title)}${row.about ? `<small>${esc(row.about)}</small>` : ""}</summary><p>${esc(row.text)}</p></details></li>`
+        : `<li${row.waits_for ? ` data-tip="${esc(`${arc.name}|${row.waits_for}, then wait for a quiet moment with ${arc.name} on watch.`)}" tabindex="0"` : ""}><span>· · ·</span>${row.waits_for ? `<small>${esc(row.waits_for)}</small>` : ""}</li>`).join("")}</ol>
+    </article>`).join(""));
 }
 
 function stat(ui, label, value, detail = "") {
@@ -535,20 +596,28 @@ export function renderWatcher(data = {}, ui) {
   root.querySelector(".aster-signal-line > span").textContent = selectedName.toUpperCase();
   root.querySelectorAll("button[data-companion]").forEach((button) => { button.setAttribute("aria-pressed", String(button.dataset.companion === identity)); button.disabled = ["starting", "engine", "unpacking", "model"].includes(data.voice?.download?.stage); });
   ui.byId("companion-choice-status").textContent = `${selectedName} is on watch.`;
-  ui.byId("aster-humour-row").hidden = identity !== "aster";
-  if (document.activeElement !== ui.byId("aster-humour")) ui.byId("aster-humour").value = data.settings?.aster_humour || "dry";
+  // Each persona's own commentary choice (5.7.4).
+  const humour = data.settings?.companion_humour;
+  ui.byId("aster-humour-row").hidden = identity === "watcher" || !humour;
+  if (humour) {
+    ui.byId("companion-humour-label").textContent = humour.label;
+    const select = ui.byId("aster-humour");
+    const options = (humour.choices || []).map(([value, label]) => `<option value="${ui.escapeHtml(value)}">${ui.escapeHtml(label)}</option>`).join("");
+    if (select.dataset.options !== options) { select.innerHTML = options; select.dataset.options = options; }
+    if (document.activeElement !== select) select.value = humour.value || "dry";
+  }
   root.querySelector('.watcher-stage-head > span').textContent = selectedName.toUpperCase();
-  root.querySelector('.watcher-lore-panel > header > span').textContent = data.lore?.pending ? `${selectedName.toUpperCase()} · STORY PENDING` : identity === "aster" ? "THE UNFINISHED MANIFEST" : "THE LONG STORY · WHAT IT REMEMBERS";
+  root.querySelector('.watcher-lore-panel > header > span').textContent = data.lore?.pending ? `${selectedName.toUpperCase()} · STORY PENDING` : identity !== "watcher" ? String(data.lore?.title || selectedName).toUpperCase() : "THE LONG STORY · WHAT IT REMEMBERS";
   root.querySelector('[data-watcher-setting="heartbeat_personality"]')?.closest("label")?.toggleAttribute("hidden", identity !== "watcher");
   root.querySelector(".watcher-eye-panel").setAttribute("aria-label", selectedName);
   root.querySelector(".watcher-bond-panel > header > span").textContent = `YOU AND ${selectedName.toUpperCase()}`;
   root.querySelector(".watcher-bond-panel").setAttribute("aria-label", `You and ${selectedName}`);
   ui.byId("watcher-reset").textContent = `RESET ${selectedName.toUpperCase()}`;
   const bookNote = root.querySelector('[data-watcher-code="book"]')?.closest(".watcher-card")?.querySelector("p");
-  if (bookNote) bookNote.textContent = identity === "aster" ? "Keep Aster’s heard story passages and service memories as a book in the Wrapped folder." : "Keep the story, memories, answers and dreams as a book in the Wrapped folder.";
+  if (bookNote) bookNote.textContent = identity !== "watcher" ? `Keep ${selectedName}’s heard story passages and service memories as a book in the Wrapped folder.` : "Keep the story, memories, answers and dreams as a book in the Wrapped folder.";
   const resetText = root.querySelector("#watcher-reset-confirm > p");
-  if (resetText) resetText.textContent = data.lore?.pending ? `${selectedName} forgets its conversation and session memory for this commander. Its previous memory is backed up first.` : identity === "aster" ? "Aster forgets its own story, conversation and service memory for this commander. Its previous memory is backed up first. The Watcher’s memory and your game records remain separate." : "The Watcher forgets its story, echoes, conversation and memory of this commander. Its previous memory is backed up first. Your game records and achievements remain.";
-  root.querySelectorAll('[data-watcher-code]').forEach((button) => { button.closest(".watcher-card")?.toggleAttribute("hidden", Boolean(data.lore?.pending) || (identity !== "watcher" && button.dataset.watcherCode !== "book")); });
+  if (resetText) resetText.textContent = data.lore?.pending ? `${selectedName} forgets its conversation and session memory for this commander. Its previous memory is backed up first.` : identity !== "watcher" ? `${selectedName} forgets its own story, conversation and service memory for this commander. Its previous memory is backed up first. Other companions’ memories and your game records remain separate.` : "The Watcher forgets its story, echoes, conversation and memory of this commander. Its previous memory is backed up first. Your game records and achievements remain.";
+  root.querySelectorAll('[data-watcher-code]').forEach((button) => { button.closest(".watcher-card")?.toggleAttribute("hidden", Boolean(data.lore?.pending)); });
 
   const reduced = document.body.classList.contains("reduced-motion");
   const feed = data.heartbeat || {};
@@ -593,7 +662,7 @@ export function renderWatcher(data = {}, ui) {
   ui.byId("watcher-poke").textContent = identity !== "watcher" ? `CALL ${selectedName.toUpperCase()}` : "POKE";
   if (identity !== "watcher") ui.byId("watcher-hotkey").textContent = data.hotkey ? `or ${data.hotkey} in game` : "Set a companion key in Settings › Hotkeys";
   ui.byId("watcher-character").innerHTML = [
-    ["NATURE", NATURES[data.nature] || data.nature || "—"],
+    identity !== "watcher" ? ["ROLE", COMPANIONS[identity]?.role || "Companion"] : ["NATURE", NATURES[data.nature] || data.nature || "—"],
     ["THOUGHTS", FREQUENCIES[data.frequency] || data.frequency || "—"],
     [identity !== "watcher" ? "DISPLAY" : "EYE", identity === "axiom" ? "Particle field" : identity === "meridian" ? "Holographic portrait" : identity === "aster" ? "Luminous halo" : data.eye === "hal" ? "HAL red" : "Theme"],
     ["OVERLAY", data.enabled ? "ON" : "OFF"],
@@ -631,6 +700,7 @@ export function renderWatcher(data = {}, ui) {
     : `<li class="empty">Nothing yet. It's been quiet.</li>`;
 
   renderLore(data.lore || {}, ui);
+  renderCrew(data.crew || {}, ui);
   renderDeeper(data.deeper || {}, data.lore || {}, ui);
   renderKnows(data.habits || {}, ui);
   renderSettings(data.settings || {}, ui);
@@ -687,7 +757,7 @@ function renderDeeper(deeper, lore, ui) {
   const asking = ui.byId("watcher-question");
   asking.classList.toggle("asking", Boolean(question));
   fill(ui, "watcher-question", question
-    ? `<header><span>${activeCompanion === "aster" ? "ASTER ASKS" : "IT ASKS YOU"}</span><b>ANSWER HERE, OR WITH YOUR ANSWER KEYS IN GAME</b></header>
+    ? `<header><span>${activeCompanion !== "watcher" ? `${String(COMPANIONS[activeCompanion]?.name || "").toUpperCase()} ASKS` : "IT ASKS YOU"}</span><b>ANSWER HERE, OR WITH YOUR ANSWER KEYS IN GAME</b></header>
       <p class="watcher-question">${esc(question.text)}</p>
       <div class="watcher-answers">${question.answers.map((answer, index) => `<button type="button" class="watcher-answer" data-watcher-answer="${esc(answer.key)}">
         <b>${esc(answer.label)}</b>${keys[index] ? `<kbd>${esc(keys[index])}</kbd>` : ""}</button>`).join("")}</div>`
@@ -697,16 +767,22 @@ function renderDeeper(deeper, lore, ui) {
   const feeling = deeper.feeling || {};
   const trust = Math.max(0, Math.min(100, Number(feeling.trust_value) || 0));
   const road = ROADS[deeper.road];
-  fill(ui, "watcher-feeling", `<div><span>TRUST</span><b>${esc(feeling.trust || "—")}</b><i class="watcher-gauge" style="--fill:${trust}%"></i></div>
-    <div><span>MOOD LATELY</span><b>${esc(feeling.mood || "—")}</b><i class="watcher-gauge mood-${esc(feeling.mood || "")}" style="--fill:${Math.round(50 + 50 * Math.max(-1, Math.min(1, Number(feeling.mood_value) || 0)))}%"></i></div>
-    <div><span>ITS ROAD</span><b>${road ? road[0].toLowerCase() : lore.book_four ? "still deciding" : "not yet"}</b><small>${lore.book_four ? "Book Four" : "after Book Three"}</small></div>`);
+  // 5.7.4: Aster, Axiom and Meridian read you in their own terms.
+  const [trustLabel, moodLabel] = feeling.labels || ["TRUST", "MOOD LATELY"];
+  const moodTone = feeling.mood_value <= -.4 ? "low" : feeling.mood_value >= .4 ? "bright" : feeling.mood || "";
+  const third = feeling.story
+    ? `<div><span>STORY</span><b>${esc(feeling.story.title)}</b><small>${esc(feeling.story.note)}</small></div>`
+    : `<div><span>ITS ROAD</span><b>${road ? road[0].toLowerCase() : lore.book_four ? "still deciding" : "not yet"}</b><small>${lore.book_four ? "Book Four" : "after Book Three"}</small></div>`;
+  fill(ui, "watcher-feeling", `<div><span>${esc(trustLabel)}</span><b>${esc(feeling.trust || "—")}</b><i class="watcher-gauge" style="--fill:${trust}%"></i></div>
+    <div><span>${esc(moodLabel)}</span><b>${esc(feeling.mood || "—")}</b><i class="watcher-gauge mood-${esc(moodTone)}" style="--fill:${Math.round(50 + 50 * Math.max(-1, Math.min(1, Number(feeling.mood_value) || 0)))}%"></i></div>
+    ${third}`);
 
   const wish = deeper.pilgrimage;
-  const wishState = wish ? (wish.reached ? ["TAKEN THERE", "done"] : wish.accepted ? ["YOU SAID YOU WOULD", "promised"] : ["NOT ANSWERED", ""]) : null;
+  const wishState = wish ? (wish.reached ? ["TAKEN THERE", "done"] : wish.accepted ? ["YOU SAID YOU WOULD", "promised"] : wish.asked ? ["ASKED", "promised"] : ["NOT ANSWERED", ""]) : null;
   fill(ui, "watcher-wish", `<header><span>WHERE IT WANTS TO GO</span><b class="${wishState ? wishState[1] : ""}">${wishState ? wishState[0] : ""}</b></header>
     ${wish ? `<p class="watcher-wish-place">${esc(wish.words)}</p><p class="watcher-note">${esc(wish.how)}.</p>
       ${wish.reached ? "" : `<div class="watcher-buttons"><button type="button" data-page="mission">PLAN IT AS AN EXPEDITION</button></div>`}`
-      : `<p class="watcher-note">Nowhere it has asked for, yet. Later in its story it may ask you to take it somewhere: a black hole, the core, the edge. An expedition can make it an objective.</p>`}`);
+      : `<p class="watcher-note">${activeCompanion === "watcher" ? "Nowhere it has asked for, yet. Later in its story it may ask you to take it somewhere: a black hole, the core, the edge." : "Nowhere it has asked for, yet. Later in its story it may ask to be taken somewhere that matters to it."} An expedition can make it an objective.</p>`}`);
 
   fill(ui, "watcher-road", road
     ? `<header><span>ITS ROAD</span><b>${road[0]}</b></header><p class="watcher-note">${road[1]}</p>
@@ -721,11 +797,13 @@ function renderDeeper(deeper, lore, ui) {
   ui.byId("watcher-memories-count").textContent = memories.length ? `${ui.numeric(memories.length)} KEPT` : "";
   ui.byId("watcher-answers-count").textContent = answers.length ? `${ui.numeric(answers.length)} ASKED` : "";
   ui.byId("watcher-dreams-count").textContent = dreams.length ? `${ui.numeric(dreams.length)}` : "";
+  const dreamsHead = ui.byId("watcher-dreams")?.closest(".watcher-card")?.querySelector("header > span");
+  if (dreamsHead) dreamsHead.textContent = deeper.notes_title || "ITS DREAMS";
   fill(ui, "watcher-memories", rows(ui, memories, "Moments it keeps: first finds, ships lost, the commanders you flew with. Weeks later it brings them up.", (row) => esc(row.text)));
   fill(ui, "watcher-answers", rows(ui, answers, "Your answers, kept. It brings them back.",
     (row) => `<small>${esc(row.asked)}</small>${row.unanswered ? "<em>You didn't answer.</em>" : esc(row.answer)}`));
-  fill(ui, "watcher-dreams", rows(ui, dreams, "When you log off, it dreams. They're written down here.", (row) => esc(row.text)));
-  fill(ui, "watcher-met", met.length ? rows(ui, met, "", (row) => `<small>${esc(row.name || "A commander")}'s Watcher</small>${esc(row.nature || "")}${row.chapter ? `, at chapter ${esc(row.chapter)}` : ""}${row.road ? ` · ${row.road === "open" ? "looking back" : "eye closed"}` : ""}`) : "");
+  fill(ui, "watcher-dreams", rows(ui, dreams, deeper.notes_title ? "When you log off, it writes a short note about the watch. They're kept here." : "When you log off, it dreams. They're written down here.", (row) => esc(row.text)));
+  fill(ui, "watcher-met", met.length ? rows(ui, met, "", (row) => `<small>${esc(row.name || "A commander")}'s ${esc((COMPANIONS[row.companion || "watcher"]?.name || "The Watcher").replace(/^The /, ""))}</small>${esc(COMPANIONS[row.nature] ? COMPANIONS[row.nature].role : row.nature || "")}${row.chapter ? `, at chapter ${esc(row.chapter)}` : ""}${row.road ? ` · ${row.road === "open" ? "looking back" : "eye closed"}` : ""}`) : "");
 }
 
 // ---------------------------------------------------------------------------
@@ -748,19 +826,19 @@ function renderKnows(habits, ui) {
 }
 
 // The tabs before 5.6.1, to the ones that took their place.
-const OLD_TABS = {overview: "now", together: "you", mind: "talk", library: "talk"};
+const OLD_TABS = {overview: "now", together: "you", mind: "now", library: "now", talk: "now", voice: "settings"};
 let watcherTab = "now";
 try { watcherTab = window.localStorage.getItem("voidcompass.watcherTab") || "now"; } catch (_error) { /* private */ }
 
 function showTab(root, tab) {
   tab = OLD_TABS[tab] || tab;
-  watcherTab = ["now", "story", "you", "said", "settings", "voice", "talk"].includes(tab) ? tab : "now";
+  watcherTab = ["now", "story", "you", "said", "settings"].includes(tab) ? tab : "now";
   root.querySelectorAll("[data-watcher-panel]").forEach((panel) => { panel.hidden = panel.dataset.watcherPanel !== watcherTab; });
   root.querySelectorAll("[data-watcher-tab]").forEach((button) => {
     button.setAttribute("aria-selected", button.dataset.watcherTab === watcherTab ? "true" : "false");
   });
   try { window.localStorage.setItem("voidcompass.watcherTab", watcherTab); } catch (_error) { /* private */ }
-  if (watcherTab === "talk") talkToNewest();
+  if (watcherTab === "now") talkToNewest();
 }
 
 function wireTabs(root) {
@@ -780,16 +858,16 @@ const toggle = (key, title, note) => `<label class="studio-switch"><span><b>${ti
 function settingsPanel() {
   return `<section class="watcher-settings" aria-label="Its thoughts">
     <header><span>ITS THOUGHTS</span><b class="watcher-saved" id="watcher-settings-saved"></b></header>
-    <p class="watcher-note">What it says beside the orb, and how. The orb itself (size, eye colour, liveliness) is in Overlay Studio.</p>
+    <p class="watcher-note">What it says beside its display, and how. The display itself (size, colour, motion) is in Overlay Studio.</p>
     ${field("heartbeat_thoughts", "Thoughts", "Rare speaks of what matters; Chatty also remarks on everyday play",
       [["off", "Off"], ["rare", "Rare"], ["occasional", "Occasional"], ["chatty", "Chatty"]])}
     ${field("heartbeat_personality", "Nature", "How it takes what happens",
       [["weary", "Depressed"], ["curious", "Curious"], ["stoic", "Stoic"], ["nervous", "Nervous"]])}
     ${toggle("heartbeat_thought_backdrop", "Thought backdrop", "A dark panel behind its words, easier to read over the game.")}
-    ${toggle("heartbeat_thought_heading", "Thought heading", "A line above its words: a memory and its chapter, an echo, or simply THE WATCHER.")}
+    ${toggle("heartbeat_thought_heading", "Thought heading", "A line above its words: a memory and its chapter, an echo, or simply its name.")}
     ${field("heartbeat_thought_side", "Thought side", "Auto goes toward the middle of the screen; either side swaps if its words won't fit there",
-      [["auto", "Auto"], ["left", "Left of the orb"], ["right", "Right of the orb"]])}
-    ${field("heartbeat_text_scale_percent", "Text size", "Its words only; the orb keeps its size",
+      [["auto", "Auto"], ["left", "Left of the display"], ["right", "Right of the display"]])}
+    ${field("heartbeat_text_scale_percent", "Text size", "Its words only; the display keeps its size",
       [["0", "All overlays"], ...[75, 85, 100, 110, 125, 150, 175, 200].map((size) => [String(size), `${size}%`])])}
     ${field("heartbeat_thought_colour", "Thought colour", "",
       [["bright", "Bright"], ["accent", "Theme accent"], ["eye", "Eye colour"]])}
@@ -835,7 +913,7 @@ function renderSettings(settings, ui) {
 function voicePanel() {
   return `<section class="watcher-voice" aria-label="Its voice">
     <header><span>ITS VOICE</span><b class="watcher-saved" id="watcher-voice-saved"></b></header>
-    <label class="studio-switch watcher-voice-switch"><span><b>Voice</b><small id="watcher-voice-state">Its thoughts, spoken aloud as they appear beside the orb.</small></span>
+    <label class="studio-switch watcher-voice-switch"><span><b>Voice</b><small id="watcher-voice-state">Its thoughts, spoken aloud as they appear beside its display.</small></span>
       <input type="checkbox" id="watcher-voice-on"><i></i></label>
     <div class="watcher-voice-get" id="watcher-voice-get">
       <p>Its voice isn't on this PC yet. Switching it on downloads the voice engine (Piper) and the <span id="watcher-voice-model-name">HAL 9000 voice</span> model,
@@ -924,9 +1002,8 @@ function renderName(name, ui) {
   const told = Array.isArray(name.told) ? name.told.length : 0;
   let note = "It hasn't read your name yet. It will the next time you load the game.";
   if (known) {
-    note = activeCompanion === "aster" ? `Aster has read ${known} in the crew register.` : `The ship writes ${known} every time you wake it.`;
-    if (!name.call && ["axiom","meridian"].includes(activeCompanion)) note += " Choose its form of address here. A personal introduction is pending.";
-    else if (!name.call) note += told ? " It has noticed, and will ask you about it. Or choose here." : " Choose what it calls you here, or wait for it to ask.";
+    note = activeCompanion === "aster" ? `Aster has read ${known} in the crew register.` : activeCompanion === "axiom" ? `Axiom has read ${known} in the journal and filed it carefully.` : activeCompanion === "meridian" ? `Meridian has read ${known} in the ship’s log.` : `The ship writes ${known} every time you wake it.`;
+    if (!name.call) note += told ? " It has noticed, and will ask you about it. Or choose here." : " Choose what it calls you here, or wait for it to ask.";
     else if (call === "name") note += officer ? " Your name is its regular form of address." : " It may use it now and then, never more than once a session.";
     else if (call === "nickname") note += nickname
       ? officer ? ` It uses ${nickname} as your regular form of address.` : ` It calls you ${nickname} now and then.`
@@ -998,15 +1075,15 @@ const DOWNLOAD_STAGES = {starting: "Starting…", engine: "Downloading the voice
 
 function renderVoice(voice, ui) {
   if (ui.byId("watcher-voice-model-name")) ui.byId("watcher-voice-model-name").textContent = voice.model_name || "HAL 9000 voice";
-  const panel = ui.byId("watcher-workspace")?.querySelector('[data-watcher-panel="voice"]');
+  const panel = ui.byId("watcher-workspace")?.querySelector('.watcher-voice');
   if (!panel) return;
   const download = voice.download || {};
   const busy = ["starting", "engine", "unpacking", "model"].includes(download.stage);
-  ui.byId("watcher-voice-badge").textContent = voice.enabled && voice.installed ? " · ON" : "";
+  ui.byId("watcher-voice-badge").textContent = voice.enabled && voice.installed ? " · VOICE ON" : "";
   ui.byId("watcher-voice-on").checked = Boolean(voice.enabled);
   ui.byId("watcher-voice-state").textContent = voice.enabled && voice.installed
-    ? (voice.speaking ? "Speaking now." : "On. Its thoughts are spoken aloud as they appear beside the orb.")
-    : voice.enabled ? "On, once the voice has downloaded." : "Off. Its thoughts appear beside the orb, silently.";
+    ? (voice.speaking ? "Speaking now." : "On. Its thoughts are spoken aloud as they appear beside its display.")
+    : voice.enabled ? "On, once the voice has downloaded." : "Off. Its thoughts appear beside its display, silently.";
   ui.byId("watcher-voice-get").hidden = Boolean(voice.installed);
   ui.byId("watcher-voice-ready").hidden = !voice.installed;
   for (const id of ["watcher-voice-size", "watcher-voice-size-2"]) ui.byId(id).textContent = ui.numeric(voice.size_mb);
@@ -1016,7 +1093,7 @@ function renderVoice(voice, ui) {
   if (busy) {
     const share = Math.round(100 * (Number(download.done) || 0) / Math.max(1, Number(download.total) || 1));
     progress.style.setProperty("--done", `${share}%`);
-    progress.querySelector("span").textContent = `${(download.stage === "model" ? `Downloading the ${voice.model_name || (activeCompanion === "aster" ? "Aster voice" : "HAL 9000 voice")}…` : DOWNLOAD_STAGES[download.stage]) || ""} ${share}%`;
+    progress.querySelector("span").textContent = `${(download.stage === "model" ? `Downloading the ${voice.model_name || (activeCompanion !== "watcher" ? `${COMPANIONS[activeCompanion]?.name || "companion"} voice` : "HAL 9000 voice")}…` : DOWNLOAD_STAGES[download.stage]) || ""} ${share}%`;
   }
   const error = ui.byId("watcher-voice-error");
   error.hidden = download.stage !== "failed";
@@ -1031,16 +1108,13 @@ function renderVoice(voice, ui) {
   const level = ui.byId("watcher-voice-level");
   if (document.activeElement !== level) level.value = voice.level || "every";
   ui.byId("watcher-voice-orb").textContent = voice.orb_on ? ""
-    : "The Watcher's orb overlay is off. Its thoughts, spoken or not, need it on in Overlay Studio. TEST THE VOICE works either way.";
+    : "The companion overlay is off. Its thoughts, spoken or not, need it on in Overlay Studio. TEST THE VOICE works either way.";
 
   const findingPanel = ui.byId("watcher-finding-stage")?.closest("section");
   if (findingPanel) findingPanel.hidden = voice.identity !== "watcher";
-  if (voice.identity === "aster") {
-    ui.byId("watcher-voice-orb").textContent = voice.orb_on ? "Aster speaks complete reports from the start. Its story unfolds separately over active service." : "Enable the companion overlay in Overlay Studio to receive Aster’s replies. TEST THE VOICE works here either way.";
-  }
-  if (["axiom", "meridian"].includes(voice.identity)) {
+  if (["aster", "axiom", "meridian"].includes(voice.identity)) {
     const name = COMPANIONS[voice.identity].name;
-    ui.byId("watcher-voice-orb").textContent = voice.orb_on ? `${name} is ready for welcome messages and commands. Its story is pending. Set up your microphone and recognition in Settings › Voice.` : `Enable the companion overlay in Overlay Studio for ${name}’s replies. TEST THE VOICE works here either way.`;
+    ui.byId("watcher-voice-orb").textContent = voice.orb_on ? `${name} speaks complete reports from the start. Its story unfolds separately over active service. Set up your microphone and recognition in Settings › Voice.` : `Enable the companion overlay in Overlay Studio to receive ${name}’s replies. TEST THE VOICE works here either way.`;
   }
   const finding = voice.finding || {};
   const stageIndex = Math.max(0, Math.min(4, Number(finding.stage) || 0));
@@ -1067,17 +1141,15 @@ const HEAR_ACTIVE = ["opening", "listening", "test"];
 function talkPanel() {
   const prompts = TALK_PROMPTS.map((text) => `<button type="button" class="talk-prompt" data-talk-prompt="${text}">${text}</button>`).join("");
   return `<section class="talk-console" aria-label="Talk to it">
-    <header><span>TALK TO IT</span><b id="watcher-talk-state"></b></header>
-    <p class="watcher-note">Ask it to work the ship, show an overlay, control the music or read something from your ship's systems.</p>
-    <p class="talk-setup"><b>SETTINGS › VOICE</b>Before speaking, set up your microphone and hold-or-tap mode there. It also shows your talk key, missing Elite keyboard bindings, and command sequences.</p>
+    <header><span id="watcher-talk-title">TALK</span><b id="watcher-talk-state"></b><button type="button" class="talk-link" id="watcher-talk-forget">CLEAR</button></header>
     <ol class="talk-transcript" id="watcher-talk-log" aria-live="polite"></ol>
     <div class="talk-prompts" id="talk-prompts" aria-label="Example commands">${prompts}</div>
     <div class="talk-say">
-      <textarea id="watcher-talk-text" rows="2" maxlength="400" placeholder="Open the galaxy map, hide the overlays, gear down…" aria-label="A command or question for the Watcher" spellcheck="true"></textarea>
+      <textarea id="watcher-talk-text" rows="1" maxlength="400" placeholder="Ask something, or give a command…" aria-label="A command or question for your companion" spellcheck="true"></textarea>
       <button type="button" class="talk-mic" id="watcher-talk-mic" data-stage="idle" title="Hold to talk" aria-label="Talk by voice" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"></path></svg></button>
-      <button type="button" class="talk-send" id="watcher-talk-send">SAY IT</button>
+      <button type="button" class="talk-send" id="watcher-talk-send" aria-label="Send">SEND</button>
     </div>
-    <footer><p id="watcher-talk-note"></p><button type="button" class="talk-link" id="watcher-talk-forget">FORGET THIS TALK</button></footer>
+    <footer><p class="watcher-note">Work the ship, show an overlay, change the music, or ask about your ship, cargo, route and system.</p><p class="talk-setup" id="watcher-talk-note"></p></footer>
   </section>`;
 }
 
@@ -1193,26 +1265,34 @@ function talkClock(seconds) {
 }
 
 function renderTalk(data, ui) {
-  const panel = ui.byId("watcher-workspace")?.querySelector('[data-watcher-panel="talk"]');
+  const panel = ui.byId("watcher-workspace")?.querySelector(".talk-console");
   if (!panel) return;
   const talk = Array.isArray(data.talk) ? data.talk : [];
-  const key = JSON.stringify(talk);
+  const name = COMPANIONS[activeCompanion]?.name || "The Watcher";
+  const key = JSON.stringify([activeCompanion, talk]);
   if (key !== talkKey) {
     talkKey = key;
-    ui.byId("watcher-talk-log").innerHTML = talk.length ? talk.map((row) => `<li class="talk-turn">
+    const icon = COMPANION_ICONS[activeCompanion] || "◉";
+    // 5.7.4: a crewmate asked by name answers under its own name, off watch.
+    const replier = (row) => row.who && row.who !== activeCompanion && COMPANIONS[row.who]
+      ? [COMPANION_ICONS[row.who] || "◉", `${COMPANIONS[row.who].name} · OFF WATCH`, " off-watch"] : [icon, name, ""];
+    ui.byId("watcher-talk-log").innerHTML = talk.length ? talk.map((row) => { const [mark, who, extra] = replier(row); return `<li class="talk-turn">
       <div class="talk-you"><small>YOU${row.voice ? " · SPOKEN" : ""} · ${ui.escapeHtml(talkClock(row.at))}</small><p>${ui.escapeHtml(row.you)}</p></div>
-      ${row.it ? `<div class="talk-it"><small>THE WATCHER</small><p>${ui.escapeHtml(row.it)}</p></div>` : ""}</li>`).join("")
-      : `<li class="talk-empty"><p>Nothing said yet. Try a command below, or ask about your ship, cargo, route or current system.</p></li>`;
+      ${row.it ? `<div class="talk-it${extra}"><i aria-hidden="true">${mark}</i><div><small>${ui.escapeHtml(who.toUpperCase())}</small><p>${ui.escapeHtml(row.it)}</p></div></div>` : ""}</li>`; }).join("")
+      : `<li class="talk-empty"><p>Say hello to ${ui.escapeHtml(name)}, try a command below, or ask about your ship, cargo, route or current system.</p></li>`;
     talkToNewest();
   }
   const canTalk = Boolean(data.orb_on);
+  ui.byId("watcher-talk-title").textContent = `TALK TO ${name.toUpperCase()}`;
   ui.byId("watcher-talk-state").textContent = talk.length ? `${talk.length} EXCHANGED` : "";
+  ui.byId("watcher-talk-forget").hidden = !talk.length;
   ui.byId("watcher-talk-send").disabled = !canTalk;
   ui.byId("watcher-talk-text").disabled = !canTalk;
+  ui.byId("watcher-talk-text").placeholder = `Ask ${name}, or give a command…`;
   panel.querySelectorAll("[data-talk-prompt]").forEach((button) => { button.disabled = !canTalk; });
-  ui.byId("watcher-talk-note").textContent = canTalk
-    ? "Voice commands and microphone settings are in Settings › Voice."
-    : "Its orb overlay is off: it answers beside the orb. Switch it on in Overlay Studio.";
+  ui.byId("watcher-talk-note").innerHTML = canTalk
+    ? "Microphone, talk key, keyboard bindings and sequences: <b>SETTINGS › VOICE</b>."
+    : "The companion overlay is off: it answers beside its display. Switch it on in <b>Overlay Studio</b>.";
 }
 
 window.addEventListener("pagehide", () => { clearTimeout(companionPoll); panelCaption?.destroy(); });

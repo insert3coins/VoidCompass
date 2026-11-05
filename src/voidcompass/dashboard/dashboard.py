@@ -1600,12 +1600,62 @@ class MainDashboard(
                  severity="INFO")
         return True
 
+    def _crew_snapshot(self, fresh=False):
+        """Who of the crew you've flown with, and each one's memory (5.7.4).
+        Inactive companions are read from their files, at most every 30 s."""
+        import json as _json
+        from voidcompass.core.config import get_active_profile
+        from voidcompass.overlays import crew_lore
+        from voidcompass.overlays.heartbeat_hud import _memory_path
+        key = get_active_profile(self.config)
+        cached = getattr(self, "_crew_cache", None)
+        if cached and not fresh and cached[0] == key and time.monotonic() - cached[1] < 30:
+            return cached[2]
+        mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+        memories = {}
+        for member in crew_lore.CREW:
+            if mind is not None and getattr(mind, "identity", None) == member:
+                memories[member] = mind.memory
+                continue
+            path = _memory_path({**self.config, "companion_identity": member})
+            try:
+                memories[member] = _json.loads(open(path, encoding="utf-8").read()) if path and os.path.exists(path) else {}
+            except (OSError, ValueError):
+                memories[member] = {}
+        flown = [member for member in crew_lore.CREW if float(memories[member].get("hours") or 0) >= crew_lore.FLOWN_HOURS]
+        snapshot = {"flown": flown, "memories": memories,
+                    "told": sum(len(crew_lore.told(memory)) for memory in memories.values())}
+        previous = cached[2] if cached and cached[0] == key else None
+        self._crew_cache = (key, time.monotonic(), snapshot)
+        if previous is not None and (len(flown) > len(previous["flown"]) or snapshot["told"] > previous["told"]):
+            self._watcher_story({})
+        return snapshot
+
+    def _stamp_session_companion(self, switched=False):
+        """Which companion is on watch this session (5.7.4), for its flight log.
+        Live sessions only; a switch mid-session hands it to the new one."""
+        log = getattr(self, "captains_log", None)
+        if log is None:
+            return
+        from voidcompass.core.companions import identity
+        with log.lock:
+            sessions = log.data.get("sessions") or []
+            session = sessions[-1] if sessions else None
+            if not session or session.get("ended") or (session.get("companion") and not switched):
+                return
+            session["companion"] = identity(self.config)
+        log.save()
+
     def _watcher_story(self, story):
         """The Watcher's story moved on (5.5.3.5): its achievements hear of it,
         as the region passport's do, through a Void Compass event."""
         engine = getattr(self, "achievement_engine", None)
         if engine is None:
             return
+        crew = getattr(self, "_crew_cache", None)
+        if crew:
+            # 5.7.4: the crew's own achievements ride along with every story event.
+            story = {**story, "CrewFlown": len(crew[2]["flown"]), "CrewTold": crew[2]["told"]}
         try:
             engine.process_event({"type": "VoidCompassWatcherStory", "event": "VoidCompassWatcherStory", **story})
         except Exception:
@@ -1615,6 +1665,10 @@ class MainDashboard(
         """What the rest of the app knows, for the Watcher's idle thoughts:
         the track playing in the Music player and Galnet's latest headline."""
         context = {}
+        try:
+            context["crew"] = {"flown": list(self._crew_snapshot()["flown"])}
+        except Exception:
+            logging.debug("Crew snapshot skipped", exc_info=True)
         status = getattr(self, "_music_status", None) or {}
         if status.get("playing") and status.get("track_id"):
             try:
@@ -8392,6 +8446,8 @@ class MainDashboard(
                 if self.captains_log.process_event(raw, context=d):
                     self._refresh_exploration_window()
                     self._refresh_html_workspace()
+                if not startup_replay:
+                    self._stamp_session_companion()
             except Exception as exc:
                 logging.debug("Captain's Log event skipped [%s]: %s", ev, exc)
         if ev in {"LoadGame", "Shutdown"}:

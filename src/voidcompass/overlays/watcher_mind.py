@@ -30,6 +30,7 @@ from voidcompass.core import ranks
 from voidcompass.exploration import bio_values
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
 from voidcompass.mining.mining_record import material_name
+from voidcompass.overlays import crew_lore, crew_voices
 from voidcompass.overlays import (
     watcher_deeper, watcher_field, watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures,
     watcher_places, watcher_copilot, watcher_name, watcher_postcards,
@@ -180,7 +181,7 @@ IMPORTANCE = {
     # 5.6.1, deeper: poked by trust, its slow mood, a moment kept, an
     # anniversary of you two, a dream, another Watcher, Book Four's musings.
     "poked_wary": 2, "poked_warm": 2, "mood_low": 1, "mood_high": 1, "idle_moment": 1, "anniversary_us": 3,
-    "dream_told": 2, "watchers_meet": 3, "idle_four_shut": 1, "idle_four_open": 1,
+    "dream_told": 2, "watchers_meet": 3, "watchers_meet_other": 3, "idle_four_shut": 1, "idle_four_open": 1,
     "greet_new": 3,
     "greet_away": 3,
     "greet_soon": 2,
@@ -293,6 +294,9 @@ IMPORTANCE = {
 }
 # Each topic: (importance, [lines]). A line takes {fields} from the context
 # that raised it; a line whose fields are missing is skipped.
+# 5.7.4: the crew's handovers (said at once) and passing remarks.
+IMPORTANCE.update({topic: 3 if topic.startswith("handover_") else 1 for topic in watcher_lines.NORMAL
+                   if topic.startswith(("handover_from_", "idle_crew_"))})
 TOPICS = {topic: (level, watcher_lines.NORMAL[topic]) for topic, level in IMPORTANCE.items()}
 # The depressed nature ("weary" in config; the default since 5.5.3.1).
 WEARY = watcher_lines.WEARY
@@ -596,6 +600,12 @@ class WatcherMind:
         self.field = watcher_field.FieldNotes()
         # 5.7.3: a question the uplink is asking Spansh about.
         self._uplink = None
+        # 5.7.4: a crewmate's off-watch line waiting its turn, the session it
+        # last spoke in, a hull scare not yet survived, and who TALK addressed.
+        self._chime = None
+        self._chimed_session = None
+        self._close_call_at = None
+        self.talking_as = None
         self._last_interesting = self.clock()
         self._pending = []           # (importance, topic, fields)
         self._dead_since = None
@@ -837,7 +847,58 @@ class WatcherMind:
             log.append([round(time.time(), 1), topic, text])
             del log[:-300]
         self._unsaved = True
+        self._crew_moment(topic, now)
         return self.thought
+
+    # -- the crew off watch (5.7.4) -------------------------------------------
+    def _crew_moment(self, topic, now):
+        """A big moment may bring a crewmate up from standby, after this line."""
+        if topic in crew_voices.DEATHS:
+            self._close_call_at = None
+            if (self._chime or {}).get("moment") == "close_call":
+                self._chime = None
+        elif topic == "hull_critical":
+            self._close_call_at = self._close_call_at or now
+        elif topic in crew_voices.MOMENTS:
+            self._crew_chime_queue(crew_voices.MOMENTS[topic], now)
+
+    def _crew_chime_queue(self, moment, now, delay=crew_voices.CHIME_DELAY_S):
+        if self._chime or self._session_start is None or self._chimed_session == self._session_start:
+            return
+        if now - float(self.memory.get("crew_chime_last") or 0) < crew_voices.CHIME_GAP_S:
+            return
+        crew = sorted(name for name in getattr(self, "_crew_flown", ()) or () if name != self.identity and name in crew_voices.CHIMES)
+        if not crew or self.random.random() > crew_voices.CHIME_CHANCE:
+            return
+        self._chime = {"speaker": self.random.choice(crew), "moment": moment, "due": now + delay,
+                       "until": now + delay + crew_voices.CHIME_EXPIRES_S}
+
+    def _crew_chime_due(self, now):
+        """The crewmate's line, once the one on watch has had its say."""
+        if self._close_call_at is not None and now - self._close_call_at >= crew_voices.CLOSE_CALL_AFTER_S and not self._in_danger:
+            self._close_call_at = None
+            self._crew_chime_queue("close_call", now, delay=0)
+        chime = self._chime
+        if not chime or now < chime["due"]:
+            return None
+        if now > chime["until"]:
+            self._chime = None
+            return None
+        if self._in_danger or FREQUENCIES.get(frequency(self.config)) is None:
+            return None
+        self._chime = None
+        with self.lock:
+            line = crew_voices.pick(self.memory, chime["speaker"], chime["moment"], self.random)
+            self.memory["crew_chime_last"] = now
+        self._chimed_session = self._session_start
+        thought = self._utter("crew_chime", f"chime:{chime['speaker']}:{chime['moment']}", line, now)
+        return self._as_crewmate(thought, chime["speaker"])
+
+    def _as_crewmate(self, thought, speaker, reply=False):
+        """A thought said by a crewmate off watch: its name and its own voice."""
+        thought.update(kind="reply" if reply else "", heading=crew_voices.heading(speaker), speaker=speaker, importance=3)
+        thought["voice"] = {"pace": 1.0, "gain": 1.0, "slip": False, "voice": speaker}
+        return thought
 
     def relay(self, text, heading="", speak=False):
         """Words from outside (the local API, 5.5.7): shown as given, under
@@ -877,11 +938,52 @@ class WatcherMind:
             return self._utter("lore_afterword", "lore:afterword", watcher_lore.AFTERWORD, now)
         row = watcher_lore.due(self.memory, self.memory.get("sessions") or 0, self.memory.get("hours") or 0, now)
         if row is None:
-            return None
+            return self._crew_passage(now, max(shared.values()) if shared else 0.0)
         self._story_changed = True
         with self.lock:
             self.memory.setdefault("lore", []).append([row[0], now])
         return self._utter("lore_fragment", f"lore:{row[0]}", row[2], now)
+
+    # -- the crew (5.7.4) ---------------------------------------------------------
+    def _crew_passage(self, now, last_story=0.0):
+        """Its part of the crew's story: how it came aboard and met the others."""
+        row = crew_lore.due(self.identity, self.memory, getattr(self, "_crew_flown", set()),
+                            self.memory.get("hours") or 0, now, last_story)
+        if row is None:
+            return None
+        passage_id, _title, text = row
+        formatter = getattr(self.random, "format_words", None)
+        words = formatter(text, {}) if callable(formatter) else text
+        with self.lock:
+            self.memory.setdefault("crew_lore", []).append([passage_id, now])
+            self.memory.setdefault("crew_lore_words", {})[passage_id] = words
+        self._story_changed = True
+        thought = self._utter("crew_lore", f"crew:{passage_id}", words, now)
+        thought.update(kind="memory", heading=crew_lore.heading(self.identity, passage_id), importance=3)
+        return thought
+
+    def _crew_handover(self, previous):
+        """Taking the watch from a crewmate by name, from a saved rotation of
+        its own lines, so a run of switches doesn't repeat itself."""
+        if previous == self.identity or previous not in crew_lore.NAMES or not self.event_lines_known(f"handover_from_{previous}"):
+            return None
+        if FREQUENCIES.get(frequency(self.config)) is None:
+            return None
+        with self.lock:
+            line = crew_lore.pick_handover(self.memory, self.identity, previous, self.random)
+        formatter = getattr(self.random, "format_words", None)
+        fields = crew_lore.handover_fields(previous)
+        words = formatter(line, fields) if callable(formatter) else line.format(**fields)
+        self._unsaved = True
+        thought = self._utter(f"handover_from_{previous}", f"handover:{previous}", words, self.clock())
+        thought.update(kind="", heading="CHANGE OF WATCH", importance=3)
+        return thought
+
+    def event_lines_known(self, topic):
+        return topic in TOPICS
+
+    def _crew_choices(self):
+        return [(f"idle_crew_{other}", {}) for other in crew_lore.met(self.identity, self.memory)]
 
     def story_progress(self):
         """The story so far (watcher_lore.progress), once each time it moves
@@ -938,44 +1040,67 @@ class WatcherMind:
         words = " ".join(str(text or "").split())[:400]
         if not words:
             return False
+        # 5.7.4: "Meridian, how far to Colonia?" A crewmate answers, off watch.
+        crewmate = crew_voices.addressed(words, self.identity)
+        who, asked = crewmate if crewmate else (None, words)
         with self.lock:
             history = self.memory.setdefault("talk", [])
-            history.append({"at": round(time.time(), 1), "you": words, "it": "", **({"voice": True} if voice else {})})
+            history.append({"at": round(time.time(), 1), "you": words, "it": "", **({"voice": True} if voice else {}),
+                            **({"who": who} if who else {})})
             del history[:-50]
             count = len(history)
         self._unsaved = True
         self._uplink = None
+        rng = crew_voices.CrewRandom(self.random, who) if who else self.random
         from voidcompass.overlays import watcher_chat
         from voidcompass.core import voice_commands
-        conversation = voice_commands.native_request(self.command_words(words), self.config.get("watcher_ship_commands"), kind="chat")
+        conversation = voice_commands.native_request(asked if who else self.command_words(words),
+                                                     self.config.get("watcher_ship_commands"), kind="chat")
         chat = conversation[0].native["value"] if conversation else None
         if chat:
-            bank = getattr(self, "chat_bank", watcher_chat)
+            bank = crew_voices.chat_bank(who, self.config) if who else getattr(self, "chat_bank", watcher_chat)
+            cycle = f"{who}:{chat}" if who else chat
             last = getattr(self, "_chat_last", {})
             cycles = getattr(self, "_chat_used", {})
-            used = cycles.get(chat, [])
+            used = cycles.get(cycle, [])
             size = len(bank.GREETINGS if chat == "greeting" else bank.CAPABILITIES)
             if len(used) >= size:
                 used = []
-            answer = bank.answer(chat, self.random, last.get(chat), used)
-            cycles[chat] = used + [answer]
+            answer = bank.answer(chat, rng, last.get(cycle), used)
+            cycles[cycle] = used + [answer]
             self._chat_used = cycles
-            self._chat_last = dict(last, **{chat: answer})
-            self._reply(answer)
+            self._chat_last = dict(last, **{cycle: answer})
+            self._reply(answer, who)
             return True
         done = None
         if callable(self.action_provider):
+            self.talking_as = who
             try:
-                done = self.action_provider(words)
+                done = self.action_provider(asked)
             except Exception:
                 done = None
+            finally:
+                self.talking_as = None
         if isinstance(done, dict) and done.get("waiting"):
-            self._uplink = {"said": words, "at": self.clock()}
+            self._uplink = {"said": asked, "at": self.clock(), "who": who}
             thought = self._utter("talk", f"talk:uplink:{count}", str(done.get("say") or ""), self.clock())
             thought["importance"] = 3
+            if who:
+                self._as_crewmate(thought, who, reply=True)
+        elif who:
+            self._reply(str(done) if done else self._crew_plain_answer(asked, who), who)
         else:
             self._reply(str(done) if done else self._plain_answer(words))
         return True
+
+    def _crew_plain_answer(self, words, who):
+        lines = []
+        if watcher_copilot.PLAIN_QUESTION.search(words) and callable(self.lookup_provider):
+            try:
+                lines = [str(line) for line in self.lookup_provider(words) or () if line]
+            except Exception:
+                lines = []
+        return watcher_copilot.plain_answer(lines) or watcher_copilot.reply("plain", crew_voices.CrewRandom(self.random, who))
 
     def _plain_answer(self, words):
         """A question gets the ship's readings; other requests get a written reply."""
@@ -999,10 +1124,12 @@ class WatcherMind:
         if pending is None or pending["said"] != words:
             return False
         self._uplink = None
-        self._reply(watcher_copilot.plain_answer(lines) or watcher_copilot.reply("uplink_empty", self.random))
+        who = pending.get("who")
+        rng = crew_voices.CrewRandom(self.random, who) if who else self.random
+        self._reply(watcher_copilot.plain_answer(lines) or watcher_copilot.reply("uplink_empty", rng), who)
         return True
 
-    def _reply(self, words):
+    def _reply(self, words, who=None):
         with self.lock:
             history = self.memory.setdefault("talk", [])
             if history and not history[-1].get("it"):
@@ -1010,6 +1137,8 @@ class WatcherMind:
             count = len(history)
         thought = self._utter("talk", f"talk:{count}", words, self.clock())
         thought["importance"] = 3
+        if who and who != self.identity:
+            self._as_crewmate(thought, who, reply=True)
         return thought
 
     def talk_waiting(self):
@@ -1413,6 +1542,9 @@ class WatcherMind:
             with self.lock:
                 self.memory["anniversary_said"] = today
             return self.consider("anniversary", fields, force=True)
+        if kind == "crew_handover":
+            # 5.7.4: a new companion on watch takes it from the last one by name.
+            return self._crew_handover(str(fields.get("previous") or ""))
         if kind in {"capsule", "capsule_early", "capsule_shared", "constellation_named"}:
             # A note you left (or not yet); a constellation finished: said
             # whatever the hour (5.5.3.7).
@@ -1508,7 +1640,7 @@ class WatcherMind:
         """What of a thought its voice says out loud, as far as it has found it."""
         if not thought:
             return ""
-        if thought.get("topic") in ("voice_found", "relay", "talk"):
+        if thought.get("topic") in ("voice_found", "relay", "talk", "crew_chime") or thought.get("speaker"):
             words = thought.get("text") or ""
         else:
             words = watcher_voice_lore.spoken_part(thought.get("text"), self.voice_stage())
@@ -1562,6 +1694,8 @@ class WatcherMind:
     def learn(self, context):
         """What the deck knows that a restart hid from the journal: the
         vehicle you're in and your ship's hold (5.5.12)."""
+        if isinstance(context, dict) and "crew" in context:
+            self._crew_flown = crew_lore.flown(context)
         context = context or {}
         kind = str(context.get("vehicle") or "").casefold()
         if kind in SRV_HOLD_T or kind in ("nomad", "fighter"):
@@ -2054,6 +2188,10 @@ class WatcherMind:
             self._say_next.append(("lore_meeting", {"text": watcher_lore.MEETING.get(watcher_lore.road(self.memory))}))
         nature = watcher_deeper.NATURE_WORDS.get(card.get("nature"), "another one")
         road = watcher_deeper.ROAD_WORDS.get(card.get("road"))
+        if card.get("companion") not in (None, "watcher"):
+            # 5.7.4: another commander's Aster, Axiom or Meridian, not one of its kind.
+            kind = watcher_deeper.NATURE_WORDS.get(card["companion"], "something else")
+            return self.consider("watchers_meet_other", {"kind": kind, "Kind": kind[:1].upper() + kind[1:]}, force=True)
         return self.consider("watchers_meet", {"nature": nature, "Nature": nature[:1].upper() + nature[1:],
                                                 "road": road, "Road": road[:1].upper() + road[1:]}, force=True)
 
@@ -2078,6 +2216,9 @@ class WatcherMind:
         calm = self._calm(now)
         if calm:
             return calm
+        chime = self._crew_chime_due(now)
+        if chime:
+            return chime
         voice = self.find_voice()
         if voice:
             return voice
@@ -2138,6 +2279,12 @@ class WatcherMind:
             # How you play, as it has come to know you (5.5.4): now and then.
             if self.random.random() < .35:
                 choices[:0] = watcher_habits.choices(self.memory, self.bond(), self.random)[:1]
+            # 5.7.4: now and then, a word about a crewmate.
+            crew = self._crew_choices()
+            self.random.shuffle(crew)
+            if crew and self.random.random() < .2:
+                choices[:0] = crew[:1]
+            choices.extend(crew[1:])
             # 5.6.1: a moment it kept; its slow mood; what you once told it.
             moment = self._moment_choice(now)
             if moment and self.random.random() < .3:

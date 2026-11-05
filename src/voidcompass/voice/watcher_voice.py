@@ -174,15 +174,23 @@ class WatcherSpeaker:
         self._last_used = time.time()
 
     # -- engine --------------------------------------------------------------
-    def _speed(self):
-        return SPEEDS.get(str(self._settings().get("watcher_voice_speed") or "standard"), 1.0)
+    def _voice_settings(self, voice=None):
+        """The settings for this line's voice: the active companion's, or a
+        crewmate's when it speaks off watch (5.7.4)."""
+        settings = self._settings()
+        if not voice or voice not in companions.IDENTITIES or voice == companions.identity(settings):
+            return settings
+        return companions.settings(getattr(settings, "source", settings), voice)
 
-    def _ensure_engine(self):
-        model = companions.identity(self._settings())
+    def _speed(self, voice=None):
+        return SPEEDS.get(str(self._voice_settings(voice).get("watcher_voice_speed") or "standard"), 1.0)
+
+    def _ensure_engine(self, voice=None):
+        model = companions.identity(self._voice_settings(voice))
         ready = voice_assets.installed(self.base, model=model) if model != "watcher" else voice_assets.installed(self.base)
         if self._closed or not ready:
             return None
-        speed = self._speed()
+        speed = self._speed(voice)
         model_file = voice_assets.model_path(self.base, model)
         model_signature = (model, str(model_file), tuple(row["sha256"] for row in voice_assets.manifest(model)[1]))
         proc = self._proc
@@ -338,7 +346,8 @@ class WatcherSpeaker:
                 continue
             if not job.get("warm"):
                 self._job_state(job, "preparing")
-            proc = self._ensure_engine()
+            voice = (job.get("feel") or {}).get("voice")
+            proc = self._ensure_engine(voice) if voice else self._ensure_engine()
             if proc is None:
                 if not job.get("warm"):
                     self._job_state(job, "failed")
@@ -347,7 +356,7 @@ class WatcherSpeaker:
             if job.get("warm"):
                 job = {"text": ".", "key": None, "serial": None, "silent": True}
             turn += 1
-            raw = voice_assets.voice_dir(self.base) / "cache" / companions.identity(self._settings()) / f"speech-{turn % 3}.wav"
+            raw = voice_assets.voice_dir(self.base) / "cache" / companions.identity(self._voice_settings(voice)) / f"speech-{turn % 3}.wav"
             try:
                 raw.parent.mkdir(parents=True, exist_ok=True)
                 proc.stdin.write(json.dumps({"text": job["text"], "output_file": str(raw)}) + "\n")
@@ -409,7 +418,7 @@ class WatcherSpeaker:
             samples = stretch(samples, max(.85, min(1.2, pace)), rate)
             if feel.get("slip"):
                 samples = slip(samples, rate)
-        gain = volume_gain(self._settings().get("watcher_voice_volume", 80))
+        gain = volume_gain(self._voice_settings(feel.get("voice")).get("watcher_voice_volume", 80))
         try:
             gain *= max(.3, min(1.0, float(feel.get("gain") or 1.0)))
         except (TypeError, ValueError):

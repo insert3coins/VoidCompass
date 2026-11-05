@@ -65,15 +65,23 @@ class AsterMindTests(unittest.TestCase):
         self.mind.memory["hours"] = 500
         self.assertIsNone(self.mind.remember())
         self.clock.now += aster_lore.SETTLE_S + 1
+        waited_days = 0
         for row in aster_lore.PASSAGES:
             thought = self.mind.remember()
+            # Chapters VII and VIII also wait real days after the chapter before.
+            while thought is None and waited_days < 10:
+                self.clock.now += 86400
+                waited_days += 1
+                thought = self.mind.remember()
             self.assertEqual(thought["text"], row[5])
-            self.assertTrue(thought["heading"].startswith("MANIFEST"))
+            self.assertTrue(thought["heading"].startswith("HANDOVER"), thought["heading"])
             self.assertIsNone(self.mind.remember(), "not twice in one quiet period")
             self.clock.now += aster_lore.GAP_S + 1
+        self.assertEqual(waited_days, 5, "two days before chapter VII, three before VIII")
         self.assertIsNone(self.mind.remember())
         self.assertTrue(aster_lore.page(self.mind.memory, 500)["complete"])
         self.assertEqual(len(aster_lore.PASSAGES), 48)
+        self.assertEqual(len(aster_lore.CHAPTERS), 8)
         fresh = AsterMind(None, self.config, clock=self.clock)
         fresh.session_start(); fresh.memory["hours"] = 500
         self.clock.now += aster_lore.SETTLE_S + 1
@@ -81,21 +89,29 @@ class AsterMindTests(unittest.TestCase):
         self.assertIsNone(fresh.remember())
 
     def test_story_gates_have_event_and_time_alternatives_and_no_spoilers(self):
+        story = aster_lore.STORY
         page = aster_lore.page({}, 0)
-        self.assertTrue(all(row["title"] == "Unopened report" and not row["told"] and not row["account"] for row in page["chapters"]))
-        for gate, (count, fallback, _label, field) in aster_lore.GATES.items():
-            self.assertFalse(aster_lore.gate_ready({}, gate, 0))
-            self.assertTrue(aster_lore.gate_ready({"aster_marks": {field: count}}, gate, 0))
-            self.assertTrue(aster_lore.gate_ready({}, gate, fallback))
+        self.assertTrue(all(row["title"] == "Unopened" and not row["told"] and not row["account"] for row in page["chapters"]))
+        self.assertTrue(all(row["unlock"] for row in page["chapters"]), "every unopened chapter says how it opens")
+        for index, chapter in enumerate(aster_lore.CHAPTERS):
+            gate = chapter["gate"]
+            if not gate:
+                continue
+            start = chapter["hours"][0]
+            self.assertFalse(story.gate_met({}, index, start))
+            self.assertTrue(story.gate_met({"aster_marks": {gate["signals"][0]: gate["count"]}}, index, start))
+            self.assertTrue(story.gate_met({}, index, start + story.grace_hours), "time alone opens every chapter")
         self.mind.observe("FSDJump", {"StarSystem": "Sol"})
         self.mind.observe("FSDJump", {"StarSystem": "Achenar"})
         self.mind.observe("FSDJump", {"StarSystem": "Sol"})
         self.mind.observe("Docked", {"StationName": "Galileo"})
         self.mind.observe("MarketSell", {})
-        self.assertEqual(self.mind.memory["aster_marks"], {"jumps": 3, "returns": 1, "arrivals": 1, "deliveries": 1})
+        self.assertEqual(self.mind.memory["aster_marks"], {"jump": 3, "return": 1, "arrival": 1, "delivery": 1})
         self.mind.observe("Shutdown", {})
-        self.assertFalse(self.mind.memory.get("echoes"))
-        self.assertFalse(self.mind.memory.get("dreams"))
+        self.assertFalse(self.mind.memory.get("echoes"), "no echo before its chapter is heard")
+        # Aster writes its own watch notes at shutdown, never the Watcher's dreams.
+        self.assertIn(self.mind.memory["dreams"][-1]["text"].split(": ")[0].split(".")[0],
+                      " ".join(self.mind.persona.keepsakes.NOTES))
         self.assertIsNone(self.mind.find_voice())
         self.assertIsNone(self.mind.pending_question())
 

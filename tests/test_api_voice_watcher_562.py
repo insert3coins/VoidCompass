@@ -66,7 +66,7 @@ class HushTests(unittest.TestCase):
         answer = deck.api_voice_hush(30)
         self.assertTrue(answer["hushed"])
         self.assertTrue(28 <= answer["hushed_for"] <= 30)
-        self.assertEqual(deck.events[-1], ("voice", {"state": "hushed", "from": "watcher"}), "cut off, and said so")
+        self.assertEqual(deck.events[-1], ("voice", {"state": "hushed", "from": "watcher", "companion": "watcher"}), "cut off, and said so")
         self.assertFalse(deck._watcher_voice_say("Another star."), "its own thoughts aren't said while hushed")
         with self.assertRaises(ApiError) as caught:
             deck.api_voice_say("Hello")
@@ -85,13 +85,13 @@ class HushTests(unittest.TestCase):
     def test_started_then_finished_or_stopped(self, _installed):
         deck = Deck()
         deck._watcher_voice_say("Hello, Commander.", key="api-1")
-        self.assertEqual(deck.events[-1], ("voice", {"state": "started", "text": "Hello, Commander.", "from": "api"}))
+        self.assertEqual(deck.events[-1], ("voice", {"state": "started", "text": "Hello, Commander.", "from": "api", "companion": "watcher"}))
         deck._watcher_voice.start()
         deck._watcher_voice.finish()
-        self.assertEqual(deck.events[-1], ("voice", {"state": "finished", "from": "api"}))
+        self.assertEqual(deck.events[-1], ("voice", {"state": "finished", "from": "api", "companion": "watcher"}))
         deck._watcher_voice.start()
         deck.api_voice_stop()
-        self.assertEqual(deck.events[-1], ("voice", {"state": "stopped", "from": "api"}))
+        self.assertEqual(deck.events[-1], ("voice", {"state": "stopped", "from": "api", "companion": "watcher"}))
         deck._watcher_voice.finish()
         self.assertEqual(len([row for row in deck.events if row[1]["state"] != "started"]), 2, "each end said once")
 
@@ -187,7 +187,8 @@ class WatcherAnswerTests(unittest.TestCase):
             with self.assertRaises(ApiError) as caught:
                 app.api_watcher_answer(7)
             self.assertEqual(caught.exception.status, 400)
-            self.assertEqual(app.api_watcher_answer(2), {"answered": True, "question": "talk_less"})
+            self.assertEqual(app.api_watcher_answer(2), {"answered": True, "question": "talk_less",
+                                                          "companion": {"identity": "watcher", "name": "The Watcher", "generation": 0}})
             self.assertEqual(mind.memory["questions"]["talk_less"]["answer"], "same")
 
 

@@ -3,8 +3,8 @@ import {SIGNATURES} from "../assets/companion-colours.js";
 export const COMPANIONS = {
   watcher: {name:"The Watcher",role:"Journal companion",description:"Patient company · an ancient eye"},
   aster: {name:"Aster",role:"Manifest officer",description:"Ship’s officer · precision and dry wit"},
-  axiom: {name:"Axiom",role:"Analytic companion",description:"Clear observations · a living particle field"},
-  meridian: {name:"Meridian",role:"Command companion",description:"Measured presence · a holographic portrait"},
+  axiom: {name:"Axiom",role:"Survey intelligence",description:"Survey intelligence · precise and curious"},
+  meridian: {name:"Meridian",role:"Veteran navigator",description:"Old navigator · measured and steady"},
 };
 export function companionInfo(source = {}) {
   const selected = source.identity || source.companion_identity;

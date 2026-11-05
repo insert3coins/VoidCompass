@@ -372,6 +372,28 @@ function feedOrb() {
 // The eye opens as the page does.
 feedOrb();
 
+// 5.7.4: the commander's selected companion presents the boot screen. The
+// Watcher keeps its orb; Aster, Axiom and Meridian use their own displays,
+// fed through the same adapters as the deck and overlay.
+let bootCompanion = {identity: 'watcher', name: 'The Watcher'};
+const companionId = () => ['aster', 'axiom', 'meridian'].includes(bootCompanion.identity) ? bootCompanion.identity : 'watcher';
+
+function feedCompanion() {
+  const identity = companionId();
+  const model = {
+    orb: {identity, accent: bootCompanion.accent, motion: bootCompanion.motion !== false,
+      focus_movement: bootCompanion.focus || 'tracking', liveliness: bootCompanion.liveliness || 'standard', frame_rate: 30},
+    vitals: {}, events: [],
+  };
+  const live = {working: starting() && Boolean(lastStatus) && lastStatus !== 'FLIGHT DECK READY'};
+  const options = {visible: presented(), reducedMotion: reduced()};
+  window.AsterCompanion?.update(orbCanvas, model, live, options);
+  window.CrewCompanion?.update(orbCanvas, model, live, options);
+  boot.dataset.companion = identity;
+}
+window.addEventListener('aster-three-ready', () => feedCompanion());
+window.addEventListener('crew-three-ready', () => feedCompanion());
+
 // Flight computer log: every status the backend reports, with its time.
 const logList = $('boot-log');
 const clock = $('boot-clock');
@@ -444,7 +466,7 @@ function showConnection(data) {
   $('boot-event-count').textContent = data.eventsKnown ? Math.max(0, data.events).toLocaleString() : '—';
   $('boot-events').textContent = data.eventsKnown ? 'Recent events restored' : 'Awaiting journal reader';
   $('boot-journal-state').textContent = live ? 'LIVE JOURNAL CONNECTED' : cached ? 'CACHED FLIGHT STATE' : data.eventsKnown ? 'RESTORING YOUR JOURNEY' : 'WAITING FOR JOURNAL';
-  $('boot-journal-note').textContent = live ? 'The next flight event will arrive live.' : cached ? 'Cached records are ready. The live journal is unavailable.' : 'The Watcher is finding where you left off.';
+  $('boot-journal-note').textContent = live ? 'The next flight event will arrive live.' : cached ? 'Cached records are ready. The live journal is unavailable.' : `${bootCompanion.name || 'The Watcher'} is finding where you left off.`;
   $('boot-link-label').textContent = live ? 'LOCAL JOURNAL / LIVE' : cached ? 'LOCAL JOURNAL / CACHED' : 'LOCAL JOURNAL / CONNECTING';
   const total = Number(data.overlaysTotal) || 0;
   $('boot-overlay-count').textContent = total ? `${data.overlaysReady} / ${total} surfaces ready` : 'No overlay surfaces registered';
@@ -535,9 +557,10 @@ function vanishingPoint() {
 function sync() {
   const on = presented();
   const animate = on && !reduced();
-  orb?.setSuspended(!on);
+  orb?.setSuspended(!on || companionId() !== 'watcher');
   // Carries a changed reduced-motion preference to the watcher.
   if (on) feedOrb();
+  feedCompanion();
   // First-run commissioning shares the boot screen: its form sits on the
   // same galaxy, held still.
   if (!boot.hidden && !document.hidden) sky.resize(vanishingPoint());
@@ -572,6 +595,7 @@ window.addEventListener('voidcompass:boot', (event) => {
     sync();
     return;
   }
+  if (announcement.companion && typeof announcement.companion === 'object') bootCompanion = announcement.companion;
   showConnection(announcement);
   showVersion(announcement);
   const events = Number(announcement.events) || 0;
@@ -616,6 +640,8 @@ motion.addEventListener('change', sync);
 window.addEventListener('pagehide', () => {
   sky.stop();
   orb?.dispose();
+  window.AsterCompanion?.dispose(orbCanvas);
+  window.CrewCompanion?.dispose(orbCanvas);
   clearInterval(factTimer);
   clearInterval(clockTimer);
   clearTimeout(voiceTimer);
@@ -639,6 +665,8 @@ window.bootScene = Object.freeze({
     count: countdown.querySelector('b').textContent,
     log: log.map((entry) => entry.status),
     orb: orb?.state() || null,
+    companion: companionId(),
+    companionDisplay: window.AsterCompanion?.inspect(orbCanvas) || window.CrewCompanion?.inspect(orbCanvas) || null,
     factInterval: FACT_INTERVAL_MS,
   }),
 });

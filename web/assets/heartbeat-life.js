@@ -98,8 +98,12 @@
     // Depressed (the default): heavy lids, a low gaze, a dim slow eye,
     // frequent sighs, and very little impresses it.
     weary: {all: .55, excitement: .3, pleased: .3, curious: .55, startled: .7, downcast: 1.8, lids: .3, lower: .08,
-      dim: .8, spin: .55, look: .03, sighs: 3},
+      dim: .8, spin: .7, look: .03, sighs: 3},
   };
+  // Where it looks around on its own when nothing is happening; a weary eye
+  // mostly looks down and away.
+  const IDLE_LOOKS = [[-1, 0], [1, 0], [0, 1], [-.7, .5], [.7, .5], [0, -.6], [-.8, -.3], [.8, -.3]];
+  const WEARY_LOOKS = [[-1, .2], [1, .2], [0, 1], [-.7, .6], [.7, .6], [-.5, .9], [.5, .9]];
   const GRIEF_MS = 10 * 60 * 1000;
   const ALARMS = new Set(['alarm', 'breach', 'strike']);
   const PLEASURES = new Set(['payout', 'complete', 'clear', 'glint', 'dock', 'touchdown']);
@@ -154,6 +158,11 @@
       this.look = null;     // one event's glance: {x, y, start, ms, kind}
       this.focus = 0;       // refocus blur, 0..1
       this.focusAt = now + this.between(20000, 45000);
+      this.idleLookAt = now + this.between(8000, 16000);
+      this.wanderPhase = this.random() * TAU;
+      this.wander = .022;      // how far the idle drift strays
+      this.drowsy = 0;
+      this.resting = false;
       this.lastAdvance = now;
       this.expression = null; // {name, start, ms, strength}
       this.habits = new Map(); // event name -> {count, at}
@@ -342,10 +351,20 @@
       this.charging += ((this.fsdCharging ? 1 : 0) - this.charging) * (1 - Math.exp(-elapsed / 500));
       this.tension += (this.dangerTarget - this.tension) * (1 - Math.exp(-elapsed / towards));
       if (now - this.lastEventAt > BREAK_MS) this.sessionStart = now;
-      if (this.reduced || !this.idle || context.asleep || context.stalled) return;
+      this.resting = Boolean(context.asleep || context.stalled);
+      this.drowsy = clamp(Number(context.drowsy) || 0);
+      if (this.reduced || !this.idle || this.resting) return;
       const fatigue = this.fatigue(now);
-      const drowsy = clamp(Number(context.drowsy) || 0);
+      const drowsy = this.drowsy;
       const stance = this.stance();
+      // Nothing happening: now and then it takes a slow look around.
+      if (this.look) this.idleLookAt = Math.max(this.idleLookAt, now + 4000);
+      else if (now >= this.idleLookAt) {
+        const looks = this.nature === 'weary' ? WEARY_LOOKS : IDLE_LOOKS;
+        const [x, y] = looks[Math.floor(this.random() * looks.length)];
+        this.look = {x, y, start: now, ms: this.between(1600, 2600), kind: 'look'};
+        this.idleLookAt = now + this.between(12000, 26000) * stance.pace * (1 + .6 * Math.max(fatigue, drowsy)) / Math.sqrt(this.level);
+      }
       const worry = this.worry();
       if (worry > 0 && now >= this.worryAt && !this.look) {
         this.look = {x: 0, y: 1, start: now, ms: 1100, kind: 'look'};
@@ -366,7 +385,7 @@
       const feeling = this.expressionPose(now);
       const dart = feeling ? (feeling.spec.dart || 0) * feeling.strength : 0;
       if (now >= this.saccade.at && now >= this.saccade.until) {
-        const reach = .045 * this.level * stance.reach * (1 + .6 * this.excitement + .5 * this.boredom(now) + .4 * dart);
+        const reach = .055 * this.level * stance.reach * (1 + .6 * this.excitement + .5 * this.boredom(now) + .4 * dart);
         const angle = this.random() * TAU;
         const distance = reach * (.4 + .6 * this.random());
         this.saccade = {
@@ -460,6 +479,13 @@
       let aperture = this.reduced ? 0 : this.thinking(now);
       let glint = null;
       let sigh = 0;
+      if (this.idle && !this.reduced && !this.resting) {
+        // It never quite holds still: a slow drift, less when drowsy.
+        const drift = this.wander * level * stance.reach * (1 - .4 * this.drowsy) * (spec.still ? 1 - strength : 1);
+        const t = now / 1000 + this.wanderPhase * 10;
+        dx += drift * (Math.sin(t * .37) + .5 * Math.sin(t * .83 + 1.7));
+        dy += drift * .7 * (Math.sin(t * .29 + 1.3) + .5 * Math.sin(t * .61 + .4));
+      }
       if (this.idle && !this.reduced) {
         // A focused eye holds its gaze; any other glances about.
         if (now < this.saccade.until && !(spec.still && strength > .4)) {

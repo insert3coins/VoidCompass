@@ -647,7 +647,8 @@ class DeckTests(unittest.TestCase):
 
     def test_the_word_list_for_its_hearing(self):
         deck = deck_for(self)
-        self.assertEqual(deck._watcher_listen_words(), ["Sol", "Wanderer", "Krait Phantom", "Sol 3", "Abraham Lincoln"])
+        # 5.7.4: the active companion's name helps recognition too.
+        self.assertEqual(deck._watcher_listen_words(), ["Sol", "Wanderer", "Krait Phantom", "Sol 3", "Abraham Lincoln", "The Watcher"])
         deck.cmdr_ship = {"ship": "unfamiliar_symbol", "ship_localised": "New Ship"}
         self.assertEqual(deck._watcher_listen_words()[2], "New Ship", "the journal's readable name wins")
         deck.cmdr_ship = {}

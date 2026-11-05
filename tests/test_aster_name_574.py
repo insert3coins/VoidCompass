@@ -114,7 +114,7 @@ class AsterNameTests(unittest.TestCase):
             mind.memory["hours"] = 500
             self.clock.now += 601
             thought = mind.remember()
-            self.assertIn("A formality, Jeff.", thought["text"])
+            self.assertIn("Before we go further, Jeff, a confession", thought["text"])
             self.assertEqual(aster_lore.page(mind.memory, 500)["chapters"][0]["told"][0]["text"], thought["text"])
             watcher_name.set_nickname(mind.memory, "Night Owl")
             mind.save()

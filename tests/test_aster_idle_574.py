@@ -88,20 +88,21 @@ class AsterIdleTests(unittest.TestCase):
     def test_story_recollections_wait_for_completed_old_chapters(self):
         mind = self.mind()
         old = self.clock() - 3 * 86400
-        mind.memory["lore"] = [[row[0], old] for row in aster_lore.PASSAGES[:7]]
+        mind.memory["lore"] = [[row[0], old] for row in aster_lore.PASSAGES[:5]]
         self.assertIn("idle_aster_lore", dict(self.choices(mind)))
         self.assertNotIn("aster_lore_recall", dict(self.choices(mind)))
-        mind.memory["lore"].append([aster_lore.PASSAGES[7][0], self.clock()])
-        self.assertNotIn("aster_lore_recall", dict(self.choices(mind)))
+        mind.memory["lore"].append([aster_lore.PASSAGES[5][0], self.clock()])
+        self.assertNotIn("aster_lore_recall", dict(self.choices(mind)), "a day must pass after the chapter")
         self.clock.now += 86401
         fields = dict(self.choices(mind))["aster_lore_recall"]
-        self.assertIn("c1", fields)
-        self.assertFalse(any(f"c{index}" in fields for index in range(2, 7)))
+        self.assertIn("cI", fields)
+        self.assertFalse(any(f"c{numeral}" in fields for numeral in ("II", "III", "IV", "V", "VI", "VII", "VIII")))
         for humour in ("dry", "off"):
             listener = self.mind(humour=humour)
             thought = listener.consider("aster_lore_recall", fields, force=True)
             self.assertIsNotNone(thought)
-            self.assertFalse(any(name in thought["text"] for name in ("Mara", "Iven", "eleven", "certificate")))
+            # Later captains stay sealed until their chapters are heard.
+            self.assertFalse(any(name in thought["text"] for name in ("Marr", "Haskell", "Varga", "Okonkwo", "Quist", "Pell")))
 
     def test_postcards_and_service_records_have_real_age_gates_and_places(self):
         mind = self.mind()
@@ -249,20 +250,20 @@ class AsterIdleTests(unittest.TestCase):
                         # exhaust; quiet is preferable to recycled company.
                         self.assertGreater(times[-1], start + 12 * 3600)
 
-    def test_all_six_chapters_have_original_recollections_in_both_modes(self):
+    def test_every_chapter_has_original_recollections_in_both_modes(self):
+        numerals = [chapter["numeral"] for chapter in aster_lore.CHAPTERS]
         for humour in ("dry", "off"):
-            for chapter in range(1, 7):
-                with self.subTest(humour=humour, chapter=chapter):
+            for chapter, numeral in enumerate(numerals, 1):
+                with self.subTest(humour=humour, chapter=numeral):
                     mind = self.mind(humour=humour)
                     mind.memory["lore"] = [[row[0], self.clock() - 3 * 86400]
-                                           for row in aster_lore.PASSAGES[:chapter * 8]]
+                                           for row in aster_lore.PASSAGES[:chapter * 6]]
                     fields = next(fields for topic, fields in self.choices(mind)
-                                  if topic == "aster_lore_recall" and f"c{chapter}" in fields)
+                                  if topic == "aster_lore_recall" and f"c{numeral}" in fields)
                     thought = mind.consider("aster_lore_recall", fields, force=True)
                     self.assertIsNotNone(thought)
                     self.assertNotIn("{", thought["text"])
                     self.assertEqual(thought["heading"], "OFFICER ON WATCH")
-
 
 if __name__ == "__main__":
     unittest.main()

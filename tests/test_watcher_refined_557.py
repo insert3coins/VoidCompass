@@ -144,6 +144,8 @@ class WatcherMotionBrowserTests(_BrowserTestCase):
       const life = orb.life;
       life.saccade = {x: 0, y: 0, at: 1e15, until: 0};
       life.look = null;
+      life.idleLookAt = 1e15;
+      life.wander = 0;
       const t0 = performance.now() + 5000;
       for (let i = 0; i < 3; i += 1) { orb.advance(t0 + i * 16.7); orb.draw(t0 + i * 16.7); }
       const begin = t0 + 50;

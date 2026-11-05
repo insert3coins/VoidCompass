@@ -145,6 +145,12 @@ button { cursor: pointer; }
 .compass text { fill: var(--orange); font: 700 8px Consolas, monospace; text-anchor: middle; }
 .compass:hover circle { stroke: var(--accent); }
 .zoom { display: grid; }
+/* 5.7.4: FOLLOW ME */
+.follow { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--border-soft); color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .1em; cursor: pointer; }
+.follow svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.follow:hover, .follow:focus-visible { color: var(--accent); }
+.follow[aria-pressed="true"] { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 55%, var(--border-soft)); }
+.follow[aria-pressed="true"] circle:first-child { fill: currentColor; }
 .zoom button { width: 40px; height: 36px; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; color: var(--text); font: 600 18px "Segoe UI", sans-serif; }
 .zoom button:last-child { border-bottom: 0; font: 700 10px Consolas, monospace; letter-spacing: .08em; }
 .zoom button:hover { color: var(--accent); background: color-mix(in srgb, var(--selection) 70%, transparent); }

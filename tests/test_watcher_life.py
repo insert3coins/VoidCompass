@@ -2,6 +2,7 @@
 glances between events, a look the way each event points, a double take at
 rare finds, side-eye and squint, and a mood that remembers the session."""
 
+import itertools
 import re
 import unittest
 from pathlib import Path
@@ -110,7 +111,7 @@ class WatcherLifeBrowserTests(unittest.TestCase):
       life.configure(configure || {});
       (before || []).forEach(([at, kind, value]) => { life.advance(at); life[kind](value, at); });
       const poses = [];
-      for (let t = 0; t <= until; t += steps) { life.advance(t); poses.push({t, ...life.pose(t)}); }
+      for (let t = 0; t <= until; t += steps) { life.advance(t); poses.push({t, ...life.pose(t), looking: Boolean(life.look)}); }
       return {poses, state: life.state(until)};
     }"""
 
@@ -126,10 +127,32 @@ class WatcherLifeBrowserTests(unittest.TestCase):
         self.assertGreater(max(pose["aperture"] for pose in run["poses"]), .9, "the aperture works")
         self.assertGreaterEqual(run["state"]["pulses"], 1)
         self.assertTrue(any(pose["glint"] is not None for pose in run["poses"]), "light crosses the glass")
-        moved = [pose for pose in run["poses"] if abs(pose["dx"]) + abs(pose["dy"]) > .005]
-        self.assertTrue(moved, "a saccade")
-        still = [pose for pose in run["poses"] if pose["dx"] == 0 and pose["dy"] == 0]
-        self.assertTrue(still, "and returns to centre")
+        moved = [pose for pose in run["poses"] if abs(pose["dx"]) + abs(pose["dy"]) > .06]
+        self.assertTrue(moved, "a glance")
+        near = [pose for pose in run["poses"] if abs(pose["dx"]) + abs(pose["dy"]) < .03]
+        self.assertTrue(near, "and comes back to rest")
+
+    def test_idle_it_never_quite_holds_still(self):
+        """5.7.4: a quiet, weary, docked eye still drifts and looks around;
+        idle motions off, or asleep, it holds still."""
+        page = self.open()
+        run = self.simulate(page, until=60000, steps=100, configure={"personality": "weary", "state": "DOCKED"})
+        poses = run["poses"]
+        frozen = max(sum(1 for _ in group) for _, group in itertools.groupby(
+            (round(pose["dx"], 4), round(pose["dy"], 4)) for pose in poses))
+        self.assertLess(frozen, 5, "no half-second without movement")
+        looks = sum(1 for before, after in zip(poses, poses[1:]) if not before["looking"] and after["looking"])
+        self.assertGreaterEqual(looks, 2, "it looks around on its own in a quiet minute")
+        off = self.simulate(page, until=30000, steps=100, configure={"personality": "weary", "idle": False})
+        self.assertEqual({(pose["dx"], pose["dy"]) for pose in off["poses"]}, {(off["poses"][0]["dx"], off["poses"][0]["dy"])})
+        asleep = page.evaluate("""() => {
+          const life = new HeartbeatLife(7, 0);
+          life.configure({});
+          const seen = new Set();
+          for (let t = 0; t <= 20000; t += 100) { life.advance(t, {asleep: true}); const pose = life.pose(t); seen.add(`${pose.dx},${pose.dy}`); }
+          return seen.size;
+        }""")
+        self.assertEqual(asleep, 1, "asleep, it rests")
 
     def test_idle_motion_off_holds_still(self):
         page = self.open()

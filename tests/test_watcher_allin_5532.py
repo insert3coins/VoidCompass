@@ -186,7 +186,8 @@ class HotkeyAndPageTests(unittest.TestCase):
         deck = SimpleNamespace(config={"heartbeat_personality": "weary", "overlay_hotkey_watcher_poke": "Ctrl+Alt+Shift+F9"},
                                heartbeat_hud=SimpleNamespace(mind=watcher), travel_history=travel,
                                _WATCHER_BONDS=HtmlDashboardMixin._WATCHER_BONDS,
-                               _WATCHER_BOND_NEXT=HtmlDashboardMixin._WATCHER_BOND_NEXT)
+                               _WATCHER_BOND_NEXT=HtmlDashboardMixin._WATCHER_BOND_NEXT,
+                               _html_crew_page=lambda: {})
         data = HtmlDashboardMixin._html_watcher_workspace(deck)
         feed = {"state": "SUPERCRUISE", "status_seq": 7, "events": [{"seq": 1, "event": "FSDJump"}],
                 "orb": {"story": {"crack": True}}, "thought": {"id": "private-presentation"}}
@@ -195,7 +196,8 @@ class HotkeyAndPageTests(unittest.TestCase):
         self.assertEqual(live["state"], "SUPERCRUISE")
         self.assertEqual(live["events"], feed["events"])
         self.assertEqual(live["orb"]["story"], {"crack": True})
-        self.assertNotIn("thought", live)
+        # Since 5.7.4 the deck feed carries the active thought for the NOW caption.
+        self.assertEqual(live["thought"], feed["thought"])
         self.assertEqual(data["log"][0]["topic"], "green_giant")
         self.assertEqual(data["log"][0]["mood"], "pleased")
         self.assertEqual(data["records"]["systems"], 2)

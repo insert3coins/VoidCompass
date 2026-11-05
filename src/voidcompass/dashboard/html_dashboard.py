@@ -159,6 +159,20 @@ def _local_departure_timestamp(value):
 WATCHER_LOG_SHOWN = 100
 
 
+def _companion_lore_page(config, memory, sessions, hours):
+    """The active companion's story page; never another companion's fiction (5.7.4)."""
+    from voidcompass.core import companions
+    from voidcompass.overlays import companion_personas
+    selected = companions.identity(config)
+    if companions.pending_story(config):
+        return {"identity": selected, "pending": True, "title": f"{companions.name(config)} · story pending",
+                "told": 0, "total": 0, "chapters": []}
+    persona = companion_personas.get(selected)
+    if persona is not None:
+        return persona.story.page(memory, hours)
+    return watcher_lore.page(memory, sessions, hours, _watcher_echoes(memory))
+
+
 def _watcher_echoes(memory):
     """Each echo of its past it has had (5.5.3.5): {topic: (times, last)},
     from what it has said."""
@@ -828,7 +842,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         from collections import Counter
         from voidcompass.overlays.heartbeat_hud import _memory_path, frame_rate as heartbeat_frame_rate
         from voidcompass.core import companions
-        from voidcompass.overlays import aster_lore, aster_name
+        from voidcompass.overlays import companion_personas
         heartbeat = getattr(self, "heartbeat_hud", None)
         mind = getattr(heartbeat, "mind", None)
         if mind is None:
@@ -841,12 +855,15 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             if not (isinstance(row, list) and len(row) >= 3):
                 continue
             kind, heading = watcher_mind.thought_heading(row[1], row[2])
-            if getattr(mind, "identity", "watcher") in companions.NEW_IDENTITIES:
-                kind, heading = "reply" if row[1] == "talk" else "", companions.name(self.config).upper()
-            if getattr(mind, "identity", "watcher") == "aster":
-                kind, heading = aster_lore.heading(row[2]) if row[1] == "aster_lore" else ("reply" if row[1] == "talk" else "", "OFFICER ON WATCH")
-                if str(row[1]).startswith("aster_name_"):
-                    kind, heading = "memory", aster_name.heading(row[1])
+            persona = companion_personas.get(getattr(mind, "identity", "watcher"))
+            if persona is not None:
+                kind, heading = ("reply", persona.reply_heading) if row[1] == "talk" else ("", persona.watch_heading)
+                if row[1] == "aster_lore":
+                    kind, heading = persona.story.heading(row[2], memory)
+                elif str(row[1]).startswith("echo_"):
+                    kind, heading = "memory", persona.story.title.upper()
+                elif str(row[1]).startswith("aster_name_"):
+                    kind, heading = "memory", persona.naming.heading(row[1])
             log.append({"at": float(row[0] or 0), "topic": _text(row[1], 40), "text": _text(row[2], 600),
                         "mood": watcher_mind.MOODS.get(str(row[1]), ""), "kind": kind, "heading": heading})
         topics = Counter(
@@ -905,7 +922,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "log": log,
             "hotkey": _text(self.config.get("overlay_hotkey_watcher_poke"), 40),
             # Its long story and the echoes heard (5.5.3.5).
-            "lore": {"identity": companions.identity(self.config), "pending": True, "title": f"{companions.name(self.config)} · story pending", "told": 0, "total": 0, "chapters": []} if companions.pending_story(self.config) else aster_lore.page(memory, hours) if companions.identity(self.config) == "aster" else watcher_lore.page(memory, sessions, hours, _watcher_echoes(memory)),
+            "lore": _companion_lore_page(self.config, memory, sessions, hours),
+            # 5.7.4: how each of the crew came aboard, from each one's memory.
+            "crew": self._html_crew_page(),
             # 5.6.1, deeper: its question, your answers, what it keeps of you,
             # its trust and mood, its dreams, the Watchers it has met.
             "deeper": self._html_watcher_deeper(mind) if hasattr(self, "_html_watcher_deeper") else {},
@@ -915,12 +934,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
 
     def _html_watcher_deeper(self, mind):
         from voidcompass.core import companions
-        if getattr(mind, "identity", "watcher") in companions.NEW_IDENTITIES:
-            return {"memories": [], "answers": [], "dreams": [], "met": [], "question": None}
-        if getattr(mind, "identity", "watcher") == "aster":
-            return {"memories": mind.memories_page(), "answers": [], "dreams": [], "met": [],
-                    "question": mind.pending_question(),
-                    "hotkeys": [_text(self.config.get(f"overlay_hotkey_watcher_answer_{index}"), 30) for index in (1, 2, 3)]}
+        if getattr(mind, "identity", "watcher") != "watcher":
+            return self._companion_deeper(mind)
         from voidcompass.overlays import watcher_deeper, watcher_places, watcher_questions
         memory = mind.memory
         answers = []
@@ -957,20 +972,70 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "marks": mind.story_marks(),
         }
 
+    def _html_crew_page(self):
+        from voidcompass.overlays import crew_lore
+        snapshot = self._crew_snapshot() if hasattr(self, "_crew_snapshot") else {"flown": [], "memories": {}}
+        flown = set(snapshot["flown"])
+        from voidcompass.core import companions
+        arcs = []
+        for member in crew_lore.CREW:
+            page = crew_lore.arc_page(member, snapshot["memories"].get(member) or {}, flown)
+            page.update(role=companions.PROFILES[member]["role"], flown=member in flown)
+            arcs.append(page)
+        return {"title": "Coming Aboard", "arcs": arcs, "told": sum(arc["told"] for arc in arcs),
+                "total": sum(arc["total"] for arc in arcs), "flown": len(flown)}
+
+    def _companion_deeper(self, mind):
+        """Aster, Axiom and Meridian (5.7.4): their own readings of you, their
+        after-watch notes, other commanders' companions and their request."""
+        from voidcompass.overlays import companion_personas, watcher_deeper, watcher_places
+        persona = companion_personas.get(mind.identity)
+        memory = mind.memory
+        (trust_label, trust_words), (mood_label, mood_words) = persona.keepsakes.FEELING["trust"], persona.keepsakes.FEELING["mood"]
+        trust = float(memory.get("trust", watcher_deeper.TRUST_START))
+        mood = float(memory.get("mood", 0.0))
+        story = persona.story
+        heard = story.told(memory)
+        begun = [index for index in range(len(story.chapters)) if any(key in heard for key in story.chapter_ids(index))]
+        chapter = story.chapters[begun[-1]] if begun else None
+        wish = memory.get("pilgrimage") or {}
+        spec = persona.keepsakes.WISH
+        return {
+            "question": mind.pending_question(),
+            "hotkeys": [_text(self.config.get(f"overlay_hotkey_watcher_answer_{index}"), 30) for index in (1, 2, 3)],
+            "memories": mind.memories_page(), "answers": [],
+            "dreams": [{"at": float(row.get("at") or 0), "text": _text(row.get("text"), 400)}
+                       for row in reversed(memory.get("dreams") or []) if isinstance(row, dict)][:30],
+            "notes_title": persona.keepsakes.NOTES_TITLE,
+            "met": [{"name": _text(row.get("name"), 60), "nature": _text(row.get("nature"), 20), "road": None,
+                     "companion": row.get("companion") or "watcher", "book": int(row.get("book") or 0),
+                     "chapter": _text(row.get("chapter"), 10), "at": float(row.get("at") or 0)}
+                    for row in reversed(memory.get("met") or []) if isinstance(row, dict)][:30],
+            "feeling": {"trust": trust_words[0] if trust < watcher_deeper.TRUST_LOW else trust_words[2] if trust >= watcher_deeper.TRUST_HIGH else trust_words[1],
+                        "mood": mood_words[0] if mood <= watcher_deeper.MOOD_LOW else mood_words[2] if mood >= watcher_deeper.MOOD_HIGH else mood_words[1],
+                        "trust_value": round(trust), "mood_value": round(mood, 2), "labels": [trust_label, mood_label],
+                        "story": {"title": chapter["title"] if chapter else "Not begun",
+                                  "note": f"chapter {chapter['numeral']} of {len(story.chapters)}" if chapter else story.title}},
+            "road": None,
+            "pilgrimage": {"kind": wish.get("kind"), "words": spec["place"], "how": spec["how"] or watcher_places.how(wish.get("kind")),
+                           "accepted": wish.get("accepted"), "asked": bool(wish.get("asked")),
+                           "reached": bool(wish.get("reached"))} if wish.get("kind") else None,
+            "marks": {},
+        }
+
     def _watcher_save_book(self):
         """The whole relationship, as a book to keep (5.6.1): the story on
         your road, what it remembers, its dreams and your answers, saved as a
         page in the Wrapped folder."""
         import html as html_module
         from voidcompass.core import companions
-        from voidcompass.overlays import aster_lore
         if companions.pending_story(self.config):
             return False
         from datetime import datetime as _datetime
         mind = self._watcher_mind()
         memory = mind.memory
         label = companions.name(self.config)
-        lore = aster_lore.page(memory, float(memory.get("hours") or 0)) if companions.identity(self.config) == "aster" else watcher_lore.page(memory, int(memory.get("sessions") or 0), float(memory.get("hours") or 0))
+        lore = _companion_lore_page(self.config, memory, int(memory.get("sessions") or 0), float(memory.get("hours") or 0))
         deeper = self._html_watcher_deeper(mind)
         esc = html_module.escape
         parts = [f"<h1>{esc(label)}</h1><p class='sub'>{esc(str(self.config.get('active_commander_name') or ''))} · "
@@ -980,12 +1045,18 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 continue
             body = chapter.get("account") or "<br>".join(esc(row["text"]) for row in chapter.get("told") or ())
             parts.append(f"<h2>{esc(chapter['numeral'])} · {esc(chapter['title'])}</h2><p>{esc(body).replace(chr(10) + chr(10), '</p><p>') if chapter.get('account') else body}</p>")
+        # 5.7.4: its own account of coming aboard, as heard.
+        from voidcompass.overlays import crew_lore
+        crew = crew_lore.arc_page(getattr(mind, "identity", "watcher"), memory, set())
+        heard = [row for row in crew["passages"] if row["heard"]]
+        if heard:
+            parts.append("<h2>Coming aboard</h2>" + "".join(f"<p><b>{esc(row['title'])}.</b> {esc(row['text'])}</p>" for row in heard))
         if deeper["answers"]:
             parts.append("<h2>What you told it</h2>" + "".join(f"<p><i>{esc(row['asked'])}</i><br>{esc(row['answer'] or 'You didn’t answer.')}</p>" for row in deeper["answers"]))
         if deeper["memories"]:
             parts.append("<h2>What it remembers</h2>" + "".join(f"<p>{esc(row['text'])}</p>" for row in deeper["memories"]))
         if deeper["dreams"]:
-            parts.append("<h2>Its dreams</h2>" + "".join(f"<p>{esc(row['text'])}</p>" for row in deeper["dreams"]))
+            parts.append(f"<h2>{esc(str(deeper.get('notes_title') or 'Its dreams').capitalize())}</h2>" + "".join(f"<p>{esc(row['text'])}</p>" for row in deeper["dreams"]))
         page = (f"<!doctype html><meta charset='utf-8'><title>{esc(label)}</title>" + "<style>body{max-width:42rem;margin:3rem auto;"
                 "padding:0 1rem;background:#0b0f14;color:#dbe7ef;font:16px/1.65 Georgia,serif}h1{font-weight:400;letter-spacing:.08em}"
                 "h2{margin-top:2.4rem;color:#7fd3ff;font:600 13px Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}"

@@ -414,7 +414,13 @@ class DashboardBridgePagesVisualTests(unittest.TestCase):
         state["companion"] = {"identity": "watcher", "name": "The Watcher"}
         self.page.evaluate("data => window.__bridgeHarness.render(data)", state)
         self.page.evaluate("data => window.__bridgeHarness.studio(data)", studio)
-        self.assertEqual(self.page.locator('[data-studio-settings="heartbeat_hud"] select').evaluate_all("nodes => nodes.map(n => [...n.options].map(o => [o.value,o.textContent]))"), choices)
+        watcher_choices = self.page.locator('[data-studio-settings="heartbeat_hud"] select').evaluate_all("nodes => nodes.map(n => [...n.options].map(o => [o.value,o.textContent]))")
+        # Same controls; only the colour list differs (HAL red vs each companion's signature palette).
+        self.assertEqual(len(watcher_choices), len(choices))
+        differing = [index for index, (a, b) in enumerate(zip(watcher_choices, choices)) if a != b]
+        self.assertEqual(len(differing), 1)
+        self.assertIn("hal", [value for value, _label in watcher_choices[differing[0]]])
+        self.assertIn("signature", [value for value, _label in choices[differing[0]]])
         self.assertEqual(self.page.input_value('#studio-companion-focus'), "off")
         self.assertEqual(self.page.input_value('#studio-heartbeat-liveliness'), "calm")
         self.assertEqual(self.page.input_value('#studio-heartbeat-size'), "72")

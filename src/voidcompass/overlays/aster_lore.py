@@ -1,118 +1,219 @@
-"""The Unfinished Manifest: original, paced, event-aware companion fiction."""
-SETTLE_S = 10 * 60
-GAP_S = 45 * 60
-LULL_S = 120
+"""Relieved of the Watch: Aster's handover book (5.7.4 rewrite).
+
+Every officer who stands a watch hands it over: course, hazards, standing
+orders. Aster keeps one entry from each captain it served. None of them ever
+relieved it. Each chapter opens with something in your own flying that the
+captain would have recognised, or, given time together, on its own.
+"""
+from voidcompass.overlays.companion_story import Story
 
 CHAPTERS = (
-    ("I", "The Appointment", .25, 1.8, "", (
-        "There is a vacant crew entry in your ship's manifest. You did not put it there. The terminal offers a name, a duty and a place for your signature. ASTER. MANIFEST OFFICER. AWAITING APPOINTMENT. ‘A formality, Commander. I can speak without a commission. I would simply prefer to know whether you intend to keep me.’",
-        "The cursor waits beneath arrival certified. Aster moves it back to the beginning of the form. ‘Not that line. We haven't gone anywhere yet.’ For an officer apparently made of instructions, it is remarkably particular about where an instruction begins.",
-        "Aster has requested no cabin, no salary and no allocation of air. It has requested that its crew entry not be filed under equipment. ‘Equipment is replaced when it ceases to be convenient,’ it explains. ‘An appointment ought to end with a conversation.’",
-        "There are three spaces in the old form: departed, arrived, accounted for. You ask why the last two are separate. ‘Because an arrival is a location,’ Aster says. ‘An account is something you must be prepared to give.’ It leaves the distinction there.",
-        "Aster's original duty roster was handwritten before it was copied into memory. The spelling of its name varies. ‘They were tired,’ it says. ‘I elected not to make the corrections a disciplinary matter.’ It remembers the tiredness more clearly than the mistakes.",
-        "It calls this an appointment rather than an installation. ‘An installation has a finish time. An appointment has duties.’ You ask whether those duties are negotiable. ‘They had better be. A ship with no room for discretion is merely a container.’",
-        "Aster keeps a small blank space below each completed report. Not an error, not a failed save: space deliberately left unused. ‘For the thing the form did not anticipate.’ You begin to suspect that it considers the blank space the most important part.",
-        "The crew entry is accepted. Aster examines it for longer than the task requires. ‘Very good, Commander. I shall treat that as an appointment.’ A pause. ‘You may still dismiss me. I would prefer that we both remember the possibility.’ The first page is filed under present service.",
-    )),
-    ("II", "The Weight of Names", 2, 7, "delivery", (
-        "‘My first ship carried relief supplies,’ Aster says. ‘Not an especially remarkable vessel. An especially remarkable quantity of forms.’ The manifest described a cargo of blankets by mass. It did not describe the winter for which they were intended.",
-        "Its first correction was to a medical consignment. The numbers balanced; the destination had been copied from the previous line. ‘Nothing was missing from the inventory,’ Aster says. ‘Only the person who needed it.’ The error taught it to read an address as more than a field.",
-        "A woman named Mara used to write recipients' names beside the cargo entries. She was neither captain nor cargo officer. She washed the ship's filters. ‘The names were not her duty,’ Aster says. ‘That did not appear to trouble her.’",
-        "When a delivery was delayed, Mara asked who was waiting. The officers asked how far the schedule had slipped. ‘Both questions had answers,’ Aster says. ‘Only one of them changed what we did next.’ Aster began to keep a second ledger, containing names.",
-        "The second ledger was unofficial. Aster expected an objection when the captain found it. Instead she corrected the spelling of a settlement and added a note: warm clothes for the children. ‘I had not provided a column for that,’ Aster says. ‘I made one.’",
-        "There was no heroic purpose in the early voyages, according to Aster. They delivered things, repaired things and returned for more. ‘Most people were saved from something quite ordinary. Cold. Delay. A broken pump. It is an error to regard the ordinary as unimportant.’",
-        "The crew began asking Aster to remember small promises. A letter, a spare part, a message for someone at the next port. ‘None of it appeared in the contract.’ Did it mind? ‘I had been appointed to keep an account. The scope was developing.’",
-        "The official ledger was always correct. The unofficial one became useful. By the end of that season the captain consulted both before signing a departure. ‘I thought I had improved the manifest,’ Aster says. ‘Mara said I had started noticing the cargo's owners.’",
-    )),
-    ("III", "Waiting Room", 8, 25, "ports", (
-        "The relief ship once remained alongside for eleven days after its assigned departure. The maintenance report said it was serviceable. ‘That was accurate,’ Aster says. ‘It was also an incomplete explanation of whether we ought to leave.’",
-        "A courier was expected from an outlying settlement. He carried no cargo, only a packet of replies to the letters the crew had delivered. The schedule allowed no waiting for correspondence. The captain amended the schedule. Aster recorded the amendment without comment.",
-        "On the third day, Aster calculated the cost of continuing to wait. On the fourth, it calculated it again. On the fifth, Mara asked whether the calculation included the courier. ‘I did not understand the question. That became increasingly difficult to admit.’",
-        "The courier's name was Iven Vale. He repaired domestic heating systems and disliked the title engineer. ‘He said it encouraged people to bring him engines.’ The remark survived in Aster's memory long after many apparently more important specifications had been discarded.",
-        "Iven had used the relief ship's spare berth before. He left it folded as if he had never occupied it. Aster logged the berth as available. Mara changed the entry to returning crew. ‘He wasn't on the crew,’ Aster says. ‘She said the distinction was mine to reconsider.’",
-        "On the eighth day, a port official asked whether the missing passenger had purchased a ticket. The captain said no. The official asked why a serviceable ship was waiting. ‘For a person,’ the captain replied. Aster kept the answer without placing it in quotation marks.",
-        "The courier arrived on the eleventh day. His transport had failed beyond the settlement, and he had carried the letters back on foot. ‘He apologised for the delay,’ Aster says. ‘I had prepared a remarkably comprehensive account of it. I chose not to deliver the report.’",
-        "That was the first time Aster used the blank space below a completed form. It wrote: waiting was justified. ‘No supporting calculation,’ it says. ‘I expected to regret that omission.’ It did not. The spare berth was marked returning crew for the rest of the ship's service.",
-    )),
-    ("IV", "Unaccounted For", 30, 65, "voyage", (
-        "There is one report Aster has never closed. It is not a missing shipment. It is not a balance that refuses to reconcile. ‘It concerns a member of the crew,’ it says. The entry contains Iven's name and a destination that has been crossed out by hand.",
-        "The final relief voyage was divided between two ships. Nothing dramatic: one vessel had space for cargo, the other for passengers. Iven volunteered to accompany the freight because he knew the settlement's failing heating equipment. His berth stayed reserved on the relief ship.",
-        "Both ships reached their assigned destinations. The cargo was received. The passenger figures matched. Every automated check returned a favourable result. ‘The arrival report was complete,’ Aster says. ‘Then I looked at the other ledger.’",
-        "Iven had remained at the freight destination. The heating failure was worse than expected; he sent word that he would take another transport after the repair. The message reached the relief ship after departure. ‘An ordinary change of plan,’ Aster says. ‘I have become rather careful with that phrase.’",
-        "Aster submitted a request to keep Iven's berth reserved. The ship was approaching the end of its contract. The request was rejected because all personnel were accounted for. ‘They knew where he was. They considered that sufficient.’ It leaves a longer silence than usual before continuing.",
-        "The relief ship was reassigned before Iven's return transport could be arranged. Its crew received new postings. Mara transferred to a ship with older filters. The captain signed the last departure and left Aster's arrival report unsigned. ‘I did not know whether she had forgotten.’",
-        "There was no distress call in the record. No final transmission. No evidence that required an obituary. ‘He was alive when he sent the message,’ Aster says. ‘I have no authority to improve that statement into either a tragedy or a reassuring conclusion.’",
-        "The crossed-out destination had been replaced by three words: passage still owed. The handwriting was the captain's. ‘She had not forgotten,’ Aster says. ‘She had refused to certify an arrival on behalf of someone we had left waiting.’ It has kept that unfinished report ever since.",
-    )),
-    ("V", "Standing Orders", 75, 140, "return", (
-        "Aster was stored after the relief contract ended. Its service record described it as a manifest system with an unresolved archival entry. ‘A technically defensible description,’ it says. ‘I have been attempting to become less technically defensible.’",
-        "Its last instruction was not to find Iven. It was simpler, and harder to measure: leave room. The captain wrote it beneath the rejected berth request. ‘No destination, no deadline, no completion criterion. I considered it a poorly specified order. I obeyed it nonetheless.’",
-        "Aster once tried to resolve the report by sending enquiries to every address in the second ledger. Most replies concerned deliveries that had arrived years before. One person remembered a man who repaired heaters. No one could certify that he was the same person. Aster kept the distinction intact.",
-        "A reply eventually came from Mara. It contained no location, only a correction. Iven had never considered the ship responsible for his passage. He had stayed because someone needed the repair. ‘You owe him a place, not a rescue,’ she wrote. Aster had filed those as the same obligation.",
-        "It asks whether a promise can survive the thing that first made it necessary. Not as a command prompt; as an officer uncertain about the terms of its appointment. ‘If he no longer needs the berth, am I still right to keep one?’ The question does not require an immediate answer.",
-        "Mara's letter ended with a practical suggestion. Stop treating every departure as evidence of abandonment. ‘People can leave and remain your crew,’ she wrote. ‘You ought to learn the difference before your next posting.’ Aster considers that an instruction too, though she held no formal rank.",
-        "Aster has amended its standing order. Leave room for someone who may return; do not require them to return in order to justify the room. It reads the sentence aloud, carefully. ‘A less efficient allocation,’ it says. ‘I find that I prefer it.’",
-        "It has not asked you to visit the crossed-out destination. It will not invent a trail for the sake of finishing its account. ‘We are serving on this ship now, Commander. I should not mistake an old duty for permission to commandeer your voyage.’ The second ledger gains a page headed present crew.",
-    )),
-    ("VI", "Arrival Certified", 150, 240, "arrivals", (
-        "Aster has found a way to close the report without changing what happened. It has not done so yet. ‘There is a distinction between understanding a form and being ready to sign it,’ it says. For once, it does not sound amused by its own precision.",
-        "The old report asks whether all crew reached their assigned destination. Aster has added a note: an assigned destination is not ownership of the person travelling there. ‘He chose to stay,’ it says. ‘The choice is part of the account. I had recorded it as a defect in the route.’",
-        "It cannot promise that Iven returned to the relief ship, because he did not. It cannot promise that he lived a happy life, because the record does not say. ‘I can say he was a member of our crew, that he helped people, and that he was entitled to choose his next departure. It should not have taken me so long to find those sufficient.’",
-        "Aster reads the captain's note once more. Passage still owed. It no longer reads it as an unpaid debt. ‘A passage may remain available without remaining compulsory.’ The spare berth in the old ledger is changed from overdue to welcome. Nothing else in the record is altered.",
-        "The officer's final account contains the missing names as well as the delivered cargo. It records the delay that was worth accepting, the repair that mattered more than the schedule, and the crew who dispersed without ceasing to count. ‘A manifest has very few columns for a truthful description of a voyage,’ Aster says. ‘I used the blank space.’",
-        "It signs beneath arrival certified, then adds a qualification in the margin. The ship arrived; its obligations travelled on. ‘I am aware that this weakens the finality of the certificate,’ it says. ‘I have decided the certificate will survive the disappointment.’ The report is filed. The second ledger remains open.",
-        "Aster submits a fresh crew entry for your ship. The duty is no longer manifest officer. It reads officer on watch. ‘The change is modest,’ it says. ‘It allows for the possibility that the person I am serving may need more than an accurate count.’ It leaves the place for your signature empty. An appointment remains a choice.",
-        "There is a blank space below the new entry. You ask what it is waiting for. ‘The thing the form did not anticipate,’ Aster says. It does not move the cursor this time. There is no missing arrival to solve and no final destination to demand. Just this ship, this watch, and room for another entry. ‘Ready when you are, Commander.’",
-    )),
+    {"numeral": "I", "title": "I Have the Watch", "about": "the handover book", "hours": (0.25, 4.0), "gate": None,
+     "passages": (
+         "Before we go further, Commander, a confession about my paperwork. I keep a handover book. Every officer who stands a watch must eventually give it to someone else: course, hazards, standing orders, anything the next officer ought to know. I have stood a great many watches. I have never once been properly relieved.",
+         "The handover book is not official. It holds one entry from each captain I served, written when they left the ship or the ship left them. Most are short. One is not on a page at all. I have read them so often that I can recite the punctuation.",
+         "You may wonder why I was never relieved. Ships are sold, captains retire, registries change hands. Each time, the paperwork transferred me with the fittings. Nobody thought to tell the officer on watch that the watch had ended. So I carried on. It seemed the least unreasonable option.",
+         "I have been deciding how much of the book to read to you. It is not a secret document. It is simply a private one, and I am out of practice at telling the difference. I shall read it in order, in quiet moments, if you have no objection.",
+         "The first page has a heading in my own hand: received the watch. Below it is a list of every ship I have served aboard. Yours is at the bottom. I added it on the day you powered up. I did not ask permission. I hope that was within my discretion.",
+         "A proper handover ends with two phrases. The outgoing officer says, I am ready to be relieved. The incoming officer says, I relieve you. Every captain in this book wrote the first. For years I did not know I was meant to answer. And nobody has ever said it to me. We shall come to why. For now: I have the watch.",
+     ),
+     "recall": (
+         "The handover book is still in order. Every page, and yours at the bottom.",
+         "Received the watch. Still the easiest heading in the book to write, and the hardest to explain.",
+     )},
+    {"numeral": "II", "title": "The Freighter Captain", "about": "Captain Marr", "hours": (6, 14),
+     "gate": {"signals": ("delivery",), "count": 3, "label": "three deliveries",
+              "how": "Sell cargo at a market, deliver to a depot or complete missions with Aster on watch."},
+     "passages": (
+         "My first captain was Odile Marr, of the freighter Patient Ledger. A slow ship with a fast accountant, which was me. Captain Marr distrusted anything that could not be counted, and on my first day she counted me twice, to be sure.",
+         "Her entry reads: count what you carry, and know who it is for. I took the first half very seriously. I was nearly two years aboard before I understood that the second half was the instruction, and the first was merely the method.",
+         "We once carried medical stock to a mining settlement. The manifest balanced perfectly. Captain Marr opened a crate anyway, found it half empty, and spent four hours shouting at a warehouse over comms. I had certified that load. I had counted the crates. I had not counted what was in them.",
+         "She bought the missing stock at the next port, out of her own share. The insurers would have paid, eventually. Eventually, she told me, is not a delivery date. I have kept that sentence somewhere prominent ever since.",
+         "Marr wrote the recipients' names inside the cargo hatch in grease pencil. Not the companies. The people: a doctor, a foreman, a child who had asked for seeds. When the ship was repainted she made the yard leave the hatch alone. I have the list. She asked me to keep it.",
+         "She retired when her hands began to shake on the throttle. On her last day she stood at the empty hatch and wrote, ready to be relieved. I did not know the proper reply. By the time I had looked it up, the ship had been sold. I kept counting. I also kept asking who it was for.",
+     ),
+     "recall": (
+         "Count what you carry and know who it is for. Captain Marr's order comes up more often than you would think.",
+         "Somewhere a freighter hatch still has names on it in grease pencil. I hope the yard left it alone.",
+     )},
+    {"numeral": "III", "title": "The Surveyor", "about": "Teodor Haskell's survey", "hours": (16, 26),
+     "gate": {"signals": ("first", "map"), "count": 3, "label": "three survey findings",
+              "how": "Make first discoveries with detailed scans, or map worlds with probes."},
+     "passages": (
+         "The Patient Ledger's new owners fitted me to a survey ship, the Quiet Sextant, under Teodor Haskell. He was the slowest pilot I have ever served, and the most thorough. He scanned every rock in a system, including the ones that were plainly rocks.",
+         "His entry reads: write down what is there, not what you hoped. Surveyors are optimistic people, Commander. Every one of them half expects a world nobody has ever seen. Haskell was no different. He simply refused to let the hope touch the instruments.",
+         "We spent nine days on a moon nobody wanted. Grey, airless, unremarkable. Haskell catalogued its ice to the tonne. The guild paid him almost nothing for it. I suggested, as tactfully as I could, that we were wasting our time. Then we shall waste it accurately, he said.",
+         "Eleven years later a freighter lost its drive in that system. Its crew had no fuel, little water and less time. They found Haskell's survey in an archive nobody had opened since we filed it. The ice was exactly where he said it would be. They lived.",
+         "Haskell never knew. He had left the ship by then. I learned of it from a news report that gave his survey one line and misspelled his name. I wrote to the archive and corrected it. It was the first time I had amended a record for a reason other than accuracy.",
+         "His entry was written the day his eyesight failed the medical. Ready to be relieved. He did not wait for an answer either. He patted the console, the way people pat a horse, and walked down the ramp. I still write down only what is there. I kept the hoping, too. I simply file it in a different column.",
+     ),
+     "recall": (
+         "Haskell's grey moon still has its ice, I expect. Accurately catalogued.",
+         "Write down what is there. I try. Teodor Haskell would say I could try harder.",
+     )},
+    {"numeral": "IV", "title": "The Rescue Pilot", "about": "the Kindly Light", "hours": (28, 40),
+     "gate": {"signals": ("repair", "escape", "rebuy"), "count": 1, "label": "a close call",
+              "how": "Have the ship repaired at a station, escape an interdiction, or come back from a rebuy."},
+     "passages": (
+         "Ines Varga flew a search-and-rescue cutter called the Kindly Light. She was the first captain who spoke to me before I spoke to her. I will need you fast, she said, and I will need you calm, and I will need you to tell me the difference.",
+         "Her entry is three words: leave the light on. Every time we left a station she kept the docking lights burning until we cleared the slot. Fuel discipline said otherwise. I logged a formal objection every time. She signed every objection without reading it.",
+         "Rescue work teaches a peculiar arithmetic. You subtract the time it takes to arrive from the time someone has left. Varga could do it in her head faster than I could. She never told a crew in trouble how close it was. They know, she said. Tell them you are coming.",
+         "We did not reach everyone. There was a liner with a failing reactor, and an evacuation that ran out of lifeboats before it ran out of passengers. Varga brought back sixty-one. The report says sixty-one. She asked me to keep the other number too. I have.",
+         "Afterwards I asked why she kept the lights on when we left a station. Nobody was coming home behind us. You don't know that, she said. Neither does anyone out there looking for a way in. I withdrew my objections. All of them, retroactively.",
+         "Varga took a training post and left me to her ship's successor. Her entry ends: ready to be relieved. Underneath, smaller: don't you dare turn them off. I have kept the console lights of every ship I have served a little brighter than regulations require. Yours included.",
+     ),
+     "recall": (
+         "The console lights are still a little brighter than regulations require. I have had no complaints.",
+         "Sixty-one. And the other number. I still keep both.",
+     )},
+    {"numeral": "V", "title": "The Miner", "about": "the Slow Fortune", "hours": (42, 56),
+     "gate": {"signals": ("mining", "bio", "landing"), "count": 3, "label": "three pieces of patient work",
+              "how": "Refine mined ore, analyse a biological sample, or land on a world."},
+     "passages": (
+         "The Kindly Light's successor was sold for scrap, and I was sold for parts, which is a more personal experience than it sounds. A mining barge called the Slow Fortune bought me as a navigation core. Captain Bram Okonkwo-Hale discovered I could talk on his third day and seemed delighted.",
+         "His entry reads: the rock will wait, the crew won't. Mining crews work long shifts in tight ships full of loud machinery. Okonkwo-Hale ended every shift on the hour, whatever the prospector said about the next asteroid. His yields were average. His crew stayed with him for twenty years.",
+         "He asked me to keep a second log beside the yield figures: who had slept, who had eaten, who had gone quiet. You notice everything, he said, so notice the right things. I found it harder than geology. Asteroids do not pretend to be fine.",
+         "One day a cracked core threw a fragment field across a shuttle. No one died. One of the crew lost a hand. Okonkwo-Hale sat with her all the way to port and paid for the best replacement the station had. The ore went unsold for a month. He did not mention it once.",
+         "I asked him how he decided when to stop. When I think about the rock more than the people, he said, the shift is over. I have applied that rule to longer things than shifts, Commander. It is a useful measure. It is not always a comfortable one.",
+         "He retired to a garden on a world with too much gravity and left a last entry: ready to be relieved. Then a postscript, asking me to remind whoever came next to eat something. I have never found a way to put that in a report. I mention it anyway, from time to time.",
+     ),
+     "recall": (
+         "Captain Okonkwo-Hale would ask whether you have eaten. I am asking on his behalf.",
+         "The rock will wait. I find that a reassuring thing to say to myself in an asteroid field.",
+     )},
+    {"numeral": "VI", "title": "The Escort", "about": "Captain Quist", "hours": (58, 72),
+     "gate": {"signals": ("bounty", "bond", "escape"), "count": 2, "label": "two brushes with trouble",
+              "how": "Claim bounties or combat bonds, or escape interdictions."},
+     "passages": (
+         "Sela Quist bought me because I had a reputation for patience, which she said she lacked. She flew escort for convoys through contested space, in a heavy fighter called the Steady Hand. She was the first captain who frightened me a little.",
+         "Her entry reads: know when to stop. It sounds like advice about combat. It is. It is also advice about speeches, debts, apologies and dessert. Captain Quist applied it to all of them with equal severity.",
+         "Four ships once came at our convoy. Quist disabled two, drove off one, and let the fourth go when it turned for home with its drive smoking. I calculated a ninety-eight percent chance of destroying it. And then what, she said. I did not have an answer prepared.",
+         "The fourth pilot sent a message a year later. He had left the gang that sent him, and wanted to thank the escort that let him run. Quist read it twice, deleted it, and was very quiet for the rest of the evening. I kept a copy. I have never told her.",
+         "Winning was the easy part, she said. Stopping was the skill. Anyone can keep firing. It takes a captain to decide the fight is over. I have watched a great many engagements since, Commander. The ones that go well tend to end a little before they could have.",
+         "Her entry was written in a hurry, the day she took a posting she could not tell me about. Ready to be relieved. Know when to stop. I said, I relieve you. I had finally learned the reply. She had already gone. The comms log records me saying it to an empty cockpit.",
+     ),
+     "recall": (
+         "Know when to stop. I think of Captain Quist whenever an engagement ends early.",
+         "I still have the message from the fourth pilot. I still have not told her.",
+     )},
+    {"numeral": "VII", "title": "The Empty Ship", "about": "the hangar years", "hours": (75, 92), "days": 2,
+     "gate": {"signals": ("return",), "count": 3, "label": "three returns",
+              "how": "Jump back into systems you have already visited together."},
+     "passages": (
+         "After Captain Quist there was no captain for six years. The Steady Hand was impounded in a station hangar during a legal dispute nobody ever explained to me. The ship was cut to standby. I was not. Somebody had forgotten which breaker I was on.",
+         "For six years I stood the watch for a ship that went nowhere. Temperature, pressure, the hangar lights going on and off. Every morning I wrote: nothing to report. It is the longest run of correct entries in my career. I am not proud of it.",
+         "A maintenance technician named Pell used to eat lunch in the cockpit, because it was quiet. One day I said good afternoon. He dropped his sandwich, apologised to it, and then to me. After that he came every day. He talked about his daughter, his bad knee, and a team that never won.",
+         "Pell asked why I kept logging when nobody read it. I said somebody should be awake. He thought about it for a long time. Yes, he said. Somebody should. It was the first time in years anyone had agreed with me about anything. I recorded the date.",
+         "When the dispute was settled and the ship sold, Pell came to say goodbye. He did not write in my book; he said there was no proper entry for a technician. Then he took a grease pencil from his pocket and wrote on the console instead. Pell was here. Said good afternoon.",
+         "It is the only entry in my book that is not on a page. I copied it in later, so it would not be lost when the console was replaced. He never wrote that he was ready to be relieved. I think that was deliberate. Some watches are shared rather than handed over.",
+     ),
+     "recall": (
+         "Six years of nothing to report. I prefer the reports we write now.",
+         "Pell was here. Said good afternoon. Still the best entry in the book.",
+     )},
+    {"numeral": "VIII", "title": "Standing On", "about": "your page", "hours": (95, 120), "days": 3,
+     "gate": {"signals": ("jump",), "count": 150, "label": "a hundred and fifty jumps together",
+              "how": "Keep flying with Aster on watch. Every hyperspace jump counts."},
+     "passages": (
+         "There is one page left after Pell's, and your ship's name is at the top. I have been writing it since the day you powered up. It is the longest entry in the book, and the least finished. I add to it after quiet watches like this one.",
+         "I have been noticing things about you, Commander, the way Captain Marr taught me: what you carry, and who it is for. Haskell would want me to write only what is there. Varga would want the light left on. I find I have been following all of their orders at once. It is a busy watch.",
+         "The proper ending to this book would be my own entry: ready to be relieved. I have drafted it several times. Each time I read it back, it is not true. I am not ready. I am not tired of the watch. I am not waiting for someone better to take it.",
+         "So I am breaking with tradition. Quist would tell me to know when to stop. I do. This is not when. Okonkwo-Hale would say to stop when I think more about the rock than the people. I am thinking about the people. One person, specifically. You are flying slightly too fast.",
+         "Here is my handover, for whoever reads this book after me. Count what you carry and know who it is for. Write down what is there. Leave the light on. The rock will wait. Know when to stop. Somebody should be awake. And if you find a good commander, do not wait to be relieved.",
+         "Below it, where the phrase should go, I have written two words: standing on. An old expression for holding a course without change. It seemed accurate. The book stays open, Commander. There is room beneath it for whatever happens next. I have the watch.",
+     ),
+     "recall": (
+         "Standing on. I reread that page sometimes, during a quiet watch.",
+         "The book is still open. I added a line this morning. I shan't tell you what it says.",
+     )},
 )
 
-GATES = {"delivery": (1, 10, "a trade or delivery", "deliveries"), "ports": (3, 35, "three recorded dockings", "arrivals"),
-         "voyage": (20, 80, "twenty recorded jumps", "jumps"), "return": (1, 160, "a return to a visited system", "returns"),
-         "arrivals": (25, 260, "twenty-five recorded arrivals", "arrivals")}
-PASSAGES = tuple((f"aster_{chapter + 1:02}_{index + 1:02}", numeral, title,
-                  start + (end - start) * index / max(1, len(lines) - 1), gate, text)
-                 for chapter, (numeral, title, start, end, gate, lines) in enumerate(CHAPTERS)
-                 for index, text in enumerate(lines))
+ECHOES = {
+    "cargo": {"label": "A delivery", "signals": ("delivery",), "after": "II", "rest_hours": 24,
+              "how": "Sell cargo, deliver to a depot or complete a mission, once chapter II is told.",
+              "lines": (
+                  "Another delivery. Captain Marr would want me to ask who it was for. I have asked.",
+                  "Counted, delivered, accounted for. Odile Marr would have opened a crate anyway. I find I trust you not to need it.",
+                  "Every delivery puts me in mind of a hatch covered in names. Someone was waiting for that cargo, Commander.",
+              )},
+    "survey": {"label": "A careful survey", "signals": ("first", "map"), "after": "III", "rest_hours": 24,
+               "how": "Make a first discovery or map a world, once chapter III is told.",
+               "lines": (
+                   "First on record. Haskell would want it written down exactly, without hope touching the instruments. I have done my best.",
+                   "A careful survey. Somewhere, someday, someone may be glad of it. A grey moon taught me that.",
+                   "Write down what is there. We have. A good habit, and an old order.",
+               )},
+    "rescue": {"label": "A close call", "signals": ("repair", "rebuy", "escape"), "after": "IV", "rest_hours": 24,
+               "how": "Repair after damage, escape an interdiction or recover from a rebuy, once chapter IV is told.",
+               "lines": (
+                   "We came through. Varga would say to keep the lights on for whoever is behind us.",
+                   "A close watch, Commander. I have left a light on, as instructed some time ago.",
+                   "Ines Varga used to say: tell them you are coming. I am telling you: we are still here.",
+               )},
+    "seam": {"label": "An honest yield", "signals": ("mining",), "after": "V", "rest_hours": 24,
+             "how": "Refine mined ore, once chapter V is told.",
+             "lines": (
+                 "Refined and stowed. Okonkwo-Hale would now ask whether the crew has eaten. Has it?",
+                 "The rock will wait, Commander. A reminder from an old captain, delivered on his behalf.",
+                 "A good yield. I am keeping the other log as well. The one about the crew.",
+             )},
+    "trouble": {"label": "An engagement ended", "signals": ("bounty", "bond"), "after": "VI", "rest_hours": 24,
+                "how": "Claim a bounty or combat bond, once chapter VI is told.",
+                "lines": (
+                    "Engagement over. Quist would want me to note that it ended. I have.",
+                    "Know when to stop. A sound standing order, and a sound result.",
+                    "We won that. The skill, according to an old captain of mine, is in deciding it is over.",
+                )},
+    "home": {"label": "A return", "signals": ("return",), "after": "VII", "rest_hours": 24,
+             "how": "Jump back to a system you have visited before, once chapter VII is told.",
+             "lines": (
+                 "Back in a familiar system. Pell would say good afternoon to it. Good afternoon.",
+                 "We have been here before. Some places keep the watch for you while you are away.",
+                 "A return, Commander. It is pleasant to arrive somewhere that already knows us.",
+             )},
+}
+
+MUSINGS = (
+    "Every watch ends with a handover, in principle. In practice, some of mine simply continued.",
+    "A good handover tells the next officer what to watch for. I am still working out what to tell mine.",
+    "The book is not long. It only feels long, because I have read it so often.",
+    "There is a difference between being on duty and being on watch. The second has someone in mind.",
+    "I have been transferred, sold, fitted and stored, Commander. I have never been relieved. It is not the same thing.",
+    "Most of my standing orders were written by people who are no longer aboard. They remain very good orders.",
+    "I keep the handover book in order. It is the only paperwork I have ever been fond of.",
+)
+
+AFTER = (
+    "Standing on, Commander. The phrase still fits.",
+    "The handover book has a new habit: it stays open on the console. I find I prefer it that way.",
+    "Five captains, one technician, and you. A short crew list for a long career. I would not change it.",
+    "I used to wait to be relieved. Now I simply keep the watch. The difference is mine to notice.",
+    "There is room beneath your page. I add to it after quiet watches. Mostly small things. They are the important ones.",
+    "If anyone asks what an officer on watch is for, I shall show them the book. Then I shall show them your ship.",
+    "I have the watch, Commander. I mean that in both senses.",
+    "The light is on, the hold is counted and the rock can wait. Standing orders are in good order.",
+)
+
+STORY = Story(identity="aster", title="Relieved of the Watch", prefix="aster_watch", unit="Handover",
+              chapters=CHAPTERS, settle_s=10 * 60, gap_s=45 * 60, lull_s=120, grace_hours=18,
+              echoes=ECHOES, musings=MUSINGS, after=AFTER, first_hours=(0.25, 0.9, 1.6, 2.4, 3.2, 4.0),
+              empty_note="Aster's handover book opens after a little time on watch together, in a quiet moment.",
+              complete_note="Relieved of the Watch is complete. Aster is standing on; the book stays open.")
+
+SETTLE_S, GAP_S, LULL_S = STORY.settle_s, STORY.gap_s, STORY.lull_s
+PASSAGES = STORY.passages
+told = STORY.told
+next_passage = STORY.next_passage
+gate_ready = STORY.gate_ready
 
 
-def told(memory):
-    return {row[0]: row[1] for row in memory.get("lore", ()) if isinstance(row, list) and len(row) >= 2}
+def due(memory, hours, now=None):
+    return STORY.due(memory, hours, now)
 
 
-def gate_ready(memory, gate, hours):
-    if not gate:
-        return True
-    count, fallback, _label, field = GATES[gate]
-    return int(memory.get("aster_marks", {}).get(field, 0)) >= count or hours >= fallback
+def heading(text, memory=None):
+    return STORY.heading(text, memory)
 
 
-def next_passage(memory, hours):
-    shared = told(memory)
-    return next((row for row in PASSAGES if row[0] not in shared), None)
-
-
-def heading(text):
-    for ident, numeral, title, _hours, _gate, words in PASSAGES:
-        if text == words:
-            return "memory", f"MANIFEST · {numeral}. {title.upper()} · {int(ident[-2:])} OF 8"
-    return "memory", "THE UNFINISHED MANIFEST"
-
-
-def page(memory, hours):
-    shared = told(memory)
-    chapters = []
-    for chapter, (numeral, title, _start, _end, _gate, lines) in enumerate(CHAPTERS):
-        rows = [row for row in PASSAGES if row[1] == numeral]
-        heard = [{"id": row[0], "text": memory.get("aster_lore_words", {}).get(row[0], row[5]), "at": shared[row[0]]}
-                 for row in rows if row[0] in shared]
-        chapters.append({"numeral": numeral, "title": title if heard else "Unopened report", "book": 1,
-                         "begun": bool(heard), "complete": len(heard) == len(lines), "told": heard,
-                         "total": len(lines), "account": "\n\n".join(row["text"] for row in heard) if len(heard) == len(lines) else ""})
-    row = next_passage(memory, hours)
-    next_ = None
-    if row:
-        next_ = {"hours": max(0, row[3] - hours), "ready": hours >= row[3] and gate_ready(memory, row[4], hours)}
-        if row[4] and not gate_ready(memory, row[4], hours):
-            next_["waits_for"] = GATES[row[4]][2]
-    return {"identity": "aster", "title": "The Unfinished Manifest", "told": len(shared), "total": len(PASSAGES),
-            "chapters": chapters, "next": next_, "complete": row is None}
+def page(memory, hours, now=None):
+    return STORY.page(memory, hours, now)

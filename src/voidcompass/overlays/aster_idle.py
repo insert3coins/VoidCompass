@@ -1,15 +1,7 @@
 """Officer's quiet watch: factual habits, kept voyages and heard story only."""
-from datetime import datetime
-import zlib
+from voidcompass.overlays import companion_idle
+from voidcompass.overlays.companion_idle import RECALL_REST_S, FACT_TOPICS, RESTS, casual  # noqa: F401
 
-from voidcompass.overlays import aster_lore, watcher_habits, watcher_postcards
-
-
-RECALL_REST_S = 30 * 86400
-FACT_TOPICS = {"cmdr_record", "cmdr_power", "cmdr_squadron", "cmdr_carrier"}
-RESTS = {"idle_postcard": watcher_postcards.RECALL_REST_S, "idle_moment": 6 * 3600,
-         "aster_recall": 6 * 3600, "aster_lore_recall": 6 * 3600,
-         "idle_aster_lore": 3 * 3600, "long_session": 3600}
 
 PLAIN = {
     "cmdr_record": (
@@ -19,28 +11,6 @@ PLAIN = {
         "{jumps} jumps in the career record. I have noted the total.",
         "The career record includes {played} in flight.",
         "Recorded flight time: {played}. An appointment with some history behind it.",
-    ),
-    "idle_aster_lore": (
-        "I have left space beneath today's entry. A voyage rarely follows the form exactly.",
-        "An appointment is an ongoing duty. I am still learning the shape of this one.",
-        "The manifest records who is aboard. Knowing the crew takes a little longer.",
-        "There is room in this posting for more than a correct inventory.",
-        "I prefer a report with room for a correction. It means someone is still paying attention.",
-        "The crew register remains open. It is a record of people, rather than a finished task.",
-    ),
-    "aster_lore_recall": (
-        "{c1}That first crew entry was an appointment, rather than an installation. The distinction still matters to me.",
-        "{c1}I still leave space below a completed report. We spoke about why, when you accepted my appointment.",
-        "{c2}Mara's second ledger gave names a place beside the cargo. I have kept the practice.",
-        "{c2}Those early relief deliveries taught me to ask who was waiting, as well as what was due.",
-        "{c3}The eleven-day wait changed what I considered a justified delay. The courier belonged in the account.",
-        "{c3}Returning crew. Mara's correction to the spare berth was more useful than my original entry.",
-        "{c4}The old arrival figures were correct. They still failed to account for Iven. I remember that distinction.",
-        "{c4}Passage still owed. The captain's note deserved more attention than the completed cargo totals.",
-        "{c5}Mara was right about the berth. Making room for someone need not require their return.",
-        "{c5}Present crew. I added that page after learning not to make an old duty the purpose of your voyage.",
-        "{c6}I signed the arrival certificate without rewriting what happened. A truthful account was enough.",
-        "{c6}Officer on watch. The amended appointment leaves more room for the person I serve.",
     ),
     "idle_postcard": (
         "The postcard from {place} is still in our voyage record. We took it {when}.",
@@ -67,12 +37,6 @@ PLAIN = {
         "I have kept an entry about {about}, {when}.",
         "{About}, {when}. A particular moment in an otherwise very long account.",
         "The summary omits the small details. My record still includes {about}, {when}.",
-    ),
-    "aster_after": (
-        "The old report is closed. The present watch still has room for another entry.",
-        "Arrival certified. I find the duties that followed rather more interesting than the certificate.",
-        "The second ledger remains open. There is a difference between finishing an account and ceasing to care.",
-        "This ship has given me a present tense. I intend to make good use of it.",
     ),
     "habit_flight": (
         "Our flight record stands at {jumps} jumps over {ly} light years.",
@@ -123,19 +87,6 @@ PLAIN = {
 }
 
 DRY = {
-    "idle_aster_lore": (
-        "The blank space below the report remains deliberate. I have resisted the urge to label it.",
-        "An appointment has duties. Fortunately, this one has also developed a view.",
-        "I could make the register more efficient by removing the people. I regard that as a flaw in the proposal.",
-    ),
-    "aster_lore_recall": (
-        "{c1}You accepted my appointment without a salary negotiation. I remain suspicious of how well that went.",
-        "{c2}Mara improved the ledger without requesting a new form. An alarming precedent, and a useful one.",
-        "{c3}I prepared eleven days of delay calculations. The courier's arrival rendered my presentation unnecessary.",
-        "{c4}Every automated arrival check passed. It is an uncomfortable memory for an automated officer.",
-        "{c5}Leave room. A standing order with exceptionally poor metrics and rather good judgement.",
-        "{c6}The certificate survived my qualifications. I suspect it had no choice in the matter.",
-    ),
     "idle_postcard": (
         "{place}, {when}. The postcard is a rather better report than my coordinates.",
         "I reviewed the postcard from {place}. No discrepancy found between the archive and my fondness for it.",
@@ -167,80 +118,7 @@ DRY = {
 }
 
 
-def casual(topic):
-    return (topic.startswith("idle_")
-            or topic in {"quiet", "aster_after", "aster_recall", "aster_lore_recall", "long_session"}
-            or topic.startswith("habit_") and topic != "habit_milestone")
 
-
-def _key(kind, *values):
-    value = repr((kind, *values)).encode("utf-8")
-    return f"{kind}:{zlib.crc32(value):08x}"
-
-
-def _fields(memory, key, at, now):
-    from voidcompass.overlays.watcher_mind import when_text
-
-    previous = memory.get("aster_idle_recalled", {}).get(key)
-    if previous is not None and now - previous < RECALL_REST_S:
-        return None
-    try:
-        when = when_text(datetime.fromtimestamp(float(at)).astimezone().isoformat(), now)
-    except (OSError, OverflowError, TypeError, ValueError):
-        return None
-    return {"_recall": key, "when": when, "When": when[:1].upper() + when[1:]} if when else None
-
-
-def choices(memory, rng, now):
-    """Only use recorded facts. Recall identities rest across wording/restarts."""
-    out = watcher_habits.choices(memory, 0, rng)
-    activities = {"an explorer": "exploration", "a trader": "trade", "a miner": "mining",
-                  "a fighter": "combat", "a courier": "courier work"}
-    for topic, fields in out:
-        if topic == "habit_style":
-            fields["style"] = activities.get(fields["style"], fields["style"])
-    heard = aster_lore.told(memory)
-    if aster_lore.PASSAGES[0][0] in heard:
-        out.append(("idle_aster_lore", {}))
-    for index, chapter in enumerate(aster_lore.CHAPTERS):
-        ids = [row[0] for row in aster_lore.PASSAGES if row[1] == chapter[0]]
-        if all(key in heard for key in ids):
-            at = max(heard[key] for key in ids)
-            if now - at >= 86400:
-                fields = _fields(memory, _key("chapter", index), at, now)
-                if fields:
-                    out.append(("aster_lore_recall", {**fields, f"c{index + 1}": ""}))
-    for row in memory.get("postcards") or ():
-        if not isinstance(row, (list, tuple)) or len(row) < 2 or not row[1]:
-            continue
-        try:
-            old = now - float(row[0]) >= watcher_postcards.RECALL_AFTER_S
-        except (TypeError, ValueError):
-            continue
-        fields = _fields(memory, _key("postcard", *row[:2]), row[0], now) if old else None
-        if fields:
-            out.append(("idle_postcard", {**fields, "place": str(row[1])}))
-    for row in memory.get("aster_moments") or ():
-        if not isinstance(row, dict) or not row.get("system"):
-            continue
-        try:
-            old = now - float(row.get("at", now)) >= 2 * 86400
-        except (TypeError, ValueError):
-            continue
-        event, system, station = row.get("event"), row["system"], row.get("station")
-        # Several visits to one place form one memory, not a bank of repeatable announcements.
-        fields = _fields(memory, _key("service", event, system, station), row.get("at"), now) if old else None
-        if not fields:
-            continue
-        if event == "FSDJump":
-            out.append(("aster_recall", {**fields, "system": system}))
-            continue
-        about = {"Docked": f"our docking at {station} in {system}" if station else "",
-                 "MissionCompleted": f"a completed mission in {system}",
-                 "SellExplorationData": f"the survey data we sold in {system}",
-                 "MultiSellExplorationData": f"the survey data we sold in {system}",
-                 "SellOrganicData": f"the biological data we sold in {system}"}.get(event)
-        if about:
-            out.append(("idle_moment", {**fields, "about": about, "About": about[:1].upper() + about[1:]}))
-    rng.shuffle(out)
-    return out
+def choices(memory, rng, now, story=None):
+    from voidcompass.overlays import aster_lore
+    return companion_idle.choices(memory, rng, now, story or aster_lore.STORY)

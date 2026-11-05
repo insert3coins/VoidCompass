@@ -43,7 +43,7 @@ OBJECTIVE_KINDS = {
     "recon_system": "Complete system recon",
     "codex_new_count": "Log new Codex species or colours",
     "first_footfall_count": "Make first footfalls",
-    "pilgrimage": "Take the Watcher somewhere",
+    "pilgrimage": "Take your companion somewhere",
     # 5.6.1, Part 5: the places on the list.
     "places_all": "Visit every place on the list",
     "places_count": "Visit places",

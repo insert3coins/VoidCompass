@@ -52,6 +52,7 @@ PROVIDER_CALLS = (
     "api_dashboard", "api_pages", "api_page", "api_open_page", "api_feed", "api_add_feed",
     "api_themes", "api_set_theme", "api_overlays", "api_overlay", "api_set_overlay",
     "api_toggle_overlay", "api_hide_overlays", "api_notify", "api_watcher", "api_watcher_thought",
+    "api_companion_status", "api_companions_list", "api_companion_profile", "api_companion_select",
     "api_watcher_poke", "api_watcher_answer", "api_watcher_code", "api_watcher_meet", "api_watcher_book",
     "api_voice", "api_voice_say", "api_voice_stop", "api_voice_hush", "api_music",
     "api_music_library", "api_music_control", "api_galnet",
@@ -324,6 +325,16 @@ class LocalApi:
             ("POST", r"/overlays/([a-z0-9_-]{1,40})", self._set_overlay, True),
             ("POST", r"/overlays/([a-z0-9_-]{1,40})/toggle",
              lambda req, oid: self._call("api_toggle_overlay", oid), True),
+            # 5.7.4: the shared companion contract. /watcher/* stay as aliases
+            # that act on whichever companion is active.
+            ("GET", r"/companion", lambda req: self._call("api_companion_status"), False),
+            ("POST", r"/companion/select", self._select_companion, True),
+            ("POST", r"/companion/thought", self._thought, True),
+            ("POST", r"/companion/poke", lambda req: self._call("api_watcher_poke", **self._expect(req)), True),
+            ("POST", r"/companion/answer", self._answer, True),
+            ("POST", r"/companion/book", lambda req: self._call("api_watcher_book", **self._expect(req)), True),
+            ("GET", r"/companions", lambda req: self._call("api_companions_list"), False),
+            ("GET", r"/companions/([a-z]{1,20})", lambda req, ident: self._call("api_companion_profile", ident), False),
             ("GET", r"/watcher", lambda req: self._call("api_watcher"), False),
             ("POST", r"/watcher/thought", self._thought, True),
             ("POST", r"/watcher/poke", lambda req: self._call("api_watcher_poke"), True),
@@ -410,7 +421,7 @@ class LocalApi:
             path = pattern.pattern[1:-3].replace("\\", "")
             path = path.replace("([a-z0-9-]{1,40})", "{page}").replace("([a-z0-9_-]{1,40})", "{overlay}")
             path = path.replace("([^/]{1,240})", "{name}").replace("([0-9]{1,20})", "{address}")
-            path = path.replace("([0-9]{1,4})", "{n}").replace("([0-9]{4})", "{year}").replace("([1-6])", "{n}")
+            path = path.replace("([a-z]{1,20})", "{id}").replace("([0-9]{1,4})", "{n}").replace("([0-9]{4})", "{year}").replace("([1-6])", "{n}")
             path = re.sub(r"\(([a-z|-]+)\)", r"{\1}", path)
             out.append({"method": method, "path": path or PREFIX, "control": control})
         return out
@@ -700,13 +711,28 @@ class LocalApi:
             raise ApiError(400, "Give it something to think: {\"text\": \"...\"}")
         return self._call("api_watcher_thought", text[:400], str(req.body.get("heading") or "")[:40],
                           # Said aloud whenever the voice is on, unless asked not to.
-                          req.body.get("speak", True) is not False)
+                          req.body.get("speak", True) is not False, **self._expect(req))
+
+    @staticmethod
+    def _expect(req):
+        """An optional {"identity": "axiom"}: refuse rather than reach another companion."""
+        body = req.body if isinstance(req.body, dict) else {}
+        value = body.get("identity")
+        # Only sent when asked for, so the /watcher aliases call exactly as before.
+        return {"expect": str(value)[:20]} if value not in (None, "") else {}
+
+    def _select_companion(self, req):
+        identity = str((req.body or {}).get("identity") or "").strip()
+        if not identity:
+            raise ApiError(400, "Name the companion: {\"identity\": \"aster\"} (watcher, aster, axiom or meridian)")
+        return self._call("api_companion_select", identity[:20])
 
     def _answer(self, req):
         answer = req.body.get("answer")
         if isinstance(answer, bool) or answer in (None, ""):
             raise ApiError(400, "Give its answer: {\"answer\": 1} (1 to 3, as the hotkeys) or its key")
-        return self._call("api_watcher_answer", answer if isinstance(answer, int) else str(answer)[:40])
+        return self._call("api_watcher_answer", answer if isinstance(answer, int) else str(answer)[:40],
+                          **self._expect(req))
 
     def _meet(self, req):
         code = str(req.body.get("code") or "").strip()

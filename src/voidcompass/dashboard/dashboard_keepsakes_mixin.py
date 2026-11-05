@@ -36,7 +36,7 @@ from voidcompass.overlays.postcard_picture import (
 _PREVIEW_LOCK = threading.Lock()
 from voidcompass.overlays.postcard_restore import saved_at
 from voidcompass.exploration.galactic_regions import find_region
-from voidcompass.overlays import watcher_mind, aster_postcards
+from voidcompass.overlays import watcher_mind, aster_postcards, companion_personas  # noqa: F401
 from voidcompass.overlays.postcards import (
     STYLES as POSTCARD_STYLES,
     THUMBNAIL_WIDTH,
@@ -300,12 +300,13 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
         recent = [] if preview else histories.setdefault(selected, [])
         mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
         rng = random.Random(7) if preview else None
-        if selected == "aster":
+        persona = companion_personas.get(selected)
+        if persona is not None:
             if not preview and getattr(mind, "identity", None) == selected:
                 rng = mind.random
-            note = aster_postcards.postcard_note(card, restrained=config.get("aster_humour", "dry") == "off",
-                                                  from_sol=from_sol, state=state, rng=rng, recent=recent)
-            signature = aster_postcards.SIGNATURE
+            note = persona.postcards.postcard_note(card, restrained=config.get(persona.humour_key, "dry") == "off",
+                                                    from_sol=from_sol, state=state, rng=rng, recent=recent)
+            signature = persona.postcards.SIGNATURE
         else:
             note = postcard_note(card, watcher_mind.personality(config), from_sol, state, rng=rng, recent=recent)
             signature = "the Watcher"
@@ -757,7 +758,7 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             "t" + format(zlib.crc32(repr((options["theme"], options["note_mode"], options["note_text"],
                                           options["signature"])).encode("utf-8")), "08x"),
             "g" + format(zlib.crc32(options["greeting"].encode("utf-8")), "08x"), int(options["postmark"]),
-            companions.identity(self.config), str(self.config.get("aster_humour", "dry")),
+            companions.identity(self.config), str(self.config.get(companions.humour_key(self.config) or "aster_humour", "dry")),
             watcher_mind.frequency(companions.settings(self.config)), int(bool(self.config.get("heartbeat_overlay_enabled", True))),
             self._postcard_signature(options), watcher_mind.personality(self.config), palette.get("accent", ""), palette.get("orange", ""),
             palette.get("text", ""))).replace("#", "")

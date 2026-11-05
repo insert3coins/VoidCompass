@@ -19,8 +19,11 @@ import re
 # purpose (5.7.2): "how's it going" brought the route, "are you alive" the
 # exobiology readout and "what do you need" the colony, and it recited them.
 TOPICS = {
+    # Where the ship is now ("where are we going" is the route).
+    "where": re.compile(r"\b(where (are|am) (we|i)\b(?! (going|headed|heading|off to))|what system|which system|"
+                        r"current (system|location|position)|(our|my) (location|position))", re.I),
     "route": re.compile(r"\b(route|next (system|jump|stop|star)|destination|how far|plotted|waypoints?|hops?|neutron|"
-                        r"jumps? (left|to go|remaining)|where are we (going|headed|heading)|heading (to|for))\b",
+                        r"jumps? (left|to go|remaining)|where (are we|am i) (going|headed|heading|off to)|heading (to|for))\b",
                         re.I),
     "survey": re.compile(r"\b(survey|scan(ned|s)?|bod(y|ies)|fss|honk|bio(logy|logicals?)?|signals?|planets?|worlds?|"
                          r"undiscovered|first discover\w*|valuable)\b", re.I),
@@ -133,6 +136,17 @@ def _number(value):
 def _whole(value):
     number = _number(value)
     return None if number is None else int(round(number))
+
+
+def where_lines(system, station="", body=""):
+    if not system or system == "---":
+        return ["The ship's position isn't known yet."]
+    lines = [f"Current system: {system}"]
+    if station:
+        lines.append(f"Docked at {station}")
+    elif body and body != system:
+        lines.append(f"Nearest body: {body}")
+    return lines
 
 
 def route_lines(nav):
@@ -1248,12 +1262,10 @@ def plain_answer(lines, limit=PLAIN_LINES):
 
 
 def reply(outcome, rng, **fields):
-    if getattr(rng, "companion_identity", "") in {"axiom", "meridian"}:
-        from voidcompass.overlays.crew_mind import command_reply
-        return command_reply(outcome, rng, fields)
-    if getattr(rng, "companion_identity", "") == "aster":
-        from voidcompass.overlays.aster_lines import command_reply
-        own = command_reply(outcome, rng, fields)
+    from voidcompass.overlays import companion_personas
+    persona = companion_personas.get(getattr(rng, "companion_identity", ""))
+    if persona is not None:
+        own = persona.lines.command_reply(outcome, rng, fields)
         if own:
             return own
     lines = REPLIES.get(outcome) or REPLIES["unavailable"]

@@ -5,8 +5,8 @@ import re
 PROFILES = {
     "watcher": {"name": "The Watcher", "role": "Journal companion", "description": "Patient company · an ancient eye", "story": True},
     "aster": {"name": "Aster", "role": "Manifest officer", "description": "Ship’s officer · precision and dry wit", "story": True},
-    "axiom": {"name": "Axiom", "role": "Analytic companion", "description": "Clear observations · a living particle field", "story": False},
-    "meridian": {"name": "Meridian", "role": "Command companion", "description": "Measured presence · a holographic portrait", "story": False},
+    "axiom": {"name": "Axiom", "role": "Survey intelligence", "description": "Survey intelligence · precise and curious", "story": True},
+    "meridian": {"name": "Meridian", "role": "Veteran navigator", "description": "Old navigator · measured and steady", "story": True},
 }
 IDENTITIES = tuple(PROFILES)
 NEW_IDENTITIES = ("axiom", "meridian")
@@ -28,6 +28,12 @@ def pending_story(config):
     return not PROFILES[identity(config)]["story"]
 
 
+def humour_key(config):
+    """The active persona's commentary setting (the Watcher uses its nature)."""
+    selected = identity(config)
+    return None if selected == "watcher" else f"{selected}_humour"
+
+
 def new_defaults():
     values = {}
     for selected in NEW_IDENTITIES:
@@ -35,7 +41,8 @@ def new_defaults():
                        f"{selected}_hud_liveliness": "standard", f"{selected}_hud_focus": "tracking",
                        f"{selected}_voice_speed": "standard", f"{selected}_voice_level": "every",
                        f"{selected}_voice_enabled": False, f"{selected}_hud_motion": True,
-                       f"{selected}_voice_volume": 80, f"{selected}_hud_size": 144})
+                       f"{selected}_voice_volume": 80, f"{selected}_hud_size": 144,
+                       f"{selected}_humour": "dry"})
     return values
 
 
@@ -67,8 +74,15 @@ def display_options(config):
     return {"companion_identity": selected, "companion_name": name(config), "companion_size": display_size(config),
             "companion_accent": display_accent(config),
             "companion_motion": bool(config.get(f"{selected}_hud_motion", True) if selected != "watcher" else config.get("heartbeat_idle_motion", True)),
-            "companion_focus": config.get(f"{selected}_hud_focus" if selected != "watcher" else "heartbeat_focus_movement", "tracking"),
-            "companion_liveliness": config.get(f"{selected}_hud_liveliness", "standard") if selected != "watcher" else config.get("heartbeat_liveliness", "standard")}
+            "companion_focus": _choice(config.get(f"{selected}_hud_focus" if selected != "watcher" else "heartbeat_focus_movement"),
+                                       ("off", "tracking", "expressive"), "tracking"),
+            "companion_liveliness": _choice(config.get(f"{selected}_hud_liveliness") if selected != "watcher" else config.get("heartbeat_liveliness"),
+                                            ("calm", "standard", "alive"), "standard")}
+
+
+def _choice(value, allowed, default):
+    # Saved values from older or hand-edited configs fall back safely.
+    return value if value in allowed else default
 
 
 def accent_choices(selected):

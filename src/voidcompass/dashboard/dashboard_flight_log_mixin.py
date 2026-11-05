@@ -25,7 +25,7 @@ class DashboardFlightLogMixin:
                 finds = deep.discovery_state(1200)
             except Exception as exc:
                 logging.debug("Flight log field discoveries skipped: %s", exc)
-        key = (len(sessions), str(newest.get("started")), str(newest.get("ended")), int(newest.get("jumps") or 0),
+        key = (len(sessions), str(newest.get("started")), str(newest.get("ended")), int(newest.get("jumps") or 0), str(newest.get("companion")),
                getattr(history, "revision", None), watcher_mind.personality(config), get_active_profile(config),
                len(finds), str((finds[-1] if finds else {}).get("timestamp")))
         cached = getattr(self, "_flight_log_cache", None)

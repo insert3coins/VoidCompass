@@ -327,6 +327,8 @@ class HtmlDashboardRuntime:
             **self._boot,
             "commander": str(config.get("active_commander_name") or "")[:120],
             "eye": "hal" if config.get("heartbeat_eye_color") == "hal" else "theme",
+            # 5.7.4: the boot screen presents the commander's selected companion.
+            "companion": self._boot_companion(config),
             "journal_live": journal_live,
             "overlays_ready": ready,
             "overlays_total": len(surfaces),
@@ -337,6 +339,18 @@ class HtmlDashboardRuntime:
                 "cockpit": ("ready" if ready == len(surfaces) else "working") if surfaces else "off" if app else "waiting",
             },
         }
+
+    @staticmethod
+    def _boot_companion(config):
+        from voidcompass.core import companions
+        try:
+            options = companions.display_options(config or {})
+        except Exception:
+            return {"identity": "watcher", "name": "The Watcher"}
+        return {"identity": options["companion_identity"], "name": options["companion_name"],
+                "accent": options["companion_accent"], "motion": bool(options["companion_motion"]),
+                "focus": str(options["companion_focus"] or "tracking"),
+                "liveliness": str(options["companion_liveliness"] or "standard")}
 
     def _publish(self):
         payload = dict(self._latest_app_model)

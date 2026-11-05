@@ -116,7 +116,7 @@ class HeartbeatModelTests(unittest.TestCase):
                          {"size": 96, "eye": "hal", "identity": "watcher", "accent": "theme", "motion": True, "focus_movement": "tracking", "working": False, "liveliness": "standard", "idle": True, "frame_rate": 24, "renderer_logging": False, "story": {"crack": False, "second_pupil": False, "shutter": 0.0}})
         self.assertEqual(self.hud(heartbeat_orb_size="60", heartbeat_eye_color="blue", heartbeat_frame_rate="45",
                                   heartbeat_liveliness="frantic", heartbeat_idle_motion=False)._html_render_model["orb"],
-                         {"size": 54, "eye": "theme", "identity": "watcher", "accent": "theme", "motion": True, "focus_movement": "tracking", "working": False, "liveliness": "standard", "idle": False, "frame_rate": everyone, "renderer_logging": False, "story": {"crack": False, "second_pupil": False, "shutter": 0.0}})
+                         {"size": 54, "eye": "theme", "identity": "watcher", "accent": "theme", "motion": False, "focus_movement": "tracking", "working": False, "liveliness": "standard", "idle": False, "frame_rate": everyone, "renderer_logging": False, "story": {"crack": False, "second_pupil": False, "shutter": 0.0}})
         self.assertTrue(self.hud(watcher_renderer_logging=True)._html_render_model["orb"]["renderer_logging"])
 
     def test_window_is_the_orb_square(self):

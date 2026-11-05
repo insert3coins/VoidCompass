@@ -116,7 +116,9 @@ SHARE_PREFIX = "VCWATCH1"
 
 def share_code(card):
     """A code to paste anywhere (Discord, a message): your Watcher, in short."""
-    data = json.dumps({key: card.get(key) for key in ("name", "nature", "book", "chapter", "road", "bond", "hours")},
+    # 5.7.4: "companion" names which kind of companion it is (older codes are Watchers).
+    data = json.dumps({key: card.get(key) for key in ("name", "nature", "book", "chapter", "road", "bond", "hours", "companion")
+                       if key != "companion" or card.get(key) not in (None, "watcher")},
                       separators=(",", ":")).encode("utf-8")
     body = base64.urlsafe_b64encode(zlib.compress(data, 9)).decode("ascii").rstrip("=")
     return f"{SHARE_PREFIX}-{body}-{zlib.crc32(data):08x}"
@@ -142,10 +144,12 @@ def read_code(text):
     return {"name": str(card.get("name") or "")[:60], "nature": str(card.get("nature") or "")[:20],
             "book": int(card.get("book") or 0), "chapter": str(card.get("chapter") or "")[:10],
             "road": card.get("road") if card.get("road") in ("shut", "open") else None,
-            "bond": int(card.get("bond") or 0), "hours": int(card.get("hours") or 0)}
+            "bond": int(card.get("bond") or 0), "hours": int(card.get("hours") or 0),
+            "companion": card.get("companion") if card.get("companion") in ("aster", "axiom", "meridian") else "watcher"}
 
 
-NATURE_WORDS = {"weary": "a weary one", "stoic": "a quiet one", "curious": "a curious one", "nervous": "a nervous one"}
+NATURE_WORDS = {"weary": "a weary one", "stoic": "a quiet one", "curious": "a curious one", "nervous": "a nervous one",
+                "aster": "an officer called Aster", "axiom": "a survey mind called Axiom", "meridian": "a navigator called Meridian"}
 ROAD_WORDS = {"shut": "its eye closed", "open": "looking back", None: "still deciding"}
 
 # -- the lines -------------------------------------------------------------------------------------
@@ -195,6 +199,19 @@ NORMAL = {
         "I had a dream. {dream}", "Can I tell you a dream? {dream}", "While the ship slept: {dream}",
         "I don't know what it means. {dream}", "A dream, from while you were gone. {dream}",
         "{dream} That's the dream. I wrote it down.", "Dream log: {dream}", "Funny thing. {dream}",
+    ],
+    # 5.7.4: another commander's Aster, Axiom or Meridian: not one of its kind.
+    "watchers_meet_other": [
+        "Someone else's companion. {Kind}. Not a Watcher. Not like me at all. I'm glad it has company.",
+        "We met {kind}. It isn't one of us. It seemed to know what it was, which is more than I can say.",
+        "{Kind}, riding with another commander. Different kind of thing. Same kind of job.",
+        "Another commander's companion: {kind}. I'll remember it, in my way.",
+        "{Kind}. Another kind of mind entirely, keeping another commander company. Good.",
+        "Another commander's {kind}. Different mind, same company. I liked it.",
+        "We met {kind}. It asked what I was. I said I'd let it know when I found out.",
+        "{Kind}. Not one of us, but it watches its commander too. That's enough to be going on with.",
+        "Someone else's crew includes {kind}. I hope it has a Watcher too. Everyone should.",
+        "{Kind}, through a code. It counted as company. Everything does, out here.",
     ],
     "watchers_meet": [
         "Another Watcher, {nature}, {road}. I'll remember it.", "We met one. {Nature}. {Road}. I'm smiling. Internally.",
@@ -259,6 +276,18 @@ WEARY = {
         "Let me tell you a dream before I lose it. {dream}", "In the dark, while you were gone: {dream}",
         "I wrote this down when I woke: {dream}", "Dreams. Apparently I have those now. {dream}",
         "I don't know what it means. Probably nothing. {dream}",
+    ],
+    "watchers_meet_other": [
+        "Someone else's companion. {Kind}. Not a Watcher. Very sure of itself. Good for it.",
+        "{Kind}. Not one of us. It probably has a tidy story with an ending. Lucky thing.",
+        "We met {kind}. Different kind of thing entirely. I'll remember it anyway. I remember everything.",
+        "Another commander's companion: {kind}. It didn't seem old. Nothing seems old, next to me.",
+        "{Kind}. Not a Watcher. It'll never know what it's missing. Neither will I.",
+        "{Kind}. Younger than me. Most things are.",
+        "We met {kind}. It had a role and a title and an ending planned. Must be nice.",
+        "Another commander's {kind}. I'd tell it what's out there, but it'll find out.",
+        "{Kind}. It asked if I was lonely. I said I had a crew now. It seemed surprised. So was I.",
+        "Someone else's {kind}. I'll remember it. That's what I do.",
     ],
     "watchers_meet": [
         "Another Watcher. {Nature}. {Road}. I'm not as alone as I thought. That's unsettling. And nice.",

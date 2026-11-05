@@ -307,14 +307,14 @@ function renderSettings(data, ui) {
   lastSettingsKey = key;
   ui.byId("capsule-settings-body").innerHTML = `
     ${choice(ui, "capsule_delivery", "Hand capsules back", "Who gives you your note when you arrive.", settings.capsule_delivery,
-      [["both", "The Watcher, or a notice if it's quiet"], ["notice", "A notice only"], ["watcher", "The Watcher only"]])}
+      [["both", "Your companion, or a notice if it's quiet"], ["notice", "A notice only"], ["watcher", "Your companion only"]])}
     ${choice(ui, "capsule_notice_s", "Notice stays", "How long a capsule's notice stays on screen.", settings.capsule_notice_s,
       [[10, "10 seconds"], [25, "25 seconds"], [45, "45 seconds"], [60, "A minute"]])}
     ${toggle(ui, "capsule_open_on_login", "Open when I log in there", "Not only when you jump in: logging in at the system opens its capsules too.", settings.capsule_open_on_login)}
     ${toggle(ui, "capsule_blur_sealed", "Blur sealed notes", "Keep the surprise: sealed notes stay blurred here until you hover to peek.", settings.capsule_blur_sealed)}
     ${toggle(ui, "capsule_sign_shares", "Sign what I share", `Capsules you share say they're from you${data.sender ? ` (CMDR ${data.sender})` : ""}. Off, they arrive unsigned.`, settings.capsule_sign_shares)}
     ${toggle(ui, "capsule_hide_received", "Keep shared capsules unread", "A capsule another commander sends you can't be read here until you get to where it was left.", settings.capsule_hide_received)}
-    ${toggle(ui, "on_this_day_watcher", "The Watcher remembers this day", "On your first jump of the day, it may tell you where you were on this date.", settings.on_this_day_watcher)}
+    ${toggle(ui, "on_this_day_watcher", "Your companion remembers this day", "On your first jump of the day, it may tell you where you were on this date.", settings.on_this_day_watcher)}
     <p class="keepsake-hint">Sealed capsules ${data.minimap ? "show" : "can show"} as small hourglasses on the Galaxy Minimap (its Time capsules switch, in Overlay Studio).</p>`;
 }
 

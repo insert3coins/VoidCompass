@@ -128,7 +128,7 @@ class MemoryTests(unittest.TestCase):
         dream = watcher._dream()
         self.assertTrue("Void Dancer" in dream or "Sol" in dream, dream)
         card = watcher.share_card("Kai")
-        self.assertEqual(watcher_deeper.read_code("paste: " + watcher_deeper.share_code(card) + " thanks"), card)
+        self.assertEqual(watcher_deeper.read_code("paste: " + watcher_deeper.share_code(card) + " thanks"), {**card, "companion": "watcher"})
         self.assertIsNone(watcher_deeper.read_code("VCWATCH1-abc-00000000"))
         met = watcher.meet({"name": "Zed", "nature": "curious", "road": "open", "hours": 4})
         self.assertTrue(met["text"])
@@ -186,7 +186,8 @@ class PageTests(unittest.TestCase):
     def test_the_page_is_laid_out_as_tabs(self):
         from pathlib import Path
         script = (Path(__file__).resolve().parents[1] / "web" / "dashboard" / "watcher.js").read_text(encoding="utf-8")
-        for tab in ("now", "story", "you", "said", "settings", "voice"):
+        # 5.7.4: VOICE sits inside SETUP ("settings") and TALK on the BRIDGE ("now").
+        for tab in ("now", "story", "you", "said", "settings"):
             self.assertIn(f'data-watcher-tab="{tab}"', script)
             self.assertIn(f'data-watcher-panel="{tab}"', script)
         for marker in ("BOOK FOUR", "THE ROAD TAKEN", 'class="watcher-answer"', "<kbd>", 'data-page="mission"', "all four books"):

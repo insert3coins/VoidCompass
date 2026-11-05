@@ -196,6 +196,7 @@ export function createCamera(canvas, {onChange, onClick, onHover, onInteract} = 
     zoom: (factor) => { stopFlight(); zoomAt(factor); },
     get flying() { return Boolean(flight); },
     get dragging() { return Boolean(drag?.moved); },
+    get panning() { return Boolean(drag?.moved && !drag.rotate); },
     set(values) { Object.assign(state, values); changed(false); },
   };
 }

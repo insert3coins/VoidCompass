@@ -18,6 +18,8 @@ HIGHLIGHTS = 6
 ELITE_YEARS = 1286
 # The night's best moments, best first.
 HIGHLIGHT_ORDER = ("RARE", "CODEX", "BIO", "SALE", "PHOTO", "LOSS", "DEBRIEF")
+_PERSONAS = ("aster", "axiom", "meridian")
+_COMPANION_NAMES = {"watcher": "the Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian"}
 
 def part_of_day(moment):
     """The part of the day a session began in, for "this morning's star"
@@ -137,6 +139,22 @@ def tonights_star(arrivals, end):
     return best
 
 
+def companion_words(facts, companion):
+    """Aster's, Axiom's or Meridian's closing paragraph (5.7.4), built like
+    the Watcher's: chosen by the session, so the same words every reading."""
+    from voidcompass.overlays import companion_personas
+    log = companion_personas.get(companion).keepsakes.LOG
+    facts = {"part": "night", "when": "tonight", "When": "Tonight", "whens": "tonight's", **facts}
+    seed = zlib.crc32(str(facts.get("id") or "").encode("utf-8"))
+    sentences = [log["openings"][seed % len(log["openings"])].format(**facts)]
+    moments = [name for name, wanted in (("died", facts.get("deaths")), ("rare", facts.get("rare_text")),
+               ("firsts", facts.get("firsts_count")), ("far", facts.get("distance_value", 0) >= 1000),
+               ("credits", facts.get("credits_value", 0) >= 1e6), ("star", facts.get("star"))) if wanted] or ["quiet"]
+    sentences += [log["moments"][name].format(**facts) for name in moments[:2]]
+    sentences.append(log["closings"][(seed // 7) % len(log["closings"])])
+    return " ".join(sentences)
+
+
 def watcher_words(facts, nature="weary"):
     """The Watcher's closing paragraph: an opening, the night's most notable
     moment (or two), and a closing; chosen by the session, so the same words
@@ -247,6 +265,7 @@ def flight_log(session, rows=(), postcards=(), nature="weary", now=None, finds=(
     ``postcards`` the album's rows ({id, title, at}), ``finds`` the field
     discoveries made in it."""
     session = session or {}
+    companion = str(session.get("companion") or "watcher")
     start = _epoch(session.get("started"))
     if start is None:
         return None
@@ -313,7 +332,10 @@ def flight_log(session, rows=(), postcards=(), nature="weary", now=None, finds=(
         "star": {"system": star[0], "minutes": round(star[1] / 60)} if star and star[1] >= 600 else None,
         "postcards": [{"id": card["id"], "title": card["title"]} for card in postcards
                       if start <= float(card.get("at") or 0) <= end + 120][:8],
-        "words": watcher_words(facts, nature),
+        "words": companion_words(facts, companion) if companion in _PERSONAS else watcher_words(facts, nature),
+        # 5.7.4: signed by whichever companion was on watch that session.
+        "companion": companion if companion in _PERSONAS else "watcher",
+        "companion_name": _COMPANION_NAMES.get(companion, "the Watcher"),
         # Field discoveries made this session (5.5.3.8), repeats grouped.
         "finds": grouped_finds(finds),
         "finds_total": len([find for find in finds or () if isinstance(find, dict)]),

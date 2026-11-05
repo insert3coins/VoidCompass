@@ -263,7 +263,7 @@ function logView(row, data, esc, ui) {
 
 function wrappedView(row, data, esc) {
   const ready = n(row.stats?.jumps) > 0;
-  return `${panel("THE TRIP, TOLD BACK", `<p class="ex-dim">The trip as Void Wrapped tells a year: the distance, the systems, the firsts, the music and the Watcher's verdict, one card at a time, ready to save or share.</p>
+  return `${panel("THE TRIP, TOLD BACK", `<p class="ex-dim">The trip as Void Wrapped tells a year: the distance, the systems, the firsts, the music and your companion's verdict, one card at a time, ready to save or share.</p>
       <div class="ex-actions">${ready ? `${button("TELL IT", "wrapped", {"expedition-id": row.id}, esc, "primary")}${button("WATCH THE REPLAY", "replay", {"expedition-id": row.id}, esc)}` : `<small>Fly a little first.</small>`}</div>`)}
     ${panel("SHARE IT", `<div class="ex-actions">${button("COPY AS A FILE'S WORTH", "export", {"expedition-id": row.id}, esc)}</div>
       <form class="ex-form" data-ex-form="import_file"><label><span>PASTE A FRIEND'S EXPEDITION</span><textarea name="text" rows="3" placeholder="What COPY gave them">${esc(field("import_file", "text"))}</textarea></label>

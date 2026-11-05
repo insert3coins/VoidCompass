@@ -7,12 +7,12 @@ Its halo and command core now have a defined instrument bezel and dark transluce
 ## Set up
 
 1. Open the **Watcher** page and choose the **Aster** identity card. Only one companion is active at a time.
-2. Use **SETTINGS** on that page for thought frequency. The **Officer’s commentary** choice beside the identity cards switches dry wit to restrained replies.
-3. Open **VOICE** on the same page to enable/download Aster’s voice, test it, and choose volume, speed and which thoughts are spoken. Speech waits for the current line and its between-line pause.
+2. Use **SETUP** on that page for thought frequency. The **Officer’s commentary** choice beside the companion switcher switches dry wit to restrained replies.
+3. In **SETUP** on the same page, enable/download Aster’s voice, test it, and choose volume, speed and which thoughts are spoken. Speech waits for the current line and its between-line pause.
 4. In **Overlay Studio**, enable the Companion overlay, labelled for whoever is on watch. Its single inspector follows the selected companion. All companions offer the same Studio controls: 54/72/96/144/192/256 pixel sizes, accent, Fixed/Tracking/Expressive focus movement, Calm/Standard/Lively animation intensity, idle animation and frame rate. Aster’s default **Aster cyan** preset pairs cyan light with violet highlights; **Theme accent**, **Ice cyan** and **Brass** remain available. The Watcher retains **HAL red**, while Axiom and Meridian have their [own signature palettes](CREW_COMPANIONS.md#display-and-preferences). Display size carries across companion switches and resizes the live overlay immediately; the displays fill the same visible diameter. Colour, focus and animation preferences remain separate. Position, opacity, thought layout and frame rate remain shared.
 5. For spoken input, configure your microphone, recognition model and talk key in **Settings → Voice**. Command names, aliases, keyboard bindings and recorded sequences remain there. Keyboard/controller shortcuts remain in **Settings → Hotkeys**.
 
-TALK accepts typed commands without a microphone. For example:
+The BRIDGE chat accepts typed commands without a microphone. For example:
 
 - `Hello Aster`
 - `Aster, what can you do?`
@@ -45,7 +45,7 @@ Aster shares the Watcher's surroundings and activity records. It can comment on 
 
 Older records can return as conversation: postcards at least six hours old, and arrivals or service moments at least two days old. For example, “We reached Sol three days ago. I have kept the arrival in our service record.” Aster can recall a docking, completed mission or sale of exploration/biological data using the actual place in its log. Each particular memory or postcard rests for 30 days across restarts, independently of the wording rotation. Postcard remarks also have a ten-hour subject rest.
 
-Small reflections on Aster's appointment begin after its first story passage. Chapter recollections use only completed chapters heard at least a day earlier; later characters and revelations stay sealed until then. After all 48 passages, Aster can reflect on its present posting. Watcher's dreams, shutter choices, eye lore and mood arcs remain part of the Watcher's own story.
+Small reflections on Aster's appointment begin after its first story passage. Chapter recollections use only completed chapters heard at least a day earlier; later characters and revelations stay sealed until then. After all 48 passages, Aster can reflect on its present posting, standing on. Watcher's dreams, shutter choices, eye lore and mood arcs remain part of the Watcher's own story.
 
 After three hours in a session, an occasional break reminder can join the quiet watch, at most once an hour. Queued journal facts about your career, power, squadron or carrier can also be acknowledged. Calling Aster can produce a contextual observation as well as its direct call replies. These additions use the same voice/caption queue and preserve the selected idle interval, danger checks, Off setting and minor-wording exhaustion. Casual conversation remains available on Rare both in port and underway; **Only what matters** still excludes it from speech.
 
@@ -63,17 +63,32 @@ Aster keeps you company while docked, aboard a carrier or on a station concourse
 
 Port remarks remain eligible on Rare, while keeping the selected overall pace: at least five minutes between idle remarks on Chatty, ten on Occasional and twenty on Rare, after the initial quiet interval. Each port topic still rests for at least half an hour, uses fresh wording first and falls silent after its minor-remark bank is exhausted. Off stays silent. If you want these casual lines spoken too, use **Most thoughts** or **Every thought** in Aster's voice settings; **Only what matters** continues to reserve speech for important reports. Normal commands, warnings and hatchling limits retain their existing behaviour.
 
-Watcher and Aster use the same caption presenter in the floating overlay and the NOW panel. When voice is enabled, both keep the line being spoken and wait for a queued reply’s own playback, including model loading and the pause between lines. Watcher’s character-by-character typing, punctuation pauses and highlighted journal words follow the actual audio clock, including when opening the panel midway through a line. Brief gaps in the live feed do not reveal the rest of a reply early or rewind its text. Full captions remain visible through long replies; synthesis failures fall back to text. With voice off, each companion uses the same natural typing system with its own personality. The NOW panel reserves room for the full line so its controls stay still while text appears; SAID and TALK remain conversation records.
+Watcher and Aster use the same caption presenter in the floating overlay and the BRIDGE panel. When voice is enabled, both keep the line being spoken and wait for a queued reply’s own playback, including model loading and the pause between lines. Watcher’s character-by-character typing, punctuation pauses and highlighted journal words follow the actual audio clock, including when opening the panel midway through a line. Brief gaps in the live feed do not reveal the rest of a reply early or rewind its text. Full captions remain visible through long replies; synthesis failures fall back to text. With voice off, each companion uses the same natural typing system with its own personality. The BRIDGE panel reserves room for the full line so its controls stay still while text appears; LOG and the chat remain conversation records.
 
-**The Unfinished Manifest** contains 48 passages across six chapters. A relief ship’s former manifest officer carries an unsigned arrival report. Its story concerns names, duty and the space a crew leaves for someone who may return. It is original fiction, separate from The Watcher’s origins, dreams and books, and makes no claim to official Elite history.
+**Relieved of the Watch** is Aster's story: 48 passages across eight chapters (rewritten in 5.7.4). Aster keeps a handover book. Every officer who stands a watch eventually hands it to someone else: course, hazards and standing orders. The book holds one entry from each captain Aster served: a freighter captain, a surveyor, a rescue pilot, a miner and an escort, plus a maintenance technician from six years in a locked hangar. None of them ever relieved Aster. The last page is yours. It is original fiction, separate from The Watcher's origins, dreams and books, and makes no claim to official Elite history.
 
-The account unfolds in order during quiet periods, after time on watch. Later chapters also respond to recorded deliveries, dockings, jumps and returns, with time-based alternatives so no particular play style is compulsory. The first passage opens after about 15 minutes together; the final chapter unfolds over a much longer association. There is at least 45 minutes between passages, a settling period after session start, and no story interruption during danger. **STORY** shows only passages already heard and seals unopened chapter titles. **SAVE BOOK** exports the heard story and service memories.
+**How it unlocks.** Passages arrive in order during quiet moments: at least 10 minutes into a session, after 2 quiet minutes, never during danger, and at least 45 minutes apart. The first chapter opens after about 15 minutes together. Each later chapter opens when you do something its captain would recognise, or after about 18 more hours together if you don't, so no play style is locked out:
+
+| Chapter | Opens with |
+| --- | --- |
+| I · I Have the Watch | Time together (about 15 minutes) |
+| II · The Freighter Captain | Three deliveries: market sales, depot deliveries or completed missions |
+| III · The Surveyor | Three survey findings: first discoveries or mapped worlds |
+| IV · The Rescue Pilot | A close call: a repair at a station, an escaped interdiction or a rebuy |
+| V · The Miner | Three pieces of patient work: refined ore, analysed organics or landings |
+| VI · The Escort | Two brushes with trouble: bounties, combat bonds or escaped interdictions |
+| VII · The Empty Ship | Three returns to systems visited together, and two real days after chapter VI |
+| VIII · Standing On | 150 jumps together, and three real days after chapter VII |
+
+Hours only count while Aster is the active companion. **STORY** lists heard chapters. Unopened chapters show only their numeral; hovering one shows how it opens. The note below says what the next chapter waits for and how long until it opens anyway. Once a captain's chapter is told, **echoes** can follow: a delivery, a careful survey, a close call, an honest yield, an ended engagement or a return can stir a short remark about that captain. Each echo rests for a day. The STORY page lists the echoes found and how to find the rest. When the book is complete, **READ THE WHOLE STORY** shows it in full, and **SAVE BOOK** exports the heard story and service memories.
+
+**Upgrading from The Unfinished Manifest.** The earlier story is retired. Passages heard from it stay in the memory file but are no longer shown; Aster starts the handover book from chapter I. Its hours, sessions, name, preferences and service memories are unchanged.
 
 ## Your name: The Crew Register
 
 Aster reads your commander name from the journal and has a short, original three-part introduction about the person behind the rank. After roughly fifteen minutes together, it waits for a quiet moment to notice the name in its register. At least three minutes later, with room between reports, it asks whether to use that name, retain **Commander**, or call you something you prefer. Your choice concludes the introduction; it does not change the main six-chapter story.
 
-Answer in the NOW panel or with the existing answer hotkeys. While the naming question is pending, TALK and configured voice recognition also accept `yes`, `keep it Commander`, or `Aster, call me Jeff`. Choosing **Call me something else** leaves room to give the name afterward or enter it under **YOU → YOUR NAME**. The pronunciation field and **HEAR IT** use the selected companion's voice; a chosen nickname can have its own pronunciation there too.
+Answer on the BRIDGE or with the existing answer hotkeys. While the naming question is pending, the BRIDGE chat and configured voice recognition also accept `yes`, `keep it Commander`, or `Aster, call me Jeff`. Choosing **Call me something else** leaves room to give the name afterward or enter it under **YOU → YOUR NAME**. The pronunciation field and **HEAR IT** use the selected companion's voice; a chosen nickname can have its own pronunciation there too.
 
 The introduction and choice stay in Aster's own commander memory. Heard passages can be reread under YOUR NAME and appear in its exported book. Existing manually chosen preferences are respected. An unanswered question expires after five minutes and is left alone for at least two weeks before another attempt. Quiet/danger checks keep it out of busy moments. Once approved, your journal name or chosen nickname becomes Aster's normal form of address in its own greetings, command replies, reports, story dialogue and farewells. For example, “Opening galaxy map, Jeff” and “Watch complete, Jeff” can both occur in the same session. Choose **Commander** to retain the title. The pronunciation field follows the chosen name, and heard story passages retain the words spoken at the time. A journal name change gets an original register update rather than restarting the introduction.
 
@@ -115,3 +130,15 @@ The selected model is British English, Piper medium, one speaker and 22,050 Hz. 
 Download source: `https://raw.githubusercontent.com/insert3coins/VoidCompass/master/models/jarvis/onnx/`, using those exact filenames. Publish this current pair at that path when updating the GitHub model assets. The supplied upstream model card limits use to personal, non-commercial purposes; see `models/jarvis/README.md` and `MODEL_CARD.md`. Aster’s character and lore are original and separate from the source voice.
 
 Models remain outside the application archive. Training archives, historical root exports, metadata CSV and installation receipts are not runtime download assets. Documentation is included by the build process.
+
+**The crew.** Aster also tells its six-passage *Coming Aboard* account and hands over the watch to its crewmates by name. See [the crew](CREW_COMPANIONS.md#the-crew-how-they-came-aboard).
+
+## Keepsakes and deeper company
+
+- **Time capsules, constellations, On this day and anniversaries** are spoken by Aster when it is on watch, in either commentary style. With capsule delivery set to "your companion, or a notice", a notice still appears if it stays quiet.
+- **Its readings of you.** The BRIDGE and YOU pages show Aster's confidence and morale. They move with real events: answering its questions, close calls, repairs, data sales, losing the ship and meeting other commanders' companions.
+- **Watch Notes.** When you log off, Aster writes a short note about the watch. The YOU page keeps them, the book export includes them, and it may mention the last one when you return.
+- **Other commanders' companions.** Copy Aster's code from the YOU page; paste a friend's code (from any companion) to meet theirs.
+- **A request.** Once, after chapter VII, Aster asks to be taken to the system where it first came aboard. The request appears on the BRIDGE, can become an expedition objective, and Aster notices when you arrive.
+- **Achievements.** Four in the Aster category: the first passage, the whole story, every echo, and *Received the Watch* for keeping its request.
+- **Captain's Log.** Sessions flown with Aster on watch end with its own closing paragraph, signed Aster.

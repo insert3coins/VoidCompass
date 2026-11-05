@@ -7331,6 +7331,231 @@
     }
   },
   {
+    "id": "aster_story_begins",
+    "title": "First Entry",
+    "desc": "Hear the first page of Aster's handover book",
+    "icon": "⬡",
+    "category": "Aster",
+    "points": 25,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "AsterTold",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "aster_story_complete",
+    "title": "Standing On",
+    "desc": "Hear Aster's whole story, to its last entry",
+    "icon": "⬡",
+    "category": "Aster",
+    "points": 250,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "AsterComplete",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "aster_every_echo",
+    "title": "Old Orders",
+    "desc": "Hear all six of Aster's echoes of its captains",
+    "icon": "⬡",
+    "category": "Aster",
+    "points": 150,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "AsterEchoes",
+      "value": 6,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "aster_request",
+    "title": "Received the Watch",
+    "desc": "Take Aster back to where it first came aboard",
+    "icon": "⬡",
+    "category": "Aster",
+    "points": 100,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "AsterRequest",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "axiom_story_begins",
+    "title": "One Discrepancy",
+    "desc": "Hear the first observation Axiom shares about itself",
+    "icon": "◌",
+    "category": "Axiom",
+    "points": 25,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "AxiomTold",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "axiom_story_complete",
+    "title": "Visitor Confirmed",
+    "desc": "Hear Axiom's whole story, to the last count",
+    "icon": "◌",
+    "category": "Axiom",
+    "points": 250,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "AxiomComplete",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "axiom_every_echo",
+    "title": "Full Census",
+    "desc": "Hear all six of Axiom's echoes",
+    "icon": "◌",
+    "category": "Axiom",
+    "points": 150,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "AxiomEchoes",
+      "value": 6,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "axiom_request",
+    "title": "Seen in Person",
+    "desc": "Take Axiom to see a black hole",
+    "icon": "◌",
+    "category": "Axiom",
+    "points": 100,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "AxiomRequest",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "meridian_story_begins",
+    "title": "Taking Station",
+    "desc": "Hear the first entry from Meridian's old log",
+    "icon": "◇",
+    "category": "Meridian",
+    "points": 25,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "MeridianTold",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "meridian_story_complete",
+    "title": "The Last Sounding",
+    "desc": "Hear Meridian's whole story, to the final line of the log",
+    "icon": "◇",
+    "category": "Meridian",
+    "points": 250,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "MeridianComplete",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "meridian_every_echo",
+    "title": "Old Waters",
+    "desc": "Hear all six of Meridian's echoes",
+    "icon": "◇",
+    "category": "Meridian",
+    "points": 150,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "MeridianEchoes",
+      "value": 6,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "meridian_request",
+    "title": "The Far End",
+    "desc": "Take Meridian to the edge of the galaxy",
+    "icon": "◇",
+    "category": "Meridian",
+    "points": 100,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "MeridianRequest",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "crew_introductions",
+    "title": "Introductions",
+    "desc": "Hear one of your companions tell how it came aboard",
+    "icon": "⚓",
+    "category": "The Crew",
+    "points": 25,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "CrewTold",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "crew_full",
+    "title": "Full Crew",
+    "desc": "Fly with all four companions: the Watcher, Aster, Axiom and Meridian",
+    "icon": "⚓",
+    "category": "The Crew",
+    "points": 100,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "CrewFlown",
+      "value": 4,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "crew_watch_rota",
+    "title": "The Watch Rota",
+    "desc": "Hear all four companions' accounts of coming aboard, every passage",
+    "icon": "⚓",
+    "category": "The Crew",
+    "points": 200,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "CrewTold",
+      "value": 24,
+      "compare": "gte"
+    }
+  },
+  {
     "id": "watcher_book_two",
     "title": "Someone Answered",
     "desc": "Hear the Watcher's second story, The Answer, to its end",

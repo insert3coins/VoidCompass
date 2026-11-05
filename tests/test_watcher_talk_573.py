@@ -59,7 +59,7 @@ class TalkPageTests(unittest.TestCase):
             {"at": 1793300001, "you": "Open the galaxy map", "it": "The galaxy map.", "voice": True}]},
             "listen": {"enabled": True, "installed": True, "mode": "hold", "stage": "idle"}}
         self.render()
-        self.page.click('[data-watcher-tab="talk"]')
+        self.page.click('[data-watcher-tab="now"]')
         self.addCleanup(self.page.close)
         self.addCleanup(lambda: self.assertEqual(self.errors, []))
 
@@ -86,14 +86,14 @@ class TalkPageTests(unittest.TestCase):
 
     def test_talk_replaces_model_and_library_controls(self):
         self.assertEqual(self.page.locator("[data-watcher-tab]").all_text_contents(),
-                         ["NOW", "STORY", "YOU", "SAID", "SETTINGS", "VOICE", "TALK"])
+                         ["BRIDGE", "STORY", "YOU", "LOG", "SETUP"])
         self.assertEqual(self.page.locator('[data-watcher-panel="mind"], [data-watcher-panel="library"]').count(), 0)
         self.assertEqual(self.page.locator("#watcher-mind-on, #watcher-mind-model, #watcher-mind-download, [data-mind-vote]").count(), 0)
         self.assertTrue(self.page.is_visible("#watcher-talk-log"))
         self.assertIn("SPOKEN", self.page.inner_text("#watcher-talk-log"))
-        self.assertIn("from your ship", self.page.inner_text(".talk-console > .watcher-note"))
-        setup = self.page.inner_text(".talk-setup")
-        for word in ("SETTINGS › VOICE", "microphone", "talk key", "keyboard bindings", "sequences"):
+        self.assertIn("ask about your ship", self.page.inner_text(".talk-console footer .watcher-note"))
+        setup = self.page.inner_text(".talk-setup").casefold()
+        for word in ("settings › voice", "microphone", "talk key", "keyboard bindings", "sequences"):
             self.assertIn(word, setup)
 
     def test_typed_command_and_reply_round_trip_without_rebuilding_input(self):
@@ -120,7 +120,7 @@ class TalkPageTests(unittest.TestCase):
         self.data["talk"]["talk"] = []
         self.render()
         self.assertEqual(self.page.locator(".talk-turn").count(), 0)
-        self.assertIn("Nothing said yet", self.page.inner_text("#watcher-talk-log"))
+        self.assertIn("Say hello", self.page.inner_text("#watcher-talk-log"))
 
     def test_mic_hold_emits_start_and_stop(self):
         mic = self.page.locator("#watcher-talk-mic")
@@ -170,7 +170,7 @@ class TalkPageTests(unittest.TestCase):
         self.assertEqual(self.commands(), [])
 
     def test_old_stored_tabs_open_the_command_conversation(self):
-        for old_tab, destination in {"mind": "talk", "library": "talk", "overview": "now", "together": "you"}.items():
+        for old_tab, destination in {"mind": "now", "library": "now", "talk": "now", "voice": "settings", "overview": "now", "together": "you"}.items():
             with self.subTest(old_tab=old_tab):
                 self.page.evaluate("tab => localStorage.setItem('voidcompass.watcherTab', tab)", old_tab)
                 self.page.reload()

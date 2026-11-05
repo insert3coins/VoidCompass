@@ -127,13 +127,13 @@ OVERLAY_HOTKEY_SPECS = (
     ("music_next", "overlay_hotkey_music_next", "Music: next track", None),
     ("music_previous", "overlay_hotkey_music_previous", "Music: previous track", None),
     # Poke the Watcher: it looks up and answers (5.5.3.2).
-    ("watcher_poke", "overlay_hotkey_watcher_poke", "The Watcher: poke", None),
+    ("watcher_poke", "overlay_hotkey_watcher_poke", "Companion: call / poke", None),
     # 5.6.1: answering its questions.
-    ("watcher_answer_1", "overlay_hotkey_watcher_answer_1", "The Watcher: answer 1", None),
-    ("watcher_answer_2", "overlay_hotkey_watcher_answer_2", "The Watcher: answer 2", None),
-    ("watcher_answer_3", "overlay_hotkey_watcher_answer_3", "The Watcher: answer 3", None),
+    ("watcher_answer_1", "overlay_hotkey_watcher_answer_1", "Companion: answer 1", None),
+    ("watcher_answer_2", "overlay_hotkey_watcher_answer_2", "Companion: answer 2", None),
+    ("watcher_answer_3", "overlay_hotkey_watcher_answer_3", "Companion: answer 3", None),
     # 5.7.1: talk to it by voice (hold or tap, chosen on the MIND page).
-    ("watcher_talk", "overlay_hotkey_watcher_talk", "The Watcher: talk (push to talk)", None),
+    ("watcher_talk", "overlay_hotkey_watcher_talk", "Companion: talk (push to talk)", None),
     _overlay_hotkey("planet_waypoint"),
     # 5.6.1: marks the spot as one of the expedition's places.
     ("field_bookmark", "overlay_hotkey_field_bookmark", "Expedition: mark this place", None),

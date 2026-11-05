@@ -160,6 +160,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".sky-views button", ".sky-stars button", ".sky-saved ol button",
   ".wrapped-years button", ".wrapped-index button", ".wrapped-start", ".game-card",
   ".pe button", ".pc-show button", ".pc-hero-card", ".pc-timeline li button",
+  ".companion-switch button", ".talk-prompt", ".talk-send", ".talk-mic", ".talk-link",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -704,6 +705,7 @@ function renderBoot(state) {
     overlaysReady: number(boot.overlays_ready),
     overlaysTotal: number(boot.overlays_total),
     eye: boot.eye === "hal" ? "hal" : "theme",
+    companion: boot.companion && typeof boot.companion === "object" ? boot.companion : {identity: "watcher"},
     update: state.update || {},
     stage: activeStage.key,
     version: String(state.app?.version || ""),
@@ -2795,7 +2797,7 @@ const SETTINGS_SECTIONS = [
   {id: "appearance", title: "Appearance", heading: "Make yourself at home", category: "PRESENTATION", detail: "Choose your palette, find a comfortable text size and make the deck your own."},
   {id: "flight", title: "Flight & exploration", heading: "Flight & exploration", category: "FIELD PREFERENCES", detail: "Tune the helpers that travel with you, from fuel warnings to your next expedition."},
   {id: "hotkeys", title: "Hotkeys", heading: "A shortcut to your cockpit", category: "COMMAND INPUT", detail: "Keep your hands on the controls. These shortcuts work while Elite Dangerous has focus."},
-  {id: "voice", title: "Voice", heading: "Say the word", category: "VOICE CONTROL", detail: "Talk to the Watcher by voice, and let it work the ship: maps, gear, lights, pips and more, with Elite's own keys."},
+  {id: "voice", title: "Voice", heading: "Say the word", category: "VOICE CONTROL", detail: "Talk to your companion by voice, and let it work the ship: maps, gear, lights, pips and more, with Elite's own keys."},
   {id: "galnet", title: "Galnet", heading: "A signal from the Bubble", category: "NEWS RELAY", detail: "Choose how often the news arrives and how headlines move through your deck."},
   {id: "integrations", title: "Integrations", heading: "Connections you choose", category: "EXTERNAL SERVICES", detail: "Manage community services, sharing and your local API. Each connection has its own controls."},
   {id: "diagnostics", title: "Diagnostics & recovery", heading: "Keep the compass steady", category: "SYSTEM CARE", detail: "Check the runtime, collect a useful report and look after this commander's local history."},
@@ -2825,7 +2827,7 @@ function settingsIcon(id) {
 }
 
 // Settings › Hotkeys' groups (5.7.3), in order; the server says which each shortcut is in.
-const HOTKEY_GROUPS = [["overlays", "OVERLAYS"], ["controls", "OVERLAY CONTROLS"], ["watcher", "THE WATCHER"],
+const HOTKEY_GROUPS = [["overlays", "OVERLAYS"], ["controls", "OVERLAY CONTROLS"], ["watcher", "COMPANION"],
   ["music", "MUSIC"], ["field", "RIGS AND EXPEDITIONS"]];
 let hotkeyFilter = (() => {
   try { return window.localStorage.getItem("voidcompass.settings.hotkeyFilter") || "all"; } catch (_error) { return "all"; }
@@ -3027,7 +3029,7 @@ const SETTINGS_GROUP_NOTES = {
   INPUT: "What Void Compass listens to, and the bindings Elite already uses.",
   OVERLAYS: "Show or hide each overlay, wherever you are.",
   "OVERLAY CONTROLS": "Overlay Studio, every overlay at once, and the overlays' own options.",
-  "THE WATCHER": "Poke it, answer its questions, and push to talk.",
+  "COMPANION": "Call it, answer its questions, and push to talk.",
   MUSIC: "The music player, from anywhere.",
   "RIGS AND EXPEDITIONS": "Mark rigs as they go down, and places along an expedition.",
   JOURNAL: "The source of your flight history.", SCREENSHOTS: "Bring your captures into the journey.",
@@ -3130,10 +3132,10 @@ function settingsSectionBody(id, data) {
   }
   if (id === "flight") {
     return settingGroup("FLIGHT", `${settingSelect({key: "low_fuel_threshold_pct", label: "Low fuel warning", detail: "Warn when the main tank falls below this.", value: String(number(value.low_fuel_threshold_pct, .25)), options: [.1, .15, .2, .25, .3, .4, .5].map((item) => [String(item), `${Math.round(item * 100)}%`]), type: "number"})}${settingSwitch({key: "auto_copy_waypoint", label: "Auto-copy the next waypoint", detail: "As you arrive in a system, your next saved waypoint goes on the clipboard, ready to paste into the galaxy map. Also on the Command Deck, under COPY NEXT DESTINATION.", checked: value.auto_copy_waypoint})}`)
-      + settingGroup("EXPEDITIONS", settingSelect({key: "expedition_risk_cr", label: "Data at risk", detail: "On an expedition, a nudge (and a word from the Watcher) each time the unsold data aboard passes another step of this.", value: String(number(value.expedition_risk_cr, 100000000)), options: [["0", "Off"], ["25000000", "25 M CR"], ["50000000", "50 M CR"], ["100000000", "100 M CR"], ["250000000", "250 M CR"], ["500000000", "500 M CR"], ["1000000000", "1 BN CR"]]})
+      + settingGroup("EXPEDITIONS", settingSelect({key: "expedition_risk_cr", label: "Data at risk", detail: "On an expedition, a nudge (and a word from your companion) each time the unsold data aboard passes another step of this.", value: String(number(value.expedition_risk_cr, 100000000)), options: [["0", "Off"], ["25000000", "25 M CR"], ["50000000", "50 M CR"], ["100000000", "100 M CR"], ["250000000", "250 M CR"], ["500000000", "500 M CR"], ["1000000000", "1 BN CR"]]})
         + settingSwitch({key: "expedition_gec_enabled", label: "Points of interest near the route", detail: "Sights from EDAstro's Galactic Exploration Catalog near your expedition's route, on its PLACES tab. Fetched from edastro.com at most once a day; off means nothing is fetched.", checked: value.expedition_gec_enabled !== false})
         + settingSelect({key: "expedition_poi_range_ly", label: "How far off the route", detail: "Points of interest this close to the line of your route are shown.", value: number(value.expedition_poi_range_ly, 150), options: [[50, "50 ly"], [100, "100 ly"], [150, "150 ly"], [250, "250 ly"], [500, "500 ly"], [1000, "1,000 ly"]], type: "number"}))
-      + settingGroup("HOME", `${settingText({key: "home_system", id: "setting-home", label: "Home system", detail: "Distances \"from home\" start here: the Watcher's remarks and the Galaxy Minimap. Leave it empty for Sol.", value: value.home_system, placeholder: "Sol", status: homeStatus(data.home)})}`)
+      + settingGroup("HOME", `${settingText({key: "home_system", id: "setting-home", label: "Home system", detail: "Distances \"from home\" start here: your companion's remarks and the Galaxy Minimap. Leave it empty for Sol.", value: value.home_system, placeholder: "Sol", status: homeStatus(data.home)})}`)
       + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
       + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingNote("Unlocks pop up in the cockpit's Achievements overlay: switch it on or off, and place it, in Overlay Studio.")}`);
   }
@@ -3149,12 +3151,12 @@ function settingsSectionBody(id, data) {
     const keyNote = !listen.hotkey ? "Set a talk key in Hotkeys → your companion."
       : listen.hotkeys_on === false ? "Enable system-wide hotkeys in Hotkeys." : "Use your keyboard shortcut or controller talk button.";
     const hearing = settingGroup("TALK BY VOICE",
-      settingSwitch({key: "watcher_listen_enabled", label: "Talk to the Watcher", detail: "Speak a command or ask a question. Release the key to send it.", checked: listen.enabled})
+      settingSwitch({key: "watcher_listen_enabled", label: "Talk to your companion", detail: "Speak a command or ask a question. Release the key to send it.", checked: listen.enabled})
       + `<div class="input-cards voice-setup-grid"><section class="input-card" data-search="recognition model whisper fast accuracy speed download"><header><b>1 · RECOGNITION</b><span>LOCAL TO THIS PC</span></header>${choice("watcher_listen_model", listen.model || "accurate", [["fast", "Fast · recommended", "Base English · 148 MB. Quick commands; may miss unusual names."], ["accurate", "Accuracy", "Small English · 488 MB. Better with names; more time to recognise."]], listen.downloading)}<div class="setting-row voice-hearing" id="voice-hearing" data-search="hearing download whisper speech model"><span class="setting-copy"><b>${escapeHtml(models.find((item) => item.id === listen.model)?.name || "Speech model")}</b><small id="voice-hearing-state">${listen.installed ? "Downloaded." : "Download this model to use it."}</small><small id="voice-latency">Recognition warms in the background while voice is on.</small></span><span class="setting-control voice-actions"><button type="button" id="voice-download"${listen.installed || listen.downloading ? " hidden" : ""}>DOWNLOAD · ${numeric(listen.download_mb)} MB</button><button type="button" id="voice-cancel"${listen.downloading ? "" : " hidden"}>CANCEL</button><button type="button" class="danger-action" id="voice-remove"${models.some((item) => item.installed) || listen.installed ? "" : " hidden"}>REMOVE MODELS</button></span><div class="voice-progress" id="voice-progress" hidden><i></i><span></span></div></div>${settingFlag()}</section>
       <section class="input-card" data-search="${settingSearchText("microphone input device", names.join(" "))}"><header><b>2 · MICROPHONE</b><span>CHOOSE AN INPUT</span></header>${choice("watcher_listen_mic", chosen, [["", "Windows default", "Follows Windows Sound settings."], ...names.map((name) => [name, name, mics.includes(name) ? "Available" : "Not connected"])])}${settingFlag()}</section>
       <section class="input-card" data-search="talk key hold tap hotkey control"><header><b>3 · TALK CONTROL</b><span>${escapeHtml(listen.hotkey || "NO KEY SET")}</span></header>${choice("watcher_listen_mode", listen.mode === "tap" ? "tap" : "hold", [["hold", "Hold to talk", "Hold, speak, release for the quickest reply."], ["tap", "Tap to talk", "Tap to start; tap again to send."]])}<div class="voice-key"><kbd>${escapeHtml(listen.hotkey || "NONE")}</kbd><button type="button" data-settings-goto="hotkeys">CHANGE IN HOTKEYS</button><p>${escapeHtml(keyNote)}</p></div>${settingFlag()}</section></div>`
       + `<div class="setting-row voice-test" data-search="test microphone mic level hear it back"><span class="setting-copy"><b>Check your microphone</b><small id="voice-test-note">Say something for a few seconds, then hear it back.</small></span><span class="setting-control"><span class="voice-meter" id="voice-meter" aria-hidden="true"><i></i></span><button type="button" id="voice-test"${listen.enabled && listen.installed ? "" : " disabled"}>TEST MIC</button><button type="button" id="voice-play"${listen.has_test ? "" : " hidden"}>HEAR IT BACK</button></span></div>`
-      + settingNote("Replies aloud also need the Watcher’s voice enabled on Watcher → Voice, and its orb enabled in Overlay Studio.")
+      + settingNote("Replies aloud also need your companion’s voice switched on (its page, SETUP), and its display enabled in Overlay Studio.")
       + (listen.notice ? settingNote(listen.notice) : ""));
     const missing = Array.isArray(ship.missing) ? ship.missing : [];
     const commands = settingGroup("COMMAND CONTROLS",
@@ -3236,7 +3238,7 @@ function settingsSectionBody(id, data) {
       + settingGroup("BGS", `${settingSwitch({key: "bgs_online_enabled", label: "BGS online", detail: "Ask the EDCD tick service when the galaxy tick happened, and let the BGS tab look systems up on EDSM. Your own journal record works without it.", checked: value.bgs_online_enabled})}${settingActions(`<button type="button" data-page="bgs">BGS</button>`, "bgs tick edsm factions background simulation")}`)
       + settingGroup("Trading", `${settingSwitch({key: "trading_online_enabled", label: "Trading searches (Spansh)", detail: "Let the Trading tab ask Spansh for trade routes, prices and station markets, only when you search. Your own trading record works without it.", checked: value.trading_online_enabled})}${settingActions(`<button type="button" data-page="trading">TRADING</button>`, "trading trade routes spansh market prices commodities profit")}`)
       + settingGroup("EDDN", `${settingSwitch({key: "eddn_market_upload_enabled", label: "Share markets on EDDN", detail: "Publish the markets you visit to the community network.", checked: value.eddn_market_upload_enabled})}${settingNote(`${numeric(data.eddn?.uploads)} uploads this session${data.eddn?.last_error ? ` · last error: ${data.eddn.last_error}` : ""}`)}`)
-      + settingGroup("LOCAL API", `${settingSwitch({key: "api_enabled", label: "Local API", detail: "Let your own tools read Void Compass and drive it: scripts, Stream Deck buttons, OBS scenes and widgets, Discord bots. No key needed: it answers this PC only, and web pages only when they're files on this PC (OBS browser sources too).", checked: value.api_enabled})}${settingText({key: "api_port", id: "setting-api-port", label: "Port", detail: "Where it listens, 1024 to 65535. Keep 7380 unless another program uses it.", value: String(value.api_port ?? 7380), status: apiStatus(data.api, value)})}${settingSwitch({key: "api_allow_control", label: "Allow control", detail: "Let tools change things: overlays, deck pages, the theme, the Watcher's thoughts and voice, music. Off, the API only reads.", checked: value.api_allow_control !== false})}${settingSwitch({key: "api_allow_lan", label: "Allow other devices", detail: "Answer other computers, tablets and phones on your network, not only this PC. There's no key, so anyone on the network can use it: only on a network you trust.", checked: value.api_allow_lan})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="api_open_docs">API DOCS</button>`, "local api port docs stream deck obs scripts bot")}`)
+      + settingGroup("LOCAL API", `${settingSwitch({key: "api_enabled", label: "Local API", detail: "Let your own tools read Void Compass and drive it: scripts, Stream Deck buttons, OBS scenes and widgets, Discord bots. No key needed: it answers this PC only, and web pages only when they're files on this PC (OBS browser sources too).", checked: value.api_enabled})}${settingText({key: "api_port", id: "setting-api-port", label: "Port", detail: "Where it listens, 1024 to 65535. Keep 7380 unless another program uses it.", value: String(value.api_port ?? 7380), status: apiStatus(data.api, value)})}${settingSwitch({key: "api_allow_control", label: "Allow control", detail: "Let tools change things: overlays, deck pages, the theme, your companion's thoughts and voice, music. Off, the API only reads.", checked: value.api_allow_control !== false})}${settingSwitch({key: "api_allow_lan", label: "Allow other devices", detail: "Answer other computers, tablets and phones on your network, not only this PC. There's no key, so anyone on the network can use it: only on a network you trust.", checked: value.api_allow_lan})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="api_open_docs">API DOCS</button>`, "local api port docs stream deck obs scripts bot")}`)
       + settingGroup("DISCORD", `${settingText({key: "carrier_discord_webhook_url", id: "setting-discord", label: "Carrier webhook", detail: "One webhook for your personal and Squadron Carrier: status, jumps and expedition updates.", value: value.carrier_discord_webhook_url, secret: true})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_discord">SEND TEST</button><button type="button" data-page="carrier">CARRIER COMMAND</button>`, "test discord carrier")}`)
 ;
   }
@@ -3263,7 +3265,7 @@ function settingsSectionBody(id, data) {
           <li><b>It asks GitHub</b><span>once as Void Compass starts, or whenever you press CHECK FOR UPDATES.</span></li>
           <li><b>You choose</b><span>nothing downloads until you say so.</span></li>
           <li><b>It checks every byte</b><span>the download must match the checksum published with the release, or it's thrown away.</span></li>
-          <li><b>It only replaces its own files</b><span>your settings, profiles, music, postcards, capsules and the Watcher's voice are never touched.</span></li>
+          <li><b>It only replaces its own files</b><span>your settings, profiles, music, postcards, capsules and companion voices are never touched.</span></li>
         </ol>
       </section>
     </div>`;

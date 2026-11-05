@@ -1,5 +1,5 @@
-/* The Watcher's page (5.5.3.2; laid out again in 5.5.3.5, and in 5.6.1 as
-   tabs: NOW, STORY, YOU, SAID, then its settings and voice). */
+/* The companion page (5.5.3.2; tabs in 5.6.1; in 5.7.4 BRIDGE, STORY, YOU,
+   LOG and SETUP below a compact companion switcher). */
 .watcher-page { --watcher-pane: clamp(420px, calc(100vh - 330px), 900px); display: grid; gap: 14px; align-items: start; min-width: 0; }
 .watcher-page[hidden] { display: none; }
 /* Wider than the deck's other pages: the reader and the log both use it. */
@@ -9,12 +9,21 @@
   padding: 14px; display: grid; gap: 12px; min-width: 0; align-content: start;
 }
 
-/* NOW: the eye beside what's live. */
-.watcher-now { grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); }
-.watcher-now-main { display: grid; gap: 14px; min-width: 0; max-width: 1280px; }
-.watcher-pair { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
-@media (max-width: 1250px) { .watcher-pair { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 900px) { .watcher-now { grid-template-columns: minmax(0, 1fr); } }
+/* BRIDGE (5.7.4): the display, the conversation, then what's live. */
+.watcher-bridge { grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(260px, 320px); }
+.watcher-bridge-main { display: grid; gap: 14px; min-width: 0; align-content: start; }
+.watcher-bridge-side { display: grid; gap: 14px; min-width: 0; align-content: start; }
+.watcher-bridge-side .watcher-feeling { grid-template-columns: minmax(0, 1fr); }
+.watcher-bridge-side .watcher-now-passage { font-size: 12px; max-height: 9.6em; overflow: hidden; mask-image: linear-gradient(black 70%, transparent); }
+.watcher-recent .watcher-log { max-height: 260px; }
+.watcher-recent .watcher-log li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.watcher-recent .watcher-log li > b { display: none; }
+.watcher-recent .watcher-log p { font: 12px/1.45 "Segoe UI", sans-serif; }
+@media (max-width: 1500px) {
+  .watcher-bridge { grid-template-columns: minmax(250px, 290px) minmax(0, 1fr); }
+  .watcher-bridge-side { grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
+}
+@media (max-width: 900px) { .watcher-bridge { grid-template-columns: minmax(0, 1fr); } }
 .watcher-ask { display: grid; gap: 10px; padding: 12px 14px; border: 1px dashed var(--border); }
 .watcher-ask.asking { padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
   border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
@@ -305,52 +314,57 @@ button.watcher-chapter:focus-visible { outline: 1px solid var(--accent); outline
 .watcher-knows-panel { grid-column: 1 / -1; }
 .watcher-subpage .studio-field select { width: auto; min-width: 170px; }
 
-/* The command conversation keeps its place as the live page updates. */
-.watcher-talkpage { max-width: 1400px; }
-.talk-console { display: grid; gap: 14px; min-width: 0; padding: 18px;
-  border: 1px solid var(--border); border-top: 2px solid var(--accent);
-  background: color-mix(in srgb, var(--panel) 92%, transparent); }
-.talk-console > header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+/* The conversation (5.7.4): your companion on the left, you on the right,
+   the input always at hand. It keeps its place as the live page updates. */
+.talk-console { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 0;
+  border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 94%, transparent); }
+.talk-console > header { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border-soft, var(--border)); }
 .talk-console > header span { color: var(--accent); font: 700 11px Consolas, monospace; letter-spacing: .14em; }
-.talk-console > header b { color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
-.talk-console > .watcher-note { margin: 0; }
-.talk-setup { margin: 0; padding: 10px 12px; border-left: 2px solid var(--accent); background: var(--inset); color: var(--muted); font: 12px/1.6 "Segoe UI", sans-serif; }
-.talk-setup b { display: block; color: var(--accent); font: 700 10px/1.8 Consolas, monospace; letter-spacing: .08em; }
-.talk-transcript { list-style: none; margin: 0; padding: 4px 4px 4px 0; display: grid; gap: 14px; align-content: start;
-  height: clamp(260px, 45vh, 580px); min-width: 0; overflow-y: auto; overscroll-behavior: contain; }
-.talk-turn { display: grid; gap: 8px; min-width: 0; }
-.talk-you, .talk-it { display: grid; gap: 3px; max-width: 78%; min-width: 0; }
-.talk-you { justify-self: end; text-align: right; }
-.talk-you p { margin: 0; padding: 8px 12px; border: 1px solid var(--border); border-right: 2px solid var(--muted);
-  background: var(--inset); color: var(--text); font: 13px/1.45 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
-.talk-it p { margin: 0; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-left: 3px solid var(--accent);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, var(--inset)), var(--inset));
-  color: var(--text); font: italic 14px/1.55 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.talk-console > header b { margin-left: auto; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.talk-transcript { list-style: none; margin: 0; padding: 4px 16px; display: flex; flex-direction: column; gap: 14px;
+  height: clamp(260px, calc(100vh - 600px), 620px); min-width: 0; overflow-y: auto; overscroll-behavior: contain; }
+.talk-turn { display: grid; gap: 10px; min-width: 0; }
+.talk-you { display: grid; gap: 3px; justify-self: end; max-width: min(70%, 560px); min-width: 0; text-align: right; }
+.talk-you p { margin: 0; padding: 8px 12px; border-radius: 10px 10px 2px 10px; background: color-mix(in srgb, var(--text) 9%, var(--inset));
+  color: var(--text); font: 13px/1.45 "Segoe UI", sans-serif; text-align: left; overflow-wrap: anywhere; }
+.talk-it { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; max-width: min(80%, 720px); min-width: 0; }
+.talk-it > i { display: grid; place-items: center; width: 26px; height: 26px; margin-top: 15px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-radius: 50%; color: var(--accent); font: 13px/1 "Segoe UI Symbol", sans-serif; font-style: normal; }
+.talk-it > div { display: grid; gap: 3px; min-width: 0; }
+.talk-it p { margin: 0; padding: 9px 13px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border)); border-radius: 2px 10px 10px 10px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--inset)); color: var(--text); font: 14px/1.55 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
 .talk-turn small { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
 .talk-it small { color: var(--accent); }
-.talk-empty p { margin: 0; color: var(--muted); font: italic 13px/1.5 "Segoe UI", sans-serif; }
-.talk-prompts { display: flex; flex-wrap: wrap; gap: 6px; }
-.talk-prompt { min-height: 30px; padding: 4px 12px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); background: transparent;
+/* 5.7.4: a crewmate asked by name answers off watch: same bubble, dashed and quieter. */
+.talk-it.off-watch > i, .talk-it.off-watch p { border-style: dashed; }
+.talk-it.off-watch small { color: var(--muted); }
+.talk-empty { margin: auto 0; }
+.talk-empty p { margin: 0; color: var(--muted); font: 13px/1.5 "Segoe UI", sans-serif; text-align: center; }
+.talk-prompts { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px; }
+.talk-prompt { min-height: 26px; padding: 3px 11px; border: 1px solid var(--border); border-radius: 13px; background: transparent;
   color: var(--muted); font: 12px "Segoe UI", sans-serif; cursor: pointer; }
 .talk-prompt:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .talk-prompt:disabled { opacity: .45; cursor: default; }
-.talk-say { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
+.talk-say { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; padding: 0 16px; }
 .talk-say:not(:has(.talk-mic:not([hidden]))) { grid-template-columns: minmax(0, 1fr) auto; }
-.talk-say textarea { width: 100%; min-width: 0; min-height: 52px; resize: vertical; box-sizing: border-box; padding: 9px 11px;
+.talk-say textarea { width: 100%; min-width: 0; min-height: 42px; max-height: 140px; resize: vertical; box-sizing: border-box; padding: 10px 12px;
   border: 1px solid var(--border); background: var(--input); color: var(--text); font: 13px/1.45 "Segoe UI", sans-serif; }
 .talk-say textarea:focus { outline: none; border-color: var(--accent); }
-.talk-send { padding: 0 22px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--inset)); color: var(--accent);
-  font: 700 11px Consolas, monospace; letter-spacing: .16em; cursor: pointer; }
-.talk-send:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 28%, var(--inset)); }
+.talk-send { min-width: 84px; padding: 0 18px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--inset)); color: var(--accent);
+  font: 700 11px Consolas, monospace; letter-spacing: .14em; cursor: pointer; }
+.talk-send:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 30%, var(--inset)); }
 .talk-send:disabled { opacity: .45; cursor: default; }
-.talk-console footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-.talk-console footer p { margin: 0; color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }
+.talk-console footer { display: grid; gap: 2px; padding: 0 16px 12px; }
+.talk-console footer p { margin: 0; color: var(--dim); font: 11px/1.45 "Segoe UI", sans-serif; }
+.talk-console footer p b { color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .06em; }
+.talk-console .talk-setup { padding: 0; border: 0; background: none; }
 .talk-link { border: 0; background: none; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .12em; cursor: pointer; }
+.talk-link[hidden] { display: none; }
 .talk-link:hover { color: var(--red); }
-.talk-mic { position: relative; width: 50px; border: 1px solid color-mix(in srgb, var(--green) 55%, var(--border)); background: var(--inset);
+.talk-mic { position: relative; width: 46px; border: 1px solid color-mix(in srgb, var(--green) 55%, var(--border)); background: var(--inset);
   color: var(--green); cursor: pointer; touch-action: none; }
 .talk-mic[hidden] { display: none; }
-.talk-mic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.talk-mic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .talk-mic rect { fill: currentColor; fill-opacity: .18; }
 .talk-mic:hover:not(:disabled) { background: color-mix(in srgb, var(--green) 14%, var(--inset)); }
 .talk-mic:disabled { opacity: .4; cursor: default; }
@@ -364,28 +378,54 @@ button.watcher-chapter:focus-visible { outline: 1px solid var(--accent); outline
 body.reduced-motion .talk-mic::after { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .talk-mic::after { animation: none !important; } }
 @media (max-width: 760px) {
-  .talk-console { padding: 12px; }
-  .talk-you, .talk-it { max-width: 94%; }
-  .talk-send { padding: 0 12px; }
+  .talk-transcript { height: clamp(260px, 60vh, 520px); padding: 4px 10px; }
+  .talk-you { max-width: 88%; }
+  .talk-it { max-width: 100%; }
+  .talk-prompts, .talk-say, .talk-console footer { padding-left: 10px; padding-right: 10px; }
+  .talk-send { min-width: 0; padding: 0 12px; }
   .talk-mic { width: 42px; }
 }
 
-.companion-picker { padding:16px; margin-bottom:15px; border:1px solid var(--border); background:var(--panel); }
-.companion-picker header { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; margin-bottom:12px; color:var(--accent); font:10px Consolas,monospace; }
-.companion-picker header small { color:var(--muted); font:11px/1.5 Consolas,monospace; }
-.companion-picker > div { display:flex; flex-wrap:wrap; gap:10px; }
-.companion-picker button { display:grid; gap:7px; flex:1 1 200px; padding:14px; text-align:left; color:var(--text); border:1px solid var(--border); background:var(--inset); }
-.companion-picker button[aria-pressed="true"] { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 7%,var(--inset)); }
-.companion-picker button b { font:12px Consolas,monospace; color:var(--accent); }
-.companion-picker button small, .companion-picker p { font:11px/1.5 Consolas,monospace; color:var(--muted); }
-.companion-picker label { display:flex; align-items:center; gap:12px; margin-top:12px; color:var(--muted); font:11px Consolas,monospace; }
-.companion-picker select { background:var(--inset); color:var(--text); border:1px solid var(--border); padding:8px; }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) #watcher-question:not(.asking), :is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) #watcher-feeling,
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) #watcher-wish, :is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) #watcher-road,
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) .watcher-card:has(#watcher-dreams), :is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) .watcher-card:has(#watcher-answers),
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) .watcher-card:has(#watcher-met), :is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) .watcher-card:has(#watcher-echoes),
+/* The companion switcher (5.7.4): compact, A–Z, above the tabs. */
+.companion-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-bottom: 12px; }
+.companion-switch { display: flex; flex-wrap: wrap; gap: 6px; }
+.companion-switch button { display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 5px 14px 5px 10px; border: 1px solid var(--border);
+  background: var(--inset); color: var(--muted); text-align: left; cursor: pointer; }
+.companion-switch button i { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 50%;
+  font: 12px/1 "Segoe UI Symbol", sans-serif; font-style: normal; color: var(--dim); }
+.companion-switch button span { display: grid; gap: 1px; }
+.companion-switch button b { color: var(--text); font: 700 11px Consolas, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.companion-switch button small { color: var(--dim); font: 10px "Segoe UI", sans-serif; }
+.companion-switch button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); }
+.companion-switch button[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--inset)); }
+.companion-switch button[aria-pressed="true"] i { border-color: var(--accent); color: var(--accent); }
+.companion-switch button[aria-pressed="true"] b { color: var(--accent); }
+.companion-switch button:disabled { opacity: .55; cursor: wait; }
+.companion-bar-side { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.companion-bar-side label { display: flex; align-items: center; gap: 8px; color: var(--muted); font: 11px Consolas, monospace; }
+.companion-bar-side [hidden] { display: none; }
+.companion-bar-side select { background: var(--inset); color: var(--text); border: 1px solid var(--border); padding: 6px 8px; }
+#companion-choice-status { margin: 0; color: var(--dim); font: 10px Consolas, monospace; letter-spacing: .06em; }
+@media (max-width: 760px) {
+  .companion-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .companion-switch button small { display: none; }
+}
+
+/* SETUP (5.7.4): its thoughts and its voice side by side, then reset. */
+.watcher-setup { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 1500px; }
+.watcher-setup-col { display: grid; gap: 14px; min-width: 0; align-content: start; }
+.watcher-setup-col > section { border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 92%, transparent);
+  padding: 14px 0; display: grid; gap: 8px; min-width: 0; }
+.watcher-setup-col > section > :is(header, p, div, ol) { margin-left: 14px; margin-right: 14px; }
+.watcher-setup .watcher-reset-panel { grid-column: 1 / -1; }
+@media (max-width: 1100px) { .watcher-setup { grid-template-columns: minmax(0, 1fr); } }
+
+/* 5.7.4: Aster, Axiom and Meridian have their own readings, notes, meetings
+   and request; only the Watcher's road, questions and voice arc stay its own. */
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) #watcher-question:not(.asking),
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) #watcher-road,
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) .watcher-card:has(#watcher-answers),
 :is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) .watcher-finding { display:none; }
-.companion-picker [hidden] { display:none; }
 .watcher-name details { margin-top:16px; padding-top:12px; border-top:1px solid var(--border); }
 .watcher-name summary { cursor:pointer; color:var(--accent); font:11px/1.6 Consolas,monospace; }
 
@@ -427,3 +467,31 @@ body.reduced-motion .talk-mic::after { animation: none !important; }
 :is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"]) #watcher-poke { border-color: color-mix(in srgb,var(--accent) 60%,var(--border)); letter-spacing: .08em; }
 
 [data-story-pending="true"] .watcher-bond-panel, [data-story-pending="true"] .watcher-now-story, [data-story-pending="true"] .watcher-pair, [data-story-pending="true"] .watcher-story-page > .watcher-side, [data-story-pending="true"] .watcher-card:has(#watcher-memories), [data-story-pending="true"] .watcher-knows-panel { display:none; }
+.watcher-voice-remove button { min-height: 28px; padding: 0 12px; font: 700 10px Consolas, monospace; letter-spacing: .1em; }
+/* The question card appears only while it is asking (5.7.4). */
+.watcher-bridge #watcher-question:not(.asking) { display: none; }
+.watcher-tabs { overflow-x: auto; scrollbar-width: none; }
+.watcher-tabs button { flex: none; white-space: nowrap; }
+@media (max-width: 760px) { .watcher-tabs button { padding: 9px 11px; } }
+
+/* THE CREW (5.7.4): four accounts side by side on STORY. */
+.watcher-crew { grid-column: 1 / -1; }
+.watcher-crew-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.watcher-crew-arc { display: grid; gap: 8px; align-content: start; padding: 10px 12px; border: 1px solid var(--border); background: var(--inset); min-width: 0; }
+.watcher-crew-arc.on-watch { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.watcher-crew-arc > header { display: flex; align-items: center; gap: 9px; }
+.watcher-crew-arc > header i { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 50%;
+  color: var(--accent); font: 12px/1 "Segoe UI Symbol", sans-serif; font-style: normal; }
+.watcher-crew-arc > header span { display: grid; gap: 1px; flex: 1; min-width: 0; }
+.watcher-crew-arc > header b { color: var(--text); font: 700 11px Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.watcher-crew-arc > header small { color: var(--dim); font: 9px Consolas, monospace; letter-spacing: .06em; }
+.watcher-crew-arc > header em { color: var(--accent); font: 700 9px Consolas, monospace; font-style: normal; letter-spacing: .08em; }
+.watcher-crew-arc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.watcher-crew-arc li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 5px 8px; border-left: 2px solid var(--border); color: var(--dim);
+  font: 11px Consolas, monospace; }
+.watcher-crew-arc li.heard { border-left-color: color-mix(in srgb, var(--accent) 60%, var(--border)); color: var(--text); }
+.watcher-crew-arc li > small { color: var(--muted); font: italic 11px "Segoe UI", sans-serif; }
+.watcher-crew-arc details { width: 100%; }
+.watcher-crew-arc summary { cursor: pointer; font: 700 11px Consolas, monospace; letter-spacing: .06em; }
+.watcher-crew-arc summary small { margin-left: 8px; color: var(--muted); font: 10px "Segoe UI", sans-serif; letter-spacing: 0; }
+.watcher-crew-arc details p { margin: 6px 0 2px; color: var(--text); font: italic 13px/1.6 "Segoe UI", sans-serif; }

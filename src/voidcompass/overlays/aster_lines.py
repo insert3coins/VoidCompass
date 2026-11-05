@@ -1,7 +1,7 @@
 """Aster's original officer dialogue. Facts are supplied by the game, never invented."""
 import random
 
-from voidcompass.overlays import aster_responses, aster_dockside, aster_idle, aster_signoff
+from voidcompass.overlays import aster_responses, aster_dockside, aster_idle, aster_signoff, aster_lore, aster_keepsakes, crew_lore
 
 GREETINGS = (
     "Aster, reporting for duty. The ship is ready. I shall reserve judgement on the itinerary.",
@@ -331,7 +331,28 @@ for bank in (aster_dockside, aster_idle, aster_signoff):
         RESTRAINED_EVENTS[topic] = tuple(dict.fromkeys(RESTRAINED_EVENTS.get(topic, ()) + lines))
         EVENTS[topic] = tuple(dict.fromkeys(EVENTS.get(topic, ()) + lines + bank.DRY.get(topic, ())))
 
+# The crew: handovers between companions and remarks about crewmates.
+for topic, lines in crew_lore.topics("aster").items():
+    RESTRAINED_EVENTS[topic] = EVENTS[topic] = tuple(lines)
+
+# Keepsakes: capsules, constellations, anniversaries, watch notes, a request.
+for topic, lines in aster_keepsakes.PLAIN.items():
+    RESTRAINED_EVENTS[topic] = tuple(dict.fromkeys(RESTRAINED_EVENTS.get(topic, ()) + lines))
+    EVENTS[topic] = tuple(dict.fromkeys(EVENTS.get(topic, ()) + lines + aster_keepsakes.VOICED.get(topic, ())))
+
+# The handover book's asides, lookbacks and echoes (5.7.4 story rewrite).
+_STORY = aster_lore.STORY
+for topic, lines in {"idle_aster_lore": _STORY.musings, "aster_lore_recall": _STORY.recall_lines(),
+                     "aster_after": _STORY.after, **_STORY.echo_topics()}.items():
+    EVENTS[topic] = tuple(dict.fromkeys(EVENTS.get(topic, ()) + tuple(lines)))
+    RESTRAINED_EVENTS[topic] = tuple(dict.fromkeys(RESTRAINED_EVENTS.get(topic, ()) + tuple(lines)))
+
 RESTRAINED_GREETINGS = tuple(GREETINGS[index] for index in (1, 2, 5, 8, 10, 13, 14, 18, 22, 28))
+
+
+# The officer keeps the log: it rates a long jump above the shared importance
+# and mentions an ordinary arrival or scoop now and then, even on Occasional.
+INTERESTS = {"arrival": 1, "scooped": 1, "jump_long": 2, "mapped": 1}
 
 
 def event_lines(topic, restrained=False):

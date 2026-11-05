@@ -1,4 +1,4 @@
-"""Axiom/Meridian integration, independent assets and welcome-only content."""
+"""Axiom/Meridian integration, independent assets and their own persona content (5.7.4)."""
 import hashlib
 import io
 import json
@@ -12,7 +12,8 @@ import zipfile
 
 from voidcompass.core import companions, config
 from voidcompass.overlays import watcher_ship, watcher_name
-from voidcompass.overlays.crew_mind import CrewMind, WELCOMES, TEST_LINES, CAPABILITIES
+from voidcompass.overlays import companion_personas
+from voidcompass.overlays.crew_mind import CrewMind, TEST_LINES
 from voidcompass.overlays.heartbeat_hud import HeartbeatHUD, _memory_path
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
 from voidcompass.voice import voice_assets, watcher_voice
@@ -25,54 +26,65 @@ class CrewMindTests(unittest.TestCase):
 
     def test_welcomes_and_capabilities_use_active_name_and_persist_rotation(self):
         for identity in companions.NEW_IDENTITIES:
+            lines = companion_personas.get(identity).lines
             with self.subTest(identity=identity), tempfile.TemporaryDirectory() as folder:
                 path=Path(folder)/"memory.json"
                 heard=[]
-                for _ in range(len(WELCOMES[identity])):
+                for _ in range(len(lines.GREETINGS)):
                     mind=self.mind(identity,path)
                     self.assertIsInstance(mind,CrewMind)
                     self.assertTrue(mind.talk(f"Hello {companions.NAMES[identity]}"))
                     heard.append(mind.thought["text"])
-                    self.assertEqual(mind.thought["heading"],companions.NAMES[identity].upper())
                     mind.save()
-                self.assertEqual(set(heard),set(WELCOMES[identity]))
+                self.assertEqual(set(heard),set(lines.GREETINGS))
                 self.assertEqual(len(heard),len(set(heard)))
                 mind=self.mind(identity,path)
                 mind.talk(f"{companions.NAMES[identity]}, what can you do?")
-                self.assertIn(mind.thought["text"],CAPABILITIES)
+                self.assertIn(mind.thought["text"],lines.CAPABILITIES)
 
     def test_login_welcome_deduplicates_and_rotates(self):
         for identity in companions.NEW_IDENTITIES:
+            events = companion_personas.get(identity).lines.EVENTS
             mind=self.mind(identity)
             login={"timestamp":"2026-11-04T10:00:00Z","Commander":"NightOwl","FID":"F1"}
             first=mind.observe("LoadGame",login)
-            self.assertIn(first["text"],WELCOMES[identity])
+            self.assertIn(first["text"],events["greet_new"])
             self.assertIsNone(mind.observe("LoadGame",login))
             mind.clock.now+=30
             second=mind.observe("LoadGame",dict(login,timestamp="2026-11-04T10:00:30Z"))
-            self.assertNotEqual(first["text"],second["text"])
+            self.assertIn(second["text"],events["greet_away"])
             self.assertEqual(mind.memory["sessions"],2)
 
-    def test_no_inherited_stories_questions_or_postcard_fiction(self):
+    def test_own_story_name_introduction_port_and_postcards(self):
         for identity in companions.NEW_IDENTITIES:
-            mind=self.mind(identity)
-            mind.session_start();mind.memory["hours"]=500;mind.clock.now+=7200
-            self.assertIsNone(mind.remember())
-            self.assertIsNone(mind._name_step(mind.clock()))
-            self.assertIsNone(mind.ask("your_name",{"name":"NightOwl"},force=True))
-            self.assertIsNone(mind.pending_question())
-            self.assertIsNone(mind.consider("hatchling_idle",force=True))
-            self.assertIsNone(mind.consider("idle_docked",force=True))
-            self.assertIsNone(mind.note("postcard",{}))
-            self.assertEqual(mind.memories_page(),[])
-            self.assertFalse(mind.memory["lore"])
+            persona = companion_personas.get(identity)
+            with self.subTest(identity=identity):
+                mind=self.mind(identity)
+                mind.session_start();mind.memory["hours"]=500;mind.clock.now+=7200
+                story=mind.remember()
+                self.assertEqual(story["text"],persona.story.passages[0][5])
+                self.assertTrue(story["heading"].startswith(persona.story.unit.upper()))
+                self.assertFalse(any(word in story["text"] for word in ("Aster","handover","Watcher")))
+                watcher_name.observe(mind.memory,"Commander",{"Name":"NightOwl","FID":"F1"})
+                asked=mind.ask("your_name")
+                self.assertIn("NightOwl",asked["text"])
+                self.assertEqual(mind.pending_question()["id"],"your_name")
+                self.assertTrue(mind.answer("yes"))
+                self.assertEqual(watcher_name.call_name(mind.memory),"NightOwl")
+                mind.surroundings.docked=True;mind.surroundings.station="Jameson Memorial"
+                port=mind.consider("idle_docked",{"station":"Jameson Memorial"},force=True)
+                self.assertIn(port["text"].replace("NightOwl","Commander"),[line.format(station="Jameson Memorial") for line in persona.lines.EVENTS["idle_docked"]])
+                note=persona.postcards.postcard_note({"title":"Sol"},rng=random.Random(3))
+                self.assertTrue(note)
+                self.assertEqual(persona.postcards.SIGNATURE,companions.NAMES[identity])
+                self.assertTrue(mind.memories_page())
 
     def test_shared_actions_facts_preferred_address_and_pronunciation(self):
         for identity in companions.NEW_IDENTITIES:
             mind=self.mind(identity)
             watcher_name.set_nickname(mind.memory,"Jeff")
             watcher_name.set_call(mind.memory,"nickname")
-            self.assertEqual(watcher_ship.reply("unavailable",mind.random),"That control is not available at present.")
+            self.assertIn(watcher_ship.reply("unavailable",mind.random),companion_personas.get(identity).lines.COMMANDS["unavailable"])
             mind.lookup_provider=lambda text:["We are in Sol."]
             self.assertTrue(mind.talk(f"{companions.NAMES[identity]}, where are we?"))
             self.assertEqual(mind.thought["text"],"We are in Sol.")

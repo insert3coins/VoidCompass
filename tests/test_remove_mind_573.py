@@ -306,7 +306,7 @@ class WrittenKeepsakeTests(unittest.TestCase):
         with mock.patch.object(watcher_postcards.random, "Random", return_value=random.Random(12)):
             note = deck._postcard_watcher_note(card, 0, "DOCKED")
         self.assertTrue(note)
-        self.assertIn(note, deck._postcard_recent_notes)
+        self.assertIn(note, deck._postcard_companion_recent_notes["watcher"])
         deck.config["heartbeat_thoughts"] = "off"
         self.assertEqual(deck._postcard_watcher_note(card, 0, "DOCKED"), "")
         deck._watcher_own_words.assert_not_called()

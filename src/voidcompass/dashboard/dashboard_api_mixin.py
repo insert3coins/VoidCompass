@@ -187,7 +187,8 @@ class DashboardApiMixin(ApiRecordsMixin):
             self._api_publish(name, data)
 
     def _api_thought(self, thought):
-        self._api_publish("thought", {key: thought.get(key) for key in ("id", "text", "heading", "mood", "kind")})
+        self._api_publish("thought", {**{key: thought.get(key) for key in ("id", "text", "heading", "mood", "kind")},
+                                      "companion": self._api_companion_tag()})
 
     # -- the app -----------------------------------------------------------------
     def api_status(self):
@@ -477,6 +478,93 @@ class DashboardApiMixin(ApiRecordsMixin):
             raise ApiError(409, "The Watcher is off (Journal Heartbeat in Overlay Studio)")
         return hud
 
+    # -- companions (5.7.4): one contract for every identity ----------------------
+    COMPANION_CAPABILITIES = {
+        "watcher": ("thought", "poke", "answer", "book", "story", "name", "voice", "share_code", "meet"),
+        "default": ("thought", "poke", "answer", "book", "story", "name", "voice", "postcards", "share_code", "meet"),
+    }
+
+    def _api_companion_tag(self, selected=None):
+        from voidcompass.core import companions
+        selected = selected or companions.identity(self.config)
+        return {"identity": selected, "name": companions.NAMES[selected],
+                "generation": getattr(self, "_companion_generation", 0)}
+
+    def _api_capabilities(self, selected):
+        return list(self.COMPANION_CAPABILITIES.get(selected) or self.COMPANION_CAPABILITIES["default"])
+
+    def _api_expect(self, expected):
+        """A request naming a companion must reach that companion, never another."""
+        from voidcompass.core import companions
+        if expected in (None, ""):
+            return
+        expected = str(expected).casefold()
+        if expected not in companions.IDENTITIES:
+            raise ApiError(404, f"There is no companion called {expected!r}: use one of {', '.join(companions.IDENTITIES)}")
+        active = companions.identity(self.config)
+        if expected != active:
+            raise ApiError(409, f"{companions.NAMES[expected]} isn't the active companion ({companions.NAMES[active]} is). "
+                                "POST /companion/select to switch first")
+
+    def _api_require(self, capability):
+        from voidcompass.core import companions
+        active = companions.identity(self.config)
+        if capability not in self._api_capabilities(active):
+            raise ApiError(409, f"{companions.NAMES[active]} doesn't support {capability.replace('_', ' ')}")
+
+    def api_companions_list(self):
+        from voidcompass.core import companions
+        active = companions.identity(self.config)
+        return {"active": active, "generation": getattr(self, "_companion_generation", 0),
+                "data": [{"identity": key, **profile, "active": key == active, "capabilities": self._api_capabilities(key)}
+                         for key, profile in companions.PROFILES.items()]}
+
+    def api_companion_profile(self, selected):
+        """What a companion keeps for this commander. Inactive ones are read
+        from their own memory and never woken, switched or voiced."""
+        from voidcompass.core import companions
+        from voidcompass.overlays import companion_personas
+        from voidcompass.overlays.heartbeat_hud import _memory_path
+        from voidcompass.voice import voice_assets
+        selected = str(selected or "").casefold()
+        if selected not in companions.IDENTITIES:
+            raise ApiError(404, f"There is no companion called {selected!r}: use one of {', '.join(companions.IDENTITIES)}")
+        active = companions.identity(self.config)
+        config = {**self.config, "companion_identity": selected}
+        hud_mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+        mind = hud_mind if selected == active and hud_mind is not None else companions.create_mind(_memory_path(config), config)
+        memory = mind.memory
+        hours = float(memory.get("hours") or 0)
+        persona = companion_personas.get(selected)
+        if persona is not None:
+            page = persona.story.page(memory, hours)
+        else:
+            from voidcompass.overlays import watcher_lore
+            page = watcher_lore.page(memory, int(memory.get("sessions") or 0), hours)
+        try:
+            installed = bool(voice_assets.installed(model=selected)) if selected != "watcher" else bool(voice_assets.installed())
+        except Exception:
+            installed = False
+        return _plain({**self._api_companion_tag(selected), **companions.PROFILES[selected], "active": selected == active,
+                       "capabilities": self._api_capabilities(selected),
+                       "hours": round(hours, 1), "sessions": int(memory.get("sessions") or 0),
+                       "story": {"title": page.get("title") or "", "told": page.get("told", 0), "total": page.get("total", 0),
+                                 "complete": bool(page.get("complete"))},
+                       "voice": {"model": voice_assets.model_name(selected), "installed": installed}})
+
+    def api_companion_status(self):
+        from voidcompass.core import companions
+        return self.api_companion_profile(companions.identity(self.config)) | {"current": self.api_watcher().get("current")}
+
+    def api_companion_select(self, selected):
+        from voidcompass.core import companions
+        selected = str(selected or "").casefold()
+        if selected not in companions.IDENTITIES:
+            raise ApiError(404, f"There is no companion called {selected!r}: use one of {', '.join(companions.IDENTITIES)}")
+        if selected != companions.identity(self.config) and not self._companion_switch(selected):
+            raise ApiError(409, "The companion can't be switched just now (a voice download may be running)")
+        return {"selected": True, **self._api_companion_tag(selected)}
+
     def api_watcher(self):
         data = self._html_watcher_workspace()
         hud = getattr(self, "heartbeat_hud", None)
@@ -485,21 +573,27 @@ class DashboardApiMixin(ApiRecordsMixin):
         data["log"] = list(data.get("log") or [])[:50]
         data["current"] = ({key: current.get(key) for key in ("id", "text", "heading", "mood", "kind")}
                            if current else None)
+        data["companion"] = self._api_companion_tag()
+        data["capabilities"] = self._api_capabilities(data["companion"]["identity"])
         return _plain(data)
 
 
-    def api_watcher_thought(self, text, heading="", speak=False):
+    def api_watcher_thought(self, text, heading="", speak=False, expect=None):
+        self._api_expect(expect)
         hud = self._api_hud()
         thought = hud.mind.relay(text, heading, speak)
         hud._redraw()
         return {"id": thought["id"], "text": thought["text"], "heading": thought["heading"],
-                "spoken": bool(speak and self._watcher_voice_on() and not self._watcher_voice_hushed())}
+                "spoken": bool(speak and self._watcher_voice_on() and not self._watcher_voice_hushed()),
+                "companion": self._api_companion_tag()}
 
-    def api_watcher_poke(self):
-        return {"answered": bool(self._api_hud().poke())}
+    def api_watcher_poke(self, expect=None):
+        self._api_expect(expect)
+        return {"answered": bool(self._api_hud().poke()), "companion": self._api_companion_tag()}
 
     # 5.6.1: answer its question, share it, meet another, keep its book.
-    def api_watcher_answer(self, answer):
+    def api_watcher_answer(self, answer, expect=None):
+        self._api_expect(expect)
         mind = self._watcher_mind()
         asked = mind.pending_question() if mind is not None else None
         if not asked:
@@ -507,20 +601,24 @@ class DashboardApiMixin(ApiRecordsMixin):
         if not self._watcher_answer(answer):
             keys = ", ".join(row["key"] for row in asked.get("answers") or ())
             raise ApiError(400, f"That isn't one of its answers: give 1 to {len(asked.get('answers') or ())}, or one of {keys}")
-        return {"answered": True, "question": asked["id"]}
+        return {"answered": True, "question": asked["id"], "companion": self._api_companion_tag()}
 
     def api_watcher_code(self):
+        self._api_require("share_code")
         return {"code": self._watcher_share_code()}
 
     def api_watcher_meet(self, code):
+        self._api_require("meet")
         if not self._watcher_meet(code):
             raise ApiError(400, "That isn't a Watcher's code (they start VCWATCH1)")
         return {"met": True}
 
-    def api_watcher_book(self):
+    def api_watcher_book(self, expect=None):
+        self._api_expect(expect)
         if not self._watcher_save_book():
             raise ApiError(500, "The book couldn't be saved")
-        return {"saved": True, "folder": str(self.wrapped_folder()) if hasattr(self, "wrapped_folder") else ""}
+        return {"saved": True, "folder": str(self.wrapped_folder()) if hasattr(self, "wrapped_folder") else "",
+                "companion": self._api_companion_tag()}
 
     def api_voice(self):
         from voidcompass.voice import voice_assets
@@ -528,7 +626,9 @@ class DashboardApiMixin(ApiRecordsMixin):
         speaker = getattr(self, "_watcher_voice", None)
         live = speaker.live() if speaker is not None else None
         from voidcompass.core import companions
-        return {"identity": companions.identity(self.config), "enabled": bool(companions.settings(self.config).get("watcher_voice_enabled")),
+        return {"identity": companions.identity(self.config), "companion": self._api_companion_tag(),
+                "model": voice_assets.model_name(companions.identity(self.config)),
+                "enabled": bool(companions.settings(self.config).get("watcher_voice_enabled")),
                 "installed": bool(self._companion_voice_installed()),
                 "ready": bool(self._watcher_voice_on()),
                 "speaking": live is not None,
@@ -538,7 +638,7 @@ class DashboardApiMixin(ApiRecordsMixin):
 
     def api_voice_say(self, text):
         if not self._watcher_voice_on():
-            raise ApiError(409, "The voice is off or not downloaded yet (The Watcher › VOICE)")
+            raise ApiError(409, "The voice is off or not downloaded yet (companion page › SETUP)")
         if self._watcher_voice_hushed():
             raise ApiError(409, "The voice is hushed: POST /voice/hush with {\"seconds\": 0} lifts it")
         if not self._watcher_voice_say(text, key=f"api-{time.time():.3f}"):

@@ -8,6 +8,7 @@ import unittest
 from tests import test_watcher_three_568 as three, test_watcher_talk_573 as talk
 from tests.test_heartbeat_orb import snapshot
 from voidcompass.core import companions
+from voidcompass.overlays import companion_personas
 
 ARTIFACTS=Path(tempfile.gettempdir())/"voidcompass-crew-checks"
 ARTIFACTS.mkdir(exist_ok=True)
@@ -84,7 +85,9 @@ class CrewPageTests(unittest.TestCase):
     def test_picker_pending_story_voice_and_mobile_layout(self):
         for identity in companions.NEW_IDENTITIES:
             name=companions.NAMES[identity]
-            self.data.update(identity=identity,companion_name=name,nature="officer",lore={"pending":True,"identity":identity,"title":f"{name} · story pending"},
+            story=companion_personas.get(identity).story
+            self.data.update(identity=identity,companion_name=name,nature="officer",lore=story.page({},0),
+                settings={**self.data.get("settings",{}),"companion_humour":{"value":"dry","label":companion_personas.get(identity).humour_label,"choices":[list(row) for row in companion_personas.get(identity).humour_choices]}},
                 heartbeat={"orb":{"identity":identity,"accent":"cyan" if identity=="axiom" else "brass","motion":False}},
                 voice={"identity":identity,"model_name":f"{name} voice","orb_on":True},name={"known":"NightOwl"})
             self.render();self.page.click('[data-watcher-tab="now"]')
@@ -95,14 +98,17 @@ class CrewPageTests(unittest.TestCase):
             self.page.wait_for_function('CrewCompanion.inspect(document.getElementById("watcher-orb"))?.frames > 0')
             self.page.locator(".watcher-eye-panel").screenshot(path=str(ARTIFACTS/f"{identity}-panel.png"))
             self.page.click('[data-watcher-tab="story"]')
-            self.assertIn("story pending",self.page.inner_text("#watcher-reader").lower())
-            self.assertFalse(self.page.is_visible('[data-watcher-code="book"]'))
-            self.page.click('[data-watcher-tab="voice"]')
+            self.assertIn(story.empty_note,self.page.inner_text("#watcher-reader"))
+            self.assertEqual(self.page.inner_text(".watcher-lore-panel > header > span"),story.title.upper())
+            self.assertIn("Opens with",self.page.get_attribute("#watcher-lore .watcher-chapter.locked >> nth=1","title"))
+            self.assertIn("about 15 minutes",self.page.inner_text("#watcher-lore-next"))
+            self.page.click('[data-watcher-tab="settings"]')
             self.assertEqual(self.page.inner_text("#watcher-voice-model-name"),f"{name} voice")
             self.assertFalse(self.page.is_visible(".watcher-finding"))
             self.assertIn("Settings",self.page.inner_text("#watcher-voice-orb"))
             self.page.click('[data-watcher-tab="you"]')
-            self.assertIn("personal introduction is pending",self.page.inner_text("#watcher-name-note"))
+            self.assertIn("NightOwl",self.page.inner_text("#watcher-name-note"))
+            self.assertIn("wait for it to ask",self.page.inner_text("#watcher-name-note"))
             self.page.set_viewport_size({"width":390,"height":1000})
             self.page.click('[data-watcher-tab="now"]')
             self.assertLessEqual(self.page.evaluate("document.documentElement.scrollWidth"),391)

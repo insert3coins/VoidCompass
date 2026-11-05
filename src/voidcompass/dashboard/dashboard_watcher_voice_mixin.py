@@ -66,11 +66,31 @@ class DashboardWatcherVoiceMixin:
     def _watcher_voice_on(self):
         return bool(companions.settings(self.config).get("watcher_voice_enabled")) and self._companion_voice_installed()
 
+    def _crewmate_voice_on(self, selected):
+        if selected not in companions.IDENTITIES:
+            return False
+        installed = voice_assets.installed(model=selected) if selected != "watcher" else voice_assets.installed()
+        return bool(companions.settings(self.config, selected).get("watcher_voice_enabled")) and installed
+
     def _companion_voice_installed(self):
         selected = companions.identity(self.config)
         return voice_assets.installed(model=selected) if selected != "watcher" else voice_assets.installed()
 
     def _companion_switch(self, selected):
+        previous = companions.identity(self.config)
+        done = self._companion_switch_inner(selected)
+        if done and hasattr(self, "_stamp_session_companion"):
+            self._stamp_session_companion(switched=True)
+        hud = getattr(self, "heartbeat_hud", None)
+        if done and previous != selected and hud is not None and hasattr(hud, "note"):
+            # 5.7.4: the incoming companion takes the watch from the last one by name.
+            try:
+                hud.note("crew_handover", {"previous": previous})
+            except Exception:
+                logging.debug("Crew handover skipped", exc_info=True)
+        return done
+
+    def _companion_switch_inner(self, selected):
         if selected not in companions.IDENTITIES:
             return False
         if selected == companions.identity(self.config):
@@ -89,6 +109,7 @@ class DashboardWatcherVoiceMixin:
             self._watcher_listen = None
         size = companions.display_size(self.config)
         self.config.update({companions.display_key({"companion_identity": identity}, "companion_size"): size for identity in companions.IDENTITIES})
+        self._companion_first_pace(selected)
         self.config["companion_identity"] = selected
         self._watcher_voice_download = None
         hud = getattr(self, "heartbeat_hud", None)
@@ -104,6 +125,22 @@ class DashboardWatcherVoiceMixin:
         self._persist_config()
         self._schedule_html_dashboard_publish(immediate=True)
         return True
+
+    def _companion_first_pace(self, selected):
+        """5.7.4: a companion's first watch starts at the Watcher's Thoughts
+        pace rather than a fixed default. Later changes are its own."""
+        if selected == "watcher":
+            return
+        from voidcompass.overlays import heartbeat_hud
+        try:
+            path = heartbeat_hud._memory_path({**self.config, "companion_identity": selected})
+            if path is None or os.path.exists(path):
+                return
+        except Exception:
+            return
+        pace = str(self.config.get("heartbeat_thoughts") or "").casefold()
+        if pace in {"off", "rare", "occasional", "chatty"}:
+            self.config[f"{selected}_thoughts"] = pace
 
     def _watcher_voice_attach(self, hud):
         """A new Watcher orb: attach its speaker and the ship's plain answers."""
@@ -142,10 +179,15 @@ class DashboardWatcherVoiceMixin:
         if (getattr(self, "_closing", False) or self._watcher_voice_boot_held()
                 or not self._watcher_voice_on() or self._watcher_voice_hushed()):
             return False
+        # 5.7.4: a crewmate off watch speaks in its own voice, or not at all.
+        crewmate = (feel or {}).get("voice") if isinstance(feel, dict) else None
+        if crewmate and crewmate != companions.identity(self.config) and not self._crewmate_voice_on(crewmate):
+            return False
         said = self._watcher_speaker().say(words, key, feel=feel)
         if said and hasattr(self, "_api_publish"):
             self._voice_from = "api" if str(key or "").startswith("api-") else "watcher"
-            self._api_publish("voice", {"state": "started", "text": words, "from": self._voice_from})
+            self._api_publish("voice", {"state": "started", "text": words, "from": self._voice_from,
+                                         "companion": companions.identity(self.config)})
         return said
 
     def _watcher_voice_boot_held(self):
@@ -199,7 +241,8 @@ class DashboardWatcherVoiceMixin:
             reason = getattr(self, "_voice_stop_reason", "") or "finished"
             self._voice_stop_reason = ""
             if hasattr(self, "_api_publish"):
-                self._api_publish("voice", {"state": reason, "from": getattr(self, "_voice_from", "watcher")})
+                self._api_publish("voice", {"state": reason, "from": getattr(self, "_voice_from", "watcher"),
+                                             "companion": companions.identity(self.config)})
 
     def _watcher_voice_sync(self):
         """Voice on and downloaded: warm it and tell the orb. Otherwise hush."""
@@ -265,6 +308,12 @@ class DashboardWatcherVoiceMixin:
             except Exception:
                 logging.debug("Watcher lookup %s skipped", topic, exc_info=True)
         return lines[:watcher_copilot.LOOKUP_LIMIT]
+
+    def _watcher_lookup_where(self):
+        docked = bool(getattr(self, "current_docked", False))
+        return watcher_copilot.where_lines(str(getattr(self, "current_sys", "") or ""),
+                                           str(getattr(self, "current_station_name", "") or "") if docked else "",
+                                           str(getattr(self, "current_body_name", "") or ""))
 
     def _watcher_lookup_route(self):
         return watcher_copilot.route_lines(self._build_navigation_hud_context())
@@ -562,7 +611,13 @@ class DashboardWatcherVoiceMixin:
         or None when nothing was asked."""
         original_text = text
         text = companions.addressed(text, companions.identity(self.config))
-        rng = getattr(getattr(getattr(self, "heartbeat_hud", None), "mind", None), "random", None)
+        mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+        rng = getattr(mind, "random", None)
+        # 5.7.4: asked of a crewmate off watch, worded in its own lines.
+        who = getattr(mind, "talking_as", None)
+        if who and who != companions.identity(self.config):
+            from voidcompass.overlays import crew_voices
+            rng = crew_voices.CrewRandom(rng, who)
         from voidcompass.core import voice_commands
         resolved = voice_commands.native_request(text, self.config.get("watcher_ship_commands"))
         native = resolved[0].native if resolved else {}
@@ -731,7 +786,8 @@ class DashboardWatcherVoiceMixin:
         return {
             "talk": [{"at": row.get("at"), "you": str(row.get("you") or ""),
                       "it": "" if " ".join(str(row.get("it") or "").split()) in retired else str(row.get("it") or ""),
-                      "voice": bool(row.get("voice"))}
+                      "voice": bool(row.get("voice")),
+                      **({"who": row["who"]} if row.get("who") in companions.IDENTITIES else {})}
                      for row in (mind.memory.get("talk") or [])[-20:] if isinstance(row, dict)],
             "orb_on": getattr(self, "heartbeat_hud", None) is not None,
         }
@@ -781,6 +837,8 @@ class DashboardWatcherVoiceMixin:
         return {
             "heartbeat_thoughts": watcher_mind.frequency(companions.settings(self.config)),
             "aster_humour": self.config.get("aster_humour", "dry"),
+            # The active persona's own commentary choice (5.7.4).
+            **self._companion_humour_payload(),
             "heartbeat_personality": watcher_mind.personality(self.config),
             "heartbeat_thought_side": thought_side_setting(self.config),
             "heartbeat_text_scale_percent": heartbeat_text_size(self.config.get("heartbeat_text_scale_percent")),
@@ -791,6 +849,14 @@ class DashboardWatcherVoiceMixin:
             "heartbeat_thought_heading": style["heading"],
             "text_sizes": list(HEARTBEAT_TEXT_SIZES),
         }
+
+    def _companion_humour_payload(self):
+        from voidcompass.overlays import companion_personas
+        persona = companion_personas.get(companions.identity(self.config))
+        if persona is None:
+            return {"companion_humour": None}
+        return {"companion_humour": {"value": self.config.get(persona.humour_key, "dry"), "label": persona.humour_label,
+                                     "choices": [list(row) for row in persona.humour_choices]}}
 
     def _html_watcher_voice(self, memory):
         selected = companions.identity(self.config)
@@ -832,10 +898,11 @@ class DashboardWatcherVoiceMixin:
         """The Watcher page's own controls. True when handled and done."""
         if operation == "companion_identity":
             return self._companion_switch(str(payload.get("value") or ""))
-        if operation == "aster_humour":
-            if payload.get("value") not in ("off", "dry"):
+        if operation in ("aster_humour", "companion_humour"):
+            key = "aster_humour" if operation == "aster_humour" else companions.humour_key(self.config)
+            if not key or payload.get("value") not in ("off", "dry"):
                 return False
-            self.config["aster_humour"] = payload["value"]
+            self.config[key] = payload["value"]
             self._persist_config()
             self._schedule_html_dashboard_publish(immediate=True)
             return True
@@ -894,10 +961,9 @@ class DashboardWatcherVoiceMixin:
             if (not self._companion_voice_installed() or self._watcher_voice_boot_held()
                     or getattr(self, "_closing", False)):
                 return False
-            line = "Aster, reporting for duty. Clear instructions, a sound ship, and room for an occasional improvement to the itinerary." if companions.identity(self.config) == "aster" else TEST_LINE
-            if companions.identity(self.config) in companions.NEW_IDENTITIES:
-                from voidcompass.overlays.crew_mind import TEST_LINES
-                line = TEST_LINES[companions.identity(self.config)]
+            from voidcompass.overlays import companion_personas
+            persona = companion_personas.get(companions.identity(self.config))
+            line = persona.test_line if persona else TEST_LINE
             return self._watcher_speaker().say(line, "test")
         if operation == "voice_stop":
             speaker = getattr(self, "_watcher_voice", None)

@@ -607,12 +607,10 @@ REPLIES = {
 
 
 def reply(outcome, rng=None, **fields):
-    if getattr(rng, "companion_identity", "") in {"axiom", "meridian"}:
-        from voidcompass.overlays.crew_mind import command_reply
-        return command_reply(outcome, rng, fields)
-    if getattr(rng, "companion_identity", "") == "aster":
-        from voidcompass.overlays.aster_lines import command_reply
-        own = command_reply(outcome, rng, fields)
+    from voidcompass.overlays import companion_personas
+    persona = companion_personas.get(getattr(rng, "companion_identity", ""))
+    if persona is not None:
+        own = persona.lines.command_reply(outcome, rng, fields)
         if own:
             return own
     lines = REPLIES.get(outcome) or REPLIES["not_here"]

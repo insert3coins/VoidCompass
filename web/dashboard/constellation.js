@@ -806,7 +806,7 @@ function renderSettings(ui) {
     ${toggle(ui, "constellation_names", "Star names", "Each star's system name beside it.", settings.constellation_names)}
     ${toggle(ui, "constellation_designations", "Designations", "Greek letters by brightness, as astronomers name stars: α is where you stayed longest.", settings.constellation_designations)}
     ${toggle(ui, "constellation_picture_legend", "Legend on the picture", "Its epithet, legend and dates under the name on a saved picture.", settings.constellation_picture_legend)}
-    ${toggle(ui, "constellation_watcher", "The Watcher names new ones", "When a constellation is finished, the Watcher tells you its name.", settings.constellation_watcher)}`;
+    ${toggle(ui, "constellation_watcher", "Your companion names new ones", "When a constellation is finished, your companion tells you its name.", settings.constellation_watcher)}`;
 }
 
 export function renderConstellation(data = {}, ui) {

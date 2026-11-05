@@ -216,7 +216,8 @@ class WatcherPageTests(unittest.TestCase):
         watcher.memory["log"] = [[1000.0 + index, "arrival", f"thought {index}"] for index in range(250)]
         deck = SimpleNamespace(config={}, heartbeat_hud=SimpleNamespace(mind=watcher), travel_history=None,
                                _WATCHER_BONDS=HtmlDashboardMixin._WATCHER_BONDS,
-                               _WATCHER_BOND_NEXT=HtmlDashboardMixin._WATCHER_BOND_NEXT)
+                               _WATCHER_BOND_NEXT=HtmlDashboardMixin._WATCHER_BOND_NEXT,
+                               _html_crew_page=lambda: {})
         data = HtmlDashboardMixin._html_watcher_workspace(deck)
         self.assertEqual(WATCHER_LOG_SHOWN, 100)
         self.assertEqual(len(data["log"]), 100)

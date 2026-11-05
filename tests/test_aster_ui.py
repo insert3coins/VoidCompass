@@ -31,10 +31,18 @@ class AsterPageTests(unittest.TestCase):
         self.page.click('[data-watcher-tab="settings"]')
         self.assertFalse(self.page.is_visible('[data-watcher-setting="heartbeat_personality"]'))
         self.page.click('[data-watcher-tab="story"]')
-        self.assertIn('Unopened report', self.page.inner_text('#watcher-lore'))
-        self.assertNotIn('Iven', self.page.inner_text('#watcher-reader'))
-        self.assertFalse(self.page.is_visible('#watcher-echoes'))
-        self.page.click('[data-watcher-tab="voice"]')
+        # 5.7.4: unopened chapters stay nameless but say how they open.
+        self.assertIn('· · ·', self.page.inner_text('#watcher-lore'))
+        self.assertIn('Opens with three deliveries', self.page.get_attribute('#watcher-lore .watcher-chapter.locked >> nth=1', 'title'))
+        self.assertNotIn('Marr', self.page.inner_text('#watcher-lore'))
+        self.assertIn('handover book', self.page.inner_text('#watcher-reader'))
+        self.assertEqual(self.page.locator('#watcher-echoes li').count(), 6)
+        self.assertEqual(self.page.locator('#watcher-echoes li.heard').count(), 0)
+        hints = ' '.join(self.page.locator('#watcher-echoes li').evaluate_all('rows => rows.map(row => row.title)'))
+        self.assertIn('once chapter II is told', hints)
+        self.assertFalse(any(name in hints for name in ('Marr', 'Haskell', 'Varga', 'Quist', 'Pell')), 'echo hints never name sealed characters')
+        self.assertEqual(self.page.inner_text('.watcher-lore-panel > header > span'), 'RELIEVED OF THE WATCH')
+        self.page.click('[data-watcher-tab="settings"]')
         self.assertFalse(self.page.is_visible('.watcher-finding'))
         self.page.click('button[data-companion="watcher"]')
         self.assertIn({'page': 'watcher', 'operation': 'companion_identity', 'value': 'watcher'}, self.commands())
@@ -58,7 +66,7 @@ class AsterPageTests(unittest.TestCase):
         self.data["voice"] = {"identity": "aster", "model_name": "Aster officer voice", "enabled": True, "installed": False,
                               "download": {"stage": "model", "done": 1, "total": 2}}
         self.render()
-        self.page.click('[data-watcher-tab="voice"]')
+        self.page.click('[data-watcher-tab="settings"]')
         self.assertIn("Aster officer voice", self.page.inner_text('#watcher-voice-progress'))
         self.assertNotIn("HAL", self.page.inner_text('#watcher-voice-progress'))
 
@@ -144,7 +152,7 @@ class AsterPageTests(unittest.TestCase):
         live["speech"] = {"level": .8}
         page.locator('.aster-instrument[data-state="speaking"]').wait_for(state="visible")
         page.wait_for_function('document.getElementById("aster-signal").textContent === "REPLYING"')
-        page.click('[data-watcher-tab="voice"]')
+        page.click('[data-watcher-tab="settings"]')
         self.assertEqual(page.inner_text('#watcher-voice-model-name'), "Aster officer voice")
         page.click('[data-watcher-tab="now"]')
         page.set_viewport_size({'width': 390, 'height': 844})

@@ -224,7 +224,7 @@ class DashboardWatcherListenMixin:
             if stage == "done":
                 feed("SYSTEM", "The Watcher can hear you now: hold your talk key and speak", severity="INFO")
             elif stage == "failed":
-                feed("SYSTEM", f"The Watcher's hearing didn't download: {state.get('error')}", severity="WARNING")
+                feed("SYSTEM", f"Voice recognition didn't download: {state.get('error')}", severity="WARNING")
         if stage == "done":
             self._watcher_listener().warm()
         self._ui_post(self._schedule_html_dashboard_publish, immediate=True, key="watcher-listen-download")

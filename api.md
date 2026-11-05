@@ -1,6 +1,6 @@
 # Void Compass Local API
 
-Void Compass can talk to your own tools. A script, a Stream Deck button, an OBS scene, a Discord bot or a home-made overlay can ask Void Compass what is happening in your game, and tell it to do things: show or hide overlays, put a thought in the Watcher's head, speak through its voice, switch the theme, change track.
+Void Compass can talk to your own tools. A script, a Stream Deck button, an OBS scene, a Discord bot or a home-made overlay can ask Void Compass what is happening in your game, and tell it to do things: show or hide overlays, put a thought in your companion's head (the Watcher, Aster, Axiom or Meridian), speak through its voice, switch the theme, change track.
 
 Everything is plain HTTP and JSON, so any language works, and there's no key to look after. The API lives at:
 
@@ -95,7 +95,7 @@ With no key, anything on your network can then use the API, so only do this on a
 Answers are JSON. When something goes wrong you get an HTTP status and a message:
 
 ```json
-{"error": {"status": 409, "message": "The voice is off or not downloaded yet (The Watcher › VOICE)"}}
+{"error": {"status": 409, "message": "The voice is off or not downloaded yet (companion page › SETUP)"}}
 ```
 
 | Status | Means |
@@ -1831,7 +1831,54 @@ print(survey["enabled"], survey["data"])
 
 `data` is the overlay's own model, the same JSON its window draws from: handy for building your own overlay or stream widget from Void Compass's numbers.
 
+## Companions
+
+Void Compass has four companions: **The Watcher**, **Aster**, **Axiom** and **Meridian**. One is active at a time for each commander. These routes work the same for all four (5.7.4). Every answer names the companion that gave it, so a script never mistakes one for another.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/companion` | The active companion: `identity`, `name`, `role`, `description`, `generation`, `capabilities`, `hours`, `sessions`, `story` (`title`, `told`, `total`, `complete`), `voice` (`model`, `installed`) and `current` (the thought on screen) |
+| GET | `/api/v1/companions` | All four, each with `active` and `capabilities`; plus `active` (its id) and `generation` |
+| GET | `/api/v1/companions/{id}` | One companion's record for this commander, active or not: the same fields as `/companion` without `current`. An inactive companion is read from its own memory; it isn't woken, switched or voiced. `404` for an unknown id |
+| POST | `/api/v1/companion/select` | Switch the active companion: `{"identity": "meridian"}`. Its own voice, display, story and memory take over. `404` for an unknown id; `409` while a voice download is running |
+| POST | `/api/v1/companion/thought` | Give the active companion a thought (as `/watcher/thought` below) |
+| POST | `/api/v1/companion/poke` | Call it, like the hotkey |
+| POST | `/api/v1/companion/answer` | Answer the question it's asking (as `/watcher/answer`) |
+| POST | `/api/v1/companion/book` | Save its book (heard story and memories) in the Wrapped folder |
+
+**Make sure it reaches the right companion.** Any of the `POST /companion/...` routes takes an optional `"identity"`. When it names a companion that isn't active (say the commander switched while your request was on its way), the request is refused with `409` rather than reaching the other one. An unknown identity gets a `404`. Nothing ever falls back to the Watcher silently.
+
+**Capabilities.** Every companion has `thought`, `poke`, `answer`, `book`, `story`, `name`, `voice`, `share_code` and `meet` (friend codes work between any two companions). Aster, Axiom and Meridian also write `postcards` notes in their own hand. Asking a companion for something it doesn't do answers `409` and says so; a companion never answers with another's fiction.
+
+**Which one spoke.** `thought` events on the event stream carry `"companion": {"identity": "axiom", "name": "Axiom", "generation": 3}`, and `voice` events carry `"companion": "axiom"`. `generation` goes up at each switch, so a client can drop anything from before the latest switch.
+
+```http
+POST /api/v1/companion/thought
+{"identity": "aster", "text": "Carrier departs in five minutes.", "heading": "From chat"}
+```
+
+```json
+{"id": 88, "text": "Carrier departs in five minutes.", "heading": "FROM CHAT", "spoken": true,
+ "companion": {"identity": "aster", "name": "Aster", "generation": 2}}
+```
+
+If Meridian is active instead:
+
+```json
+{"error": "Aster isn't the active companion (Meridian is). POST /companion/select to switch first"}
+```
+
+```powershell
+# Which companion is on watch, and how far its story has gone
+$c = Invoke-RestMethod http://127.0.0.1:7380/api/v1/companion
+"$($c.name): $($c.story.title), $($c.story.told) of $($c.story.total) told"
+# Switch to Axiom
+Invoke-RestMethod -Method Post http://127.0.0.1:7380/api/v1/companion/select -ContentType "application/json" -Body '{"identity": "axiom"}'
+```
+
 ## The Watcher
+
+The `/watcher` routes predate the other companions. They still work, and they act on **whichever companion is active**, so older scripts keep working with Aster, Axiom or Meridian. Their answers now include `companion` and `capabilities` too. `/watcher/code` and `/watcher/meet` work for every companion; a code names its companion, so a Watcher can meet an Axiom. New scripts can use the `/companion` routes above.
 
 Read the Watcher's thoughts and story, give it a thought of your own, poke it, answer its questions, and meet other commanders' Watchers.
 
@@ -1857,6 +1904,7 @@ Read the Watcher's thoughts and story, give it a thought of your own, poke it, a
   - `pilgrimage`: a place it has asked you to take it (`kind`, `words`, `how`, `accepted`, `reached`), or `null`
   - `memories` (what it keeps of you, `faded` where the shutter took them), `answers` (what you told it), `dreams`, `met` (other Watchers), `marks` (what its story did to the eye)
 - `lore`: its long story: `chapters` (each `numeral`, `title`, `book`, `begun`, `complete` and the passages `told` so far), `told` of `total`, `next` (what the next passage waits for), `echoes` found, and `books` finished
+- `identity`, `companion_name`, `companion` and `capabilities`: which companion this is (5.7.4). For Aster, Axiom and Meridian, `lore` is that companion's own story: unopened chapters carry `unlock` (how they open) and `waits_for`; `next` adds `how`, `grace` (hours until it opens anyway) and `days`; `echo_labels` and `echo_how` list what stirs its echoes
 
 **Example: answer from a Stream Deck** (three buttons, one per answer)
 
@@ -1882,7 +1930,7 @@ POST /api/v1/watcher/thought
 
 ## Voice
 
-The Watcher's voice can say anything you give it.
+The active companion's voice can say anything you give it. Each companion has its own voice; `GET /voice` names it in `companion` and `model`.
 
 | Method | Path | What it does |
 |---|---|---|
@@ -1891,14 +1939,14 @@ The Watcher's voice can say anything you give it.
 | POST | `/api/v1/voice/stop` | Stop talking at once (the next thought may still be said) |
 | POST | `/api/v1/voice/hush` | Stop at once and **stay quiet**: `{"seconds": 30}` for a while, `{}` until lifted, `{"seconds": 0}` to lift it |
 
-The voice must be switched on and downloaded on **The Watcher › VOICE** first, otherwise `409`. New lines wait in order for the current line to finish, with a 0.6-second pause between lines. Hush clears waiting lines and stops playback. Up to 400 characters at a time; the orb's pupil moves with the words.
+The voice must be switched on and downloaded in the companion page’s **SETUP** first, otherwise `409`. New lines wait in order for the current line to finish, with a 0.6-second pause between lines. Hush clears waiting lines and stops playback. Up to 400 characters at a time; the orb's pupil moves with the words.
 
 **Sharing the air with your own voice** (5.6.1)
 
 If you have a voice of your own (an assistant, a TTS bot, a co-pilot app), it can take turns with the Watcher:
 
 - **Hush it while you talk.** `POST /voice/hush` with `{"seconds": 30}` (or `{}`) before your voice speaks, and `{"seconds": 0}` after. While hushed, its thoughts still show beside the orb; they just aren't said, and `/voice/say` answers `409`. A hush is forgotten when Void Compass restarts.
-- **Wait for it to finish.** The event stream's `voice` events say when it starts and stops: `{"state": "started", "text": "…", "from": "watcher"}`, then `{"state": "finished"}` when the line ends, `"stopped"` when `/voice/stop` cut it off, or `"hushed"` when a hush did. `from` is `watcher` for its own thoughts, `api` for `/voice/say`.
+- **Wait for it to finish.** The event stream's `voice` events say when it starts and stops: `{"state": "started", "text": "…", "from": "watcher"}`, then `{"state": "finished"}` when the line ends, `"stopped"` when `/voice/stop` cut it off, or `"hushed"` when a hush did. `from` is `watcher` for its own thoughts, `api` for `/voice/say`; `companion` names whose voice it was (5.7.4).
 
 ```powershell
 # Before your own voice speaks: the Watcher stops and keeps quiet.

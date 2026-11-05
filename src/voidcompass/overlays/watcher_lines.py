@@ -1256,3 +1256,9 @@ from voidcompass.overlays import watcher_name as _name  # noqa: E402
 for _topic, (_level, _normal, _weary) in _name.FACTS.items():
     NORMAL[_topic] = list(_normal)
     WEARY[_topic] = list(_weary)
+
+# 5.7.4: the crew. Handing over the watch, and remarks about crewmates.
+from voidcompass.overlays import crew_lore as _crew  # noqa: E402
+for _topic, _lines in _crew.topics("watcher").items():
+    NORMAL[_topic] = list(_lines)
+    WEARY[_topic] = list(_lines)

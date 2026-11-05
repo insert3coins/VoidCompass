@@ -81,6 +81,11 @@
       <button type="button" id="compass" class="compass card" title="North up (N)" aria-label="Turn north up">
         <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27"/><g id="compass-needle"><path class="north" d="M32 8 L38 32 L32 29 L26 32 Z"/><path class="south" d="M32 56 L26 32 L32 35 L38 32 Z"/><text x="32" y="6">N</text></g></svg>
       </button>
+      <button type="button" id="follow-me" class="follow card" aria-pressed="false"
+        data-tip="FOLLOW ME|Keeps you (YOU ARE HERE) centred on the map and follows you as you jump. Your zoom stays as it is. Drag the map to stop following."
+        aria-label="Follow me: keep your position centred on the map as you travel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="7.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg><span>FOLLOW ME</span>
+      </button>
       <div class="zoom card">
         <button type="button" id="zoom-in" title="Zoom in (+)" aria-label="Zoom in">+</button>
         <button type="button" id="zoom-out" title="Zoom out (−)" aria-label="Zoom out">−</button>
