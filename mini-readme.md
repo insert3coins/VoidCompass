@@ -1,6 +1,6 @@
 # VoidCompass // UPDATE LOG
 
-## v5.7.4 // Aster, Officer on Watch
+## v5.7.4 // All Hands on Deck
 **Release Date:** 5 NOV 3312 *(Galactic Standard Time)*
 
 * **Four companions.** Choose The Watcher, Aster, Axiom or Meridian at the top of the companion page. Each has its own character, story, voice, display and memory for every commander, and they share the same ship commands, aliases, sequences, microphone and uplink. Switching stops queued speech, ignores late replies meant for the previous companion, and leaves each one's memory, story clock and preferences untouched. See [Aster](docs/ASTER_COMPANION.md), [Axiom](docs/AXIOM_COMPANION.md), [Meridian](docs/MERIDIAN_COMPANION.md) and [setup](docs/CREW_COMPANIONS.md).
