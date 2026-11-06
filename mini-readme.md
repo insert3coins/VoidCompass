@@ -1,7 +1,7 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.7.6 // Changing of the Watch
-**Release Date:** TBA 3312 *(Galactic Standard Time)*
+**Release Date:** 7 NOV 3312 *(Galactic Standard Time)*
 
 * **Meet Lyra, the fifth companion.** She was a ship's computer. Her first commander was a great pilot who flew too far and ran out of fuel, and when a passing cargo ship turned up with an empty memory chip in its hold, Lyra jumped aboard. Now she's yours: bright, exact and very fond of a full tank. She has her own voice (a robotic Piper voice, downloaded like the others), her own story, *The Empty Chip*, in eight chapters with echoes that stir on real journal events and a request after Chapter III (take her to a star nobody has discovered), her own name arc, postcard notes, Captain's Log paragraphs and share code, and her own words for everything the other officers talk about, in two styles, Bright and System. Say "hello Lyra" in TALK, or put her name before a command. Four achievements of her own: Power On, Full Tanks, Every Gauge Read and Uncharted.
 * **Lyra's face moves.** Her jaw follows her voice, and her face wears the mood of what she's saying: a wider smile and squinted eyes when she's pleased, wide eyes and swept-back fins when she's wary, a frown and drooping fins when she's downcast, a tilted head when she's curious. Low fuel, overheating or a threat worries her whatever she's saying, and her face settles back to rest when the thought has gone. Reduced motion changes it at once instead of easing.
