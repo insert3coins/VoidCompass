@@ -4,7 +4,7 @@ scanned, signal sources, heat and neutron-cone damage, a carrier jump set or
 cancelled, a Powerplay rank, synthesis and screenshots.
 """
 
-IMPORTANCE = {"docking_granted": 0, "docking_denied": 2, "refuelled": 0, "ship_swap": 2, "repaired": 1, "scanned": 1,
+IMPORTANCE = {"docking_granted": 1, "docking_denied": 2, "refuelled": 0, "ship_swap": 2, "repaired": 1, "scanned": 1,
               "uss_drop": 1, "heat_damage": 2, "jet_damage": 2, "carrier_jump_set": 2, "carrier_jump_cancelled": 2,
               "powerplay_rank": 2, "synthesis": 1, "screenshot": 0}
 

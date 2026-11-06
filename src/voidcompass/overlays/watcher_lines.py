@@ -1291,3 +1291,11 @@ from voidcompass.overlays import ship_life as _life  # noqa: E402
 for _topic, _lines in _life.WATCHER_NORMAL.items():
     NORMAL[_topic] = list(_lines)
     WEARY[_topic] = list(_life.WATCHER_WEARY[_topic])
+
+# 5.7.5: your squadron, beyond its name: your rank in it, and its moments.
+from voidcompass.overlays import squadron_talk as _squadron  # noqa: E402
+for _topic, _lines in _squadron.WATCHER_NORMAL.items():
+    NORMAL[_topic] = list(_lines)
+    WEARY[_topic] = list(_squadron.WATCHER_WEARY[_topic])
+NORMAL["cmdr_squadron"] = NORMAL["cmdr_squadron"] + list(_squadron.RANK_LINES["watcher"][0])
+WEARY["cmdr_squadron"] = WEARY["cmdr_squadron"] + list(_squadron.RANK_LINES["watcher"][1])

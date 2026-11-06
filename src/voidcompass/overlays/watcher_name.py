@@ -403,7 +403,9 @@ def fact_fields(event, raw):
     if event == "Powerplay" and raw.get("Power"):
         return "cmdr_power", {"power": str(raw["Power"]), "rank": str(raw.get("Rank") or "")}
     if event == "SquadronStartup" and raw.get("SquadronName"):
-        return "cmdr_squadron", {"squadron": str(raw["SquadronName"])}
+        # 5.7.5: readable ("East Orion Company", not capitals), with your rank.
+        from voidcompass.overlays import squadron_talk
+        return "cmdr_squadron", squadron_talk.fields(raw)
     if event == "CarrierStats" and raw.get("Name") and raw.get("CarrierType", "FleetCarrier") == "FleetCarrier":
         return "cmdr_carrier", {"carrier": str(raw["Name"]).strip()}
     return None

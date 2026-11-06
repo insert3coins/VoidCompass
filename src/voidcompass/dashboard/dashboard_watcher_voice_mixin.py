@@ -519,6 +519,11 @@ class DashboardWatcherVoiceMixin:
         return watcher_copilot.ranks_lines(getattr(self, "cmdr_ranks", None), getattr(self, "cmdr_rank_progress", None),
                                            getattr(self, "cmdr_reputation", None), names=ranks.name)
 
+    def _watcher_lookup_squadron(self):
+        tracker = getattr(self, "carrier_tracker", None)
+        context = dict(getattr(tracker, "_squadron_context", None) or {}) if tracker is not None else {}
+        return watcher_copilot.squadron_lines(context.get("squadron_name"), context.get("squadron_rank_name"))
+
     def _watcher_lookup_carrier(self):
         tracker = getattr(self, "carrier_tracker", None)
         return watcher_copilot.carrier_lines(tracker.display_carrier() if tracker is not None else None, now=time.time())

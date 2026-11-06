@@ -65,6 +65,19 @@ class CompanionTests(unittest.TestCase):
                     for sentence in re.split(r"(?<=[.!?]) ", thought["text"]):
                         self.assertFalse(sentence[:1].islower(), thought["text"])
 
+    def test_docking_is_acknowledged_even_on_quieter_settings(self):
+        """It was importance 0: never said on Occasional or Rare."""
+        self.assertEqual(watcher_mind.IMPORTANCE["docked_home"], 2)
+        self.assertEqual(watcher_mind.IMPORTANCE["docking_granted"], 1)
+        self.assertEqual(watcher_mind.IMPORTANCE["undocked"], 1)
+        for identity, frequency in (("meridian", "occasional"), ("watcher", "rare")):
+            config = {"companion_identity": identity, f"{identity}_thoughts": frequency, "heartbeat_thoughts": frequency}
+            companion = companions.create_mind(None, config, clock=Clock(), rng=random.Random(2))
+            companion.session_start()
+            companion.clock.now += 1200
+            thought = companion.observe("Docked", {"event": "Docked", "StationName": "Jameson Memorial", "StationType": "Orbis"})
+            self.assertEqual((thought or {}).get("topic"), "docked_home", (identity, frequency))
+
     def test_depth_for_every_companion(self):
         for topic, level in ship_life.IMPORTANCE.items():
             self.assertEqual(watcher_mind.IMPORTANCE[topic], level)

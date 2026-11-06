@@ -1,5 +1,5 @@
 """Meridian's words: greetings, rundowns, control replies and composed banks (5.7.4)."""
-from voidcompass.overlays import crew_lore, meridian_events, meridian_keepsakes, meridian_lore, meridian_watch, meridian_soundings, persona_lines, route_lines, survey_report, meridian_field, meridian_more, rhino_lines, mining_talk, ship_life
+from voidcompass.overlays import crew_lore, meridian_events, meridian_keepsakes, meridian_lore, meridian_watch, meridian_soundings, persona_lines, route_lines, survey_report, meridian_field, meridian_more, rhino_lines, mining_talk, ship_life, squadron_talk
 
 GREETINGS = (
     "Good day, Commander. Meridian on watch.",
@@ -178,13 +178,15 @@ BANK = persona_lines.Bank(greetings=GREETINGS, restrained_greetings=RESTRAINED_G
                                                      survey_report.persona_banks("meridian")[0], meridian_field.PLAIN,
                                                      meridian_more.PLAIN, rhino_lines.persona_banks("meridian")[0],
                                                      mining_talk.persona_banks("meridian")[0],
-                                                     ship_life.persona_banks("meridian")[0]),
+                                                     ship_life.persona_banks("meridian")[0],
+                                                     squadron_talk.persona_banks("meridian")[0]),
                           voiced=persona_lines.merge(meridian_events.VOICED, meridian_watch.VOICED, meridian_keepsakes.VOICED, meridian_soundings.VOICED,
                                                       route_lines.persona_banks("meridian")[1],
                                                       survey_report.persona_banks("meridian")[1], meridian_field.VOICED,
                                                       meridian_more.VOICED, rhino_lines.persona_banks("meridian")[1],
                                                       mining_talk.persona_banks("meridian")[1],
-                                                      ship_life.persona_banks("meridian")[1]),
+                                                      ship_life.persona_banks("meridian")[1],
+                                                      squadron_talk.persona_banks("meridian")[1]),
                           commands=COMMANDS, story=meridian_lore.STORY)
 EVENTS, RESTRAINED_EVENTS = BANK.EVENTS, BANK.RESTRAINED_EVENTS
 # Refining in an SRV only happens in the Rhino: the rigs' yield (5.7.5).

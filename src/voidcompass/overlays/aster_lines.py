@@ -1,7 +1,7 @@
 """Aster's original officer dialogue. Facts are supplied by the game, never invented."""
 import random
 
-from voidcompass.overlays import aster_responses, aster_dockside, aster_idle, aster_signoff, aster_lore, aster_keepsakes, crew_lore, route_lines, survey_report, aster_field, aster_more, rhino_lines, mining_talk, ship_life
+from voidcompass.overlays import aster_responses, aster_dockside, aster_idle, aster_signoff, aster_lore, aster_keepsakes, crew_lore, route_lines, survey_report, aster_field, aster_more, rhino_lines, mining_talk, ship_life, squadron_talk
 
 GREETINGS = (
     "Aster, reporting for duty. The ship is ready. I shall reserve judgement on the itinerary.",
@@ -341,7 +341,7 @@ for topic, lines in crew_lore.topics("aster").items():
 for _plain, _voiced in (route_lines.persona_banks("aster"), survey_report.persona_banks("aster"),
                         (aster_field.PLAIN, aster_field.VOICED), (aster_more.PLAIN, aster_more.VOICED),
                         rhino_lines.persona_banks("aster"), mining_talk.persona_banks("aster"),
-                        ship_life.persona_banks("aster")):
+                        ship_life.persona_banks("aster"), squadron_talk.persona_banks("aster")):
     for topic in dict.fromkeys((*_plain, *_voiced)):
         plain, voiced = tuple(_plain.get(topic, ())), tuple(_voiced.get(topic, ()))
         RESTRAINED_EVENTS[topic] = tuple(dict.fromkeys(RESTRAINED_EVENTS.get(topic, ()) + plain))

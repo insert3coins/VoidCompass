@@ -1,5 +1,5 @@
 """Axiom's words: greetings, rundowns, control replies and composed banks (5.7.4)."""
-from voidcompass.overlays import crew_lore, axiom_events, axiom_keepsakes, axiom_lore, axiom_watch, axiom_survey, persona_lines, route_lines, survey_report, axiom_field, axiom_more, rhino_lines, mining_talk, ship_life
+from voidcompass.overlays import crew_lore, axiom_events, axiom_keepsakes, axiom_lore, axiom_watch, axiom_survey, persona_lines, route_lines, survey_report, axiom_field, axiom_more, rhino_lines, mining_talk, ship_life, squadron_talk
 
 GREETINGS = (
     "Hello, Commander. Axiom here. I am pleased to see you, to a measurable degree.",
@@ -178,13 +178,15 @@ BANK = persona_lines.Bank(greetings=GREETINGS, restrained_greetings=RESTRAINED_G
                                                      survey_report.persona_banks("axiom")[0], axiom_field.PLAIN,
                                                      axiom_more.PLAIN, rhino_lines.persona_banks("axiom")[0],
                                                      mining_talk.persona_banks("axiom")[0],
-                                                     ship_life.persona_banks("axiom")[0]),
+                                                     ship_life.persona_banks("axiom")[0],
+                                                     squadron_talk.persona_banks("axiom")[0]),
                           voiced=persona_lines.merge(axiom_events.VOICED, axiom_watch.VOICED, axiom_keepsakes.VOICED, axiom_survey.VOICED,
                                                       route_lines.persona_banks("axiom")[1],
                                                       survey_report.persona_banks("axiom")[1], axiom_field.VOICED,
                                                       axiom_more.VOICED, rhino_lines.persona_banks("axiom")[1],
                                                       mining_talk.persona_banks("axiom")[1],
-                                                      ship_life.persona_banks("axiom")[1]),
+                                                      ship_life.persona_banks("axiom")[1],
+                                                      squadron_talk.persona_banks("axiom")[1]),
                           commands=COMMANDS, story=axiom_lore.STORY)
 EVENTS, RESTRAINED_EVENTS = BANK.EVENTS, BANK.RESTRAINED_EVENTS
 # Refining in an SRV only happens in the Rhino: the rigs' yield (5.7.5).

@@ -30,7 +30,7 @@ from voidcompass.core import ranks
 from voidcompass.exploration import bio_values
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
 from voidcompass.mining.mining_record import material_name
-from voidcompass.overlays import crew_lore, crew_voices, mining_talk, rhino_lines, route_lines, ship_life, survey_report
+from voidcompass.overlays import crew_lore, crew_voices, mining_talk, rhino_lines, route_lines, ship_life, squadron_talk, survey_report
 from voidcompass.overlays import (
     watcher_deeper, watcher_field, watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures,
     watcher_places, watcher_copilot, watcher_name, watcher_postcards,
@@ -268,7 +268,9 @@ IMPORTANCE = {
     "promotion": 2,
     "long_session": 1,
     "quiet": 0,
-    "docked_home": 0,
+    # 5.7.5: docking is a moment you expect acknowledged, even on Rare (it was 0:
+    # silent on Occasional and Rare).
+    "docked_home": 2,
     "jump_far": 0,
     "arrival": 0,
     "jump_long": 1,
@@ -278,7 +280,7 @@ IMPORTANCE = {
     "mapped_efficient": 1,
     "analysed": 1,
     "touchdown": 0,
-    "undocked": 0,
+    "undocked": 1,
     "on_foot": 0,
     "mission_done": 1,
     "bounty": 0,
@@ -306,6 +308,7 @@ IMPORTANCE.update(survey_report.IMPORTANCE)
 IMPORTANCE.update(rhino_lines.IMPORTANCE)
 IMPORTANCE.update(mining_talk.IMPORTANCE)
 IMPORTANCE.update(ship_life.IMPORTANCE)
+IMPORTANCE.update(squadron_talk.IMPORTANCE)
 TOPICS = {topic: (level, watcher_lines.NORMAL[topic]) for topic, level in IMPORTANCE.items()}
 # The depressed nature ("weary" in config; the default since 5.5.3.1).
 WEARY = watcher_lines.WEARY
@@ -1370,7 +1373,7 @@ class WatcherMind:
         if mined:
             return mined
         # 5.7.5: the ship's everyday life; its usual handling still follows.
-        life = ship_life.moment(event, raw)
+        life = ship_life.moment(event, raw) or squadron_talk.moment(event, raw)
         if life:
             thought = self.consider(*life)
             if thought:

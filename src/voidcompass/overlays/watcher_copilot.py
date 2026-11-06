@@ -50,6 +50,8 @@ TOPICS = {
                         re.I),
     # Your fleet carrier.
     "carrier": re.compile(r"\b((fleet |our |my |the )?carrier'?s?|callsign)\b", re.I),
+    # 5.7.5: your squadron and your rank in it.
+    "squadron": re.compile(r"\b(squadron'?s?|squad)\b", re.I),
     # The exploration and exobiology data you haven't sold yet.
     "data": re.compile(r"\b(unsold|cartographic|(exploration|exobiology|biology|bio|organic|scan) data|data (we|to sell|worth|"
                        r"value)|sell (the |our )?(data|samples)|universal cartographics)\b", re.I),
@@ -113,6 +115,10 @@ def topics_for(question):
     # "Reputation with the Federation" is the superpower, not a faction.
     if "ranks" in found and "factions" in found and re.search(r"\b(empire|federation|alliance|navy|superpowers?)\b", text, re.I):
         found.discard("factions")
+    # "My squadron rank" is the squadron's, not the pilot ranks (5.7.5).
+    if "squadron" in found and "ranks" in found and not re.search(
+            r"\b(combat|trade|trading|explor\w*|exobiolog\w*|mercenary|cqc|navy|federation|empire|alliance)\b", text, re.I):
+        found.discard("ranks")
     # "Sell our data" is the data; "the value of my cargo" the hold.
     if "market" in found and "data" in found:
         found.discard("market")
@@ -712,6 +718,15 @@ def ranks_lines(ranks, progress=None, reputation=None, names=None):
     if standing:
         lines.append("Superpower reputation: " + ", ".join(standing))
     return lines or ["No ranks on record yet (the journal lists them when the game starts)"]
+
+
+def squadron_lines(name, rank=None):
+    """The squadron the journal last reported, and your rank in it (5.7.5)."""
+    from voidcompass.overlays.squadron_talk import readable
+    name, rank = readable(name), readable(rank)
+    if not name:
+        return ["The commander isn't in a squadron, as far as the journal says"]
+    return [f"Squadron: {name}" + (f", rank {rank}" if rank else "")]
 
 
 def carrier_lines(carrier, now=None):
