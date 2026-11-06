@@ -92,6 +92,17 @@
     const holds = (model.holds || []).filter((row) => number(row.capacity) > 0);
     byId("rigs-holds").replaceChildren(...holds.map(hold));
     byId("rigs-holds").hidden = !holds.length;
+    // 5.7.6: the survey, the best patch and the next spot in the rig pattern.
+    const facts = model.survey || {};
+    const lines = [];
+    if (facts.survey) lines.push(`SURVEY ${Math.round(number(facts.survey.percent))}%${facts.survey.next ? ` · NEXT STOP ${distance(facts.survey.next.distance)} ${facts.survey.next.compass || ""}` : " · SWEPT"}`);
+    if (facts.patch) lines.push(`BEST PATCH ${number(facts.patch.distance) < 40 ? "HERE" : `${distance(facts.patch.distance)} ${facts.patch.compass || ""}`} · ${number(facts.patch.pulses)} PULSES`);
+    if (facts.rig_spot && number(facts.rig_spot.distance) >= 10) lines.push(`NEXT RIG SPOT ${distance(facts.rig_spot.distance)} ${facts.rig_spot.compass || ""}`);
+    const survey = byId("rigs-survey");
+    if (survey) {
+      survey.replaceChildren(...lines.map((line) => node("li", "", line.trim())));
+      survey.hidden = !lines.length;
+    }
     byId("rigs-hint").textContent = String(model.hint || "");
     byId("rigs-hint").hidden = !model.hint;
   }

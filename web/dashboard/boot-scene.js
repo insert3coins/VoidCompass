@@ -376,7 +376,7 @@ feedOrb();
 // Watcher keeps its orb; Aster, Axiom and Meridian use their own displays,
 // fed through the same adapters as the deck and overlay.
 let bootCompanion = {identity: 'watcher', name: 'The Watcher'};
-const companionId = () => ['aster', 'axiom', 'meridian'].includes(bootCompanion.identity) ? bootCompanion.identity : 'watcher';
+const companionId = () => ['aster', 'axiom', 'meridian', 'lyra'].includes(bootCompanion.identity) ? bootCompanion.identity : 'watcher';
 
 function feedCompanion() {
   const identity = companionId();

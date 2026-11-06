@@ -3,13 +3,15 @@ import {createAsterMotion} from "./aster-3d.js";
 import {createCompanionFrame, COMPANION_EXTENT} from "./companion-frame.js";
 import {SIGNATURES} from "./companion-colours.js";
 import {createCompanionCore} from "./companion-core.js";
+import {addLyraRobot, addLyraHalo} from "./lyra-robot.js";
 
 const TAU = Math.PI * 2;
 const clamp = (n, lo=0, hi=1) => Math.max(lo, Math.min(hi, n));
 
 // Original procedural displays: no image plates, opaque backdrops or character likenesses.
 export function createCrewDisplay(canvas, identity) {
-  const portrait = identity === "meridian";
+  const lyra = identity === "lyra";
+  const portrait = identity === "meridian" || lyra;
   const signature = SIGNATURES[identity];
   const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true, premultipliedAlpha:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -71,7 +73,12 @@ export function createCrewDisplay(canvas, identity) {
        gl_FragColor=vec4(mix(uColour,uOther,.25),(band*tail*.85+echo*.6)*(uIdle+uEnergy));
        #include <colorspace_fragment>
      }`));sweep.position.z=.55;rings.add(sweep);
-  if(portrait) {
+  const halo=lyra?addLyraHalo(rings,uniforms):null;
+  if(halo)for(const object of [rotor,counter,inner,sweep])object.visible=false;
+  let portraitLayer=null;
+  if(lyra) {
+    portraitLayer=addLyraRobot(field,uniforms,renderer,scene);
+  } else if(portrait) {
     // An anonymous instrument portrait: elliptical skull, modeled cheeks and a subtle nose ridge.
     function head(lat,a) {
       const y=Math.cos(lat)*.73, width=Math.pow(Math.sin(lat),.72)*(.39+.035*Math.cos(lat));
@@ -191,7 +198,9 @@ export function createCrewDisplay(canvas, identity) {
       if(mouthOpen<.001)mouthOpen=0;
       uniforms.uMouth.value=mouthOpen;
     }
-    scan.position.y=Math.sin(time*.95)*.67;scan.visible=portrait&&(idle||state==="working"||state==="listening");
+    portraitLayer?.update({clock:time,pose,mouthOpen,reduced,focus,animated:pose.active});
+    halo?.update({clock:time,reduced,animated:pose.active});
+    scan.position.y=Math.sin(time*.95)*.67;scan.visible=portrait&&!lyra&&(idle||state==="working"||state==="listening");
     outer.scale.setScalar(1+(pose.pulse||0)*.015);
     renderer.render(scene,camera);frames++;if(pose.active)schedule();
   }
@@ -211,9 +220,9 @@ export function createCrewDisplay(canvas, identity) {
     setReducedMotion(value){if(reduced!==Boolean(value)){reduced=Boolean(value);changed();}},
     setFrameRate(value){const next=[15,24,30,60].includes(Number(value))?Number(value):30;if(frameRate!==next){frameRate=next;changed();}},
     setVisible(value){if(visible!==Boolean(value)){visible=Boolean(value);if(!visible){cancelAnimationFrame(frame);frame=0;}else changed();}},
-    inspect(){return {...pose,identity,design:portrait?"wireframe-portrait":"particle-torus",frames,state,reduced,idle,focus,frameRate,time,accent,secondary,intensity:activity,
-      width:canvas.clientWidth,height:canvas.clientHeight,drawCalls:renderer.info.render.calls,reactor:reactor?.inspect()||null,mouthOpen};},
-    destroy(){disposed=true;cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener("visibilitychange",visibility);
+    inspect(){return {...pose,identity,design:lyra?"robot-companion":portrait?"wireframe-portrait":"particle-torus",frames,state,reduced,idle,focus,frameRate,time,accent,secondary,intensity:activity,
+      width:canvas.clientWidth,height:canvas.clientHeight,drawCalls:renderer.info.render.calls,reactor:reactor?.inspect()||null,mouthOpen,...portraitLayer?.inspect()};},
+    destroy(){disposed=true;portraitLayer?.destroy();cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener("visibilitychange",visibility);
       const geometries=new Set(),materials=new Set();scene.traverse(object=>{if(object.geometry)geometries.add(object.geometry);if(object.material)materials.add(object.material);});
       geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());renderer.dispose();},
   };

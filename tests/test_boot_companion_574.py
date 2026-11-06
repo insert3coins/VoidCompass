@@ -18,7 +18,7 @@ class BootCompanionBrowserTests(unittest.TestCase):
         return page
 
     def test_each_companion_presents_its_own_display(self):
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             with self.subTest(identity=identity):
                 page = self.open(identity)
                 page.wait_for_function(f"window.bootScene.state().companion === '{identity}'", timeout=20000)

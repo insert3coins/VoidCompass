@@ -491,6 +491,9 @@ class DashboardApiMixin(ApiRecordsMixin):
                 "generation": getattr(self, "_companion_generation", 0)}
 
     def _api_capabilities(self, selected):
+        from voidcompass.core import companions
+        if companions.overlay_only(selected):
+            return ["overlay"]
         return list(self.COMPANION_CAPABILITIES.get(selected) or self.COMPANION_CAPABILITIES["default"])
 
     def _api_expect(self, expected):
@@ -536,7 +539,9 @@ class DashboardApiMixin(ApiRecordsMixin):
         memory = mind.memory
         hours = float(memory.get("hours") or 0)
         persona = companion_personas.get(selected)
-        if persona is not None:
+        if companions.pending_story(config):
+            page = {"title": "Story pending", "told": 0, "total": 0}
+        elif persona is not None:
             page = persona.story.page(memory, hours)
         else:
             from voidcompass.overlays import watcher_lore
@@ -550,7 +555,7 @@ class DashboardApiMixin(ApiRecordsMixin):
                        "hours": round(hours, 1), "sessions": int(memory.get("sessions") or 0),
                        "story": {"title": page.get("title") or "", "told": page.get("told", 0), "total": page.get("total", 0),
                                  "complete": bool(page.get("complete"))},
-                       "voice": {"model": voice_assets.model_name(selected), "installed": installed}})
+                       "voice": {"model": None if companions.overlay_only(selected) else voice_assets.model_name(selected), "installed": installed}})
 
     def api_companion_status(self):
         from voidcompass.core import companions
@@ -580,6 +585,7 @@ class DashboardApiMixin(ApiRecordsMixin):
 
     def api_watcher_thought(self, text, heading="", speak=False, expect=None):
         self._api_expect(expect)
+        self._api_require("thought")
         hud = self._api_hud()
         thought = hud.mind.relay(text, heading, speak)
         hud._redraw()
@@ -589,11 +595,13 @@ class DashboardApiMixin(ApiRecordsMixin):
 
     def api_watcher_poke(self, expect=None):
         self._api_expect(expect)
+        self._api_require("poke")
         return {"answered": bool(self._api_hud().poke()), "companion": self._api_companion_tag()}
 
     # 5.6.1: answer its question, share it, meet another, keep its book.
     def api_watcher_answer(self, answer, expect=None):
         self._api_expect(expect)
+        self._api_require("answer")
         mind = self._watcher_mind()
         asked = mind.pending_question() if mind is not None else None
         if not asked:
@@ -615,6 +623,7 @@ class DashboardApiMixin(ApiRecordsMixin):
 
     def api_watcher_book(self, expect=None):
         self._api_expect(expect)
+        self._api_require("book")
         if not self._watcher_save_book():
             raise ApiError(500, "The book couldn't be saved")
         return {"saved": True, "folder": str(self.wrapped_folder()) if hasattr(self, "wrapped_folder") else "",
@@ -627,7 +636,7 @@ class DashboardApiMixin(ApiRecordsMixin):
         live = speaker.live() if speaker is not None else None
         from voidcompass.core import companions
         return {"identity": companions.identity(self.config), "companion": self._api_companion_tag(),
-                "model": voice_assets.model_name(companions.identity(self.config)),
+                "model": None if companions.overlay_only(self.config) else voice_assets.model_name(companions.identity(self.config)),
                 "enabled": bool(companions.settings(self.config).get("watcher_voice_enabled")),
                 "installed": bool(self._companion_voice_installed()),
                 "ready": bool(self._watcher_voice_on()),

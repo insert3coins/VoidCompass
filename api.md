@@ -1848,7 +1848,7 @@ Void Compass has four companions: **The Watcher**, **Aster**, **Axiom** and **Me
 
 **Make sure it reaches the right companion.** Any of the `POST /companion/...` routes takes an optional `"identity"`. When it names a companion that isn't active (say the commander switched while your request was on its way), the request is refused with `409` rather than reaching the other one. An unknown identity gets a `404`. Nothing ever falls back to the Watcher silently.
 
-**Capabilities.** Every companion has `thought`, `poke`, `answer`, `book`, `story`, `name`, `voice`, `share_code` and `meet` (friend codes work between any two companions). Aster, Axiom and Meridian also write `postcards` notes in their own hand. Asking a companion for something it doesn't do answers `409` and says so; a companion never answers with another's fiction.
+**Capabilities.** The Watcher, Aster, Axiom and Meridian have `thought`, `poke`, `answer`, `book`, `story`, `name`, `voice`, `share_code` and `meet` (friend codes work between them). Aster, Axiom and Meridian also write `postcards` notes in their own hand. **Lyra** is an overlay-only preview: she can be listed/selected through the same API, reports capabilities `["overlay"]`, zero story progress and a null voice model, and returns `409` for unsupported dialogue/story operations. Asking a companion for something it doesn't do answers `409` and says so; a companion never answers with another's fiction.
 
 **Which one spoke.** `thought` events on the event stream carry `"companion": {"identity": "axiom", "name": "Axiom", "generation": 3}`, and `voice` events carry `"companion": "axiom"`. `generation` goes up at each switch, so a client can drop anything from before the latest switch.
 

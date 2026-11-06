@@ -14,7 +14,7 @@ class CompanionPageTests(unittest.TestCase):
 
     def test_switcher_is_compact_and_in_alphabetical_order(self):
         names = self.page.locator(".companion-switch button b").all_text_contents()
-        self.assertEqual(names, ["Aster", "Axiom", "Meridian", "The Watcher"])
+        self.assertEqual(names, ["Aster", "Axiom", "Lyra", "Meridian", "The Watcher"])
         self.assertEqual(self.page.locator(".companion-picker").count(), 0)
         bar = self.page.locator(".companion-bar").bounding_box()
         self.assertLess(bar["height"], 90, "the switcher no longer pushes the page down")

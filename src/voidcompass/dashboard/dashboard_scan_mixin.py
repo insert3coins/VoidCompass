@@ -1,3 +1,4 @@
+import logging
 import math
 import time
 import threading
@@ -218,6 +219,16 @@ class DashboardScanMixin:
         if data is None:
             return
         self._apply_status_update(data)
+        self._status_after_update()
+
+    def _status_after_update(self):
+        """After every Status.json update, on whichever path it came."""
+        rota = getattr(self, "_crew_rota_tick", None)
+        if callable(rota):
+            try:
+                rota()  # 5.7.6: the watch rota follows what you're doing
+            except Exception:
+                logging.debug("Watch rota skipped", exc_info=True)
 
     def _current_fuel_percent(self):
         """Tank percentage the Navigation HUD displays, rounded to match it."""
@@ -944,6 +955,11 @@ class DashboardScanMixin:
         )
         if vehicle_state_changed and getattr(self, "rig_tracker_hud", None) is not None:
             self._rig_update_overlay()  # into the Rhino, or out of it
+        if moved and self.on_planet and getattr(self, "current_in_srv", False):
+            # 5.7.6: the survey covers what the scanner reaches as you drive.
+            survey = self._survey_tick()
+            if survey and survey[0] and getattr(self, "rig_tracker_hud", None) is not None:
+                self._rig_update_overlay()
         if (moved or on_planet_changed or vehicle_state_changed) and getattr(self, "rhino_map_hud", None) is not None:
             # The Rhino map follows you as you drive (5.5.17).
             self._update_rhino_map()
@@ -1631,6 +1647,7 @@ class DashboardScanMixin:
                 self.root.call_later(0, self._flush_pending_status_update)
             return
         self._apply_status_update(data)
+        self._status_after_update()
 
 
 

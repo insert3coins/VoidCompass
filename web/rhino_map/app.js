@@ -131,6 +131,9 @@ function drawSurface(surface) {
     context.restore();
   };
   const metres = (value) => (value >= 1000 ? `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)} KM` : `${Math.round(value)} M`);
+  // Zoomed out, rigs bunch up: their own labels win over the patch's and the next spot's.
+  const rigSpots = (surface.rigs || []).map((rig) => at(rig.at));
+  const crowded = (spot) => rigSpots.some(([x, y]) => Math.hypot(x - spot[0], y - spot[1]) < 16);
 
   // Range rings round you, a round number of metres apart.
   const ringStep = RANGE_STEPS.find((step) => step * frame.scale >= Math.min(size.cssWidth, size.cssHeight) * .16) || 5000;
@@ -157,6 +160,61 @@ function drawSurface(surface) {
     context.setLineDash([]);
   }
 
+  // The survey (5.7.6, after EDSMT): its edge, what the scanner has reached
+  // inside it, and the sweep stops whose circles cover the rest.
+  const survey = surface.survey;
+  if (survey?.at) {
+    const centre = at(survey.at);
+    const radius = number(survey.radius_m) * frame.scale;
+    const grid = number(survey.grid, 48), cell = 2 * number(survey.radius_m) / grid;
+    const bits = String(survey.covered || "");
+    if (bits && cell * frame.scale > .8) {
+      context.beginPath();
+      for (let index = 0; index < bits.length; index += 1) {
+        const nibble = parseInt(bits[index], 16);
+        if (!nibble) continue;
+        for (let bit = 0; bit < 4; bit += 1) {
+          if (!(nibble & (1 << bit))) continue;
+          const cellIndex = index * 4 + bit, row = Math.floor(cellIndex / grid), column = cellIndex % grid;
+          const spot = at([survey.at[0] - survey.radius_m + (column + .5) * cell, survey.at[1] - survey.radius_m + (row + .5) * cell]);
+          if (!inside(spot, -cell * frame.scale)) continue;
+          context.moveTo(spot[0] + cell * frame.scale * .72, spot[1]);
+          context.arc(spot[0], spot[1], cell * frame.scale * .72, 0, Math.PI * 2);
+        }
+      }
+      context.fillStyle = css(accent, .1);
+      context.fill();
+    }
+    context.setLineDash([8, 5]); context.strokeStyle = css(accent, .65); context.lineWidth = 1.4;
+    context.beginPath(); context.arc(centre[0], centre[1], radius, 0, Math.PI * 2); context.stroke();
+    context.setLineDash([]);
+    const following = survey.next?.at;
+    for (const stop of survey.stops || []) {
+      const spot = at(stop.at);
+      if (!inside(spot)) continue;
+      const isNext = following && stop.at[0] === following[0] && stop.at[1] === following[1];
+      context.beginPath(); context.arc(spot[0], spot[1], isNext ? 4.5 : 3.2, 0, Math.PI * 2);
+      if (stop.swept) { context.fillStyle = css(green, .75); context.fill(); }
+      else { context.fillStyle = "rgba(0, 0, 0, .7)"; context.fill(); context.strokeStyle = css(isNext ? hud : accent, .9); context.lineWidth = 1.3; context.stroke(); }
+    }
+    if (following) {
+      const spot = at(following);
+      if (inside(spot)) {
+        const reach = number(survey.scanner_m, 2000) * frame.scale;
+        if (reach > 16) {
+          context.setLineDash([2, 4]); context.strokeStyle = css(hud, .35); context.lineWidth = 1;
+          context.beginPath(); context.arc(spot[0], spot[1], reach, 0, Math.PI * 2); context.stroke();
+          context.setLineDash([]);
+        }
+        tag("SWEEP", spot, hud, -8);
+      } else {
+        const point = edge(spot);
+        pointer(point, hud);
+        tag(`SWEEP ${metres(number(survey.next.distance))}`, [point[0], point[1]], hud, point[1] < cy ? 14 : -8);
+      }
+    }
+  }
+
   // Your trail this drive.
   const trail = (surface.trail || []).map(at);
   if (trail.length > 1) {
@@ -178,6 +236,18 @@ function drawSurface(surface) {
     context.beginPath(); context.arc(spot[0], spot[1], radius + 3, 0, Math.PI * 2); context.fill();
     context.fillStyle = css(yellow, .9);
     context.beginPath(); context.arc(spot[0], spot[1], radius * .55, 0, Math.PI * 2); context.fill();
+  }
+
+  // The richest patch so far (pulses only): a ring round the amber.
+  if (surface.best_patch?.at) {
+    const spot = at(surface.best_patch.at);
+    if (inside(spot, -6)) {
+      context.strokeStyle = css(yellow, .9); context.lineWidth = 1.4;
+      context.beginPath(); context.arc(spot[0], spot[1], 11, 0, Math.PI * 2); context.stroke();
+      if (!crowded(spot)) tag(`BEST ${number(surface.best_patch.pulses)}`, spot, yellow, -14);
+    } else {
+      pointer(edge(spot), yellow);
+    }
   }
 
   // Saved sites, and the compass target.
@@ -213,6 +283,16 @@ function drawSurface(surface) {
       context.beginPath(); context.arc(spot[0], spot[1], spacing, 0, Math.PI * 2); context.stroke();
     }
   }
+  // The rig pattern (5.7.6): the spots still to fill, faintly.
+  for (const planned of surface.plan || []) {
+    if (planned.next && (surface.rigs || []).length) continue;
+    const spot = at(planned.at);
+    if (!inside(spot)) continue;
+    context.setLineDash([2, 2]); context.strokeStyle = css(green, .5); context.lineWidth = 1;
+    context.beginPath(); context.moveTo(spot[0], spot[1] - 5); context.lineTo(spot[0] + 3.5, spot[1]);
+    context.lineTo(spot[0], spot[1] + 5); context.lineTo(spot[0] - 3.5, spot[1]); context.closePath(); context.stroke();
+    context.setLineDash([]);
+  }
   // Where the next rig can go: here, or the nearest spot clear of them all.
   const legal = surface.next_spot;
   if (legal && !legal.here) {
@@ -224,7 +304,7 @@ function drawSurface(surface) {
       context.fillStyle = css(green, .9);
       context.beginPath(); context.moveTo(spot[0], spot[1] - 6); context.lineTo(spot[0] + 4, spot[1]);
       context.lineTo(spot[0], spot[1] + 6); context.lineTo(spot[0] - 4, spot[1]); context.closePath(); context.fill();
-      tag("RIG HERE", spot, green, -9);
+      if (!crowded(spot)) tag("RIG HERE", spot, green, -9);
     }
   }
 
@@ -331,6 +411,7 @@ function drawSurfaceStrip(surface) {
   else if (surface.next_spot && !surface.next_spot.here && (surface.rigs || []).length < 6) parts.push(`NEXT RIG SPOT <b>${metres(number(surface.next_spot.distance))}</b>`);
   if (!far && nextRig) parts.push(nextRig.here ? `<span class="route">RIG ${nextRig.slot} HERE</span>` : `RIG ${nextRig.slot} <b>${metres(number(nextRig.distance))}</b>`);
   else if (!far && (surface.rigs || []).length === 0 && surface.vehicle === "RHINO") parts.push("NO RIGS MARKED");
+  if (surface.survey) parts.push(`SURVEY <b>${Math.round(number(surface.survey.percent))}%</b>`);
   if (number(surface.signals) > 0) parts.push(`<b>${number(surface.signals)}</b> MINING SITE${number(surface.signals) === 1 ? "" : "S"}`);
   // Each fact in one piece: the strip wraps between them, never inside one.
   facts.innerHTML = parts.map((part) => `<i class="fact">${part}</i>`).join(" · ");

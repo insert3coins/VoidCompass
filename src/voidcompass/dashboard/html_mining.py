@@ -280,6 +280,12 @@ class HtmlMiningMixin:
             except Exception as exc:
                 logging.debug("Mining page rigs skipped: %s", exc)
         holds = self._rig_holds() if callable(getattr(self, "_rig_holds", None)) else []
+        survey = None
+        if callable(getattr(self, "_survey_facts", None)) and where["mode"] in ("rhino", "srv", "foot", "planet"):
+            try:
+                survey = self._survey_facts()
+            except Exception as exc:
+                logging.debug("Mining page survey skipped: %s", exc)
         finder = self._html_profile_transient("_html_mining_ground", {"status": "ready", "detail": "", "results": []})
         sell = self._html_profile_transient("_html_mining_sell", {"status": "ready", "detail": "", "commodity": "", "results": []})
         options = self._trading_cargo_options() if callable(getattr(self, "_trading_cargo_options", None)) else {"radius": 50}
@@ -289,7 +295,7 @@ class HtmlMiningMixin:
                        "prices": [{"name": name, **row} for name, row in
                                   sorted(income["prices"].items(), key=lambda item: -item[1]["credits"])]},
             "record": self._mining_record_view(),
-            "rigs": rigs, "ground": self._mining_ground_here(where), "sites": self._mining_sites_here(where),
+            "rigs": rigs, "survey": survey, "ground": self._mining_ground_here(where), "sites": self._mining_sites_here(where),
             "system_grounds": self._mining_system_grounds(),
             "material_grounds": material_grounds(),
             "grounds": [{"key": key, "label": GROUND_LABELS.get(key, key)} for key in GROUND_SPANSH],
@@ -322,6 +328,11 @@ class HtmlMiningMixin:
             self._mining_record_view(refresh=True)
             self._schedule_html_dashboard_publish(immediate=True)
             return True
+        if operation in ("survey_centre", "survey_edge", "survey_clear"):
+            mark = getattr(self, "_survey_mark", None)
+            done = mark(operation.split("_", 1)[1]) if callable(mark) else None
+            self._schedule_html_dashboard_publish(immediate=True)
+            return bool(done)
         if operation == "forget_rigs":
             clear = getattr(self, "_rig_clear_here", None)
             forgotten = bool(clear()) if callable(clear) else False

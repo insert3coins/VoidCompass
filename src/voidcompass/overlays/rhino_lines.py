@@ -269,3 +269,14 @@ def officer_refining(identity):
     banks = PERSONAS[identity]
     plain = tuple(banks["plain"]["mined_surface"])
     return plain, plain + tuple(banks["voiced"]["mined_surface"])
+
+
+# 5.7.6: the Rhino survey (centre and edge, half, done) and the best patch.
+from voidcompass.overlays import rhino_survey_lines as _survey  # noqa: E402
+
+IMPORTANCE.update(_survey.IMPORTANCE)
+WATCHER_NORMAL.update(_survey.WATCHER_NORMAL)
+WATCHER_WEARY.update(_survey.WATCHER_WEARY)
+for _identity, _banks in _survey.PERSONAS.items():
+    PERSONAS[_identity]["plain"].update(_banks["plain"])
+    PERSONAS[_identity]["voiced"].update(_banks["voiced"])

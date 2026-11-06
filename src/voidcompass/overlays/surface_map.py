@@ -128,10 +128,12 @@ def legal_spot(you, rigs, spacing):
 
 
 def build_surface_map(plane_map, plane, *, rig_model=None, rig_points=None, here_m=40.0, spots=(),
-                      signals=0, vehicle="", options=None, spacing_m=78.0, warn_m=3500.0):
+                      signals=0, vehicle="", options=None, spacing_m=78.0, warn_m=3500.0, survey=None):
     """The minimap's ground view. ``plane_map`` is the Planetary page's map
     (``_planetary_map``), ``plane`` its lat/lon → metres frame, ``rig_points``
-    ``{slot: (lat, lon)}``, ``spots`` the refining pulses on this body."""
+    ``{slot: (lat, lon)}``, ``spots`` the refining pulses on this body,
+    ``survey`` the body's survey (rhino_survey.SurveyStore.survey)."""
+    from voidcompass.overlays import rhino_survey
     options = dict(options or surface_options({}))
     you = (plane_map.get("you") or {}).get("at")
     heading = (plane_map.get("you") or {}).get("heading")
@@ -155,6 +157,17 @@ def build_surface_map(plane_map, plane, *, rig_model=None, rig_points=None, here
     sites = list(plane_map.get("sites") or [])[:30]
     # Only your rigs and deposits set the zoom; the ship and a target point
     # from the edge when they're off it.
+    # 5.7.6: the richest patch, and the pattern for the rigs still to place,
+    # round the first rig down (or the patch, before any are).
+    patch = rhino_survey.best_patch(deposits, you)
+    first = next((rig["at"] for slot in order for rig in rigs if rig["slot"] == slot), None) or (rigs[0]["at"] if rigs else None)
+    anchor = first or (patch or {}).get("at")
+    plan = rhino_survey.rig_plan(anchor, [rig["at"] for rig in rigs], spacing_m, you, warn_m=warn_m) if anchor else []
+    area = rhino_survey.survey_model(survey, plane, you) if survey else None
+    planned = next((row for row in plan if row.get("next")), None)
+    if planned and rigs:
+        spot = {"at": planned["at"], "distance": planned["distance"], "here": planned["distance"] < 10,
+                "bearing": planned["bearing"], "planned": True}
     focus = [rig["at"] for rig in rigs] + [item["at"] for item in deposits[:12]]
     model = {
         "body": str(plane_map.get("body") or ""),
@@ -175,6 +188,9 @@ def build_surface_map(plane_map, plane, *, rig_model=None, rig_points=None, here
         "too_close": advice["too_close"],
         "too_far": advice["too_far"],
         "next_spot": spot,
+        "best_patch": patch,
+        "plan": plan,
+        "survey": area,
         "scanner_m": SCANNER_M,
         "signals": int(signals or 0),
         "half_m": map_half(you, focus, options.get("range", "auto")),

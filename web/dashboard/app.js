@@ -2827,8 +2827,8 @@ function settingsIcon(id) {
 }
 
 // Settings › Hotkeys' groups (5.7.3), in order; the server says which each shortcut is in.
-const HOTKEY_GROUPS = [["overlays", "OVERLAYS"], ["controls", "OVERLAY CONTROLS"], ["watcher", "COMPANION"],
-  ["music", "MUSIC"], ["field", "RIGS AND EXPEDITIONS"]];
+const HOTKEY_GROUPS = [["overlays", "OVERLAYS"], ["controls", "OVERLAY CONTROLS"], ["navigation", "NAVIGATION"],
+  ["rhino", "RHINO, RIGS AND SURVEY"], ["field", "EXPEDITIONS AND COLONIES"], ["watcher", "COMPANION"], ["music", "MUSIC"]];
 let hotkeyFilter = (() => {
   try { return window.localStorage.getItem("voidcompass.settings.hotkeyFilter") || "all"; } catch (_error) { return "all"; }
 })();

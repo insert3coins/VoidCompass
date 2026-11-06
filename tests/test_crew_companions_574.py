@@ -149,7 +149,7 @@ class FourVoiceAssetsTests(unittest.TestCase):
         with zipfile.ZipFile(archive,"w") as bundle:bundle.writestr("piper/piper.exe",b"engine")
         contents={"piper_windows_amd64.zip":archive.getvalue()}
         manifests={}
-        for identity in companions.IDENTITIES:
+        for identity in (i for i in companions.IDENTITIES if not companions.overlay_only(i)):
             manifests[identity]=[]
             for suffix in (".onnx",".onnx.json"):
                 name=identity+suffix;data=(identity+suffix).encode();contents[name]=data
@@ -158,14 +158,14 @@ class FourVoiceAssetsTests(unittest.TestCase):
         fetched=[]
         def opener(url):
             name=url.rsplit("/",1)[-1];fetched.append(name);return io.BytesIO(contents[name])
-        folders={i:voice_assets.manifest(i)[0] for i in companions.IDENTITIES}
+        folders={i:voice_assets.manifest(i)[0] for i in companions.IDENTITIES if not companions.overlay_only(i)}
         def manifest(identity="watcher"):return folders[identity],manifests[identity],"https://example.test/"
         with tempfile.TemporaryDirectory() as base,patch.object(voice_assets,"ENGINE",engine),patch.object(voice_assets,"manifest",side_effect=manifest):
             for identity in ("axiom","meridian","watcher","aster"):
                 job=voice_assets.VoiceDownload(base,opener=opener,model=identity);job._run(None)
                 self.assertEqual(job.state()["stage"],"done",job.state())
             self.assertEqual(fetched.count("piper_windows_amd64.zip"),1)
-            self.assertEqual(len({voice_assets._receipt(base,i) for i in companions.IDENTITIES}),4)
+            self.assertEqual(len({voice_assets._receipt(base,i) for i in companions.IDENTITIES if not companions.overlay_only(i)}),4)
             for identity in ("watcher","aster","meridian"):
                 self.assertTrue(voice_assets.remove(base,identity))
                 self.assertTrue(voice_assets.installed(base,"axiom"))

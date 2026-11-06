@@ -1,6 +1,6 @@
 # Adding another heartbeat companion
 
-Reusable implementation checklist, based on **The Watcher → Aster in v5.7.4**. Last reviewed: **5 November 2026**.
+Reusable implementation checklist, based on **The Watcher → Aster in v5.7.4**. Last reviewed: **7 November 2026**.
 
 Use this when adding a fresh companion with its own character, lore, dialogue, memory, Piper voice and animated display. The goal is the same working capabilities and settings as the Watcher, expressed through the new companion's identity.
 
@@ -15,6 +15,79 @@ The checked items below record work completed for Aster. The unchecked items for
 5. Verify every companion, both display surfaces and switching between them before release.
 
 **Current integration:** the identity registry, profile settings, voice lifecycle, memory paths, companion page, Studio, boot screen and Local API support Watcher, Aster, Axiom and Meridian. Aster, Axiom and Meridian share one persona mind ([companion_personas.py](src/voidcompass/overlays/companion_personas.py)) and the story engine. A new officer-style companion mostly needs a new persona entry and its writing; still audit the dispatch points below.
+
+## Lyra — robot overlay preview (7 November 2026)
+
+User-approved name: **Lyra**. Scope is her display and the registration needed to select it. Voice, dialogue, lore, name introduction and stories are deliberately pending. Setup: [LYRA_COMPANION.md](docs/LYRA_COMPANION.md).
+
+- [x] Register `lyra` as an overlay-only profile with a silent [OverlayPreviewMind](src/voidcompass/overlays/overlay_preview_mind.py), independent settings/defaults and memory filename. Preserve existing commander/companion settings and switching.
+- [x] Build Lyra as an original female robot inspired by the supplied robot reference: pearl shell, dark visor, cyan ring optics, antenna fins, neck joints and chest armour. Keep the forehead plain: **no logos or text**. The human portrait and generic human mesh prototypes are superseded.
+- [x] Build actual articulated Three.js geometry in [lyra-robot.js](web/assets/lyra-robot.js), integrated with the shared crew renderer. Include blinking optics, attention movement, subtle head/antenna motion, chest pulses and an amplitude-driven mechanical jaw. Mouth input is actual playback only, never the microphone; simulated playback validates it while her voice is pending. Dispose geometry, materials and the procedural reflection map on teardown.
+- [x] Give Lyra her own animated inner halo: three travelling luminous arcs, an opposing light track and subtle 3D tilt behind the robot. Share her palette, activity, liveliness and motion/reduced-motion/visibility handling; retain the outer contrast bezel.
+- [x] Add **Lyra aurora** (cyan/rose) and every existing Studio size, accent, focus, motion, liveliness and frame-rate control. Use the same visible diameter and the shared size across switches.
+- [x] Integrate the BRIDGE, companion switcher, floating overlay and selected-companion boot screen. Mark dialogue/story/voice as pending; disable unavailable controls and prevent fallback to another companion’s lines or Piper model.
+- [x] Register the local robot module for static serving and sandboxed overlay imports. Existing recursive `web/` and `docs/` packaging includes it. No portrait textures, external GLB, extra loader dependencies or model download are needed.
+- [x] Extend the shared companion API listing/selection with `overlay` capability only, empty story progress and no voice model. Reject unsupported content operations; exclude Lyra from existing crew stories, chatter, automatic rota duties, postcard notes and Captain’s Log persona writing.
+- [x] Validate the preview, both display surfaces, boot, every Studio control, sandboxed asset delivery, switching and existing companion behaviour. Focused companion regression coverage: 54 tests; two fixture assumptions corrected and the three affected checks rerun successfully. Pixel checks verify real blinking and playback-driven jaw movement; no full-suite run.
+- [x] Select and store the GLaDOS-style female robot Piper pair directly under `models/lyra/`, preserving filenames, source attribution and verified hashes. The other candidate packs have been removed.
+- [ ] Integrate the selected voice into the app and its download lifecycle. **The user will handle this work.**
+- [ ] Write original lore, stories, name introduction, dialogue banks, command replies, crew relationships, postcard notes and the repeat/pacing coverage before enabling those features.
+
+For another overlay-only addition, follow this limited path deliberately. `companions.NEW_IDENTITIES` still identifies the existing extra **voiced** personas; adding a preview there would incorrectly select an existing model/persona. Use `overlay_only` capability guards and the silent shell until the new writing and voice are ready. Current full-persona and crew content remains the original four companions.
+
+### Moving Lyra’s eyes, mouth and other parts
+
+These are **developer editing notes**, not additional Overlay Studio controls. Studio already controls focus, idle motion, liveliness, colours, size and frame rate. The model is procedural Three.js geometry: groups articulate the head/eyes/fins, and a vertex shader deforms the jaw. There is no imported skeleton or image portrait to rig.
+
+Start in [lyra-robot.js](web/assets/lyra-robot.js), inside `addLyraRobot()`. Positions are local model units: **+X right, +Y up, +Z towards the viewer**; rotations are radians. The `head` group is scaled by `1.16`, so its children move and scale with it. Edit construction values for placement, and the returned `update()` for movement over time.
+
+| Part | Where to edit | What the current values do |
+| --- | --- | --- |
+| Eye placement | `eye.position.set(side*.255, -.045, .424)` | `side` is −1/1 for the two eyes. Change `.255` for spacing, `-.045` for height and `.424` for depth. Keep both eyes in front of the curved visor. |
+| Eye size and angle | `eye.scale.setScalar(1.1)` and `eye.rotation.y=side*.16` | Scale the complete optical assembly or turn the two housings slightly outward. If changing the resting scale, also change the `1.1` in the blink calculation below. |
+| Gaze | `lens.position.x/y` in `update()` | `pose.x*.022` and `pose.y*.014` move the lenses inside their housings. For a wider glance, try `.030` and `.020`, then check the visor edges. `focus === "off"` (Fixed) and Reduced motion centre the gaze. This follows the shared attention system, not a separate mouse tracker. |
+| Blink / wink | `phase`, `blink` and `eye.scale.y` in `update()` | `(clock+1.15)%5.3` sets the blink cycle; `.22` is its duration and `.96` its closure amount. These are renderer-clock units: Liveliness changes their real-time speed. Both eyes currently blink together. A future wink can choose a separate blink value using `side`, while keeping the same motion guards. |
+| Head movement | `head.rotation.set(...)`, `head.position.y` | Pitch follows `-pose.y*.065`, yaw follows `pose.x*.08`; idle roll uses `sin(clock*.53)*.025`, and vertical bob uses `sin(clock*1.4)*.007`. The parent `field` in `crew-3d.js` also supplies attention rotation and breathing; tune both layers if the combined movement is too strong. |
+| Resting mouth | `shellMaterial.onBeforeCompile`, fragment shader | `smile=-.389+.035*pow(vShell.x/.16,2.0)` sets height, smile curve and half-width. `.006` is the resting slit. To relocate or resize the mouth, update its matching opening/bounds and the lower-jaw deformation mask too, so the moving shell stays aligned with the opening. |
+| Speaking jaw | `jaw.value`, shader uniform `uLyraJaw` | `mouthOpen` drives the jaw from 0 to 1. The vertex shader moves the lower shell down by up to `.045` and forward by `.012`; the fragment shader widens the cavity by up to `.035`. Change these together for a larger or smaller speaking motion. The dark inner shell supplies the mouth cavity. |
+| Antennae / chest | `fins` and `lights` loops in `update()` | Fins pivot gently around their resting angle; chest lights pulse in scale and respond to mouth activity. Use the existing `clock`, `animated` and `reduced` inputs for new motion. |
+| Inner halo | `addLyraHalo()` in the same file | Torus/ring radii set its shape. Shader rates `.055` / `.038` control the opposing tracks; `halo.rotation.x/y` adds tilt. Keep it behind the robot (`z=-.34`, `renderOrder=-2`) and after the contrast recess. |
+
+**Connecting speech later:** [crew-companion.js](web/assets/crew-companion.js) passes `live.speech.level` separately from microphone/activity levels to `setState()`. [crew-3d.js](web/assets/crew-3d.js) clamps/scales that playback envelope and smooths it into `mouthOpen` before calling the robot’s `update()`. Its opening/closing response rates are `24` / `18`. Preserve this route when fitting Lyra’s Piper voice: audio pauses should close the jaw, and absent speech or Reduced motion should set it to zero. Queued text and microphone input must not animate the mouth. This is amplitude-driven jaw movement; phoneme/viseme mouth shapes would be additional work.
+
+For inspection in the browser console, use the existing adapter (the floating overlay’s canvas is `orb`; the deck’s is `watcher-orb`):
+
+```js
+const source = document.getElementById("watcher-orb") || document.getElementById("orb");
+window.CrewCompanion.inspect(source);
+// Reports blink, mouthMorph, mouthOpen, eyeRigs, focus, reduced and frames.
+```
+
+**Checklist for a future expression or another articulated companion:**
+
+- [ ] Change placement and animation in the model module; keep both surfaces using the shared factory/adapter.
+- [ ] Keep eyes within the visor and the mouth opening aligned with the jaw mask. Check the silhouette at 54, 96 and 256 px, including head turns and a full blink.
+- [ ] Use the renderer’s clock and frame scheduling; do not create another animation loop or timer for each part.
+- [ ] Respect Fixed focus, Idle Off, Reduced motion and hidden-display parking. Expressions must return to their resting state when their trigger ends.
+- [ ] For speech, verify actual playback, pauses, completion, queued text, microphone-only input and alert speech. Until Lyra has a voice, inject playback levels through the existing browser fixtures instead of enabling another companion’s model.
+- [ ] After implementation and docs are complete, run the relevant blink/jaw/deck checks in [test_lyra_companion.py](tests/test_lyra_companion.py), plus Studio or boot checks if those paths changed. Inspect rendered pixels, not only numeric animation state.
+
+### Lyra’s selected Piper voice — assets ready
+
+**User choice, 7 November 2026: GLaDOS-style robotic female voice.** Scope for this step is storing the chosen model in `models/` only; **the user will handle app integration**.
+
+- [x] Place `glados.onnx` and its matching `glados.onnx.json` directly in [models/lyra](models/lyra/README.md), preserving original filenames and bytes.
+- [x] Preserve `SOURCE.json` with pinned revision, download URLs, sizes and SHA-256, plus the unchanged upstream README. Source: [rokeya71/VITS-Piper-GlaDOS-en-onnx](https://huggingface.co/rokeya71/VITS-Piper-GlaDOS-en-onnx), referencing dnhkng/GLaDOS. The mirror’s MIT label is recorded separately from underlying game/character-voice provenance.
+- [x] Verify the ONNX against upstream LFS SHA-256 and small source files against Git blob hashes; recheck model/config SHA-256 after placing the chosen pair in the final folder.
+- [x] Confirm the pair synthesizes with the app’s pinned Piper 2023.11.14-2 engine. Keep [Lyra’s speech sample](models/lyra/samples/glados.wav), script and result metadata under `models/lyra/samples/`: 12.299 seconds, mono 22,050 Hz PCM16; 1.396-second cold whole-sample synthesis run. This is raw model output with no added effects, and not a warmed app latency measurement.
+- [x] Remove the unused Cori, Kristin and LJSpeech candidate packs and their auditions; keep only the selected voice in Lyra’s model folder.
+
+**Pending integration, reserved for the user:**
+
+- [ ] Add the explicit Lyra voice manifest, receipt path, download size, settings and UI availability. Use our GitHub download/checksum lifecycle after the selected assets are uploaded.
+- [ ] Separate voice readiness from pending story capability, so fitting a voice does not unlock borrowed dialogue. Do not add `lyra` to `NEW_IDENTITIES` while that tuple still selects Axiom/Meridian models.
+- [ ] Connect actual playback levels through the shared adapter to the mechanical jaw, following the movement notes above. Lyra’s own lore, name introduction, command replies and crew writing remain pending.
+- [ ] Verify download/checksum/removal and switching, then spoken captions and jaw timing on both surfaces. Update the silent-preview tests only for capabilities actually implemented.
 
 ## Current batch — full stories for Aster, Axiom and Meridian (5 November 2026)
 

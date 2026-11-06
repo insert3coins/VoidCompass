@@ -146,7 +146,7 @@
     });
     showThought(model.thought, motionPreference.matches || Boolean(effects.reduced_motion), identity !== "watcher" ? model.orb.accent : model.orb?.eye,
       model.personality);
-    const companionLabel = {aster:"Aster",axiom:"Axiom",meridian:"Meridian"}[identity] || "Journal watcher";
+    const companionLabel = {aster:"Aster",axiom:"Axiom",meridian:"Meridian",lyra:"Lyra"}[identity] || "Journal watcher";
     const label = stalled ? `${companionLabel}: feed quiet`
       : orb.lastEvent ? `${companionLabel}: ${orb.lastEvent}` : companionLabel;
     root.setAttribute("aria-label", label);

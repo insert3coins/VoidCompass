@@ -40,8 +40,21 @@ def _readable(raw, *keys):
     return ""
 
 
+# 5.7.6: the station's answer to a docking request. Said every time, within
+# ANSWER_S of the request, whatever was just said (often your own command).
+ANSWERS = frozenset({"docking_granted", "docking_denied", "docking_cancelled", "docking_timeout"})
+ANSWER_S = 120.0
+
+
 def moment(event, raw):
     """(topic, fields) for an everyday moment worth a word, or None."""
+    if event == "DockingRequested":
+        station = _readable(raw, "StationName_Localised", "StationName")
+        return "docking_requested", ({"station": station} if station else {})
+    if event == "DockingCancelled":
+        return "docking_cancelled", {}
+    if event == "DockingTimeout":
+        return "docking_timeout", {}
     if event == "DockingGranted":
         pad = raw.get("LandingPad")
         return "docking_granted", ({"pad": str(pad)} if pad else {})
@@ -378,3 +391,30 @@ PERSONAS = {
 def persona_banks(identity):
     banks = PERSONAS[identity]
     return banks["plain"], banks["voiced"]
+
+
+# 5.7.6: the docking request, and the station cancelling or timing it out.
+from voidcompass.overlays import docking_talk as _docking  # noqa: E402
+
+IMPORTANCE.update(_docking.IMPORTANCE)
+WATCHER_NORMAL.update(_docking.WATCHER_NORMAL)
+WATCHER_WEARY.update(_docking.WATCHER_WEARY)
+for _identity, _banks in _docking.PERSONAS.items():
+    PERSONAS[_identity]["plain"].update(_banks["plain"])
+    PERSONAS[_identity]["voiced"].update(_banks["voiced"])
+
+# 5.7.6: the rest of the journal worth a word (life_events), as everyday life.
+from voidcompass.overlays import life_events as _life_more  # noqa: E402
+
+IMPORTANCE.update(_life_more.IMPORTANCE)
+WATCHER_NORMAL.update(_life_more.WATCHER_NORMAL)
+WATCHER_WEARY.update(_life_more.WATCHER_WEARY)
+for _identity, _banks in _life_more.PERSONAS.items():
+    PERSONAS[_identity]["plain"].update(_banks["plain"])
+    PERSONAS[_identity]["voiced"].update(_banks["voiced"])
+_own_moment = moment
+
+
+def moment(event, raw):  # noqa: F811
+    """(topic, fields) for an everyday moment worth a word, or None."""
+    return _own_moment(event, raw) or _life_more.moment(event, raw)

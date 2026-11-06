@@ -1,0 +1,30 @@
+{
+  "downloaded_at": "2026-11-06T16:10:52.867970+00:00",
+  "repository": "rokeya71/VITS-Piper-GlaDOS-en-onnx",
+  "revision": "5852e4bfc742fdfc5dafcf94c06305695af37018",
+  "upstream_project": "https://github.com/dnhkng/GLaDOS",
+  "files": [
+    {
+      "name": "UPSTREAM_README.md",
+      "source_path": "README.md",
+      "size": 108,
+      "sha256": "32b8de5010057411f75a6ca9af6a4cf83a3cba099d84f7bd09a52d3b931a2c29",
+      "url": "https://huggingface.co/rokeya71/VITS-Piper-GlaDOS-en-onnx/resolve/5852e4bfc742fdfc5dafcf94c06305695af37018/README.md?download=true"
+    },
+    {
+      "name": "glados.onnx",
+      "source_path": "glados.onnx",
+      "size": 63511038,
+      "sha256": "17ea16dd18e1bac343090b8589042b4052f1e5456d42cad8842a4f110de25095",
+      "url": "https://huggingface.co/rokeya71/VITS-Piper-GlaDOS-en-onnx/resolve/5852e4bfc742fdfc5dafcf94c06305695af37018/glados.onnx?download=true"
+    },
+    {
+      "name": "glados.onnx.json",
+      "source_path": "glados.onnx.json",
+      "size": 7097,
+      "sha256": "01f5e602e1ec04daec6d54960e4d641b5de305f39186e40bf9b4a47bd757a489",
+      "url": "https://huggingface.co/rokeya71/VITS-Piper-GlaDOS-en-onnx/resolve/5852e4bfc742fdfc5dafcf94c06305695af37018/glados.onnx.json?download=true"
+    }
+  ],
+  "rights_note": "Hugging Face mirror labels MIT. It references a GLaDOS character-voice model from dnhkng/GLaDOS; this metadata is not a statement that underlying game recordings or character voice are public domain."
+}

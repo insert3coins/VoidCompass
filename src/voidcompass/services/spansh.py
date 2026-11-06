@@ -259,6 +259,27 @@ def resolve_system(system, id64=None):
     return {"id64": int(selected["id64"]), "name": selected.get("name") or name}
 
 
+def system_position(name):
+    """5.7.6: a system's name and [x, y, z] from Spansh's system search, or None."""
+    name = str(name or "").strip()
+    if not name:
+        return None
+    try:
+        response = requests.get(f"{BASE}/search/systems", params={"q": name}, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
+    except requests.RequestException as exc:
+        raise SpanshError(f"Could not reach Spansh: {exc}") from exc
+    if response.status_code >= 400:
+        raise SpanshError(_error_text(response))
+    try:
+        results = response.json().get("results") or []
+    except (ValueError, AttributeError) as exc:
+        raise SpanshError("Spansh returned invalid system-search data.") from exc
+    exact = next((row for row in results if str(row.get("name") or "").casefold() == name.casefold()), None)
+    if exact is None or any(exact.get(axis) is None for axis in ("x", "y", "z")):
+        return None
+    return {"name": str(exact.get("name") or name), "coords": [float(exact["x"]), float(exact["y"]), float(exact["z"])]}
+
+
 def _normalize_fleet_carrier_result(
     result, job, *, source=None, destinations=None, carrier_type=None,
     used_capacity=None, calculate_starting_fuel=None,

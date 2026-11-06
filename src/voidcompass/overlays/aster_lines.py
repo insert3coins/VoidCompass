@@ -1,6 +1,7 @@
 """Aster's original officer dialogue. Facts are supplied by the game, never invented."""
 import random
 
+from voidcompass.overlays import officer_habits, talk_replies
 from voidcompass.overlays import aster_responses, aster_dockside, aster_idle, aster_signoff, aster_lore, aster_keepsakes, crew_lore, route_lines, survey_report, aster_field, aster_more, rhino_lines, mining_talk, ship_life, squadron_talk
 
 GREETINGS = (
@@ -362,6 +363,8 @@ for topic, lines in {"idle_aster_lore": _STORY.musings, "aster_lore_recall": _ST
 # Refining in an SRV only happens in the Rhino: the rigs' yield, in place of
 # the old wording, which spoke as if materials had been picked up by hand.
 RESTRAINED_EVENTS["mined_surface"], EVENTS["mined_surface"] = rhino_lines.officer_refining("aster")
+# 5.7.6: habit summaries in depth, and style lines that read right.
+officer_habits.apply("aster", EVENTS, RESTRAINED_EVENTS)
 
 RESTRAINED_GREETINGS = tuple(GREETINGS[index] for index in (1, 2, 5, 8, 10, 13, 14, 18, 22, 28))
 
@@ -461,6 +464,8 @@ for outcome, lines in COMMAND_VARIATIONS.items():
     COMMANDS[outcome] += lines
 for outcome, lines in aster_responses.COMMAND_VARIATIONS.items():
     COMMANDS[outcome] = tuple(dict.fromkeys(COMMANDS[outcome] + lines))
+# 5.7.6: the nearest station and how far to a system.
+COMMANDS.update(talk_replies.OFFICERS["aster"])
 
 
 def answer(kind, rng=None, previous=None, used=(), restrained=False):

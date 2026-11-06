@@ -481,10 +481,18 @@ class DeckTests(unittest.TestCase):
 
     def test_every_shortcut_in_a_group_on_the_hotkeys_page(self):
         from voidcompass.dashboard.html_dashboard import _hotkey_group
+        from voidcompass.dashboard.html_dashboard import HOTKEY_GROUP_OF
         groups = {action: _hotkey_group(action, attr) for action, _key, _label, attr in OVERLAY_HOTKEY_SPECS}
-        self.assertEqual(set(groups.values()), {"overlays", "controls", "watcher", "music", "field"})
+        self.assertEqual(set(groups.values()), {"overlays", "controls", "navigation", "rhino", "field", "watcher", "music"})
         self.assertEqual((groups["watcher_talk"], groups["toggle_all"], groups["navigation"]),
                          ("watcher", "controls", "overlays"))
+        # 5.7.6: no strays. Every shortcut that isn't an overlay's, the companion's
+        # or the music's is placed by name; OVERLAY CONTROLS is only the overlay-wide ones.
+        for action, _key, _label, attr in OVERLAY_HOTKEY_SPECS:
+            if attr is None and not action.startswith(("watcher_", "music_")):
+                self.assertIn(action, HOTKEY_GROUP_OF, f"{action} has no hotkey group")
+        self.assertEqual(sorted(action for action, group in groups.items() if group == "controls"), ["layout_studio", "toggle_all"])
+        self.assertEqual({groups[name] for name in ("rig_1", "rig_clear", "rhino_map_range", "rhino_survey_centre")}, {"rhino"})
         script = (Path(__file__).resolve().parents[1] / "web/dashboard/app.js").read_text(encoding="utf-8")
         for group in set(groups.values()):
             self.assertIn(f'["{group}", "', script, f"app.js has no HOTKEY_GROUPS entry for {group}")

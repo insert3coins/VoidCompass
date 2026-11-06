@@ -14,6 +14,34 @@ class FollowViewStateTests(unittest.TestCase):
         self.assertFalse(view._normalise_view_state({"follow": "yes"})["follow"])
 
 
+class FollowRestartTests(unittest.TestCase):
+    def test_no_position_until_the_journal_gives_one(self):
+        from voidcompass.exploration.expedition_map_view import current_position_of
+        self.assertIsNone(current_position_of("Colonia", [0, 0, 0]), "the default, not a place")
+        self.assertIsNone(current_position_of("---", [0, 0, 0]))
+        self.assertEqual(current_position_of("Sol", [0, 0, 0]), (0.0, 0.0, 0.0))
+        self.assertEqual(current_position_of("Colonia", [-9530.5, -910.3, 19808.1]), (-9530.5, -910.3, 19808.1))
+        self.assertIsNone(current_position_of("Colonia", None))
+
+
+class FollowMeRestoredTests(unittest.TestCase):
+    setUpClass = classmethod(atlas.AtlasBrowserTests.setUpClass.__func__)
+    tearDownClass = classmethod(atlas.AtlasBrowserTests.tearDownClass.__func__)
+    open = atlas.AtlasBrowserTests.open
+
+    def snapshot(self):
+        snapshot = atlas.AtlasBrowserTests.snapshot(self)
+        snapshot["view_state"] = {"layers": {}, "follow": True,
+                                  "camera": {"target": [-4962.5, 0.0, 738.1], "distance": 50358.9, "heading": 13.5, "tilt": 15.0}}
+        return snapshot
+
+    def test_after_a_restart_it_is_still_on_and_centres_on_you(self):
+        page, _commands = self.open()
+        self.assertEqual(page.locator("#follow-me").get_attribute("aria-pressed"), "true")
+        page.wait_for_function("(() => { const p = window.voidcompassAtlas.project([-9530.5, -910.3, 19808.1]);"
+                               " return p && p.x > 500 && p.x < 1100 && p.y > 250 && p.y < 650; })()", timeout=15000)
+
+
 class FollowMeBrowserTests(unittest.TestCase):
     setUpClass = classmethod(atlas.AtlasBrowserTests.setUpClass.__func__)
     tearDownClass = classmethod(atlas.AtlasBrowserTests.tearDownClass.__func__)

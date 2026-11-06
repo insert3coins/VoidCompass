@@ -294,6 +294,8 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             return ""
         import random
         selected = companions.identity(config)
+        if companions.overlay_only(selected):
+            return ""
         histories = getattr(self, "_postcard_companion_recent_notes", None)
         if histories is None:
             histories = self._postcard_companion_recent_notes = {}

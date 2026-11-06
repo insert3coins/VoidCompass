@@ -12,7 +12,7 @@ function update(source, model = {}, live = {}, options = {}) {
   if (!source) return;
   for (const canvas of views.keys()) if (!canvas.isConnected) dispose(canvas);
   const identity = model.orb?.identity;
-  const active = ["axiom", "meridian"].includes(identity);
+  const active = ["axiom", "meridian", "lyra"].includes(identity);
   let view = views.get(source);
   if (view && view.identity !== identity) { dispose(source); view = null; }
   if (!active) {
@@ -34,7 +34,7 @@ function update(source, model = {}, live = {}, options = {}) {
       const message = document.createElement("span");
       message.className = "crew-renderer-error";
       message.style.cssText = "position:absolute;inset:15%;display:grid;place-items:center;text-align:center;font:11px/1.5 Consolas,monospace;color:var(--text,#d8e6ee)";
-      message.textContent = `${identity === "axiom" ? "Axiom" : "Meridian"} display unavailable. Check WebGL / hardware acceleration.`;
+      message.textContent = `${{axiom:"Axiom",meridian:"Meridian",lyra:"Lyra"}[identity]} display unavailable. Check WebGL / hardware acceleration.`;
       source.insertAdjacentElement("afterend", message);
       views.set(source, {canvas, identity, display: null, error: message});
       source.style.opacity = "0";

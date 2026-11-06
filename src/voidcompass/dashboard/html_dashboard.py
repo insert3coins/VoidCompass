@@ -184,6 +184,17 @@ def _watcher_echoes(memory):
     return heard
 
 
+# 5.7.6: every shortcut that isn't an overlay's own show/hide has its group
+# named here; tests/test_controllers_573.py fails on one that hasn't.
+HOTKEY_GROUP_OF = {
+    "toggle_all": "controls", "layout_studio": "controls",
+    "hud_page_next": "navigation", "hud_pages_mode": "navigation", "galaxy_minimap_view": "navigation",
+    **{f"rig_{slot}": "rhino" for slot in range(1, 7)}, "rig_clear": "rhino", "rhino_map_range": "rhino",
+    "rhino_survey_centre": "rhino", "rhino_survey_edge": "rhino", "rhino_survey_clear": "rhino",
+    "field_bookmark": "field", "colony_fold": "field", "colony_refresh": "field",
+}
+
+
 def _hotkey_group(action, attr):
     """Which group of Settings › Hotkeys a shortcut is shown in (5.7.3)."""
     if attr is not None:
@@ -192,9 +203,7 @@ def _hotkey_group(action, attr):
         return "watcher"
     if action.startswith("music_"):
         return "music"
-    if action.startswith("rig_") or action == "field_bookmark":
-        return "field"
-    return "controls"
+    return HOTKEY_GROUP_OF.get(action, "controls")
 
 class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin, HtmlMiningMixin, HtmlPlanetaryMixin):
     """Publish exploration state and accept private dashboard commands."""
@@ -890,6 +899,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         return {
             "identity": companions.identity(self.config),
             "companion_name": companions.name(self.config),
+            "overlay_only": companions.overlay_only(self.config),
             "companions": [{"id": identity, **profile} for identity, profile in companions.PROFILES.items()],
             "companion_generation": getattr(self, "_companion_generation", 0),
             "enabled": heartbeat is not None,
@@ -982,14 +992,19 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             page = crew_lore.arc_page(member, snapshot["memories"].get(member) or {}, flown)
             page.update(role=companions.PROFILES[member]["role"], flown=member in flown)
             arcs.append(page)
-        return {"title": "Coming Aboard", "arcs": arcs, "told": sum(arc["told"] for arc in arcs),
-                "total": sum(arc["total"] for arc in arcs), "flown": len(flown)}
+        from voidcompass.overlays import crew_story
+        told, total = sum(arc["told"] for arc in arcs), sum(arc["total"] for arc in arcs)
+        return {"title": "Coming Aboard", "arcs": arcs, "told": told, "total": total, "flown": len(flown),
+                # 5.7.6: the crew's own story, once every account is told.
+                "ensemble": crew_story.page(snapshot.get("story") or (), bool(total) and told >= total)}
 
     def _companion_deeper(self, mind):
         """Aster, Axiom and Meridian (5.7.4): their own readings of you, their
         after-watch notes, other commanders' companions and their request."""
         from voidcompass.overlays import companion_personas, watcher_deeper, watcher_places
         persona = companion_personas.get(mind.identity)
+        if persona is None:
+            return {"question": None, "answers": [], "memories": [], "dreams": [], "met": [], "feeling": {}, "pilgrimage": None}
         memory = mind.memory
         (trust_label, trust_words), (mood_label, mood_words) = persona.keepsakes.FEELING["trust"], persona.keepsakes.FEELING["mood"]
         trust = float(memory.get("trust", watcher_deeper.TRUST_START))

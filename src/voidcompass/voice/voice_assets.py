@@ -50,6 +50,8 @@ MERIDIAN_MODEL_FILES = (
 
 
 def model_name(model):
+    if companions.overlay_only(model):
+        return "Voice pending"
     return {"watcher": "HAL 9000 voice", "aster": "Aster officer voice",
             "axiom": "Axiom voice", "meridian": "Meridian voice"}.get(model, "HAL 9000 voice")
 
@@ -64,6 +66,8 @@ def notice(model):
 
 
 def manifest(model="watcher"):
+    if companions.overlay_only(model):
+        raise ValueError("This companion has no voice model yet")
     if model in companions.NEW_IDENTITIES:
         folder, files = ("data", AXIOM_MODEL_FILES) if model == "axiom" else ("picard", MERIDIAN_MODEL_FILES)
         return folder, files, f"https://raw.githubusercontent.com/insert3coins/VoidCompass/master/models/{folder}/"
@@ -117,6 +121,8 @@ def _receipt(base=None, model="watcher") -> Path:
 def installed(base=None, model="watcher") -> bool:
     """Engine and model both in place, and installed by us (the receipt
     records the hashes checked when they arrived)."""
+    if companions.overlay_only(model):
+        return False
     try:
         receipt = json.loads(_receipt(base, model).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -287,6 +293,8 @@ class VoiceDownload:
 def remove(base=None, model="watcher") -> bool:
     """Delete the engine and model (the speech cache with them). Only the
     files the download brought: the model's README stays."""
+    if companions.overlay_only(model):
+        return False
     folder = voice_dir(base)
     selected = model
     model = model_path(base, selected).parent

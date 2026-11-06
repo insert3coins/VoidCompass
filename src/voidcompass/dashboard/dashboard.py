@@ -1623,8 +1623,12 @@ class MainDashboard(
             except (OSError, ValueError):
                 memories[member] = {}
         flown = [member for member in crew_lore.CREW if float(memories[member].get("hours") or 0) >= crew_lore.FLOWN_HOURS]
+        from voidcompass.overlays import crew_story
         snapshot = {"flown": flown, "memories": memories,
-                    "told": sum(len(crew_lore.told(memory)) for memory in memories.values())}
+                    "told": sum(len(crew_lore.told(memory)) for memory in memories.values()),
+                    "total": sum(len(arc) for arc in crew_lore.PASSAGES.values()),
+                    # 5.7.6: the crew's own story, as far as any of them has told it.
+                    "story": sorted(set().union(*(crew_story.told(memory) for memory in memories.values())))}
         previous = cached[2] if cached and cached[0] == key else None
         self._crew_cache = (key, time.monotonic(), snapshot)
         if previous is not None and (len(flown) > len(previous["flown"]) or snapshot["told"] > previous["told"]):
@@ -1641,7 +1645,14 @@ class MainDashboard(
         with log.lock:
             sessions = log.data.get("sessions") or []
             session = sessions[-1] if sessions else None
-            if not session or session.get("ended") or (session.get("companion") and not switched):
+            if not session or session.get("ended"):
+                return
+            # 5.7.6: everyone who stood a watch this session, for their postscripts.
+            on_watch = session.setdefault("companions", [])
+            if identity(self.config) not in on_watch:
+                on_watch.append(identity(self.config))
+            if session.get("companion") and not switched:
+                log.save()
                 return
             session["companion"] = identity(self.config)
         log.save()
@@ -1666,7 +1677,9 @@ class MainDashboard(
         the track playing in the Music player and Galnet's latest headline."""
         context = {}
         try:
-            context["crew"] = {"flown": list(self._crew_snapshot()["flown"])}
+            crew = self._crew_snapshot()
+            context["crew"] = {"flown": list(crew["flown"]), "told": crew.get("told", 0), "total": crew.get("total", 0),
+                               "story": list(crew.get("story") or ())}
         except Exception:
             logging.debug("Crew snapshot skipped", exc_info=True)
         status = getattr(self, "_music_status", None) or {}
@@ -3795,6 +3808,9 @@ class MainDashboard(
             return
         if action == "rig_clear":
             self._rig_clear_here()
+            return
+        if action in ("rhino_survey_centre", "rhino_survey_edge", "rhino_survey_clear"):
+            self._survey_mark(action.rsplit("_", 1)[1])
             return
         if action == "watcher_poke":
             self._watcher_poke()
@@ -10273,6 +10289,23 @@ class MainDashboard(
             reconciled = {key: row for key, row in missions.items() if key in active}
             if len(reconciled) != len(missions):
                 state["missions"] = reconciled
+                changed = True
+
+        elif ev == "CommunityGoal":
+            # 5.7.6: every goal you've joined, as the game reports it.
+            state["community_goals"] = {str(row.get("CGID")): companion_features.community_goal(row)
+                                        for row in raw.get("CurrentGoals") or () if isinstance(row, dict) and row.get("CGID") is not None}
+            changed = True
+
+        elif ev == "CommunityGoalJoin":
+            goals = state.setdefault("community_goals", {})
+            key = str(raw.get("CGID"))
+            if raw.get("CGID") is not None and key not in goals:
+                goals[key] = companion_features.community_goal({"Title": raw.get("Name"), "SystemName": raw.get("System")})
+                changed = True
+
+        elif ev in ("CommunityGoalDiscard", "CommunityGoalReward"):
+            if state.setdefault("community_goals", {}).pop(str(raw.get("CGID")), None) is not None:
                 changed = True
 
         elif ev == "CargoDepot":

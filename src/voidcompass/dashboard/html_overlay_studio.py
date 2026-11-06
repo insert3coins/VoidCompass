@@ -680,7 +680,7 @@ class HtmlOverlayStudioMixin:
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
             "survey_status_show_all_bodies", "survey_codex_flags",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
-            "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion",
+            "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion", "lyra_hud_motion",
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "rig_tracker_show_holds",
@@ -713,7 +713,7 @@ class HtmlOverlayStudioMixin:
             self.update_hud()
         elif key in {"hud_pages_takeover", "hud_hold_lists"} or key.startswith("hud_page_"):
             self._hud_pages_apply_settings()
-        elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion"}:
+        elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion", "lyra_hud_motion"}:
             heartbeat = getattr(self, "heartbeat_hud", None)
             if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
                 heartbeat.apply_settings()
@@ -944,7 +944,7 @@ class HtmlOverlayStudioMixin:
                 self.config[accent_key] = companions.normalize_accent(identity, payload[accent_key])
             if lively_key in payload:
                 self.config[lively_key] = payload[lively_key] if payload[lively_key] in LIVELINESS else "standard"
-        for focus_key in ("aster_hud_focus", "axiom_hud_focus", "meridian_hud_focus", "heartbeat_focus_movement"):
+        for focus_key in (*[f"{identity}_hud_focus" for identity in companions.IDENTITIES[1:]], "heartbeat_focus_movement"):
             if focus_key in payload:
                 value = payload[focus_key]
                 self.config[focus_key] = value if value in ("off", "tracking", "expressive") else "tracking"

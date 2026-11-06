@@ -43,6 +43,8 @@ class CrewOverlayTests(unittest.TestCase):
             data["heartbeat"]["orb"]["motion"]=False
             page.evaluate("data => renderHeartbeat(data)",data)
             page.emulate_media(reduced_motion="reduce")
+            page.evaluate("data => renderHeartbeat(data)",data)
+            page.wait_for_function('CrewCompanion.inspect(document.getElementById("orb")).reduced')
             page.wait_for_timeout(150)
             frames=page.evaluate('CrewCompanion.inspect(document.getElementById("orb")).frames')
             page.wait_for_timeout(180)
@@ -91,7 +93,7 @@ class CrewPageTests(unittest.TestCase):
                 heartbeat={"orb":{"identity":identity,"accent":"cyan" if identity=="axiom" else "brass","motion":False}},
                 voice={"identity":identity,"model_name":f"{name} voice","orb_on":True},name={"known":"NightOwl"})
             self.render();self.page.click('[data-watcher-tab="now"]')
-            self.assertEqual(self.page.locator("button[data-companion]").count(),4)
+            self.assertEqual(self.page.locator("button[data-companion]").count(),len(companions.IDENTITIES))
             self.assertEqual(self.page.get_attribute(f'button[data-companion="{identity}"]',"aria-pressed"),"true")
             self.assertEqual(self.page.inner_text(".watcher-stage-head > span"),name.upper())
             self.assertTrue(self.page.is_visible(".crew-instrument"))

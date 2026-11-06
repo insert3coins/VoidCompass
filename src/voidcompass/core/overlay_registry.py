@@ -108,6 +108,10 @@ OVERLAY_HOTKEY_SPECS = (
     # The game logs nothing when a rig goes down: its key marks it where you stand.
     *((f"rig_{n}", f"overlay_hotkey_rig_{n}", f"Rig Tracker: rig {n} deployed / collected", None) for n in range(1, 7)),
     ("rig_clear", "overlay_hotkey_rig_clear", "Rig Tracker: forget the rigs on this planet", None),
+    # 5.7.6: a survey area after EDSMT, its centre and edge where you stand.
+    ("rhino_survey_centre", "overlay_hotkey_rhino_survey_centre", "Rhino survey: mark the centre here", None),
+    ("rhino_survey_edge", "overlay_hotkey_rhino_survey_edge", "Rhino survey: mark the edge here", None),
+    ("rhino_survey_clear", "overlay_hotkey_rhino_survey_clear", "Rhino survey: clear the survey on this planet", None),
     _overlay_hotkey("planet_materials"),
     _overlay_hotkey("powerplay"),
     _overlay_hotkey("gravity"),

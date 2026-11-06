@@ -306,6 +306,12 @@ class DashboardJourneyMixin:
                 sources["sky"] = sky()[0]
             except Exception as exc:
                 logging.debug("Wrapped constellations skipped: %s", exc)
+        snapshot = getattr(self, "_crew_snapshot", None)
+        if callable(snapshot):
+            try:
+                sources["crew"] = snapshot(fresh=True)["memories"]
+            except Exception as exc:
+                logging.debug("Wrapped crew skipped: %s", exc)
         commander = str(config.get("active_commander_name") or getattr(self, "cmdr_name", "") or "")
         record = getattr(self, "_year_record", None)
         if record is None:

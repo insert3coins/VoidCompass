@@ -362,6 +362,33 @@ function rigsPanel(data, esc) {
     {note: `${rows.length} out · arrows point from where you face`});
 }
 
+// The Rhino survey (5.7.6, after EDSMT): how much of the area your scanner
+// has reached, the next sweep stop, the best patch and the next rig spot.
+function surveyPanel(data, esc) {
+  const facts = data.survey || {};
+  const survey = facts.survey;
+  const way = (row) => `${distance(row.distance)} ${esc(row.compass || "")}`;
+  const parts = [];
+  if (survey) {
+    parts.push(`<div class="mn-tiles">
+      ${tile("COVERED", `${Math.round(n(survey.percent))}%`, survey.edge ? `of ${distance(survey.radius_m)} round the centre` : "edge not marked yet")}
+      ${tile("SWEEP STOPS", `${whole(survey.swept)} / ${whole(survey.stops)}`, "swept / to sweep")}
+    </div>`);
+    parts.push(survey.next ? `<p class="mn-sub">Next sweep stop: <b>${way(survey.next)}</b></p>` : `<p class="mn-sub"><b>Every sweep stop covered.</b></p>`);
+  } else {
+    parts.push(empty("Mark a survey's centre where you stand (Ctrl+Alt+7), drive out and mark its edge (Ctrl+Alt+8). This then follows how much of the area your scanner has reached (2 km round you) and where to drive next."));
+  }
+  if (facts.patch) {
+    const kinds = (facts.patch.materials || []).length ? ` · ${(facts.patch.materials || []).map(esc).join(", ")}` : "";
+    parts.push(`<p class="mn-sub">Best patch: <b>${whole(facts.patch.pulses)} pulses</b> · ${n(facts.patch.distance) < 40 ? "here" : way(facts.patch)}${kinds}</p>`);
+  } else {
+    parts.push(empty("The best patch shows once the Rhino has refined in one place a few times. Only pulses where you stood count; Elite gives no deposit positions."));
+  }
+  if (facts.rig_spot) parts.push(`<p class="mn-sub">Next rig in the pattern: <b>${n(facts.rig_spot.distance) < 10 ? "here" : way(facts.rig_spot)}</b>${facts.rig_spot.far ? ` <em class="mn-warn">far from your other rigs</em>` : ""}</p>`);
+  const buttons = `<button type="button" data-mine-op="survey_centre">MARK CENTRE HERE</button>${survey ? `<button type="button" data-mine-op="survey_edge">MARK EDGE HERE</button>${confirmButton("survey", "CLEAR THE SURVEY", "survey_clear", {}, esc)}` : ""}`;
+  return panel("RHINO SURVEY", `${parts.join("")}<div class="mn-actions">${buttons}</div>`, {note: "keys in Settings › Hotkeys"});
+}
+
 function groundPanel(data, esc) {
   const ground = data.ground;
   if (!ground) return panel("THIS GROUND", empty("Scan the planet you're on (FSS, or the surface scanner) to see what its ground tends to hold."));
@@ -401,6 +428,7 @@ function rhinoLive(data, esc) {
       known(data.srv_fuel.percent) ? (n(data.srv_fuel.percent) <= 25 ? "low: head for the ship" : "in the Rhino's tank") : "learning the tank's size") : ""}
   </div>`;
   return `<div class="mn-grid">${rigsPanel(data, esc)}${panel("HOLDS", `${holds || empty("Waiting for your cargo.")}${tiles}`)}</div>
+    <div class="mn-grid">${surveyPanel(data, esc)}</div>
     <div class="mn-grid">${groundPanel(data, esc)}${yieldPanel(data, esc)}</div>
     <div class="mn-grid">${prospectsPanel(data, esc)}</div>
     <div class="mn-grid">${sitesPanel(data, esc)}${planPanel(data, esc)}</div>`;

@@ -30,7 +30,7 @@ from voidcompass.core import ranks
 from voidcompass.exploration import bio_values
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
 from voidcompass.mining.mining_record import material_name
-from voidcompass.overlays import crew_lore, crew_voices, mining_talk, rhino_lines, route_lines, ship_life, squadron_talk, survey_report
+from voidcompass.overlays import crew_debrief, crew_lore, crew_story, crew_voices, mining_talk, rhino_lines, route_lines, ship_life, squadron_talk, survey_report
 from voidcompass.overlays import (
     watcher_deeper, watcher_field, watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures,
     watcher_places, watcher_copilot, watcher_name, watcher_postcards,
@@ -68,6 +68,8 @@ THOUGHT_SECONDS = 9.0
 TOPIC_REST_S = 20 * 60.0
 # The same kind of idle thought is not raised again for this long (5.5.3.2).
 IDLE_REST_S = 30 * 60.0
+# 5.7.6: a docking request this soon after a TALK reply was asked for by you; the reply said it.
+DOCK_TALK_S = 15.0
 # Galnet at most once a day, and each headline only once (5.5.11).
 GALNET_REST_S = 86400.0
 GALNET_HEADLINE_REST_S = 30 * 86400.0
@@ -616,6 +618,8 @@ class WatcherMind:
         # last spoke in, a hull scare not yet survived, and who TALK addressed.
         self._chime = None
         self._chimed_session = None
+        # 5.7.6: crewmates' lines waiting their turn (an expedition's debrief).
+        self._crew_queue = []
         # 5.7.5: the plotted route as the journal counts it down (jumps left
         # including the one targeted, its length, the milestones said) and
         # the class of the star we're about to arrive at.
@@ -771,7 +775,9 @@ class WatcherMind:
             fresh = [row for row in options if not self._said_recently(row[0], window(row))]
             if fresh:
                 return self.random.choice(fresh)[:2]
-            if topic not in route_lines.TRAVEL or not (FREQUENCIES.get(frequency(self.config)) or {}).get("cycle"):
+            cycles = topic in ship_life.ANSWERS or topic == "docking_requested" or (
+                topic in route_lines.TRAVEL and (FREQUENCIES.get(frequency(self.config)) or {}).get("cycle"))
+            if not cycles:
                 return None
         # Something it must say (or Chatty's travel talk, with every line
         # used): the ones said longest ago, never the last one again.
@@ -902,8 +908,30 @@ class WatcherMind:
         self._chime = {"speaker": self.random.choice(crew), "moment": moment, "due": now + delay,
                        "until": now + delay + crew_voices.CHIME_EXPIRES_S}
 
+    def _queue_debrief(self, name):
+        """5.7.6: each crewmate you've flown with adds a line before an
+        expedition, one after another, off watch."""
+        now = self.clock()
+        for index, speaker in enumerate(crew_debrief.speakers(self.identity, getattr(self, "_crew_flown", ()))):
+            line = self.random.choice(crew_debrief.DEBRIEF[speaker]).format(name=name)
+            due = now + crew_debrief.SPACING_S * (index + 1)
+            self._crew_queue.append({"speaker": speaker, "text": line, "due": due, "until": due + crew_debrief.EXPIRES_S})
+
+    def _crew_queue_due(self, now):
+        queue = self._crew_queue
+        while queue and now > queue[0]["until"]:
+            queue.pop(0)
+        if not queue or now < queue[0]["due"] or self._in_danger or FREQUENCIES.get(frequency(self.config)) is None:
+            return None
+        row = queue.pop(0)
+        key = row.get("key") or f"debrief:{row['speaker']}:{zlib.crc32(row['text'].encode('utf-8')):08x}"
+        return self._crew_line(row.get("topic") or "crew_debrief", key, row["speaker"], row["text"], row.get("heading"), now)
+
     def _crew_chime_due(self, now):
         """The crewmate's line, once the one on watch has had its say."""
+        queued = self._crew_queue_due(now)
+        if queued:
+            return queued
         if self._close_call_at is not None and now - self._close_call_at >= crew_voices.CLOSE_CALL_AFTER_S and not self._in_danger:
             self._close_call_at = None
             self._crew_chime_queue("close_call", now, delay=0)
@@ -979,7 +1007,7 @@ class WatcherMind:
         row = crew_lore.due(self.identity, self.memory, getattr(self, "_crew_flown", set()),
                             self.memory.get("hours") or 0, now, last_story)
         if row is None:
-            return None
+            return self._crew_story_scene(now)
         passage_id, _title, text = row
         formatter = getattr(self.random, "format_words", None)
         words = formatter(text, {}) if callable(formatter) else text
@@ -989,6 +1017,35 @@ class WatcherMind:
         self._story_changed = True
         thought = self._utter("crew_lore", f"crew:{passage_id}", words, now)
         thought.update(kind="memory", heading=crew_lore.heading(self.identity, passage_id), importance=3)
+        return thought
+
+    def _crew_story_scene(self, now):
+        """5.7.6: a scene of the crew's own story, a line from each of them in
+        turn, each in its own voice. The first is said now, the rest queue."""
+        scene = crew_story.due(self.memory, getattr(self, "_crew_story_shared", ()), getattr(self, "_crew_unlocked", False), now)
+        if scene is None:
+            return None
+        scene_id, _title, lines = scene
+        with self.lock:
+            self.memory.setdefault("crew_story", []).append([scene_id, now])
+        self._story_changed = True
+        heading = crew_story.heading(scene_id)
+        speaker, text = lines[0]
+        thought = self._crew_line("crew_story", f"crewstory:{scene_id}:0", speaker, text, heading, now)
+        for index, (speaker, text) in enumerate(lines[1:], start=1):
+            due = now + crew_story.SPACING_S * index
+            self._crew_queue.append({"speaker": speaker, "text": text, "due": due, "until": due + crew_debrief.EXPIRES_S,
+                                     "topic": "crew_story", "heading": heading, "key": f"crewstory:{scene_id}:{index}"})
+        return thought
+
+    def _crew_line(self, topic, key, speaker, text, heading, now):
+        """One line of the crew's: in this companion's own voice if it's the
+        speaker, otherwise the crewmate's, off watch."""
+        thought = self._utter(topic, key, text, now)
+        if speaker != self.identity:
+            self._as_crewmate(thought, speaker)
+        thought.update(kind="memory" if topic == "crew_story" else thought.get("kind", ""), importance=3,
+                       **({"heading": heading} if heading else {}))
         return thought
 
     def _crew_handover(self, previous):
@@ -1375,8 +1432,21 @@ class WatcherMind:
         # 5.7.5: the ship's everyday life; its usual handling still follows.
         life = ship_life.moment(event, raw) or squadron_talk.moment(event, raw)
         if life:
-            thought = self.consider(*life)
+            now = self.clock()
+            if life[0] == "docking_requested":
+                # 5.7.6: the station's answer follows; you asked by voice or TALK,
+                # its reply has said the request already.
+                self._docking_asked = now
+                if now - self._last_said("talk") < DOCK_TALK_S:
+                    life = None
+        if life:
+            # The station's answer to your request is always said.
+            answer = life[0] in ship_life.ANSWERS and now - getattr(self, "_docking_asked", float("-inf")) <= ship_life.ANSWER_S
+            thought = self.consider(*life, force=answer)
             if thought:
+                if answer:
+                    thought["importance"] = max(int(thought.get("importance") or 0), 2)
+                    self._docking_asked = float("-inf")
                 return thought
         if route and event == "FSDTarget":
             thought = self.consider(*route)
@@ -1708,6 +1778,11 @@ class WatcherMind:
             return thought
         if kind.startswith("hatchling_") and kind in IMPORTANCE:
             return self.consider(kind, fields, force=kind in {"hatchling_grown", "hatchling_trick"})
+        if kind == "expedition_set_out" and kind in IMPORTANCE:
+            # 5.7.6: the one on watch marks the start; the crew each add a line.
+            thought = self.consider(kind, fields, force=True)
+            self._queue_debrief(fields.get("name") or "the expedition")
+            return thought
         if kind.startswith("expedition_") and kind in IMPORTANCE:
             # An expedition's milestones come once each (the expedition
             # remembers them), so they're said whatever the hour.
@@ -1820,6 +1895,10 @@ class WatcherMind:
         vehicle you're in and your ship's hold (5.5.12)."""
         if isinstance(context, dict) and "crew" in context:
             self._crew_flown = crew_lore.flown(context)
+            crew = context.get("crew") or {}
+            # 5.7.6: how far the crew's accounts and their shared story have got.
+            self._crew_unlocked = bool(crew.get("total")) and int(crew.get("told") or 0) >= int(crew.get("total") or 0)
+            self._crew_story_shared = set(crew.get("story") or ())
         context = context or {}
         kind = str(context.get("vehicle") or "").casefold()
         if kind in SRV_HOLD_T or kind in ("nomad", "fighter"):

@@ -349,7 +349,7 @@ class PlanetLookupTests(unittest.TestCase):
     def test_your_materials_from_the_journal(self):
         deck = Deck()
         deck.engineer_materials = {"raw": {"iron": {"name": "Iron", "count": 9}}}
-        self.assertEqual(deck._watcher_lookup_materials("how much iron?"), ["Iron: 9 (raw)"])
+        self.assertEqual(deck._watcher_lookup_materials("how much iron?"), ["Iron: 9 of 300 (raw, grade 1)"])
 
 
 # -- missions, ranks, carrier, unsold data, the world here, your record, rebuy -----------

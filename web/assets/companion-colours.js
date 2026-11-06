@@ -5,6 +5,7 @@ export const SIGNATURES = {
   aster: {label:"Aster cyan",primary:"#65e4ef",secondary:"#a8b4ff"},
   axiom: {label:"Axiom violet",primary:"#a897ff",secondary:"#65e4ef"},
   meridian: {label:"Meridian gold",primary:"#e8c48c",secondary:"#74bbff"},
+  lyra: {label:"Lyra aurora",primary:"#74ddff",secondary:"#ec9fdb"},
 };
 
 export function companionColours(identity, accent, theme) {

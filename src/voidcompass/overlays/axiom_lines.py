@@ -1,4 +1,5 @@
 """Axiom's words: greetings, rundowns, control replies and composed banks (5.7.4)."""
+from voidcompass.overlays import officer_habits, talk_replies
 from voidcompass.overlays import crew_lore, axiom_events, axiom_keepsakes, axiom_lore, axiom_watch, axiom_survey, persona_lines, route_lines, survey_report, axiom_field, axiom_more, rhino_lines, mining_talk, ship_life, squadron_talk
 
 GREETINGS = (
@@ -171,6 +172,9 @@ COMMANDS = {
               "I can report on the ship, cargo, route and station, or run a configured control. Ask me what I can do."),
 }
 
+# 5.7.6: the nearest station and how far to a system.
+COMMANDS.update(talk_replies.OFFICERS["axiom"])
+
 BANK = persona_lines.Bank(greetings=GREETINGS, restrained_greetings=RESTRAINED_GREETINGS, capabilities=CAPABILITIES,
                           plain=persona_lines.merge(axiom_events.PLAIN, axiom_watch.PLAIN, axiom_keepsakes.PLAIN,
                                                      crew_lore.topics("axiom"), axiom_survey.PLAIN,
@@ -191,5 +195,7 @@ BANK = persona_lines.Bank(greetings=GREETINGS, restrained_greetings=RESTRAINED_G
 EVENTS, RESTRAINED_EVENTS = BANK.EVENTS, BANK.RESTRAINED_EVENTS
 # Refining in an SRV only happens in the Rhino: the rigs' yield (5.7.5).
 RESTRAINED_EVENTS["mined_surface"], EVENTS["mined_surface"] = rhino_lines.officer_refining("axiom")
+# 5.7.6: habit summaries in depth, and style lines that read right.
+officer_habits.apply("axiom", EVENTS, RESTRAINED_EVENTS)
 INTERESTS = axiom_survey.INTERESTS
 event_lines, answer, command_reply = BANK.event_lines, BANK.answer, BANK.command_reply

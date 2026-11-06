@@ -11,7 +11,7 @@ const NAMES = {
   longest_jump: "Longest jump", furthest: "Furthest out", regions: "Where you lived", home: "Home",
   discoveries: "First discoveries", rare: "Rarest find", codex: "Codex personality", biology: "Organics",
   money: "Credits", bgs: "Factions", music: "Soundtrack", postcards: "Postcards", constellations: "Constellations",
-  achievements: "Achievements", combat: "Combat", everyday: "The everyday", deaths: "Rebuys", places: "Places", hatchling: "Along for the ride", verdict: "The verdict", finale: "The whole year",
+  achievements: "Achievements", combat: "Combat", everyday: "The everyday", deaths: "Rebuys", places: "Places", hatchling: "Along for the ride", crew: "The crew", verdict: "The verdict", finale: "The whole year",
 };
 const PALETTES = {
   intro: ["#070a22", "#341060", "#7ae7ff"], distance: ["#03101f", "#0b3d6e", "#5be0ff"],
@@ -25,7 +25,7 @@ const PALETTES = {
   postcards: ["#181007", "#5a3b14", "#ffcf8a"], constellations: ["#04081a", "#16205e", "#a3b5ff"],
   achievements: ["#181204", "#6b520b", "#ffd84d"], deaths: ["#170405", "#5a0b10", "#ff5c66"],
   places: ["#04130f", "#0f4a3c", "#6fffd2"],
-  hatchling: ["#06140f", "#14523a", "#9dffd2"],
+  hatchling: ["#06140f", "#14523a", "#9dffd2"], crew: ["#060a14", "#1b2c52", "#8fb8ff"],
   combat: ["#170506", "#5e1012", "#ff4d4d"], everyday: ["#08121a", "#174256", "#7fd8ff"],
   verdict: ["#040509", "#141826", "#00d1ff"], finale: ["#05070c", "#0f2033", "#00d1ff"],
 };
@@ -932,6 +932,33 @@ const PAINT = {
     text(c, `${card.moments} ${card.moments === 1 ? "MOMENT" : "MOMENTS"} IN ITS DIARY`, W / 2, 752, {size: 28, font: MONO, colour, spacing: 6, align: "center", alpha: appear(t, .9)});
     (card.lines || []).slice(-5).forEach((line, index) => text(c, line, 90, 850 + index * 54, {size: 32, colour: index ? SOFT : INK, alpha: appear(t, 1.2 + index * .25), max: 900}));
     if (card.badge) text(c, `✦ ${card.badge}`, W / 2, 1240, {size: 38, colour, align: "center", alpha: appear(t, 2.6)});
+  },
+
+  // 5.7.6: who stood watch, for how long, and a line each of them said.
+  crew(c, card, t, colour) {
+    kicker(c, "The crew", t, colour);
+    headline(c, "On watch", 90, 300, t, .3, {size: 96});
+    text(c, `${card.top} stood the most of it.`, 90, 366, {size: 34, font: SERIF, colour: SOFT, alpha: appear(t, .8), max: 900});
+    const members = (card.members || []).slice(0, 4);
+    const top = Math.max(1, ...members.map((member) => Number(member.hours) || 0));
+    members.forEach((member, index) => {
+      const at = 1 + index * .35, a = appear(t, at, .8), y = 470 + index * 190;
+      const facts = [`${fmt(member.hours, member.hours < 10 ? 1 : 0)} h`, `${fmt(member.watches)} ${member.watches === 1 ? "watch" : "watches"}`];
+      if (member.stories) facts.push(`${fmt(member.stories)} ${member.stories === 1 ? "story" : "stories"}`);
+      text(c, member.name, 90, y, {size: 44, colour: INK, alpha: a, max: 420});
+      text(c, facts.join("  ·  ").toUpperCase(), W - 90, y, {size: 22, font: MONO, colour: rgba(colour, .95), alpha: a, spacing: 3, align: "right", max: 470});
+      c.save();
+      c.globalAlpha = a;
+      c.fillStyle = "rgba(255,255,255,.08)";
+      c.fillRect(90, y + 22, W - 180, 10);
+      c.shadowColor = colour;
+      c.shadowBlur = 12;
+      c.fillStyle = colour;
+      c.fillRect(90, y + 22, (W - 180) * (Number(member.hours) || 0) / top * ease((t - at) / 1.1), 10);
+      c.restore();
+      if (member.line) text(c, `“${member.line}”`, 90, y + 84, {size: 30, font: `italic ${SERIF}`, colour: SOFT, alpha: appear(t, at + .5), max: 900});
+    });
+    if (card.night_watch) text(c, `✦ The Night Watch: ${card.night_watch} of 6 heard`, W / 2, 1270, {size: 32, colour, align: "center", alpha: appear(t, 2.8)});
   },
 
   verdict(c, card, t, colour) {

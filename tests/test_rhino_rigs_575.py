@@ -46,7 +46,7 @@ class RefiningTests(unittest.TestCase):
 
 class RigNoteTests(unittest.TestCase):
     def test_every_companion_speaks_to_each_rig_moment(self):
-        fields = {"slot": "2", "left": "3", "km": "3.6", "body": "Synuefe 4 a"}
+        fields = {"slot": "2", "left": "3", "km": "3.6", "body": "Synuefe 4 a", "percent": "50", "pulses": "6"}
         for identity in CREW:
             for kind in rhino_lines.IMPORTANCE:
                 with self.subTest(identity=identity, kind=kind):

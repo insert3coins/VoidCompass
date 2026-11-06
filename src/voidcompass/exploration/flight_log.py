@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 import time
 import zlib
 
+from voidcompass.overlays import crew_debrief
+
 TRAIL_POINTS = 400
 HIGHLIGHTS = 6
 ELITE_YEARS = 1286
@@ -143,7 +145,10 @@ def companion_words(facts, companion):
     """Aster's, Axiom's or Meridian's closing paragraph (5.7.4), built like
     the Watcher's: chosen by the session, so the same words every reading."""
     from voidcompass.overlays import companion_personas
-    log = companion_personas.get(companion).keepsakes.LOG
+    persona = companion_personas.get(companion)
+    if persona is None:
+        return ""
+    log = persona.keepsakes.LOG
     facts = {"part": "night", "when": "tonight", "When": "Tonight", "whens": "tonight's", **facts}
     seed = zlib.crc32(str(facts.get("id") or "").encode("utf-8"))
     sentences = [log["openings"][seed % len(log["openings"])].format(**facts)]
@@ -336,6 +341,10 @@ def flight_log(session, rows=(), postcards=(), nature="weary", now=None, finds=(
         # 5.7.4: signed by whichever companion was on watch that session.
         "companion": companion if companion in _PERSONAS else "watcher",
         "companion_name": _COMPANION_NAMES.get(companion, "the Watcher"),
+        # 5.7.6: the others who stood a watch this session add a signed postscript.
+        "postscripts": [{**row, "name": _COMPANION_NAMES.get(row["companion"], "the Watcher")}
+                        for row in crew_debrief.postscripts(companion, session.get("companions") or (), zlib.crc32(
+                            str(session.get("started") or "").encode("utf-8")))],
         # Field discoveries made this session (5.5.3.8), repeats grouped.
         "finds": grouped_finds(finds),
         "finds_total": len([find for find in finds or () if isinstance(find, dict)]),

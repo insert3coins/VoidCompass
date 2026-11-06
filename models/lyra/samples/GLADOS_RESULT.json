@@ -1,0 +1,10 @@
+{
+  "candidate": "glados",
+  "file": "glados.wav",
+  "sample_rate": 22050,
+  "channels": 1,
+  "duration_seconds": 12.299,
+  "cold_synthesis_seconds": 1.396,
+  "processing": "Raw Piper output; no extra robot effects applied.",
+  "script": "Hello, I'm Lyra. All systems ready. Your next jump is twelve light years. The galaxy map is open. Welcome back, Commander. I'll keep an eye on the ship while you explore."
+}

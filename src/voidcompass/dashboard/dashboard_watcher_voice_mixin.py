@@ -13,7 +13,7 @@ import os
 import re
 import time
 
-from voidcompass.core import companion_features, ranks, companions
+from voidcompass.core import companion_features, crew_rota, home_anchor, ranks, companions
 from voidcompass.core.overlay_registry import OVERLAY_SPECS
 from voidcompass.exploration import codex_index
 from voidcompass.exploration.galactic_regions import region_names
@@ -41,6 +41,9 @@ WATCHER_SWITCHES = ("heartbeat_thought_backdrop", "heartbeat_thought_heading")
 TEST_LINE = "This is my voice, Commander. I can hear you. Well. I can hear the ship."
 # The lookups that need what you asked: the world you name, the material you name.
 ASKS_THE_QUESTION = {"life", "planet", "materials", "codex", "world", "record", "cargo", "market"}
+# The nearest station with a service: this many results asked of Spansh, the
+# carriers among them dropped unless you asked for one.
+STATION_SEARCH_SIZE = 8
 # Short names commanders use for commodities.
 COMMODITY_ALIASES = {"ltd": "Low Temperature Diamonds", "ltds": "Low Temperature Diamonds",
                      "vo": "Void Opal", "vos": "Void Opal"}
@@ -54,6 +57,14 @@ def _asked_words(question):
     return f" {' '.join(re.sub(r'[?!.,;:]+', ' ', str(question or '').casefold()).split())} "
 
 
+
+def _rota_of(deck):
+    rota = getattr(deck, "_crew_rota", None)
+    if rota is None:
+        rota = deck._crew_rota = crew_rota.Rota()
+    return rota
+
+
 class DashboardWatcherVoiceMixin:
     # -- the speaker ---------------------------------------------------------
     def _watcher_speaker(self):
@@ -64,21 +75,26 @@ class DashboardWatcherVoiceMixin:
         return speaker
 
     def _watcher_voice_on(self):
-        return bool(companions.settings(self.config).get("watcher_voice_enabled")) and self._companion_voice_installed()
+        return not companions.overlay_only(self.config) and bool(companions.settings(self.config).get("watcher_voice_enabled")) and self._companion_voice_installed()
 
     def _crewmate_voice_on(self, selected):
-        if selected not in companions.IDENTITIES:
+        if selected not in companions.IDENTITIES or companions.overlay_only(selected):
             return False
         installed = voice_assets.installed(model=selected) if selected != "watcher" else voice_assets.installed()
         return bool(companions.settings(self.config, selected).get("watcher_voice_enabled")) and installed
 
     def _companion_voice_installed(self):
         selected = companions.identity(self.config)
+        if companions.overlay_only(selected):
+            return False
         return voice_assets.installed(model=selected) if selected != "watcher" else voice_assets.installed()
 
-    def _companion_switch(self, selected):
+    def _companion_switch(self, selected, by_rota=False):
         previous = companions.identity(self.config)
         done = self._companion_switch_inner(selected)
+        if done and not by_rota and previous != selected:
+            # 5.7.6: your own choice holds the watch before the rota takes over again.
+            _rota_of(self).hold(time.time())
         if done and hasattr(self, "_stamp_session_companion"):
             self._stamp_session_companion(switched=True)
         hud = getattr(self, "heartbeat_hud", None)
@@ -89,6 +105,56 @@ class DashboardWatcherVoiceMixin:
             except Exception:
                 logging.debug("Crew handover skipped", exc_info=True)
         return done
+
+    def _crew_rota_state(self):
+        return _rota_of(self)
+
+    def _crew_rota_schedule(self):
+        """While the rota is on, it looks again every few seconds: docked and
+        idle, Status.json may not change for minutes, and the watch never
+        changed (5.7.6)."""
+        if getattr(self, "_crew_rota_job", None) is not None or not self.config.get("crew_rota"):
+            return
+        call_later = getattr(getattr(self, "root", None), "call_later", None)
+        if not callable(call_later):
+            return
+
+        def look():
+            self._crew_rota_job = None
+            try:
+                self._crew_rota_tick()
+            except Exception:
+                logging.debug("Watch rota skipped", exc_info=True)
+            self._crew_rota_schedule()
+
+        try:
+            self._crew_rota_job = call_later(int(crew_rota.TICK_S * 1000), look)
+        except Exception:
+            self._crew_rota_job = None
+
+    def _crew_rota_facts(self):
+        mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+        try:
+            home_ly = home_anchor.distance(getattr(self, "current_coords", None), self.config)
+        except Exception:
+            home_ly = None
+        return {"docked": bool(getattr(self, "current_docked", False)), "gui_focus": getattr(self, "current_gui_focus", None),
+                "on_planet": bool(getattr(self, "on_planet", False)), "on_foot": bool(getattr(self, "current_on_foot", False)),
+                "in_srv": bool(getattr(self, "current_in_srv", False)), "route_left": getattr(mind, "_route_left", None),
+                "home_ly": home_ly, "deep_ly": crew_rota.deep_ly(self.config)}
+
+    def _crew_rota_tick(self, now=None):
+        """5.7.6: with the watch rota on, the companion follows what you're
+        doing (crew_rota.py). Runs on each Status.json update."""
+        if not self.config.get("crew_rota") or getattr(self, "heartbeat_hud", None) is None:
+            return None
+        self._crew_rota_schedule()
+        now = time.time() if now is None else now
+        target = self._crew_rota_state().step(self._crew_rota_facts(), now, companions.identity(self.config),
+                                              rota_duties=crew_rota.duties(self.config))
+        if target and self._companion_switch(target, by_rota=True):
+            return target
+        return None
 
     def _companion_switch_inner(self, selected):
         if selected not in companions.IDENTITIES:
@@ -129,7 +195,7 @@ class DashboardWatcherVoiceMixin:
     def _companion_first_pace(self, selected):
         """5.7.4: a companion's first watch starts at the Watcher's Thoughts
         pace rather than a fixed default. Later changes are its own."""
-        if selected == "watcher":
+        if selected == "watcher" or companions.overlay_only(selected):
             return
         from voidcompass.overlays import heartbeat_hud
         try:
@@ -150,7 +216,7 @@ class DashboardWatcherVoiceMixin:
         hud.voice_listener = self._watcher_voice_say
         hud.voice_status_listener = self._watcher_voice_status
         self._watcher_voice_sync()
-        if self.config.get("watcher_listen_enabled"):
+        if self.config.get("watcher_listen_enabled") and not companions.overlay_only(self.config):
             self._watcher_listener().warm()
         mind = getattr(hud, "mind", None)
         if mind is not None:
@@ -301,6 +367,14 @@ class DashboardWatcherVoiceMixin:
         if "market" not in topics and "data" not in topics and watcher_copilot.VALUE_ASKED.search(str(question or "")):
             if self._watcher_commodities_named(question, self._watcher_market_file().get("items") or ()):
                 topics.append("market")
+        # 5.7.6: "How much arsenic do I have?": a material you hold, by name.
+        if "materials" not in topics and "planet" not in topics and not watcher_copilot._SOMEWHERE.search(str(question or "")):
+            stock = getattr(self, "engineer_materials", None) or {}
+            words = _asked_words(question)
+            held = {str(entry.get("name") or "").casefold() for kind in ("raw", "manufactured", "encoded")
+                    for entry in (stock.get(kind) or {}).values() if isinstance(entry, dict)}
+            if any(name and f" {name} " in words for name in held):
+                topics.append("materials")
         for topic in topics:
             try:
                 lookup = getattr(self, f"_watcher_lookup_{topic}")
@@ -551,7 +625,13 @@ class DashboardWatcherVoiceMixin:
         return watcher_copilot.record_lines((getattr(self, "companion_state", None) or {}).get("statistics"), question)
 
     def _watcher_lookup_materials(self, question=""):
-        return watcher_copilot.materials_lines(getattr(self, "engineer_materials", None) or {}, question)
+        from voidcompass.engineering.engineering_data import material_info
+        return watcher_copilot.materials_lines(getattr(self, "engineer_materials", None) or {}, question,
+                                               grade_of=lambda symbol: material_info(symbol).get("grade"))
+
+    def _watcher_lookup_goals(self):
+        goals = (getattr(self, "companion_state", None) or {}).get("community_goals") or {}
+        return watcher_copilot.community_goal_lines(list(goals.values()) if isinstance(goals, dict) else list(goals), time.time())
 
     def _watcher_lookup_colony(self):
         colony = getattr(self, "colony", None)
@@ -635,6 +715,13 @@ class DashboardWatcherVoiceMixin:
             return self._watcher_uplink(original_text, request, rng)
         if native.get("kind") == "overlay":
             return self._watcher_overlay({key: native[key] for key in ("overlay", "op")}, rng)
+        # 5.7.6: the nearest station with a service, and how far to a system.
+        station = watcher_copilot.station_request(text)
+        if station:
+            return self._watcher_station_search(original_text, station, rng)
+        target = watcher_copilot.distance_request(text)
+        if target:
+            return self._watcher_distance(original_text, target, rng)
         # 5.7.3: the ship's own controls, pressed in Elite.
         ship = getattr(self, "_watcher_ship", None)
         done = ship(text, rng) if callable(ship) else None
@@ -778,6 +865,92 @@ class DashboardWatcherVoiceMixin:
                            cache_key=("watcher-uplink-fresh-two", kind, system, commodity, amount, tuple(sorted(options.items()))))
         return {"waiting": True, "say": watcher_copilot.reply("uplink_opening", rng, commodity=commodity, verb=kind)}
 
+    def _watcher_station_search(self, text, station, rng=None):
+        """5.7.6: "Where's the nearest material trader?" Spansh's station
+        search from where you are, answered when it comes back."""
+        if not self._trading_online():
+            return watcher_copilot.reply("uplink_off", rng)
+        system = str(getattr(self, "current_sys", "") or "")
+        coords = self._galaxy_minimap_position() if hasattr(self, "_galaxy_minimap_position") else None
+        if not system and not coords:
+            return watcher_copilot.reply("distance_nowhere", rng)
+        generation = getattr(self, "_companion_generation", 0)
+        requested_mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+
+        def work():
+            if station["trader"]:
+                rows = spansh.material_traders(system, station["trader"], size=STATION_SEARCH_SIZE, coords=coords)
+            else:
+                rows = spansh.service_stations(system, station["service"], size=STATION_SEARCH_SIZE, coords=coords)
+            return [row for row in rows if station["carriers"] or not row.get("carrier")]
+
+        def done(result, error):
+            if generation != getattr(self, "_companion_generation", 0) or requested_mind is not getattr(getattr(self, "heartbeat_hud", None), "mind", None):
+                return
+            lines = watcher_copilot.nearest_station_lines(station["label"], result, system, error)
+            mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+            if mind is not None and mind.uplink_answer(text, lines):
+                self._watcher_mind_watch()
+
+        self._trading_task("watcher-station", work, lambda result, error: self._ui_post(done, result, error),
+                           cache_key=("watcher-station", system, station["service"], station["trader"], station["carriers"]))
+        return {"waiting": True, "say": watcher_copilot.reply("station_opening", rng, label=station["label"])}
+
+    def _watcher_distance(self, text, name, rng=None):
+        """5.7.6: "How far is Colonia?" From your own history first (or a
+        well-known place, or home), else Spansh when trading searches are on."""
+        here = self._galaxy_minimap_position() if hasattr(self, "_galaxy_minimap_position") else None
+        if here is None:
+            return watcher_copilot.reply("distance_nowhere", rng)
+        here_name = str(getattr(self, "current_sys", "") or "")
+        try:
+            reach = float(self._expedition_jump_range() or 0)
+        except Exception:
+            reach = 0.0
+        found = None
+        if name.casefold() in ("home", "home system", "my home", "our home"):
+            anchor = home_anchor.home(self.config)
+            found = {"name": anchor["name"], "coords": anchor["pos"]}
+        if found is None:
+            history = getattr(self, "travel_history", None)
+            rows = []
+            if history is not None:
+                lock = getattr(history, "lock", None)
+                if lock is not None:
+                    with lock:
+                        rows = list(getattr(history, "rows", None) or ())
+                else:
+                    rows = list(getattr(history, "rows", None) or ())
+            position = home_anchor.from_history(rows, name) if rows else None
+            if position is not None:
+                spelled = next((str(row[1]) for row in reversed(rows) if str(row[1]).casefold() == name.casefold()), name)
+                found = {"name": spelled, "coords": position}
+        found = found or watcher_copilot.landmark(name)
+        if found is not None:
+            return watcher_copilot.plain_answer(watcher_copilot.distance_lines(found["name"], found["coords"], here_name, here, reach))
+        if not self._trading_online():
+            return watcher_copilot.reply("distance_unknown", rng, name=name)
+        generation = getattr(self, "_companion_generation", 0)
+        requested_mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+
+        def done(result, error):
+            if generation != getattr(self, "_companion_generation", 0) or requested_mind is not getattr(getattr(self, "heartbeat_hud", None), "mind", None):
+                return
+            if error:
+                lines = [f"The uplink couldn't find {name}: {error}"]
+            elif not result:
+                lines = [f"Spansh doesn't know a system called {name}"]
+            else:
+                lines = watcher_copilot.distance_lines(result["name"], result["coords"], here_name, here, reach)
+            mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+            if mind is not None and mind.uplink_answer(text, lines):
+                self._watcher_mind_watch()
+
+        self._trading_task("watcher-distance", lambda: spansh.system_position(name),
+                           lambda result, error: self._ui_post(done, result, error),
+                           cache_key=("watcher-distance", name.casefold()))
+        return {"waiting": True, "say": watcher_copilot.reply("distance_opening", rng, name=name)}
+
     def _watcher_mind_watch(self):
         """Speak and publish a new command reply or uplink answer immediately."""
         if not getattr(self, "_closing", False):
@@ -799,6 +972,8 @@ class DashboardWatcherVoiceMixin:
 
     # -- the download --------------------------------------------------------
     def _watcher_voice_downloader(self):
+        if companions.overlay_only(self.config):
+            raise ValueError("This companion has no voice model yet")
         download = getattr(self, "_watcher_voice_download", None)
         selected = companions.identity(self.config)
         if download is None or getattr(download, "model", "watcher") != selected:
@@ -852,6 +1027,9 @@ class DashboardWatcherVoiceMixin:
             "heartbeat_thought_hold": style["hold"],
             "heartbeat_thought_backdrop": style["backdrop"],
             "heartbeat_thought_heading": style["heading"],
+            "crew_rota": bool(self.config.get("crew_rota")),
+            **{crew_rota.duty_key(duty): who for duty, who in crew_rota.duties(self.config).items()},
+            "crew_rota_deep_ly": str(crew_rota.deep_ly(self.config)),
             "text_sizes": list(HEARTBEAT_TEXT_SIZES),
         }
 
@@ -865,6 +1043,10 @@ class DashboardWatcherVoiceMixin:
 
     def _html_watcher_voice(self, memory):
         selected = companions.identity(self.config)
+        if companions.overlay_only(selected):
+            return {"identity": selected, "available": False, "model_name": "Voice pending", "enabled": False,
+                    "installed": False, "download": {"stage": "idle"}, "size_mb": 0, "speaking": False,
+                    "orb_on": getattr(self, "heartbeat_hud", None) is not None}
         config = companions.settings(self.config)
         download = getattr(self, "_watcher_voice_download", None)
         state = download.state() if download is not None else {"stage": "idle", "done": 0,
@@ -903,6 +1085,8 @@ class DashboardWatcherVoiceMixin:
         """The Watcher page's own controls. True when handled and done."""
         if operation == "companion_identity":
             return self._companion_switch(str(payload.get("value") or ""))
+        if companions.overlay_only(self.config) and operation != "settings":
+            return False
         if operation in ("aster_humour", "companion_humour"):
             key = "aster_humour" if operation == "aster_humour" else companions.humour_key(self.config)
             if not key or payload.get("value") not in ("off", "dry"):
@@ -919,6 +1103,43 @@ class DashboardWatcherVoiceMixin:
                 self.config[companions.key(self.config, "heartbeat_thoughts")] = values["heartbeat_thoughts"]
                 self._persist_config()
                 values = {key: value for key, value in values.items() if key != "heartbeat_thoughts"}
+            if "crew_rota" in values:
+                # 5.7.6: the watch rota, a commander setting of its own.
+                self.config["crew_rota"] = bool(values["crew_rota"])
+                self._crew_rota_state().held_until = 0.0
+                self._persist_config()
+                values = {key: value for key, value in values.items() if key != "crew_rota"}
+                if self.config["crew_rota"]:
+                    self._crew_rota_tick()
+            if "crew_rota_deep_ly" in values:
+                # 5.7.6: where deep space starts, light years from home.
+                try:
+                    reach = int(values["crew_rota_deep_ly"])
+                except (TypeError, ValueError):
+                    return False
+                if reach not in crew_rota.DEEP_CHOICES:
+                    return False
+                self.config["crew_rota_deep_ly"] = reach
+                self._crew_rota_state().candidate = None
+                self._persist_config()
+                values = {key: value for key, value in values.items() if key != "crew_rota_deep_ly"}
+                if not values:
+                    self._schedule_html_dashboard_publish(immediate=True)
+                    return True
+            duty_keys = {crew_rota.duty_key(duty) for duty, _label, _who in crew_rota.DUTIES}
+            if duty_keys & set(values):
+                # 5.7.6: who takes each duty on the watch rota.
+                for key in duty_keys & set(values):
+                    who = str(values[key] or "").casefold()
+                    if who not in crew_rota.CREW and who != crew_rota.KEEP:
+                        return False
+                    self.config[key] = who
+                self._crew_rota_state().candidate = None
+                self._persist_config()
+                values = {key: value for key, value in values.items() if key not in duty_keys}
+                if not values:
+                    self._schedule_html_dashboard_publish(immediate=True)
+                    return True
             selects = {key: values[key] for key in WATCHER_SELECTS if key in values}
             done = True
             if selects:

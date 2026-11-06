@@ -164,6 +164,13 @@ COLOR_YELLOW = _themes.ACTIVE_PALETTE["yellow"]
 
 
 PROFILE_TEXT_SETTINGS = (
+    # 5.7.6: who takes each duty on the watch rota.
+    "crew_rota_docked",
+    "crew_rota_scanning",
+    "crew_rota_surface",
+    "crew_rota_route",
+    "crew_rota_deep",
+    "crew_rota_flight",
     "edsm_cmdr_name",
     "edsm_api_key",
     "inara_api_key",
@@ -264,6 +271,9 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_rig_5",
     "overlay_hotkey_rig_6",
     "overlay_hotkey_rig_clear",
+    "overlay_hotkey_rhino_survey_centre",
+    "overlay_hotkey_rhino_survey_edge",
+    "overlay_hotkey_rhino_survey_clear",
     "overlay_hotkey_galaxy_minimap",
     "overlay_hotkey_galaxy_minimap_view",
     "overlay_hotkey_rhino_map",
@@ -345,6 +355,8 @@ PROFILE_BOOL_SETTINGS = (
     "heartbeat_idle_motion",
     "heartbeat_thought_backdrop",
     "heartbeat_thought_heading",
+    # 5.7.6: the watch rota (the companion follows what you're doing).
+    "crew_rota",
     "aster_voice_enabled",
     *companions.NEW_BOOL_KEYS,
     "aster_hud_motion",
@@ -457,6 +469,7 @@ PROFILE_BOOL_SETTINGS = (
 )
 
 PROFILE_VALUE_SETTINGS = (
+    "crew_rota_deep_ly",
     "nav_collapsed_groups",
     "galnet_rotation_seconds",
     "galnet_refresh_minutes",
@@ -985,6 +998,9 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_rig_5": "Ctrl+Alt+5",
         "overlay_hotkey_rig_6": "Ctrl+Alt+6",
         "overlay_hotkey_rig_clear": "",
+        "overlay_hotkey_rhino_survey_centre": "Ctrl+Alt+7",
+        "overlay_hotkey_rhino_survey_edge": "Ctrl+Alt+8",
+        "overlay_hotkey_rhino_survey_clear": "",
         "overlay_hotkey_galaxy_minimap": "",
         "overlay_hotkey_galaxy_minimap_view": "",
         "overlay_hotkey_rhino_map": "",
@@ -1356,6 +1372,9 @@ def load_config():
         'overlay_hotkey_rig_5': 'Ctrl+Alt+5',
         'overlay_hotkey_rig_6': 'Ctrl+Alt+6',
         'overlay_hotkey_rig_clear': '',
+        'overlay_hotkey_rhino_survey_centre': 'Ctrl+Alt+7',
+        'overlay_hotkey_rhino_survey_edge': 'Ctrl+Alt+8',
+        'overlay_hotkey_rhino_survey_clear': '',
         'overlay_hotkey_galaxy_minimap': '',
         'overlay_hotkey_galaxy_minimap_view': '',
         'overlay_hotkey_rhino_map': '',
@@ -1539,6 +1558,14 @@ def load_config():
         # and the Watcher's own text size (0 follows all overlays).
         'heartbeat_thought_side': 'auto',
         'heartbeat_thought_heading': True,
+        'crew_rota': False,
+        'crew_rota_docked': 'aster',
+        'crew_rota_scanning': 'axiom',
+        'crew_rota_surface': 'axiom',
+        'crew_rota_route': 'meridian',
+        'crew_rota_deep': 'watcher',
+        'crew_rota_flight': 'keep',
+        'crew_rota_deep_ly': 1000,
         'heartbeat_text_scale_percent': 0,
         # The Watcher's voice (5.5.4): Piper with the HAL model, off until
         # the commander turns it on; how loud, how fast, and how much it says.

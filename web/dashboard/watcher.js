@@ -9,7 +9,7 @@ import {companionColours} from "../assets/companion-colours.js";
 // (and its life) survives every refresh. While the page is hidden the canvas
 // has no size and the orb stops drawing.
 
-const COMPANION_ICONS = {watcher: "◉", aster: "⬡", axiom: "◌", meridian: "◇"};
+const COMPANION_ICONS = {watcher: "◉", aster: "⬡", axiom: "◌", meridian: "◇", lyra: "✧"};
 const NATURES = {weary: "Depressed", curious: "Curious", stoic: "Stoic", nervous: "Nervous", officer: "Officer on watch"};
 const FREQUENCIES = {off: "Off", rare: "Rare", occasional: "Occasional", chatty: "Chatty"};
 const MOOD_LABELS = {pleased: "PLEASED", wary: "WARY", curious: "CURIOUS", downcast: "DOWNCAST"};
@@ -36,7 +36,8 @@ function panelText(ui) {
   const liveThought = companionLive.thought, modelThought = companionModel.thought;
   const stale = liveThought?.scope && modelThought?.scope && liveThought.scope !== modelThought.scope;
   const current = (stale ? null : liveThought) || modelThought;
-  const thought = current || {id: `log:${latestLog?.at || "empty"}`, text: latestLog?.text || "It hasn't said anything yet. Give it a moment."};
+  const preview = Boolean(COMPANIONS[activeCompanion]?.overlay_only);
+  const thought = current || {id: `log:${activeCompanion}:${latestLog?.at || "empty"}`, text: latestLog?.text || (preview ? "Lyra’s overlay is ready to preview. Her voice, dialogue and story are still to come. Appearance and animation are in Overlay Studio." : "It hasn't said anything yet. Give it a moment.")};
   const body = quote.querySelector(".companion-caption");
   const fullText = window.CompanionCaption.finalWords(thought.script || thought.text || "").map(part => part.ch).join("");
   if (body.dataset.fullText !== fullText) body.dataset.fullText = fullText;
@@ -224,6 +225,7 @@ function shell(root, ui) {
       <header><span>THE CREW · COMING ABOARD</span><b id="watcher-crew-count"></b></header>
       <p class="watcher-note">How each of your companions came aboard, and how they found each other. Each tells its own part in quiet moments; a passage about a crewmate waits until you've flown with that crewmate too.</p>
       <div class="watcher-crew-grid" id="watcher-crew"></div>
+      <div class="watcher-crew-story" id="watcher-crew-story"></div>
     </section>
   </div>
   <div class="watcher-page watcher-you" data-watcher-panel="you" hidden>
@@ -568,6 +570,15 @@ function renderCrew(crew, ui) {
   const arcs = Array.isArray(crew.arcs) ? crew.arcs : [];
   const count = ui.byId("watcher-crew-count");
   if (count) count.textContent = crew.total ? `${ui.numeric(crew.told)} OF ${ui.numeric(crew.total)} TOLD · ${ui.numeric(crew.flown || 0)} OF 4 FLOWN WITH` : "";
+  // 5.7.6: the crew's own story, told together once every account is in.
+  const night = crew.ensemble || {};
+  const nightBox = ui.byId("watcher-crew-story");
+  if (nightBox) nightBox.innerHTML = !night.scenes ? "" : `<header><b>${ui.escapeHtml(night.title || "")}</b><em>${night.unlocked
+      ? `${ui.numeric(night.told)} / ${ui.numeric(night.total)}` : "When every account is told"}</em></header>
+    <ol>${night.scenes.map((scene) => scene.heard
+      ? `<li class="heard"><details><summary>${ui.escapeHtml(scene.title)}</summary>${scene.lines.map((line) =>
+          `<p><b>${ui.escapeHtml(line.speaker)}</b> ${ui.escapeHtml(line.text)}</p>`).join("")}</details></li>`
+      : `<li><span>· · ·</span></li>`).join("")}</ol>`;
   fill(ui, "watcher-crew", arcs.map((arc) => `<article class="watcher-crew-arc${arc.identity === activeCompanion ? " on-watch" : ""}" data-crew="${esc(arc.identity)}">
       <header><i aria-hidden="true">${COMPANION_ICONS[arc.identity] || "◉"}</i><span><b>${esc(arc.name)}</b><small>${esc(arc.role || "")}${arc.identity === activeCompanion ? " · ON WATCH" : arc.flown ? "" : " · NOT YET FLOWN WITH"}</small></span><em>${ui.numeric(arc.told)} / ${ui.numeric(arc.total)}</em></header>
       <ol>${(arc.passages || []).map((row) => row.heard
@@ -590,6 +601,8 @@ export function renderWatcher(data = {}, ui) {
   activeGeneration = data.companion_generation || 0;
   renderCompanionChrome(data);
   root.dataset.companion = identity;
+  root.dataset.overlayOnly = String(Boolean(COMPANIONS[identity]?.overlay_only));
+  if (COMPANIONS[identity]?.overlay_only && watcherTab === "you") showTab(root,"now");
   const selectedName = data.companion_name || (COMPANIONS[identity]?.name || "The Watcher");
   root.dataset.storyPending = String(Boolean(data.lore?.pending));
   root.querySelector(".aster-officer-mark b").textContent = (COMPANIONS[identity]?.role || "Companion").toUpperCase();
@@ -609,6 +622,9 @@ export function renderWatcher(data = {}, ui) {
   root.querySelector('.watcher-stage-head > span').textContent = selectedName.toUpperCase();
   root.querySelector('.watcher-lore-panel > header > span').textContent = data.lore?.pending ? `${selectedName.toUpperCase()} · STORY PENDING` : identity !== "watcher" ? String(data.lore?.title || selectedName).toUpperCase() : "THE LONG STORY · WHAT IT REMEMBERS";
   root.querySelector('[data-watcher-setting="heartbeat_personality"]')?.closest("label")?.toggleAttribute("hidden", identity !== "watcher");
+  // 5.7.6: the rota's duties show while the rota is on.
+  root.querySelectorAll('[data-watcher-setting^="crew_rota_"]').forEach((select) =>
+    select.closest("label")?.toggleAttribute("hidden", !data.settings?.crew_rota));
   root.querySelector(".watcher-eye-panel").setAttribute("aria-label", selectedName);
   root.querySelector(".watcher-bond-panel > header > span").textContent = `YOU AND ${selectedName.toUpperCase()}`;
   root.querySelector(".watcher-bond-panel").setAttribute("aria-label", `You and ${selectedName}`);
@@ -658,13 +674,13 @@ export function renderWatcher(data = {}, ui) {
   const captionChanged = panelText(ui);
   if ((!companionPoll || captionChanged) && !companionAsking) { clearTimeout(companionPoll); companionPoll = 0; companionLiveLoop(ui); }
   ui.byId("watcher-hotkey").textContent = data.hotkey ? `or ${data.hotkey} in game` : "Bind a key in Settings › Hotkeys to poke it in game";
-  ui.byId("watcher-poke").disabled = !data.enabled;
+  ui.byId("watcher-poke").disabled = !data.enabled || Boolean(COMPANIONS[identity]?.overlay_only);
   ui.byId("watcher-poke").textContent = identity !== "watcher" ? `CALL ${selectedName.toUpperCase()}` : "POKE";
   if (identity !== "watcher") ui.byId("watcher-hotkey").textContent = data.hotkey ? `or ${data.hotkey} in game` : "Set a companion key in Settings › Hotkeys";
   ui.byId("watcher-character").innerHTML = [
     identity !== "watcher" ? ["ROLE", COMPANIONS[identity]?.role || "Companion"] : ["NATURE", NATURES[data.nature] || data.nature || "—"],
     ["THOUGHTS", FREQUENCIES[data.frequency] || data.frequency || "—"],
-    [identity !== "watcher" ? "DISPLAY" : "EYE", identity === "axiom" ? "Particle field" : identity === "meridian" ? "Holographic portrait" : identity === "aster" ? "Luminous halo" : data.eye === "hal" ? "HAL red" : "Theme"],
+    [identity !== "watcher" ? "DISPLAY" : "EYE", identity === "axiom" ? "Particle field" : identity === "lyra" ? "3D robot" : identity === "meridian" ? "Holographic portrait" : identity === "aster" ? "Luminous halo" : data.eye === "hal" ? "HAL red" : "Theme"],
     ["OVERLAY", data.enabled ? "ON" : "OFF"],
     ["VOICE", data.voice?.enabled && data.voice?.installed ? "ON" : "OFF"],
   ].map(([label, value]) => `<div><dt>${label}</dt><dd>${ui.escapeHtml(value)}</dd></div>`).join("");
@@ -850,6 +866,11 @@ function wireTabs(root) {
 }
 
 const option = (value, label) => `<option value="${value}">${label}</option>`;
+// 5.7.6: the watch rota's duties, and who can take each.
+const ROTA_DUTIES = [["docked", "Docked"], ["scanning", "Scanning (FSS or DSS)"], ["surface", "On a planet's surface"],
+  ["route", "On a plotted route"], ["deep", "Deep space"], ["flight", "Ordinary flight"]];
+const ROTA_DEEP = [250, 500, 1000, 2000, 5000, 10000].map((ly) => [String(ly), `${ly.toLocaleString("en-GB")} ly`]);
+const ROTA_CREW = [["watcher", "The Watcher"], ["aster", "Aster"], ["axiom", "Axiom"], ["meridian", "Meridian"], ["keep", "Whoever's on watch"]];
 const field = (key, title, note, options) => `<label class="studio-field"><span>${title}${note ? `<small>${note}</small>` : ""}</span>
   <select data-watcher-setting="${key}">${options.map(([value, label]) => option(value, label)).join("")}</select></label>`;
 const toggle = (key, title, note) => `<label class="studio-switch"><span><b>${title}</b><small>${note}</small></span>
@@ -865,6 +886,9 @@ function settingsPanel() {
       [["weary", "Depressed"], ["curious", "Curious"], ["stoic", "Stoic"], ["nervous", "Nervous"]])}
     ${toggle("heartbeat_thought_backdrop", "Thought backdrop", "A dark panel behind its words, easier to read over the game.")}
     ${toggle("heartbeat_thought_heading", "Thought heading", "A line above its words: a memory and its chapter, an echo, or simply its name.")}
+    ${toggle("crew_rota", "Watch rota", "The crew changes the watch with what you're doing, within a minute of it starting. Choose who takes each duty below. Choosing a companion yourself holds it for half an hour.")}
+    ${ROTA_DUTIES.map(([duty, title]) => field(`crew_rota_${duty}`, title, "", ROTA_CREW)
+      + (duty === "deep" ? field("crew_rota_deep_ly", "Deep space starts", "How far from home", ROTA_DEEP) : "")).join("")}
     ${field("heartbeat_thought_side", "Thought side", "Auto goes toward the middle of the screen; either side swaps if its words won't fit there",
       [["auto", "Auto"], ["left", "Left of the display"], ["right", "Right of the display"]])}
     ${field("heartbeat_text_scale_percent", "Text size", "Its words only; the display keeps its size",
@@ -1077,6 +1101,18 @@ function renderVoice(voice, ui) {
   if (ui.byId("watcher-voice-model-name")) ui.byId("watcher-voice-model-name").textContent = voice.model_name || "HAL 9000 voice";
   const panel = ui.byId("watcher-workspace")?.querySelector('.watcher-voice');
   if (!panel) return;
+  const pending = voice.available === false || Boolean(COMPANIONS[activeCompanion]?.overlay_only);
+  panel.querySelectorAll("input,select,button").forEach(control => { control.disabled = pending; });
+  if (pending) {
+    ui.byId("watcher-voice-model-name").textContent = "Voice pending";
+    ui.byId("watcher-voice-on").checked = false;
+    ui.byId("watcher-voice-state").textContent = "Voice pending. Lyra is an overlay-only preview for now.";
+    ui.byId("watcher-voice-badge").textContent = " · PREVIEW";
+    ui.byId("watcher-voice-get").hidden = true;
+    ui.byId("watcher-voice-ready").hidden = true;
+    ui.byId("watcher-voice-orb").textContent = "Choose Lyra’s colours, size, focus and animation in Overlay Studio. No voice download is available yet.";
+    return;
+  }
   const download = voice.download || {};
   const busy = ["starting", "engine", "unpacking", "model"].includes(download.stage);
   ui.byId("watcher-voice-badge").textContent = voice.enabled && voice.installed ? " · VOICE ON" : "";
@@ -1269,6 +1305,7 @@ function renderTalk(data, ui) {
   if (!panel) return;
   const talk = Array.isArray(data.talk) ? data.talk : [];
   const name = COMPANIONS[activeCompanion]?.name || "The Watcher";
+  const preview = Boolean(COMPANIONS[activeCompanion]?.overlay_only);
   const key = JSON.stringify([activeCompanion, talk]);
   if (key !== talkKey) {
     talkKey = key;
@@ -1279,18 +1316,19 @@ function renderTalk(data, ui) {
     ui.byId("watcher-talk-log").innerHTML = talk.length ? talk.map((row) => { const [mark, who, extra] = replier(row); return `<li class="talk-turn">
       <div class="talk-you"><small>YOU${row.voice ? " · SPOKEN" : ""} · ${ui.escapeHtml(talkClock(row.at))}</small><p>${ui.escapeHtml(row.you)}</p></div>
       ${row.it ? `<div class="talk-it${extra}"><i aria-hidden="true">${mark}</i><div><small>${ui.escapeHtml(who.toUpperCase())}</small><p>${ui.escapeHtml(row.it)}</p></div></div>` : ""}</li>`; }).join("")
-      : `<li class="talk-empty"><p>Say hello to ${ui.escapeHtml(name)}, try a command below, or ask about your ship, cargo, route or current system.</p></li>`;
+      : `<li class="talk-empty"><p>${preview ? "Overlay preview. Lyra’s dialogue and voice are pending." : `Say hello to ${ui.escapeHtml(name)}, try a command below, or ask about your ship, cargo, route or current system.`}</p></li>`;
     talkToNewest();
   }
-  const canTalk = Boolean(data.orb_on);
+  const canTalk = Boolean(data.orb_on) && !preview;
   ui.byId("watcher-talk-title").textContent = `TALK TO ${name.toUpperCase()}`;
   ui.byId("watcher-talk-state").textContent = talk.length ? `${talk.length} EXCHANGED` : "";
   ui.byId("watcher-talk-forget").hidden = !talk.length;
   ui.byId("watcher-talk-send").disabled = !canTalk;
   ui.byId("watcher-talk-text").disabled = !canTalk;
   ui.byId("watcher-talk-text").placeholder = `Ask ${name}, or give a command…`;
+  if (preview) ui.byId("watcher-talk-text").placeholder = "Dialogue and voice are pending for Lyra.";
   panel.querySelectorAll("[data-talk-prompt]").forEach((button) => { button.disabled = !canTalk; });
-  ui.byId("watcher-talk-note").innerHTML = canTalk
+  ui.byId("watcher-talk-note").innerHTML = preview ? "Lyra’s dialogue and voice are pending. Her display controls are in <b>Overlay Studio</b>." : canTalk
     ? "Microphone, talk key, keyboard bindings and sequences: <b>SETTINGS › VOICE</b>."
     : "The companion overlay is off: it answers beside its display. Switch it on in <b>Overlay Studio</b>.";
 }

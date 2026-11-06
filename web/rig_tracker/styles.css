@@ -68,6 +68,8 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 
 .hint { margin: 0; color: var(--muted); font: 700 calc(9px * var(--scale)) var(--font-wide); letter-spacing: .08em; overflow-wrap: anywhere; }
 .order { margin: 0; color: var(--accent); font: 700 calc(9.5px * var(--scale)) var(--font-wide); letter-spacing: .1em; overflow-wrap: anywhere; }
+/* 5.7.6: the survey, the best patch and the next rig spot. */
+.survey { display: grid; gap: calc(2px * var(--scale)); margin: 0; padding: 0; list-style: none; color: var(--text); font: 700 calc(9px * var(--scale)) var(--font-wide); letter-spacing: .08em; overflow-wrap: anywhere; }
 .holds { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; column-gap: calc(8px * var(--scale)); row-gap: calc(4px * var(--scale)); margin: 0; padding: calc(6px * var(--scale)) 0 0; list-style: none; border-top: 1px solid var(--hud-faint); }
 /* one grid for every hold, so the bars line up */
 .hold { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; }

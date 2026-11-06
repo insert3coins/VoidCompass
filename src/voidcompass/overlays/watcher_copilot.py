@@ -13,6 +13,7 @@ the clipboard and its voice; ship controls have their own command catalogue.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import math
 import re
 
 # What a question is about: the systems asked, by the words in it. Narrow on
@@ -74,6 +75,8 @@ TOPICS = {
                         r"logged)\b", re.I),
     # Your engineering materials: raw, manufactured, encoded.
     "materials": re.compile(r"\b(materials?|mats|raw|manufactured|encoded)\b", re.I),
+    # 5.7.6: the community goals you've joined, from the journal.
+    "goals": re.compile(r"\b(community goals?|cgs?)\b", re.I),
     "colony": re.compile(r"\b(colon(y|ies|is\w*)|construction|build(ing)? site|still needs?|what('s| is) (still )?needed)\b",
                          re.I),
     "powerplay": re.compile(r"\b(power ?play|merits?|pledged?|powers?)\b", re.I),
@@ -887,21 +890,59 @@ def record_lines(statistics, question=""):
     return lines[:10] or ["No lifetime record yet (the game sends it when it starts)"]
 
 
-def materials_lines(inventory, question="", top=5):
+# What each grade holds at most (Elite's material storage limits).
+GRADE_CAPS = {1: 300, 2: 250, 3: 200, 4: 150, 5: 100}
+_GRADE = re.compile(r"\b(?:grade|g)\s*([1-5])\b|\b(grades?|by grade)\b", re.I)
+
+
+def materials_lines(inventory, question="", top=5, grade_of=None):
     """Your engineering materials (5.7.2): the ones you named, else each kind's
-    total and the most plentiful raw ones."""
+    total and the most plentiful raw ones. 5.7.6: with ``grade_of`` (symbol →
+    grade), a named material's grade and limit, and totals by grade."""
     inventory = inventory or {}
     kinds = (("raw", "Raw"), ("manufactured", "Manufactured"), ("encoded", "Encoded"))
-    rows = {key: [entry for entry in (inventory.get(key) or {}).values()
+    rows = {key: [dict(entry, symbol=symbol) for symbol, entry in (inventory.get(key) or {}).items()
                   if isinstance(entry, dict) and entry.get("name") and (_whole(entry.get("count")) or 0) > 0]
             for key, _label in kinds}
     if not any(rows.values()):
         return ["No engineering materials on record yet (the journal lists them when the game starts)"]
+    grade = (lambda entry: grade_of(entry["symbol"]) if callable(grade_of) else None)
     words = f" {str(question or '').casefold()} "
     named = [(label, entry) for key, label in kinds for entry in rows[key] if f" {str(entry['name']).casefold()}" in words]
     if named:
-        return [f"{entry['name']}: {_whole(entry['count'])} ({label.lower()})" for label, entry in named[:10]]
+        lines = []
+        for label, entry in named[:10]:
+            level = grade(entry)
+            cap = GRADE_CAPS.get(level)
+            lines.append(f"{entry['name']}: {_whole(entry['count'])}" + (f" of {cap}" if cap else "")
+                         + f" ({label.lower()}" + (f", grade {level}" if level else "") + ")")
+        return lines
     asked = [key for key, label in kinds if label.casefold() in words]
+    graded = _GRADE.search(words) if callable(grade_of) else None
+    if graded:
+        wanted = int(graded.group(1)) if graded.group(1) else None
+        lines = []
+        for key, label in kinds:
+            if asked and key not in asked:
+                continue
+            by_grade = {}
+            for entry in rows[key]:
+                level = grade(entry)
+                if level in GRADE_CAPS and (wanted is None or level == wanted):
+                    by_grade.setdefault(level, []).append(entry)
+            if not by_grade:
+                continue
+            if wanted is None:
+                lines.append(f"{label} by grade: " + ", ".join(
+                    f"grade {level} {sum(_whole(entry['count']) for entry in found):,}" for level, found in sorted(by_grade.items())))
+                continue
+            found = by_grade[wanted]
+            full = sum(1 for entry in found if _whole(entry["count"]) >= GRADE_CAPS[wanted])
+            lines.append(f"{label} grade {wanted}: {sum(_whole(entry['count']) for entry in found):,} in all, {len(found)} kind"
+                         + ("" if len(found) == 1 else "s") + (f", {full} full at {GRADE_CAPS[wanted]}" if full else "")
+                         + ". Most: " + ", ".join(f"{entry['name']} {_whole(entry['count'])}" for entry in
+                                                  sorted(found, key=lambda entry: -_whole(entry["count"]))[:3]))
+        return lines or [f"No grade {wanted} materials" if wanted else "No graded materials on record"]
     lines = [f"{label} materials: {sum(_whole(entry['count']) for entry in rows[key]):,} in all, "
              f"{len(rows[key])} kind{'' if len(rows[key]) == 1 else 's'}"
              for key, label in kinds if rows[key] and (not asked or key in asked)]
@@ -911,6 +952,156 @@ def materials_lines(inventory, question="", top=5):
         most = sorted(rows[key], key=lambda entry: (-_whole(entry["count"]), str(entry["name"])))[:top]
         if most:
             lines.append(f"Most plentiful {label.lower()}: " + ", ".join(f"{entry['name']} {_whole(entry['count'])}" for entry in most))
+    return lines
+
+
+def community_goal_lines(goals, now, limit=4):
+    """5.7.6: the community goals you've joined: where, your part, the tier
+    and the time left, from the game's own CommunityGoal event."""
+    rows = [row for row in goals or () if isinstance(row, dict) and row.get("title")]
+    if not rows:
+        return ["No community goals joined (the journal lists them when you sign up, and each time the game starts)"]
+    rows.sort(key=lambda row: _when(row.get("expiry")) or float("inf"))
+    lines = [f"Community goals joined: {len(rows)}"]
+    for row in rows[:limit]:
+        parts = []
+        where = ", ".join(str(part) for part in (row.get("market"), row.get("system")) if part)
+        if where:
+            parts.append(f"at {where}")
+        if _whole(row.get("contribution")):
+            parts.append(f"your part {_whole(row['contribution']):,}")
+        if row.get("percentile"):
+            parts.append(f"top {row['percentile']}%")
+        if _whole(row.get("tier")):
+            parts.append(f"tier {_whole(row['tier'])}" + (f" of {_whole(row['top_tier'])}" if _whole(row.get("top_tier")) else ""))
+        if row.get("complete"):
+            parts.append("complete")
+        else:
+            left = _hours_left(row.get("expiry"), now)
+            if left:
+                parts.append(left)
+        lines.append(f"{row['title']}: " + ", ".join(parts))
+    return lines
+
+
+# -- the nearest station with a service, and how far to a named system (5.7.6) ---------
+# Spoken service → (Spansh's service name, material trader kind, how it's said).
+NEAREST_SERVICES = (
+    (r"raw (material )?traders?", "Material Trader", "Raw", "raw material trader"),
+    (r"manufactured (material )?traders?", "Material Trader", "Manufactured", "manufactured material trader"),
+    (r"(encoded|data) (material )?traders?", "Material Trader", "Encoded", "encoded material trader"),
+    (r"(material|mats?) traders?", "Material Trader", None, "material trader"),
+    (r"interstellar factors?( contacts?)?", "Interstellar Factors Contact", None, "Interstellar Factors"),
+    (r"tech(nology)? brokers?", "Technology Broker", None, "technology broker"),
+    (r"shipyards?", "Shipyard", None, "shipyard"),
+    (r"outfitting", "Outfitting", None, "outfitting"),
+    (r"black markets?", "Black Market", None, "black market"),
+    (r"(universal )?cartographics", "Universal Cartographics", None, "Universal Cartographics"),
+    (r"vista genomics", "Vista Genomics", None, "Vista Genomics"),
+    (r"refuel(ling)?|fuel (stops?|stations?)|buy fuel", "Refuel", None, "place to refuel"),
+    (r"repairs?|repair (shops?|stations?)", "Repair", None, "place to repair"),
+    (r"restock|rearm|ammo", "Restock", None, "place to rearm"),
+    (r"search and rescue", "Search and Rescue", None, "Search and Rescue contact"),
+    (r"pioneer supplies", "Pioneer Supplies", None, "Pioneer Supplies"),
+    (r"apex( interstellar)?", "Apex Interstellar", None, "Apex Interstellar"),
+    (r"frontline solutions", "Frontline Solutions", None, "Frontline Solutions"),
+    (r"bartenders?", "Bartender", None, "bartender"),
+    (r"refinery contacts?", "Refinery Contact", None, "refinery contact"),
+    (r"redemption offices?", "Redemption Office", None, "redemption office"),
+    (r"stations?|starports?|outposts?|somewhere to dock|place to dock", "Dock", None, "station"),
+)
+_NEAREST = re.compile(r"\b(nearest|closest|nearby|near (here|us|me)|close by)\b", re.I)
+
+
+def station_request(text):
+    """"Where's the nearest material trader?": {service, trader, label}, or None."""
+    text = str(text or "")
+    if not _NEAREST.search(text):
+        return None
+    for pattern, service, trader, label in NEAREST_SERVICES:
+        if re.search(rf"\b(?:{pattern})\b", text, re.I):
+            return {"service": service, "trader": trader, "label": label,
+                    "carriers": bool(re.search(r"\bcarriers?\b", text, re.I))}
+    return None
+
+
+def _light_years(value):
+    value = float(value or 0)
+    return f"{value:,.0f}" if value >= 100 else f"{value:,.1f}"
+
+
+def nearest_station_lines(label, rows, system="", error=""):
+    """The nearest stations with what you asked for, nearest first."""
+    if error:
+        return [f"The uplink couldn't search for a {label}: {error}"]
+    rows = [row for row in rows or () if isinstance(row, dict) and row.get("station")][:3]
+    if not rows:
+        return [f"No {label} found near {system or 'here'}"]
+    lines = []
+    for index, row in enumerate(rows):
+        where = str(row.get("system") or "")
+        away = float(row.get("distance") or 0)
+        place = f"here in {where}" if away < .05 else f"in {where}, {_light_years(away)} light years away"
+        details = []
+        if _whole(row.get("dist_ls")):
+            details.append(f"{_whole(row['dist_ls']):,} ls from the star")
+        details.append("large pads" if row.get("large_pad") else "no large pads")
+        lead = f"Nearest {label}: {row['station']}" if index == 0 else f"Then {row['station']}"
+        lines.append(f"{lead}, {place} ({', '.join(details)})")
+    return lines
+
+
+# Places commanders name that aren't always in their own history.
+LANDMARKS = {
+    "sol": ("Sol", (0.0, 0.0, 0.0)),
+    "colonia": ("Colonia", (-9530.5, -910.28125, 19808.125)),
+    "jaques station": ("Colonia", (-9530.5, -910.28125, 19808.125)),
+    "beagle point": ("Beagle Point", (-1111.5625, -134.21875, 65269.75)),
+    "sagittarius a*": ("Sagittarius A*", (25.21875, -20.90625, 25899.96875)),
+    "sagittarius a": ("Sagittarius A*", (25.21875, -20.90625, 25899.96875)),
+    "sag a*": ("Sagittarius A*", (25.21875, -20.90625, 25899.96875)),
+    "sag a": ("Sagittarius A*", (25.21875, -20.90625, 25899.96875)),
+    "the core": ("Sagittarius A*", (25.21875, -20.90625, 25899.96875)),
+    "the galactic core": ("Sagittarius A*", (25.21875, -20.90625, 25899.96875)),
+    "the galactic centre": ("Sagittarius A*", (25.21875, -20.90625, 25899.96875)),
+    "the bubble": ("Sol", (0.0, 0.0, 0.0)),
+}
+_DISTANCE = re.compile(r"\b(?:how far(?: away)?(?: is it| are we| am i)?(?: is| to| from)?|"
+                       r"(?:what(?:'s| is) the )?distance (?:to|from here to|from us to))\s+"
+                       r"(?P<name>[^?!.]+?)(?:\s+from (?:here|us|me))?\s*[?!.]*$", re.I)
+# Route questions keep their own answer: the next jump, the destination, the jumps left.
+_ROUTE_WORDS = re.compile(r"^(?:the )?(?:next\b|destination|route|end\b|go\b|it\b|there\b|left\b|jumps?\b|we\b|i\b|"
+                          r"have\b|did\b|away\b|until\b|till\b)", re.I)
+
+
+def distance_request(text):
+    """"How far is Colonia?": the system named, or None."""
+    match = _DISTANCE.search(str(text or "").strip())
+    if not match:
+        return None
+    name = re.sub(r"^(?:it |we |i )?(?:to |from )?(?:the system )?", "", match.group("name").strip(), flags=re.I).strip(" ,")
+    if not name or _ROUTE_WORDS.match(name):
+        return None
+    return name
+
+
+def landmark(name):
+    found = LANDMARKS.get(str(name or "").casefold().strip())
+    return {"name": found[0], "coords": found[1]} if found else None
+
+
+def distance_lines(name, target, here_name, here, jump_range=None):
+    """How far a system is from where you are, and in how many jumps."""
+    away = math.dist(tuple(target), tuple(here))
+    if away < .05:
+        return [f"We're in {name}"]
+    lines = [f"{name} is {_light_years(away)} light years from {here_name or 'here'}"]
+    try:
+        reach = float(jump_range or 0)
+    except (TypeError, ValueError):
+        reach = 0.0
+    if reach > 0 and away > reach:
+        lines.append(f"About {math.ceil(away / reach):,} jumps at your {reach:.0f} light year range")
     return lines
 
 
@@ -1258,6 +1449,13 @@ REPLIES = {
                        "The uplink's open. Looking for {commodity}."),
     "uplink_off": ("The uplink is off. Turn on trading searches in Settings, under Integrations.",),
     "uplink_what": ("The uplink reaches Spansh's markets. Name a commodity, and ask where to sell or buy it.",),
+    # 5.7.6: the nearest station with a service, and how far to a system.
+    "station_opening": ("Asking the uplink for the nearest {label}.", "Looking for the nearest {label}. A moment.",
+                        "The uplink's open. The nearest {label}, coming up."),
+    "distance_opening": ("{name} isn't on my charts. Asking the uplink where it is.", "Looking up where {name} is."),
+    "distance_unknown": ("I don't know where {name} is. With trading searches on in Settings, under Integrations, "
+                         "I can look it up.",),
+    "distance_nowhere": ("I don't know where we are yet. After the next jump, ask again.",),
     "plain": ("I can work the ship's controls, show or hide overlays, and play the music. "
               "Or ask what's in the hold, where we are, or where we're headed.",
               "Try a ship command, or ask me what the ship's systems show. I can also look up commodity "

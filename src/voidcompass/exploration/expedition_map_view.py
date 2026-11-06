@@ -48,6 +48,15 @@ def _position(value):
     except (TypeError, ValueError):
         return None
 
+def current_position_of(system, coords):
+    """Where you are, or None. 0, 0, 0 is the default before the journal has
+    said; it is only believed in Sol, or FOLLOW ME took you there (5.7.6)."""
+    position = _position(coords)
+    if position == (0.0, 0.0, 0.0) and str(system or '').strip().casefold() != 'sol':
+        return None
+    return position
+
+
 def _row_epoch(row):
     value = (row or {}).get('timestamp')
     try:
@@ -244,7 +253,7 @@ class ExpeditionMapView:
         route, journey = self._journey(raw_route)
         positions = {str(row.get('system') or '').casefold(): tuple(row['pos']) for row in route if row.get('system')}
         current_system = _bounded_text(getattr(self.app, 'current_sys', ''), 120)
-        current_position = _position(getattr(self.app, 'current_coords', None))
+        current_position = current_position_of(current_system, getattr(self.app, 'current_coords', None))
         if current_position is not None and current_system:
             positions[current_system.casefold()] = current_position
         manager = getattr(self.app, 'expedition_manager', None)

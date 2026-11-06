@@ -3,8 +3,11 @@ overlay kept up to date as you drive (overlays/rig_tracker.py)."""
 from __future__ import annotations
 
 import logging
+import math
+from pathlib import Path
 
 from voidcompass.core.config import get_active_profile, get_profile_file
+from voidcompass.overlays import rhino_survey
 from voidcompass.overlays.cargo_hud import VEHICLE_CARGO_CAPACITIES
 from voidcompass.overlays.rig_tracker import RigStore, build_rig_model, hold_row, rig_here_m, surface_distance_m
 
@@ -24,6 +27,13 @@ def _distance_text(metres):
     return f"{metres / 1000:.1f} km" if metres >= 1000 else f"{metres:.0f} m"
 
 
+_POINTS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+
+
+def _compass(bearing):
+    return _POINTS[int(((float(bearing or 0) + 22.5) % 360) // 45)]
+
+
 class DashboardRigsMixin:
     def rig_store(self):
         key = get_active_profile(getattr(self, "config", None) or {})
@@ -31,6 +41,15 @@ class DashboardRigsMixin:
         if store is None or getattr(self, "_rig_store_key", None) != key:
             store = RigStore(get_profile_file(key, "rigs.json"))
             self._rig_store_instance, self._rig_store_key = store, key
+        return store
+
+    def survey_store(self):
+        """The Rhino surveys and pulses (5.7.6), kept beside the rigs."""
+        rigs_path = getattr(self.rig_store(), "path", None)
+        path = str(Path(rigs_path).with_name("rhino_survey.json")) if isinstance(rigs_path, str) and rigs_path else None
+        store = getattr(self, "_survey_store_instance", None)
+        if store is None or store.path != path:
+            store = self._survey_store_instance = rhino_survey.SurveyStore(path)
         return store
 
     def _rig_place(self):
@@ -185,6 +204,12 @@ class DashboardRigsMixin:
         material = str((raw or {}).get("Type_Localised") or (raw or {}).get("Type") or "").strip()
         spots["spots"].append((lat, lon, material[:40]))
         del spots["spots"][:-2000]
+        # 5.7.6: kept per planet too, for the best patch after a restart.
+        try:
+            self.survey_store().note_pulse(system, body, lat, lon, material)
+            self._survey_patch_watch()
+        except Exception:
+            logging.debug("Pulse not kept for the survey", exc_info=True)
         return True
 
     def _surface_mining_signals(self, body):
@@ -215,12 +240,133 @@ class DashboardRigsMixin:
         rigs = self.rig_store().rigs(system, body)
         pulses = getattr(self, "_surface_pulses", None) or {}
         spots = pulses.get("spots") or [] if pulses.get("body") == (system, body) else []
+        kept = self.survey_store().pulses(system, body)
+        if len(kept) > len(spots):
+            spots = [(row[0], row[1], row[2] if len(row) > 2 else "") for row in kept]
         return build_surface_map(
             plane_map, plane, rig_model=self._rig_model(),
             rig_points={slot: (rig["lat"], rig["lon"]) for slot, rig in rigs.items()},
             here_m=here_m(getattr(self, "config", None) or {}), spots=spots,
             signals=self._surface_mining_signals(body), vehicle=vehicle, options=options,
-            spacing_m=rig_spacing_m(getattr(self, "config", None) or {}), warn_m=rig_warn_m(getattr(self, "config", None) or {}))
+            spacing_m=rig_spacing_m(getattr(self, "config", None) or {}), warn_m=rig_warn_m(getattr(self, "config", None) or {}),
+            survey=self.survey_store().survey(system, body))
+
+    # -- the Rhino survey (5.7.6, after EDSMT) ------------------------------------------
+    def _survey_mark(self, what):
+        """The survey keys: "centre" here, "edge" here, or "clear"."""
+        place = self._rig_place()
+        if place is None:
+            self._rig_say("RHINO SURVEY", "Surveys are marked on a planet's surface", severity="warn")
+            return None
+        system, body, lat, lon, radius = place
+        store = self.survey_store()
+        if what == "centre":
+            store.mark_centre(system, body, lat, lon)
+            self._rig_say("SURVEY CENTRE MARKED", f"{body} · now drive out and mark the edge", severity="success")
+            outcome = "centre"
+        elif what == "edge":
+            size = store.mark_edge(system, body, lat, lon, radius)
+            if size is None:
+                self._rig_say("RHINO SURVEY", "Mark the survey's centre first", severity="warn")
+                return None
+            self._rig_say("SURVEY AREA SET", f"{body} · {_distance_text(size)} round the centre", severity="success")
+            self._rig_tell("survey_marked", km=f"{size / 1000:.1f}", body=body)
+            outcome = "edge"
+        else:
+            outcome = "cleared" if store.clear(system, body) else None
+            if outcome:
+                self._rig_say("SURVEY CLEARED", body)
+        self._survey_tick()
+        self._rig_update_overlay()
+        self._update_rhino_map()
+        return outcome
+
+    def _survey_tick(self):
+        """In the SRV inside a survey: what the scanner has reached is covered.
+        Half and done are said once each."""
+        place = self._rig_place()
+        if place is None or not getattr(self, "current_in_srv", False):
+            return None
+        system, body, lat, lon, radius = place
+        store = self.survey_store()
+        try:
+            result = store.drive(system, body, lat, lon, radius)
+        except Exception:
+            logging.debug("Survey coverage skipped", exc_info=True)
+            return None
+        if not result or not result[0]:
+            return result
+        percent = result[1]
+        for milestone, kind in ((rhino_survey.DONE_PERCENT, "survey_done"), (rhino_survey.HALF_PERCENT, "survey_half")):
+            if percent >= milestone and store.said(system, body, milestone):
+                if kind == "survey_done":
+                    store.said(system, body, rhino_survey.HALF_PERCENT)
+                    self._rig_say("SURVEY COMPLETE", f"{body} · {percent:.0f}% covered", severity="success")
+                else:
+                    self._rig_say("SURVEY HALF DONE", f"{body} · {percent:.0f}% covered")
+                self._rig_tell(kind, percent=f"{percent:.0f}", body=body)
+                break
+        return result
+
+    def _survey_facts(self):
+        """The survey, best patch and next rig spot round where you stand, in
+        metres from you: for the Rig Tracker and the Mining page."""
+        place = self._rig_place()
+        if place is None:
+            return None
+        from voidcompass.overlays.rig_tracker import placed_order, rig_spacing_m, rig_warn_m
+        from voidcompass.overlays.surface_map import cluster_deposits
+        system, body, lat, lon, radius = place
+        plane = lambda point: list(rhino_survey.offset_m((lat, lon), point, radius))
+        store = self.survey_store()
+        survey = store.survey(system, body)
+        area = rhino_survey.survey_model(survey, plane, (0.0, 0.0)) if survey else None
+        patch = rhino_survey.best_patch(cluster_deposits(store.pulses(system, body), plane), (0.0, 0.0))
+        rigs = self.rig_store().rigs(system, body)
+        points = [plane((rigs[slot]["lat"], rigs[slot]["lon"])) for slot in placed_order(rigs)]
+        config = getattr(self, "config", None) or {}
+        anchor = points[0] if points else (patch or {}).get("at")
+        plan = rhino_survey.rig_plan(anchor, points, rig_spacing_m(config), (0.0, 0.0), warn_m=rig_warn_m(config)) if anchor else []
+        spot = next((row for row in plan if row.get("next")), None)
+        if not area and not patch and not spot:
+            return None
+        out = {"body": body}
+        if area:
+            out["survey"] = {"percent": area["percent"], "edge": area["edge"], "radius_m": area["radius_m"],
+                             "stops": len(area["stops"]), "swept": area["swept"], "inside": area["inside"],
+                             "next": {**area["next"], "compass": _compass(area["next"]["bearing"])} if area["next"] else None}
+        if patch:
+            out["patch"] = {**patch, "compass": _compass(patch.get("bearing"))}
+            out["patch"].pop("at", None)
+        if spot:
+            out["rig_spot"] = {"distance": spot["distance"], "bearing": spot["bearing"], "compass": _compass(spot["bearing"]),
+                               "far": bool(spot.get("far"))}
+        return out
+
+    def _survey_patch_watch(self):
+        """Said when a best patch first shows, and when another patch takes the
+        lead; not for one that was already there before a restart."""
+        place = self._rig_place()
+        if place is None:
+            return False
+        from voidcompass.overlays.surface_map import cluster_deposits
+        system, body, _lat, _lon, radius = place
+        pulses = self.survey_store().pulses(system, body)
+        if not pulses:
+            return False
+        origin = (pulses[0][0], pulses[0][1])
+        patch = rhino_survey.best_patch(cluster_deposits(pulses, lambda point: list(rhino_survey.offset_m(origin, point, radius))))
+        if not patch:
+            return False
+        said = getattr(self, "_survey_patch_said", None)
+        same_body = bool(said) and said[0] == (system, body)
+        self._survey_patch_said = ((system, body), patch["at"])
+        if same_body and math.hypot(said[1][0] - patch["at"][0], said[1][1] - patch["at"][1]) <= rhino_survey.PATCH_M:
+            return False
+        if not same_body and patch["pulses"] > rhino_survey.MIN_PATCH_PULSES:
+            return False
+        self._rig_tell("best_patch", pulses=patch["pulses"])
+        return True
 
     def _rig_range_watch(self):
         """A rig getting too far away: said once a trip, as the game destroys
@@ -312,7 +458,10 @@ class DashboardRigsMixin:
         if hud is None:
             return False
         try:
-            hud.update(self._rig_model())
+            model = self._rig_model()
+            if model is not None:
+                model["survey"] = self._survey_facts()
+            hud.update(model)
         except Exception:
             logging.exception("Rig Tracker overlay update failed")
             return False

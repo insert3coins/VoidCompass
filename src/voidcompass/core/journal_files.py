@@ -122,6 +122,7 @@ def latest_session(folder, max_files=40) -> dict:
 SESSION_HEADER_EVENTS = (
     "Commander", "Materials", "Rank", "Progress", "Reputation", "EngineerProgress",
     "SquadronStartup", "LoadGame", "Statistics", "Powerplay", "Missions", "Loadout", "Cargo", "ShipLocker",
+    "CommunityGoal",
 )
 
 

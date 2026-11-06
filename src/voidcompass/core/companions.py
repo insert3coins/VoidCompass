@@ -7,12 +7,13 @@ PROFILES = {
     "aster": {"name": "Aster", "role": "Manifest officer", "description": "Ship’s officer · precision and dry wit", "story": True},
     "axiom": {"name": "Axiom", "role": "Survey intelligence", "description": "Survey intelligence · precise and curious", "story": True},
     "meridian": {"name": "Meridian", "role": "Veteran navigator", "description": "Old navigator · measured and steady", "story": True},
+    "lyra": {"name": "Lyra", "role": "Robot companion", "description": "Pearl shell · cyan optics · overlay preview", "story": False, "overlay_only": True},
 }
 IDENTITIES = tuple(PROFILES)
 NEW_IDENTITIES = ("axiom", "meridian")
 NAMES = {key: row["name"] for key, row in PROFILES.items()}
 DISPLAY_SIZES = dict.fromkeys(IDENTITIES, (54, 72, 96, 144, 192, 256))
-DISPLAY_DEFAULTS = {"watcher": 54, "aster": 144, "axiom": 144, "meridian": 144}
+DISPLAY_DEFAULTS = {"watcher": 54, "aster": 144, "axiom": 144, "meridian": 144, "lyra": 144}
 ASTER_KEYS = {"heartbeat_thoughts": "aster_thoughts", "watcher_voice_enabled": "aster_voice_enabled",
               "watcher_voice_volume": "aster_voice_volume", "watcher_voice_speed": "aster_voice_speed",
               "watcher_voice_level": "aster_voice_level"}
@@ -28,10 +29,15 @@ def pending_story(config):
     return not PROFILES[identity(config)]["story"]
 
 
+def overlay_only(config):
+    selected = config if isinstance(config, str) else identity(config)
+    return bool(PROFILES.get(selected, {}).get("overlay_only"))
+
+
 def humour_key(config):
     """The active persona's commentary setting (the Watcher uses its nature)."""
     selected = identity(config)
-    return None if selected == "watcher" else f"{selected}_humour"
+    return None if selected == "watcher" or overlay_only(selected) else f"{selected}_humour"
 
 
 def new_defaults():
@@ -43,6 +49,8 @@ def new_defaults():
                        f"{selected}_voice_enabled": False, f"{selected}_hud_motion": True,
                        f"{selected}_voice_volume": 80, f"{selected}_hud_size": 144,
                        f"{selected}_humour": "dry"})
+    values.update(lyra_thoughts="off", lyra_hud_accent="signature", lyra_hud_liveliness="standard",
+                  lyra_hud_focus="tracking", lyra_hud_motion=True, lyra_hud_size=144)
     return values
 
 
@@ -162,6 +170,9 @@ def addressed(text, selected):
 
 
 def create_mind(path, config, **kwargs):
+    if overlay_only(config):
+        from voidcompass.overlays.overlay_preview_mind import OverlayPreviewMind
+        return OverlayPreviewMind(path, config, **kwargs)
     if identity(config) in NEW_IDENTITIES:
         from voidcompass.overlays.crew_mind import CrewMind
         return CrewMind(path, config, **kwargs)

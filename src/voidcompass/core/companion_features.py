@@ -227,6 +227,22 @@ def mission_from_event(event):
     }
 
 
+def community_goal(row):
+    """5.7.6: one community goal from the journal's CommunityGoal event."""
+    row = row or {}
+    top = row.get("TopTier") if isinstance(row.get("TopTier"), dict) else {}
+
+    def tier(value):
+        digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+        return int(digits) if digits else 0
+
+    return {"title": str(row.get("Title") or "").strip(), "system": str(row.get("SystemName") or ""),
+            "market": str(row.get("MarketName") or ""), "expiry": row.get("Expiry"),
+            "complete": bool(row.get("IsComplete")), "contribution": row.get("PlayerContribution"),
+            "contributors": row.get("NumContributors"), "percentile": row.get("PlayerPercentileBand"),
+            "tier": tier(row.get("TierReached")), "top_tier": tier(top.get("Name"))}
+
+
 def normalise_stored_ship(record):
     return {
         "type": record.get("ShipType_Localised") or record.get("ShipType") or "Unknown ship",

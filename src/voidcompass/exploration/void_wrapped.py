@@ -613,6 +613,9 @@ def year_story(year, sources, nature="weary", commander="", now=None, trip=None)
                       "points": sum(int(item.get("points") or 0) for _when, item in unlocked),
                       "best": {"title": str(best.get("title") or best.get("name") or ""), "points": int(best.get("points") or 0),
                                "detail": str(best.get("description") or "")[:160]}})
+    crew = crew_card(sessions, sources.get("crew") or {}, start, end, seed)
+    if crew:
+        cards.append(crew)
     deaths = sum(int(session.get("deaths") or 0) for session in session_rows)
     facts["deaths"] = deaths
     if deaths:
@@ -655,6 +658,45 @@ def year_story(year, sources, nature="weary", commander="", now=None, trip=None)
                   "trip": trip["name"] if trip else None})
     return {"year": year, "elite_year": year + ELITE_YEARS, "commander": commander, "empty": False,
             "cards": cards, "summary": summary, "trip": dict(trip) if trip else None}
+
+
+CREW = ("watcher", "aster", "axiom", "meridian")
+# Their own flight talk only: never a story passage, a crewmate's line, or an answer.
+_UNQUOTED = ("lore", "crew_", "relay", "answer", "talk", "question", "callback", "name_", "dream", "echo", "book", "voice_found")
+
+
+def crew_card(sessions, memories, start, end, seed):
+    """5.7.6: who stood watch, for how long, the stories they told and one
+    thing each of them said. ``sessions`` as from _sessions_in; ``memories``
+    each companion's memory. A session with several on watch is shared."""
+    hours = Counter()
+    watches = Counter()
+    for _began, length, session in sessions:
+        on_watch = [who for who in session.get("companions") or () if who in CREW] \
+            or [session.get("companion") if session.get("companion") in CREW else "watcher"]
+        for who in on_watch:
+            hours[who] += length / 3600.0 / len(on_watch)
+            watches[who] += 1
+    members = []
+    for who in CREW:
+        memory = memories.get(who) or {}
+        def within(key):
+            return [row for row in memory.get(key) or () if isinstance(row, (list, tuple)) and len(row) > 1
+                    and start <= float(row[1] or 0) < end]
+        stories = len(within("lore")) + len(within("crew_lore"))
+        said = [str(row[2]) for row in memory.get("log") or () if isinstance(row, (list, tuple)) and len(row) > 2
+                and start <= float(row[0] or 0) < end and not any(part in str(row[1]) for part in _UNQUOTED)
+                and 24 <= len(str(row[2])) <= 120 and "{" not in str(row[2])]
+        if hours[who] < .05 and not stories and not said:
+            continue
+        members.append({"id": who, "name": "The Watcher" if who == "watcher" else who.title(), "hours": round(hours[who], 1),
+                        "watches": watches[who], "stories": stories, "line": said[seed % len(said)] if said else ""})
+    if not members or not any(member["hours"] for member in members):
+        return None
+    members.sort(key=lambda member: (-member["hours"], CREW.index(member["id"])))
+    night = {row[0] for memory in memories.values() for row in (memory or {}).get("crew_story") or ()
+             if isinstance(row, (list, tuple)) and len(row) > 1 and start <= float(row[1] or 0) < end}
+    return {"kind": "crew", "members": members, "top": members[0]["name"], "night_watch": len(night)}
 
 
 def _credits(value):
