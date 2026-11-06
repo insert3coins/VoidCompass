@@ -1,6 +1,6 @@
 # Axiom and Meridian
 
-Available in **5.7.4** alongside The Watcher and Aster. Select **Axiom** or **Meridian** at the top of the companion page. The deck title, BRIDGE display and chat, and SETUP follow that choice. Each has its own character, story, name introduction, conversation and postcard notes: see [Axiom](AXIOM_COMPANION.md), a survey intelligence (*The Uncounted Star*), and [Meridian](MERIDIAN_COMPANION.md), a veteran navigator (*The Last Sounding*). This page covers what they share: voices, displays and Studio controls.
+Available in **5.7.4** alongside The Watcher and Aster. Select **Axiom** or **Meridian** at the top of the companion page. The deck title, BRIDGE display and chat, and SETUP follow that choice. Each has its own character, story, name introduction, conversation and postcard notes: see [Axiom](AXIOM_COMPANION.md), a survey intelligence (*The Uncounted Star*), and [Meridian](MERIDIAN_COMPANION.md), a veteran navigator (*The Last Sounding*). This page covers what they share: voices, displays and Studio controls. **Lyra**, the fifth companion, has her own guide: [Lyra](LYRA_COMPANION.md).
 
 | Companion | Voice pair | Display |
 | --- | --- | --- |
@@ -13,13 +13,14 @@ Axiom and Meridian sit inside a defined instrument bezel, with a dark translucen
 
 ## The crew: how they came aboard
 
-All four companions are aboard your ship at once; the one you choose is simply the one **on watch**.
+All five companions are aboard your ship at once; the one you choose is simply the one **on watch**.
 
 - **The Watcher** was aboard first: salvage, wired in as a spare log buffer before you ever flew.
 - **Aster, Axiom and Meridian** came aboard later as second-hand cores, bought cheap from surplus brokers: an officer core in a lot of used modules, a survey mind from a dealer's shelf, and a navigation trainer from an academy auction.
+- **Lyra** came last: a ship's computer whose first commander was lost when the fuel ran out. She jumped into an empty memory chip in a passing cargo ship's hold and arrived in yours listed as a faulty part. Aster added a fifth name to the rota, and a new duty to go with it: ordinary flight.
 - They found each other on the ship's data bus in the hours you're logged off. Aster drew up a **watch rota**, and Meridian keeps proposing amendments to it in the old naval form. The rota is one on watch at a time, with the choice of who left to you.
 
-**Coming Aboard.** Each companion tells its own six passages: its arrival, finding the others, the rota, then one passage about each crewmate. The arc begins after about two hours together, once you've flown with at least two companions. A passage about a crewmate waits until you've flown with that crewmate for 15 minutes. Passages come in quiet moments, at least an hour apart and never in danger, and they share pacing with the companion's main story. The **STORY** tab's **THE CREW** section shows all four accounts, whoever is on watch. Hover over a locked passage to see what it waits for. **SAVE BOOK** includes the active companion's account.
+**Coming Aboard.** Each companion tells its own seven passages: its arrival, finding the others, the rota, then one passage about each crewmate. The arc begins after about two hours together, once you've flown with at least two companions. A passage about a crewmate waits until you've flown with that crewmate for 15 minutes. Passages come in quiet moments, at least an hour apart and never in danger, and they share pacing with the companion's main story. The **STORY** tab's **THE CREW** section shows all five accounts, whoever is on watch. Hover over a locked passage to see what it waits for. **SAVE BOOK** includes the active companion's account.
 
 **Handovers.** Choosing another companion hands over the watch: the incoming companion takes it from the outgoing one by name, for example *"Taking over from Aster. Everything is in order, with a blank line at the bottom. As expected."* Each companion has 15 to 20 lines for every crewmate and works through all of them before any line comes back, so a run of switches doesn't repeat itself. Once a crewmate's passage has been told, companions occasionally mention them in quiet moments.
 
@@ -29,7 +30,7 @@ All four companions are aboard your ship at once; the one you choose is simply t
 
 **Starting pace.** A companion's first watch starts at the same Thoughts setting as the Watcher. After that its setting is its own.
 
-**Achievements** (category *The Crew*): *Introductions* (the first crew passage), *Full Crew* (fly with all four companions) and *The Watch Rota* (all 24 passages).
+**Achievements** (category *The Crew*): *Introductions* (the first crew passage), *Full Crew* (fly with all five companions) and *The Watch Rota* (all 35 passages).
 
 ## Try them
 
@@ -44,7 +45,7 @@ Examples: `Axiom, open galaxy map`, `Meridian, where are we?`, `Axiom, show the 
 
 ## Display and preferences
 
-Both identities use the same Studio size, accent, focus movement, idle animation, liveliness, frame rate and caption controls. Size carries across switches. Accent, motion, focus, liveliness, voice settings and thought frequency are saved separately per companion and commander. Fixed focus stops attention turns; reduced motion pauses continuous animation. Hidden displays park their rendering.
+Every companion uses the same Studio size, accent, focus movement, idle animation, liveliness, frame rate and caption controls, and all but colour are shared by the whole crew: change size, focus, idle animation or liveliness and it applies to all five, so you set them once. Colour is each companion's own, as are voice settings and thought frequency, per companion and commander. Fixed focus stops attention turns; reduced motion pauses continuous animation. Hidden displays park their rendering.
 
 Each companion has a signature colour preset, including its main light and highlights:
 
@@ -53,12 +54,17 @@ Each companion has a signature colour preset, including its main light and highl
 | Aster cyan | Cyan `#65e4ef` | Violet `#a8b4ff` |
 | Axiom violet | Violet `#a897ff` | Cyan `#65e4ef` |
 | Meridian gold | Gold `#e8c48c` | Blue `#74bbff` |
+| Lyra aurora | Cyan `#74ddff` | Rose `#ec9fdb` |
 
 These are the defaults for new companion settings. Select the named preset in **Overlay Studio → Companion → Accent** to use it with existing settings. The chosen palette colours the floating display, bezel and deck panel; captions set to **Eye colour** also follow it. **Theme accent**, **Ice cyan** and **Brass** remain available. Existing choices of those three are preserved. The earlier non-Watcher red choice now selects that companion’s signature palette. The Watcher keeps **HAL red**.
 
 Studio changes publish the companion model and native window dimensions immediately, including while the journal is quiet. Theme accent follows the selected app theme on both surfaces. Axiom’s idle animation includes flowing particle bands, breathing ripples and two counter-rotating light trails. Meridian’s instrument rings counter-rotate around a gently moving portrait with a visible scan band. Calm, Standard and Lively change the motion speed. Idle animation Off parks the continuous motion; activity and speech can still wake it. If Reduced motion is enabled in Appearance or your system preferences, the Studio note explains why continuous animation is paused.
 
 Axiom’s central crystal slowly turns and breathes at idle. Listening draws light inward along its connections; working sends faster pulses through the lattice. Speech expands and lights the core with the real audio level, and alerts use warning colours. Aster uses the same reactions in a smaller hexagonal prism inside its command interface. These cores appear in both the floating overlay and the deck BRIDGE panel, using the selected palette and existing motion controls.
+
+**Moods and moments (5.7.6).** Every officer wears the mood of what it is saying (pleased, wary, downcast or curious; danger worries all of them), easing back to rest when the thought has gone. Meridian smiles or frowns, tilts or dips its head (held level with Fixed focus) and draws its rings in when wary. Axiom's particles and crystal brighten, tighten, sink or turn to look. Aster's halo pulses twice for good news, its core holds still when wary, a scan crosses the prism when curious, and it dims when downcast. Each also shows a moment of its own work: Meridian's needle points to the next star while the drive charges on a route, Axiom's crystal lights a facet per body scanned (all of them when the system is complete), and Aster's halo sweeps once with the pad number in its core when docking is granted. Reduced motion changes moods at once and skips the sweeps and pulses.
+
+**Their own instruments (5.7.6).** Each officer has its own bezel inside the same silhouette, so every display stays the same size: Aster's command bezel (six notches and three rank chevrons), Axiom's graduated scale, Meridian's brass compass rose. Aster rings the watch bells every half hour (naval style: one to eight, in pairs) and, with the watch rota on, shows a watch bill of the six duties round its core, the current one lit, with a light run round at a handover. Axiom replaces the shared rings with a measuring scale and vernier, keeps a tally of the bodies counted in this system, and draws the system in its particle field: a dot per scanned body, nearer ones inside, coloured by kind. Meridian's compass needle points home at rest (the core when home is within 20 ly) and to the next star while the drive charges on a route; a sounding gauge on the left shows home's distance from 1 to 100,000 ly; a wake ripples outward at each jump. Reduced motion skips the bells' pulses, sweeps and ripples.
 
 Meridian keeps its portrait. Its upper and lower lips now form a visible mouth opening driven by the actual speech envelope, with a quick attack and a smooth close during pauses. Queued text and microphone input do not move the lips. Warning speech still moves the mouth while the portrait shows its alert colours. When audio ends the mouth closes; Reduced motion keeps it still. This is amplitude-driven mouth movement, rather than phoneme-based lip sync.
 

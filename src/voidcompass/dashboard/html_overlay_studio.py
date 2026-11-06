@@ -699,6 +699,8 @@ class HtmlOverlayStudioMixin:
             requested_value if isinstance(requested_value, bool)
             else not bool(self.config.get(key, False))
         )
+        if key in companions.shared_display("companion_motion", True):
+            self.config.update(companions.shared_display("companion_motion", self.config[key]))
         self._persist_config()
         if key == "overlay_mouse_passthrough":
             self._apply_overlay_mouse_passthrough()
@@ -779,9 +781,11 @@ class HtmlOverlayStudioMixin:
                 value = "signature"
             if value not in choices:
                 return False
-            payload[companions.display_key(self.config, key)] = value
-            if key == "companion_size":
-                payload.update({companions.display_key({"companion_identity": identity}, "companion_size"): value for identity in companions.IDENTITIES})
+            if key in companions.SHARED_DISPLAY:
+                payload.update(companions.shared_display(key, value))
+            else:
+                # Colour is each companion's own.
+                payload[companions.display_key(self.config, key)] = value
         hatchling_size_before = None
         if {"hatchling_look", "hatchling_pet_size"} & set(payload):
             hatchling_size_before = hatchling_pet_window(self.config)

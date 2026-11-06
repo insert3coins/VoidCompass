@@ -48,32 +48,46 @@ MERIDIAN_MODEL_FILES = (
     {"name": "en_US-picard_7399-medium.onnx.json", "sha256": "4d4ad126bb0089b7f48f49a8c7349a82ec92afc49fccc934b395976a6629bbce", "size": 4848},
 )
 
+# 5.7.6: Lyra's robot voice, kept in models/lyra/ like the others.
+LYRA_MODEL_FILES = (
+    {"name": "glados.onnx", "sha256": "17ea16dd18e1bac343090b8589042b4052f1e5456d42cad8842a4f110de25095", "size": 63511038},
+    {"name": "glados.onnx.json", "sha256": "01f5e602e1ec04daec6d54960e4d641b5de305f39186e40bf9b4a47bd757a489", "size": 7097},
+)
+LYRA_NOTICE = ("Lyra uses a GLaDOS-style robot Piper voice (rokeya71/VITS-Piper-GlaDOS-en-onnx, from the dnhkng/GLaDOS project). "
+               "The mirror labels the model MIT; that says nothing about rights in the game recordings or the character voice "
+               "it was trained on. Source filenames and attribution are kept in models/lyra. Lyra herself is this app's own character.")
+_RAW = "https://raw.githubusercontent.com/insert3coins/VoidCompass/master/models/"
+# Each companion's voice: (folder under models/, files, download URL, name, receipt folder).
+# Files and URLs are named, not copied, so they are read when used.
+VOICES = {
+    "watcher": ("hal9000", "MODEL_FILES", "MODEL_URL", "HAL 9000 voice", ""),
+    "aster": ("jarvis/onnx", "ASTER_MODEL_FILES", "ASTER_MODEL_URL", "Aster officer voice", "jarvis"),
+    "axiom": ("data", "AXIOM_MODEL_FILES", _RAW + "data/", "Axiom voice", "data"),
+    "meridian": ("picard", "MERIDIAN_MODEL_FILES", _RAW + "picard/", "Meridian voice", "picard"),
+    "lyra": ("lyra", "LYRA_MODEL_FILES", _RAW + "lyra/", "Lyra voice", "lyra"),
+}
+
 
 def model_name(model):
     if companions.overlay_only(model):
         return "Voice pending"
-    return {"watcher": "HAL 9000 voice", "aster": "Aster officer voice",
-            "axiom": "Axiom voice", "meridian": "Meridian voice"}.get(model, "HAL 9000 voice")
+    return VOICES.get(model, VOICES["watcher"])[3]
 
 
 def notice(model):
-    if model in companions.NEW_IDENTITIES:
+    if model in ("axiom", "meridian"):
         source = "Data" if model == "axiom" else "Picard"
         return (f"{companions.NAMES[model]} uses the {source} Piper model from dividebysandwich/piper-voice-models, "
                 "trained on Star Trek Generations game dialogue. The downloaded source includes no licence or usage terms. "
                 "Source filenames and attribution are retained in models/. The voice source is separate from the companion identity.")
-    return ASTER_NOTICE if model == "aster" else RIGHTS_NOTICE
+    return {"aster": ASTER_NOTICE, "lyra": LYRA_NOTICE}.get(model, RIGHTS_NOTICE)
 
 
 def manifest(model="watcher"):
     if companions.overlay_only(model):
         raise ValueError("This companion has no voice model yet")
-    if model in companions.NEW_IDENTITIES:
-        folder, files = ("data", AXIOM_MODEL_FILES) if model == "axiom" else ("picard", MERIDIAN_MODEL_FILES)
-        return folder, files, f"https://raw.githubusercontent.com/insert3coins/VoidCompass/master/models/{folder}/"
-    if model == "aster":
-        return "jarvis/onnx", ASTER_MODEL_FILES, ASTER_MODEL_URL
-    return "hal9000", MODEL_FILES, MODEL_URL
+    folder, files, url, _name, _receipt = VOICES.get(model, VOICES["watcher"])
+    return folder, globals()[files], globals().get(url, url)
 
 
 def download_bytes(model="watcher"):
@@ -114,7 +128,7 @@ def sha256_of(path) -> str:
 
 
 def _receipt(base=None, model="watcher") -> Path:
-    folder = {"aster": "jarvis", "axiom": "data", "meridian": "picard"}.get(model, "")
+    folder = VOICES.get(model, VOICES["watcher"])[4]
     return voice_dir(base) / folder / "installed.json"
 
 

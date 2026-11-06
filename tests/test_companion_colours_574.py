@@ -16,6 +16,7 @@ PALETTES = {
     "aster": ("Aster cyan", "#65e4ef", "#a8b4ff"),
     "axiom": ("Axiom violet", "#a897ff", "#65e4ef"),
     "meridian": ("Meridian gold", "#e8c48c", "#74bbff"),
+    "lyra": ("Lyra aurora", "#74ddff", "#ec9fdb"),
 }
 ARTIFACTS = Path(tempfile.gettempdir()) / "voidcompass-companion-palettes"
 ARTIFACTS.mkdir(exist_ok=True)
@@ -55,7 +56,7 @@ class PaletteOverlayTests(unittest.TestCase):
         page = self.open_page("dashboard/index.html")
         choices = page.evaluate('''async () => {
             const {renderCompanionStudio} = await import('/dashboard/companion-ui.js');
-            return ['watcher','aster','axiom','meridian'].map(identity => {
+            return ['watcher','aster','axiom','meridian','lyra'].map(identity => {
                 renderCompanionStudio({companion_identity:identity, companion_accent:'hal'});
                 const field = document.querySelector('[data-studio-setting="companion_accent"]');
                 return {identity,value:field.value,options:[...field.options].map(o=>[o.value,o.textContent])};

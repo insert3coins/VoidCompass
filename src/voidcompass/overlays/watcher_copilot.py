@@ -75,6 +75,8 @@ TOPICS = {
                         r"logged)\b", re.I),
     # Your engineering materials: raw, manufactured, encoded.
     "materials": re.compile(r"\b(materials?|mats|raw|manufactured|encoded)\b", re.I),
+    # 5.7.6: your engineers: who's unlocked, your rank with each.
+    "engineers": re.compile(r"\b(engineers?|workshops?)\b", re.I),
     # 5.7.6: the community goals you've joined, from the journal.
     "goals": re.compile(r"\b(community goals?|cgs?)\b", re.I),
     "colony": re.compile(r"\b(colon(y|ies|is\w*)|construction|build(ing)? site|still needs?|what('s| is) (still )?needed)\b",
@@ -893,6 +895,43 @@ def record_lines(statistics, question=""):
 # What each grade holds at most (Elite's material storage limits).
 GRADE_CAPS = {1: 300, 2: 250, 3: 200, 4: 150, 5: 100}
 _GRADE = re.compile(r"\b(?:grade|g)\s*([1-5])\b|\b(grades?|by grade)\b", re.I)
+# 5.7.6: "Which materials are full?"
+_FULL = re.compile(r"\b(full|maxed|max(?:ed)? out|at (?:the |their )?(?:limit|cap)|no (?:more )?room)\b", re.I)
+
+
+def engineer_lines(engineers, question=""):
+    """5.7.6: your engineers, from the game's EngineerProgress: the ones you
+    named, else how many are unlocked, your rank with each, and the rest."""
+    rows = {str(name): entry for name, entry in (engineers or {}).items() if isinstance(entry, dict) and name}
+    if not rows:
+        return ["No engineers on record yet (the game lists them when it starts)"]
+
+    def state(name, entry):
+        progress = str(entry.get("progress") or "Known")
+        rank = _whole(entry.get("rank"))
+        if progress.casefold() != "unlocked":
+            return f"{name}: {progress.casefold()}"
+        done = _whole(entry.get("rank_progress"))
+        return f"{name}: unlocked, rank {rank}" + (f" ({done}% of the way to rank {rank + 1})" if 0 < rank < 5 and done else "")
+
+    words = f" {str(question or '').casefold()} "
+    named = [(name, entry) for name, entry in rows.items()
+             if any(len(part) > 3 and f" {part}" in words for part in name.casefold().split())]
+    if named:
+        return [state(name, entry) for name, entry in named[:6]]
+    unlocked = sorted((name for name, entry in rows.items() if str(entry.get("progress") or "").casefold() == "unlocked"),
+                      key=lambda name: (-_whole(rows[name].get("rank")), name))
+    lines = [f"Engineers: {len(unlocked)} unlocked of {len(rows)} you know"]
+    by_rank = {}
+    for name in unlocked:
+        by_rank.setdefault(_whole(rows[name].get("rank")), []).append(name)
+    for rank in sorted(by_rank, reverse=True):
+        lines.append(f"Rank {rank}: " + ", ".join(by_rank[rank]))
+    for progress in ("Invited", "Acquainted", "Known", "Barred"):
+        waiting = sorted(name for name, entry in rows.items() if str(entry.get("progress") or "") == progress)
+        if waiting:
+            lines.append(f"{progress}: " + ", ".join(waiting[:8]) + (f" and {len(waiting) - 8} more" if len(waiting) > 8 else ""))
+    return lines[:8]
 
 
 def materials_lines(inventory, question="", top=5, grade_of=None):
@@ -918,6 +957,13 @@ def materials_lines(inventory, question="", top=5, grade_of=None):
                          + f" ({label.lower()}" + (f", grade {level}" if level else "") + ")")
         return lines
     asked = [key for key, label in kinds if label.casefold() in words]
+    if _FULL.search(words) and callable(grade_of):
+        full = [entry for key, _label in kinds if not asked or key in asked for entry in rows[key]
+                if GRADE_CAPS.get(grade(entry)) and _whole(entry["count"]) >= GRADE_CAPS[grade(entry)]]
+        if not full:
+            return ["No materials are full"]
+        return [f"Full ({len(full)}): " + ", ".join(f"{entry['name']} {_whole(entry['count'])}" for entry in full[:12])
+                + (f" and {len(full) - 12} more" if len(full) > 12 else "")]
     graded = _GRADE.search(words) if callable(grade_of) else None
     if graded:
         wanted = int(graded.group(1)) if graded.group(1) else None

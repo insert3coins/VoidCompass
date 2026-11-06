@@ -31,6 +31,7 @@ from voidcompass.exploration import bio_values
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
 from voidcompass.mining.mining_record import material_name
 from voidcompass.overlays import crew_debrief, crew_lore, crew_story, crew_voices, mining_talk, rhino_lines, route_lines, ship_life, squadron_talk, survey_report
+from voidcompass.overlays import life_engineering
 from voidcompass.overlays import (
     watcher_deeper, watcher_field, watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures,
     watcher_places, watcher_copilot, watcher_name, watcher_postcards,
@@ -626,9 +627,17 @@ class WatcherMind:
         self._route_left = None
         self._route_total = None
         self._route_said = set()
+        # 5.7.6: the system that count is for, the hyperspace jump under way,
+        # and a fresh plot (NavRoute) whose count starts the route over.
+        self._route_target = ""
+        self._route_jump_to = ""
+        self._route_new = False
         self._next_star = ""
         # 5.7.5: this system's scans, for the report when every body is found.
         self._survey = survey_report.SurveyTally()
+        # 5.7.6: engineering materials as the journal counts them (a store
+        # filling up, a grade 5 picked up).
+        self._materials = life_engineering.MaterialStore()
         # 5.7.5: a visit to a ring, and the limpets aboard (the deck says).
         self._mining = mining_talk.MiningTrip()
         self._limpets = None
@@ -1373,7 +1382,16 @@ class WatcherMind:
         if event in {"FSDTarget", "StartJump"} and raw.get("StarClass"):
             if event == "FSDTarget" or str(raw.get("JumpType") or "") == "Hyperspace":
                 self._next_star = str(raw.get("StarClass") or "")
+        if event == "StartJump" and str(raw.get("JumpType") or "") == "Hyperspace":
+            self._route_jump_to = str(raw.get("StarSystem") or "?")
+        if event == "NavRoute":
+            self._route_new = True
+            return None
         if event == "NavRouteClear":
+            # The game clears the route during the final jump, before we
+            # arrive: keep it until the arrival, so the end is still said.
+            if self._route_jump_to and self._route_left == 1:
+                return None
             self._route_left = self._route_total = None
             return None
         if event == "FSDTarget":
@@ -1383,16 +1401,24 @@ class WatcherMind:
                 return None
             if left < 1:
                 return None
-            fresh = self._route_left is None or left > self._route_left
-            self._route_left = left
+            fresh = self._route_left is None or left > self._route_left or self._route_new
+            self._route_left, self._route_target, self._route_new = left, str(raw.get("Name") or ""), False
             if fresh:
                 self._route_total, self._route_said = left, set()
                 if left >= 5:
                     return "route_plotted", {"jumps": str(left)}
             return None
-        if event != "FSDJump" or not self._route_left:
+        if event != "FSDJump":
             return None
-        left, total = self._route_left - 1, self._route_total or self._route_left
+        self._route_jump_to = ""
+        if not self._route_left:
+            return None
+        # The next leg is usually targeted mid-jump, before the arrival is
+        # logged: its count is already what's left. Only a count still for
+        # the system we've just reached goes down by this jump.
+        arrived = str(raw.get("StarSystem") or "").casefold()
+        here = not self._route_target or self._route_target.casefold() == arrived
+        left, total = self._route_left - (1 if here else 0), self._route_total or self._route_left
         self._route_left = left or None
         if not left:
             self._route_total = None
@@ -1430,7 +1456,8 @@ class WatcherMind:
         if mined:
             return mined
         # 5.7.5: the ship's everyday life; its usual handling still follows.
-        life = ship_life.moment(event, raw) or squadron_talk.moment(event, raw)
+        stored = self._materials.observe(event, raw)
+        life = ship_life.moment(event, raw) or squadron_talk.moment(event, raw) or stored
         if life:
             now = self.clock()
             if life[0] == "docking_requested":

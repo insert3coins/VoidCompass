@@ -61,4 +61,21 @@ OFFICERS = {
                              "Our position's not on the chart yet. Ask again after the next jump.",
                              "I need a fix first, Commander. The next jump will give me one."),
     },
+    "lyra": {
+        "station_opening": ("Searching for the nearest {label}. One moment.", "Finding the nearest {label}, Commander.",
+                            "Querying the uplink for the nearest {label}.", "Nearest {label}, coming up."),
+        "distance_opening": ("{name} is not in our own logs. Asking the uplink.", "Looking up {name}. One moment.",
+                             "No coordinates for {name} aboard. Querying the uplink.", "Resolving {name}, Commander."),
+        "distance_unknown": ("I have no coordinates for {name}. Turn on trading searches in Settings, under Integrations, "
+                             "and I can look it up.",
+                             "{name} is not in our logs. With trading searches on, in Settings under Integrations, I can find it.",
+                             "We have never been to {name}, so I cannot place it. Trading searches, in Settings under "
+                             "Integrations, would let me look.",
+                             "No record of {name} aboard. Switch on trading searches in Settings, under Integrations, "
+                             "and I will find it."),
+        "distance_nowhere": ("I do not have our position yet. Ask again after the next jump.",
+                             "Our position is not logged yet. One jump will fix it.",
+                             "No position fix yet. Ask me after the next jump.",
+                             "I need our coordinates first, Commander. The next jump will give them to me."),
+    },
 }

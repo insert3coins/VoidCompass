@@ -62,7 +62,8 @@ export function addLyraRobot(field, uniforms, renderer, scene) {
   field.add(robot); robot.add(head, body); head.position.y = .20; head.scale.setScalar(1.16);
   let blink = 0, mouth = 0;
   const eyeRigs = [], fins = [], lights = [];
-  const jaw = {value:0};
+  const jaw = {value:0}, smile = {value:0};
+  let face = {joy:0, worry:0, sad:0, curious:0};
   const pearl = new THREE.MeshPhysicalMaterial({color:0xd4e6ef, metalness:.30, roughness:.24,
     clearcoat:1, clearcoatRoughness:.18, envMapIntensity:.85});
   const steel = new THREE.MeshStandardMaterial({color:0x59748b, metalness:.85, roughness:.26});
@@ -117,17 +118,18 @@ export function addLyraRobot(field, uniforms, renderer, scene) {
   // A recessed visor and mouth cut through the actual curved shell.
   const shellMaterial=pearl.clone();
   shellMaterial.onBeforeCompile=shader=>{
-    shader.uniforms.uLyraJaw=jaw;
+    shader.uniforms.uLyraJaw=jaw;shader.uniforms.uLyraSmile=smile;
     shader.vertexShader=shader.vertexShader.replace("#include <common>","#include <common>\nuniform float uLyraJaw;varying vec3 vShell;");
     shader.vertexShader=shader.vertexShader.replace("#include <begin_vertex>",`#include <begin_vertex>
       vShell=position;
       float lower=(1.0-smoothstep(-.415,-.385,position.y))*(1.0-smoothstep(.10,.32,abs(position.x)));
       transformed.y-=uLyraJaw*.045*lower;transformed.z+=uLyraJaw*.012*lower;`);
-    shader.fragmentShader=shader.fragmentShader.replace("#include <common>","#include <common>\nuniform float uLyraJaw;varying vec3 vShell;");
+    shader.fragmentShader=shader.fragmentShader.replace("#include <common>","#include <common>\nuniform float uLyraJaw,uLyraSmile;varying vec3 vShell;");
     shader.fragmentShader=shader.fragmentShader.replace("#include <clipping_planes_fragment>",`#include <clipping_planes_fragment>
       vec2 q=abs(vec2(vShell.x,vShell.y+.045))-vec2(.422,.103);
       float screen=length(max(q,0.0))+min(max(q.x,q.y),0.0)-.105;
-      float smile=-.389+.035*pow(vShell.x/.16,2.0);
+      // uLyraSmile bends the mouth: up to a broad smile at 1, a frown below about -1.2.
+      float smile=-.389-uLyraSmile*.004+(.035+uLyraSmile*.03)*pow(vShell.x/.16,2.0);
       float opening=.006+uLyraJaw*.035*(1.0-pow(vShell.x/.16,2.0));
       if(vShell.z>.17&&(screen<0.0||(abs(vShell.x)<.16&&vShell.y<smile+.006&&vShell.y>smile-opening)))discard;`);
   };
@@ -203,27 +205,40 @@ export function addLyraRobot(field, uniforms, renderer, scene) {
   ring(body,steel,.105,.02,[0,-.91,.16]);
 
   return {
-    update({clock,pose,mouthOpen,reduced,focus,animated}) {
+    update({clock,pose,mouthOpen,reduced,focus,animated,expression}) {
+      face=expression||face;
+      const {joy,worry,sad,curious}=face;
       const phase=(clock+1.15)%5.3;
       blink=animated&&!reduced&&phase<.22?Math.sin(phase/.22*Math.PI)**.6:0;
       mouth=reduced?0:mouthOpen;jaw.value=mouth;
+      smile.value=joy-worry*.7-sad*2.2;
       const tracking=!reduced&&focus!=="off";
-      head.rotation.set(tracking?-pose.y*.065:0,tracking?pose.x*.08:0,
-        animated&&tracking?Math.sin(clock*.53)*.025:0);
-      head.position.y=.20+(animated&&!reduced?Math.sin(clock*1.4)*.007:0);
+      // Curious tilts the head; downcast lowers it a little. Both hold still with Fixed focus.
+      head.rotation.set(tracking?-pose.y*.065+sad*.07:0,tracking?pose.x*.08:0,
+        tracking?(animated?Math.sin(clock*.53)*.025:0)+curious*.10:0);
+      head.position.y=.20+(animated&&!reduced?Math.sin(clock*1.4)*.007:0)-sad*.012;
       for(const {eye,lens,side} of eyeRigs) {
-        eye.scale.y=1.1*(1-blink*.96);
-        lens.position.x=tracking?pose.x*.022:0;lens.position.y=tracking?pose.y*.014:0;
+        // Pleased squints, wary widens, curious makes one lens bigger than the other.
+        const open=1-joy*.24+worry*.07-sad*.13+curious*side*.07;
+        eye.scale.y=1.1*open*(1-blink*.96);eye.scale.x=1.1*(1+joy*.03-worry*.03);
+        eye.rotation.z=side*(worry*.10-sad*.12);
+        eye.position.y=-.045+joy*.012-sad*.008;
+        lens.position.x=tracking?pose.x*.022:0;lens.position.y=(tracking?pose.y*.014:0)-sad*.012;
         lens.rotation.z=animated?side*Math.sin(clock*.6)*.035:0;
       }
-      for(const {fin,side} of fins)fin.rotation.z=-side*.25+(animated&&!reduced?Math.sin(clock*1.1)*side*.035:0);
+      // Fins lift when she is pleased, sweep back when wary, droop when downcast.
+      for(const {fin,side} of fins) {
+        const lift=joy*.16+curious*(side>0?.14:-.04)-worry*.20-sad*.28;
+        fin.rotation.z=-side*(.25-lift)+(animated&&!reduced?Math.sin(clock*(1.1+worry*1.6))*side*(.035+worry*.02):0);
+        fin.rotation.x=-worry*.18+sad*.10;
+      }
       glow.color.copy(uniforms.uColour.value);soft.color.copy(uniforms.uOther.value);
       pearl.color.set(0xd4e6ef).lerp(uniforms.uColour.value,.045);
       fill.color.set(0xc0e6ff).lerp(uniforms.uColour.value,.28);
       rim.color.copy(uniforms.uOther.value).lerp(uniforms.uColour.value,.6);
       lights.forEach((light,i)=>{light.scale.x=animated&&!reduced?1+.10*Math.sin(clock*2-i*.65)+mouth*.15:1;});
     },
-    inspect:()=>({modelReady:true,modelType:"articulated-robot",blink,mouthMorph:mouth,eyeRigs:eyeRigs.length}),
+    inspect:()=>({modelReady:true,modelType:"articulated-robot",blink,mouthMorph:mouth,smile:smile.value,eyeRigs:eyeRigs.length}),
     destroy(){scene.environment=null;environment.dispose();},
   };
 }

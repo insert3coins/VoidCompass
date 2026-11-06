@@ -6,7 +6,7 @@ from voidcompass.core import companions
 from voidcompass.overlays import companion_personas, mining_talk, watcher_mind
 from tests.test_aster_companion import Clock
 
-CREW = ("watcher", "aster", "axiom", "meridian")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
 RING = "Sim 3 A Ring"
 
 
@@ -110,7 +110,7 @@ class CompanionTests(unittest.TestCase):
             self.assertEqual(watcher_mind.IMPORTANCE[topic], level)
             self.assertGreaterEqual(len(watcher_mind.TOPICS[topic][1]), 10)
             self.assertGreaterEqual(len(watcher_mind.WEARY[topic]), 10)
-            for identity in ("aster", "axiom", "meridian"):
+            for identity in ("aster", "axiom", "meridian", "lyra"):
                 lines = companion_personas.get(identity).lines
                 self.assertGreaterEqual(len(lines.event_lines(topic)), 9, (identity, topic))
                 self.assertGreaterEqual(len(lines.event_lines(topic, True)), 4, (identity, topic))

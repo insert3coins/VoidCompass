@@ -52,7 +52,7 @@ class GreetingTests(unittest.TestCase):
 
 class CrewGreetingDepthTests(unittest.TestCase):
     def test_every_companion_has_as_many_greetings_and_rundowns(self):
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             config = {"companion_identity": identity, f"{identity}_thoughts": "chatty"}
             companion = companions.create_mind(None, config, clock=Clock(), rng=random.Random(2))
             for phrase, size in ((f"hello {identity}", 50), ("what can you do", 10)):

@@ -415,7 +415,7 @@ function renderLore(lore, ui) {
     ui.byId("watcher-books").replaceChildren();
     return;
   }
-  if (["aster", "axiom", "meridian"].includes(lore.identity)) { renderCrewLore(lore, ui); return; }
+  if (["aster", "axiom", "meridian", "lyra"].includes(lore.identity)) { renderCrewLore(lore, ui); return; }
   const chapters = Array.isArray(lore.chapters) ? lore.chapters : [];
   const echoes = Array.isArray(lore.echoes) ? lore.echoes : [];
   const books = Array.isArray(lore.books) ? lore.books : [];
@@ -870,7 +870,7 @@ const option = (value, label) => `<option value="${value}">${label}</option>`;
 const ROTA_DUTIES = [["docked", "Docked"], ["scanning", "Scanning (FSS or DSS)"], ["surface", "On a planet's surface"],
   ["route", "On a plotted route"], ["deep", "Deep space"], ["flight", "Ordinary flight"]];
 const ROTA_DEEP = [250, 500, 1000, 2000, 5000, 10000].map((ly) => [String(ly), `${ly.toLocaleString("en-GB")} ly`]);
-const ROTA_CREW = [["watcher", "The Watcher"], ["aster", "Aster"], ["axiom", "Axiom"], ["meridian", "Meridian"], ["keep", "Whoever's on watch"]];
+const ROTA_CREW = [["watcher", "The Watcher"], ["aster", "Aster"], ["axiom", "Axiom"], ["meridian", "Meridian"], ["lyra", "Lyra"], ["keep", "Whoever's on watch"]];
 const field = (key, title, note, options) => `<label class="studio-field"><span>${title}${note ? `<small>${note}</small>` : ""}</span>
   <select data-watcher-setting="${key}">${options.map(([value, label]) => option(value, label)).join("")}</select></label>`;
 const toggle = (key, title, note) => `<label class="studio-switch"><span><b>${title}</b><small>${note}</small></span>
@@ -886,7 +886,7 @@ function settingsPanel() {
       [["weary", "Depressed"], ["curious", "Curious"], ["stoic", "Stoic"], ["nervous", "Nervous"]])}
     ${toggle("heartbeat_thought_backdrop", "Thought backdrop", "A dark panel behind its words, easier to read over the game.")}
     ${toggle("heartbeat_thought_heading", "Thought heading", "A line above its words: a memory and its chapter, an echo, or simply its name.")}
-    ${toggle("crew_rota", "Watch rota", "The crew changes the watch with what you're doing, within a minute of it starting. Choose who takes each duty below. Choosing a companion yourself holds it for half an hour.")}
+    ${toggle("crew_rota", "Watch rota", "The crew changes the watch with what you're doing, within a minute of it starting. Choose who takes each duty below. Choosing a companion yourself holds it for five minutes.")}
     ${ROTA_DUTIES.map(([duty, title]) => field(`crew_rota_${duty}`, title, "", ROTA_CREW)
       + (duty === "deep" ? field("crew_rota_deep_ly", "Deep space starts", "How far from home", ROTA_DEEP) : "")).join("")}
     ${field("heartbeat_thought_side", "Thought side", "Auto goes toward the middle of the screen; either side swaps if its words won't fit there",
@@ -1026,7 +1026,7 @@ function renderName(name, ui) {
   const told = Array.isArray(name.told) ? name.told.length : 0;
   let note = "It hasn't read your name yet. It will the next time you load the game.";
   if (known) {
-    note = activeCompanion === "aster" ? `Aster has read ${known} in the crew register.` : activeCompanion === "axiom" ? `Axiom has read ${known} in the journal and filed it carefully.` : activeCompanion === "meridian" ? `Meridian has read ${known} in the ship’s log.` : `The ship writes ${known} every time you wake it.`;
+    note = activeCompanion === "aster" ? `Aster has read ${known} in the crew register.` : activeCompanion === "axiom" ? `Axiom has read ${known} in the journal and filed it carefully.` : activeCompanion === "meridian" ? `Meridian has read ${known} in the ship’s log.` : activeCompanion === "lyra" ? `Lyra has read ${known} in the ship’s registry.` : `The ship writes ${known} every time you wake it.`;
     if (!name.call) note += told ? " It has noticed, and will ask you about it. Or choose here." : " Choose what it calls you here, or wait for it to ask.";
     else if (call === "name") note += officer ? " Your name is its regular form of address." : " It may use it now and then, never more than once a session.";
     else if (call === "nickname") note += nickname
@@ -1148,7 +1148,7 @@ function renderVoice(voice, ui) {
 
   const findingPanel = ui.byId("watcher-finding-stage")?.closest("section");
   if (findingPanel) findingPanel.hidden = voice.identity !== "watcher";
-  if (["aster", "axiom", "meridian"].includes(voice.identity)) {
+  if (["aster", "axiom", "meridian", "lyra"].includes(voice.identity)) {
     const name = COMPANIONS[voice.identity].name;
     ui.byId("watcher-voice-orb").textContent = voice.orb_on ? `${name} speaks complete reports from the start. Its story unfolds separately over active service. Set up your microphone and recognition in Settings › Voice.` : `Enable the companion overlay in Overlay Studio to receive ${name}’s replies. TEST THE VOICE works here either way.`;
   }

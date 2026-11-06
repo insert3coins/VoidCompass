@@ -7,7 +7,7 @@ from voidcompass.core import companions
 from voidcompass.overlays import companion_personas, route_lines, watcher_mind
 from tests.test_aster_companion import Clock
 
-CREW = ("watcher", "aster", "axiom", "meridian")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
 
 
 def mind(identity, frequency="chatty", seed=1):
@@ -37,7 +37,7 @@ class RouteTests(unittest.TestCase):
                 companion.clock.now += 60  # past the session's opening remark
                 heard = [(target(companion, 12) or {}).get("topic")]
                 for left in range(12, 0, -1):
-                    thought = jump(companion)
+                    thought = jump(companion, f"Next {left}")
                     heard.append(thought["topic"] if thought else None)
                     if left > 1:
                         target(companion, left - 1)
@@ -45,6 +45,32 @@ class RouteTests(unittest.TestCase):
                     self.assertIn(topic, heard, identity)
                 self.assertEqual(heard.count("route_progress"), 1, "five to go, once")
                 self.assertIsNone(companion._route_left, "the route is over")
+
+    def test_the_journals_own_order_counts_right_to_the_end(self):
+        """As Elite writes it (5.7.6): the next leg is targeted mid-jump,
+        before the arrival, and the route is cleared during the last jump.
+        "Last jump" with one to go, and "route done" on arriving."""
+        with unittest.mock.patch.object(watcher_mind.WatcherMind, "_said_recently", return_value=False):
+            companion = mind("lyra")
+            companion.random.random = lambda: 0.0
+            companion.clock.now += 60
+            companion.observe("NavRoute", {"event": "NavRoute"})
+            names = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"]
+            self.assertEqual(companion.observe("FSDTarget", {"event": "FSDTarget", "Name": "Alpha", "StarClass": "K",
+                                                             "RemainingJumpsInRoute": 6})["topic"], "route_plotted")
+            heard = {}
+            for index, name in enumerate(names):
+                companion.observe("StartJump", {"event": "StartJump", "JumpType": "Hyperspace", "StarSystem": name, "StarClass": "K"})
+                if index + 1 < len(names):
+                    companion.observe("FSDTarget", {"event": "FSDTarget", "Name": names[index + 1], "StarClass": "K",
+                                                    "RemainingJumpsInRoute": len(names) - index - 1})
+                else:
+                    companion.observe("NavRouteClear", {"event": "NavRouteClear"})
+                heard[name] = ((jump(companion, name) or {}).get("topic"), companion._route_left)
+            self.assertEqual(heard["Echo"], ("route_last", 1), "one jump to go")
+            self.assertEqual(heard["Foxtrot"], ("route_done", None), "said on arriving at the end")
+            self.assertEqual(heard["Alpha"][1], 5)
+            self.assertNotIn("route_done", [topic for topic, _left in list(heard.values())[:-1]])
 
     def test_short_routes_and_cleared_routes_stay_quiet(self):
         companion = mind("meridian")
@@ -80,7 +106,7 @@ class RouteTests(unittest.TestCase):
         for topic in route_lines.IMPORTANCE:
             self.assertGreaterEqual(len(watcher_mind.TOPICS[topic][1]), 10, topic)
             self.assertGreaterEqual(len(watcher_mind.WEARY[topic]), 10, topic)
-            for identity in ("aster", "axiom", "meridian"):
+            for identity in ("aster", "axiom", "meridian", "lyra"):
                 lines = companion_personas.get(identity).lines
                 self.assertGreaterEqual(len(lines.event_lines(topic)), 10, (identity, topic))
                 self.assertGreaterEqual(len(lines.event_lines(topic, True)), 4, (identity, topic))

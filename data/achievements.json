@@ -7511,6 +7511,66 @@
     }
   },
   {
+    "id": "lyra_story_begins",
+    "title": "Power On",
+    "desc": "Hear the first entry from Lyra's own logs",
+    "icon": "◈",
+    "category": "Lyra",
+    "points": 25,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "LyraTold",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "lyra_story_complete",
+    "title": "Full Tanks",
+    "desc": "Hear Lyra's whole story, to the last line of her logs",
+    "icon": "◈",
+    "category": "Lyra",
+    "points": 250,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "LyraComplete",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "lyra_every_echo",
+    "title": "Every Gauge Read",
+    "desc": "Hear all six of Lyra's echoes",
+    "icon": "◈",
+    "category": "Lyra",
+    "points": 150,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "LyraEchoes",
+      "value": 6,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "lyra_request",
+    "title": "Uncharted",
+    "desc": "Take Lyra to a star nobody has discovered",
+    "icon": "◈",
+    "category": "Lyra",
+    "points": 100,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "LyraRequest",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
     "id": "crew_introductions",
     "title": "Introductions",
     "desc": "Hear one of your companions tell how it came aboard",
@@ -7528,7 +7588,7 @@
   {
     "id": "crew_full",
     "title": "Full Crew",
-    "desc": "Fly with all four companions: the Watcher, Aster, Axiom and Meridian",
+    "desc": "Fly with all five companions: the Watcher, Aster, Axiom, Meridian and Lyra",
     "icon": "⚓",
     "category": "The Crew",
     "points": 100,
@@ -7536,14 +7596,14 @@
       "type": "flag",
       "event": "VoidCompassWatcherStory",
       "field": "CrewFlown",
-      "value": 4,
+      "value": 5,
       "compare": "gte"
     }
   },
   {
     "id": "crew_watch_rota",
     "title": "The Watch Rota",
-    "desc": "Hear all four companions' accounts of coming aboard, every passage",
+    "desc": "Hear all five companions' accounts of coming aboard, every passage",
     "icon": "⚓",
     "category": "The Crew",
     "points": 200,
@@ -7551,7 +7611,7 @@
       "type": "flag",
       "event": "VoidCompassWatcherStory",
       "field": "CrewTold",
-      "value": 24,
+      "value": 35,
       "compare": "gte"
     }
   },

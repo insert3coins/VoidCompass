@@ -12,7 +12,7 @@ from voidcompass.overlays import crew_debrief, crew_lore, crew_story
 from tests.test_aster_companion import Clock
 
 ROOT = Path(__file__).resolve().parents[1]
-CREW = ("watcher", "aster", "axiom", "meridian")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
 
 
 def mind(identity, flown=CREW, **crew):
@@ -42,7 +42,7 @@ class RotaTests(unittest.TestCase):
         self.assertEqual(crew_rota.wanted({"on_planet": True, "on_foot": True}), "axiom")
         self.assertEqual(crew_rota.wanted({"route_left": 3, "home_ly": 5000}), "meridian", "a route beats deep space")
         self.assertEqual(crew_rota.wanted({"home_ly": 1500}), "watcher")
-        self.assertIsNone(crew_rota.wanted({"home_ly": 200}), "near home, nobody asks")
+        self.assertEqual(crew_rota.wanted({"home_ly": 200}), "lyra", "ordinary flight is Lyra's watch")
         self.assertIsNone(crew_rota.wanted({"on_planet": True, "home_ly": 5000}), "landed in the ship isn't deep space")
         self.assertIsNone(crew_rota.wanted({"route_left": "x", "home_ly": None}))
 
@@ -98,9 +98,11 @@ class RotaTests(unittest.TestCase):
         self.assertIsNone(crew_rota.wanted({"home_ly": 5000}, chosen), "keep leaves whoever has the watch")
         self.assertEqual(crew_rota.duty_of({"on_planet": True, "in_srv": True}), "surface")
         self.assertEqual(crew_rota.duty_of({"gui_focus": crew_rota.FSS_FOCUS}), "scanning")
-        # Ordinary flight: in the ship, no route, near home. Nobody's unless you choose.
+        # Ordinary flight: in the ship, no route, near home. Lyra's, unless you choose.
         self.assertEqual(crew_rota.duty_of({"home_ly": 334}), "flight")
-        self.assertIsNone(crew_rota.wanted({"home_ly": 334}), "whoever's on watch by default")
+        self.assertEqual(crew_rota.wanted({"home_ly": 334}), "lyra")
+        self.assertIsNone(crew_rota.wanted({"home_ly": 334}, crew_rota.duties({"crew_rota_flight": "keep"})),
+                          "keep leaves whoever's on watch")
         self.assertEqual(crew_rota.wanted({"home_ly": 334}, crew_rota.duties({"crew_rota_flight": "meridian"})), "meridian")
         self.assertIsNone(crew_rota.duty_of({"on_planet": True}), "landed in the ship isn't flight")
         # Where deep space starts is yours to choose too.
@@ -252,7 +254,7 @@ class StoryTests(unittest.TestCase):
         self.assertIsNone(crew_story.due({"crew_story": [["night_1", 100.0]]}, (), True, 100 + crew_story.GAP_S - 1))
         self.assertIsNone(crew_story.due({}, crew_story.IDS, True, 10 ** 9), "all told")
 
-    def test_scenes_are_four_voices(self):
+    def test_scenes_are_five_voices(self):
         for scene_id, _title, lines in crew_story.SCENES:
             self.assertEqual(sorted(speaker for speaker, _line in lines), sorted(CREW), scene_id)
             self.assertEqual(len(crew_story.heading(scene_id).split(" · ")), 3)
@@ -276,7 +278,7 @@ class StoryTests(unittest.TestCase):
         self.assertIsNone(companion._crew_story_scene(companion.clock.now), "one scene, then a long gap")
 
     def test_not_before_the_accounts(self):
-        companion = mind("watcher", told=3, total=24, story=[])
+        companion = mind("watcher", told=3, total=35, story=[])
         companion.clock.now += 10 ** 6
         self.assertIsNone(companion._crew_story_scene(companion.clock.now))
 
@@ -285,7 +287,7 @@ class StoryTests(unittest.TestCase):
         self.assertEqual((page["told"], page["total"]), (1, len(crew_story.SCENES)))
         heard = [scene for scene in page["scenes"] if scene["heard"]]
         self.assertEqual([scene["id"] for scene in heard], ["night_2"])
-        self.assertEqual(len(heard[0]["lines"]), 4)
+        self.assertEqual(len(heard[0]["lines"]), 5)
         self.assertTrue(all(not scene["lines"] for scene in page["scenes"] if not scene["heard"]), "untold scenes stay hidden")
         script = (ROOT / "web/dashboard/watcher.js").read_text(encoding="utf-8")
         self.assertIn('id="watcher-crew-story"', script)

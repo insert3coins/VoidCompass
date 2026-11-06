@@ -393,6 +393,11 @@ def persona_banks(identity):
     return banks["plain"], banks["voiced"]
 
 
+# 5.7.6: Lyra, before docking and the life_* lines are merged in for every companion.
+from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
+
+PERSONAS["lyra"] = {"plain": dict(_lyra.SHIP_LIFE["plain"]), "voiced": dict(_lyra.SHIP_LIFE["voiced"])}
+
 # 5.7.6: the docking request, and the station cancelling or timing it out.
 from voidcompass.overlays import docking_talk as _docking  # noqa: E402
 

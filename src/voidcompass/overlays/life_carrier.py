@@ -354,3 +354,8 @@ PERSONAS = {
         },
     },
 }
+
+# 5.7.6: Lyra.
+from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
+
+PERSONAS["lyra"] = _lyra.life_group("life_carrier")

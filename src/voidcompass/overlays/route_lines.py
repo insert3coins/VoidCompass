@@ -259,3 +259,8 @@ def persona_banks(identity):
     """(plain, voiced) for one of the officer-style companions."""
     banks = PERSONAS[identity]
     return banks["plain"], banks["voiced"]
+
+# 5.7.6: Lyra.
+from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
+
+PERSONAS["lyra"] = _lyra.ROUTE

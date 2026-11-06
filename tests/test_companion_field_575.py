@@ -9,7 +9,7 @@ from voidcompass.overlays import (aster_field, axiom_field, companion_personas, 
                                   watcher_mind)
 from tests.test_aster_companion import Clock
 
-CREW = ("watcher", "aster", "axiom", "meridian")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
 FIELD = re.compile(r"mine|mining|rhino|prospect|crack|motherlode|srv|scarab|scorpion|nomad|launch|fighter|foot|touchdown|"
                    r"landed|taxi|fss|map|sample|analys|codex|world|planet|first|discover|valuable|ring|green|big_system|"
                    r"small_system|near_body|star|survey")
@@ -42,7 +42,7 @@ class FieldWordsTests(unittest.TestCase):
     def test_every_field_topic_has_depth_for_every_officer(self):
         topics = field_topics()
         self.assertGreater(len(topics), 55)
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             lines = companion_personas.get(identity).lines
             for topic in topics:
                 with self.subTest(identity=identity, topic=topic):
@@ -115,7 +115,7 @@ class SurveyReportTests(unittest.TestCase):
         self.assertEqual(watcher_mind.IMPORTANCE["survey_report"], 2, "said even on Occasional")
         self.assertGreaterEqual(len(watcher_mind.TOPICS["survey_report"][1]), 10)
         self.assertGreaterEqual(len(watcher_mind.WEARY["survey_report"]), 10)
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             lines = companion_personas.get(identity).lines
             self.assertGreaterEqual(len(lines.event_lines("survey_report")), 10)
             self.assertGreaterEqual(len(lines.event_lines("survey_report", True)), 4)

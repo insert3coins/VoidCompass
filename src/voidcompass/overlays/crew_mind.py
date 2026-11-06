@@ -1,9 +1,9 @@
-"""Axiom and Meridian: full companions on the shared officer-style mind (5.7.4)."""
+"""Axiom, Meridian and Lyra: full companions on the shared officer-style mind (5.7.4, Lyra 5.7.6)."""
 from voidcompass.core import companions
 from voidcompass.overlays import companion_personas
 from voidcompass.overlays.aster_mind import AsterMind
 
-TEST_LINES = {identity: companion_personas.get(identity).test_line for identity in ("axiom", "meridian")}
+TEST_LINES = {identity: companion_personas.get(identity).test_line for identity in companions.NEW_IDENTITIES}
 
 
 def command_reply(outcome, rng, fields):

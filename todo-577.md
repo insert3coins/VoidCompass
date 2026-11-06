@@ -1,4 +1,4 @@
-# 5.7.7 plan: a fifth companion
+# Plan: a fifth companion (ships in 5.7.6)
 
 Noted 7 November 2026, at bedtime. This is a starting point for tomorrow; nothing is decided yet.
 
@@ -14,7 +14,7 @@ What the memories show:
 The likely cause: picking a companion yourself holds it for 30 minutes, with no sign of that anywhere, so trying the rota by hand switches it off. Its waits (45 seconds to settle, at least 3 minutes between changes) also make it feel dead.
 
 - [ ] **Show the rota's state on the companion page.** For example: "Rota: docked, Aster takes over in 30 s", "Holding your pick until 23:51" (with a button to release it now), or "Next change allowed in 2 min".
-- [ ] **Rethink the hold.** Perhaps hold your pick only until the duty changes, not for a fixed 30 minutes, or make it shorter.
+- [x] **Rethink the hold.** Shortened to 5 minutes (user's choice, 7 November). Holding only until the duty changes is still an option.
 - [ ] **Waits per duty.** Docked could swap after about 10 seconds; scanning keeps the longer wait. Review the 3-minute gap between changes.
 - [ ] **Watch it live.** Use the debugger (Local API /debug, verbose), and add a debug line for each rota decision: duty, who's wanted, and why not yet. Then a clean run with no manual picks: dock, FSS, plot a route, fly.
 - [ ] **Blank duty settings.** Duty settings never chosen are saved as "" and fall back to the defaults. Confirm the dropdowns show the default, not a blank.
@@ -30,7 +30,7 @@ The watch rota has five duties but only four companions, so Axiom holds two (sca
 - [ ] **The Night Watch:** its last scene says "five of us standing watch now. One of us doesn't talk" (the ship's chronometer). Either adjust that ending, or have the newcomer arrive after it, as a sixth presence aboard.
 - [ ] **Their voice:** a Piper model. It must be one we can host on our GitHub, as with the others.
 - [ ] **Their display:** an animated Three.js display, like the particle and portrait displays.
-- [ ] **Which release:** 5.7.7 (5.7.6 is nearly ready), and its title.
+- [x] **Which release:** 5.7.6, with the rest of that release (user's choice, 7 November).
 
 ## Build (each officer in 5.7.4 needed all of this)
 

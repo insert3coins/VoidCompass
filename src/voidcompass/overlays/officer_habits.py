@@ -40,6 +40,17 @@ STYLE = {
          "Every captain has a bent. Yours is {style}: {share} percent of the log.",
          "Call it {style}, {share} percent of the time. The rest is weather."),
     ),
+    "lyra": (
+        ("By activity, you are mostly {style}: {share} percent.",
+         "{share} percent of our flying is that of {style}.",
+         "Profile: {style}, {share} percent.",
+         "Your logs read like {style}'s: {share} percent of them."),
+        ("By the numbers you are {style}, {share} percent of the time. I like knowing what we are.",
+         "{share} percent of our flying has been the work of {style}. Logged with approval.",
+         "My records say {style}, at {share} percent. My first commander was a different sort. I like this sort.",
+         "Statistically, you are {style}. {share} percent. And careful with fuel, one hundred percent.",
+         "If the ship's registry had to describe you: {style}, {share} percent. I would add: good to fly with."),
+    ),
 }
 
 # Added to each officer's habit topics: (plain, voiced).
@@ -63,6 +74,14 @@ MORE = {
         "habit_trade": (("Top commodity sold: {sold}, {sold_t} tonnes.", "Profit to date: {profit} credits."),
                         ("{profit} credits of profit. The curve is going the right way.",
                          "{best} returned {best_cr} credits. An outlier, in the good direction.")),
+    },
+    "lyra": {
+        "habit_cargo": (("Most carried: {commodity}, {tonnes} tonnes.", "Mined: {mined}, {mined_n} tonnes."),
+                        ("{commodity} leads the manifest at {tonnes} tonnes. I know every crate.",
+                         "{mined_n} tonnes of {mined}, refined and stowed. Good, steady work.")),
+        "habit_trade": (("Top commodity sold: {sold}, {sold_t} tonnes.", "Profit to date: {profit} credits."),
+                        ("{profit} credits of profit. A lovely, healthy reserve.",
+                         "{best} returned {best_cr} credits. I remember the fuel we spent on it. Worth it.")),
     },
     "meridian": {
         "habit_cargo": (("Mostly {commodity} in the hold: {tonnes} tonnes.", "Mined so far: {mined_n} tonnes of {mined}."),

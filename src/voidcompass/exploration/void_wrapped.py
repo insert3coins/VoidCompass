@@ -660,7 +660,7 @@ def year_story(year, sources, nature="weary", commander="", now=None, trip=None)
             "cards": cards, "summary": summary, "trip": dict(trip) if trip else None}
 
 
-CREW = ("watcher", "aster", "axiom", "meridian")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
 # Their own flight talk only: never a story passage, a crewmate's line, or an answer.
 _UNQUOTED = ("lore", "crew_", "relay", "answer", "talk", "question", "callback", "name_", "dream", "echo", "book", "voice_found")
 

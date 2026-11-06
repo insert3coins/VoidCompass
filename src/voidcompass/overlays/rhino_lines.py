@@ -271,6 +271,11 @@ def officer_refining(identity):
     return plain, plain + tuple(banks["voiced"]["mined_surface"])
 
 
+# 5.7.6: Lyra, before the survey's lines are merged in for every companion.
+from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
+
+PERSONAS["lyra"] = {"plain": dict(_lyra.RHINO["plain"]), "voiced": dict(_lyra.RHINO["voiced"])}
+
 # 5.7.6: the Rhino survey (centre and edge, half, done) and the best patch.
 from voidcompass.overlays import rhino_survey_lines as _survey  # noqa: E402
 

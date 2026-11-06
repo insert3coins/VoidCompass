@@ -24,6 +24,7 @@ from voidcompass.core.overlay_registry import OVERLAY_SPECS, TEXT_SIZES, overlay
 from voidcompass.overlays.heartbeat_events import classify
 from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 from voidcompass.overlays import watcher_mind
+from voidcompass.overlays import companion_moments
 
 _STALL_AFTER_S = 15
 # A thought shown while the voice was held is said when it is released, if it
@@ -202,6 +203,10 @@ class HeartbeatHUD:
         self._event_serial = 0
         self._events = deque(maxlen=_EVENT_HISTORY)
         self._vitals = vitals(0)
+        # 5.7.6: the officers' own moments on their displays (headings, the
+        # watch, scanned bodies, docking pad). The dashboard sets the provider.
+        self._moments = companion_moments.Moments()
+        self.moment_provider = None
         # Its inner voice and its memory of the commander (watcher_mind).
         self._mind_path = _memory_path(config)
         self.mind = companions.create_mind(self._mind_path, config)
@@ -424,6 +429,9 @@ class HeartbeatHUD:
             if activity in {'LoadGame', 'Commander'}:
                 self._check_profile()
             self.mind.observe(str(activity or ''), detail if isinstance(detail, dict) else {})
+            moments = getattr(self, '_moments', None)
+            if moments is not None:
+                moments.observe(str(activity or ''), detail)
         else:
             self._status_serial += 1
             if isinstance(detail, dict) and 'Flags' in detail:
@@ -472,7 +480,22 @@ class HeartbeatHUD:
             'memory': self._memory_summary(),
             'thought': self._thought_payload(),
             'hearing': getattr(self, '_hearing', ''),
+            'moment': self._moment(),
         }
+
+    def _moment(self):
+        """Route, scan and dock moments for the officers' displays (5.7.6)."""
+        moments = getattr(self, '_moments', None)
+        if moments is None:
+            return {}
+        context = None
+        provider = getattr(self, 'moment_provider', None)
+        if callable(provider):
+            try:
+                context = provider()
+            except Exception:
+                context = None
+        return moments.payload(self.mind, context)
 
     def _memory_summary(self):
         mind = getattr(self, 'mind', None)

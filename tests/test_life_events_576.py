@@ -10,9 +10,16 @@ from voidcompass.core import companions
 from voidcompass.overlays import companion_personas, life_events, ship_life, watcher_mind
 from tests.test_aster_companion import Clock
 
-CREW = ("watcher", "aster", "axiom", "meridian")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
 EVENTS = {
     "CockpitBreached": ({}, "cockpit_breached"),
+    # 5.7.6: engineering.
+    "EngineerCraft": ({"Engineer": "Felicity Farseer", "BlueprintName": "FSD_LongRange", "Level": 5, "Quality": 1.0,
+                       "Module": "int_hyperdrive_size5_class5", "Slot": "FrameShiftDrive", "Ingredients": []}, "engineer_grade5"),
+    "EngineerContribution": ({"Engineer": "Lei Cheung", "Type": "Commodity", "Commodity": "gold", "Commodity_Localised": "Gold",
+                              "Quantity": 10, "TotalQuantity": 10}, "engineer_contribution"),
+    "TechnologyBroker": ({"BrokerType": "guardian", "ItemsUnlocked": [{"Name": "Hpt_GuardianGaussCannon_Fixed_Small",
+                                                                       "Name_Localised": "Guardian Gauss Cannon"}]}, "tech_broker"),
     "SystemsShutdown": ({}, "systems_shutdown"),
     "SelfDestruct": ({}, "self_destruct"),
     "CommitCrime": ({"CrimeType": "fireInNoFireZone", "Faction": "Police", "Fine": 400}, "crime_committed"),
@@ -127,7 +134,7 @@ class CompanionTests(unittest.TestCase):
                   "count": "2", "goal": "G", "name": "N", "module": "Mo", "minutes": "3", "engineer": "E", "rank": "R",
                   "material": "Ma", "paid": "a", "paid_n": "1", "received": "b", "received_n": "2", "callsign": "C", "tonnes": "4",
                   "total": "5", "commodity": "Co", "order": "buy order", "power": "P", "old": "O", "merits": "6", "suit": "Su",
-                  "weapon": "We", "grade": "3", "body": "B", "captain": "Ca"}
+                  "weapon": "We", "grade": "3", "body": "B", "captain": "Ca", "blueprint": "Bp", "effect": "Ef", "cap": "300"}
         fields.update({key[:1].upper() + key[1:]: value for key, value in list(fields.items())})
         for topic, level in life_events.IMPORTANCE.items():
             self.assertEqual(watcher_mind.IMPORTANCE[topic], level)
@@ -135,7 +142,7 @@ class CompanionTests(unittest.TestCase):
             self.assertGreaterEqual(len(watcher_mind.WEARY[topic]), 10, topic)
             for line in list(watcher_mind.TOPICS[topic][1]) + list(watcher_mind.WEARY[topic]):
                 self.assertNotIn("{", line.format(**fields), (topic, line))
-            for identity in ("aster", "axiom", "meridian"):
+            for identity in ("aster", "axiom", "meridian", "lyra"):
                 lines = companion_personas.get(identity).lines
                 self.assertGreaterEqual(len(lines.event_lines(topic)), 9, (identity, topic))
                 self.assertGreaterEqual(len(lines.event_lines(topic, True)), 4, (identity, topic))

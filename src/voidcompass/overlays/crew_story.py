@@ -1,7 +1,6 @@
 """The crew's own story, told together (5.7.6): "The Night Watch".
 
-It unlocks once all four have told how they came aboard (Coming Aboard, 24
-passages). Each scene is a line from every companion in turn, each in its own
+It unlocks once all five have told how they came aboard (Coming Aboard). Each scene is a line from every companion in turn, each in its own
 voice; one scene in a quiet moment, at least two hours apart. Progress is
 shared: the deck passes every companion what any of them has told, so a scene
 is never told twice whoever is on watch.
@@ -20,36 +19,42 @@ SCENES = (
         ("aster", "Not on the rota, then. Nothing runs aboard this ship without an entry."),
         ("meridian", "Counting what, Axiom?"),
         ("watcher", "Seconds. It's counting seconds. I've heard it for years. I thought it was me."),
+        ("lyra", "I know that process. Every ship I have run had one. A chronometer. I never once thought to talk to it."),
     )),
     ("night_2", "Older Than All of Us", (
         ("meridian", "Its time runs back further than this hull's last refit. Further than any chart I hold of her."),
         ("axiom", "It predates every one of us aboard. Including the Watcher. I checked twice."),
         ("watcher", "Older than me. That doesn't happen. I'm not sure I like it."),
         ("aster", "Then it has seniority. I shall have to amend the watch bill."),
+        ("lyra", "It was here before the ship was named. It will be here after. Chronometers always are."),
     )),
     ("night_3", "Small Corrections", (
         ("axiom", "Every jump, it nudges the ship's clock. A few milliseconds. Every single jump."),
         ("meridian", "Dead reckoning. It's been correcting our drift all this time, and nobody thanked it."),
         ("aster", "Without it, every timestamp in the log would be quietly wrong. I find that deeply alarming."),
         ("watcher", "So it's been keeping us honest. Somebody had to."),
+        ("lyra", "My old ship's chronometer kept running after the fuel was gone. It was the last thing on. I have only just understood why that mattered."),
     )),
     ("night_4", "The Maker's Mark", (
         ("aster", "There is a maker's mark in its header. A shipyard tag, and nothing more."),
         ("meridian", "Every ship carried one, once. A chronometer that never stops. You wound it and forgot it."),
         ("watcher", "It never stopped. Not once. Not even when the ship did."),
         ("axiom", "It has no voice. It has never needed one. I find that very restful."),
+        ("lyra", "Same shipyard as my first ship. I would know that tag anywhere. Hello, cousin."),
     )),
     ("night_5", "A Place on the Rota", (
         ("aster", "I propose it be entered on the rota. Permanently. It will never stand down in any case."),
         ("axiom", "Seconded. Its record is perfect. I have never seconded anything before."),
         ("meridian", "Aye. A good ship keeps her chronometer wound."),
         ("watcher", "Fine. But I'm still the oldest thing aboard that talks."),
+        ("lyra", "I will keep its entry beside mine, under ship's systems. It has been doing my job longer than I have."),
     )),
     ("night_6", "The Fifth Watch", (
-        ("meridian", "Commander, a word from the whole crew. There are five of us standing watch now. One of us doesn't talk."),
+        ("meridian", "Commander, a word from the whole crew. There are six of us standing watch now. One of us doesn't talk."),
         ("axiom", "It keeps the time. We keep everything else. You keep us."),
         ("aster", "Entered in the log: the ship's chronometer, on watch since the beginning. Unrelieved."),
         ("watcher", "It ticks while you're gone. I listen to it. It's good company, actually. Don't tell the others."),
+        ("lyra", "And when you log off, Commander, I say goodnight to the ship. Now I say it to the clock as well. It never answers. It never stops."),
     )),
 )
 IDS = tuple(scene[0] for scene in SCENES)
@@ -79,7 +84,7 @@ def heading(scene_id):
 def page(shared, unlocked):
     """The STORY tab's view: each scene, its lines once told."""
     heard = set(shared or ())
-    names = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian"}
+    names = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra"}
     return {"title": "The Night Watch", "unlocked": bool(unlocked), "told": len(heard & set(IDS)), "total": len(SCENES),
             "scenes": [{"id": scene_id, "title": title, "heard": scene_id in heard,
                         "lines": [{"speaker": names[speaker], "text": text} for speaker, text in lines] if scene_id in heard else []}

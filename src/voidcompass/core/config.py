@@ -1564,7 +1564,7 @@ def load_config():
         'crew_rota_surface': 'axiom',
         'crew_rota_route': 'meridian',
         'crew_rota_deep': 'watcher',
-        'crew_rota_flight': 'keep',
+        'crew_rota_flight': 'lyra',
         'crew_rota_deep_ly': 1000,
         'heartbeat_text_scale_percent': 0,
         # The Watcher's voice (5.5.4): Piper with the HAL model, off until

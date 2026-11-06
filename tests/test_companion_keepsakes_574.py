@@ -14,7 +14,7 @@ from voidcompass.overlays import companion_personas, watcher_deeper, watcher_min
 from tests.test_aster_companion import Clock
 
 ROOT = Path(__file__).resolve().parents[1]
-PERSONAS = ("aster", "axiom", "meridian")
+PERSONAS = ("aster", "axiom", "meridian", "lyra")
 KEEPSAKES = {"capsule": {"note": "Remember the rings", "span": "3 weeks", "system": "Sol"},
              "capsule_early": {"system": "Sol", "wait": "2 days"},
              "capsule_shared": {"note": "Fly safe", "span": "a month", "system": "Sol", "sender": "CMDR Ana"},
@@ -106,7 +106,9 @@ class DeeperCompanyTests(unittest.TestCase):
     def test_the_request_comes_once_after_its_chapter_and_is_noticed_on_arrival(self):
         arrivals = {"aster": ("FSDJump", {"StarSystem": "Home", "StarPos": [0, 0, 0]}),
                     "axiom": ("Scan", {"BodyName": "BH", "StarType": "H"}),
-                    "meridian": ("FSDJump", {"StarSystem": "Rim", "StarPos": [0, 0, 26000 + 39000]})}
+                    "meridian": ("FSDJump", {"StarSystem": "Rim", "StarPos": [0, 0, 26000 + 39000]}),
+                    "lyra": ("Scan", {"BodyName": "Fresh A", "StarType": "K", "DistanceFromArrivalLS": 0,
+                                      "WasDiscovered": False})}
         for identity in PERSONAS:
             with self.subTest(identity=identity):
                 companion = mind(identity)
@@ -150,7 +152,7 @@ class AchievementAndLogTests(unittest.TestCase):
     def test_story_achievements_listen_for_each_personas_progress(self):
         rows = [row for row in json.loads((ROOT / "data" / "achievements.json").read_text(encoding="utf-8"))
                 if row["id"].split("_")[0] in PERSONAS]
-        self.assertEqual(len(rows), 12)
+        self.assertEqual(len(rows), 16)
         for identity in PERSONAS:
             companion = mind(identity)
             companion._story_changed = True

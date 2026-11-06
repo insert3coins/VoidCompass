@@ -40,7 +40,7 @@ WATCHER_SELECTS = (
 WATCHER_SWITCHES = ("heartbeat_thought_backdrop", "heartbeat_thought_heading")
 TEST_LINE = "This is my voice, Commander. I can hear you. Well. I can hear the ship."
 # The lookups that need what you asked: the world you name, the material you name.
-ASKS_THE_QUESTION = {"life", "planet", "materials", "codex", "world", "record", "cargo", "market"}
+ASKS_THE_QUESTION = {"life", "planet", "materials", "codex", "world", "record", "cargo", "market", "engineers"}
 # The nearest station with a service: this many results asked of Spansh, the
 # carriers among them dropped unless you asked for one.
 STATION_SEARCH_SIZE = 8
@@ -173,8 +173,8 @@ class DashboardWatcherVoiceMixin:
         if listener is not None:
             listener.close()
             self._watcher_listen = None
-        size = companions.display_size(self.config)
-        self.config.update({companions.display_key({"companion_identity": identity}, "companion_size"): size for identity in companions.IDENTITIES})
+        # The newcomer keeps the shared Studio settings (size, motion, focus, liveliness); colour stays its own.
+        self.config.update(companions.shared_look(self.config))
         self._companion_first_pace(selected)
         self.config["companion_identity"] = selected
         self._watcher_voice_download = None
@@ -375,6 +375,12 @@ class DashboardWatcherVoiceMixin:
                     for entry in (stock.get(kind) or {}).values() if isinstance(entry, dict)}
             if any(name and f" {name} " in words for name in held):
                 topics.append("materials")
+        # 5.7.6: "What rank am I with Farseer?": an engineer you know, by name.
+        if "engineers" not in topics:
+            known = ((getattr(self, "engineer_materials", None) or {}).get("engineers") or {})
+            words = _asked_words(question)
+            if any(len(part) > 3 and f" {part} " in words for name in known for part in str(name).casefold().split()):
+                topics.append("engineers")
         for topic in topics:
             try:
                 lookup = getattr(self, f"_watcher_lookup_{topic}")
@@ -628,6 +634,9 @@ class DashboardWatcherVoiceMixin:
         from voidcompass.engineering.engineering_data import material_info
         return watcher_copilot.materials_lines(getattr(self, "engineer_materials", None) or {}, question,
                                                grade_of=lambda symbol: material_info(symbol).get("grade"))
+
+    def _watcher_lookup_engineers(self, question=""):
+        return watcher_copilot.engineer_lines(((getattr(self, "engineer_materials", None) or {}).get("engineers") or {}), question)
 
     def _watcher_lookup_goals(self):
         goals = (getattr(self, "companion_state", None) or {}).get("community_goals") or {}

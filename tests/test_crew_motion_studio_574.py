@@ -54,7 +54,7 @@ def live_studio(identity):
 
 class LiveStudioTests(unittest.TestCase):
     def test_every_control_publishes_the_active_model_without_a_journal_tick(self):
-        for identity in (*companions.NEW_IDENTITIES, "lyra"):
+        for identity in companions.NEW_IDENTITIES:
             studio, hud, bridge = live_studio(identity)
             for key, value, field, expected in (
                 ("companion_size", "192", "size", 192),
@@ -94,7 +94,7 @@ class CrewMotionBrowserTests(unittest.TestCase):
 
     def test_idle_animation_changes_visible_pixels_with_focus_fixed(self):
         page = self.ready()
-        for identity in (*companions.NEW_IDENTITIES, "lyra"):
+        for identity in companions.NEW_IDENTITIES:
             for size, minimum in ((54, 40), (96, 150)):
                 data = snapshot(crt=False)
                 data["heartbeat"]["orb"].update(identity=identity, size=size, motion=True, focus_movement="off")
@@ -108,7 +108,7 @@ class CrewMotionBrowserTests(unittest.TestCase):
 
     def test_studio_models_change_size_colour_motion_focus_intensity_and_rate(self):
         page = self.ready()
-        for identity in (*companions.NEW_IDENTITIES, "lyra"):
+        for identity in companions.NEW_IDENTITIES:
             studio, hud, bridge = live_studio(identity)
             def send(**fields):
                 self.assertTrue(studio._handle_html_overlay_studio_command({"operation": "save_settings", **fields}))
@@ -170,7 +170,7 @@ class CrewMotionBrowserTests(unittest.TestCase):
         page.goto(server.url)
         page.wait_for_selector("body.ready", timeout=15000)
         page.click('.nav-item[data-page="overlay-studio"]')
-        for identity in (*companions.NEW_IDENTITIES, "lyra"):
+        for identity in companions.NEW_IDENTITIES:
             studio.config["companion_identity"] = identity
             hud.mind = companions.create_mind(None, studio.config)
             hud.apply_settings(); publish()
@@ -193,17 +193,19 @@ class CrewMotionBrowserTests(unittest.TestCase):
                 self.assertTrue(changed.value.ok)
                 page.wait_for_function('([key,value]) => document.querySelector(`[data-studio-setting="${key}"]`).closest(".studio-field").classList.contains("saved")', arg=[key, value])
                 self.assertEqual(bridge.surface.publish.call_args.args[0]["heartbeat"]["orb"][field], expected)
+            # Motion is shared by the whole crew: one click sets it for every companion.
+            wanted = not page.is_checked('[data-overlay-option="companion_motion"]')
             with page.expect_response(lambda response: "/api/command" in response.url and response.request.post_data_json.get("key") == "companion_motion") as changed:
                 page.locator('[data-overlay-option="companion_motion"]').locator("..").click()
             self.assertTrue(changed.value.ok)
-            self.assertFalse(page.is_checked('[data-overlay-option="companion_motion"]'))
-            self.assertFalse(studio.config[f"{identity}_hud_motion"])
-            self.assertFalse(bridge.surface.publish.call_args.args[0]["heartbeat"]["orb"]["motion"])
+            self.assertEqual(page.is_checked('[data-overlay-option="companion_motion"]'), wanted)
+            self.assertEqual({studio.config[key] for key in companions.shared_display("companion_motion", True)}, {wanted})
+            self.assertEqual(bridge.surface.publish.call_args.args[0]["heartbeat"]["orb"]["motion"], wanted)
         self.assertEqual(errors, [])
 
     def test_theme_accent_uses_the_app_theme_instead_of_the_panel_decoration(self):
         page = self.ready()
-        for identity in (*companions.NEW_IDENTITIES, "lyra"):
+        for identity in companions.NEW_IDENTITIES:
             data = snapshot(crt=False)
             data["heartbeat"]["orb"].update(identity=identity, size=96, motion=False, accent="theme")
             page.evaluate("data => renderHeartbeat(data)", data)

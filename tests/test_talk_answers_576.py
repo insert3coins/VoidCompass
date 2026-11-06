@@ -175,7 +175,7 @@ class DeckTests(unittest.TestCase):
 
 class OfficerTests(unittest.TestCase):
     def test_every_new_reply_in_every_voice(self):
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             persona = companion_personas.get(identity)
             commands = getattr(persona.lines, "COMMANDS", None) or persona.lines.BANK.COMMANDS
             for key in ("station_opening", "distance_opening", "distance_unknown", "distance_nowhere"):
@@ -194,7 +194,7 @@ class OfficerTests(unittest.TestCase):
                   "limpets": "300", "mined": "Painite", "mined_n": "400", "bounties": "50", "bounty_cr": "9 million",
                   "target": "Pirate", "target_n": "20", "interdicted": "12", "escaped": "9", "bonds": "30",
                   "sold": "Gold", "sold_t": "2,000", "profit": "50 million", "best": "Gold", "best_cr": "2 million"}
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             lines = companion_personas.get(identity).lines
             for topic in ("habit_flight", "habit_scans", "habit_cargo", "habit_combat", "habit_trade", "habit_style"):
                 self.assertGreaterEqual(len(lines.event_lines(topic)), 9, (identity, topic))
@@ -206,7 +206,7 @@ class OfficerTests(unittest.TestCase):
             for line in lines.event_lines("habit_style"):
                 self.assertFalse(line.startswith("{style}"), line)
                 self.assertNotRegex(line, r"(towards|leans|preference for|gives|activity is|work is) \{style\}")
-        self.assertEqual(set(officer_habits.STYLE), {"aster", "axiom", "meridian"})
+        self.assertEqual(set(officer_habits.STYLE), {"aster", "axiom", "meridian", "lyra"})
 
 
 if __name__ == "__main__":

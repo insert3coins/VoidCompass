@@ -10,12 +10,18 @@ did adds a short postscript to the Captain's Log, signed.
 """
 
 # The order crewmates speak in: the navigator first, the Watcher last.
-ORDER = ("meridian", "axiom", "aster", "watcher")
+ORDER = ("meridian", "axiom", "aster", "lyra", "watcher")
 SPACING_S = 9.0      # between one crewmate's line and the next
 EXPIRES_S = 180.0    # a debrief line not said by then is let go
 
 # {name} is the expedition's.
 DEBRIEF = {
+    "lyra": ("{name}. Fuel tables are ready, every scoopable star flagged. I will get us home from it.",
+             "{name}. I have plotted the way back before the way out. My rules.",
+             "{name}. Systems green, reserves full, and I am very much looking forward to it.",
+             "{name}. I have been on a long voyage that went wrong. This one will not. I have checked.",
+             "{name}. Route home stored in three places. Shall we?",
+             "{name}. The ship's computer approves. Fuel first, wonder second."),
     "meridian": ("{name}. I've laid in the course. Keep a margin in the tank and we'll do well.",
                  "A fine passage ahead. Watch the fuel stars; I'll call the long legs.",
                  "{name}. The chart's ready. Steady as she goes.",
@@ -44,6 +50,11 @@ DEBRIEF = {
 
 # The Captain's Log: a crewmate's postscript under the closing paragraph.
 POSTSCRIPTS = {
+    "lyra": ("My watch kept every system green and the tank above a fifth. I checked twice.",
+             "For the log: the ship ran well on my watch. She always does when you fly her.",
+             "Ship's computer's note: no low-fuel warnings on my watch. My favourite kind of watch.",
+             "I stood a watch too. The route home was loaded the whole time.",
+             "A quiet watch from the systems bay. I said goodnight to the ship at the end."),
     "watcher": ("I had a watch too. I watched. Nothing went wrong while I did.",
                 "My part was quiet. I prefer it that way.",
                 "I was there for some of it. I remember all of it.",

@@ -38,7 +38,7 @@ class CompanionReadabilityTests(unittest.TestCase):
 
     def test_bezel_has_dark_and_light_contrast_at_small_sizes(self):
         page = self.ready()
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             for size in (54, 96):
                 self.render(page, identity, size)
                 for background in ("#ffffff", "#070b10"):
@@ -66,7 +66,7 @@ class CompanionReadabilityTests(unittest.TestCase):
 
     def test_lattice_gaps_and_outer_transparency_are_preserved(self):
         page = self.ready()
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             self.render(page, identity, 192)
             pixels = self.capture(page, f"{identity}-transparent.png")
             for point in ((0, 0), (191, 0), (0, 191), (191, 191)):
@@ -83,7 +83,7 @@ class CompanionReadabilityTests(unittest.TestCase):
 
     def test_frame_uses_the_selected_accent_and_stays_when_motion_is_off(self):
         page = self.ready()
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             self.render(page, identity, 96)
             page.evaluate('''identity => {
                 const display = identity === "aster" ? AsterCompanion : CrewCompanion;

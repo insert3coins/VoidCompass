@@ -5,9 +5,9 @@ carrier, colonies and Powerplay, the crew, wings and the kit you wear.
 
 The words are in the life_* modules; ship_life merges them in, so every
 companion picks them up the way it does the ship's everyday life."""
-from voidcompass.overlays import life_carrier, life_crew, life_danger, life_missions, life_ships
+from voidcompass.overlays import life_carrier, life_crew, life_danger, life_engineering, life_missions, life_ships
 
-GROUPS = (life_danger, life_missions, life_ships, life_carrier, life_crew)
+GROUPS = (life_danger, life_missions, life_ships, life_carrier, life_crew, life_engineering)
 IMPORTANCE = {topic: level for group in GROUPS for topic, level in group.IMPORTANCE.items()}
 
 COMBAT_RANKS = ("Harmless", "Mostly Harmless", "Novice", "Competent", "Expert", "Master", "Dangerous", "Deadly", "Elite")
@@ -59,6 +59,12 @@ def crime(kind):
     return words or "a crime"
 
 
+def _material(row):
+    """A material's readable name: the journal's own, else ours ("iron" → "Iron")."""
+    symbol = _text(row, "Material")
+    return _text(row, "Material_Localised") or (life_engineering.material_info(symbol).get("name") if symbol else "") or symbol.title()
+
+
 def _ship(raw):
     return _text(raw, "ShipType_Localised") or str((raw or {}).get("ShipType") or "").replace("_", " ").title()
 
@@ -66,7 +72,7 @@ def _ship(raw):
 def moment(event, raw):
     """(topic, fields) for one of these events worth a word, or None. Each
     field also comes capitalised ({Crime}), for the start of a sentence."""
-    found = _moment(event, raw or {})
+    found = _moment(event, raw or {}) or life_engineering.moment(event, raw or {})
     if not found:
         return None
     topic, fields = found
@@ -168,7 +174,7 @@ def _moment(event, raw):
         return ("material_discovered", {"material": material}) if material else None
     if event == "MaterialTrade":
         paid, received = raw.get("Paid") or {}, raw.get("Received") or {}
-        paid_name, received_name = _text(paid, "Material_Localised", "Material"), _text(received, "Material_Localised", "Material")
+        paid_name, received_name = _material(paid), _material(received)
         if not paid_name or not received_name:
             return None
         return "material_traded", {"paid": paid_name, "paid_n": str(_whole(paid.get("Quantity"))),
@@ -253,4 +259,4 @@ WATCHER_NORMAL = {topic: lines for group in GROUPS for topic, lines in group.WAT
 WATCHER_WEARY = {topic: lines for group in GROUPS for topic, lines in group.WATCHER_WEARY.items()}
 PERSONAS = {identity: {"plain": {topic: lines for group in GROUPS for topic, lines in group.PERSONAS[identity]["plain"].items()},
                        "voiced": {topic: lines for group in GROUPS for topic, lines in group.PERSONAS[identity]["voiced"].items()}}
-            for identity in ("aster", "axiom", "meridian")}
+            for identity in ("aster", "axiom", "meridian", "lyra")}

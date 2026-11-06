@@ -7,10 +7,10 @@ PROFILES = {
     "aster": {"name": "Aster", "role": "Manifest officer", "description": "Ship’s officer · precision and dry wit", "story": True},
     "axiom": {"name": "Axiom", "role": "Survey intelligence", "description": "Survey intelligence · precise and curious", "story": True},
     "meridian": {"name": "Meridian", "role": "Veteran navigator", "description": "Old navigator · measured and steady", "story": True},
-    "lyra": {"name": "Lyra", "role": "Robot companion", "description": "Pearl shell · cyan optics · overlay preview", "story": False, "overlay_only": True},
+    "lyra": {"name": "Lyra", "role": "Ship's computer", "description": "A ship's computer · bright, exact and fond of full tanks", "story": True},
 }
 IDENTITIES = tuple(PROFILES)
-NEW_IDENTITIES = ("axiom", "meridian")
+NEW_IDENTITIES = ("axiom", "meridian", "lyra")
 NAMES = {key: row["name"] for key, row in PROFILES.items()}
 DISPLAY_SIZES = dict.fromkeys(IDENTITIES, (54, 72, 96, 144, 192, 256))
 DISPLAY_DEFAULTS = {"watcher": 54, "aster": 144, "axiom": 144, "meridian": 144, "lyra": 144}
@@ -49,8 +49,6 @@ def new_defaults():
                        f"{selected}_voice_enabled": False, f"{selected}_hud_motion": True,
                        f"{selected}_voice_volume": 80, f"{selected}_hud_size": 144,
                        f"{selected}_humour": "dry"})
-    values.update(lyra_thoughts="off", lyra_hud_accent="signature", lyra_hud_liveliness="standard",
-                  lyra_hud_focus="tracking", lyra_hud_motion=True, lyra_hud_size=144)
     return values
 
 
@@ -117,6 +115,24 @@ def display_key(config, setting):
             "companion_motion": f"{selected}_hud_motion" if selected != "watcher" else "heartbeat_idle_motion",
             "companion_focus": f"{selected}_hud_focus" if selected != "watcher" else "heartbeat_focus_movement",
             "companion_liveliness": f"{selected}_hud_liveliness" if selected != "watcher" else "heartbeat_liveliness"}[setting]
+
+
+# Studio settings the whole crew shares. Colour is each companion's own.
+SHARED_DISPLAY = ("companion_size", "companion_motion", "companion_focus", "companion_liveliness")
+
+
+def shared_display(setting, value):
+    """This setting's key and value for every companion: set once, not once each."""
+    return {display_key({"companion_identity": selected}, setting): value for selected in IDENTITIES}
+
+
+def shared_look(config):
+    """The companion on watch's shared Studio settings, for every companion."""
+    options = display_options(config)
+    values = {}
+    for setting in SHARED_DISPLAY:
+        values.update(shared_display(setting, options[setting]))
+    return values
 
 
 def key(config, setting):

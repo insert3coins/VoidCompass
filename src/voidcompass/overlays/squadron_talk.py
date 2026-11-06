@@ -317,3 +317,9 @@ def persona_banks(identity):
     rank_plain, rank_voiced = RANK_LINES[identity]
     plain["cmdr_squadron"], voiced["cmdr_squadron"] = rank_plain, rank_voiced
     return plain, voiced
+
+# 5.7.6: Lyra.
+from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
+
+PERSONAS["lyra"] = _lyra.SQUADRON
+RANK_LINES["lyra"] = _lyra.SQUADRON_RANK

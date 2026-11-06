@@ -10,7 +10,7 @@ from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcher
 from voidcompass.overlays import companion_personas, squadron_talk, watcher_copilot, watcher_mind, watcher_name
 from tests.test_aster_companion import Clock
 
-CREW = ("watcher", "aster", "axiom", "meridian")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
 EVENTS = (("AppliedToSquadron", {"SquadronName": "NEON HORIZON"}, "squadron_applied"),
           ("InvitedToSquadron", {"SquadronName": "NEON HORIZON"}, "squadron_invited"),
           ("JoinedSquadron", {"SquadronName": "NEON HORIZON"}, "squadron_joined"),
@@ -57,12 +57,12 @@ class CompanionTests(unittest.TestCase):
         for topic in squadron_talk.IMPORTANCE:
             self.assertGreaterEqual(len(watcher_mind.TOPICS[topic][1]), 10)
             self.assertGreaterEqual(len(watcher_mind.WEARY[topic]), 10)
-            for identity in ("aster", "axiom", "meridian"):
+            for identity in ("aster", "axiom", "meridian", "lyra"):
                 lines = companion_personas.get(identity).lines
                 self.assertGreaterEqual(len(lines.event_lines(topic)), 9, (identity, topic))
                 self.assertGreaterEqual(len(lines.event_lines(topic, True)), 4, (identity, topic))
         self.assertTrue(any("{rank}" in line for line in watcher_mind.TOPICS["cmdr_squadron"][1]))
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             self.assertTrue(any("{rank}" in line for line in companion_personas.get(identity).lines.event_lines("cmdr_squadron")))
 
 

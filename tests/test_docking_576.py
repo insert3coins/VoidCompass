@@ -9,7 +9,7 @@ from voidcompass.core import companions
 from voidcompass.overlays import docking_talk, ship_life, watcher_mind
 from tests.test_aster_companion import Clock
 
-CREW = ("watcher", "aster", "axiom", "meridian")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
 
 
 def mind(identity, frequency="chatty"):
@@ -83,7 +83,7 @@ class LineTests(unittest.TestCase):
         for topic in docking_talk.IMPORTANCE:
             self.assertGreaterEqual(len(watcher_mind.TOPICS[topic][1]), 10)
             self.assertGreaterEqual(len(watcher_mind.WEARY[topic]), 10)
-            for identity in ("aster", "axiom", "meridian"):
+            for identity in ("aster", "axiom", "meridian", "lyra"):
                 from voidcompass.overlays import companion_personas
                 lines = companion_personas.get(identity).lines
                 self.assertGreaterEqual(len(lines.event_lines(topic)), 9, (identity, topic))

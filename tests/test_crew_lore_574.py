@@ -1,4 +1,5 @@
-"""The crew (5.7.4): how the four companions came aboard and found each other."""
+"""The crew (5.7.4): how the companions came aboard and found each other
+(five since Lyra joined in 5.7.6)."""
 import json
 from pathlib import Path
 import random
@@ -25,11 +26,11 @@ def mind(identity):
 
 
 class CrewContentTests(unittest.TestCase):
-    def test_every_companion_tells_six_passages_and_meets_each_crewmate_once(self):
-        self.assertEqual(sum(len(arc) for arc in crew_lore.PASSAGES.values()), 24)
+    def test_every_companion_tells_seven_passages_and_meets_each_crewmate_once(self):
+        self.assertEqual(sum(len(arc) for arc in crew_lore.PASSAGES.values()), 35)
         for identity in crew_lore.CREW:
             arc = crew_lore.PASSAGES[identity]
-            self.assertEqual(len(arc), 6)
+            self.assertEqual(len(arc), 7)
             self.assertEqual([row[2] for row in arc[:3]], [None, None, None], "arrival, the others, the rota")
             self.assertEqual(sorted(row[2] for row in arc[3:]), sorted(set(crew_lore.CREW) - {identity}))
             for row in arc:
@@ -56,7 +57,7 @@ class CrewPacingTests(unittest.TestCase):
         self.assertIsNone(crew_lore.due("axiom", memory, {"axiom", "aster"}, 1.0, now), "not before two hours together")
         self.assertIsNone(crew_lore.due("axiom", memory, {"axiom"}, 5.0, now), "not before a second companion")
         order = []
-        for _ in range(6):
+        for _ in range(7):
             row = crew_lore.due("axiom", memory, {"axiom", "meridian"}, 5.0, now)
             if row is None:
                 break
@@ -86,7 +87,7 @@ class CrewPacingTests(unittest.TestCase):
                 thought = companion.remember()
             self.assertEqual(thought["topic"], "crew_lore", identity)
             self.assertTrue(thought["heading"].startswith("THE CREW · "))
-            self.assertTrue(thought["heading"].endswith("1 OF 6"))
+            self.assertTrue(thought["heading"].endswith("1 OF 7"))
             self.assertEqual(companion.memory["crew_lore"][0][0], f"crew_{identity}_01")
             self.assertEqual(crew_lore.arc_page(identity, companion.memory, set(crew_lore.CREW))["told"], 1)
 
@@ -172,20 +173,22 @@ class DeckTests(unittest.TestCase):
         self.assertEqual(events[-1]["CrewTold"], 2)
         self.assertEqual(events[-1]["CrewFlown"], 3)
         self.assertEqual([arc["identity"] for arc in page["arcs"]], list(crew_lore.CREW))
-        self.assertEqual((page["told"], page["total"], page["flown"]), (2, 24, 3))
+        self.assertEqual((page["told"], page["total"], page["flown"]), (2, 35, 3))
         meridian = page["arcs"][3]
         self.assertFalse(meridian["flown"])
         aster = page["arcs"][1]
         self.assertEqual(aster["passages"][0]["title"], "Received Aboard")
         self.assertTrue(aster["passages"][0]["heard"])
         self.assertEqual(aster["passages"][5]["waits_for"], "Fly with Meridian")
+        self.assertEqual(aster["passages"][6]["waits_for"], "Fly with Lyra")
 
     def test_crew_achievements_listen_for_the_crew_totals(self):
         rows = {row["id"]: row for row in json.loads((ROOT / "data" / "achievements.json").read_text(encoding="utf-8"))
                 if row["id"].startswith("crew_")}
         self.assertEqual(set(rows), {"crew_introductions", "crew_full", "crew_watch_rota"})
         self.assertEqual(rows["crew_full"]["trigger"]["field"], "CrewFlown")
-        self.assertEqual(rows["crew_watch_rota"]["trigger"]["value"], 24)
+        self.assertEqual(rows["crew_watch_rota"]["trigger"]["value"], 35)
+        self.assertEqual(rows["crew_full"]["trigger"]["value"], 5)
 
 
 if __name__ == "__main__":

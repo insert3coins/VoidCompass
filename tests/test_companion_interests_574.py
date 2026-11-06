@@ -33,7 +33,7 @@ class InterestTests(unittest.TestCase):
         self.assertEqual(mind("axiom")._importance("fuel_low"), watcher_mind.IMPORTANCE["fuel_low"], "never lowered")
 
     def test_interest_topics_have_plenty_of_lines_in_both_styles(self):
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             persona = companion_personas.get(identity)
             for topic in persona.interests:
                 with self.subTest(identity=identity, topic=topic):

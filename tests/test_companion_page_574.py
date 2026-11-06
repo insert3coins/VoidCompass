@@ -72,7 +72,7 @@ class CompanionPageTests(unittest.TestCase):
         self.data["crew"] = {"arcs": arcs, "told": 1, "total": 24, "flown": 2}
         self.render()
         self.page.click('[data-watcher-tab="story"]')
-        self.assertEqual(self.page.locator(".watcher-crew-arc").count(), 4)
+        self.assertEqual(self.page.locator(".watcher-crew-arc").count(), 5)
         self.assertIn("1 OF 24 TOLD", self.page.inner_text("#watcher-crew-count"))
         watcher = self.page.locator('.watcher-crew-arc[data-crew="watcher"]')
         watcher.locator("summary").first.click()

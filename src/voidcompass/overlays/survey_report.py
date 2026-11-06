@@ -19,6 +19,18 @@ def _join(parts):
     return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
 
 
+def body_kind(raw):
+    """A scanned body's kind, in a word, for a map of the system."""
+    if raw.get("StarType"):
+        return "star"
+    planet = str(raw.get("PlanetClass") or "").casefold()
+    for words, kind in (("earthlike", "earthlike"), ("water world", "water"), ("ammonia", "ammonia"), ("gas giant", "gas"),
+                        ("metal", "metal"), ("icy", "icy"), ("rocky", "rocky")):
+        if words in planet:
+            return kind
+    return "other"
+
+
 class SurveyTally:
     """This system's scans, until you jump."""
 
@@ -28,6 +40,7 @@ class SurveyTally:
     def reset(self):
         self.bodies = {}     # body name -> (planet class, terraformable, discovered)
         self.biology = {}    # body name -> biological signals
+        self.where = {}      # body name -> (light seconds from arrival, kind) (5.7.6)
 
     def observe(self, event, raw):
         if event in ("FSDJump", "CarrierJump"):
@@ -36,6 +49,11 @@ class SurveyTally:
             self.bodies[str(raw["BodyName"])] = (str(raw.get("PlanetClass") or ""),
                                                  str(raw.get("TerraformState") or "") == "Terraformable",
                                                  raw.get("WasDiscovered") is not False)
+            try:
+                distance = float(raw.get("DistanceFromArrivalLS") or 0)
+            except (TypeError, ValueError):
+                distance = 0.0
+            self.where[str(raw["BodyName"])] = (distance, body_kind(raw))
         elif event in ("FSSBodySignals", "SAASignalsFound") and raw.get("BodyName"):
             for signal in raw.get("Signals") or ():
                 if isinstance(signal, dict) and "Biological" in str(signal.get("Type") or ""):
@@ -123,3 +141,8 @@ PERSONAS = {
                    "{system}, complete. {summary} I'll mark the ones worth a visit."),
     },
 }
+
+# 5.7.6: Lyra.
+from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
+
+PERSONAS["lyra"] = _lyra.SURVEY_REPORT

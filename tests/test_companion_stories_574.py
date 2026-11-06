@@ -11,7 +11,7 @@ from voidcompass.overlays import aster_lines, companion_personas, companion_stor
 from voidcompass.services.local_api import ApiError, LocalApi
 from tests.test_aster_companion import Clock
 
-PERSONAS = ("aster", "axiom", "meridian")
+PERSONAS = ("aster", "axiom", "meridian", "lyra")
 # Names that belong to one story: they must never appear in another
 # companion's words, or in ordinary banks before their chapter is heard.
 STORY_NAMES = {
@@ -99,7 +99,7 @@ class FrozenBuildTests(unittest.TestCase):
 class PersonaBankTests(unittest.TestCase):
     def test_every_topic_and_command_in_both_modes_with_valid_fields(self):
         own_story = {identity: set(companion_personas.get(identity).story.echo_topics()) for identity in PERSONAS}
-        for identity in ("axiom", "meridian"):
+        for identity in ("axiom", "meridian", "lyra"):
             lines = companion_personas.get(identity).lines
             with self.subTest(identity=identity):
                 # Nobody takes the watch from, or remarks on, itself.
@@ -164,7 +164,7 @@ class PersonaMindTests(unittest.TestCase):
                 self.assertIn(after["text"], companion.persona.lines.EVENTS[after["topic"]])
 
     def test_commentary_setting_is_per_persona(self):
-        for identity in ("axiom", "meridian"):
+        for identity in ("axiom", "meridian", "lyra"):
             restrained = mind(identity, **{f"{identity}_humour": "off"})
             voiced = mind(identity)
             self.assertLess(len(restrained.event_lines("arrival")), len(voiced.event_lines("arrival")))

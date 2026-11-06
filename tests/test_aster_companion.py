@@ -451,7 +451,7 @@ class CompanionDisplayFixTests(unittest.TestCase):
             self.assertEqual(voice_assets.sha256_of(path), row["sha256"])
         self.assertEqual(voice_assets._receipt(root, "aster"), root / "models/jarvis/installed.json")
 
-    def test_studio_controls_save_to_active_companion_and_resize_live_window(self):
+    def test_studio_controls_are_one_look_for_the_whole_crew_and_resize_live_window(self):
         from tests.test_heartbeat_orb import _Studio
         studio = _Studio()
         studio.config.update(companion_identity="aster", aster_hud_size=144, aster_hud_liveliness="standard")
@@ -465,14 +465,25 @@ class CompanionDisplayFixTests(unittest.TestCase):
         self.assertFalse(studio._html_overlay_settings_save({"companion_size": "65", "companion_focus": "wandering"}))
         self.assertTrue(studio._html_overlay_option_toggle("companion_motion", False))
         self.assertFalse(studio.config["aster_hud_motion"])
+        for identity in companions.IDENTITIES:
+            # Set once, for every companion: no setting each of them in turn.
+            look = companions.display_options({**studio.config, "companion_identity": identity})
+            self.assertEqual((look["companion_size"], look["companion_liveliness"], look["companion_focus"], look["companion_motion"]),
+                             (192, "alive", "expressive", False), identity)
+            self.assertEqual(look["companion_accent"], "brass" if identity == "aster" else companions.display_accent({"companion_identity": identity}),
+                             "colour is each companion's own")
         studio.config["companion_identity"] = "watcher"
         self.assertTrue(studio._html_overlay_settings_save({"companion_size": "72", "companion_accent": "hal", "companion_liveliness": "calm", "companion_focus": "off"}))
         self.assertEqual(studio.config["heartbeat_orb_size"], 72)
         self.assertEqual(studio.config["aster_hud_size"], 72)
         self.assertEqual(companions.display_options(studio.config)["companion_size"], 72)
-        self.assertEqual(studio.config["aster_hud_liveliness"], "alive")
-        self.assertEqual(studio.config["aster_hud_focus"], "expressive")
+        self.assertEqual(studio.config["aster_hud_liveliness"], "calm")
+        self.assertEqual(studio.config["aster_hud_focus"], "off")
         self.assertEqual(studio.config["heartbeat_focus_movement"], "off")
+        # Colour stays each companion's own.
+        self.assertEqual((studio.config["heartbeat_eye_color"], studio.config["aster_hud_accent"]), ("hal", "brass"))
+        self.assertTrue(studio._html_overlay_option_toggle("companion_motion", True))
+        self.assertTrue(all(studio.config[key] for key in companions.shared_display("companion_motion", True)))
         self.assertEqual(companions.display_options(studio.config)["companion_focus"], "off")
         for setting in ("aster_hud_focus", "heartbeat_focus_movement"):
             self.assertIn(setting, config.PROFILE_TEXT_SETTINGS)

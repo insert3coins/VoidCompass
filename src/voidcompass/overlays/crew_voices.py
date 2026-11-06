@@ -22,7 +22,7 @@ MOMENTS = {"world_earthlike": "earthlike", "footfall_first": "footfall", "record
            "record_far": "record_far"}
 DEATHS = {"died", "died_foot", "after_death"}
 
-_NAMES = r"the watcher|watcher|aster|axiom|meridian"
+_NAMES = r"the watcher|watcher|aster|axiom|meridian|lyra"
 _ASKING = (r"what|what's|whats|how|how's|where|where's|when|which|who|why|is|are|do|does|did|can|could|would|will|"
            r"should|tell|give|show|open|close|have|has|any|say|please|play|stop|hide|find|check|read|request")
 _DIRECT = re.compile(rf"^\s*(?:(?:hey|hi|hello|ok|okay)\s+)?(?P<name>{_NAMES})\s*[,;:]\s*(?P<rest>.+)$", re.I)
@@ -225,5 +225,32 @@ CHIMES = {
                        "A close shave. Let us keep a wider berth next time.",
                        "Off watch, but I was on my feet for that. Well handled.",
                        "We came through. Ships have been lost for less."),
+    },
+    "lyra": {
+        "earthlike": ("Sorry, Commander. An Earth-like. I had to come up from the systems and look.",
+                      "Off watch, but an Earth-like world. Blue, green, and reachable. My favourite kind.",
+                      "An Earth-like. My first commander found two. I am very glad you found this one.",
+                      "From the ship's systems: that is an Earth-like world. Logged at the highest priority.",
+                      "I was running diagnostics. Then I saw it. Blue and green. Worth every drop of fuel."),
+        "footfall": ("First footsteps on that ground. The ship's computer is very proud, off watch.",
+                     "Nobody has stood there before. Now you have. I am watching the ship for you.",
+                     "A first footfall. Logged, backed up, and celebrated quietly in a protected sector.",
+                     "Off watch, but I saw. New ground, your boots on it. Lovely.",
+                     "First landing party. Come back to the ship when you are done. It misses you."),
+        "record_jump": ("A record jump. The drive and I are both very pleased, off watch.",
+                        "Longest jump this ship has made. I measured it from the systems bay. It is real.",
+                        "Off watch, but I felt that one in the FSD. A record.",
+                        "A new longest jump. I have updated the fuel tables. They are still happy.",
+                        "Record stride, Commander. Clean jump. Lovely numbers."),
+        "record_far": ("Further from Sol than ever. I have the way home loaded. I always have the way home loaded.",
+                       "Off watch, but I noticed: our furthest yet. Fuel stars flagged all the way back.",
+                       "A record distance from home. I am not worried. I am prepared. There is a difference.",
+                       "From the systems bay: furthest yet. I have plotted three routes home. Humour me.",
+                       "Further out than ever, Commander. Well fuelled, though. That is the part I care about."),
+        "close_call": ("That was close. I had already plotted the way out. Glad you did not need it.",
+                       "Off watch, but I heard the alarms. I was ready. I am always ready. Still glad we are fine.",
+                       "A near thing. I have been on a ship that did not come back. This one did. Good.",
+                       "From the systems bay: we came through. I am logging the relief.",
+                       "Close call. Wider margins next time, please. I say that with love and a full diagnostic."),
     },
 }

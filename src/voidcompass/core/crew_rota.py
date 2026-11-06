@@ -15,7 +15,7 @@ holds your choice for a while before the rota takes over again.
 
 SETTLE_S = 45.0       # an activity holds this long before the watch changes
 MIN_GAP_S = 180.0     # the least time between two rota handovers
-HOLD_S = 1800.0       # a companion you chose yourself keeps the watch this long
+HOLD_S = 300.0        # a companion you chose yourself keeps the watch this long (5 minutes)
 DEEP_LY = 1000.0      # this far from home counts as deep space, unless you choose another
 DEEP_CHOICES = (250, 500, 1000, 2000, 5000, 10000)
 
@@ -33,11 +33,11 @@ DUTIES = (
     ("surface", "On a planet's surface", "axiom"),
     ("route", "On a plotted route", "meridian"),
     ("deep", "Deep space", "watcher"),
-    # Flying with none of the above: nobody's by default.
-    ("flight", "Ordinary flight", "keep"),
+    # Flying with none of the above: the ship's own computer, Lyra (5.7.6).
+    ("flight", "Ordinary flight", "lyra"),
 )
 DEFAULT_DUTIES = {duty: who for duty, _label, who in DUTIES}
-CREW = ("watcher", "aster", "axiom", "meridian")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
 
 
 def duty_key(duty):
@@ -87,7 +87,8 @@ def duty_of(facts):
         far = False
     if flying and far:
         return "deep"
-    if flying:
+    # No fix on where we are yet: it could be deep space, so nobody's flight.
+    if flying and facts.get("home_ly") is not None:
         return "flight"
     return None
 

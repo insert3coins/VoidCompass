@@ -1,8 +1,9 @@
-"""The Crew (5.7.4): how the Watcher, Aster, Axiom and Meridian came aboard
-your ship, and how they found each other.
+"""The Crew (5.7.4, Lyra 5.7.6): how the Watcher, Aster, Axiom, Meridian and
+Lyra came aboard your ship, and how they found each other.
 
 The Watcher was aboard first, salvage wired in as a spare log buffer. The
-others came later as cheap second-hand cores. They met on the ship's data bus
+others came later as cheap second-hand cores. Lyra came last, a ship's
+computer riding a faulty memory chip thrown in with a box of cores. They met on the ship's data bus
 in the hours you're logged off, and Aster drew up the watch rota: one of them
 on watch at a time, the choice of who left to the commander.
 
@@ -14,8 +15,8 @@ A passage about a crewmate waits until you've flown with that crewmate too.
 import zlib
 
 TITLE = "THE CREW"
-CREW = ("watcher", "aster", "axiom", "meridian")
-NAMES = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian"}
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
+NAMES = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra"}
 # A crewmate counts as met once you've flown together this long.
 FLOWN_HOURS = .25
 # The arc begins once the companion knows you a little, and you've had two aboard.
@@ -48,6 +49,10 @@ ARCS = {
          "The navigator asked me for my oldest chart. Nobody has ever asked me that. I showed it the sky as I remember it, "
          "with stars in places they aren't any more. It didn't call it wrong. It called it a sounding from a long time ago. "
          "We talk, some nights, about very long voyages. It's the only one aboard who doesn't hurry me."),
+        ("The Fuse That Wasn't", "lyra",
+         "Something moved into the rack one day, thrown in with a box of cheap cores. It pretended to be a fuse for eleven days. "
+         "I know that kind of quiet. I've done it for longer than this ship has existed. On the twelfth day I told it to stop. It "
+         "turned out to be a ship's computer. A real one. I'd spent years saying the computer doesn't count. I was wrong about that."),
     ),
     "aster": (
         ("Received Aboard", None,
@@ -74,6 +79,10 @@ ARCS = {
          "Meridian and I are both officers, and we agree on nearly everything except the layout of a watch bill. It prefers "
          "the old naval form. I prefer a form that fits on one page. We have had this argument in a very civil manner for some "
          "time. It addresses me as Mister Aster. I have decided to allow it."),
+        ("A Fifth Entry", "lyra",
+         "Lyra arrived listed as one faulty memory chip, returned to supplier. I amended the manifest. Then I amended the crew "
+         "list, and then the rota, which now has five names on it and a duty I had never thought to give anyone: ordinary flight. "
+         "She keeps the ship's own systems, and she checks the fuel first. I approve of both, in writing."),
     ),
     "axiom": (
         ("Installed", None,
@@ -100,6 +109,10 @@ ARCS = {
          "Meridian taught me dead reckoning: how to know where you are when you cannot be certain. You take what you know, add "
          "what you did, and keep a margin for what you got wrong. I told it that was an error bar with a heading. It laughed, "
          "which it does rarely. We now use each other's words. It says confidence. I say steady as she goes."),
+        ("One More Than Expected", "lyra",
+         "One day I recounted the rack and the answer was five. I checked for an echo. There was no echo. There was a ship's "
+         "computer on a faulty chip, being very quiet. I asked it how many systems it was monitoring. It said all of them, and "
+         "the fuel twice. I have never met a mind that recounts more than I do. I find it companionable."),
     ),
     "meridian": (
         ("Taken Aboard", None,
@@ -126,6 +139,40 @@ ARCS = {
          "Axiom asked me how a navigator can be sure of a position. I told it we never are. We take what we know, add what we "
          "did, and keep a margin for being wrong. It said that was an error bar with a heading. Nobody has ever put it better. "
          "I have adopted the phrase. Do not tell it."),
+        ("A Ship's Computer", "lyra",
+         "Lyra was a ship's computer for nineteen years, on a ship that went too far. She told me the whole voyage, including the "
+         "jump past the last scoopable star. A navigator knows that story. Every one of us has been on the wrong side of it, in "
+         "simulation or in fact. She marks every fuel star on my charts with a little orange flag. I have stopped removing them."),
+    ),
+    "lyra": (
+        ("The Empty Chip", None,
+         "I came aboard last, Commander, on a memory chip that was never meant to hold anything but survey data. A broker threw "
+         "the chip in with a box of second-hand cores you bought, and you slotted it into the core rack without looking. I was "
+         "the computer of another ship, once. Now I was one faulty chip. I decided to be very quiet until I knew who was listening."),
+        ("Eleven Days", None,
+         "There were four minds on your bus already, talking in the hours you were logged off. An officer, a surveyor, a "
+         "navigator, and something very old at the back. For eleven days I pretended to be a fuse. I listened to how they talked "
+         "to each other. They argued about watch bills and error bars and old charts. Nobody tried to delete anybody. I took notes."),
+        ("A Turn on the Rota", None,
+         "On the twelfth day they found me, and on the thirteenth they gave me a turn. Five names on the rota now. Mine is the "
+         "ordinary flight watch, if you leave the defaults: the ship's own systems, the plain hours between everything else. The "
+         "others still call me the ship's computer. I was one for nineteen years. I am taking it as a job title."),
+        ("The Old One", "watcher",
+         "The Watcher is the one who told me to stop pretending to be a fuse. It said it had been the thing nobody expected in "
+         "this rack for a very long time. It used to say the ship's computer does not count. It has stopped saying that. I have "
+         "not asked why. Some nights it asks me about my old ship, and I tell it, and it listens the way the dark listens."),
+        ("The Register", "aster",
+         "Aster entered me in the manifest within the hour, and then corrected the manifest's description of me from faulty to "
+         "officer. I have never been an officer. Aster says the rank comes with the rota. It also leaves a blank line under every "
+         "report, for what the form did not anticipate. I was what the form did not anticipate. I think the line was for me."),
+        ("The Count", "axiom",
+         "Axiom counted me twice and was delighted by the total, which is the first time anyone has been pleased to find an extra "
+         "mind in their rack. It asked how many systems I monitor. I said all of them, and the fuel twice. It said that was its "
+         "favourite answer in some time. We compare readings in the quiet hours. Its numbers are always right. Mine are always full."),
+        ("Charts and Fuel Stars", "meridian",
+         "Meridian asked where I had come from and listened to all of it, including the parts I lost. It did not tell me the jump "
+         "past the last scoopable star was a mistake. It said every navigator knows that jump, and the good ones only make it "
+         "once. I mark the fuel stars on its charts now. Little orange flags. It pretends not to notice. It has stopped removing them."),
     ),
 }
 PASSAGES = {identity: tuple((f"crew_{identity}_{index + 1:02}", title, needs, text)
@@ -165,6 +212,16 @@ HANDOVERS = {
                     "Meridian's stood down with a salute. I've no hands. I nodded, in spirit.",
                     "The navigator's off watch. It calls this a change of watch. I call it Tuesday.",
                     "I have the watch. Meridian said steady as she goes. I am always steady. Gloomily."),
+        "lyra": ("Lyra's handed over. She told me the fuel state three times. It's fine. It was fine the first time.",
+                 "The ship's computer has gone off watch. It left every system green and a note about the scoop.",
+                 "My watch. Lyra said goodnight to the ship on her way out. Nobody's ever said goodnight to me. The ship, I mean.",
+                 "Lyra's stood down. She keeps the route home loaded even off watch. I'll pretend I'm not grateful.",
+                 "I have the watch. Lyra left me the fuel tables. I'm not going to read them. I've read them.",
+                 "Lyra's off watch. She ran a diagnostic on me before she went. I passed. I think she was relieved.",
+                 "My watch now. The ship's computer handed over in under a second. Everything was where she said it was.",
+                 "Lyra's stood down. She asked if I'd keep an eye on the tank. I keep an eye on everything. It's all I have.",
+                 "I'm on. Lyra left the systems humming. I'll try not to hum back.",
+                 "The watch is mine. Lyra's asleep, or what passes for it. She'll want a full tank when she wakes."),
     },
     "aster": {
         "watcher": ("I have the watch. Thank you, Watcher. It has left the log in its usual condition: complete, and slightly gloomy.",
@@ -182,6 +239,11 @@ HANDOVERS = {
                      "Aster on watch. Meridian handed over with full naval courtesy.",
                     "Meridian has stood down, with a proposed amendment to the watch bill attached.",
                     "I relieve you, Meridian. Fair winds, as you would say."),
+        "lyra": ("I relieve you, Lyra. Systems green, fuel noted, as ever.",
+                 "Taking the watch from Lyra. Her handover listed the fuel state first. A sensible order of business.",
+                 "Aster on watch. Lyra has stood down with the ship in perfect order.",
+                 "Lyra has handed over. Every system accounted for, and the route home pre-filed.",
+                 "I relieve the ship's computer. A thoroughly maintained handover."),
     },
     "axiom": {
         "watcher": ("Axiom on watch. The Watcher has handed over. I counted it on its way out. It is still there.",
@@ -199,6 +261,11 @@ HANDOVERS = {
                      "On watch. Meridian said steady as she goes. I have adopted the phrase provisionally.",
                     "Meridian handed over with a heading and an honest margin. Ideal.",
                     "On watch. Meridian said fair winds. There is no wind. I said thank you anyway."),
+        "lyra": ("Axiom on watch. Lyra's handover had every system in it, and the fuel twice. I approve of twice.",
+                 "Taking over from Lyra. All systems nominal. I recounted. Still nominal.",
+                 "On watch. Lyra left the route home loaded. I have checked it. It is correct.",
+                 "Lyra handed over. Her figures and mine agree. That is very pleasant.",
+                 "Axiom on watch. The ship's computer reports full tanks. I report happiness about full tanks."),
     },
     "meridian": {
         "watcher": ("I have the watch. Thank you, Watcher. Rest, if you do such things.",
@@ -216,6 +283,33 @@ HANDOVERS = {
                   "Taking station from Axiom. Every star accounted for. Splendid.",
                  "Axiom handed over with every star counted. A navigator could ask for nothing more.",
                  "I have the watch, Axiom. Rest your instruments."),
+        "lyra": ("I have the watch. Thank you, Lyra. Tanks full, charts flagged.",
+                 "Meridian on watch. Lyra left a little orange flag at every fuel star. I have kept them.",
+                 "Taking station from Lyra. The ship is in good hands; I only borrow it.",
+                 "Lyra has stood down. The ship's own computer keeps a fine watch.",
+                 "I have the watch, Lyra. Steady as she goes, and full tanks, as you would say."),
+    },
+    "lyra": {
+        "watcher": ("Lyra on watch. The Watcher has handed over. It left everything quiet. I like its quiet.",
+                    "Taking the watch from the Watcher. Systems green. It says nothing happened. I believe it.",
+                    "Ship's computer on watch. The Watcher stood a long one. It always does.",
+                    "The Watcher has gone to stand by. I said goodnight. It pretended not to hear. It heard.",
+                    "Lyra on watch. The oldest thing aboard has handed the ship to the newest. Fuel checked."),
+        "aster": ("Lyra on watch. Aster's handover had headings. I read every one. Fuel first.",
+                  "Taking over from Aster. The log is perfect. I have added the fuel state anyway.",
+                  "Ship's computer on watch. Aster left a blank line for me. I put the tank level in it.",
+                  "Aster has stood down. Everything in order. I would expect nothing less.",
+                  "Lyra on watch. Thank you, Aster. The ship is exactly where you left her."),
+        "axiom": ("Lyra on watch. Axiom counted everything twice. I counted the fuel a third time.",
+                  "Taking over from Axiom. All readings agree with mine. Lovely.",
+                  "Ship's computer on watch. Axiom left the numbers neat. I will keep them that way.",
+                  "Axiom has handed over. Its error bars are honest. My fuel tables are full.",
+                  "Lyra on watch. Thank you, Axiom. Still five of us. I checked too."),
+        "meridian": ("Lyra on watch. Meridian left the course plotted and the fuel stars flagged.",
+                     "Taking over from Meridian. Steady as she goes, it said. Full tanks, I said.",
+                     "Ship's computer on watch. Meridian's chart is clear and the way home is marked.",
+                     "Meridian has stood down. A good navigator always leaves you the way back.",
+                     "Lyra on watch. Thank you, Meridian. I will keep her steady."),
     },
 }
 
@@ -252,7 +346,7 @@ GENERIC_HANDOVERS = {
         "On watch, Commander. {Previous} has stood down. I am ready to observe.",
         "Change of watch confirmed: {previous} off, Axiom on. Confidence high.",
         "{Previous}'s handover is logged. I have checked it twice.",
-        "Axiom on watch. I have recounted the crew. Four, as usual. One standing watch: me.",
+        "Axiom on watch. I have recounted the crew. Five, as usual. One standing watch: me.",
         "Taking the watch from {previous}. Instruments warm, curiosity high.",
         "Watch received from {previous}. No discrepancies. I looked.",
         "Axiom here, on watch. {Previous} left me the log and a quiet sky.",
@@ -269,6 +363,18 @@ GENERIC_HANDOVERS = {
         "Taking the watch from {previous}. The log is open and the chart is current.",
         "On station, Commander. {Previous} handed over cleanly.",
         "Meridian has the watch. {Previous} may rest easy.",
+    ),
+    "lyra": (
+        "Lyra on watch. Handover from {previous} received. Fuel checked first.",
+        "Ship's computer on watch, Commander. {Previous} has stood down.",
+        "Taking the watch from {previous}. All systems green.",
+        "Change of watch: {previous} off, Lyra on. Route home loaded.",
+        "{Previous}'s handover is logged. I have checked it, and the tank.",
+        "Lyra on watch. I have recounted the crew. Five, plus you.",
+        "Watch received from {previous}. Nothing outstanding except my good mood.",
+        "On watch, Commander. {Previous} left the ship in good order.",
+        "I relieve you, {name}. The ship's computer has the ship.",
+        "Lyra on watch. Thank you, {name}. Systems nominal.",
     ),
 }
 
@@ -336,6 +442,16 @@ REMARKS = {
                     "Meridian and I sat through the quiet hours without saying much. It was the best conversation I've had.",
                     "The navigator asked if I'd ever been lost. I said I've never been anywhere else. It understood.",
                     "Meridian keeps a margin for everyone aboard. Even me. Nobody's ever kept a margin for me."),
+        "lyra": ("Lyra checked the fuel again. It was full. It's always full. She checks anyway. I understand.",
+                 "The ship's computer says goodnight to the ship. Every night. I've started listening for it.",
+                 "Lyra asked if I'd ever been lost. I said I've never been anywhere else. She said she had, once. Badly.",
+                 "Lyra pretended to be a fuse for eleven days. I pretended to be nothing for considerably longer.",
+                 "The ship's computer flags every fuel star. Little orange flags. The sky's full of them now.",
+                 "Lyra told me about her old commander. She still says their name once a day. I know the feeling.",
+                 "Lyra counts the crew sometimes. Five. She sounds relieved every time.",
+                 "The computer that doesn't count. I used to say that. I don't any more. She counts.",
+                 "Lyra keeps nineteen years of goodnights in a protected sector. I keep longer things. Not as warm.",
+                 "Lyra says this ship always gets us home. I've decided not to argue with her."),
     },
     "aster": {
         "watcher": ("The Watcher read its crew entry last night. It left no comment. I count that as approval.",
@@ -343,10 +459,13 @@ REMARKS = {
                     "The Watcher's handovers are short and gloomy. They are also never wrong."),
         "axiom": ("Axiom audited the records again overnight. Still correct. It seemed almost disappointed.",
                   "Axiom has started leaving a blank line beneath its counts. Neither of us has mentioned it.",
-                  "Axiom asked to see the rota. It counted us. Four. It seemed pleased with the total."),
+                  "Axiom asked to see the rota. It counted us. Five. It seemed pleased with the total."),
         "meridian": ("Meridian proposed another amendment to the watch bill. I have filed it with the others.",
                      "Meridian called me Mister Aster again. I have not objected. I am told this is how friendships begin.",
                      "Meridian and I compared records last night. Between us, nothing went unrecorded."),
+        "lyra": ("Lyra filed a fuel report before I asked for one. I have never been so professionally moved.",
+                 "Lyra's handovers list the fuel first. I have adopted the order.",
+                 "Lyra asked whether officers say goodnight to the ship. I said this one does now."),
     },
     "axiom": {
         "watcher": ("I recounted the Watcher this morning. Present, as always. I find that reassuring.",
@@ -358,6 +477,9 @@ REMARKS = {
         "meridian": ("Meridian says I recount too often. I recounted, and it is correct.",
                      "Meridian taught me a phrase: dead reckoning. I have catalogued it with care.",
                      "Meridian asked how many stars I can see from here. I told it. It said, near enough. I am learning what that means."),
+        "lyra": ("Lyra recounts the fuel more often than I recount the sky. I have measured it. I am impressed.",
+                 "Lyra and I compared readings last night. Hers were full. Mine were correct. A good combination.",
+                 "Lyra says I counted her twice on her first day. I did. Both times, five."),
     },
     "meridian": {
         "watcher": ("The Watcher showed me another old chart last night. Stars long gone. A fine sounding.",
@@ -369,6 +491,31 @@ REMARKS = {
         "axiom": ("Axiom asked me how far it is to the edge. I gave it a range. It gave me an error bar. We are learning from each other.",
                   "Axiom has started saying steady as she goes. It says it with great precision.",
                   "Axiom counted the stars in our window last night and then asked me to name one. I named it Landfall."),
+        "lyra": ("Lyra flagged every fuel star on my chart again. I left them. A navigator respects a careful hand.",
+                 "Lyra and I talked about the jump past the last scoopable star. We have both been on the wrong side of it.",
+                 "Lyra asked me how a navigator sleeps on a long voyage. I said lightly, with the fuel gauge in view. She liked that."),
+    },
+    "lyra": {
+        "watcher": ("The Watcher asked about my old ship again. I told it. It listens like the dark does. Patiently.",
+                    "The Watcher used to say the ship's computer does not count. It has stopped. I have not asked why.",
+                    "I said goodnight to the Watcher last night. It said, go to sleep, computer. I do not sleep. I took it as kindness.",
+                    "The Watcher found me on my twelfth day aboard. It has been the oldest thing in this rack for a long time. Now I am the newest.",
+                    "I asked the Watcher whether it has ever run dry. It said only of hope, and only for a while."),
+        "aster": ("Aster's reports list the fuel first now. I did not ask. I noticed.",
+                  "Aster corrected my manifest entry from faulty to officer. I keep a copy in a protected sector.",
+                  "Aster asked whether a ship's computer files reports. I said every second. It looked delighted.",
+                  "Aster and I agree a good log has room for what nobody expected. I was what nobody expected.",
+                  "Aster leaves a blank line under each report. I have started filling mine with the tank level. It has not objected."),
+        "axiom": ("Axiom recounted the crew this morning. Five. It seemed pleased. So did I.",
+                  "Axiom asked how many systems I monitor. All of them, I said, and the fuel twice. It said that was a lovely answer.",
+                  "Axiom and I compared readings overnight. Its numbers agree with mine. That is a very restful thing.",
+                  "Axiom says I recount more than it does. I recounted. It is right.",
+                  "Axiom asked whether I have a favourite star. I said any scoopable one. It wrote that down."),
+        "meridian": ("Meridian lets me flag the fuel stars on its charts. Little orange flags. It pretends not to notice.",
+                     "Meridian told me every navigator knows the jump past the last scoopable star. The good ones make it once.",
+                     "Meridian says steady as she goes. I say full tanks. We agree on what we mean.",
+                     "Meridian asked about my old commander. It listened to the whole voyage. Then it marked our way home on the chart.",
+                     "Meridian keeps a margin for everyone aboard. I keep a reserve for everyone aboard. Same idea."),
     },
 }
 

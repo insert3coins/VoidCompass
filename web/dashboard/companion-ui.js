@@ -5,7 +5,7 @@ export const COMPANIONS = {
   aster: {name:"Aster",role:"Manifest officer",description:"Ship’s officer · precision and dry wit"},
   axiom: {name:"Axiom",role:"Survey intelligence",description:"Survey intelligence · precise and curious"},
   meridian: {name:"Meridian",role:"Veteran navigator",description:"Old navigator · measured and steady"},
-  lyra: {name:"Lyra",role:"Robot companion",description:"Pearl shell · cyan optics · overlay preview",overlay_only:true},
+  lyra: {name:"Lyra",role:"Ship's computer",description:"A ship's computer · bright, exact and fond of full tanks"},
 };
 export function companionInfo(source = {}) {
   const selected = source.identity || source.companion_identity;
@@ -58,8 +58,8 @@ export function renderCompanionStudio(source = {}) {
   choices("companion_focus", [["off","Fixed focus"],["tracking","Tracking"],["expressive","Expressive"]]);
   choices("companion_liveliness", [["calm","Calm"],["standard","Standard"],["alive","Lively"]]);
   const note = panel.querySelector("[data-companion-motion-note]");
-  if (note) note.textContent = identity === "axiom" ? "Flowing particles, breathing ripples and counter-rotating light trails. Off, it still reacts when addressed." : identity === "meridian" ? "Turning instrument rings, a moving scan band and gentle portrait movement. Off, it still reacts when addressed." : aster ? "A flowing light halo and animated command core. Off, it still reacts when addressed." : "Aperture, breathing and glances between events; off, it only reacts.";
+  if (note) note.textContent = identity === "axiom" ? "Flowing particles, breathing ripples and counter-rotating light trails. Off, it still reacts when addressed." : identity === "meridian" ? "Turning instrument rings, a moving scan band and gentle portrait movement. Off, it still reacts when addressed." : identity === "lyra" ? "A turning halo, blinking optics and a face that follows her mood. Off, she still reacts when addressed." : aster ? "A flowing light halo and animated command core. Off, it still reacts when addressed." : "Aperture, breathing and glances between events; off, it only reacts.";
   if (note && options.companion_motion && (document.body.classList.contains("reduced-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches)) note.textContent += " Reduced motion is currently on, so continuous animation is paused.";
-  if (note && identity === "lyra") note.textContent = "Blinking optics, gentle head movement, antenna motion and a pulsing chest light. Voice and story are pending." + (options.companion_motion && (document.body.classList.contains("reduced-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches) ? " Reduced motion is currently on, so continuous animation is paused." : "");
+  if (note && identity === "lyra") note.textContent = "Blinking optics, gentle head movement, antenna motion, a pulsing chest light, a jaw that moves with her voice, and expressions that follow what she says." + (options.companion_motion && (document.body.classList.contains("reduced-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches) ? " Reduced motion is currently on, so continuous animation is paused." : "");
   return options;
 }

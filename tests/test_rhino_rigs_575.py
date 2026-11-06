@@ -12,7 +12,7 @@ from voidcompass.overlays import companion_personas, rhino_lines, rig_tracker, w
 from tests.test_aster_companion import Clock
 from tests.test_rhino_map_5517 import Deck as RigDeck, degrees
 
-CREW = ("watcher", "aster", "axiom", "meridian")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
 
 
 def mind(identity, frequency="chatty"):
@@ -35,7 +35,7 @@ class RefiningTests(unittest.TestCase):
             self.assertIn("Platinum", thought["text"])
 
     def test_the_officers_no_longer_talk_as_if_they_picked_it_up(self):
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             lines = companion_personas.get(identity).lines
             plain, full = rhino_lines.officer_refining(identity)
             self.assertEqual(lines.event_lines("mined_surface"), full)
@@ -66,7 +66,7 @@ class RigNoteTests(unittest.TestCase):
         for topic in rhino_lines.IMPORTANCE:
             self.assertGreaterEqual(len(watcher_mind.TOPICS[topic][1]), 10)
             self.assertGreaterEqual(len(watcher_mind.WEARY[topic]), 10)
-            for identity in ("aster", "axiom", "meridian"):
+            for identity in ("aster", "axiom", "meridian", "lyra"):
                 lines = companion_personas.get(identity).lines
                 self.assertGreaterEqual(len(lines.event_lines(topic)), 9, (identity, topic))
                 self.assertGreaterEqual(len(lines.event_lines(topic, True)), 4, (identity, topic))

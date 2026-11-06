@@ -19,7 +19,7 @@ class DepthTests(unittest.TestCase):
     def test_every_officer_topic_has_depth_in_both_styles(self):
         topics = [topic for topic in watcher_mind.TOPICS if not topic.startswith(NOT_OFFICER)]
         self.assertGreater(len(topics), 130)
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             lines = companion_personas.get(identity).lines
             for topic in topics:
                 with self.subTest(identity=identity, topic=topic):
@@ -39,7 +39,7 @@ class DepthTests(unittest.TestCase):
     def test_distances_say_their_units_and_home_is_home(self):
         """{dist} is a bare number ("22,000"), so every line says light years;
         idle_far measures from your home system, which isn't always Sol."""
-        for identity in ("aster", "axiom", "meridian"):
+        for identity in ("aster", "axiom", "meridian", "lyra"):
             lines = companion_personas.get(identity).lines
             for topic in ("jump_long", "record_far", "record_jump", "idle_far", "idle_home", "idle_home_away"):
                 for line in lines.event_lines(topic):

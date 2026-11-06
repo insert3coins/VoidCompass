@@ -165,7 +165,7 @@ class FourVoiceAssetsTests(unittest.TestCase):
                 job=voice_assets.VoiceDownload(base,opener=opener,model=identity);job._run(None)
                 self.assertEqual(job.state()["stage"],"done",job.state())
             self.assertEqual(fetched.count("piper_windows_amd64.zip"),1)
-            self.assertEqual(len({voice_assets._receipt(base,i) for i in companions.IDENTITIES if not companions.overlay_only(i)}),4)
+            self.assertEqual(len({voice_assets._receipt(base,i) for i in companions.IDENTITIES if not companions.overlay_only(i)}),5)
             for identity in ("watcher","aster","meridian"):
                 self.assertTrue(voice_assets.remove(base,identity))
                 self.assertTrue(voice_assets.installed(base,"axiom"))

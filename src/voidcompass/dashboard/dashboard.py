@@ -1727,6 +1727,27 @@ class MainDashboard(
             }
         return context
 
+    def _companion_moment_context(self):
+        """5.7.6: for the officers' displays: Meridian's headings (the next
+        star, home, the core) and Aster's watch (the rota and its duty)."""
+        from voidcompass.overlays.companion_moments import headings
+        here = getattr(self, "current_coords", None)
+        # Before the journal has said where we are, there's nothing to point at.
+        if not here or list(here) == [0, 0, 0]:
+            context = {}
+        else:
+            context = headings(here, getattr(self, "nav_route_entries", None), getattr(self, "current_sys", ""),
+                               home_anchor.home(self.config).get("pos"))
+        if self.config.get("crew_rota"):
+            from voidcompass.core import crew_rota
+            try:
+                context.update(rota=True, duty=crew_rota.duty_of(self._crew_rota_facts()))
+            except Exception:
+                context.update(rota=True, duty=None)
+        else:
+            context["rota"] = False
+        return context
+
     def _watcher_sign_off(self):
         """At Shutdown the Watcher sums up the session, in the Captain's
         Log's own figures (the same as the deck's Session Pulse)."""
@@ -2868,6 +2889,7 @@ class MainDashboard(
         if self._overlay_enabled("heartbeat_hud"):
             self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
             self.heartbeat_hud.context_provider = self._watcher_context
+            self.heartbeat_hud.moment_provider = self._companion_moment_context
             self.heartbeat_hud.story_listener = self._watcher_story
             self.heartbeat_hud.thought_listener = self._api_thought
             self._watcher_voice_attach(self.heartbeat_hud)
@@ -5316,6 +5338,7 @@ class MainDashboard(
             if self.heartbeat_hud is None:
                 self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
                 self.heartbeat_hud.context_provider = self._watcher_context
+                self.heartbeat_hud.moment_provider = self._companion_moment_context
                 self.heartbeat_hud.story_listener = self._watcher_story
                 self.heartbeat_hud.thought_listener = self._api_thought
                 self._watcher_voice_attach(self.heartbeat_hud)
