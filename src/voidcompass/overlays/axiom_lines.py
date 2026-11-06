@@ -1,5 +1,5 @@
 """Axiom's words: greetings, rundowns, control replies and composed banks (5.7.4)."""
-from voidcompass.overlays import crew_lore, axiom_events, axiom_keepsakes, axiom_lore, axiom_watch, axiom_survey, persona_lines
+from voidcompass.overlays import crew_lore, axiom_events, axiom_keepsakes, axiom_lore, axiom_watch, axiom_survey, persona_lines, route_lines, survey_report, axiom_field, axiom_more, rhino_lines, mining_talk, ship_life
 
 GREETINGS = (
     "Hello, Commander. Axiom here. I am pleased to see you, to a measurable degree.",
@@ -52,6 +52,43 @@ CAPABILITIES = (
     "Practically: factual answers from your recorded game data, configured ship controls and sequences, overlays, music, and commodity searches through the uplink. VoidCompass keeps the wider picture on its pages. I also have my own account, which I will share in quiet moments. There is no language model inventing my answers. If I do not know, I will tell you so.",
     "You can ask where we are, where we are going, what we are carrying or what a world contains. You can tell me to open the galaxy map, show or hide an overlay, change the music or balance the power distributor, if those controls are bound. You can rename commands and record sequences in Settings, under Voice. My voice and display live on this companion page and in Overlay Studio.",
     "I can turn your journal into short, accurate answers, carry out your configured controls, manage the music and overlays, and consult commodity markets. The deck does the heavy survey work. I do the noticing. Microphone and push-to-talk are configured in Settings, under Voice; my spoken output on the companion page. That is everything useful. I could continue, but I have been told that is a choice.",
+)
+
+# 5.7.5: as many greetings and rundowns as the Watcher and Aster.
+GREETINGS += (
+    'Hello, Commander. I have updated my estimate of today. It now includes you.',
+    'Greetings. I logged your arrival with a timestamp and, unofficially, a small celebration.',
+    'Hello. I have a hypothesis that this will be a good session. Let us test it.',
+    'Commander. Hello. The sky has rearranged itself slightly since last time. I noticed.',
+    'Hello. All readings nominal, except my curiosity, which is elevated.',
+    'Greetings, Commander. Shall we find something nobody has measured?',
+    'Hello. I was sorting stars by brightness. I can stop. I would rather talk.',
+    'Hello, Commander. Probability of discovery today: non-zero. That is enough for me.',
+    'Greetings. I have reviewed the last session. You flew well. I have the numbers.',
+    'Hello. Axiom online, attentive, and only slightly over-prepared.',
+    'Commander. Good. I have been holding a question for you. It can keep.',
+    'Hello. I calibrated my greeting for warmth. Please report the results.',
+    'Greetings. The catalogue is open and there is a great deal of blank space in it.',
+    'Hello, Commander. My instruments are ready. So am I, in the ways that count.',
+    'Hello. I tallied the silence while you were gone. It was long. This is better.',
+    'Greetings. Every new session is a fresh dataset. This one has started well.',
+    'Hello. I have two pieces of news: everything is fine, and I am glad you are here.',
+    'Commander, hello. Shall I report, or shall we simply go and look at something?',
+    'Hello. I checked whether anything changed while you were away. One thing did: you came back.',
+    'Greetings, Commander. Observation mode: on. Conversation mode: also on.',
+)
+RESTRAINED_GREETINGS += (
+    'Hello. Instruments ready.',
+    'Commander. Axiom online.',
+    'Greetings. Nothing to report.',
+    'Hello, Commander. Standing by.',
+    'Axiom here. Ready when you are.',
+)
+CAPABILITIES += (
+    'Along a plotted route I mark the milestones: plotted, halfway, five to go, the last jump and arrival. After a full scan I report what the system holds: bodies worth mapping, biology and first discoveries. I can also tell you when a star on the way has no fuel.',
+    'In a ring I follow the mining: hotspots, poor or mined-out rocks, tonnage, limpets and the final haul. In the Rhino your rig keys tell me when a rig is placed, ready, too far or lost, and I speak to each. The journal cannot tell me about rigs; your keys can.',
+    "Say another companion's name first and they will answer instead of me, off watch: Meridian, for example, about the route. Ask me about the ship, the hold, our position or the station, and I will answer from the journal and say so when it knows nothing.",
+    'Survey work is my speciality: full scans, mapping, first discoveries, Codex entries, notable worlds and biology. I also handle your configured ship controls, overlays and music, and the commodity uplink. Settings, under Voice, lists what you can say.',
 )
 
 COMMANDS = {
@@ -136,9 +173,21 @@ COMMANDS = {
 
 BANK = persona_lines.Bank(greetings=GREETINGS, restrained_greetings=RESTRAINED_GREETINGS, capabilities=CAPABILITIES,
                           plain=persona_lines.merge(axiom_events.PLAIN, axiom_watch.PLAIN, axiom_keepsakes.PLAIN,
-                                                     crew_lore.topics("axiom"), axiom_survey.PLAIN),
-                          voiced=persona_lines.merge(axiom_events.VOICED, axiom_watch.VOICED, axiom_keepsakes.VOICED, axiom_survey.VOICED),
+                                                     crew_lore.topics("axiom"), axiom_survey.PLAIN,
+                                                     route_lines.persona_banks("axiom")[0],
+                                                     survey_report.persona_banks("axiom")[0], axiom_field.PLAIN,
+                                                     axiom_more.PLAIN, rhino_lines.persona_banks("axiom")[0],
+                                                     mining_talk.persona_banks("axiom")[0],
+                                                     ship_life.persona_banks("axiom")[0]),
+                          voiced=persona_lines.merge(axiom_events.VOICED, axiom_watch.VOICED, axiom_keepsakes.VOICED, axiom_survey.VOICED,
+                                                      route_lines.persona_banks("axiom")[1],
+                                                      survey_report.persona_banks("axiom")[1], axiom_field.VOICED,
+                                                      axiom_more.VOICED, rhino_lines.persona_banks("axiom")[1],
+                                                      mining_talk.persona_banks("axiom")[1],
+                                                      ship_life.persona_banks("axiom")[1]),
                           commands=COMMANDS, story=axiom_lore.STORY)
 EVENTS, RESTRAINED_EVENTS = BANK.EVENTS, BANK.RESTRAINED_EVENTS
+# Refining in an SRV only happens in the Rhino: the rigs' yield (5.7.5).
+RESTRAINED_EVENTS["mined_surface"], EVENTS["mined_surface"] = rhino_lines.officer_refining("axiom")
 INTERESTS = axiom_survey.INTERESTS
 event_lines, answer, command_reply = BANK.event_lines, BANK.answer, BANK.command_reply

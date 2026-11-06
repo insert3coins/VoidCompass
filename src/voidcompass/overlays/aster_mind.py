@@ -9,7 +9,7 @@ from datetime import datetime
 from voidcompass.overlays import (
     aster_dockside, companion_idle, companion_personas, companion_story,
     watcher_mind, watcher_name, watcher_copilot, watcher_questions, watcher_habits,
-    watcher_deeper, watcher_places, crew_voices,
+    watcher_deeper, watcher_places, crew_voices, route_lines,
 )
 
 
@@ -24,7 +24,7 @@ KEEPSAKE_HEADINGS = {
     "companion_wish_reached": ("memory", "A REQUEST, KEPT"),
 }
 # Said in the next quiet moment once queued (a note from last watch, an anniversary).
-QUEUED_TOPICS = {"dream_told", "anniversary_us", "companion_wish_reached"}
+QUEUED_TOPICS = {"dream_told", "anniversary_us", "companion_wish_reached", "survey_report", "ring_hotspots", "mining_summary"}
 DATA_SALES = {"SellExplorationData", "MultiSellExplorationData", "SellOrganicData"}
 HATCHLING_MOMENT_AGE_S = 120
 
@@ -205,7 +205,11 @@ class AsterMind(watcher_mind.WatcherMind):
             fresh = [row for row in candidates
                      if not self._said_recently(row[0], 86400 if row[2] else 3 * 86400)
                      and text_fresh(row, 86400 if row[2] else 3 * 86400)]
-            return self.random.choice(fresh)[:2] if fresh else None
+            if fresh:
+                return self.random.choice(fresh)[:2]
+            # 5.7.5: on Chatty, used-up travel talk starts a new round rather than going quiet.
+            if topic not in route_lines.TRAVEL or not (watcher_mind.FREQUENCIES.get(watcher_mind.frequency(self.config)) or {}).get("cycle"):
+                return None
         # Important reports and direct calls still answer after exhaustion.
         # Avoid the immediately preceding wording even when timestamps tie.
         previous = self.memory["aster_event_last"].get(topic)
@@ -292,7 +296,7 @@ class AsterMind(watcher_mind.WatcherMind):
                 rest = max(rest, watcher_habits.HABIT_REST_S)
             if importance < 3 and self._said_recently(topic, rest):
                 return None
-            if importance < 3 and self.random.random() > .35 + .25 * importance:
+            if importance < 3 and self.random.random() > .35 + .25 * importance + setting.get("boost", 0.0):
                 return None
         if self._in_danger and importance < 2:
             return None

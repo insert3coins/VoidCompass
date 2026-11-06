@@ -68,12 +68,16 @@ CAPABILITIES = (
 )
 
 
+# 5.7.5: any of the crew, by name (the greeting was "hello watcher" alone).
+_CREW_NAMES = r"(?:the watcher|watcher|aster|axiom|meridian)"
+
+
 def intent(text):
     words = " ".join(re.sub(r"[^a-z0-9' ]", " ", str(text).lower()).split())
-    if re.fullmatch(r"(?:hey|hi|hello)(?: there)?(?: (?:watcher|aster|commander))?", words):
+    if re.fullmatch(rf"(?:hey|hi|hello)(?: there)?(?: (?:{_CREW_NAMES}|commander))?", words):
         return "greeting"
-    words = re.sub(r"^(?:(?:hey|ok|okay|watcher|the watcher|aster|please) )+", "", words)
-    words = re.sub(r"(?: (?:watcher|aster|commander|please|for me|thanks|thank you))+$", "", words)
+    words = re.sub(rf"^(?:(?:hey|ok|okay|{_CREW_NAMES}|please) )+", "", words)
+    words = re.sub(rf"(?: (?:{_CREW_NAMES}|commander|please|for me|thanks|thank you))+$", "", words)
     if re.fullmatch(r"hello(?: there)?|hi(?: there)?|hey|greetings|good (?:morning|afternoon|evening)", words):
         return "greeting"
     if re.fullmatch(r"what can you do|what do you do|what can (?:void compass|this (?:app|program)) do|"

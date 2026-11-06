@@ -1262,3 +1262,32 @@ from voidcompass.overlays import crew_lore as _crew  # noqa: E402
 for _topic, _lines in _crew.topics("watcher").items():
     NORMAL[_topic] = list(_lines)
     WEARY[_topic] = list(_lines)
+
+# 5.7.5: talk along a plotted route.
+from voidcompass.overlays import route_lines as _route  # noqa: E402
+for _topic, _lines in _route.WATCHER_NORMAL.items():
+    NORMAL[_topic] = list(_lines)
+    WEARY[_topic] = list(_route.WATCHER_WEARY[_topic])
+
+# 5.7.5: a full system scan, reported.
+from voidcompass.overlays import survey_report as _survey  # noqa: E402
+NORMAL["survey_report"] = list(_survey.WATCHER_NORMAL)
+WEARY["survey_report"] = list(_survey.WATCHER_WEARY)
+
+# 5.7.5: the Rhino's rigs, which only the rig hotkeys know about.
+from voidcompass.overlays import rhino_lines as _rhino  # noqa: E402
+for _topic, _lines in _rhino.WATCHER_NORMAL.items():
+    NORMAL[_topic] = list(_lines)
+    WEARY[_topic] = list(_rhino.WATCHER_WEARY[_topic])
+
+# 5.7.5: mining in a ring, from dropping in to the haul.
+from voidcompass.overlays import mining_talk as _mining  # noqa: E402
+for _topic, _lines in _mining.WATCHER_NORMAL.items():
+    NORMAL[_topic] = list(_lines)
+    WEARY[_topic] = list(_mining.WATCHER_WEARY[_topic])
+
+# 5.7.5: the ship's everyday life (docking, fuel, ships, scans, signals...).
+from voidcompass.overlays import ship_life as _life  # noqa: E402
+for _topic, _lines in _life.WATCHER_NORMAL.items():
+    NORMAL[_topic] = list(_lines)
+    WEARY[_topic] = list(_life.WATCHER_WEARY[_topic])

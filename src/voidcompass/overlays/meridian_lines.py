@@ -1,5 +1,5 @@
 """Meridian's words: greetings, rundowns, control replies and composed banks (5.7.4)."""
-from voidcompass.overlays import crew_lore, meridian_events, meridian_keepsakes, meridian_lore, meridian_watch, meridian_soundings, persona_lines
+from voidcompass.overlays import crew_lore, meridian_events, meridian_keepsakes, meridian_lore, meridian_watch, meridian_soundings, persona_lines, route_lines, survey_report, meridian_field, meridian_more, rhino_lines, mining_talk, ship_life
 
 GREETINGS = (
     "Good day, Commander. Meridian on watch.",
@@ -52,6 +52,43 @@ CAPABILITIES = (
     "In practical terms: factual answers from your recorded game data, configured ship controls and sequences, overlays, music, and commodity searches through the uplink. VoidCompass keeps the larger charts on its pages. I keep a log of my own and share it in quiet moments. I do not invent facts. If the log does not say, neither shall I.",
     "You may ask me to open the galaxy map, show or hide an overlay, change the music or balance the power, if those controls are bound. You may rename commands and record sequences in Settings, under Voice. My voice and display live on this companion page and in Overlay Studio. The microphone and push-to-talk are in Settings, under Voice.",
     "I turn the journal into plain answers, carry out your configured controls, mind the music and overlays, and consult the commodity markets. The deck does the heavy charting. I do the steering advice. That is the useful part of my introduction, Commander. The rest is old stories, and those keep for the long watches.",
+)
+
+# 5.7.5: as many greetings and rundowns as the Watcher and Aster.
+GREETINGS += (
+    'Good day, Commander. The chart table is clear and ready for a new course.',
+    'Hello. I have been keeping the watch. It is a better watch with you on the bridge.',
+    'Ah, Commander. I was just checking our margin. It is healthy. So, I trust, are you.',
+    'Greetings. Fair winds to you, wherever the day takes us.',
+    'Hello, Commander. The old instruments and I are glad of the company.',
+    'Good to have you aboard again. Shall we see what lies past the next star?',
+    'Hello. A quiet watch, Commander. I have saved you a few thoughts.',
+    'Commander. Hello. I always feel steadier when the helm is manned.',
+    'Greetings. Every chart I keep has room for one more line. Let us earn it.',
+    'Hello. I trimmed the log while you were away. It is shipshape.',
+    'Good day, Commander. The galaxy is wide and the ship is willing.',
+    'Hello. I have marked the way home, as always, and the way out, as usual.',
+    'Ah, there you are. The bridge felt like an empty harbour.',
+    "Greetings, Commander. A navigator's favourite words: where to?",
+    'Hello. Steady hands, steady course, and a steady old navigator. Ready.',
+    'Commander. Good morning, or evening; at sea, it is always the next watch.',
+    'Hello. All lines on the chart are as we left them. Shall we draw another?',
+    'Greetings. I have the sounding of every system we have passed. And I am glad of yours.',
+    'Hello, Commander. I have a weather eye on everything, and a warm one on you.',
+    'Good to hear your voice. Let us make some distance today.',
+)
+RESTRAINED_GREETINGS += (
+    'Hello. The chart is ready.',
+    'Commander. Meridian here.',
+    'Greetings. Course clear.',
+    'Hello, Commander. On watch.',
+    'Good day. Ready to steer.',
+)
+CAPABILITIES += (
+    'On a plotted route I call the passage: the course plotted, halfway, five to go, the last jump and landfall, and any star along the way that will not give us fuel. Jumps, distance and the long cruise are my particular business.',
+    "After a full scan I give you the system's sounding: how many bodies, which are worth mapping, where there is biology, and how many first discoveries. I also mark new regions, record distances and the way back to your home port.",
+    'In a ring I follow the fishing: hotspots, poor rocks, tonnage, limpets and the haul as we leave. In the Rhino your rig keys tell me when a rig is down, ready, too far or lost. The journal does not know your rigs; your keys do.',
+    "Say another companion's name first and they will answer you, off watch: Axiom, for example, about a survey. Ask me about the ship, the hold, the route or the harbour and I will answer plainly from the log. Settings, under Voice, lists what you can say.",
 )
 
 COMMANDS = {
@@ -136,9 +173,21 @@ COMMANDS = {
 
 BANK = persona_lines.Bank(greetings=GREETINGS, restrained_greetings=RESTRAINED_GREETINGS, capabilities=CAPABILITIES,
                           plain=persona_lines.merge(meridian_events.PLAIN, meridian_watch.PLAIN, meridian_keepsakes.PLAIN,
-                                                     crew_lore.topics("meridian"), meridian_soundings.PLAIN),
-                          voiced=persona_lines.merge(meridian_events.VOICED, meridian_watch.VOICED, meridian_keepsakes.VOICED, meridian_soundings.VOICED),
+                                                     crew_lore.topics("meridian"), meridian_soundings.PLAIN,
+                                                     route_lines.persona_banks("meridian")[0],
+                                                     survey_report.persona_banks("meridian")[0], meridian_field.PLAIN,
+                                                     meridian_more.PLAIN, rhino_lines.persona_banks("meridian")[0],
+                                                     mining_talk.persona_banks("meridian")[0],
+                                                     ship_life.persona_banks("meridian")[0]),
+                          voiced=persona_lines.merge(meridian_events.VOICED, meridian_watch.VOICED, meridian_keepsakes.VOICED, meridian_soundings.VOICED,
+                                                      route_lines.persona_banks("meridian")[1],
+                                                      survey_report.persona_banks("meridian")[1], meridian_field.VOICED,
+                                                      meridian_more.VOICED, rhino_lines.persona_banks("meridian")[1],
+                                                      mining_talk.persona_banks("meridian")[1],
+                                                      ship_life.persona_banks("meridian")[1]),
                           commands=COMMANDS, story=meridian_lore.STORY)
 EVENTS, RESTRAINED_EVENTS = BANK.EVENTS, BANK.RESTRAINED_EVENTS
+# Refining in an SRV only happens in the Rhino: the rigs' yield (5.7.5).
+RESTRAINED_EVENTS["mined_surface"], EVENTS["mined_surface"] = rhino_lines.officer_refining("meridian")
 INTERESTS = meridian_soundings.INTERESTS
 event_lines, answer, command_reply = BANK.event_lines, BANK.answer, BANK.command_reply

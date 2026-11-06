@@ -278,7 +278,7 @@ Existing custom docking sequences are preserved. Use **Restore default steps** o
 
 ### Conversation
 
-“Hello”, “hello Watcher” and similar greetings have 50 written replies. “Watcher, what can you do?” has ten written rundowns of Void Compass. Each pool is used before repeating, with no immediate repeat at a cycle boundary. Replies appear in Talk and beside the orb, and are spoken in full when the Watcher's voice is on. The greetings keep to the Watcher's established character without revealing later story chapters. You can rename these commands and replace their spoken phrases just like other app actions.
+“Hello” and similar greetings, with or without a companion's name (“hello Watcher”, “hi Axiom”, “hey Meridian”, “hello Aster”), get a written reply from the companion on watch, from 50 in its own words. Greeting a crewmate who isn't on watch by name gets that crewmate's own reply, off watch. “What can you do?” (also “Meridian, what can you do?”) has ten written rundowns of Void Compass for each companion. Each pool is used before repeating, with no immediate repeat at a cycle boundary. Replies appear in Talk and beside the companion's display, and are spoken in full when its voice is on. The greetings keep to each companion's established character without revealing later story chapters. You can rename these commands and replace their spoken phrases just like other app actions.
 
 ## Worked examples
 
@@ -354,7 +354,7 @@ Trading searches must be enabled in Settings > Integrations. The uplink uses the
 
 ### Change a greeting or the programme rundown
 
-Under **Conversation**, edit `hello watcher` or `what can you do`. You might label the greeting `Old friend`, give it the main phrase `awake old friend`, and add `are you there watcher` as an alias. Keep the original phrases enabled if you still want "hello" to work.
+Under **Conversation**, edit `hello` or `what can you do`. You might label the greeting `Old friend`, give it the main phrase `awake old friend`, and add `are you there` as an alias. Keep the original phrases enabled if you still want "hello" (and "hello" with a companion's name) to work.
 
 The greeting still draws from its 50 written replies; the rundown still draws from its ten explanations. Changing names and aliases changes how you call them, while each command keeps its response pool. Ask "Watcher, what can you do?" for the default rundown. Replies appear as text and are spoken in full when the Watcher's voice is enabled and not hushed.
 

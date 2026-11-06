@@ -35,7 +35,8 @@ def builtins():
             verb = "turn " + op if op in ("on", "off") else op
             native("app_overlay_" + overlay.replace("-", "_") + "_" + op,
                    verb + " " + aliases[0], "Overlays", {"kind": "overlay", "overlay": overlay, "op": op})
-    native("app_greeting", "hello watcher", "Conversation", {"kind": "chat", "value": "greeting"})
+    # 5.7.5: "hello", to any companion ("hello Meridian" works too); it was "hello watcher".
+    native("app_greeting", "hello", "Conversation", {"kind": "chat", "value": "greeting"})
     native("app_capabilities", "what can you do", "Conversation", {"kind": "chat", "value": "capabilities"})
     for kind in ("buy", "sell"):
         native("app_uplink_" + kind, "where can I " + kind + " {commodity}", "Market uplink",

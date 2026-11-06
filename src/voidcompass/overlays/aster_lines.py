@@ -1,7 +1,7 @@
 """Aster's original officer dialogue. Facts are supplied by the game, never invented."""
 import random
 
-from voidcompass.overlays import aster_responses, aster_dockside, aster_idle, aster_signoff, aster_lore, aster_keepsakes, crew_lore
+from voidcompass.overlays import aster_responses, aster_dockside, aster_idle, aster_signoff, aster_lore, aster_keepsakes, crew_lore, route_lines, survey_report, aster_field, aster_more, rhino_lines, mining_talk, ship_life
 
 GREETINGS = (
     "Aster, reporting for duty. The ship is ready. I shall reserve judgement on the itinerary.",
@@ -120,8 +120,8 @@ EVENTS = {
     "taxi_ride": ("Transport underway. We can review the record in transit.", "Someone else is flying. I shall endeavour not to look relieved."),
     "carrier_jump": ("Carrier arrival recorded at {system}.", "{system}. Our berth has travelled with us; a civilised arrangement."),
     "revisit": ("Returning to {system}. We last visited {when}.", "{system} again. A familiar name needn't make an uninteresting arrival."),
-    "record_far": ("New distance record: {dist} from Sol.", "{dist} from Sol. The distance column has become quite assertive."),
-    "record_jump": ("New longest jump: {dist}.", "{dist}. A particularly efficient use of the space between entries."),
+    "record_far": ("New distance record: {dist} light years from Sol.", "{dist} light years from Sol. The distance column has become quite assertive."),
+    "record_jump": ("New longest jump: {dist} light years.", "{dist} light years. A particularly efficient use of the space between entries."),
     "record_firsts": ("A new session record: {count} first discoveries.", "{count} first discoveries. The report is beginning to look well justified."),
     "anniversary": ("{years} years in the record. Worth a moment's consideration.", "{years} years. An impressive return on the original decision to depart."),
     "poked": ("Here, Commander. What requires our attention?", "Still at my post. The inspection may be considered satisfactory."),
@@ -132,9 +132,9 @@ EVENTS = {
     "idle_star_odd": ("An unusual primary in {system}: {a_star}.", "{system}. The star appears to have declined the standard specification."),
     "idle_big_system": ("{count} bodies in {system}. There is ample survey work here.", "{system}, {count} bodies. An itinerary for the admirably patient."),
     "idle_small_system": ("A compact system: {system}.", "{system}. Not every worthwhile visit requires a lengthy catalogue."),
-    "idle_far": ("We are {dist} from Sol.", "{dist} from Sol. I have ceased calling this a local appointment."),
-    "idle_home": ("Home is {dist} away.", "{dist} from home. Familiarity may shortly become a navigational resource."),
-    "idle_home_away": ("{home} is {dist} away.", "{home}, {dist} away. A useful name to keep in the return column."),
+    "idle_far": ("We are {dist} light years from {home}.", "{dist} light years from {home}. I have ceased calling this a local appointment."),
+    "idle_home": ("Home is {dist} light years away.", "{dist} light years from home. Familiarity may shortly become a navigational resource."),
+    "idle_home_away": ("{home} is {dist} light years away.", "{home}, {dist} light years away. A useful name to keep in the return column."),
     "idle_session": ("This watch: {jumps} jumps, {ly} travelled, {firsts} first discoveries.", "{jumps} jumps and {ly}. We appear to be taking the long interpretation of a short trip."),
     "idle_night": ("Local time is {clock}. Consider a rest when convenient.", "{clock}. I shall avoid expressing an opinion about anyone's sleep schedule."),
     "idle_morning": ("{clock} locally. A new watch, if you choose to call it that.", "{clock}. The day has arrived, with or without a formal handover."),
@@ -166,7 +166,7 @@ EVENTS = {
     "docked_home": ("Home port. Arrival recorded.", "Home again. There is a particular satisfaction in completing the return column."),
     "jump_far": ("A substantial distance from our starting point.", "The local portion of the itinerary appears to be behind us."),
     "arrival": ("Arrival in {system}. Primary: {star}.", "{system}. A new entry, and an opportunity to make it a useful one."),
-    "jump_long": ("Jump completed: {dist}.", "{dist}. A concise answer to a considerable distance."),
+    "jump_long": ("Jump completed: {dist} light years.", "{dist} light years. A concise answer to a considerable distance."),
     "scooped": ("Fuel scooping recorded.", "A sensible provision for the next departure."),
     "fss_complete": ("System scan complete: {system}.", "{system}, surveyed. The report now has rather more substance."),
     "mapped": ("Mapping recorded for {body}.", "{body}. A more precise account of where we have been."),
@@ -283,7 +283,7 @@ EVENTS.update({
 EVENT_VARIATIONS = {
     "quiet": ("Nothing calls for a report just now. I shall leave you the view.", "The watch continues. Some entries are best left unwritten.", "A little room between reports is part of the service.", "I have no urgent business with your attention, Commander."),
     "arrival": ("{system}. Arrival entered in the log.", "We have reached {system}. Primary classification: {star}.", "On station in {system}. The next decision is yours."),
-    "jump_long": ("{dist} covered. That leg is behind us.", "Transit recorded at {dist}. Ready for the next leg.", "{dist}. A useful amendment to our position."),
+    "jump_long": ("{dist} light years covered. That leg is behind us.", "Transit recorded at {dist} light years. Ready for the next leg.", "{dist} light years. A useful amendment to our position."),
     "scooped": ("Fuel collection noted. A prudent use of the approach.", "The scoop has made its contribution to the itinerary.", "Refuelling recorded for the watch."),
     "fss_complete": ("Survey of {system} complete. The observations are on file.", "{system}: system scan entered in the record.", "The scan of {system} is complete. We can consider the next task."),
     "mapped": ("{body}: mapping entered in the survey log.", "Map of {body} recorded. Another blank attended to.", "The survey record now includes a map of {body}."),
@@ -335,6 +335,18 @@ for bank in (aster_dockside, aster_idle, aster_signoff):
 for topic, lines in crew_lore.topics("aster").items():
     RESTRAINED_EVENTS[topic] = EVENTS[topic] = tuple(lines)
 
+# 5.7.5: talk along a plotted route, the survey report, and more for the
+# ground, the vehicles, mining and exploration, combat, travel, docking,
+# trade, expeditions and the quiet hours.
+for _plain, _voiced in (route_lines.persona_banks("aster"), survey_report.persona_banks("aster"),
+                        (aster_field.PLAIN, aster_field.VOICED), (aster_more.PLAIN, aster_more.VOICED),
+                        rhino_lines.persona_banks("aster"), mining_talk.persona_banks("aster"),
+                        ship_life.persona_banks("aster")):
+    for topic in dict.fromkeys((*_plain, *_voiced)):
+        plain, voiced = tuple(_plain.get(topic, ())), tuple(_voiced.get(topic, ()))
+        RESTRAINED_EVENTS[topic] = tuple(dict.fromkeys(RESTRAINED_EVENTS.get(topic, ()) + plain))
+        EVENTS[topic] = tuple(dict.fromkeys(EVENTS.get(topic, ()) + plain + voiced))
+
 # Keepsakes: capsules, constellations, anniversaries, watch notes, a request.
 for topic, lines in aster_keepsakes.PLAIN.items():
     RESTRAINED_EVENTS[topic] = tuple(dict.fromkeys(RESTRAINED_EVENTS.get(topic, ()) + lines))
@@ -346,6 +358,10 @@ for topic, lines in {"idle_aster_lore": _STORY.musings, "aster_lore_recall": _ST
                      "aster_after": _STORY.after, **_STORY.echo_topics()}.items():
     EVENTS[topic] = tuple(dict.fromkeys(EVENTS.get(topic, ()) + tuple(lines)))
     RESTRAINED_EVENTS[topic] = tuple(dict.fromkeys(RESTRAINED_EVENTS.get(topic, ()) + tuple(lines)))
+
+# Refining in an SRV only happens in the Rhino: the rigs' yield, in place of
+# the old wording, which spoke as if materials had been picked up by hand.
+RESTRAINED_EVENTS["mined_surface"], EVENTS["mined_surface"] = rhino_lines.officer_refining("aster")
 
 RESTRAINED_GREETINGS = tuple(GREETINGS[index] for index in (1, 2, 5, 8, 10, 13, 14, 18, 22, 28))
 

@@ -97,6 +97,10 @@ class GameDataTests(unittest.TestCase):
         self.assertEqual(dashboard.current_pips, [4, 8, 0])
         dashboard._apply_status_update({"Flags": 0, "Flags2": 1})
         self.assertIsNone(dashboard.current_pips, "on foot there is no distributor")
+        # 5.7.5: Status.json reports the SRV's and the fighter's distributor too.
+        for flag in (0x04000000, 0x02000000):
+            dashboard._apply_status_update({"Flags": flag, "Pips": [2, 6, 4]})
+            self.assertEqual(dashboard.current_pips, [2, 6, 4], hex(flag))
 
 
 class GameDataHudTests(unittest.TestCase):
@@ -166,7 +170,15 @@ class GameDataHudTests(unittest.TestCase):
         self.assertEqual(columns, [["full"] * 4, [""] * 4, ["full", "half", "", ""]])
         self.assertTrue(page.evaluate("document.querySelector('.holo-bay').contains(document.getElementById('vehicle-pips'))"))
         self.show(page, "FLIGHT", pips=[8, 0, 3], in_main_ship=False)
-        self.assertTrue(page.locator("#vehicle-pips").is_hidden(), "on foot or in the SRV there is no distributor")
+        self.assertTrue(page.locator("#vehicle-pips").is_hidden(), "no vehicle reported, no distributor")
+        # 5.7.5: every SRV and a fighter have a distributor too; on foot, as a
+        # passenger or as crew there's none of yours to show.
+        for mode, shown in (("srv", True), ("fighter", True), ("ship", True),
+                            ("on_foot", False), ("taxi", False), ("multicrew", False)):
+            state = hud_state("FLIGHT", pips=[2, 6, 4], in_main_ship=mode == "ship")
+            state["vehicle"]["mode"] = mode
+            self.render(page, state)
+            self.assertEqual(page.locator("#vehicle-pips").is_visible(), shown, mode)
 
     def test_the_new_scenes_stay_cheap_to_draw(self):
         page = self.open()

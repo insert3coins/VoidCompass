@@ -40,6 +40,50 @@ _ROMAN = {"I": "one", "II": "two", "III": "three", "IV": "four", "V": "five",
 _KEEP_CAPS = frozenset({"DSS", "FSS", "SRV", "HIP", "NPC", "AI", "UV", "CQC", "LY", "OK", "TV"}) | frozenset(_ROMAN)
 
 
+_ONES = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+         "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen")
+_TENS = ("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")
+
+
+def _two(number):
+    if number < 20:
+        return _ONES[number]
+    tens, ones = divmod(number, 10)
+    return _TENS[tens] + (f"-{_ONES[ones]}" if ones else "")
+
+
+def year_words(number):
+    """A year as it's said (5.7.5): 1998 "nineteen ninety-eight", 2005 "two
+    thousand five", 3312 "thirty-three twelve", 3301 "thirty-three oh one".
+    Piper read them as counts ("one thousand nine hundred ninety-eight")."""
+    if 2000 <= number <= 2009:
+        return "two thousand" + (f" {_ONES[number - 2000]}" if number > 2000 else "")
+    high, low = divmod(number, 100)
+    if not low:
+        return f"{_two(high)} hundred"
+    return f"{_two(high)} oh {_ONES[low]}" if low < 10 else f"{_two(high)} {_two(low)}"
+
+
+# A four-digit number that reads as a year: 1100-2099 or Elite's 3000s, on
+# its own (no comma, decimal, sign or digits around it) and not a count of
+# something ("1500 tonnes", "1200 light years", "2048 credits").
+_YEAR = re.compile(
+    r"(?<![\d.,#$£€+-])\b(1[1-9]\d\d|20\d\d|3\d\d\d)\b(?!\d|%|[.,]\d)"
+    r"(?!\s*(?:tonnes?|tons?|t\b|credits?|cr\b|km\b|kilomet|met(?:re|er)s?\b|m\b|light|ly\b|ls\b|lightyears?|jumps?|"
+    r"bod(?:y|ies)|systems?|hours?|minutes?|seconds?|days?|percent|kg|probes?|limpets?|times|ships?|stars?|worlds?|"
+    r"planets?|signals?|samples?|units?|thousand|million|billion|metres|feet|rigs?|fragments?|°))", re.I)
+
+
+_CATALOGUE = re.compile(r"\b[A-Z]{2,}\s+$")
+
+
+def _year_or_name(match):
+    """A star's catalogue number (LHS 3447, HIP 1998) is part of its name: kept."""
+    if _CATALOGUE.search(match.string[max(0, match.start() - 12):match.start()]):
+        return match.group(0)
+    return year_words(int(match.group(1)))
+
+
 def _like(word, sound):
     """``sound`` in the case ``word`` was written in."""
     return sound[:1].upper() + sound[1:] if word[:1].isupper() else sound
@@ -80,6 +124,8 @@ _SAY_AS = (
     (re.compile(r"\b[Mm]{2,}\b"), lambda match: _like(match.group(0), "hmm")),
     (re.compile(r"\b[Ss][Hh]+\b"), lambda match: _like(match.group(0), "shush")),
     (re.compile(r"\b[Pp][Ff]+[Tt]*\b"), lambda match: _like(match.group(0), "puh")),
+    # Years said as years (5.7.5), after the units above have become words.
+    (_YEAR, lambda match: _year_or_name(match)),
     # A shouted word, not a catalogue's letters (HIP 10322, JB-W d2-16).
     (re.compile(r"\b[A-Z]{2,}\b(?![-\d])(?!\s+\d)"), _said_quietly),
     (re.compile(r"\s*[·—–]\s*"), ", "),

@@ -2,12 +2,13 @@
 import json
 from pathlib import Path
 import random
+import re
 import string
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from voidcompass.overlays import aster_lines, watcher_copilot, watcher_mind, watcher_ship
+from voidcompass.overlays import aster_lines, route_lines, watcher_copilot, watcher_mind, watcher_ship
 from voidcompass.overlays.aster_mind import AsterMind, _fingerprint
 from tests import test_watcher_long_session_5532 as exploration_fixture
 
@@ -69,7 +70,11 @@ class AsterRepeatTests(unittest.TestCase):
                         mind._utter(topic, key, words, self.clock())
                     self.assertEqual(len(keys), len(set(keys)))
                     following = mind._variant(topic, fields)
-                    if watcher_mind.IMPORTANCE.get(topic, 1) < 2:
+                    if topic in route_lines.TRAVEL and watcher_mind.frequency(mind.config) == "chatty":
+                        # 5.7.5: Chatty's jump-by-jump talk starts a new round, never the last line again.
+                        self.assertIsNotNone(following, "Chatty keeps talking through a long trip")
+                        self.assertNotEqual(following[0], keys[-1])
+                    elif watcher_mind.IMPORTANCE.get(topic, 1) < 2:
                         self.assertIsNone(following, "minor commentary leaves room for silence")
                     else:
                         self.assertIsNotNone(following, "important reports still answer")
@@ -265,7 +270,12 @@ class AsterRepeatTests(unittest.TestCase):
                         return AsterMind(path, {"aster_thoughts": config["heartbeat_thoughts"], "aster_humour": humour}, clock=clock, rng=rng)
                     with patch.object(exploration_fixture, "WatcherMind", side_effect=officer):
                         heard = exploration_fixture.session("stoic", seed=seed)
-                    self.assertEqual(len(heard), len(set(heard)), [line for line in set(heard) if heard.count(line) > 1])
+                    # 5.7.5: Chatty's jump-by-jump talk starts new rounds on a long
+                    # trip (test_route_talk_575); everything else never repeats.
+                    travel = [re.compile(re.sub(r"\\\{\w+\\\}", ".+", re.escape(line)) + "$")
+                              for topic in route_lines.TRAVEL for line in aster_lines.event_lines(topic, humour == "off")]
+                    others = [line for line in heard if not any(pattern.match(line) for pattern in travel)]
+                    self.assertEqual(len(others), len(set(others)), [line for line in set(others) if others.count(line) > 1])
                     self.assertGreater(len(heard), 60, "the officer remains useful through the whole watch")
 
     def test_shutdown_cycles_complete_across_restarts_and_gaps_longer_than_freshness_window(self):

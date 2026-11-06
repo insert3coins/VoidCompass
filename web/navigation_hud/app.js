@@ -893,10 +893,14 @@ function vehicleCaption(state = {}, presentation = null) {
 }
 
 // The power distributor (5.6.9), from Status.json's half pips (SYS, ENG,
-// WEP), on the portrait while you're in your ship.
+// WEP), on the portrait. 5.7.5: the game reports it in every SRV and fighter
+// too; not on foot, and not as a passenger or crew (that's someone else's).
+const PIP_MODES = new Set(['ship', 'srv', 'fighter']);
 function renderPips(state = {}) {
   const dynamics = state.dynamics || {}, pips = dynamics.pips;
-  const shown = Array.isArray(pips) && pips.length === 3 && dynamics.in_main_ship !== false;
+  const mode = state.vehicle?.mode;
+  const aboard = mode ? PIP_MODES.has(mode) : dynamics.in_main_ship !== false;
+  const shown = Array.isArray(pips) && pips.length === 3 && aboard;
   dom['vehicle-pips'].hidden = !shown;
   if (!shown) return;
   [...dom['vehicle-pips'].children].forEach((column, c) => [...column.children].forEach((pip, i) => {

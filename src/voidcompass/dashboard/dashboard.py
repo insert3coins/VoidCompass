@@ -1697,6 +1697,10 @@ class MainDashboard(
         if (getattr(self, "current_in_srv", False) or getattr(self, "current_in_fighter", False)) and vehicle:
             context["vehicle"] = vehicle
         context["cargo_capacity"] = int(getattr(self, "cargo_capacity", 0) or 0)
+        # 5.7.5: limpets aboard the ship, for a companion watching you mine.
+        if str(getattr(self, "current_cargo_vessel", "Ship") or "Ship").casefold() == "ship":
+            context["limpets"] = sum(int(row.get("Count") or 0) for row in getattr(self, "current_cargo_inventory", None) or ()
+                                     if isinstance(row, dict) and str(row.get("Name") or "").casefold() == "drones")
         heartbeat = getattr(self, "heartbeat_hud", None)
         if getattr(heartbeat, "_status_serial", 0):
             from voidcompass.overlays.heartbeat_hud import _STALL_AFTER_S

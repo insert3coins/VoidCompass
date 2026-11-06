@@ -30,7 +30,7 @@ from voidcompass.core import ranks
 from voidcompass.exploration import bio_values
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
 from voidcompass.mining.mining_record import material_name
-from voidcompass.overlays import crew_lore, crew_voices
+from voidcompass.overlays import crew_lore, crew_voices, mining_talk, rhino_lines, route_lines, ship_life, survey_report
 from voidcompass.overlays import (
     watcher_deeper, watcher_field, watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures,
     watcher_places, watcher_copilot, watcher_name, watcher_postcards,
@@ -53,7 +53,10 @@ FREQUENCIES = {
     # mutter: least time between two idle thoughts (5.5.3.2).
     "rare": {"gap": 300.0, "minimum": 2, "quiet": 900.0, "rest": 1200.0, "mutter": 1200.0},
     "occasional": {"gap": 75.0, "minimum": 1, "quiet": 300.0, "rest": 600.0, "mutter": 600.0},
-    "chatty": {"gap": 25.0, "minimum": 0, "quiet": 120.0, "rest": 300.0, "mutter": 300.0},
+    # 5.7.5: Chatty speaks up more (boost) and a remark can come back sooner;
+    # with every line of a travel remark used, it starts a new round instead
+    # of going quiet (cycle; route_lines.TRAVEL).
+    "chatty": {"gap": 25.0, "minimum": 0, "quiet": 120.0, "rest": 180.0, "mutter": 300.0, "boost": .25, "cycle": True},
 }
 DEFAULT_FREQUENCY = "rare"
 PERSONALITIES = ("stoic", "curious", "nervous", "weary")
@@ -297,6 +300,12 @@ IMPORTANCE = {
 # 5.7.4: the crew's handovers (said at once) and passing remarks.
 IMPORTANCE.update({topic: 3 if topic.startswith("handover_") else 1 for topic in watcher_lines.NORMAL
                    if topic.startswith(("handover_from_", "idle_crew_"))})
+# 5.7.5: a plotted route's start, milestones and end, and stars with no fuel.
+IMPORTANCE.update(route_lines.IMPORTANCE)
+IMPORTANCE.update(survey_report.IMPORTANCE)
+IMPORTANCE.update(rhino_lines.IMPORTANCE)
+IMPORTANCE.update(mining_talk.IMPORTANCE)
+IMPORTANCE.update(ship_life.IMPORTANCE)
 TOPICS = {topic: (level, watcher_lines.NORMAL[topic]) for topic, level in IMPORTANCE.items()}
 # The depressed nature ("weary" in config; the default since 5.5.3.1).
 WEARY = watcher_lines.WEARY
@@ -604,6 +613,18 @@ class WatcherMind:
         # last spoke in, a hull scare not yet survived, and who TALK addressed.
         self._chime = None
         self._chimed_session = None
+        # 5.7.5: the plotted route as the journal counts it down (jumps left
+        # including the one targeted, its length, the milestones said) and
+        # the class of the star we're about to arrive at.
+        self._route_left = None
+        self._route_total = None
+        self._route_said = set()
+        self._next_star = ""
+        # 5.7.5: this system's scans, for the report when every body is found.
+        self._survey = survey_report.SurveyTally()
+        # 5.7.5: a visit to a ring, and the limpets aboard (the deck says).
+        self._mining = mining_talk.MiningTrip()
+        self._limpets = None
         self._close_call_at = None
         self.talking_as = None
         self._last_interesting = self.clock()
@@ -745,10 +766,15 @@ class WatcherMind:
                     return 12 * 3600
                 return 86400 if row[2] else 3 * 86400
             fresh = [row for row in options if not self._said_recently(row[0], window(row))]
-            if not fresh:
+            if fresh:
+                return self.random.choice(fresh)[:2]
+            if topic not in route_lines.TRAVEL or not (FREQUENCIES.get(frequency(self.config)) or {}).get("cycle"):
                 return None
-            return self.random.choice(fresh)[:2]
-        # Something it must say, with every line used: the ones said longest ago.
+        # Something it must say (or Chatty's travel talk, with every line
+        # used): the ones said longest ago, never the last one again.
+        if len(options) > 1:
+            last = max(options, key=lambda row: self._last_said(row[0]))
+            options = [row for row in options if row is not last]
         options.sort(key=lambda row: self._last_said(row[0]))
         return self.random.choice(options[:max(1, len(options) // 3)])[:2]
 
@@ -791,7 +817,7 @@ class WatcherMind:
             if importance < 3 and self._said_recently(topic, rest):
                 return None
             # Even with something to say, it often keeps it to itself.
-            chance = min(1.0, (.35 + .25 * importance) * weight)
+            chance = min(1.0, (.35 + .25 * importance + setting.get("boost", 0.0)) * weight)
             if importance < 3 and self.random.random() > chance:
                 return None
         headline_key = None
@@ -1281,9 +1307,78 @@ class WatcherMind:
             echo = reached[0] if reached else None
         return echo
 
+    def _route(self, event, raw):
+        """Follow the plotted route and the next star (5.7.5). Returns what
+        a jump means for the route: (topic, fields), or None."""
+        if event in {"FSDTarget", "StartJump"} and raw.get("StarClass"):
+            if event == "FSDTarget" or str(raw.get("JumpType") or "") == "Hyperspace":
+                self._next_star = str(raw.get("StarClass") or "")
+        if event == "NavRouteClear":
+            self._route_left = self._route_total = None
+            return None
+        if event == "FSDTarget":
+            try:
+                left = int(raw.get("RemainingJumpsInRoute"))
+            except (TypeError, ValueError):
+                return None
+            if left < 1:
+                return None
+            fresh = self._route_left is None or left > self._route_left
+            self._route_left = left
+            if fresh:
+                self._route_total, self._route_said = left, set()
+                if left >= 5:
+                    return "route_plotted", {"jumps": str(left)}
+            return None
+        if event != "FSDJump" or not self._route_left:
+            return None
+        left, total = self._route_left - 1, self._route_total or self._route_left
+        self._route_left = left or None
+        if not left:
+            self._route_total = None
+            return ("route_done", {"jumps": str(total)}) if total >= 3 else None
+        mark = ("route_last" if left == 1 else "route_progress" if left == 5
+                else "route_halfway" if total >= 10 and left == total // 2 else None)
+        if mark and mark not in self._route_said:
+            self._route_said.add(mark)
+            return mark, {"left": str(left), "jumps": str(total)}
+        return None
+
+    def _mining_moment(self, event, raw):
+        """A moment in a ring (5.7.5), said now, or queued if it matters and
+        can't be said yet; the event's usual handling still runs after."""
+        if event == "LaunchDrone" and self._limpets is not None:
+            self._limpets = max(0, self._limpets - 1)
+        moment = self._mining.observe(event, raw, srv=self.surroundings.srv,
+                                      capacity=getattr(self, "_cargo_capacity", 0), limpets=self._limpets)
+        if not moment:
+            return None
+        thought = self.consider(*moment)
+        if thought:
+            return thought
+        topic, fields = moment
+        if topic in mining_talk.QUEUED and FREQUENCIES.get(frequency(self.config)) is not None:
+            self._say_next = [row for row in self._say_next if row[0] != topic] + [(topic, fields)]
+        return None
+
     def _observe(self, event, raw):
         raw = raw if isinstance(raw, dict) else {}
         now = self.clock()
+        route = self._route(event, raw)
+        self._survey.observe(event, raw)
+        mined = self._mining_moment(event, raw)
+        if mined:
+            return mined
+        # 5.7.5: the ship's everyday life; its usual handling still follows.
+        life = ship_life.moment(event, raw)
+        if life:
+            thought = self.consider(*life)
+            if thought:
+                return thought
+        if route and event == "FSDTarget":
+            thought = self.consider(*route)
+            if thought:
+                return thought
         # The first map of a world, the first footsteps on one (5.7.2).
         first = self.field.observe(event, raw)
         if first:
@@ -1358,20 +1453,42 @@ class WatcherMind:
         if event == "FSDJump":
             self._last_interesting = now
             fields = {"system": raw.get("StarSystem") or "Here"}
+            # The journal names the star on StartJump and FSDTarget, not here.
+            star, self._next_star = self._next_star or str(raw.get("StarClass") or ""), ""
+            # 5.7.5: the route's milestones first, then a star with no fuel.
+            if route:
+                thought = self.consider(*route)
+                if thought:
+                    return thought
+            if route_lines.kind(star) and self._route_left:
+                thought = self.consider("no_scoop", {"kind": route_lines.kind(star)})
+                if thought:
+                    return thought
             try:
                 distance = float(raw.get("JumpDist") or 0)
             except (TypeError, ValueError):
                 distance = 0
             if distance >= 50:
                 return self.consider("jump_long", {**fields, "dist": f"{distance:.1f}"})
-            star = str(raw.get("StarClass") or "").strip()
-            if star:
-                fields["star"] = star
+            if route_lines.simple_class(star):
+                fields["star"] = route_lines.simple_class(star)
             return self.consider("arrival", fields)
         if event == "FuelScoop":
             return self.consider("scooped")
         if event == "FSSAllBodiesFound":
-            return self.consider("fss_complete", {"system": raw.get("SystemName") or "this system"})
+            system = raw.get("SystemName") or "this system"
+            # 5.7.5: what the system holds. It often lands just after a run of
+            # scan remarks, so if it can't be said now it waits its turn.
+            summary = self._survey.summary(raw.get("Count"))
+            if summary:
+                fields = {"system": system, "summary": summary}
+                thought = self.consider("survey_report", fields)
+                if thought:
+                    return thought
+                if FREQUENCIES.get(frequency(self.config)) is not None and not self._in_danger:
+                    self._say_next = [row for row in self._say_next if row[0] != "survey_report"] + [("survey_report", fields)]
+                    return None
+            return self.consider("fss_complete", {"system": system})
         if event == "SAAScanComplete":
             body = raw.get("BodyName") or "That world"
             try:
@@ -1525,6 +1642,10 @@ class WatcherMind:
         fields = dict(fields or {})
         if kind == "achievement":
             return self.consider("achievement", fields)
+        if kind in rhino_lines.IMPORTANCE:
+            # 5.7.5: a rig placed, ready, collected, too far, lost or left
+            # behind. Not in the journal: the rig hotkeys tell us.
+            return self.consider(kind, fields)
         if kind == "revisit":
             return self.consider("revisit", fields)
         if kind in {"record_far", "record_jump"}:
@@ -1708,6 +1829,9 @@ class WatcherMind:
             capacity = 0
         if capacity > 0:
             self._cargo_capacity = capacity
+        # 5.7.5: limpets aboard, for "running low" while mining.
+        if isinstance(context.get("limpets"), int):
+            self._limpets = context["limpets"]
 
     def _combat(self, event, raw, now):
         """(handled, thought) for a moment in a fight (5.5.7): attacks,

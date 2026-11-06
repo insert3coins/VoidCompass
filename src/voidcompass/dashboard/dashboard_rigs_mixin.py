@@ -50,6 +50,18 @@ class DashboardRigsMixin:
         if callable(feed):
             feed("MINING", f"{title.title()}: {message}", severity="INFO")
 
+    def _rig_tell(self, kind, **fields):
+        """5.7.5: a rig moment for the companion on watch. Rigs aren't in the
+        journal, so only these hotkeys can tell it."""
+        hud = getattr(self, "heartbeat_hud", None)
+        if hud is None or not hasattr(hud, "note"):
+            return None
+        try:
+            return hud.note(kind, {key: str(value) for key, value in fields.items()})
+        except Exception:
+            logging.debug("Rig note for the companion skipped", exc_info=True)
+            return None
+
     def _rig_mark(self, slot):
         """A rig hotkey: track rig ``slot`` here, or stop tracking it."""
         place = self._rig_place()
@@ -69,9 +81,14 @@ class DashboardRigsMixin:
             nearest = min(others, key=lambda pair: pair[1]) if others else None
             self._rig_say(f"RIG {slot} DEPLOYED", f"{body}" + (f" · {_distance_text(nearest[1])} from rig {nearest[0]}" if nearest else ""),
                           severity="success")
+            self._rig_tell("rig_placed", slot=slot)
         else:
             left = len(store.rigs(system, body))
             self._rig_say(f"RIG {slot} COLLECTED", f"{left} still out" if left else "All rigs collected")
+            self._rig_tell("rig_collected", slot=slot, left=left) if left else self._rig_tell("rig_all_collected")
+        ready = getattr(self, "_rig_ready_said", None)
+        if ready is not None:
+            ready.discard(slot)  # placed again or collected: a fresh two minutes
         self._rig_update_overlay()
         self._update_rhino_map()
         return outcome
@@ -210,8 +227,17 @@ class DashboardRigsMixin:
         it at 5 km (after EDSMT). Said again only after you've been back near."""
         from voidcompass.overlays.rig_tracker import LOST_M, rig_advice, rig_warn_m
         warn = rig_warn_m(getattr(self, "config", None) or {})
-        model = self._rig_model() if warn else None
-        far = {row["slot"]: row for row in rig_advice((model or {}).get("slots"), warn_m=warn)["too_far"]} if model else {}
+        model = self._rig_model()
+        advice = rig_advice((model or {}).get("slots"), warn_m=warn) if model else {"too_far": [], "ready": []}
+        far = {row["slot"]: row for row in advice["too_far"]} if warn else {}
+        # 5.7.5: a rig that has sat its two minutes, with you beside it, once.
+        ready_said = getattr(self, "_rig_ready_said", None)
+        if ready_said is None:
+            ready_said = self._rig_ready_said = set()
+        for slot in advice["ready"]:
+            if slot not in ready_said:
+                ready_said.add(slot)
+                self._rig_tell("rig_ready", slot=slot)
         warned = getattr(self, "_rig_far_warned", None)
         if warned is None:
             warned = self._rig_far_warned = set()
@@ -221,6 +247,7 @@ class DashboardRigsMixin:
                 left = max(0, round((LOST_M - row["distance"]) / 100) / 10)
                 self._rig_say(f"RIG {slot} TOO FAR", f"{row['distance'] / 1000:.1f} km away · lost at 5 km ({left:.1f} km to go)",
                               severity="warn")
+                self._rig_tell("rig_far", slot=slot, km=f"{row['distance'] / 1000:.1f}")
         rows = {row["slot"]: row for row in (model or {}).get("slots") or () if row.get("tracked")}
         place = self._rig_place()
         lost = [slot for slot, row in rows.items() if (row.get("distance_m") or 0) >= LOST_M]
@@ -230,6 +257,8 @@ class DashboardRigsMixin:
                 self.rig_store().forget(place[0], place[1], slot)
                 warned.discard(slot)
                 self._rig_say(f"RIG {slot} LOST", "More than 5 km behind: the game takes it back", severity="warn")
+                self._rig_tell("rig_lost", slot=slot)
+                ready_said.discard(slot)
             self._rig_update_overlay()
             self._update_rhino_map()
         for slot in list(warned):
@@ -245,6 +274,7 @@ class DashboardRigsMixin:
         if not body or not self.rig_store().clear(system, str(body)):
             return False
         self._rig_say("RIGS LEFT BEHIND", f"{body}: rigs still out there are lost", severity="warn")
+        self._rig_tell("rigs_left_behind", body=body)
         self._rig_update_overlay()
         self._update_rhino_map()
         return True
