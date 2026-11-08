@@ -14,6 +14,7 @@ import logging
 import math
 import time
 
+from voidcompass.core.discovery import our_first
 from voidcompass.colonisation import catalogue as colony_catalogue
 from voidcompass.core import companion_features, companions, crew_rota, home_anchor
 from voidcompass.core.config import get_active_profile, get_profile_file
@@ -21,7 +22,7 @@ from voidcompass.exploration import codex_index as codex_module
 from voidcompass.orders import campaigns, generators, pacing, places, ribbons
 from voidcompass.orders import talk as orders_talk
 from voidcompass.orders import objectives as objective_rules
-from voidcompass.orders.ledger import STANDINGS, OrderLedger, epoch, objectives_of, progress, service_level, standing
+from voidcompass.orders.ledger import STANDINGS, OrderLedger, current_target, epoch, objectives_of, progress, service_level, standing
 from voidcompass.overlays import order_campaign_words, order_files, order_lines
 from voidcompass.services import spansh
 
@@ -147,7 +148,7 @@ class DashboardOrdersMixin:
             # Mapped by someone before you (the Scan's own word): no first map to be had.
             row["mapped_before"] = raw.get("WasMapped") is True
             row["value"] = WORTHY_WEIGHT.get(kind.casefold(), 3 if row["terraformable"] else 0)
-            if raw.get("StarType") and float(raw.get("DistanceFromArrivalLS") or 0) == 0 and raw.get("WasDiscovered") is False:
+            if raw.get("StarType") and float(raw.get("DistanceFromArrivalLS") or 0) == 0 and our_first(raw):
                 place["undiscovered"] = True
         elif event == "SAAScanComplete" and raw.get("BodyName"):
             place["bodies"].setdefault(str(raw["BodyName"]).casefold(), {"name": raw["BodyName"]})["mapped"] = True
@@ -947,7 +948,7 @@ class DashboardOrdersMixin:
         Settings, open it too, so you can paste it into the search."""
         if isinstance(order, str):
             order = self.order_ledger.get(order)
-        target = (order or {}).get("target") or {}
+        target = current_target(order or {})
         system = target.get("plot") or target.get("system")
         if not system:
             return {"ok": False, "message": "This order has no system to plot."}
@@ -1017,7 +1018,7 @@ class DashboardOrdersMixin:
 
     def _orders_view_of(self, order, here=None):
         rows = objectives_of(order)
-        target = dict(order.get("target") or {})
+        target = current_target(order)
         if here and target.get("coords"):
             gap = places.distance(here, target["coords"])
             if gap is not None:
@@ -1098,14 +1099,14 @@ class DashboardOrdersMixin:
             rows = [row for row in objectives_of(order) if not objective_rules.done(row) and row.get("type") in types]
             if not rows:
                 continue
-            target = order.get("target") or {}
+            target = current_target(order)
             rank = 0 if str(target.get("system") or "").casefold() == here_system and here_system else 1
             if best is None or rank < best[0]:
                 best = (rank, order, rows[0])
         if best is None:
             return None
         _rank, order, row = best
-        target = order.get("target") or {}
+        target = current_target(order)
         here = getattr(self, "current_coords", None)
         gap = places.distance(here, target["coords"]) if target.get("coords") and here and list(here) != [0, 0, 0] else None
         return {"officer": order_lines.NAMES.get(order.get("officer"), "Crew"), "title": order.get("title"),
@@ -1118,7 +1119,7 @@ class DashboardOrdersMixin:
             return []
         out = []
         for order in ledger.active() + [row for row in ledger.offered() if not row.get("later")]:
-            target = order.get("target") or {}
+            target = current_target(order)
             coords = target.get("coords")
             if not coords:
                 continue
@@ -1150,7 +1151,7 @@ class DashboardOrdersMixin:
         order = min(active, key=lambda row: float(row.get("accepted_at") or 0))
         rows = [row for row in objectives_of(order) if not objective_rules.done(row)]
         return {"title": order.get("title"), "officer": order_lines.NAMES.get(order.get("officer"), "Crew"),
-                "next": objective_rules.describe(rows[0]) if rows else "", "system": (order.get("target") or {}).get("system")}
+                "next": objective_rules.describe(rows[0]) if rows else "", "system": current_target(order).get("system")}
 
     # -- the cockpit overlay -----------------------------------------------------------------------
     def _orders_overlay_model(self):
@@ -1270,7 +1271,7 @@ class DashboardOrdersMixin:
         nxt = objective_rules.describe(rows[0]) if rows else "nothing left"
         if asked == "far":
             here = getattr(self, "current_coords", None)
-            target = (current.get("target") or {})
+            target = current_target(current)
             gap = places.distance(here, target["coords"]) if here and target.get("coords") else None
             if gap is None:
                 return f"{current.get('title')}: next, {nxt}. I don't have a position for the target."

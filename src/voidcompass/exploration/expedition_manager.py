@@ -11,6 +11,7 @@ import re
 import threading
 import uuid
 
+from voidcompass.core.discovery import unclaimed
 from voidcompass.exploration import expedition_plan
 from voidcompass.exploration.galactic_regions import find_region
 from voidcompass.core.persistence_queue import persistence_queue
@@ -1451,7 +1452,7 @@ class ExpeditionManager:
                 planet_class = _localized(raw, "PlanetClass").casefold()
                 terraformable = str(raw.get("TerraformState") or "").casefold() == "terraformable"
                 valuable = terraformable or planet_class in HIGH_VALUE_WORLDS
-                first = raw.get("WasDiscovered") is False
+                first = unclaimed(raw)
                 body_fact = self._body_fact_key(raw, system, body)
                 if valuable and self._new_fact(stats, "valuable_bodies", body_fact):
                     stats["valuable_worlds"] = _integer(stats.get("valuable_worlds")) + 1

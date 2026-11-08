@@ -4,6 +4,7 @@ import time
 import threading
 import logging
 
+from voidcompass.core.discovery import unclaimed
 from voidcompass.core.journal_files import journal_sort_key, latest_session, session_header
 
 
@@ -1196,7 +1197,7 @@ class JournalWatcher:
                     "planet_class": planet_class,
                     "terraform_state": data.get("TerraformState"),
                     "landable": data.get("Landable", False),
-                    "was_discovered": data.get("WasDiscovered", True),
+                    "was_discovered": not unclaimed(data),
                     "was_mapped": data.get("WasMapped", True),
                     "was_footfalled": data.get("WasFootfalled"),
                     # Elite reports whether somebody had already made first

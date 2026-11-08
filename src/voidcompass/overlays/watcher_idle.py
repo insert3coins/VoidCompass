@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
+from voidcompass.core.discovery import our_first
 
 # Idle topics, besides the plain "quiet" mutter. watcher_lines has the words.
 IDLE_TOPICS = (
@@ -212,7 +213,7 @@ class Surroundings:
         elif event == "Scan":
             if raw.get("StarType") and not raw.get("DistanceFromArrivalLS"):
                 self.star_class = str(raw.get("StarType"))
-            if raw.get("WasDiscovered") is False and raw.get("PlanetClass"):
+            if our_first(raw) and raw.get("PlanetClass"):
                 self.firsts += 1
                 if self.firsts in {1, 5, 10, 25}:
                     self._remember(f"{raw.get('BodyName')}, the first world nobody had seen" if self.firsts == 1

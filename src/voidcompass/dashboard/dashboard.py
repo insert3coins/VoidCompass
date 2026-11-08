@@ -14,6 +14,7 @@ import shutil
 from collections import deque
 from datetime import datetime, timezone
 
+from voidcompass.core.discovery import our_first, unclaimed
 from voidcompass.core.config import (
     load_config, CONFIG_FILE,
     COLOR_BG, COLOR_ACCENT, COLOR_TEXT,
@@ -6717,7 +6718,7 @@ class MainDashboard(
                 payload.get("TerraformState") or normalised.get("terraform_state") or ""
             ).casefold() == "terraformable"
             first_discovery = (
-                payload.get("WasDiscovered") is False
+                our_first(payload)
                 or normalised.get("was_discovered") is False
             )
             first_footfall = bool(
@@ -10500,7 +10501,7 @@ class MainDashboard(
         mass = raw.get("MassEM") or raw.get("StellarMass") or 0
         value = self._get_body_value(
             planet_class, star_type, terraformable, mass,
-            not bool(raw.get("WasDiscovered")), bool(raw.get("WasMapped")),
+            unclaimed(raw), bool(raw.get("WasMapped")),
             not bool(raw.get("WasMapped")), True,
         )
         keys.append(key)

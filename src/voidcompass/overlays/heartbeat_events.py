@@ -12,6 +12,7 @@ The effect names are the painters in web/heartbeat/orb.js.
 """
 
 from __future__ import annotations
+from voidcompass.core.discovery import our_first
 
 TONES = ("accent", "orange", "green", "yellow", "red", "muted")
 
@@ -383,7 +384,7 @@ def classify(event, detail=None):
     # water or ammonia world, or a Codex entry new to the commander.
     rare = False
     if name == "Scan" and (detail.get("PlanetClass") or detail.get("StarType")):
-        rare = (detail.get("WasDiscovered") is False
+        rare = (our_first(detail)
                 or str(detail.get("PlanetClass") or "").casefold() in _RARE_PLANETS)
     elif name == "CodexEntry":
         rare = bool(detail.get("IsNewEntry"))

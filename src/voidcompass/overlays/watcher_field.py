@@ -12,6 +12,7 @@ must be (its genus's colony range), and when you're far enough. These are
 said from the written lines, keeping the measured distance.
 """
 from __future__ import annotations
+from voidcompass.core.discovery import our_first
 
 PLANET_FIRST_NORMAL = [
     "{body}. Nobody has charted that one before you.",
@@ -190,7 +191,7 @@ class FieldNotes:
         if event == "Scan":
             body = str(raw.get("BodyName") or "")
             if raw.get("StarType") and not raw.get("DistanceFromArrivalLS"):
-                self.charted = raw.get("WasDiscovered") is not False
+                self.charted = not our_first(raw)
             if raw.get("PlanetClass") and body:
                 if raw.get("WasMapped") is False:
                     self.unmapped.add(body)
@@ -212,7 +213,7 @@ class FieldNotes:
 
     def first_world(self, raw):
         """The first world nobody had found, in a system others have charted."""
-        if self.charted and not self.said_first and raw.get("PlanetClass") and raw.get("WasDiscovered") is False:
+        if self.charted and not self.said_first and raw.get("PlanetClass") and our_first(raw):
             self.said_first = True
             return True
         return False

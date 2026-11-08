@@ -14,6 +14,7 @@ import math
 import os
 import threading
 
+from voidcompass.core.discovery import unclaimed
 from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.core.persistence_queue import persistence_queue
 from voidcompass.exploration.galactic_regions import find_region
@@ -895,7 +896,7 @@ class DeepSurveyTracker:
             elif event == "Scan":
                 self._touch_route(
                     raw,
-                    discoveries=1 if raw.get("WasDiscovered") is False else 0,
+                    discoveries=1 if unclaimed(raw) else 0,
                     star_class=raw.get("StarType"),
                 )
                 planet_class = str(raw.get("PlanetClass") or "")

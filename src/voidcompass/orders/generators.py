@@ -126,7 +126,8 @@ def lyra_bio_hunt(facts):
     items = items[:MAX_BIO_TARGETS]
     first = items[0]
     new_count = sum(1 for item in items if item["state"] == "new")
-    objectives = [obj.make("bio", label=f"{item['name']} on {item['body']}", entry=item["entry"]) for item in items]
+    objectives = [obj.make("bio", label=f"{item['name']} on {item['body']}", entry=item["entry"],
+                           place={key: item[key] for key in ("system", "body", "coords", "address")}) for item in items]
     count = len(items)
     title = f"The {first['variant'].lower()} {first['species'].split(' ', 1)[-1]}" if count == 1 and first["variant"] else (
         f"{count} {genus} you've never logged" if new_count == count else f"{count} {genus} colours for your Codex")

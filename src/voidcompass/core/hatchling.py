@@ -28,6 +28,7 @@ import copy
 import json
 import re
 
+from voidcompass.core.discovery import our_first
 from voidcompass.core import hatchling_chatter
 
 NEEDS = ("hunger", "mood", "clean", "health", "energy")
@@ -632,7 +633,7 @@ def _cue(pet, name, event, now):
         kind = ""
     if name == "ShieldState" and event.get("ShieldsUp") is False:
         kind = "danger"
-    if (name == "Scan" and event.get("WasDiscovered") is False) or (name == "CodexEntry" and event.get("IsNewEntry")):
+    if (name == "Scan" and our_first(event)) or (name == "CodexEntry" and event.get("IsNewEntry")):
         kind = "discovery"
     if name in PLACES:
         pet["place"] = PLACES[name]
@@ -703,7 +704,7 @@ def _toys(pet, name, event, now):
         return _toy(pet, now, "fragment", f"a chunk of {event.get('Type_Localised') or 'ore'}")
     if name == "ScanOrganic" and event.get("ScanType") == "Analyse":
         return _toy(pet, now, "pebble", f"a pebble from beside {event.get('Species_Localised') or 'something alive'}")
-    if name == "Scan" and event.get("WasDiscovered") is False and event.get("StarType"):
+    if name == "Scan" and our_first(event) and event.get("StarType"):
         return _toy(pet, now, "beacon", f"a beacon from {event.get('BodyName') or 'a new star'}")
     if name == "Docked" and str(event.get("MarketID") or event.get("StationName") or "") not in pet["stations"]:
         return _toy(pet, now, "model", f"a model of {event.get('StationName') or 'a station'}")
@@ -779,7 +780,7 @@ def _observe_mood(pet, name, event, now, needs, care, who, species, asleep):
         if asleep:
             return True
         return mood(2, "A new star outside. Curious.", "good", "curious")
-    if name == "Scan" and event.get("WasDiscovered") is False and event.get("ScanType") in {"Detailed", "AutoScan", "Basic"}:
+    if name == "Scan" and our_first(event) and event.get("ScanType") in {"Detailed", "AutoScan", "Basic"}:
         care["discoveries"] += 1
         return mood(3, f"First to find {event.get('BodyName') or 'it'}!", "good", "happy")
     if name == "CodexEntry" and event.get("IsNewEntry"):

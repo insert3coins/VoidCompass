@@ -9,6 +9,7 @@ journal alone.
 from __future__ import annotations
 
 import math
+from voidcompass.core.discovery import our_first
 
 # Sagittarius A*, the heart of the galaxy.
 CORE = (25.21875, -20.90625, 25899.96875)
@@ -46,7 +47,7 @@ def place_of(event, raw):
             main_star = float(raw.get("DistanceFromArrivalLS") or 0) == 0 and star
         except (TypeError, ValueError):
             main_star = False
-        if main_star and raw.get("WasDiscovered") is False:
+        if main_star and our_first(raw):
             return "undiscovered"
         return None
     if event in {"FSDJump", "Location", "CarrierJump"}:

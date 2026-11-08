@@ -90,6 +90,19 @@ def progress(order):
     return here
 
 
+def current_target(order):
+    """Where the order sends you now: the next unfinished objective's own
+    place when it has one elsewhere, otherwise the order's target."""
+    target = dict(order.get("target") or {})
+    for row in objectives_of(order):
+        if not objective_rules.done(row):
+            place = objective_rules.place_of(row)
+            if place and place.get("body") != target.get("body"):
+                return place
+            break
+    return target
+
+
 def _fresh():
     return {"schema": SCHEMA, "orders": [], "history": [], "record": {}, "declines": {}, "muted": {},
             "keys": {}, "ribbons": {}, "events": [], "offers": {"session": None, "count": 0, "last": 0.0},

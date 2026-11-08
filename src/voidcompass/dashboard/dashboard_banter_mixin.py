@@ -13,7 +13,8 @@ import logging
 import random
 import time
 
-from voidcompass.core import companions, home_anchor
+from voidcompass.core.discovery import our_first
+from voidcompass.core import companions, discovery, home_anchor
 from voidcompass.core.config import get_active_profile, get_profile_file
 from voidcompass.core.persistence_queue import persistence_queue
 from voidcompass.orders.generators import spoken_credits
@@ -54,6 +55,9 @@ class DashboardBanterMixin:
         # And only ask you to scan where it's worth it (EDSM traffic).
         if hasattr(self, "_system_quiet"):
             watcher_mind.SYSTEM_QUIET = self._system_quiet
+        # And only call a discovery yours when no other commander is on record.
+        if hasattr(self, "_someone_else_found"):
+            discovery.SOMEONE_ELSE = self._someone_else_found
 
     def _banter_reset_session(self):
         self._banter_session = {"jumps": 0, "star": "", "mined": False, "low_fuel": False, "heat": False, "danger": False,
@@ -174,7 +178,7 @@ class DashboardBanterMixin:
             self._banter_far(raw)
             return
         if event == "Scan":
-            if raw.get("StarType") and float(raw.get("DistanceFromArrivalLS") or 0) == 0 and raw.get("WasDiscovered") is False:
+            if raw.get("StarType") and float(raw.get("DistanceFromArrivalLS") or 0) == 0 and our_first(raw):
                 self._banter("first_discovery", {"system": raw.get("StarSystem") or getattr(self, "current_sys", "")})
             elif str(raw.get("PlanetClass") or "").casefold() in WORTHY and not self._banter_mapped(raw):
                 self._banter("worthy_world", {"body": raw.get("BodyName")})

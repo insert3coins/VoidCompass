@@ -10,7 +10,9 @@ the journal schema (schemas.edomh.nl).
 from __future__ import annotations
 
 import math
+import re
 
+from voidcompass.core.discovery import our_first
 from voidcompass.exploration import galactic_regions
 
 ARRIVALS = frozenset({"FSDJump", "CarrierJump", "Location"})
@@ -60,6 +62,23 @@ def done(objective):
 def fraction(objective):
     need = max(1, int(objective.get("need") or 1))
     return min(1.0, max(0, int(objective.get("have") or 0)) / need)
+
+
+# A body's name is its system's, then an optional star letter, a planet number and any moons.
+_BODY_NAME = re.compile(r"^(.+?)\s+(?:[A-Z]{1,4}\s+)?\d{1,3}(?:\s+[a-z])*$")
+
+
+def place_of(objective):
+    """Where this objective is done, if it has a place of its own. Orders
+    accepted before objectives carried one only name the body in the label."""
+    place = objective.get("place")
+    if isinstance(place, dict) and (place.get("system") or place.get("body")):
+        return dict(place)
+    if objective.get("type") != "bio":
+        return None
+    body = str(objective.get("label") or "").rpartition(" on ")[2].strip()
+    match = _BODY_NAME.match(body)
+    return {"system": match.group(1), "body": body} if match else None
 
 
 def _same(a, b):
@@ -193,7 +212,7 @@ def _gain(kind, objective, event, raw, ctx):
             return 0
         return 1 if _seen(objective, raw.get("SystemAddress") or raw.get("SystemName")) else 0
     if kind == "discover":
-        if event != "Scan" or raw.get("WasDiscovered") is not False or raw.get("ScanType") == "NavBeaconDetail":
+        if event != "Scan" or not our_first(raw):
             return 0
         if objective.get("stars") and not raw.get("StarType"):
             return 0

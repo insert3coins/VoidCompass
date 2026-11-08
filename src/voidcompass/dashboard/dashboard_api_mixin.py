@@ -13,6 +13,7 @@ import logging
 import os
 import time
 
+from voidcompass.core.discovery import our_first
 from voidcompass.bgs import ticks as bgs_ticks
 from voidcompass.bgs import views as bgs_views
 from voidcompass.core import debug_tap, themes
@@ -136,7 +137,7 @@ class DashboardApiMixin(ApiRecordsMixin):
         announced = self.__dict__.setdefault("_api_announced", set())
         base = {"commander": getattr(self, "cmdr_name", "") or "",
                 "system": raw.get("StarSystem") or getattr(self, "current_sys", "") or ""}
-        if event == "Scan" and raw.get("WasDiscovered") is False and (raw.get("PlanetClass") or raw.get("StarType")):
+        if event == "Scan" and our_first(raw) and (raw.get("PlanetClass") or raw.get("StarType")):
             key = ("discovery", raw.get("SystemAddress"), raw.get("BodyID"))
             if key in announced:
                 return None

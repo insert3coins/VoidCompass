@@ -8,6 +8,7 @@ import math
 import os
 import threading
 from datetime import datetime, timezone
+from voidcompass.core.discovery import unclaimed
 from voidcompass.core.journal_files import journal_sort_key
 from voidcompass.core.persistence_queue import persistence_queue
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
@@ -213,7 +214,7 @@ class CaptainsLog:
             elif ev == "Scan":
                 planet_class = str(raw.get("PlanetClass") or "")
                 terraformable = str(raw.get("TerraformState") or "") == "Terraformable"
-                if raw.get("WasDiscovered") is False:
+                if unclaimed(raw):
                     session["first_discoveries"] = int(session.get("first_discoveries") or 0) + 1
                 if planet_class in NOTABLE_WORLDS or terraformable:
                     session["valuable_worlds"] = int(session.get("valuable_worlds") or 0) + 1

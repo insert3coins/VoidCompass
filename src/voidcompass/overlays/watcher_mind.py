@@ -26,6 +26,7 @@ from datetime import datetime
 from pathlib import Path
 import zlib
 
+from voidcompass.core.discovery import our_first
 from voidcompass.core import ranks
 from voidcompass.exploration import bio_values
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
@@ -1824,7 +1825,7 @@ class WatcherMind:
             return self.consider(topic, {"material": material}) if material else None
         if event == "Scan":
             # The arrival star's scan says whether anyone charted the system.
-            if raw.get("StarType") and raw.get("WasDiscovered") is False and not raw.get("DistanceFromArrivalLS"):
+            if raw.get("StarType") and our_first(raw) and not raw.get("DistanceFromArrivalLS"):
                 self._first_streak += 1
                 self._last_interesting = now
                 return self.consider("undiscovered_system")
@@ -1843,7 +1844,7 @@ class WatcherMind:
                     if thought:
                         self._record_said.add("firsts")
                         return thought
-            if raw.get("WasDiscovered") is False and (raw.get("PlanetClass") or raw.get("StarType")):
+            if our_first(raw) and (raw.get("PlanetClass") or raw.get("StarType")):
                 self._first_streak += 1
                 self._last_interesting = now
                 if self._first_streak >= 4 and self._first_streak % 2 == 0:
@@ -1866,7 +1867,7 @@ class WatcherMind:
                 except (KeyError, TypeError, ValueError):
                     pass
                 kind = watcher_worlds.KIND_WORDS.get(planet) or ("A terraformable world" if terraformable else "")
-                if raw.get("WasDiscovered") is False and kind:
+                if our_first(raw) and kind:
                     thought = self.consider("world_first", dict(fields, kind=kind, kind_l=kind[:1].lower() + kind[1:]))
                     if thought:
                         self._worlds_remarked().add(name)
@@ -2532,7 +2533,7 @@ class WatcherMind:
                 watcher_deeper.shift(memory, "repair")
             elif event in {"SellExplorationData", "MultiSellExplorationData", "SellOrganicData"}:
                 watcher_deeper.shift(memory, "sold")
-            elif event == "Scan" and raw.get("WasDiscovered") is False and raw.get("PlanetClass"):
+            elif event == "Scan" and our_first(raw) and raw.get("PlanetClass"):
                 planet = str(raw.get("PlanetClass_Localised") or raw.get("PlanetClass") or "")
                 if rarity({"planet_class": raw.get("PlanetClass")}) or "earth" in planet.casefold() or "water world" in planet.casefold():
                     self._keep_moment("first", f"the {planet.lower()} you were first to find, {raw.get('BodyName') or 'out there'}", now)

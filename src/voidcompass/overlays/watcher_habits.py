@@ -11,6 +11,7 @@ skipped. Milestones (the hundredth jump, the thousandth body) are said as
 they happen.
 """
 from __future__ import annotations
+from voidcompass.core.discovery import our_first
 
 # Counts at which a milestone is worth a word.
 MILESTONES = (10, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000)
@@ -112,7 +113,7 @@ def observe(memory, event, raw):
         bump("honks")
     elif event == "Scan" and (raw.get("PlanetClass") or raw.get("StarType")):
         bump("bodies", kind="bodies")
-        if raw.get("WasDiscovered") is False:
+        if our_first(raw):
             bump("firsts", kind="firsts")
     elif event == "SAAScanComplete":
         bump("mapped", kind="mapped")

@@ -11,6 +11,7 @@ They only refer to chapters the commander has already heard.
 """
 import math
 import time
+from voidcompass.core.discovery import our_first
 
 _SOL_FAR_LY = 10000.0
 _SOL_DEEP_LY = 20000.0
@@ -61,7 +62,7 @@ def signals(event, raw):
         out.add("mission")
     if event == "Scan" and raw.get("BodyName"):
         out.add("scan")
-        if raw.get("WasDiscovered") is False:
+        if our_first(raw):
             out.add("first")
         planet = str(raw.get("PlanetClass") or "")
         if planet == "Earthlike body":

@@ -36,6 +36,20 @@ class DashboardJumpInfoMixin:
                 }
                 self._jump_info_prefetch(name)
 
+    def _someone_else_found(self, raw):
+        """True when EDSM names another commander as this body's discoverer.
+        Your own uploads put your name there, so those stay yours."""
+        system = str(raw.get("StarSystem") or getattr(self, "current_sys", "") or "").strip().casefold()
+        me = str(getattr(self, "cmdr_name", "") or "").strip().casefold()
+        known = getattr(self, "_edsm_body_discovery", None) or {}
+        found = (known.get("bodies") or {}).get(str(raw.get("BodyID"))) if known.get("system") == system else None
+        by = str((found or {}).get("by") or "")
+        if not by and raw.get("StarType") and not raw.get("DistanceFromArrivalLS"):
+            # The arrival star comes before the body list: Jump Info asked when you targeted it.
+            cached = (getattr(self, "_jump_info_intel", None) or {}).get(system)
+            by = str((cached[1] if cached else {}).get("discovered_by") or "")
+        return bool(by) and by.strip().casefold() != me
+
     def _system_quiet(self, name):
         """5.7.7: worth asking you to scan? True (five visits a year or fewer),
         False (busier), None (EDSM hasn't answered). The arrival's traffic is

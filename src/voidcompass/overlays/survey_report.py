@@ -48,7 +48,7 @@ class SurveyTally:
         elif event == "Scan" and raw.get("BodyName") and (raw.get("PlanetClass") or raw.get("StarType")):
             self.bodies[str(raw["BodyName"])] = (str(raw.get("PlanetClass") or ""),
                                                  str(raw.get("TerraformState") or "") == "Terraformable",
-                                                 raw.get("WasDiscovered") is not False)
+                                                 not our_first(raw))
             try:
                 distance = float(raw.get("DistanceFromArrivalLS") or 0)
             except (TypeError, ValueError):
@@ -143,6 +143,7 @@ PERSONAS = {
 }
 
 # 5.7.6: Lyra.
+from voidcompass.core.discovery import our_first
 from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
 
 PERSONAS["lyra"] = _lyra.SURVEY_REPORT

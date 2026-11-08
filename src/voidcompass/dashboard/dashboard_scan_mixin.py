@@ -3,6 +3,7 @@ import math
 import time
 import threading
 
+from voidcompass.core.discovery import unclaimed
 from voidcompass.exploration import bio_values
 from voidcompass.core import operational_state
 from voidcompass.core.config import COLOR_ACCENT, COLOR_TEXT
@@ -1732,7 +1733,7 @@ class DashboardScanMixin:
 
         terraformable = data.get("TerraformState") == "Terraformable"
         landable = data.get("Landable", False)
-        was_discovered = data.get("WasDiscovered", True)
+        was_discovered = not unclaimed(data)
         was_mapped = data.get("WasMapped", True)
         was_footfalled = data.get("WasFootfalled")
         first_footfall = bool(landable and was_footfalled is False)
