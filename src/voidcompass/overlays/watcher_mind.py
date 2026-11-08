@@ -684,6 +684,7 @@ class WatcherMind:
         self._low_health = False
         self._fuel_warned = False
         self._codex_bodies = set()
+        self._sample_run = None
         # 5.7.2: being first in this system (its scans, until you jump).
         self.field = watcher_field.FieldNotes()
         # 5.7.3: a question the uplink is asking Spansh about.
@@ -1766,8 +1767,16 @@ class WatcherMind:
             genus = raw.get("Genus_Localised") or str(species or "").split(" ")[0]
             distance = bio_values.GENUS_COLONY_M.get(genus)
             if species and distance:
-                topic = "sample_first" if str(raw.get("ScanType")).casefold() == "log" else "sample_second"
-                return self.consider(topic, {"species": species, "distance": f"{distance:,}"}, force=True)
+                # The journal writes Log, Sample, Sample, then Analyse seconds after the
+                # third. The third has nothing to say that Analyse won't, and a Sample
+                # whose Log we never saw could be either, so neither is announced.
+                run = (raw.get("SystemAddress"), raw.get("Body"), species)
+                held = self._sample_run
+                count = 1 if str(raw.get("ScanType")).casefold() == "log" else (held[1] + 1 if held and held[0] == run else 0)
+                self._sample_run = (run, count) if count else None
+                topic = {1: "sample_first", 2: "sample_second"}.get(count)
+                if topic:
+                    return self.consider(topic, {"species": species, "distance": f"{distance:,}"}, force=True)
             return None
         if event == "Touchdown" and raw.get("PlayerControlled", True):
             return self.consider("touchdown")

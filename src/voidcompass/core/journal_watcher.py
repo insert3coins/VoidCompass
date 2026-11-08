@@ -4,7 +4,7 @@ import time
 import threading
 import logging
 
-from voidcompass.core.discovery import unclaimed
+from voidcompass.core.discovery import beacon_read, footfall_open, unclaimed
 from voidcompass.core.journal_files import journal_sort_key, latest_session, session_header
 
 
@@ -1199,13 +1199,13 @@ class JournalWatcher:
                     "landable": data.get("Landable", False),
                     "was_discovered": not unclaimed(data),
                     "was_mapped": data.get("WasMapped", True),
-                    "was_footfalled": data.get("WasFootfalled"),
+                    "was_footfalled": None if beacon_read(data) else data.get("WasFootfalled"),
                     # Elite reports whether somebody had already made first
                     # footfall when the body was scanned.  Keep the existing
                     # UI key as an availability flag for landable planets.
                     "first_footfall": bool(
                         data.get("Landable", False)
-                        and data.get("WasFootfalled") is False
+                        and footfall_open(data)
                     ),
                     "mass_em": data.get("MassEM"),
                     "stellar_mass": data.get("StellarMass"),

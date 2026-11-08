@@ -3,7 +3,7 @@ import math
 import time
 import threading
 
-from voidcompass.core.discovery import unclaimed
+from voidcompass.core.discovery import beacon_read, unclaimed
 from voidcompass.exploration import bio_values
 from voidcompass.core import operational_state
 from voidcompass.core.config import COLOR_ACCENT, COLOR_TEXT
@@ -1735,7 +1735,7 @@ class DashboardScanMixin:
         landable = data.get("Landable", False)
         was_discovered = not unclaimed(data)
         was_mapped = data.get("WasMapped", True)
-        was_footfalled = data.get("WasFootfalled")
+        was_footfalled = None if beacon_read(data) else data.get("WasFootfalled")
         first_footfall = bool(landable and was_footfalled is False)
 
         if not was_discovered:

@@ -14,7 +14,7 @@ import shutil
 from collections import deque
 from datetime import datetime, timezone
 
-from voidcompass.core.discovery import our_first, unclaimed
+from voidcompass.core.discovery import footfall_open, our_first, unclaimed
 from voidcompass.core.config import (
     load_config, CONFIG_FILE,
     COLOR_BG, COLOR_ACCENT, COLOR_TEXT,
@@ -135,6 +135,7 @@ from voidcompass.mining.specialist_engine import SpecialistEngine
 from voidcompass.exploration.captains_log import CaptainsLog
 from voidcompass.exploration.deep_survey import DeepSurveyTracker
 from voidcompass.exploration.travel_history import TravelHistory
+from voidcompass.exploration.walked_bodies import WalkedBodies
 from voidcompass.exploration.galactic_regions import find_region
 from voidcompass.exploration.explorer_fieldcraft import (
     HIGH_VALUE_WORLDS, WHITE_DWARF_CLASSES, revisit_candidate,
@@ -1805,6 +1806,12 @@ class MainDashboard(
     def _import_exploration_history(self, journal_path, logbook, tracker, commander=None, fid=None,
                                     scan_db_path=None, profile_key=None, travel=None, codex=None):
         """Read history sequentially so indexers never contend for the journal folder."""
+        walked = getattr(self, "walked_bodies", None)
+        if walked is not None:
+            try:
+                walked.import_journals(journal_path, commander=commander, fid=fid)
+            except Exception as exc:
+                logging.warning("Walked bodies import skipped: %s", exc)
         self._import_captains_log_history(journal_path, logbook, commander, fid)
         self._import_deep_survey_history(journal_path, tracker, commander, fid)
         self._import_travel_history(journal_path, travel, commander, fid)
@@ -2286,6 +2293,9 @@ class MainDashboard(
         )
         if getattr(self, "codex_index", None):
             self.codex_index.flush(wait=False)
+        if getattr(self, "walked_bodies", None):
+            self.walked_bodies.flush(wait=False)
+        self.walked_bodies = WalkedBodies(get_profile_file(new_key, "walked_bodies.json"))
         self.codex_index = CodexIndex(get_profile_file(new_key, "codex_index.json"))
         self._colony_switch_profile(new_key)
         self._bgs_switch_profile(new_key)
@@ -2418,6 +2428,9 @@ class MainDashboard(
         )
         self.deep_survey = DeepSurveyTracker(
             get_profile_file(get_active_profile(self.config), "deep_survey.json")
+        )
+        self.walked_bodies = WalkedBodies(
+            get_profile_file(get_active_profile(self.config), "walked_bodies.json")
         )
         # Every jump from every journal, for the Galactic Atlas: Deep Survey
         # keeps only the latest 5,000, and older trips (Beagle Point, say)
@@ -6723,7 +6736,7 @@ class MainDashboard(
             )
             first_footfall = bool(
                 (payload.get("Landable") or normalised.get("landable"))
-                and (payload.get("WasFootfalled") is False
+                and (footfall_open(payload)
                      or normalised.get("was_footfalled") is False)
             )
             if planet_class in HIGH_VALUE_WORLDS or terraformable:

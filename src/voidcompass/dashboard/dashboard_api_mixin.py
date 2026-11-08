@@ -13,7 +13,7 @@ import logging
 import os
 import time
 
-from voidcompass.core.discovery import our_first
+from voidcompass.core.discovery import footfall_open, new_ground, our_first
 from voidcompass.bgs import ticks as bgs_ticks
 from voidcompass.bgs import views as bgs_views
 from voidcompass.core import debug_tap, themes
@@ -151,7 +151,7 @@ class DashboardApiMixin(ApiRecordsMixin):
             return {**base, "kind": "first_discovery", "body": raw.get("BodyName") or "", "body_id": raw.get("BodyID"),
                     "class": star_type_label(star, include_star=True) if star else planet, "star": bool(star),
                     "terraformable": terraformable, "landable": bool(raw.get("Landable")),
-                    "first_footfall_available": bool(raw.get("Landable") and raw.get("WasFootfalled") is False),
+                    "first_footfall_available": bool(raw.get("Landable") and footfall_open(raw)),
                     "value": value, "mapped_value": mapped}
         items = getattr(self, "scan_items_by_id", None) or {}
         if event == "ScanOrganic" and str(raw.get("ScanType") or "").casefold() == "analyse":
@@ -171,7 +171,7 @@ class DashboardApiMixin(ApiRecordsMixin):
         if event == "Disembark" and raw.get("OnPlanet") and not raw.get("OnStation"):
             body = items.get(raw.get("BodyID")) or {}
             key = ("footfall", raw.get("SystemAddress"), raw.get("BodyID"))
-            if not body.get("first_footfall") or key in announced:
+            if not body.get("first_footfall") or key in announced or not new_ground(raw):
                 return None
             announced.add(key)
             return {**base, "kind": "first_footfall", "body": raw.get("Body") or body.get("name") or "",

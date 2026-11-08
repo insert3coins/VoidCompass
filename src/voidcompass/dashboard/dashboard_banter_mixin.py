@@ -13,7 +13,7 @@ import logging
 import random
 import time
 
-from voidcompass.core.discovery import our_first
+from voidcompass.core.discovery import new_ground, our_first
 from voidcompass.core import companions, discovery, home_anchor
 from voidcompass.core.config import get_active_profile, get_profile_file
 from voidcompass.core.persistence_queue import persistence_queue
@@ -58,6 +58,7 @@ class DashboardBanterMixin:
         # And only call a discovery yours when no other commander is on record.
         if hasattr(self, "_someone_else_found"):
             discovery.SOMEONE_ELSE = self._someone_else_found
+            discovery.WALKED_BEFORE = self._walked_before
 
     def _banter_reset_session(self):
         self._banter_session = {"jumps": 0, "star": "", "mined": False, "low_fuel": False, "heat": False, "danger": False,
@@ -191,7 +192,7 @@ class DashboardBanterMixin:
             self._banter("landing", {"body": raw.get("Body")})
         elif event == "Disembark" and raw.get("OnPlanet"):
             bodies = (getattr(self, "_orders_place", None) or {}).get("bodies") or {}
-            if (bodies.get(str(raw.get("Body") or "").casefold()) or {}).get("footfalled") is False:
+            if (bodies.get(str(raw.get("Body") or "").casefold()) or {}).get("footfalled") is False and new_ground(raw):
                 self._banter("footfall", {"body": raw.get("Body")})
         elif event in {"SellExplorationData", "MultiSellExplorationData"}:
             total = int(raw.get("TotalEarnings") or 0) or int(raw.get("BaseValue") or 0) + int(raw.get("Bonus") or 0)

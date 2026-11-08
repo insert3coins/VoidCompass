@@ -50,6 +50,17 @@ class DashboardJumpInfoMixin:
             by = str((cached[1] if cached else {}).get("discovered_by") or "")
         return bool(by) and by.strip().casefold() != me
 
+    def _walked_before(self, raw):
+        """True when a step outside can't be a first footfall: you've walked
+        this body before, or people live in the system."""
+        walked = getattr(self, "walked_bodies", None)
+        if walked is not None and walked.before(raw):
+            return True
+        try:
+            return int(getattr(self, "_music_population", 0) or 0) > 0
+        except (TypeError, ValueError):
+            return False
+
     def _system_quiet(self, name):
         """5.7.7: worth asking you to scan? True (five visits a year or fewer),
         False (busier), None (EDSM hasn't answered). The arrival's traffic is

@@ -12,7 +12,7 @@ must be (its genus's colony range), and when you're far enough. These are
 said from the written lines, keeping the measured distance.
 """
 from __future__ import annotations
-from voidcompass.core.discovery import our_first
+from voidcompass.core.discovery import footfall_open, new_ground, our_first
 
 PLANET_FIRST_NORMAL = [
     "{body}. Nobody has charted that one before you.",
@@ -195,7 +195,7 @@ class FieldNotes:
             if raw.get("PlanetClass") and body:
                 if raw.get("WasMapped") is False:
                     self.unmapped.add(body)
-                if raw.get("WasFootfalled") is False:
+                if footfall_open(raw):
                     self.unwalked.add(body)
             return None
         if event == "SAAScanComplete":
@@ -208,7 +208,8 @@ class FieldNotes:
             body = str(raw.get("Body") or "")
             if body in self.unwalked:
                 self.unwalked.discard(body)
-                return "footfall_first", {"body": body}
+                if new_ground(raw):
+                    return "footfall_first", {"body": body}
         return None
 
     def first_world(self, raw):

@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 import re
 
-from voidcompass.core.discovery import our_first
+from voidcompass.core.discovery import new_ground, our_first
 from voidcompass.exploration import galactic_regions
 
 ARRIVALS = frozenset({"FSDJump", "CarrierJump", "Location"})
@@ -230,7 +230,7 @@ def _gain(kind, objective, event, raw, ctx):
             return 0
         body = str(raw.get("Body") or "")
         facts = (ctx.get("bodies") or {}).get(body.casefold()) or {}
-        if facts.get("footfalled") is not False:
+        if facts.get("footfalled") is not False or not new_ground(raw):
             return 0
         return 1 if _seen(objective, f"{raw.get('SystemAddress')}:{body}") else 0
     if kind == "jumps":

@@ -11,7 +11,7 @@ import re
 import threading
 import uuid
 
-from voidcompass.core.discovery import unclaimed
+from voidcompass.core.discovery import footfall_open, new_ground, unclaimed
 from voidcompass.exploration import expedition_plan
 from voidcompass.exploration.galactic_regions import find_region
 from voidcompass.core.persistence_queue import persistence_queue
@@ -1463,7 +1463,7 @@ class ExpeditionManager:
                         expedition, raw, "valuable_count", lambda _objective: True,
                         f"{body or planet_class} in {system}",
                     )
-                if raw.get("WasFootfalled") is False and raw.get("Landable"):
+                if footfall_open(raw) and raw.get("Landable"):
                     self._new_fact(stats, "unwalked", self._body_fact_key(raw, system, raw.get("BodyName") or body))
                 if first and self._new_fact(stats, "first_bodies", body_fact):
                     stats["first_discoveries"] = _integer(stats.get("first_discoveries")) + 1
@@ -1556,7 +1556,7 @@ class ExpeditionManager:
             elif event == "Disembark" and raw.get("OnPlanet") and not raw.get("OnStation"):
                 # A first footfall: the body's Scan said nobody had walked it.
                 key = self._body_fact_key(raw, system, raw.get("Body") or body)
-                if key and key in (stats.get("facts") or {}).get("unwalked", {}) and self._new_fact(stats, "footfalls", key):
+                if key and key in (stats.get("facts") or {}).get("unwalked", {}) and new_ground(raw) and self._new_fact(stats, "footfalls", key):
                     stats["first_footfalls"] = _integer(stats.get("first_footfalls")) + 1
                     completed += self._advance(expedition, raw, "first_footfall_count", lambda _objective: True,
                                                f"First footfall on {raw.get('Body') or body}")

@@ -14,7 +14,7 @@ import logging
 import math
 import time
 
-from voidcompass.core.discovery import our_first
+from voidcompass.core.discovery import beacon_read, our_first
 from voidcompass.colonisation import catalogue as colony_catalogue
 from voidcompass.core import companion_features, companions, crew_rota, home_anchor
 from voidcompass.core.config import get_active_profile, get_profile_file
@@ -142,7 +142,7 @@ class DashboardOrdersMixin:
             row = place["bodies"].setdefault(name.casefold(), {"name": name})
             kind = str(raw.get("PlanetClass") or raw.get("StarType") or "")
             row.update(type=kind, terraformable=str(raw.get("TerraformState") or "").casefold() == "terraformable",
-                       discovered=raw.get("WasDiscovered"), footfalled=raw.get("WasFootfalled"),
+                       discovered=raw.get("WasDiscovered"), footfalled=None if beacon_read(raw) else raw.get("WasFootfalled"),
                        landable=bool(raw.get("Landable")))
             row["mapped"] = bool(row.get("mapped") or raw.get("WasMapped"))
             # Mapped by someone before you (the Scan's own word): no first map to be had.
