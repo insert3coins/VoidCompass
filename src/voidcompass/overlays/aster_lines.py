@@ -1,7 +1,7 @@
 """Aster's original officer dialogue. Facts are supplied by the game, never invented."""
 import random
 
-from voidcompass.overlays import officer_habits, talk_replies
+from voidcompass.overlays import officer_docking, officer_habits, talk_replies
 from voidcompass.overlays import aster_responses, aster_dockside, aster_idle, aster_signoff, aster_lore, aster_keepsakes, crew_lore, route_lines, survey_report, aster_field, aster_more, rhino_lines, mining_talk, ship_life, squadron_talk
 
 GREETINGS = (
@@ -363,6 +363,8 @@ for topic, lines in {"idle_aster_lore": _STORY.musings, "aster_lore_recall": _ST
 # Refining in an SRV only happens in the Rhino: the rigs' yield, in place of
 # the old wording, which spoke as if materials had been picked up by hand.
 RESTRAINED_EVENTS["mined_surface"], EVENTS["mined_surface"] = rhino_lines.officer_refining("aster")
+# 5.7.7: docking anywhere but home.
+RESTRAINED_EVENTS["docked_away"], EVENTS["docked_away"] = officer_docking.officer("aster")
 # 5.7.6: habit summaries in depth, and style lines that read right.
 officer_habits.apply("aster", EVENTS, RESTRAINED_EVENTS)
 

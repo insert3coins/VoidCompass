@@ -14,7 +14,9 @@ holds your choice for a while before the rota takes over again.
 """
 
 SETTLE_S = 45.0       # an activity holds this long before the watch changes
-MIN_GAP_S = 180.0     # the least time between two rota handovers
+# 5.7.7: docking is plain at once; a quick look at the FSS isn't. Each duty settles in its own time.
+SETTLE_BY_DUTY = {"docked": 10.0, "scanning": 45.0, "surface": 30.0, "route": 30.0, "deep": 60.0, "flight": 45.0}
+MIN_GAP_S = 90.0      # the least time between two rota handovers (5.7.7: was three minutes, which felt dead)
 HOLD_S = 300.0        # a companion you chose yourself keeps the watch this long (5 minutes)
 DEEP_LY = 1000.0      # this far from home counts as deep space, unless you choose another
 DEEP_CHOICES = (250, 500, 1000, 2000, 5000, 10000)
@@ -93,6 +95,11 @@ def duty_of(facts):
     return None
 
 
+def settle_for(facts):
+    """How long the current activity has to hold before the watch changes."""
+    return SETTLE_BY_DUTY.get(duty_of(facts), SETTLE_S)
+
+
 def wanted(facts, rota_duties=None):
     """Who should have the watch for this activity, or None to keep whoever has it."""
     duty = duty_of(facts)
@@ -116,6 +123,10 @@ class Rota:
         self.held_until = now + HOLD_S
         self.candidate = None
 
+    def release(self):
+        """5.7.7: let the rota take over again now."""
+        self.held_until = 0.0
+
     def step(self, facts, now, current, enabled=True, rota_duties=None):
         if not enabled or now < self.held_until:
             self.candidate = None
@@ -127,11 +138,38 @@ class Rota:
         if target != self.candidate:
             self.candidate, self.since = target, now
             return None
-        if now - self.since < SETTLE_S or now - self.last_change < MIN_GAP_S:
+        if now - self.since < settle_for(facts) or now - self.last_change < MIN_GAP_S:
             return None
         self.candidate = None
         self.last_change = now
         return target
+
+    def status(self, facts, now, current, enabled=True, rota_duties=None):
+        """5.7.7: what the rota is doing, for the companion page and the debug
+        log: {state, duty, wanted, until, text}. States: off, holding, settled,
+        waiting (the activity is settling), gap (too soon after the last change)."""
+        duty = duty_of(facts)
+        target = wanted(facts, rota_duties)
+        names = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra"}
+        label = dict((key, title) for key, title, _who in DUTIES).get(duty, "no duty")
+        row = {"duty": duty, "wanted": target, "until": None}
+        if not enabled:
+            return dict(row, state="off", text="Rota off")
+        if now < self.held_until:
+            return dict(row, state="holding", until=self.held_until,
+                        text=f"Holding your pick ({names.get(current, current)})")
+        if target is None or target == current:
+            return dict(row, state="settled", text=f"Rota: {label.lower()}, {names.get(current, current)} on watch"
+                        if duty else f"Rota: {names.get(current, current)} on watch")
+        if self.candidate == target:
+            settle_at = self.since + settle_for(facts)
+            gap_at = self.last_change + MIN_GAP_S
+            if gap_at > settle_at and gap_at > now:
+                return dict(row, state="gap", until=gap_at, text=f"Rota: {label.lower()}, {names.get(target, target)} next")
+            return dict(row, state="waiting", until=max(settle_at, now),
+                        text=f"Rota: {label.lower()}, {names.get(target, target)} takes over")
+        # Not yet seen by a step: no countdown, so the page doesn't redraw on a ticking time.
+        return dict(row, state="waiting", text=f"Rota: {label.lower()}, {names.get(target, target)} takes over")
 
     def changed(self, now):
         """The rota changed the watch: it waits before the next change."""

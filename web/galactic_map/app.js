@@ -16,7 +16,7 @@ if (window.self !== window.top) document.documentElement.classList.add('embedded
 const ORIENTATION = 'galactic-north-up-east-right-v3';
 const FOV_HALF = 17.5 * Math.PI / 180;
 const LAYERS = ['Regions', 'Travel', 'Planned', 'Expedition', 'Return', 'Sectors', 'Valuable', 'Biology', 'Codex',
-  'Photos', 'Recon', 'Revisit', 'Bookmarks', 'Annotations'];
+  'Photos', 'Recon', 'Revisit', 'Bookmarks', 'Orders', 'Annotations'];
 const LAYER_INFO = {
   Regions: {label: 'Codex regions', shape: 'hexagon', tone: 'border'},
   Travel: {label: 'Where you have been', shape: 'line', tone: 'accent'},
@@ -31,6 +31,8 @@ const LAYER_INFO = {
   Recon: {label: 'Recon candidates', shape: 'triangle', tone: 'orange'},
   Revisit: {label: 'Unfinished surveys', shape: 'ring', tone: 'red'},
   Bookmarks: {label: 'Bookmarks', shape: 'star', tone: 'orange'},
+  // 5.7.7: where the crew's orders point.
+  Orders: {label: 'Crew orders', shape: 'triangle', tone: 'yellow'},
   Annotations: {label: 'Your map marks', shape: 'cross', tone: 'text'},
 };
 const MARK_TONES = {Note: 'text', Danger: 'red', 'Region of Interest': 'yellow', 'Survey Target': 'green', Waypoint: 'accent'};

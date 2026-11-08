@@ -21,7 +21,7 @@ MAX_MOMENTS = 900
 # The highlights worth a moment on the tape (jumps are the trail itself).
 MOMENT_KINDS = {
     "RARE": "rare", "VALUABLE": "valuable", "CODEX": "codex", "BIO": "bio", "FSS": "survey",
-    "SALE": "sale", "LOSS": "loss", "PHOTO": "photo", "NOTE": "note", "DEBRIEF": "debrief",
+    "SALE": "sale", "LOSS": "loss", "PHOTO": "photo", "NOTE": "note", "DEBRIEF": "debrief", "ORDER": "order",
 }
 FIND_KINDS = {"MaterialDiscovered": "material", "DataScanned": "data", "DatalinkScan": "data", "DatalinkVoucher": "data"}
 # A stretch longer than this with nothing happening is "quiet" (skippable).

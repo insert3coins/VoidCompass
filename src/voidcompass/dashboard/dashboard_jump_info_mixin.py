@@ -36,6 +36,25 @@ class DashboardJumpInfoMixin:
                 }
                 self._jump_info_prefetch(name)
 
+    def _system_quiet(self, name):
+        """5.7.7: worth asking you to scan? True (five visits a year or fewer),
+        False (busier), None (EDSM hasn't answered). The arrival's traffic is
+        usually here already: Jump Info asked EDSM when you targeted it."""
+        from voidcompass.exploration import system_traffic
+        key = str(name or "").strip().casefold()
+        if not key:
+            return None
+        cached = (getattr(self, "_jump_info_intel", None) or {}).get(key)
+        if cached and cached[1].get("available", True):
+            intel = cached[1]
+            if not intel.get("known"):
+                return True
+            return system_traffic.quiet(intel.get("traffic") or {}, intel.get("discovered_at") or "")
+        if key == str(getattr(self, "current_sys", "") or "").casefold() and getattr(self, "_system_traffic_resolved", False):
+            traffic = getattr(self, "system_traffic", None) or {}
+            return system_traffic.quiet(traffic, traffic.get("discovered_at") or "")
+        return None
+
     def _jump_info_prefetch(self, name):
         key = str(name or "").strip().casefold()
         if not key:

@@ -1,0 +1,181 @@
+/* Crew Orders (orders.js, 5.7.7). Interface colours are theme tokens. Each
+   officer has one fixed identity colour (its display's own hue), used only
+   for its markers: the edge of a card, its glyph, its stage dot. */
+
+#orders-workspace {
+  --ord-watcher: #e0574f; --ord-aster: #d9a441; --ord-axiom: #8f9bff; --ord-meridian: #3fbf8f; --ord-lyra: #74ddff;
+  container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0;
+}
+#orders-workspace .ord-watcher { --ord: var(--ord-watcher); }
+#orders-workspace .ord-aster { --ord: var(--ord-aster); }
+#orders-workspace .ord-axiom { --ord: var(--ord-axiom); }
+#orders-workspace .ord-meridian { --ord: var(--ord-meridian); }
+#orders-workspace .ord-lyra { --ord: var(--ord-lyra); }
+#orders-workspace button { cursor: pointer; }
+#orders-workspace button.cockpit-button { min-height: 30px; padding: 0 12px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+#orders-workspace button.cockpit-button.primary { border-color: var(--accent); color: var(--accent); }
+#orders-workspace button.cockpit-button.ghost { background: transparent; }
+#orders-workspace button.cockpit-button.danger { color: var(--red); }
+#orders-workspace h4 { margin: 2px 0 8px; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+#orders-workspace h3 { margin: 0; color: var(--text); font: 600 16px "Segoe UI", sans-serif; }
+
+.ord-page { display: grid; gap: 12px; min-width: 0; }
+
+/* The bridge: the five officers and the offer controls. */
+.ord-bridge { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 12px; border: 1px solid var(--border-soft); border-left: 3px solid var(--accent); background: var(--panel); }
+.ord-crew { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ord-crew li { display: flex; align-items: center; gap: 7px; padding: 5px 10px 5px 7px; border: 1px solid var(--border-soft); background: var(--inset); }
+.ord-crew li.on-watch { border-color: var(--ord); box-shadow: inset 0 -2px 0 var(--ord); }
+.ord-crew i { color: var(--ord); font-style: normal; font-size: 15px; }
+.ord-crew span { display: grid; }
+.ord-crew b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.ord-crew small { color: var(--muted); font: 10px "Segoe UI", sans-serif; }
+.ord-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-left: auto; }
+.ord-pace, .ord-why-now { color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.ord-why-now { color: var(--dim); }
+.ord-notice { color: var(--green); font: 600 11px "Segoe UI", sans-serif; }
+.ord-notice.warn { color: var(--yellow); }
+.ord-status-line:empty { display: none; }
+
+.ord-tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--border-soft); }
+.ord-tabs button { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.ord-tabs button.active { border-bottom-color: var(--accent); color: var(--text); }
+.ord-tabs button b { min-width: 16px; padding: 1px 4px; background: var(--accent); color: var(--panel); font-size: 9px; text-align: center; }
+
+.ord-body { display: grid; gap: 14px; min-width: 0; }
+.ord-section { min-width: 0; }
+.ord-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; align-items: start; }
+.ord-empty, .ord-dim { margin: 0; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.ord-empty { padding: 14px; border: 1px dashed var(--border-soft); }
+
+/* An order. */
+.ord-card { display: grid; gap: 9px; padding: 12px 14px; border: 1px solid var(--border-soft); border-left: 3px solid var(--ord, var(--accent)); background: var(--panel); min-width: 0; }
+.ord-card.offer { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ord, var(--accent)) 25%, transparent); }
+.ord-card header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ord-officer { display: inline-flex; align-items: center; gap: 5px; color: var(--ord, var(--text)); font: 700 10px Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.ord-officer i { font-style: normal; font-size: 13px; }
+.ord-officer em { margin-left: 4px; padding: 1px 4px; border: 1px solid var(--ord); font-style: normal; font-size: 8px; }
+.ord-size { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.ord-time { margin-left: auto; color: var(--muted); font: 10px "Segoe UI", sans-serif; }
+.ord-brief { margin: 0; color: var(--text); font: 12.5px/1.45 "Segoe UI", sans-serif; }
+.ord-line { margin: 0; padding: 7px 10px; border-left: 2px solid var(--ord, var(--accent)); background: var(--inset); }
+.ord-line p { margin: 0; color: var(--text); font: italic 12px/1.45 "Segoe UI", sans-serif; }
+.ord-line cite { display: block; margin-top: 3px; color: var(--ord, var(--muted)); font: 700 9px Consolas, monospace; font-style: normal; letter-spacing: .12em; text-transform: uppercase; }
+.ord-objectives { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.ord-objectives li { display: grid; grid-template-columns: 16px minmax(0, 1fr) 90px; align-items: center; gap: 8px; color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.ord-objectives li.done { color: var(--muted); grid-template-columns: 16px minmax(0, 1fr); }
+.ord-objectives li b { color: var(--ord, var(--accent)); }
+.ord-objectives li.done b { color: var(--green); }
+.ord-bar { position: relative; display: block; height: 4px; background: var(--inset); overflow: hidden; }
+.ord-bar i { position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--ord, var(--accent)); }
+.ord-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.ord-progress .ord-bar { height: 6px; }
+.ord-progress b { color: var(--text); font: 700 11px Consolas, monospace; }
+.ord-target { margin: 0; color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.ord-target b { margin-right: 6px; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.ord-target em { margin-left: 6px; color: var(--accent); font-style: normal; }
+.ord-why summary { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; cursor: pointer; }
+.ord-why ul { display: grid; gap: 4px; margin: 6px 0 0; padding: 0; list-style: none; }
+.ord-why li { display: grid; gap: 1px; padding-left: 9px; border-left: 1px solid var(--border-soft); }
+.ord-why span { color: var(--text); font: 11.5px "Segoe UI", sans-serif; }
+.ord-why small { color: var(--muted); font: 10px "Segoe UI", sans-serif; }
+.ord-card footer, .ord-campaign footer { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
+
+/* The campaign. */
+.ord-campaign { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border-soft); border-top: 3px solid var(--ord, var(--accent)); background: var(--panel); }
+.ord-campaign > header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.ord-campaign > header > b { margin-left: auto; color: var(--text); font: 700 14px Consolas, monospace; }
+.ord-stages { display: flex; flex-wrap: wrap; gap: 0; margin: 0; padding: 0; list-style: none; counter-reset: stage; }
+.ord-stages li { position: relative; display: flex; align-items: center; gap: 8px; flex: 1 1 150px; min-width: 0; padding: 8px 10px 8px 0; color: var(--muted); }
+.ord-stages li::after { content: ""; position: absolute; left: 26px; right: 0; top: 50%; height: 1px; background: var(--border-soft); z-index: 0; }
+.ord-stages li:last-child::after { display: none; }
+.ord-stages i { position: relative; z-index: 1; display: grid; place-items: center; flex: none; width: 24px; height: 24px; border: 1px solid var(--ord, var(--border)); background: var(--panel); color: var(--ord, var(--muted)); font: 700 10px Consolas, monospace; font-style: normal; }
+.ord-stages li.done i { background: var(--ord); color: var(--panel); }
+.ord-stages li.current i { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ord) 35%, transparent); }
+.ord-stages span { position: relative; z-index: 1; display: grid; min-width: 0; padding-right: 8px; background: var(--panel); }
+.ord-stages b { overflow: hidden; color: var(--text); font: 600 11.5px "Segoe UI", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.ord-stages li:not(.current):not(.done) b { color: var(--muted); }
+.ord-stages small { color: var(--dim); font: 10px "Segoe UI", sans-serif; text-transform: capitalize; }
+.ord-stage-now { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--inset); }
+.ord-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ord-choice h4 { width: 100%; margin: 0; }
+.ord-scenes { display: grid; gap: 8px; }
+.ord-scene { display: grid; gap: 4px; padding: 8px 10px; border-left: 1px solid var(--border-soft); }
+.ord-scene small { color: var(--dim); font: 10px "Segoe UI", sans-serif; }
+.ord-scene p { margin: 0; color: var(--text); font: 12px/1.45 "Segoe UI", sans-serif; }
+.ord-scene p b { margin-right: 8px; color: var(--ord); font: 700 9px Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+
+/* Service record: the roster of five, and the officer picked in full. */
+.ord-service { display: grid; grid-template-columns: minmax(250px, 340px) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.ord-roster { display: grid; grid-auto-rows: 1fr; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ord-roster-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; grid-template-rows: auto auto auto; gap: 3px 8px; align-items: center;
+  width: 100%; height: 100%; padding: 9px 12px; border: 1px solid var(--border-soft); border-left: 3px solid var(--ord); background: var(--panel); color: var(--text); text-align: left; }
+.ord-roster-row:hover { background: var(--inset); }
+.ord-roster-row.chosen { border-color: var(--ord); box-shadow: inset 0 0 0 1px var(--ord); background: var(--inset); }
+.ord-roster-row i { grid-row: span 3; color: var(--ord); font-style: normal; font-size: 16px; }
+.ord-roster-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ord-roster-name b { font: 600 13px "Segoe UI", sans-serif; }
+.ord-roster-name em { padding: 0 5px; border: 1px solid var(--ord); color: var(--ord); font: 700 8px/14px Consolas, monospace; font-style: normal; letter-spacing: .12em; }
+.ord-roster-row strong { color: var(--text); font: 600 11px "Segoe UI", sans-serif; text-align: right; }
+.ord-roster-row .ord-bar { grid-column: 2 / -1; background: var(--border-soft); }
+.ord-roster-row small { color: var(--muted); font: 10px "Segoe UI", sans-serif; }
+.ord-roster-row .ord-roster-files { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; text-align: right; }
+.ord-dossier { display: grid; align-content: start; gap: 12px; padding: 14px 16px; border: 1px solid var(--border-soft); border-top: 3px solid var(--ord); background: var(--panel); min-width: 0; }
+.ord-dossier header { display: flex; align-items: center; gap: 8px; }
+.ord-dossier header strong { margin-left: auto; color: var(--text); font: 600 13px "Segoe UI", sans-serif; }
+.ord-dossier dl { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.ord-dossier dl div { display: grid; gap: 2px; padding: 7px 8px; background: var(--inset); }
+.ord-dossier dt { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .14em; }
+.ord-dossier dd { margin: 0; color: var(--text); font: 700 16px Consolas, monospace; }
+.ord-file h4 { margin: 0 0 4px; }
+.ord-muted { margin: 0; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.ord-link { margin-left: 6px; padding: 0; border: 0; background: none; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.ord-file ol { display: grid; gap: 7px; margin: 8px 0 0; padding: 0; list-style: none; }
+.ord-file li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 6px; }
+.ord-file li b { color: var(--ord); font: 700 10px Consolas, monospace; }
+.ord-file li p { margin: 0; color: var(--text); font: 13px/1.55 Georgia, serif; max-width: 72ch; }
+.ord-file li.locked p { color: var(--dim); font: italic 11px "Segoe UI", sans-serif; }
+.ord-ribbons { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ord-ribbons.hands { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.ord-ribbons.hands li.earned { border-color: var(--ord); }
+.ord-ribbons.hands li.earned i { background: var(--ord); }
+#orders-workspace h4.ord-subhead { margin-top: 12px; }
+.ord-ribbons li { display: grid; grid-template-columns: 22px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--border-soft); background: var(--panel); opacity: .5; }
+.ord-ribbons li.earned { opacity: 1; border-color: var(--accent); }
+.ord-ribbons i { grid-row: span 2; width: 18px; height: 22px; background: linear-gradient(90deg, var(--accent) 0 33%, var(--yellow) 33% 66%, var(--accent) 66%); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%); }
+.ord-ribbons li:not(.earned) i { background: var(--border); }
+.ord-ribbons b { color: var(--text); font: 600 11.5px "Segoe UI", sans-serif; }
+.ord-ribbons small { color: var(--muted); font: 10px "Segoe UI", sans-serif; }
+.ord-ribbons em { grid-column: 2; color: var(--accent); font: italic 10px "Segoe UI", sans-serif; }
+.ord-ribbons li { grid-template-rows: auto auto auto; }
+
+/* Log. */
+.ord-log { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.ord-log li { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 2px 10px; align-items: baseline; padding: 7px 10px; border-left: 2px solid var(--ord, var(--border)); background: var(--panel); }
+.ord-log em { grid-column: 2 / -1; color: var(--muted); font: 11px "Segoe UI", sans-serif; font-style: normal; }
+.ord-log b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.ord-log small { color: var(--muted); font: 10px "Segoe UI", sans-serif; }
+.ord-status { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.ord-log li.done .ord-status { color: var(--green); }
+.ord-log li.declined .ord-status, .ord-log li.abandoned .ord-status { color: var(--yellow); }
+
+.ord-off { display: grid; gap: 8px; justify-items: start; padding: 18px; border: 1px dashed var(--border-soft); }
+.ord-off p { margin: 0; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+
+@container (max-width: 1100px) {
+  .ord-ribbons { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .ord-ribbons.hands { grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr)); }
+}
+@container (max-width: 820px) {
+  .ord-service { grid-template-columns: minmax(0, 1fr); }
+  .ord-ribbons { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container (max-width: 640px) {
+  .ord-ribbons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ord-actions { margin-left: 0; }
+  .ord-dossier dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ord-log li { grid-template-columns: minmax(0, 1fr); }
+  .ord-objectives li { grid-template-columns: 16px minmax(0, 1fr); }
+  .ord-objectives li .ord-bar { grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) { #orders-workspace * { transition: none !important; } }

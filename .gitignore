@@ -111,3 +111,9 @@ models/jarvis/*.7z
 models/jarvis/metadata.csv
 models/data/installed.json
 models/picard/installed.json
+
+# Private planning notes and todos, kept on this PC.
+/notes/
+
+# Tests stay on this PC, not in the repo.
+/tests/

@@ -571,6 +571,53 @@ def exploration_body_search(
     return result
 
 
+def bio_landmarks(reference_system, max_distance=500, size=80):
+    """5.7.7: bodies near a system with biology others have logged, nearest
+    first, each with its species and colours: ``[{system, body, distance,
+    coords, system_id64, variants: [(species, colour), ...]}]``. For Crew
+    Orders, which pick out the ones missing from your Codex."""
+    reference = str(reference_system or "").strip()
+    if not reference:
+        raise SpanshError("No reference system known yet.")
+    body = {
+        "filters": {"distance": {"min": 0, "max": max(1, min(5000, int(max_distance)))},
+                    "signals": [{"name": "Biological", "value": [1, 100]}]},
+        "sort": [{"distance": {"direction": "asc"}}],
+        "size": max(1, min(200, int(size))), "page": 0, "reference_system": reference,
+    }
+    try:
+        response = requests.post(f"{BASE}/bodies/search", json=body, headers=HEADERS, timeout=SUBMIT_TIMEOUT)
+    except requests.RequestException as exc:
+        raise SpanshError(f"Could not reach Spansh: {exc}") from exc
+    if response.status_code >= 400:
+        raise SpanshError(_error_text(response))
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise SpanshError("Spansh returned invalid body-search data.") from exc
+    rows = []
+    for raw in (payload or {}).get("results") or () if isinstance(payload, dict) else ():
+        if not isinstance(raw, dict):
+            continue
+        variants = []
+        for item in raw.get("landmarks") or ():
+            if not isinstance(item, dict) or not item.get("variant"):
+                continue
+            pair = (str(item.get("subtype") or "").strip(), str(item.get("variant") or "").strip())
+            if pair[0] and pair not in variants:
+                variants.append(pair)
+        if not variants:
+            continue
+        coords = [raw.get("system_x"), raw.get("system_y"), raw.get("system_z")]
+        try:
+            coords = [float(value) for value in coords]
+        except (TypeError, ValueError):
+            coords = None
+        rows.append({"system": raw.get("system_name"), "body": raw.get("name"), "distance": raw.get("distance"),
+                     "coords": coords, "system_id64": raw.get("system_id64"), "variants": variants})
+    return rows
+
+
 def _xyz(row):
     """A Spansh system's [x, y, z], or None."""
     try:

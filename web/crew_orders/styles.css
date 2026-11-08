@@ -1,0 +1,87 @@
+/* Crew Orders (5.7.7), in the Navigation HUD's language: frame and corner
+   brackets, Bahnschrift, state notice. Colours are theme tokens; the values
+   here are only the fallbacks before the first snapshot. */
+:root {
+  color-scheme: dark;
+  --bg: #070b10; --panel: #0d141c; --inset: #0a1118; --border: #243746;
+  --accent: #00d1ff; --orange: #ff7a18; --green: #4ee59b; --yellow: #ffd166;
+  --red: #ff6075; --text: #dce8ef; --muted: #85939d; --dim: #52616c;
+  --scale: 1;
+  --hud: var(--orange);
+  --hud-soft: color-mix(in srgb, var(--hud) 62%, transparent);
+  --hud-faint: color-mix(in srgb, var(--hud) 22%, transparent);
+  --hud-ghost: color-mix(in srgb, var(--hud) 8%, transparent);
+  --font-hud: "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif;
+  --font-wide: "Bahnschrift", "Segoe UI", sans-serif;
+  --state: var(--hud);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
+body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
+
+/* ---------------------------------------------------------------- frame -- */
+.orders {
+  position: relative; width: 100%; color: var(--text); font-variant-numeric: tabular-nums;
+  background:
+    radial-gradient(ellipse at 18% -30%, color-mix(in srgb, var(--state) 14%, transparent), transparent 58%),
+    linear-gradient(0deg, var(--hud-ghost) 1px, transparent 1px) 0 0 / 100% 4px,
+    linear-gradient(160deg, color-mix(in srgb, var(--inset) 94%, var(--hud)), var(--panel) 48%, var(--bg));
+  isolation: isolate;
+}
+.orders.empty { opacity: 0; }
+.orders.here { --state: var(--accent); }
+/* Never clip the page itself: only this decorative inset. */
+.orders::before {
+  content: ""; position: absolute; inset: 2px; z-index: -1; border: 1px solid var(--hud-faint);
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+  box-shadow: inset 0 0 26px rgba(0, 0, 0, .8);
+}
+.frame-corners { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.frame-corners i { position: absolute; width: 18px; height: 12px; border: 0 solid var(--hud-soft); }
+.frame-corners i:nth-child(1) { left: 4px; top: 4px; border-left-width: 2px; border-top-width: 2px; }
+.frame-corners i:nth-child(2) { right: 4px; top: 4px; border-right-width: 2px; border-top-width: 2px; }
+.frame-corners i:nth-child(3) { right: 4px; bottom: 4px; border-right-width: 2px; border-bottom-width: 2px; }
+.frame-corners i:nth-child(4) { left: 4px; bottom: 4px; border-left-width: 2px; border-bottom-width: 2px; }
+.scanlines { position: absolute; inset: 0; z-index: 30; pointer-events: none; opacity: .2; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .32) 3px); }
+.vignette { position: absolute; inset: 0; z-index: 29; pointer-events: none; box-shadow: inset 0 0 22px rgba(0, 0, 0, .78); }
+.orders.no-crt .scanlines, .orders.no-crt .vignette { display: none; }
+
+.content { position: relative; zoom: var(--scale); display: flex; flex-direction: column; gap: 5px; padding: 11px 13px 11px; }
+
+/* --------------------------------------------------------------- notice -- */
+.notice {
+  position: relative; min-width: 0; min-height: 26px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px;
+  padding: 2px 8px 2px 7px; border-left: 3px solid var(--state);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--state) 18%, transparent), color-mix(in srgb, var(--state) 5%, transparent) 60%, transparent);
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
+}
+.notice-tag { padding: 2px 5px 1px; border: 1px solid color-mix(in srgb, var(--state) 55%, transparent); color: var(--state); font: 700 8px var(--font-wide); letter-spacing: .16em; }
+.orders-title { min-width: 0; overflow-wrap: anywhere; color: var(--state); font: 700 15px/1.1 var(--font-hud); letter-spacing: .05em; text-shadow: 0 0 10px color-mix(in srgb, var(--state) 38%, transparent); }
+
+
+/* ----------------------------------------------------------------- body -- */
+/* Each officer's identity hue marks the order's edge; the rest is theme. */
+.by-watcher { --who: #e0574f; } .by-aster { --who: #d9a441; } .by-axiom { --who: #8f9bff; }
+.by-meridian { --who: #3fbf8f; } .by-lyra { --who: #74ddff; }
+.order { --state: var(--who, var(--hud)); display: flex; flex-direction: column; gap: 5px; }
+.orders-list { display: flex; flex-direction: column; gap: 10px; }
+.order + .order { padding-top: 9px; border-top: 1px solid var(--hud-faint); }
+.order.offer .notice-tag { background: color-mix(in srgb, var(--state) 22%, transparent); }
+.orders-from { padding-left: 10px; overflow-wrap: anywhere; color: var(--state); font: 700 10px var(--font-wide); letter-spacing: .12em; }
+.orders-from small { display: block; color: var(--hud-soft); font: 700 9px var(--font-wide); letter-spacing: .12em; }
+.orders-steps { display: grid; gap: 3px; padding-left: 10px; }
+.orders-steps .step { display: grid; grid-template-columns: max-content minmax(0, 1fr) 56px; align-items: center; gap: 6px; color: var(--text); font: 600 10.5px var(--font-hud); letter-spacing: .03em; }
+.orders-steps .step.done { color: var(--muted); grid-template-columns: max-content minmax(0, 1fr); }
+.orders-steps .step i { color: var(--state); font-style: normal; }
+.orders-steps .step.done i { color: var(--green); }
+.orders-steps .step span { min-width: 0; overflow-wrap: anywhere; }
+.orders-steps .step em { position: relative; height: 3px; background: var(--hud-faint); }
+.orders-steps .step em::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); background: var(--state); }
+.orders-line { padding-left: 10px; overflow-wrap: anywhere; color: var(--muted); font: italic 10px/1.35 "Segoe UI", sans-serif; }
+.orders-line:empty { display: none; }
+.orders-figures { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 3px; padding-top: 5px; border-top: 1px solid var(--hud-faint); color: var(--text); font: 700 9.5px var(--font-wide); letter-spacing: .08em; }
+.orders-figures:empty { display: none; }
+.orders-figures b { color: var(--hud-soft); font-weight: 700; }
+.orders.reduced-motion * { animation: none !important; transition: none !important; }

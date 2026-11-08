@@ -306,6 +306,9 @@ class DashboardJourneyMixin:
                 sources["sky"] = sky()[0]
             except Exception as exc:
                 logging.debug("Wrapped constellations skipped: %s", exc)
+        ledger = getattr(self, "order_ledger", None)
+        if ledger is not None:
+            sources["orders"] = {"history": list(ledger.data.get("history") or ()), "ribbons": dict(ledger.data.get("ribbons") or {})}
         snapshot = getattr(self, "_crew_snapshot", None)
         if callable(snapshot):
             try:

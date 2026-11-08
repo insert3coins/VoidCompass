@@ -11,7 +11,7 @@ const MOMENTS = {
   first: ['⚑', 'First discovery'], footfall: ['⬩', 'First footfall'], rare: ['✦', 'Rare world'], valuable: ['◆', 'Valuable world'],
   codex: ['⬡', 'Codex'], bio: ['❦', 'Organics'], survey: ['◎', 'Survey'], sale: ['¤', 'Sale'], loss: ['✖', 'Ship lost'],
   photo: ['▣', 'Picture'], postcard: ['✉', 'Postcard'], material: ['◇', 'Material'], data: ['≋', 'Data'], note: ['✎', 'Note'],
-  debrief: ['■', 'Session end'], find: ['•', 'Find'],
+  debrief: ['■', 'Session end'], find: ['•', 'Find'], order: ['⚑', 'Crew order'],
 };
 
 export function createRecorder(env) {

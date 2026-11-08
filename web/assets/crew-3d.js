@@ -28,7 +28,8 @@ export function createCrewDisplay(canvas, identity) {
   const reactor=portrait?null:createCompanionCore({identity,time:uniforms.uTime,energy:uniforms.uEnergy,
     colour:uniforms.uColour,highlight:uniforms.uOther});
   if(reactor){reactor.group.position.z=.45;rig.add(reactor.group);}
-  scene.add(createCompanionFrame({colour:uniforms.uColour,energy:uniforms.uEnergy,opening:portrait?0:.48,
+  const service={value:0};
+  scene.add(createCompanionFrame({colour:uniforms.uColour,energy:uniforms.uEnergy,opening:portrait?0:.48,service,
     style:axiom?"scale":meridian?"compass":""}));
   const shader = (vertexShader,fragmentShader,extra={}) => new THREE.ShaderMaterial({vertexShader,fragmentShader,uniforms:{...uniforms,uOpacity:{value:1},...extra},
     transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide});
@@ -378,6 +379,9 @@ export function createCrewDisplay(canvas, identity) {
     setContext(model){
       const moved=life.context(model),felt=moods.context(model);
       const next=model?.moment&&typeof model.moment==="object"?model.moment:{};
+      // 5.7.7: service pips on the bezel, from your standing with this officer.
+      const pips=Math.max(0,Math.min(4,Math.round(Number(next.service)||0)));
+      if(pips!==service.value){service.value=pips;changed();}
       const fresh=JSON.stringify(next)!==JSON.stringify(moment);
       if(fresh){
         const jumps=Number(next.jumps)||0;

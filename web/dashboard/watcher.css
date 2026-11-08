@@ -510,3 +510,7 @@ body.reduced-motion .talk-mic::after { animation: none !important; }
 [data-overlay-only="true"] #watcher-talk-mic,
 [data-overlay-only="true"] .watcher-reset-panel,
 [data-overlay-only="true"] label:has([data-watcher-setting="heartbeat_thoughts"]) { display:none; }
+
+/* 5.7.7: what the watch rota is doing, under its switch. */
+.watcher-rota-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: -2px 0 6px; padding: 6px 10px; border-left: 2px solid var(--accent); background: var(--inset); color: var(--text); font: 11.5px "Segoe UI", sans-serif; }
+.watcher-rota-status button { padding: 3px 8px; border: 1px solid var(--accent); background: none; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .12em; cursor: pointer; }

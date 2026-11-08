@@ -14,11 +14,12 @@ import {handleTradingClick, handleTradingInput, handleTradingSubmit, renderTradi
 import {handleMiningClick, handleMiningInput, handleMiningSubmit, renderMining, resetMining} from "./mining.js";
 import {handleExpeditionsChange, handleExpeditionsClick, handleExpeditionsInput, handleExpeditionsSubmit, renderExpeditions, resetExpeditions} from "./expeditions.js";
 import {handlePlanetaryChange, handlePlanetaryClick, handlePlanetaryInput, handlePlanetarySubmit, renderPlanetary, resetPlanetary, setPlanetaryView} from "./planetary.js";
-import {renderWatcher} from "./watcher.js";
+import {renderWatcher, openWatcherTab} from "./watcher.js";
 import {renderCompanionChrome, renderCompanionStudio} from "./companion-ui.js";
 import {renderPostcards} from "./postcards.js";
 import {renderScreenshots} from "./screenshots.js";
 import {renderCapsules} from "./capsules.js";
+import {handleOrdersClick} from "./orders.js";
 import {renderTools} from "./tools.js";
 import {renderConstellation} from "./constellation.js";
 import {renderGames} from "./games.js";
@@ -125,7 +126,8 @@ for (const suite of PAGE_SUITES) {
   for (const [page] of suite.pages) PAGE_SUITE_BY_PAGE.set(page, suite);
 }
 // Ground & Exobio is the Planetary page's ON THE GROUND tab since 5.5.12.
-const LEGACY_PAGE_REDIRECTS = {operations: "overview", ground: "planet-materials", "system-map": "explore"};
+// 5.7.7: Crew Orders live on the companion page, in its ORDERS tab.
+const LEGACY_PAGE_REDIRECTS = {operations: "overview", ground: "planet-materials", "system-map": "explore", orders: "watcher"};
 
 const HOTKEY_MODIFIER_KEYS = new Set([
   "Alt", "AltGraph", "Control", "Meta", "OS", "Shift",
@@ -3135,6 +3137,14 @@ function settingsSectionBody(id, data) {
       + settingGroup("EXPEDITIONS", settingSelect({key: "expedition_risk_cr", label: "Data at risk", detail: "On an expedition, a nudge (and a word from your companion) each time the unsold data aboard passes another step of this.", value: String(number(value.expedition_risk_cr, 100000000)), options: [["0", "Off"], ["25000000", "25 M CR"], ["50000000", "50 M CR"], ["100000000", "100 M CR"], ["250000000", "250 M CR"], ["500000000", "500 M CR"], ["1000000000", "1 BN CR"]]})
         + settingSwitch({key: "expedition_gec_enabled", label: "Points of interest near the route", detail: "Sights from EDAstro's Galactic Exploration Catalog near your expedition's route, on its PLACES tab. Fetched from edastro.com at most once a day; off means nothing is fetched.", checked: value.expedition_gec_enabled !== false})
         + settingSelect({key: "expedition_poi_range_ly", label: "How far off the route", detail: "Points of interest this close to the line of your route are shown.", value: number(value.expedition_poi_range_ly, 150), options: [[50, "50 ly"], [100, "100 ly"], [150, "150 ly"], [250, "250 ly"], [500, "500 ly"], [1000, "1,000 ly"]], type: "number"}))
+      + settingGroup("CREW ORDERS", settingSwitch({key: "orders_enabled", label: "Crew orders", detail: "The officers ask things of you: a species you've never logged, a faster route, a better price, a long journey for the Watcher. The journal finishes each one. Your orders are on the companion page, under ORDERS.", checked: value.orders_enabled !== false})
+        + settingSelect({key: "orders_frequency", label: "How often they offer", detail: "Never in a fight, a menu or a jump, and never in a session's first minutes. You can always ask for one on the Crew Orders page.", value: value.orders_frequency || "session", options: [["session", "Once a session"], ["sometimes", "Now and then (every two hours at most)"], ["often", "Often (every hour at most)"], ["off", "Only when I ask"]]})
+        + [["exobiology", "Exobiology", "Species and colours missing from your Codex, and cashing in samples."], ["exploration", "Exploration", "Worlds worth mapping, full system surveys, first discoveries, selling charts."], ["travel", "Travel and routes", "Neutron routes, regions you've never visited, distance records."], ["trade", "Trade", "Better prices for what's in your hold."], ["colonisation", "Colonisation", "Deliveries your construction sites still need."], ["powerplay", "Powerplay", "A week's merits for your power."]].map(([kind, label, detail]) => settingSwitch({key: `orders_kind_${kind}`, label: `Orders: ${label}`, detail, checked: value[`orders_kind_${kind}`] !== false})).join("")
+        + settingSwitch({key: "orders_campaigns", label: "Campaigns", detail: "Orders in several stages, handed between officers, with targets from your own record. One at a time.", checked: value.orders_campaigns !== false})
+        + settingSwitch({key: "orders_watcher", label: "The Watcher's long orders and errands", detail: "Far places it wants to see, and odd small errands. The reward is a story you can't hear any other way.", checked: value.orders_watcher !== false})
+        + settingSwitch({key: "orders_copy_target", label: "Copy the target when you accept", detail: "The order's system goes on the clipboard, ready to paste into the galaxy map.", checked: value.orders_copy_target !== false})
+        + settingSwitch({key: "orders_open_map", label: "Open the galaxy map when you accept", detail: "Uses your Elite key bindings (Voice settings), then you paste the system into the search.", checked: value.orders_open_map === true})
+        + settingActions(`<button type="button" data-page="watcher" data-watcher-open="orders">CREW ORDERS</button>`, "crew orders officers campaigns errands"))
       + settingGroup("HOME", `${settingText({key: "home_system", id: "setting-home", label: "Home system", detail: "Distances \"from home\" start here: your companion's remarks and the Galaxy Minimap. Leave it empty for Sol.", value: value.home_system, placeholder: "Sol", status: homeStatus(data.home)})}`)
       + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
       + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingNote("Unlocks pop up in the cockpit's Achievements overlay: switch it on or off, and place it, in Overlay Studio.")}`);
@@ -4099,6 +4109,7 @@ async function eventLoop() {
 }
 
 function showPage(name) {
+  if (name === "orders") openWatcherTab("orders");
   if (name === "ground") setPlanetaryView("ground");
   if (name === "system-map") setExploreView("map", EXPLORE_WORKSPACE_UI);
   name = LEGACY_PAGE_REDIRECTS[name] || name;
@@ -4345,6 +4356,7 @@ document.addEventListener("click", async (event) => {
   }
   if (handleColonisationClick(event, WORKSHOP_UI, () => renderColonisationWorkspace(model.workspace?.data || {}))) return;
   if (handleBgsClick(event, WORKSHOP_UI)) return;
+  if (handleOrdersClick(event, WORKSHOP_UI)) return;
   if (handleTradingClick(event, WORKSHOP_UI)) return;
   if (handleMiningClick(event, WORKSHOP_UI)) return;
   if (handleExpeditionsClick(event, WORKSHOP_UI)) return;
@@ -4379,6 +4391,8 @@ document.addEventListener("click", async (event) => {
   }
   const pageButton = event.target.closest("[data-page]");
   if (pageButton) {
+    // Links into the companion page may name its tab (5.7.7: ORDERS).
+    if (pageButton.dataset.page === "watcher" && pageButton.dataset.watcherOpen) openWatcherTab(pageButton.dataset.watcherOpen);
     // Links into Explore may name the view they belong to.
     if (pageButton.dataset.page === "explore" && pageButton.dataset.exploreView) {
       setExploreView(pageButton.dataset.exploreView, EXPLORE_WORKSPACE_UI);

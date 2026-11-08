@@ -22,7 +22,7 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 
 /* ---------------------------------------------------------------- frame -- */
 .route {
-  position: relative; width: 100%; height: 100%; color: var(--text); font-variant-numeric: tabular-nums;
+  position: relative; width: 100%; color: var(--text); font-variant-numeric: tabular-nums;
   background:
     radial-gradient(ellipse at 18% -30%, color-mix(in srgb, var(--state) 14%, transparent), transparent 58%),
     linear-gradient(0deg, var(--hud-ghost) 1px, transparent 1px) 0 0 / 100% 4px,
@@ -58,15 +58,15 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
   clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
 }
 .notice-tag { padding: 2px 5px 1px; border: 1px solid color-mix(in srgb, var(--state) 55%, transparent); color: var(--state); font: 700 8px var(--font-wide); letter-spacing: .16em; }
-#route-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--state); font: 700 15px/1.1 var(--font-hud); letter-spacing: .05em; text-shadow: 0 0 10px color-mix(in srgb, var(--state) 38%, transparent); }
+#route-title { min-width: 0; overflow-wrap: anywhere; color: var(--state); font: 700 15px/1.1 var(--font-hud); letter-spacing: .05em; text-shadow: 0 0 10px color-mix(in srgb, var(--state) 38%, transparent); }
 .route-warnings { display: flex; flex-direction: column; gap: 2px; }
-.route-warnings span { padding-left: 9px; border-left: 2px solid var(--yellow); color: var(--yellow); font: 700 9.5px var(--font-wide); letter-spacing: .1em; }
+.route-warnings span { padding-left: 9px; border-left: 2px solid var(--yellow); overflow-wrap: anywhere; color: var(--yellow); font: 700 9.5px var(--font-wide); letter-spacing: .1em; }
 
 
 /* ----------------------------------------------------------------- body -- */
 .route.sell { --state: var(--accent); }
 .route.done { --state: var(--green); }
-.route-place { padding-left: 10px; color: var(--text); font: 700 11px var(--font-wide); letter-spacing: .04em; }
+.route-place { padding-left: 10px; overflow-wrap: anywhere; color: var(--text); font: 700 11px var(--font-wide); letter-spacing: .04em; }
 .route-place small { display: block; color: var(--hud-soft); font: 700 9px var(--font-wide); letter-spacing: .12em; }
 .route-figures { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 3px; padding-top: 5px; border-top: 1px solid var(--hud-faint); color: var(--text); font: 700 9.5px var(--font-wide); letter-spacing: .08em; }
 .route-figures b { color: var(--hud-soft); font-weight: 700; }

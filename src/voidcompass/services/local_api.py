@@ -67,6 +67,7 @@ PROVIDER_CALLS = (
     "api_return_later_action", "api_neutron_route", "api_import_neutron_route",
     "api_wrapped_years", "api_wrapped", "api_recorder_sessions", "api_recorder_tape",
     "api_rigs", "api_rig_mark", "api_rigs_clear", "api_mining_record",
+    "api_orders", "api_orders_ask", "api_orders_answer", "api_orders_abandon",
 )
 
 
@@ -410,6 +411,11 @@ class LocalApi:
             ("GET", r"/rigs", lambda req: self._call("api_rigs"), False),
             ("POST", r"/rigs/clear", self._clear_rigs, True),
             ("POST", r"/rigs/([1-6])", lambda req, slot: self._call("api_rig_mark", int(slot)), True),
+            # Crew Orders (5.7.7): the officers' orders, and your answers.
+            ("GET", r"/orders", lambda req: self._call("api_orders"), False),
+            ("POST", r"/orders/ask", lambda req: self._call("api_orders_ask"), True),
+            ("POST", r"/orders/(accept|decline|later)", self._answer_order, True),
+            ("POST", r"/orders/abandon", self._abandon_order, True),
         ]
         return [(method, re.compile(f"^{re.escape(PREFIX)}{pattern}/?$"), handler, control)
                 for method, pattern, handler, control in rows]
@@ -628,6 +634,15 @@ class LocalApi:
         if not entry_id:
             raise ApiError(400, 'Which place? {"id": "..."} from /api/v1/route/return-later')
         return self._call("api_return_later_action", action, entry_id)
+
+    def _answer_order(self, req, answer):
+        return self._call("api_orders_answer", answer, str(req.body.get("id") or "")[:40])
+
+    def _abandon_order(self, req):
+        order_id = str(req.body.get("id") or "")[:40]
+        if not order_id:
+            raise ApiError(400, 'Say which order: {"id": "o-..."} (GET /orders lists them)')
+        return self._call("api_orders_abandon", order_id)
 
     def _leave_capsule(self, req):
         note = " ".join(str(req.body.get("note") or "").split())

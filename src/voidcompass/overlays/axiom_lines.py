@@ -1,5 +1,5 @@
 """Axiom's words: greetings, rundowns, control replies and composed banks (5.7.4)."""
-from voidcompass.overlays import officer_habits, talk_replies
+from voidcompass.overlays import officer_docking, officer_habits, talk_replies
 from voidcompass.overlays import crew_lore, axiom_events, axiom_keepsakes, axiom_lore, axiom_watch, axiom_survey, persona_lines, route_lines, survey_report, axiom_field, axiom_more, rhino_lines, mining_talk, ship_life, squadron_talk
 
 GREETINGS = (
@@ -195,6 +195,8 @@ BANK = persona_lines.Bank(greetings=GREETINGS, restrained_greetings=RESTRAINED_G
 EVENTS, RESTRAINED_EVENTS = BANK.EVENTS, BANK.RESTRAINED_EVENTS
 # Refining in an SRV only happens in the Rhino: the rigs' yield (5.7.5).
 RESTRAINED_EVENTS["mined_surface"], EVENTS["mined_surface"] = rhino_lines.officer_refining("axiom")
+# 5.7.7: docking anywhere but home.
+RESTRAINED_EVENTS["docked_away"], EVENTS["docked_away"] = officer_docking.officer("axiom")
 # 5.7.6: habit summaries in depth, and style lines that read right.
 officer_habits.apply("axiom", EVENTS, RESTRAINED_EVENTS)
 INTERESTS = axiom_survey.INTERESTS

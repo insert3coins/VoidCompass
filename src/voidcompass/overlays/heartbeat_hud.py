@@ -14,6 +14,7 @@ The eye itself stays lit, because a quiet game is not a broken link.
 This class only keeps the model; web/heartbeat draws it.
 """
 from collections import deque
+from pathlib import Path
 import time
 
 from voidcompass.core.application_runtime import OverlayWindowState
@@ -319,9 +320,15 @@ class HeartbeatHUD:
             lookup, action = getattr(self.mind, "lookup_provider", None), getattr(self.mind, "action_provider", None)
             self.mind.seen()
             self.mind.save()
-            self._mind_path = path
+            previous_path, self._mind_path = self._mind_path, path
             active = self.mind.voice_active
+            previous = self.mind
             self.mind = companions.create_mind(path, self.config)
+            # 5.7.7: a companion taking the watch (same commander) carries on
+            # from the last one, rather than remarking on everything again.
+            same_commander = previous_path is not None and path is not None and Path(previous_path).parent == Path(path).parent
+            if same_commander and hasattr(self.mind, "take_watch_from"):
+                self.mind.take_watch_from(previous)
             self.mind.lookup_provider, self.mind.action_provider = lookup, action
             self.mind.voice_active = active
             self._spoken_id = None
@@ -586,7 +593,7 @@ class HeartbeatHUD:
         if caption:
             voiced = (thought['id'], caption['full'])
         voice_state = self._voice_state(thought['id'])
-        return {'id': thought['id'], 'text': thought['text'], 'script': thought.get('script') or thought['text'],
+        return {**self._guest(thought), 'id': thought['id'], 'text': thought['text'], 'script': thought.get('script') or thought['text'],
                 'scope': f'{get_active_profile(self.config)}:{companions.identity(self.config)}',
                 # Said aloud (5.5.4): the page types it in time with the voice
                 # once it says whole thoughts.
@@ -599,6 +606,22 @@ class HeartbeatHUD:
                 # 5.6.1: a question to answer (the answer hotkeys, 1 to 3), and
                 # a story moment the eye shows once.
                 'question': thought.get('question'), 'effect': thought.get('effect') or ''}
+
+    def _guest(self, thought):
+        """5.7.7: a crewmate off watch speaking. The overlay shows their own
+        display while they talk, in their colour, with their service pips."""
+        speaker = str(thought.get('speaker') or '')
+        if not speaker or speaker == companions.identity(self.config) or speaker not in companions.IDENTITIES:
+            return {}
+        key = 'heartbeat_eye_color' if speaker == 'watcher' else f'{speaker}_hud_accent'
+        guest = {'speaker': speaker, 'speaker_accent': companions.normalize_accent(speaker, self.config.get(key))}
+        service = getattr(self, 'service_provider', None)
+        if callable(service):
+            try:
+                guest['speaker_service'] = int(service(speaker) or 0)
+            except Exception:
+                pass
+        return guest
 
     def thought_side(self):
         """The side asked for in Overlay Studio, or on Auto the side of the

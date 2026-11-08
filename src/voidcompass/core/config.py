@@ -164,6 +164,12 @@ COLOR_YELLOW = _themes.ACTIVE_PALETTE["yellow"]
 
 
 PROFILE_TEXT_SETTINGS = (
+    # 5.7.7: Crew Orders, how often and which kinds.
+    "orders_frequency",
+    # 5.7.7: crew banter, how often and how many talk.
+    "crew_banter",
+    "crew_banter_size",
+    "crew_banter_length",
     # 5.7.6: who takes each duty on the watch rota.
     "crew_rota_docked",
     "crew_rota_scanning",
@@ -261,6 +267,9 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_jump_info",
     "overlay_hotkey_colony_needs",
     "overlay_hotkey_trade_route",
+    "overlay_hotkey_crew_orders",
+    "overlay_hotkey_orders_accept",
+    "overlay_hotkey_orders_decline",
     "overlay_hotkey_expedition",
     "overlay_hotkey_hatchling",
     "overlay_hotkey_rig_tracker",
@@ -320,6 +329,24 @@ PROFILE_TEXT_SETTINGS = (
 )
 
 PROFILE_BOOL_SETTINGS = (
+    # 5.7.7: Crew Orders.
+    "orders_enabled",
+    # 5.7.7: crew banter, when they talk.
+    "crew_banter_flight",
+    "crew_banter_exploring",
+    "crew_banter_port",
+    "crew_banter_crew",
+    "crew_banter_quiet",
+    "orders_campaigns",
+    "orders_watcher",
+    "orders_copy_target",
+    "orders_open_map",
+    "orders_kind_exobiology",
+    "orders_kind_exploration",
+    "orders_kind_travel",
+    "orders_kind_trade",
+    "orders_kind_colonisation",
+    "orders_kind_powerplay",
     "overlay_hide_on_maps",
     "overlay_hide_in_menus",
     "overlay_transparency_fix",
@@ -379,6 +406,7 @@ PROFILE_BOOL_SETTINGS = (
     "jump_info_overlay_enabled",
     "colony_needs_overlay_enabled",
     "trade_route_overlay_enabled",
+    "crew_orders_overlay_enabled",
     "expedition_overlay_enabled",
     "hatchling_overlay_enabled",
     "rig_tracker_overlay_enabled",
@@ -398,6 +426,7 @@ PROFILE_BOOL_SETTINGS = (
     "constellation_picture_legend",
     "constellation_watcher",
     "galaxy_minimap_capsules",
+    "galaxy_minimap_orders",
     # Music that flies with you (5.5.3.8).
     "music_follow_game",
     "music_jump_duck",
@@ -470,6 +499,7 @@ PROFILE_BOOL_SETTINGS = (
 
 PROFILE_VALUE_SETTINGS = (
     "crew_rota_deep_ly",
+    "crew_banter_gap",
     "nav_collapsed_groups",
     "galnet_rotation_seconds",
     "galnet_refresh_minutes",
@@ -510,6 +540,8 @@ PROFILE_VALUE_SETTINGS = (
     "colony_needs_hud_y",
     "trade_route_hud_x",
     "trade_route_hud_y",
+    "orders_hud_x",
+    "orders_hud_y",
     "expedition_hud_x",
     "expedition_hud_y",
     "hatchling_hud_x",
@@ -579,6 +611,7 @@ PROFILE_VALUE_SETTINGS = (
     "jump_info_text_scale_percent",
     "colony_needs_text_scale_percent",
     "trade_route_text_scale_percent",
+    "crew_orders_text_scale_percent",
     "expedition_text_scale_percent",
     "hatchling_text_scale_percent",
     "rig_tracker_text_scale_percent",
@@ -884,6 +917,11 @@ def apply_profile_config(config, profile_key=None):
     config["active_commander_fid"] = profile.get("fid", config.get("active_commander_fid", ""))
     text_defaults = {
         "edsm_cmdr_name": profile.get("commander_name", ""),
+        "orders_frequency": "session",
+        "crew_banter": "sometimes", "crew_banter_size": "three", "crew_banter_length": "short",
+        # 5.7.7: a duty never chosen showed blank; it starts at its default.
+        "crew_rota_docked": "aster", "crew_rota_scanning": "axiom", "crew_rota_surface": "axiom",
+        "crew_rota_route": "meridian", "crew_rota_deep": "watcher", "crew_rota_flight": "lyra",
         "edsm_api_key": "",
         "inara_api_key": "",
         "inara_cmdr_name": "",
@@ -988,6 +1026,9 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_jump_info": "",
         "overlay_hotkey_colony_needs": "",
         "overlay_hotkey_trade_route": "",
+        "overlay_hotkey_crew_orders": "",
+        "overlay_hotkey_orders_accept": "",
+        "overlay_hotkey_orders_decline": "",
         "overlay_hotkey_expedition": "",
         "overlay_hotkey_hatchling": "",
         "overlay_hotkey_rig_tracker": "",
@@ -1041,6 +1082,11 @@ def apply_profile_config(config, profile_key=None):
     }
     bool_defaults = {
         **OVERLAY_ENABLE_DEFAULTS,
+        "orders_enabled": True, "orders_campaigns": True, "orders_watcher": True,
+        "orders_copy_target": True, "orders_open_map": False,
+        "crew_banter_flight": True, "crew_banter_exploring": True, "crew_banter_port": True, "crew_banter_crew": True,
+        "crew_banter_quiet": True,
+        "orders_kind_exobiology": True, "orders_kind_exploration": True, "orders_kind_travel": True, "orders_kind_trade": True, "orders_kind_colonisation": True, "orders_kind_powerplay": True,
         "watcher_voice_enabled": False,
         "watcher_listen_enabled": False,
         "watcher_ship_enabled": True,
@@ -1108,6 +1154,7 @@ def apply_profile_config(config, profile_key=None):
         "constellation_picture_legend": True,
         "constellation_watcher": True,
         "galaxy_minimap_capsules": True,
+        "galaxy_minimap_orders": True,
         "music_follow_game": False,
         "music_jump_duck": True,
         "flight_log_notice": True,
@@ -1227,6 +1274,7 @@ def apply_profile_config(config, profile_key=None):
                 "jump_info_text_scale_percent": 0,
                 "colony_needs_text_scale_percent": 0,
                 "trade_route_text_scale_percent": 0,
+                "crew_orders_text_scale_percent": 0,
                 "expedition_text_scale_percent": 0,
                 "hatchling_text_scale_percent": 0,
                 "rig_tracker_text_scale_percent": 0,
@@ -1362,6 +1410,9 @@ def load_config():
         'overlay_hotkey_jump_info': '',
         'overlay_hotkey_colony_needs': '',
         'overlay_hotkey_trade_route': '',
+        'overlay_hotkey_crew_orders': '',
+        'overlay_hotkey_orders_accept': '',
+        'overlay_hotkey_orders_decline': '',
         'overlay_hotkey_expedition': '',
         'overlay_hotkey_hatchling': '',
         'overlay_hotkey_rig_tracker': '',
@@ -1458,6 +1509,8 @@ def load_config():
         'colony_needs_hud_y': 120,
         'trade_route_hud_x': 1520,
         'trade_route_hud_y': 480,
+        'orders_hud_x': 1520,
+        'orders_hud_y': 640,
         'expedition_hud_x': 40,
         'expedition_hud_y': 560,
         'hatchling_hud_x': 1660,
@@ -1491,6 +1544,7 @@ def load_config():
         'constellation_picture_legend': True,
         'constellation_watcher': True,
         'galaxy_minimap_capsules': True,
+        'galaxy_minimap_orders': True,
         'music_follow_game': False,
         'music_jump_duck': True,
         'flight_log_notice': True,
@@ -1566,6 +1620,29 @@ def load_config():
         'crew_rota_deep': 'watcher',
         'crew_rota_flight': 'lyra',
         'crew_rota_deep_ly': 1000,
+        # Crew Orders (5.7.7).
+        'orders_enabled': True,
+        # Crew banter (5.7.7).
+        'crew_banter': 'sometimes',
+        'crew_banter_size': 'three',
+        'crew_banter_length': 'short',
+        'crew_banter_gap': 20,
+        'crew_banter_flight': True,
+        'crew_banter_exploring': True,
+        'crew_banter_port': True,
+        'crew_banter_crew': True,
+        'crew_banter_quiet': True,
+        'orders_frequency': 'session',
+        'orders_kind_exobiology': True,
+        'orders_kind_exploration': True,
+        'orders_kind_travel': True,
+        'orders_kind_trade': True,
+        'orders_kind_colonisation': True,
+        'orders_kind_powerplay': True,
+        'orders_campaigns': True,
+        'orders_watcher': True,
+        'orders_copy_target': True,
+        'orders_open_map': False,
         'heartbeat_text_scale_percent': 0,
         # The Watcher's voice (5.5.4): Piper with the HAL model, off until
         # the commander turns it on; how loud, how fast, and how much it says.
@@ -1649,6 +1726,7 @@ def load_config():
         'jump_info_text_scale_percent': 0,
         'colony_needs_text_scale_percent': 0,
         'trade_route_text_scale_percent': 0,
+        'crew_orders_text_scale_percent': 0,
         'expedition_text_scale_percent': 0,
         'hatchling_text_scale_percent': 0,
         'rig_tracker_text_scale_percent': 0,

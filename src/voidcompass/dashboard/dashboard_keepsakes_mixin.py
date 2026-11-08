@@ -135,7 +135,8 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             return hud.update(session, rows, revision, position, system,
                               list(getattr(self, "nav_route_entries", None) or []),
                               self._galaxy_minimap_trip(position, system),
-                              self._galaxy_minimap_capsules())
+                              self._galaxy_minimap_capsules(),
+                              self._orders_map_targets() if hasattr(self, "_orders_map_targets") else None)
         except Exception as exc:
             logging.debug("Galaxy minimap update skipped: %s", exc)
             return False

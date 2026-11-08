@@ -6,6 +6,8 @@
   const dom = Object.fromEntries(["route", "content", "route-tag", "route-title", "route-place", "route-warnings", "route-figures"]
     .map((id) => [id, document.getElementById(id)]));
 
+  // The window's design size (html_trade_route_overlay): fit to it, report height in its units (overlayfix.md).
+  const DESIGN_WIDTH = 360, MIN_HEIGHT = 90;
   const number = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
   const credits = (value) => {
     const v = number(value), abs = Math.abs(v);
@@ -25,6 +27,7 @@
 
   function render(snapshot = {}) {
     VoidCompassOverlay.applyTheme(dom.route, snapshot.theme || {}, snapshot.effects || {});
+    VoidCompassOverlay.fitToWindow(dom.route, DESIGN_WIDTH, snapshot.effects || {});
     const step = snapshot.route || null;
     dom.route.classList.toggle("empty", !step);
     if (!step) return;
@@ -50,7 +53,7 @@
   }
 
   function contentHeight() {
-    return Math.ceil(dom.content.getBoundingClientRect().height + 2);
+    return VoidCompassOverlay.designHeight(dom.route, MIN_HEIGHT);
   }
 
   VoidCompassOverlay.startPolling({token, overlay, render, contentHeight, interval: 250});

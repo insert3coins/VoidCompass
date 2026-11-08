@@ -97,6 +97,17 @@ def _capital(text):
     return text[:1].upper() + text[1:] if text else text
 
 
+# 5.7.7: idle remarks about where you are, said once a place a visit: the
+# star and the system's size, the way home, cruising through, the world
+# you're on or near, the station, ring or settlement. They kept coming back.
+PLACE_FAMILIES = {
+    "idle_star": "star", "idle_star_odd": "star", "idle_big_system": "size", "idle_small_system": "size",
+    "idle_far": "home", "idle_home": "home", "idle_home_away": "home", "idle_supercruise": "cruise",
+    "idle_near_body": "body", "idle_landed": "body", "idle_on_foot": "body", "idle_ring": "ring",
+    "idle_settlement": "settlement", "idle_docked": "station", "idle_carrier": "station", "idle_station_foot": "station",
+}
+
+
 class Surroundings:
     """The commander's surroundings and the session's memories."""
 
@@ -123,6 +134,24 @@ class Surroundings:
         self.ship = ""
         self.ship_name = ""
         self.suit = ""
+        self.said_here = set()
+
+    def place_key(self, topic, fields=None):
+        """("family:place") for a remark about where you are, else None."""
+        family = PLACE_FAMILIES.get(topic)
+        if family is None and topic in {f"idle_{kind}" for kind in SRV_KINDS + ("nomad", "fighter", "srv")}:
+            family = "vehicle"
+        if family is None:
+            return None
+        fields = fields or {}
+        place = next((fields[key] for key in ("body", "station", "settlement", "ring") if fields.get(key)), self.system)
+        return f"{family}:{str(place or '').casefold()}"
+
+    def said(self, topic, fields=None):
+        """A remark made: one about this place isn't made again this visit."""
+        key = self.place_key(topic, fields)
+        if key:
+            self.said_here.add(key)
 
     def reset_session(self):
         self.jumps = 0
@@ -157,6 +186,7 @@ class Surroundings:
                 self.system = system
                 self.star_class = self._pending_star if event == "FSDJump" else ""
                 self.bodies = None
+                self.said_here = set()
             self._pending_star = ""
             position = raw.get("StarPos")
             if isinstance(position, (list, tuple)) and len(position) >= 3:
@@ -387,6 +417,7 @@ class Surroundings:
             time_of_day.append(("idle_morning", {"clock": clock}))
         out = []
         for group in (where, here, world, session, time_of_day):
+            group[:] = [row for row in group if self.place_key(*row) not in self.said_here]
             rng.shuffle(group)
             out.extend(group)
         # Mix the ranks a little, so it doesn't always open with the same kind.

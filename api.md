@@ -1336,6 +1336,27 @@ The Expeditions page's trips: the one you're on, followed live, and every one yo
 | GET | `/api/v1/expedition` | The active expedition: its `legs` (each `system`, `kind` stop, destination, home or carrier, `coords`, `reached`, its Spansh `plot`, `fuel_runs` with no star to scoop, and for a stop on a planet its `body` and `lat`/`lon`), `places` (each `kind` planet, surface, poi, station, system or note, `title`, `system`, `body`, `lat`/`lon`, `notes`, `visited`, `on_route`, `pictures`), the trip's unkept `finds`, `objectives` with `progress`, `stats`, the `streak` since the last death or hull scare, `days` (a line a day, with your notes), recent `events`, and `live`: `progress` (`share`, `done_ly`, `to_go_ly`, `next`), `pace` and `eta`, `risk` (unsold data `value`, `hull`, distance home) `supplies` (`rows`, and the ones running `low`) and `surface` (when the next stop is on a planet: its `body`, and on it a `target` with `distance_m`, `bearing` and `turn`). 404 when none is active |
 | GET | `/api/v1/expeditions` | Every expedition: `id`, `name`, `status` (active, paused, completed or failed), `started`, `ended`, `destination`, `ironman` and its `stats`, and the `active_id` |
 
+## Crew Orders
+
+The officers' orders (5.7.7): the ones waiting for your answer, the ones you're on, the campaign under way, and each officer's record with you. The journal finishes every order; these only read them, ask for one, and answer.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/orders` | `offered` and `active` orders, each with its `id`, `kind`, `size` (field, campaign or long), `officer`, `title`, `brief`, `why` (each fact with its `source` and when it was true), `objectives` (`text`, `done`, `fraction`), `progress`, `target` (`system`, `body`, `station`, `distance`), a campaign's `stages`, and the officer's `last_line`; `history`; `record` (per officer: `done`, `campaigns`, `declined`, `standing`, its Order Files); `ribbons`; `why` there's no offer right now; `on_watch` |
+| POST | `/api/v1/orders/ask` | Ask the crew for an order now (pacing aside). 409 when nobody has one |
+| POST | `/api/v1/orders/accept` | Accept the order waiting for your answer, or the one named: `{"id": "o-..."}` |
+| POST | `/api/v1/orders/decline` | Decline it. Two refusals of the same kind within a month and that officer stops offering it |
+| POST | `/api/v1/orders/later` | Keep it on the board for a day |
+| POST | `/api/v1/orders/abandon` | Cancel an active order: `{"id": "o-..."}` |
+
+Answering needs an order waiting (409 otherwise). With thoughts or voice off, the order is still in the companion page's ORDERS tab and on its overlay.
+
+**Example: accept and decline on two Stream Deck keys** (PowerShell)
+
+```powershell
+Invoke-RestMethod -Method Post "http://127.0.0.1:7380/api/v1/orders/accept" | Select-Object -ExpandProperty message
+```
+
 ## Rig Tracker
 
 The mining rigs you've set down for Rhino mining, as the Rig Tracker overlay shows them. The game writes nothing when a rig goes down, so these do what the rig keys (Ctrl+Alt+1 to 6) do: handy on a Stream Deck.
@@ -1791,6 +1812,7 @@ The overlay ids are:
 | `jump-info` | Jump Info |
 | `colony-needs` | Construction Needs |
 | `trade-route` | Trade Route |
+| `crew-orders` | Crew Orders |
 | `expedition` | Expedition |
 | `hatchling` | Hatchling |
 | `galaxy-minimap` | Galaxy Minimap |

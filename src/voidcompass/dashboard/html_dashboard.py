@@ -192,6 +192,7 @@ HOTKEY_GROUP_OF = {
     **{f"rig_{slot}": "rhino" for slot in range(1, 7)}, "rig_clear": "rhino", "rhino_map_range": "rhino",
     "rhino_survey_centre": "rhino", "rhino_survey_edge": "rhino", "rhino_survey_clear": "rhino",
     "field_bookmark": "field", "colony_fold": "field", "colony_refresh": "field",
+    "orders_accept": "watcher", "orders_decline": "watcher",
 }
 
 
@@ -896,7 +897,10 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         first = records.get("first")
         heartbeat_model = getattr(heartbeat, "_html_render_model", None)
         heartbeat_model = heartbeat_model if isinstance(heartbeat_model, dict) else {}
+        orders = getattr(self, "_orders_snapshot", None)
         return {
+            # Crew Orders (5.7.7): the companion page's ORDERS tab.
+            "orders": orders() if callable(orders) else {"enabled": False},
             "identity": companions.identity(self.config),
             "companion_name": companions.name(self.config),
             "overlay_only": companions.overlay_only(self.config),
@@ -1131,6 +1135,12 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             if colony and not colony.get("complete"):
                 facts["colony"] = {"header": colony.get("header"), "remaining": colony.get("remaining"),
                                    "trips": colony.get("trips"), "at_site": colony.get("at_site")}
+        except Exception:
+            pass
+        try:
+            order = self._orders_field_cue() if hasattr(self, "_orders_field_cue") else None
+            if order:
+                facts["order"] = order
         except Exception:
             pass
         return facts
@@ -2473,6 +2483,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "inara_cmdr_name", "inara_api_key", "inara_upload_enabled",
             "raven_api_key", "raven_sync_enabled", "raven_share_ship_cargo",
             "bgs_online_enabled", "trading_online_enabled",
+            "orders_enabled", "orders_frequency", "orders_campaigns", "orders_watcher",
+            "orders_kind_exobiology", "orders_kind_exploration", "orders_kind_travel", "orders_kind_trade", "orders_kind_colonisation", "orders_kind_powerplay",
+            "orders_copy_target", "orders_open_map",
             "eddn_market_upload_enabled", "carrier_discord_webhook_url",
             "runtime_trace_enabled", "crash_reporting_enabled",
             "recovery_safe_mode_enabled", "edsm_backfill_on_cache_rebuild",
@@ -2494,6 +2507,10 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             ("adaptive_command_enabled", True),
             ("raven_sync_enabled", True), ("raven_share_ship_cargo", False), ("bgs_online_enabled", True),
             ("trading_online_enabled", True),
+            ("orders_enabled", True), ("orders_frequency", "session"),
+            ("orders_campaigns", True),
+            ("orders_kind_exobiology", True), ("orders_kind_exploration", True), ("orders_kind_travel", True), ("orders_kind_trade", True), ("orders_kind_colonisation", True), ("orders_kind_powerplay", True),
+            ("orders_watcher", True), ("orders_copy_target", True), ("orders_open_map", False),
         ):
             if values.get(key) is None:
                 values[key] = default
@@ -3195,7 +3212,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         """Validate and apply commands from fully HTML specialist pages."""
         page = _text(payload.get("page"), 40).casefold()
         operation = _text(payload.get("operation"), 60).casefold()
-        if page not in _HTML_WORKSPACE_PAGES:
+        # 5.7.7: Crew Orders is the companion page's ORDERS tab, not a page of its
+        # own, but its buttons still send commands as "orders".
+        if page not in _HTML_WORKSPACE_PAGES and page != "orders":
             return False
         changed = False
 
@@ -3204,6 +3223,11 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
 
         if page == "colonisation":
             result = self._handle_colonisation_command(operation, payload)
+            self._schedule_html_dashboard_publish(immediate=True)
+            return result
+
+        if page == "orders":
+            result = self._orders_command(operation, payload)
             self._schedule_html_dashboard_publish(immediate=True)
             return result
 
@@ -4255,6 +4279,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                     "inara_cmdr_name": str, "inara_api_key": str, "inara_upload_enabled": bool,
                     "raven_api_key": str, "raven_sync_enabled": bool,
                     "raven_share_ship_cargo": bool, "bgs_online_enabled": bool, "trading_online_enabled": bool,
+                    "orders_enabled": bool, "orders_frequency": str, "orders_campaigns": bool,
+                    "orders_kind_exobiology": bool, "orders_kind_exploration": bool, "orders_kind_travel": bool, "orders_kind_trade": bool, "orders_kind_colonisation": bool, "orders_kind_powerplay": bool,
+                    "orders_watcher": bool, "orders_copy_target": bool, "orders_open_map": bool,
                     "eddn_market_upload_enabled": bool,
                     "carrier_discord_webhook_url": str,
                     "runtime_trace_enabled": bool, "crash_reporting_enabled": bool,

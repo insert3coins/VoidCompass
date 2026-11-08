@@ -21,7 +21,7 @@ from voidcompass.exploration.galactic_regions import find_region, region_labels,
 from voidcompass.core.theme_state import THEME
 from voidcompass.core.paths import resource_path
 ANNOTATION_TYPES = ('Note', 'Danger', 'Region of Interest', 'Survey Target', 'Waypoint')
-LAYER_NAMES = ('Regions', 'Travel', 'Planned', 'Expedition', 'Return', 'Sectors', 'Valuable', 'Biology', 'Codex', 'Photos', 'Recon', 'Revisit', 'Bookmarks', 'Annotations')
+LAYER_NAMES = ('Regions', 'Travel', 'Planned', 'Expedition', 'Return', 'Sectors', 'Valuable', 'Biology', 'Codex', 'Photos', 'Recon', 'Revisit', 'Bookmarks', 'Orders', 'Annotations')
 SCOPES = ('All History', 'Current Session', 'Active Expedition')
 GALACTIC_CENTRE = (0.0, 0.0, 25899.0)
 GALAXY_RADIUS_LY = 51500.0
@@ -244,6 +244,12 @@ class ExpeditionMapView:
             for row in important + untouched[:allowance]:
                 status = str(row.get('status') or 'untouched')
                 add('Sectors', 'Sector', '', f"{plan.get('name') or 'Expedition sector'} · cell {row.get('id')}", f"{status.title()} · {int(row.get('surveyed_systems') or 0)}/{int(row.get('visited_systems') or 0)} visited systems FSS complete", position=row.get('position'), status=status, cell_size=float(grid.get('cell_size_ly') or plan.get('cell_size_ly') or 100))
+        # 5.7.7: where the crew's orders point, waiting or under way.
+        targets = getattr(self.app, '_orders_map_targets', None)
+        for row in (targets() if callable(targets) else ()) or ():
+            add('Orders', 'Order', row.get('system'), f"{row.get('officer_name') or 'Crew'}'s order: {row.get('title') or ''}",
+                'Waiting for your answer' if row.get('status') == 'offered' else 'Under way', position=row.get('coords'),
+                officer=row.get('officer'), order_id=row.get('id'))
         return markers
 
     def _build_snapshot(self):

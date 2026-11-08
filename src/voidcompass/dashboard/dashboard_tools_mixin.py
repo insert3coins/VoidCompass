@@ -33,7 +33,7 @@ OVERLAY_GROUPS = (
     ("surface", "Exploration & surface", ("survey_status_hud", "planet_materials_hud", "ground_popup", "postcard_hud", "expedition_hud")),
     ("industry", "Industry & commerce", ("cargo_hud", "prospector_hud", "rig_tracker_hud", "rhino_map_hud", "trade_route_hud", "colony_needs_hud",
                                          "carrier_hud", "powerplay_hud")),
-    ("cockpit", "Cockpit & companion", ("toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud",
+    ("cockpit", "Cockpit & companion", ("toast_hud", "achievement_hud", "heartbeat_hud", "orders_hud", "galnet_ticker_hud",
                                         "music_player_hud", "hatchling_hud")),
 )
 GROUP_OF = {attr: group for group, _label, attrs in OVERLAY_GROUPS for attr in attrs}

@@ -176,7 +176,8 @@ export function createAsterDisplay(canvas) {
   const uTime={value:0},uEnergy={value:0},uOpen={value:.61},uColour={value:colour},uWarm={value:warm},uScan={value:0};
   const uDim={value:0},uSweep={value:-1};
   const shared={uTime,uEnergy,uOpen,uColour,uWarm,uDim,uSweep};
-  scene.add(createCompanionFrame({colour:uColour,energy:uEnergy,opening:.29,style:'command'}));
+  const service={value:0};
+  scene.add(createCompanionFrame({colour:uColour,energy:uEnergy,opening:.29,style:'command',service}));
   const shader=(vertexShader,fragmentShader,uniforms={})=>new THREE.ShaderMaterial({
     vertexShader,fragmentShader,uniforms:{...shared,...uniforms},transparent:true,depthWrite:false,
     blending:THREE.AdditiveBlending,side:THREE.DoubleSide,forceSinglePass:true});
@@ -337,6 +338,9 @@ export function createAsterDisplay(canvas) {
     setState(value,valueLevel=0){const next=clamp(Number(valueLevel)||0);if(state!==value||Math.abs(next-level)>.004){moods.state(value);state=value;level=next;changed();}},
     setContext(model){
       const moved=life.context(model),felt=moods.context(model);
+      // 5.7.7: service pips on the bezel, from your standing with Aster.
+      const pips=Math.max(0,Math.min(4,Math.round(Number(model?.moment?.service)||0)));
+      if(pips!==service.value){service.value=pips;changed();}
       const granted=Number.isFinite(Number(model?.moment?.dock?.pad))&&model.moment.dock.pad!==null?Number(model.moment.dock.pad):null;
       const fresh=granted!==pad;
       if(fresh){if(granted!==null){drawPad(granted);sweep=0;}pad=granted;}

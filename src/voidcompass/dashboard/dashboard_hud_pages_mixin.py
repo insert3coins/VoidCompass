@@ -178,7 +178,7 @@ class DashboardHudPagesMixin:
     def _hud_page_survey(self, limit=None):
         model = self._hud_survey_model()
         self._hud_rhino_hints(model)
-        return hud_pages.survey_page(model, self._hud_contacts())
+        return hud_pages.survey_page(model, self._hud_contacts(), self._hud_order("survey"))
 
     def _hud_contacts(self):
         ledger = getattr(self, "contact_ledger", None)
@@ -230,7 +230,15 @@ class DashboardHudPagesMixin:
         config = getattr(self, "config", None) or {}
         gravity = getattr(getattr(self, "gravity_warning_hud", None), "_last_gravity", None)
         return hud_pages.planet_page(body, materials, target, self._sampling_snapshot(), gravity,
-                                     float(config.get("gravity_warning_threshold_g") or 3.0))
+                                     float(config.get("gravity_warning_threshold_g") or 3.0), order=self._hud_order("planet"))
+
+    def _hud_order(self, page):
+        """5.7.7: the crew order that belongs on this page, or None."""
+        pick = getattr(self, "_orders_page_line", None)
+        try:
+            return pick(page) if callable(pick) else None
+        except Exception:
+            return None
 
     def _hud_page_rhino(self):
         from voidcompass.overlays.rig_tracker import rig_spacing_m, rig_warn_m

@@ -53,6 +53,8 @@ OVERLAY_SPECS = (
     # 5.6.3: the Games page's pocket pet, where you can see it while you fly.
     OverlaySpec("hatchling_hud", "hatchling", "Void Compass Hatchling", "hatchling_overlay_enabled", "hatchling_hud_x", "hatchling_hud_y", (1660, 860), (250, 132), "Hatchling", "HATCHLING", False, "hatchling", "overlay_hotkey_hatchling", "Hatchling"),
     OverlaySpec("trade_route_hud", "trade-route", "Void Compass Trade Route", "trade_route_overlay_enabled", "trade_route_hud_x", "trade_route_hud_y", (1520, 480), (360, 150), "Trade Route", "TRADE", True, "trade_route", "overlay_hotkey_trade_route", "Trade Route"),
+    # 5.7.7: the order waiting for your answer, or the one you're on.
+    OverlaySpec("orders_hud", "crew-orders", "Void Compass Crew Orders", "crew_orders_overlay_enabled", "orders_hud_x", "orders_hud_y", (1520, 640), (360, 170), "Crew Orders", "ORDERS", True, "crew_orders", "overlay_hotkey_crew_orders", "Crew Orders"),
     # 5.5.3.7: the Milky Way in a corner, with you on it; and a Polaroid of
     # each screenshot taken in game.
     OverlaySpec("galaxy_minimap_hud", "galaxy-minimap", "Void Compass Galaxy Minimap", "galaxy_minimap_overlay_enabled", "galaxy_minimap_hud_x", "galaxy_minimap_hud_y", (40, 600), (240, 280), "Galaxy Minimap", "MINIMAP", False, "galaxy_minimap", "overlay_hotkey_galaxy_minimap", "Galaxy Minimap"),
@@ -95,6 +97,10 @@ OVERLAY_HOTKEY_SPECS = (
     _overlay_hotkey("jump_info"),
     _overlay_hotkey("colony_needs"),
     _overlay_hotkey("trade_route"),
+    _overlay_hotkey("crew_orders"),
+    # 5.7.7: answer the order waiting on the board without leaving the cockpit.
+    ("orders_accept", "overlay_hotkey_orders_accept", "Crew Orders: accept the waiting order", None),
+    ("orders_decline", "overlay_hotkey_orders_decline", "Crew Orders: decline the waiting order", None),
     _overlay_hotkey("expedition"),
     ("colony_refresh", "overlay_hotkey_colony_refresh", "Construction Needs: refresh from Raven Colonial", None),
     ("colony_fold", "overlay_hotkey_colony_fold", "Construction Needs: fold / unfold covered groups", None),
@@ -175,6 +181,7 @@ TEXT_SIZE_KEYS = {
     "jump_info_hud": "jump_info_text_scale_percent",
     "colony_needs_hud": "colony_needs_text_scale_percent",
     "trade_route_hud": "trade_route_text_scale_percent",
+    "orders_hud": "crew_orders_text_scale_percent",
     "expedition_hud": "expedition_text_scale_percent",
     "hatchling_hud": "hatchling_text_scale_percent",
     "rig_tracker_hud": "rig_tracker_text_scale_percent",

@@ -28,6 +28,7 @@
   <link rel="stylesheet" href="capsules.css">
   <link rel="stylesheet" href="tools.css">
   <link rel="stylesheet" href="constellation.css">
+  <link rel="stylesheet" href="orders.css">
   <link rel="stylesheet" href="games.css">
   <link rel="stylesheet" href="hatchling.css">
   <link rel="stylesheet" href="flightlog.css">
@@ -245,17 +246,17 @@
 
       <nav class="nav" aria-label="Command deck">
         <p>EXPLORATION</p>
-        <button class="nav-item active" data-page="overview" aria-label="Dashboard" aria-current="page" title="Dashboard"><i>⌖</i><span>Dashboard</span><b>01</b></button>
-        <button class="nav-item" data-page="mission" aria-label="Expeditions" title="Expeditions: plan a long trip and keep all of it"><i>⚐</i><span>Expeditions</span><b>02</b></button>
-        <button class="nav-item" data-page="explore" aria-label="Explore &amp; Survey" title="Explore &amp; Survey"><i>✦</i><span>Explore & Survey</span><b>03</b></button>
-        <button class="nav-item" data-page="map" aria-label="Galactic Atlas" title="Galactic Atlas"><i>◉</i><span>Galactic Atlas</span><b>04</b></button>
-        <button class="nav-item" data-page="planet-materials" aria-label="Planetary Operations" title="Planetary Operations"><i>◇</i><span>Planetary Operations</span><b>05</b></button>
+        <button class="nav-item active" data-page="overview" aria-label="Dashboard" aria-current="page" title="Dashboard"><i>⌖</i><span>Dashboard</span><b>1</b></button>
+        <button class="nav-item" data-page="mission" aria-label="Expeditions" title="Expeditions: plan a long trip and keep all of it"><i>⚐</i><span>Expeditions</span><b>2</b></button>
+        <button class="nav-item" data-page="explore" aria-label="Explore &amp; Survey" title="Explore &amp; Survey"><i>✦</i><span>Explore & Survey</span><b>3</b></button>
+        <button class="nav-item" data-page="map" aria-label="Galactic Atlas" title="Galactic Atlas"><i>◉</i><span>Galactic Atlas</span><b>4</b></button>
+        <button class="nav-item" data-page="planet-materials" aria-label="Planetary Operations" title="Planetary Operations"><i>◇</i><span>Planetary Operations</span><b>5</b></button>
         <p>RECORDS</p>
-        <button class="nav-item" data-page="profile" aria-label="Commander Record" title="Commander Record"><i>◎</i><span>Commander Record</span><b>06</b></button>
+        <button class="nav-item" data-page="profile" aria-label="Commander Record" title="Commander Record"><i>◎</i><span>Commander Record</span><b>6</b></button>
         <p>FIELD SYSTEMS</p>
-        <button class="nav-item" data-page="bgs" aria-label="BGS" title="Background Simulation: factions, influence, states and conflicts"><i>◈</i><span>BGS</span><b>07</b></button>
-        <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>08</b></button>
-        <button class="nav-item" data-page="colonisation" aria-label="Colonisation" title="Colonisation"><i>⬢</i><span>Colonisation</span><b>09</b></button>
+        <button class="nav-item" data-page="bgs" aria-label="BGS" title="Background Simulation: factions, influence, states and conflicts"><i>◈</i><span>BGS</span><b>7</b></button>
+        <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>8</b></button>
+        <button class="nav-item" data-page="colonisation" aria-label="Colonisation" title="Colonisation"><i>⬢</i><span>Colonisation</span><b>9</b></button>
         <button class="nav-item" data-page="mining" aria-label="Mining Command" title="Mining Command"><i>◆</i><span>Mining Command</span><b>10</b></button>
         <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>11</b></button>
         <button class="nav-item" data-page="trading" aria-label="Trading" title="Trading: routes, markets and your profits"><i>⇄</i><span>Trading</span><b>12</b></button>
@@ -838,6 +839,7 @@
                     <label class="studio-switch"><span><b>Plotted route</b><small>The route ahead, waypoint by waypoint, how far and how many jumps.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_route"><i></i></label>
                     <label class="studio-switch"><span><b>Spansh route</b><small>The whole trip beyond the leg plotted in game: your waypoint route, or your latest neutron plot, with its neutron stars.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_spansh"><i></i></label>
                     <label class="studio-switch"><span><b>Time capsules</b><small>A small hourglass where a note you sealed on the Time Capsules page is waiting.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_capsules"><i></i></label>
+                    <label class="studio-switch"><span><b>Crew orders</b><small>A small flag where an order from the crew points, in its officer's colour.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_orders"><i></i></label>
                     <label class="studio-switch"><span><b>Region names</b><small>The names of the regions on the map; the one you're in, in orange.</small></span><input type="checkbox" data-overlay-option="galaxy_minimap_labels"><i></i></label>
                     <label class="studio-field"><span>Region names<small>Just the names on the map; bigger names leave out more of their neighbours</small></span><select id="studio-minimap-region-text" data-studio-setting="galaxy_minimap_region_text_percent"><option value="0">Same as text</option><option value="75">75%</option><option value="85">85%</option><option value="100">100%</option><option value="110">110%</option><option value="125">125%</option><option value="150">150%</option><option value="175">175%</option><option value="200">200%</option></select></label>
                   </section>

@@ -1053,6 +1053,8 @@ class _OverlayHost:
             path = "/colony_needs/index.html"
         elif template == "trade_route":
             path = "/trade_route/index.html"
+        elif template == "crew_orders":
+            path = "/crew_orders/index.html"
         elif template == "expedition":
             path = "/expedition/index.html"
         elif template == "hatchling":

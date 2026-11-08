@@ -3,7 +3,7 @@
 Lyra was a ship's computer before she was crew. Her System style is exact
 and terse; her Bright style keeps the precision and adds warmth, a robot's
 dry humour and a watchful eye on the fuel, for reasons her story explains."""
-from voidcompass.overlays import officer_habits, talk_replies
+from voidcompass.overlays import officer_docking, officer_habits, talk_replies
 from voidcompass.overlays import (crew_lore, lyra_depth, lyra_events, lyra_keepsakes, lyra_lore, lyra_more, mining_talk,
                                   persona_lines, rhino_lines, route_lines, ship_life, squadron_talk, survey_report)
 
@@ -192,6 +192,8 @@ BANK = persona_lines.Bank(greetings=GREETINGS, restrained_greetings=RESTRAINED_G
 EVENTS, RESTRAINED_EVENTS = BANK.EVENTS, BANK.RESTRAINED_EVENTS
 # Refining in an SRV only happens in the Rhino: the rigs' yield.
 RESTRAINED_EVENTS["mined_surface"], EVENTS["mined_surface"] = rhino_lines.officer_refining("lyra")
+# 5.7.7: docking anywhere but home.
+RESTRAINED_EVENTS["docked_away"], EVENTS["docked_away"] = officer_docking.officer("lyra")
 officer_habits.apply("lyra", EVENTS, RESTRAINED_EVENTS)
 # Lyra minds the ship: fuel and the way home matter more to her than to most.
 INTERESTS = {"scooped": 1, "fuel_low": 3, "srv_fuel_low": 2, "docked_home": 1, "no_scoop": 2}

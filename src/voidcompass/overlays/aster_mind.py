@@ -171,13 +171,19 @@ class AsterMind(watcher_mind.WatcherMind):
 
     def _importance(self, topic):
         """The shared importance, raised for what this companion's role cares about."""
-        return max(watcher_mind.IMPORTANCE.get(topic, 1), self.persona.interests.get(topic, 0))
+        # 5.7.7: docking anywhere is acknowledged like docking at home.
+        shared = watcher_mind.IMPORTANCE.get("docked_home" if topic == "docked_away" else topic, 1)
+        return max(shared, self.persona.interests.get(topic, 0))
 
     def _variant(self, topic, fields):
         lines = self.event_lines(topic)
         candidates = []
         eligible = {}
         for line in lines:
+            if fields.get("_busy") and watcher_mind.SCAN_PROMPT.search(line):
+                continue
+            if fields.get("_away") and watcher_mind.HOME_WORDS.search(line):
+                continue
             try:
                 noticed = watcher_mind.noticed(fields)
                 factual = line.format(**noticed)

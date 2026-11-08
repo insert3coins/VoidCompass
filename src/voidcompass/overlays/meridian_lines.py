@@ -1,5 +1,5 @@
 """Meridian's words: greetings, rundowns, control replies and composed banks (5.7.4)."""
-from voidcompass.overlays import officer_habits, talk_replies
+from voidcompass.overlays import officer_docking, officer_habits, talk_replies
 from voidcompass.overlays import crew_lore, meridian_events, meridian_keepsakes, meridian_lore, meridian_watch, meridian_soundings, persona_lines, route_lines, survey_report, meridian_field, meridian_more, rhino_lines, mining_talk, ship_life, squadron_talk
 
 GREETINGS = (
@@ -195,6 +195,8 @@ BANK = persona_lines.Bank(greetings=GREETINGS, restrained_greetings=RESTRAINED_G
 EVENTS, RESTRAINED_EVENTS = BANK.EVENTS, BANK.RESTRAINED_EVENTS
 # Refining in an SRV only happens in the Rhino: the rigs' yield (5.7.5).
 RESTRAINED_EVENTS["mined_surface"], EVENTS["mined_surface"] = rhino_lines.officer_refining("meridian")
+# 5.7.7: docking anywhere but home.
+RESTRAINED_EVENTS["docked_away"], EVENTS["docked_away"] = officer_docking.officer("meridian")
 # 5.7.6: habit summaries in depth, and style lines that read right.
 officer_habits.apply("meridian", EVENTS, RESTRAINED_EVENTS)
 INTERESTS = meridian_soundings.INTERESTS

@@ -74,6 +74,78 @@ DOCK_TALK_S = 15.0
 # Galnet at most once a day, and each headline only once (5.5.11).
 GALNET_REST_S = 86400.0
 GALNET_HEADLINE_REST_S = 30 * 86400.0
+# 5.7.7: a Crew Orders line waits this long (through a fight, say) before it's let go.
+ORDER_LINE_WAIT_S = 600.0
+# 5.7.7: crew lines in conversation (banter, campaign scenes) wait for the last
+# voice to finish. The deck sets VOICE_BUSY to its speaker's busy check; with
+# none, or a quiet voice, a line still waits its reading time.
+VOICE_BUSY = None
+CONVERSE_FLOOR_S = 1.6
+CONVERSE_READ_S = .3
+CONVERSE_WAIT_S = 240.0
+# 5.7.7: asking you to scan (honk, the FSS) only where it's worth it: the deck
+# sets SYSTEM_QUIET(system) -> True, False or None (not known yet) from EDSM's
+# traffic (exploration/system_traffic). A busy system gets no scan prompts.
+SYSTEM_QUIET = None
+SCAN_PROMPT = re.compile(r"\b(honk|FSS|full[- ]spectrum|discovery scan|scan (the|this) system)\b", re.I)
+
+
+# 5.7.7: signing off at ten in the morning with "Goodnight" sounded wrong.
+# The farewell follows your clock: morning, afternoon, evening, late night,
+# and the small hours.
+DAYPART_FAREWELLS = {
+    "morning": ("Have a good morning", "Enjoy the rest of your morning"),
+    "afternoon": ("Enjoy your afternoon", "Have a good afternoon"),
+    "evening": ("Have a good evening", "Enjoy your evening"),
+    "late": ("Goodnight",),
+    "small": ("Get some sleep", "Goodnight. It's late"),
+}
+DAYPART_TONIGHT = {"morning": "today", "afternoon": "today", "evening": "this evening", "late": "tonight", "small": "tonight"}
+_GOODNIGHT = re.compile(r"\b(good ?night|sleep well)\b", re.I)
+_TONIGHT = re.compile(r"\btonight\b", re.I)
+
+
+def daypart(moment=None):
+    """morning (5-12), afternoon (12-17), evening (17-22), late (22-2), small (2-5)."""
+    hour = time.localtime(moment).tm_hour if moment is not None else time.localtime().tm_hour
+    if 5 <= hour < 12:
+        return "morning"
+    if 12 <= hour < 17:
+        return "afternoon"
+    if 17 <= hour < 22:
+        return "evening"
+    return "late" if hour >= 22 or hour < 2 else "small"
+
+
+def farewell_for_the_hour(text, moment=None, rng=None):
+    """A sign-off's "Goodnight" (and "tonight") made to fit the time of day."""
+    if not text or not (_GOODNIGHT.search(text) or _TONIGHT.search(text)):
+        return text
+    part = daypart(moment)
+    phrase = (rng or random).choice(DAYPART_FAREWELLS[part])
+
+    def fit(match, words):
+        if part in {"late", "small"} and match.group(0).casefold() == "sleep well":
+            return match.group(0)
+        first = match.group(0)[0]
+        return words if first.isupper() else words[0].lower() + words[1:]
+    text = _GOODNIGHT.sub(lambda match: fit(match, phrase), text)
+    return _TONIGHT.sub(lambda match: fit(match, DAYPART_TONIGHT[part]), text)
+
+
+# Docked anywhere but home: no line that calls the station home (5.7.7).
+HOME_WORDS = re.compile(r"\bhome(ward)?\b|familiar berth|starting point", re.I)
+
+
+def system_busy(system):
+    """True when the deck knows the system gets more than five visits a year."""
+    check = SYSTEM_QUIET
+    if not callable(check) or not system:
+        return False
+    try:
+        return check(system) is False
+    except Exception:
+        return False
 # A prospected rock this rich in one material is worth a word (5.5.12).
 RICH_ROCK_PCT = 30.0
 RHINO_HOLD_T = 72
@@ -751,6 +823,10 @@ class WatcherMind:
             variants = named + [line for line in variants if line not in named]
         options = []
         for template in variants:
+            if fields.get("_busy") and SCAN_PROMPT.search(template):
+                continue
+            if fields.get("_away") and HOME_WORDS.search(template):
+                continue
             try:
                 text = template.format(**noticed(fields))
             except (KeyError, IndexError, ValueError):
@@ -864,6 +940,8 @@ class WatcherMind:
 
     def _utter(self, topic, key, script, now):
         """Say a thought: on screen for a while, and remembered."""
+        if topic in {"sign_off", "sign_off_quiet"}:
+            script = farewell_for_the_hour(script, now, self.random)
         text = plain_text(script)
         self._serial += 1
         self._last_spoke = now
@@ -926,15 +1004,92 @@ class WatcherMind:
             due = now + crew_debrief.SPACING_S * (index + 1)
             self._crew_queue.append({"speaker": speaker, "text": line, "due": due, "until": due + crew_debrief.EXPIRES_S})
 
+    # 5.7.7: what a companion taking the watch picks up from the one it
+    # relieves: this system, its survey and first maps, the worlds and
+    # materials already remarked on, the route, where you are. A fresh mind
+    # at each handover said all of it again (the rota hands over often).
+    HANDOVER = ("surroundings", "field", "_survey", "_materials", "_mining", "_mapped_world_names",
+                "_remarked_world_names", "_codex_bodies", "_record_said", "_first_streak", "_route_left",
+                "_route_total", "_route_said", "_route_target", "_route_jump_to", "_route_new", "_next_star",
+                "_on_foot", "_fuel_warned", "_hull_warned", "_srv_full_said", "_hold_full_said", "_cargo_capacity",
+                "_limpets", "_last_interesting", "_loaded_at", "_mined_at")
+
+    def take_watch_from(self, previous):
+        """Carry on from the companion that had the watch (same commander)."""
+        for name in self.HANDOVER:
+            if name in getattr(previous, "__dict__", {}):
+                setattr(self, name, getattr(previous, name))
+
+    def _worlds_mapped(self):
+        """Worlds mapped this session (5.7.7)."""
+        found = getattr(self, "_mapped_world_names", None)
+        if found is None:
+            found = self._mapped_world_names = set()
+        return found
+
+    def _worlds_remarked(self):
+        """Worlds already remarked on this session (5.7.7)."""
+        found = getattr(self, "_remarked_world_names", None)
+        if found is None:
+            found = self._remarked_world_names = set()
+        return found
+
+    def order_line(self, speaker, text, heading="", order=None, delay=0.0, wait=ORDER_LINE_WAIT_S, converse=False):
+        """5.7.7: a Crew Orders line, said by the officer the order belongs
+        to: by this companion if it's theirs, otherwise off watch in their
+        own voice. Lines queue one after another, like a debrief; with
+        ``converse`` each waits for the last one's voice instead."""
+        if speaker != self.identity and heading:
+            # Off watch, the heading names who's speaking ("NEW ORDER · AXIOM").
+            heading = f"{heading} · {crew_voices.heading(speaker).split(' · ')[0]}"
+        return self.crew_say(speaker, text, heading=heading, topic="crew_orders", order=order, delay=delay,
+                             wait=wait, converse=converse, key=f"order:{speaker}:{zlib.crc32(str(text).encode('utf-8')):08x}")
+
+    def crew_say(self, speaker, text, heading="", topic="crew_banter", order=None, delay=0.0, wait=None, converse=True, key=None):
+        """5.7.7: a line from any of the crew, queued: in this companion's own
+        voice if it's the speaker, otherwise off watch in theirs. In a
+        conversation (``converse``) it waits for the one before to be said."""
+        now = self.clock()
+        queue = self._crew_queue
+        due = now + delay
+        if queue:
+            due = max(due, queue[-1]["due"] + (.5 if converse else crew_debrief.SPACING_S))
+        wait = CONVERSE_WAIT_S if wait is None else wait
+        queue.append({"speaker": speaker, "text": str(text), "due": due, "until": due + wait, "topic": topic,
+                      "heading": heading, "key": key or f"{topic}:{speaker}:{zlib.crc32(str(text).encode('utf-8')):08x}",
+                      "order": dict(order) if order else None, "converse": bool(converse)})
+        return due
+
+    def _converse_ready(self, now):
+        """A conversation line may go once the last one has had its reading
+        time and the voice has finished with it."""
+        if now < float(getattr(self, "_converse_after", 0.0) or 0.0):
+            return False
+        busy = VOICE_BUSY
+        if callable(busy):
+            try:
+                if busy():
+                    return False
+            except Exception:
+                pass
+        return True
+
     def _crew_queue_due(self, now):
         queue = self._crew_queue
         while queue and now > queue[0]["until"]:
             queue.pop(0)
         if not queue or now < queue[0]["due"] or self._in_danger or FREQUENCIES.get(frequency(self.config)) is None:
             return None
+        if queue[0].get("converse") and not self._converse_ready(now):
+            return None
         row = queue.pop(0)
         key = row.get("key") or f"debrief:{row['speaker']}:{zlib.crc32(row['text'].encode('utf-8')):08x}"
-        return self._crew_line(row.get("topic") or "crew_debrief", key, row["speaker"], row["text"], row.get("heading"), now)
+        thought = self._crew_line(row.get("topic") or "crew_debrief", key, row["speaker"], row["text"], row.get("heading"), now)
+        if thought is not None and row.get("order"):
+            thought["order"] = row["order"]
+        if row.get("converse"):
+            self._converse_after = now + max(CONVERSE_FLOOR_S, len(row["text"].split()) * CONVERSE_READ_S)
+        return thought
 
     def _crew_chime_due(self, now):
         """The crewmate's line, once the one on watch has had its say."""
@@ -1117,6 +1272,7 @@ class WatcherMind:
             for topic, fields in self.surroundings.choices(now, self.random, known):
                 thought = self.consider(topic, fields, force=True)
                 if thought:
+                    self.surroundings.said(topic, fields)
                     return thought
         return self.consider("poked", force=True)
 
@@ -1572,6 +1728,8 @@ class WatcherMind:
                 return self.consider("jump_long", {**fields, "dist": f"{distance:.1f}"})
             if route_lines.simple_class(star):
                 fields["star"] = route_lines.simple_class(star)
+            if system_busy(fields.get("system")):
+                fields["_busy"] = True
             return self.consider("arrival", fields)
         if event == "FuelScoop":
             return self.consider("scooped")
@@ -1591,6 +1749,8 @@ class WatcherMind:
             return self.consider("fss_complete", {"system": system})
         if event == "SAAScanComplete":
             body = raw.get("BodyName") or "That world"
+            # 5.7.7: the Scan the game writes next is for a world you've just mapped.
+            self._worlds_mapped().add(str(raw.get("BodyName") or "").casefold())
             try:
                 efficient = int(raw.get("ProbesUsed") or 99) <= int(raw.get("EfficiencyTarget") or 0)
             except (TypeError, ValueError):
@@ -1692,7 +1852,12 @@ class WatcherMind:
                 self._first_streak = 0
             planet = str(raw.get("PlanetClass") or "").casefold()
             terraformable = raw.get("TerraformState") == "Terraformable"
-            if planet in watcher_worlds.KIND_WORDS or terraformable:
+            # 5.7.7: "Map it" only for a world not yet mapped, and once a world:
+            # the game re-scans a world as your probes finish, and the crew asked
+            # you to map one you'd just mapped.
+            name = str(raw.get("BodyName") or "").casefold()
+            already = raw.get("WasMapped") is True or name in self._worlds_mapped() or name in self._worlds_remarked()
+            if (planet in watcher_worlds.KIND_WORDS or terraformable) and not already:
                 # The worlds worth stopping for (5.5.3.9): each in its own words.
                 self._last_interesting = now
                 fields = {"body": raw.get("BodyName") or "That world"}
@@ -1704,10 +1869,14 @@ class WatcherMind:
                 if raw.get("WasDiscovered") is False and kind:
                     thought = self.consider("world_first", dict(fields, kind=kind, kind_l=kind[:1].lower() + kind[1:]))
                     if thought:
+                        self._worlds_remarked().add(name)
                         return thought
                 topic = {"earthlike body": "world_earthlike", "water world": "world_water",
                          "ammonia world": "world_ammonia"}.get(planet, "world_terraformable")
-                return self.consider(topic, fields)
+                thought = self.consider(topic, fields)
+                if thought:
+                    self._worlds_remarked().add(name)
+                return thought
             # A world nobody had found, in a system others charted (5.7.2).
             if self.field.first_world(raw):
                 self._last_interesting = now
@@ -1734,8 +1903,28 @@ class WatcherMind:
                          if key not in {"timestamp", "event"}), None)
             return self.consider("promotion", {"rank": rank} if rank else {})
         if event == "Docked":
-            return self.consider("docked_home")
+            # 5.7.7: "home" lines only at your home (Settings, or Sol). Anywhere
+            # else the officers have their own docking words; the Watcher's
+            # docking lines were never about home, less the few that are.
+            if self._docked_at_home(raw):
+                return self.consider("docked_home")
+            fields = {"_away": True}
+            station = str(raw.get("StationName") or "").strip()
+            if station and str(raw.get("StationType") or "").casefold() != "fleetcarrier" and not station.startswith("$"):
+                fields["station"] = station
+            away = "docked_away" if "docked_away" not in TOPICS and self.event_lines_known("docked_away") else "docked_home"
+            return self.consider(away, fields)
         return None
+
+    def _docked_at_home(self, raw):
+        try:
+            from voidcompass.core import home_anchor
+            homes = {str(home_anchor.home(self.config).get("name") or ""), str(self.config.get("home_system") or "")}
+        except Exception:
+            return False
+        # The name you set counts even before its coordinates are looked up.
+        here = str(raw.get("StarSystem") or "").strip().casefold()
+        return bool(here) and here in {name.strip().casefold() for name in homes if name.strip()}
 
     def note(self, kind, fields=None):
         """Something Void Compass noticed (not a journal line)."""
@@ -2541,6 +2730,7 @@ class WatcherMind:
             for topic, fields in choices:
                 thought = self.consider(topic, fields)
                 if thought:
+                    self.surroundings.said(topic, fields)
                     with self.lock:
                         self.memory["said"].append(["idle", now])
                     return thought

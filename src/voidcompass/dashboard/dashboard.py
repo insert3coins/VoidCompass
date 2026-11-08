@@ -53,6 +53,7 @@ from voidcompass.exploration.contact_scope import ContactLedger
 from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.overlays.trade_route_hud import TradeRouteHUD
+from voidcompass.overlays.orders_hud import OrdersHUD
 from voidcompass.overlays.expedition_hud import ExpeditionHUD
 from voidcompass.overlays.hatchling_hud import HatchlingHUD
 from voidcompass.overlays.rig_tracker import RigTrackerHUD
@@ -80,6 +81,7 @@ from voidcompass.overlays.html_contact_overlay import attach_html_contact_overla
 from voidcompass.overlays.html_jump_info_overlay import attach_html_jump_info_overlay
 from voidcompass.overlays.html_colony_needs_overlay import attach_html_colony_needs_overlay
 from voidcompass.overlays.html_trade_route_overlay import attach_html_trade_route_overlay
+from voidcompass.overlays.html_orders_overlay import attach_html_orders_overlay
 from voidcompass.overlays.html_expedition_overlay import attach_html_expedition_overlay
 from voidcompass.overlays.html_hatchling_overlay import attach_html_hatchling_overlay
 from voidcompass.overlays.html_rig_tracker_overlay import attach_html_rig_tracker_overlay
@@ -109,6 +111,8 @@ from voidcompass.dashboard.dashboard_api_mixin import DashboardApiMixin
 from voidcompass.dashboard.dashboard_colonisation_mixin import DashboardColonisationMixin
 from voidcompass.dashboard.dashboard_bgs_mixin import DashboardBgsMixin
 from voidcompass.dashboard.dashboard_trading_mixin import DashboardTradingMixin
+from voidcompass.dashboard.dashboard_orders_mixin import DashboardOrdersMixin
+from voidcompass.dashboard.dashboard_banter_mixin import DashboardBanterMixin
 from voidcompass.dashboard.dashboard_games_mixin import DashboardGamesMixin
 from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
 from voidcompass.core.field_state import (
@@ -312,6 +316,8 @@ class MainDashboard(
     DashboardColonisationMixin,
     DashboardBgsMixin,
     DashboardTradingMixin,
+    DashboardOrdersMixin,
+    DashboardBanterMixin,
     DashboardGamesMixin,
     DashboardCoreMixin,
     DashboardDBMixin,
@@ -1003,6 +1009,7 @@ class MainDashboard(
             "jump_info_hud",
             "colony_needs_hud",
             "trade_route_hud",
+            "orders_hud",
             "expedition_hud",
             "hatchling_hud",
             "rig_tracker_hud",
@@ -1094,7 +1101,7 @@ class MainDashboard(
             "hud", "cargo_hud", "carrier_hud", "prospector_hud", "planet_materials_hud", "powerplay_hud",
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud",
-            "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud",
+            "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud", "orders_hud",
             "expedition_hud", "hatchling_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud", "postcard_hud",
         ):
             overlay = getattr(self, attr, None)
@@ -1738,6 +1745,14 @@ class MainDashboard(
         else:
             context = headings(here, getattr(self, "nav_route_entries", None), getattr(self, "current_sys", ""),
                                home_anchor.home(self.config).get("pos"))
+        # 5.7.7: your standing with whoever's on watch, from Crew Orders.
+        service = getattr(self, "_orders_service_level", None)
+        if callable(service):
+            try:
+                from voidcompass.core.companions import identity
+                context["service"] = service(identity(self.config))
+            except Exception:
+                pass
         if self.config.get("crew_rota"):
             from voidcompass.core import crew_rota
             try:
@@ -2274,6 +2289,8 @@ class MainDashboard(
         self._colony_switch_profile(new_key)
         self._bgs_switch_profile(new_key)
         self._trading_switch_profile(new_key)
+        self._orders_switch_profile(new_key)
+        self._banter_switch_profile(new_key)
         if getattr(self, "expedition_manager", None):
             self.expedition_manager.flush(wait=False)
         self.expedition_manager = ExpeditionManager(
@@ -2413,6 +2430,8 @@ class MainDashboard(
         self._colony_init()
         self._bgs_init()
         self._trading_init()
+        self._orders_init()
+        self._banter_init()
         self.expedition_manager = ExpeditionManager(
             get_profile_file(get_active_profile(self.config), "expeditions.json"),
             examples=True,
@@ -2890,6 +2909,7 @@ class MainDashboard(
             self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
             self.heartbeat_hud.context_provider = self._watcher_context
             self.heartbeat_hud.moment_provider = self._companion_moment_context
+            self.heartbeat_hud.service_provider = getattr(self, "_orders_service_level", None)
             self.heartbeat_hud.story_listener = self._watcher_story
             self.heartbeat_hud.thought_listener = self._api_thought
             self._watcher_voice_attach(self.heartbeat_hud)
@@ -2933,6 +2953,11 @@ class MainDashboard(
             self.trade_route_hud = TradeRouteHUD(self.root, self.config)
         else:
             self.trade_route_hud = None
+
+        if self._overlay_enabled("orders_hud"):
+            self.orders_hud = OrdersHUD(self.root, self.config)
+        else:
+            self.orders_hud = None
 
         if self._overlay_enabled("expedition_hud"):
             self.expedition_hud = ExpeditionHUD(self.root, self.config)
@@ -3058,6 +3083,10 @@ class MainDashboard(
         # Trading: your own trades from the journal history, and the route
         # you were following (on its overlay).
         self._trading_start_import()
+        # Crew Orders (5.7.7): offers, reminders and campaign stages, every few seconds.
+        self._orders_schedule()
+        # An order already on the board shows in the cockpit from the start.
+        self._orders_update_overlay()
         self._trading_update_overlay()
         # Keep a restored capacity if no journal names the ship's hold; a
         # different ship since the snapshot doesn't keep the old one's hold.
@@ -3819,6 +3848,11 @@ class MainDashboard(
         if action == "hud_page_next":
             self._hud_page_next()
             return
+        if action in {"orders_accept", "orders_decline"}:
+            # 5.7.7: answer the waiting order from the cockpit.
+            result = self._orders_accept() if action == "orders_accept" else self._orders_decline()
+            self._orders_notice = {"text": result.get("message", ""), "ok": bool(result.get("ok")), "at": time.time()}
+            return
         if action == "hud_pages_mode":
             self._hud_pages_mode_key()
             return
@@ -4344,10 +4378,12 @@ class MainDashboard(
         self._bgs_close()
         clock.mark("BGS")
         self._trading_close()
+        self._orders_close()
+        self._banter_save(immediate=True)
         clock.mark("Trading")
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
-            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "expedition_hud", "hatchling_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
+            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "orders_hud", "expedition_hud", "hatchling_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
             "postcard_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
@@ -5339,6 +5375,7 @@ class MainDashboard(
                 self.heartbeat_hud = HeartbeatHUD(self.root, self.config)
                 self.heartbeat_hud.context_provider = self._watcher_context
                 self.heartbeat_hud.moment_provider = self._companion_moment_context
+                self.heartbeat_hud.service_provider = getattr(self, "_orders_service_level", None)
                 self.heartbeat_hud.story_listener = self._watcher_story
                 self.heartbeat_hud.thought_listener = self._api_thought
                 self._watcher_voice_attach(self.heartbeat_hud)
@@ -5400,6 +5437,14 @@ class MainDashboard(
         elif getattr(self, "trade_route_hud", None):
             self.trade_route_hud.destroy()
             self.trade_route_hud = None
+
+        if self._overlay_enabled("orders_hud"):
+            if getattr(self, "orders_hud", None) is None:
+                self.orders_hud = OrdersHUD(self.root, self.config)
+                self._orders_update_overlay()
+        elif getattr(self, "orders_hud", None):
+            self.orders_hud.destroy()
+            self.orders_hud = None
 
         if self._overlay_enabled("expedition_hud"):
             if getattr(self, "expedition_hud", None) is None:
@@ -5532,6 +5577,10 @@ class MainDashboard(
                 )
             elif attr == "trade_route_hud":
                 attach_html_trade_route_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "orders_hud":
+                attach_html_orders_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "expedition_hud":
@@ -8527,6 +8576,10 @@ class MainDashboard(
         self._bgs_observe(raw if isinstance(raw, dict) else None, startup_replay=startup_replay)
         # Trading: your trades, and the route you're following (trading.journal).
         self._trading_observe(raw if isinstance(raw, dict) else None, startup_replay=startup_replay)
+        # Crew Orders: the journal finishes them (5.7.7).
+        self._orders_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
+        # Crew banter: the crew talking to each other at the moments that matter (5.7.7).
+        self._banter_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
         if ev == "CodexEntry" and isinstance(raw, dict) and is_green_giant_codex(raw):
             self._note_green_giant_codex(raw)
         if getattr(self, "codex_index", None) and ev == "CodexEntry" and isinstance(raw, dict):

@@ -118,6 +118,9 @@ class Moments:
             out["heading"] = compass
         if "rota" in context:
             out["watch"] = {"rota": bool(context.get("rota")), "duty": context.get("duty")}
+        if context.get("service"):
+            # 5.7.7: your standing with this companion, as pips on its bezel.
+            out["service"] = int(context["service"])
         survey = getattr(mind, "_survey", None)
         if self.body_count:
             found = len(getattr(survey, "bodies", None) or {})

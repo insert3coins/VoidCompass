@@ -50,6 +50,8 @@ def minimap_options(config):
         "spansh": bool(config.get("galaxy_minimap_spansh", True)),
         # Where your sealed time capsules wait (5.5.3.7).
         "capsules": bool(config.get("galaxy_minimap_capsules", True)),
+        # Where the crew's orders point (5.7.7).
+        "orders": bool(config.get("galaxy_minimap_orders", True)),
         # The region names' size (5.5.4): 0 follows the minimap's text size.
         "region_text": region_text_size(config.get("galaxy_minimap_region_text_percent")),
     }
@@ -224,7 +226,7 @@ def spansh_trip(waypoints=None, plot=None, position=None, system=""):
 
 
 def build_minimap_model(rows, position=None, system="", route_entries=None, options=None, regions_visited=0, trip=None,
-                        capsules=None, home=None):
+                        capsules=None, home=None, orders=None):
     """The page's model. ``rows`` are this session's travel-history rows
     (oldest first, starting where the session began), ``position`` the ship's
     [x, y, z] when known, ``route_entries`` NavRoute.json's route."""
@@ -251,6 +253,8 @@ def build_minimap_model(rows, position=None, system="", route_entries=None, opti
         "route": plotted_route(route_entries, position, system) if options["route"] else None,
         "trip": trip if options.get("spansh", True) else None,
         "capsules": [list(point) for point in (capsules or ())][:200] if options.get("capsules", True) else [],
+        "orders": [{"x": row["coords"][0], "z": row["coords"][2], "officer": row.get("officer") or "",
+                    "offered": row.get("status") == "offered"} for row in (orders or ())][:8] if options.get("orders", True) else [],
         "regions_visited": int(regions_visited or 0),
         "regions_total": len(region_names()),
         "options": options,
@@ -270,8 +274,8 @@ class GalaxyMinimapHUD:
         self.win = OverlayWindowState(root)
         self.win.geometry(overlay_chrome.position_geometry(
             _integer(config.get("galaxy_minimap_hud_x"), 40), _integer(config.get("galaxy_minimap_hud_y"), 600)))
-        # session rows, every row, revision, position, system, route entries, trip, capsules
-        self._last = ([], [], None, None, "", None, None, None)
+        # session rows, every row, revision, position, system, route entries, trip, capsules, orders
+        self._last = ([], [], None, None, "", None, None, None, None)
 
     def _regions_visited(self, rows, revision):
         """How many of the 42 regions the journey has reached, counted once
@@ -291,7 +295,7 @@ class GalaxyMinimapHUD:
         return len(seen)
 
     def update(self, session_rows, all_rows=None, revision=None, position=None, system="", route_entries=None, trip=None,
-               capsules=None):
+               capsules=None, orders=None):
         """This session's arrivals, the whole journey (only to count regions),
         where the ship is, the plotted route and the Spansh trip
         (``spansh_trip``). Rebuilt only when something changed."""
@@ -304,22 +308,23 @@ class GalaxyMinimapHUD:
                      tuple(round(float(v), 1) for v in position) if position else None, str(system or ""),
                      route_key, tuple(sorted(options.items())),
                      (trip["source"], trip["name"], trip["stops"], len(trip["points"])) if trip else None,
-                     tuple(tuple(point) for point in (capsules or ())), home["name"], tuple(home["pos"]))
-        self._last = (session_rows, all_rows, revision, position, system, route_entries, trip, capsules)
+                     tuple(tuple(point) for point in (capsules or ())), home["name"], tuple(home["pos"]),
+                     tuple((row.get("id"), row.get("status"), tuple(row["coords"])) for row in orders or ()))
+        self._last = (session_rows, all_rows, revision, position, system, route_entries, trip, capsules, orders)
         if signature == self._signature:
             return False
         self._signature = signature
         visited = self._regions_visited(all_rows, signature[0])
         self._html_render_model = build_minimap_model(
             session_rows, position=position, system=system, route_entries=route_entries,
-            options=options, regions_visited=visited, trip=trip, capsules=capsules, home=home)
+            options=options, regions_visited=visited, trip=trip, capsules=capsules, home=home, orders=orders)
         return True
 
     def apply_settings(self):
         """Overlay Studio changed its size, view or route."""
-        session_rows, all_rows, revision, position, system, route_entries, trip, capsules = self._last
+        session_rows, all_rows, revision, position, system, route_entries, trip, capsules, orders = self._last
         self._signature = None
-        self.update(session_rows, all_rows, revision, position, system, route_entries, trip, capsules)
+        self.update(session_rows, all_rows, revision, position, system, route_entries, trip, capsules, orders)
 
     def apply_theme(self, palette=None):
         self._palette = themes.normalize_theme(palette or themes.ACTIVE_PALETTE)

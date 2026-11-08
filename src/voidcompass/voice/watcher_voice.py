@@ -110,6 +110,10 @@ _SAY_AS = (
     (re.compile(r"(\d)\s*Cr\b"), r"\1 credits"),
     (re.compile(r"(\d)\s*km\b"), r"\1 kilometres"),
     (re.compile(r"(\d)\s*AU\b"), r"\1 astronomical units"),
+    # 5.7.7: names the crew's orders say aloud, checked with piper --debug:
+    # "A*" was "A asterisk", and Concha was "con-CHAH".
+    (re.compile(r"\b(Sagittarius|Sag) A\*"), r"\1 A-Star"),
+    (re.compile(r"\bConcha\b"), "Conka"),
     (re.compile(r"\bCMDR\b"), "Commander"),
     (re.compile(r"\bFSD\b"), "frame shift drive"),
     (re.compile(r"\bSRV\b"), "S R V"),
@@ -312,6 +316,14 @@ class WatcherSpeaker:
         self.stop()
         self._stop_engine()
         self._wake.set()
+
+    def busy(self):
+        """5.7.7: something queued, being prepared or playing. The crew wait
+        for this in conversation, so nobody talks over anyone."""
+        with self._lock:
+            if self._pending or self._live:
+                return True
+            return any(state == "preparing" for state in self._states.values())
 
     def live(self):
         """What it's saying now, for the orb and the typing: the key, how

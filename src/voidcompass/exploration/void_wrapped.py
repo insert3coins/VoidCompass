@@ -616,6 +616,9 @@ def year_story(year, sources, nature="weary", commander="", now=None, trip=None)
     crew = crew_card(sessions, sources.get("crew") or {}, start, end, seed)
     if crew:
         cards.append(crew)
+    orders = orders_card(sources.get("orders") or {}, start, end)
+    if orders:
+        cards.append(orders)
     deaths = sum(int(session.get("deaths") or 0) for session in session_rows)
     facts["deaths"] = deaths
     if deaths:
@@ -697,6 +700,31 @@ def crew_card(sessions, memories, start, end, seed):
     night = {row[0] for memory in memories.values() for row in (memory or {}).get("crew_story") or ()
              if isinstance(row, (list, tuple)) and len(row) > 1 and start <= float(row[1] or 0) < end}
     return {"kind": "crew", "members": members, "top": members[0]["name"], "night_watch": len(night)}
+
+
+_ORDER_NAMES = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra"}
+
+
+def orders_card(ledger, start, end):
+    """5.7.7: the crew's orders you finished, the campaigns, who you did the
+    most for, and the ribbons earned. ``ledger`` is the Crew Orders ledger's data."""
+    done = [row for row in ledger.get("history") or () if row.get("status") == "done"
+            and start <= float(row.get("closed_at") or 0) < end]
+    if not done:
+        return None
+    by = Counter(row.get("officer") for row in done if row.get("officer") in _ORDER_NAMES)
+    campaigns = [str(row.get("title") or "") for row in done if row.get("size") == "campaign"]
+    try:
+        from voidcompass.orders.ribbons import RIBBONS
+    except Exception:
+        RIBBONS = {}
+    earned = [RIBBONS.get(key, (key, ""))[0] for key, at in (ledger.get("ribbons") or {}).items()
+              if start <= float(at or 0) < end]
+    top = by.most_common(1)[0][0] if by else "watcher"
+    best = campaigns[-1] if campaigns else str(max(done, key=lambda row: float(row.get("closed_at") or 0)).get("title") or "")
+    return {"kind": "orders", "done": len(done), "campaigns": campaigns[-4:], "ribbons": earned[-6:],
+            "by": [{"id": key, "name": _ORDER_NAMES[key], "count": count} for key, count in by.most_common()],
+            "top": _ORDER_NAMES.get(top, "The crew"), "best": best}
 
 
 def _credits(value):

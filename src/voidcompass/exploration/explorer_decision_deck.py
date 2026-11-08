@@ -261,6 +261,14 @@ def field_cues(facts):
             "detail": f"{colony.get('header') or 'Your project'} · {remaining:,} t to go"
                       + (f", about {trips} trip{'s' if trips != 1 else ''}" if trips else ""),
         })
+    # 5.7.7: the order you've been on longest, and its next step.
+    order = facts.get("order") or {}
+    if order.get("title"):
+        cues.append({
+            "id": "crew-order", "kind": "order", "score": 88,
+            "title": f"{order['officer']}'s order: {order['title']}",
+            "detail": (order.get("next") or "Under way") + (f" · {order['system']}" if order.get("system") else ""),
+        })
     return cues
 
 

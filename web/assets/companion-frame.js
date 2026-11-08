@@ -10,12 +10,16 @@ export const COMPANION_EXTENT = 1.16;
 // (Axiom: a graduated measuring scale), "compass" (Meridian: a brass rose
 // with cardinal points). Anything else is the plain shared bezel.
 const STYLES = {command:1, scale:2, compass:3};
-export function createCompanionFrame({colour, energy, opening = .30, style = ""}) {
+// 5.7.7: your standing with the officer (Crew Orders), as service pips set
+// into the bottom of the bezel: one for Trusted up to four for Indispensable,
+// the fourth gilding them all. Inside the same silhouette, so no display grows.
+export function createCompanionFrame({colour, energy, opening = .30, style = "", service = {value:0}}) {
   const material = front => new THREE.ShaderMaterial({
-    uniforms: {uColour:colour, uEnergy:energy, uOpening:{value:opening}, uFront:{value:front?1:0}, uStyle:{value:STYLES[style]||0}},
+    uniforms: {uColour:colour, uEnergy:energy, uOpening:{value:opening}, uFront:{value:front?1:0}, uStyle:{value:STYLES[style]||0},
+      uService:service},
     vertexShader: `varying vec2 vUv;
       void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader: `varying vec2 vUv;uniform vec3 uColour;uniform float uEnergy,uOpening,uFront,uStyle;
+    fragmentShader: `varying vec2 vUv;uniform vec3 uColour;uniform float uEnergy,uOpening,uFront,uStyle,uService;
       float stroke(float d,float width){return 1.0-smoothstep(width,width+fwidth(d),abs(d));}
       void main(){
         vec2 p=(vUv-.5)*2.55;float r=length(p),a=atan(p.y,p.x);
@@ -51,6 +55,15 @@ export function createCompanionFrame({colour, energy, opening = .30, style = ""}
           float rose=(1.0-step(.08,fract(turn*32.0)))*stroke(r-1.095,.008);
           ticks=max(max(cardinal,inter),rose*.8);
         }
+        // Service pips: small studs across the bottom of the housing.
+        float pips=0.0;
+        for(int i=0;i<4;i++){
+          float k=float(i);
+          if(k<uService){
+            vec2 c=vec2((k-(min(uService,4.0)-1.0)*.5)*.085,-1.079);
+            pips=max(pips,1.0-smoothstep(.016,.016+fwidth(length(p-c))*1.5,length(p-c)));
+          }
+        }
         float alpha=uFront>.5?max(housing*.96*edge,bevel*.94):glass*.76;
         if(alpha<.001)discard;
         vec3 dark=vec3(.012,.022,.032);
@@ -63,6 +76,8 @@ export function createCompanionFrame({colour, energy, opening = .30, style = ""}
           surface=mix(surface,dark,inset*.7);
           surface=mix(surface,mix(uColour,vec3(.83,.92,.97),.32),clamp(bevel*(.72+sheen*.28)+ticks*.42,0.0,1.0));
           surface+=uColour*bevel*clamp(uEnergy,0.0,1.0)*.12;
+          vec3 pipColour=uService>3.5?vec3(1.0,.82,.42):mix(uColour,vec3(.95,.98,1.0),.35);
+          surface=mix(surface,pipColour,pips*.95);
         }
         gl_FragColor=vec4(surface,alpha);
         #include <colorspace_fragment>

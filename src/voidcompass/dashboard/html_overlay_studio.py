@@ -386,6 +386,7 @@ class HtmlOverlayStudioMixin:
                 "galaxy_minimap_labels": galaxy_minimap_hud.minimap_options(self.config)["labels"],
                 "galaxy_minimap_spansh": galaxy_minimap_hud.minimap_options(self.config)["spansh"],
                 "galaxy_minimap_capsules": galaxy_minimap_hud.minimap_options(self.config)["capsules"],
+                "galaxy_minimap_orders": galaxy_minimap_hud.minimap_options(self.config)["orders"],
                 "galaxy_minimap_text_scale_percent": heartbeat_text_size(self.config.get("galaxy_minimap_text_scale_percent")),
                 "galaxy_minimap_region_text_percent": heartbeat_text_size(self.config.get("galaxy_minimap_region_text_percent")),
                 "rig_tracker_show_holds": bool(self.config.get("rig_tracker_show_holds", True)),
@@ -681,7 +682,7 @@ class HtmlOverlayStudioMixin:
             "survey_status_show_all_bodies", "survey_codex_flags",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
             "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion", "lyra_hud_motion",
-            "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "postcard_photo",
+            "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "galaxy_minimap_orders", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "rig_tracker_show_holds",
             "hatchling_speech", "hatchling_glow", "hatchling_sounds",
@@ -719,7 +720,7 @@ class HtmlOverlayStudioMixin:
             heartbeat = getattr(self, "heartbeat_hud", None)
             if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
                 heartbeat.apply_settings()
-        elif key in {"galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "postcard_photo", "postcard_facts", "postcard_note", "postcard_doing"}:
+        elif key in {"galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "galaxy_minimap_orders", "postcard_photo", "postcard_facts", "postcard_note", "postcard_doing"}:
             for attr in ("galaxy_minimap_hud", "postcard_hud"):
                 overlay = getattr(self, attr, None)
                 if overlay is not None and hasattr(overlay, "apply_settings"):

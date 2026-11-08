@@ -132,6 +132,13 @@ class DashboardWatcherVoiceMixin:
         except Exception:
             self._crew_rota_job = None
 
+    def _crew_rota_status(self, now=None, facts=None):
+        """5.7.7: what the rota is doing, for the companion page."""
+        now = time.time() if now is None else now
+        return self._crew_rota_state().status(facts or self._crew_rota_facts(), now, companions.identity(self.config),
+                                              enabled=bool(self.config.get("crew_rota")),
+                                              rota_duties=crew_rota.duties(self.config))
+
     def _crew_rota_facts(self):
         mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
         try:
@@ -150,8 +157,11 @@ class DashboardWatcherVoiceMixin:
             return None
         self._crew_rota_schedule()
         now = time.time() if now is None else now
-        target = self._crew_rota_state().step(self._crew_rota_facts(), now, companions.identity(self.config),
+        facts = self._crew_rota_facts()
+        target = self._crew_rota_state().step(facts, now, companions.identity(self.config),
                                               rota_duties=crew_rota.duties(self.config))
+        # 5.7.7: each decision, for the live debugger: duty, who's wanted, and why not yet.
+        logging.debug("Watch rota: %s", self._crew_rota_status(now, facts))
         if target and self._companion_switch(target, by_rota=True):
             return target
         return None
@@ -728,6 +738,10 @@ class DashboardWatcherVoiceMixin:
         station = watcher_copilot.station_request(text)
         if station:
             return self._watcher_station_search(original_text, station, rng)
+        # 5.7.7: Crew Orders, asked about by name ("any orders?", "accept the order").
+        orders = self._orders_talk(text) if hasattr(self, "_orders_talk") else None
+        if orders:
+            return orders
         target = watcher_copilot.distance_request(text)
         if target:
             return self._watcher_distance(original_text, target, rng)
@@ -1039,6 +1053,9 @@ class DashboardWatcherVoiceMixin:
             "crew_rota": bool(self.config.get("crew_rota")),
             **{crew_rota.duty_key(duty): who for duty, who in crew_rota.duties(self.config).items()},
             "crew_rota_deep_ly": str(crew_rota.deep_ly(self.config)),
+            "rota_status": self._crew_rota_status() if self.config.get("crew_rota") else None,
+            # 5.7.7: crew banter, on the same page.
+            **(self._banter_settings() if hasattr(self, "_banter_settings") else {}),
             "text_sizes": list(HEARTBEAT_TEXT_SIZES),
         }
 
@@ -1104,6 +1121,12 @@ class DashboardWatcherVoiceMixin:
             self._persist_config()
             self._schedule_html_dashboard_publish(immediate=True)
             return True
+        if operation == "rota_release":
+            # 5.7.7: give the watch back to the rota now, instead of waiting out your pick.
+            self._crew_rota_state().release()
+            self._crew_rota_tick()
+            self._schedule_html_dashboard_publish(immediate=True)
+            return True
         if operation == "settings":
             values = payload.get("values") if isinstance(payload.get("values"), dict) else {}
             if companions.identity(self.config) != "watcher" and "heartbeat_thoughts" in values:
@@ -1146,6 +1169,16 @@ class DashboardWatcherVoiceMixin:
                 self._crew_rota_state().candidate = None
                 self._persist_config()
                 values = {key: value for key, value in values.items() if key not in duty_keys}
+                if not values:
+                    self._schedule_html_dashboard_publish(immediate=True)
+                    return True
+            if hasattr(self, "_banter_save_settings") and any(str(key).startswith("crew_banter") for key in values):
+                # 5.7.7: crew banter, how often, how many and when.
+                rest = self._banter_save_settings(values)
+                if rest is None:
+                    return False
+                self._persist_config()
+                values = rest
                 if not values:
                     self._schedule_html_dashboard_publish(immediate=True)
                     return True

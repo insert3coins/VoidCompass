@@ -132,3 +132,9 @@ body.still .thought i, body.still .thought-box, body.still .thought-words::after
 /* A question's answers (5.6.1), numbered for the Watcher's answer hotkeys. */
 .thought-answers { display: block; margin-top: 6px; color: var(--accent); font: 700 .82em Consolas, monospace; letter-spacing: .06em; }
 .thought-answers[hidden] { display: none; }
+
+/* 5.7.7: a crewmate off watch takes the overlay while they speak; the
+   displays cross over with a short fade, both ways. */
+@keyframes guest-swap { from { opacity: .15; } to { opacity: 1; } }
+.heartbeat.guest-swap > canvas { animation: guest-swap .45s ease-out; }
+body.still .heartbeat.guest-swap > canvas { animation: none; }

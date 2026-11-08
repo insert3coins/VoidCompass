@@ -253,6 +253,19 @@ def alert_line(gravity=None, rigs=None):
     return None
 
 
+def order_line(order):
+    """5.7.7: the crew order that fits this page, as one line:
+    ORDER · LYRA · THE TEAL CERBRUS · 14 LY."""
+    if not order or not order.get("title"):
+        return None
+    parts = ["ORDER", str(order.get("officer") or "").upper(), str(order["title"]).upper()]
+    if order.get("next"):
+        parts.append(str(order["next"]).upper())
+    if order.get("distance"):
+        parts.append(str(order["distance"]).upper())
+    return note(" · ".join(part for part in parts if part), "accent", wrap=True)
+
+
 def _page(page_id, title, *blocks, tone="hud"):
     return {"id": page_id, "label": LABELS.get(page_id, page_id.upper()), "title": title, "tone": tone,
             "blocks": [block for block in blocks if _shown(block)]}
@@ -339,8 +352,8 @@ def survey_rank(row):
     return work, -value
 
 
-def survey_page(model, contacts=None):
-    if not model and not contacts:
+def survey_page(model, contacts=None, order=None):
+    if not model and not contacts and not order:
         return None
     model = model or {}
     system = str(model.get("system") or "")
@@ -387,6 +400,7 @@ def survey_page(model, contacts=None):
             blocks.append(bars([("SCANNED", f"{round(scanned / total * 100)}%", scanned / total, "accent")]))
         blocks.append(listing(rows, title="WORTH A LOOK"))
     blocks.append(signal_list(contacts))
+    blocks.append(order_line(order))
     return _page("survey", "SYSTEM SURVEY", *blocks, tone="accent")
 
 
@@ -403,7 +417,7 @@ def signal_list(contacts, threats_only=False):
     return listing(items, more=more, title="THREATS HERE" if threats_only else "SIGNALS HERE", rows=None) if items else None
 
 
-def planet_page(body="", materials=None, target=None, sampling=None, gravity=None, threshold=None):
+def planet_page(body="", materials=None, target=None, sampling=None, gravity=None, threshold=None, order=None):
     materials = materials or {}
     details = materials.get("details") or {}
     name = materials.get("short_body") or body
@@ -440,6 +454,7 @@ def planet_page(body="", materials=None, target=None, sampling=None, gravity=Non
                                 _credits(row.get("median")) + " / T" if row.get("median") else "", "yellow" if index == 0 else "text")
                                for index, row in enumerate(best[:3])],
                               title=f"RHINO GROUND{f' · {sites} MINING SITES' if sites else ''}"))
+    blocks.append(order_line(order))
     return _page("planet", "ON THE SURFACE", *blocks, tone="red" if heavy else "hud")
 
 

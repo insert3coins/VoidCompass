@@ -1,22 +1,40 @@
 import {createCrewDisplay} from "./crew-3d.js";
 import {companionColours} from "./companion-colours.js";
 
-const views = new Map();
+// 5.7.7: a display per companion for each source, so a crewmate stepping in
+// while they speak (a guest) doesn't rebuild the one on watch. A guest's
+// display unused for a while is let go.
+const pools = new Map();
+const views = {get: (source) => { const pool = pools.get(source); return pool?.byId.get(pool.current) || null; }, keys: () => pools.keys()};
+const IDLE_MS = 90000;
+function release(view) { view.display?.destroy(); view.canvas.remove(); view.error?.remove(); }
 function dispose(source) {
-  const view = views.get(source);
-  if (!view) return;
-  view.display?.destroy(); view.canvas.remove(); view.error?.remove(); views.delete(source);
+  const pool = pools.get(source);
+  if (!pool) return;
+  for (const view of pool.byId.values()) release(view);
+  pools.delete(source);
   source.style.opacity = "";
+}
+function hide(view) {
+  view.display?.setVisible(false); view.canvas.hidden = true; view.canvas.style.display = "none";
+  if (view.error) { view.error.hidden = true; view.error.style.display = "none"; }
 }
 function update(source, model = {}, live = {}, options = {}) {
   if (!source) return;
-  for (const canvas of views.keys()) if (!canvas.isConnected) dispose(canvas);
+  for (const canvas of [...pools.keys()]) if (!canvas.isConnected) dispose(canvas);
   const identity = model.orb?.identity;
   const active = ["axiom", "meridian", "lyra"].includes(identity);
-  let view = views.get(source);
-  if (view && view.identity !== identity) { dispose(source); view = null; }
+  let pool = pools.get(source);
+  if (!pool) { pool = {byId: new Map(), current: null}; pools.set(source, pool); }
+  const now = performance.now();
+  for (const [id, other] of [...pool.byId]) {
+    if (id === identity) continue;
+    hide(other);
+    if (now - (other.used || 0) > IDLE_MS) { release(other); pool.byId.delete(id); }
+  }
+  pool.current = active ? identity : null;
+  let view = active ? pool.byId.get(identity) : null;
   if (!active) {
-    if (view) { view.display?.setVisible(false); view.canvas.hidden = true; view.canvas.style.display = "none"; if (view.error) { view.error.hidden = true; view.error.style.display = "none"; } }
     source.style.opacity = identity && identity !== "watcher" ? "0" : "";
     return;
   }
@@ -36,14 +54,15 @@ function update(source, model = {}, live = {}, options = {}) {
       message.style.cssText = "position:absolute;inset:15%;display:grid;place-items:center;text-align:center;font:11px/1.5 Consolas,monospace;color:var(--text,#d8e6ee)";
       message.textContent = `${{axiom:"Axiom",meridian:"Meridian",lyra:"Lyra"}[identity]} display unavailable. Check WebGL / hardware acceleration.`;
       source.insertAdjacentElement("afterend", message);
-      views.set(source, {canvas, identity, display: null, error: message});
+      pool.byId.set(identity, {canvas, identity, display: null, error: message, used: now});
       source.style.opacity = "0";
       source.setAttribute("aria-label", `${identity} display could not start`);
       window.dispatchEvent(new CustomEvent("crew-renderer-error", {detail: String(error)}));
       return;
     }
-    views.set(source, view);
+    pool.byId.set(identity, view);
   }
+  view.used = now;
   if (!view.display) { source.style.opacity = "0"; if (view.error) { view.error.hidden = false; view.error.style.display = "grid"; } return; }
   source.style.opacity = "0"; view.canvas.hidden = false; view.canvas.style.display = "block";
   const visible = options.visible !== false && source.getClientRects().length > 0;
@@ -73,4 +92,4 @@ function update(source, model = {}, live = {}, options = {}) {
 }
 window.CrewCompanion = {update, dispose, inspect: source => views.get(source)?.display?.inspect() || null};
 window.dispatchEvent(new Event("crew-three-ready"));
-window.addEventListener("pagehide", () => { for (const source of views.keys()) dispose(source); });
+window.addEventListener("pagehide", () => { for (const source of [...pools.keys()]) dispose(source); });

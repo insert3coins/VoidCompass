@@ -1,6 +1,7 @@
 import "../assets/companion-caption.js";
 import {renderCompanionChrome, COMPANIONS} from "./companion-ui.js";
 import {companionColours} from "../assets/companion-colours.js";
+import {renderOrders} from "./orders.js";
 // The Watcher's page (5.5.3.2): its eye, live; everything it has said; what
 // it remembers of the commander (records, places, the bond grown over
 // sessions together); and a poke.
@@ -159,6 +160,7 @@ function shell(root, ui) {
     </div>
   </header><nav class="watcher-tabs" role="tablist" aria-label="Companion">
     <button type="button" role="tab" data-watcher-tab="now">BRIDGE<b id="watcher-now-badge"></b></button>
+    <button type="button" role="tab" data-watcher-tab="orders">ORDERS<b id="watcher-orders-badge"></b></button>
     <button type="button" role="tab" data-watcher-tab="story">STORY</button>
     <button type="button" role="tab" data-watcher-tab="you">YOU</button>
     <button type="button" role="tab" data-watcher-tab="said">LOG</button>
@@ -203,6 +205,9 @@ function shell(root, ui) {
         <button type="button" class="watcher-go" data-watcher-go="said">THE FULL LOG</button>
       </section>
     </aside>
+  </div>
+  <div class="watcher-page watcher-orders-page" data-watcher-panel="orders" hidden>
+    <div id="orders-workspace" class="workspace-shell loading-panel">Opening the order book…</div>
   </div>
   <div class="watcher-page watcher-story-page" data-watcher-panel="story" hidden>
     <section class="watcher-card watcher-lore-panel" aria-label="Its long story">
@@ -598,6 +603,11 @@ export function renderWatcher(data = {}, ui) {
   const identity = data.identity || "watcher";
   if (identity !== activeCompanion || (data.companion_generation || 0) !== activeGeneration) { companionLive = {}; panelCaption?.clear(); lastLoreKey = ""; lastLogKey = ""; lastThought = ""; chosenChapter = null; }
   activeCompanion = identity;
+  // 5.7.7: the crew's orders, in their own tab; its badge counts the ones waiting for an answer.
+  renderOrders(data.orders || {enabled: false}, ui);
+  const waiting = (data.orders?.offered || []).filter((row) => !row.later).length;
+  const badge = ui.byId("watcher-orders-badge");
+  if (badge) badge.textContent = waiting ? String(waiting) : "";
   activeGeneration = data.companion_generation || 0;
   renderCompanionChrome(data);
   root.dataset.companion = identity;
@@ -848,13 +858,21 @@ try { watcherTab = window.localStorage.getItem("voidcompass.watcherTab") || "now
 
 function showTab(root, tab) {
   tab = OLD_TABS[tab] || tab;
-  watcherTab = ["now", "story", "you", "said", "settings"].includes(tab) ? tab : "now";
+  watcherTab = ["now", "orders", "story", "you", "said", "settings"].includes(tab) ? tab : "now";
   root.querySelectorAll("[data-watcher-panel]").forEach((panel) => { panel.hidden = panel.dataset.watcherPanel !== watcherTab; });
   root.querySelectorAll("[data-watcher-tab]").forEach((button) => {
     button.setAttribute("aria-selected", button.dataset.watcherTab === watcherTab ? "true" : "false");
   });
   try { window.localStorage.setItem("voidcompass.watcherTab", watcherTab); } catch (_error) { /* private */ }
   if (watcherTab === "now") talkToNewest();
+}
+
+// 5.7.7: other pages can open a tab here (Settings' CREW ORDERS button, an old Orders link).
+export function openWatcherTab(tab) {
+  watcherTab = tab;
+  try { window.localStorage.setItem("voidcompass.watcherTab", tab); } catch (_error) { /* private */ }
+  const root = document.getElementById("watcher-workspace");
+  if (root?.querySelector(".watcher-tabs")) showTab(root, tab);
 }
 
 function wireTabs(root) {
@@ -871,6 +889,24 @@ const ROTA_DUTIES = [["docked", "Docked"], ["scanning", "Scanning (FSS or DSS)"]
   ["route", "On a plotted route"], ["deep", "Deep space"], ["flight", "Ordinary flight"]];
 const ROTA_DEEP = [250, 500, 1000, 2000, 5000, 10000].map((ly) => [String(ly), `${ly.toLocaleString("en-GB")} ly`]);
 const ROTA_CREW = [["watcher", "The Watcher"], ["aster", "Aster"], ["axiom", "Axiom"], ["meridian", "Meridian"], ["lyra", "Lyra"], ["keep", "Whoever's on watch"]];
+// 5.7.7: crew banter, the crew talking to each other: how often, how many, and when.
+const BANTER_GROUPS = [
+  ["flight", "In flight", "Fuel, a full scoop, long jump runs, heat, a narrow escape, launch, distance records, black holes and neutron stars."],
+  ["exploring", "Exploring", "First discoveries, worlds worth mapping, the Codex, samples, landings, footfalls and data sold."],
+  ["port", "In port", "Docking, trade and mining."],
+  ["crew", "Crew moments", "A crew order done, a ship lost, a long session."],
+  ["quiet", "Quiet stretches", "When nothing has been said for a while."]];
+function banterPanel() {
+  return `<div class="watcher-banter">
+    ${field("crew_banter", "Crew banter", "The crew talking to each other, each in their own voice. Only companions whose voice is on take part: the one on watch, and crewmates you've flown with.",
+      [["off", "Off"], ["sometimes", "Now and then"], ["often", "Often"]])}
+    <p class="watcher-rota-status" id="watcher-banter-status" hidden><span></span></p>
+    ${field("crew_banter_gap", "At most one every", "However often, never closer than this", [["10", "10 minutes"], ["20", "20 minutes"], ["30", "30 minutes"], ["60", "Hour"]])}
+    ${field("crew_banter_size", "Who joins", "Just two of them, or a third when there's one to hand", [["two", "Two"], ["three", "Up to three"]])}
+    ${field("crew_banter_length", "Length", "Short is a line and its answer; Full lets the whole exchange play out", [["short", "Short"], ["full", "Full"]])}
+    ${BANTER_GROUPS.map(([group, title, note]) => toggle(`crew_banter_${group}`, title, note)).join("")}
+  </div>`;
+}
 const field = (key, title, note, options) => `<label class="studio-field"><span>${title}${note ? `<small>${note}</small>` : ""}</span>
   <select data-watcher-setting="${key}">${options.map(([value, label]) => option(value, label)).join("")}</select></label>`;
 const toggle = (key, title, note) => `<label class="studio-switch"><span><b>${title}</b><small>${note}</small></span>
@@ -886,9 +922,11 @@ function settingsPanel() {
       [["weary", "Depressed"], ["curious", "Curious"], ["stoic", "Stoic"], ["nervous", "Nervous"]])}
     ${toggle("heartbeat_thought_backdrop", "Thought backdrop", "A dark panel behind its words, easier to read over the game.")}
     ${toggle("heartbeat_thought_heading", "Thought heading", "A line above its words: a memory and its chapter, an echo, or simply its name.")}
-    ${toggle("crew_rota", "Watch rota", "The crew changes the watch with what you're doing, within a minute of it starting. Choose who takes each duty below. Choosing a companion yourself holds it for five minutes.")}
+    ${toggle("crew_rota", "Watch rota", "The crew changes the watch with what you're doing: within seconds of docking, under a minute for the rest. Choose who takes each duty below. Choosing a companion yourself holds it for five minutes.")}
+    <p class="watcher-rota-status" id="watcher-rota-status" hidden><span></span><button type="button" data-watcher-rota-release hidden>LET THE ROTA DECIDE</button></p>
     ${ROTA_DUTIES.map(([duty, title]) => field(`crew_rota_${duty}`, title, "", ROTA_CREW)
       + (duty === "deep" ? field("crew_rota_deep_ly", "Deep space starts", "How far from home", ROTA_DEEP) : "")).join("")}
+    ${banterPanel()}
     ${field("heartbeat_thought_side", "Thought side", "Auto goes toward the middle of the screen; either side swaps if its words won't fit there",
       [["auto", "Auto"], ["left", "Left of the display"], ["right", "Right of the display"]])}
     ${field("heartbeat_text_scale_percent", "Text size", "Its words only; the display keeps its size",
@@ -910,8 +948,37 @@ function savedNote(id, ok) {
   note._timer = window.setTimeout(() => { note.textContent = ""; }, 2200);
 }
 
+// 5.7.7: the rota's state under its switch. The deck sends when a change is
+// due; the countdown runs here, so the page itself never redraws for a clock.
+let rotaStatus = null;
+let rotaTimer = 0;
+function rotaText() {
+  const line = document.getElementById("watcher-rota-status");
+  if (!line) return;
+  const status = rotaStatus;
+  line.hidden = !status;
+  if (!status) return;
+  const left = status.until ? Math.max(0, Math.round(status.until - Date.now() / 1000)) : null;
+  const when = left == null ? "" : left >= 120 ? ` in ${Math.ceil(left / 60)} min` : ` in ${left} s`;
+  let text = status.text || "";
+  if (status.state === "holding" && status.until) {
+    const until = new Date(status.until * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+    text = `${text} until ${until}`;
+  } else if (status.state === "gap") {
+    text = `${text}${left ? `: next change allowed${when}` : ""}`;
+  } else if (status.state === "waiting") {
+    text = `${text}${left ? when : ""}`;
+  }
+  line.querySelector("span").textContent = text;
+  line.querySelector("[data-watcher-rota-release]").hidden = status.state !== "holding";
+}
+
 function wireSettings(root, ui) {
   const panel = root.querySelector('[data-watcher-panel="settings"]');
+  panel.addEventListener("click", async (event) => {
+    if (!event.target.closest("[data-watcher-rota-release]")) return;
+    await ui.command("workspace", {page: "watcher", operation: "rota_release"});
+  });
   panel.addEventListener("change", async (event) => {
     const select = event.target.closest("[data-watcher-setting]");
     const box = event.target.closest("[data-watcher-switch]");
@@ -932,6 +999,19 @@ function renderSettings(settings, ui) {
     const value = settings[box.dataset.watcherSwitch];
     if (value !== undefined) box.checked = Boolean(value);
   });
+  // 5.7.7: crew banter's details show while it's on, with who can talk now.
+  const banterOn = (settings.crew_banter || "sometimes") !== "off";
+  panel.querySelectorAll('[data-watcher-setting^="crew_banter_"], [data-watcher-switch^="crew_banter_"]').forEach((control) =>
+    control.closest("label")?.toggleAttribute("hidden", !banterOn));
+  const banterStatus = document.getElementById("watcher-banter-status");
+  if (banterStatus) {
+    banterStatus.hidden = !settings.banter_status;
+    banterStatus.querySelector("span").textContent = settings.banter_status || "";
+  }
+  rotaStatus = settings.rota_status || null;
+  rotaText();
+  if (rotaStatus && !rotaTimer) rotaTimer = window.setInterval(rotaText, 1000);
+  if (!rotaStatus && rotaTimer) { window.clearInterval(rotaTimer); rotaTimer = 0; }
 }
 
 function voicePanel() {

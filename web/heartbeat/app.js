@@ -9,7 +9,12 @@
   let poller = null;
   let asterModel = {};
   let asterReduced = false;
+  // The live poll repaints with the same palette as the snapshot did: without
+  // it a Theme accent flipped between two colours every second.
+  let shownPalette;
   let companionIdentity = "watcher";
+  // 5.7.7: whose display is showing; a crewmate off watch takes it while they speak.
+  let shownIdentity = null;
   const thoughtBox = document.getElementById("thought");
   const thoughtFrame = thoughtBox.querySelector(".thought-box");
   const thoughtHead = thoughtBox.querySelector(".thought-head");
@@ -52,12 +57,12 @@
 
   // A thought: a moment's thought first (the aperture tightens), then it
   // types out as the eye speaks it, the eye showing how it feels about it.
-  function showThought(thought, reduced, eye, nature) {
+  function showThought(thought, reduced, eye, nature, who = companionIdentity) {
     const style = (thought && thought.style) || {};
     document.body.classList.toggle("still", Boolean(reduced));
     document.body.classList.toggle("thought-backdrop", style.backdrop !== false);
-    const companion = companionIdentity !== "watcher";
-    const colours = window.CompanionColours?.resolve(companionIdentity, eye, getComputedStyle(document.documentElement).getPropertyValue("--accent").trim());
+    const companion = who !== "watcher";
+    const colours = window.CompanionColours?.resolve(who, eye, getComputedStyle(document.documentElement).getPropertyValue("--accent").trim());
     if (colours) document.body.style.setProperty("--companion-eye-colour", colours.primary);
     document.body.dataset.thoughtColour = style.colour === "accent" ? "accent" : style.colour === "eye" ? (companion ? "companion" : eye === "hal" ? "red" : ["cyan", "brass"].includes(eye) ? eye : "accent") : "bright";
     document.body.dataset.thoughtSize = ["small", "large"].includes(style.size) ? style.size : "standard";
@@ -91,15 +96,34 @@
   function render(snapshot = {}) {
     const effects = snapshot.effects || {};
     const palette = VoidCompassOverlay.applyTheme(root, snapshot.theme || {}, effects);
+    shownPalette = palette;
     const model = snapshot.heartbeat || {};
     const stalled = Boolean(model.stalled);
     const identity = model.orb?.identity || "watcher";
     if (identity !== companionIdentity) { companionIdentity = identity; caption.clear(); thoughtId = null; }
-    asterModel = model;
     asterReduced = motionPreference.matches || Boolean(effects.reduced_motion);
-    orb.setSuspended?.(identity !== "watcher");
-    window.AsterCompanion?.update(canvas, model, {speech, hearing}, {palette, reducedMotion: motionPreference.matches || Boolean(effects.reduced_motion)});
-    window.CrewCompanion?.update(canvas, model, {speech, hearing}, {palette, reducedMotion: asterReduced});
+    // 5.7.7: a crewmate off watch, speaking (an order, a remark): their own
+    // display takes the overlay while they talk, then it's back to whoever
+    // has the watch. Live voice levels still come for the one on watch.
+    const speaker = String(model.thought?.speaker || "");
+    const guest = speaker && speaker !== identity ? speaker : "";
+    const guestEye = guest ? model.thought.speaker_accent || (guest === "watcher" ? model.orb?.eye : "signature") : "";
+    const shown = guest ? {...model, orb: {...(model.orb || {}), identity: guest, accent: guestEye, ...(guest === "watcher" ? {eye: guestEye} : {})},
+      moment: {...(model.moment || {}), service: Number(model.thought.speaker_service) || 0}} : model;
+    const showing = guest || identity;
+    // Only a guest stepping in or out fades; switching who's on watch doesn't.
+    const guestBefore = root.classList.contains("guest");
+    if (shownIdentity !== null && showing !== shownIdentity && (guest || guestBefore) && !asterReduced) {
+      root.classList.remove("guest-swap");
+      void root.offsetWidth;
+      root.classList.add("guest-swap");
+    }
+    shownIdentity = showing;
+    root.classList.toggle("guest", Boolean(guest));
+    asterModel = shown;
+    orb.setSuspended?.(showing !== "watcher");
+    window.AsterCompanion?.update(canvas, shown, {speech, hearing}, {palette, reducedMotion: asterReduced});
+    window.CrewCompanion?.update(canvas, shown, {speech, hearing}, {palette, reducedMotion: asterReduced});
 
     // You pressed talk: the ring shows now, not on the next slow poll.
     if (model.hearing && model.hearing !== hearingStage && !liveAsking) {
@@ -114,7 +138,7 @@
     root.classList.toggle("stalled", stalled);
     orb.update({
       palette,
-      eye: (model.orb || {}).eye,
+      eye: (shown.orb || {}).eye,
       crt: effects.crt !== false,
       reducedMotion: motionPreference.matches || Boolean(effects.reduced_motion),
       stalled,
@@ -136,6 +160,8 @@
       memory: model.memory,
       // What its story has done to the eye (5.6.1).
       story: (model.orb || {}).story,
+      // Your standing with it, as service pips on its housing (5.7.7).
+      service: (shown.moment || {}).service,
     });
     if (model.orb?.renderer_logging) orb.watchRenderer((renderer, reason) => {
       const token = encodeURIComponent(params.get("token") || "");
@@ -144,9 +170,8 @@
         method: "POST", body: JSON.stringify({renderer, ...(reason ? {reason} : {})}),
       }).then((response) => response.arrayBuffer()).catch(() => {});
     });
-    showThought(model.thought, motionPreference.matches || Boolean(effects.reduced_motion), identity !== "watcher" ? model.orb.accent : model.orb?.eye,
-      model.personality);
-    const companionLabel = {aster:"Aster",axiom:"Axiom",meridian:"Meridian",lyra:"Lyra"}[identity] || "Journal watcher";
+    showThought(model.thought, asterReduced, showing !== "watcher" ? shown.orb.accent : shown.orb?.eye, model.personality, showing);
+    const companionLabel = {aster:"Aster",axiom:"Axiom",meridian:"Meridian",lyra:"Lyra"}[showing] || "Journal watcher";
     const label = stalled ? `${companionLabel}: feed quiet`
       : orb.lastEvent ? `${companionLabel}: ${orb.lastEvent}` : companionLabel;
     root.setAttribute("aria-label", label);
@@ -176,8 +201,8 @@
       caption.live(speech);
       orb.voice?.(speech ? Number(speech.level) || 0 : null);
       hearing = live.hearing && typeof live.hearing === "object" ? live.hearing : null;
-      window.AsterCompanion?.update(canvas, asterModel, live, {reducedMotion: asterReduced});
-      window.CrewCompanion?.update(canvas, asterModel, live, {reducedMotion: asterReduced});
+      window.AsterCompanion?.update(canvas, asterModel, live, {palette: shownPalette, reducedMotion: asterReduced});
+      window.CrewCompanion?.update(canvas, asterModel, live, {palette: shownPalette, reducedMotion: asterReduced});
       showHearing(hearing);
     } catch (_error) {
       orb.music?.(null);

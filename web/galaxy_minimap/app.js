@@ -55,6 +55,8 @@ function rgb(hex, fallback = [0, 209, 255]) {
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 }
 const css = (colour, alpha) => `rgba(${colour[0]}, ${colour[1]}, ${colour[2]}, ${alpha})`;
+// Each officer's identity hue, for the crew's order flags (5.7.7).
+const ORDER_COLOURS = {watcher: [224, 87, 79], aster: [217, 164, 65], axiom: [143, 155, 255], meridian: [63, 191, 143], lyra: [116, 221, 255]};
 
 // The view: which square of the galactic plane the map shows.
 // "Your route" (5.5.3.7, the default): framed on you, this session's trail
@@ -326,6 +328,26 @@ function drawMarks(view = bounds(), hereWorld = null, gliding = false) {
     hourglass(); context.stroke();
     context.strokeStyle = css(yellow, 1); context.lineWidth = 1.3;
     hourglass(); context.stroke();
+  }
+
+  // Where the crew's orders point (5.7.7): a small flag in the officer's
+  // colour; one still waiting for your answer is hollow.
+  for (const order of model.orders || []) {
+    const [x, y] = at(number(order.x), number(order.z));
+    if (!inside([x, y])) continue;
+    const colour = ORDER_COLOURS[order.officer] || yellow;
+    const flag = () => {
+      context.beginPath();
+      context.moveTo(x, y + 4); context.lineTo(x, y - 6); context.lineTo(x + 6, y - 3.5); context.lineTo(x, y - 1);
+    };
+    context.strokeStyle = "rgba(0, 0, 0, .8)"; context.lineWidth = 3; context.lineJoin = "round";
+    flag(); context.stroke();
+    context.strokeStyle = css(colour, 1); context.lineWidth = 1.3;
+    flag(); context.stroke();
+    if (!order.offered) {
+      context.fillStyle = css(colour, .85);
+      context.beginPath(); context.moveTo(x, y - 6); context.lineTo(x + 6, y - 3.5); context.lineTo(x, y - 1); context.closePath(); context.fill();
+    }
   }
 
   // The route ahead, through its waypoints, to where it ends.

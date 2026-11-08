@@ -11,7 +11,7 @@ const NAMES = {
   longest_jump: "Longest jump", furthest: "Furthest out", regions: "Where you lived", home: "Home",
   discoveries: "First discoveries", rare: "Rarest find", codex: "Codex personality", biology: "Organics",
   money: "Credits", bgs: "Factions", music: "Soundtrack", postcards: "Postcards", constellations: "Constellations",
-  achievements: "Achievements", combat: "Combat", everyday: "The everyday", deaths: "Rebuys", places: "Places", hatchling: "Along for the ride", crew: "The crew", verdict: "The verdict", finale: "The whole year",
+  achievements: "Achievements", combat: "Combat", everyday: "The everyday", deaths: "Rebuys", places: "Places", hatchling: "Along for the ride", crew: "The crew", orders: "Orders", verdict: "The verdict", finale: "The whole year",
 };
 const PALETTES = {
   intro: ["#070a22", "#341060", "#7ae7ff"], distance: ["#03101f", "#0b3d6e", "#5be0ff"],
@@ -25,7 +25,7 @@ const PALETTES = {
   postcards: ["#181007", "#5a3b14", "#ffcf8a"], constellations: ["#04081a", "#16205e", "#a3b5ff"],
   achievements: ["#181204", "#6b520b", "#ffd84d"], deaths: ["#170405", "#5a0b10", "#ff5c66"],
   places: ["#04130f", "#0f4a3c", "#6fffd2"],
-  hatchling: ["#06140f", "#14523a", "#9dffd2"], crew: ["#060a14", "#1b2c52", "#8fb8ff"],
+  hatchling: ["#06140f", "#14523a", "#9dffd2"], crew: ["#060a14", "#1b2c52", "#8fb8ff"], orders: ["#0d0a06", "#4a3410", "#ffcf7a"],
   combat: ["#170506", "#5e1012", "#ff4d4d"], everyday: ["#08121a", "#174256", "#7fd8ff"],
   verdict: ["#040509", "#141826", "#00d1ff"], finale: ["#05070c", "#0f2033", "#00d1ff"],
 };
@@ -959,6 +959,38 @@ const PAINT = {
       if (member.line) text(c, `“${member.line}”`, 90, y + 84, {size: 30, font: `italic ${SERIF}`, colour: SOFT, alpha: appear(t, at + .5), max: 900});
     });
     if (card.night_watch) text(c, `✦ The Night Watch: ${card.night_watch} of 6 heard`, W / 2, 1270, {size: 32, colour, align: "center", alpha: appear(t, 2.8)});
+  },
+
+  // 5.7.7: the orders you finished for the crew, and the ribbons.
+  orders(c, card, t, colour) {
+    kicker(c, "Crew orders", t, colour);
+    headline(c, `${fmt(card.done)} ${card.done === 1 ? "order" : "orders"} done`, 90, 300, t, .3, {size: 92, max: 900});
+    text(c, `Most of them for ${card.top}.`, 90, 366, {size: 34, font: SERIF, colour: SOFT, alpha: appear(t, .8), max: 900});
+    const rows = (card.by || []).slice(0, 5);
+    const top = Math.max(1, ...rows.map((row) => Number(row.count) || 0));
+    rows.forEach((row, index) => {
+      const at = 1 + index * .3, a = appear(t, at, .8), y = 470 + index * 92;
+      text(c, row.name, 90, y, {size: 38, colour: INK, alpha: a, max: 420});
+      text(c, `${fmt(row.count)}`, W - 90, y, {size: 30, font: MONO, colour: rgba(colour, .95), alpha: a, align: "right"});
+      c.save();
+      c.globalAlpha = a;
+      c.fillStyle = "rgba(255,255,255,.08)";
+      c.fillRect(90, y + 20, W - 180, 8);
+      c.fillStyle = colour;
+      c.fillRect(90, y + 20, (W - 180) * (Number(row.count) || 0) / top * ease((t - at) / 1.1), 8);
+      c.restore();
+    });
+    let y = 470 + rows.length * 92 + 40;
+    if ((card.campaigns || []).length) {
+      text(c, "CAMPAIGNS", 90, y, {size: 22, font: MONO, colour, spacing: 6, alpha: appear(t, 2.4)});
+      card.campaigns.forEach((name, index) => text(c, name, 90, y + 52 + index * 46, {size: 34, font: SERIF, colour: INK, alpha: appear(t, 2.6 + index * .2), max: 900}));
+      y += 52 + card.campaigns.length * 46 + 20;
+    }
+    if ((card.ribbons || []).length) {
+      text(c, `⚑ ${card.ribbons.join("  ·  ")}`, W / 2, Math.min(1270, y + 30), {size: 28, colour, align: "center", alpha: appear(t, 3), max: 940});
+    } else if (card.best) {
+      text(c, `Best: ${card.best}`, W / 2, Math.min(1270, y + 30), {size: 30, font: `italic ${SERIF}`, colour: SOFT, align: "center", alpha: appear(t, 3), max: 940});
+    }
   },
 
   verdict(c, card, t, colour) {

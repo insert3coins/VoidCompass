@@ -960,6 +960,7 @@
       this.decay(now);
       // What its story has done to the eye (5.6.1): they stay once earned.
       this.story = input.story && typeof input.story === 'object' ? input.story : {};
+      this.service = Math.max(0, Math.min(4, Math.round(Number(input.service) || 0)));
       this.pal = themeColors(input.palette || {});
       this.palKey = JSON.stringify(this.pal);
       this.eye = ['theme', 'cyan', 'brass', 'hal'].includes(input.eye) ? input.eye : 'theme';
@@ -1452,6 +1453,17 @@
         phase: this.reduced || !this.life?.idle ? 0 : this.breath,
         strength: .05 + .12 * level + .12 * this.voiceLevel + .06 * this.musicLevel,
       });
+      // 5.7.7: service pips on its housing, from your standing with it (Crew Orders).
+      if (this.service) {
+        const gold = this.service >= 4;
+        for (let index = 0; index < this.service; index += 1) {
+          const angle = Math.PI / 2 + (index - (this.service - 1) / 2) * .075;
+          const px = cx + Math.cos(angle) * R * .9, py = cy + Math.sin(angle) * R * .9;
+          ctx.beginPath(); ctx.arc(px, py, Math.max(1.2, R * .028), 0, TAU);
+          ctx.fillStyle = gold ? 'rgba(255, 209, 107, .95)' : `rgba(${rim.map((v) => Math.round(v)).join(',')}, .9)`;
+          ctx.fill();
+        }
+      }
 
       // Everything inside the lens.
       ctx.save();
