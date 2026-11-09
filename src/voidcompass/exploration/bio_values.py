@@ -9,7 +9,7 @@ GENUS_COLONY_M = {
     "Fumerola": 100, "Fungoida": 300, "Osseus": 800, "Recepta": 150,
     "Stratum": 500, "Tubus": 800, "Tussock": 200,
     "Anemone": 100, "Amphora Plant": 100, "Bark Mounds": 100,
-    "Brain Tree": 100, "Sinuous Tubers": 100, "Crystalline Shards": 100,
+    "Brain Tree": 100, "Brain Trees": 100, "Sinuous Tubers": 100, "Crystalline Shards": 100,
 }
 
 # Values are generated from the same pinned EDMC-BioScan catalogue as the

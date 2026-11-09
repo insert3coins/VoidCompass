@@ -176,19 +176,19 @@ RESTRAINED_EVENTS = {
         "The first recorded arrival on foot at {body} is yours.",
     ),
     "sample_first": (
-        "Sample one for {species}. Maintain at least {distance} before sampling again.",
-        "One {species} sample obtained. The next needs {distance} of separation.",
-        "{species} sampling is underway. Allow at least {distance} for sample two.",
+        "Sample one for {species}. Maintain at least {distance} metres before sampling again.",
+        "One {species} sample obtained. The next needs {distance} metres of separation.",
+        "{species} sampling is underway. Allow at least {distance} metres for sample two.",
     ),
     "sample_second": (
-        "Sample two for {species}. Allow {distance} before the last collection.",
-        "Two {species} samples obtained. One remains, separated by {distance}.",
-        "{species}: second collection recorded. Keep at least {distance} for the third.",
+        "Sample two for {species}. Allow {distance} metres before the last collection.",
+        "Two {species} samples obtained. One remains, separated by {distance} metres.",
+        "{species}: second collection recorded. Keep at least {distance} metres for the third.",
     ),
     "sample_clear": (
-        "Collection distance met for {species}: {distance}.",
-        "{species} is clear for another sample. Separation: {distance}.",
-        "Distance requirement satisfied for {species}, at {distance}.",
+        "Collection distance met for {species}: {distance} metres.",
+        "{species} is clear for another sample. Separation: {distance} metres.",
+        "Distance requirement satisfied for {species}, at {distance} metres.",
     ),
     "rare_world": (
         "Unusual survey finding: {body}, {kind}.",
