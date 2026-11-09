@@ -1,5 +1,5 @@
 import "../assets/companion-caption.js";
-import {renderCompanionChrome, COMPANIONS} from "./companion-ui.js";
+import {renderCompanionChrome, COMPANIONS, renderCompanionDisplay} from "./companion-ui.js";
 import {companionColours} from "../assets/companion-colours.js";
 import {renderOrders} from "./orders.js";
 // The Watcher's page (5.5.3.2): its eye, live; everything it has said; what
@@ -913,9 +913,19 @@ const toggle = (key, title, note) => `<label class="studio-switch"><span><b>${ti
   <input type="checkbox" data-watcher-switch="${key}"><i></i></label>`;
 
 function settingsPanel() {
-  return `<section class="watcher-settings" aria-label="Its thoughts">
+  return `<section class="watcher-settings" aria-label="Its display">
+    <header><span>ITS DISPLAY</span><b class="watcher-saved" id="watcher-display-saved"></b></header>
+    <p class="watcher-note">How it looks on screen. Colour is each companion's own; the rest is shared by the whole crew. Its size is in Overlay Studio.</p>
+    ${field("companion_accent", "Accent", "At rest; danger still uses a warning colour", [])}
+    ${field("companion_focus", "Focus movement", "How it focuses on and follows activity", [["off", "Fixed focus"], ["tracking", "Tracking"], ["expressive", "Expressive"]])}
+    ${field("companion_liveliness", "Animation intensity", "", [["calm", "Calm"], ["standard", "Standard"], ["alive", "Lively"]])}
+    ${field("heartbeat_frame_rate", "Frame rate", "Lower is lighter on an older PC", [["0", "Same as all overlays"], ["60", "Full · 60"], ["30", "Standard · 30"], ["24", "Gentle · 24"], ["15", "Light · 15"]])}
+    <label class="studio-switch"><span><b>Idle animation</b><small data-companion-motion-note></small></span>
+      <input type="checkbox" data-watcher-switch="companion_motion"><i></i></label>
+  </section>
+  <section class="watcher-settings" aria-label="Its thoughts">
     <header><span>ITS THOUGHTS</span><b class="watcher-saved" id="watcher-settings-saved"></b></header>
-    <p class="watcher-note">What it says beside its display, and how. The display itself (size, colour, motion) is in Overlay Studio.</p>
+    <p class="watcher-note">What it says beside its display, and how.</p>
     ${field("heartbeat_thoughts", "Thoughts", "Rare speaks of what matters; Chatty also remarks on everyday play",
       [["off", "Off"], ["rare", "Rare"], ["occasional", "Occasional"], ["chatty", "Chatty"]])}
     ${field("heartbeat_personality", "Nature", "How it takes what happens",
@@ -984,13 +994,15 @@ function wireSettings(root, ui) {
     const box = event.target.closest("[data-watcher-switch]");
     if (!select && !box) return;
     const values = select ? {[select.dataset.watcherSetting]: select.value} : {[box.dataset.watcherSwitch]: box.checked};
-    savedNote("watcher-settings-saved", await ui.command("workspace", {page: "watcher", operation: "settings", values}));
+    const saved = event.target.closest(".watcher-settings")?.querySelector(".watcher-saved")?.id || "watcher-settings-saved";
+    savedNote(saved, await ui.command("workspace", {page: "watcher", operation: "settings", values}));
   });
 }
 
 function renderSettings(settings, ui) {
   const panel = ui.byId("watcher-workspace")?.querySelector('[data-watcher-panel="settings"]');
   if (!panel) return;
+  renderCompanionDisplay(panel, settings);
   panel.querySelectorAll("[data-watcher-setting]").forEach((select) => {
     const value = settings[select.dataset.watcherSetting];
     if (value !== undefined && document.activeElement !== select) select.value = String(value);

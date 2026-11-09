@@ -26,6 +26,11 @@
 * **Home is home.** Docking anywhere used to bring "Back home" and "Home station" lines. Now those wait for your home system (the one set in Settings, or Sol); anywhere else, the Watcher says its usual docking lines, and Aster, Axiom, Meridian and Lyra each have new words of their own for docking anywhere, often naming the station.
 * **Asked to scan only where it's worth it.** Your companions remember a system's traffic: where nobody comes through they'll still say "honk when ready", but in a system with more than five visits a year (from EDSM, usually known before you arrive because Jump Info asks as you target it) they just say hello. Axiom's "finish the FSS" order follows the same rule.
 * **A steadier watch rota.** The companion page now says what the rota is doing ("Rota: docked, Aster takes over in 8 s", "Holding your pick until 23:51") with a button to let the rota decide now. Docking hands over within ten seconds, other duties settle in their own time, and the gap between changes is down from three minutes to ninety seconds. Each decision is written to the debug log.
+* **Companion display settings, where you'd look for them.** Accent colour, focus movement, animation intensity, frame rate and idle animation are now on the companion page, under SETUP. Overlay Studio keeps the display size.
+* **COPY SYSTEM follows the order.** On an order with several places, ticking off a step moves the target on. The order card, COPY SYSTEM, the overlay, your maps and TALK all point to the next place.
+* **Firsts that are really yours.** Your companions only call something a first discovery when you found it. Reading a nav beacon no longer counts, and neither does a body EDSM credits to another commander.
+* **First footfall means first.** Stepping out on a world you've walked before no longer counts, whether you've hopped out of the SRV again or come back months later. Neither do populated systems, taxis, multicrew or settlements.
+* **Bio samples, said right.** Your third sample is no longer announced as your second. Distances now say metres, so it's "Next one 300 metres away", not "300 to go", and Brain Trees get their distance too.
 
 ## Earlier releases
 

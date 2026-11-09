@@ -27,7 +27,7 @@ from voidcompass.overlays import (
 from voidcompass.services import spansh
 from voidcompass.trading import market as trade_market
 from voidcompass.trading.commodities import symbol
-from voidcompass.overlays.heartbeat_hud import HEARTBEAT_TEXT_SIZES, heartbeat_text_size, thought_side_setting
+from voidcompass.overlays.heartbeat_hud import HEARTBEAT_TEXT_SIZES, frame_rate_setting, heartbeat_text_size, thought_side_setting
 from voidcompass.voice import voice_assets
 from voidcompass.voice.watcher_voice import LEVELS, SPEEDS, WatcherSpeaker
 
@@ -1038,6 +1038,8 @@ class DashboardWatcherVoiceMixin:
     def _html_watcher_settings(self):
         style = watcher_mind.thought_style(self.config)
         return {
+            **{key: value for key, value in companions.display_options(self.config).items() if key != "companion_size"},
+            "heartbeat_frame_rate": frame_rate_setting(self.config),
             "heartbeat_thoughts": watcher_mind.frequency(companions.settings(self.config)),
             "aster_humour": self.config.get("aster_humour", "dry"),
             # The active persona's own commentary choice (5.7.4).
@@ -1129,6 +1131,18 @@ class DashboardWatcherVoiceMixin:
             return True
         if operation == "settings":
             values = payload.get("values") if isinstance(payload.get("values"), dict) else {}
+            # The display settings moved here from Overlay Studio, and save the same way.
+            display = {key: values[key] for key in ("companion_accent", "companion_focus", "companion_liveliness",
+                                                    "heartbeat_frame_rate") if key in values}
+            if display and not self._html_overlay_settings_save(display):
+                return False
+            if "companion_motion" in values:
+                self._html_overlay_option_toggle("companion_motion", bool(values["companion_motion"]))
+            if display or "companion_motion" in values:
+                values = {key: value for key, value in values.items() if key not in display and key != "companion_motion"}
+                if not values:
+                    self._schedule_html_dashboard_publish(immediate=True)
+                    return True
             if companions.identity(self.config) != "watcher" and "heartbeat_thoughts" in values:
                 if values["heartbeat_thoughts"] not in watcher_mind.FREQUENCIES:
                     return False

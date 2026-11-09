@@ -53,13 +53,24 @@ export function renderCompanionStudio(source = {}) {
     if (changed || document.activeElement !== field) field.value = String(options[key]);
   };
   choices("companion_size", [54,72,96,144,192,256].map(size => [String(size), `${size} PX`]));
-  choices("companion_accent", [[identity === "watcher" ? "hal" : "signature",SIGNATURES[identity].label],
-    ["theme","Theme accent"],["cyan","Ice cyan"],["brass","Brass"]]);
-  choices("companion_focus", [["off","Fixed focus"],["tracking","Tracking"],["expressive","Expressive"]]);
-  choices("companion_liveliness", [["calm","Calm"],["standard","Standard"],["alive","Lively"]]);
+  return options;
+}
+
+// The companion page's SETUP tab: this companion's colours and what its idle motion looks like.
+export function renderCompanionDisplay(panel, source = {}) {
+  const {identity} = companionInfo(source);
+  const aster = identity !== "watcher";
+  const options = source;
+  const accent = panel.querySelector('[data-watcher-setting="companion_accent"]');
+  if (accent && accent.dataset.identity !== identity) {
+    accent.dataset.identity = identity;
+    accent.replaceChildren(...[[identity === "watcher" ? "hal" : "signature", SIGNATURES[identity].label],
+      ["theme","Theme accent"],["cyan","Ice cyan"],["brass","Brass"]].map(([value, title]) => {
+      const option = document.createElement("option"); option.value = value; option.textContent = title; return option;
+    }));
+  }
   const note = panel.querySelector("[data-companion-motion-note]");
   if (note) note.textContent = identity === "axiom" ? "Flowing particles, breathing ripples and counter-rotating light trails. Off, it still reacts when addressed." : identity === "meridian" ? "Turning instrument rings, a moving scan band and gentle portrait movement. Off, it still reacts when addressed." : identity === "lyra" ? "A turning halo, blinking optics and a face that follows her mood. Off, she still reacts when addressed." : aster ? "A flowing light halo and animated command core. Off, it still reacts when addressed." : "Aperture, breathing and glances between events; off, it only reacts.";
   if (note && options.companion_motion && (document.body.classList.contains("reduced-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches)) note.textContent += " Reduced motion is currently on, so continuous animation is paused.";
   if (note && identity === "lyra") note.textContent = "Blinking optics, gentle head movement, antenna motion, a pulsing chest light, a jaw that moves with her voice, and expressions that follow what she says." + (options.companion_motion && (document.body.classList.contains("reduced-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches) ? " Reduced motion is currently on, so continuous animation is paused." : "");
-  return options;
 }
