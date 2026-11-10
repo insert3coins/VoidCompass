@@ -2,7 +2,7 @@ import * as THREE from "../galactic_map/vendor/three.module.min.js";
 
 // Shared reactive geometry; the owning display supplies its clock and audio
 // envelope, so the core adds no timers or animation loop of its own.
-export function createCompanionCore({identity, time, energy, colour, highlight}) {
+export function createCompanionCore({identity, time, energy, colour, highlight, diamond=false}) {
   const command = identity === "aster";
   const group = new THREE.Group(), lattice = new THREE.Group();
   group.name = `${identity}-reactive-core`;
@@ -11,9 +11,9 @@ export function createCompanionCore({identity, time, energy, colour, highlight})
   const uniforms = {uTime:time,uEnergy:energy,uColour:colour,uOther:highlight,
     uMode:{value:0},uLinks:{value:0},uViewport:{value:new THREE.Vector2(144,144)},
     uGlow:{value:0},uDim:{value:0},uWorry:{value:0},uLit:{value:0},uFlash:{value:0}};
-  const geometry = command ? new THREE.CylinderGeometry(.205,.205,.19,6,1) : new THREE.IcosahedronGeometry(.32,0);
+  const geometry = command ? new THREE.CylinderGeometry(.205,.205,.19,6,1) : diamond ? new THREE.OctahedronGeometry(.32,0) : new THREE.IcosahedronGeometry(.32,0);
   if (command) geometry.rotateX(Math.PI/2);
-  // The crystal's twenty faces, numbered (its geometry is three vertices a face).
+  // Numbered faces (three vertices each); the surveyor's forehead uses a diamond.
   const faceCount = command ? 0 : geometry.getAttribute("position").count / 3;
   geometry.setAttribute("aFace",new THREE.Float32BufferAttribute(
     Array.from({length:geometry.getAttribute("position").count},(_,i)=>command?999:Math.floor(i/3)),1));
@@ -118,6 +118,6 @@ export function createCompanionCore({identity, time, energy, colour, highlight})
     },
     inspect(){return {design:command?"command-prism":"lattice-crystal",state:mode,energy:amplitude,
       scale:lattice.scale.x,rotation:lattice.rotation.toArray().slice(0,3),links:uniforms.uLinks.value,
-      litFacets:lit,glow:uniforms.uGlow.value,dim:uniforms.uDim.value};},
+      litFacets:lit,facets:faceCount,glow:uniforms.uGlow.value,dim:uniforms.uDim.value};},
   };
 }

@@ -70,3 +70,11 @@ Axiom keeps its own `axiom_memory.json` for each commander: story progress, name
 ## Local API
 
 `GET /api/v1/companion` reports the active companion and its story progress. `GET /api/v1/companions/axiom` reads Axiom's record even when another companion is active. See [api.md](../api.md#companions).
+
+## Precision android display
+
+Axiom’s floating overlay, BRIDGE and boot screen share an ivory-and-violet precision android, inspired by the measured, curious character of his voice. His head has separate ceramic plates, recessed camera optics with metallic irises, exposed temple processors and a small articulated speech plate. The body is a solid instrument chassis with shaped shoulder armour and a survey crystal behind the chest window.
+
+His camera shutters blink and follow attention; the head tilts when curious and his expression follows the current thought. The mouth and jaw use actual playback, including spoken warnings. Microphone input and queued speech do not move them. Chest indicators and the eight-sided survey crystal track progress, with the existing measuring scale, body tally and system markers around the frame.
+
+The geometry lives in `web/assets/officer-robots.js`; `crew-3d.js` supplies the shared clock, expression and playback envelope. Studio size, colour, focus, liveliness, idle animation, frame rate and Reduced motion apply on every surface. The optical finish uses antialiasing and tone mapping to keep bright material reflections controlled while preserving transparent corners. No portrait texture or downloaded character model is used.

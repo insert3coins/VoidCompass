@@ -2,7 +2,7 @@
 
 Aster is a selectable companion alongside The Watcher. Its original identity is a precise ship’s officer with restrained, dry wit. It uses written dialogue and the app’s factual lookups; it does not require a language model. Added for version 5.7.4.
 
-Its halo and command core now have a defined instrument bezel and dark translucent recess, using the Watcher’s contrast treatment for visibility over game scenery. The centre remains open, with the existing animated halo and segmented core; the space outside the display remains transparent. The same shared frame is used by Axiom and Meridian around their own designs.
+Aster is an articulated command android: dark machined armour, a continuous smoked visor with cyan focus shutters, titanium cheek plates, a high collar and an asymmetric communications mast. His restrained movements follow the composed officer voice. The dark recess keeps him readable over game scenery; outside the bezel remains transparent.
 
 ## Set up
 
@@ -100,21 +100,15 @@ Switching saves the outgoing mind and pauses its clock; it does not convert or r
 
 A switch stops the old voice and discards queued speech, closes recognition, and rejects late recognition/uplink replies from the previous identity. Existing journal, microphone, overlay and hotkey services are reused. API routes and overlay identifiers remain compatible; snapshots include the selected identity.
 
-## Three.js halo
+## Three.js officer
 
-The live overlay and dashboard use original procedural Three.js geometry in `web/assets/aster-3d.js`: a flowing light halo, layered filaments, drifting particles and a hexagonal command interface containing a floating lattice prism. Counter-rotating segmented arcs, fine calibration marks and scanning traces give the centre an instrument style. There are no eyes, paired dots, central star or opaque disk. The game remains visible between the prism’s edges and the surrounding interface. An orthographic camera keeps its visible envelope consistent with Watcher and the selected Studio size.
+The floating overlay, BRIDGE panel and boot screen share `web/assets/aster-3d.js` and the articulated geometry in `web/assets/officer-robots.js`. The design is built directly from meshes: curved armour, a smoked visor, independent focus shutters, a moving jaw, collar and shaped shoulders. No portrait bitmap or external model download is used. The outer diameter remains the same as the other companions at every Studio size.
 
-The design takes its direction from the user’s local `Data Overlay.avif` reference, rebuilt as animated geometry and shaders. The reference bitmap and its dark background are not bundled or displayed. Aster’s NOW panel uses the same halo with an officer’s station treatment, a **CALL ASTER** control and a live ON WATCH/LISTENING/ASSESSING/REPLYING/ATTENTION state label. These states come from the existing journal, microphone and speech feeds.
+Aster glances towards activity, blinks, makes small head movements, and wears the mood of his current thought. Fixed focus holds his gaze and orientation still. Actual voice playback opens the jaw and lights the speech bars; microphone levels and queued lines do not move his mouth. The shared caption presenter continues to control text timing.
 
-Aster’s command core makes subtle orientation changes during quiet periods, settles when docked and responds to flight and scanning activity. Journal events draw its focus toward the corresponding overlay, and rare finds can prompt a longer response and brief flare. New snapshots do not replay old events. Listening and working move a scanning trace through the core; speech brightens its circuits and sends ripples through the halo using the actual Piper envelope. Confirmed danger, fuel and heat warnings use amber. All of this is procedural animation driven by existing signals.
+His cyan/violet instrument track and segmented arcs move behind the helmet. The watch bells, six-duty watch bill, service marks and double acknowledgement pulse remain. A docking grant puts the pad number on his chest and sends a single sweep around the halo. His small command prism sits in the chest medallion and steps aside for the pad display. Confirmed danger, fuel and heat warnings use amber.
 
-The central prism slowly turns and breathes at idle, gathers light along its connections when listening and carries quicker pulses while working. It expands with the real speech level. Axiom shares these reactions with its own faceted crystal shape through `web/assets/companion-core.js`; both use their existing renderer clock, frame cap and motion preferences.
-
-**Focus movement** controls how both companions follow activity. Fixed focus centres the display, Tracking follows flight and journal activity, and Expressive increases its reach. Each companion saves its own setting. **Idle animation** controls continuous standby motion; disabling it still permits reactions to voice and events. Global/OS reduced motion keeps the instrument still, including when speaking, while allowing the current readings and voice level to update. Hidden renderers park their animation loop. Pixel ratio, frame rate and GPU resources remain bounded, and geometry/materials are disposed on teardown.
-
-No stock image, EPS or premium artwork is embedded. WebGL/hardware acceleration is required; a clear error appears if the instrument cannot start.
-
-The optional design sandbox remains at `web/companion-preview/`, served from a local HTTP server rooted at `web`. Its state controls simulate signals; production uses the live data above.
+Size, accent, focus, liveliness, idle animation and frame rate use the existing Studio controls. Idle animation Off parks quiet displays; speech and events can still wake them. Reduced motion parks continuous movement and applies expressions immediately. Hidden displays stop drawing. Materials, geometry and the procedural reflection map are released when the display is destroyed.
 
 ## Piper assets and release preparation
 

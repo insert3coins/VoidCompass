@@ -70,3 +70,13 @@ Meridian keeps its own `meridian_memory.json` for each commander: story progress
 ## Local API
 
 `GET /api/v1/companion` reports the active companion and its story progress. `GET /api/v1/companions/meridian` reads Meridian's record even when another companion is active. See [api.md](../api.md#companions).
+
+## Navigator android display
+
+Meridian’s floating overlay, BRIDGE and boot display share a brass-and-midnight-blue navigator robot. The restrained design follows his voice and existing seafaring character: calm optical shutters, separate cheek and jaw plates, side gimbals, a broad collar and an instrument chest. The forehead stays plain.
+
+His head and optics follow attention, blink slowly and wear the mood of the current thought. His mouth and mechanical jaw use the actual playback envelope, closing for silence, microphone input and queued lines. Spoken warnings still animate the mouth. Fixed focus holds his gaze and orientation; Reduced motion applies expressions immediately and parks continuous movement.
+
+The existing compass rose, service pips and jump ripple remain. The outer bearing needle sits clear of his face. The chest dial repeats the same bearing: the next star while charging on a route, otherwise home, or the core when close to home. With no valid bearing it shows no needle. All existing Studio sizes, accents, focus, liveliness, idle animation and frame rates remain shared.
+
+Geometry is in `web/assets/officer-robots.js` (`addMeridianNavigator`), driven by `crew-3d.js`. Reflections, antialiasing and tone mapping use the existing robot rendering path; transparent corners and the common outer diameter are preserved. There is no portrait image or external character-model dependency.

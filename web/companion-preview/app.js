@@ -90,7 +90,7 @@ stage.addEventListener("pointerleave", () => display?.setTilt(0, 0));
 let animation;
 function signal(now) {
   const level = reduced.checked ? .35 : .2 + .65 * Math.abs(Math.sin(now / 170) * Math.cos(now / 317));
-  display?.setState(state, level);
+  display?.setState(state, level, state === "speaking" ? level : null);
   animation = requestAnimationFrame(signal);
 }
 window.addEventListener("pagehide", () => { cancelAnimationFrame(animation); display?.destroy(); });

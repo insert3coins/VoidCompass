@@ -690,7 +690,7 @@ export function renderWatcher(data = {}, ui) {
   ui.byId("watcher-character").innerHTML = [
     identity !== "watcher" ? ["ROLE", COMPANIONS[identity]?.role || "Companion"] : ["NATURE", NATURES[data.nature] || data.nature || "—"],
     ["THOUGHTS", FREQUENCIES[data.frequency] || data.frequency || "—"],
-    [identity !== "watcher" ? "DISPLAY" : "EYE", identity === "axiom" ? "Particle field" : identity === "lyra" ? "3D robot" : identity === "meridian" ? "Holographic portrait" : identity === "aster" ? "Luminous halo" : data.eye === "hal" ? "HAL red" : "Theme"],
+    [identity !== "watcher" ? "DISPLAY" : "EYE", identity === "axiom" ? "Precision android" : identity === "lyra" ? "3D robot" : identity === "meridian" ? "Navigator android" : identity === "aster" ? "Command android" : data.eye === "hal" ? "HAL red" : "Theme"],
     ["OVERLAY", data.enabled ? "ON" : "OFF"],
     ["VOICE", data.voice?.enabled && data.voice?.installed ? "ON" : "OFF"],
   ].map(([label, value]) => `<div><dt>${label}</dt><dd>${ui.escapeHtml(value)}</dd></div>`).join("");

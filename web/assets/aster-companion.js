@@ -56,7 +56,7 @@ function update(source, model = {}, live = {}, options = {}) {
   view.canvas.dataset.state = state;
   view.display.setContext(model);
   view.display.setFocus(model.orb?.focus_movement);
-  view.display.setState(state, speech?.level ?? hearing?.level ?? 0);
+  view.display.setState(state, speech?.level ?? hearing?.level ?? 0, speech ? speech.level ?? 0 : null);
   const accent = model.orb?.accent;
   const theme = options.palette?.accent || getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
   const colours = companionColours("aster",accent,theme);

@@ -4,6 +4,7 @@ import {createCompanionFrame, COMPANION_EXTENT} from "./companion-frame.js";
 import {SIGNATURES} from "./companion-colours.js";
 import {createCompanionCore} from "./companion-core.js";
 import {addLyraRobot, addLyraHalo} from "./lyra-robot.js";
+import {addAxiomSurveyor, addMeridianNavigator, addOfficerHalo, createOfficerFinish} from "./officer-robots.js";
 import {createMood} from "./companion-mood.js";
 
 const TAU = Math.PI * 2;
@@ -12,12 +13,13 @@ const clamp = (n, lo=0, hi=1) => Math.max(lo, Math.min(hi, n));
 // Original procedural displays: no image plates, opaque backdrops or character likenesses.
 export function createCrewDisplay(canvas, identity) {
   const lyra = identity === "lyra";
-  const portrait = identity === "meridian" || lyra;
+  const portrait = identity === "meridian" || lyra || identity === "axiom";
   const meridian = identity === "meridian", axiom = identity === "axiom";
   const signature = SIGNATURES[identity];
   const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true, premultipliedAlpha:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setClearColor(0, 0); renderer.outputColorSpace = THREE.SRGBColorSpace;
+  const finish=axiom||meridian?createOfficerFinish(renderer,meridian?.18:.20):null;let drawCalls=0;
   const extent = COMPANION_EXTENT, scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-extent,extent,extent,-extent,.1,20); camera.position.z = 5;
   const rig = new THREE.Group(), field = new THREE.Group(), rings = new THREE.Group();
@@ -25,7 +27,7 @@ export function createCrewDisplay(canvas, identity) {
   const uniforms = {uTime:{value:0},uEnergy:{value:0},uScan:{value:0},uIdle:{value:1},uColour:{value:new THREE.Color(signature.primary)},
     uOther:{value:new THREE.Color(signature.secondary)},uDpr:{value:renderer.getPixelRatio()},uScale:{value:1},uMouth:{value:0},uFace:{value:0},
     uSmile:{value:0},uMood:{value:new THREE.Vector4()}};
-  const reactor=portrait?null:createCompanionCore({identity,time:uniforms.uTime,energy:uniforms.uEnergy,
+  const reactor=identity!=="axiom"?null:createCompanionCore({identity,diamond:axiom,time:uniforms.uTime,energy:uniforms.uEnergy,
     colour:uniforms.uColour,highlight:uniforms.uOther});
   if(reactor){reactor.group.position.z=.45;rig.add(reactor.group);}
   const service={value:0};
@@ -105,74 +107,26 @@ export function createCrewDisplay(canvas, identity) {
        gl_FragColor=vec4(mix(uColour,uOther,.25),(band*tail*.85+echo*.6)*(uIdle+uEnergy));
        #include <colorspace_fragment>
      }`));sweep.position.z=.55;rings.add(sweep);
-  const halo=lyra?addLyraHalo(rings,uniforms):null;
-  if(halo)for(const object of [rotor,counter,inner,sweep])object.visible=false;
-  let portraitLayer=null,needle=null,needleMaterial=null,bodyMap=null,gauge=null,wake=null;
+  const halo=lyra?addLyraHalo(rings,uniforms):axiom?addOfficerHalo(rings,uniforms,"axiom"):null;
+  if(lyra)for(const object of [rotor,counter,inner,sweep])object.visible=false;
+  if(axiom||meridian){inner.visible=false;rotor.position.z=counter.position.z=-.35;}
+  if(axiom)sweep.visible=false;
+  let portraitLayer=null,needle=null,needleMaterial=null,bodyMap=null,wake=null;
   if(lyra) {
     portraitLayer=addLyraRobot(field,uniforms,renderer,scene);
+  } else if(axiom) {
+    portraitLayer=addAxiomSurveyor(field,uniforms,renderer,scene);
+    portraitLayer.coreMount.add(reactor.group);reactor.group.position.set(0,0,0);reactor.group.scale.setScalar(.32);
   } else if(portrait) {
-    // An anonymous instrument portrait: elliptical skull, modeled cheeks and a subtle nose ridge.
-    function head(lat,a) {
-      const y=Math.cos(lat)*.73, width=Math.pow(Math.sin(lat),.72)*(.39+.035*Math.cos(lat));
-      const x=Math.sin(a)*width;
-      let z=Math.cos(a)*Math.sin(lat)*.31;
-      if(Math.cos(a)>0){
-        z+=.17*Math.exp(-Math.pow(x/.09,2)-Math.pow((y+.015)/.22,2));
-        z-=.07*Math.exp(-Math.pow((Math.abs(x)-.16)/.085,2)-Math.pow((y-.14)/.075,2));
-        z+=.025*Math.exp(-Math.pow((Math.abs(x)-.21)/.12,2)-Math.pow((y+.07)/.12,2));
-      }
-      return [x,y,z];
-    }
-    const face=[];
-    for(let j=1;j<30;j++)for(let i=0;i<72;i++) face.push(...head(j/30*Math.PI,-Math.PI/2+i/72*Math.PI),...head(j/30*Math.PI,-Math.PI/2+(i+1)/72*Math.PI));
-    for(let i=0;i<=36;i++)for(let j=0;j<60;j++)face.push(...head(j/60*Math.PI,-Math.PI/2+i/36*Math.PI),...head((j+1)/60*Math.PI,-Math.PI/2+i/36*Math.PI));
-    lines(face,field,shader(lineVertex,lineFragment,{uOpacity:{value:.68},uFace:{value:1}}));
-    const silhouette=[];
-    for(const side of [-1,1])for(let j=0;j<60;j++)silhouette.push(...head(j/60*Math.PI,side*Math.PI/2),...head((j+1)/60*Math.PI,side*Math.PI/2));
-    const details=[...silhouette];
-    const curve = (fn,n=28) => {for(let i=0;i<n;i++) details.push(...fn(i/n),...fn((i+1)/n));};
-    for(const sign of [-1,1]) {
-      curve(t=>[sign*(.08+t*.17),.18+Math.sin(t*Math.PI)*.025,.287]);
-      curve(t=>[sign*(.09+t*.14),.115-Math.sin(t*Math.PI)*.018,.275]);
-      curve(t=>[sign*(.393+Math.sin(t*Math.PI)*.038),.13-t*.26,.015]);
-    }
-    curve(t=>[(t-.5)*.16,-.082-Math.sin(t*Math.PI)*.022,.405]);
-    lines(details,field);
-    const lips=new THREE.Mesh(new THREE.PlaneGeometry(.34,.22),new THREE.ShaderMaterial({
-      uniforms,
-      vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`varying vec2 vUv;uniform vec3 uColour,uOther;uniform float uMouth,uSmile;
-        void main(){vec2 p=(vUv-.5)*vec2(.34,.22);float x=abs(p.x)/.135;if(x>1.0)discard;
-          float curve=sqrt(max(0.0,1.0-x*x)),opening=uMouth*.075;
-          float bend=uSmile*.026*(x*x-.35);
-          float upper=.003+curve*opening*.55+sin(x*3.14159265)*.003+bend;
-          float lower=-.003-curve*opening+bend;
-          float aa=max(fwidth(p.y),.0015);
-          float lip=1.0-smoothstep(.002,.002+aa,min(abs(p.y-upper),abs(p.y-lower)));
-          float cavity=smoothstep(lower-aa,lower+aa,p.y)*(1.0-smoothstep(upper-aa,upper+aa,p.y));
-          gl_FragColor=vec4(mix(vec3(.004,.009,.016),mix(uColour,uOther,.25),lip),max(cavity*.94,lip*.95));
-          #include <colorspace_fragment>
-        }`,
-      transparent:true,depthWrite:false,blending:THREE.NormalBlending,side:THREE.DoubleSide,forceSinglePass:true,
-    }));
-    lips.position.set(0,-.245,.43);lips.renderOrder=2;field.add(lips);
-    lines([-.18,-.69,0,-.21,-.8,0,-.21,-.8,0,-.55,-.9,0,.18,-.69,0,.21,-.8,0,.21,-.8,0,.55,-.9,0],field);
+    portraitLayer=addMeridianNavigator(field,uniforms,renderer,scene);
     const brackets=[];
     for(const sign of [-1,1])for(const y of [-.42,.42])brackets.push(sign*.66,y,0,sign*.73,y,0,sign*.73,y,0,sign*.73,y+Math.sign(y)*.12,0);
     lines(brackets,rings);
     needle=new THREE.Group();needle.position.z=.6;needle.visible=false;rings.add(needle);
     needleMaterial=shader(lineVertex,lineFragment,{uOpacity:{value:0}});
-    lines([0,.62,0,0,.9,0, -.06,.64,0,.06,.64,0],needle,needleMaterial);
-    const arrow=new THREE.BufferGeometry();arrow.setAttribute("position",new THREE.Float32BufferAttribute([0,1.0,0,-.065,.87,0,.065,.87,0],3));
+    lines([0,.86,0,0,1.01,0, -.06,.89,0,.06,.89,0],needle,needleMaterial);
+    const arrow=new THREE.BufferGeometry();arrow.setAttribute("position",new THREE.Float32BufferAttribute([0,1.035,0,-.065,.94,0,.065,.94,0],3));
     needle.add(new THREE.Mesh(arrow,needleMaterial));
-    // The sounding line: how far from home, 1 to 100,000 light years, logarithmic.
-    const scale=[-.70,-.38,0,-.70,.38,0];
-    for(let i=0;i<=5;i++){const y=-.38+i*.152;scale.push(-.70,y,0,i%5===0?-.66:-.68,y,0);}
-    gauge={group:new THREE.Group(),marker:new THREE.Group(),depth:null};
-    gauge.group.position.z=.55;rings.add(gauge.group);lines(scale,gauge.group);
-    gauge.group.add(gauge.marker);
-    lines([-.735,0,0,-.705,0,0, -.735,.018,0,-.735,-.018,0, -.735,.018,0,-.705,0,0, -.735,-.018,0,-.705,0,0],gauge.marker);
-    gauge.group.visible=false;
     wake=new THREE.Mesh(new THREE.PlaneGeometry(2.2,2.2),shader(
       `varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
       `varying vec2 vUv;uniform vec3 uColour,uOther;uniform float uWake;
@@ -182,38 +136,8 @@ export function createCrewDisplay(canvas, identity) {
          #include <colorspace_fragment>
        }`,{uWake:{value:-1}}));
     wake.position.z=.5;rings.add(wake);
-  } else {
-    const seeds=[],positions=[];
-    for(let i=0;i<5400;i++){
-      const random=n=>{const v=Math.sin((i+1)*n)*43758.5453;return v-Math.floor(v);};
-      seeds.push(random(12.9898),random(39.346),random(73.156),random(91.217)); positions.push(0,0,0);
-    }
-    const geometry=new THREE.BufferGeometry(); geometry.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
-    geometry.setAttribute("aSeed",new THREE.Float32BufferAttribute(seeds,4));
-    const material=shader(`attribute vec4 aSeed;uniform float uTime,uEnergy,uDpr,uScale;uniform vec4 uMood;varying float vLight,vTint;
-      void main(){float a=aSeed.x*6.2831853+uTime*(.22+aSeed.z*.045);float b=aSeed.y*6.2831853+uTime*.45;
-        float wave=sin(a*5.0+uTime*1.2)*.035+sin(a*11.0-uTime*.8)*.018;
-        float tube=(.12+.045*sin(a*3.0+uTime*.8)+uEnergy*.06)*(1.0-uMood.y*.45);
-        float r=.77+cos(b)*tube+wave;
-        vec3 p=vec3(cos(a)*r,sin(a)*r,sin(b)*tube*1.8);
-        p.y-=uMood.z*.07;p.x+=uMood.w*.07*(.5+.5*cos(a));
-        p.xy*=1.0+uEnergy*.025*sin(a*8.0-uTime*3.0);
-        gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);
-        gl_PointSize=max(.8,(.65+aSeed.w*1.9+uEnergy*.65)*uScale)*uDpr;
-        float travelling=.5+.5*sin(a*3.0-uTime*1.7);
-        vLight=(.22+.65*aSeed.w)*(.5+travelling*.7);vTint=.5+.5*sin(a-uTime*.65);
-        float ripple=pow(.5+.5*sin(a*2.0-uTime*2.4),6.0);
-        vLight*=(1.0+uMood.x*(.3+ripple*.9))*(1.0-uMood.z*.4)*(1.0+uMood.w*.5*max(0.0,cos(a)));
-        vLight*=1.0-uMood.y*.3*step(.5,fract(uTime*5.0+aSeed.x*7.0));
-        vTint=mix(vTint,1.0,uMood.x*ripple*.6);
-      }`,`uniform vec3 uColour,uOther;varying float vLight,vTint;
-      void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;
-        gl_FragColor=vec4(mix(uColour,uOther,vTint*.75),(1.0-smoothstep(.05,.5,d))*vLight);
-        #include <colorspace_fragment>
-      }`);
-    const cloud=new THREE.Points(geometry,material);cloud.frustumCulled=false;field.add(cloud);
-    const orbit=lines(arc(.77,0,TAU),field);orbit.rotation.x=.55;
-    const orbit2=lines(arc(.79,0,TAU),field);orbit2.rotation.x=-.55;
+  }
+  if(axiom) {
     const map=new THREE.BufferGeometry();
     map.setAttribute("position",new THREE.Float32BufferAttribute(new Float32Array(48*3),3));
     map.setAttribute("aBody",new THREE.Float32BufferAttribute(new Float32Array(48*4),4));
@@ -233,7 +157,7 @@ export function createCrewDisplay(canvas, identity) {
          gl_FragColor=vec4(mix(vKind,vec3(1.0),core*.5),(core+halo*.55)*uMapShow);
          #include <colorspace_fragment>
        }`,{uMapShow:{value:0}}));
-    bodyMap.frustumCulled=false;bodyMap.renderOrder=3;field.add(bodyMap);
+    bodyMap.frustumCulled=false;bodyMap.renderOrder=-1;bodyMap.position.z=-.30;rings.add(bodyMap);
   }
   // Faint light behind the structure, with a truly transparent centre and corners.
   const glow=new THREE.Mesh(new THREE.PlaneGeometry(2.5,2.5),shader(`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
@@ -249,7 +173,7 @@ export function createCrewDisplay(canvas, identity) {
   const moods=createMood(),expression=moods.expression;
   // Moments in its own line of work: Meridian's heading needle, Axiom's lit facets.
   let moment={},needleAngle=null,needleShow=0,needleTarget=0;
-  let scanPhase=0,needleMoving=false,wakeAt=-1,lastJumps=null,tallyCount=0,tallyFresh=0,mapShow=0,depth=null,otherMoving=false;
+  let scanPhase=0,needleMoving=false,wakeAt=-1,lastJumps=null,tallyCount=0,tallyFresh=0,mapShow=0,otherMoving=false;
   function updateNeedle(dt){
     if(!needle)return;
     // On a route with the drive charging, the next star, bright; at rest, home
@@ -274,16 +198,7 @@ export function createCrewDisplay(canvas, identity) {
   function updateOwn(dt){
     const rate=reduced?1:1-Math.exp(-dt*5);
     otherMoving=false;
-    if(meridian&&gauge){
-      // The sounding: home's distance on the gauge.
-      const ly=Number(moment.heading?.home_ly);
-      gauge.group.visible=Number.isFinite(ly);
-      if(Number.isFinite(ly)){
-        const goal=-.38+Math.min(1,Math.log10(Math.max(1,ly))/5)*.76;
-        depth=depth===null||reduced?goal:depth+(goal-depth)*rate;
-        if(Math.abs(goal-depth)<.001)depth=goal;else otherMoving=true;
-        gauge.marker.position.y=depth;gauge.depth=depth;
-      }
+    if(meridian&&wake){
       // The wake: a ripple out across the rings for each jump.
       if(wakeAt>=0){wakeAt=reduced?-1:wakeAt+dt/1.6;if(wakeAt>=1)wakeAt=-1;else otherMoving=true;}
       wake.material.uniforms.uWake.value=wakeAt;
@@ -308,7 +223,7 @@ export function createCrewDisplay(canvas, identity) {
     const positions=bodyMap.geometry.getAttribute("position"),info=bodyMap.geometry.getAttribute("aBody");
     bodies.forEach(([ls,kind],i)=>{
       // Clear of the crystal, out to the scale: nearer bodies inside, distant ones out.
-      const r=.50+.42*Math.min(1,Math.log10(Math.max(0,Number(ls)||0)+1)/5.5);
+      const r=.84+.08*Math.min(1,Math.log10(Math.max(0,Number(ls)||0)+1)/5.5);
       info.setXYZW(i,r,i*2.39996,KINDS[kind]??7,kind==="star"?11:kind==="gas"?9:7);positions.setXYZ(i,0,0,0);
     });
     info.needsUpdate=true;positions.needsUpdate=true;bodyMap.geometry.setDrawRange(0,bodies.length);
@@ -349,7 +264,7 @@ export function createCrewDisplay(canvas, identity) {
       if(mouthOpen<.001)mouthOpen=0;
       uniforms.uMouth.value=mouthOpen;
     }
-    if(portrait&&!lyra){
+    if(meridian){
       // Meridian: a smile or a frown, a tilt when curious, a dip when downcast
       // (held level with Fixed focus), rings drawn in and the scan quicker when wary.
       uniforms.uSmile.value=joy-worry*.5-sad*1.4;
@@ -360,13 +275,13 @@ export function createCrewDisplay(canvas, identity) {
       updateNeedle(dt);
     }
     updateOwn(dt);
-    portraitLayer?.update({clock:time,pose,mouthOpen,reduced,focus,animated:pose.active,expression});
+    portraitLayer?.update({clock:time,pose,mouthOpen,reduced,focus,animated:pose.active,expression,scan:moment.scan||null,bearing:needleAngle,bearingVisible:needleShow>0});
     halo?.update({clock:time,reduced,animated:pose.active});
     scanPhase+=dt*activity*(1+worry*1.6);
     scan.position.y=Math.sin(scanPhase*.95)*.67;
-    scan.visible=portrait&&!lyra&&(idle||state==="working"||state==="listening"||worry>.05||curious>.05);
+    scan.visible=false;
     outer.scale.setScalar(1+(pose.pulse||0)*.015);
-    renderer.render(scene,camera);frames++;if(pose.active||moods.settling||needleMoving||otherMoving)schedule();
+    if(finish)drawCalls=finish.render(scene,camera);else{renderer.render(scene,camera);drawCalls=renderer.info.render.calls;}frames++;if(pose.active||moods.settling||needleMoving||otherMoving)schedule();
   }
   const observer=new ResizeObserver(resize);observer.observe(canvas);
   function visibility(){if(document.hidden){cancelAnimationFrame(frame);frame=0;}else changed();}
@@ -400,13 +315,13 @@ export function createCrewDisplay(canvas, identity) {
     setReducedMotion(value){if(reduced!==Boolean(value)){reduced=Boolean(value);changed();}},
     setFrameRate(value){const next=[15,24,30,60].includes(Number(value))?Number(value):30;if(frameRate!==next){frameRate=next;changed();}},
     setVisible(value){if(visible!==Boolean(value)){visible=Boolean(value);if(!visible){cancelAnimationFrame(frame);frame=0;}else changed();}},
-    inspect(){return {...pose,identity,design:lyra?"robot-companion":portrait?"wireframe-portrait":"particle-torus",frames,state,reduced,idle,focus,frameRate,time,accent,secondary,intensity:activity,
-      width:canvas.clientWidth,height:canvas.clientHeight,drawCalls:renderer.info.render.calls,reactor:reactor?.inspect()||null,mouthOpen,mood:moods.mood,expression:{...expression},expressing:moods.settling,smileCurve:uniforms.uSmile.value,
+    inspect(){return {...pose,identity,design:lyra?"robot-companion":axiom?"precision-android":"navigator-android",frames,state,reduced,idle,focus,frameRate,time,accent,secondary,intensity:activity,
+      width:canvas.clientWidth,height:canvas.clientHeight,drawCalls,reactor:reactor?.inspect()||null,mouthOpen,mood:moods.mood,expression:{...expression},expressing:moods.settling,smileCurve:uniforms.uSmile.value,
       needle:needle?{visible:needle.visible,angle:needleAngle,show:needleShow,target:needleTarget}:null,
-      gauge:gauge?{visible:gauge.group.visible,depth:gauge.depth}:null,wake:wake?wakeAt:null,
+      wake:wake?wakeAt:null,
       tally:tally?{count:tallyCount,fresh:tallyFresh}:null,map:bodyMap?{bodies:bodyMap.geometry.drawRange.count,show:mapShow}:null,
       moving:needleMoving||otherMoving,...portraitLayer?.inspect()};},
-    destroy(){disposed=true;portraitLayer?.destroy();cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener("visibilitychange",visibility);
+    destroy(){disposed=true;portraitLayer?.destroy();finish?.destroy();cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener("visibilitychange",visibility);
       const geometries=new Set(),materials=new Set();scene.traverse(object=>{if(object.geometry)geometries.add(object.geometry);if(object.material)materials.add(object.material);});
       geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());renderer.dispose();},
   };
