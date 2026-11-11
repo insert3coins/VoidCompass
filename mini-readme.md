@@ -1,7 +1,7 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.7.7 // Orders from the Bridge
-**Release Date:** TBA 3312 *(Galactic Standard Time)*
+**Release Date:** 11 NOV 3312 *(Galactic Standard Time)*
 
 * **Crew Orders: the crew asks things of you.** Until now your companions talked about what you'd done. Now they give you orders. Every order rests on a real fact (your journal, Spansh, your Codex, your trades) and says where that fact came from and when. The journal finishes each one: you never tick anything off. The officer who gave it follows it through, cheers the halfway mark and debriefs you at the end.
 * **Each officer orders what they care about.** Lyra hunts species and colours missing from your Codex ("Two Bacterium you've never logged within 180 ly") and wants samples cashed in before something goes wrong. Axiom wants worlds mapped, systems finished in the FSS, and first discoveries out in the black. Meridian finds neutron routes that save you hours, regions you've never entered and new distance records. Aster finds better prices for what's in your hold, sells charts and samples sensibly, and keeps your construction sites and Powerplay merits supplied. The Watcher has long orders to far places (Sagittarius A*, Colonia, Beagle Point) and odd little errands: sit ten minutes in a system nobody has seen, take a picture of something it would like, walk where nobody has walked.
