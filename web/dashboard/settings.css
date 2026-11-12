@@ -171,10 +171,6 @@ body.reduced-motion .settings-page *,body.reduced-motion .settings-page *::befor
 .hotkey-cell button:disabled { opacity:.35; cursor:default; }
 .hotkey-row.recording { box-shadow:inset -2px 0 var(--orange); }
 .hotkey-row.recording .hotkey-key input { color:var(--orange); border-color:var(--orange); }
-.auto-honk-binding.recording { box-shadow:inset -2px 0 var(--orange); }
-.auto-honk-binding.recording input { color:var(--orange); border-color:var(--orange); }
-.auto-honk-binding .setting-control { min-width:0; }
-.auto-honk-binding input { max-width:220px; }
 .hotkey-row.learning { box-shadow:inset -2px 0 var(--green); }
 .hotkey-row.learning .hotkey-pad output { color:var(--green); border-color:var(--green); }
 .hotkey-clash { color:var(--orange) !important; }

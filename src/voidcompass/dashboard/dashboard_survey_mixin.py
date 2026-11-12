@@ -33,6 +33,7 @@ CENTRE_KINDS = ("here", "destination", "next_stop", "carrier", "lock", "system")
 DUMPS_AHEAD = 40        # the nearest systems whose dumps are fetched in the background
 DUMPS_KEPT = 400
 WATCH_S = 600           # Nearby follows your jumps while the page asked for it this recently
+NOT_ON_SPANSH = "not on Spansh"  # a system nobody has reported yet: no error to show
 BOOKMARKS_FILE = "explore_bookmarks.json"
 
 
@@ -69,6 +70,8 @@ class DashboardSurveyMixin:
             result, error = None, ""
             try:
                 result = work()
+            except spansh.SpanshNotFound:
+                error = NOT_ON_SPANSH
             except spansh.SpanshError as exc:
                 error = str(exc)
             except Exception as exc:
@@ -555,12 +558,9 @@ class DashboardSurveyMixin:
             region_id=region[0] if region else None, coords=coords, records=self._survey_record_keys(),
             barycentres=(getattr(self, "system_barycentres", None) if name.casefold() == str(getattr(self, "current_sys", "") or "").casefold()
                          else (self.load_barycentres_from_db(name) if hasattr(self, "load_barycentres_from_db") else [])))
+        # A system nobody has reported is simply yours, not an error (5.7.9).
         error = str(entry.get("error") or "")
-        # A 404 is Spansh not knowing the system yet, the usual case out exploring:
-        # the table is simply yours, not an error.
-        if "(404)" in error:
-            error = ""
-        meta.update(spansh_known=dump is not None, spansh_error=error)
+        meta.update(spansh_known=dump is not None, spansh_error="" if error == NOT_ON_SPANSH else error)
         current = name.casefold() == str(getattr(self, "current_sys", "") or "").casefold()
         if current:
             meta["body_count"] = meta.get("body_count") or (int(getattr(self, "total", 0) or 0) or None)

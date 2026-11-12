@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.7.8**
+**Current version: 5.7.9**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
@@ -50,8 +50,6 @@ The command deck has a tab for each part of the game:
 - **The Watcher**: an eye that watches your journal and thinks out loud beside it, about what you're doing, where you've been and its own long story. It remembers you between sessions and, once you know each other, asks whether it may use your name. Its thoughts and story come from written lines, spoken by its optional Piper voice. The TALK tab takes typed or spoken commands and answers questions from your ship's systems. Whisper hears push-to-talk speech on this PC; the uplink can look up commodity prices through Spansh.
 
 Any page except the Dashboard can pop out into a window of its own for a second monitor (**⧉ POP OUT** beside its title), without the main deck's header or status bars.
-
-Optional auto honk on arrival is under **Settings › Flight & exploration**. Record the keyboard key bound to your Discovery Scanner's Primary or Secondary Fire button in Elite, and keep the scanner in your arrival fire group.
 
 An AI client you already use (Claude Code, the Claude desktop app or any MCP client) can read your game through the Local API with the read-only MCP server in `tools/mcp`. See the [Local API docs](api.md#mcp-server).
 

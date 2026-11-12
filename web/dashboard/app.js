@@ -7,7 +7,6 @@ import {renderCmdr} from "./cmdr.js";
 import {renderHistory} from "./history.js";
 import {renderBridge} from "./bridge.js";
 import {renderRoute as renderRoutePlotter} from "./explore-route.js";
-import {autoHonkBinding, installAutoHonkBinding} from "./auto-honk.js";
 
 // 5.7.8: every page can pop out into its own window, for a second monitor.
 function installPopOut() {
@@ -3088,8 +3087,6 @@ function settingsSectionBody(id, data) {
         + settingSwitch({key: "pad_location", label: "Where your pad is", detail: "\"Pad 34: at the back, up on your right\" as docking is granted, with a small diagram on the Dashboard. From bgol's LandingPad tables.", checked: value.pad_location !== false})
         + settingSwitch({key: "crew_warnings", label: "Crew warnings", detail: "Wanted (and the nearest Interstellar Factors), the wrong suit for biology, oxygen or health low with data aboard, no limpets on undock.", checked: value.crew_warnings !== false})
         + settingSwitch({key: "mining_recap", label: "Mining recap", detail: "After a stint of 20 t or more: what you refined, your rate and the best rock.", checked: value.mining_recap !== false})
-        + settingSwitch({key: "auto_honk", label: "Auto honk", detail: "Holds your scanner key after each hyperspace arrival while Elite is in front. Put the Discovery Scanner on that fire button in the fire group you jump with.", checked: value.auto_honk === true})
-        + autoHonkBinding(value.auto_honk_key, escapeHtml)
         + settingSwitch({key: "canonn_reports", label: "Phenomena reports", detail: "On arriving in a system, ask Canonn what other commanders found in space there (notable stellar phenomena), and hear the ones not yet in your Codex for the region. Only the system's name is sent.", checked: value.canonn_reports !== false}))
       + settingGroup("HOME", `${settingText({key: "home_system", id: "setting-home", label: "Home system", detail: "Distances \"from home\" start here: your companion's remarks and the Galaxy Minimap. Leave it empty for Sol.", value: value.home_system, placeholder: "Sol", status: homeStatus(data.home)})}`)
       + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
@@ -5179,7 +5176,6 @@ byId("studio-delete-preset").addEventListener("click", async () => {
 });
 
 installSetup(SETUP_UI);
-installAutoHonkBinding(command);
 
 byId("atlas-frame").addEventListener("load", () => {
   text("atlas-status", "Initialising map scene and commander layers…");

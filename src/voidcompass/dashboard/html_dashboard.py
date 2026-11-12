@@ -2435,7 +2435,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "expedition_gec_enabled", "expedition_poi_range_ly",
             "achievement_notifications_enabled", "adaptive_command_enabled",
             "home_system", "start_page", "target_remarks", "crew_warnings", "pad_location", "mining_recap",
-            "auto_honk", "auto_honk_key", "canonn_reports", "target_sounds", "leave_behind_cr",
+            "canonn_reports", "target_sounds", "leave_behind_cr",
             "api_enabled", "api_port", "api_allow_lan", "api_allow_control",
         ):
             value = self.config.get(key)
@@ -2449,7 +2449,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             ("trading_online_enabled", True),
             ("orders_enabled", True), ("orders_frequency", "session"), ("start_page", "last"),
             ("target_remarks", "crew"), ("crew_warnings", True), ("pad_location", True), ("mining_recap", True),
-            ("auto_honk", False), ("auto_honk_key", ""), ("canonn_reports", True), ("target_sounds", True), ("leave_behind_cr", 2_000_000),
+            ("canonn_reports", True), ("target_sounds", True), ("leave_behind_cr", 2_000_000),
             ("orders_campaigns", True),
             ("orders_kind_exobiology", True), ("orders_kind_exploration", True), ("orders_kind_travel", True), ("orders_kind_trade", True), ("orders_kind_colonisation", True), ("orders_kind_powerplay", True),
             ("orders_watcher", True), ("orders_copy_target", True), ("orders_open_map", False),
@@ -4185,7 +4185,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                     "raven_share_ship_cargo": bool, "bgs_online_enabled": bool, "trading_online_enabled": bool,
                     "orders_enabled": bool, "orders_frequency": str, "orders_campaigns": bool, "start_page": str,
                     "target_remarks": str, "crew_warnings": bool, "pad_location": bool, "mining_recap": bool,
-                    "auto_honk": bool, "auto_honk_key": str, "canonn_reports": bool, "target_sounds": bool, "leave_behind_cr": int,
+                    "canonn_reports": bool, "target_sounds": bool, "leave_behind_cr": int,
                     "orders_kind_exobiology": bool, "orders_kind_exploration": bool, "orders_kind_travel": bool, "orders_kind_trade": bool, "orders_kind_colonisation": bool, "orders_kind_powerplay": bool,
                     "orders_watcher": bool, "orders_copy_target": bool, "orders_open_map": bool,
                     "eddn_market_upload_enabled": bool,
@@ -4242,15 +4242,6 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                             self._schedule_html_dashboard_publish(immediate=True)
                             return False
                         updates[key] = {name: list(steps) for name, steps in value.items()}
-                    elif key == "auto_honk_key":
-                        from voidcompass.core.elite_keys import keyboard_shortcut
-                        try:
-                            keyboard_shortcut(value)
-                        except ValueError as exc:
-                            self._html_settings_last_save = {"id": save_id, "ok": False, "detail": str(exc)}
-                            self._schedule_html_dashboard_publish(immediate=True)
-                            return False
-                        updates[key] = _text(value, 100)
                     elif cast is bool:
                         updates[key] = bool(value)
                     elif key == "galnet_rotation_seconds":

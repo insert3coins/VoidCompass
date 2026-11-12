@@ -220,6 +220,11 @@ class SystemMapCatalogue:
             if str(body.get("name") or "").casefold() != key[0] or (key[1] and identifier(body.get("id64")) != key[1]):
                 raise spansh.SpanshError("Spansh returned a different system; keeping your journal data.")
             answer = {"status": "ready", "detail": "Spansh catalogue linked. Your journal scans take priority.", "system": body, "next": self.clock() + 600}
+        except spansh.SpanshNotFound:
+            # Nobody has reported it yet (5.7.9): not an outage, so no retry a minute on.
+            with self.lock:
+                kept = self.entries.get(key, {}).get("system") or {}
+            answer = {"status": "cached" if kept else "unavailable", "detail": "Nobody has reported this system to Spansh yet: the map is your own scans.", "system": kept, "next": self.clock() + 600}
         except Exception as exc:
             with self.lock:
                 kept = self.entries.get(key, {}).get("system") or {}

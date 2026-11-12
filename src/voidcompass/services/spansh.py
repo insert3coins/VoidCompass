@@ -35,6 +35,14 @@ class SpanshError(Exception):
     pass
 
 
+class SpanshNotFound(SpanshError):
+    """Spansh has no record of it (5.7.9): for a system, nobody has reported it
+    yet, the usual case out exploring. Not a failure; your own scans stand."""
+
+    def __init__(self, message="Spansh has no record of it yet."):
+        super().__init__(message)
+
+
 # -- fast lookups (5.5.3.2) -----------------------------------------------------
 # One kept-alive connection for every trading request: a new connection costs
 # a TLS handshake (about a second) before Spansh even sees the question. A
@@ -180,6 +188,8 @@ def _call(method, path, *, params=None, body=None, timeout=45, ttl=CACHE_TTL_S):
         _health(f"HTTP {resp.status_code}")
     elif resp.status_code < 400:
         _health()
+    if resp.status_code == 404:
+        raise SpanshNotFound()
     if resp.status_code >= 400:
         raise SpanshError(_error_text(resp))
     try:
@@ -271,7 +281,7 @@ def resolve_system(system, id64=None):
     )
     selected = exact or (results[0] if results else None)
     if not selected or selected.get("id64") is None:
-        raise SpanshError(f"Spansh could not find the system {name}.")
+        raise SpanshNotFound(f"Spansh has no record of {name} yet.")
     return {"id64": int(selected["id64"]), "name": selected.get("name") or name}
 
 

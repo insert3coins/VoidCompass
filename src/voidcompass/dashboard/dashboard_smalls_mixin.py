@@ -8,7 +8,6 @@ GPLv3), each a line from the companion on watch:
 - fuel from your own jumps: per hop, jumps left at your pace, seconds to a full tank;
 - crew warnings: wanted, the wrong suit for biology, oxygen or health low with data
   aboard, no limpets on undock;
-- auto honk (off unless you turn it on);
 - the best rock of a mining stint and a recap after it;
 - a sound as you target a system (a fanfare, an upbeat pair or a thud);
 - "sell here" at a station that buys the data you carry;
@@ -26,11 +25,12 @@ import statistics
 import threading
 import time
 
-from voidcompass.core import companions, elite_keys
+from voidcompass.core import companions
 from voidcompass.core.config import get_active_profile
 from voidcompass.outrider import fsd, ggg, pads
 
 logger = logging.getLogger(__name__)
+
 FUEL_SAMPLES = 40
 FLAG_SHIELDS_UP = 1 << 3
 FLAG_IN_DANGER = 1 << 22
@@ -447,71 +447,6 @@ class DashboardSmallsMixin:
                         + (" Life support off means you're on the emergency oxygen." if urgent else ""),
                         heading="MODULES OFF", topic="modules_off")
 
-    # -- auto honk ------------------------------------------------------------------------------------
-    def _smalls_cancel_honk(self):
-        self._auto_honk_token = None
-        timer = self.__dict__.pop("_auto_honk_timer", None)
-        if timer is not None:
-            timer.cancel()
-
-    def _smalls_auto_honk(self, raw):
-        """Hold the recorded scanner key after a live hyperspace arrival."""
-        self._smalls_cancel_honk()
-        if not self.config.get("auto_honk", False) or not hasattr(self, "_ship_presser"):
-            return
-        if getattr(self, "current_in_srv", False) or getattr(self, "current_on_foot", False):
-            return
-        configured = str(self.config.get("auto_honk_key") or "")
-        try:
-            binding = elite_keys.keyboard_shortcut(configured)
-        except ValueError:
-            binding = None
-        if binding is None:
-            logger.info("Auto honk skipped: record the scanner key in Settings > Flight & exploration")
-            return
-        system = str(raw.get("StarSystem") or "").casefold()
-        if not system:
-            return
-        profile = get_active_profile(self.config)
-        token = self._auto_honk_token = object()
-        expires = time.monotonic() + 20
-
-        def current():
-            return (self.__dict__.get("_auto_honk_token") is token
-                    and not getattr(self, "_closing", False)
-                    and self.config.get("auto_honk", False)
-                    and self.config.get("auto_honk_key") == configured
-                    and get_active_profile(self.config) == profile
-                    and str(getattr(self, "current_sys", "") or "").casefold() == system)
-
-        def allowed():
-            if not current() or not self._ship_game().in_front():
-                return False
-            if getattr(self, "_ship_recording", lambda: False)():
-                return False
-            flags, place, focus = self._ship_live_status()
-            return place == "ship" and focus == 0 and bool(flags & (1 << 4)) and not bool(flags & ((1 << 0) | (1 << 1) | (1 << 30)))
-
-        def job():
-            if not current() or time.monotonic() > expires:
-                return None
-            game = self._ship_game()
-            game.find()
-            if not allowed():
-                return None
-            base = self._ship_presser()
-            presser = elite_keys.KeyPresser(allowed, send=base.send, sleep=base.sleep)
-            presser.press(*binding, hold=6.5)
-            return None
-
-        def ready():
-            if current():
-                self._ship_queue(job)
-
-        timer = self._auto_honk_timer = threading.Timer(6.0, ready)
-        timer.daemon = True
-        timer.start()
-
     # -- mining ---------------------------------------------------------------------------------------
     def _smalls_mining(self, event, raw):
         stint = self.__dict__.get("_mining_stint")
@@ -595,8 +530,6 @@ class DashboardSmallsMixin:
     def _smalls_event(self, event, raw, startup_replay=False):
         if startup_replay or not isinstance(raw, dict):
             return
-        if event in ("StartJump", "FSSDiscoveryScan", "Location", "CarrierJump", "LoadGame", "Died", "Shutdown"):
-            self._smalls_cancel_honk()
         try:
             if event == "FSDTarget":
                 self._smalls_on_target(raw)
@@ -606,7 +539,6 @@ class DashboardSmallsMixin:
                 self._smalls_on_docking_granted(raw)
             elif event == "FSDJump":
                 self._smalls_on_jump(raw)
-                self._smalls_auto_honk(raw)
             elif event == "FuelScoop":
                 self._smalls_on_scoop(raw)
             elif event == "CommitCrime":
