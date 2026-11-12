@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.7.7**
+**Current version: 5.7.8**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
@@ -12,9 +12,17 @@ Choose **The Watcher** or **Aster**, an officer with dry wit, an original six-ch
 
 The command deck has a tab for each part of the game:
 
-- **Dashboard and Explore & Survey**: the system you're in, FSS and DSS progress, biological and geological signals, valuable worlds, your route and waypoints, and what's worth doing next.
+- **Dashboard**: the ship's bridge. A compact flight header shows where you are and the route ahead, with full ship and service readings under **FLIGHT DETAILS**. Below it: the system you're in, your route and the ship across the top; cards for exploring, mining, trading, fighting, on foot or docked, and your crew and their orders, each when it has something to report; your session, priorities and the region's Codex; and the live feed.
+- **Explore & Survey**: seven tabs.
+  - Overview: Nearby (every known system round you, with who's been there, its main star and notable worlds) beside this system's body table, with the route ahead.
+  - System: every body in one sortable table, yours laid over Spansh's: class, distance, gravity, biology and geology, rings, firsts and records, value now and fully mapped, the order to scan them in, and potential green gas giants.
+  - Search: systems, bodies and stations, from your own journals or Spansh.
+  - Firsts: unsold data and what you'd leave behind, your records and a firsts watch.
+  - Checklist: the Codex's organics for the region you're in, colour by colour.
+  - System Map and Archive (with the Journal Log, every event as a readable line).
 - **System Map** (a tab of Explore & Survey): a live Three.js view of your current system, with detailed planets, stars, atmospheres and rings. Spansh supplies known architecture while your journal scans take priority. Open a body from the Survey list, move between overview and true scale, and follow orbital time and starlight without losing your camera when new scans arrive. It marks where you are, your target, stations, settlements, fleet carriers, ring hotspots and your saved places; gives the distance and supercruise time to any body, its coming eclipses, day and night on locked worlds and a sky view from the surface; and has a survey layer with filters and a Quality setting. Public records remain separate from your discoveries; surface patterns are illustrative.
 - **Galactic Atlas**: an offline map of the galaxy's regions and everywhere you've been. Its **Flight Recorder** plays any past session back on the map, jump by jump, with your discoveries, sales and postcards where they happened and the music you were listening to.
+- **Route**: Spansh's neutron, exact, road to riches, exobiology, Earth-like, ammonia, terraformable and tourist routes, followed as you jump, with fuel warnings and pace. A plotted route becomes your waypoint route, so the Nav HUD, the Galaxy Minimap and the Atlas follow it; Expeditions plots on the same plotter. The nearest place to dock is on it too.
 - **Planetary Operations**: everything on a planet's surface, in three tabs.
   - On the ground: a compass to any coordinates (or back to your ship), a field map of your trail, samples and markers, and the planet itself.
   - Exobiology: what lives on the planet you're on, what's worth sampling and what's new to the Codex, how far to move before your next sample, and the biology in the rest of the system.
@@ -24,7 +32,7 @@ The command deck has a tab for each part of the game:
   - Find: rings by mineral, and planets with the right ground for the Rhino.
   - Sell: what your haul is worth and who pays most for it.
   - Record: all your mining from your journals, month by month.
-- **Commander Record**: your ranks, history, achievements, and a Captain's Log of every trip.
+- **Commander Record**: your ranks, history and achievements. The CMDR tabs add your money and ranks, every ship and stored module, missions soonest first, sessions, and earnings by kind and month; History (on Explore & Survey) has a row per session, trips from sale to sale, your top 25 finds, exports and your EDSM flight log.
 - **Carrier Command**: your own carrier and your squadron's, with fuel, cargo, routes and jump countdowns.
 - **Colonisation**: your construction projects, shared with your team through [Raven Colonial](https://ravencolonial.com).
   - Track what each site still needs and what your ship and carriers hold, and find where to buy it.
@@ -38,9 +46,14 @@ The command deck has a tab for each part of the game:
 - **Void Wrapped**: your year in Elite, told as a story of animated cards, from how far you flew to your fights, your soundtrack and the Watcher's verdict. Every card saves as a picture for Discord.
 - **Keepsakes**: postcards from your screenshots, time capsules (notes you leave in a system, handed back when you return), On this day, and your journey drawn as constellations.
 - **Music**: a player for your own music files, with an overlay you can show in game.
-- **Games**: fourteen arcade cabinets in Elite's world to play in the deck, from Docking Computer to Trumble Trouble.
-- **Hatchling**: a shipboard companion that lives in real time, is raised by how you really play, and has its own habitat and overlay.
+- **Games**: thirteen arcade cabinets in Elite's world to play in the deck, from Docking Computer to Trumble Trouble.
 - **The Watcher**: an eye that watches your journal and thinks out loud beside it, about what you're doing, where you've been and its own long story. It remembers you between sessions and, once you know each other, asks whether it may use your name. Its thoughts and story come from written lines, spoken by its optional Piper voice. The TALK tab takes typed or spoken commands and answers questions from your ship's systems. Whisper hears push-to-talk speech on this PC; the uplink can look up commodity prices through Spansh.
+
+Any page except the Dashboard can pop out into a window of its own for a second monitor (**⧉ POP OUT** beside its title), without the main deck's header or status bars.
+
+Optional auto honk on arrival is under **Settings › Flight & exploration**. Record the keyboard key bound to your Discovery Scanner's Primary or Secondary Fire button in Elite, and keep the scanner in your arrival fire group.
+
+An AI client you already use (Claude Code, the Claude desktop app or any MCP client) can read your game through the Local API with the read-only MCP server in `tools/mcp`. See the [Local API docs](api.md#mcp-server).
 
 Everything else is quiet on purpose: it shows up on the deck, in notifications and on the overlays.
 
@@ -111,8 +124,6 @@ The code lives in `src/voidcompass`, grouped by area: `core`, `dashboard`, `over
 
 To build a release, run `python tools/build.py`. It creates the app in `dist` and the zip in `release`.
 
-To capture the shared Hatchling models for a community post, run `.venv\Scripts\python.exe tools\hatchling_showcase.py`. It writes individual companion and outfit cards, transparent PNGs and galleries to `exports/hatchlings-5.6.8`.
-
 To diagnose the Watcher renderer, close the app and set `"watcher_renderer_logging": true` in the root `config.json` beside the executable (or in the source run's folder). On the next launch, `logs/watcher_renderer.log` records whether the boot eye uses Three.js or the canvas fallback. It also records the dashboard Watcher and Heartbeat overlay once each when they have drawn. A fallback report says whether the Three.js module failed to load or the renderer could not start. Set it back to `false` to turn this diagnostic off; the setting is off by default.
 
 ## Contributing
@@ -127,7 +138,7 @@ Before you share a log or journal excerpt, take out your commander name, Frontie
 
 ## License
 
-Void Compass is free software under the [GNU General Public License v3.0](LICENSE). It builds on work from SrvSurvey, Raven Colonial, BGS-Tally and others. The credits are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Void Compass is free software under the [GNU General Public License v3.0](LICENSE). It builds on work from ED Outrider, SrvSurvey, Raven Colonial, BGS-Tally and others. The credits are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Disclaimer
 

@@ -350,9 +350,6 @@ class HtmlOverlayServer:
         elif template == "heartbeat":
             model = snapshot.get("heartbeat") or {}
             value = [model.get("events"), model.get("thought")]
-        elif template == "hatchling":
-            model = snapshot.get("hatchling") or {}
-            value = [model.get("cue"), model.get("chat"), model.get("line")]
         else:
             return None
         return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)

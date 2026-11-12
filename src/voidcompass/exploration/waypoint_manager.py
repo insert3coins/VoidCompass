@@ -100,15 +100,17 @@ class WaypointManager:
         return False
             
     def get_distance(self, c1, c2):
-        """Calculates distance between two coordinate dicts or lists."""
-        # Normalize to dicts if lists are passed
-        if isinstance(c1, list) and len(c1) == 3:
-            c1 = {'x': c1[0], 'y': c1[1], 'z': c1[2]}
-        if isinstance(c2, list) and len(c2) == 3:
-            c2 = {'x': c2[0], 'y': c2[1], 'z': c2[2]}
-
-        if c1 and c2:
-            return math.sqrt((c1['x']-c2['x'])**2 + (c1['y']-c2['y'])**2 + (c1['z']-c2['z'])**2)
+        """Calculates distance between two coordinate dicts, lists or tuples."""
+        def xyz(c):
+            if isinstance(c, dict):
+                c = (c.get('x'), c.get('y'), c.get('z'))
+            try:
+                return tuple(float(v) for v in c) if c is not None and len(c) == 3 else None
+            except (TypeError, ValueError):
+                return None
+        a, b = xyz(c1), xyz(c2)
+        if a and b:
+            return math.dist(a, b)
         return 0.0
 
     def get_next_waypoint(self, current_name):

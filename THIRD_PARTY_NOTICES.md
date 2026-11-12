@@ -160,3 +160,9 @@ price paid, bounties at fleet carriers halved, a conflict zone counted once on
 its first combat bond, ground conflict zone size from the bond's value
 (5,000 and 38,000 credits), and its Discord report layout. VoidCompass's BGS
 code (`src/voidcompass/bgs`) is its own implementation of these rules.
+
+### Data looked up as you play
+
+Systems, bodies, stations and routes come from [Spansh](https://spansh.co.uk), with [EDSM](https://www.edsm.net) for
+your own flight log when you ask for it. Known Guardian sites and reported geology come from Canonn's services when a
+body's panel opens; nothing is stored or sent about you. Each source's data stays under its own terms.

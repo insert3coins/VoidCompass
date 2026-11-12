@@ -116,6 +116,29 @@ def parse_commodity(reply, commodity, kind):
     return out
 
 
+def sell_all(records, hold, top=10):
+    """5.7.8, after ED-Outrider's Sell all: stations ranked by what they'd pay
+    for your whole hold. ``records``: Spansh station records with their whole
+    market; ``hold``: rows with "name" (Spansh's) and "count"."""
+    ranked = []
+    for record in records:
+        total, covered, missing = 0, [], []
+        for item in hold:
+            row = _market_row(record, item["name"])
+            price, demand = (_num((row or {}).get("sell_price")), _num((row or {}).get("demand"))) if row else (0, 0)
+            if price > 0 and demand > 0:
+                sold = min(int(item["count"]), int(demand))
+                total += int(price) * sold
+                covered.append({"name": item["name"], "count": sold, "price": int(price)})
+            else:
+                missing.append(item["name"])
+        if total:
+            ranked.append({**_station(record), "total": total, "covers": len(covered), "of": len(hold),
+                           "sold": covered, "missing": missing})
+    ranked.sort(key=lambda row: (-row["total"], row.get("distance") or 0))
+    return ranked[:top]
+
+
 def parse_station(reply):
     """One station (``/api/station/<market id>``) -> its details and market."""
     record = (reply or {}).get("record") or {}

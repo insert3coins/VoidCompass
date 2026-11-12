@@ -173,6 +173,12 @@ VSVersionInfo(
         f'--add-data={project_dir / "data" / "codexRef.json"}{data_sep}data',
         f'--add-data={project_dir / "data" / "achievements.json"}{data_sep}data',
         f'--add-data={project_dir / "data" / "rhino_mining_sheet.json"}{data_sep}data',
+        # 5.7.8, from ED-Outrider: Canonn's geology and phenomena by region, how
+        # Piper says the species names, and the alert sounds' recipes.
+        f'--add-data={project_dir / "data" / "geo_codex.json"}{data_sep}data',
+        f'--add-data={project_dir / "data" / "bio_rules.json"}{data_sep}data',
+        f'--add-data={project_dir / "data" / "pronounce.json"}{data_sep}data',
+        f'--add-data={project_dir / "data" / "alert_sounds.json"}{data_sep}data',
         f'--add-data={project_dir / "data" / "colonisation"}{data_sep}data/colonisation',
         # SrvSurvey's bio criteria (GPL-3): the colours Survey Operations'
         # Codex flags judge.

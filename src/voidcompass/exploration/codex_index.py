@@ -26,7 +26,9 @@ from voidcompass.core.paths import resource_path
 from voidcompass.core.persistence_queue import persistence_queue
 from voidcompass.exploration.travel_history import commander_matches
 
-SCHEMA = 1
+# 2 (5.7.8): every other Codex entry kept as its EntryID per region (body and
+# geology types for the new-to-Codex marks), so older files are read again.
+SCHEMA = 3
 MARKERS = tuple(
     marker
     for event in ("CodexEntry", "Commander", "LoadGame")
@@ -72,6 +74,8 @@ class CodexIndex:
         self.files = {}
         self.revision = 0
         self._by_entry = {}
+        # {EntryID: [region, ...]}: stars, planets, geology and the rest (5.7.8).
+        self.types = {}
         self.load()
 
     # -- storage -------------------------------------------------------------
@@ -86,8 +90,14 @@ class CodexIndex:
         if not isinstance(data, dict):
             return
         with self.lock:
-            self.rows = [row for row in data.get("rows") or [] if isinstance(row, list) and len(row) >= 5]
-            self.files = {str(key): str(value) for key, value in (data.get("files") or {}).items()}
+            current = data.get("schema") == SCHEMA
+            # An older index filed geology as biology (5.7.8): rebuilt from the files.
+            self.rows = [row for row in data.get("rows") or [] if isinstance(row, list) and len(row) >= 5] if current else []
+            # An older index never kept the other entries: read every file again.
+            self.files = ({str(key): str(value) for key, value in (data.get("files") or {}).items()}
+                          if data.get("schema") == SCHEMA else {})
+            self.types = {str(key): list(value)
+                          for key, value in (data.get("types") or {}).items() if isinstance(value, list)}
             self._reindex()
 
     def _reindex(self):
@@ -98,7 +108,8 @@ class CodexIndex:
 
     def _payload(self):
         with self.lock:
-            return {"schema": SCHEMA, "rows": list(self.rows), "files": dict(self.files)}
+            return {"schema": SCHEMA, "rows": list(self.rows), "files": dict(self.files),
+                    "types": {key: list(value) for key, value in self.types.items()}}
 
     def save(self, immediate=False):
         if self.path:
@@ -111,10 +122,29 @@ class CodexIndex:
             persistence_queue().flush(self.path, timeout=1.0)
 
     # -- recording -----------------------------------------------------------
+    def _record_type(self, raw):
+        """Any other CodexEntry: its EntryID, once per region."""
+        try:
+            entry_id = str(int(raw.get("EntryID")))
+        except (TypeError, ValueError):
+            return False
+        region = region_id(raw.get("Region"))
+        regions = self.types.setdefault(entry_id, [])
+        if region in regions:
+            return False
+        regions.append(region)
+        return True
+
     def _record(self, raw):
         """Add one biological CodexEntry; True when it was new to the index."""
-        if raw.get("event") != "CodexEntry" or "biology" not in str(raw.get("Category") or "").casefold():
+        if raw.get("event") != "CodexEntry":
             return False
+        # Geology and anomalies share the Biology category with the organics
+        # (5.7.8): only Organic Structures are species; the rest are types.
+        subcategory = str(raw.get("SubCategory") or "").casefold()
+        biology = "organic_structures" in subcategory if subcategory else "biology" in str(raw.get("Category") or "").casefold()
+        if not biology:
+            return self._record_type(raw)
         entry = str(raw.get("Name") or "").strip()
         timestamp = str(raw.get("timestamp") or "")
         if not entry.startswith("$Codex_Ent_") or not timestamp:
@@ -206,6 +236,19 @@ class CodexIndex:
         """Every row, as kept: ``[timestamp, entry, region, address, body id]``."""
         with self.lock:
             return [list(row) for row in self.rows]
+
+    def type_state(self, entry_id, region):
+        """A body or geology type (EntryID) still to log: "new" never anywhere,
+        "region" not in this region, "" logged. "" too with nothing to compare."""
+        with self.lock:
+            if not self.types:
+                return ""
+            regions = self.types.get(str(entry_id))
+        if not regions:
+            return NEW
+        if region is not None and region not in regions:
+            return REGION
+        return ""
 
     def entries_on(self, address, body_id):
         """Codex entries the commander logged on one body, oldest first."""

@@ -383,6 +383,13 @@ function cargoView(data, ui) {
     : `<p class="tr-dim">Your hold is empty.</p>`;
   let results = "";
   if (cargo.error) results = `<p class="co-error">${esc(cargo.error)}</p>`;
+  // Sell all (5.7.8): the stations that pay the most for your whole hold.
+  if ((cargo.sell_all || []).length) {
+    results += `<section class="tr-card tr-sellall"><h4>SELL ALL · WHO PAYS MOST FOR THE WHOLE HOLD</h4>${cargo.sell_all.map((row) => `<div class="tr-sellall-row">
+      <b>${cr(row.total)}</b><span>${esc(row.station)} · ${esc(row.system)}${row.distance != null ? ` · ${count(row.distance)} ly` : ""}${row.pad ? ` · pad ${esc(row.pad)}` : ""}</span>
+      <small>${row.covers} of ${row.of} commodities${row.missing.length ? ` · doesn't buy ${esc(row.missing.join(", "))}` : ""}${row.updated ? ` · ${ago(row.updated)}` : ""}</small>
+      <button type="button" data-trade-op="copy" data-text="${esc(row.system)}">COPY SYSTEM</button></div>`).join("")}</section>`;
+  }
   for (const row of cargo.rows || []) {
     const best = row.stations[0];
     const listed = byDistance && Array.isArray(row.nearest) ? row.nearest : row.stations;

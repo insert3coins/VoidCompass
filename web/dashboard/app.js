@@ -2,6 +2,34 @@ import {renderPowerplayWorkspace as renderPowerplayOperationsWorkspace} from "./
 import {
   openExploreBody, renderExploreSystem, renderExploreWorkspace, resetExploreProfile, setExploreView, exploreView,
 } from "./explore.js";
+import {renderStatusStrip} from "./status-strip.js";
+import {renderCmdr} from "./cmdr.js";
+import {renderHistory} from "./history.js";
+import {renderBridge} from "./bridge.js";
+import {renderRoute as renderRoutePlotter} from "./explore-route.js";
+import {autoHonkBinding, installAutoHonkBinding} from "./auto-honk.js";
+
+// 5.7.8: every page can pop out into its own window, for a second monitor.
+function installPopOut() {
+  if (SOLO_PAGE) return;
+  for (const actions of document.querySelectorAll(".page:not(.overview-page) > .page-title .title-actions, .atlas-page > .atlas-dockbar .title-actions")) {
+    if (actions.querySelector("[data-popout]")) continue;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost";
+    button.dataset.popout = "";
+    button.title = "Open this page in a window of its own";
+    button.textContent = "⧉ POP OUT";
+    actions.append(button);
+  }
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-popout]");
+    if (!button) return;
+    const page = button.closest(".page")?.dataset.pageName;
+    // Where that page's window was last put (5.7.8), if it was ever moved.
+    if (page) window.pywebview?.api?.pop_out?.(page, model?.popout_geometry?.[page] || null);
+  });
+}
 import {renderExplorationArchive} from "./archive.js";
 import {createMusicDeck} from "./music.js";
 import {installSetup, renderSetup} from "./setup.js";
@@ -20,17 +48,22 @@ import {renderPostcards} from "./postcards.js";
 import {renderScreenshots} from "./screenshots.js";
 import {renderCapsules} from "./capsules.js";
 import {handleOrdersClick} from "./orders.js";
-import {renderTools} from "./tools.js";
 import {renderConstellation} from "./constellation.js";
 import {renderGames} from "./games.js";
-import {renderHatchling, setHatchlingActive} from "./hatchling.js";
-import {renderFlightLogs} from "./flightlog.js";
 import {renderWrapped} from "./wrapped.js";
 import {renderAbout} from "./about.js";
 import {installSystemMap,renderSystemMap,setSystemMapActive,resetSystemMap,openSystemMap,systemMapState} from "./system-map.js";
 
 const query = new URLSearchParams(window.location.search);
 const token = query.get("token") || "";
+// 5.7.8: a page popped out into its own window shows that page alone.
+const SOLO_PAGE = query.get("solo") === "1" ? String(query.get("page") || "") : "";
+if (SOLO_PAGE) {
+  document.body.classList.add("solo");
+  document.getElementById("boot")?.setAttribute("hidden", "");
+}
+if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", installPopOut, {once: true});
+else installPopOut();
 let revision = -1;
 let model = {};
 // The music player runs behind every page once the deck is up (music.js).
@@ -90,8 +123,6 @@ let groundTargetRefreshTimer = 0;
 const achievementUi = {category: "all", status: "all", search: "", sort: "progress", visible: 24};
 let hotkeyCaptureAction = "";
 let analyticsView = "trends";
-let replaySelectedSessionIndex = 0;
-let replayTimer = 0;
 let deckLayoutDraft = null;
 let deckLayoutFingerprint = "";
 let atlasLayerRequest = "";
@@ -114,7 +145,7 @@ const PAGE_SUITES = [
   {parent: "explore", label: "EXPLORATION COMMAND", pages: [
     // Expeditions has its own place on the rail since 5.6.1.
     ["explore", "SYSTEM SURVEY"],
-    ["recon", "SCOUT & RECON"], ["ledger", "VALUE LEDGER"], ["chronicle", "CAPTAIN'S LOG"],
+    ["chronicle", "HISTORY"],
   ]},
   {parent: "profile", label: "COMMANDER RECORD", pages: [
     ["profile", "COMMANDER"], ["records", "FLIGHT RECORD"],
@@ -127,7 +158,9 @@ for (const suite of PAGE_SUITES) {
 }
 // Ground & Exobio is the Planetary page's ON THE GROUND tab since 5.5.12.
 // 5.7.7: Crew Orders live on the companion page, in its ORDERS tab.
-const LEGACY_PAGE_REDIRECTS = {operations: "overview", ground: "planet-materials", "system-map": "explore", orders: "watcher"};
+const LEGACY_PAGE_REDIRECTS = {operations: "overview", ground: "planet-materials", "system-map": "explore", orders: "watcher", hatchling: "games",
+  // 5.7.8: Explore & Survey and History do their work now.
+  recon: "explore", ledger: "chronicle"};
 
 const HOTKEY_MODIFIER_KEYS = new Set([
   "Alt", "AltGraph", "Control", "Meta", "OS", "Shift",
@@ -149,6 +182,8 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".nav-item", "[data-feed-filter]", ".overlay-quick button", "#overlay-all-toggle", "#overlay-quick-more", ".studio-overlay-card", ".studio-monitor", "[data-setup-go]", ".studio-text-link",
   ".studio-index-select", ".mission-row", ".workspace-tabs button", ".watcher-chapter", ".album-grid button", ".sky-gallery button", ".flightlog-nights button",
   ".suite-tabs button", "[data-analytics-view]",
+  // 5.7.8: the tables' small icon buttons stay plain icons.
+  ".xn-acts button", ".xt-table button", ".xt-box button",
   ".galnet-headline-row", "#status-galnet",
   ".survey-body-row", ".explore-views button", "[data-explore-filter]", ".body-select",
   ".settings-tab", ".theme-option", ".settings-group-link", ".settings-clear-search", ".settings-studio-link",
@@ -243,7 +278,8 @@ async function finishHotkeyCapture(message) {
 const byId = (id) => document.getElementById(id);
 const text = (id, value, fallback = "—") => {
   const node = byId(id);
-  if (node) node.textContent = value === null || value === undefined || value === "" ? fallback : String(value);
+  const next = value === null || value === undefined || value === "" ? fallback : String(value);
+  if (node && node.textContent !== next) node.textContent = next;
 };
 const number = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const clamp = (value, low = 0, high = 100) => Math.max(low, Math.min(high, number(value)));
@@ -396,7 +432,7 @@ function pageLayoutContainers(pageName) {
 
 function layoutPanels(container) {
   const candidates = [...container.children].filter((node) => node.matches(
-    "article, aside, main, .card, .mission-detail, section.telemetry-strip, section.workspace-card, .tool-card",
+    "article, aside, main, .card, .mission-detail, section.telemetry-strip, section.workspace-card, section.bridge-activity, .tool-card",
   ));
   const used = new Set();
   candidates.forEach((panel, index) => {
@@ -631,6 +667,13 @@ function applyTheme(theme = {}) {
 }
 
 function renderBoot(state) {
+  if (SOLO_PAGE) {
+    // A popped-out window joins the deck already running: no boot screen.
+    byId("boot").hidden = true;
+    document.body.classList.add("ready");
+    byId("app").setAttribute("aria-hidden", "false");
+    return;
+  }
   const boot = state.boot || {};
   const onboarding = state.onboarding || {};
   const commissioning = Boolean(onboarding.active);
@@ -785,17 +828,14 @@ function renderCommissioning(onboarding) {
 
 function renderHeader(state) {
   const flight = state.flight || {};
-  const survey = state.survey || {};
-  const route = state.route || {};
-  const session = state.session || {};
-  const traffic = state.traffic || {};
   const source = String(state.sources?.overall || "CACHED").toUpperCase();
   text("header-system", flight.system, "---");
   text("header-context", flight.context, "WAITING FOR LIVE JOURNAL");
-  text("header-survey", `${number(survey.scanned)} / ${survey.total_known ? number(survey.total) : "?"}`);
-  text("header-route", route.summary, "INACTIVE");
-  text("header-session", session.elapsed, "00:00:00");
-  text("header-traffic", `${number(traffic.day)} / ${number(traffic.week)} / ${number(traffic.total)}`);
+  text("header-region", state.tiles?.where?.region || state.intelligence?.region, "REGION UNKNOWN");
+  text("header-state", flight.state, "STANDBY");
+  text("header-link", source);
+  byId("header-link").dataset.source = source.toLowerCase();
+  renderStatusStrip(state.tiles || {}, {profileKey: () => profileKey});
   text("header-commander", state.profile?.commander, "UNKNOWN");
   text("header-ship", `${flight.ship || "SHIP"} // ${flight.state || "FLIGHT"}`.toUpperCase());
   renderOverlaySwitchboard(state.overlay_studio || {});
@@ -915,7 +955,7 @@ function renderPreflight(state) {
 }
 
 function renderFlightLog(state) {
-  const enabled = Boolean(state.ui?.flight_log_mode);
+  const enabled = !SOLO_PAGE && Boolean(state.ui?.flight_log_mode);
   document.body.classList.toggle("flight-log-mode", enabled);
   byId("flight-log-shell")?.setAttribute("aria-hidden", String(!enabled));
   if (!enabled) return;
@@ -1217,8 +1257,8 @@ function renderSurvey(state) {
     }));
   }
 
-  // The Explore survey board, band and schematic are fed by this snapshot.
-  renderExploreSystem(state, EXPLORE_WORKSPACE_UI);
+  // Keep Explore's state current; it paints only its visible tab.
+  if (currentPage !== "explore") renderExploreSystem(state, EXPLORE_WORKSPACE_UI);
 }
 
 function renderRoute(state) {
@@ -1485,7 +1525,12 @@ function renderEvents(state) {
     feedFingerprint = fingerprint;
     byId("event-feed").replaceChildren(...filtered.slice(0, 45).map(createEventRow));
   }
-  byId("record-feed").replaceChildren(...all.slice(0, 80).map(createEventRow));
+  const record = byId("record-feed");
+  const recordKey = JSON.stringify(all.slice(0, 80));
+  if (record.dataset.renderKey !== recordKey) {
+    record.dataset.renderKey = recordKey;
+    record.replaceChildren(...all.slice(0, 80).map(createEventRow));
+  }
 }
 
 function galnetArticles(state = model) {
@@ -2283,8 +2328,9 @@ const EXPLORE_WORKSPACE_UI = Object.freeze({
   orreryDetail, percentWidth, showPage, text,
   planetKind: surveyPlanetKind,
   profileKey: () => profileKey,
-  command, showToast,
+  command, showToast, apiUrl: (path) => apiUrl(path),
   onViewChange: () => syncSystemMap(),
+  renderArchive: (archive) => renderExploreArchive(archive),
 });
 
 // The System Map is Explore & Survey's SYSTEM MAP tab (5.6.9): it draws only
@@ -2370,6 +2416,8 @@ function renderProfileWorkspace(data) {
       ${workspaceCard(`MISSION RESPONSIBILITIES · ${(data.missions || []).length}`, missions)}
       ${workspaceCard("PROFILE CUSTODY", `<div class="fact-list spacious"><div><span>PROFILE KEY</span><b>${escapeHtml(data.key)}</b></div><div><span>PROFILE FOLDER</span><b class="path-value">${escapeHtml(data.folder)}</b></div><div><span>GAME MODE</span><b>${escapeHtml(data.session?.game_mode || "UNKNOWN")}</b></div><div><span>REPAIR DRONE RECORDS</span><b>${numeric(data.session?.repair_drone_events)}</b></div><div><span>EDSM UPLOAD</span><b>${data.integrations?.edsm ? "ON" : "OFF"}</b></div><div><span>EDDN MARKET</span><b>${data.integrations?.eddn ? "ON" : "OFF"}</b></div><div><span>CARRIER DISCORD</span><b>${data.integrations?.discord ? "CONFIGURED" : "OFF"}</b></div></div>`)}
     </section>`;
+  // 5.7.8: the record in tabs, with the books from the journal.
+  renderCmdr(root, WORKSHOP_UI, profileKey);
 }
 
 function renderArchiveWorkspace(data) {
@@ -2379,100 +2427,14 @@ function renderArchiveWorkspace(data) {
 // The archive inside Explore & Survey (5.5.4): drawn again only when it changed.
 let lastArchiveKey = "";
 function renderExploreArchive(archive) {
-  const key = JSON.stringify({...archive, current: {...(archive.current || {}), elapsed: ""}, profileKey});
+  const key = JSON.stringify({...archive, current: {...(archive.current || {}), elapsed: ""},
+    science_status: {...(archive.science_status || {}), age_seconds: null}, profileKey});
   if (key === lastArchiveKey && byId("analytics-workspace")?.childElementCount) return;
   lastArchiveKey = key;
   renderArchiveWorkspace(archive);
 }
 
-function replayGeometry(replay = {}, sessionIndex = 0) {
-  const points = replay.points || [];
-  const session = (replay.sessions || [])[sessionIndex] || {};
-  let start = Number.isInteger(session.point_start) ? session.point_start : 0;
-  let end = Number.isInteger(session.point_end) ? session.point_end : Math.max(0, points.length - 1);
-  start = Math.max(0, Math.min(start, Math.max(0, points.length - 1)));
-  end = Math.max(start, Math.min(end, Math.max(0, points.length - 1)));
-  const scoped = points.slice(start, end + 1);
-  if (!scoped.length) return {start: 0, end: 0, points: [], projected: [], path: ""};
-  const xs = scoped.map((row) => number(row.pos?.[0]));
-  const zs = scoped.map((row) => number(row.pos?.[2]));
-  const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
-  const span = Math.max(1, maxX - minX, maxZ - minZ);
-  const projected = scoped.map((row, index) => ({
-    ...row, globalIndex: start + index,
-    x: 54 + (number(row.pos?.[0]) - minX) * 792 / span,
-    y: 382 - (number(row.pos?.[2]) - minZ) * 330 / span,
-  }));
-  return {start, end, points: scoped, projected, path: projected.map((row, index) => `${index ? "L" : "M"}${row.x.toFixed(1)} ${row.y.toFixed(1)}`).join(" ")};
-}
 
-function replayMarkup(replay = {}) {
-  const sessions = replay.sessions || [];
-  if (replaySelectedSessionIndex >= sessions.length) replaySelectedSessionIndex = 0;
-  const geometry = replayGeometry(replay, replaySelectedSessionIndex);
-  const first = geometry.projected[0];
-  const photos = (replay.photos || []).map((photo) => {
-    const match = [...geometry.projected].reverse().find((row) => row.system === photo.system && row.epoch <= photo.epoch) || geometry.projected.find((row) => row.system === photo.system);
-    return match ? `<circle class="replay-photo" cx="${match.x}" cy="${match.y}" r="4"><title>${escapeHtml(photo.body || photo.system)} · ${escapeHtml(String(photo.timestamp || "").replace("T", " ").slice(0, 16))}</title></circle>` : "";
-  }).join("");
-  const discoveries = geometry.projected.filter((row) => row.discoveries || row.codex || row.fss_complete).map((row) => `<circle class="replay-discovery" cx="${row.x}" cy="${row.y}" r="3"><title>${escapeHtml(row.system)} · ${row.discoveries ? `${row.discoveries} discoveries` : row.codex ? `${row.codex} Codex` : "FSS complete"}</title></circle>`).join("");
-  const options = sessions.map((row, index) => `<option value="${index}" ${index === replaySelectedSessionIndex ? "selected" : ""}>${escapeHtml(String(row.started || "UNKNOWN FLIGHT").replace("T", " ").slice(0, 16))} · ${escapeHtml(row.start_system || "—")} → ${escapeHtml(row.end_system || "—")}</option>`).join("");
-  return `<div class="replay-toolbar"><label>FLIGHT<select id="replay-session">${options}</select></label><div><button id="replay-play" ${geometry.points.length > 1 ? "" : "disabled"}>PLAY REPLAY</button><button data-ws-page="chronicle" data-ws-op="export_replay" data-session-index="${replaySelectedSessionIndex}" ${geometry.points.length ? "" : "disabled"}>EXPORT INTERACTIVE HTML</button></div></div><svg class="replay-chart" viewBox="0 0 900 430" role="img" aria-label="Expedition journey replay"><path class="replay-grid" d="M450 22V408M22 215H878M225 22V408M675 22V408M22 108H878M22 322H878"/><path class="replay-route" d="${geometry.path}"/>${discoveries}${photos}${first ? `<g id="replay-ship" transform="translate(${first.x} ${first.y})"><path d="M0 -9L7 8L0 5L-7 8Z"/></g>` : ""}<text x="24" y="32">${geometry.points.length ? `${geometry.points.length} RETAINED SYSTEMS` : "NO COORDINATED ROUTE IN THIS SESSION"}</text></svg><div class="replay-controls"><input id="replay-slider" type="range" min="${geometry.start}" max="${geometry.end}" value="${geometry.start}" ${geometry.points.length ? "" : "disabled"}><span id="replay-readout">${first ? `01 / ${String(geometry.points.length).padStart(2, "0")} · ${escapeHtml(first.system)}` : "AWAITING ROUTE EVIDENCE"}</span><div><i class="discovery"></i> DISCOVERY <i class="photo"></i> PHOTO</div></div>`;
-}
-
-function updateReplayCursor(globalIndex) {
-  const replay = model.workspace?.page === "chronicle" ? model.workspace.data?.replay || {} : {};
-  const geometry = replayGeometry(replay, replaySelectedSessionIndex);
-  const localIndex = Math.max(0, Math.min(geometry.projected.length - 1, number(globalIndex) - geometry.start));
-  const row = geometry.projected[localIndex];
-  const ship = byId("replay-ship");
-  if (!row || !ship) return;
-  ship.setAttribute("transform", `translate(${row.x} ${row.y})`);
-  text("replay-readout", `${String(localIndex + 1).padStart(2, "0")} / ${String(geometry.projected.length).padStart(2, "0")} · ${row.system} · ${numeric(row.jump_dist, 1)} LY`);
-}
-
-// The Captain's Log's long lists, folded until wanted (5.5.3.8); each stays
-// open or shut as left, though the page is drawn again as the game goes on.
-const chronicleFolds = {photos: false, discoveries: false};
-document.addEventListener("toggle", (event) => {
-  const fold = event.target.closest?.("[data-chronicle-fold]");
-  if (fold) chronicleFolds[fold.dataset.chronicleFold] = fold.open;
-}, true);
-
-function chronicleFold(key, title, body) {
-  return `<details class="chronicle-fold" data-chronicle-fold="${key}"${chronicleFolds[key] ? " open" : ""}><summary>${escapeHtml(title)}</summary>${body}</details>`;
-}
-
-function renderChronicleWorkspace(data) {
-  const root = byId("chronicle-workspace");
-  const sessions = data.sessions || [];
-  if (replayTimer) { clearInterval(replayTimer); replayTimer = 0; }
-  // Each session's own log is in the flight logs above (5.5.3.8): one list
-  // of nights, each opening to its full log, instead of every card at once.
-  const photos = [...(data.replay?.photos || [])].reverse().slice(0, 24);
-  const photoRows = photos.map((photo) => {
-    const location = [photo.system, photo.body].filter(Boolean).join(" · ") || "Location unavailable";
-    const coordinates = photo.latitude === null || photo.latitude === undefined
-      ? "" : ` · ${numeric(photo.latitude, 4)}°, ${numeric(photo.longitude, 4)}°`;
-    const context = photo.nearby_label
-      ? `${photo.nearby_label}${photo.nearby_detail ? ` · ${photo.nearby_detail}` : ""}`
-      : "No nearby notable journal event retained";
-    const filename = String(photo.filename || "Screenshot").split(/[\\/]/).pop();
-    return `<div class="photo-chronicle-row"><i></i><p><strong>${escapeHtml(location)}</strong><span>${escapeHtml(context)}</span><small>${escapeHtml(filename)}${escapeHtml(coordinates)}</small></p><time>${escapeHtml(String(photo.timestamp || "").replace("T", " ").slice(0, 16))}</time></div>`;
-  });
-  // Field discoveries are each flight's own now, in its flight log (5.5.3.8).
-  root.classList.remove("loading-panel");
-  root.innerHTML = `${workspaceMetrics([
-    {label: "Flights", value: numeric(sessions.length), detail: "PROFILE CHRONICLE"},
-    {label: "Distance", value: `${numeric(sessions.reduce((sum, row) => sum + number(row.distance), 0), 1)} LY`, detail: "RETAINED TRAVEL"},
-    {label: "FSS surveys", value: numeric(sessions.reduce((sum, row) => sum + number(row.fss), 0)), detail: "SYSTEM COMPLETIONS"},
-    {label: "Bio analyses", value: numeric(sessions.reduce((sum, row) => sum + number(row.bio), 0)), detail: "GENETIC SAMPLES"},
-  ])}<section class="workspace-grid chronicle-feature-grid">${workspaceCard("EXPEDITION REPLAY", replayMarkup(data.replay || {}), `${numeric(data.replay?.points?.length)} ROUTE POINTS`, "replay-card")}</section>${chronicleFold("photos", `SCREENSHOT CHRONICLE · ${photos.length} RECENT`, workspaceCard("SCREENSHOT CHRONICLE", `${workspaceRows(photoRows, "Screenshots will be associated with their system, body and nearby journal event.")}<div class="workspace-actions"><button data-command="open_screenshots">OPEN SCREENSHOT FOLDER</button></div>`, `${photos.length} RECENT PHOTOS`, "photo-chronicle-card"))}${sessions.length ? "" : `<p class="workspace-empty">Captain's Log will populate as journal sessions are completed.</p>`}`;
-}
-
-
-
-// The Mining page lives in mining.js (5.5.12).
 function renderMiningWorkspace(data) {
   renderMining(data, WORKSHOP_UI);
 }
@@ -2663,19 +2625,6 @@ function renderCarrierWorkspace(data) {
   </section>`;
 }
 
-function renderReconWorkspace(data) {
-  const root = byId("recon-workspace");
-  const report = data.report || {};
-  const gaps = (report.gaps || []).map((row) => `<div class="recon-gap"><i></i><span>${escapeHtml(typeof row === "string" ? row : row.detail || row.title || row.kind || JSON.stringify(row))}</span></div>`);
-  const candidates = workspaceTable([{label: "System", key: "system"}, {label: "Score", render: (row) => `${numeric(row.score)}/100`}, {label: "Grade", key: "grade"}, {label: "Saved", key: "saved"}, {label: "", render: (row) => `<button class="row-delete" data-ws-page="recon" data-ws-op="delete_candidate" data-system="${escapeHtml(row.system)}">×</button>`}], data.candidates || [], "No recon candidates saved.");
-  root.classList.remove("loading-panel");
-  root.innerHTML = `${workspaceMetrics([
-    {label: "Current system", value: report.system || "UNKNOWN", detail: "RECON TARGET"},
-    {label: "Readiness", value: `${numeric(report.score)} / 100`, detail: String(report.grade || "UNKNOWN").toUpperCase()},
-    {label: "Survey gaps", value: numeric((report.gaps || []).length), detail: "REMAINING CHECKS"},
-    {label: "Retained candidates", value: numeric((data.candidates || []).length), detail: `${numeric((data.revisits || []).length)} REVISITS`},
-  ])}<section class="workspace-grid two">${workspaceCard("CURRENT ASSESSMENT", `<div class="recon-score"><strong>${numeric(report.score)}</strong><span>/100<br>${escapeHtml(String(report.grade || "unknown").toUpperCase())}</span></div>${workspaceRows(gaps, "This system has no identified survey gaps.")}<div class="workspace-actions"><button data-ws-page="recon" data-ws-op="copy_report">COPY DOSSIER</button><button data-ws-page="recon" data-ws-op="save">SAVE CANDIDATE</button></div>`)}${workspaceCard("SAVED CANDIDATES", candidates)}${workspaceCard("REVISIT QUEUE", workspaceTable([{label: "System", key: "system"}, {label: "Reason", render: (row) => escapeHtml(row.reason || row.detail || row.grade || "Missed opportunity")}, {label: "", render: (row) => `<button data-ws-page="recon" data-ws-op="dismiss_revisit" data-system="${escapeHtml(row.system)}">DISMISS</button>`}], data.revisits || [], "No unresolved revisit opportunities."))}${workspaceCard("EXPLORATION MILESTONES", workspaceTable([{label: "When", key: "timestamp"}, {label: "Milestone", render: (row) => escapeHtml(row.title || row.kind || row.detail || "Milestone")}, {label: "System", key: "system"}], data.milestones || [], "Milestones will appear as the exploration record grows."))}</section>`;
-}
 
 function achievementPercent(row) {
   return row.unlocked ? 100 : number(row.target) > 0
@@ -2780,20 +2729,7 @@ function renderAchievementsWorkspace(data) {
   renderAchievementCatalogue(data);
 }
 
-function renderLedgerWorkspace(data) {
-  const root = byId("ledger-workspace");
-  const rows = data.rows || [];
-  root.classList.remove("loading-panel");
-  root.innerHTML = `${workspaceMetrics([{label: "Valuable bodies", value: numeric(rows.length), detail: "PROFILE INDEX"}, {label: "Retained estimate", value: credits(data.total), detail: "CURRENT SCAN EVIDENCE"}, {label: "Mapped", value: numeric(rows.filter((row) => row.mapped).length), detail: "DSS COMPLETE"}, {label: "Terraformable", value: numeric(rows.filter((row) => (row.flags || []).includes("Terraformable")).length), detail: "HIGH VALUE"}])}<section class="card ledger-card"><header><span>VALUABLE WORLD INDEX</span><input id="ledger-filter" placeholder="FILTER SYSTEM, BODY OR CLASS"></header><div id="ledger-table">${workspaceTable([{label: "System", key: "system"}, {label: "Body", key: "body"}, {label: "Class", key: "class"}, {label: "Value", render: (row) => `<b>${credits(row.value)}</b>`}, {label: "Mapped", render: (row) => row.mapped ? "YES" : "NO"}, {label: "Flags", render: (row) => escapeHtml((row.flags || []).join(" · "))}], rows, "No valuable bodies are indexed for this profile yet.")}</div></section>`;
-  root.dataset.rows = JSON.stringify(rows);
-}
 
-// ------------------------------------------------------------- settings --
-// Settings save one control at a time as it changes, as Overlay Studio does;
-// there is no Save button. One section shows at a time, chosen from the rail,
-// and the find box searches every setting in every section. The command
-// channel answers before Python applies a save, so each save carries an id
-// and the next snapshot's last_save says whether it was kept.
 const SETTINGS_SECTIONS = [
   {id: "journal", title: "Journal & files", heading: "Journal & files", category: "FLIGHT RECORDS", detail: "Connect your flight journals and screenshots. Every discovery begins with a good record."},
   {id: "appearance", title: "Appearance", heading: "Make yourself at home", category: "PRESENTATION", detail: "Choose your palette, find a comfortable text size and make the deck your own."},
@@ -3062,10 +2998,11 @@ function settingSelect({key, label, detail = "", value, options, type = "text"})
   return `<label class="setting-row" data-search="${settingSearchText(label, detail, key, options.map((item) => item[1]).join(" "))}"><span class="setting-copy"><b>${escapeHtml(label)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</span><span class="setting-control"><select data-setting="${escapeHtml(key)}" data-setting-type="${escapeHtml(type)}">${choices}</select></span>${settingFlag()}</label>`;
 }
 
-function settingText({key, id = "", label, detail = "", value, secret = false, browse = false, status = null, placeholder = ""}) {
+function settingText({key, id = "", label, detail = "", value, secret = false, browse = false, open = "", status = null, placeholder = ""}) {
   const chip = status ? `<span class="setting-status ${escapeHtml(status.tone)}">${escapeHtml(status.text)}</span>` : "";
   const tools = [
     browse ? `<button type="button" data-settings-browse="${escapeHtml(key)}">BROWSE</button>` : "",
+    open ? `<button type="button" data-command="${escapeHtml(open)}" title="Open this folder">OPEN</button>` : "",
     secret ? `<button type="button" data-settings-reveal aria-pressed="false">SHOW</button>` : "",
   ].join("");
   const fieldId = id || `setting-${key}`;
@@ -3116,7 +3053,7 @@ function settingsSectionBody(id, data) {
       ? {tone: "good", text: `${numeric(journal.logs)} JOURNALS${journal.latest ? ` · LATEST ${journal.latest.replace(/^Journal\./, "").replace(/\.log$/, "")}` : ""}`}
       : {tone: "bad", text: "FOLDER NOT FOUND"};
     const shotsStatus = paths.screenshots?.exists ? {tone: "good", text: "FOLDER FOUND"} : {tone: "bad", text: "FOLDER NOT FOUND"};
-    return settingGroup("JOURNAL", `${settingText({key: "journal_path", id: "setting-journal", label: "Journal folder", detail: "The folder holding Frontier's Journal.*.log files. Void Compass only ever reads it. A new folder is watched straight away, from the end of its newest journal.", value: value.journal_path, browse: true, status: journalStatus})}`)
+    return settingGroup("JOURNAL", `${settingText({key: "journal_path", id: "setting-journal", label: "Journal folder", detail: "The folder holding Frontier's Journal.*.log files. Void Compass only ever reads it. A new folder is watched straight away, from the end of its newest journal.", value: value.journal_path, browse: true, open: "open_journal", status: journalStatus})}`)
       + settingGroup("SCREENSHOTS", `${settingText({key: "screenshots_path", id: "setting-screenshots", label: "Screenshot folder", detail: "Where Elite saves its BMP screenshots.", value: value.screenshots_path, browse: true, status: shotsStatus})}${settingSwitch({key: "screenshots_enabled", label: "Convert screenshots to PNG", detail: "Watch the screenshot folder and convert each new BMP.", checked: value.screenshots_enabled})}<p class="setting-note">How postcards look, keeping them as pictures, their folder and caption files: the Postcards page.</p>${settingActions(`<button type="button" data-command="open_screenshots">OPEN SCREENSHOTS</button><button type="button" data-command="open_postcards">OPEN POSTCARDS</button><button type="button" data-page="screenshots">SCREENSHOTS</button><button type="button" data-page="postcards">POSTCARDS</button>`, "open screenshots postcards album caption style gallery")}`);
   }
   if (id === "appearance") {
@@ -3129,7 +3066,7 @@ function settingsSectionBody(id, data) {
     }).join("");
     const colors = (editor.keys || []).map((key) => `<label><span>${escapeHtml(key.replaceAll("_", " "))}</span><input type="color" data-theme-color="${escapeHtml(key)}" value="${escapeHtml(editor.palette?.[key] || "#000000")}"></label>`).join("");
     return settingGroup("THEME", `<div class="theme-options" data-search="${settingSearchText("theme palette colour color", (data.themes || []).map((theme) => theme.name).join(" "))}">${cards}</div>`)
-      + settingGroup("DISPLAY", `${settingSelect({key: "ui_text_scale_percent", label: "Text size", detail: "Makes all the deck's text bigger, keeping the layout as it is.", value: number(value.ui_text_scale_percent, 100), options: [[100, "Standard"], [110, "110%"], [120, "120%"], [135, "135%"], [150, "150%"]], type: "number"})}${settingSelect({key: "ui_text_min_px", label: "Smallest text", detail: "Raises the small labels to at least this size and leaves the headings alone. The easiest fix if the fine print is hard to read.", value: number(value.ui_text_min_px, 0), options: [[0, "As designed"], [10, "10 px"], [11, "11 px"], [12, "12 px"], [13, "13 px"], [14, "14 px"]], type: "number"})}${settingSelect({key: "overlay_text_scale_percent", label: "Overlay text size", detail: "Text on every cockpit overlay. Overlays grow to fit it; one overlay can have its own size in Overlay Studio.", value: number(value.overlay_text_scale_percent, 100), options: [75, 90, 100, 110, 125, 140, 160, 180, 200].map((item) => [item, item === 100 ? "Standard" : `${item}%`]), type: "number"})}${settingSelect({key: "ui_scale_percent", label: "Command deck scale", detail: "Zooms everything in this window, text, panels and maps, as Ctrl+ does in a browser. Less fits on screen.", value: number(value.ui_scale_percent, 100), options: [90, 100, 110, 125, 140, 160].map((item) => [item, `${item}%`]), type: "number"})}${settingSwitch({key: "reduced_motion_enabled", label: "Reduced motion", detail: "Still frames instead of animation on the deck and every overlay.", checked: value.reduced_motion_enabled})}`)
+      + settingGroup("DISPLAY", `${settingSelect({key: "ui_text_scale_percent", label: "Text size", detail: "Makes all the deck's text bigger, keeping the layout as it is.", value: number(value.ui_text_scale_percent, 100), options: [[100, "Standard"], [110, "110%"], [120, "120%"], [135, "135%"], [150, "150%"]], type: "number"})}${settingSelect({key: "ui_text_min_px", label: "Smallest text", detail: "Raises the small labels to at least this size and leaves the headings alone. The easiest fix if the fine print is hard to read.", value: number(value.ui_text_min_px, 0), options: [[0, "As designed"], [10, "10 px"], [11, "11 px"], [12, "12 px"], [13, "13 px"], [14, "14 px"]], type: "number"})}${settingSelect({key: "overlay_text_scale_percent", label: "Overlay text size", detail: "Text on every cockpit overlay. Overlays grow to fit it; one overlay can have its own size in Overlay Studio.", value: number(value.overlay_text_scale_percent, 100), options: [75, 90, 100, 110, 125, 140, 160, 180, 200].map((item) => [item, item === 100 ? "Standard" : `${item}%`]), type: "number"})}${settingSelect({key: "ui_scale_percent", label: "Command deck scale", detail: "Zooms everything in this window, text, panels and maps, as Ctrl+ does in a browser. Less fits on screen.", value: number(value.ui_scale_percent, 100), options: [90, 100, 110, 125, 140, 160].map((item) => [item, `${item}%`]), type: "number"})}${settingSwitch({key: "reduced_motion_enabled", label: "Reduced motion", detail: "Still frames instead of animation on the deck and every overlay.", checked: value.reduced_motion_enabled})}${settingSelect({key: "start_page", label: "Start page", detail: "The page the deck opens on.", value: value.start_page || "last", options: [["last", "The page you last had open"], ["overview", "Dashboard"], ["explore", "Explore & Survey"]]})}`)
       + `<details class="settings-group theme-workshop"${settingsWorkshopOpen ? " open" : ""} data-search="${settingSearchText("theme workshop custom palette colours colors")}"><summary><span class="theme-workshop-label"><h4>THEME WORKSHOP</h4><small>Build a palette of your own.</small></span><span>${numeric((editor.custom || []).length)} CUSTOM</span></summary><div class="theme-workshop-body"><div class="theme-workshop-head"><label>NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>DELETE A CUSTOM THEME<select id="custom-theme-existing"><option value="">CHOOSE ONE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><p class="setting-note">Starts from the active theme. Change any colour, then save it as your own.</p><div class="theme-colour-grid">${colors}</div><div class="setting-row actions"><button type="button" data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY</button><button type="button" class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED</button></div></div></details>`;
   }
   if (id === "flight") {
@@ -3145,6 +3082,15 @@ function settingsSectionBody(id, data) {
         + settingSwitch({key: "orders_copy_target", label: "Copy the target when you accept", detail: "The order's system goes on the clipboard, ready to paste into the galaxy map.", checked: value.orders_copy_target !== false})
         + settingSwitch({key: "orders_open_map", label: "Open the galaxy map when you accept", detail: "Uses your Elite key bindings (Voice settings), then you paste the system into the search.", checked: value.orders_open_map === true})
         + settingActions(`<button type="button" data-page="watcher" data-watcher-open="orders">CREW ORDERS</button>`, "crew orders officers campaigns errands"))
+      + settingGroup("CREW CALLS", settingSelect({key: "target_remarks", label: "When you target a system", detail: "Whether it's new to everyone, known but unscanned by you, or a place you've finished.", value: value.target_remarks || "crew", options: [["crew", "Your companion says"], ["tone", "A notification"], ["off", "Nothing"]]})
+        + settingSwitch({key: "target_sounds", label: "Target sounds", detail: "A short sound as you target a system: a fanfare if nobody has reported it, an upbeat pair if it's known but unscanned by you, a thud if you've been. From ED-Outrider.", checked: value.target_sounds !== false})
+        + settingSelect({key: "leave_behind_cr", label: "Money left behind", detail: "Target onward with mapping or biology undone worth at least this, and you're told before you go.", value: number(value.leave_behind_cr, 2000000), options: [[0, "Never"], [1000000, "1 million"], [2000000, "2 million"], [5000000, "5 million"], [10000000, "10 million"], [25000000, "25 million"]], type: "number"})
+        + settingSwitch({key: "pad_location", label: "Where your pad is", detail: "\"Pad 34: at the back, up on your right\" as docking is granted, with a small diagram on the Dashboard. From bgol's LandingPad tables.", checked: value.pad_location !== false})
+        + settingSwitch({key: "crew_warnings", label: "Crew warnings", detail: "Wanted (and the nearest Interstellar Factors), the wrong suit for biology, oxygen or health low with data aboard, no limpets on undock.", checked: value.crew_warnings !== false})
+        + settingSwitch({key: "mining_recap", label: "Mining recap", detail: "After a stint of 20 t or more: what you refined, your rate and the best rock.", checked: value.mining_recap !== false})
+        + settingSwitch({key: "auto_honk", label: "Auto honk", detail: "Holds your scanner key after each hyperspace arrival while Elite is in front. Put the Discovery Scanner on that fire button in the fire group you jump with.", checked: value.auto_honk === true})
+        + autoHonkBinding(value.auto_honk_key, escapeHtml)
+        + settingSwitch({key: "canonn_reports", label: "Phenomena reports", detail: "On arriving in a system, ask Canonn what other commanders found in space there (notable stellar phenomena), and hear the ones not yet in your Codex for the region. Only the system's name is sent.", checked: value.canonn_reports !== false}))
       + settingGroup("HOME", `${settingText({key: "home_system", id: "setting-home", label: "Home system", detail: "Distances \"from home\" start here: your companion's remarks and the Galaxy Minimap. Leave it empty for Sol.", value: value.home_system, placeholder: "Sol", status: homeStatus(data.home)})}`)
       + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
       + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingNote("Unlocks pop up in the cockpit's Achievements overlay: switch it on or off, and place it, in Overlay Studio.")}`);
@@ -3878,20 +3824,16 @@ function renderWorkspace(state) {
     "planet-materials": (data) => renderPlanetary(data, PLANETARY_UI),
     explore: (data) => {
       renderExploreWorkspace(data, EXPLORE_WORKSPACE_UI);
-      if (data.archive) renderExploreArchive(data.archive);
     },
     profile: renderProfileWorkspace,
-    chronicle: (data) => {
-      renderChronicleWorkspace(data);
-      renderFlightLogs(data.flight_logs || {}, WORKSHOP_UI, data.sessions || []);
-    },
+    chronicle: () => renderHistory(WORKSHOP_UI, profileKey),
     // 5.6.1: Mission Control is the Expeditions page (expeditions.js).
     mission: (data) => renderExpeditions(data, WORKSHOP_UI),
     mining: renderMiningWorkspace,
     powerplay: renderPowerplayWorkspace,
     carrier: renderCarrierWorkspace,
-    recon: renderReconWorkspace, achievements: renderAchievementsWorkspace,
-    ledger: renderLedgerWorkspace, settings: renderSettingsWorkspace,
+    achievements: renderAchievementsWorkspace,
+    settings: renderSettingsWorkspace,
     colonisation: renderColonisationWorkspace,
     bgs: renderBgsWorkspace,
     trading: renderTradingWorkspace,
@@ -3899,14 +3841,26 @@ function renderWorkspace(state) {
     postcards: (data) => renderPostcards(data, WORKSHOP_UI),
     screenshots: (data) => renderScreenshots(data, WORKSHOP_UI),
     capsules: (data) => renderCapsules(data, WORKSHOP_UI),
-    tools: (data) => renderTools(data, WORKSHOP_UI),
     constellation: (data) => renderConstellation(data, WORKSHOP_UI),
     games: (data) => renderGames(data, WORKSHOP_UI),
-    hatchling: (data) => renderHatchling(data, WORKSHOP_UI),
     wrapped: (data) => renderWrapped(data, WORKSHOP_UI),
   };
   renderers[page]?.(workspace.data || {});
   preparePageLayout(page);
+}
+
+function renderOverview(state) {
+  renderBridge(state.activity || {}, WORKSHOP_UI);
+  renderDecision(state);
+  renderPreflight(state);
+  renderSurvey(state);
+  renderRoute(state);
+  renderMetrics(state);
+  renderSessionPulse(state);
+  renderCodexHunt(state);
+  renderDeckLayout(state);
+  renderPriorities(state);
+  renderEvents(state);
 }
 
 function renderDashboard(state) {
@@ -3924,7 +3878,6 @@ function renderDashboard(state) {
     resetExpeditions();
     resetPlanetary();
     analyticsView = "trends";
-    replaySelectedSessionIndex = 0;
     deckLayoutDraft = null;
     deckLayoutFingerprint = "";
     decisionTagsFingerprint = "";
@@ -3949,7 +3902,6 @@ function renderDashboard(state) {
     if (galnetRotationTimer) window.clearTimeout(galnetRotationTimer);
     galnetRotationTimer = 0;
     byId("galnet-reader").hidden = true;
-    if (replayTimer) { clearInterval(replayTimer); replayTimer = 0; }
     atlasRequested = false;
     const atlasFrame = byId("atlas-frame");
     if (atlasFrame) {
@@ -3957,25 +3909,27 @@ function renderDashboard(state) {
       atlasFrame.dataset.url = "";
     }
     byId("atlas-frame-shell")?.classList.remove("ready");
-    const savedPage = localStorage.getItem(`voidcompass.dashboard.page.${profileKey}`) || "overview";
+    // 5.7.8: Settings › Appearance › Start page, else the page you last had open.
+    const startPage = SOLO_PAGE || (["overview", "explore"].includes(model.profile?.start_page) ? model.profile.start_page : null);
+    const savedPage = startPage || localStorage.getItem(`voidcompass.dashboard.page.${profileKey}`) || "overview";
     showPage(document.querySelector(`[data-page-name="${CSS.escape(savedPage)}"]`) ? savedPage : "overview");
   }
   renderHeader(model);
   renderAdaptive(model);
-  renderDecision(model);
-  renderPreflight(model);
   renderFlightLog(model);
-  renderSurvey(model);
-  renderRoute(model);
-  renderMetrics(model);
-  renderSessionPulse(model);
-  renderCodexHunt(model);
-  renderDeckLayout(model);
-  renderPriorities(model);
-  renderEvents(model);
+  if (currentPage === "overview" && !model.ui?.flight_log_mode) renderOverview(model);
+  if (currentPage === "explore") {
+    renderExploreSystem(model, EXPLORE_WORKSPACE_UI);
+    renderIntelligence(model);
+    renderExpedition(model);
+  }
+  if (currentPage === "records") {
+    renderMetrics(model);
+    renderIntelligence(model);
+    renderEvents(model);
+  }
   renderGalnet(model);
-  renderIntelligence(model);
-  renderExpedition(model);
+  text("footer-region", `REGION ${(model.intelligence?.region || "UNKNOWN").toUpperCase()}`);
   renderSources(model);
   renderUpdateNotice(model.update || {});
   renderWorkspace(model);
@@ -3985,10 +3939,12 @@ function renderDashboard(state) {
   if (currentPage === "overlay-studio") renderOverlayStudio(model);
   const requestedPage = model.ui?.page_request || {};
   const requestedId = number(requestedPage.id, 0);
-  if (requestedId > pageRequestId && document.querySelector(`[data-page-name="${CSS.escape(requestedPage.page || "")}"]`)) {
+  if (!SOLO_PAGE && requestedId > pageRequestId && document.querySelector(`[data-page-name="${CSS.escape(requestedPage.page || "")}"]`)) {
     pageRequestId = requestedId;
     showPage(requestedPage.page);
   }
+  // The Route page follows each publish while it's open (its plots and dock searches land here).
+  renderRoutePage();
   renderAtlas(model);
   if (model.system_map) renderSystemMap(model.system_map);
   const appVersion = model.app?.version || "DEV";
@@ -4010,6 +3966,9 @@ function renderState(state) {
     bootReleaseStarted = true;
   }
   model = incoming;
+  if (SOLO_PAGE && model.popout_workspaces?.[SOLO_PAGE] && model.workspace?.page !== SOLO_PAGE) {
+    model = {...model, workspace: {page: SOLO_PAGE, ready: true, data: model.popout_workspaces[SOLO_PAGE]}};
+  }
   if (model.watcher_renderer_logging) {
     window.bootScene?.watchRenderer?.((renderer, reason) => command("watcher_renderer", {surface: "boot", renderer, ...(reason ? {reason} : {})}));
   }
@@ -4118,9 +4077,8 @@ function showPage(name) {
   if (pageLayoutEditing && pageLayoutEditing !== name) cancelPageLayout();
   if (name === "settings" && currentPage !== "settings") workspaceFingerprints.settings = "";
   currentPage = name;
-  setHatchlingActive(name === "hatchling");
   syncSystemMap();
-  localStorage.setItem(`voidcompass.dashboard.page.${profileKey}`, name);
+  if (!SOLO_PAGE) localStorage.setItem(`voidcompass.dashboard.page.${profileKey}`, name);
   document.querySelectorAll(".page").forEach((node) => node.classList.toggle("active", node === page));
   const navPage = navigationPage(name);
   document.querySelectorAll(".nav-item[data-page]").forEach((node) => {
@@ -4141,11 +4099,40 @@ function showPage(name) {
   if (name === "map") syncAtlasViewport();
   if (name === "map") window.setTimeout(syncAtlasLayerRequest, 160);
   if (name === "overlay-studio") renderOverlayStudio(model);
+  if (name === "route") renderRoutePage();
+  if (name === "overview") renderOverview(model);
+  if (name === "records") {
+    renderMetrics(model);
+    renderIntelligence(model);
+    renderEvents(model);
+  }
+  // Refresh immediately when returning to a page that was idle.
+  if (name === "explore" && model?.flight) {
+    renderExploreSystem(model, EXPLORE_WORKSPACE_UI);
+    renderIntelligence(model);
+    renderExpedition(model);
+  }
   musicDeck?.showPage(name === "music");
   preparePageLayout(name);
 }
 
+// The Route page (5.7.8): PLOT ROUTE out of Explore & Survey, as it was.
+function renderRoutePage() {
+  if (currentPage !== "route") return;
+  renderRoutePlotter(byId("route-workspace"), EXPLORE_WORKSPACE_UI, `${model?.survey_rev ?? 0}:${model?.flight?.system || ""}`);
+}
+
+let soloBeat = 0;
 function requestPageChange(name) {
+  if (SOLO_PAGE) {
+    if (name !== SOLO_PAGE) return;
+    // A popped-out window says which page it shows, every few seconds, without
+    // moving the main window's page.
+    command("page_changed", {page: name, window: "popout"});
+    window.clearInterval(soloBeat);
+    soloBeat = window.setInterval(() => command("page_changed", {page: name, window: "popout"}), 10000);
+    return;
+  }
   const ticket = ++workspaceSyncTicket;
   if (workspaceSyncTimer) window.clearTimeout(workspaceSyncTimer);
   workspaceSyncTimer = 0;
@@ -4327,22 +4314,6 @@ document.addEventListener("click", async (event) => {
     document.querySelectorAll("[data-analytics-panel]").forEach((panel) => { panel.hidden = panel.dataset.analyticsPanel !== analyticsView; });
     return;
   }
-  if (event.target.closest("#replay-play")) {
-    const slider = byId("replay-slider");
-    if (!slider || slider.disabled) return;
-    if (replayTimer) {
-      clearInterval(replayTimer); replayTimer = 0;
-      event.target.textContent = "PLAY REPLAY";
-    } else {
-      event.target.textContent = "PAUSE";
-      replayTimer = window.setInterval(() => {
-        const maximum = number(slider.max);
-        slider.value = number(slider.value) >= maximum ? number(slider.min) : number(slider.value) + 1;
-        updateReplayCursor(slider.value);
-      }, 360);
-    }
-    return;
-  }
   const studioDisplay = event.target.closest("[data-studio-display]");
   if (studioDisplay) {
     showStudioDisplay(studioDisplay.dataset.studioDisplay);
@@ -4394,6 +4365,12 @@ document.addEventListener("click", async (event) => {
     // Links into the companion page may name its tab (5.7.7: ORDERS).
     if (pageButton.dataset.page === "watcher" && pageButton.dataset.watcherOpen) openWatcherTab(pageButton.dataset.watcherOpen);
     // Links into Explore may name the view they belong to.
+    if (pageButton.dataset.page === "explore" && pageButton.dataset.exploreView === "route") {
+      // An old link into the PLOT ROUTE tab: it's the Route page now.
+      event.preventDefault();
+      showPage("route");
+      return;
+    }
     if (pageButton.dataset.page === "explore" && pageButton.dataset.exploreView) {
       setExploreView(pageButton.dataset.exploreView, EXPLORE_WORKSPACE_UI);
     }
@@ -4680,10 +4657,7 @@ document.addEventListener("click", async (event) => {
       if (!window.confirm("Confirm this profile-local change?")) return;
       payload.confirmed = true;
     }
-    if (page === "chronicle" && operation === "export_replay") {
-      payload.path = await window.pywebview?.api?.choose_replay_file?.();
-      if (!payload.path) return;
-    } else if (operation === "backup_picker" || operation === "restore_picker") {
+    if (operation === "backup_picker" || operation === "restore_picker") {
       try {
         const selected = await window.pywebview?.api?.choose_folder?.();
         if (!selected) return;
@@ -4708,15 +4682,6 @@ document.addEventListener("click", async (event) => {
       if (note === null) return;
       payload.name = name.trim();
       payload.note = note.trim();
-    } else if (page === "explore" && operation === "neutron_plot") {
-      Object.assign(payload, {
-        from: byId("neutron-from")?.value.trim() || "",
-        to: byId("neutron-to")?.value.trim() || "",
-        range: byId("neutron-range")?.value,
-        efficiency: byId("neutron-efficiency")?.value,
-        multiplier: byId("neutron-multiplier")?.value,
-      });
-      if (!payload.from || !payload.to || number(payload.range) <= 0) return;
     } else if (page === "explore" && operation === "scout_search") {
       Object.assign(payload, {
         reference: byId("scout-reference")?.value.trim() || "",
@@ -4852,22 +4817,10 @@ document.addEventListener("input", (event) => {
     flightLogSearch = event.target.value;
     flightLogEventsFingerprint = "";
     renderFlightLogEvents(model, true);
-  } else if (event.target.id === "replay-slider") {
-    updateReplayCursor(event.target.value);
   } else if (event.target.id === "achievement-filter") {
     achievementUi.search = event.target.value;
     achievementUi.visible = 24;
     renderAchievementCatalogue(model.workspace?.data || {});
-  } else if (event.target.id === "ledger-filter") {
-    const query = event.target.value.trim().toLocaleLowerCase();
-    const rows = model.workspace?.page === "ledger" ? model.workspace.data?.rows || [] : [];
-    const filtered = rows.filter((row) => !query || Object.values(row).flat().join(" ").toLocaleLowerCase().includes(query));
-    byId("ledger-table").innerHTML = workspaceTable([
-      {label: "System", key: "system"}, {label: "Body", key: "body"}, {label: "Class", key: "class"},
-      {label: "Value", render: (row) => `<b>${credits(row.value)}</b>`},
-      {label: "Mapped", render: (row) => row.mapped ? "YES" : "NO"},
-      {label: "Flags", render: (row) => escapeHtml((row.flags || []).join(" · "))},
-    ], filtered, "No valuable bodies match that filter.");
   }
 });
 
@@ -4932,9 +4885,6 @@ document.addEventListener("change", async (event) => {
     const hidden = new Set(deckLayoutDraft.hidden);
     if (event.target.checked) hidden.delete(id); else hidden.add(id);
     deckLayoutDraft.hidden = [...hidden];
-  } else if (event.target.id === "replay-session") {
-    replaySelectedSessionIndex = Math.max(0, number(event.target.value));
-    renderChronicleWorkspace(model.workspace?.data || {});
   } else if (!handleColonisationChange(event, WORKSHOP_UI, model.workspace?.data)) {
     handleBgsChange(event, WORKSHOP_UI);
   }
@@ -5029,8 +4979,7 @@ async function refreshGalnet(button) {
 }
 byId("galnet-reader-refresh").addEventListener("click", () => refreshGalnet(byId("galnet-reader-refresh")));
 
-byId("flightlog-directive-primary").addEventListener("click", () => byId("decision-primary").click());
-byId("decision-primary").addEventListener("click", async () => {
+async function performDecisionAction() {
   const primary = model.decision?.primary || {};
   if (!primary.command) return;
   const payload = primary.target ? {target: primary.target} : {};
@@ -5039,7 +4988,9 @@ byId("decision-primary").addEventListener("click", async () => {
     atlasLayerRequest = "Codex";
     showPage("map");
   }
-});
+}
+byId("flightlog-directive-primary").addEventListener("click", performDecisionAction);
+byId("decision-primary").addEventListener("click", performDecisionAction);
 
 byId("codex-open-atlas").addEventListener("click", async () => {
   atlasLayerRequest = "Codex";
@@ -5228,6 +5179,7 @@ byId("studio-delete-preset").addEventListener("click", async () => {
 });
 
 installSetup(SETUP_UI);
+installAutoHonkBinding(command);
 
 byId("atlas-frame").addEventListener("load", () => {
   text("atlas-status", "Initialising map scene and commander layers…");

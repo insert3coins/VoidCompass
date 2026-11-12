@@ -1,5 +1,6 @@
 """Commander-local surface mining sites, separate from journal scan evidence."""
 import math
+import os
 import json
 import re
 import sqlite3
@@ -50,6 +51,20 @@ class PlanetMaterialsStore:
                 db.execute("ALTER TABLE sites ADD COLUMN location_index INTEGER")
 
     def rows(self):
+        # Read again only when the file changes (the System Map asks on every refresh).
+        try:
+            stat = os.stat(self.path)
+            key = (stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            key = None
+        cached = getattr(self, "_rows_cache", None)
+        if key is not None and cached and cached[0] == key:
+            return [dict(row) for row in cached[1]]
+        rows = self._read_rows()
+        self._rows_cache = (key, rows) if key is not None else None
+        return [dict(row) for row in rows]
+
+    def _read_rows(self):
         with closing(sqlite3.connect(self.path)) as db:
             db.row_factory = sqlite3.Row
             rows = [dict(row) for row in db.execute(
@@ -64,6 +79,7 @@ class PlanetMaterialsStore:
             return rows
 
     def save(self, data):
+        self._rows_cache = None
         values = {}
         details = data.get("body_details") or {}
         if isinstance(details, str):
@@ -211,6 +227,7 @@ class PlanetMaterialsStore:
         return best
 
     def delete(self, site_id):
+        self._rows_cache = None
         with closing(sqlite3.connect(self.path)) as db, db:
             return bool(db.execute("DELETE FROM sites WHERE id=?", (int(site_id),)).rowcount)
 

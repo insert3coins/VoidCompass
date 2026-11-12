@@ -13,7 +13,6 @@ from voidcompass.overlays import (
 )
 
 
-HATCHLING_PASSIVE = {"hatchling_idle", "hatchling_said"}
 # Keepsakes and the deeper company (5.7.4), headed as the Watcher heads them.
 KEEPSAKE_HEADINGS = {
     **{topic: watcher_mind.HEADED_TOPICS[topic] for topic in
@@ -26,7 +25,6 @@ KEEPSAKE_HEADINGS = {
 # Said in the next quiet moment once queued (a note from last watch, an anniversary).
 QUEUED_TOPICS = {"dream_told", "anniversary_us", "companion_wish_reached", "survey_report", "ring_hotspots", "mining_summary"}
 DATA_SALES = {"SellExplorationData", "MultiSellExplorationData", "SellOrganicData"}
-HATCHLING_MOMENT_AGE_S = 120
 
 
 def _fingerprint(words):
@@ -134,8 +132,6 @@ class AsterMind(watcher_mind.WatcherMind):
                 headlines[key] = max(headlines.get(key, 0), at)
         for topic, key in previous.items():
             last.setdefault(topic, key)
-        wording["aster:hatchling"] = max((at for topic, at in wording.items() if topic.startswith("hatchling_")),
-                                         default=wording.get("aster:hatchling", 0))
         texts = self.memory.setdefault("aster_texts", {})
         for at, topic, words in self.memory.get("log", []):
             if topic in self.persona.lines.EVENTS:
@@ -155,7 +151,7 @@ class AsterMind(watcher_mind.WatcherMind):
         memory.update(aster_marks={}, aster_systems=[], aster_arrivals=[], aster_moments=[],
                       aster_wording={}, aster_event_last={}, aster_texts={},
                       aster_commands={}, aster_dialogue={}, aster_choice_last={}, aster_headlines={},
-                      aster_hatchling_seen={}, aster_idle_recalled={}, aster_farewells={}, aster_lore_words={},
+                      aster_idle_recalled={}, aster_farewells={}, aster_lore_words={},
                       aster_welcomes={}, aster_load_game=None)
         return memory
 
@@ -235,38 +231,6 @@ class AsterMind(watcher_mind.WatcherMind):
         at = self.memory["aster_wording"].get(key)
         return self.clock() - at < within if at is not None else super()._said_recently(key, within)
 
-    def _hatchling_allowed(self, topic, fields, setting, now):
-        at = fields.get("_moment_at")
-        if at is not None:
-            try:
-                if now - float(at) > HATCHLING_MOMENT_AGE_S:
-                    return False
-            except (TypeError, ValueError):
-                return False
-        moment = fields.get("_moment_id")
-        if moment:
-            with self.lock:
-                seen = self.memory["aster_hatchling_seen"]
-                key = _fingerprint(str(moment))
-                if key in seen:
-                    return False
-                # Consume a real notice even if we stay quiet. A restart must
-                # not turn a previously deferred moment into a fresh milestone.
-                seen[key] = now
-                while len(seen) > 128:
-                    del seen[next(iter(seen))]
-                self._unsaved = True
-        if self._in_danger:
-            return False
-        if topic in HATCHLING_PASSIVE:
-            return (not self._said_recently("aster:hatchling", watcher_mind.IDLE_REST_S)
-                    and not self._said_recently("idle", setting["mutter"])
-                    and now - self._last_spoke >= setting["quiet"]
-                    and now - self._last_interesting >= setting["quiet"])
-        # Tricks arrive through a forced event path, but ordinary pet chatter
-        # must still leave room between reports. A new growth stage is rare.
-        return topic == "hatchling_grown" or not self._said_recently("aster:hatchling", max(600, setting["rest"]))
-
     def consider(self, topic, fields=None, force=False):
         setting = watcher_mind.FREQUENCIES.get(watcher_mind.frequency(self.config))
         if setting is None or topic not in self.persona.lines.EVENTS:
@@ -287,8 +251,6 @@ class AsterMind(watcher_mind.WatcherMind):
             importance = max(importance, 2)
         now = self.clock()
         fields = dict(fields or {})
-        if topic.startswith("hatchling_") and not self._hatchling_allowed(topic, fields, setting, now):
-            return None
         if not force:
             if importance < setting["minimum"] or (importance < 3 and now - self._last_spoke < setting["gap"]):
                 return None
@@ -353,10 +315,6 @@ class AsterMind(watcher_mind.WatcherMind):
                 texts[_text_key(script)] = now
                 while len(texts) > 512:
                     del texts[next(iter(texts))]
-                if topic.startswith("hatchling_"):
-                    self.memory["aster_wording"]["aster:hatchling"] = now
-                if topic in HATCHLING_PASSIVE:
-                    self.memory["aster_wording"]["idle"] = now
         persona = self.persona
         if topic == "aster_lore":
             passage = key.rsplit(":", 1)[-1]

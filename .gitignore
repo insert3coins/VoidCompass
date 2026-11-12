@@ -65,6 +65,10 @@ data/*
 !data/achievements.json
 !data/codexRef.json
 !data/rhino_mining_sheet.json
+!data/geo_codex.json
+!data/bio_rules.json
+!data/pronounce.json
+!data/alert_sounds.json
 !data/engineering_companion/
 !data/engineering_companion/**
 !data/build_planner/

@@ -973,6 +973,8 @@ Who you are, where you are, and the ship you're in, as the game last told Void C
 | GET | `/api/v1/commander/location` | Where you are: system, body, station, docked or landed, on foot, surface position |
 | GET | `/api/v1/commander/ship` | Your ship now: fuel, hull, cargo, frame shift drive, heat |
 | GET | `/api/v1/commander/fleet` | Your stored ships, and the loadout of each ship you've flown |
+| GET | `/api/v1/commander/earnings` | What you've earned, by kind and month, where you sold most, the species that paid most and each ship's record (`period`: `all`, a year `2026` or a month `2026-11`). Mining counts only ore you mined |
+| GET | `/api/v1/history` | History's books: a row per session, the summary rows, trips from sale to sale, your top 25 finds and records (`period`: `all` or a year) |
 | GET | `/api/v1/statistics` | The game's own statistics for you (the Statistics journal event), and when they last came in |
 | GET | `/api/v1/missions` | Your active missions |
 | GET | `/api/v1/achievements` | Your Void Compass achievements: unlocked, in progress, and when |
@@ -1007,12 +1009,15 @@ To put where you are on your stream, see [OBS Studio](#obs-studio).
 
 ## Journal
 
+`GET /api/v1/journal/log` gives every journal event as one readable line, newest first (`q` to search, `days`, default 7): the ARCHIVE tab's Journal Log.
+
 The game writes everything you do to its journal. Void Compass reads it as it's written, and the API passes it on: the same events, field for field, as the game wrote them. Frontier's journal manual lists every event.
 
 | Method | Path | What it does |
 |---|---|---|
 | GET | `/api/v1/journal/events` | The newest live events since Void Compass started (up to 2000 kept) |
 | GET | `/api/v1/journal/history` | Search the journal files on disk, newest first |
+| GET | `/api/v1/journal/log` | Every journal event as one readable line, newest first (`q`, `days`): the ARCHIVE tab's Journal Log |
 | GET | `/api/v1/journal/files` | The journal files, newest first |
 | GET | `/api/v1/journal/status` | `Status.json` now: flags, fuel, position, heading, legal state |
 | GET | `/api/v1/journal/cargo` | `Cargo.json` now |
@@ -1092,6 +1097,9 @@ Everything you've found, kept by Void Compass across every session: the value yo
 | GET | `/api/v1/exploration/systems` | Systems you've been to: visits, first and last arrival, position, star class, bodies found (`query`, `limit`) |
 | GET | `/api/v1/exploration/route` | Your arrivals, newest first: jumps, carrier jumps and logins (`limit`, default 100) |
 | GET | `/api/v1/exploration/regions` | The galaxy's regions you've been to, with your first and last arrival in each |
+| GET | `/api/v1/explore/nearby` | Explore & Survey's Nearby list: every known system round its centre, with status, main star, bodies, notable worlds and value (the first ask fetches it from Spansh: `status` says `working` until then) |
+| GET | `/api/v1/explore/system` | One system's body table, yours laid over Spansh's (`name`; the system you're in without one): class, distance, gravity, biology and geology, rings, firsts, value now and max |
+| GET | `/api/v1/explore/route` | The route the Route page follows: every stop, where you are on it, jumps and light years left, refuel stops, fuel warnings and the target check |
 | GET | `/api/v1/codex` | Your Codex: each organic logged, how often, when, and in which regions (`region` to narrow) |
 
 `/api/v1/exploration/bodies` takes:
@@ -1181,8 +1189,8 @@ Everything on Explore & Survey's ROUTE tab: your waypoints, the places worth com
 | GET | `/api/v1/route/return-later` | The places worth coming back to: unfinished organics, worlds to map, systems not fully scanned |
 | POST | `/api/v1/route/return-later/waypoint` | Add one of them to your waypoints: `{"id": "..."}` |
 | POST | `/api/v1/route/return-later/dismiss` | Put one aside for good: `{"id": "..."}` |
-| GET | `/api/v1/route/neutron` | The neutron route last plotted on the ROUTE tab, jump by jump |
-| POST | `/api/v1/route/neutron/import` | Add that neutron route to your waypoints (systems already there are skipped) |
+| GET | `/api/v1/route/neutron` | The route on the Route page (neutron, exact, road to riches and the rest), stop by stop; `followed` says it's your waypoint route |
+| POST | `/api/v1/route/neutron/import` | Make that route your waypoint route (a plotted route already is, so this only matters for one plotted before 5.7.8) |
 
 Waypoints count from `0`, in the order the ROUTE tab shows them; `index` in `/route` gives each one's number. Moving one changes the numbers, so read `/route` again before the next change. A waypoint added for the system you're in takes its position from the game. The plotted route itself, jump by jump, is `/api/v1/journal/navroute`; plotting a new neutron route asks Spansh, so it's done on the deck.
 
@@ -1814,7 +1822,6 @@ The overlay ids are:
 | `trade-route` | Trade Route |
 | `crew-orders` | Crew Orders |
 | `expedition` | Expedition |
-| `hatchling` | Hatchling |
 | `galaxy-minimap` | Galaxy Minimap |
 | `rhino-map` | Rhino Map |
 | `rig-tracker` | Rig Tracker |
@@ -2060,6 +2067,23 @@ The usual suspects, and what to do about each.
 **The browser source shows nothing.** Open its file in a normal browser and press F12: the console shows what went wrong. Most often the API is off, or the source isn't a local file.
 
 **504.** Void Compass was busy (rebuilding its cache, or loading a long journal). Try again in a moment.
+
+## MCP server
+
+An AI client you already run (Claude Code, the Claude desktop app, or any client that speaks the Model Context Protocol) can ask about your game through this API. `tools/mcp/voidcompass_mcp.py` in Void Compass's source is a small MCP server over stdio. It only ever sends `GET` requests to this PC, so it can read your game but can't press a key or change anything.
+
+1. Switch the Local API on (**Settings › Integrations › Local API**).
+2. Give your client this command, from a copy of Void Compass's source with Python 3.11 or later:
+
+```bat
+python tools/mcp/voidcompass_mcp.py
+```
+
+For Claude Code: `claude mcp add voidcompass -- python D:/path/to/VoidCompass/tools/mcp/voidcompass_mcp.py`
+
+Its tools: `commander`, `location`, `ship`, `fleet`, `missions`, `system_bodies`, `survey`, `nearby`, `route`, `unsold`, `codex`, `earnings`, `history`, `journal_log` and `status`. Each one is a `GET` on this API. Set `VOIDCOMPASS_API` if your API listens on another port (the default is `http://127.0.0.1:7380/api/v1`).
+
+After ED Outrider's MCP server, on Void Compass's own API.
 
 ## For developers
 

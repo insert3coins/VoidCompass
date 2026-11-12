@@ -514,3 +514,8 @@ body.reduced-motion .talk-mic::after { animation: none !important; }
 /* 5.7.7: what the watch rota is doing, under its switch. */
 .watcher-rota-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: -2px 0 6px; padding: 6px 10px; border-left: 2px solid var(--accent); background: var(--inset); color: var(--text); font: 11.5px "Segoe UI", sans-serif; }
 .watcher-rota-status button { padding: 3px 8px; border: 1px solid var(--accent); background: none; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .12em; cursor: pointer; }
+/* Muting a line (5.7.8). */
+.watcher-mute { opacity: 0; min-height: 0 !important; padding: 0 4px !important; border: 0 !important; background: none !important; cursor: pointer; }
+li:hover > .watcher-mute, .watcher-mute:focus-visible { opacity: .8; }
+.watcher-muted ul { margin: 0; padding: 6px 12px; list-style: none; }
+.watcher-muted li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--border-soft); color: var(--muted); font: 12px "Segoe UI", sans-serif; }

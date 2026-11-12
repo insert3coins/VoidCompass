@@ -600,9 +600,6 @@ class DashboardScanMixin:
         on_position = getattr(self, "_expedition_on_position", None)
         if callable(on_position):
             on_position()
-        tick = getattr(self, "_hatchling_tick", None)
-        if callable(tick):
-            tick()
         flags = data.get("Flags")
         in_supercruise = False
         if isinstance(flags, int):
@@ -902,6 +899,9 @@ class DashboardScanMixin:
             self.in_fss = in_fss
             self.fss_summary_active = not in_fss
         if gui_focus_changed:
+            if was_gui_focus in (6, 7, 8) and gui_focus not in (6, 7, 8):
+                # Left a map: the Music event that opened it no longer counts.
+                self._map_music = False
             self._apply_map_overlay_hiding()
             # Construction Needs shows in station services and on the right panel.
             update_colony = getattr(self, "_colony_update_overlay", None)
@@ -1035,6 +1035,9 @@ class DashboardScanMixin:
         if not self.batch_mode:
             self._check_low_fuel()
             self._check_status_toasts(data, flags, flags2)
+            smalls = getattr(self, "_smalls_on_status", None)
+            if callable(smalls):
+                smalls(data)
         if getattr(self, "heartbeat_hud", None):
             self.heartbeat_hud.pulse(
                 "status", "STATUS",
@@ -1080,6 +1083,7 @@ class DashboardScanMixin:
         # actionable alert already explains it or while safely docked/landed.
         generic_danger = bool(
             generic_danger and not overheat and not interdicted
+            and time.monotonic() >= float(getattr(self, "_danger_quiet_until", 0.0) or 0.0)
             and not getattr(self, "current_docked", False)
             and not getattr(self, "current_landed", False)
             and not getattr(self, "current_on_foot", False)
@@ -1657,14 +1661,20 @@ class DashboardScanMixin:
         under 0.51 g. Work it out again from the journal's m/s², and redo the
         bio prediction that was judged against the wrong figure."""
         gravity_g = self._gravity_to_g(item.get("surface_gravity"))
-        if gravity_g is None or item.get("gravity_g") == gravity_g:
+        # 5.7.8: predictions saved before the pressure fix (judged in pascals) or
+        # before Starling's rules joined in are worked out again, once.
+        stale = "predicted_genuses" in item and item.get("bio_rules") != 3
+        if gravity_g is None or (item.get("gravity_g") == gravity_g and not stale):
             return False
         item["gravity_g"] = gravity_g
+        item["bio_rules"] = 3
         if item.get("planet_class") and "predicted_genuses" in item:
             region_id, system_coords = self._bio_location_context()
             item["predicted_genuses"] = bio_values.predict_genera(
                 item.get("planet_class"), item.get("atmosphere_type"), item.get("surface_temp"), gravity_g,
-                item.get("volcanism"), item.get("surface_pressure"), region_id, system_coords,
+                item.get("volcanism"), bio_values.pressure_atm(item.get("surface_pressure")), region_id, system_coords,
+                system_stars=getattr(self, "_bio_system_stars", lambda: [])(), geo=bool(item.get("geo_count")),
+                distance_ls=item.get("distance_to_arrival"),
             )
         return True
 
@@ -1736,7 +1746,11 @@ class DashboardScanMixin:
         was_discovered = not unclaimed(data)
         was_mapped = data.get("WasMapped", True)
         was_footfalled = None if beacon_read(data) else data.get("WasFootfalled")
-        first_footfall = bool(landable and was_footfalled is False)
+        # Note: populated systems never paid the x5 first-footfall bonus in
+        # Outrider's sales (0 of 8 runs, 208 of 208 elsewhere), so no estimate
+        # counts it there.
+        populated = int(getattr(self, "_music_population", 0) or 0) > 0
+        first_footfall = bool(landable and was_footfalled is False and not populated)
 
         if not was_discovered:
             icons.append("⚑")
@@ -1877,6 +1891,7 @@ class DashboardScanMixin:
             "first_footfall": first_footfall,
             "system_address": data.get("SystemAddress"),
             "green_giant": self._claim_green_giant(data, planet_class),
+            "bio_rules": 3,
             "_ts": ts
         }
         region_id, system_coords = self._bio_location_context()
@@ -1886,9 +1901,12 @@ class DashboardScanMixin:
             item.get("surface_temp"),
             item.get("gravity_g"),
             item.get("volcanism"),
-            item.get("surface_pressure"),
+            bio_values.pressure_atm(item.get("surface_pressure")),
             region_id,
             system_coords,
+            system_stars=getattr(self, "_bio_system_stars", lambda: [])(),
+            geo=bool(item.get("geo_count")),
+            distance_ls=item.get("distance_to_arrival"),
         )
 
         existing = None

@@ -82,7 +82,8 @@ class HtmlSurveyOverlayBridge(HtmlOverlayBridgeLifecycle):
         # so its design width grows by the same factor. HTML supplies the
         # measured content height, which already includes the zoom.
         scale = survey_text_scale(self.config)
-        width, native_height = int(round(420 * scale)), int(round(90 * scale))
+        # 480: one line a world in the WORLDS list (5.7.8; 420 before).
+        width, native_height = int(round(480 * scale)), int(round(90 * scale))
         browser_height = _safe_int(self._browser_content_height)
         return width, max(native_height, browser_height) if browser_height else native_height
 
@@ -156,8 +157,8 @@ class HtmlSurveyOverlayBridge(HtmlOverlayBridgeLifecycle):
             tuple(sorted(window.items())),
             self.config.get("overlay_text_scale_percent"),
             self.config.get("survey_text_scale_percent"),
-            self.config.get("survey_spotlight_rotation"),
-            self.config.get("survey_spotlight_threshold"),
+            self.config.get("survey_grow_to"),
+            self.config.get("survey_species_lists", True),
             self.config.get("overlay_opacity_percent", 100),
             bool(self.config.get("hud_crt_enabled", True)),
             bool(self.config.get("reduced_motion_enabled", False)),

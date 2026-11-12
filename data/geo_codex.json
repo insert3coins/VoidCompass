@@ -1,0 +1,3920 @@
+{
+ "generated": "2026-11-10T02:41:36Z",
+ "source": "Canonn (canonn.science): the codex reference and its reported sites, counted per galactic region",
+ "entries": [
+  {
+   "id": 1400102,
+   "name": "Sulphur Dioxide Fumarole",
+   "codex": "$Codex_Ent_Fumarole_SulphurDioxideMagma_Name;",
+   "kind": "Geology",
+   "group": "Fumarole",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 1018,
+    "2": 1420,
+    "3": 279,
+    "4": 1101,
+    "5": 702,
+    "6": 361,
+    "7": 458,
+    "8": 252,
+    "9": 2378,
+    "10": 1158,
+    "11": 116,
+    "12": 241,
+    "13": 173,
+    "14": 150,
+    "15": 124,
+    "16": 227,
+    "17": 392,
+    "18": 11926,
+    "19": 869,
+    "20": 104,
+    "21": 96,
+    "22": 142,
+    "23": 192,
+    "24": 464,
+    "25": 118,
+    "26": 74,
+    "27": 173,
+    "28": 63,
+    "29": 289,
+    "30": 139,
+    "31": 458,
+    "32": 324,
+    "33": 1487,
+    "34": 1741,
+    "35": 1064,
+    "36": 251,
+    "37": 131,
+    "38": 155,
+    "39": 111,
+    "40": 263,
+    "41": 322,
+    "42": 86
+   }
+  },
+  {
+   "id": 1400108,
+   "name": "Water Fumarole",
+   "codex": "$Codex_Ent_Fumarole_WaterGeysers_Name;",
+   "kind": "Geology",
+   "group": "Fumarole",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 25,
+    "2": 33,
+    "3": 8,
+    "4": 40,
+    "5": 20,
+    "6": 11,
+    "7": 14,
+    "8": 9,
+    "9": 64,
+    "10": 24,
+    "11": 11,
+    "12": 6,
+    "13": 6,
+    "14": 10,
+    "15": 9,
+    "16": 10,
+    "17": 6,
+    "18": 164,
+    "19": 24,
+    "20": 4,
+    "21": 6,
+    "22": 5,
+    "23": 11,
+    "24": 16,
+    "25": 5,
+    "26": 7,
+    "27": 9,
+    "28": 5,
+    "29": 11,
+    "30": 5,
+    "31": 15,
+    "32": 10,
+    "33": 24,
+    "34": 42,
+    "35": 27,
+    "36": 7,
+    "37": 8,
+    "38": 9,
+    "39": 6,
+    "40": 7,
+    "41": 13,
+    "42": 5
+   }
+  },
+  {
+   "id": 1400109,
+   "name": "Carbon Dioxide Fumarole",
+   "codex": "$Codex_Ent_Fumarole_CarbonDioxideGeysers_Name;",
+   "kind": "Geology",
+   "group": "Fumarole",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "22": 1,
+    "26": 1,
+    "29": 1,
+    "31": 1,
+    "34": 1,
+    "36": 1,
+    "37": 1,
+    "38": 1,
+    "40": 1,
+    "41": 1
+   }
+  },
+  {
+   "id": 1400114,
+   "name": "Silicate Vapour Fumarole",
+   "codex": "$Codex_Ent_Fumarole_SilicateVapourGeysers_Name;",
+   "kind": "Geology",
+   "group": "Fumarole",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 861,
+    "2": 1099,
+    "3": 230,
+    "4": 853,
+    "5": 576,
+    "6": 299,
+    "7": 444,
+    "8": 207,
+    "9": 1882,
+    "10": 908,
+    "11": 109,
+    "12": 171,
+    "13": 135,
+    "14": 109,
+    "15": 99,
+    "16": 216,
+    "17": 274,
+    "18": 8756,
+    "19": 559,
+    "20": 71,
+    "21": 71,
+    "22": 94,
+    "23": 133,
+    "24": 305,
+    "25": 63,
+    "26": 61,
+    "27": 126,
+    "28": 43,
+    "29": 221,
+    "30": 125,
+    "31": 327,
+    "32": 228,
+    "33": 1050,
+    "34": 1191,
+    "35": 723,
+    "36": 172,
+    "37": 92,
+    "38": 112,
+    "39": 63,
+    "40": 190,
+    "41": 238,
+    "42": 73
+   }
+  },
+  {
+   "id": 1400152,
+   "name": "Sulphur Dioxide Ice Fumarole",
+   "codex": "$Codex_Ent_IceFumarole_SulphurDioxideMagma_Name;",
+   "kind": "Geology",
+   "group": "Fumarole",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 9,
+    "2": 5,
+    "3": 5,
+    "4": 9,
+    "5": 8,
+    "6": 3,
+    "7": 7,
+    "8": 4,
+    "9": 12,
+    "10": 7,
+    "11": 1,
+    "12": 5,
+    "13": 3,
+    "14": 5,
+    "15": 3,
+    "16": 3,
+    "17": 4,
+    "18": 72,
+    "19": 6,
+    "20": 1,
+    "21": 5,
+    "22": 3,
+    "23": 5,
+    "24": 9,
+    "25": 2,
+    "26": 2,
+    "27": 4,
+    "28": 2,
+    "29": 5,
+    "30": 3,
+    "31": 6,
+    "32": 7,
+    "33": 5,
+    "34": 12,
+    "35": 10,
+    "36": 6,
+    "37": 3,
+    "38": 3,
+    "39": 3,
+    "40": 5,
+    "41": 3,
+    "42": 2
+   }
+  },
+  {
+   "id": 1400158,
+   "name": "Water Ice Fumarole",
+   "codex": "$Codex_Ent_IceFumarole_WaterGeysers_Name;",
+   "kind": "Geology",
+   "group": "Fumarole",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 488,
+    "2": 335,
+    "3": 136,
+    "4": 349,
+    "5": 350,
+    "6": 202,
+    "7": 172,
+    "8": 102,
+    "9": 1146,
+    "10": 389,
+    "11": 85,
+    "12": 100,
+    "13": 89,
+    "14": 63,
+    "15": 80,
+    "16": 120,
+    "17": 173,
+    "18": 7184,
+    "19": 380,
+    "20": 57,
+    "21": 40,
+    "22": 59,
+    "23": 112,
+    "24": 243,
+    "25": 57,
+    "26": 44,
+    "27": 67,
+    "28": 26,
+    "29": 122,
+    "30": 71,
+    "31": 203,
+    "32": 134,
+    "33": 872,
+    "34": 875,
+    "35": 560,
+    "36": 99,
+    "37": 53,
+    "38": 68,
+    "39": 40,
+    "40": 137,
+    "41": 138,
+    "42": 42
+   }
+  },
+  {
+   "id": 1400159,
+   "name": "Carbon Dioxide Ice Fumarole",
+   "codex": "$Codex_Ent_IceFumarole_CarbonDioxideGeysers_Name;",
+   "kind": "Geology",
+   "group": "Fumarole",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 204,
+    "2": 138,
+    "3": 45,
+    "4": 136,
+    "5": 137,
+    "6": 64,
+    "7": 62,
+    "8": 32,
+    "9": 449,
+    "10": 139,
+    "11": 37,
+    "12": 44,
+    "13": 36,
+    "14": 59,
+    "15": 29,
+    "16": 51,
+    "17": 57,
+    "18": 2425,
+    "19": 134,
+    "20": 23,
+    "21": 30,
+    "22": 46,
+    "23": 66,
+    "24": 151,
+    "25": 47,
+    "26": 31,
+    "27": 63,
+    "28": 19,
+    "29": 125,
+    "30": 32,
+    "31": 144,
+    "32": 56,
+    "33": 319,
+    "34": 494,
+    "35": 195,
+    "36": 67,
+    "37": 43,
+    "38": 64,
+    "39": 27,
+    "40": 91,
+    "41": 107,
+    "42": 52
+   }
+  },
+  {
+   "id": 1400160,
+   "name": "Ammonia Ice Fumarole",
+   "codex": "$Codex_Ent_IceFumarole_AmmoniaGeysers_Name;",
+   "kind": "Geology",
+   "group": "Fumarole",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 64,
+    "2": 57,
+    "3": 20,
+    "4": 73,
+    "5": 51,
+    "6": 37,
+    "7": 35,
+    "8": 24,
+    "9": 150,
+    "10": 79,
+    "11": 13,
+    "12": 22,
+    "13": 18,
+    "14": 17,
+    "15": 14,
+    "16": 27,
+    "17": 31,
+    "18": 787,
+    "19": 52,
+    "20": 8,
+    "21": 12,
+    "22": 16,
+    "23": 20,
+    "24": 57,
+    "25": 14,
+    "26": 18,
+    "27": 29,
+    "28": 10,
+    "29": 34,
+    "30": 19,
+    "31": 49,
+    "32": 28,
+    "33": 133,
+    "34": 146,
+    "35": 75,
+    "36": 30,
+    "37": 10,
+    "38": 28,
+    "39": 14,
+    "40": 26,
+    "41": 35,
+    "42": 13
+   }
+  },
+  {
+   "id": 1400161,
+   "name": "Methane Ice Fumarole",
+   "codex": "$Codex_Ent_IceFumarole_MethaneGeysers_Name;",
+   "kind": "Geology",
+   "group": "Fumarole",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 94,
+    "2": 78,
+    "3": 38,
+    "4": 61,
+    "5": 91,
+    "6": 67,
+    "7": 46,
+    "8": 41,
+    "9": 257,
+    "10": 115,
+    "11": 22,
+    "12": 36,
+    "13": 28,
+    "14": 22,
+    "15": 21,
+    "16": 35,
+    "17": 51,
+    "18": 1203,
+    "19": 118,
+    "20": 17,
+    "21": 13,
+    "22": 23,
+    "23": 34,
+    "24": 76,
+    "25": 20,
+    "26": 29,
+    "27": 25,
+    "28": 9,
+    "29": 53,
+    "30": 20,
+    "31": 83,
+    "32": 43,
+    "33": 205,
+    "34": 243,
+    "35": 140,
+    "36": 43,
+    "37": 24,
+    "38": 44,
+    "39": 18,
+    "40": 44,
+    "41": 51,
+    "42": 25
+   }
+  },
+  {
+   "id": 1400162,
+   "name": "Nitrogen Ice Fumarole",
+   "codex": "$Codex_Ent_IceFumarole_NitrogenGeysers_Name;",
+   "kind": "Geology",
+   "group": "Fumarole",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 141,
+    "2": 132,
+    "3": 37,
+    "4": 112,
+    "5": 117,
+    "6": 93,
+    "7": 64,
+    "8": 42,
+    "9": 379,
+    "10": 177,
+    "11": 38,
+    "12": 67,
+    "13": 34,
+    "14": 31,
+    "15": 23,
+    "16": 56,
+    "17": 79,
+    "18": 1831,
+    "19": 194,
+    "20": 21,
+    "21": 21,
+    "22": 37,
+    "23": 59,
+    "24": 120,
+    "25": 34,
+    "26": 26,
+    "27": 39,
+    "28": 18,
+    "29": 69,
+    "30": 30,
+    "31": 118,
+    "32": 59,
+    "33": 319,
+    "34": 410,
+    "35": 224,
+    "36": 76,
+    "37": 38,
+    "38": 51,
+    "39": 29,
+    "40": 60,
+    "41": 73,
+    "42": 28
+   }
+  },
+  {
+   "id": 1400164,
+   "name": "Silicate Vapour Ice Fumarole",
+   "codex": "$Codex_Ent_IceFumarole_SilicateVapourGeysers_Name;",
+   "kind": "Geology",
+   "group": "Fumarole",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 15,
+    "2": 14,
+    "3": 8,
+    "4": 17,
+    "5": 11,
+    "6": 3,
+    "7": 11,
+    "8": 6,
+    "9": 35,
+    "10": 11,
+    "11": 2,
+    "12": 7,
+    "13": 6,
+    "14": 8,
+    "15": 2,
+    "16": 6,
+    "17": 9,
+    "18": 115,
+    "19": 9,
+    "20": 3,
+    "21": 4,
+    "22": 4,
+    "23": 3,
+    "24": 10,
+    "25": 6,
+    "26": 4,
+    "27": 5,
+    "28": 4,
+    "29": 11,
+    "30": 4,
+    "31": 9,
+    "32": 14,
+    "33": 18,
+    "34": 14,
+    "35": 13,
+    "36": 7,
+    "37": 5,
+    "38": 4,
+    "39": 4,
+    "40": 3,
+    "41": 4,
+    "42": 5
+   }
+  },
+  {
+   "id": 1400208,
+   "name": "Water Geyser",
+   "codex": "$Codex_Ent_Geysers_WaterGeysers_Name;",
+   "kind": "Geology",
+   "group": "Geyser",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 25,
+    "2": 33,
+    "3": 9,
+    "4": 42,
+    "5": 18,
+    "6": 13,
+    "7": 13,
+    "8": 10,
+    "9": 61,
+    "10": 30,
+    "11": 11,
+    "12": 6,
+    "13": 6,
+    "14": 9,
+    "15": 9,
+    "16": 10,
+    "17": 8,
+    "18": 158,
+    "19": 26,
+    "20": 5,
+    "21": 6,
+    "22": 5,
+    "23": 9,
+    "24": 10,
+    "25": 5,
+    "26": 4,
+    "27": 11,
+    "28": 4,
+    "29": 15,
+    "30": 6,
+    "31": 15,
+    "32": 8,
+    "33": 19,
+    "34": 39,
+    "35": 25,
+    "36": 7,
+    "37": 7,
+    "38": 8,
+    "39": 5,
+    "40": 7,
+    "41": 9,
+    "42": 5
+   }
+  },
+  {
+   "id": 1400258,
+   "name": "Water Ice Geyser",
+   "codex": "$Codex_Ent_IceGeysers_WaterGeysers_Name;",
+   "kind": "Geology",
+   "group": "Geyser",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 586,
+    "2": 419,
+    "3": 177,
+    "4": 403,
+    "5": 418,
+    "6": 265,
+    "7": 204,
+    "8": 122,
+    "9": 1423,
+    "10": 494,
+    "11": 95,
+    "12": 122,
+    "13": 109,
+    "14": 73,
+    "15": 94,
+    "16": 150,
+    "17": 223,
+    "18": 9041,
+    "19": 498,
+    "20": 67,
+    "21": 52,
+    "22": 75,
+    "23": 110,
+    "24": 304,
+    "25": 70,
+    "26": 51,
+    "27": 76,
+    "28": 27,
+    "29": 138,
+    "30": 86,
+    "31": 246,
+    "32": 171,
+    "33": 1066,
+    "34": 1062,
+    "35": 691,
+    "36": 125,
+    "37": 66,
+    "38": 85,
+    "39": 40,
+    "40": 157,
+    "41": 150,
+    "42": 45
+   }
+  },
+  {
+   "id": 1400259,
+   "name": "Carbon Dioxide Ice Geyser",
+   "codex": "$Codex_Ent_IceGeysers_CarbonDioxideGeysers_Name;",
+   "kind": "Geology",
+   "group": "Geyser",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 225,
+    "2": 153,
+    "3": 53,
+    "4": 148,
+    "5": 158,
+    "6": 70,
+    "7": 71,
+    "8": 38,
+    "9": 526,
+    "10": 172,
+    "11": 34,
+    "12": 49,
+    "13": 42,
+    "14": 56,
+    "15": 32,
+    "16": 58,
+    "17": 75,
+    "18": 2959,
+    "19": 166,
+    "20": 25,
+    "21": 26,
+    "22": 41,
+    "23": 61,
+    "24": 125,
+    "25": 38,
+    "26": 24,
+    "27": 45,
+    "28": 13,
+    "29": 98,
+    "30": 34,
+    "31": 137,
+    "32": 62,
+    "33": 367,
+    "34": 490,
+    "35": 232,
+    "36": 70,
+    "37": 45,
+    "38": 54,
+    "39": 26,
+    "40": 68,
+    "41": 104,
+    "42": 44
+   }
+  },
+  {
+   "id": 1400260,
+   "name": "Ammonia Ice Geyser",
+   "codex": "$Codex_Ent_IceGeysers_AmmoniaGeysers_Name;",
+   "kind": "Geology",
+   "group": "Geyser",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 71,
+    "2": 61,
+    "3": 26,
+    "4": 64,
+    "5": 54,
+    "6": 39,
+    "7": 31,
+    "8": 25,
+    "9": 194,
+    "10": 85,
+    "11": 13,
+    "12": 26,
+    "13": 17,
+    "14": 14,
+    "15": 15,
+    "16": 37,
+    "17": 37,
+    "18": 967,
+    "19": 65,
+    "20": 7,
+    "21": 12,
+    "22": 16,
+    "23": 23,
+    "24": 45,
+    "25": 13,
+    "26": 10,
+    "27": 21,
+    "28": 10,
+    "29": 32,
+    "30": 22,
+    "31": 46,
+    "32": 33,
+    "33": 151,
+    "34": 174,
+    "35": 95,
+    "36": 37,
+    "37": 10,
+    "38": 24,
+    "39": 14,
+    "40": 22,
+    "41": 31,
+    "42": 14
+   }
+  },
+  {
+   "id": 1400261,
+   "name": "Methane Ice Geyser",
+   "codex": "$Codex_Ent_IceGeysers_MethaneGeysers_Name;",
+   "kind": "Geology",
+   "group": "Geyser",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 112,
+    "2": 109,
+    "3": 41,
+    "4": 77,
+    "5": 116,
+    "6": 85,
+    "7": 59,
+    "8": 46,
+    "9": 322,
+    "10": 164,
+    "11": 27,
+    "12": 42,
+    "13": 33,
+    "14": 26,
+    "15": 33,
+    "16": 44,
+    "17": 56,
+    "18": 1636,
+    "19": 166,
+    "20": 19,
+    "21": 16,
+    "22": 26,
+    "23": 37,
+    "24": 100,
+    "25": 25,
+    "26": 22,
+    "27": 29,
+    "28": 11,
+    "29": 60,
+    "30": 22,
+    "31": 99,
+    "32": 63,
+    "33": 253,
+    "34": 304,
+    "35": 194,
+    "36": 51,
+    "37": 29,
+    "38": 50,
+    "39": 27,
+    "40": 56,
+    "41": 56,
+    "42": 26
+   }
+  },
+  {
+   "id": 1400262,
+   "name": "Nitrogen Ice Geyser",
+   "codex": "$Codex_Ent_IceGeysers_NitrogenGeysers_Name;",
+   "kind": "Geology",
+   "group": "Geyser",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 186,
+    "2": 168,
+    "3": 56,
+    "4": 147,
+    "5": 175,
+    "6": 123,
+    "7": 71,
+    "8": 61,
+    "9": 514,
+    "10": 245,
+    "11": 58,
+    "12": 88,
+    "13": 48,
+    "14": 43,
+    "15": 34,
+    "16": 65,
+    "17": 97,
+    "18": 2583,
+    "19": 256,
+    "20": 26,
+    "21": 27,
+    "22": 48,
+    "23": 61,
+    "24": 135,
+    "25": 45,
+    "26": 37,
+    "27": 48,
+    "28": 20,
+    "29": 75,
+    "30": 40,
+    "31": 151,
+    "32": 75,
+    "33": 436,
+    "34": 534,
+    "35": 294,
+    "36": 94,
+    "37": 41,
+    "38": 62,
+    "39": 31,
+    "40": 66,
+    "41": 90,
+    "42": 35
+   }
+  },
+  {
+   "id": 1400306,
+   "name": "Silicate Magma Lava Spout",
+   "codex": "$Codex_Ent_Lava_Spouts_SilicateMagma_Name;",
+   "kind": "Geology",
+   "group": "Lava Spout",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 1027,
+    "2": 1387,
+    "3": 254,
+    "4": 932,
+    "5": 654,
+    "6": 325,
+    "7": 443,
+    "8": 232,
+    "9": 2072,
+    "10": 960,
+    "11": 127,
+    "12": 205,
+    "13": 161,
+    "14": 117,
+    "15": 106,
+    "16": 229,
+    "17": 292,
+    "18": 9917,
+    "19": 611,
+    "20": 94,
+    "21": 80,
+    "22": 115,
+    "23": 160,
+    "24": 361,
+    "25": 83,
+    "26": 63,
+    "27": 126,
+    "28": 48,
+    "29": 225,
+    "30": 121,
+    "31": 374,
+    "32": 272,
+    "33": 1206,
+    "34": 1345,
+    "35": 860,
+    "36": 195,
+    "37": 114,
+    "38": 141,
+    "39": 79,
+    "40": 225,
+    "41": 257,
+    "42": 70
+   }
+  },
+  {
+   "id": 1400307,
+   "name": "Iron Magma Lava Spout",
+   "codex": "$Codex_Ent_Lava_Spouts_IronMagma_Name;",
+   "kind": "Geology",
+   "group": "Lava Spout",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 445,
+    "2": 417,
+    "3": 143,
+    "4": 485,
+    "5": 349,
+    "6": 178,
+    "7": 275,
+    "8": 130,
+    "9": 1224,
+    "10": 531,
+    "11": 60,
+    "12": 105,
+    "13": 86,
+    "14": 75,
+    "15": 70,
+    "16": 130,
+    "17": 199,
+    "18": 6272,
+    "19": 368,
+    "20": 52,
+    "21": 53,
+    "22": 61,
+    "23": 110,
+    "24": 246,
+    "25": 56,
+    "26": 30,
+    "27": 76,
+    "28": 34,
+    "29": 127,
+    "30": 71,
+    "31": 214,
+    "32": 159,
+    "33": 751,
+    "34": 881,
+    "35": 532,
+    "36": 112,
+    "37": 77,
+    "38": 61,
+    "39": 51,
+    "40": 122,
+    "41": 145,
+    "42": 54
+   }
+  },
+  {
+   "id": 1400402,
+   "name": "Sulphur Dioxide Gas Vent",
+   "codex": "$Codex_Ent_Gas_Vents_SulphurDioxideMagma_Name;",
+   "kind": "Geology",
+   "group": "Gas Vent",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 847,
+    "2": 1084,
+    "3": 240,
+    "4": 877,
+    "5": 605,
+    "6": 307,
+    "7": 404,
+    "8": 195,
+    "9": 2004,
+    "10": 892,
+    "11": 99,
+    "12": 194,
+    "13": 156,
+    "14": 112,
+    "15": 111,
+    "16": 202,
+    "17": 319,
+    "18": 9754,
+    "19": 702,
+    "20": 93,
+    "21": 85,
+    "22": 118,
+    "23": 165,
+    "24": 404,
+    "25": 88,
+    "26": 59,
+    "27": 133,
+    "28": 61,
+    "29": 226,
+    "30": 126,
+    "31": 372,
+    "32": 309,
+    "33": 1256,
+    "34": 1393,
+    "35": 849,
+    "36": 201,
+    "37": 104,
+    "38": 133,
+    "39": 97,
+    "40": 218,
+    "41": 263,
+    "42": 78
+   }
+  },
+  {
+   "id": 1400408,
+   "name": "Water Gas Vent",
+   "codex": "$Codex_Ent_Gas_Vents_WaterGeysers_Name;",
+   "kind": "Geology",
+   "group": "Gas Vent",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 46,
+    "2": 46,
+    "3": 13,
+    "4": 54,
+    "5": 34,
+    "6": 16,
+    "7": 23,
+    "8": 20,
+    "9": 95,
+    "10": 48,
+    "11": 12,
+    "12": 10,
+    "13": 12,
+    "14": 15,
+    "15": 12,
+    "16": 19,
+    "17": 18,
+    "18": 384,
+    "19": 44,
+    "20": 9,
+    "21": 12,
+    "22": 10,
+    "23": 14,
+    "24": 25,
+    "25": 10,
+    "26": 8,
+    "27": 15,
+    "28": 8,
+    "29": 27,
+    "30": 7,
+    "31": 29,
+    "32": 18,
+    "33": 49,
+    "34": 74,
+    "35": 48,
+    "36": 12,
+    "37": 9,
+    "38": 16,
+    "39": 11,
+    "40": 12,
+    "41": 20,
+    "42": 7
+   }
+  },
+  {
+   "id": 1400409,
+   "name": "Carbon Dioxide Gas Vent",
+   "codex": "$Codex_Ent_Gas_Vents_CarbonDioxideGeysers_Name;",
+   "kind": "Geology",
+   "group": "Gas Vent",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 7,
+    "2": 12,
+    "3": 2,
+    "4": 8,
+    "5": 6,
+    "6": 3,
+    "7": 6,
+    "8": 1,
+    "9": 40,
+    "10": 6,
+    "11": 1,
+    "12": 4,
+    "13": 1,
+    "14": 9,
+    "15": 3,
+    "16": 2,
+    "17": 4,
+    "18": 97,
+    "19": 10,
+    "20": 2,
+    "21": 4,
+    "22": 8,
+    "23": 2,
+    "24": 8,
+    "25": 1,
+    "26": 4,
+    "27": 2,
+    "29": 13,
+    "30": 4,
+    "31": 10,
+    "32": 6,
+    "33": 9,
+    "34": 10,
+    "35": 14,
+    "36": 8,
+    "37": 4,
+    "38": 4,
+    "39": 4,
+    "40": 6,
+    "41": 4,
+    "42": 9
+   }
+  },
+  {
+   "id": 1400414,
+   "name": "Silicate Vapour Gas Vent",
+   "codex": "$Codex_Ent_Gas_Vents_SilicateVapourGeysers_Name;",
+   "kind": "Geology",
+   "group": "Gas Vent",
+   "list": "geo",
+   "section": "Geology and Anomalies",
+   "regions": {
+    "1": 1011,
+    "2": 1336,
+    "3": 261,
+    "4": 965,
+    "5": 648,
+    "6": 340,
+    "7": 453,
+    "8": 249,
+    "9": 2075,
+    "10": 940,
+    "11": 127,
+    "12": 197,
+    "13": 173,
+    "14": 109,
+    "15": 112,
+    "16": 235,
+    "17": 304,
+    "18": 9518,
+    "19": 620,
+    "20": 87,
+    "21": 70,
+    "22": 105,
+    "23": 153,
+    "24": 342,
+    "25": 86,
+    "26": 60,
+    "27": 137,
+    "28": 55,
+    "29": 227,
+    "30": 136,
+    "31": 342,
+    "32": 267,
+    "33": 1197,
+    "34": 1296,
+    "35": 859,
+    "36": 201,
+    "37": 116,
+    "38": 142,
+    "39": 75,
+    "40": 219,
+    "41": 265,
+    "42": 83
+   }
+  },
+  {
+   "id": 1400601,
+   "name": "Caeruleum Lagrange Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Blue_Name;",
+   "kind": "Cloud",
+   "group": "Lagrange Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1400601.csv",
+   "regions": {
+    "1": 1,
+    "2": 7,
+    "4": 21,
+    "5": 69,
+    "7": 38,
+    "8": 4,
+    "9": 68,
+    "17": 4,
+    "18": 109,
+    "20": 15,
+    "21": 8,
+    "35": 46
+   }
+  },
+  {
+   "id": 1400701,
+   "name": "Viride Lagrange Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Green_Name;",
+   "kind": "Cloud",
+   "group": "Lagrange Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1400701.csv",
+   "regions": {
+    "1": 4,
+    "2": 13,
+    "4": 47,
+    "5": 132,
+    "7": 64,
+    "8": 8,
+    "9": 159,
+    "10": 5,
+    "17": 11,
+    "18": 273,
+    "20": 34,
+    "21": 10,
+    "26": 1,
+    "35": 94
+   }
+  },
+  {
+   "id": 1400702,
+   "name": "Viride Lagrange Storm Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Green_Storm_Name;",
+   "kind": "Cloud",
+   "group": "Storm Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1400702.csv",
+   "regions": {
+    "1": 3,
+    "2": 1
+   }
+  },
+  {
+   "id": 1400801,
+   "name": "Luteolum Lagrange Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Orange_Name;",
+   "kind": "Cloud",
+   "group": "Lagrange Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1400801.csv",
+   "regions": {
+    "2": 5,
+    "4": 22,
+    "5": 76,
+    "7": 34,
+    "8": 6,
+    "9": 59,
+    "10": 1,
+    "17": 5,
+    "18": 112,
+    "20": 14,
+    "21": 8,
+    "35": 39
+   }
+  },
+  {
+   "id": 1400802,
+   "name": "Luteolum Lagrange Storm Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Orange_Storm_Name;",
+   "kind": "Cloud",
+   "group": "Storm Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1400802.csv",
+   "regions": {
+    "4": 1,
+    "6": 1,
+    "7": 1
+   }
+  },
+  {
+   "id": 1400901,
+   "name": "Roseum Lagrange Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Pink_Name;",
+   "kind": "Cloud",
+   "group": "Lagrange Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1400901.csv",
+   "regions": {
+    "1": 1,
+    "2": 12,
+    "4": 30,
+    "5": 112,
+    "7": 61,
+    "8": 8,
+    "9": 114,
+    "10": 2,
+    "17": 10,
+    "18": 225,
+    "20": 18,
+    "21": 13,
+    "26": 1,
+    "35": 54
+   }
+  },
+  {
+   "id": 1400902,
+   "name": "Roseum Lagrange Storm Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Pink_Storm_Name;",
+   "kind": "Cloud",
+   "group": "Storm Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1400902.csv",
+   "regions": {
+    "7": 1
+   }
+  },
+  {
+   "id": 1401001,
+   "name": "Rubicundum Lagrange Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Red_Name;",
+   "kind": "Cloud",
+   "group": "Lagrange Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1401001.csv",
+   "regions": {
+    "1": 4,
+    "2": 7,
+    "4": 30,
+    "5": 112,
+    "7": 61,
+    "8": 11,
+    "9": 89,
+    "10": 2,
+    "17": 8,
+    "18": 178,
+    "20": 24,
+    "21": 8,
+    "26": 1,
+    "35": 68
+   }
+  },
+  {
+   "id": 1401002,
+   "name": "Rubicundum Lagrange Storm Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Red_Storm_Name;",
+   "kind": "Cloud",
+   "group": "Storm Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1401002.csv",
+   "regions": {
+    "2": 1
+   }
+  },
+  {
+   "id": 1401101,
+   "name": "Croceum Lagrange Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Yellow_Name;",
+   "kind": "Cloud",
+   "group": "Lagrange Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1401101.csv",
+   "regions": {
+    "1": 2,
+    "2": 12,
+    "4": 31,
+    "5": 109,
+    "7": 47,
+    "8": 7,
+    "9": 78,
+    "10": 2,
+    "17": 3,
+    "18": 220,
+    "19": 1,
+    "20": 24,
+    "21": 10,
+    "35": 71
+   }
+  },
+  {
+   "id": 1401102,
+   "name": "Croceum Lagrange Storm Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Yellow_Storm_Name;",
+   "kind": "Cloud",
+   "group": "Storm Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1401102.csv",
+   "regions": {
+    "19": 1,
+    "36": 1
+   }
+  },
+  {
+   "id": 1401300,
+   "name": "Proto-Lagrange Cloud",
+   "codex": "$Codex_Ent_Gas_Clds_Light_Name;",
+   "kind": "Cloud",
+   "group": "Lagrange Cloud",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1401300.csv",
+   "regions": {
+    "1": 8,
+    "2": 3,
+    "3": 3,
+    "4": 88,
+    "5": 10,
+    "7": 2,
+    "8": 1,
+    "9": 26,
+    "10": 1,
+    "11": 1,
+    "12": 8,
+    "18": 10094,
+    "19": 2,
+    "20": 1045,
+    "21": 904,
+    "22": 52,
+    "23": 46,
+    "24": 11,
+    "29": 1,
+    "30": 1,
+    "32": 19,
+    "33": 1,
+    "34": 1,
+    "35": 564,
+    "37": 12,
+    "38": 136,
+    "39": 359,
+    "40": 1,
+    "41": 19
+   }
+  },
+  {
+   "id": 1410100,
+   "name": "Solid Mineral Spheres",
+   "codex": "$Codex_Ent_SPOI_Ball_Name;",
+   "kind": "Cloud",
+   "group": "Mineral Spheres",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1410100.csv",
+   "regions": {
+    "1": 17,
+    "2": 37,
+    "4": 304,
+    "5": 384,
+    "7": 199,
+    "8": 13,
+    "9": 271,
+    "10": 6,
+    "17": 7,
+    "18": 3420,
+    "20": 6,
+    "21": 16,
+    "32": 4,
+    "35": 349,
+    "38": 11
+   }
+  },
+  {
+   "id": 1410110,
+   "name": "Lattice Mineral Spheres",
+   "codex": "$Codex_Ent_SPOI_Ball_Lattice_Name;",
+   "kind": "Cloud",
+   "group": "Mineral Spheres",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/1410110.csv",
+   "regions": {
+    "2": 1,
+    "4": 16,
+    "5": 14,
+    "7": 20,
+    "9": 16,
+    "10": 1,
+    "18": 30,
+    "32": 5,
+    "35": 5
+   }
+  },
+  {
+   "id": 2100601,
+   "name": "Lindigoticum Ice Crystals",
+   "codex": "$Codex_Ent_L_Cry_IcCry_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Ice Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100601.csv",
+   "regions": {
+    "21": 144,
+    "22": 39,
+    "23": 46,
+    "24": 280,
+    "35": 2008,
+    "37": 2,
+    "38": 146,
+    "39": 356,
+    "41": 4
+   }
+  },
+  {
+   "id": 2100602,
+   "name": "Prasinum Ice Crystals",
+   "codex": "$Codex_Ent_L_Cry_IcCry_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Ice Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100602.csv",
+   "regions": {
+    "21": 147,
+    "22": 37,
+    "23": 50,
+    "24": 257,
+    "35": 2078,
+    "38": 139,
+    "39": 376,
+    "41": 2
+   }
+  },
+  {
+   "id": 2100603,
+   "name": "Roseum Ice Crystals",
+   "codex": "$Codex_Ent_L_Cry_IcCry_Pk_Name;",
+   "kind": "Cloud",
+   "group": "Ice Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100603.csv",
+   "regions": {
+    "21": 143,
+    "22": 36,
+    "23": 40,
+    "24": 243,
+    "35": 1992,
+    "38": 127,
+    "39": 363
+   }
+  },
+  {
+   "id": 2100604,
+   "name": "Purpureum Ice Crystals",
+   "codex": "$Codex_Ent_L_Cry_IcCry_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Ice Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100604.csv",
+   "regions": {
+    "21": 145,
+    "22": 44,
+    "23": 41,
+    "24": 259,
+    "35": 2055,
+    "38": 127,
+    "39": 364,
+    "41": 6
+   }
+  },
+  {
+   "id": 2100605,
+   "name": "Rubeum Ice Crystals",
+   "codex": "$Codex_Ent_L_Cry_IcCry_Red_Name;",
+   "kind": "Cloud",
+   "group": "Ice Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100605.csv",
+   "regions": {
+    "21": 138,
+    "22": 49,
+    "23": 40,
+    "24": 269,
+    "35": 2046,
+    "38": 130,
+    "39": 379,
+    "41": 1
+   }
+  },
+  {
+   "id": 2100606,
+   "name": "Albidum Ice Crystals",
+   "codex": "$Codex_Ent_L_Cry_IcCry_Wte_Name;",
+   "kind": "Cloud",
+   "group": "Ice Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100606.csv",
+   "regions": {
+    "21": 161,
+    "22": 37,
+    "23": 48,
+    "24": 258,
+    "35": 2046,
+    "38": 141,
+    "39": 326,
+    "41": 1
+   }
+  },
+  {
+   "id": 2100607,
+   "name": "Flavum Ice Crystals",
+   "codex": "$Codex_Ent_L_Cry_IcCry_Yw_Name;",
+   "kind": "Cloud",
+   "group": "Ice Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100607.csv",
+   "regions": {
+    "21": 148,
+    "22": 45,
+    "23": 40,
+    "24": 273,
+    "35": 2032,
+    "38": 131,
+    "39": 353
+   }
+  },
+  {
+   "id": 2100701,
+   "name": "Lindigoticum Silicate Crystals",
+   "codex": "$Codex_Ent_L_Cry_QtzCry_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Silicate Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100701.csv",
+   "regions": {
+    "21": 52,
+    "22": 116,
+    "23": 110,
+    "24": 93,
+    "29": 1,
+    "35": 602,
+    "37": 1,
+    "38": 49,
+    "39": 398,
+    "40": 1,
+    "41": 2
+   }
+  },
+  {
+   "id": 2100702,
+   "name": "Prasinum Silicate Crystals",
+   "codex": "$Codex_Ent_L_Cry_QtzCry_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Silicate Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100702.csv",
+   "regions": {
+    "21": 39,
+    "22": 17,
+    "23": 18,
+    "24": 77,
+    "35": 270,
+    "38": 42,
+    "39": 263,
+    "41": 2
+   }
+  },
+  {
+   "id": 2100703,
+   "name": "Roseum Silicate Crystals",
+   "codex": "$Codex_Ent_L_Cry_QtzCry_Pk_Name;",
+   "kind": "Cloud",
+   "group": "Silicate Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100703.csv",
+   "regions": {
+    "21": 29,
+    "22": 24,
+    "23": 19,
+    "24": 57,
+    "35": 256,
+    "38": 40,
+    "39": 264
+   }
+  },
+  {
+   "id": 2100704,
+   "name": "Purpureum Silicate Crystals",
+   "codex": "$Codex_Ent_L_Cry_QtzCry_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Silicate Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100704.csv",
+   "regions": {
+    "21": 38,
+    "22": 22,
+    "23": 16,
+    "24": 80,
+    "35": 227,
+    "38": 45,
+    "39": 229
+   }
+  },
+  {
+   "id": 2100705,
+   "name": "Rubeum Silicate Crystals",
+   "codex": "$Codex_Ent_L_Cry_QtzCry_Red_Name;",
+   "kind": "Cloud",
+   "group": "Silicate Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100705.csv",
+   "regions": {
+    "21": 37,
+    "22": 21,
+    "23": 28,
+    "24": 89,
+    "35": 228,
+    "38": 41,
+    "39": 231,
+    "41": 3
+   }
+  },
+  {
+   "id": 2100706,
+   "name": "Albidum Silicate Crystals",
+   "codex": "$Codex_Ent_L_Cry_QtzCry_Wte_Name;",
+   "kind": "Cloud",
+   "group": "Silicate Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100706.csv",
+   "regions": {
+    "21": 35,
+    "22": 21,
+    "23": 8,
+    "24": 78,
+    "35": 219,
+    "38": 33,
+    "39": 245
+   }
+  },
+  {
+   "id": 2100707,
+   "name": "Flavum Silicate Crystals",
+   "codex": "$Codex_Ent_L_Cry_QtzCry_Yw_Name;",
+   "kind": "Cloud",
+   "group": "Silicate Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100707.csv",
+   "regions": {
+    "21": 28,
+    "22": 17,
+    "23": 15,
+    "24": 83,
+    "35": 249,
+    "38": 54,
+    "39": 261,
+    "41": 3
+   }
+  },
+  {
+   "id": 2100801,
+   "name": "Prasinum Metallic Crystals",
+   "codex": "$Codex_Ent_L_Cry_MetCry_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Metallic Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100801.csv",
+   "regions": {
+    "1": 12,
+    "2": 32,
+    "3": 3,
+    "4": 489,
+    "5": 332,
+    "7": 138,
+    "8": 14,
+    "9": 225,
+    "10": 7,
+    "12": 3,
+    "15": 1,
+    "16": 1,
+    "17": 12,
+    "18": 13047,
+    "20": 155,
+    "21": 127,
+    "32": 19,
+    "35": 1691,
+    "38": 156
+   }
+  },
+  {
+   "id": 2100802,
+   "name": "Purpureum Metallic Crystals",
+   "codex": "$Codex_Ent_L_Cry_MetCry_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Metallic Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100802.csv",
+   "regions": {
+    "1": 12,
+    "2": 25,
+    "3": 1,
+    "4": 491,
+    "5": 341,
+    "7": 138,
+    "8": 15,
+    "9": 236,
+    "10": 7,
+    "12": 7,
+    "16": 1,
+    "17": 11,
+    "18": 12924,
+    "20": 136,
+    "21": 117,
+    "32": 14,
+    "35": 1718,
+    "38": 132
+   }
+  },
+  {
+   "id": 2100803,
+   "name": "Rubeum Metallic Crystals",
+   "codex": "$Codex_Ent_L_Cry_MetCry_Red_Name;",
+   "kind": "Cloud",
+   "group": "Metallic Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100803.csv",
+   "regions": {
+    "1": 11,
+    "2": 34,
+    "4": 459,
+    "5": 331,
+    "7": 150,
+    "8": 17,
+    "9": 214,
+    "10": 4,
+    "12": 7,
+    "17": 8,
+    "18": 12768,
+    "20": 152,
+    "21": 103,
+    "32": 19,
+    "35": 1706,
+    "38": 135
+   }
+  },
+  {
+   "id": 2100804,
+   "name": "Flavum Metallic Crystals",
+   "codex": "$Codex_Ent_L_Cry_MetCry_Yw_Name;",
+   "kind": "Cloud",
+   "group": "Metallic Crystals",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2100804.csv",
+   "regions": {
+    "1": 14,
+    "2": 26,
+    "3": 2,
+    "4": 476,
+    "5": 338,
+    "7": 139,
+    "8": 19,
+    "9": 227,
+    "10": 3,
+    "12": 3,
+    "15": 1,
+    "17": 8,
+    "18": 12770,
+    "20": 117,
+    "21": 100,
+    "32": 16,
+    "35": 1654,
+    "38": 147
+   }
+  },
+  {
+   "id": 2101001,
+   "name": "Luteolum Calcite Plates",
+   "codex": "$Codex_Ent_L_Org_PltFun_V1_Def_Name;",
+   "kind": "Cloud",
+   "group": "Calcite Plates",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2101001.csv",
+   "regions": {
+    "30": 1,
+    "32": 34
+   }
+  },
+  {
+   "id": 2101002,
+   "name": "Lindigoticum Calcite Plates",
+   "codex": "$Codex_Ent_L_Org_PltFun_V1_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Calcite Plates",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2101002.csv",
+   "regions": {
+    "30": 1,
+    "32": 35
+   }
+  },
+  {
+   "id": 2101003,
+   "name": "Viride Calcite Plates",
+   "codex": "$Codex_Ent_L_Org_PltFun_V1_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Calcite Plates",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2101003.csv",
+   "regions": {
+    "30": 1,
+    "32": 33
+   }
+  },
+  {
+   "id": 2101004,
+   "name": "Rutulum Calcite Plates",
+   "codex": "$Codex_Ent_L_Org_PltFun_V1_Red_Name;",
+   "kind": "Cloud",
+   "group": "Calcite Plates",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2101004.csv",
+   "regions": {
+    "32": 34
+   }
+  },
+  {
+   "id": 2201001,
+   "name": "Candidum Peduncle Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp01_Def_Name;",
+   "kind": "Cloud",
+   "group": "Peduncle",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2201001.csv",
+   "regions": {
+    "20": 5602,
+    "21": 2764
+   }
+  },
+  {
+   "id": 2201002,
+   "name": "Caeruleum Peduncle Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp01_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Peduncle",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2201002.csv",
+   "regions": {
+    "21": 961
+   }
+  },
+  {
+   "id": 2201003,
+   "name": "Gypseeum Peduncle Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp01_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Peduncle",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2201003.csv",
+   "regions": {
+    "21": 988
+   }
+  },
+  {
+   "id": 2201004,
+   "name": "Purpureum Peduncle Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp01_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Peduncle",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2201004.csv",
+   "regions": {
+    "21": 1007
+   }
+  },
+  {
+   "id": 2201005,
+   "name": "Rufum Peduncle Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp01_Red_Name;",
+   "kind": "Cloud",
+   "group": "Peduncle",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2201005.csv",
+   "regions": {
+    "21": 982
+   }
+  },
+  {
+   "id": 2202001,
+   "name": "Cereum Aster Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp02_Def_Name;",
+   "kind": "Cloud",
+   "group": "Aster",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2202001.csv",
+   "regions": {
+    "24": 8
+   }
+  },
+  {
+   "id": 2202002,
+   "name": "Lindigoticum Aster Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp02_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Aster",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2202002.csv",
+   "regions": {
+    "24": 1
+   }
+  },
+  {
+   "id": 2202003,
+   "name": "Prasinum Aster Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp02_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Aster",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2202003.csv",
+   "regions": {
+    "24": 1
+   }
+  },
+  {
+   "id": 2202004,
+   "name": "Puniceum Aster Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp02_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Aster",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2202004.csv",
+   "regions": {
+    "24": 1
+   }
+  },
+  {
+   "id": 2202005,
+   "name": "Rubellum Aster Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp02_Red_Name;",
+   "kind": "Cloud",
+   "group": "Aster",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2202005.csv",
+   "regions": {
+    "24": 1
+   }
+  },
+  {
+   "id": 2203001,
+   "name": "Niveum Octahedral Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp03_Def_Name;",
+   "kind": "Cloud",
+   "group": "Void",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2203001.csv",
+   "regions": {
+    "2": 1
+   }
+  },
+  {
+   "id": 2203002,
+   "name": "Caeruleum Octahedral Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp03_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Void",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2203002.csv",
+   "regions": {
+    "2": 13
+   }
+  },
+  {
+   "id": 2203003,
+   "name": "Viride Octahedral Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp03_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Void",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2203003.csv",
+   "regions": {
+    "2": 8
+   }
+  },
+  {
+   "id": 2203004,
+   "name": "Blatteum Octahedral Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp03_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Void",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2203004.csv",
+   "regions": {
+    "2": 5
+   }
+  },
+  {
+   "id": 2203005,
+   "name": "Rubeum Octahedral Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp03_Red_Name;",
+   "kind": "Cloud",
+   "group": "Void",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2203005.csv",
+   "regions": {
+    "2": 5
+   }
+  },
+  {
+   "id": 2204001,
+   "name": "Albidum Collared Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp04_Def_Name;",
+   "kind": "Cloud",
+   "group": "Collared Pod",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2204001.csv",
+   "regions": {
+    "18": 1
+   }
+  },
+  {
+   "id": 2204002,
+   "name": "Lividum Collared Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp04_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Collared Pod",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2204002.csv",
+   "regions": {
+    "18": 1
+   }
+  },
+  {
+   "id": 2204004,
+   "name": "Blatteum Collared Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp04_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Collared Pod",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2204004.csv",
+   "regions": {
+    "18": 4
+   }
+  },
+  {
+   "id": 2204005,
+   "name": "Rubicundum Collared Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp04_Red_Name;",
+   "kind": "Cloud",
+   "group": "Collared Pod",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2204005.csv",
+   "regions": {
+    "18": 8
+   }
+  },
+  {
+   "id": 2205001,
+   "name": "Albidum Chalice Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp05_Def_Name;",
+   "kind": "Cloud",
+   "group": "Chalice Pod",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2205001.csv",
+   "regions": {
+    "22": 262,
+    "23": 219
+   }
+  },
+  {
+   "id": 2205002,
+   "name": "Caeruleum Chalice Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp05_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Chalice Pod",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2205002.csv",
+   "regions": {
+    "23": 2
+   }
+  },
+  {
+   "id": 2205003,
+   "name": "Viride Chalice Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp05_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Chalice Pod",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2205003.csv",
+   "regions": {
+    "22": 2
+   }
+  },
+  {
+   "id": 2205004,
+   "name": "Ostrinum Chalice Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp05_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Chalice Pod",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2205004.csv",
+   "regions": {
+    "23": 6
+   }
+  },
+  {
+   "id": 2205005,
+   "name": "Rubellum Chalice Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp05_Red_Name;",
+   "kind": "Cloud",
+   "group": "Chalice Pod",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2205005.csv",
+   "regions": {
+    "23": 4
+   }
+  },
+  {
+   "id": 2206001,
+   "name": "Roseum Gyre Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp06_Def_Name;",
+   "kind": "Cloud",
+   "group": "Gyre",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2206001.csv",
+   "regions": {
+    "41": 84
+   }
+  },
+  {
+   "id": 2206002,
+   "name": "Aurarium Gyre Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp06_Gd_Name;",
+   "kind": "Cloud",
+   "group": "Gyre",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2206002.csv",
+   "regions": {
+    "37": 13
+   }
+  },
+  {
+   "id": 2207001,
+   "name": "Candidum Rhizome Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp07_Def_Name;",
+   "kind": "Cloud",
+   "group": "Rhizome",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2207001.csv",
+   "regions": {
+    "39": 807
+   }
+  },
+  {
+   "id": 2207002,
+   "name": "Cobalteum Rhizome Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp07_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Rhizome",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2207002.csv",
+   "regions": {
+    "39": 728
+   }
+  },
+  {
+   "id": 2207003,
+   "name": "Gypseeum Rhizome Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp07_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Rhizome",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2207003.csv",
+   "regions": {
+    "39": 62
+   }
+  },
+  {
+   "id": 2207004,
+   "name": "Purpureum Rhizome Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp07_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Rhizome",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2207004.csv",
+   "regions": {
+    "39": 101
+   }
+  },
+  {
+   "id": 2207005,
+   "name": "Rubeum Rhizome Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp07_Red_Name;",
+   "kind": "Cloud",
+   "group": "Rhizome",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2207005.csv",
+   "regions": {
+    "39": 150
+   }
+  },
+  {
+   "id": 2207101,
+   "name": "Albidum Quadripartite Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp08_Def_Name;",
+   "kind": "Cloud",
+   "group": "Quadripartite",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2207101.csv",
+   "regions": {
+    "38": 295
+   }
+  },
+  {
+   "id": 2207102,
+   "name": "Caeruleum Quadripartite Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp08_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Quadripartite",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2207102.csv",
+   "regions": {
+    "38": 233
+   }
+  },
+  {
+   "id": 2207103,
+   "name": "Viride Quadripartite Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp08_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Quadripartite",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2207103.csv",
+   "regions": {
+    "38": 120
+   }
+  },
+  {
+   "id": 2207104,
+   "name": "Blatteum Quadripartite Pod",
+   "codex": "$Codex_Ent_S_Seed_SdTp08_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Quadripartite",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2207104.csv",
+   "regions": {
+    "38": 48
+   }
+  },
+  {
+   "id": 2207200,
+   "name": "Stolon Pod",
+   "codex": "$Codex_Ent_SPOI_Root_Seeds_Name;",
+   "kind": "Cloud",
+   "group": "Stolon",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2207200.csv",
+   "regions": {
+    "26": 2
+   }
+  },
+  {
+   "id": 2208001,
+   "name": "Albidum Peduncle Tree",
+   "codex": "$Codex_Ent_L_Seed_Pln01_V1_Def_Name;",
+   "kind": "Cloud",
+   "group": "Peduncle",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2208001.csv",
+   "regions": {
+    "17": 7,
+    "19": 1,
+    "20": 496,
+    "21": 349,
+    "36": 1
+   }
+  },
+  {
+   "id": 2208002,
+   "name": "Caeruleum Peduncle Tree",
+   "codex": "$Codex_Ent_L_Seed_Pln01_V1_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Peduncle",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2208002.csv",
+   "regions": {
+    "20": 4485,
+    "21": 3598
+   }
+  },
+  {
+   "id": 2208003,
+   "name": "Viride Peduncle Tree",
+   "codex": "$Codex_Ent_L_Seed_Pln01_V1_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Peduncle",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2208003.csv",
+   "regions": {
+    "20": 3897,
+    "21": 3093
+   }
+  },
+  {
+   "id": 2208004,
+   "name": "Ostrinum Peduncle Tree",
+   "codex": "$Codex_Ent_L_Seed_Pln01_V1_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Peduncle",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2208004.csv",
+   "regions": {
+    "20": 4184,
+    "21": 3453
+   }
+  },
+  {
+   "id": 2208005,
+   "name": "Rubellum Peduncle Tree",
+   "codex": "$Codex_Ent_L_Seed_Pln01_V1_Red_Name;",
+   "kind": "Cloud",
+   "group": "Peduncle",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2208005.csv",
+   "regions": {
+    "20": 4229,
+    "21": 3386
+   }
+  },
+  {
+   "id": 2208101,
+   "name": "Cereum Aster Tree",
+   "codex": "$Codex_Ent_L_Seed_Pln02_V3_Def_Name;",
+   "kind": "Cloud",
+   "group": "Aster",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2208101.csv",
+   "regions": {
+    "24": 6
+   }
+  },
+  {
+   "id": 2208103,
+   "name": "Prasinum Aster Tree",
+   "codex": "$Codex_Ent_L_Seed_Pln02_V3_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Aster",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2208103.csv",
+   "regions": {
+    "24": 1
+   }
+  },
+  {
+   "id": 2208105,
+   "name": "Rubellum Aster Tree",
+   "codex": "$Codex_Ent_L_Seed_Pln02_V3_Red_Name;",
+   "kind": "Cloud",
+   "group": "Aster",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2208105.csv",
+   "regions": {
+    "24": 1
+   }
+  },
+  {
+   "id": 2209021,
+   "name": "Stolon Tree",
+   "codex": "$Codex_Ent_L_Seed_SdRt02_V3_Name;",
+   "kind": "Cloud",
+   "group": "Stolon",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2209021.csv",
+   "regions": {
+    "26": 2
+   }
+  },
+  {
+   "id": 2210001,
+   "name": "Viride Gyre Tree",
+   "codex": "$Codex_Ent_SPOI_SeedPolyp01_V1_Name;",
+   "kind": "Cloud",
+   "group": "Gyre",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2210001.csv",
+   "regions": {
+    "37": 12,
+    "41": 80
+   }
+  },
+  {
+   "id": 2210011,
+   "name": "Aurarium Gyre Tree",
+   "codex": "$Codex_Ent_SPOI_SeedPolyp01_V1_Gld_Name;",
+   "kind": "Cloud",
+   "group": "Gyre",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2210011.csv",
+   "regions": {
+    "37": 13
+   }
+  },
+  {
+   "id": 2210101,
+   "name": "Chryseum Void Heart",
+   "codex": "$Codex_Ent_SPOI_SeedWeed01_V1_Name;",
+   "kind": "Cloud",
+   "group": "Void",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2210101.csv",
+   "regions": {
+    "2": 28
+   }
+  },
+  {
+   "id": 2300101,
+   "name": "Albulum Gourd Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V1_Def_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300101.csv",
+   "regions": {
+    "18": 6234
+   }
+  },
+  {
+   "id": 2300102,
+   "name": "Caeruleum Gourd Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V1_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300102.csv",
+   "regions": {
+    "18": 1
+   }
+  },
+  {
+   "id": 2300103,
+   "name": "Viride Gourd Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V1_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300103.csv",
+   "regions": {
+    "18": 1
+   }
+  },
+  {
+   "id": 2300104,
+   "name": "Phoeniceum Gourd Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V1_Pnk_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300104.csv",
+   "regions": {
+    "18": 1
+   }
+  },
+  {
+   "id": 2300105,
+   "name": "Purpureum Gourd Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V1_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300105.csv",
+   "regions": {
+    "18": 4
+   }
+  },
+  {
+   "id": 2300106,
+   "name": "Rufum Gourd Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V1_Red_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300106.csv",
+   "regions": {
+    "18": 47
+   }
+  },
+  {
+   "id": 2300107,
+   "name": "Croceum Gourd Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V1_Y_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300107.csv",
+   "regions": {
+    "18": 1
+   }
+  },
+  {
+   "id": 2300202,
+   "name": "Caeruleum Torus Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V2_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300202.csv",
+   "regions": {
+    "32": 76
+   }
+  },
+  {
+   "id": 2300203,
+   "name": "Viride Torus Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V2_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300203.csv",
+   "regions": {
+    "32": 4
+   }
+  },
+  {
+   "id": 2300205,
+   "name": "Blatteum Torus Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V2_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300205.csv",
+   "regions": {
+    "32": 3
+   }
+  },
+  {
+   "id": 2300206,
+   "name": "Rubellum Torus Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V2_Red_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300206.csv",
+   "regions": {
+    "32": 4
+   }
+  },
+  {
+   "id": 2300207,
+   "name": "Flavum Torus Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V2_Y_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300207.csv",
+   "regions": {
+    "32": 1
+   }
+  },
+  {
+   "id": 2300301,
+   "name": "Albulum Squid Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V3_Def_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300301.csv",
+   "regions": {
+    "24": 9
+   }
+  },
+  {
+   "id": 2300302,
+   "name": "Caeruleum Squid Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V3_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300302.csv",
+   "regions": {
+    "24": 75
+   }
+  },
+  {
+   "id": 2300304,
+   "name": "Roseum Squid Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V3_Pnk_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300304.csv",
+   "regions": {
+    "24": 729
+   }
+  },
+  {
+   "id": 2300305,
+   "name": "Puniceum Squid Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V3_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300305.csv",
+   "regions": {
+    "24": 58
+   }
+  },
+  {
+   "id": 2300306,
+   "name": "Rubeum Squid Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V3_Red_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300306.csv",
+   "regions": {
+    "24": 99
+   }
+  },
+  {
+   "id": 2300401,
+   "name": "Cereum Bullet Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V4_Def_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300401.csv",
+   "regions": {
+    "35": 1703
+   }
+  },
+  {
+   "id": 2300402,
+   "name": "Lividum Bullet Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V4_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300402.csv",
+   "regions": {
+    "35": 2344
+   }
+  },
+  {
+   "id": 2300403,
+   "name": "Viride Bullet Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V4_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300403.csv",
+   "regions": {
+    "35": 2071
+   }
+  },
+  {
+   "id": 2300406,
+   "name": "Rubeum Bullet Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V4_Red_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300406.csv",
+   "regions": {
+    "35": 1029
+   }
+  },
+  {
+   "id": 2300407,
+   "name": "Flavum Bullet Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V4_Y_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300407.csv",
+   "regions": {
+    "35": 235
+   }
+  },
+  {
+   "id": 2300501,
+   "name": "Niveum Globe Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V5_Def_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300501.csv",
+   "regions": {
+    "9": 1
+   }
+  },
+  {
+   "id": 2300502,
+   "name": "Cobalteum Globe Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V5_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300502.csv",
+   "regions": {
+    "9": 1
+   }
+  },
+  {
+   "id": 2300503,
+   "name": "Prasinum Globe Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V5_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300503.csv",
+   "regions": {
+    "9": 22
+   }
+  },
+  {
+   "id": 2300504,
+   "name": "Roseum Globe Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V5_Pnk_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300504.csv",
+   "regions": {
+    "9": 1
+   }
+  },
+  {
+   "id": 2300505,
+   "name": "Ostrinum Globe Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V5_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300505.csv",
+   "regions": {
+    "9": 1
+   }
+  },
+  {
+   "id": 2300506,
+   "name": "Rutulum Globe Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V5_Red_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300506.csv",
+   "regions": {
+    "9": 5
+   }
+  },
+  {
+   "id": 2300507,
+   "name": "Croceum Globe Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V5_Y_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300507.csv",
+   "regions": {
+    "9": 2
+   }
+  },
+  {
+   "id": 2300601,
+   "name": "Albens Bell Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V6_Def_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300601.csv",
+   "regions": {
+    "9": 13,
+    "10": 7,
+    "17": 14,
+    "35": 11
+   }
+  },
+  {
+   "id": 2300602,
+   "name": "Lindigoticum Bell Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V6_Bl_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300602.csv",
+   "regions": {
+    "10": 2
+   }
+  },
+  {
+   "id": 2300603,
+   "name": "Gypseeum Bell Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V6_Gr_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300603.csv",
+   "regions": {
+    "9": 1
+   }
+  },
+  {
+   "id": 2300605,
+   "name": "Blatteum Bell Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V6_Pur_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300605.csv",
+   "regions": {
+    "17": 8
+   }
+  },
+  {
+   "id": 2300607,
+   "name": "Luteolum Bell Mollusc",
+   "codex": "$Codex_Ent_Small_Org_Moll01_V6_Y_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2300607.csv",
+   "regions": {
+    "35": 3
+   }
+  },
+  {
+   "id": 2301601,
+   "name": "Luteolum Parasol Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V1_Def_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301601.csv",
+   "regions": {
+    "7": 196
+   }
+  },
+  {
+   "id": 2301602,
+   "name": "Lindigoticum Parasol Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V1_Dark_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301602.csv",
+   "regions": {
+    "7": 101
+   }
+  },
+  {
+   "id": 2301603,
+   "name": "Viride Parasol Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V1_Earth_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301603.csv",
+   "regions": {
+    "7": 8
+   }
+  },
+  {
+   "id": 2301701,
+   "name": "Luteolum Bulb Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V2_Def_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301701.csv",
+   "regions": {
+    "8": 7
+   }
+  },
+  {
+   "id": 2301702,
+   "name": "Lindigoticum Bulb Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V2_Dark_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301702.csv",
+   "regions": {
+    "8": 4
+   }
+  },
+  {
+   "id": 2301703,
+   "name": "Viride Bulb Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V2_Earth_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301703.csv",
+   "regions": {
+    "8": 16
+   }
+  },
+  {
+   "id": 2301801,
+   "name": "Luteolum Umbrella Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V3_Def_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301801.csv",
+   "regions": {
+    "9": 201
+   }
+  },
+  {
+   "id": 2301802,
+   "name": "Lindigoticum Umbrella Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V3_Dark_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301802.csv",
+   "regions": {
+    "9": 5
+   }
+  },
+  {
+   "id": 2301803,
+   "name": "Viride Umbrella Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V3_Earth_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301803.csv",
+   "regions": {
+    "9": 192
+   }
+  },
+  {
+   "id": 2301901,
+   "name": "Luteolum Capsule Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V4_Def_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301901.csv",
+   "regions": {
+    "4": 136
+   }
+  },
+  {
+   "id": 2301902,
+   "name": "Lindigoticum Capsule Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V4_Dark_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301902.csv",
+   "regions": {
+    "4": 5
+   }
+  },
+  {
+   "id": 2301903,
+   "name": "Viride Capsule Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V4_Earth_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2301903.csv",
+   "regions": {
+    "4": 5
+   }
+  },
+  {
+   "id": 2302101,
+   "name": "Luteolum Reel Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V6_Def_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2302101.csv",
+   "regions": {
+    "5": 652
+   }
+  },
+  {
+   "id": 2302102,
+   "name": "Lindigoticum Reel Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V6_Dark_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2302102.csv",
+   "regions": {
+    "5": 1
+   }
+  },
+  {
+   "id": 2302103,
+   "name": "Viride Reel Mollusc",
+   "codex": "$Codex_Ent_L_Org_Moll03_V6_Earth_Name;",
+   "kind": "Cloud",
+   "group": "Mollusc",
+   "list": "phen",
+   "section": "Organic Structures",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Cloud/2302103.csv",
+   "regions": {
+    "5": 5
+   }
+  },
+  {
+   "id": 2401001,
+   "name": "K01-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_001_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401001.csv",
+   "regions": {
+    "4": 177
+   }
+  },
+  {
+   "id": 2401002,
+   "name": "K02-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_002_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401002.csv",
+   "regions": {
+    "10": 3
+   }
+  },
+  {
+   "id": 2401003,
+   "name": "K03-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_003_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401003.csv",
+   "regions": {
+    "4": 177
+   }
+  },
+  {
+   "id": 2401004,
+   "name": "K04-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_004_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401004.csv",
+   "regions": {
+    "4": 173
+   }
+  },
+  {
+   "id": 2401005,
+   "name": "K05-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_005_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401005.csv",
+   "regions": {
+    "4": 167
+   }
+  },
+  {
+   "id": 2401006,
+   "name": "K06-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_006_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401006.csv",
+   "regions": {
+    "4": 170
+   }
+  },
+  {
+   "id": 2401007,
+   "name": "E04-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_007_Name;",
+   "kind": "Anomaly",
+   "group": "E-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401007.csv",
+   "regions": {
+    "4": 167
+   }
+  },
+  {
+   "id": 2401008,
+   "name": "K07-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_008_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401008.csv",
+   "regions": {
+    "29": 1
+   }
+  },
+  {
+   "id": 2401009,
+   "name": "K08-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_009_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401009.csv",
+   "regions": {
+    "4": 141
+   }
+  },
+  {
+   "id": 2401010,
+   "name": "K09-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_010_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401010.csv",
+   "regions": {
+    "2": 7
+   }
+  },
+  {
+   "id": 2401011,
+   "name": "K10-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_011_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401011.csv",
+   "regions": {
+    "1": 4,
+    "3": 5
+   }
+  },
+  {
+   "id": 2401012,
+   "name": "K11-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_012_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401012.csv",
+   "regions": {
+    "1": 1
+   }
+  },
+  {
+   "id": 2401013,
+   "name": "E01-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_013_Name;",
+   "kind": "Anomaly",
+   "group": "E-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401013.csv",
+   "regions": {
+    "8": 1
+   }
+  },
+  {
+   "id": 2401014,
+   "name": "E02-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_014_Name;",
+   "kind": "Anomaly",
+   "group": "E-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401014.csv",
+   "regions": {
+    "7": 23
+   }
+  },
+  {
+   "id": 2401015,
+   "name": "E03-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_015_Name;",
+   "kind": "Anomaly",
+   "group": "E-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401015.csv",
+   "regions": {
+    "7": 8
+   }
+  },
+  {
+   "id": 2401016,
+   "name": "K12-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_016_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401016.csv",
+   "regions": {
+    "4": 1
+   }
+  },
+  {
+   "id": 2401017,
+   "name": "K13-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Cld_017_Name;",
+   "kind": "Anomaly",
+   "group": "K-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2401017.csv",
+   "regions": {
+    "40": 1
+   }
+  },
+  {
+   "id": 2402001,
+   "name": "T01-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_001_Name;",
+   "kind": "Anomaly",
+   "group": "T-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2402001.csv",
+   "regions": {
+    "2": 39
+   }
+  },
+  {
+   "id": 2402002,
+   "name": "T02-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_002_Name;",
+   "kind": "Anomaly",
+   "group": "T-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2402002.csv",
+   "regions": {
+    "1": 1
+   }
+  },
+  {
+   "id": 2402003,
+   "name": "L01-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_003_Name;",
+   "kind": "Anomaly",
+   "group": "L-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2402003.csv",
+   "regions": {
+    "1": 1
+   }
+  },
+  {
+   "id": 2402004,
+   "name": "T03-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_004_Name;",
+   "kind": "Anomaly",
+   "group": "T-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2402004.csv",
+   "regions": {
+    "2": 1
+   }
+  },
+  {
+   "id": 2402005,
+   "name": "T04-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_005_Name;",
+   "kind": "Anomaly",
+   "group": "T-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2402005.csv",
+   "regions": {
+    "1": 1
+   }
+  },
+  {
+   "id": 2402007,
+   "name": "L03-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_007_Name;",
+   "kind": "Anomaly",
+   "group": "L-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2402007.csv",
+   "regions": {
+    "16": 1
+   }
+  },
+  {
+   "id": 2402008,
+   "name": "L04-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_008_Name;",
+   "kind": "Anomaly",
+   "group": "L-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2402008.csv",
+   "regions": {
+    "1": 3
+   }
+  },
+  {
+   "id": 2402011,
+   "name": "L07-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_011_Name;",
+   "kind": "Anomaly",
+   "group": "L-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2402011.csv",
+   "regions": {
+    "9": 2
+   }
+  },
+  {
+   "id": 2402012,
+   "name": "L08-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_012_Name;",
+   "kind": "Anomaly",
+   "group": "L-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2402012.csv",
+   "regions": {
+    "39": 1
+   }
+  },
+  {
+   "id": 2403002,
+   "name": "P01-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_002_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403002.csv",
+   "regions": {
+    "18": 1
+   }
+  },
+  {
+   "id": 2403003,
+   "name": "P02-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_003_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403003.csv",
+   "regions": {
+    "9": 1
+   }
+  },
+  {
+   "id": 2403004,
+   "name": "P03-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_004_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403004.csv",
+   "regions": {
+    "2": 1
+   }
+  },
+  {
+   "id": 2403005,
+   "name": "P04-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_005_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403005.csv",
+   "regions": {
+    "35": 1
+   }
+  },
+  {
+   "id": 2403006,
+   "name": "P05-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_006_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403006.csv",
+   "regions": {
+    "41": 1
+   }
+  },
+  {
+   "id": 2403007,
+   "name": "P06-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_007_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403007.csv",
+   "regions": {
+    "9": 1
+   }
+  },
+  {
+   "id": 2403008,
+   "name": "P07-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_008_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403008.csv",
+   "regions": {
+    "41": 1
+   }
+  },
+  {
+   "id": 2403009,
+   "name": "P08-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_009_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403009.csv",
+   "regions": {
+    "12": 1
+   }
+  },
+  {
+   "id": 2403010,
+   "name": "P09-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_010_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403010.csv",
+   "regions": {
+    "12": 6
+   }
+  },
+  {
+   "id": 2403011,
+   "name": "P10-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_011_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403011.csv",
+   "regions": {
+    "5": 5
+   }
+  },
+  {
+   "id": 2403012,
+   "name": "P11-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_012_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403012.csv",
+   "regions": {
+    "4": 1
+   }
+  },
+  {
+   "id": 2403013,
+   "name": "P12-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_013_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403013.csv",
+   "regions": {
+    "12": 2
+   }
+  },
+  {
+   "id": 2403014,
+   "name": "P13-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_014_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403014.csv",
+   "regions": {
+    "1": 1
+   }
+  },
+  {
+   "id": 2403015,
+   "name": "P14-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_015_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403015.csv",
+   "regions": {
+    "12": 1
+   }
+  },
+  {
+   "id": 2403016,
+   "name": "P15-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Eng_016_Name;",
+   "kind": "Anomaly",
+   "group": "P-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2403016.csv",
+   "regions": {
+    "1": 1
+   }
+  },
+  {
+   "id": 2406001,
+   "name": "Q01-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Orb_001_Name;",
+   "kind": "Anomaly",
+   "group": "Q-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2406001.csv",
+   "regions": {
+    "30": 1
+   }
+  },
+  {
+   "id": 2406002,
+   "name": "Q02-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Orb_002_Name;",
+   "kind": "Anomaly",
+   "group": "Q-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2406002.csv",
+   "regions": {
+    "1": 1
+   }
+  },
+  {
+   "id": 2406003,
+   "name": "Q03-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Orb_003_Name;",
+   "kind": "Anomaly",
+   "group": "Q-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2406003.csv",
+   "regions": {
+    "2": 1
+   }
+  },
+  {
+   "id": 2406004,
+   "name": "Q04-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Orb_004_Name;",
+   "kind": "Anomaly",
+   "group": "Q-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2406004.csv",
+   "regions": {
+    "18": 1
+   }
+  },
+  {
+   "id": 2406005,
+   "name": "Q05-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Orb_005_Name;",
+   "kind": "Anomaly",
+   "group": "Q-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2406005.csv",
+   "regions": {
+    "9": 3
+   }
+  },
+  {
+   "id": 2406006,
+   "name": "Q06-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Orb_006_Name;",
+   "kind": "Anomaly",
+   "group": "Q-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2406006.csv",
+   "regions": {
+    "1": 14
+   }
+  },
+  {
+   "id": 2406007,
+   "name": "Q07-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Orb_007_Name;",
+   "kind": "Anomaly",
+   "group": "Q-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2406007.csv",
+   "regions": {
+    "15": 1
+   }
+  },
+  {
+   "id": 2406008,
+   "name": "Q08-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Orb_008_Name;",
+   "kind": "Anomaly",
+   "group": "Q-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2406008.csv",
+   "regions": {
+    "18": 1
+   }
+  },
+  {
+   "id": 2406009,
+   "name": "Q09-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Orb_009_Name;",
+   "kind": "Anomaly",
+   "group": "Q-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/2406009.csv",
+   "regions": {
+    "18": 1
+   }
+  },
+  {
+   "id": 24020009,
+   "name": "L05-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_009_Name;",
+   "kind": "Anomaly",
+   "group": "L-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/24020009.csv",
+   "regions": {
+    "1": 1
+   }
+  },
+  {
+   "id": 24020010,
+   "name": "L06-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_010_Name;",
+   "kind": "Anomaly",
+   "group": "L-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/24020010.csv",
+   "regions": {
+    "19": 1
+   }
+  },
+  {
+   "id": 24020013,
+   "name": "L09-Type Anomaly",
+   "codex": "$Codex_Ent_L_Phn_Part_Clus_013_Name;",
+   "kind": "Anomaly",
+   "group": "L-Type Anomaly",
+   "list": "phen",
+   "section": "Geology and Anomalies",
+   "dump": "https://storage.googleapis.com/canonn-downloads/dumpr/Anomaly/24020013.csv",
+   "regions": {
+    "29": 1
+   }
+  }
+ ]
+}

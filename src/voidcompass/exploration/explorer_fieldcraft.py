@@ -85,7 +85,7 @@ def _genus_names(item):
             names.append(name)
     if names:
         return names
-    for row in (item or {}).get("predicted_genuses") or ():
+    for row in bio_values.likely_genera((item or {}).get("predicted_genuses")):
         name = row.get("name") if isinstance(row, dict) else row
         name = str(name or "").strip()
         if name and name not in names:

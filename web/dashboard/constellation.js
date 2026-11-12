@@ -666,7 +666,7 @@ function drawNight(ui, item) {
   box.innerHTML = `<small>THE NIGHT BEHIND ${esc(star.designation || "")} ${esc(star.system.toUpperCase())}</small>
     <p>${esc(star.star ? `A class ${star.star} star.` : "A star.")} You stayed ${hours(star.dwell)}${star.visits > 1 ? ` over ${star.visits} visits` : ""}.${star.capsules ? ` ${star.capsules} time capsule${star.capsules === 1 ? "" : "s"} left here.` : ""}</p>
     ${nights || "<p>No session record for it: it's older than the Captain's Log.</p>"}
-    <div class="sky-night-actions"><button type="button" data-page="chronicle">FLIGHT LOGS</button>${star.capsules ? '<button type="button" data-page="capsules">TIME CAPSULES</button>' : ""}</div>`;
+    <div class="sky-night-actions"><button type="button" data-page="chronicle">HISTORY</button>${star.capsules ? '<button type="button" data-page="capsules">TIME CAPSULES</button>' : ""}</div>`;
 }
 
 function show(ui, data = lastData) {

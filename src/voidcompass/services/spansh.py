@@ -150,6 +150,17 @@ def _trim_cache():
         pass
 
 
+# The status tiles' Data tile (5.7.8): when Spansh last answered, and last failed.
+HEALTH = {"ok_at": None, "error_at": None, "error": ""}
+
+
+def _health(error=None):
+    if error:
+        HEALTH.update(error_at=time.time(), error=str(error)[:200])
+    else:
+        HEALTH["ok_at"] = time.time()
+
+
 def _call(method, path, *, params=None, body=None, timeout=45, ttl=CACHE_TTL_S):
     """One Spansh request on the shared session, answered from the disk
     cache when it was asked recently."""
@@ -163,7 +174,12 @@ def _call(method, path, *, params=None, body=None, timeout=45, ttl=CACHE_TTL_S):
         else:
             resp = http().post(f"{BASE}/{path}", json=body, timeout=timeout)
     except requests.RequestException as exc:
+        _health(exc)
         raise SpanshError(f"Could not reach Spansh: {exc}") from exc
+    if resp.status_code >= 500:
+        _health(f"HTTP {resp.status_code}")
+    elif resp.status_code < 400:
+        _health()
     if resp.status_code >= 400:
         raise SpanshError(_error_text(resp))
     try:
@@ -943,3 +959,297 @@ def _error_text(resp):
     except ValueError:
         detail = None
     return f"Spansh error ({resp.status_code}): {detail or resp.text[:200]}"
+
+
+# -- 5.7.8: Explore & Survey's Nearby, Search and Plot Route ------------------------------------------
+# The calls and their answers' shapes follow ED-Outrider (github.com/weslocke/ED-Outrider, GPLv3), which
+# checked each one against the live site.
+
+SEARCH_PAGE = 100
+SPHERE_MAX_PAGES = 12
+LEGACY_CUTOFF = "2022-11-29"
+
+
+def _coords(coords):
+    try:
+        x, y, z = (float(value) for value in coords[:3])
+    except (TypeError, ValueError, IndexError):
+        raise SpanshError("No position for that system yet.")
+    return {"x": x, "y": y, "z": z}
+
+
+def systems_sphere(coords, radius, max_pages=SPHERE_MAX_PAGES, ttl=600):
+    """Every system Spansh knows within ``radius`` ly of ``coords``, nearest
+    first, with the search's own body list (types and values, no signals)."""
+    centre = _coords(coords)
+    results, page, count = [], 0, None
+    while page < max_pages:
+        body = {"filters": {"distance": {"min": "0", "max": str(float(radius) + 0.5)}},
+                "reference_coords": centre, "sort": [{"distance": {"direction": "asc"}}],
+                "size": SEARCH_PAGE, "page": page}
+        data = _call("POST", "systems/search", body=body, ttl=ttl)
+        batch = data.get("results") or []
+        results += [row for row in batch if isinstance(row, dict)]
+        count = data.get("count", 0)
+        if len(results) >= count or not batch:
+            break
+        page += 1
+    return {"results": results, "count": count if count is not None else len(results),
+            "complete": count is None or len(results) >= count}
+
+
+def system_dump_full(id64, ttl=6 * 3600):
+    """One system's whole Spansh dump (bodies with signals, rings, landability),
+    kept a few hours on disk; stations cut out, they're big and unused here."""
+    key = f"dump-bodies/{int(id64)}"
+    cached = _cache_get(key, ttl)
+    if cached is not None:
+        return cached
+    system = (_call("GET", f"dump/{int(id64)}", ttl=0, timeout=45) or {}).get("system") or {}
+    keep = {k: v for k, v in system.items() if k not in ("stations", "factions", "controllingFaction", "powers")}
+    bodies = []
+    for body in system.get("bodies") or ():
+        if isinstance(body, dict):
+            bodies.append({k: v for k, v in body.items() if k not in ("stations", "materials", "solidComposition")})
+    keep["bodies"] = bodies
+    _cache_put(key, keep)
+    return keep
+
+
+def body_search(filters, coords, radius, size=SEARCH_PAGE, max_pages=5, sort=None, ttl=600):
+    """Spansh's body search round a point: (bodies, count, cut). ``cut`` is the
+    distance of the last body fetched when more matched than were fetched."""
+    centre = _coords(coords)
+    results, page, count = [], 0, 0
+    while page < max_pages:
+        body = {"filters": dict(filters or {}, distance={"min": "0", "max": str(float(radius))}),
+                "reference_coords": centre, "sort": sort or [{"distance": {"direction": "asc"}}],
+                "size": int(size), "page": page}
+        data = _call("POST", "bodies/search", body=body, ttl=ttl)
+        batch = [row for row in data.get("results") or [] if isinstance(row, dict)]
+        results += batch
+        count = data.get("count", 0)
+        if len(results) >= count or not batch:
+            return results, count, None
+        page += 1
+    return results, count, results[-1].get("distance") if results else None
+
+
+def systems_search(filters, coords, radius, size=SEARCH_PAGE, max_pages=3, ttl=600):
+    """Spansh's system search with filters round a point: (systems, count)."""
+    centre = _coords(coords)
+    results, page, count = [], 0, 0
+    while page < max_pages:
+        body = {"filters": dict(filters or {}, distance={"min": "0", "max": str(float(radius))}),
+                "reference_coords": centre, "sort": [{"distance": {"direction": "asc"}}],
+                "size": int(size), "page": page}
+        data = _call("POST", "systems/search", body=body, ttl=ttl)
+        batch = [row for row in data.get("results") or [] if isinstance(row, dict)]
+        results += batch
+        count = data.get("count", 0)
+        if len(results) >= count or not batch:
+            break
+        page += 1
+    return results, count
+
+
+def systems_by_name(names, ttl=3600):
+    """Spansh's search rows (with their bodies) for up to 100 systems by exact name."""
+    names = [str(name) for name in names if name][:100]
+    if not names:
+        return []
+    body = {"filters": {"name": {"value": names}}, "sort": [], "size": len(names), "page": 0}
+    return [row for row in (_call("POST", "systems/search", body=body, ttl=ttl).get("results") or []) if isinstance(row, dict)]
+
+
+def system_lookup(name):
+    """{name, id64, coords} for a system Spansh knows, by exact name."""
+    exact, id64 = system_id64(name)
+    record = _get_json(f"system/{id64}", ttl=86400).get("record") or {}
+    return {"name": record.get("name") or exact, "id64": str(id64),
+            "coords": [record.get("x"), record.get("y"), record.get("z")] if record.get("x") is not None else None,
+            "record": record}
+
+
+def _job(path, params, method="POST", max_wait=120, should_stop=None):
+    """A Spansh route job with form fields (a list value repeats the field) or a query."""
+    try:
+        if method == "GET":
+            resp = http().get(f"{BASE}/{path}", params=params, timeout=SUBMIT_TIMEOUT)
+        else:
+            resp = http().post(f"{BASE}/{path}", data=params, timeout=SUBMIT_TIMEOUT)
+    except requests.RequestException as exc:
+        raise SpanshError(f"Could not reach Spansh: {exc}") from exc
+    try:
+        data = resp.json()
+    except ValueError:
+        data = {}
+    if isinstance(data, dict) and data.get("error"):
+        raise SpanshError(f"Spansh: {data['error']}")
+    if resp.status_code >= 400:
+        raise SpanshError(_error_text(resp))
+    if isinstance(data, dict) and data.get("result") is not None:
+        return data["result"]
+    job = data.get("job") if isinstance(data, dict) else None
+    if not job:
+        raise SpanshError("Spansh sent neither a route nor a job to wait for.")
+    deadline = time.monotonic() + max_wait
+    polls = 0
+    while time.monotonic() < deadline:
+        if should_stop and should_stop():
+            raise SpanshError("Stopped.")
+        try:
+            poll = http().get(f"{BASE}/results/{job}", timeout=POLL_TIMEOUT)
+        except requests.RequestException as exc:
+            raise SpanshError(f"Lost connection to Spansh: {exc}") from exc
+        try:
+            answer = poll.json()
+        except ValueError:
+            answer = {}
+        if isinstance(answer, dict) and answer.get("error"):
+            raise SpanshError(f"Spansh: {answer['error']}")
+        if poll.status_code >= 400:
+            raise SpanshError(_error_text(poll))
+        if answer.get("status") == "ok" or answer.get("result") is not None:
+            return answer.get("result")
+        polls += 1
+        time.sleep(0.5 if polls <= 4 else 1.0 if polls <= 10 else 1.5)
+    raise SpanshError("Spansh took too long to plot the route: try again later.")
+
+
+def _num(value, conv=float):
+    try:
+        out = conv(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return out
+
+
+def route_rows(plotter, result):
+    """A finished exact or neutron route as rows, the start first:
+    {system, id64, coords, distance, fuel_used, fuel_left, neutron, refuel, jumps, remaining}."""
+    if not isinstance(result, dict):
+        raise SpanshError("Spansh sent a route in a shape we don't know.")
+    raw = result.get("jumps") if plotter == "exact" else result.get("system_jumps")
+    if not isinstance(raw, list):
+        raise SpanshError("Spansh sent a route in a shape we don't know.")
+    rows = []
+    for hop in raw:
+        if not isinstance(hop, dict):
+            continue
+        name = hop.get("name") if plotter == "exact" else hop.get("system")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        row = {"system": name.strip(), "id64": str(hop.get("id64") or "") or None, "coords": _xyz(hop)}
+        if plotter == "exact":
+            row.update(distance=_num(hop.get("distance")), fuel_used=_num(hop.get("fuel_used")),
+                       fuel_left=_num(hop.get("fuel_in_tank")), neutron=bool(hop.get("has_neutron")),
+                       refuel=bool(hop.get("must_refuel")), jumps=0 if not rows else 1,
+                       remaining=_num(hop.get("distance_to_destination")))
+        else:
+            row.update(distance=_num(hop.get("distance_jumped")), fuel_used=None, fuel_left=None,
+                       neutron=bool(hop.get("neutron_star")), refuel=False,
+                       jumps=max(0, _num(hop.get("jumps"), int) or 0) if rows else 0,
+                       remaining=_num(hop.get("distance_left")))
+        rows.append(row)
+    if len(rows) < 2:
+        raise SpanshError("Spansh found no route between those systems.")
+    return rows
+
+
+def exact_route(source, destination, figures, cargo=0, *, supercharged=False, use_supercharge=True,
+                injections=False, exclude_secondary=False, optimal_mass=None, should_stop=None):
+    """Spansh's exact plotter (generic/route): every jump with its fuel and
+    refuel stops, from the ship's own figures (outrider.fsd.fleet_figures)."""
+    reserve = figures.get("fuel_reserve") or 0
+    params = {"source": source, "destination": destination, "is_supercharged": int(bool(supercharged)),
+              "use_supercharge": int(bool(use_supercharge)), "use_injections": int(bool(injections)),
+              "exclude_secondary": int(bool(exclude_secondary)), "fuel_power": figures["fuel_power"],
+              "fuel_multiplier": figures["fuel_multiplier"], "optimal_mass": optimal_mass or figures["optimal_mass"],
+              "supercharge_multiplier": figures.get("supercharge") or 4,
+              "base_mass": round(figures["unladen"] + reserve, 3), "tank_size": figures["fuel_main"],
+              "internal_tank_size": reserve, "max_fuel_per_jump": figures["max_fuel"],
+              "range_boost": figures.get("booster_ly") or 0, "cargo": int(cargo or 0)}
+    return route_rows("exact", _job("generic/route", params, method="GET", should_stop=should_stop))
+
+
+def neutron_rows(source, destination, jump_range, efficiency=60, supercharge_multiplier=4, should_stop=None):
+    params = {"from": source, "to": destination, "range": round(float(jump_range), 2), "efficiency": int(efficiency),
+              "supercharge_multiplier": 6 if int(supercharge_multiplier) == 6 else 4}
+    return route_rows("neutron", _job("route", params, should_stop=should_stop))
+
+
+# Road to Riches and its relatives. The worlds' routes are the riches router
+# asked for one body type, as Spansh's own pages do.
+SURVEY_KINDS = {
+    "riches": {"label": "Road to Riches", "path": "riches/route", "send": {}},
+    "exo": {"label": "Expressway to Exomastery", "path": "exobiology/route", "send": {}},
+    "elw": {"label": "Earth-like worlds", "path": "riches/route", "send": {"min_value": 1, "body_types": ["Earth-like world"], "use_mapping_value": 1}},
+    "aw": {"label": "Ammonia worlds", "path": "riches/route", "send": {"min_value": 1, "body_types": ["Ammonia world"], "use_mapping_value": 1}},
+    "tf": {"label": "Terraformable worlds", "path": "riches/route",
+           "send": {"min_value": 100_000, "body_types": ["Rocky body", "High metal content world"], "use_mapping_value": 1}},
+}
+
+
+def survey_route(kind, source, jump_range, *, destination=None, radius=25, max_results=100, max_distance=50,
+                 min_value=1_000_000, use_mapping_value=True, avoid_thargoids=True, loop=True, should_stop=None):
+    spec = SURVEY_KINDS[kind]
+    params = {"from": source, "range": round(float(jump_range), 2), "radius": int(radius),
+              "max_results": int(max_results), "max_distance": int(max_distance), "min_value": int(min_value),
+              "use_mapping_value": int(bool(use_mapping_value)), "avoid_thargoids": int(bool(avoid_thargoids)),
+              "loop": int(bool(loop))}
+    if destination:
+        params["to"] = destination
+    if kind == "exo":
+        params.pop("use_mapping_value", None)
+    params.update(spec["send"])
+    result = _job(spec["path"], params, should_stop=should_stop)
+    return survey_rows(result)
+
+
+def tourist_route(source, systems, jump_range, loop=False, should_stop=None):
+    """A sweep: Spansh's tourist router flies the ticked systems in the best order."""
+    params = {"source": source, "range": round(float(jump_range), 2), "loop": int(bool(loop)),
+              "destination": [name for name in systems if name][:100]}
+    result = _job("tourist/route", params, should_stop=should_stop)
+    rows = []
+    hops = result.get("system_jumps") if isinstance(result, dict) else result
+    for hop in hops or ():
+        if not isinstance(hop, dict):
+            continue
+        name = hop.get("system") or hop.get("name")
+        if not name:
+            continue
+        rows.append({"system": name, "id64": str(hop.get("id64") or "") or None, "coords": _xyz(hop),
+                     "jumps": _num(hop.get("jumps"), int) or 0, "distance": _num(hop.get("distance_jumped")),
+                     "remaining": _num(hop.get("distance_left")), "bodies": [], "neutron": False, "refuel": False})
+    if not rows:
+        raise SpanshError("Spansh found no sweep through those systems.")
+    return rows
+
+
+def survey_rows(result):
+    """Road to Riches' answer (a list of systems with bodies) as route rows."""
+    if isinstance(result, dict):
+        result = result.get("result") or result.get("systems") or []
+    rows = []
+    for hop in result or ():
+        if not isinstance(hop, dict) or not hop.get("name"):
+            continue
+        bodies = []
+        for body in hop.get("bodies") or ():
+            if not isinstance(body, dict) or not body.get("name"):
+                continue
+            species = [{"name": lm.get("subtype"), "genus": lm.get("type"), "value": lm.get("value")}
+                       for lm in body.get("landmarks") or () if isinstance(lm, dict)]
+            bodies.append({"name": body.get("name"), "type": body.get("subtype") or body.get("type"),
+                           "ls": body.get("distance_to_arrival"), "scan": body.get("estimated_scan_value"),
+                           "map": body.get("estimated_mapping_value"), "terraformable": bool(body.get("is_terraformable")),
+                           "species": species, "value": body.get("landmark_value")})
+        rows.append({"system": hop["name"], "id64": str(hop.get("id64") or "") or None, "coords": _xyz(hop),
+                     "jumps": _num(hop.get("jumps"), int) or 0, "bodies": bodies, "neutron": False, "refuel": False,
+                     "distance": None, "remaining": None})
+    if not any(row["bodies"] for row in rows):
+        raise SpanshError("Spansh found nothing to visit with those settings: try further from the bubble, "
+                          "a larger radius or a lower minimum value.")
+    return rows

@@ -56,7 +56,6 @@ from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.overlays.trade_route_hud import TradeRouteHUD
 from voidcompass.overlays.orders_hud import OrdersHUD
 from voidcompass.overlays.expedition_hud import ExpeditionHUD
-from voidcompass.overlays.hatchling_hud import HatchlingHUD
 from voidcompass.overlays.rig_tracker import RigTrackerHUD
 from voidcompass.overlays.rhino_map_hud import RhinoMapHUD
 from voidcompass.overlays.galaxy_minimap_hud import GalaxyMinimapHUD
@@ -84,7 +83,6 @@ from voidcompass.overlays.html_colony_needs_overlay import attach_html_colony_ne
 from voidcompass.overlays.html_trade_route_overlay import attach_html_trade_route_overlay
 from voidcompass.overlays.html_orders_overlay import attach_html_orders_overlay
 from voidcompass.overlays.html_expedition_overlay import attach_html_expedition_overlay
-from voidcompass.overlays.html_hatchling_overlay import attach_html_hatchling_overlay
 from voidcompass.overlays.html_rig_tracker_overlay import attach_html_rig_tracker_overlay
 from voidcompass.overlays.html_galaxy_minimap_overlay import attach_html_galaxy_minimap_overlay
 from voidcompass.overlays.html_rhino_map_overlay import attach_html_rhino_map_overlay
@@ -94,6 +92,13 @@ from voidcompass.dashboard.dashboard_db_mixin import DashboardDBMixin
 from voidcompass.dashboard.dashboard_core_mixin import DashboardCoreMixin
 from voidcompass.dashboard.dashboard_scan_mixin import DashboardScanMixin
 from voidcompass.dashboard.dashboard_exploration_mixin import DashboardExplorationMixin
+from voidcompass.dashboard.dashboard_survey_mixin import DashboardSurveyMixin
+from voidcompass.dashboard.dashboard_status_mixin import DashboardStatusMixin
+from voidcompass.dashboard.dashboard_survey_more_mixin import DashboardSurveyMoreMixin
+from voidcompass.dashboard.dashboard_cmdr_mixin import DashboardCmdrMixin
+from voidcompass.dashboard.dashboard_history_mixin import DashboardHistoryMixin
+from voidcompass.dashboard.dashboard_bridge_mixin import DashboardBridgeMixin
+from voidcompass.dashboard.dashboard_smalls_mixin import DashboardSmallsMixin
 from voidcompass.dashboard.dashboard_jump_info_mixin import DashboardJumpInfoMixin
 from voidcompass.dashboard.dashboard_keepsakes_mixin import DashboardKeepsakesMixin
 from voidcompass.dashboard.dashboard_capsules_mixin import DashboardCapsulesMixin
@@ -107,7 +112,6 @@ from voidcompass.dashboard.dashboard_watcher_listen_mixin import DashboardWatche
 from voidcompass.dashboard.dashboard_controller_mixin import DashboardControllerMixin
 from voidcompass.dashboard.dashboard_ship_control_mixin import DashboardShipControlMixin
 from voidcompass.dashboard.dashboard_home_mixin import DashboardHomeMixin
-from voidcompass.dashboard.dashboard_tools_mixin import DashboardToolsMixin
 from voidcompass.dashboard.dashboard_api_mixin import DashboardApiMixin
 from voidcompass.dashboard.dashboard_colonisation_mixin import DashboardColonisationMixin
 from voidcompass.dashboard.dashboard_bgs_mixin import DashboardBgsMixin
@@ -298,6 +302,13 @@ def _location_surface_focus(event, raw, data):
 
 class MainDashboard(
     HtmlDashboardMixin,
+    DashboardSurveyMixin,
+    DashboardSurveyMoreMixin,
+    DashboardCmdrMixin,
+    DashboardHistoryMixin,
+    DashboardBridgeMixin,
+    DashboardSmallsMixin,
+    DashboardStatusMixin,
     DashboardScanMixin,
     DashboardExplorationMixin,
     DashboardJumpInfoMixin,
@@ -313,7 +324,6 @@ class MainDashboard(
     DashboardControllerMixin,
     DashboardShipControlMixin,
     DashboardHomeMixin,
-    DashboardToolsMixin,
     DashboardApiMixin,
     DashboardColonisationMixin,
     DashboardBgsMixin,
@@ -494,6 +504,11 @@ class MainDashboard(
         region = find_region(*position)
         return (region[0] if region else None), position
 
+    def _bio_system_stars(self):
+        """The stars scanned in the system you're in: some species need a kind of star (5.7.8)."""
+        return [item.get("star_type") for item in getattr(self, "scan_items", None) or ()
+                if isinstance(item, dict) and item.get("star_type")]
+
     def _bio_predictions_for_scan(self, scan_data):
         if not scan_data:
             return []
@@ -504,9 +519,12 @@ class MainDashboard(
             scan_data.get("surface_temp") or scan_data.get("temp_k"),
             scan_data.get("gravity_g") or self._gravity_to_g(scan_data.get("surface_gravity")),
             scan_data.get("volcanism"),
-            scan_data.get("surface_pressure"),
+            bio_values.pressure_atm(scan_data.get("surface_pressure")),
             region_id,
             coords,
+            system_stars=self._bio_system_stars(),
+            geo=bool(scan_data.get("geo_count")),
+            distance_ls=scan_data.get("distance_to_arrival"),
         )
 
     def _enrich_bio_event_context(self, data):
@@ -1013,7 +1031,6 @@ class MainDashboard(
             "trade_route_hud",
             "orders_hud",
             "expedition_hud",
-            "hatchling_hud",
             "rig_tracker_hud",
             "galaxy_minimap_hud",
             "rhino_map_hud",
@@ -1104,7 +1121,7 @@ class MainDashboard(
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud",
             "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud", "orders_hud",
-            "expedition_hud", "hatchling_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud", "postcard_hud",
+            "expedition_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud", "postcard_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -2900,6 +2917,7 @@ class MainDashboard(
             self.survey_status_hud = SurveyStatusHUD(self.root, self.config)
             self.survey_status_hud.codex_lookup = self._survey_codex_lookup
             self.survey_status_hud.codex_variants = self._survey_codex_variants
+            self.survey_status_hud.explore_provider = self._survey_overlay_explore
             self.survey_status_hud.on_codex_new = self._watcher_codex_new
         else:
             self.survey_status_hud = None
@@ -2981,12 +2999,6 @@ class MainDashboard(
             self._expedition_overlay_refresh(force=True)
         else:
             self.expedition_hud = None
-
-        if self._overlay_enabled("hatchling_hud"):
-            self.hatchling_hud = HatchlingHUD(self.root, self.config)
-            self._hatchling_overlay_refresh(force=True)
-        else:
-            self.hatchling_hud = None
 
         if self._overlay_enabled("rig_tracker_hud"):
             self.rig_tracker_hud = RigTrackerHUD(self.root, self.config)
@@ -3195,6 +3207,7 @@ class MainDashboard(
         self._tick_ui_stall_watchdog()
         self._start_ui_stall_sampler()
         self._tick_runtime_trace()
+        self._tick_game_process()
         self._tick_overlay_position_sync()
         self._tick_overlay_hotkey_guard()
         self._tick_hud_pages()
@@ -4397,7 +4410,7 @@ class MainDashboard(
         clock.mark("Trading")
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
-            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "orders_hud", "expedition_hud", "hatchling_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
+            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "orders_hud", "expedition_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
             "postcard_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
@@ -4451,10 +4464,6 @@ class MainDashboard(
         clock.mark("exploration checkpoint")
         self._save_watcher_memory()
         clock.mark("Watcher memory")
-        flush_pet = getattr(self, "_hatchling_flush", None)
-        if callable(flush_pet):
-            flush_pet()
-        clock.mark("Hatchling saved")
 
         if self.route_plotter and self.route_plotter.win.winfo_exists():
             self.route_plotter.on_close()
@@ -4789,7 +4798,7 @@ class MainDashboard(
     def open_exploration_window(self, section=None):
         html_page = {
             "mission": "mission", "recon": "recon", "ledger": "ledger",
-            "discoveries": "explore", "biology": "explore", "route": "explore",
+            "discoveries": "explore", "biology": "explore", "route": "route",
             "survey": "explore",
         }.get(str(section or "").casefold(), "explore")
         self._route_to_html_workspace(html_page)
@@ -5245,9 +5254,7 @@ class MainDashboard(
         # The Watcher's own frame rate (5.5.7).
         from voidcompass.overlays.heartbeat_hud import frame_rate_setting
         from voidcompass.dashboard.html_overlay_studio import overlay_frame_rate as all_overlays_rate
-        from voidcompass.overlays.hatchling_hud import hatchling_frame_rate
-        HtmlOverlayServer.set_overlay_frame_rates({"heartbeat": frame_rate_setting(self.config),
-                                                   "hatchling": hatchling_frame_rate(all_overlays_rate(self.config))})
+        HtmlOverlayServer.set_overlay_frame_rates({"heartbeat": frame_rate_setting(self.config)})
         # Overlays with their own opacity (5.5.3.3).
         if hasattr(self, "_apply_own_opacities"):
             self._apply_own_opacities()
@@ -5468,14 +5475,6 @@ class MainDashboard(
             self.expedition_hud.destroy()
             self.expedition_hud = None
 
-        if self._overlay_enabled("hatchling_hud"):
-            if getattr(self, "hatchling_hud", None) is None:
-                self.hatchling_hud = HatchlingHUD(self.root, self.config)
-                self._hatchling_overlay_refresh(force=True)
-        elif getattr(self, "hatchling_hud", None):
-            self.hatchling_hud.destroy()
-            self.hatchling_hud = None
-
         if self._overlay_enabled("rig_tracker_hud"):
             if getattr(self, "rig_tracker_hud", None) is None:
                 self.rig_tracker_hud = RigTrackerHUD(self.root, self.config)
@@ -5600,10 +5599,6 @@ class MainDashboard(
             elif attr == "expedition_hud":
                 attach_html_expedition_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
-                )
-            elif attr == "hatchling_hud":
-                attach_html_hatchling_overlay(
-                    overlay, overlay_id, title, enabled_key, x_key, y_key, levels=self.music_levels,
                 )
             elif attr == "rig_tracker_hud":
                 attach_html_rig_tracker_overlay(
@@ -6152,6 +6147,11 @@ class MainDashboard(
             self.current_coords, route, entries, current,
             waypoint_manager=waypoint_manager,
         )
+        # 5.7.8: Elite's route to the next stop of a plotted route, then the rest.
+        if route and isinstance(route_remaining, int):
+            beyond, _end = route_strip._waypoints_beyond(
+                list(getattr(waypoint_manager, "waypoints", None) or []), route, entries)
+            route_remaining += sum(max(1, int(waypoint.get("jumps") or 1)) for waypoint in beyond)
         if not hops and selected_name and selected_name == next_name:
             selected_class = str(selected_star.get("star_class") or "").strip()
             hops = [{
@@ -6320,6 +6320,7 @@ class MainDashboard(
             "hops": hops,
             "hops_truncated": hops_truncated,
             "route_track": route_track,
+            "system_lines": self._hud_system_lines(),
             "total_distance_text": route_strip.total_distance_text(hops, hops_truncated),
             "cargo": f"{cargo_tons}/{cargo_cap}T" if cargo_cap else f"{cargo_tons}T",
             "credits": self._format_hud_credits(self._latest_hud_balance()),
@@ -8426,13 +8427,23 @@ class MainDashboard(
             if commander:
                 self._switch_commander_profile(commander, fid)
         self._postcard_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
-        self._games_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
         self._inara_observe(ev, raw, startup_replay)
         # Jump Info learns the target before the jump phase moves on.
         self._jump_info_observe(
             ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay,
         )
         self._jump_clock_event(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
+        if ev == "FSDTarget" and not startup_replay and isinstance(raw, dict):
+            # Plot Route: the right system targeted? (5.7.8)
+            self._route_on_target(raw)
+        if ev == "SupercruiseExit" and isinstance(raw, dict):
+            self._hotspot_observe(raw, startup_replay)
+        # The smaller moments from Outrider: target remarks, pads, crew warnings (5.7.8).
+        self._smalls_event(ev, raw if isinstance(raw, dict) else d, startup_replay)
+        if ev in ("StartJump", "FSDJump", "SupercruiseEntry", "SupercruiseExit"):
+            # The game sets "in danger" on every jump and supercruise entry for
+            # 16-26 s with no threat (ED-Outrider's JOURNAL_REFERENCE): not a fight.
+            self._danger_quiet_until = time.monotonic() + 30.0
         self._observe_navigation_jump_event(
             ev,
             raw if isinstance(raw, dict) else d,
@@ -8559,6 +8570,7 @@ class MainDashboard(
         if ev in {"LoadGame", "Shutdown"}:
             # Out of the main menu, or the game closed: no menu is open.
             self._observe_menu_music("")
+            self._observe_game_session(ev)
         if ev == "Shutdown" and not startup_replay:
             self._watcher_sign_off()
             # Tonight's flight log is written (5.5.3.8).
@@ -8621,6 +8633,13 @@ class MainDashboard(
                 self._capsule_arrival(ev, history_raw, startup_replay)
                 # Who lives here, for the music's deep space (5.5.3.8).
                 self._music_observe(ev, history_raw)
+                # Whose system, and your standing with them, for the Nav HUD (5.7.8).
+                self._observe_standing(ev, history_raw)
+                if ev in ("FSDJump", "CarrierJump", "Location") and not startup_replay:
+                    # Plot Route follows you; Nearby too when it's centred on you (5.7.8).
+                    self._route_on_arrival(history_raw.get("StarSystem") if isinstance(history_raw, dict) else "")
+                    if ev != "Location":
+                        self._survey_on_arrival()
                 if self.travel_history.observe(history_raw):
                     self._refresh_exploration_window()
                     if not startup_replay:
@@ -8889,6 +8908,7 @@ class MainDashboard(
             self._refresh_html_workspace()
 
         elif ev == "FuelScoop":
+            self._last_scoop_at = _journal_epoch((raw or {}).get("timestamp") if isinstance(raw, dict) else None) or time.time()
             # FuelScoop.Total is the journal-confirmed tank level after the
             # scoop. Status.json supplies the finer-grained readings while the
             # scoop is still running.
@@ -11091,6 +11111,11 @@ class MainDashboard(
             self._freeze_startup_heap()
             self._enforce_overlay_hotkey_visibility()
             self._adaptive_startup_mode()
+            # 5.7.8: read the journals for My Samples now, quietly, so the
+            # CHECKLIST opens at once.
+            warm = getattr(self, "_samples_payload", None)
+            if callable(warm):
+                threading.Thread(target=lambda: warm(), name="WarmSamples", daemon=True).start()
             self._hold_startup_presentation()
             self._publish_expedition_resume_briefing()
             try:
@@ -11528,6 +11553,11 @@ class MainDashboard(
         self._colony_on_market_file(data)
         context = self._eddn_market_context(data)
         if not context.get("docked"):
+            return
+        # Only a Market.json written for the station you're docked at: a stale
+        # file from the last station must not go out under this one (5.7.8).
+        here = getattr(self, "current_station_market_id", None)
+        if here not in (None, "") and str(data.get("MarketID")) != str(here):
             return
         eddn_market_uploader.set_enabled(
             bool(self.config.get("eddn_market_upload_enabled", True))

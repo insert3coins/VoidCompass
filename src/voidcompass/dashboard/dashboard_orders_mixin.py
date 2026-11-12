@@ -419,7 +419,11 @@ class DashboardOrdersMixin:
                         value["first"] = waypoints[1].get("system")
                     self._orders_lookups["neutron"] = {"at": time.time(), "key": key, "value": value if not error else {}}
                 destination = route["destination"]
-                self._trading_task("orders-neutron", lambda: spansh.neutron_route(system, destination, jump_range), neutron_done)
+                def neutron_plot():
+                    rows = spansh.neutron_rows(system, destination, jump_range)
+                    return {"total_jumps": sum(int(row.get("jumps") or 0) for row in rows),
+                            "waypoints": [{"system": row["system"], "jumps": row.get("jumps"), "neutron": row.get("neutron")} for row in rows]}
+                self._trading_task("orders-neutron", neutron_plot, neutron_done)
         if "trade" in self._orders_categories():
             self._orders_sale_lookup(system, now, generation)
 
@@ -1183,6 +1187,7 @@ class DashboardOrdersMixin:
         steps = [row for row in view["objectives"] if not row["done"]] or view["objectives"][:1]
         tag = "NEW ORDER" if offer else ("CAMPAIGN" if order.get("size") == "campaign" else "LONG ORDER" if order.get("size") == "long" else "ORDER")
         return {
+            "id": order.get("id"), "plot": bool(view.get("target")),
             "state": "offer" if offer else "active", "tag": tag, "title": view["title"], "officer": view["officer"],
             "officer_name": view["officer_name"], "stage": f"{order.get('title')}: {stage['title']}" if stage and not offer else "",
             "steps": [{"text": row["text"], "done": row["done"], "fraction": row["fraction"]} for row in steps],

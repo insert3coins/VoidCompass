@@ -6,6 +6,9 @@
 (() => {
   "use strict";
   const token = new URLSearchParams(location.search).get("token") || "";
+  // A popped-out page (5.7.8) joins a deck that's already running: no boot
+  // screen, not even for the moment before app.js has loaded.
+  if (new URLSearchParams(location.search).get("solo") === "1") document.documentElement.classList.add("solo-window");
   const started = performance.now();
   const seen = [];
   const styleRetries = new Map();

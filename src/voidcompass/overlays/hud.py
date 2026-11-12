@@ -1416,7 +1416,8 @@ class TacticalHUD:
             "region": region_text,
             # EDSM: who discovered the system and when, and when it was last
             # updated (shown only when later than the discovery).
-            "history": self._system_history(system_traffic),
+            # 5.7.8: from Sol (or home), and your standing here, before EDSM's history.
+            "history": [*(nav_context.get("system_lines") or []), *self._system_history(system_traffic)],
             "arrival_epoch": float(nav_context.get("system_arrival_epoch") or 0.0),
             "star_class": str(nav_context.get("current_star_class") or "").strip()[:40],
         }

@@ -1,0 +1,112 @@
+/* The Dashboard as the whole ship (5.7.8). */
+.bridge-activity-label { margin-left: 10px; padding: 1px 6px; border: 1px solid var(--accent); color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; vertical-align: middle; }
+.bridge-activity-label:empty { display: none; }
+.bridge-activity { display: contents; }
+.bridge-activity[hidden] { display: none; }
+.page.overview-page { max-width: none; }
+/* The starting page, laid out on purpose: where you are, where you're going and
+   the ship across the top; what's under way; the session beside your priorities
+   and the region's Codex; the feed along the bottom. */
+.overview-page #overview-modules { grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-flow: row dense; align-items: stretch; gap: 12px; }
+.overview-page #overview-modules > :is(.card, .telemetry-strip),
+.overview-page #overview-modules > .bridge-activity > .card { grid-column: span 12; min-width: 0; min-height: 0; margin-block: 0; }
+.overview-page #overview-modules > .survey-card { grid-column: span 5; }
+.overview-page #overview-modules > .route-card { grid-column: span 4; }
+.overview-page #overview-modules > .telemetry-strip { grid-column: span 3; }
+.overview-page #overview-modules > .bridge-activity > .card { grid-column: span 4; }
+.overview-page #overview-modules > .session-card { grid-column: span 6; grid-row: span 2; }
+.overview-page #overview-modules > .priority-card,
+.overview-page #overview-modules > .codex-hunt-card { grid-column: span 6; }
+.overview-page #overview-modules > .feed-card { grid-column: span 12; }
+.overview-page #overview-modules > .bridge-activity > .card { order: inherit; }
+.overview-page #overview-modules .card { border-color: var(--bridge-line); background: var(--bridge-surface); box-shadow: inset 0 1px color-mix(in srgb, var(--text) 3%, transparent); }
+.overview-page #overview-modules .card > header { min-height: 34px; padding-inline: 13px; background: var(--header); border-bottom: 1px solid var(--bridge-line); }
+.overview-page #overview-modules .card > header > span { color: var(--orange); font: 700 10px/1.3 Consolas, monospace; letter-spacing: .08em; }
+.overview-page #overview-modules .card > header > b { max-width: 55%; color: var(--muted); font: 700 9px/1.3 Consolas, monospace; white-space: normal; text-align: right; }
+.br-card { display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; }
+.br-card > header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.br-card > :not(header) { margin-left: 13px; margin-right: 13px; }
+.br-crew-name { color: var(--accent); font: 700 26px/1.1 "Bahnschrift SemiCondensed", sans-serif; }
+.br-thought { margin: 0 13px; padding-left: 12px; border-left: 2px solid var(--accent); color: var(--text); font: italic 14px/1.55 Georgia, serif; }
+.br-note { margin: 0; color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif; }
+.br-accent { color: var(--accent); }
+.br-green, .br-good { color: var(--green); }
+.br-yellow, .br-warn { color: var(--yellow); }
+.br-red, .br-danger { color: var(--red); }
+.br-orange { color: var(--orange); }
+.br-dim { color: var(--dim); }
+.br-hero small { display: block; color: var(--muted); font: 700 9px/1.4 Consolas, monospace; letter-spacing: .09em; }
+.br-hero b { display: block; margin: 3px 0; color: var(--text); font: 700 23px/1.15 "Bahnschrift SemiCondensed", sans-serif; overflow-wrap: anywhere; }
+.br-hero span { display: block; color: var(--muted); font: 12px/1.4 "Segoe UI", sans-serif; }
+.br-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 7px; }
+.br-stats > div { padding: 7px 9px; border: 1px solid var(--border-soft); background: var(--inset); }
+.br-stats small { display: block; color: var(--muted); font: 700 9px/1.35 Consolas, monospace; letter-spacing: .045em; }
+.br-stats b { display: block; margin-top: 2px; color: var(--text); font: 700 14px/1.35 "Segoe UI", sans-serif; }
+.br-bars > div { display: grid; grid-template-columns: minmax(80px, 1fr) 2fr auto; align-items: center; gap: 8px; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.br-bars i, .br-progress { display: block; height: 4px; background: var(--border); }
+.br-bars em, .br-progress em { display: block; height: 100%; background: var(--accent); }
+.br-list small { color: var(--muted); font: 700 9px/1.4 Consolas, monospace; letter-spacing: .08em; }
+.br-list > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border-soft); color: var(--text); font: 12px/1.4 "Segoe UI", sans-serif; }
+.br-list > div > * { min-width: 0; overflow-wrap: anywhere; }
+.br-list em { color: var(--muted); font-style: normal; }
+.br-order { display: grid; gap: 2px; padding: 4px 0; border-bottom: 1px solid var(--border-soft); font: 12px "Segoe UI", sans-serif; }
+.br-order small { color: var(--orange); font: 700 8px Consolas, monospace; letter-spacing: .1em; }
+.br-order span { color: var(--muted); }
+.br-order em { color: var(--dim); font-style: normal; }
+.br-actions { display: flex; justify-content: flex-end; gap: 6px; padding-top: 5px; border-top: 1px solid var(--border-soft); }
+.br-actions button { min-height: 28px; font-size: 9px; }
+.bridge-small { display: grid; gap: 12px; padding: 2px 0; }
+.br-small + .br-small { padding-top: 10px; border-top: 1px solid var(--border-soft); }
+.br-small small { display: block; margin-bottom: 4px; color: var(--orange); font: 700 9px/1.35 Consolas, monospace; letter-spacing: .09em; }
+.br-small span { color: var(--text); font: 12px/1.45 "Segoe UI", sans-serif; }
+.overview-page #overview-modules > .telemetry-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.overview-page #overview-modules .telemetry-strip article { min-height: 74px; padding: 10px 12px; }
+.overview-page #overview-modules .telemetry-strip i { display: none; }
+.overview-page #overview-modules .telemetry-strip strong { font-size: 17px; }
+.overview-page #overview-modules .survey-command { grid-template-columns: 60px minmax(0, 1fr); gap: 12px; padding: 13px; }
+.overview-page #overview-modules .survey-orbital { width: 58px; height: 58px; }
+.overview-page #overview-modules .survey-title h3 { font-size: 21px; white-space: normal; overflow-wrap: anywhere; }
+.overview-page #overview-modules .survey-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 9px; }
+.overview-page #overview-modules .survey-stats > div:nth-child(even) { border-right: 0; }
+.overview-page #overview-modules .survey-stats > div:nth-child(n+3) { border-top: 1px solid var(--border-soft); padding-top: 8px; }
+.overview-page #overview-modules .survey-stats strong { font-size: 12px; white-space: normal; }
+.overview-page #overview-modules .survey-footer { margin: 0 13px; }
+.overview-page #overview-modules .route-target { grid-template-columns: 43px minmax(0, 1fr); min-height: 0; gap: 11px; padding: 13px; }
+.overview-page #overview-modules .route-radar { width: 42px; height: 42px; }
+.overview-page #overview-modules .route-target h3 { font-size: 21px; overflow-wrap: anywhere; }
+.overview-page #overview-modules .route-target p { margin-bottom: 0; line-height: 1.45; }
+.overview-page #overview-modules .route-card .wide-button { margin-top: 7px; margin-bottom: 8px; }
+.overview-page #overview-modules .route-auto-copy { white-space: normal; height: auto; line-height: 1.4; padding-block: 6px; }
+.overview-page #overview-modules .session-pulse-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 10px; }
+.overview-page #overview-modules .session-pulse-grid > div { padding: 7px 9px; }
+.overview-page #overview-modules .session-pulse-grid strong { font-size: 16px; }
+.overview-page #overview-modules .priority-list { padding-bottom: 4px; }
+.overview-page #overview-modules .event-feed { height: clamp(260px, 32vh, 520px); }
+.overview-page #overview-modules .event-row { grid-template-columns: 51px minmax(0, 1fr); gap: 4px 7px; padding: 8px 10px; }
+.overview-page #overview-modules .event-row > :last-child { grid-column: 2; white-space: normal; line-height: 1.4; }
+.overview-page #overview-modules .feed-filters { flex-wrap: wrap; }
+.overview-page.layout-editing .bridge-activity { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); grid-column: 1 / -1; gap: 12px; }
+@media (max-width: 1600px) {
+  .overview-page #overview-modules > .survey-card { grid-column: span 7; }
+  .overview-page #overview-modules > .route-card { grid-column: span 5; }
+  .overview-page #overview-modules > .telemetry-strip { grid-column: span 12; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .overview-page #overview-modules > .bridge-activity > .card { grid-column: span 6; }
+}
+@media (max-width: 1100px) {
+  .overview-page #overview-modules > :is(.survey-card, .route-card, .session-card, .priority-card, .codex-hunt-card),
+  .overview-page #overview-modules > .bridge-activity > .card { grid-column: span 12; grid-row: auto; }
+  .overview-page #overview-modules > .telemetry-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Current System and Flight Corridor, compact: Explore & Survey has the detail. */
+.overview-modules .survey-card .survey-body-deck, .overview-modules .survey-card #survey-notables { display: none; }
+.overview-modules .route-card .route-horizon { display: none; }
+.br-padmap { display: block; width: 110px; height: 110px; margin-top: 4px; }
+.br-pad-ring { fill: none; stroke: var(--border); stroke-width: 1; }
+.br-pad-slot { fill: var(--green); }
+.br-pad { fill: var(--dim); }
+.br-pad-on { fill: var(--accent); stroke: var(--text); stroke-width: .6; }
+/* A page popped out into its own window (5.7.8): that page alone. */
+body.solo .app, html.solo-window .app { grid-template-columns: 1fr; }
+body.solo .rail, body.solo [data-popout], html.solo-window .rail, html.solo-window [data-popout] { display: none; }
+html.solo-window #boot { display: none !important; }
+body.solo .atlas-dockbar [data-page="overview"] { display: none; }

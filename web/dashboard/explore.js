@@ -1,9 +1,12 @@
-/** Explore & Survey: one live system model and three task views.
+/** Explore & Survey (5.7.8, rebuilt on ED-Outrider's views):
  *
- *   SURVEY     the system you're in: its hero and the survey board
+ *   OVERVIEW   Nearby and the system you're viewing, two tables side by side
+ *   SYSTEM     one system's body table full width, or the survey board (QUEUE)
+ *   SEARCH     condition search and find by name
+ *   FIRSTS     unsold firsts, the firsts watch, Left behind, your records
+ *   CHECKLIST  species by region, geology, My Samples, your Codex gaps
  *   SYSTEM MAP the live 3D System Map (system-map.js), 5.6.9
- *   PROSPECTS  Return Later, Exploration Scout and personal Codex gaps
- *   ARCHIVE    the Exploration Archive: flights, scan science, regions (5.5.4)
+ *   ARCHIVE    the Exploration Archive (5.5.4) and the Journal Log
  *
  * 5.6.1: the page in the newer pages' style. The route (NavRoute, waypoints and
  * the neutron plotter) lives on the Expeditions page now; a slim next-waypoint
@@ -18,11 +21,21 @@
  * choices. Board and System Map share one selection.
  */
 
+import {renderOverview, resetOverview} from "./explore-overview.js";
+import {renderSystemTable, setSystemMode, systemModes} from "./explore-system.js";
+import {renderSearch} from "./explore-search.js";
+import {renderFirsts} from "./explore-firsts.js";
+import {renderChecklist} from "./explore-checklist.js";
+import {renderJournalLog} from "./explore-log.js";
+
 const VIEWS = [
-  {id: "system", label: "SURVEY", idle: ""},
+  {id: "overview", label: "OVERVIEW", idle: ""},
+  {id: "system", label: "SYSTEM", idle: ""},
+  {id: "search", label: "SEARCH", idle: ""},
+  {id: "firsts", label: "FIRSTS", idle: ""},
+  {id: "checklist", label: "CHECKLIST", idle: ""},
   {id: "map", label: "SYSTEM MAP", idle: ""},
-  {id: "prospects", label: "PROSPECTS", idle: ""},
-  // 5.5.4: the Exploration Archive, merged in.
+  // 5.5.4: the Exploration Archive, merged in; 5.7.8: with the Journal Log.
   {id: "archive", label: "ARCHIVE", idle: ""},
 ];
 const VIEW_IDS = VIEWS.map((view) => view.id);
@@ -39,7 +52,11 @@ const STATUS = {
 };
 const RANK = {targeted: 0, pinned: 1, pending: 2, awaiting: 3, listed: 3, skipped: 4, complete: 5, known: 6};
 
-let prefs = {profile: null, view: "system", filter: "all", sort: "bio"};
+let prefs = {profile: null, view: "overview", filter: "all", sort: "bio"};
+// SYSTEM shows the system you're in, or one opened from another tab.
+let systemViewing = null;
+let archiveMode = "archive";
+let directive = null;
 let uiRef = null;
 let selection = null;
 let boardFingerprint = "";
@@ -69,8 +86,8 @@ function loadPrefs(ui) {
   }
   prefs = {
     profile,
-    // The old ROUTE view is on the Expeditions page now.
-    view: VIEW_IDS.includes(saved.view) ? saved.view : "system",
+    // PROSPECTS was split up in 5.7.8, and PLOT ROUTE is the Route page of its own.
+    view: VIEW_IDS.includes(saved.view) ? saved.view : "overview",
     filter: FILTER_IDS.includes(saved.filter) ? saved.filter : "all",
     sort: SORT_IDS.includes(saved.sort) ? saved.sort : "bio",
   };
@@ -92,27 +109,36 @@ function skeletonMarkup() {
   const tabs = VIEWS.map((view) => `<button type="button" role="tab" id="explore-tab-${view.id}" data-explore-view="${view.id}" aria-controls="explore-view-${view.id}" aria-selected="false" tabindex="-1">${view.label}<small id="explore-tab-${view.id}-meta"></small></button>`).join("");
   const filters = FILTERS.map(([id, label]) => `<button type="button" data-explore-filter="${id}" aria-pressed="false">${label}<b data-filter-count="${id}">0</b></button>`).join("");
   const sorts = SORTS.map(([id, label]) => `<button type="button" data-explore-sort="${id}" aria-pressed="false">${label}</button>`).join("");
+  // The system's survey heads every tab (5.7.8 redesign): the survey, what it's
+  // worth and what's new here, and the Directive under it. Its name, region and
+  // next jump live in the deck's top bar, on every page.
   return `<section class="explore-hero" aria-label="This system">
-      <div class="explore-star" aria-hidden="true"><i></i></div>
-      <div class="explore-identity">
-        <small><b id="workboard-badge">LIVE</b><span id="workboard-class">PRIMARY STAR · CLASS UNKNOWN</span><span class="explore-hero-region">REGION <b id="explore-region">UNKNOWN</b></span></small>
-        <strong id="workboard-system">NO SYSTEM DATA</strong>
-        <span class="explore-next"><small>NEXT WAYPOINT</small><b id="explore-next-waypoint">—</b><button type="button" data-ws-page="explore" data-ws-op="copy_next" id="explore-copy-next" disabled>COPY</button><button type="button" data-page="mission" title="The route, the waypoints and the neutron plotter are on the Expeditions page">ROUTE ›</button></span>
-      </div>
       <div class="explore-hero-figures">
-        <div class="explore-fss"><small>FSS</small><b id="workboard-count">0 / ? BODIES</b><i aria-hidden="true"><em id="explore-fss-fill"></em></i><span id="workboard-percent">—</span></div>
-        <div><small>BIOLOGY</small><b id="explore-bio">0 / 0</b></div>
-        <div><small>GEOLOGY</small><b id="explore-geo">0</b></div>
-        <div><small>CARTOGRAPHY</small><b id="intel-carto">0 CR</b></div>
-        <div class="readout-bio"><small id="intel-bio-label">EXOBIOLOGY</small><b id="intel-bio">0 CR</b></div>
-        <div title="Bodies here with biology you've never logged in your Codex, or not in this region"><small>CODEX TARGETS</small><b id="explore-codex">0</b></div>
-        <div title="Landable bodies nobody has walked on yet"><small>FIRST FOOTFALL</small><b id="explore-footfall">0</b></div>
-        <div class="explore-traffic"><small>EDSM TRAFFIC</small><b id="explore-traffic">—</b></div>
+        <div class="xh-group xh-survey"><small class="xh-label">SURVEY</small>
+          <div class="explore-fss"><small>FSS</small><b id="workboard-count">0 / ? BODIES</b><i aria-hidden="true"><em id="explore-fss-fill"></em></i><span id="workboard-percent">—</span></div>
+          <div><small>BIOLOGY</small><b id="explore-bio">0 / 0</b></div>
+          <div><small>GEOLOGY</small><b id="explore-geo">0</b></div>
+        </div>
+        <div class="xh-group xh-value"><small class="xh-label">WORTH</small>
+          <div><small>CARTOGRAPHY</small><b id="intel-carto">0 CR</b></div>
+          <div class="readout-bio"><small id="intel-bio-label">EXOBIOLOGY</small><b id="intel-bio">0 CR</b></div>
+        </div>
+        <div class="xh-group xh-finds"><small class="xh-label">FINDS</small>
+          <div title="Bodies here with biology you've never logged in your Codex, or not in this region"><small>CODEX TARGETS</small><b id="explore-codex">0</b></div>
+          <div title="Landable bodies nobody has walked on yet"><small>FIRST FOOTFALL</small><b id="explore-footfall">0</b></div>
+          <div class="explore-traffic"><small>EDSM TRAFFIC</small><b id="explore-traffic">—</b></div>
+        </div>
       </div>
+      <p class="explore-directive" id="explore-directive" title="The Mission Directive: what to do next"><small>DIRECTIVE</small><b id="explore-directive-title">—</b><span id="explore-directive-detail"></span></p>
       <a class="explore-expedition" id="explore-expedition" data-page="mission" href="#" hidden><small>EXPEDITION <b id="expedition-badge">ACTIVE</b></small><strong id="expedition-name"></strong><span id="expedition-detail"></span><i aria-hidden="true"><em id="expedition-progress"></em></i><span id="expedition-progress-label">0 / 0</span></a>
     </section>
     <nav class="co-tabs explore-views" role="tablist" aria-label="Explore and survey views">${tabs}</nav>
-    <section class="explore-view" role="tabpanel" id="explore-view-system" data-explore-panel="system" aria-labelledby="explore-tab-system">
+    <section class="explore-view explore-overview-view" role="tabpanel" id="explore-view-overview" data-explore-panel="overview" aria-labelledby="explore-tab-overview"></section>
+    <section class="explore-view explore-system-view" role="tabpanel" id="explore-view-system" data-explore-panel="system" aria-labelledby="explore-tab-system" hidden>
+      <div class="explore-system-bar"><span class="xn-modes" role="group" aria-label="Table or survey queue"><button type="button" data-system-mode="table">TABLE</button><button type="button" data-system-mode="queue">QUEUE</button></span>
+        <span id="explore-system-viewing"></span><div id="explore-audit-slot" class="explore-audit"></div></div>
+      <div class="explore-system-table" data-system-table></div>
+      <div class="explore-system-queue" data-system-queue hidden>
       <div class="explore-system-grid">
         <section class="explore-board" aria-labelledby="explore-board-title">
           <header class="explore-board-head"><div><small>SURVEY BOARD</small><h3 id="explore-board-title">Bodies by priority</h3></div>
@@ -123,15 +149,20 @@ function skeletonMarkup() {
           <footer class="explore-board-foot"><span>Click a body for its details. Pinned and targeted bodies stay at the top; then the sort you chose.</span><button type="button" id="explore-survey-reset" data-ws-page="explore" data-ws-op="survey_reset" disabled>RESET COMMANDER CHOICES</button></footer>
         </section>
       </div>
+      </div>
     </section>
+    <section class="explore-view explore-search-view" role="tabpanel" id="explore-view-search" data-explore-panel="search" aria-labelledby="explore-tab-search" hidden>
+      <div id="explore-search"></div>
+    </section>
+    <section class="explore-view explore-firsts-view" role="tabpanel" id="explore-view-firsts" data-explore-panel="firsts" aria-labelledby="explore-tab-firsts" hidden></section>
+    <section class="explore-view explore-checklist-view" role="tabpanel" id="explore-view-checklist" data-explore-panel="checklist" aria-labelledby="explore-tab-checklist" hidden></section>
     <section class="explore-view explore-map-view" role="tabpanel" id="explore-view-map" data-explore-panel="map" aria-labelledby="explore-tab-map" hidden>
       <section id="system-map-workspace" aria-label="Live system map"></section>
     </section>
-    <section class="explore-view" role="tabpanel" id="explore-view-prospects" data-explore-panel="prospects" aria-labelledby="explore-tab-prospects" hidden>
-      <div id="explore-prospects" class="explore-columns explore-prospect-grid">${pending("LINKING PROSPECT RECORDS", "Return Later, Exploration Scout and Codex gaps load with the survey workspace.")}</div>
-    </section>
     <section class="explore-view explore-archive" role="tabpanel" id="explore-view-archive" data-explore-panel="archive" aria-labelledby="explore-tab-archive" hidden>
+      <div class="explore-archive-bar"><span class="xn-modes" role="group"><button type="button" data-archive-mode="archive">ARCHIVE</button><button type="button" data-archive-mode="log">JOURNAL LOG</button></span></div>
       <div id="analytics-workspace" class="workspace-shell">${pending("OPENING THE ARCHIVE", "Retained flight sessions, scan evidence and region stamps load with the survey workspace.")}</div>
+      <div id="explore-journal-log" hidden></div>
     </section>`;
 }
 
@@ -142,6 +173,23 @@ function bind(root, ui) {
     const tab = event.target.closest("[data-explore-view]");
     if (tab && root.contains(tab)) {
       setExploreView(tab.dataset.exploreView, ui);
+      return;
+    }
+    const systemMode = event.target.closest("[data-system-mode]");
+    if (systemMode) {
+      setSystemMode(ui.profileKey(), systemMode.dataset.systemMode);
+      renderActive(root, ui);
+      return;
+    }
+    const archive = event.target.closest("[data-archive-mode]");
+    if (archive) {
+      archiveMode = archive.dataset.archiveMode;
+      renderActive(root, ui);
+      return;
+    }
+    if (event.target.closest("[data-system-back]")) {
+      systemViewing = null;
+      renderActive(root, ui);
       return;
     }
     const sort = event.target.closest("[data-explore-sort]");
@@ -191,9 +239,16 @@ function ensureSkeleton(ui) {
   const root = ui.byId("explore-workspace");
   if (!root) return {root: null, created: false};
   bind(root, ui);
-  if (root.querySelector(":scope > .explore-hero")) return {root, created: false};
+  if (root.querySelector(":scope > .explore-views")) {
+    if (root.dataset.profile !== prefs.profile) {
+      root.dataset.profile = prefs.profile;
+      applyView(root, ui);
+    }
+    return {root, created: false};
+  }
   root.classList.remove("loading-panel");
   root.innerHTML = skeletonMarkup();
+  root.dataset.profile = prefs.profile;
   boardFingerprint = "";
   boardObserver?.disconnect();
   boardObserver = null;
@@ -215,6 +270,76 @@ function applyView(root, ui) {
   ui.onViewChange?.(view);
   root.dataset.view = view;
   applyFilter(root);
+  renderActive(root, ui);
+}
+
+/** The page modules' ui: the deck's, plus moving between tabs. */
+function moduleUi(ui) {
+  return {
+    ...ui,
+    setView: (view) => setExploreView(view, ui),
+    openSystem: (name, id64 = "") => {
+      systemViewing = {name, id64};
+      setSystemMode(ui.profileKey(), "table");
+      setExploreView("system", ui);
+    },
+  };
+}
+
+// Reopening a tab keeps its history; refresh it at most once a minute.
+const slowTicks = new Map();
+function slowKey(view) {
+  const now = Date.now();
+  const key = `${prefs.profile}:${view}`;
+  if (now - (slowTicks.get(key) || 0) > 60000) slowTicks.set(key, now);
+  return `${key}:${slowTicks.get(key)}`;
+}
+
+/** Draw the tab that's showing (the others wait until they're opened). */
+function renderActive(root, ui) {
+  if (!root || !surveyState) return;
+  // Nothing is asked of Spansh until the page is showing.
+  if (!root.closest(".page")?.classList.contains("active")) return;
+  const view = prefs.view;
+  const mui = moduleUi(ui);
+  const survey = surveyState.survey || {};
+  const rev = `${workspaceData?.survey?.rev ?? 0}:${ui.number(survey.scanned)}:${ui.number(survey.bio_complete)}:${(survey.bodies || []).length}:${surveyState.system}`;
+  if (view === "overview") {
+    renderOverview(root.querySelector("[data-explore-panel=overview]"), mui, rev, surveyState.system);
+  } else if (view === "system") {
+    const mode = systemModes(ui.profileKey());
+    for (const button of root.querySelectorAll("[data-system-mode]")) button.setAttribute("aria-pressed", String(button.dataset.systemMode === mode));
+    const table = root.querySelector("[data-system-table]");
+    const queue = root.querySelector("[data-system-queue]");
+    if (table) table.hidden = mode !== "table";
+    if (queue) queue.hidden = mode !== "queue";
+    if (mode === "queue") renderBoard(root, ui);
+    const viewing = systemViewing && systemViewing.name && lower(systemViewing.name) !== lower(surveyState.system) ? systemViewing : null;
+    const label = root.querySelector("#explore-system-viewing");
+    if (label) label.innerHTML = viewing ? `VIEWING <b>${ui.escapeHtml(viewing.name)}</b> <button type="button" data-system-back>BACK TO ${ui.escapeHtml(surveyState.system || "HERE")}</button>` : "";
+    if (mode === "table") renderSystemTable(table, mui, rev, viewing?.name || surveyState.system, viewing?.id64 || "");
+  } else if (view === "search") {
+    renderSearch(root.querySelector("#explore-search"), mui, `${workspaceData?.survey?.rev ?? 0}`);
+    } else if (view === "firsts") {
+    renderFirsts(root.querySelector("[data-explore-panel=firsts]"), mui, `${slowKey("firsts")}:${workspaceData?.survey?.rev ?? 0}`);
+  } else if (view === "checklist") {
+    renderChecklist(root.querySelector("[data-explore-panel=checklist]"), mui, `${slowKey("checklist")}:${surveyState.system}`, codexMarkup(workspaceData || {}, ui));
+  } else if (view === "archive") {
+    for (const button of root.querySelectorAll("[data-archive-mode]")) button.setAttribute("aria-pressed", String(button.dataset.archiveMode === archiveMode));
+    const archive = root.querySelector("#analytics-workspace");
+    const log = root.querySelector("#explore-journal-log");
+    if (archive) archive.hidden = archiveMode === "log";
+    if (log) log.hidden = archiveMode !== "log";
+    if (archiveMode === "log") renderJournalLog(log, mui);
+    else if (workspaceData?.archive) ui.renderArchive?.(workspaceData.archive);
+  }
+}
+
+function renderDirective(root) {
+  const title = root.querySelector("#explore-directive-title");
+  const detail = root.querySelector("#explore-directive-detail");
+  if (title) title.textContent = directive?.title || "—";
+  if (detail) detail.textContent = directive?.detail || "";
 }
 
 export function exploreView() {
@@ -260,7 +385,8 @@ function matchesSelection(row) {
 
 function markSelection(root, {focus = false, scroll = false} = {}) {
   const list = root?.querySelector("#body-workboard");
-  if (!list) return;
+  if (!list || prefs.view !== "system" || systemModes(prefs.profile) !== "queue"
+      || !root.closest(".page")?.classList.contains("active")) return;
   let selected = null;
   for (const row of list.querySelectorAll(".body-row[data-body-name]")) {
     const active = matchesSelection(row);
@@ -272,20 +398,24 @@ function markSelection(root, {focus = false, scroll = false} = {}) {
       row.removeAttribute("aria-current");
     }
   }
-  list.querySelector(".body-more")?.remove();
+  const previousMore = list.querySelector(".body-more");
   if (selected && uiRef) {
-    const more = document.createElement("div");
-    more.className = "body-more";
+    const more = previousMore || document.createElement("div");
     const body = orreryBodyFor({bodyId: selected.dataset.bodyId, name: selected.dataset.bodyName});
-    more.innerHTML = body ? uiRef.orreryDetail(body) : fallbackDetail(selected, uiRef);
+    let markup = body ? uiRef.orreryDetail(body) : fallbackDetail(selected, uiRef);
     const name = selected.dataset.bodyName || "";
     if (name && boardSystem) {
       const esc = uiRef.escapeHtml;
-      more.insertAdjacentHTML("beforeend", `<div class="body-more-actions"><button type="button" data-system-map-body="${esc(body?.id ?? selected.dataset.bodyId ?? '')}" data-system="${esc(boardSystem)}" data-body="${esc(name)}">SYSTEM MAP ↗</button><button type="button" data-explore-keep="place" data-system="${esc(boardSystem)}" data-body="${esc(name)}">+ EXPEDITION PLACE</button>
-        <button type="button" data-explore-keep="route" data-system="${esc(boardSystem)}" data-body="${esc(name)}">+ EXPEDITION ROUTE</button></div>`);
+      markup += `<div class="body-more-actions"><button type="button" data-system-map-body="${esc(body?.id ?? selected.dataset.bodyId ?? '')}" data-system="${esc(boardSystem)}" data-body="${esc(name)}">SYSTEM MAP ↗</button><button type="button" data-explore-keep="place" data-system="${esc(boardSystem)}" data-body="${esc(name)}">+ EXPEDITION PLACE</button>
+        <button type="button" data-explore-keep="route" data-system="${esc(boardSystem)}" data-body="${esc(name)}">+ EXPEDITION ROUTE</button></div>`;
     }
-    selected.after(more);
-  }
+    if (more._markup !== markup) {
+      more.className = "body-more";
+      more._markup = markup;
+      more.innerHTML = markup;
+    }
+    if (selected.nextElementSibling !== more) selected.after(more);
+  } else previousMore?.remove();
   if (focus) (selected || list).focus({preventScroll: true});
   if (selected && (focus || scroll)) {
     const rowBox = selected.getBoundingClientRect();
@@ -309,6 +439,8 @@ export function openExploreBody(button, ui) {
   };
   loadPrefs(ui).view = "system";
   savePrefs();
+  systemViewing = null;
+  setSystemMode(ui.profileKey(), "queue");
   ui.showPage("explore");
   const {root} = ensureSkeleton(ui);
   if (!root) return;
@@ -317,13 +449,15 @@ export function openExploreBody(button, ui) {
 }
 
 export function resetExploreProfile() {
+  resetOverview();
+  systemViewing = null;
   selection = null;
   boardFingerprint = "";
   boardSystem = "";
   liveTargetId = "";
   surveyState = null;
   workspaceData = null;
-  prefs = {profile: null, view: "system", filter: "all", sort: "bio"};
+  prefs = {profile: null, view: "overview", filter: "all", sort: "bio"};
 }
 
 function sameSystem(left, right) {
@@ -459,7 +593,8 @@ function boardRowMarkup(row, system, ui) {
 
 function renderBoard(root, ui) {
   const list = root.querySelector("#body-workboard");
-  if (!list) return;
+  if (!list || prefs.view !== "system" || systemModes(prefs.profile) !== "queue"
+      || !root.closest(".page")?.classList.contains("active")) return;
   const {system, rows, queue} = boardModel(ui);
   if (selection && !sameSystem(selection.system, system)) selection = null;
   const survey = surveyState?.survey || {};
@@ -512,11 +647,6 @@ function renderBand(root, ui) {
   const {number, text, percentWidth} = ui;
   const survey = surveyState?.survey || {};
   const completion = number(survey.percent);
-  const star = String(survey.star_class || "").trim();
-  root.querySelector(".explore-star")?.setAttribute("data-star-class", star.charAt(0).toUpperCase());
-  text("workboard-badge", survey.complete ? "COMPLETE" : survey.archive_bodies ? "KNOWN" : "LIVE");
-  text("workboard-system", surveyState?.system, "NO SYSTEM DATA");
-  text("workboard-class", star ? `PRIMARY · ${star}` : "PRIMARY STAR · CLASS UNKNOWN");
   text("workboard-percent", survey.total_known ? `${Math.round(completion)}%` : "—");
   text("workboard-count", `${number(survey.scanned)} / ${survey.total_known ? number(survey.total) : "?"} BODIES`);
   percentWidth("explore-fss-fill", survey.total_known ? completion : 0);
@@ -564,7 +694,8 @@ function setMeta(ui, view, value) {
 function renderSystemMeta(ui) {
   const survey = surveyState?.survey || {};
   const {number} = ui;
-  setMeta(ui, "system", surveyState?.system ? `${boardCounts.todo} TO DO` : "");
+  const todo = currentQueue()?.pending ?? Math.max(0, number(survey.total) - number(survey.scanned));
+  setMeta(ui, "system", surveyState?.system ? `${todo} TO DO` : "");
 }
 
 /** Snapshot-driven half: identity band, schematic strip and survey board. */
@@ -574,14 +705,17 @@ export function renderExploreSystem(state, ui) {
     survey: state.survey || {},
     traffic: state.traffic || {},
   };
+  directive = state.decision || null;
   loadPrefs(ui);
   const {root, created} = ensureSkeleton(ui);
   if (!root) return;
   uiRef = ui;
+  renderDirective(root);
   renderBand(root, ui);
   renderBoard(root, ui);
   renderSystemMeta(ui);
   if (created && workspaceData) renderWorkspaceParts(root, ui);
+  renderActive(root, ui);
 }
 
 function fallbackDetail(row, ui) {
@@ -602,8 +736,8 @@ function followTarget(root) {
   markSelection(root);
 }
 
-/** The waypoint route, NavRoute and the neutron plotter: drawn on the
- * Expeditions page since 5.6.1 (expeditions.js). */
+/** The waypoint route, NavRoute and the plotted route (Explore & Survey's
+ * Route page, 5.7.8): drawn on the Expeditions page since 5.6.1 (expeditions.js). */
 export function routeMarkup(data, ui) {
   const {escapeHtml, numeric} = ui;
   const route = Array.isArray(data.nav_route) ? data.nav_route : [];
@@ -618,9 +752,7 @@ export function routeMarkup(data, ui) {
     <span><b>${String(row.index + 1).padStart(2, "0")} · ${escapeHtml(row.name)}</b><small>${escapeHtml(row.note || (row.coords_known ? "COORDINATES RESOLVED" : "COORDINATES AWAITING VISIT"))}${row.distance === null || row.distance === undefined ? "" : ` · ${numeric(row.distance, 1)} LY`}</small></span>
     <div><button type="button" data-ws-page="explore" data-ws-op="copy_waypoint" data-index="${row.index}">COPY</button><button type="button" data-ws-page="explore" data-ws-op="edit_waypoint" data-index="${row.index}" data-name="${escapeHtml(row.name)}" data-note="${escapeHtml(row.note || "")}">EDIT</button><button type="button" data-ws-page="explore" data-ws-op="move_waypoint" data-index="${row.index}" data-offset="-1" aria-label="Move earlier">↑</button><button type="button" data-ws-page="explore" data-ws-op="move_waypoint" data-index="${row.index}" data-offset="1" aria-label="Move later">↓</button><button type="button" class="danger-action" data-ws-page="explore" data-ws-op="delete_waypoint" data-index="${row.index}" aria-label="Delete waypoint">×</button></div>
   </div>`).join("");
-  const plotRows = plottedRows.map((row, index) => `<div class="neutron-row"><i>${String(index + 1).padStart(2, "0")}</i><span><b>${escapeHtml(row.system)}</b><small>${row.distance_jumped === null || row.distance_jumped === undefined ? "LEG —" : `${numeric(row.distance_jumped, 1)} LY`} · ${row.distance_left === null || row.distance_left === undefined ? "REMAINING —" : `${numeric(row.distance_left, 1)} LY LEFT`}</small></span><em class="${row.neutron ? "neutron" : ""}">${row.neutron ? "NEUTRON" : "STANDARD"}</em></div>`).join("");
-  const multiplier = ui.number(plotter.multiplier, 4);
-  const working = plotter.status === "working";
+  const plotRows = plottedRows.map((row, index) => `<div class="neutron-row"><i>${String(index + 1).padStart(2, "0")}</i><span><b>${escapeHtml(row.system)}</b><small>${row.jumps ? `${numeric(row.jumps)} JUMP${row.jumps === 1 ? "" : "S"}` : ""}${row.refuel ? " · REFUEL" : ""}</small></span><em class="${row.neutron ? "neutron" : ""}">${row.neutron ? "NEUTRON" : "STANDARD"}</em></div>`).join("");
   return `<section class="explore-card nav-route-card" aria-labelledby="explore-nav-title">
       <header><div><small>ELITE NAVROUTE</small><h3 id="explore-nav-title">Live route</h3></div><b>${numeric(route.length)} STOPS</b></header>
       <p class="explore-card-lead">${data.destination ? `NAV TARGET · ${escapeHtml(data.destination)}` : "No local nav target"}</p>
@@ -630,82 +762,34 @@ export function routeMarkup(data, ui) {
       <header><div><small>PROFILE ROUTE</small><h3 id="explore-waypoint-title">Saved waypoints</h3></div><b>${numeric(waypoints.length - remaining)}/${numeric(waypoints.length)} COMPLETE</b></header>
       <div class="route-add-form"><input id="waypoint-name" placeholder="SYSTEM NAME" aria-label="Waypoint system name"><input id="waypoint-note" placeholder="OPTIONAL NOTE" aria-label="Waypoint note"><button type="button" class="primary" data-ws-page="explore" data-ws-op="add_waypoint">ADD</button></div>
       <div class="waypoint-next"><span><small>NEXT WAYPOINT</small><b>${escapeHtml(data.next_waypoint || "ROUTE COMPLETE / EMPTY")}</b></span><button type="button" data-ws-page="explore" data-ws-op="copy_next" ${data.next_waypoint ? "" : "disabled"}>COPY NEXT</button><button type="button" data-ws-page="explore" data-ws-op="set_auto_copy" data-enabled="${!data.auto_copy}" aria-pressed="${Boolean(data.auto_copy)}" title="As you arrive in a system, the next waypoint goes on the clipboard">AUTO-COPY ON ARRIVAL ${data.auto_copy ? "ON" : "OFF"}</button></div>
-      <div class="explore-card-body" data-scroll-key="waypoints">${waypointRows || `<p class="workspace-empty">No saved waypoints. Add a destination above or import a neutron plot.</p>`}</div>
+      <div class="explore-card-body" data-scroll-key="waypoints">${waypointRows || `<p class="workspace-empty">No saved waypoints. Add a destination above, or plot a route.</p>`}</div>
       <footer><button type="button" class="danger-action" data-ws-page="explore" data-ws-op="clear_waypoints" ${waypoints.length ? "" : "disabled"}>CLEAR ROUTE</button></footer>
     </section>
     <section class="explore-card neutron-card" aria-labelledby="explore-neutron-title">
-      <header><div><small>SPANSH</small><h3 id="explore-neutron-title">Neutron plotter</h3></div><b>${plotted.total_jumps ? `${numeric(plotted.total_jumps)} JUMPS` : "MANUAL ROUTE"}</b></header>
-      <div class="neutron-form"><label class="wide">FROM<input id="neutron-from" value="${escapeHtml(plotter.from || data.current || "")}"></label><label class="wide">DESTINATION<input id="neutron-to" value="${escapeHtml(plotter.to || "")}"></label><label>SHIP RANGE<input id="neutron-range" type="number" min="1" step="0.1" value="${ui.number(plotter.range, 30)}"></label><label>EFFICIENCY<input id="neutron-efficiency" type="number" min="1" max="100" value="${ui.number(plotter.efficiency, 60)}"></label><label>BOOST<select id="neutron-multiplier"><option value="4" ${multiplier === 4 ? "selected" : ""}>NEUTRON 4×</option><option value="6" ${multiplier === 6 ? "selected" : ""}>OVERCHARGE 6×</option></select></label><button type="button" class="primary" data-ws-page="explore" data-ws-op="neutron_plot" ${working ? "disabled" : ""}>${working ? "PLOTTING…" : "PLOT ROUTE"}</button></div>
-      <p class="workspace-status ${escapeHtml(plotter.status || "ready")}">${escapeHtml(plotter.detail || "Ready.")}</p>
-      <div class="explore-card-body" data-scroll-key="neutron">${plotRows || `<p class="workspace-empty">Plot a route to inspect its manual waypoints here.</p>`}</div>
-      <footer><button type="button" data-ws-page="explore" data-ws-op="neutron_copy" ${plottedRows.length ? "" : "disabled"}>COPY LIST</button><button type="button" data-ws-page="explore" data-ws-op="neutron_import" ${plottedRows.length ? "" : "disabled"}>IMPORT TO WAYPOINTS</button><button type="button" data-ws-page="explore" data-ws-op="neutron_clear" ${plottedRows.length ? "" : "disabled"}>CLEAR</button></footer>
+      <header><div><small>THE ROUTE PAGE</small><h3 id="explore-neutron-title">Plotted route</h3></div><b>${plotted.total_jumps ? `${numeric(plotted.total_jumps)} JUMPS` : "NONE"}</b></header>
+      <p class="workspace-status ${escapeHtml(plotter.status || "ready")}">${escapeHtml(plotted.label ? `${plotted.label}: ${plotted.from} to ${plotted.to}${plotted.followed ? " · your waypoint route" : ""}` : plotter.detail || "Neutron, exact, road to riches and the rest, on one plotter. A plotted route becomes your waypoint route.")}</p>
+      <div class="explore-card-body" data-scroll-key="neutron">${plotRows || `<p class="workspace-empty">No route plotted. Plot one on Explore & Survey, or plot a leg above.</p>`}</div>
+      <footer><button type="button" class="primary" data-page="route">OPEN ROUTE</button></footer>
     </section>`;
 }
 
-function prospectsMarkup(data, ui) {
-  const {credits, escapeHtml, number, numeric} = ui;
-  const returnLater = data.return_later || {};
-  const entries = Array.isArray(returnLater.entries) ? returnLater.entries : [];
-  const returnRows = entries.map((row) => {
-    const id = escapeHtml(row.id || "");
-    const reasons = (Array.isArray(row.reasons) ? row.reasons : []).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("");
-    const visited = row.last_visited ? `LAST VISIT ${escapeHtml(String(row.last_visited).replace("T", " ").slice(0, 16))}` : "VISIT TIME UNAVAILABLE";
-    return `<article class="return-later-entry${row.current ? " current" : ""}">
-      <div class="return-later-entry-main"><small>${row.current ? "CURRENT SYSTEM · " : ""}${visited} · ${escapeHtml(String(row.source || "journal").toUpperCase())}</small><h4>${escapeHtml(row.system || "UNKNOWN SYSTEM")}</h4><strong>${row.body ? escapeHtml(row.body) : "SYSTEM SURVEY"}</strong><ul>${reasons || "<li>Unfinished survey work recorded in the Journal</li>"}</ul></div>
-      <div class="return-later-actions"><button type="button" data-ws-page="explore" data-ws-op="return_later_copy" data-return-later-id="${id}">COPY</button><button type="button" data-ws-page="explore" data-ws-op="return_later_waypoint" data-return-later-id="${id}">ADD TO ROUTE</button><button type="button" class="danger-action" data-ws-page="explore" data-ws-op="return_later_dismiss" data-return-later-id="${id}">DISMISS</button></div>
-    </article>`;
-  }).join("");
-  const scout = data.scout || {};
-  const audit = scout.audit || {};
-  const codex = scout.codex || {};
-  const modes = Object.entries(scout.modes || {}).map(([key, label]) => `<option value="${escapeHtml(key)}" ${scout.mode === key ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
+function codexMarkup(data, ui) {
+  const {escapeHtml, numeric} = ui;
+  const codex = data.scout?.codex || {};
   const codexRows = (codex.candidates || []).map((row) => `<div class="scout-codex-row"><i></i><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml([row.category, row.subcategory].filter(Boolean).join(" · ") || "PERSONAL CODEX GAP")}</small></span></div>`).join("");
-  const results = Array.isArray(scout.results) ? scout.results : [];
-  const prospectRows = results.map((row, index) => {
-    const distance = row.distance === null || row.distance === undefined
-      ? (row.route_index ? `ROUTE STOP ${numeric(row.route_index)}${row.jumps ? ` · ${numeric(row.jumps)} JUMPS` : ""}` : "DISTANCE NOT RETURNED")
-      : `${numeric(row.distance, 1)} LY FROM REFERENCE`;
-    const arrival = row.arrival_ls === null || row.arrival_ls === undefined ? "" : ` · ${numeric(row.arrival_ls, 0)} LS ARRIVAL`;
-    const evidence = (row.reasons || []).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("");
-    const freshness = `${escapeHtml(row.confidence || "CATALOGUE MATCH")} · ${row.updated_at ? `UPDATED ${escapeHtml(String(row.updated_at).replace("T", " ").slice(0, 16))}` : escapeHtml(row.source || "COMMUNITY CATALOGUE")}`;
-    return `<article class="scout-prospect">
-      <header><span><small>${escapeHtml(distance)}${arrival}</small><h4>${escapeHtml(row.system || "UNKNOWN SYSTEM")}</h4><b>${escapeHtml(row.body || row.body_type || "SYSTEM PROSPECT")}</b></span><em>${row.mapping_value ? credits(row.mapping_value) : row.signal_count ? `${numeric(row.signal_count)} SIGNAL${number(row.signal_count) === 1 ? "" : "S"}` : "KNOWN TARGET"}</em></header>
-      <ul>${evidence || "<li>Known catalogue match</li>"}</ul><footer><small>${freshness}</small><div><button type="button" data-ws-page="explore" data-ws-op="scout_copy" data-result-index="${index}">COPY</button><button type="button" data-ws-page="explore" data-ws-op="scout_add_waypoint" data-result-index="${index}">ADD TO ROUTE</button><button type="button" data-ws-page="explore" data-ws-op="scout_add_objective" data-result-index="${index}">ADD OBJECTIVE</button><button type="button" data-page="map">ATLAS</button><button type="button" data-ws-page="explore" data-ws-op="scout_open" data-result-index="${index}">OPEN SPANSH</button></div></footer>
-    </article>`;
-  }).join("");
-  const auditHeadline = audit.complete ? "SURVEY COMPLETE" : audit.scan_known ? `${numeric(audit.pending)} TARGETS PENDING` : "FSS TOTAL AWAITING CONFIRMATION";
-  const working = scout.status === "working";
-  return `<div class="explore-stack">
-      <section class="return-later-board explore-card" aria-label="Return Later exploration board">
-        <header><div><small>EXPEDITION CONTINUITY · PROFILE-LOCAL</small><h3>Return later</h3></div><b>${numeric(entries.length)} OPEN</b></header>
-        <p class="explore-card-lead">Unfinished survey work kept when you leave a system. New journal evidence updates it when you return.</p>
-        <div class="return-later-entries" data-scroll-key="return">${returnRows || `<p class="workspace-empty">No unfinished return targets recorded yet. Journal-backed gaps appear here after departure.</p>`}</div>
-      </section>
-      <section class="explore-card codex-card" aria-labelledby="explore-codex-title">
+  return `<section class="explore-card codex-card" aria-labelledby="explore-codex-title">
         <header><div><small>PERSONAL CODEX · ${escapeHtml(codex.region || "REGION UNKNOWN")}</small><h3 id="explore-codex-title">Codex gaps</h3></div><b>${numeric(codex.personal_gap_count)} GAPS</b></header>
         <p class="explore-card-lead">${numeric(codex.personal_entries_here)} of ${numeric(codex.personal_entries_total)} recorded here · ${numeric(codex.personal_coverage_percent, 1)}% coverage</p>
         <div class="explore-card-body" data-scroll-key="codex">${codexRows || `<p class="workspace-empty">Retained Codex history has no regional comparison yet.</p>`}</div>
         <p class="explore-card-note">${escapeHtml(codex.availability_note || "Personal history only; no spawn is inferred.")}</p>
-      </section>
-    </div>
-    <section class="exploration-scout explore-card" aria-labelledby="explore-scout-title">
-      <header><div><small>EXPLORATION INTELLIGENCE · JOURNAL + COMMUNITY EVIDENCE</small><h3 id="explore-scout-title">EXPLORATION SCOUT</h3></div><b>${escapeHtml(codex.region || "REGION UNKNOWN")}</b></header>
-      <div class="scout-audit"><span><small>CURRENT SYSTEM AUDIT</small><b>${auditHeadline}</b></span><p>${audit.scan_known ? `${numeric(audit.scanned)} / ${numeric(audit.total)} bodies resolved · ` : ""}${numeric(audit.known_bodies)} known · ${numeric(audit.mapped_bodies)} mapped · ${numeric(audit.bio_targets)} bio · ${numeric(audit.geo_targets)} geo${audit.next ? ` · next ${escapeHtml(audit.next)}` : ""} <em>${escapeHtml(audit.source || "ELITE JOURNAL")}</em></p></div>
-      <div class="scout-search-form">
-        <label class="wide">REFERENCE SYSTEM<input id="scout-reference" value="${escapeHtml(scout.reference || data.current || "")}" placeholder="SYSTEM NAME"></label>
-        <label class="wide">PROSPECT TYPE<select id="scout-mode">${modes}</select></label>
-        <label>RADIUS<input id="scout-radius" type="number" min="1" max="10000" value="${number(scout.radius, 500)}"><small>LY / route radius</small></label>
-        <label>MIN SIGNALS<input id="scout-signals" type="number" min="1" max="100" value="${number(scout.min_signals, 1)}"><small>Signal searches</small></label>
-        <label>MIN VALUE<input id="scout-min-value" type="number" min="1" step="100000" value="${number(scout.min_value, 500000)}"><small>Value search CR</small></label>
-        <label>SHIP RANGE<input id="scout-range" type="number" min="1" max="500" step="0.1" value="${number(scout.jump_range, 30)}"><small>Value route</small></label>
-        <label>LIMIT<input id="scout-limit" type="number" min="1" max="100" value="${number(scout.max_results, 20)}"><small>Results</small></label>
-        <button type="button" class="primary" data-ws-page="explore" data-ws-op="scout_search" ${working ? "disabled" : ""}>${working ? "SEARCHING…" : "FIND PROSPECTS"}</button>
-      </div>
-      <p class="workspace-status ${escapeHtml(scout.status || "ready")}">${escapeHtml(scout.detail || "Ready.")}${scout.source ? ` · SOURCE ${escapeHtml(scout.source)}` : ""}${scout.searched_at ? ` · ${escapeHtml(String(scout.searched_at).replace("T", " "))}` : ""}</p>
-      ${scout.evidence_note ? `<p class="scout-provenance">${escapeHtml(scout.evidence_note)} · ${numeric(scout.catalogue_count)} catalogue matches reported.</p>` : ""}
-      <div class="scout-results" data-scroll-key="scout">${prospectRows || `<p class="workspace-empty">No prospect result set. Search from the current system or enter another reference.</p>`}</div>
-      <footer><button type="button" data-ws-page="explore" data-ws-op="scout_clear" ${results.length ? "" : "disabled"}>CLEAR RESULTS</button></footer>
-    </section>`;
+      </section>`;
+}
+
+function auditMarkup(data, ui) {
+  const {escapeHtml, numeric} = ui;
+  const audit = data.scout?.audit || {};
+  const headline = audit.complete ? "SURVEY COMPLETE" : audit.scan_known ? `${numeric(audit.pending)} TARGETS PENDING` : "FSS TOTAL AWAITING CONFIRMATION";
+  return `<span><small>AUDIT</small><b>${headline}</b></span><p>${audit.scan_known ? `${numeric(audit.scanned)} / ${numeric(audit.total)} bodies resolved · ` : ""}${numeric(audit.known_bodies)} known · ${numeric(audit.mapped_bodies)} mapped · ${numeric(audit.bio_targets)} bio · ${numeric(audit.geo_targets)} geo${audit.next ? ` · next ${escapeHtml(audit.next)}` : ""}</p>`;
 }
 
 /** Replace a slot's markup while keeping every list at its scroll position.
@@ -728,14 +812,10 @@ function renderWorkspaceParts(root, ui) {
   followTarget(root);
   renderBoard(root, ui);
   renderSystemMeta(ui);
-  const prospects = root.querySelector("#explore-prospects");
-  if (prospects) replaceKeepingScroll(prospects, prospectsMarkup(data, ui));
-  ui.text("explore-next-waypoint", data.next_waypoint, "—");
-  const copy = root.querySelector("#explore-copy-next");
-  if (copy) copy.disabled = !data.next_waypoint;
-  const returns = number(data.return_later?.entries?.length);
-  const scouted = number(data.scout?.results?.length);
-  setMeta(ui, "prospects", returns || scouted ? `${returns} RETURN LATER · ${scouted} SCOUTED` : "");
+  const audit = root.querySelector("#explore-audit-slot");
+  if (audit) replaceKeepingScroll(audit, auditMarkup(data, ui));
+  setMeta(ui, "firsts", number(data.return_later?.entries?.length) ? `${number(data.return_later.entries.length)} LEFT` : "");
+  renderActive(root, ui);
 }
 
 /** Workspace-driven half: orrery, queue enrichment, route and prospects. */

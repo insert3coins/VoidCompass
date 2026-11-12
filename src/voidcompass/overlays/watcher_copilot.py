@@ -1403,7 +1403,6 @@ OVERLAY_NAMES = {
     "jump-info": ("jump information", "jump info"),
     "colony-needs": ("construction needs", "colony needs"),
     "expedition": ("expedition guide", "expedition overlay", "expedition"),
-    "hatchling": ("hatchling", "pet"),
     "trade-route": ("trade route overlay", "trade route"),
     "crew-orders": ("crew orders overlay", "crew orders", "orders overlay"),
     "galaxy-minimap": ("galaxy minimap", "minimap", "mini map"),

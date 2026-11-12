@@ -139,6 +139,35 @@ def pressable(key, modifiers=()):
     return tuple(name for name in (*modifiers, key) if scancode(name) is None)
 
 
+def keyboard_shortcut(value):
+    """A recorded game key, including bare keys, as (key, modifiers)."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    parts = [part.strip() for part in text.split("+")]
+    modifier_names = {"ctrl": "LeftControl", "control": "LeftControl", "alt": "LeftAlt",
+                      "shift": "LeftShift", "win": "LeftWin"}
+    aliases = {"up": "UpArrow", "down": "DownArrow", "left": "LeftArrow", "right": "RightArrow"}
+    modifiers, key = [], None
+    for part in parts:
+        token = part.replace(" ", "").casefold()
+        if token in modifier_names:
+            modifier = "Key_" + modifier_names[token]
+            if modifier in modifiers:
+                raise ValueError("Use each modifier only once.")
+            modifiers.append(modifier)
+        elif key is None and token:
+            bare = aliases.get(token, token)
+            key = "Key_" + key_name(bare)
+        else:
+            raise ValueError("Record one keyboard key, with optional modifiers.")
+    if key is None or pressable(key, modifiers):
+        raise ValueError("Record a letter, number, F-key or another supported keyboard key.")
+    if key_name(key) in {"leftcontrol", "rightcontrol", "leftalt", "rightalt", "leftshift", "rightshift", "leftwin", "rightwin"}:
+        raise ValueError("Add a final key after the modifier.")
+    return key, tuple(modifiers)
+
+
 # -- Windows ----------------------------------------------------------------------------
 _KEYEVENTF_EXTENDEDKEY = 0x0001
 _KEYEVENTF_KEYUP = 0x0002
@@ -301,7 +330,17 @@ class KeyPresser:
                 if not self.send(code, extended, False):
                     return False
                 down.append((code, extended))
-                self.sleep(hold if index == len(codes) - 1 else MODIFIER_LEAD_S)
+                duration = hold if index == len(codes) - 1 else MODIFIER_LEAD_S
+                if duration <= 0.2:
+                    self.sleep(duration)
+                else:
+                    remaining = duration
+                    while remaining > 0:
+                        if not self.allowed():
+                            return False
+                        step = min(0.05, remaining)
+                        self.sleep(step)
+                        remaining -= step
             return True
         finally:
             for code, extended in reversed(down):

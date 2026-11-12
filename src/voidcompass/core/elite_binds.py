@@ -225,6 +225,45 @@ def _epic_installs(environ):
     return found
 
 
+def game_running():
+    """True while EliteDangerous64.exe runs, False when it doesn't, None when
+    we can't tell. Only the process name, so an elevated game still counts."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class Entry(ctypes.Structure):
+            _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD), ("th32ProcessID", wintypes.DWORD),
+                        ("th32DefaultHeapID", ctypes.c_size_t), ("th32ModuleID", wintypes.DWORD),
+                        ("cntThreads", wintypes.DWORD), ("th32ParentProcessID", wintypes.DWORD),
+                        ("pcPriClassBase", ctypes.c_long), ("dwFlags", wintypes.DWORD),
+                        ("szExeFile", ctypes.c_wchar * 260)]
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        kernel.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+        kernel.Process32FirstW.argtypes = kernel.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(Entry)]
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        snapshot = kernel.CreateToolhelp32Snapshot(0x2, 0)
+        if not snapshot or snapshot == wintypes.HANDLE(-1).value:
+            return None
+        try:
+            entry = Entry()
+            entry.dwSize = ctypes.sizeof(Entry)
+            ok = kernel.Process32FirstW(snapshot, ctypes.byref(entry))
+            while ok:
+                if entry.szExeFile.casefold() == "elitedangerous64.exe":
+                    return True
+                ok = kernel.Process32NextW(snapshot, ctypes.byref(entry))
+        finally:
+            kernel.CloseHandle(snapshot)
+        return False
+    except Exception:
+        logging.debug("Couldn't look for the running game", exc_info=True)
+    return None
+
+
 def running_game_folder():
     """The folder of a running EliteDangerous64.exe, or None (Windows only)."""
     if os.name != "nt":

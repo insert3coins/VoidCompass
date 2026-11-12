@@ -215,8 +215,6 @@ HEADED_TOPICS = {
     "on_this_day": ("recall", "ON THIS DAY"),
     "capsule_early": ("recall", "TIME CAPSULE · NOT YET"),
     "constellation_named": ("recall", "A NEW CONSTELLATION"),
-    # 5.6.4: your Hatchling.
-    **{topic: ("", "THE HATCHLING") for topic in ("hatchling_toy", "hatchling_trick", "hatchling_scared", "hatchling_grown", "hatchling_idle", "hatchling_said")},
     # 5.5.4: finding its voice, and what it has learned about you.
     "voice_found": ("memory", watcher_voice_lore.TITLE),
     "habit_milestone": ("", "A MILESTONE"),
@@ -225,6 +223,19 @@ HEADED_TOPICS = {
     **watcher_name.HEADINGS,
     "talk": ("reply", "IN REPLY"),
 }
+
+
+# Answers to you, and its story, are never muted.
+UNMUTABLE = frozenset({"talk", "answer", "question", "voice_found", "lore_fragment", "lore_afterword", "crew_lore"})
+
+
+def mute_key(text):
+    return " ".join(str(text or "").casefold().split())[:400]
+
+
+def is_muted(config, text):
+    muted = (config or {}).get("muted_lines") or ()
+    return bool(muted) and mute_key(text) in set(muted)
 
 
 def thought_heading(topic, words=""):
@@ -325,8 +336,6 @@ IMPORTANCE = {
     "on_this_day": 2,
     "capsule_early": 2,
     "constellation_named": 3,
-    # 5.6.4: your Hatchling; growing up is said whatever the hour.
-    "hatchling_toy": 1, "hatchling_trick": 2, "hatchling_scared": 1, "hatchling_grown": 2, "hatchling_idle": 0, "hatchling_said": 0,
     # You and it: a poke, hiding it, moving it, and the bond over time.
     "poked": 3,
     "poked_again": 3,
@@ -458,8 +467,6 @@ MOODS = {
     "on_this_day": "downcast",
     "capsule_early": "curious",
     "constellation_named": "pleased",
-    "hatchling_toy": "pleased", "hatchling_trick": "pleased", "hatchling_scared": "wary", "hatchling_grown": "pleased",
-    "hatchling_idle": "curious", "hatchling_said": "pleased",
     **{topic: "curious" for topic in watcher_habits.HABIT_TOPICS},
     "habit_milestone": "pleased",
     "voice_found": "curious",
@@ -945,6 +952,9 @@ class WatcherMind:
         if topic in {"sign_off", "sign_off_quiet"}:
             script = farewell_for_the_hour(script, now, self.random)
         text = plain_text(script)
+        if topic not in UNMUTABLE and is_muted(self.config, text):
+            # A line you muted (5.7.8) is never said again: the last thought stays.
+            return self.thought
         self._serial += 1
         self._last_spoke = now
         kind, heading = thought_heading(topic, text)
@@ -2002,8 +2012,6 @@ class WatcherMind:
             # quick close lost the sign-off from its memory).
             self.save()
             return thought
-        if kind.startswith("hatchling_") and kind in IMPORTANCE:
-            return self.consider(kind, fields, force=kind in {"hatchling_grown", "hatchling_trick"})
         if kind == "expedition_set_out" and kind in IMPORTANCE:
             # 5.7.6: the one on watch marks the start; the crew each add a line.
             thought = self.consider(kind, fields, force=True)

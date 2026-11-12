@@ -182,12 +182,8 @@ class DashboardJourneyMixin:
         end = epoch(expedition.get("ended")) or time.time()
         trip = {"id": expedition["id"], "name": expedition.get("name") or "Expedition", "start": start, "end": end + 60}
         places = manager.bookmarks(expedition_id)
-        pet = None
-        if hasattr(self, "_hatchling_state"):
-            from voidcompass.core import hatchling
-            pet = hatchling.trip_story(self._hatchling_state(), expedition_id)
         key = (expedition.get("ended"), int((expedition.get("stats") or {}).get("jumps") or 0), self._wrapped_key(0)[1:],
-               len(places), sum(1 for row in places if row.get("status") == "visited"), (pet or {}).get("moments"), (pet or {}).get("badge"))
+               len(places), sum(1 for row in places if row.get("status") == "visited"))
         cache = getattr(self, "_trip_story_cache", None)
         if cache is None:
             cache = self._trip_story_cache = {}
@@ -208,10 +204,6 @@ class DashboardJourneyMixin:
                     cards.insert(at, {"kind": "places", "count": len(places),
                                       "visited": sum(1 for row in places if row.get("status") == "visited"),
                                       "names": [str(row.get("title") or row.get("body") or row.get("system") or "")[:80] for row in places][:6]})
-                # 5.6.4: your Hatchling's side of the trip, just before the verdict too.
-                if pet and cards:
-                    at = next((index for index, card in enumerate(cards) if card.get("kind") == "verdict"), len(cards))
-                    cards.insert(at, {**pet, "kind": "hatchling"})
             except Exception:
                 logging.exception("Expedition story couldn't be told")
                 story = {"trip": trip, "error": True, "cards": []}
@@ -528,7 +520,10 @@ class DashboardJourneyMixin:
         if name in ("listen", "listen-test"):
             # Talking to the Watcher (5.7.1): the level meter, and the mic test to hear back.
             return self._watcher_listen_data(name)
-        return None
+        # Explore & Survey, CMDR and History's tables (5.7.8).
+        survey = getattr(self, "_survey_data", None)
+        answer = survey(name, query) if callable(survey) else None
+        return self._json_answer(answer) if answer is not None else None
 
     # -- the Local API (5.5.10) -------------------------------------------------------------------------
     def api_wrapped_years(self):

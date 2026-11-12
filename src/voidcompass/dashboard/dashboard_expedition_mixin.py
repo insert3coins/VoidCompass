@@ -779,8 +779,6 @@ class DashboardExpeditionMixin:
         view = {
             "id": _text(row.get("id"), 20), "name": _text(row.get("name") or "Expedition", 140),
             "description": _text(row.get("description"), 400), "status": _text(row.get("status") or "paused", 20),
-            # 5.6.4: your Hatchling, along for the trip.
-            "pet": self._hatchling_trip_view(row.get("id")) if hasattr(self, "_hatchling_trip_view") else None,
             "started": _text(row.get("started"), 40), "ended": _text(row.get("ended"), 40),
             "start_system": _text(row.get("start_system"), 120), "destination": _text(row.get("destination"), 120),
             "return_system": _text(row.get("return_system"), 120), "ironman": bool(row.get("ironman")),
@@ -910,9 +908,9 @@ class DashboardExpeditionMixin:
             changed = manager.set_status(expedition_id, payload["status"]) if operation == "status" else manager.delete(expedition_id)
             if changed:
                 self._expedition_clear_route(expedition.get("name") or "", was_active)
-                # The Hatchling was along for it (5.6.4): finished together, a badge.
-                if hasattr(self, "_hatchling_trip_ended"):
-                    self._hatchling_trip_ended(expedition_id, operation == "status" and payload["status"] == "completed")
+                # Its route on PLOT ROUTE goes with it (5.7.8).
+                getattr(self, "_route_forget", lambda *_a: False)(
+                    "Expedition: " if was_active else f"Expedition: {expedition.get('name') or ''}")
             return bool(changed)
         if operation == "create":
             here = getattr(self, "current_sys", "") or ""
@@ -1103,8 +1101,10 @@ class DashboardExpeditionMixin:
         return True
 
     def _expedition_plot(self, expedition_id, leg_id, payload):
-        """Plot one leg on Spansh: a neutron route, or a carrier route."""
-        from voidcompass.services.spansh import fleet_carrier_route, neutron_route
+        """Plot one leg on Spansh: a neutron route (Explore & Survey's plotter,
+        5.7.8), or a carrier route."""
+        from voidcompass.services import spansh
+        from voidcompass.services.spansh import fleet_carrier_route
         manager = self.expedition_manager
         expedition = manager.get(expedition_id) or {}
         legs = expedition.get("legs") or []
@@ -1132,9 +1132,10 @@ class DashboardExpeditionMixin:
                 result = fleet_carrier_route(source, [leg["system"]])
                 return {"kind": "carrier", "total_jumps": max(0, len(result["jumps"]) - 1), "tritium": result.get("fuel_required_t"),
                         "waypoints": [{"system": row["system"], "neutron": False, "jumps": 1} for row in result["jumps"][1:]]}
-            result = neutron_route(source, leg["system"], jump_range, int(payload.get("efficiency") or 60))
-            return {"kind": "neutron", "range": jump_range, "total_jumps": result.get("total_jumps"),
-                    "waypoints": result.get("waypoints") or []}
+            rows = spansh.neutron_rows(source, leg["system"], jump_range, int(payload.get("efficiency") or 60))
+            return {"kind": "neutron", "range": jump_range, "total_jumps": sum(int(row.get("jumps") or 0) for row in rows),
+                    "waypoints": [{"system": row["system"], "coords": row.get("coords"), "neutron": bool(row.get("neutron")),
+                                   "jumps": row.get("jumps"), "refuel": bool(row.get("refuel"))} for row in rows[1:]]}
 
         def done(result, error):
             if error is not None:
@@ -1160,6 +1161,19 @@ class DashboardExpeditionMixin:
                                   "expedition_id": row["expedition_id"]} if row.get("body") and row.get("id") and row.get("expedition_id") else {})}
                              for row in rows if row.get("system")]
         manager.save()
+        adopt = getattr(self, "_route_adopt", None)
+        if callable(adopt):
+            here = str(getattr(self, "current_sys", "") or "")
+            stops = [{"system": row["system"], "id64": None, "coords": row.get("coords"), "jumps": row.get("jumps") or 1,
+                      "distance": None, "remaining": None, "neutron": bool(row.get("neutron")), "refuel": bool(row.get("refuel")),
+                      "bodies": [], "permit": False} for row in rows if row.get("system")]
+            if here and stops and stops[0]["system"].casefold() != here.casefold():
+                stops.insert(0, {"system": here, "id64": None, "coords": getattr(self, "current_coords", None), "jumps": 0,
+                                 "distance": None, "remaining": None, "neutron": False, "refuel": False, "bodies": [], "permit": False})
+            adopt({"kind": "expedition", "label": note, "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                   "from": stops[0]["system"], "to": stops[-1]["system"], "options": {}, "ship": None, "rows": stops,
+                   "at": 0 if here else None, "furthest": 0 if here else None, "off_route": False, "done_at": None, "note": "",
+                   "target_check": None, "waypoint_note": note}, waypoints=False)
         for name in ("update_hud", "_update_galaxy_minimap_safely"):
             action = getattr(self, name, None)
             if callable(action):
@@ -1249,26 +1263,26 @@ class DashboardExpeditionMixin:
         return done
 
     def _expedition_route_to(self, system, note):
-        """Plot from here to one system and make it the waypoint route."""
-        from voidcompass.services.spansh import neutron_route
+        """Plot from here to one system on Explore & Survey's plotter (5.7.8):
+        the route flown, on PLOT ROUTE and as the waypoint route."""
         here = getattr(self, "current_sys", "") or ""
         jump_range = self._expedition_jump_range()
         if not system:
             return False
-        if not here or jump_range <= 0:
+        plot = getattr(self, "_route_plot", None)
+        if not here or jump_range <= 0 or not callable(plot):
             return self._expedition_set_waypoints([{"system": system, "coords": self._expedition_coords_of(system)}], note)
         self._expedition_job_state(f"Spansh is plotting {here} to {system}…", busy=True)
 
-        def done(result, error):
-            if error is not None:
-                self._expedition_set_waypoints([{"system": system, "coords": self._expedition_coords_of(system)}], note)
-                self._expedition_job_state(f"Spansh couldn't plot it ({error}); {system} is the next waypoint instead.", "warn")
-                return
-            self._expedition_set_waypoints(result.get("waypoints") or [], note)
-            self._expedition_job_state(f"Route to {system}: {int(result.get('total_jumps') or 0):,} jumps.")
+        def done(route):
+            jumps = sum(int(row.get("jumps") or 0) for row in route["rows"])
+            self._expedition_job_state(f"Route to {system}: {jumps:,} jumps.")
 
-        self._expedition_worker("route", lambda: neutron_route(here, system, jump_range), done)
-        return True
+        def failed(error):
+            self._expedition_set_waypoints([{"system": system, "coords": self._expedition_coords_of(system)}], note)
+            self._expedition_job_state(f"Spansh couldn't plot it ({error}); {system} is the next waypoint instead.", "warn")
+
+        return plot({"plotter": "neutron", "from": here, "to": system, "range": jump_range}, note=note, on_done=done, on_error=failed)
 
     def _expedition_go_home(self, expedition_id):
         expedition = self.expedition_manager.get(expedition_id) or {}

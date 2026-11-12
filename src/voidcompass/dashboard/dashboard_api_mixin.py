@@ -27,7 +27,7 @@ from voidcompass.services.local_api import _SECRET_NAME, ApiError, LocalApi, DEF
 
 # Deck pages whose data the API never hands out: Settings holds the
 # commander's keys and webhooks, Tools only runs actions.
-API_HIDDEN_PAGES = frozenset({"settings", "tools"})
+API_HIDDEN_PAGES = frozenset({"settings"})
 COMPANION_FILES = {"status": "Status.json", "cargo": "Cargo.json", "navroute": "NavRoute.json",
                    "market": "Market.json", "shiplocker": "ShipLocker.json"}
 _SNAPSHOT_CHANNELS = {"status": "status", "cargo": "cargo", "nav_route": "navroute",
@@ -355,7 +355,7 @@ class DashboardApiMixin(ApiRecordsMixin):
         from voidcompass.dashboard.html_dashboard import _HTML_WORKSPACE_PAGES
 
         return {"data": sorted(_HTML_WORKSPACE_PAGES - API_HIDDEN_PAGES),
-                "open": sorted({"overview", "explore", "map", "records", "operations", "overlay-studio",
+                "open": sorted({"overview", "explore", "map", "records", "operations", "route", "overlay-studio",
                                 "settings", "about", "music", *_HTML_WORKSPACE_PAGES})}
 
     def api_page(self, page):

@@ -5,16 +5,13 @@
   --bridge-glow: color-mix(in srgb, var(--accent) 10%, transparent);
   --bridge-surface: color-mix(in srgb, var(--panel) 91%, var(--bg));
   position: relative;
-  background:
-    radial-gradient(ellipse at 61% -5%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 42%),
-    linear-gradient(90deg, transparent 0 99%, color-mix(in srgb, var(--accent) 3%, transparent) 100%) 0 0 / 42px 42px,
-    linear-gradient(transparent 0 99%, color-mix(in srgb, var(--accent) 3%, transparent) 100%) 0 0 / 42px 42px;
+  background: radial-gradient(ellipse at 61% -5%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 42%);
 }
 
 .overview-page .overview-masthead {
-  min-height: 88px;
-  margin: 0 0 15px;
-  padding: 1px 0 13px;
+  min-height: 66px;
+  margin: 0 0 12px;
+  padding: 0 0 11px;
   align-items: center;
   gap: 14px 22px;
   border-bottom: 1px solid var(--bridge-line);
@@ -61,7 +58,7 @@
 .overview-heading h2 {
   margin: 0;
   color: var(--text);
-  font: 700 clamp(26px, 2.45vw, 36px)/1 "Bahnschrift SemiCondensed", "Arial Narrow", sans-serif;
+  font: 700 clamp(26px, 2.15vw, 32px)/1 "Bahnschrift SemiCondensed", "Arial Narrow", sans-serif;
   letter-spacing: .055em;
   text-transform: uppercase;
   text-shadow: 0 0 22px var(--bridge-glow);

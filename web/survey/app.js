@@ -22,9 +22,9 @@
   // Most manifest rows and catalogue lines shown per text-scale tier before
   // paging on the shared clock. No body is ever hidden behind "+N more".
   const LIMITS = {
-    normal: {manifest: 8, surface: 3, notable: 2, chips: 3, rows: 4},
-    large: {manifest: 7, surface: 3, notable: 2, chips: 3, rows: 3},
-    huge: {manifest: 6, surface: 2, notable: 2, chips: 3, rows: 3},
+    normal: {manifest: 8, surface: 3, notable: 2, chips: 3, rows: 4, worlds: 9},
+    large: {manifest: 7, surface: 3, notable: 2, chips: 3, rows: 3, worlds: 8},
+    huge: {manifest: 6, surface: 2, notable: 2, chips: 3, rows: 3, worlds: 7},
   };
   // Overlay height budget. When a busy system (or a sampling card) would
   // exceed it, the lowest-priority regions give up lines first — the quiet
@@ -32,11 +32,14 @@
   const HEIGHT_BUDGET = {normal: 640, large: 680, huge: 700};
   // A still overlay may use the full cap rather than page its worlds.
   const STILL_BUDGET = 700;
+  // 5.7.8: the system view grows to this before its worlds fold; it never pages.
+  const SYSTEM_BUDGET = {normal: 900, large: 960, huge: 1000};
   const MANIFEST_MIN_ROWS = 3;
   const MANIFEST_FLOOR_ROWS = 2;
   // Earth-likes, water worlds and other high-value bodies are the last to
   // give up lines (5.5.3).
-  const SHRINK_ORDER = ["other", "landable", "surface", "notable"];
+  // The quiet line goes whole before the WORLDS list gives up a row.
+  const SHRINK_ORDER = ["quiet", "other", "landable", "surface", "notable"];
   const collator = new Intl.Collator("en", {numeric: true, sensitivity: "base"});
   let cycle = null;
   let cycleTimer = 0;
@@ -660,7 +663,8 @@
     if (options.kicker) title.appendChild(node("b", "spot-kicker", options.kicker));
     if (row.terraformable) title.appendChild(node("b", "environment-tag terraformable", "TF"));
     if (row.notable) title.appendChild(node("b", "environment-tag notable-tag", "◆ NOTABLE"));
-    const value = moneyRange(row.min_value, row.max_value);
+    // Explore & Survey's worth when it has the world (5.7.8), else the biology estimate.
+    const value = row.value_max ? worldValue(row) : moneyRange(row.min_value, row.max_value);
     if (value) {
       title.appendChild(node("b", `spot-value${event.value ? " event-value-badge" : ""}`, value));
     }
@@ -788,6 +792,147 @@
     return chip;
   }
 
+  // 5.7.8: the system as Explore & Survey's table has it. One row a world:
+  // its step in the suggested scan order, the world, its biology and surface
+  // signals, what's yours to claim, its worth, and whose scan it is (yours,
+  // or Spansh's: other commanders').
+  const WORLD_FLAGS = [
+    ["first_discovered", "1ST", "First discovered by you", "first"],
+    ["first_mapped", "1ST MAP", "First mapped by you", "first"],
+    ["footfall_open", "FOOTFALL", "Nobody has walked here yet", "footfall"],
+    ["ggg", "GGG", "A green gas giant (or a likely one)", "green"],
+  ];
+
+  function worldValue(row) {
+    const max = safeNumber(row.value_max ?? row.notable?.value ?? row.value);
+    const now = safeNumber(row.value_now);
+    if (!max) return "";
+    if (row.source === "spansh") return `≤${money(max)}`;
+    return now > 0 && now < max ? `${money(now)} / ${money(max)}` : money(max);
+  }
+
+  function worldRow(row, options = {}) {
+    const system = options.system || "";
+    const event = options.event || {};
+    const bio = count(row.bio_count);
+    const complete = Boolean(bio && (row.bio_complete || count(row.complete) >= bio));
+    const spansh = row.source === "spansh";
+    const surfaceCount = count(row.geo_count) + count(row.mining_count);
+    const tone = bio ? "bio" : row.notable || row.value_line ? "notable" : surfaceCount || hasSites(row) ? "surface" : "other";
+    const element = node("div", ["world-row", "body-row", `row-${tone}`, complete ? "complete" : "",
+      spansh ? "from-spansh" : "from-you", row.recent_scan ? "recent" : "",
+      String(row.planet_class || "").trim() ? "" : "unclassified",
+      event.fresh ? "event-new-target" : "", event.completed ? "event-target-complete" : "",
+      event.mapped ? "event-mapped" : "", event.value ? "event-value" : ""].filter(Boolean).join(" "));
+    element.dataset.bodyKey = rowKey(row);
+    const order = node("b", "world-order", row.order ? String(row.order) : "");
+    if (row.order) order.title = `Step ${row.order} of the suggested scan order${row.leg_ls ? ` · ${Math.round(row.leg_ls).toLocaleString()} ls from the last` : ""}`;
+    element.appendChild(order);
+    element.appendChild(planetOrb(row));
+    // One line a world: name and class, then its signals and marks.
+    const top = node("span", "world-top");
+    top.appendChild(node("strong", "", designation(row, system)));
+    top.appendChild(node("span", "world-class", shortClass(row)));
+    if (row.terraformable) top.appendChild(node("b", "row-tag tf", "TF"));
+    if (row.recent_scan) top.appendChild(node("b", "row-tag new", "NEW"));
+    element.appendChild(top);
+    // The planet's own marks on its line; its biology and geology are listed under it.
+    const marks = node("span", "world-marks");
+    const surface = [["GEO", count(row.geo_count)], ["MINING", count(row.mining_count)]]
+      .filter(([, amount]) => amount).map(([label, amount]) => `${label} ${amount}`).join(" · ");
+    if (bio) {
+      const done = node("span", "world-bio", spansh ? `${bio} BIO` : `${count(row.complete)}/${bio} BIO`);
+      done.title = "Species analysed of the biological signals";
+      marks.appendChild(done);
+    }
+    // Folded to one line, a world keeps its geology on its line.
+    if (options.compact && surface) marks.appendChild(node("span", "world-surface", surface));
+    for (const [key, label, title, kind] of WORLD_FLAGS) {
+      if (!row[key] && !(key === "footfall_open" && row.first_footfall)) continue;
+      const flag = node("b", `world-flag ${kind}`, label);
+      flag.title = title;
+      marks.appendChild(flag);
+    }
+    if (row.codex_type === "new" || row.codex_type === "region") {
+      const flag = node("b", `world-flag codex ${row.codex_type}`, "CODEX");
+      flag.title = `${row.codex_type_name || "This kind of world"}: new to your Codex${row.codex_type === "new" ? "" : " in this region"}`;
+      marks.appendChild(flag);
+    }
+    if (!spansh && row.needs_dss && !bio && (row.notable || row.value_line)) marks.appendChild(node("b", "world-flag dss", "DSS"));
+    element.appendChild(marks);
+    element.appendChild(node("span", "row-end world-value", worldValue(row)));
+    const source = node("b", `world-source ${spansh ? "spansh" : "you"}`, spansh ? "SPANSH" : "YOURS");
+    source.title = spansh ? `Other commanders' scans, from Spansh${row.spansh_date ? ` (${row.spansh_date})` : ""}` : "Your own scan";
+    element.appendChild(source);
+    const species = options.compact ? null : worldSpecies(row);
+    if (species) element.appendChild(species);
+    element.setAttribute("aria-label", [row.name || designation(row, system), shortClass(row),
+      bio ? `biology ${count(row.complete)} of ${bio}` : "", surface, worldValue(row), spansh ? "from Spansh" : "your scan"]
+      .filter(Boolean).join(" · "));
+    return element;
+  }
+
+  // A biology world's species under its row: what the journal has confirmed
+  // (analysed, being sampled, detected), with colour, Codex flag and value.
+  // Under a world's name, its own list: one line a species (analysed, being
+  // sampled, detected), the types not identified yet, then geology and mining.
+  function worldSpecies(row) {
+    const bio = count(row.bio_count);
+    const surface = [["GEO", count(row.geo_count)], ["MINING", count(row.mining_count)]]
+      .filter(([, amount]) => amount).map(([label, amount]) => `${label} ${amount}`).join(" · ");
+    if (!bio && !surface) return null;
+    const list = node("span", "world-species");
+    const details = systemDetails(row);
+    for (const detail of details) {
+      const kind = String(detail.kind || "detected").toLowerCase();
+      const item = node("span", `species-token ${kind}`);
+      const mark = kind === "complete" ? "✓" : kind === "sample" ? `${Math.max(1, count(detail.progress))}/3` : "○";
+      item.appendChild(node("b", "species-mark", mark));
+      const name = node("span", "species-name");
+      if (CODEX_TITLES[detail.codex]) name.appendChild(codexFlag(detail.codex));
+      name.append(String(detail.display_name || detail.name || "Organic"));
+      item.appendChild(name);
+      const value = safeNumber(detail.value) || safeNumber(detail.max_value);
+      item.appendChild(node("small", "species-value", value ? money(value) : ""));
+      list.appendChild(item);
+    }
+    const unknown = bio - details.length;
+    if (unknown > 0) {
+      const item = node("span", "species-token pending");
+      item.appendChild(node("b", "species-mark", "·"));
+      const types = `${unknown} type${unknown === 1 ? "" : "s"}`;
+      item.appendChild(node("span", "species-name", details.length
+        ? `${unknown} more not identified` : row.needs_dss ? `${types} not identified · map to reveal` : `${types} not identified`));
+      list.appendChild(item);
+    }
+    if (surface) {
+      const item = node("span", "species-token surface");
+      item.appendChild(node("b", "species-mark", "◆"));
+      item.appendChild(node("span", "species-name", surface));
+      list.appendChild(item);
+    }
+    return list;
+  }
+
+  // WORLDS: Explore's suggested order first, then biology still to do, then
+  // the most valuable; finished biology last. The rest fold into one line.
+  function worldGroups(model, groups) {
+    const all = [...(Array.isArray(model.rows) ? model.rows : []), ...(model.notable_rows || [])];
+    const watching = (row) => Boolean(count(row.bio_count) || row.notable || row.value_line || count(row.geo_count)
+      || count(row.mining_count) || hasSites(row) || row.order || row.ggg || row.codex_type === "new");
+    const worth = (row) => safeNumber(row.value_max ?? row.notable?.value ?? row.value);
+    // As the spotlight turns: biology the scanners revealed, then biology only
+    // predicted, then the other worlds by worth; finished biology last.
+    // High-value worlds come straight after biology (5.5.3).
+    const rank = (row) => (row.order ? 0 : !count(row.bio_count) ? (row.notable || row.value_line ? 3 : 4)
+      : row.bio_complete ? 5 : row.needs_dss && !count(row.complete) ? 2 : 1);
+    const worlds = all.filter(watching).sort((left, right) => rank(left) - rank(right)
+      || (rank(left) === 0 ? safeNumber(left.order) - safeNumber(right.order) : 0)
+      || worth(right) - worth(left) || collator.compare(designation(left, model.system), designation(right, model.system)));
+    const quiet = all.filter((row) => !watching(row));
+    return {worlds, quiet};
+  }
+
   function sampleCard(sampling, event = {}) {
     const progress = Math.max(1, Math.min(3, Math.round(safeNumber(sampling.progress) || 1)));
     const distanceKnown = sampling.min_distance_m != null
@@ -860,6 +1005,19 @@
     return {head, counter};
   }
 
+  // "14 icy, 6 rocky · nothing to stop for": the quiet worlds as one line (5.7.8).
+  function quietSummary(rows) {
+    const counts = new Map();
+    for (const row of rows) {
+      const label = String(shortClass(row) || classLabel(row) || "other").toLowerCase();
+      counts.set(label, (counts.get(label) || 0) + 1);
+    }
+    const parts = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([label, n]) => `${n} ${label}`);
+    const line = node("div", "quiet-summary", `${parts.join(", ")} · nothing to stop for`);
+    line.dataset.key = "quiet-summary";
+    return line;
+  }
+
   // Tier the system into what the pilot acts on: biology first, then the
   // high-value bodies (Earth-likes, water worlds...), then surface signals,
   // then the landable and quiet rest.
@@ -877,10 +1035,11 @@
     const byDesignation = (left, right) => collator.compare(
       designation(left, system), designation(right, system),
     );
-    // Rows keep their place as scans arrive (NEW marks the latest instead of
-    // hoisting it); completed biology settles to the bottom of the manifest.
-    groups.biology.sort((left, right) => Number(Boolean(left.bio_complete))
-      - Number(Boolean(right.bio_complete)) || byDesignation(left, right));
+    // 5.7.8: most important at the top: biology the scanners have revealed
+    // (mapped, or sampling) still to do, then biology only predicted, then
+    // finished worlds. Rows keep their place within each band as scans arrive.
+    const band = (row) => (row.bio_complete ? 2 : row.needs_dss && !count(row.complete) ? 1 : 0);
+    groups.biology.sort((left, right) => band(left) - band(right) || byDesignation(left, right));
     // Rare worlds first (a green gas giant at the very top), then the most
     // valuable, so the best worlds never page out of sight.
     const worth = (row) => safeNumber(row.notable?.value ?? row.value);
@@ -1075,13 +1234,32 @@
       return;
     }
     pager.counter.textContent = pager.pages.length > 1
-      ? `${pager.total} ${pageDots(pager.page, pager.pages.length)}` : "";
-    pager.counter.hidden = pager.pages.length <= 1;
+      ? `${pager.total} ${pageDots(pager.page, pager.pages.length)}` : pager.key === "worlds" ? String(pager.total) : "";
+    pager.counter.hidden = pager.pages.length <= 1 && pager.key !== "worlds";
+  }
+
+  // The WORLDS list keeps the spotlit world on screen: the page that holds it.
+  function worldsPager() {
+    return cycle?.pagers.find((pager) => pager.key === "worlds") || null;
+  }
+
+  function pageHolding(pager, key) {
+    return pager ? pager.pages.findIndex((page) => page.some((element) => element.dataset.bodyKey === key)) : -1;
+  }
+
+  function followSpotlight() {
+    const pager = worldsPager();
+    const page = pageHolding(pager, cycle?.spotKey);
+    if (page >= 0) pager.page = page;
+    return page >= 0;
   }
 
   function paintPager(pager) {
     syncChildren(pager.items, pager.pages[pager.page] || []);
     paintCounter(pager);
+    if (pager.key === "worlds") {
+      for (const element of pager.items.children) element.classList.toggle("spotlit", element.dataset.bodyKey === cycle?.spotKey);
+    }
   }
 
   function tick() {
@@ -1097,7 +1275,9 @@
       cycle.manifest.page = (cycle.manifest.page + 1) % cycle.manifest.pages;
       paintManifest(new Map(), true, cycle.manifest.page);
     }
+    const followed = spotlightTurns() && followSpotlight();
     for (const pager of cycle.pagers) {
+      if (followed && pager.key === "worlds") continue;
       if (pager.pages.length > 1) pager.page = (pager.page + 1) % pager.pages.length;
     }
     schedule(CYCLE_MS);
@@ -1136,8 +1316,9 @@
     if (!pager.pages.length) pager.pages.push([]);
     // Holding still, the catalogue never pages: what fits shows and the rest
     // is counted in the group's label.
-    pager.unshown = cycle?.still ? pager.elements.length - pager.pages[0].length : 0;
-    if (cycle?.still) pager.pages.length = 1;
+    const still = cycle?.still && !pager.keepPages;
+    pager.unshown = still ? pager.elements.length - pager.pages[0].length : 0;
+    if (still) pager.pages.length = 1;
     pager.page = Math.min(pager.page, pager.pages.length - 1);
     // Reserve the first (fullest) page so turning never resizes the band.
     pager.items.replaceChildren(...pager.pages[0]);
@@ -1168,6 +1349,18 @@
       lines: 1, pages: [[]], page: kept?.identity === identity ? kept.page : 0};
     buildLinePager(pager);
     cycle.pagers = [pager];
+    return true;
+  }
+
+  // The quiet worlds' line is the first thing a tight overlay gives up whole.
+  function dropQuiet() {
+    const index = cycle.pagers.findIndex((pager) => pager.key === "quiet");
+    if (index < 0) return false;
+    // Its count moves to the footer, so the quiet worlds are still counted.
+    const total = cycle.pagers[index].total;
+    cycle.pagers[index].items.closest(".world-list")?.remove();
+    cycle.pagers.splice(index, 1);
+    dom.footer.firstElementChild?.append(` · ${total} QUIET`);
     return true;
   }
 
@@ -1233,9 +1426,17 @@
       if (pager) {
         pager.lines = Math.max(1, pager.lines - steps(overflow, pager.items, pager.lines));
         buildLinePager(pager);
-      } else if (!foldCatalogue() && !shrinkManifest(MANIFEST_MIN_ROWS, overflow)
-          && !shrinkManifest(MANIFEST_FLOOR_ROWS, overflow)) {
-        break;
+      } else if (dropQuiet()) {
+        continue;
+      } else {
+        const worlds = worldsPager();
+        if (worlds && worlds.lines > 1) {
+          worlds.lines = Math.max(1, worlds.lines - steps(overflow, worlds.items, worlds.lines));
+          buildLinePager(worlds);
+        } else if (!foldCatalogue() && !shrinkManifest(MANIFEST_MIN_ROWS, overflow)
+            && !shrinkManifest(MANIFEST_FLOOR_ROWS, overflow)) {
+          break;
+        }
       }
     }
   }
@@ -1280,96 +1481,117 @@
       system, systemName, biology: groups.biology, keys, spotKey, holdUntil, reason,
       locked: Boolean(sampleRow),
       samplingSpecies: sampleRow ? String(model.sampling.species || "").trim().toLowerCase() : "",
-      rotates: spotlightRotates(options, keys.length),
+      // 5.7.8: no spotlight card in the system view; the latest world is a
+      // highlighted row in WORLDS, so nothing turns but an overflowing list.
+      rotates: false,
       still: holdsStill(options, keys.length),
       pagers: [], spotlight: null, manifest: null, catalogue: null,
       periodStart: previous?.periodStart || 0, nextAt: previous?.nextAt || 0,
     };
 
     if (sample) dom.content.appendChild(sample);
-    if (groups.biology.length) {
-      cycle.spotlight = node("section", "spotlight-slot");
-      cycle.spotlight.setAttribute("aria-label", "Spotlight world");
-      dom.content.appendChild(cycle.spotlight);
-      reserveSpotlight();
-    }
-    // A lone biology world is fully described by the spotlight itself.
-    if (groups.biology.length > 1) {
-      const section = node("section", "manifest");
-      section.setAttribute("aria-label", "Biology manifest");
-      const {head, counter} = sectionHead("BIOLOGY", "tone-bio");
-      const list = node("div", "manifest-rows");
-      section.append(head, list);
-      dom.content.appendChild(section);
-      cycle.manifest = {list, counter, page: -1, pages: 1,
-        // Still, every world gets a row (the height budget may take some
-        // back); turning, the manifest windows along with the spotlight.
-        limit: cycle.still ? groups.biology.length : Math.max(1, limits.manifest),
-        min: Math.min(MANIFEST_MIN_ROWS, groups.biology.length)};
-      buildManifest(motion.rows);
-    }
-
+    // 5.7.8: the worlds as Explore & Survey's table has them, then the quiet
+    // ones. Nothing pages: the overlay grows to its limit, then the lowest
+    // worlds fold to one line, then to chips (fitWorlds).
+    const {worlds, quiet} = worldGroups(model, groups);
     const scopeAll = model.scope === "all";
-    const specs = [
-      ["notable", "NOTABLE", groups.notable, "rows", limits.notable],
-      ["surface", "SURFACE", groups.surface, "rows", limits.surface],
-      ["landable", "LANDABLE", groups.landable, scopeAll ? "rows" : "chips", scopeAll ? limits.rows : limits.chips],
-      ["other", "OTHER", groups.other, scopeAll ? "rows" : "chips", scopeAll ? limits.rows : limits.chips],
-    ].filter(([, , rows]) => rows.length);
-    if (specs.length) {
-      const catalogue = node("section", "catalogue");
-      catalogue.setAttribute("aria-label", "System catalogue");
-      dom.content.appendChild(catalogue);
-      cycle.catalogue = {section: catalogue, folded: false, previous: previous?.pagers || [],
-        rows: specs.flatMap(([, , rows]) => rows)};
-      for (const [key, label, rows, layout, lines] of specs) {
-        const group = node("div", `catalogue-group group-${key} layout-${layout}`);
-        group.dataset.group = key;
-        const head = node("div", "group-label");
-        head.appendChild(node("strong", "", label));
-        const counter = node("span", "group-count");
-        head.appendChild(counter);
-        const items = node("div", "group-items");
-        group.append(head, items);
-        catalogue.appendChild(group);
-        const elements = rows.map((row) => layout === "chips"
-          ? bodyChip(row, systemName)
-          : bodyRow(row, {system: systemName, kind: key,
-            event: motion.rows.get(rowKey(row)) || motion.notable.get(rowKey(row)) || {}}));
-        const identity = `${layout}|${rows.map(rowKey).join("|")}`;
-        const kept = previous?.pagers.find((pager) => pager.key === key);
-        const pager = {key, items, counter, elements, identity, total: rows.length,
-          lines: Math.max(1, lines), pages: [[]],
-          page: kept?.identity === identity ? kept.page : 0};
-        // Still, a group takes every line it needs; fitBudget takes lines
-        // back (and the group counts what it cannot show) only when the
-        // overlay would outgrow its height budget.
-        if (cycle.still) pager.lines = Math.max(pager.lines, wrappedLines(items, elements).length);
-        buildLinePager(pager);
-        cycle.pagers.push(pager);
-      }
+    const motionOf = (row) => motion.rows.get(rowKey(row)) || motion.notable.get(rowKey(row)) || {};
+    if (worlds.length) {
+      const section = node("section", "world-list group-worlds layout-worlds");
+      section.dataset.group = "worlds";
+      section.setAttribute("aria-label", "Worlds in this system");
+      const {head, counter} = sectionHead("WORLDS", "tone-worlds");
+      counter.textContent = String(worlds.length);
+      const items = node("div", "group-items");
+      const more = node("div", "world-more");
+      section.append(head, items, more);
+      dom.content.appendChild(section);
+      // Studio: "Species under each world" off starts every world on one line.
+      const start = options.species_lists === false ? "line" : "full";
+      cycle.worlds = {rows: worlds, items, more, motionOf, systemName, tiers: worlds.map(() => start)};
+      paintWorlds();
     }
-    // Never taller than the room left on its screen below it (sent by the
-    // app from the overlay's position and the display's scaling): a lower
-    // overlay pages its lists instead of running off the bottom.
+    if (quiet.length) {
+      const layout = scopeAll ? "worlds" : quiet.length > 3 ? "summary" : "chips";
+      const section = node("section", `world-list group-quiet layout-${layout}`);
+      section.dataset.group = "quiet";
+      section.setAttribute("aria-label", "Quiet worlds");
+      const {head, counter} = sectionHead("QUIET", "tone-quiet");
+      const items = node("div", "group-items");
+      section.append(head, items);
+      dom.content.appendChild(section);
+      const elements = layout === "summary" ? [quietSummary(quiet)] : quiet.map((row) => layout === "chips"
+        ? bodyChip(row, systemName) : worldRow(row, {system: systemName, event: motionOf(row), compact: true}));
+      const pager = {key: "quiet", items, counter, elements, identity: "", total: quiet.length, lines: 9999, pages: [[]], page: 0};
+      buildLinePager(pager);
+      cycle.pagers.push(pager);
+    }
+    // As tall as it needs, up to its limit and never past the room left on its
+    // screen below it (sent by the app from the overlay's position and scaling).
     const room = safeNumber(options.max_height);
-    const budget = cycle.still ? STILL_BUDGET : HEIGHT_BUDGET[tier];
-    fitBudget(room > 0 ? Math.min(budget, Math.max(220, room - 8)) : budget);
-
-    // Show the spotlit world's manifest page after a journal jump or while it
-    // turns; otherwise a self-paging manifest keeps the page it was on.
-    let manifestPage = null;
-    if (cycle.manifest) {
-      const kept = previous?.manifest?.limit === cycle.manifest.limit ? previous.manifest.page : 0;
-      manifestPage = spotlightTurns() || jumped ? spotlightPage()
-        : Math.min(Math.max(0, kept), cycle.manifest.pages - 1);
-    }
-    if (!rotating()) schedule(0);
-    else if (jumped && spotlightTurns()) schedule(Math.max(CYCLE_MS, holdUntil - now));
-    else if (jumped || !cycleTimer) schedule(CYCLE_MS);
-    paintSpotlight(motion.rows);
-    paintManifest(motion.rows, true, manifestPage);
+    // The Studio's "Grow up to" sets it, scaled with the text tier.
+    const growTo = safeNumber(options.grow_to);
+    const budget = growTo ? Math.round(growTo * SYSTEM_BUDGET[tier] / SYSTEM_BUDGET.normal) : SYSTEM_BUDGET[tier];
+    fitWorlds(room > 0 ? Math.min(budget, Math.max(220, room - 8)) : budget);
+    schedule(0);
     cycle.pagers.forEach(paintPager);
+  }
+
+  // Each world at its level: a full row with its species, one line, a chip,
+  // or (only past every chip that fits) counted in "+N MORE".
+  function paintWorlds() {
+    const worlds = cycle?.worlds;
+    if (!worlds) return;
+    const rows = [];
+    const chips = [];
+    let hidden = 0;
+    worlds.rows.forEach((row, index) => {
+      const level = worlds.tiers[index];
+      if (level === "hidden") hidden += 1;
+      else if (level === "chip") chips.push(worldChip(row, worlds.systemName));
+      else rows.push(worldRow(row, {system: worlds.systemName, event: worlds.motionOf(row), compact: level === "line"}));
+    });
+    if (hidden) chips.push(node("span", "body-chip world-more-count", `+${hidden} MORE`));
+    syncChildren(worlds.items, rows);
+    syncChildren(worlds.more, chips);
+    worlds.more.hidden = !chips.length;
+    for (const element of worlds.items.children) element.classList.toggle("spotlit", element.dataset.bodyKey === cycle.spotKey);
+  }
+
+  // Over the limit: the quiet line goes first (counted in the footer), then
+  // the lowest worlds fold, a level at a time: full rows to one line, one line
+  // to chips, chips to the count. The world the journal just moved stays full.
+  function fitWorlds(budget) {
+    const worlds = cycle.worlds;
+    const fold = (from, to, limit) => {
+      let moved = 0;
+      for (let index = worlds.tiers.length - 1; index >= 0 && moved < limit; index -= 1) {
+        if (worlds.tiers[index] === from && rowKey(worlds.rows[index]) !== cycle.spotKey) {
+          worlds.tiers[index] = to;
+          moved += 1;
+        }
+      }
+      return moved;
+    };
+    for (let guard = 0; guard < 400; guard += 1) {
+      const overflow = renderedContentHeight() - budget;
+      if (overflow <= 0) return;
+      if (dropQuiet()) continue;
+      if (!worlds) return;
+      // Several worlds a step when far over, so a big system settles quickly.
+      const batch = Math.max(1, Math.floor(overflow / 120));
+      if (!fold("full", "line", batch) && !fold("line", "chip", batch) && !fold("chip", "hidden", batch)) return;
+      paintWorlds();
+    }
+  }
+
+  function worldChip(row, system) {
+    const chip = bodyChip(row, system);
+    const bio = count(row.bio_count);
+    if (bio) chip.insertBefore(node("b", "chip-flag bio", row.source === "spansh" ? `${bio} BIO` : `${count(row.complete)}/${bio} BIO`),
+      chip.querySelector(".chip-flag"));
+    if (row.source === "spansh") chip.classList.add("from-spansh");
+    return chip;
   }
 
   function renderBody(model, motion) {
@@ -1411,9 +1633,13 @@
         spotlight: row ? designation(row, cycle.systemName) : null,
         spotIndex: row ? cycle.keys.indexOf(rowKey(row)) + 1 : 0,
         bio: cycle.biology.length,
-        manifestPage: cycle.manifest ? cycle.manifest.page + 1 : 0,
-        manifestPages: cycle.manifest ? cycle.manifest.pages : 0,
+        // 5.7.8: one WORLDS list that never pages; how many worlds at each level.
+        manifestPage: cycle.worlds ? 1 : 0,
+        manifestPages: cycle.worlds ? 1 : 0,
+        worlds: cycle.worlds ? Object.fromEntries(["full", "line", "chip", "hidden"].map((level) =>
+          [level, cycle.worlds.tiers.filter((value) => value === level).length])) : {},
         locked: cycle.locked,
+        still: Boolean(cycle.still),
         held: Date.now() < cycle.holdUntil,
         rotating: rotating(),
         spotlightTurns: spotlightTurns(),
@@ -1477,14 +1703,33 @@
       item.appendChild(node("b", "", value));
       metrics.appendChild(item);
     }
-    const estimate = moneyRange(low, high);
+    const explore = bodyMode ? null : model.explore;
+    // System view: what the whole system is worth, as Explore & Survey reckons it.
+    const estimate = explore && explore.value_max
+      ? (explore.value_now ? `${money(explore.value_now)} / ${money(explore.value_max)}` : money(explore.value_max))
+      : moneyRange(low, high);
     if (estimate) {
       const item = node("span", "overview-metric estimate");
-      item.appendChild(node("small", "", "EST"));
+      item.appendChild(node("small", "", explore && explore.value_max ? "WORTH" : "EST"));
       item.appendChild(node("b", "", estimate));
       metrics.appendChild(item);
     }
     dom.overview.appendChild(metrics);
+    if (explore) {
+      // Whose scans these are: yours, and other commanders' from Spansh.
+      const sources = node("div", "overview-line overview-sources");
+      sources.appendChild(node("b", "source-you", `YOURS ${count(explore.own)}`));
+      if (explore.spansh) {
+        sources.appendChild(node("i", "context-separator", "·"));
+        sources.appendChild(node("b", "source-spansh", `SPANSH ${count(explore.spansh)}`));
+        if (explore.spansh_date) sources.appendChild(node("small", "", `reported ${explore.spansh_date}`));
+      } else if (explore.asking) {
+        sources.appendChild(node("i", "context-separator", "·"));
+        sources.appendChild(node("small", "", "asking Spansh…"));
+      }
+      if (explore.ordered) sources.appendChild(node("small", "source-order", `${count(explore.ordered)}-step scan order`));
+      dom.overview.appendChild(sources);
+    }
   }
 
   function footer(model) {
@@ -1496,7 +1741,8 @@
       const mapped = count(lifetime.mapped);
       if (mapped) right = `DSS EFF ${count(lifetime.efficient)}/${mapped}`;
     } else {
-      const rows = Array.isArray(model.rows) ? model.rows : [];
+      // Mapped counts your own worlds only: Spansh's aren't yours to map yet.
+      const rows = (Array.isArray(model.rows) ? model.rows : []).filter((row) => row.source !== "spansh");
       left.push(`MAPPED ${rows.filter((row) => !row.needs_dss).length}/${rows.length}`);
       const footfall = rows.filter((row) => row.first_footfall).length;
       if (footfall) left.push(`1ST FOOTFALL ${footfall}`);

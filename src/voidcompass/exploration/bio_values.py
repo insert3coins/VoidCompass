@@ -2,6 +2,7 @@
 
 from voidcompass.exploration import bio_reference
 from voidcompass.exploration import bio_requirements
+from voidcompass.exploration import starling_rules
 
 GENUS_COLONY_M = {
     "Aleoida": 150, "Bacterium": 500, "Cactoida": 300, "Clypeus": 150,
@@ -10,6 +11,21 @@ GENUS_COLONY_M = {
     "Stratum": 500, "Tubus": 800, "Tussock": 200,
     "Anemone": 100, "Amphora Plant": 100, "Bark Mounds": 100,
     "Brain Tree": 100, "Brain Trees": 100, "Sinuous Tubers": 100, "Crystalline Shards": 100,
+    # Starling's spellings (5.7.8).
+    "Radicoida": 100, "Amphora": 100, "Bark Mound": 100,
+}
+
+# Price corrections (5.7.8), each checked against the game's own Codex
+# rewards (data/codexRef.json), Starling (Daddyg88's COVAS) and EDEXO: the
+# pinned catalogue has a placeholder for Concha Biconcavis (16,777,215, the
+# largest 24-bit number) and calls Radicoida Unica "Unicus". The Thargoid
+# coral is newer than the catalogue. Every price your own journals have sold
+# matches these.
+PRICE_CORRECTIONS = {
+    "Concha Biconcavis": 19010800,
+    "Radicoida Unica": 119037,
+    "Thargoid Coral Root": 1924600,
+    "Thargoid Coral Tree": 1896800,
 }
 
 # Values are generated from the same pinned EDMC-BioScan catalogue as the
@@ -41,6 +57,24 @@ _SUPPLEMENTAL_SPECIES = {
 for name, (value, family) in _SUPPLEMENTAL_SPECIES.items():
     SPECIES_VALUES[name] = value
     SPECIES_FAMILIES[name] = family
+
+for genus_key, species_rows in bio_requirements.CATALOG.items():
+    for species_key, row in species_rows.items():
+        corrected = PRICE_CORRECTIONS.get(str(row.get("name") or "").strip())
+        if corrected:
+            row["value"] = corrected
+            _CODEX_SPECIES_VALUES[str(species_key).casefold()] = corrected
+for name, value in PRICE_CORRECTIONS.items():
+    SPECIES_VALUES[name] = value
+    SPECIES_FAMILIES.setdefault(name, name.split(" ", 1)[0])
+SPECIES_VALUES["Radicoida Unicus"] = PRICE_CORRECTIONS["Radicoida Unica"]
+
+# The game's Codex identifier by species name, for species only Starling's
+# rules add (the Codex flags key on it).
+_SPECIES_KEY_BY_NAME = {
+    str(row.get("name") or "").casefold(): species_key
+    for species_rows in bio_requirements.CATALOG.values() for species_key, row in species_rows.items()
+}
 
 _SPECIES_VALUE_INDEX = {
     str(name).casefold(): value for name, value in SPECIES_VALUES.items()
@@ -80,6 +114,35 @@ PREDICTION_RULES = {
 FIRST_LOGGED_MULTIPLIER = 5
 
 
+# Things found in one place in the galaxy (Starling's author's advice, 5.7.8):
+# never guessed, and left out of "possible here" counts, or a one-off with a
+# huge price would throw every estimate out.
+UNIQUE_SPECIES = frozenset({"radicoida unica", "radicoida unicus", "chryseum void heart"})
+
+
+def is_unique(name):
+    return str(name or "").strip().casefold() in UNIQUE_SPECIES
+
+
+def likely_genera(rows):
+    """The genera the older rules call likely (5.7.8), else every one: what a
+    value estimate or a spoken line should go by, so Starling's wider list
+    of possibles never inflates them."""
+    rows = [row for row in rows or () if isinstance(row, dict)]
+    likely = [row for row in rows if row.get("likely", True)]
+    return likely or rows
+
+
+def pressure_atm(pascals):
+    """The journal's SurfacePressure (pascals) in atmospheres, as the species
+    rules give it. Passing pascals made every pressure limit fail (5.7.8: the
+    live predictions missed about a third of the species really found)."""
+    try:
+        return float(pascals) / 101325.0 if pascals not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
 def species_value(species_localised):
     if not species_localised:
         return None
@@ -113,7 +176,8 @@ def genus_info(genus_localised):
 
 
 def predict_genera(planet_class, atmosphere, temp_k, gravity_g, volcanism,
-                   pressure_atm=None, region_id=None, coords=None):
+                   pressure_atm=None, region_id=None, coords=None, *,
+                   system_stars=(), geo=False, distance_ls=None, thin=None):
     """Predict genera present on a body, newest data first.
 
     The published species requirements cover families that live on airless
@@ -127,10 +191,28 @@ def predict_genera(planet_class, atmosphere, temp_k, gravity_g, volcanism,
     # real answer, and the coarser legacy rules must not overrule it.
     if not planet_class or (temp_k is None and gravity_g is None):
         return _predict_genera_legacy(planet_class, atmosphere, temp_k, gravity_g, volcanism)
-    species = bio_requirements.candidate_species(
+    ours = bio_requirements.candidate_species(
         planet_class, atmosphere, temp_k, gravity_g, volcanism, pressure_atm,
         region_id, coords,
     )
+    species = [dict(row, likely=True) for row in ours or () if not is_unique(row.get("name"))]
+    # 5.7.8: Starling's rules decide what could be there (on our own journals
+    # they listed every species really analysed); the older rules above say
+    # which of those are likeliest. A species only Starling's rules allow is
+    # possible, not likely.
+    listed = {str(row.get("name") or "").casefold() for row in species}
+    try:
+        wide = starling_rules.candidates(planet_class, atmosphere, temp_k, gravity_g, volcanism, thin=thin,
+                                         distance_ls=distance_ls, system_stars=system_stars, geo=geo)
+    except Exception:
+        wide = []
+    for row in wide:
+        name = row["name"]
+        if is_unique(name) or name.casefold() in listed:
+            continue
+        listed.add(name.casefold())
+        species.append({"name": name, "value": species_value(name), "unchecked": [], "confirmed": False,
+                        "species_key": _SPECIES_KEY_BY_NAME.get(name.casefold()), "genus": row.get("genus"), "likely": False})
     if species:
         grouped = {}
         for row in species:
@@ -138,7 +220,7 @@ def predict_genera(planet_class, atmosphere, temp_k, gravity_g, volcanism,
             # names alone cannot be split reliably, because the non-flora
             # families are named colour-first.
             genus = bio_requirements.GENUS_FAMILIES.get(row.get("genus_key")) or \
-                bio_requirements.family_for_species(row.get("name"))
+                bio_requirements.family_for_species(row.get("name")) or row.get("genus")
             if not genus:
                 continue
             entry = grouped.get(genus)
@@ -146,25 +228,29 @@ def predict_genera(planet_class, atmosphere, temp_k, gravity_g, volcanism,
                 entry = genus_info(genus)
                 entry["species"] = []
                 entry["confirmed"] = False
+                entry["likely"] = False
                 grouped[genus] = entry
             entry["species"].append({
                 "name": row.get("name"), "value": row.get("value"),
                 "unchecked": row.get("unchecked"), "confirmed": row.get("confirmed"),
-                "key": row.get("species_key"),
+                "key": row.get("species_key"), "likely": bool(row.get("likely")),
             })
             entry["confirmed"] = entry["confirmed"] or bool(row.get("confirmed"))
+            entry["likely"] = entry["likely"] or bool(row.get("likely"))
         for entry in grouped.values():
             # genus_info() spans every species the genus can contain. Now that
-            # the fitting species are known, narrow the range to those, so the
-            # figure cannot contradict the species listed beneath it.
-            values = [row["value"] for row in entry["species"] if row.get("value")]
+            # the fitting species are known, narrow the range to those (the
+            # likeliest, when the older rules picked some), so the figure
+            # cannot contradict the species listed beneath it.
+            pool = [row for row in entry["species"] if row.get("likely")] or entry["species"]
+            values = [row["value"] for row in pool if row.get("value")]
             if values:
                 entry["min_value"] = min(values)
                 entry["max_value"] = max(values)
         if grouped:
             return sorted(
                 grouped.values(),
-                key=lambda row: (not row.get("confirmed"), row.get("name") or ""),
+                key=lambda row: (not row.get("likely"), not row.get("confirmed"), row.get("name") or ""),
             )
     return []
 

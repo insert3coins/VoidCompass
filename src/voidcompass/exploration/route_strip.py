@@ -12,13 +12,36 @@ from voidcompass.exploration.route_stars import is_scoopable
 SCOOPABLE_CLASSES = "KGBFOAM"
 
 
+def _xyz(point):
+    """Coordinates as a list, a tuple or a waypoint's {x, y, z}."""
+    if isinstance(point, dict):
+        point = (point.get("x"), point.get("y"), point.get("z"))
+    return point
+
+
 def _distance(a, b):
+    a, b = _xyz(a), _xyz(b)
     if not a or not b:
         return None
     try:
         return math.sqrt(sum((float(x) - float(y)) ** 2 for x, y in zip(a, b)))
     except Exception:
         return None
+
+
+def _waypoints_beyond(waypoints, route, entries):
+    """5.7.8: Elite's route to the next stop of a longer one (a plotted route,
+    an expedition), and the stops after it: [(waypoint, coords of the game
+    route's last system)], or [] when the game route doesn't end on a stop."""
+    if not route or not waypoints:
+        return [], None
+    end = str(route[-1] or "").strip().casefold()
+    at = next((index for index, waypoint in enumerate(waypoints)
+               if str(waypoint.get("name") or "").strip().casefold() == end), -1)
+    if at < 0:
+        return [], None
+    last = entries[len(route) - 1] if len(entries) >= len(route) else {}
+    return [waypoint for waypoint in waypoints[at + 1:] if not waypoint.get("visited")], (last or {}).get("StarPos")
 
 
 def build_route_hops(current_coords, route_list, nav_route_entries, current_sys=None,
@@ -44,7 +67,7 @@ def build_route_hops(current_coords, route_list, nav_route_entries, current_sys=
             dist = waypoint_manager.get_distance(prev_coords, coords) if prev_coords and coords else None
             hops.append({
                 "name": wp.get("name"), "dist": dist,
-                "scoopable": None, "star_class": "",
+                "scoopable": wp.get("scoopable"), "star_class": str(wp.get("star_class") or ""),
             })
             if coords:
                 prev_coords = coords
@@ -66,7 +89,8 @@ def build_route_hops(current_coords, route_list, nav_route_entries, current_sys=
 
     hops = []
     prev_coords = current_coords
-    total_upcoming = len(upcoming_names)
+    beyond, _end = _waypoints_beyond(waypoints, route, entries)
+    total_upcoming = len(upcoming_names) + len(beyond)
     for name, entry in zip(upcoming_names, upcoming_entries):
         coords = (entry or {}).get("StarPos")
         star_class = str((entry or {}).get("StarClass") or "").strip()
@@ -80,6 +104,15 @@ def build_route_hops(current_coords, route_list, nav_route_entries, current_sys=
             prev_coords = coords
         if len(hops) >= max_hops:
             break
+    # Then the rest of the plotted route, stop by stop.
+    for waypoint in beyond:
+        if len(hops) >= max_hops:
+            break
+        coords = waypoint.get("coords")
+        hops.append({"name": waypoint.get("name"), "dist": _distance(prev_coords, coords),
+                     "scoopable": waypoint.get("scoopable"), "star_class": str(waypoint.get("star_class") or ""), "plotted": True})
+        if coords:
+            prev_coords = coords
 
     truncated = max(0, total_upcoming - len(hops))
     return hops, truncated
@@ -131,8 +164,8 @@ def build_route_track(current_coords, route_list, nav_route_entries, current_sys
             hops.append({
                 "name": waypoint.get("name"),
                 "dist": distance,
-                "scoopable": None,
-                "star_class": "",
+                "scoopable": waypoint.get("scoopable"),
+                "star_class": str(waypoint.get("star_class") or ""),
                 "completed": bool(waypoint.get("visited")),
                 "current": index == current_index,
                 "next": index == next_index,
@@ -182,10 +215,24 @@ def build_route_track(current_coords, route_list, nav_route_entries, current_sys
             })
             if coords:
                 previous_coords = coords
+        # The game route reaches the next stop of a longer plotted route: the
+        # stops after it follow on the same line.
+        beyond, end = _waypoints_beyond(waypoints, route, entries)
+        previous_coords = end or previous_coords
+        for waypoint in beyond:
+            coords = waypoint.get("coords")
+            distance = None
+            if previous_coords and coords:
+                distance = _distance(previous_coords, coords)
+            hops.append({"name": waypoint.get("name"), "dist": distance, "scoopable": waypoint.get("scoopable"),
+                         "star_class": str(waypoint.get("star_class") or ""),
+                         "completed": False, "current": False, "next": False, "plotted": True})
+            if coords:
+                previous_coords = coords
         return {
             "hops": hops,
             "origin_current": route_idx in (-1, 0),
-            "source": "game",
+            "source": "game+waypoints" if beyond else "game",
         }
 
     return {"hops": [], "origin_current": True, "source": "none"}

@@ -15,6 +15,7 @@ export function companionInfo(source = {}) {
 
 export function renderCompanionChrome(source = {}) {
   const {identity, name} = companionInfo(source);
+  if (document.body.dataset.companion === identity) return;
   document.body.dataset.companion = identity;
   const nav = document.querySelector('.nav-item[data-page="watcher"]');
   if (nav) {

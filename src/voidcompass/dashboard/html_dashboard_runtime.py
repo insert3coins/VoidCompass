@@ -401,6 +401,21 @@ class HtmlDashboardRuntime:
             self.window_geometry = {"width": width, "height": height, "x": x, "y": y,
                                     "physical": bool(payload.get("physical"))}
             return True
+        if action == "popout_geometry":
+            # A popped-out page's window, moved or resized (5.7.8).
+            page = str(payload.get("page") or "")[:40]
+            try:
+                rect = {key: int(payload.get(key)) for key in ("x", "y", "width", "height")}
+            except (TypeError, ValueError):
+                return False
+            save = getattr(self.app, "_save_popout_geometry", None)
+            if not page or not callable(save):
+                return False
+            try:
+                self.root.call_later(0, lambda: save(page, rect))
+            except Exception:
+                return False
+            return True
         if action == "window_closed":
             try:
                 self.root.call_later(0, self._close_from_window)
@@ -417,7 +432,7 @@ class HtmlDashboardRuntime:
             return bool(callable(receive) and receive(payload))
         if action not in {
             "open", "copy_next", "set_auto_copy", "set_theme", "rebuild_cache",
-            "open_screenshots", "open_postcards", "open_logs", "quit",
+            "open_screenshots", "open_journal", "open_postcards", "open_logs", "quit",
             "page_changed", "overlay_studio", "workspace", "music",
             "set_flight_log_mode",
             "set_exploration_doctrine", "save_dashboard_layout",

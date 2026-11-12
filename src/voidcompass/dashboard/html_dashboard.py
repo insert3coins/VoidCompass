@@ -42,7 +42,6 @@ from voidcompass.core.version import APP_VERSION
 from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_material_catalogue, SURFACE_MINING_NEW, location_index
 from voidcompass.mining.rhino_intelligence import ground_intelligence, rhino_forecast, rhino_hint
 from voidcompass.core.config import get_active_profile, get_profile_dir
-from voidcompass.exploration.deep_survey import recon_report
 from voidcompass.exploration.exploration_intelligence import body_completion
 from voidcompass.overlays.survey_status_hud import body_codex_flag
 from voidcompass.core.diagnostic_logs import application_base_dir
@@ -102,9 +101,9 @@ _CORE_RANKS = ranks.RANKS
 
 _HTML_WORKSPACE_PAGES = {
     "planet-materials", "explore", "profile", "chronicle", "mission", "ground", "mining",
-    "powerplay", "carrier", "recon", "achievements", "ledger", "settings",
+    "powerplay", "carrier", "achievements", "settings",
     "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation",
-    "tools", "wrapped", "games", "hatchling", "system-map",
+    "wrapped", "games", "system-map",
 }
 
 
@@ -917,6 +916,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 "state", "status", "stalled", "status_seq", "events", "orb", "vitals", "personality", "memory", "activity", "overlays", "thought",
             ) if key in heartbeat_model},
             "thoughts": int(memory.get("thoughts") or 0),
+            "muted": list(self.config.get("muted_lines") or [])[-200:],
             "sessions": sessions,
             "hours": round(hours, 1),
             "deaths": int(memory.get("deaths") or 0),
@@ -1632,7 +1632,26 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             cache = None
         age_seconds = max(0.0, now - _number(cache.get("time"), 0)) if cache else None
         read_status = "ready"
-        if cache is None or age_seconds > 6.0:
+        soon = getattr(self, "_survey_items_soon", None)
+        if callable(soon):
+            # 5.7.8: the scan cache is parsed off the UI thread (every scan row's
+            # JSON, read here every 6 s, froze the deck for seconds on a long history).
+            items = soon()
+            if items is None:
+                read_status = "loading"
+            elif cache is None or cache.get("items") is not items or age_seconds > 6.0:
+                deep = getattr(self, "deep_survey", None)
+                try:
+                    region_state = deep.region_passport_state() if deep is not None else {}
+                except Exception:
+                    region_state = {}
+                science = (cache.get("science") if cache is not None and cache.get("items") is items
+                           else build_science_lab([(item.get("_system"), item) for item in items]))
+                cache = {"profile": profile, "time": now, "items": items, "science": science,
+                         "passport": build_region_passport(region_state)}
+                self._html_science_lab_cache = cache
+                age_seconds = 0.0
+        elif cache is None or age_seconds > 6.0:
             lock = getattr(self, "db_lock", None)
             acquired = False
             if lock is None:
@@ -1688,64 +1707,6 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             },
         }
 
-    def _html_chronicle_workspace(self):
-        analytics = self._html_analytics_workspace(include_science=False)
-        analytics.pop("current", None)
-        logbook = getattr(self, "captains_log", None)
-        sessions = []
-        if logbook is not None:
-            try:
-                sessions = logbook.sessions()
-            except Exception:
-                sessions = []
-        analytics["sessions"] = [
-            {
-                **analytics["sessions"][index],
-                "highlights": [
-                    {
-                        "kind": _text(item.get("kind") or "LOG", 30),
-                        "title": _text(item.get("title") or "Journal event", 180),
-                        "detail": _text(item.get("detail"), 260),
-                        "timestamp": _text(item.get("timestamp"), 40),
-                    }
-                    for item in (session.get("highlights") or [])[-24:] if isinstance(item, dict)
-                ],
-            }
-            for index, session in enumerate(sessions[:120])
-        ]
-        deep = getattr(self, "deep_survey", None)
-        try:
-            replay_state = deep.replay_state() if deep is not None else {}
-        except Exception:
-            replay_state = {}
-        analytics["replay"] = build_replay(sessions[:120], replay_state)
-        # One page for each night you flew (5.5.3.8, dashboard_flight_log_mixin).
-        logs = getattr(self, "_flight_logs", None)
-        try:
-            analytics["flight_logs"] = {
-                "logs": logs(sessions) if callable(logs) else [],
-                "notice": bool(self.config.get("flight_log_notice", True)),
-            }
-        except Exception as exc:
-            logging.debug("Flight logs skipped: %s", exc)
-            analytics["flight_logs"] = {"logs": [], "notice": True}
-        try:
-            discoveries = deep.discovery_state(160) if deep is not None else []
-        except Exception:
-            discoveries = []
-        analytics["discoveries"] = [
-            {
-                "timestamp": _text(row.get("timestamp"), 40),
-                "event": _text(row.get("event"), 40),
-                "system": _text(row.get("system"), 140),
-                "body": _text(row.get("body"), 160),
-                "title": _text(row.get("title") or "Field discovery", 180),
-                "detail": _text(row.get("detail"), 220),
-                "value": _integer(row.get("value")),
-            }
-            for row in reversed(discoveries) if isinstance(row, dict)
-        ]
-        return analytics
 
     def _html_mission_workspace(self):
         # 5.6.1: Mission Control is the Expeditions page (dashboard_expedition_mixin).
@@ -2340,28 +2301,6 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             },
         }
 
-    def _html_recon_workspace(self):
-        bodies = [row for row in (getattr(self, "scan_items", None) or []) if isinstance(row, dict)]
-        try:
-            report = recon_report(
-                getattr(self, "current_sys", "Unknown"), bodies,
-                _integer(getattr(self, "scanned", 0)),
-                _integer(getattr(self, "total", 0)),
-                getattr(self, "system_traffic", {}) or {},
-            )
-        except Exception:
-            report = {"system": getattr(self, "current_sys", "Unknown"), "score": 0, "grade": "unknown", "gaps": []}
-        deep = getattr(self, "deep_survey", None)
-        try:
-            stored = deep.snapshot() if deep is not None else {}
-        except Exception:
-            stored = {}
-        return {
-            "report": report,
-            "candidates": (stored.get("candidates") or [])[-80:],
-            "revisits": (stored.get("revisit_queue") or [])[-80:],
-            "milestones": (stored.get("milestones") or [])[-80:],
-        }
 
     def _html_achievements_workspace(self):
         engine = getattr(self, "achievement_engine", None)
@@ -2495,7 +2434,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "low_fuel_threshold_pct", "auto_copy_waypoint", "expedition_risk_cr",
             "expedition_gec_enabled", "expedition_poi_range_ly",
             "achievement_notifications_enabled", "adaptive_command_enabled",
-            "home_system",
+            "home_system", "start_page", "target_remarks", "crew_warnings", "pad_location", "mining_recap",
+            "auto_honk", "auto_honk_key", "canonn_reports", "target_sounds", "leave_behind_cr",
             "api_enabled", "api_port", "api_allow_lan", "api_allow_control",
         ):
             value = self.config.get(key)
@@ -2507,7 +2447,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             ("adaptive_command_enabled", True),
             ("raven_sync_enabled", True), ("raven_share_ship_cargo", False), ("bgs_online_enabled", True),
             ("trading_online_enabled", True),
-            ("orders_enabled", True), ("orders_frequency", "session"),
+            ("orders_enabled", True), ("orders_frequency", "session"), ("start_page", "last"),
+            ("target_remarks", "crew"), ("crew_warnings", True), ("pad_location", True), ("mining_recap", True),
+            ("auto_honk", False), ("auto_honk_key", ""), ("canonn_reports", True), ("target_sounds", True), ("leave_behind_cr", 2_000_000),
             ("orders_campaigns", True),
             ("orders_kind_exobiology", True), ("orders_kind_exploration", True), ("orders_kind_travel", True), ("orders_kind_trade", True), ("orders_kind_colonisation", True), ("orders_kind_powerplay", True),
             ("orders_watcher", True), ("orders_copy_target", True), ("orders_open_map", False),
@@ -2708,8 +2650,13 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         self._html_settings_paths_cache = None
 
     def _planet_materials_store(self):
-        return PlanetMaterialsStore(os.path.join(
-            get_profile_dir(get_active_profile(self.config)), "planet_materials.db"))
+        # One store per profile: opening it checks the schema, and the System Map
+        # asks for it on every refresh.
+        path = os.path.join(get_profile_dir(get_active_profile(self.config)), "planet_materials.db")
+        store = getattr(self, "_planet_materials_store_obj", None)
+        if store is None or store.path != path:
+            store = self._planet_materials_store_obj = PlanetMaterialsStore(path)
+        return store
 
     def _html_planet_materials_workspace(self):
         lat = _number(getattr(self, "current_latitude", None))
@@ -2825,15 +2772,13 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             # 5.5.4: the Exploration Archive is Explore & Survey's Archive tab.
             "explore": lambda: {**self._html_explore_workspace(intelligence), "archive": self._html_analytics_workspace()},
             "profile": self._html_profile_workspace,
-            "chronicle": self._html_chronicle_workspace,
+            "chronicle": lambda: {"history": True},
             "mission": self._html_mission_workspace,
             "ground": self._html_ground_workspace,
             "mining": self._html_mining_workspace,
             "powerplay": self._html_powerplay_workspace,
             "carrier": self._html_carrier_workspace,
-            "recon": self._html_recon_workspace,
             "achievements": self._html_achievements_workspace,
-            "ledger": self._html_ledger_workspace,
             "settings": self._html_settings_workspace,
             "colonisation": self._html_colonisation_workspace,
             "bgs": self._html_bgs_workspace,
@@ -2845,15 +2790,12 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "screenshots": getattr(self, "_html_screenshots_workspace", None),
             # Time capsules and On this day (5.5.3.7, dashboard_capsules_mixin).
             "capsules": getattr(self, "_html_capsules_workspace", None),
-            "tools": getattr(self, "_html_tools_workspace", None),
             # Your constellation (5.5.3.7, dashboard_capsules_mixin).
             "constellation": getattr(self, "_html_constellation_workspace", None),
             # Void Wrapped (5.5.10, dashboard_journey_mixin).
             "wrapped": getattr(self, "_html_wrapped_workspace", None),
             # Games (5.6.3, dashboard_games_mixin).
             "games": getattr(self, "_html_games_workspace", None),
-            # Hatchling has a dedicated Cockpit workspace (5.6.7).
-            "hatchling": getattr(self, "_html_hatchling_workspace", None),
         }
         builder = builders.get(page)
         if builder is None:
@@ -2868,7 +2810,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
     def _request_html_dashboard_page(self, page):
         page = _text(page, 40).casefold()
         if page not in {
-            "overview", "explore", "map", "records", "operations",
+            "overview", "explore", "map", "records", "operations", "route",
             "overlay-studio", "settings", "about", *_HTML_WORKSPACE_PAGES,
         }:
             return False
@@ -3085,6 +3027,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 "installer": self._html_release_installer(release_update),
             },
             "profile": {
+                "start_page": _text(self.config.get("start_page") or "last", 20),
                 "key": _text(self.config.get("active_commander_profile"), 120),
                 "commander": _text(profile_name, 120),
                 "profile_label": f"{profile_name} · profile-aware exploration state",
@@ -3099,6 +3042,12 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 "session": adaptive.get("session") or {},
             },
             "flight": flight,
+            # The status tiles across every page (5.7.8).
+            "tiles": self._status_tiles() if hasattr(self, "_status_tiles") else {},
+            # The Dashboard as the whole ship: panels in the order what you're doing wants (5.7.8).
+            "activity": self._html_dashboard_activity() if hasattr(self, "_html_dashboard_activity") else {},
+            # The Route page refreshes when Plot Route's state moves on (5.7.8).
+            "survey_rev": int((self._survey() or {}).get("rev") or 0) if hasattr(self, "_survey") else 0,
             "survey": survey,
             "route": route,
             "traffic": {
@@ -3157,6 +3106,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 if boot_active or active_page not in _HTML_WORKSPACE_PAGES
                 else self._html_workspace(active_page, intelligence=intelligence)
             ),
+            "popout_workspaces": {} if boot_active else self._html_popout_workspaces(active_page, intelligence),
+            "popout_geometry": dict(self.config.get("popout_geometry") or {}),
             # The Studio is an on-demand workspace, not boot-critical state.
             # Deferring its desktop/overlay catalogue keeps startup snapshots
             # small and prevents geometry inspection from competing with the
@@ -3247,19 +3198,12 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         if page == "games":
             return self._handle_games_command(operation, payload)
 
-        if page == "hatchling":
-            return operation == "action" and self._hatchling_action(payload)
-
         if page == "wrapped":
             return self._handle_wrapped_command(operation, payload)
 
         if page == "flight_log":
             return self._handle_flight_log_command(operation, payload)
 
-        if page == "tools":
-            result = self._handle_tools_command(operation, payload)
-            self._schedule_html_dashboard_publish(immediate=True)
-            return result
 
         if page == "capsules":
             result = self._handle_capsules_command(operation, payload)
@@ -3289,6 +3233,18 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 done = self._watcher_reset()
                 self._schedule_html_dashboard_publish(immediate=True)
                 return done
+            # 5.7.8: mute (or bring back) one line you're tired of hearing.
+            if operation in ("mute_line", "unmute_line"):
+                key = watcher_mind.mute_key(payload.get("text"))
+                if not key:
+                    return False
+                muted = [line for line in (self.config.get("muted_lines") or []) if line != key]
+                if operation == "mute_line":
+                    muted.append(key)
+                self.config["muted_lines"] = muted[-500:]
+                self._persist_config()
+                self._schedule_html_dashboard_publish(immediate=True)
+                return True
             # 5.6.1: answer its question; your Watcher's code; a friend's.
             if operation == "answer":
                 return self._watcher_answer(_text(payload.get("answer"), 20))
@@ -3384,41 +3340,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             if operation == "watch_again":
                 # The Flight Recorder on the Galactic Atlas (5.5.10).
                 return self._recorder_open(_text(payload.get("id"), 40))
-            if operation != "export_replay":
-                return False
-            workspace = self._html_chronicle_workspace()
-            sessions = workspace.get("sessions") or []
-            replay = workspace.get("replay") or {}
-            index = _integer(payload.get("session_index"), 0)
-            if not 0 <= index < len(sessions):
-                return False
-            session = sessions[index]
-            replay_session = (replay.get("sessions") or [{}])[index]
-            title = _text(
-                f"{session.get('start_system') or 'Expedition'} to "
-                f"{session.get('end_system') or session.get('start_system') or 'Unknown'}",
-                180,
-            )
-            try:
-                path = str(payload.get("path") or "").strip()
-                if path and (not Path(path).is_absolute() or Path(path).suffix.lower() != ".html"):
-                    return False
-                if not path:
-                    return True
-                document = replay_export_html(
-                    title,
-                    getattr(self, "cmdr_name", None) or self.config.get("active_commander_name"),
-                    replay,
-                    replay_session,
-                )
-                Path(path).write_text(document, encoding="utf-8")
-            except Exception as exc:
-                logging.warning("Expedition replay export failed: %s", exc)
-                return False
-            self.add_event_feed_entry(
-                "EXPEDITION", f"Interactive replay exported: {Path(path).name}", severity="INFO",
-            )
-            return True
+            return False
 
         elif page == "mission":
             manager = getattr(self, "expedition_manager", None)
@@ -3907,7 +3829,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                         return False
                     total, free = carrier.get("space_total"), carrier.get("space_free")
                     try:
-                        used = max(0, int(total) - int(free))
+                        # Reserved space (buy orders) carries no mass (5.7.8).
+                        used = max(0, int(total) - int(free) - int(carrier.get("space_reserved") or 0))
                     except (TypeError, ValueError):
                         used = 0
                     engine = getattr(self, "specialist_engine", None)
@@ -4048,25 +3971,6 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                         else "https://spansh.co.uk/bodies"
                     )
                     return True
-
-        elif page == "recon":
-            deep = getattr(self, "deep_survey", None)
-            if deep is None:
-                return False
-            if operation == "save":
-                report = self._html_recon_workspace().get("report") or {}
-                changed = bool(deep.save_candidate(report, notes=_text(payload.get("notes"), 1000)))
-                if changed:
-                    manager = getattr(self, "expedition_manager", None)
-                    if manager is not None:
-                        manager.observe_recon(report.get("system"), report.get("score"))
-            elif operation == "dismiss_revisit":
-                deep.dismiss_revisit(_text(payload.get("system"), 140))
-                changed = True
-            elif operation == "delete_candidate":
-                changed = bool(payload.get("confirmed") and deep.remove_candidate(_text(payload.get("system"), 140)))
-            elif operation == "copy_report":
-                return self._html_copy_text(deep.recon_markdown(self._html_recon_workspace().get("report") or {}))
 
         elif page == "achievements":
             engine = getattr(self, "achievement_engine", None)
@@ -4279,7 +4183,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                     "inara_cmdr_name": str, "inara_api_key": str, "inara_upload_enabled": bool,
                     "raven_api_key": str, "raven_sync_enabled": bool,
                     "raven_share_ship_cargo": bool, "bgs_online_enabled": bool, "trading_online_enabled": bool,
-                    "orders_enabled": bool, "orders_frequency": str, "orders_campaigns": bool,
+                    "orders_enabled": bool, "orders_frequency": str, "orders_campaigns": bool, "start_page": str,
+                    "target_remarks": str, "crew_warnings": bool, "pad_location": bool, "mining_recap": bool,
+                    "auto_honk": bool, "auto_honk_key": str, "canonn_reports": bool, "target_sounds": bool, "leave_behind_cr": int,
                     "orders_kind_exobiology": bool, "orders_kind_exploration": bool, "orders_kind_travel": bool, "orders_kind_trade": bool, "orders_kind_colonisation": bool, "orders_kind_powerplay": bool,
                     "orders_watcher": bool, "orders_copy_target": bool, "orders_open_map": bool,
                     "eddn_market_upload_enabled": bool,
@@ -4336,6 +4242,15 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                             self._schedule_html_dashboard_publish(immediate=True)
                             return False
                         updates[key] = {name: list(steps) for name, steps in value.items()}
+                    elif key == "auto_honk_key":
+                        from voidcompass.core.elite_keys import keyboard_shortcut
+                        try:
+                            keyboard_shortcut(value)
+                        except ValueError as exc:
+                            self._html_settings_last_save = {"id": save_id, "ok": False, "detail": str(exc)}
+                            self._schedule_html_dashboard_publish(immediate=True)
+                            return False
+                        updates[key] = _text(value, 100)
                     elif cast is bool:
                         updates[key] = bool(value)
                     elif key == "galnet_rotation_seconds":
@@ -4429,15 +4344,50 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             runtime.allow_frame_source(view.server.origin)
         self._schedule_html_dashboard_publish(immediate=True)
 
+    def _save_popout_geometry(self, page, rect):
+        """Where each popped-out page's window was last put (this PC's, not a profile's)."""
+        if not re.fullmatch(r"[a-z][a-z0-9-]{1,39}", str(page or "")):
+            return False
+        saved = dict(self.config.get("popout_geometry") or {})
+        if saved.get(page) == rect:
+            return True
+        saved[page] = rect
+        self.config["popout_geometry"] = saved
+        self._persist_config()
+        return True
+
+    def _html_popout_workspaces(self, active_page, intelligence=None):
+        popped = getattr(self, "_html_popout_pages", None) or {}
+        now = time.time()
+        out = {}
+        for page, seen in list(popped.items()):
+            if now - seen > 30:
+                popped.pop(page, None)
+                continue
+            if page == active_page or page not in _HTML_WORKSPACE_PAGES:
+                continue
+            try:
+                out[page] = self._html_workspace(page, intelligence=intelligence)
+            except Exception as exc:
+                logging.debug("Popped-out page skipped [%s]: %s", page, exc)
+        return out
+
     def handle_html_dashboard_command(self, payload):
         action = str((payload or {}).get("action") or "").strip().casefold()
         if action == "page_changed":
             page = _text(payload.get("page"), 40).casefold()
             if page not in {
-                "overview", "explore", "map", "records", "operations",
+                "overview", "explore", "map", "records", "operations", "route",
                 "overlay-studio", "settings", "about", "music", *_HTML_WORKSPACE_PAGES,
             }:
                 return False
+            if payload.get("window") == "popout":
+                # A page popped out into its own window (5.7.8): its data rides
+                # along beside the main window's while it keeps asking.
+                popped = self.__dict__.setdefault("_html_popout_pages", {})
+                popped[page] = time.time()
+                self._schedule_html_dashboard_publish(immediate=True)
+                return True
             self._html_dashboard_active_page = page
             # Layout mode belongs to Overlay Studio: leaving it puts every
             # overlay back to showing only when it has something to show.
@@ -4509,7 +4459,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             allowed_pages = {
                 "overview", "explore", "records", "operations", "profile",
                 "chronicle", "mission", "ground", "mining",
-                "powerplay", "carrier", "recon", "achievements", "ledger",
+                "powerplay", "carrier", "achievements",
                 "settings", "about",
             }
             if page not in allowed_pages:
@@ -4589,6 +4539,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         if action == "open_screenshots":
             self.open_screenshots_folder()
             return True
+        if action == "open_journal":
+            path = str(self.config.get("journal_path") or "")
+            return bool(path) and open_path(path)
         if action == "open_postcards":
             self.open_postcards_folder()
             return True

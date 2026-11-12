@@ -6,6 +6,9 @@ Studio (which edits them), without either importing the other.
 
 SPOTLIGHT_ROTATION_MODES = ("auto", "always", "off")
 DEFAULT_SPOTLIGHT_THRESHOLD = 8
+# 5.7.8: how tall the system view grows before its worlds fold (it never pages).
+GROW_TO_RANGE = (500, 1200)
+DEFAULT_GROW_TO = 900
 
 
 def _integer(value, default):
@@ -24,9 +27,13 @@ def survey_overlay_options(config):
     """
     mode = str(config.get("survey_spotlight_rotation") or "auto").strip().casefold()
     threshold = _integer(config.get("survey_spotlight_threshold"), DEFAULT_SPOTLIGHT_THRESHOLD)
+    grow_to = _integer(config.get("survey_grow_to"), DEFAULT_GROW_TO)
     return {
+        # Kept for old profiles; the system view no longer rotates (5.7.8).
         "spotlight_rotation": mode if mode in SPOTLIGHT_ROTATION_MODES else "auto",
         "spotlight_threshold": max(2, min(40, threshold)),
+        "grow_to": max(GROW_TO_RANGE[0], min(GROW_TO_RANGE[1], grow_to)),
+        "species_lists": bool(config.get("survey_species_lists", True)),
     }
 
 

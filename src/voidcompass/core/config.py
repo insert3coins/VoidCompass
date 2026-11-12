@@ -67,6 +67,12 @@ RETIRED_SYSTEM_INFO_CONFIG_KEYS = (
     "system_info_hud_x",
     "system_info_hud_y",
 )
+# The Hatchling was removed in 5.7.8. Its pet file stays on disk, unread.
+RETIRED_HATCHLING_CONFIG_KEYS = (
+    "hatchling_overlay_enabled", "hatchling_hud_x", "hatchling_hud_y", "overlay_hotkey_hatchling",
+    "hatchling_text_scale_percent", "hatchling_look", "hatchling_pet_size", "hatchling_roam",
+    "hatchling_needs", "hatchling_chatter", "hatchling_speech", "hatchling_glow", "hatchling_sounds",
+)
 DEPRECATED_CONFIG_KEYS = (
     'engineer_window_geometry',
     'bgs_window_geometry',
@@ -148,7 +154,7 @@ DEPRECATED_CONFIG_KEYS = (
     'dashboard_compact_geometry',
     'dashboard_expanded_geometry',
     'dashboard_window_geometry_version',
-) + RETIRED_COMPASS_CONFIG_KEYS + RETIRED_SYSTEM_INFO_CONFIG_KEYS
+) + RETIRED_COMPASS_CONFIG_KEYS + RETIRED_SYSTEM_INFO_CONFIG_KEYS + RETIRED_HATCHLING_CONFIG_KEYS
 # Overlay/HUD colors are seeded from the active theme at startup; the live
 # theme bridge rebinds these module constants and repaints open overlays.
 from voidcompass.core import themes as _themes
@@ -164,6 +170,10 @@ COLOR_YELLOW = _themes.ACTIVE_PALETTE["yellow"]
 
 
 PROFILE_TEXT_SETTINGS = (
+    # 5.7.8: the page the deck opens on: "last", "overview" or "explore".
+    "start_page",
+    # 5.7.8: what's said as you target a system: "crew", "tone" (a toast) or "off".
+    "target_remarks",
     # 5.7.7: Crew Orders, how often and which kinds.
     "orders_frequency",
     # 5.7.7: crew banter, how often and how many talk.
@@ -215,7 +225,9 @@ PROFILE_TEXT_SETTINGS = (
     "watcher_listen_mode",
     "watcher_listen_model",
     "home_system",
+    "auto_honk_key",
     "hud_scene_mode",
+    "hud_distance_from",
     "hud_font_face",
     "hud_label_size",
     "galnet_ticker_speed",
@@ -228,12 +240,6 @@ PROFILE_TEXT_SETTINGS = (
     "music_track_id",
     "music_player_layout",
     "music_player_skin",
-    # The Hatchling overlay (5.6.4): a panel, or the pet on its own.
-    "hatchling_look",
-    "hatchling_pet_size",
-    "hatchling_roam",
-    "hatchling_needs",
-    "hatchling_chatter",
     "music_player_visualizer",
     "music_player_colour",
     "music_player_palette",
@@ -271,7 +277,6 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_orders_accept",
     "overlay_hotkey_orders_decline",
     "overlay_hotkey_expedition",
-    "overlay_hotkey_hatchling",
     "overlay_hotkey_rig_tracker",
     "overlay_hotkey_rig_1",
     "overlay_hotkey_rig_2",
@@ -337,6 +342,13 @@ PROFILE_BOOL_SETTINGS = (
     "crew_banter_port",
     "crew_banter_crew",
     "crew_banter_quiet",
+    # 5.7.8: the smaller moments from ED-Outrider.
+    "crew_warnings",
+    "pad_location",
+    "mining_recap",
+    "auto_honk",
+    "canonn_reports",
+    "target_sounds",
     "orders_campaigns",
     "orders_watcher",
     "orders_copy_target",
@@ -349,6 +361,7 @@ PROFILE_BOOL_SETTINGS = (
     "orders_kind_powerplay",
     "overlay_hide_on_maps",
     "overlay_hide_in_menus",
+    "overlay_hide_when_game_closed",
     "overlay_transparency_fix",
     # The old (windowed) overlay windows, for a PC where visual hosting
     # fails (5.5.3.4.1). Read when the overlay host starts.
@@ -402,13 +415,14 @@ PROFILE_BOOL_SETTINGS = (
     "survey_status_overlay_enabled",
     "survey_status_show_all_bodies",
     "survey_codex_flags",
+    "survey_spansh_bodies",
+    "survey_species_lists",
     "contact_scope_overlay_enabled",
     "jump_info_overlay_enabled",
     "colony_needs_overlay_enabled",
     "trade_route_overlay_enabled",
     "crew_orders_overlay_enabled",
     "expedition_overlay_enabled",
-    "hatchling_overlay_enabled",
     "rig_tracker_overlay_enabled",
     "galaxy_minimap_overlay_enabled",
     "rhino_map_overlay_enabled",
@@ -469,9 +483,6 @@ PROFILE_BOOL_SETTINGS = (
     "galnet_ticker_overlay_enabled",
     "galnet_ticker_show_date",
     "rig_tracker_show_holds",
-    "hatchling_speech",
-    "hatchling_glow",
-    "hatchling_sounds",
     "galnet_ticker_crt_motion",
     "galnet_ticker_glitch_on_news",
     "music_player_overlay_enabled",
@@ -498,6 +509,11 @@ PROFILE_BOOL_SETTINGS = (
 )
 
 PROFILE_VALUE_SETTINGS = (
+    # 5.7.8: lines from the crew you've muted, as their folded text.
+    "muted_lines",
+    # 5.7.8: the value left in a system worth a word before you jump (0: never).
+    "leave_behind_cr",
+    "explore_nearby_radius",
     "crew_rota_deep_ly",
     "crew_banter_gap",
     "nav_collapsed_groups",
@@ -528,6 +544,7 @@ PROFILE_VALUE_SETTINGS = (
     "survey_status_hud_x",
     "survey_status_hud_y",
     "survey_spotlight_threshold",
+    "survey_grow_to",
     "survey_text_scale_percent",
     "hud_text_scale_percent",
     "contact_scope_hud_x",
@@ -544,8 +561,6 @@ PROFILE_VALUE_SETTINGS = (
     "orders_hud_y",
     "expedition_hud_x",
     "expedition_hud_y",
-    "hatchling_hud_x",
-    "hatchling_hud_y",
     "rig_tracker_hud_x",
     "rig_tracker_hud_y",
     "galaxy_minimap_hud_x",
@@ -613,7 +628,6 @@ PROFILE_VALUE_SETTINGS = (
     "trade_route_text_scale_percent",
     "crew_orders_text_scale_percent",
     "expedition_text_scale_percent",
-    "hatchling_text_scale_percent",
     "rig_tracker_text_scale_percent",
     "postcard_text_scale_percent",
     "ground_text_scale_percent",
@@ -671,6 +685,8 @@ PROFILE_SETTINGS = PROFILE_TEXT_SETTINGS + PROFILE_BOOL_SETTINGS + PROFILE_VALUE
 GLOBAL_ONLY_KEYS = (
     "journal_path",
     "main_geometry",
+    # 5.7.8: where each popped-out page's window was last put (this PC's).
+    "popout_geometry",
     "settings_geometry",
     "perf_spike_threshold_ms",
     "ui_watchdog_spike_ms",
@@ -811,7 +827,7 @@ def apply_profile_config(config, profile_key=None):
     # survey facts remain available through the dashboard, Navigation HUD and
     # Survey Operations, but its old switch, hotkey and geometry must not leak
     # back into commander profiles written by earlier releases.
-    for setting in RETIRED_SYSTEM_INFO_CONFIG_KEYS:
+    for setting in RETIRED_SYSTEM_INFO_CONFIG_KEYS + RETIRED_HATCHLING_CONFIG_KEYS:
         profile.pop(setting, None)
         config.pop(setting, None)
     # Trade Assist was retired, but its independent EDDN publisher remains.
@@ -918,6 +934,7 @@ def apply_profile_config(config, profile_key=None):
     text_defaults = {
         "edsm_cmdr_name": profile.get("commander_name", ""),
         "orders_frequency": "session",
+        "start_page": "last", "target_remarks": "crew",
         "crew_banter": "sometimes", "crew_banter_size": "three", "crew_banter_length": "short",
         # 5.7.7: a duty never chosen showed blank; it starts at its default.
         "crew_rota_docked": "aster", "crew_rota_scanning": "axiom", "crew_rota_surface": "axiom",
@@ -961,7 +978,9 @@ def apply_profile_config(config, profile_key=None):
         "watcher_listen_mode": "hold",
         "watcher_listen_model": "accurate",
         "home_system": "",
+        "auto_honk_key": "",
         "hud_scene_mode": "full",
+        "hud_distance_from": "sol",
         "hud_font_face": "cockpit",
         "hud_label_size": "standard",
         "galnet_ticker_speed": "standard",
@@ -977,11 +996,6 @@ def apply_profile_config(config, profile_key=None):
         "music_player_visualizer": "bars",
         "music_player_colour": "theme",
         "music_player_palette": "neon",
-        "hatchling_look": "panel",
-        "hatchling_pet_size": "medium",
-        "hatchling_roam": "short",
-        "hatchling_needs": "low",
-        "hatchling_chatter": "quiet",
         "adaptive_mode_lock": "auto",
         "exploration_doctrine": "balanced",
         "explore_active_page": "System Survey",
@@ -1030,7 +1044,6 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_orders_accept": "",
         "overlay_hotkey_orders_decline": "",
         "overlay_hotkey_expedition": "",
-        "overlay_hotkey_hatchling": "",
         "overlay_hotkey_rig_tracker": "",
         "overlay_hotkey_rig_1": "Ctrl+Alt+1",
         "overlay_hotkey_rig_2": "Ctrl+Alt+2",
@@ -1086,6 +1099,7 @@ def apply_profile_config(config, profile_key=None):
         "orders_copy_target": True, "orders_open_map": False,
         "crew_banter_flight": True, "crew_banter_exploring": True, "crew_banter_port": True, "crew_banter_crew": True,
         "crew_banter_quiet": True,
+        "crew_warnings": True, "pad_location": True, "mining_recap": True, "auto_honk": False, "canonn_reports": True, "target_sounds": True,
         "orders_kind_exobiology": True, "orders_kind_exploration": True, "orders_kind_travel": True, "orders_kind_trade": True, "orders_kind_colonisation": True, "orders_kind_powerplay": True,
         "watcher_voice_enabled": False,
         "watcher_listen_enabled": False,
@@ -1093,6 +1107,7 @@ def apply_profile_config(config, profile_key=None):
         "controller_hotkeys_enabled": True,
         "overlay_hide_on_maps": True,
         "overlay_hide_in_menus": False,
+        "overlay_hide_when_game_closed": False,
         "edsm_upload_enabled": False,
         "inara_upload_enabled": False,
         "edsm_backfill_on_cache_rebuild": True,
@@ -1102,9 +1117,6 @@ def apply_profile_config(config, profile_key=None):
         "galnet_auto_rotate_enabled": True,
         "galnet_ticker_show_date": True,
         "rig_tracker_show_holds": True,
-        "hatchling_speech": True,
-        "hatchling_glow": True,
-        "hatchling_sounds": False,
         "galnet_ticker_crt_motion": True,
         "galnet_ticker_glitch_on_news": True,
         "music_player_show_art": True,
@@ -1121,6 +1133,8 @@ def apply_profile_config(config, profile_key=None):
         "station_info_auto_hide_enabled": False,
         "survey_status_show_all_bodies": False,
         "survey_codex_flags": True,
+        "survey_spansh_bodies": True,
+        "survey_species_lists": True,
         "raven_sync_enabled": True,
         "bgs_online_enabled": True,
         "trading_online_enabled": True,
@@ -1226,6 +1240,7 @@ def apply_profile_config(config, profile_key=None):
                 "explore_map_annotation_geometry": "470x360",
                 "stellar_survey_queue_state": {},
                 "survey_spotlight_threshold": 8,
+                "survey_grow_to": 900,
                 "survey_text_scale_percent": 0,
                 "hud_text_scale_percent": 0,
                 "contact_scope_timeout_s": 45,
@@ -1276,7 +1291,6 @@ def apply_profile_config(config, profile_key=None):
                 "trade_route_text_scale_percent": 0,
                 "crew_orders_text_scale_percent": 0,
                 "expedition_text_scale_percent": 0,
-                "hatchling_text_scale_percent": 0,
                 "rig_tracker_text_scale_percent": 0,
                 "postcard_text_scale_percent": 0,
                 "ground_text_scale_percent": 0,
@@ -1414,7 +1428,6 @@ def load_config():
         'overlay_hotkey_orders_accept': '',
         'overlay_hotkey_orders_decline': '',
         'overlay_hotkey_expedition': '',
-        'overlay_hotkey_hatchling': '',
         'overlay_hotkey_rig_tracker': '',
         'overlay_hotkey_rig_1': 'Ctrl+Alt+1',
         'overlay_hotkey_rig_2': 'Ctrl+Alt+2',
@@ -1476,6 +1489,8 @@ def load_config():
         'survey_status_hud_y': 520,
         'survey_status_show_all_bodies': False,
         'survey_codex_flags': True,
+        'survey_spansh_bodies': True,
+        'survey_species_lists': True,
         'survey_codex_flags_version': 1,
         'raven_sync_enabled': True,
         'bgs_online_enabled': True,
@@ -1492,6 +1507,7 @@ def load_config():
         'colony_planner_buff_nerf': True,
         'survey_spotlight_rotation': 'auto',
         'survey_spotlight_threshold': 8,
+        'survey_grow_to': 900,
         'survey_text_scale_percent': 0,
         'hud_text_scale_percent': 0,
         'hud_font_face': 'cockpit',
@@ -1499,6 +1515,8 @@ def load_config():
         'hud_bright_labels': False,
         # Navigation HUD hologram: full, still (low-end PCs) or off (5.5.3).
         'hud_scene_mode': 'full',
+        # 5.7.8: the Nav HUD's distance, from Sol or your home system.
+        'hud_distance_from': 'sol',
         'contact_scope_hud_x': 1180,
         'contact_scope_hud_y': 250,
         'contact_scope_timeout_s': 45,
@@ -1513,8 +1531,6 @@ def load_config():
         'orders_hud_y': 640,
         'expedition_hud_x': 40,
         'expedition_hud_y': 560,
-        'hatchling_hud_x': 1660,
-        'hatchling_hud_y': 860,
         'rig_tracker_hud_x': 1320,
         'rig_tracker_hud_y': 400,
         # 5.5.3.7: the Galaxy Minimap (size, whole galaxy or around you, the
@@ -1633,6 +1649,18 @@ def load_config():
         'crew_banter_crew': True,
         'crew_banter_quiet': True,
         'orders_frequency': 'session',
+        'start_page': 'last',
+        'target_remarks': 'crew',
+        'crew_warnings': True,
+        'pad_location': True,
+        'mining_recap': True,
+        'auto_honk': False,
+        'auto_honk_key': '',
+        'canonn_reports': True,
+        'target_sounds': True,
+        'leave_behind_cr': 2000000,
+        'muted_lines': [],
+        'explore_nearby_radius': 25,
         'orders_kind_exobiology': True,
         'orders_kind_exploration': True,
         'orders_kind_travel': True,
@@ -1686,14 +1714,6 @@ def load_config():
         'galnet_ticker_content': 'summary',
         'galnet_ticker_show_date': True,
         'rig_tracker_show_holds': True,
-        'hatchling_look': 'panel',
-        'hatchling_pet_size': 'medium',
-        'hatchling_roam': 'short',
-        'hatchling_needs': 'low',
-        'hatchling_chatter': 'quiet',
-        'hatchling_speech': True,
-        'hatchling_glow': True,
-        'hatchling_sounds': False,
         'rig_tracker_here_m': 40,
         'rig_tracker_spacing_m': 78,
         'rig_tracker_warn_m': 3500,
@@ -1728,7 +1748,6 @@ def load_config():
         'trade_route_text_scale_percent': 0,
         'crew_orders_text_scale_percent': 0,
         'expedition_text_scale_percent': 0,
-        'hatchling_text_scale_percent': 0,
         'rig_tracker_text_scale_percent': 0,
         'postcard_text_scale_percent': 0,
         'ground_text_scale_percent': 0,
@@ -1846,6 +1865,7 @@ def load_config():
         'overlay_text_scale_percent': 100,
         'overlay_hide_on_maps': True,
         'overlay_hide_in_menus': False,
+        'overlay_hide_when_game_closed': False,
         'overlay_frame_rate': 30,
         'overlay_transparency_fix': False,
         'overlay_classic_windows': False,

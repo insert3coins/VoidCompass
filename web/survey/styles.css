@@ -368,3 +368,65 @@ footer .credits { flex: 0 0 auto; color: var(--accent); text-align: right; }
 .badge.site.thargoid { color: var(--green); border-color: color-mix(in srgb, var(--green) 55%, transparent); }
 .target-notes { display: flex; flex-wrap: wrap; gap: 3px 8px; margin-top: 2px; }
 .target-note { color: var(--yellow); font-size: var(--type-compact); letter-spacing: .06em; }
+
+/* 5.7.8: the quiet worlds of a big system, as one line. */
+.quiet-summary { color: var(--muted); font-size: var(--type-compact); line-height: 1.4; white-space: normal; }
+
+/* 5.7.8: the worlds as Explore & Survey's table has them. Each row: its step
+   in the suggested scan order, the world, its signals and what's yours to
+   claim, its worth, and whose scan it is: yours, or Spansh's (dashed). */
+.world-list { display: grid; gap: 4px; }
+.world-list.group-quiet { padding-top: 4px; border-top: 1px solid var(--soft); }
+.world-list.group-quiet .section-head strong { color: var(--muted); }
+.layout-worlds .group-items { display: grid; grid-template-columns: 14px 18px minmax(64px, max-content) minmax(0, 1fr) max-content max-content; column-gap: 7px; row-gap: 2px; align-content: start; min-width: 0; }
+.world-order { justify-self: center; min-width: 13px; color: var(--accent); font-size: var(--type-compact); font-weight: 700; text-align: center; }
+.world-order:not(:empty) { border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--soft)); line-height: 1.25; }
+.world-top { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.world-top strong { flex: 0 0 auto; color: var(--text); font-size: var(--type-body); letter-spacing: .3px; }
+.world-class { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: var(--type-label); }
+.world-marks { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; white-space: nowrap; color: var(--muted); font-size: var(--type-compact); }
+.world-bio { color: var(--green); font-weight: 700; }
+.world-surface { color: var(--accent); font-weight: 700; }
+.world-flag { flex: 0 0 auto; padding: 0 3px; border: 1px solid var(--soft); font-size: calc(8px * var(--scale)); font-weight: 700; line-height: 1.25; }
+.world-flag.first { border-color: color-mix(in srgb, var(--yellow) 45%, var(--soft)); color: var(--yellow); }
+.world-flag.footfall, .world-flag.green { border-color: color-mix(in srgb, var(--green) 45%, var(--soft)); color: var(--green); }
+.world-flag.codex.new { border-color: color-mix(in srgb, var(--accent) 50%, var(--soft)); color: var(--accent); }
+.world-flag.codex.region { color: var(--muted); }
+.world-flag.dss { color: var(--dim); }
+.world-value { color: var(--yellow); font-size: var(--type-body); }
+.world-row.complete .world-value { color: var(--green); }
+.world-source { justify-self: end; padding: 0 3px; border: 1px solid var(--soft); font-size: calc(7.5px * var(--scale)); font-weight: 700; letter-spacing: .5px; line-height: 1.3; }
+.world-source.you { border-color: color-mix(in srgb, var(--accent) 45%, var(--soft)); color: var(--accent); }
+.world-source.spansh { border-style: dashed; color: var(--muted); }
+.world-row.from-spansh { border-left-style: dashed; background: color-mix(in srgb, var(--raised) 16%, transparent); }
+.world-row.from-spansh .world-top strong { color: var(--muted); }
+.world-row.from-spansh .planet-orb { opacity: .62; }
+/* A world's own list under its name: a species a line, then geology. */
+.world-species { grid-column: 3 / -1; display: grid; gap: 0; min-width: 0; padding: 0 0 2px; border-left: 1px solid var(--soft);
+  margin-left: 2px; padding-bottom: 1px; color: var(--muted); font-size: var(--type-label); }
+.species-token { display: grid; grid-template-columns: calc(18px * var(--scale)) minmax(0, 1fr) max-content; align-items: baseline; gap: 6px;
+  min-width: 0; padding-left: 7px; white-space: nowrap; color: var(--text); font-size: var(--type-body); line-height: 1.15; }
+.species-token .species-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.species-token .species-value { justify-self: end; }
+.species-token.surface { color: var(--accent); font-size: var(--type-label); font-weight: 700; }
+.species-token.surface .species-mark { color: var(--accent); }
+.species-token .species-mark { color: var(--dim); font-size: var(--type-compact); }
+.species-token.complete { color: var(--green); }
+.species-token.complete .species-mark { color: var(--green); }
+.species-token.sample .species-mark { color: var(--orange); }
+.species-token.pending { color: var(--dim); font-size: var(--type-compact); font-weight: 700; letter-spacing: .3px; }
+.species-token .species-value { color: color-mix(in srgb, var(--yellow) 75%, var(--muted)); font-size: var(--type-compact); }
+.species-token .codex-flag { width: .75em; height: .95em; margin-right: 4px; vertical-align: -1px; }
+.world-row.from-spansh .species-token { color: var(--muted); }
+/* Worlds folded to chips, under the rows (5.7.8). */
+.world-more { display: flex; flex-wrap: wrap; gap: 3px 4px; padding-top: 3px; }
+.world-more[hidden] { display: none; }
+.chip-flag.bio { color: var(--green); }
+.body-chip.from-spansh { border-style: dashed; }
+.world-more-count { color: var(--muted); font-size: var(--type-label); font-weight: 700; }
+.overview-sources { gap: 6px; color: var(--dim); font-size: var(--type-compact); font-weight: 700; letter-spacing: .5px; }
+.overview-sources .source-you { color: var(--accent); }
+.overview-sources .source-spansh { color: var(--muted); }
+.overview-sources small { color: var(--dim); font-weight: 400; letter-spacing: 0; }
+.overview-sources .source-order { margin-left: auto; color: var(--accent); }
+.world-row { min-height: calc(13px + 6px * var(--scale)); }

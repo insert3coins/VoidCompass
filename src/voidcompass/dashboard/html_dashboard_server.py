@@ -29,7 +29,6 @@ MEDIA_CHUNK_BYTES = 64 * 1024
 _MEDIA_ID = re.compile(r"[0-9a-f]{16}")
 _RANGE = re.compile(r"bytes=(\d*)-(\d*)")
 _SANDBOXED_MODULES = frozenset({
-    "/assets/hatchling-3d.js",
     "/assets/heartbeat-3d.js",
     "/assets/aster-companion.js",
     "/assets/aster-3d.js",
@@ -250,7 +249,7 @@ class HtmlDashboardServer:
         handler.send_header(
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data:; connect-src 'self'; font-src 'self'; "
+            "img-src 'self' data: https://storage.googleapis.com/canonn-downloads/; connect-src 'self'; font-src 'self'; "
             f"object-src 'none'; frame-src {frame_policy}; "
             "frame-ancestors 'none'; base-uri 'none'",
         )
@@ -326,8 +325,7 @@ class HtmlDashboardServer:
         # Shared browser assets live beside the dashboard folder so every
         # overlay can use the same branded cursor without duplicating it, and
         # the boot screen wakes the same watcher orb the heartbeat overlay draws.
-        # The music visualizers (5.6.2) are shared with the music overlay, and
-        # the Hatchling's looks (5.6.3) with its game page.
+        # The music visualizers (5.6.2) are shared with the music overlay.
         if request_path in {"/assets/cursor.css", "/assets/void-compass-cursor.png",
                             "/assets/heartbeat-orb.js", "/assets/heartbeat-life.js", "/assets/heartbeat-3d.js",
                             "/assets/aster-companion.js", "/assets/aster-3d.js",
@@ -338,8 +336,7 @@ class HtmlDashboardServer:
                             "/assets/companion-core.js",
                             "/assets/companion-mood.js",
                             "/assets/companion-caption.js",
-                            "/assets/music-visualizers.js", "/assets/hatchling-art.js", "/assets/hatchling-life.js",
-                            "/assets/hatchling-3d.js", "/galactic_map/vendor/three.module.min.js",
+                            "/assets/music-visualizers.js", "/galactic_map/vendor/three.module.min.js",
                             "/galactic_map/vendor/three.core.min.js"}:
             candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()
             try:

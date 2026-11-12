@@ -43,6 +43,11 @@ from voidcompass.services.spansh import (
 )
 
 
+# Explore & Survey's tables (5.7.8, dashboard_survey_mixin and its kin).
+SURVEY_OPERATIONS = ("nearby_", "bookmark", "copy_system", "target_system", "add_route", "system_", "search_",
+                     "plot_", "firsts_", "checklist_", "samples_", "log_", "history_")
+
+
 class HtmlExploreWorkspaceMixin:
     # Journal reductions can arrive off the UI thread while a scheduled HTML
     # snapshot is rendering.  Keep the profile cache and atomic file writes in
@@ -152,11 +157,8 @@ class HtmlExploreWorkspaceMixin:
             if coords:
                 previous = coords
 
-        tool = self._html_profile_transient(
-            "_html_explore_tool_state",
-            {"status": "ready", "detail": "Ready to plot a manual neutron route.", "route": None},
-        )
-        saved_form = self.config.get("system_plotter_form") or {}
+        # 5.7.8: one plotter, Explore & Survey's PLOT ROUTE; this is its route.
+        plotted = getattr(self, "api_neutron_route", lambda: {})() or {}
         return {
             "current": current,
             "destination": _text(getattr(self, "dest_name", None), 140),
@@ -167,14 +169,9 @@ class HtmlExploreWorkspaceMixin:
             ),
             "auto_copy": bool(self.config.get("auto_copy_waypoint", False)),
             "plotter": {
-                "from": _text(saved_form.get("from") or current, 140),
-                "to": _text(saved_form.get("to"), 140),
-                "range": _number(saved_form.get("range"), 30),
-                "efficiency": _integer(saved_form.get("efficiency"), 60),
-                "multiplier": _integer(saved_form.get("supercharge_multiplier"), 4),
-                "status": _text(tool.get("status"), 30),
-                "detail": _text(tool.get("detail"), 300),
-                "result": tool.get("route"),
+                "status": _text(plotted.get("status"), 30),
+                "detail": _text(plotted.get("detail"), 300),
+                "result": plotted.get("route"),
             },
         }
 
@@ -273,8 +270,10 @@ class HtmlExploreWorkspaceMixin:
             for row in return_later_state.get("entries") or ()
             if isinstance(row, dict)
         ]
+        survey = getattr(self, "_survey_snapshot", None)
         return {
             **route,
+            "survey": survey() if callable(survey) else {},
             "return_later": {
                 "entries": return_later_entries,
                 "count": len(return_later_entries),
@@ -311,6 +310,8 @@ class HtmlExploreWorkspaceMixin:
     def _handle_html_explore_command(self, payload):
         operation = _text(payload.get("operation"), 60).casefold()
         changed = False
+        if operation.startswith(SURVEY_OPERATIONS):
+            return bool(self._survey_command(operation, payload))
         if operation in {"return_later_copy", "return_later_waypoint", "return_later_dismiss"}:
             entry_id = _text(payload.get("id"), 300)
             with self._return_later_lock:
@@ -597,95 +598,12 @@ class HtmlExploreWorkspaceMixin:
                 return False
             manager.clear()
             changed = True
+            # Plot Route is the route's source (5.7.8): clearing it here clears it there.
+            getattr(self, "_route_forget", lambda *_a: False)()
         elif operation == "set_auto_copy":
             self.config["auto_copy_waypoint"] = bool(payload.get("enabled"))
             self._persist_config()
             changed = True
-        elif operation == "neutron_copy":
-            tool = self._html_profile_transient("_html_explore_tool_state", {})
-            names = [
-                _text(row.get("system"), 140) for row in ((tool.get("route") or {}).get("waypoints") or [])
-                if isinstance(row, dict) and _text(row.get("system"), 140)
-            ]
-            return self._html_copy_text("\n".join(names))
-        elif operation == "neutron_clear":
-            tool = self._html_profile_transient("_html_explore_tool_state", {})
-            tool.update({"status": "ready", "detail": "Route result cleared.", "route": None})
-            changed = True
-            getattr(self, "_update_galaxy_minimap_safely", lambda: None)()
-        elif operation == "neutron_import":
-            tool = self._html_profile_transient("_html_explore_tool_state", {})
-            rows = (tool.get("route") or {}).get("waypoints") or []
-            existing = {str(row.get("name") or "").casefold() for row in manager.waypoints}
-            added = 0
-            for row in rows:
-                name = _text(row.get("system") if isinstance(row, dict) else "", 140)
-                if not name or name.casefold() in existing:
-                    continue
-                # Its coordinates and neutron stops come along (the Galaxy
-                # Minimap draws the trip, 5.5.3.7).
-                manager.waypoints.append({"name": name, "coords": row.get("coords"), "note": "Spansh neutron route",
-                                          "neutron": bool(row.get("neutron")), "jumps": row.get("jumps")})
-                existing.add(name.casefold())
-                added += 1
-            changed = bool(added and manager.save())
-            if added:
-                tool["detail"] = f"Imported {added:,} new systems into the profile waypoint route."
-        elif operation == "neutron_plot":
-            from_system = _text(payload.get("from") or getattr(self, "current_sys", ""), 140)
-            to_system = _text(payload.get("to"), 140)
-            jump_range = _number(payload.get("range"))
-            efficiency = max(1, min(100, _integer(payload.get("efficiency"), 60)))
-            multiplier = 6 if _integer(payload.get("multiplier"), 4) == 6 else 4
-            if not from_system or not to_system or jump_range is None or jump_range <= 0:
-                return False
-            profile = get_active_profile(self.config)
-            generation = time.time_ns()
-            tool = self._html_profile_transient(
-                "_html_explore_tool_state", {"status": "ready", "detail": "", "route": None},
-            )
-            tool.update({
-                "generation": generation, "status": "working",
-                "detail": f"Spansh is plotting {from_system} to {to_system}…", "route": None,
-            })
-            self.config["system_plotter_form"] = {
-                "from": from_system, "to": to_system, "range": jump_range,
-                "efficiency": efficiency, "supercharge_multiplier": multiplier,
-            }
-            self._persist_config()
-            self.add_event_feed_entry("ROUTE", f"Neutron plot started: {from_system} to {to_system}", severity="INFO")
-            self._schedule_html_dashboard_publish(immediate=True)
-
-            def worker():
-                try:
-                    result = neutron_route(
-                        from_system, to_system, jump_range, efficiency,
-                        supercharge_multiplier=multiplier,
-                    )
-                    error = None
-                except Exception as exc:
-                    result, error = None, exc
-
-                def finish():
-                    active = self._html_profile_transient("_html_explore_tool_state", {})
-                    if active.get("profile") != profile or active.get("generation") != generation:
-                        return
-                    if error is not None:
-                        detail = str(error) if isinstance(error, SpanshError) else f"Unexpected route error: {error}"
-                        active.update({"status": "failed", "detail": detail, "route": None})
-                        self.add_event_feed_entry("ROUTE", f"Neutron plot failed: {detail}", severity="WARN")
-                    else:
-                        count = len(result.get("waypoints") or [])
-                        active.update({"status": "ready", "detail": f"Route ready · {count:,} waypoints.", "route": result})
-                        self.add_event_feed_entry("ROUTE", f"Neutron plot ready: {count:,} waypoints", severity="INFO")
-                        getattr(self, "_update_galaxy_minimap_safely", lambda: None)()
-                    self._schedule_html_dashboard_publish(immediate=True)
-
-                self._ui_post(finish, key="html-neutron-route")
-
-            threading.Thread(target=worker, name="HtmlSpanshNeutron", daemon=True).start()
-            return True
-
         if changed:
             # Waypoint edits are profile-local rather than journal events, so
             # explicitly republish the cockpit route immediately.

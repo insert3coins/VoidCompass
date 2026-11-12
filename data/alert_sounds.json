@@ -1,0 +1,89 @@
+{
+  "_about": [
+    "The alert sounds, shared by the page (built as WebAudio oscillators in page.js) and the server (rendered to WAV by outrider.tts.render_sound for 'Play speech and sounds on this PC').",
+    "Each tone: freq (Hz), start and dur (s from the sound's start), type (sine, triangle, square, sawtooth), vol (peak gain), attack (s to the peak; it then fades out exponentially by the end), glideTo (Hz, an exponential glide over dur).",
+    "lowpass (Hz) filters the sound's tones, except a tone marked dry. gain scales every sound."
+  ],
+  "gain": 0.8,
+  "sounds": {
+    "fanfare": {
+      "note": "brassy rising arpeggio into a held major chord",
+      "lowpass": 2400,
+      "tones": [
+        {"freq": 523.25, "start": 0, "dur": 0.16, "type": "sawtooth", "vol": 0.16, "attack": 0.02},
+        {"freq": 659.25, "start": 0.13, "dur": 0.16, "type": "sawtooth", "vol": 0.16, "attack": 0.02},
+        {"freq": 783.99, "start": 0.26, "dur": 0.16, "type": "sawtooth", "vol": 0.16, "attack": 0.02},
+        {"freq": 783.99, "start": 0.42, "dur": 0.12, "type": "sawtooth", "vol": 0.16, "attack": 0.02},
+        {"freq": 523.25, "start": 0.56, "dur": 1.1, "type": "sawtooth", "vol": 0.11, "attack": 0.03},
+        {"freq": 659.25, "start": 0.56, "dur": 1.1, "type": "sawtooth", "vol": 0.11, "attack": 0.03},
+        {"freq": 783.99, "start": 0.56, "dur": 1.1, "type": "sawtooth", "vol": 0.11, "attack": 0.03},
+        {"freq": 1046.5, "start": 0.56, "dur": 1.1, "type": "sawtooth", "vol": 0.11, "attack": 0.03},
+        {"freq": 261.63, "start": 0.56, "dur": 1.1, "type": "triangle", "vol": 0.2, "attack": 0.01, "dry": true}
+      ]
+    },
+    "upbeat": {
+      "note": "two quick rising notes",
+      "tones": [
+        {"freq": 659.25, "start": 0, "dur": 0.14, "type": "triangle", "vol": 0.28, "attack": 0.01},
+        {"freq": 880, "start": 0.12, "dur": 0.26, "type": "triangle", "vol": 0.28, "attack": 0.01}
+      ]
+    },
+    "thud": {
+      "note": "low drop with a soft knock",
+      "tones": [
+        {"freq": 120, "start": 0, "dur": 0.32, "type": "sine", "vol": 0.6, "attack": 0.005, "glideTo": 40},
+        {"freq": 70, "start": 0, "dur": 0.08, "type": "square", "vol": 0.06, "attack": 0.002}
+      ]
+    },
+    "alert": {
+      "note": "two-note nag: something is unfinished here",
+      "tones": [
+        {"freq": 987.77, "start": 0, "dur": 0.1, "type": "square", "vol": 0.12, "attack": 0.01},
+        {"freq": 739.99, "start": 0.1, "dur": 0.1, "type": "square", "vol": 0.12, "attack": 0.01},
+        {"freq": 987.77, "start": 0.22, "dur": 0.1, "type": "square", "vol": 0.12, "attack": 0.01},
+        {"freq": 739.99, "start": 0.32, "dur": 0.1, "type": "square", "vol": 0.12, "attack": 0.01}
+      ]
+    },
+    "chime": {
+      "note": "soft bell: news, nothing to do right now",
+      "tones": [
+        {"freq": 1318.5, "start": 0, "dur": 0.9, "type": "sine", "vol": 0.16, "attack": 0.004},
+        {"freq": 1760, "start": 0.09, "dur": 0.9, "type": "sine", "vol": 0.16, "attack": 0.004}
+      ]
+    },
+    "routine": {
+      "note": "soft low falling pair: arrived somewhere routine, nothing to say",
+      "lowpass": 1800,
+      "tones": [
+        {"freq": 587.33, "start": 0, "dur": 0.2, "type": "sine", "vol": 0.14, "attack": 0.01},
+        {"freq": 440, "start": 0.15, "dur": 0.34, "type": "sine", "vol": 0.12, "attack": 0.01}
+      ]
+    },
+    "cash": {
+      "note": "bright two-step \"ka-ching\": money",
+      "tones": [
+        {"freq": 1567.98, "start": 0, "dur": 0.08, "type": "triangle", "vol": 0.22, "attack": 0.002},
+        {"freq": 2093, "start": 0.07, "dur": 0.5, "type": "triangle", "vol": 0.2, "attack": 0.002},
+        {"freq": 3135.96, "start": 0.07, "dur": 0.35, "type": "sine", "vol": 0.06, "attack": 0.002}
+      ]
+    },
+    "find": {
+      "note": "rising sparkle: something worth a look just turned up",
+      "tones": [
+        {"freq": 880, "start": 0.0, "dur": 0.35, "type": "sine", "vol": 0.14, "attack": 0.005},
+        {"freq": 1108.73, "start": 0.07, "dur": 0.35, "type": "sine", "vol": 0.14, "attack": 0.005},
+        {"freq": 1318.51, "start": 0.14, "dur": 0.35, "type": "sine", "vol": 0.14, "attack": 0.005},
+        {"freq": 1760, "start": 0.21, "dur": 0.35, "type": "sine", "vol": 0.14, "attack": 0.005}
+      ]
+    },
+    "danger": {
+      "note": "low two-tone klaxon: the ship is in trouble",
+      "tones": [
+        {"freq": 330, "start": 0, "dur": 0.25, "type": "sawtooth", "vol": 0.1, "attack": 0.01},
+        {"freq": 247, "start": 0.14, "dur": 0.14, "type": "sawtooth", "vol": 0.1, "attack": 0.01},
+        {"freq": 330, "start": 0.3, "dur": 0.25, "type": "sawtooth", "vol": 0.1, "attack": 0.01},
+        {"freq": 247, "start": 0.44, "dur": 0.14, "type": "sawtooth", "vol": 0.1, "attack": 0.01}
+      ]
+    }
+  }
+}

@@ -7,7 +7,7 @@ from voidcompass.core.config import save_config
 from voidcompass.overlays import overlay_chrome
 from voidcompass.exploration.notable_bodies import build_notable_body_rows
 _CHROMA = '#ff00ff'
-WIDTH = 420
+WIDTH = 480
 SIGNAL_FONT = ('Courier', 10, 'bold')
 BIO_DETAIL_FONT = ('Courier', 9, 'bold')
 BIO_SYMBOL_FONT = ('Courier', 10, 'bold')
@@ -408,7 +408,7 @@ def _base_value_range(item):
         return (known, known)
     lows = []
     highs = []
-    for row in item.get('genuses') or item.get('predicted_genuses') or []:
+    for row in item.get('genuses') or bio_values.likely_genera(item.get('predicted_genuses')) or []:
         values = [_safe_int(entry.get('value')) for entry in (row.get('species') or () if isinstance(row, dict) else ()) if entry.get('value')]
         if not values:
             info = bio_values.genus_info(_genus_name(row))
@@ -437,7 +437,12 @@ def _base_detail_rows(item):
         _genus_name(raw).casefold(): list(raw.get('species') or ())
         for raw in item.get('predicted_genuses') or () if isinstance(raw, dict)
     }
-    for source, kind in ((item.get('genuses') or [], 'detected'), (item.get('predicted_genuses') or [], 'predicted')):
+    predicted = [raw for raw in item.get('predicted_genuses') or () if isinstance(raw, dict)]
+    likely = bio_values.likely_genera(predicted)
+    # 5.7.8: Starling's rules widen what's possible; the genera only they allow
+    # are one line, so the likely ones stay readable.
+    others = [raw for raw in predicted if raw not in likely]
+    for source, kind in ((item.get('genuses') or [], 'detected'), (likely, 'predicted')):
         for raw in source:
             name = _genus_name(raw)
             key = name.casefold()
@@ -451,6 +456,8 @@ def _base_detail_rows(item):
             row_kind = kind
             status = 'DETECTED' if kind == 'detected' else 'PREDICTED'
             species = list(raw.get('species') or ()) if isinstance(raw, dict) else []
+            # Within a likely genus, its likely species (5.7.8: Starling's rules add possibles).
+            species = [entry for entry in species if entry.get('likely', True)] or species
             if kind == 'predicted' and species:
                 values = [_safe_int(entry.get('value')) for entry in species if entry.get('value')]
                 if values:
@@ -462,6 +469,14 @@ def _base_detail_rows(item):
             codex_species = _codex_species(name, species or predicted_species.get(key) or ())
             codex_genus = [] if codex_species else _genus_species_keys(name)
             rows.append({'status': status, 'name': name, 'variant': '', 'display_name': display, 'min_value': low, 'max_value': high, 'kind': row_kind, 'progress': 0, 'codex_species': codex_species, 'codex_genus': codex_genus})
+    others = [raw for raw in others if _genus_name(raw).casefold() not in represented]
+    if others and not item.get('genuses'):
+        names = [_genus_name(raw) for raw in others]
+        values = [_safe_int(entry.get('value')) for raw in others for entry in raw.get('species') or () if entry.get('value')]
+        rows.append({'status': 'POSSIBLE', 'name': 'Also possible', 'variant': '',
+                     'display_name': 'Also possible: ' + ', '.join(names[:5]) + (f' +{len(names) - 5}' if len(names) > 5 else ''),
+                     'min_value': min(values) if values else None, 'max_value': max(values) if values else None,
+                     'kind': 'possible', 'progress': 0, 'codex_species': [], 'codex_genus': [], 'also': names})
     return rows
 
 def _bonus(item):
@@ -507,7 +522,55 @@ def _joined_lines(values, max_chars=62):
         lines.append(current)
     return lines
 
-def build_survey_model(system_name, scan_items, focused_body_id=None, focused_body_name=None, sampling=None, scanned=0, total=0, min_notable_value=50000, palette=None, total_known=True, body_signals=None, belt_clusters=None, show_all_bodies=False, dss_stats=None):
+# Explore & Survey's facts a body carries on the overlay (5.7.8): one table for both.
+EXPLORE_FACTS = ('first_discovered', 'first_mapped', 'footfall_open', 'codex_type', 'codex_type_name', 'record', 'order', 'leg_ls',
+                 'value_now', 'value_max', 'mapped', 'hotspots')
+
+
+def _explore_index(explore):
+    rows = [row for row in (explore or {}).get('rows') or () if isinstance(row, dict)]
+    by_id = {str(row.get('body_id')): row for row in rows if row.get('own') and row.get('body_id') is not None}
+    by_name = {str(row.get('name') or '').casefold(): row for row in rows if row.get('own')}
+    return rows, by_id, by_name
+
+
+def _explore_facts(row):
+    facts = {key: row.get(key) for key in EXPLORE_FACTS}
+    facts['ggg'] = bool(row.get('ggg') or row.get('green'))
+    facts['green'] = bool(row.get('green'))
+    return facts
+
+
+def _spansh_body_row(row, system_name, min_notable_value):
+    """A body only Spansh knows (other commanders' scans), as an overlay row,
+    marked as Spansh's: its biology is what they reported, or a guess."""
+    cells = [cell for cell in row.get('bio') or () if isinstance(cell, dict)]
+    details = [{'status': 'REPORTED' if cell.get('state') == 'detected' else 'PREDICTED', 'name': cell.get('name') or 'Organic',
+                'variant': '', 'display_name': cell.get('name') or 'Organic',
+                'min_value': _safe_int(cell.get('low') or cell.get('value')), 'max_value': _safe_int(cell.get('value')),
+                'kind': 'detected' if cell.get('state') == 'detected' else 'predicted', 'progress': 0} for cell in cells]
+    value_max = _safe_int(row.get('value_max'))
+    notable = None
+    if value_max >= int(min_notable_value or 0) and not _safe_int(row.get('bio_count')):
+        notable = {'value': value_max, 'rarity': 0, 'value_line': f"SPANSH · UP TO {_credits(value_max)}"}
+    planet_class = str(row.get('cls_full') or row.get('cls') or '')
+    return {'body_id': row.get('body_id'), 'name': row.get('name') or 'Unknown body',
+            'display_name': _body_display_name(row.get('name'), system_name, planet_class, row.get('terraformable')),
+            'designation': _short_body_name(row.get('name'), system_name), 'class_label': _planet_label(planet_class),
+            'atmosphere_label': str(row.get('atmosphere') or ''), 'ring_count': len(row.get('rings') or ()), 'temperature_k': None, 'notes': [],
+            'planet_class': planet_class, 'terraformable': bool(row.get('terraformable')),
+            'bio_count': _safe_int(row.get('bio_count')), 'geo_count': _safe_int(row.get('geo_count')), 'mining_count': 0, 'sites': {},
+            'complete': 0, 'bio_complete': False, 'needs_dss': True, 'dss_probes_used': None, 'dss_efficiency_target': None,
+            'dss_efficiency_met': None,
+            'min_value': sum(detail['min_value'] for detail in details), 'max_value': sum(detail['max_value'] for detail in details),
+            'first_footfall': False, 'landable': bool(row.get('landable')), 'landable_known': True, 'gravity_g': row.get('gravity'),
+            'notable': notable, 'priority': bool(row.get('bio_count') or row.get('geo_count') or notable), 'expanded': False,
+            'recent_scan': False, 'scan_timestamp': None, 'bio_details': [detail for detail in details if detail['kind'] not in PREDICTED_KINDS],
+            'guesses': [detail for detail in details if detail['kind'] in PREDICTED_KINDS],
+            'source': 'spansh', 'spansh_date': row.get('updated'), **_explore_facts(row)}
+
+
+def build_survey_model(system_name, scan_items, focused_body_id=None, focused_body_name=None, sampling=None, scanned=0, total=0, min_notable_value=50000, palette=None, total_known=True, body_signals=None, belt_clusters=None, show_all_bodies=False, dss_stats=None, explore=None):
     """Build a renderer-neutral survey model for the overlay and tests."""
     bodies = _survey_bodies(scan_items, body_signals)
     # Scan rows are newest-first. Highlight the newest planet even when FSS
@@ -550,6 +613,11 @@ def build_survey_model(system_name, scan_items, focused_body_id=None, focused_bo
         focused_notable = notable_by_id.get(str(focused.get('body_id'))) if focused.get('body_id') is not None else None
         focused_notable = focused_notable or notable_by_name.get(str(focused.get('name') or '').casefold())
         lo, hi = _body_value_range(focused)
+        _ex_rows, ex_by_id, ex_by_name = _explore_index(explore)
+        match = ex_by_id.get(str(focused.get('body_id'))) or ex_by_name.get(str(focused.get('name') or '').casefold())
+        if match:
+            focused.update(_explore_facts(match))
+        focused['source'] = 'own'
         return {'mode': 'body', 'system': system_name or '', 'body': focused, 'body_display': _body_display_name(focused.get('name'), system_name, focused.get('planet_class'), focused.get('terraformable')), 'rows': _body_detail_rows(focused), 'sampling': sampling, 'min_value': lo, 'max_value': hi, 'notable': focused_notable, 'notable_rows': [], 'scanned': _safe_int(scanned), 'total': _safe_int(total), 'total_known': bool(total_known), 'dss_stats': dss_stats or {}}
     rows = []
     represented_notable = set()
@@ -568,12 +636,27 @@ def build_survey_model(system_name, scan_items, focused_body_id=None, focused_bo
             represented_notable.add((str(notable.get('body_id')), str(notable.get('name') or '').casefold()))
         lo, hi = _body_value_range(body)
         rows.append({'body_id': body.get('body_id'), 'name': body.get('name') or 'Unknown body', 'display_name': _body_display_name(body.get('name'), system_name, body.get('planet_class'), body.get('terraformable')), **visual(body), 'planet_class': body.get('planet_class') or '', 'terraformable': bool(body.get('terraformable')), 'bio_count': bio_count, 'geo_count': geo_count, 'mining_count': mining_count, 'sites': sites, 'complete': complete, 'bio_complete': bool(bio_count and complete >= bio_count), 'needs_dss': needs_dss, 'dss_probes_used': body.get('dss_probes_used'), 'dss_efficiency_target': body.get('dss_efficiency_target'), 'dss_efficiency_met': body.get('dss_efficiency_met'), 'min_value': lo, 'max_value': hi, 'first_footfall': bool(body.get('first_footfall')), 'landable': bool(body.get('landable')), 'landable_known': 'landable' in body and body.get('landable') is not None, 'gravity_g': body.get('gravity_g'), 'notable': notable, 'priority': priority, 'expanded': bool(show_all_bodies and not priority), 'recent_scan': recent_scan, 'scan_timestamp': body.get('scan_timestamp'), 'bio_details': [detail for detail in _body_detail_rows(body) if detail.get('kind') not in PREDICTED_KINDS]})
+    explore_rows, ex_by_id, ex_by_name = _explore_index(explore)
+    for row in rows:
+        row['source'] = 'own'
+        match = ex_by_id.get(str(row.get('body_id'))) or ex_by_name.get(str(row.get('name') or '').casefold())
+        if match:
+            row.update(_explore_facts(match))
+    spansh_rows = [_spansh_body_row(row, system_name, min_notable_value) for row in explore_rows
+                   if not row.get('own') and row.get('kind') == 'planet']
+    rows.extend(spansh_rows)
     rows.sort(key=lambda row: (not row['recent_scan'], bool(row['bio_complete']), not bool(row['bio_count'] or row['geo_count'] or row['mining_count'] or row['landable']), not bool(row['bio_count']), row['name']))
     remaining_notable = [row for row in notable_rows if (str(row.get('body_id')), str(row.get('name') or '').casefold()) not in represented_notable]
     scan_in_progress = bool(total_known and _safe_int(total) > 0 and (_safe_int(scanned) < _safe_int(total)))
     if not rows and (not remaining_notable) and (not sampling):
         return None
-    return {'mode': 'system', 'system': system_name or '', 'rows': rows, 'scope': 'all' if show_all_bodies else 'compact', 'notable_rows': remaining_notable, 'sampling': sampling, 'scanned': _safe_int(scanned), 'total': _safe_int(total), 'total_known': bool(total_known), 'notable_count': len(notable_rows), 'scan_in_progress': scan_in_progress, 'dss_stats': dss_stats or {}}
+    meta = (explore or {}).get('meta') or {}
+    sources = {'own': sum(1 for row in rows if row.get('source') == 'own'), 'spansh': len(spansh_rows),
+               'spansh_date': meta.get('spansh_date'), 'spansh_known': bool(meta.get('spansh_known')),
+               'asking': (explore or {}).get('status') == 'working',
+               'value_now': _safe_int(meta.get('value_now')), 'value_max': _safe_int(meta.get('value_max')),
+               'ordered': _safe_int(meta.get('ordered'))} if explore else None
+    return {'mode': 'system', 'system': system_name or '', 'rows': rows, 'scope': 'all' if show_all_bodies else 'compact', 'notable_rows': remaining_notable, 'sampling': sampling, 'scanned': _safe_int(scanned), 'total': _safe_int(total), 'total_known': bool(total_known), 'notable_count': len(notable_rows), 'scan_in_progress': scan_in_progress, 'dss_stats': dss_stats or {}, 'explore': sources}
 
 def _survey_render_key(model):
     """Key only pixels the Survey Operations renderer can actually change."""
@@ -594,13 +677,13 @@ def _survey_render_key(model):
     def detail_key(row):
         row = row or {}
         return (row.get('kind'), row.get('status'), row.get('display_name') or row.get('name'), row.get('value'), row.get('min_value'), row.get('max_value'), _safe_int(row.get('progress')), row.get('codex'), repr(row.get('codex_lines')))
-    common = (model.get('mode'), model.get('system'), sampling_key, model.get('scope'), repr(model.get('dss_stats') or {}), _safe_int(model.get('scanned')), _safe_int(model.get('total')), bool(model.get('total_known')), tuple((notable_key(row) for row in model.get('notable_rows') or ())))
+    common = (model.get('mode'), model.get('system'), sampling_key, model.get('scope'), repr(model.get('dss_stats') or {}), repr(model.get('explore')), _safe_int(model.get('scanned')), _safe_int(model.get('total')), bool(model.get('total_known')), tuple((notable_key(row) for row in model.get('notable_rows') or ())))
     if model.get('mode') == 'body':
         body = model.get('body') or {}
         return common + (model.get('body_display') or body.get('name'), body.get('designation'), body.get('class_label'), body.get('atmosphere_label'), body.get('ring_count'), body.get('temperature_k'), repr(body.get('notes')), _safe_int(body.get('bio_count')), _safe_int(body.get('organic_complete_count')), _safe_int(body.get('geo_count')), _safe_int(body.get('mining_count')), bool(body.get('dss_complete')), body.get('dss_probes_used'), body.get('dss_efficiency_target'), body.get('dss_efficiency_met'), bool(body.get('first_footfall')), body.get('landable') if 'landable' in body else None, body.get('gravity_g'), notable_key(model.get('notable')) if model.get('notable') else None, tuple((detail_key(row) for row in model.get('rows') or ())), model.get('min_value'), model.get('max_value'), bool(body.get('recent_scan')), body.get('scan_timestamp'), repr(sorted((body.get('sites') or {}).items())))
     row_keys = []
     for row in model.get('rows') or ():
-        row_keys.append((row.get('body_id'), row.get('display_name') or row.get('name'), row.get('designation'), row.get('class_label'), row.get('atmosphere_label'), row.get('ring_count'), row.get('temperature_k'), bool(row.get('priority')), _safe_int(row.get('bio_count')), _safe_int(row.get('geo_count')), _safe_int(row.get('mining_count')), _safe_int(row.get('complete')), bool(row.get('bio_complete')), bool(row.get('needs_dss')), bool(row.get('landable_known')), bool(row.get('first_footfall')), row.get('dss_probes_used'), row.get('dss_efficiency_target'), row.get('dss_efficiency_met'), bool(row.get('landable')) if row.get('landable_known') else None, row.get('min_value'), row.get('max_value'), notable_key(row.get('notable')) if row.get('notable') else None, tuple((detail_key(detail) for detail in row.get('bio_details') or ())), repr(sorted((row.get('sites') or {}).items()))))
+        row_keys.append((row.get('body_id'), row.get('display_name') or row.get('name'), row.get('designation'), row.get('class_label'), row.get('atmosphere_label'), row.get('ring_count'), row.get('temperature_k'), bool(row.get('priority')), _safe_int(row.get('bio_count')), _safe_int(row.get('geo_count')), _safe_int(row.get('mining_count')), _safe_int(row.get('complete')), bool(row.get('bio_complete')), bool(row.get('needs_dss')), bool(row.get('landable_known')), bool(row.get('first_footfall')), row.get('dss_probes_used'), row.get('dss_efficiency_target'), row.get('dss_efficiency_met'), bool(row.get('landable')) if row.get('landable_known') else None, row.get('min_value'), row.get('max_value'), notable_key(row.get('notable')) if row.get('notable') else None, tuple((detail_key(detail) for detail in row.get('bio_details') or ())), repr(sorted((row.get('sites') or {}).items())), row.get('source'), tuple(row.get(key) for key in EXPLORE_FACTS), bool(row.get('ggg'))))
     recent_keys = tuple((bool(row.get('recent_scan')), row.get('scan_timestamp'))
                         for row in model.get('rows') or ())
     return common + (tuple(row_keys), _safe_int(model.get('notable_count')), bool(model.get('scan_in_progress')), recent_keys)
@@ -707,7 +790,14 @@ class SurveyStatusHUD:
         self._last_update = (system_name, scanned, total, scan_items, body_signals, sampling, focused_body_id, focused_body_name, total_known, belt_clusters, dss_stats)
         if self._suppressed:
             return
-        model = build_survey_model(system_name, scan_items, focused_body_id, focused_body_name, sampling, scanned, total, _safe_int(self.config.get('survey_min_body_value'), 50000), self._palette, total_known, body_signals=body_signals, belt_clusters=belt_clusters, show_all_bodies=bool(self.config.get('survey_status_show_all_bodies', False)), dss_stats=dss_stats)
+        explore = None
+        provider = getattr(self, 'explore_provider', None)
+        if callable(provider):
+            try:
+                explore = provider(system_name)
+            except Exception:
+                explore = None
+        model = build_survey_model(system_name, scan_items, focused_body_id, focused_body_name, sampling, scanned, total, _safe_int(self.config.get('survey_min_body_value'), 50000), self._palette, total_known, body_signals=body_signals, belt_clusters=belt_clusters, show_all_bodies=bool(self.config.get('survey_status_show_all_bodies', False)), dss_stats=dss_stats, explore=explore)
         if not model:
             self._last_render_key = None
             self._html_render_model = None

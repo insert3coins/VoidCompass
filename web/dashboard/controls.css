@@ -1,0 +1,96 @@
+/* Shared form controls (5.7.8). Loaded last, so every page's checkboxes,
+   dropdowns, number boxes, sliders and toggle groups look alike and follow
+   the theme: no white browser squares, no native spinners, one focus ring.
+   The bracket buttons (styles.css, "cockpit-button") stay the deck's own. */
+
+/* -- checkboxes and radios: a square (or dot) that fills with the accent ---- */
+input[type="checkbox"], input[type="radio"] {
+  -webkit-appearance: none; appearance: none;
+  flex: 0 0 auto; width: 14px; height: 14px; vertical-align: -2px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  background: var(--input); cursor: pointer;
+  transition: border-color .12s, background-color .12s, box-shadow .12s;
+}
+input[type="radio"] { border-radius: 50%; }
+input[type="checkbox"]:hover:not(:disabled), input[type="radio"]:hover:not(:disabled) { border-color: var(--accent); }
+input[type="checkbox"]:checked, input[type="radio"]:checked {
+  border-color: var(--accent); background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--input), 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+input[type="checkbox"]:indeterminate {
+  border-color: var(--accent);
+  background: linear-gradient(var(--accent), var(--accent)) center / 8px 2px no-repeat, var(--input);
+}
+input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+/* :where() keeps this below a page's own hidden switch input (opacity 0). */
+:where(input[type="checkbox"], input[type="radio"]):disabled { opacity: .4; cursor: default; }
+
+/* -- dropdowns: one look, a themed arrow, the list in the panel colours ----- */
+select {
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  padding-right: 24px !important;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%) !important;
+  background-position: calc(100% - 13px) 52%, calc(100% - 9px) 52% !important;
+  background-size: 4px 4px, 4px 4px !important;
+  background-repeat: no-repeat !important;
+  transition: border-color .12s;
+}
+select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border)) !important;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--accent) 50%),
+    linear-gradient(135deg, var(--accent) 50%, transparent 50%) !important;
+}
+select:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+select:disabled { opacity: .45; cursor: default; }
+select option, select optgroup { background: var(--panel); color: var(--text); }
+
+/* -- text and number boxes: no spinners, one accent focus ring ------------- */
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):focus-visible, textarea:focus-visible {
+  outline: none; border-color: var(--accent) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+input::placeholder, textarea::placeholder { color: var(--dim); opacity: 1; }
+
+/* -- sliders: a thin track and a square handle ----------------------------- */
+input[type="range"] { -webkit-appearance: none; appearance: none; height: 18px; background: transparent; cursor: pointer; }
+input[type="range"]::-webkit-slider-runnable-track { height: 4px; border: 1px solid var(--border); background: var(--inset); }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 12px; height: 12px; margin-top: -5px;
+  border: 1px solid var(--accent); background: var(--accent);
+  box-shadow: 0 0 0 2px var(--panel), 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+input[type="range"]:hover::-webkit-slider-thumb { background: color-mix(in srgb, var(--accent) 70%, white); }
+input[type="range"]:focus-visible { outline: none; }
+input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 1px solid var(--accent); outline-offset: 2px; }
+
+/* -- toggle groups: one joined control, the choice filled ------------------
+   (TABLE/QUEUE, LIST/TREE/SCHEMATIC, STANDARD/BOXEL, SPANSH/LOCAL, the
+   plotters, ARCHIVE/JOURNAL LOG): each option was its own bracketed button. */
+:is(.xn-modes, .xs-source, .xb-modes, .xr-plotters) {
+  display: inline-flex; flex-wrap: wrap; gap: 0 !important;
+  border: 1px solid var(--border); background: color-mix(in srgb, var(--inset) 70%, transparent);
+}
+:is(.xn-modes, .xs-source, .xb-modes, .xr-plotters) > button.cockpit-button {
+  --bracket: transparent; --bracket-arm: 0px;
+  min-height: 24px; margin: 0; padding: 0 10px;
+  border: 0 !important; border-right: 1px solid var(--border-soft) !important;
+  background-color: transparent; color: var(--muted);
+}
+:is(.xn-modes, .xs-source, .xb-modes, .xr-plotters) > button.cockpit-button:last-child { border-right: 0 !important; }
+:is(.xn-modes, .xs-source, .xb-modes, .xr-plotters) > button.cockpit-button:hover:not(:disabled) {
+  --bracket: transparent; color: var(--text); background-color: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+:is(.xn-modes, .xs-source, .xb-modes, .xr-plotters) > button.cockpit-button[aria-pressed="true"] {
+  border-color: var(--border-soft) !important; color: var(--accent) !important;
+  background: linear-gradient(var(--accent), var(--accent)) left bottom / 100% 2px no-repeat,
+    color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/* -- busy toolbars: shorter brackets, so a row of tools reads as one ------- */
+:is(.xb-head-tools, .xr-tools, .xn-bar, .xr-links, .xn-layout) > button.cockpit-button { --bracket-arm: 4px; }
+:is(.xb-head-tools, .xr-tools, .xn-bar, .xr-links, .xn-layout) > button.cockpit-button:hover:not(:disabled) { --bracket-arm: 7px; }

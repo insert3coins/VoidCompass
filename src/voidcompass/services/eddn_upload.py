@@ -42,6 +42,13 @@ def _epoch(value):
         return None
 
 
+def live_game(version):
+    """Never send Legacy (3.x) or beta sessions: only the live game's data
+    belongs in the community's tools (5.7.8, ED-Outrider's JOURNAL_REFERENCE)."""
+    text = str(version or "").strip().casefold()
+    return bool(text) and not text.startswith("3.") and "beta" not in text
+
+
 def _now_epoch():
     return int(datetime.now(timezone.utc).timestamp())
 
@@ -105,6 +112,8 @@ class EddnUploader:
         with self._lock:
             enabled = self.enabled
         if not enabled or not isinstance(market, dict):
+            return
+        if not live_game(str((context or {}).get("gameversion") or "")):
             return
         market_id = market.get("MarketID")
         timestamp = market.get("timestamp")

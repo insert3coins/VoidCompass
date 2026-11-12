@@ -292,6 +292,15 @@ function shell(root, ui) {
       root.scrollIntoView({block: "start"});
       return;
     }
+    const mute = event.target.closest("[data-watcher-mute], [data-watcher-unmute]");
+    if (mute) {
+      const muting = mute.dataset.watcherMute !== undefined;
+      const text = muting ? mute.dataset.watcherMute : mute.dataset.watcherUnmute;
+      if (await ui.command("workspace", {page: "watcher", operation: muting ? "mute_line" : "unmute_line", text})) {
+        ui.showToast?.(muting ? "Muted: it won't be said again" : "That line can be said again");
+      }
+      return;
+    }
     const answer = event.target.closest("[data-watcher-answer]");
     if (answer) {
       answer.disabled = true;
@@ -730,6 +739,7 @@ export function renderWatcher(data = {}, ui) {
   renderDeeper(data.deeper || {}, data.lore || {}, ui);
   renderKnows(data.habits || {}, ui);
   renderSettings(data.settings || {}, ui);
+  renderMuted(data.muted || [], ui);
   renderVoice(data.voice || {}, ui);
   renderName(data.name || {}, ui);
   renderTalk(data.talk || {}, ui);
@@ -742,7 +752,7 @@ export function renderWatcher(data = {}, ui) {
   const key = JSON.stringify(log.slice(0, 3).map((row) => [row.at, row.text]).concat([log.length]));
   if (key !== lastLogKey) {
     lastLogKey = key;
-    const line = (row) => `<li data-mood="${ui.escapeHtml(row.mood || "")}" data-kind="${ui.escapeHtml(row.kind || "")}"><time>${ui.escapeHtml(ago(row.at))}</time><p>${row.heading ? `<small>${ui.escapeHtml(row.heading)}</small>` : ""}${ui.escapeHtml(row.text)}</p>${row.mood ? `<b>${MOOD_LABELS[row.mood] || ""}</b>` : ""}</li>`;
+    const line = (row) => `<li data-mood="${ui.escapeHtml(row.mood || "")}" data-kind="${ui.escapeHtml(row.kind || "")}"><time>${ui.escapeHtml(ago(row.at))}</time><p>${row.heading ? `<small>${ui.escapeHtml(row.heading)}</small>` : ""}${ui.escapeHtml(row.text)}</p>${row.mood ? `<b>${MOOD_LABELS[row.mood] || ""}</b>` : ""}<button type="button" class="watcher-mute" data-watcher-mute="${ui.escapeHtml(row.text)}" title="Never say this line again (the companion page's SETUP brings it back)">🔇</button></li>`;
     ui.byId("watcher-log").innerHTML = log.length ? log.map(line).join("")
       : `<li class="empty">Its thoughts will be kept here as it shares them.</li>`;
     ui.byId("watcher-lately").innerHTML = log.length > 1 ? log.slice(1, 6).map(line).join("")
@@ -997,6 +1007,25 @@ function wireSettings(root, ui) {
     const saved = event.target.closest(".watcher-settings")?.querySelector(".watcher-saved")?.id || "watcher-settings-saved";
     savedNote(saved, await ui.command("workspace", {page: "watcher", operation: "settings", values}));
   });
+}
+
+// Lines you've muted (5.7.8), each one tap to bring back.
+let lastMuted = "";
+function renderMuted(muted, ui) {
+  const panel = ui.byId("watcher-workspace")?.querySelector('[data-watcher-panel="settings"] .watcher-setup-col');
+  if (!panel) return;
+  let box = panel.querySelector(".watcher-muted");
+  if (!box) {
+    box = document.createElement("section");
+    box.className = "card watcher-muted";
+    panel.append(box);
+  }
+  const key = JSON.stringify(muted);
+  if (key === lastMuted) return;
+  lastMuted = key;
+  box.innerHTML = `<header><span>MUTED LINES</span><b>${muted.length}</b></header>${muted.length
+    ? `<ul>${muted.map((text) => `<li><span>${ui.escapeHtml(text)}</span><button type="button" data-watcher-unmute="${ui.escapeHtml(text)}">BRING BACK</button></li>`).join("")}</ul>`
+    : `<p class="workspace-empty">Mute any line with 🔇 in its thoughts, and it's never said again.</p>`}`;
 }
 
 function renderSettings(settings, ui) {

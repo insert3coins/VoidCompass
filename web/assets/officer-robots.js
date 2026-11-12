@@ -4,8 +4,8 @@ const TAU = Math.PI * 2;
 
 // These are articulated meshes, not portrait plates. The owning renderer supplies
 // the clock, expression and playback envelope; there are no extra animation loops.
-function workshop(parent, uniforms, renderer, scene) {
-  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;
+function workshop(parent, uniforms, renderer, scene, lamps={}) {
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=lamps.exposure??.95;
   const root = new THREE.Group(), head = new THREE.Group(), body = new THREE.Group();
   parent.add(root); root.add(head, body); head.position.y = .21;
   const pearl = new THREE.MeshPhysicalMaterial({color:0xd5e3ef, metalness:.38, roughness:.26,
@@ -57,16 +57,55 @@ function workshop(parent, uniforms, renderer, scene) {
   }
   const pmrem=new THREE.PMREMGenerator(renderer),environment=pmrem.fromScene(room,.06,.1,20);
   scene.environment=environment.texture;pmrem.dispose();room.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});
-  root.add(new THREE.HemisphereLight(0xe0efff,0x263452,1.8));
-  const key=new THREE.DirectionalLight(0xffffff,2.5);key.position.set(-2,3,5);root.add(key);
-  const fill=new THREE.DirectionalLight(0x9ed9ff,1.5);fill.position.set(3,1,2);root.add(fill);
-  const rim=new THREE.DirectionalLight(0xbdb6ff,2.6);rim.position.set(0,2,-3);root.add(rim);
+  // Each officer sits under its own lamps: where they are and how warm.
+  const lamp=(name,colour,intensity,at)=>{const spec=lamps[name]||{};const light=new THREE.DirectionalLight(spec.colour??colour,spec.intensity??intensity);
+    light.position.set(...(spec.at||at));root.add(light);return light;};
+  const hemi=lamps.hemi||{};root.add(new THREE.HemisphereLight(hemi.sky??0xe0efff,hemi.ground??0x263452,hemi.intensity??1.8));
+  const key=lamp("key",0xffffff,2.5,[-2,3,5]);
+  const fill=lamp("fill",0x9ed9ff,1.5,[3,1,2]);
+  const rim=lamp("rim",0xbdb6ff,2.6,[0,2,-3]);
+  if(lamps.top)lamp("top",0xffffff,1.5,[0,5,1.5]);
+  const rimMix=lamps.rim?.follow??1,fillMix=lamps.fill?.follow??.28;
   function colour() {
     glow.color.copy(uniforms.uColour.value);soft.color.copy(uniforms.uOther.value);
     pearl.color.set(0xd5e3ef).lerp(uniforms.uColour.value,.06);
-    rim.color.copy(uniforms.uOther.value);fill.color.set(0xc0dfff).lerp(uniforms.uColour.value,.28);
+    rim.color.set(lamps.rim?.colour??0xbdb6ff).lerp(uniforms.uOther.value,rimMix);
+    fill.color.set(lamps.fill?.colour??0xc0dfff).lerp(uniforms.uColour.value,fillMix);
   }
-  return {root,head,body,pearl,steel,dark,glass,glow,soft,white,mesh,ball,plate,path,ring,bar,dome,colour,
+  // Still parts that share a material become one mesh, so detail doesn't cost
+  // a draw call each. Anything that moves or changes on its own is kept out.
+  function bake(group,keep=[]) {
+    const kept=new Set(keep),byMaterial=new Map();
+    for(const child of [...group.children]){
+      if(!child.isMesh||kept.has(child))continue;
+      child.updateMatrix();
+      const part=child.geometry.index?child.geometry.toNonIndexed():child.geometry.clone();
+      if(child.matrix.determinant()<0){
+        // A mirrored part has its winding turned round; turn it back.
+        const p=part.getAttribute("position"),n=part.getAttribute("normal");
+        for(let i=0;i<p.count;i+=3)for(const a of [p,n]){
+          const x=a.getX(i+1),y=a.getY(i+1),z=a.getZ(i+1);
+          a.setXYZ(i+1,a.getX(i+2),a.getY(i+2),a.getZ(i+2));a.setXYZ(i+2,x,y,z);
+        }
+      }
+      part.applyMatrix4(child.matrix);
+      if(!byMaterial.has(child.material))byMaterial.set(child.material,[]);
+      byMaterial.get(child.material).push(part);
+      group.remove(child);child.geometry.dispose();
+    }
+    for(const [material,parts] of byMaterial){
+      let count=0;for(const part of parts)count+=part.getAttribute("position").count;
+      const position=new Float32Array(count*3),normal=new Float32Array(count*3);let at=0;
+      for(const part of parts){
+        position.set(part.getAttribute("position").array,at*3);normal.set(part.getAttribute("normal").array,at*3);
+        at+=part.getAttribute("position").count;part.dispose();
+      }
+      const merged=new THREE.BufferGeometry();
+      merged.setAttribute("position",new THREE.BufferAttribute(position,3));merged.setAttribute("normal",new THREE.BufferAttribute(normal,3));
+      group.add(new THREE.Mesh(merged,material));
+    }
+  }
+  return {root,head,body,pearl,steel,dark,glass,glow,soft,white,mesh,ball,plate,path,ring,bar,dome,colour,bake,
     destroy(){scene.environment=null;environment.dispose();}};
 }
 
@@ -132,18 +171,33 @@ export function addOfficerHalo(parent,uniforms,identity) {
   }};
 }
 
-// Aster: a naval command unit. A wide smoked visor, titanium cheeks, one
-// communications mast and a high collar; no toy optics or hexagonal shell.
+//// Aster: a naval command unit. A smoked visor hooded by a titanium brow,
+// machined cheeks with raised vents, a squared jaw, high collar and layered
+// shoulder armour; one communications mast. Dark, with the light on its edges.
 export function addAsterOfficer(parent,uniforms,renderer,scene) {
-  const w=workshop(parent,uniforms,renderer,scene);
-  const {root,head,body,pearl,steel,dark,glass,glow,soft,mesh,ball,plate,path,ring,bar,dome}=w;
+  const w=workshop(parent,uniforms,renderer,scene,{
+    key:{colour:0xf4f8ff,intensity:2.2,at:[-2.4,3.2,4.6]},
+    fill:{colour:0x9fd4ff,intensity:1.3,at:[3,.6,2.4],follow:.22},
+    rim:{colour:0xc4e8ff,intensity:3.8,at:[.6,2.4,-3],follow:.5},
+    top:{colour:0xeaf4ff,intensity:1.6,at:[-.5,5,1.5]},exposure:1.05,
+    hemi:{sky:0xdfefff,ground:0x1c2a40,intensity:2.0}});
+  const {root,head,body,pearl,steel,dark,glass,glow,soft,mesh,ball,plate,path,ring,bar,dome,bake}=w;
   root.name="aster-command-android";head.name="aster-command-helm";head.position.y=.25;
-  const armour=pearl.clone();armour.color.set(0x344858);armour.roughness=.30;armour.metalness=.72;
+  const armour=pearl.clone();armour.color.set(0x3a5064);armour.roughness=.28;armour.metalness=.70;
   const titanium=steel.clone();titanium.color.set(0x879aa9);titanium.roughness=.31;
+  const gunmetal=steel.clone();gunmetal.color.set(0x24333f);gunmetal.roughness=.40;
   const outline=[[-.25,.48],[-.41,.37],[-.49,.16],[-.47,-.12],[-.32,-.34],[-.16,-.42],
     [.16,-.42],[.32,-.34],[.47,-.12],[.49,.16],[.41,.37],[.25,.48]];
   plate(head,dark,outline,.25,[0,0,-.16],.035);
   dome(head,armour,outline,.10,.19);
+  // The helmet's edge, then seams and a crest that follow the dome's own curve.
+  path(head,titanium,outline.map(([x,y])=>[x*.985,y*.985,.105]),.012,true);
+  const onDome=(x,y,lift=0)=>[x,y,.10+.19*(1-Math.min(1,(x/.49)**2+(y/.47)**2))+lift];
+  path(head,titanium,[onDome(0,.47,.004),onDome(0,.38,.004),onDome(0,.29,.004)],.013);
+  path(head,titanium,[-.40,-.22,0,.22,.40].map(x=>onDome(x,.31,.012)),.009);
+  for(const side of [-1,1])path(head,gunmetal,[onDome(side*.43,.20,.004),onDome(side*.455,-.04,.004),onDome(side*.37,-.27,.004)],.006);
+  // The brow hoods the visor, so the shutters sit in shadow.
+  plate(head,titanium,[[-.47,.21],[-.42,.27],[.42,.27],[.47,.21],[.45,.175],[-.45,.175]],.055,[0,0,.28],.012);
   const visorOutline=[[-.40,.18],[-.45,.11],[-.43,-.045],[-.30,-.10],[.30,-.10],[.43,-.045],[.45,.11],[.40,.18]];
   plate(head,titanium,visorOutline,.025,[0,0,.275],.018);
   dome(head,glass,visorOutline.map(([x,y])=>[x*.98,(y-.04)*.90+.04]),.307,.048);
@@ -155,39 +209,53 @@ export function addAsterOfficer(parent,uniforms,renderer,scene) {
     eye.position.set(side*.17,.055,.372);
     plate(lens,glow,[[-.105,.012],[.09,.012],[.105,-.012],[-.09,-.012]],.008,[0,0,0],.003);
     bar(lens,soft,.057,.005,[side*.04,.023,.008]);eyes.push({eye,lens,side});
-    const cheek=plate(head,titanium,[[-.075,.10],[.06,.08],[.045,-.16],[-.04,-.22]],.035,[side*.33,-.17,.19],.018);
+    // Cheeks: a gunmetal recess with the vents raised in titanium.
+    const cheek=plate(head,gunmetal,[[-.08,.11],[.065,.09],[.05,-.17],[-.045,-.23]],.03,[side*.33,-.17,.185],.012);
     cheek.scale.x=side;cheek.rotation.y=side*.18;
-    for(let i=0;i<3;i++)bar(head,dark,.055,.009,[side*.335,-.14-i*.035,.246]).rotation.z=-side*.18;
+    for(let i=0;i<3;i++)bar(head,titanium,.06,.010,[side*.335,-.14-i*.035,.228]).rotation.z=-side*.18;
     path(head,soft,[[side*.395,.25,.19],[side*.31,.38,.185],[side*.20,.425,.16]],.005);
   }
-  // Offset comms pod and mast distinguish the silhouette from both crewmates.
+  // Offset comms pod and mast on one side, a receiver on the other.
   const pod=new THREE.Group();head.add(pod);pod.position.set(-.49,.035,-.035);pod.rotation.y=-.30;
   ball(pod,dark,[0,0,0],[.095,.20,.13]);
   ring(pod,titanium,.093,.021,[0,0,.105]);ring(pod,glow,.071,.006,[0,0,.126]);
   ball(pod,glass,[0,0,.13],[.057,.057,.014]);
   path(head,titanium,[[-.45,.21,-.10],[-.52,.43,-.15],[-.50,.59,-.15]],.012);
   ball(head,soft,[-.50,.59,-.15],[.018,.022,.018],16);
+  const receiver=new THREE.Group();head.add(receiver);receiver.position.set(.50,.02,.02);receiver.rotation.z=Math.PI/2;
+  mesh(new THREE.CylinderGeometry(.10,.10,.05,28),gunmetal,receiver);
+  mesh(new THREE.CylinderGeometry(.085,.085,.07,28),titanium,receiver);
+  ring(receiver,soft,.07,.005,[0,.04,0]).rotation.x=Math.PI/2;
   const jaw=new THREE.Group();head.add(jaw);
   plate(head,dark,[[-.18,-.19],[.18,-.19],[.15,-.33],[-.15,-.33]],.02,[0,0,.29],.008);
   plate(jaw,titanium,[[-.24,-.21],[-.13,-.26],[.13,-.26],[.24,-.21],[.16,-.35],[0,-.40],[-.16,-.35]],.025,[0,0,.29],.014);
+  plate(jaw,dark,[[-.13,-.39],[.13,-.39],[.09,-.46],[-.09,-.46]],.02,[0,0,.27],.008);
+  for(const side of [-1,1])path(jaw,gunmetal,[[side*.37,-.25,.16],[side*.31,-.35,.235],[side*.18,-.41,.275]],.014);
   const mouth=[];
   for(let i=-2;i<=2;i++)mouth.push(bar(head,glow,.031,.009,[i*.039,-.228,.321]));
   mesh(new THREE.CylinderGeometry(.105,.135,.23,32),dark,body,[0,-.27,0]);
   for(const y of [-.20,-.28,-.35])ring(body,titanium,.12,.009,[0,y,0]).rotation.x=Math.PI/2;
+  for(const side of [-1,1])path(body,gunmetal,[[side*.075,-.42,-.075],[side*.075,-.17,-.075]],.018);
   // Shaped collar and shoulder armour over an articulated underframe.
+  mesh(new THREE.CylinderGeometry(.17,.20,.08,32,1,true),dark,body,[0,-.39,0]);
   const collar=mesh(new THREE.CylinderGeometry(.22,.32,.19,48,1,true,0,Math.PI*1.55),armour,body,[0,-.42,-.025]);
   collar.rotation.y=Math.PI*.23;
+  ring(body,titanium,.245,.012,[0,-.345,-.025]).rotation.x=Math.PI/2;
   ball(body,dark,[0,-.73,-.04],[.40,.28,.23]);
   const breast=[[-.24,.19],[.24,.19],[.27,-.05],[.14,-.24],[-.14,-.24],[-.27,-.05]];
   plate(body,armour,breast,.10,[0,-.73,.11],.022);
   plate(body,glass,breast.map(([x,y])=>[x*.72,y*.85]),.015,[0,-.73,.23],.012);
-  const chest=[];
+  plate(body,titanium,[[-.16,-.03],[.16,-.03],[.13,.03],[-.13,.03]],.03,[0,-.86,.20],.008);
+  const chest=[],shoulders=[];
   for(const side of [-1,1]){
-    const shoulder=new THREE.Group();body.add(shoulder);shoulder.position.set(side*.40,-.55,-.02);shoulder.rotation.z=side*.28;
+    const shoulder=new THREE.Group();body.add(shoulder);shoulders.push(shoulder);
+    shoulder.position.set(side*.40,-.55,-.02);shoulder.rotation.z=side*.28;
     ball(shoulder,dark,[0,-.06,0],[.18,.20,.17]);
-    dome(shoulder,armour,[[-.17,.11],[-.09,.19],[.11,.16],[.20,-.02],[.15,-.15],[-.08,-.10]],.19,.065);
-    path(shoulder,titanium,[[-.13,.09,.235],[-.06,.15,.235],[.10,.12,.235],[.17,-.01,.21]],.012);
-    path(shoulder,glow,[[-.06,.115,.25],[.08,.095,.25],[.13,.025,.235]],.006);
+    dome(shoulder,armour,[[-.19,.10],[-.10,.21],[.12,.18],[.22,-.02],[.17,-.17],[-.09,-.12]],.17,.075);
+    dome(shoulder,titanium,[[-.12,.07],[-.05,.15],[.09,.13],[.15,-.02],[.11,-.11],[-.06,-.08]],.245,.035);
+    path(shoulder,gunmetal,[[-.17,.08,.24],[-.08,.19,.24],[.11,.16,.24],[.20,-.02,.215]],.009);
+    path(shoulder,glow,[[-.06,.115,.29],[.08,.095,.29],[.13,.025,.275]],.006);
+    path(body,gunmetal,[[side*.26,-.56,.236],[side*.19,-.63,.242],[side*.13,-.60,.244]],.005);
     plate(body,titanium,[[-.035,.13],[.055,.14],[.045,-.14],[-.04,-.10]],.035,[side*.20,-.49,.15],.008).rotation.z=-side*.42;
     mesh(new THREE.CylinderGeometry(.08,.08,.11,20),dark,body,[side*.42,-.78,-.01]).rotation.z=side*.25;
     ring(body,titanium,.055,.008,[side*.42,-.77,.095]);
@@ -195,6 +263,7 @@ export function addAsterOfficer(parent,uniforms,renderer,scene) {
   }
   bar(body,glow,.095,.009,[0,-.57,.262]);
   ring(body,titanium,.078,.012,[0,-.88,.24]);
+  bake(head,[horizon,...mouth]);bake(jaw);bake(pod);bake(receiver);bake(body,chest);for(const shoulder of shoulders)bake(shoulder);
   let blink=0,mouthOpenValue=0;
   return {root,head,body,
     update({clock,pose,mouthOpen,reduced,focus,animated,expression={},docking=false}) {
@@ -211,21 +280,28 @@ export function addAsterOfficer(parent,uniforms,renderer,scene) {
       horizon.scale.y=1-blink*.85;
       mouth.forEach((o,i)=>{o.scale.y=1+mouthOpenValue*(2.5+Math.cos(i)*1.1);o.position.y=-.228-mouthOpenValue*.014;});
       chest.forEach(o=>{o.visible=!docking;});
-      w.colour();armour.color.set(0x253746).lerp(uniforms.uColour.value,.035);
+      w.colour();armour.color.set(0x3a5064).lerp(uniforms.uColour.value,.035);
       titanium.color.set(0x879aa9).lerp(uniforms.uOther.value,.025);
     },
     inspect:()=>({modelReady:true,modelType:"command-android",eyeRigs:2,blink,mouthMorph:mouthOpenValue}),
     destroy:w.destroy};
 }
 
-// Axiom: a precision instrument given a body. Ivory ceramic plates separate at
-// the seams, paired camera irises and exposed temple processors suggest curiosity.
+/// Axiom: a precision instrument given a body. Ivory ceramic plates with their
+// seams showing, camera irises under calm half-lids and a brow, exposed temple
+// processors and a solid laboratory chassis, lit cleanly from above.
 export function addAxiomSurveyor(parent,uniforms,renderer,scene) {
-  const w=workshop(parent,uniforms,renderer,scene);
-  const {root,head,body,pearl,steel,dark,glass,glow,soft,white,mesh,ball,plate,path,ring,bar,dome}=w;
+  const w=workshop(parent,uniforms,renderer,scene,{
+    key:{colour:0xffffff,intensity:2.3,at:[-.8,4.2,4]},
+    fill:{colour:0xc9c0ff,intensity:1.2,at:[3,.4,2.6],follow:.3},
+    rim:{colour:0xb9a8ff,intensity:2.4,at:[.4,1.6,-3],follow:.7},
+    top:{colour:0xf6f3ff,intensity:1.2,at:[.3,5,.8]},
+    hemi:{sky:0xf0ecff,ground:0x2a2846,intensity:1.7}});
+  const {root,head,body,pearl,steel,dark,glass,glow,soft,white,mesh,ball,plate,path,ring,bar,dome,bake}=w;
   root.name="axiom-precision-android";head.name="axiom-ceramic-head";head.position.y=.28;
   const ceramic=pearl.clone();ceramic.color.set(0xc7c7ce);ceramic.metalness=.12;ceramic.roughness=.31;
   const brass=steel.clone();brass.color.set(0x967748);brass.roughness=.29;
+  const graphite=steel.clone();graphite.color.set(0x3a3f4e);graphite.roughness=.42;
   ball(head,dark,[0,0,-.035],[.43,.51,.30]);
   const shell=ceramic.clone();
   shell.onBeforeCompile=shader=>{
@@ -240,13 +316,20 @@ export function addAxiomSurveyor(parent,uniforms,renderer,scene) {
   };
   shell.customProgramCacheKey=()=>"axiom-ceramic-optics";
   const shellGeometry=new THREE.SphereGeometry(1,64,40);shellGeometry.scale(.431,.50,.325);mesh(shellGeometry,shell,head);
+  // Where the shell's surface is, for seams that sit on it.
+  const onShell=(x,y,lift=.004)=>[x,y,.325*Math.sqrt(Math.max(0,1-(x/.431)**2-(y/.5)**2))+lift];
   // The frontal crest is a structural seam, never a logo or a glowing crown.
   path(head,steel,[[0,.215,.29],[0,.34,.238],[0,.43,.16]],.007);
   plate(head,steel,[[-.014,.13],[.014,.13],[.028,-.075],[0,-.108],[-.028,-.075]],.012,[0,0,.322],.005);
+  // Panel seams: the crown cap, a line round the skull at the optics, cheek plates.
+  path(head,graphite,Array.from({length:24},(_,i)=>{const a=i/24*TAU;return onShell(Math.cos(a)*.30,.30+Math.sin(a)*.17*.98);}),.004,true);
   for(const side of [-1,1]){
+    path(head,graphite,[onShell(side*.33,.10),onShell(side*.40,.06),onShell(side*.425,-.02),onShell(side*.40,-.12)],.004);
     const seam=[[side*.275,.34],[side*.365,.18],[side*.385,-.06],[side*.29,-.30]];
-    path(head,steel,seam.map(([x,y])=>[x,y,.325*Math.sqrt(Math.max(0,1-(x/.431)**2-(y/.50)**2))+.003]),.003);
+    path(head,graphite,seam.map(([x,y])=>onShell(x,y)),.004);
   }
+  // A brow over both optics, with the old steel lines as its edge.
+  plate(head,ceramic,[[-.335,.125],[-.31,.185],[-.12,.215],[.12,.215],[.31,.185],[.335,.125],[.30,.15],[.12,.178],[-.12,.178],[-.30,.15]],.035,[0,0,.268],.008);
   const eyes=[],processors=[];
   for(const side of [-1,1]){
     const eye=new THREE.Group(),lens=new THREE.Group();head.add(eye);eye.add(lens);
@@ -255,21 +338,27 @@ export function addAxiomSurveyor(parent,uniforms,renderer,scene) {
     ball(lens,glass,[0,0,.017],[.087,.083,.035]);
     ring(lens,brass,.059,.011,[0,0,.045]);ring(lens,soft,.043,.004,[0,0,.053]);
     ball(lens,dark,[0,0,.055],[.032,.038,.010],24);
-    ball(lens,white,[-.020,.028,.059],[.010,.015,.004],16);eyes.push({eye,lens,side});
-    path(head,steel,[[side*.08,.174,.272],[side*.19,.194,.257],[side*.30,.16,.223]],.009);
+    ball(lens,white,[-.017,.024,.059],[.008,.012,.004],16);eyes.push({eye,lens,side});
+    // A half-lid over each iris: a calm, measuring look rather than a stare.
+    const lid=plate(head,ceramic,[[-.135,.045],[-.12,.085],[-.07,.118],[0,.13],[.07,.118],[.12,.085],[.135,.045],[.10,.062],[.05,.072],[0,.075],[-.05,.072],[-.10,.062]],.03,[side*.187,.045,.345],.006);
+    lid.rotation.y=side*.19;
+    path(head,steel,[[side*.08,.174,.282],[side*.19,.194,.267],[side*.30,.16,.233]],.007);
     // Separate cheek plates expose the black mechanical cheek joint.
     plate(head,steel,[[-.025,.06],[.035,.05],[.06,-.11],[0,-.16]],.025,[side*.32,-.17,.16],.010).scale.x=side;
     path(head,glow,[[side*.30,-.13,.235],[side*.27,-.23,.236]],.005);
     const temple=new THREE.Group();head.add(temple);temple.position.set(side*.414,.055,-.03);
     plate(temple,steel,[[-.03,.20],[.025,.19],[.045,-.20],[-.025,-.19]],.10,[0,0,0],.008);
+    const lights=[];
     for(let i=0;i<3;i++){
       const chip=plate(temple,glass,[[-.028,-.037],[.035,-.037],[.035,.037],[-.028,.037]],.045,[side*.032,.12-i*.105,.085],.006);
-      const light=bar(temple,glow,.035,.006,[side*.032,.12-i*.105,.14]);processors.push({chip,light,side,i});
+      const light=bar(temple,glow,.035,.006,[side*.032,.12-i*.105,.14]);processors.push({chip,light,side,i});lights.push(light);
     }
+    bake(temple,lights);
     ball(head,steel,[side*.405,-.21,-.015],[.044,.07,.065],20);
   }
   const jaw=new THREE.Group();head.add(jaw);
   plate(jaw,ceramic,[[-.15,-.27],[.15,-.27],[.14,-.35],[.05,-.41],[-.05,-.41],[-.14,-.35]],.02,[0,0,.25],.015);
+  path(jaw,graphite,[[-.14,-.30,.272],[-.05,-.40,.272],[.05,-.40,.272],[.14,-.30,.272]],.003);
   const mouth=new THREE.Mesh(new THREE.PlaneGeometry(.24,.12),new THREE.ShaderMaterial({
     uniforms:{...uniforms,uJaw:{value:0},uSmile:{value:0}},
     vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
@@ -287,23 +376,31 @@ export function addAxiomSurveyor(parent,uniforms,renderer,scene) {
   mesh(new THREE.CylinderGeometry(.075,.10,.22,24),dark,body,[0,-.30,0]);
   for(const y of [-.23,-.29,-.35])ring(body,steel,.10,.014,[0,y,0]).rotation.x=Math.PI/2;
   ring(body,glow,.101,.005,[0,-.26,0]).rotation.x=Math.PI/2;
+  for(const side of [-1,1])path(body,graphite,[[side*.06,-.40,-.06],[side*.06,-.19,-.06]],.012);
   mesh(new THREE.CylinderGeometry(.18,.24,.10,32),steel,body,[0,-.42,0]);
+  ring(body,graphite,.215,.012,[0,-.375,0]).rotation.x=Math.PI/2;
   ball(body,dark,[0,-.73,-.025],[.37,.27,.20]);
   const breast=[[-.23,.17],[.23,.17],[.27,-.02],[.13,-.25],[-.13,-.25],[-.27,-.02]];
   plate(body,ceramic,breast,.09,[0,-.71,.04],.025);
+  // A clavicle bar and panel lines across the breastplate.
+  plate(body,steel,[[-.26,.03],[.26,.03],[.24,-.03],[-.24,-.03]],.02,[0,-.545,.12],.006);
+  for(const side of [-1,1])path(body,graphite,[[side*.25,-.60,.145],[side*.21,-.70,.148],[side*.19,-.86,.135]],.004);
   plate(body,steel,[[-.14,.12],[.14,.12],[.18,-.03],[.09,-.19],[-.09,-.19],[-.18,-.03]],.025,[0,-.70,.16],.014);
   plate(body,glass,[[-.12,.105],[.12,.105],[.15,-.03],[.075,-.17],[-.075,-.17],[-.15,-.03]],.018,[0,-.70,.20],.010);
-  const scanBars=[];
+  const scanBars=[],shoulders=[];
   for(const side of [-1,1]){
-    const shoulder=new THREE.Group();body.add(shoulder);shoulder.position.set(side*.35,-.57,-.015);shoulder.rotation.z=side*.32;
+    const shoulder=new THREE.Group();body.add(shoulder);shoulders.push(shoulder);
+    shoulder.position.set(side*.35,-.57,-.015);shoulder.rotation.z=side*.32;
     ball(shoulder,dark,[0,-.02,0],[.16,.20,.15]);
-    dome(shoulder,ceramic,[[-.14,.12],[-.06,.18],[.10,.14],[.17,-.04],[.09,-.15],[-.10,-.08]],.08,.08);
-    path(shoulder,steel,[[-.10,.09,.14],[-.04,.14,.16],[.09,.10,.14],[.13,-.02,.12]],.009);
-    bar(shoulder,glow,.065,.009,[.01,.09,.17]);
+    dome(shoulder,ceramic,[[-.16,.10],[-.07,.20],[.12,.16],[.19,-.04],[.11,-.16],[-.11,-.10]],.08,.09);
+    dome(shoulder,steel,[[-.10,.06],[-.04,.14],[.08,.11],[.13,-.03],[.08,-.10],[-.07,-.07]],.165,.03);
+    path(shoulder,graphite,[[-.14,.08,.165],[-.06,.17,.165],[.10,.14,.165],[.16,-.03,.15]],.006);
+    bar(shoulder,glow,.065,.009,[.01,.09,.205]);
     ball(body,steel,[side*.36,-.80,-.01],[.075,.095,.075],20);
     for(let i=0;i<3;i++)scanBars.push(bar(body,glow,.015,.026,[side*.204,-.63-i*.046,.175]));
   }
   const coreMount=new THREE.Group();coreMount.position.set(0,-.73,.29);body.add(coreMount);
+  bake(head,[mouth]);bake(jaw);bake(body,scanBars);for(const shoulder of shoulders)bake(shoulder);
   let blink=0,mouthValue=0,scanProgress=0;
   return {root,head,body,coreMount,
     update({clock,pose,mouthOpen,reduced,focus,animated,expression={},scan=null}) {

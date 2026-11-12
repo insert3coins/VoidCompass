@@ -204,3 +204,10 @@
   .tr-market-search { position: static; max-height: none; }
   .tr-stations { max-height: 280px; overflow-y: auto; }
 }
+/* Sell all (5.7.8). */
+.tr-sellall { margin-bottom: 10px; }
+.tr-sellall h4 { margin: 0 0 6px; color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.tr-sellall-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; grid-template-rows: auto auto; align-items: center; gap: 2px 10px; padding: 5px 0; border-bottom: 1px solid var(--border-soft); font: 12px "Segoe UI", sans-serif; }
+.tr-sellall-row b { grid-row: span 2; color: var(--green); font: 700 15px "Bahnschrift SemiCondensed", sans-serif; }
+.tr-sellall-row small { grid-column: 2; color: var(--muted); }
+.tr-sellall-row button { grid-column: 3; grid-row: 1 / span 2; }

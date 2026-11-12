@@ -403,18 +403,27 @@ class ApiRecordsMixin:
         return {"done": action, "id": entry_id, "waypoints": self._api_waypoints()}
 
     def api_neutron_route(self):
-        transient = getattr(self, "_html_profile_transient", None)
-        tool = transient("_html_explore_tool_state", {}) if callable(transient) else {}
-        route = tool.get("route") or None
-        return _plain({"status": tool.get("status") or "ready", "detail": tool.get("detail") or "", "route": route})
+        """The route on Explore & Survey's PLOT ROUTE (5.7.8: every plotter's)."""
+        plotting = getattr(self, "_route_plotting", lambda: {})() or {}
+        route = getattr(self, "_route", lambda: None)()
+        out = None
+        if route:
+            stops = route["rows"][1:]
+            out = {"kind": route.get("kind"), "label": route.get("label"), "from": route.get("from"), "to": route.get("to"),
+                   "total_jumps": sum(int(row.get("jumps") or 0) for row in stops), "followed": bool(route.get("waypoint_note")),
+                   "waypoints": [{"system": row["system"], "coords": row.get("coords"), "jumps": row.get("jumps"),
+                                  "neutron": bool(row.get("neutron")), "refuel": bool(row.get("refuel"))} for row in stops]}
+        return _plain({"status": plotting.get("status") or "ready", "detail": plotting.get("detail") or "", "route": out})
 
     def api_import_neutron_route(self):
-        if not (self.api_neutron_route()["route"] or {}).get("waypoints"):
-            raise ApiError(409, "No neutron route has been plotted: plot one on Explore & Survey › ROUTE")
+        route = getattr(self, "_route", lambda: None)()
+        if not route:
+            raise ApiError(409, "No route has been plotted: plot one on the Route page")
         before = len(self._api_waypoints())
-        self._api_explore("neutron_import")
+        if not route.get("waypoint_note"):
+            self._route_adopt(route)
         after = self._api_waypoints()
-        return {"imported": len(after) - before, "waypoints": after}
+        return {"imported": max(0, len(after) - before), "waypoints": after}
 
     def api_copy_next(self):
         next_of = getattr(self, "_dashboard_next_destination", None)

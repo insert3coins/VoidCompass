@@ -142,16 +142,20 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
             return False
 
     def _galaxy_minimap_trip(self, position, system):
-        """The whole trip from Spansh (5.5.3.7): the waypoint route, or this
-        commander's latest neutron plot."""
+        """The whole trip from Spansh (5.5.3.7): the waypoint route, which a
+        plotted route becomes (5.7.8)."""
         from voidcompass.overlays.galaxy_minimap_hud import spansh_trip
         manager = getattr(self, "waypoint_manager", None)
+        waypoints = list(getattr(manager, "waypoints", None) or [])
+        route = getattr(self, "_route", lambda: None)()
         plot = None
-        state = getattr(self, "_html_explore_tool_state", None)
-        if isinstance(state, dict) and state.get("profile") == get_active_profile(self.config):
-            plot = state.get("route") if isinstance(state.get("route"), dict) else None
+        if route and not route.get("done_at"):
+            plot = {"waypoints": [{"system": row["system"], "coords": row.get("coords"), "neutron": bool(row.get("neutron")),
+                                   "jumps": row.get("jumps")} for row in route.get("rows") or () if row.get("system")]}
+            if not route.get("waypoint_note"):
+                waypoints = []   # a route plotted before 5.7.8 followed on its own
         try:
-            return spansh_trip(list(getattr(manager, "waypoints", None) or []), plot, position, system)
+            return spansh_trip(waypoints, plot, position, system)
         except Exception as exc:
             logging.debug("Galaxy minimap trip skipped: %s", exc)
             return None
@@ -705,14 +709,6 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
         """The editor's drawing, from the deck server's save route: over the
         postcard, or as a new one beside it."""
         import base64
-        if payload.get("mode") == "snap":
-            # The Hatchling's SNAP (5.6.4): its pod as a new postcard.
-            try:
-                png = base64.b64decode(str(payload.get("png") or ""), validate=True)
-            except ValueError:
-                return {"ok": False, "error": "not a picture"}
-            saved = self._hatchling_snap(png) if hasattr(self, "_hatchling_snap") else None
-            return {"ok": True, "id": saved} if saved else {"ok": False, "error": "not saved"}
         card_id = str(payload.get("id") or "")[:16]
         design = payload.get("design")
         if not isinstance(design, dict) or len(str(design)) > 400_000:

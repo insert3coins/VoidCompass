@@ -1169,6 +1169,7 @@ function showLocationLine() {
   label.textContent = text;
   label.title = text;
   label.classList.toggle('system-history', locationLineIndex % locationLines.length > 0);
+  label.classList.toggle('system-hostile', text.startsWith('HOSTILE WITH '));
 }
 
 function renderLocationLines(system) {

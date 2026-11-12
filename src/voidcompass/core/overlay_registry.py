@@ -34,7 +34,7 @@ OVERLAY_SPECS = (
     OverlaySpec("powerplay_hud", "powerplay", "Void Compass Powerplay Operations", "powerplay_overlay_enabled", "powerplay_hud_x", "powerplay_hud_y", (820, 490), (430, 310), "Powerplay Operations", "POWERPLAY", False, "powerplay", "overlay_hotkey_powerplay", "Powerplay Operations"),
     OverlaySpec("gravity_warning_hud", "gravity", "Void Compass Gravity Warning", "gravity_warning_overlay_enabled", "gravity_warning_hud_x", "gravity_warning_hud_y", (1200, 530), (320, 106), "Gravity Warning", "GRAVITY", True, "gravity", "overlay_hotkey_gravity", "Gravity Warning"),
     OverlaySpec("station_info_hud", "station", "Void Compass Station Link", "station_info_overlay_enabled", "station_info_hud_x", "station_info_hud_y", (30, 380), (520, 442), "Station Information", "STATION", True, "station_info", "overlay_hotkey_station_info", "Station Info"),
-    OverlaySpec("survey_status_hud", "survey", "Void Compass Survey Operations", "survey_status_overlay_enabled", "survey_status_hud_x", "survey_status_hud_y", (30, 520), (420, 340), "Survey Operations", "SURVEY", True, "survey", "overlay_hotkey_survey", "Survey Operations"),
+    OverlaySpec("survey_status_hud", "survey", "Void Compass Survey Operations", "survey_status_overlay_enabled", "survey_status_hud_x", "survey_status_hud_y", (30, 520), (480, 340), "Survey Operations", "SURVEY", True, "survey", "overlay_hotkey_survey", "Survey Operations"),
     OverlaySpec("toast_hud", "toast", "Void Compass Cockpit Notifications", "toast_overlay_enabled", "toast_hud_x", "toast_hud_y", (1200, 80), (400, 94), "Cockpit Notifications", "NOTIFY", True, "notifications", "overlay_hotkey_notifications", "Cockpit Notifications"),
     # 5.5.4: achievements in their own window, on or off apart from notifications.
     OverlaySpec("achievement_hud", "achievements", "Void Compass Achievements", "achievement_overlay_enabled", "achievement_hud_x", "achievement_hud_y", (1200, 230), (420, 120), "Achievements", "ACHIEVE", True, "achievements", "overlay_hotkey_achievements", "Achievements"),
@@ -50,8 +50,6 @@ OVERLAY_SPECS = (
     # Trading (5.5.2.6): only while a trade route is being followed.
     # 5.6.1: an expedition at a glance; the HUD's EXPEDITION page stands in for it.
     OverlaySpec("expedition_hud", "expedition", "Void Compass Expedition", "expedition_overlay_enabled", "expedition_hud_x", "expedition_hud_y", (40, 560), (380, 220), "Expedition", "EXPEDITION", True, "expedition", "overlay_hotkey_expedition", "Expedition"),
-    # 5.6.3: the Games page's pocket pet, where you can see it while you fly.
-    OverlaySpec("hatchling_hud", "hatchling", "Void Compass Hatchling", "hatchling_overlay_enabled", "hatchling_hud_x", "hatchling_hud_y", (1660, 860), (250, 132), "Hatchling", "HATCHLING", False, "hatchling", "overlay_hotkey_hatchling", "Hatchling"),
     OverlaySpec("trade_route_hud", "trade-route", "Void Compass Trade Route", "trade_route_overlay_enabled", "trade_route_hud_x", "trade_route_hud_y", (1520, 480), (360, 150), "Trade Route", "TRADE", True, "trade_route", "overlay_hotkey_trade_route", "Trade Route"),
     # 5.7.7: the order waiting for your answer, or the one you're on.
     OverlaySpec("orders_hud", "crew-orders", "Void Compass Crew Orders", "crew_orders_overlay_enabled", "orders_hud_x", "orders_hud_y", (1520, 640), (360, 170), "Crew Orders", "ORDERS", True, "crew_orders", "overlay_hotkey_crew_orders", "Crew Orders"),
@@ -131,7 +129,6 @@ OVERLAY_HOTKEY_SPECS = (
     ("rhino_map_range", "overlay_hotkey_rhino_map_range", "Rhino Map: range", None),
     _overlay_hotkey("postcards"),
     _overlay_hotkey("music_player"),
-    _overlay_hotkey("hatchling"),
     # The player itself, from anywhere: in game, or with the deck on another screen.
     ("music_play_pause", "overlay_hotkey_music_play_pause", "Music: play / pause", None),
     ("music_next", "overlay_hotkey_music_next", "Music: next track", None),
@@ -183,7 +180,6 @@ TEXT_SIZE_KEYS = {
     "trade_route_hud": "trade_route_text_scale_percent",
     "orders_hud": "crew_orders_text_scale_percent",
     "expedition_hud": "expedition_text_scale_percent",
-    "hatchling_hud": "hatchling_text_scale_percent",
     "rig_tracker_hud": "rig_tracker_text_scale_percent",
     "rhino_map_hud": "rhino_map_text_scale_percent",
     "postcard_hud": "postcard_text_scale_percent",

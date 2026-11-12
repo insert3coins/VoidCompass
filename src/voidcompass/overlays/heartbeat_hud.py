@@ -400,10 +400,6 @@ class HeartbeatHUD:
         """Whether this thought is said aloud, by the Voice level setting."""
         if not self.mind.voice_active or not callable(self.voice_listener):
             return False
-        # A Watcher thought may quote the pet. Keep the pet's words text-only
-        # even when the Watcher is configured to speak every thought.
-        if thought.get('topic') == 'hatchling_said':
-            return False
         level = str(companions.settings(self.config).get('watcher_voice_level') or 'every').casefold()
         if thought.get('topic') == 'voice_found':
             return True

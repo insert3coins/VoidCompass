@@ -6,7 +6,6 @@
   <link rel="modulepreload" href="/galactic_map/vendor/three.core.min.js">
   <link rel="modulepreload" href="/galactic_map/vendor/three.module.min.js">
   <link rel="modulepreload" href="/assets/heartbeat-3d.js">
-  <link rel="modulepreload" href="/assets/hatchling-3d.js">
   <title>Void Compass</title>
   <script src="page-start.js"></script>
   <link rel="stylesheet" href="styles.css">
@@ -14,6 +13,9 @@
   <link rel="stylesheet" href="bridge-pages.css">
   <link rel="stylesheet" href="bridge-exploration.css">
   <link rel="stylesheet" href="explore.css">
+  <link rel="stylesheet" href="explore-tables.css">
+  <link rel="stylesheet" href="status-strip.css">
+  <link rel="stylesheet" href="bridge.css">
   <link rel="stylesheet" href="system-map.css">
   <link rel="stylesheet" href="archive.css">
   <link rel="stylesheet" href="bridge-systems.css">
@@ -26,12 +28,9 @@
   <link rel="stylesheet" href="postcard-editor.css">
   <link rel="stylesheet" href="screenshots.css">
   <link rel="stylesheet" href="capsules.css">
-  <link rel="stylesheet" href="tools.css">
   <link rel="stylesheet" href="constellation.css">
   <link rel="stylesheet" href="orders.css">
   <link rel="stylesheet" href="games.css">
-  <link rel="stylesheet" href="hatchling.css">
-  <link rel="stylesheet" href="flightlog.css">
   <link rel="stylesheet" href="wrapped.css">
   <link rel="stylesheet" href="powerplay.css">
   <link rel="stylesheet" href="colonisation.css">
@@ -43,14 +42,13 @@
   <link rel="stylesheet" href="setup.css">
   <link rel="stylesheet" href="focused-log.css">
   <link rel="stylesheet" href="boot.css">
+  <link rel="stylesheet" href="controls.css">
   <script defer src="/assets/heartbeat-life.js"></script>
   <script defer src="/assets/heartbeat-orb.js"></script>
   <script type="module" src="/assets/heartbeat-3d.js"></script>
   <script type="module" src="/assets/aster-companion.js"></script>
   <script type="module" src="/assets/crew-companion.js"></script>
   <script defer src="/assets/music-visualizers.js"></script>
-  <script defer src="/assets/hatchling-art.js"></script>
-  <script defer src="/assets/hatchling-life.js"></script>
   <script type="module" src="boot-scene.js"></script>
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
@@ -124,7 +122,7 @@
             <figure class="setup-eye"><div class="setup-eye-frame"><canvas id="setup-orb" aria-hidden="true"></canvas><i></i><i></i><i></i><i></i></div><figcaption><b>THE WATCHER</b><span>A little company in the black.</span></figcaption></figure></div>
             <ul class="setup-features">
               <li><i aria-hidden="true">◇</i><b>Find your next discovery.</b><span>Survey worlds, follow biological signals and set out on an expedition.</span></li>
-              <li><i aria-hidden="true">◎</i><b>Bring the cockpit to life.</b><span>Useful overlays, a Watcher with memories and a Hatchling to travel with.</span></li>
+              <li><i aria-hidden="true">◎</i><b>Bring the cockpit to life.</b><span>Useful overlays and a crew with memories to travel with.</span></li>
               <li><i aria-hidden="true">⌁</i><b>Keep more than coordinates.</b><span>Flight logs, postcards and an Atlas of everywhere you have been.</span></li>
             </ul>
             <ul class="setup-promises">
@@ -251,19 +249,19 @@
         <button class="nav-item" data-page="explore" aria-label="Explore &amp; Survey" title="Explore &amp; Survey"><i>✦</i><span>Explore & Survey</span><b>3</b></button>
         <button class="nav-item" data-page="map" aria-label="Galactic Atlas" title="Galactic Atlas"><i>◉</i><span>Galactic Atlas</span><b>4</b></button>
         <button class="nav-item" data-page="planet-materials" aria-label="Planetary Operations" title="Planetary Operations"><i>◇</i><span>Planetary Operations</span><b>5</b></button>
+        <button class="nav-item" data-page="route" aria-label="Route" title="Route"><i>⤳</i><span>Route</span><b>6</b></button>
         <p>RECORDS</p>
-        <button class="nav-item" data-page="profile" aria-label="Commander Record" title="Commander Record"><i>◎</i><span>Commander Record</span><b>6</b></button>
+        <button class="nav-item" data-page="profile" aria-label="Commander Record" title="Commander Record"><i>◎</i><span>Commander Record</span><b>7</b></button>
         <p>FIELD SYSTEMS</p>
-        <button class="nav-item" data-page="bgs" aria-label="BGS" title="Background Simulation: factions, influence, states and conflicts"><i>◈</i><span>BGS</span><b>7</b></button>
-        <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>8</b></button>
-        <button class="nav-item" data-page="colonisation" aria-label="Colonisation" title="Colonisation"><i>⬢</i><span>Colonisation</span><b>9</b></button>
-        <button class="nav-item" data-page="mining" aria-label="Mining Command" title="Mining Command"><i>◆</i><span>Mining Command</span><b>10</b></button>
-        <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>11</b></button>
-        <button class="nav-item" data-page="trading" aria-label="Trading" title="Trading: routes, markets and your profits"><i>⇄</i><span>Trading</span><b>12</b></button>
+        <button class="nav-item" data-page="bgs" aria-label="BGS" title="Background Simulation: factions, influence, states and conflicts"><i>◈</i><span>BGS</span><b>8</b></button>
+        <button class="nav-item" data-page="carrier" aria-label="Carrier Command" title="Carrier Command"><i>◈</i><span>Carrier Command</span><b>9</b></button>
+        <button class="nav-item" data-page="colonisation" aria-label="Colonisation" title="Colonisation"><i>⬢</i><span>Colonisation</span><b>10</b></button>
+        <button class="nav-item" data-page="mining" aria-label="Mining Command" title="Mining Command"><i>◆</i><span>Mining Command</span><b>11</b></button>
+        <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>12</b></button>
+        <button class="nav-item" data-page="trading" aria-label="Trading" title="Trading: routes, markets and your profits"><i>⇄</i><span>Trading</span><b>13</b></button>
         <p>COCKPIT</p>
-        <button class="nav-item" data-page="constellation" aria-label="Constellation" title="Your constellation: your journey drawn in the stars"><i>✧</i><span>Constellation</span><b>13</b></button>
-        <button class="nav-item" data-page="games" aria-label="Games" title="Games: something to play while the FSD charges"><i>◆</i><span>Games</span><b>14</b></button>
-        <button class="nav-item" data-page="hatchling" aria-label="Hatchling" title="Hatchling: your shipboard companion"><i>✧</i><span>Hatchling</span><b>15</b></button>
+        <button class="nav-item" data-page="constellation" aria-label="Constellation" title="Your constellation: your journey drawn in the stars"><i>✧</i><span>Constellation</span><b>14</b></button>
+        <button class="nav-item" data-page="games" aria-label="Games" title="Games: something to play while the FSD charges"><i>◆</i><span>Games</span><b>15</b></button>
         <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>16</b></button>
         <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>17</b></button>
         <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>18</b></button>
@@ -274,7 +272,6 @@
         <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>22</b></button>
         <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>23</b></button>
         <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>24</b></button>
-        <button class="nav-item" data-page="tools" aria-label="Tools" title="Tools: everything you switch often, in one place"><i>⚙</i><span>Tools</span><b>25</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -286,16 +283,13 @@
     <section class="deck">
       <header class="topbar">
         <div class="system-identity">
-          <small>CURRENT SYSTEM</small>
+          <div class="header-eyebrow"><small>CURRENT SYSTEM</small><b id="header-state">STANDBY</b></div>
           <strong id="header-system">---</strong>
           <span id="header-context">WAITING FOR LIVE JOURNAL</span>
+          <span id="header-region">REGION UNKNOWN</span>
         </div>
-        <div class="top-metrics">
-          <div><small>SURVEY</small><strong id="header-survey">0 / ?</strong></div>
-          <div><small>ROUTE</small><strong id="header-route">INACTIVE</strong></div>
-          <div><small>SESSION</small><strong id="header-session">00:00:00</strong></div>
-          <div><small>TRAFFIC</small><strong id="header-traffic">0 / 0 / 0</strong></div>
-        </div>
+        <!-- The route here (the game's, or Plot Route's); a click opens the Route page. -->
+        <div class="top-metrics top-route" id="status-route" data-page="route" role="button" tabindex="0" aria-label="Route: open the Route page" title="Open the Route page"></div>
         <!-- Every overlay on or off from any page (CMDR Nyx Evera's idea):
              ALL hides them all for now; each switch is its Overlay Studio on/off. -->
         <div class="overlay-switchboard" hidden>
@@ -304,15 +298,16 @@
           <div id="overlay-quick" class="overlay-quick" role="group" aria-label="Turn each overlay on or off"></div>
         </div>
         <div class="commander">
-          <small>COMMANDER</small><strong id="header-commander">UNKNOWN</strong>
+          <div class="header-eyebrow"><small>COMMANDER</small><b id="header-link" data-source="cached">CACHED</b></div><strong id="header-commander">UNKNOWN</strong>
           <span id="header-ship">SHIP // FLIGHT</span>
         </div>
       </header>
+      <section id="status-strip" class="status-strip" aria-label="Where you are, your commander, fuel, carrier, unsold data and data sources"></section>
 
       <main class="pages">
         <section class="page active overview-page" data-page-name="overview">
           <header class="page-title overview-masthead">
-            <div class="overview-heading"><p><i class="overview-live-indicator" aria-hidden="true"></i> EXPLORATION // LIVE OPERATIONS <b id="overview-link-state">JOURNAL STANDBY</b></p><h2>Expedition bridge</h2><span id="overview-subtitle">Journal-backed field intelligence</span></div>
+            <div class="overview-heading"><p><i class="overview-live-indicator" aria-hidden="true"></i> THE WHOLE SHIP // LIVE OPERATIONS <b id="overview-link-state">JOURNAL STANDBY</b></p><h2>Ship's bridge <small id="bridge-activity-label" class="bridge-activity-label"></small></h2><span id="overview-subtitle">Journal-backed field intelligence</span></div>
             <div class="title-actions overview-actions">
               <button class="ghost" id="customise-deck">DECK OPTIONS</button>
               <button class="ghost" data-command="set_flight_log_mode" data-enabled="true">FOCUSED LOG</button>
@@ -331,30 +326,11 @@
           </section>
 
           <section id="overview-modules" class="overview-modules">
-            <article class="card decision-card accent-card core-module" data-layout-panel="smart-next-action">
-              <header><span>01 / MISSION DIRECTIVE</span><b id="decision-doctrine">BALANCED</b></header>
-              <div class="decision-body">
-                <div class="decision-lens" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
-                <div class="decision-copy"><small id="decision-confidence">JOURNAL-BACKED</small><h3 id="decision-title">HOLD FOR EXPLORATION TELEMETRY</h3><p id="decision-detail">No unresolved journal-backed objective is currently known.</p><div id="decision-tags" class="decision-tags"></div></div>
-                <button id="decision-primary" class="primary">OPEN SYSTEM SURVEY</button>
-              </div>
-              <footer class="decision-footer"><span>CURRENT THEATRE <b id="decision-context">UNKNOWN SYSTEM</b></span><span>LOCAL JOURNAL / DECISION SUPPORT</span></footer>
-            </article>
-
-            <article class="card preflight-card core-module" data-layout-panel="exploration-preflight">
-              <header><span>02 / DEPARTURE SYSTEMS</span><b id="preflight-status">CHECK</b></header>
-              <div class="preflight-body">
-                <div class="preflight-summary-row">
-                  <p id="preflight-summary">Checking departure systems.</p>
-                  <div id="preflight-signal" class="preflight-signal" role="img" aria-label="Departure checks loading"></div>
-                  <button type="button" id="preflight-toggle" aria-expanded="false" aria-controls="preflight-checks">SHOW ALL CHECKS</button>
-                </div>
-                <div id="preflight-checks" class="preflight-checks"></div>
-              </div>
-            </article>
+            <!-- What's under way, led by what you're doing now; each panel only when it has something in it. -->
+            <section class="bridge-activity core-module" id="bridge-activity" data-layout-panel="ship-activity" aria-label="What's under way" hidden></section>
 
             <article class="card survey-card accent-card core-module" data-layout-panel="current-system-survey">
-              <header><span>03 / CURRENT SYSTEM</span><b id="survey-badge">AWAITING</b></header>
+              <header><span>01 / CURRENT SYSTEM</span><b id="survey-badge">AWAITING</b></header>
               <div class="survey-command">
                 <div id="survey-orbital" class="survey-orbital" role="progressbar" aria-label="Current system survey" aria-valuemin="0" aria-valuemax="100" aria-valuetext="System body total unknown"><i class="survey-world" aria-hidden="true"></i><em id="survey-percent">0%</em></div>
                 <div class="survey-heading"><small>STELLAR CARTOGRAPHY / LIVE SURVEY</small><div class="survey-title"><h3 id="survey-system">NO SYSTEM DATA</h3><span id="survey-star">STAR CLASS —</span></div><div class="survey-progress"><i id="survey-progress"></i></div></div>
@@ -374,7 +350,7 @@
             </article>
 
             <article class="card route-card" data-deck-module="route">
-              <header><span>04 / FLIGHT CORRIDOR</span><b id="route-badge">NO ROUTE</b></header>
+              <header><span>02 / FLIGHT CORRIDOR</span><b id="route-badge">NO ROUTE</b></header>
               <div class="route-target">
                 <span class="route-radar" aria-hidden="true"><i></i><i></i></span>
                 <div><small id="route-source">NAVIGATION</small><h3 id="route-next">NO ACTIVE ROUTE</h3><p id="route-final">Plot a route in Elite or on the Expeditions page.</p></div>
@@ -432,6 +408,33 @@
             </article>
 
           </section>
+          <div class="bridge-directive-holder" hidden>
+            <article class="card preflight-card">
+              <header><span>01 / DEPARTURE SYSTEMS</span><b id="preflight-status">CHECK</b></header>
+              <div class="preflight-body">
+                <div class="preflight-summary-row">
+                  <p id="preflight-summary">Checking departure systems.</p>
+                  <div id="preflight-signal" class="preflight-signal" role="img" aria-label="Departure checks loading"></div>
+                  <button type="button" id="preflight-toggle" aria-expanded="false" aria-controls="preflight-checks">SHOW ALL CHECKS</button>
+                </div>
+                <div id="preflight-checks" class="preflight-checks"></div>
+              </div>
+            </article>
+            <article class="card decision-card accent-card">
+              <header><span>01 / MISSION DIRECTIVE</span><b id="decision-doctrine">BALANCED</b></header>
+              <div class="decision-body">
+                <div class="decision-lens" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
+                <div class="decision-copy"><small id="decision-confidence">JOURNAL-BACKED</small><h3 id="decision-title">HOLD FOR EXPLORATION TELEMETRY</h3><p id="decision-detail">No unresolved journal-backed objective is currently known.</p><div id="decision-tags" class="decision-tags"></div></div>
+                <button id="decision-primary" class="primary">OPEN SYSTEM SURVEY</button>
+              </div>
+              <footer class="decision-footer"><span>CURRENT THEATRE <b id="decision-context">UNKNOWN SYSTEM</b></span><span>LOCAL JOURNAL / DECISION SUPPORT</span></footer>
+            </article>
+          </div>
+        </section>
+
+        <section class="page specialist-page route-page" data-page-name="route">
+          <header class="page-title"><div><p>NAVIGATION</p><h2>Route</h2><span>Plot a route on Spansh and fly it: the Nav HUD, the top bar, the minimap and the Atlas follow it</span></div><div class="title-actions"><button class="ghost" data-page="explore">EXPLORE &amp; SURVEY</button><button class="ghost" data-page="mission">EXPEDITIONS</button></div></header>
+          <div id="route-workspace" class="explore-route-view"></div>
         </section>
 
         <section class="page" data-page-name="planet-materials">
@@ -493,7 +496,6 @@
             <article class="tool-card"><i>◆</i><div><small>RESOURCE OPERATIONS</small><h3>Mining</h3><p>Prospector analysis, refinery yield, cargo economics and session history.</p></div><button data-command="open" data-target="mining">OPEN MINING</button></article>
             <article class="tool-card"><i>⚑</i><div><small>GALACTIC POWERS</small><h3>Powerplay Operations</h3><p>Leader dossiers, merit and cycle history, system state, cargo ledgers and commander assignments.</p></div><button data-command="open" data-target="powerplay">OPEN POWERPLAY</button></article>
             <article class="tool-card"><i>◈</i><div><small>LONG-RANGE SUPPORT</small><h3>Carrier Command</h3><p>Personal and Squadron Carrier inventory, expedition routes, Tritium planning and jump operations.</p></div><button data-command="open" data-target="carrier">OPEN CARRIERS</button></article>
-            <article class="tool-card"><i>✦</i><div><small>FIELD RECON</small><h3>Colonisation Recon</h3><p>Assess surveyed systems as possible expansion candidates.</p></div><button data-command="open" data-target="recon">OPEN RECON</button></article>
             <article class="tool-card"><i>★</i><div><small>COMMANDER MILESTONES</small><h3>Explorer Achievements</h3><p>Journal-driven milestones for travel, biology, mining and expeditions.</p></div><button data-command="open" data-target="achievements">OPEN ACHIEVEMENTS</button></article>
           </section>
         </section>
@@ -504,9 +506,8 @@
         </section>
 
         <section class="page specialist-page" data-page-name="chronicle">
-          <header class="page-title"><div><p>EXPEDITION TIME MACHINE</p><h2>Captain's Log</h2><span>Replay journeys, inspect retained highlights and export interactive chronicles</span></div><div class="title-actions"><button data-page="records">RETURN TO RECORDS</button></div></header>
-          <div id="flightlog-workspace" class="flightlog-shell"></div>
-          <div id="chronicle-workspace" class="workspace-shell loading-panel">Opening the commander chronicle…</div>
+          <header class="page-title"><div><p>YOUR JOURNEYS</p><h2>History</h2><span>A row per session, trips from sale to sale, your top finds and records, and exports</span></div><div class="title-actions"><button data-page="records">RETURN TO RECORDS</button></div></header>
+          <div id="history-workspace" class="workspace-shell"></div>
         </section>
 
         <section class="page specialist-page" data-page-name="mission">
@@ -543,11 +544,6 @@
         <section class="page specialist-page" data-page-name="carrier">
           <header class="page-title"><div><p>LONG-RANGE SUPPORT</p><h2>Carrier command</h2><span>Independent personal and Squadron Carrier fuel, cargo, jumps and expedition routes</span></div><div class="title-actions"><button data-page="overview">COMMAND DECK</button><button class="primary" data-ws-page="carrier" data-ws-op="copy_next">COPY NEXT STOP</button></div></header>
           <div id="carrier-workspace" class="workspace-shell loading-panel">Synchronising Carrier operations…</div>
-        </section>
-
-        <section class="page specialist-page" data-page-name="recon">
-          <header class="page-title"><div><p>COLONISATION RECON</p><h2>System assessment</h2><span>Survey completeness, value, traffic and retained candidates</span></div><div class="title-actions"><button data-page="explore">EXPLORE & SURVEY</button><button class="primary" data-ws-page="recon" data-ws-op="save">SAVE CURRENT</button></div></header>
-          <div id="recon-workspace" class="workspace-shell loading-panel">Assessing the current system…</div>
         </section>
 
         <section class="page music-page" data-page-name="music">
@@ -626,11 +622,6 @@
           <div id="screenshots-workspace" class="workspace-shell loading-panel">Opening your screenshots…</div>
         </section>
 
-        <section class="page specialist-page" data-page-name="tools">
-          <header class="page-title"><div><p>APPLICATION</p><h2>Tools</h2><span>The switches you reach for mid-flight, on one console. Each one is the same setting as on its own page.</span></div></header>
-          <div id="tools-workspace" class="workspace-shell loading-panel">Laying out the tools…</div>
-        </section>
-
         <section class="page specialist-page" data-page-name="capsules">
           <header class="page-title"><div><p>COCKPIT KEEPSAKES</p><h2>Time Capsules</h2><span>Leave a note for a system; it's handed back when you next jump in there, whenever that is.</span></div><div class="title-actions"><button data-page="watcher">THE WATCHER</button></div></header>
           <div id="capsules-workspace" class="workspace-shell loading-panel">Opening the capsules…</div>
@@ -646,11 +637,6 @@
           <div id="games-workspace" class="workspace-shell loading-panel">Racking the cabinets…</div>
         </section>
 
-        <section class="page specialist-page" data-page-name="hatchling">
-          <header class="page-title"><div><p>COCKPIT COMPANION</p><h2>Hatchling</h2><span>A living shipmate, shaped by your journeys. Its needs, discoveries and little habits follow the journal.</span></div></header>
-          <div id="hatchling-workspace" class="workspace-shell loading-panel">Checking the habitat…</div>
-        </section>
-
         <section class="page specialist-page wrapped-page-shell" data-page-name="wrapped">
           <header class="page-title"><div><p>COCKPIT KEEPSAKES</p><h2>Void Wrapped</h2><span>Your year in the black, told as a story: how far, how long, where you lived, what you found, and what the Watcher made of it all.</span></div><div class="title-actions"><button data-page="constellation">CONSTELLATION</button></div></header>
           <div id="wrapped-workspace" class="workspace-shell loading-panel">Gathering your year…</div>
@@ -660,11 +646,6 @@
         <section class="page specialist-page" data-page-name="achievements">
           <header class="page-title"><div><p>COMMANDER RECORD</p><h2>Achievements</h2><span>A living record of discoveries, expeditions and the milestones ahead.</span></div><div class="title-actions"><button data-page="profile">COMMANDER PROFILE</button></div></header>
           <div id="achievements-workspace" class="workspace-shell loading-panel">Loading your commander record…</div>
-        </section>
-
-        <section class="page specialist-page" data-page-name="ledger">
-          <header class="page-title"><div><p>UNIVERSAL CARTOGRAPHICS</p><h2>System Value Ledger</h2><span>Valuable worlds retained across the active commander profile</span></div><div class="title-actions"><button data-page="explore">RETURN TO SURVEY</button></div></header>
-          <div id="ledger-workspace" class="workspace-shell loading-panel">Reading the profile value index…</div>
         </section>
 
         <section class="page settings-page" data-page-name="settings">
@@ -770,13 +751,15 @@
                     <label class="studio-field"><span>Small text<small>Larger labels widen the HUD to fit</small></span><select id="studio-hud-labels" data-studio-setting="hud_label_size"><option value="standard">Standard</option><option value="large">Large</option><option value="larger">Larger</option></select></label>
                     <label class="studio-switch"><span><b>Brighter labels</b><small>Faded and grey labels at full strength.</small></span><input type="checkbox" data-overlay-option="hud_bright_labels"><i></i></label>
                     <label class="studio-field"><span>Hologram<small>Still: for low-end PCs, it moves only when the state changes</small></span><select id="studio-hud-scene" data-studio-setting="hud_scene_mode"><option value="full">Full</option><option value="still">Still</option><option value="off">Off</option></select></label>
+                    <label class="studio-field"><span>Distance from<small>Under the system name: from Sol, or the home system set in Settings</small></span><select id="studio-hud-distance" data-studio-setting="hud_distance_from"><option value="sol">Sol</option><option value="home">Home system</option></select></label>
                   </section>
                   <section data-studio-settings="survey_status_hud">
                     <h4>SURVEY OPERATIONS</h4>
-                    <label class="studio-field"><span>Rotation</span><select id="studio-survey-rotation" data-studio-setting="survey_spotlight_rotation"><option value="auto">Auto</option><option value="always">Always</option><option value="off">Off</option></select></label>
-                    <label class="studio-field"><span>Auto rotates above<small>Still at or below</small></span><div><input id="studio-survey-threshold" type="number" min="2" max="40" step="1" data-studio-setting="survey_spotlight_threshold"><b>WORLDS</b></div></label>
-                    <label class="studio-switch"><span><b>Expand routine bodies</b><small>Landable and other bodies as full rows, not chips.</small></span><input type="checkbox" data-overlay-option="survey_status_show_all_bodies"><i></i></label>
+                    <label class="studio-field"><span>Grow up to<small>Taller systems fold their least pressing worlds to one line, then chips; it never pages</small></span><div><input id="studio-survey-grow" type="number" min="500" max="1200" step="20" data-studio-setting="survey_grow_to"><b>PX</b></div></label>
+                    <label class="studio-switch"><span><b>Species under each world</b><small>Each world's species listed under it, one a line. Off: one line a world, with its counts.</small></span><input type="checkbox" data-overlay-option="survey_species_lists"><i></i></label>
+                    <label class="studio-switch"><span><b>List quiet worlds</b><small>Worlds with nothing to stop for as rows, not one summary line.</small></span><input type="checkbox" data-overlay-option="survey_status_show_all_bodies"><i></i></label>
                     <label class="studio-switch"><span><b>Codex flags</b><small>A filled flag: never logged. An outline: not logged in this region. A tick: already logged here.</small></span><input type="checkbox" data-overlay-option="survey_codex_flags"><i></i></label>
+                    <label class="studio-switch"><span><b>Spansh bodies</b><small>Show the bodies other commanders reported before you scan them, marked SPANSH. Asks Spansh once per system you arrive in.</small></span><input type="checkbox" data-overlay-option="survey_spansh_bodies"><i></i></label>
                   </section>
                   <section data-studio-settings="gravity_warning_hud">
                     <h4>GRAVITY WARNING</h4>
@@ -872,17 +855,6 @@
                     <label class="studio-field"><span>Rig spacing<small>20 to 300 m. The ring round each rig on the Rhino map: red when you're too close to put down another</small></span><div><input id="studio-rig-spacing" type="number" min="20" max="300" step="1" data-studio-setting="rig_tracker_spacing_m"><b>M</b></div></label>
                     <label class="studio-field"><span>Warn when a rig is this far<small>The game destroys a rig 5 km behind you. 0 turns the warning off</small></span><div><input id="studio-rig-warn" type="number" min="0" max="4900" step="100" data-studio-setting="rig_tracker_warn_m"><b>M</b></div></label>
                   </section>
-                  <section data-studio-settings="hatchling_hud">
-                    <h4>HATCHLING</h4>
-                    <label class="studio-field"><span>Look<small>A panel with its needs, or just the pet, roaming a see-through strip</small></span><select id="studio-hatchling-look" data-studio-setting="hatchling_look"><option value="panel">Panel</option><option value="pet">Pet only</option></select></label>
-                    <label class="studio-field"><span>Pet size<small>Pet only</small></span><select id="studio-hatchling-size" data-studio-setting="hatchling_pet_size"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></label>
-                    <label class="studio-field"><span>Roam<small>Pet only: how far it wanders</small></span><select id="studio-hatchling-roam" data-studio-setting="hatchling_roam"><option value="still">Stays put</option><option value="short">A short strip</option><option value="wide">A wide strip</option></select></label>
-                    <label class="studio-field"><span>Needs<small>Pet only: its needs under it, a bubble when it wants something, or nothing</small></span><select id="studio-hatchling-needs" data-studio-setting="hatchling_needs"><option value="always">Always</option><option value="low">When it wants something</option><option value="never">Never</option></select></label>
-                    <label class="studio-field"><span>Chatter<small>A few words of its own now and then, on its page and here. Never over the Watcher</small></span><select id="studio-hatchling-chatter" data-studio-setting="hatchling_chatter"><option value="off">Off</option><option value="quiet">Quiet</option><option value="chatty">Chatty</option></select></label>
-                    <label class="studio-switch"><span><b>Speech bubbles</b><small>Its words and its dreams, over its head.</small></span><input type="checkbox" data-overlay-option="hatchling_speech"><i></i></label>
-                    <label class="studio-switch"><span><b>Glow</b><small>The light around it. Off reads better over bright scenes.</small></span><input type="checkbox" data-overlay-option="hatchling_glow"><i></i></label>
-                    <label class="studio-switch"><span><b>Sounds</b><small>Its chirps, hums and beeps while you fly.</small></span><input type="checkbox" data-overlay-option="hatchling_sounds"><i></i></label>
-                  </section>
                   <section data-studio-settings="galnet_ticker_hud">
                     <h4>GALNET TICKER</h4>
                     <label class="studio-field"><span>Bar length<small>360 to 2560</small></span><div><input id="studio-ticker-width" type="number" min="360" max="2560" step="20" data-studio-setting="galnet_ticker_width"><b>PX</b></div></label>
@@ -927,6 +899,7 @@
               <label class="studio-switch compact" title="Show every enabled overlay with its outline, even ones with nothing to show yet, so they can be placed. Turns off when you leave Overlay Studio."><span><b>Layout mode</b></span><input type="checkbox" id="studio-layout-mode"><i></i></label>
               <label class="studio-switch compact" title="Hide every overlay while the Galaxy Map, System Map or Orrery is open."><span><b>Hide on maps</b></span><input type="checkbox" data-overlay-option="overlay_hide_on_maps"><i></i></label>
               <label class="studio-switch compact" title="Hide every overlay while a ship panel, station services, the Codex, carrier management, Powerplay, Squadrons or the main menu is open. The game doesn't say when the pause menu opens."><span><b>Hide in menus</b></span><input type="checkbox" data-overlay-option="overlay_hide_in_menus"><i></i></label>
+              <label class="studio-switch compact" title="Hide every overlay except the music player once Elite shuts down, and bring them back when you load into the game. A crash is noticed too. Layout mode still shows them all."><span><b>Hide with the game closed</b></span><input type="checkbox" data-overlay-option="overlay_hide_when_game_closed"><i></i></label>
               <label class="studio-switch compact" title="Turn on if overlays show dark boxes or corners. It also trims soft glows at their edges."><span><b>Dark box fix</b></span><input type="checkbox" data-overlay-option="overlay_transparency_fix"><i></i></label>
               <label class="studio-switch compact" title="Only if overlays don't appear or misbehave: the older overlay windows. They show dark boxes in Windows dark mode. Applies when Void Compass restarts."><span><b>Classic windows</b></span><input type="checkbox" data-overlay-option="overlay_classic_windows"><i></i></label>
               <label class="studio-switch compact"><span><b>Mouse passthrough</b></span><input type="checkbox" data-overlay-option="overlay_mouse_passthrough"><i></i></label>
@@ -972,7 +945,7 @@
 
           <section class="about-capabilities" aria-label="Made for your journey">
             <article><span class="about-feature-mark" aria-hidden="true">◇</span><div><h3>Find your next reason to land.</h3><p>Survey worlds, follow biological signals and plan an expedition worth taking.</p></div></article>
-            <article><span class="about-feature-mark" aria-hidden="true">◎</span><div><h3>A cockpit with company.</h3><p>Overlays follow your flight. The Watcher remembers. Your Hatchling comes along.</p></div></article>
+            <article><span class="about-feature-mark" aria-hidden="true">◎</span><div><h3>A cockpit with company.</h3><p>Overlays follow your flight. Your crew remembers.</p></div></article>
             <article><span class="about-feature-mark" aria-hidden="true">⌁</span><div><h3>Keep more than coordinates.</h3><p>Flight logs, postcards and discoveries turn a route into your own story.</p></div></article>
           </section>
 

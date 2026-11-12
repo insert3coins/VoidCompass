@@ -362,7 +362,16 @@ class ExpeditionMapView:
     def refresh(self, system_rows=None, value_rows=None):
         if self._disposed:
             return
-        if system_rows is None and hasattr(self.app, 'db_lock'):
+        soon = getattr(self.app, '_survey_items_soon', None)
+        if system_rows is None and callable(soon):
+            # The scan cache, parsed off the UI thread (5.7.8); None until it's ready.
+            items = soon()
+            if items is not None:
+                counts = defaultdict(int)
+                for item in items:
+                    counts[item.get('_system')] += int(item.get('bio_count') or 0)
+                system_rows = [{'system': system, 'bio_signals': count} for system, count in counts.items()]
+        elif system_rows is None and hasattr(self.app, 'db_lock'):
             if self.app.db_lock.acquire(blocking=False):
                 try:
                     counts = defaultdict(int)

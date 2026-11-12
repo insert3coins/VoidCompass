@@ -369,6 +369,14 @@ class LocalApi:
             ("GET", r"/exploration/route", lambda req: self._call(
                 "api_exploration_route", _int(req.query.get("limit"), 100, 1, 5000)), False),
             ("GET", r"/exploration/regions", lambda req: self._call("api_exploration_regions"), False),
+            # 5.7.8: Explore & Survey's tables.
+            ("GET", r"/explore/nearby", lambda req: self._call("api_explore_nearby"), False),
+            ("GET", r"/explore/system", lambda req: self._call("api_explore_system", str(req.query.get("name") or "")[:140]), False),
+            ("GET", r"/explore/route", lambda req: self._call("api_explore_route"), False),
+            ("GET", r"/journal/log", lambda req: self._call(
+                "api_journal_log", str(req.query.get("q") or "")[:120], _int(req.query.get("days"), 7, 1, 3650)), False),
+            ("GET", r"/commander/earnings", lambda req: self._call("api_earnings", str(req.query.get("period") or "all")[:7]), False),
+            ("GET", r"/history", lambda req: self._call("api_history", str(req.query.get("period") or "all")[:4]), False),
             ("GET", r"/codex", lambda req: self._call("api_codex", str(req.query.get("region") or "")[:60]), False),
             ("GET", r"/log", lambda req: self._call("api_log", _int(req.query.get("limit"), 20, 1, 200)), False),
             ("POST", r"/log", self._add_log, True),

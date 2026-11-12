@@ -98,8 +98,76 @@ def _set_native_rect(hwnd, x, y, width, height):
     return ok
 
 
+def _on_a_monitor(rect):
+    """Whether a saved rectangle still lands on a connected monitor."""
+    if not rect or os.name != "nt":
+        return False
+    import ctypes
+    from ctypes import wintypes
+
+    area = wintypes.RECT(int(rect["x"]), int(rect["y"]), int(rect["x"] + rect["width"]), int(rect["y"] + rect["height"]))
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.MonitorFromRect.argtypes = (ctypes.POINTER(wintypes.RECT), wintypes.DWORD)
+    user32.MonitorFromRect.restype = ctypes.c_void_p
+    return bool(user32.MonitorFromRect(ctypes.byref(area), 0))   # MONITOR_DEFAULTTONULL
+
+
+class _PopOutWindow:
+    """5.7.8: a popped-out page's window remembers where you put it, as the
+    deck's own window does (real screen pixels, read back from Windows)."""
+
+    def __init__(self, host, page, rect):
+        self.host, self.page, self.rect = host, page, rect
+        self.hwnd = 0
+        self.timer = None
+        self.lock = threading.Lock()
+
+    def attach(self, window):
+        """The window exists (pywebview builds a later window before it
+        returns, so before_show has been and gone): find its handle, put it
+        where it was, then show it."""
+        try:
+            handle = window.native.Handle
+            self.hwnd = int(handle.ToInt64() if hasattr(handle, "ToInt64") else handle)
+        except Exception:
+            self.hwnd = 0
+        if self.hwnd and _on_a_monitor(self.rect):
+            _set_native_rect(self.hwnd, self.rect["x"], self.rect["y"], self.rect["width"], self.rect["height"])
+        window.events.moved += self.changed
+        window.events.resized += self.changed
+        window.events.closed += self.closed
+        window.show()
+
+    def changed(self, *_args):
+        rect = _native_rect(self.hwnd)
+        if not rect or rect["x"] <= -30000 or rect["y"] <= -30000:
+            return   # minimized: keep the last real place
+        with self.lock:
+            self.rect = rect
+            if self.timer is not None:
+                self.timer.cancel()
+            self.timer = threading.Timer(0.4, self.save)
+            self.timer.daemon = True
+            self.timer.start()
+
+    def save(self):
+        with self.lock:
+            self.timer = None
+            rect = dict(self.rect or {})
+        if {"x", "y", "width", "height"}.issubset(rect):
+            self.host.post("popout_geometry", page=self.page, **rect)
+
+    def closed(self):
+        with self.lock:
+            timer, self.timer = self.timer, None
+        if timer is not None:
+            timer.cancel()
+        self.save()
+
+
 class DashboardHost:
     def __init__(self, dashboard_url):
+        self.dashboard_url = dashboard_url
         parsed = urlparse(str(dashboard_url))
         self.origin = f"{parsed.scheme}://{parsed.netloc}"
         self.token = (parse_qs(parsed.query).get("token") or [""])[0]
@@ -479,6 +547,31 @@ class DashboardApi:
         # window.native.AccessibilityObject and exhausting Python's recursion
         # limit before the dashboard can finish its startup handoff.
         self._host = host
+
+    def pop_out(self, page, rect=None):
+        """5.7.8: a page in a window of its own, for a second monitor, where
+        that page's window was last put (``rect``: the deck's saved one)."""
+        import re as _re
+        import webview
+        page = str(page or "")
+        if not _re.fullmatch(r"[a-z][a-z0-9-]{1,39}", page):
+            return False
+        try:
+            rect = {key: int(rect[key]) for key in ("x", "y", "width", "height")} if isinstance(rect, dict) else None
+        except (KeyError, TypeError, ValueError):
+            rect = None
+        if rect and (rect["width"] < 400 or rect["height"] < 300):
+            rect = None
+        url = self._host.dashboard_url
+        url += ("&" if "?" in url else "?") + f"solo=1&page={page}"
+        keeper = _PopOutWindow(self._host, page, rect)
+        window = webview.create_window(f"Void Compass · {page.replace('-', ' ').title()}", url, js_api=self,
+                                       width=1400, height=900, min_size=(720, 480), background_color="#070b10",
+                                       text_select=True, hidden=True)
+        if window is None:
+            return False
+        keeper.attach(window)
+        return True
 
     def choose_journal_folder(self):
         return self.choose_folder()

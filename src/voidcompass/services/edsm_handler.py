@@ -214,6 +214,9 @@ class EDSMHandler:
                 self._log_callback("EDSM", "Upload skipped: game version/build not detected yet", "WARN")
             return
 
+        from voidcompass.services.eddn_upload import live_game
+        if not live_game(self._game_version):
+            return
         ev_name = raw_event.get("event", "")
         if ev_name in _EDSM_DISCARD_EVENTS:
             return

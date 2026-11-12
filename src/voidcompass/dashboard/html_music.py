@@ -95,8 +95,8 @@ class HtmlMusicMixin:
             "focus": dict(getattr(self, "_music_focus", None) or {"seq": 0, "playlist_id": ""}),
             "notice": dict(getattr(self, "_music_notice", None) or {"seq": 0, "text": "", "tone": ""}),
             "working": bool(getattr(self, "_music_working", False)),
-            # The levels go out for the music overlay, and for the Hatchling's dances (5.6.4).
-            "overlay": bool(config.get("music_player_overlay_enabled", False) or config.get("hatchling_overlay_enabled", False)),
+            # The levels go out for the music overlay.
+            "overlay": bool(config.get("music_player_overlay_enabled", False)),
             # Music that flies with you (5.5.3.8): the settings and what the
             # game is doing now.
             "follow": follow_settings(config),
@@ -373,18 +373,9 @@ class HtmlMusicMixin:
             "scene": _text(payload.get("scene"), 12),
         }
         previous = getattr(self, "_music_status", None) or {}
-        if not status["playing"]:
-            self._hatchling_music_started_at = None
-        elif not previous.get("playing") or not getattr(self, "_hatchling_music_started_at", None):
-            self._hatchling_music_started_at = time.time()
         self._music_status = status
         self._music_remember(status)
         self._music_update_overlay()
-        if previous.get("playing") != status["playing"] and hasattr(self, "_hatchling_overlay_refresh"):
-            # The Hatchling dances while it plays (5.6.4), and may say so.
-            self._hatchling_overlay_refresh(force=True)
-            if status["playing"] and hasattr(self, "_hatchling_chat"):
-                self._hatchling_chat("music")
         if (previous.get("track_id"), previous.get("playing")) == (status["track_id"], status["playing"]):
             return
         track = self.music_library().track(status["track_id"]) or {} if status["track_id"] else {}

@@ -710,36 +710,6 @@ RESTRAINED_EVENTS = {
         "Ready to assist with the fighter's next manoeuvre.",
         "Our fighter assignment deserves a clear way home.",
     ),
-    "hatchling_toy": (
-        "{name}'s new toy is {toy}. The find is recorded.",
-        "A keepsake found by {name}: {toy}.",
-        "{toy} is now among {name}'s belongings, Commander.",
-    ),
-    "hatchling_trick": (
-        "The new trick learned by {name} is {trick}.",
-        "{name} has learned {trick}, Commander. Well done.",
-        "A new ability for {name}: {trick}.",
-    ),
-    "hatchling_scared": (
-        "{name} could use a little reassurance, Commander.",
-        "Allow {name} some room to settle.",
-        "Mind {name} while things are unsettled aboard.",
-    ),
-    "hatchling_grown": (
-        "The growth record for {name} now reads {form}.",
-        "{name} is now a {form}, Commander. A welcome milestone.",
-        "A new growth stage for {name}: {form}.",
-    ),
-    "hatchling_idle": (
-        "{name} is included in my watch, Commander.",
-        "A little room in our routine for {name} is time well spent.",
-        "Our arrangements aboard have a place for {name}.",
-    ),
-    "hatchling_said": (
-        "{name}'s remark is \"{said}.\" Acknowledged.",
-        "A short contribution from {name}: \"{said}.\"",
-        "\"{said},\" says {name}. I have heard it, Commander.",
-    ),
     "idle_recall": (
         "Among this watch's observations: {thing}.",
         "I have kept a note of {thing} from our fieldwork.",

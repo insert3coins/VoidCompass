@@ -167,6 +167,8 @@ class MiningDataStore:
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_hotspots_material ON hotspots(material_name)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_hotspots_system ON hotspots(system_name)")
+            # hotspots_in matches names case-blind: without this it read the whole table.
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_hotspots_system_nocase ON hotspots(system_name COLLATE NOCASE)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_hotspots_ring ON hotspots(ring_type)")
             self._normalize_existing_hotspots(conn)
             conn.commit()

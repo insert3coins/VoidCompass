@@ -1057,7 +1057,13 @@ class CarrierTracker:
             free = int(cd.get("space_free"))
         except (TypeError, ValueError):
             return False
-        used_capacity = max(0, total - free)
+        try:
+            reserved = int(cd.get("space_reserved") or 0)
+        except (TypeError, ValueError):
+            reserved = 0
+        # A buy order's reserved space weighs nothing (ED-Outrider, checked
+        # against the game's own JumpRangeCurr): it stays out of the mass.
+        used_capacity = max(0, total - free - reserved)
         # Current Fleet Carrier formula: the 25,000 T hull, used carrier
         # capacity and depot fuel all contribute to the burn for this leg.
         burn = int(math.floor(

@@ -137,9 +137,37 @@ _SAY_AS = (
 )
 
 
+# 5.7.8: the species' Latin, said right. ED-Outrider's respellings
+# (data/pronounce.json, "fon-TIK-yoo-loo-uh"), lower-cased: our Piper reads
+# capitals letter by letter and has no phoneme input, so "fon-tik-yoo-loo-uh".
+_RESPELL = None
+
+
+def _respellings():
+    global _RESPELL
+    if _RESPELL is None:
+        words = {}
+        try:
+            from voidcompass.core.paths import resource_path
+            with open(resource_path("data", "pronounce.json"), encoding="utf-8") as handle:
+                for word, say in (json.load(handle).get("words") or {}).items():
+                    if isinstance(word, str) and isinstance(say, str) and re.fullmatch(r"[A-Za-z]+(?:-[A-Za-z]+)*", say.strip()):
+                        words[word.casefold()] = say.strip().lower()
+        except (OSError, ValueError):
+            words = {}
+        pattern = re.compile(r"\b(" + "|".join(re.escape(w) for w in sorted(words, key=len, reverse=True)) + r")\b", re.I) if words else None
+        _RESPELL = (pattern, words)
+    return _RESPELL
+
+
+def respelled(text):
+    pattern, words = _respellings()
+    return pattern.sub(lambda match: words[match.group(1).casefold()], text) if pattern else text
+
+
 def speakable(text):
     """The words as they should be heard."""
-    said = str(text or "")
+    said = respelled(str(text or ""))
     for pattern, replacement in _SAY_AS:
         said = pattern.sub(replacement, said)
     return said.strip()

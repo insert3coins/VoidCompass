@@ -836,3 +836,5 @@ body {
 
 .pg-note { margin: 0; overflow: hidden; color: var(--ink); font: var(--type-weight) var(--size-9) var(--font-wide); letter-spacing: calc(.1em * var(--track)); text-overflow: ellipsis; white-space: nowrap; }
 .pg-note.wrap { white-space: normal; line-height: 1.45; }
+/* 5.7.8: a hostile system's standing, in red. */
+.system-hostile { color: var(--red, #ff5c5c) !important; }

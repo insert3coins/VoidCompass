@@ -1,5 +1,5 @@
 """More of Lyra's words (5.7.6): arrivals and scans, launches and mining,
-expeditions, the Hatchling, port idles, memories and habit summaries."""
+expeditions, port idles, memories and habit summaries."""
 
 PLAIN = {
     "codex_new": ("New Codex finding at {body}.", "Codex: new entry at {body}.", "{body}. Codex discovery.", "Codex finding logged: {body}."),
@@ -63,13 +63,6 @@ PLAIN = {
     "idle_nomad": ("Nomad watch.", "Nomad systems nominal.", "Nomad on {body}.", "Nomad watch on {body}."),
     "idle_fighter": ("Fighter watch. Keep the mothership in view.", "Fighter systems nominal.", "Fighter out in {system}.",
                      "Fighter watch, {system}."),
-    "hatchling_toy": ("{name} found {toy}.", "{name} has {toy}.", "New toy for {name}: {toy}.", "{name}: {toy}."),
-    "hatchling_trick": ("{name} learned to {trick}.", "{name} can now {trick}.", "New trick: {name} can {trick}.",
-                        "{name}, trick learned."),
-    "hatchling_scared": ("{name} is frightened.", "{name} is scared.", "{name} needs reassurance.", "{name}: frightened."),
-    "hatchling_grown": ("{name} is now a {form}.", "{name} grew: {form}.", "{name}, now a {form}.", "{name} has become a {form}."),
-    "hatchling_idle": ("{name} is with us.", "{name} is nearby.", "{name} accounted for.", "{name} is aboard."),
-    "hatchling_said": ("{name} says, \"{said}.\"", "{name}: \"{said}.\"", "From {name}: \"{said}.\"", "{name} says \"{said}.\""),
     "idle_recall": ("This session I noted: {thing}.", "Logged earlier: {thing}.", "{Thing}. I noted it.", "Earlier: {thing}."),
     "idle_ring": ("Ring field at {ring}.", "Rings at {ring}.", "{ring}: ringed.", "Ring system: {ring}."),
     "idle_port_preparations": ("At {station}. A good moment to check the ship.", "{station}. Refuel, repair, rearm.",
@@ -192,16 +185,6 @@ VOICED = {
     "idle_rhino": ("Rhino watch. Slow, strong, steady.", "Rhino on {body}. I like a vehicle that does not hurry."),
     "idle_nomad": ("Nomad watch. Light on its wheels.", "Nomad on {body}. Small, quick and fuelled."),
     "idle_fighter": ("Fighter watch. I know where the mothership is. Always.", "Fighter out in {system}. I am watching the big ship."),
-    "hatchling_toy": ("{name} has found {toy}. I have added it to the personal-effects log.",
-                      "{name} found {toy}. I did not know the ship had one of those. Now I do."),
-    "hatchling_trick": ("{name} can now {trick}. I have updated its capabilities list.",
-                        "{name} learned to {trick}. I am very proud. Is that allowed? I am doing it anyway."),
-    "hatchling_scared": ("{name} is frightened. When we are safe, it might like some reassurance. So might I.",
-                         "{name} is scared. I am dimming the cabin lights a little. It seems to help."),
-    "hatchling_grown": ("{name} is now a {form}. I measured it. It is bigger.", "{name} has grown into a {form}. Time flies, on a ship."),
-    "hatchling_idle": ("{name} is nearby. I count it every few minutes. It is always still there.",
-                       "{name} is aboard. Crew complete, plus one small one."),
-    "hatchling_said": ("{name} says \"{said}\". I think it is happy. I am, too.", "{name}: \"{said}\". Logged with affection."),
     "idle_recall": ("Earlier, I noted {thing}. I wanted to mention it again.", "{Thing}. I logged it earlier. I keep coming back to it."),
     "idle_ring": ("Rings at {ring}. Billions of small bodies. Not one of them a fuel stop.",
                   "{ring} has rings. Beautiful. I have logged them and their gravity."),

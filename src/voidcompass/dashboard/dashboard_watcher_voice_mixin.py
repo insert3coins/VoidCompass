@@ -15,7 +15,7 @@ import time
 
 from voidcompass.core import companion_features, crew_rota, home_anchor, ranks, companions
 from voidcompass.core.overlay_registry import OVERLAY_SPECS
-from voidcompass.exploration import codex_index
+from voidcompass.exploration import bio_values, codex_index
 from voidcompass.exploration.galactic_regions import region_names
 from voidcompass.core.ship_names import ship_name
 from voidcompass.core.watcher_retirement import retired_speech
@@ -692,7 +692,7 @@ class DashboardWatcherVoiceMixin:
             return bool(short) and re.search(rf"(?<![\w-]){re.escape(short)}(?![\w-])", words) is not None
 
         def best(item):
-            return max((row.get("max_value") or 0 for row in item.get("predicted_genuses") or ()), default=0)
+            return max((row.get("max_value") or 0 for row in bio_values.likely_genera(item.get("predicted_genuses"))), default=0)
 
         here = str(getattr(self, "current_body_name", "") or "").casefold()
         chosen = (sorted((item for item in items if named(item)), key=lambda item: -len(str(item.get("name") or "")))[:1]
@@ -706,7 +706,7 @@ class DashboardWatcherVoiceMixin:
                        self._survey_codex_variants(item.get("body_id")).items() if rows and rows[0].get("colour")}
             bodies.append({"name": item.get("full_name") or item.get("name"), "signals": item.get("bio_count"),
                            "known": [str(genus) for genus in item.get("genuses") or () if not str(genus).startswith("$")],
-                           "genera": item.get("predicted_genuses") or [], "colours": colours})
+                           "genera": bio_values.likely_genera(item.get("predicted_genuses")), "colours": colours})
         return watcher_copilot.life_lines(bodies)
 
     def _watcher_mind_action(self, text):

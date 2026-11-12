@@ -465,6 +465,7 @@ class HtmlTradingMixin:
             from concurrent.futures import ThreadPoolExecutor
             self._trading_spansh_names()
             finished = []
+            seen = {}
 
             def look_up(item):
                 # Each commodity asked side by side on the shared connection
@@ -473,10 +474,14 @@ class HtmlTradingMixin:
                 choice = {"large_pad": options["large"], "carriers": options["carriers"],
                           "planetary": options["planetary"], "radius": options["radius"]}
                 # The best payers within your radius, and the nearest ones.
-                stations = trade_market.parse_commodity(
-                    spansh.commodity_stations("sell", system, name, item["count"], size=10, sort="price", **choice), name, "sell")
-                close = trade_market.parse_commodity(
-                    spansh.commodity_stations("sell", system, name, item["count"], size=10, **choice), name, "sell")
+                best_reply = spansh.commodity_stations("sell", system, name, item["count"], size=10, sort="price", **choice)
+                close_reply = spansh.commodity_stations("sell", system, name, item["count"], size=10, **choice)
+                stations = trade_market.parse_commodity(best_reply, name, "sell")
+                close = trade_market.parse_commodity(close_reply, name, "sell")
+                # Every station seen, with its whole market, for Sell all (5.7.8).
+                for record in [*((best_reply or {}).get("results") or ()), *((close_reply or {}).get("results") or ())]:
+                    if isinstance(record, dict) and record.get("market_id") is not None:
+                        seen[record["market_id"]] = record
                 stations.sort(key=lambda row: -row["price"])
                 here = trade_market.in_system(stations + close, system, "sell", 1)
                 finished.append(name)
@@ -490,7 +495,8 @@ class HtmlTradingMixin:
             else:
                 with ThreadPoolExecutor(max_workers=4, thread_name_prefix="trading-cargo") as pool:
                     rows = list(pool.map(look_up, hold))
-            return {"rows": rows, "system": system, "at": time.time(), "radius": options["radius"]}
+            return {"rows": rows, "system": system, "at": time.time(), "radius": options["radius"],
+                    "sell_all": trade_market.sell_all(seen.values(), rows)}
 
         def done(result, error):
             ui["cargo"] = {"error": error} if error else result

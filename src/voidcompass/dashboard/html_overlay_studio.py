@@ -1,5 +1,7 @@
 """Overlay Layout Studio model and command controller."""
 
+import threading
+
 from voidcompass.core.display_scale import monitor_bounds, monitor_handle_scale, monitor_scale
 from voidcompass.core.overlay_registry import OVERLAY_SPEC_BY_ATTR, TEXT_SIZE_KEYS, TEXT_SIZES, text_size_choice
 from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
@@ -34,10 +36,6 @@ from voidcompass.overlays.jump_info_hud import LINGER_CHOICES as JUMP_INFO_LINGE
 from voidcompass.overlays.galnet_ticker_hud import (
     TICKER_CONTENT, TICKER_CRT, TICKER_GLITCH, TICKER_GLITCH_STRENGTH, TICKER_SPEEDS,
     TICKER_STORIES, TICKER_WIDTH_RANGE, ticker_options,
-)
-from voidcompass.overlays.hatchling_hud import (
-    CHATTER as HATCHLING_CHATTER, LOOKS as HATCHLING_LOOKS, NEEDS_SHOWN as HATCHLING_NEEDS, PET_SIZES as HATCHLING_PET_SIZES, ROAMS as HATCHLING_ROAMS,
-    hatchling_frame_rate, hatchling_overlay_options, hatchling_pet_window,
 )
 from voidcompass.overlays.music_player_hud import (
     MUSIC_AUTO_HIDE, MUSIC_COLOURS, MUSIC_LAYOUTS, MUSIC_NEXT_COUNTS, MUSIC_PALETTES, MUSIC_SKINS, MUSIC_VISUALIZERS,
@@ -331,6 +329,7 @@ class HtmlOverlayStudioMixin:
                 "hud_label_size": hud_typography(self.config)["labels"],
                 "hud_bright_labels": hud_typography(self.config)["bright"],
                 "hud_scene_mode": hud_scene_mode(self.config),
+                "hud_distance_from": "home" if self.config.get("hud_distance_from") == "home" else "sol",
                 # The pages (5.5.17): the one overlay for everything.
                 "hud_pages": hud_pages.pages_options(self.config)["mode"],
                 "hud_pages_takeover": hud_pages.pages_options(self.config)["takeover"],
@@ -341,6 +340,7 @@ class HtmlOverlayStudioMixin:
                 "overlay_frame_rate": overlay_frame_rate(self.config),
                 "overlay_hide_on_maps": bool(self.config.get("overlay_hide_on_maps", True)),
                 "overlay_hide_in_menus": bool(self.config.get("overlay_hide_in_menus", False)),
+                "overlay_hide_when_game_closed": bool(self.config.get("overlay_hide_when_game_closed", False)),
                 # The page redraws every switch from these (5.5.3.4: the Dark
                 # box fix's switch went back to off without it).
                 "overlay_transparency_fix": bool(self.config.get("overlay_transparency_fix", False)),
@@ -359,6 +359,7 @@ class HtmlOverlayStudioMixin:
                 "station_info_auto_hide_enabled": bool(self.config.get("station_info_auto_hide_enabled", False)),
                 "survey_status_show_all_bodies": bool(self.config.get("survey_status_show_all_bodies", False)),
                 "survey_codex_flags": bool(self.config.get("survey_codex_flags", True)),
+                "survey_spansh_bodies": bool(self.config.get("survey_spansh_bodies", True)),
                 **{
                     f"survey_{key}": value
                     for key, value in survey_overlay_options(self.config).items()
@@ -390,14 +391,6 @@ class HtmlOverlayStudioMixin:
                 "galaxy_minimap_text_scale_percent": heartbeat_text_size(self.config.get("galaxy_minimap_text_scale_percent")),
                 "galaxy_minimap_region_text_percent": heartbeat_text_size(self.config.get("galaxy_minimap_region_text_percent")),
                 "rig_tracker_show_holds": bool(self.config.get("rig_tracker_show_holds", True)),
-                "hatchling_look": hatchling_overlay_options(self.config)["look"],
-                "hatchling_pet_size": hatchling_overlay_options(self.config)["size"],
-                "hatchling_roam": hatchling_overlay_options(self.config)["roam"],
-                "hatchling_needs": hatchling_overlay_options(self.config)["needs"],
-                "hatchling_chatter": hatchling_overlay_options(self.config)["chatter"],
-                "hatchling_speech": hatchling_overlay_options(self.config)["speech"],
-                "hatchling_glow": hatchling_overlay_options(self.config)["glow"],
-                "hatchling_sounds": hatchling_overlay_options(self.config)["sounds"],
                 "rig_tracker_here_m": rig_here_m(self.config),
                 "rig_tracker_spacing_m": rig_spacing_m(self.config),
                 "rig_tracker_warn_m": rig_warn_m(self.config),
@@ -588,6 +581,7 @@ class HtmlOverlayStudioMixin:
     _MENU_GUI_FOCUS = {1, 2, 3, 4, 5, 11}
     MENU_MUSIC = frozenset({"MainMenu", "CQCMenu", "FleetCarrier_Managment", "FleetCarrier_Management",
                             "GalacticPowers", "Squadrons", "Codex"})
+    MAP_MUSIC = frozenset({"GalaxyMap", "SystemMap"})
     # Construction Needs is made for station services and the right panel.
     MENU_KEEP_DEFAULT = ("colony_needs_hud",)
 
@@ -608,6 +602,13 @@ class HtmlOverlayStudioMixin:
     def _observe_menu_music(self, track):
         """The journal's Music event (and LoadGame/Shutdown, with no track):
         a menu screen opened or closed. Hides or shows the overlays when it did."""
+        # Status.json's GuiFocus can lag the galaxy map by seconds; the
+        # journal's Music event doesn't (5.7.8), so a map track hides at once.
+        map_music = track in self.MAP_MUSIC
+        if map_music != bool(getattr(self, "_map_music", False)) and track is not None:
+            self._map_music = map_music
+            if bool(self.config.get("overlay_hide_on_maps", True)):
+                self._apply_map_overlay_hiding()
         menu = track if track in self.MENU_MUSIC else ""
         if menu == getattr(self, "_menu_music", ""):
             return
@@ -621,17 +622,46 @@ class HtmlOverlayStudioMixin:
         Overlay Studio."""
         focus = getattr(self, "current_gui_focus", -1)
         hidden = set()
-        if bool(self.config.get("overlay_hide_on_maps", True)) and focus in self._MAP_GUI_FOCUS:
+        if bool(self.config.get("overlay_hide_on_maps", True)) and (focus in self._MAP_GUI_FOCUS or getattr(self, "_map_music", False)):
             keep = self._map_keep_visible()
             hidden = {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in keep}
         if bool(self.config.get("overlay_hide_in_menus", False)) and self._in_game_menu():
             keep = self._menu_keep_visible()
             hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in keep}
+        if bool(self.config.get("overlay_hide_when_game_closed", False)) and getattr(self, "_game_closed", False):
+            # The game is shut down (or gone): only the music player stays.
+            hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in self.GAME_CLOSED_KEEP}
         if self.config.get("colony_hide_other_overlays", False) and getattr(self, "_colony_overlay_showing", False):
             # While the Construction Needs panel is up: it, the Navigation
             # HUD, notifications, gravity warnings and the heartbeat stay.
             hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in self._COLONY_FOCUS_KEEP}
         return HtmlOverlayServer.set_overrides(hidden=hidden)
+
+    GAME_CLOSED_KEEP = frozenset({"music_player_hud"})
+
+    def _observe_game_session(self, event):
+        """Shutdown closes the game for the overlays, LoadGame opens it. During
+        startup catch-up this lands before any overlay is shown, so the last
+        journal event decides with no flash."""
+        closed = event == "Shutdown"
+        if closed == bool(getattr(self, "_game_closed", False)):
+            return
+        self._game_closed = closed
+        if bool(self.config.get("overlay_hide_when_game_closed", False)):
+            self._apply_map_overlay_hiding()
+
+    def _tick_game_process(self):
+        """A crash writes no Shutdown, so look for the game itself now and then."""
+        if not getattr(self, "is_running", False):
+            return
+        if bool(self.config.get("overlay_hide_when_game_closed", False)) and not getattr(self, "_game_closed", False):
+            from voidcompass.core.elite_binds import game_running
+
+            def worker():
+                if game_running() is False:
+                    self._ui_post(lambda: self._observe_game_session("Shutdown"), key="game-process")
+            threading.Thread(target=worker, name="GameProcessCheck", daemon=True).start()
+        self.root.call_later(20000, self._tick_game_process)
 
     def _set_overlay_map_hiding(self, overlay_id, hide):
         """Overlay Studio inspector: whether one overlay hides on the maps."""
@@ -679,16 +709,15 @@ class HtmlOverlayStudioMixin:
             "rebuy_warnings_enabled",
             "toast_fss_signals_enabled", "toast_dss_signals_enabled",
             "data_risk_warnings_enabled", "station_info_auto_hide_enabled",
-            "survey_status_show_all_bodies", "survey_codex_flags",
+            "survey_status_show_all_bodies", "survey_codex_flags", "survey_spansh_bodies", "survey_species_lists",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
             "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion", "lyra_hud_motion",
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "galaxy_minimap_orders", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "rig_tracker_show_holds",
-            "hatchling_speech", "hatchling_glow", "hatchling_sounds",
             "hud_pages_takeover", "hud_hold_lists", "hud_page_expedition", "hud_page_jump", "hud_page_survey", "hud_page_planet", "hud_page_rhino", "hud_page_mining", "hud_page_combat", "hud_page_station", "hud_page_colony", "hud_page_carrier", "hud_page_trade", "hud_page_powerplay",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
-            "overlay_hide_on_maps", "overlay_hide_in_menus", "overlay_transparency_fix", "overlay_classic_windows",
+            "overlay_hide_on_maps", "overlay_hide_in_menus", "overlay_hide_when_game_closed", "overlay_transparency_fix", "overlay_classic_windows",
             "colony_show_carriers", "colony_carrier_delta", "colony_collapse_covered",
             "colony_highlight_almost", "colony_show_on_right_panel",
             "colony_inline_carriers", "colony_hide_other_overlays",
@@ -705,7 +734,7 @@ class HtmlOverlayStudioMixin:
         self._persist_config()
         if key == "overlay_mouse_passthrough":
             self._apply_overlay_mouse_passthrough()
-        elif key in {"overlay_hide_on_maps", "overlay_hide_in_menus"}:
+        elif key in {"overlay_hide_on_maps", "overlay_hide_in_menus", "overlay_hide_when_game_closed"}:
             self._apply_map_overlay_hiding()
         elif key == "overlay_transparency_fix":
             HtmlOverlayServer.set_shape_windows(bool(self.config[key]))
@@ -739,10 +768,6 @@ class HtmlOverlayStudioMixin:
             music = getattr(self, "music_player_hud", None)
             if music is not None:
                 music.apply_settings()
-        elif key.startswith("hatchling_"):
-            refresh = getattr(self, "_hatchling_overlay_refresh", None)
-            if callable(refresh):
-                refresh(force=True)
         elif key == "rig_tracker_show_holds":
             update_rigs = getattr(self, "_rig_update_overlay", None)
             if callable(update_rigs):
@@ -757,7 +782,7 @@ class HtmlOverlayStudioMixin:
                 update_colony()
             if key == "colony_hide_other_overlays":
                 self._apply_map_overlay_hiding()
-        elif key in {"survey_status_show_all_bodies", "survey_codex_flags"}:
+        elif key in {"survey_status_show_all_bodies", "survey_codex_flags", "survey_spansh_bodies", "survey_species_lists"}:
             survey = getattr(self, "survey_status_hud", None)
             if survey is not None:
                 survey._last_render_key = None
@@ -787,12 +812,6 @@ class HtmlOverlayStudioMixin:
             else:
                 # Colour is each companion's own.
                 payload[companions.display_key(self.config, key)] = value
-        hatchling_size_before = None
-        if {"hatchling_look", "hatchling_pet_size"} & set(payload):
-            hatchling_size_before = hatchling_pet_window(self.config)
-            if hatchling_size_before is None:
-                current = getattr(getattr(self, "hatchling_hud", None), "_html_window_size", None)
-                hatchling_size_before = current if isinstance(current, (tuple, list)) and len(current) == 2 else DEFAULT_SIZES["hatchling_hud"]
         numeric = {
             "overlay_text_scale_percent": (75.0, 200.0, 100.0, True),
             "overlay_opacity_percent": (40.0, 100.0, 100.0, True),
@@ -827,8 +846,7 @@ class HtmlOverlayStudioMixin:
             self.config["heartbeat_frame_rate"] = rate if rate in HEARTBEAT_FRAME_RATES else 0
         # Applied every save (and at start), so new overlay windows follow it.
         HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
-        HtmlOverlayServer.set_overlay_frame_rates({"heartbeat": heartbeat_frame_rate(self.config),
-                                                   "hatchling": hatchling_frame_rate(overlay_frame_rate(self.config))})
+        HtmlOverlayServer.set_overlay_frame_rates({"heartbeat": heartbeat_frame_rate(self.config)})
         HtmlOverlayServer.set_opacity(overlay_opacity_ratio(self.config))
         if "hud_crt_intensity" in payload:
             intensity = _text(payload.get("hud_crt_intensity") or "Subtle", 20).title()
@@ -844,6 +862,9 @@ class HtmlOverlayStudioMixin:
         if "survey_spotlight_threshold" in payload:
             threshold = _number(payload.get("survey_spotlight_threshold"), 8)
             self.config["survey_spotlight_threshold"] = int(round(max(2, min(40, threshold if threshold is not None else 8))))
+        if "survey_grow_to" in payload:
+            grow_to = _number(payload.get("survey_grow_to"), 900)
+            self.config["survey_grow_to"] = int(round(max(500, min(1200, grow_to if grow_to is not None else 900))))
         if "survey_text_scale_percent" in payload:
             # 0 follows the overlay-wide text scale; otherwise 75-200 %.
             self.config["survey_text_scale_percent"] = text_size_choice(payload.get("survey_text_scale_percent"))
@@ -894,37 +915,10 @@ class HtmlOverlayStudioMixin:
             ("music_player_visualizer", MUSIC_VISUALIZERS, "bars"),
             ("music_player_colour", MUSIC_COLOURS, "theme"),
             ("music_player_palette", MUSIC_PALETTES, "neon"),
-            ("hatchling_look", HATCHLING_LOOKS, "panel"),
-            ("hatchling_pet_size", tuple(HATCHLING_PET_SIZES), "medium"),
-            ("hatchling_roam", tuple(HATCHLING_ROAMS), "short"),
-            ("hatchling_needs", HATCHLING_NEEDS, "low"),
-            ("hatchling_chatter", HATCHLING_CHATTER, "quiet"),
         ):
             if key in payload:
                 choice = _text(payload.get(key), 20).casefold()
                 self.config[key] = choice if choice in choices else default
-        if {"hatchling_look", "hatchling_pet_size", "hatchling_roam", "hatchling_needs", "hatchling_chatter"} & set(payload):
-            # A taller Pet Only window may extend off the bottom of the
-            # current display. Move it only when the user changes its size,
-            # and through the normal position path so Studio and the host
-            # agree. Never reposition an ordinary drag or an unchanged size.
-            enlarged = hatchling_pet_window(self.config)
-            move = getattr(self, "_set_overlay_position", None)
-            if hatchling_size_before and enlarged and enlarged[1] > hatchling_size_before[1] and callable(move):
-                x = _integer(self.config.get("hatchling_hud_x"), DEFAULT_POSITIONS["hatchling_hud"][0])
-                y = _integer(self.config.get("hatchling_hud_y"), DEFAULT_POSITIONS["hatchling_hud"][1])
-                scale = monitor_scale(x + hatchling_size_before[0] // 2, y + hatchling_size_before[1] // 2)
-                cx = x + round(hatchling_size_before[0] * scale / 2)
-                cy = y + round(hatchling_size_before[1] * scale / 2)
-                bounds = monitor_bounds(cx, cy)
-                if bounds:
-                    scale = monitor_scale(cx, cy)
-                    new_y = max(bounds[1], min(y, bounds[3] - round(enlarged[1] * scale)))
-                    if new_y != y:
-                        move("hatchling_hud", x, new_y, authority_s=3.0)
-            refresh = getattr(self, "_hatchling_overlay_refresh", None)
-            if callable(refresh):
-                refresh(force=True)
         if "music_player_text_scale_percent" in payload:
             self.config["music_player_text_scale_percent"] = text_size_choice(payload.get("music_player_text_scale_percent"))
         if "music_player_auto_hide" in payload:
@@ -959,6 +953,8 @@ class HtmlOverlayStudioMixin:
         if "hud_scene_mode" in payload:
             mode = _text(payload.get("hud_scene_mode"), 10).casefold()
             self.config["hud_scene_mode"] = mode if mode in HUD_SCENE_MODES else "full"
+        if "hud_distance_from" in payload:
+            self.config["hud_distance_from"] = "home" if _text(payload.get("hud_distance_from"), 10).casefold() == "home" else "sol"
         if "heartbeat_thoughts" in payload:
             thoughts = _text(payload.get("heartbeat_thoughts"), 20).casefold()
             self.config["heartbeat_thoughts"] = thoughts if thoughts in watcher_mind.FREQUENCIES else watcher_mind.DEFAULT_FREQUENCY

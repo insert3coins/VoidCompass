@@ -3,8 +3,8 @@
 // deck only by postMessage (ready, over, mute, crt, action) and the deck
 // answers with the theme, the commander's best, the sound and CRT switches,
 // how you want to play it (mouse and keys, keys only or mouse only),
-// and what the journal knows for it ("live": the Hatchling, Touchdown's
-// gravity), sent again whenever that changes.
+// and what the journal knows for it ("live": Touchdown's gravity), sent
+// again whenever that changes.
 
 let games = [];
 let playing = "";       // the game open in the player, or ""
@@ -63,18 +63,9 @@ function stage(item, run) {
   return run?.wave ? ` · ${ui.escapeHtml(item.stage || "WAVE")} ${run.wave}` : "";
 }
 
-// The pet's card shows the pet, not a score.
-function petBadge(item) {
-  const pet = item.live?.pet;
-  if (!pet) return `<b>—</b><small>NO EGG CHOSEN YET</small>`;
-  const esc = ui.escapeHtml;
-  return `<b>${esc(pet.name.toUpperCase())}</b><small>${esc(pet.mood_word)}${pet.wants ? ` · WANTS ${esc(pet.wants)}` : ""}</small>`;
-}
-
 function card(item) {
   const esc = ui.escapeHtml;
-  const best = item.id === "hatchling" ? petBadge(item)
-    : item.best ? `<b>${score(item.best.score)}</b><small>BEST${stage(item, item.best)}</small>` : `<b>—</b><small>NOT PLAYED YET</small>`;
+  const best = item.best ? `<b>${score(item.best.score)}</b><small>BEST${stage(item, item.best)}</small>` : `<b>—</b><small>NOT PLAYED YET</small>`;
   const accent = item.accent ? ` style="--game-tone:${esc(item.accent)}"` : "";
   return `<button type="button" class="game-card" data-game-open="${esc(item.id)}"${accent} aria-label="Play ${esc(item.title)}">
     <div class="game-art">${cardArt(item)}<i class="game-play">PLAY</i></div>
@@ -126,8 +117,7 @@ function shell(root) {
 function renderCards() {
   const grid = ui.byId("games-grid");
   if (!grid) return;
-  const key = JSON.stringify([games.map((item) => [item.id, item.title, item.tagline, item.card, item.best?.score, item.played, item.accent,
-    item.id === "hatchling" ? [item.live?.pet?.name, item.live?.pet?.mood_word, item.live?.pet?.wants] : null]), cardSize]);
+  const key = JSON.stringify([games.map((item) => [item.id, item.title, item.tagline, item.card, item.best?.score, item.played, item.accent]), cardSize]);
   if (key === lastCardsKey) return;
   lastCardsKey = key;
   grid.innerHTML = games.length
@@ -145,7 +135,7 @@ function renderRuns() {
   const esc = ui.escapeHtml;
   list.innerHTML = (item.runs || []).slice(0, 5).map((run) => `<li><b>${score(run.score)}</b>
     <span>${stage(item, run).replace(" · ", "")}${run.rank ? `${run.wave ? " · " : ""}${esc(run.rank)}` : ""}</span><small>${when(run.at)}</small></li>`).join("")
-    || `<li class="games-none">${item.id === "hatchling" ? "It keeps no scores: it keeps you company." : "Your first run goes here."}</li>`;
+    || `<li class="games-none">Your first run goes here.</li>`;
 }
 
 function hello() {
@@ -169,19 +159,6 @@ function showInput(item) {
   box.hidden = item.input_modes === false;
   const mode = inputMode(item);
   for (const button of box.querySelectorAll("[data-game-input]")) button.setAttribute("aria-pressed", String(button.dataset.gameInput === mode));
-}
-
-// The Hatchling hears the deck's music (5.6.4), a few times a second.
-let hearing = 0;
-function hearMusic() {
-  window.clearInterval(hearing);
-  hearing = 0;
-  if (playing !== "hatchling") return;
-  hearing = window.setInterval(() => {
-    if (playing !== "hatchling" || !frame) { window.clearInterval(hearing); hearing = 0; return; }
-    const heard = window.voidcompassMusicLevels?.();
-    if (heard?.playing) frame.contentWindow?.postMessage({source: "voidcompass-deck", type: "levels", bands: heard.bands, playing: true}, "*");
-  }, 100);
 }
 
 function setInput(mode) {
@@ -219,7 +196,6 @@ function openGame(id) {
   ui.byId("games-genre").textContent = item.genre.toUpperCase();
   ui.byId("games-about").textContent = item.description || item.tagline;
   showInput(item);
-  hearMusic();
   ui.byId("games-controls").innerHTML = item.controls.map(([keys, action]) =>
     `<dt>${ui.escapeHtml(keys)}</dt><dd>${ui.escapeHtml(action)}</dd>`).join("");
   ui.byId("games-player").style.setProperty("--game-tone", item.accent || "var(--accent)");
@@ -256,24 +232,7 @@ async function received(event) {
   if (data.type === "ready") hello();
   else if (data.type === "mute") store(`voidcompass.games.${item.id}.muted`, data.muted ? "1" : "0");
   else if (data.type === "crt") store(`voidcompass.games.${item.id}.crt`, data.on ? "1" : "0");
-  else if (data.type === "action") {
-    // "act", not "action": the deck's command already uses that key for its own name.
-    await ui.command("workspace", {page: "games", operation: "action", game: item.id,
-      act: String(data.action || "").slice(0, 20), value: data.value && typeof data.value === "object" ? data.value : {}});
-  } else if (data.type === "snap" && item.id === "hatchling" && typeof data.png === "string" && data.png.length < 20_000_000) {
-    // The Hatchling's SNAP (5.6.4): its pod, saved as a postcard.
-    try {
-      const response = await fetch(ui.apiUrl("/api/postcard-save"), {
-        method: "POST", cache: "no-store", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({mode: "snap", png: data.png}),
-      });
-      const reply = await response.json().catch(() => ({}));
-      if (!response.ok || !reply.ok) throw new Error(reply.error || `HTTP ${response.status}`);
-      ui.showToast?.("Postcard saved: it's on the Postcards page");
-    } catch (error) {
-      ui.showToast?.(`The postcard wasn't saved: ${error.message}`);
-    }
-  } else if (data.type === "over") {
+  else if (data.type === "over") {
     await ui.command("workspace", {page: "games", operation: "score", game: item.id,
       score: data.score, wave: data.wave ?? data.level, accuracy: data.accuracy, rank: data.rank});
   }
