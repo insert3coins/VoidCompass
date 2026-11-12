@@ -1267,7 +1267,7 @@ function renderRoute(state) {
   text("route-badge", route.mode === "none" ? "NO ROUTE" : route.mode === "game" ? "GAME ROUTE" : "WAYPOINT PLAN");
   text("route-source", route.source, "NAVIGATION");
   text("route-next", route.next, "NO ACTIVE ROUTE");
-  text("route-final", route.final ? `FINAL // ${route.final}` : "Plot a route in Elite or on the Expeditions page.");
+  text("route-final", route.final ? `FINAL // ${route.final}` : "Plot a route in Elite or on the Route page.");
   text("route-progress-label", route.text, "INACTIVE");
   text("route-distance", route.distance_text, "— LY");
   text("route-remaining", `${number(route.remaining)} ${number(route.remaining) === 1 ? "JUMP" : "JUMPS"} LEFT`);

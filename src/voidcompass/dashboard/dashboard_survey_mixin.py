@@ -247,7 +247,7 @@ class DashboardSurveyMixin:
             return {"kind": kind, "name": "", "error": {
                 "here": "No system yet: the journal hasn't said where you are.",
                 "destination": "No destination: plot a route or target a system in the galaxy map.",
-                "next_stop": "No next stop: plot a route, or add waypoints on the Expeditions page.",
+                "next_stop": "No next stop: plot one on the Route page, or add waypoints on the Expeditions page.",
                 "carrier": "No carrier known.", "lock": "Nothing locked yet.",
                 "system": "Type a system name."}[kind]}
         coords = self._survey_coords_of(name)
@@ -555,7 +555,12 @@ class DashboardSurveyMixin:
             region_id=region[0] if region else None, coords=coords, records=self._survey_record_keys(),
             barycentres=(getattr(self, "system_barycentres", None) if name.casefold() == str(getattr(self, "current_sys", "") or "").casefold()
                          else (self.load_barycentres_from_db(name) if hasattr(self, "load_barycentres_from_db") else [])))
-        meta.update(spansh_known=dump is not None, spansh_error=entry.get("error") or "")
+        error = str(entry.get("error") or "")
+        # A 404 is Spansh not knowing the system yet, the usual case out exploring:
+        # the table is simply yours, not an error.
+        if "(404)" in error:
+            error = ""
+        meta.update(spansh_known=dump is not None, spansh_error=error)
         current = name.casefold() == str(getattr(self, "current_sys", "") or "").casefold()
         if current:
             meta["body_count"] = meta.get("body_count") or (int(getattr(self, "total", 0) or 0) or None)
