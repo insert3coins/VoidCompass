@@ -586,12 +586,20 @@
     });
   }
 
-  // System rows carry only journal-confirmed biology; predictions belong to
-  // the focused body view where the pilot can act on them.
+  // System rows lead with journal-confirmed biology; the likeliest species for
+  // the types not identified yet follow as guesses (worldGuesses, 5.7.9).
   function systemDetails(row) {
     return orderedBiologicalDetails(row.bio_details || row.rows || [])
       .filter((detail) => ["detected", "sample", "complete"]
         .includes(String(detail.kind || "").toLowerCase()));
+  }
+
+  // The likely species for a world's unidentified biology, likeliest first
+  // (the model's order); never the "Also possible" catch-all.
+  function worldGuesses(row) {
+    return (row.bio_guesses || []).filter((detail) =>
+      ["predicted", "possible"].includes(String(detail.kind || "").toLowerCase())
+      && !detail.also && String(detail.name || "") !== "Also possible");
   }
 
   function surfaceBadges(row, event = {}) {
@@ -897,12 +905,28 @@
       list.appendChild(item);
     }
     const unknown = bio - details.length;
+    // 5.7.9: what the unidentified ones likely are, one "?" line each, no more
+    // lines than there are signals left.
+    const guesses = unknown > 0 ? worldGuesses(row).slice(0, unknown) : [];
+    for (const detail of guesses) {
+      const item = node("span", "species-token guess");
+      item.appendChild(node("b", "species-mark", "?"));
+      const name = node("span", "species-name");
+      if (CODEX_TITLES[detail.codex]) name.appendChild(codexFlag(detail.codex));
+      name.append(String(detail.display_name || detail.name || "Organic"));
+      item.appendChild(name);
+      const value = safeNumber(detail.value) || safeNumber(detail.max_value);
+      item.appendChild(node("small", "species-value", value ? `≤${money(value)}` : ""));
+      list.appendChild(item);
+    }
     if (unknown > 0) {
       const item = node("span", "species-token pending");
       item.appendChild(node("b", "species-mark", "·"));
       const types = `${unknown} type${unknown === 1 ? "" : "s"}`;
-      item.appendChild(node("span", "species-name", details.length
-        ? `${unknown} more not identified` : row.needs_dss ? `${types} not identified · map to reveal` : `${types} not identified`));
+      const reveal = row.needs_dss ? " · map to reveal" : "";
+      item.appendChild(node("span", "species-name", guesses.length
+        ? `? likely, not confirmed${row.needs_dss ? " · map to confirm" : ""}`
+        : details.length ? `${unknown} more not identified` : `${types} not identified${reveal}`));
       list.appendChild(item);
     }
     if (surface) {

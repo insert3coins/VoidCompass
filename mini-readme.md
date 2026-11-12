@@ -3,6 +3,7 @@
 ## v5.7.9 // Loose Ends
 **Release Date:** 13 NOV 3312 *(Galactic Standard Time)*
 
+* **Likely biology on the Survey overlay.** A world with biology signals not identified yet lists what they likely are under its name in the system view ("?", with what each could be worth), never more lines than signals left, with "map to confirm" where a surface map would tell you. What you've detected, sampled or analysed still comes first, and the guesses go as the real ones are known.
 * **Route hints point to the Route page.** The Dashboard's Flight Corridor and the "no next stop" message said to plot on the Expeditions page.
 * **A system Spansh doesn't know is yours, not an error.** Explore & Survey's body table said "Spansh error (404)" for systems nobody has reported, the usual case out exploring, and the SYSTEM MAP said "Spansh unavailable" and asked again every minute. Now the table says "yours only", the map says nobody has reported the system yet, and a system name Spansh doesn't know reads "Spansh has no record of it yet".
 * **Getting Started guide, refreshed.** docs/VoidCompass_Guide.pdf has new screenshots and chapters for 5.7.8: the Route page, the new Explore & Survey and History, the crew of five and their orders, and the new Survey overlay.

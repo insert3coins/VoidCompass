@@ -414,6 +414,8 @@ footer .credits { flex: 0 0 auto; color: var(--accent); text-align: right; }
 .species-token.complete { color: var(--green); }
 .species-token.complete .species-mark { color: var(--green); }
 .species-token.sample .species-mark { color: var(--orange); }
+.species-token.guess { color: var(--muted); font-style: italic; }
+.species-token.guess .species-mark { color: color-mix(in srgb, var(--accent) 70%, var(--dim)); font-style: normal; }
 .species-token.pending { color: var(--dim); font-size: var(--type-compact); font-weight: 700; letter-spacing: .3px; }
 .species-token .species-value { color: color-mix(in srgb, var(--yellow) 75%, var(--muted)); font-size: var(--type-compact); }
 .species-token .codex-flag { width: .75em; height: .95em; margin-right: 4px; vertical-align: -1px; }
